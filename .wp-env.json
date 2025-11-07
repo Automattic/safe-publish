@@ -4,7 +4,7 @@
         "WP_DEBUG_DISPLAY": true,
         "WP_DEVELOPMENT_MODE": "plugin",
         "WP_ENVIRONMENT_TYPE": "development",
-        "CCP_SHARED_SECRET": "local-dev-secret-4ilEg6NA3K1"
+        "CCP_SHARED_SECRET": "local-dev-secret-4ilEg6NA3K1lLJV"
     },
     "mappings": {
         ".htaccess": "./bin/conf/htaccess",
@@ -20,7 +20,7 @@
                 "WP_DEBUG_DISPLAY": true,
                 "WP_DEVELOPMENT_MODE": "plugin",
                 "WP_ENVIRONMENT_TYPE": "development",
-                "CCP_SHARED_SECRET": "local-dev-secret-4ilEg6NA3K1"
+                "CCP_SHARED_SECRET": "local-dev-secret-4ilEg6NA3K1lLJV"
             },
             "mappings": {
                 ".htaccess": "./bin/conf/htaccess",
