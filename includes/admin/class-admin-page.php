@@ -134,7 +134,7 @@ class Admin_Page {
 
 			if ( ! empty( $shared_secret ) ) {
 				$auth_credentials['shared_secret'] = $shared_secret;
-			} elseif ( $this->is_development_environment() ) {
+			} elseif ( \ccp_is_development_environment() ) {
 				// Fallback to Basic auth in development environments only.
 				$username = get_option( 'ccp_username', '' );
 				$password = get_option( 'ccp_password', '' );

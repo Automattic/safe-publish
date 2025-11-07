@@ -127,7 +127,7 @@ class Admin_Handler {
 		);
 
 		// Basic authentication settings (development only)
-		if ( $this->is_development_environment() ) {
+		if ( \ccp_is_development_environment() ) {
 			register_setting(
 				'ccp_settings',
 				'ccp_username',
@@ -1039,50 +1039,13 @@ class Admin_Handler {
 	}
 
 	/**
-	 * Check if we're in a development environment
-	 *
-	 * @return bool True if development environment.
-	 */
-	private function is_development_environment() {
-		// Never allow Basic auth in VIP production environments
-		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
-			return false;
-		}
-
-		// Check for common development indicators
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			return true;
-		}
-
-		if ( defined( 'WP_LOCAL_DEV' ) && WP_LOCAL_DEV ) {
-			return true;
-		}
-
-		// Check for development domains
-		$site_url = get_site_url();
-		$host = wp_parse_url( $site_url, PHP_URL_HOST );
-
-		$dev_domains = array( '.test', '.local', '.dev', 'localhost', '127.0.0.1', '::1' );
-
-		foreach ( $dev_domains as $dev_domain ) {
-			if ( $host === $dev_domain ||
-				 ( function_exists( 'str_ends_with' ) && str_ends_with( $host, $dev_domain ) ) ||
-				 ( ! function_exists( 'str_ends_with' ) && substr( $host, -strlen( $dev_domain ) ) === $dev_domain ) ) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	/**
 	 * Sanitize username for Basic authentication (development only)
 	 *
 	 * @param mixed $value Value to sanitize.
 	 * @return string
 	 */
 	public function sanitize_username( $value ) {
-		if ( ! $this->is_development_environment() ) {
+		if ( ! \ccp_is_development_environment() ) {
 			return '';
 		}
 
@@ -1096,7 +1059,7 @@ class Admin_Handler {
 	 * @return string
 	 */
 	public function sanitize_password( $value ) {
-		if ( ! $this->is_development_environment() ) {
+		if ( ! \ccp_is_development_environment() ) {
 			return '';
 		}
 
@@ -1120,7 +1083,7 @@ class Admin_Handler {
 		}
 
 		// Fallback to Basic auth in development environments only
-		if ( $this->is_development_environment() ) {
+		if ( \ccp_is_development_environment() ) {
 			$username = get_option( 'ccp_username', '' );
 			$password = get_option( 'ccp_password', '' );
 

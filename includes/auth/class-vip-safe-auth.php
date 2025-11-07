@@ -64,7 +64,7 @@ class VIP_Safe_Auth {
 		}
 
 		// Only allow Basic auth in development environments
-		if ( ! empty( $auth_config['username'] ) && ! empty( $auth_config['password'] ) && self::is_development_environment() ) {
+		if ( ! empty( $auth_config['username'] ) && ! empty( $auth_config['password'] ) && \ccp_is_development_environment() ) {
 			return 'basic_auth';
 		}
 
@@ -118,7 +118,7 @@ class VIP_Safe_Auth {
 			}
 
 			// Check if we're in a development environment (basic auth not allowed in production)
-			if ( ! self::is_development_environment() ) {
+			if ( ! \ccp_is_development_environment() ) {
 				return false;
 			}
 
@@ -268,7 +268,7 @@ class VIP_Safe_Auth {
 		}
 
 		// Only allow in development environments
-		if ( ! self::is_development_environment() ) {
+		if ( ! \ccp_is_development_environment() ) {
 			return array();
 		}
 
@@ -279,42 +279,6 @@ class VIP_Safe_Auth {
 		);
 	}
 
-	/**
-	 * Check if we're in a development environment
-	 *
-	 * @return bool True if development environment.
-	 */
-	private static function is_development_environment() {
-		// Never allow Basic auth in VIP production environments
-		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
-			return false;
-		}
-
-		// Check for common development indicators
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			return true;
-		}
-
-		if ( defined( 'WP_LOCAL_DEV' ) && WP_LOCAL_DEV ) {
-			return true;
-		}
-
-		// Check for development domains
-		$site_url = \get_site_url();
-		$host = \wp_parse_url( $site_url, PHP_URL_HOST );
-
-		$dev_domains = array( '.test', '.local', '.dev', 'localhost', '127.0.0.1', '::1' );
-
-		foreach ( $dev_domains as $dev_domain ) {
-			if ( $host === $dev_domain ||
-				 ( function_exists( 'str_ends_with' ) && str_ends_with( $host, $dev_domain ) ) ||
-				 ( ! function_exists( 'str_ends_with' ) && substr( $host, -strlen( $dev_domain ) ) === $dev_domain ) ) {
-				return true;
-			}
-		}
-
-		return false;
-	}
 
 	/**
 	 * Verify incoming authentication

@@ -119,7 +119,7 @@ class Settings_Page {
 								</td>
 							</tr>
 
-							<?php if ( $this->is_development_environment() ) : ?>
+							<?php if ( \ccp_is_development_environment() ) : ?>
 							<tr>
 								<th scope="row">
 									<label for="ccp_username">
@@ -174,40 +174,4 @@ class Settings_Page {
 		<?php
 	}
 
-	/**
-	 * Check if we're in a development environment
-	 *
-	 * @return bool True if development environment.
-	 */
-	private function is_development_environment() {
-		// Never allow Basic auth in VIP production environments.
-		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
-			return false;
-		}
-
-		// Check for common development indicators.
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			return true;
-		}
-
-		if ( defined( 'WP_LOCAL_DEV' ) && WP_LOCAL_DEV ) {
-			return true;
-		}
-
-		// Check for development domains.
-		$site_url = get_site_url();
-		$host     = wp_parse_url( $site_url, PHP_URL_HOST );
-
-		$dev_domains = array( '.test', '.local', '.dev', 'localhost', '127.0.0.1', '::1' );
-
-		foreach ( $dev_domains as $dev_domain ) {
-			if ( $host === $dev_domain ||
-				( function_exists( 'str_ends_with' ) && str_ends_with( $host, $dev_domain ) ) ||
-				( ! function_exists( 'str_ends_with' ) && substr( $host, -strlen( $dev_domain ) ) === $dev_domain ) ) {
-				return true;
-			}
-		}
-
-		return false;
-	}
 }
