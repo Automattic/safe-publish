@@ -219,7 +219,11 @@ export function PostTypeSelector( {
 
 			{ ! getExternalSiteUrl() && (
 				<Notice status="info" isDismissible={ false }>
-					{ __( 'Please enter a site URL above to load available post types.', 'ccp' ) }
+					{ __( 'Please enter a site URL in the ', 'ccp' ) }
+					<a href={ window.ccpAdminData?.settingsUrl || '/wp-admin/admin.php?page=ccp-settings' }>
+						{ __( 'settings page', 'ccp' ) }
+					</a>
+					{ __( ' to load available post types.', 'ccp' ) }
 				</Notice>
 			) }
 		</div>

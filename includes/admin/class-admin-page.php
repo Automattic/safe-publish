@@ -68,7 +68,15 @@ class Admin_Page {
 
 					<?php if ( empty( $site_url ) ) : ?>
 						<div class="notice notice-warning">
-							<p><?php esc_html_e( 'Please configure the non-prod site URL above to see posts.', 'ccp' ); ?></p>
+							<p>
+								<?php
+								printf(
+									/* translators: %s: Settings page URL */
+									esc_html__( 'Please configure the non-prod site URL in the %s to see posts.', 'ccp' ),
+									'<a href="' . esc_url( admin_url( 'admin.php?page=ccp-settings' ) ) . '">' . esc_html__( 'settings page', 'ccp' ) . '</a>'
+								);
+								?>
+							</p>
 						</div>
 					<?php else : ?>
 						<div id="ccp-dataviews-container">
@@ -285,13 +293,14 @@ class Admin_Page {
 			'ccp-admin-dataviews-script',
 			'ccpAdminData',
 			array(
-				'ajaxurl'     => admin_url( 'admin-ajax.php' ),
-				'nonce'       => wp_create_nonce( 'ccp_ajax_nonce' ),
-				'restNonce'   => wp_create_nonce( 'wp_rest' ),
-				'siteUrl'     => $site_url,
-				'numPosts'    => $number_of_posts,
+				'ajaxurl'      => admin_url( 'admin-ajax.php' ),
+				'settingsUrl'  => admin_url( 'admin.php?page=ccp-settings' ),
+				'nonce'        => wp_create_nonce( 'ccp_ajax_nonce' ),
+				'restNonce'    => wp_create_nonce( 'wp_rest' ),
+				'siteUrl'      => $site_url,
+				'numPosts'     => $number_of_posts,
 				'containerId' => 'ccp-dataviews-container',
-				'postsData'   => $posts_data,
+				'postsData'    => $posts_data,
 				'strings'     => array(
 					'loading'      => __( 'Loading posts...', 'ccp' ),
 					'error'        => __( 'Error loading posts.', 'ccp' ),

@@ -26,13 +26,13 @@ interface AdminToolsProps {
 
 interface TestResult {
 	success: boolean;
-	message: string;
+	message: string | React.ReactNode;
 	response_time?: number;
 }
 
 interface PreviewResult {
 	type: string;
-	message: string;
+	message: string | React.ReactNode;
 	posts?: Post[];
 }
 
@@ -122,9 +122,16 @@ export function AdminTools( {
 		const siteUrl = getExternalSiteUrl();
 
 		if ( ! siteUrl ) {
+			const settingsUrl = window.ccpAdminData?.settingsUrl || '/wp-admin/admin.php?page=ccp-settings';
 			setTestResult( {
 				success: false,
-				message: __( 'Please enter a site URL first.', 'ccp' ),
+				message: (
+					<>
+						{ __( 'Please enter a site URL in the ', 'ccp' ) }
+						<a href={ settingsUrl }>{ __( 'settings page', 'ccp' ) }</a>
+						{ __( ' first.', 'ccp' ) }
+					</>
+				),
 			} );
 			return;
 		}
@@ -169,9 +176,16 @@ export function AdminTools( {
 		const siteUrl = getExternalSiteUrl();
 
 		if ( ! siteUrl ) {
+			const settingsUrl = window.ccpAdminData?.settingsUrl || '/wp-admin/admin.php?page=ccp-settings';
 			setPreviewResult( {
 				type: 'error',
-				message: __( 'Please enter a site URL first.', 'ccp' ),
+				message: (
+					<>
+						{ __( 'Please enter a site URL in the ', 'ccp' ) }
+						<a href={ settingsUrl }>{ __( 'settings page', 'ccp' ) }</a>
+						{ __( ' first.', 'ccp' ) }
+					</>
+				),
 			} );
 			return;
 		}

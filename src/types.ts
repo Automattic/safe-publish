@@ -26,6 +26,7 @@ export interface AdminData {
 	nonce: string;
 	restNonce: string;
 	siteUrl: string;
+	settingsUrl: string;
 	numPosts: number;
 	containerId: string;
 	postsData: any[]; // Raw posts data from PHP
