@@ -2,11 +2,6 @@
 
 TASK="${1-stop}"
 
-teardown_redis() {
-	echo "🔽 Shutting down Redis..."
-	docker compose -f docker-compose.overrides.yml down
-}
-
 teardown_wordpress() {
 	if [ "$TASK" = "destroy" ]; then
 		npx wp-env destroy
@@ -17,8 +12,4 @@ teardown_wordpress() {
 	fi
 }
 
-# Kill any lingering Node.js processes.
-pkill -f 'remote-data-blocks/node_modules/'
-
-teardown_redis
 teardown_wordpress

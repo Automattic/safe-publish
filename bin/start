@@ -65,9 +65,6 @@ install_and_activate_plugin() {
 }
 
 configure_wordpress() {
-    echo "✏️ Enabling Redis..."
-    npm run -s wp-cli redis enable
-
     echo "✏️ Updating home option..."
     npm run -s wp-cli config set WP_HOME "$WP_HOME"
 
@@ -87,11 +84,6 @@ configure_decoupled_wordpress() {
     install_and_activate_plugin "$DECOUPLED_PLUGIN_URL" "vip-decoupled-bundle"
 
     echo "✅ Decoupled configuration complete."
-}
-
-start_redis() {
-    echo "🔼 Starting Redis..."
-    docker compose -f docker-compose.overrides.yml up -d
 }
 
 start_wordpress() {
@@ -131,7 +123,6 @@ open_browser() {
 # Cleanup after error or trapping SIGINT (Ctrl+C) and SIGTERM signals
 trap 'cleanup' INT TERM
 
-start_redis
 start_wordpress
 configure_wordpress
 
