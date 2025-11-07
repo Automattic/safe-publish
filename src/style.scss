@@ -1,0 +1,173 @@
+@import "@wordpress/dataviews/build-style/style.css";
+
+// Bulk import styling enhancements
+.ccp-dataviews-wrapper {
+	.dataviews-bulk-actions {
+		background: #f0f6fc;
+		border: 1px solid #c3dbf0;
+		border-radius: 3px;
+		margin-bottom: 16px;
+		padding: 12px 16px;
+
+		.dataviews-bulk-actions__selection-count {
+			font-weight: 600;
+			color: #1e3a8a;
+		}
+	}
+
+	// Highlight selected rows
+	.dataviews-view-table tr[aria-selected="true"] {
+		background-color: #f0f6fc !important;
+		border-left: 3px solid #3858e9;
+	}
+
+	// Style bulk action buttons
+	.dataviews-bulk-actions button[data-action-id="bulk-import"] {
+		background: #3858e9;
+		color: white;
+		font-weight: 600;
+
+		&:hover {
+			background: #2145e6;
+		}
+	}
+}
+
+// Bulk import modal improvements
+.ccp-bulk-import-progress {
+	.components-progress-bar {
+		margin: 8px 0;
+	}
+
+	.ccp-import-results {
+		max-height: 200px;
+		overflow-y: auto;
+		background: #f9f9f9;
+		border: 1px solid #ddd;
+		border-radius: 4px;
+		padding: 10px;
+
+		.ccp-import-result-item {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 4px 0;
+			border-bottom: 1px solid #eee;
+
+			&:last-child {
+				border-bottom: none;
+			}
+
+			.ccp-result-title {
+				flex: 1;
+				font-size: 0.85em;
+
+				&.success {
+					color: #008a20;
+				}
+
+				&.error {
+					color: #d63638;
+				}
+			}
+
+			.ccp-result-status {
+				font-size: 0.8em;
+				color: #666;
+				font-weight: 500;
+			}
+		}
+	}
+}
+
+// Loading and error states
+.ccp-loading {
+	text-align: center;
+	padding: 20px;
+	color: #666;
+}
+
+.ccp-error-message {
+	color: #d63638;
+	background: #ffeaea;
+	border: 1px solid #f0c2c2;
+	border-radius: 3px;
+	padding: 12px;
+	margin: 16px 0;
+}
+
+.ccp-no-posts {
+	text-align: center;
+	padding: 40px 20px;
+	color: #666;
+	font-style: italic;
+}
+
+.dataviews-action-modal__tertiary {
+	h2 {
+		font-size: 1.3em;
+	}
+}
+
+.ccp-block-diff-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  .ccp-block-diff {
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    padding: 10px 12px;
+    border-radius: 4px;
+    &__header {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    &__modified {
+      display: flex;
+      gap: 10px;
+      .ccp-block-diff__col {
+        flex: 1;
+        border: 1px solid #eef2f7;
+        padding: 8px;
+        background: #fafbfc;
+        max-width: 50%;
+        overflow-x: auto;
+      }
+    }
+    &__added { background: #f0fff4; border: 1px solid #c6f6d5; padding:8px; }
+    &__removed { background: #fff5f5; border: 1px solid #fed7d7; padding:8px; }
+    &__unchanged { background: #f8f9fa; padding:8px; }
+  }
+  .ccp-badge {
+    text-transform: uppercase;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 2em;
+    background:#e2e8f0;
+    &.ccp-added { background:#38a169; color:#fff; }
+    &.ccp-removed { background:#e53e3e; color:#fff; }
+    &.ccp-modified { background:#3182ce; color:#fff; }
+    &.ccp-unchanged { background:#a0aec0; color:#fff; }
+  }
+  .ccp-inline-added {
+    background: #c6f6d5;
+    border-radius: 2px;
+  }
+  .ccp-inline-removed {
+    background: #fed7d7;
+    text-decoration: line-through;
+    border-radius: 2px;
+  }
+  .ccp-block-diff__col img,
+  .ccp-block-diff__added img,
+  .ccp-block-diff__removed img,
+  .ccp-block-diff__unchanged img {
+    max-width:100%;
+    height:auto;
+    display:block;
+  }
+}

@@ -1,0 +1,116 @@
+/* Post Type Selector React Component Styles */
+.ccp-post-type-selector {
+	margin-bottom: 15px;
+	padding: 10px;
+	background: #f9f9f9;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+}
+
+.ccp-post-type-selector .components-base-control {
+	margin-bottom: 8px;
+}
+
+.ccp-post-type-selector .components-base-control__field {
+	margin-bottom: 0;
+}
+
+.ccp-post-type-selector .components-select-control__input {
+	min-width: 200px;
+}
+
+/* Admin Tools styling */
+.ccp-admin-tools .ccp-tool {
+	margin-bottom: 30px;
+	padding: 20px;
+	background: #fff;
+	border: 1px solid #ccd0d4;
+	border-radius: 4px;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.ccp-admin-tools .ccp-tool h3 {
+	margin-top: 0;
+	margin-bottom: 10px;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.ccp-admin-tools .ccp-tool p {
+	margin-bottom: 15px;
+	color: #646970;
+}
+
+.ccp-admin-tools .components-notice {
+	margin-top: 15px;
+	margin-bottom: 10px;
+}
+
+/* Preview posts results */
+.ccp-preview-posts {
+	margin-top: 15px;
+	padding: 10px;
+	background: #f7f7f7;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	max-height: 300px;
+	overflow-y: auto;
+}
+
+.ccp-preview-post {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 8px 0;
+	border-bottom: 1px solid #eee;
+}
+
+.ccp-preview-post:last-child {
+	border-bottom: none;
+}
+
+.ccp-preview-post-title {
+	font-weight: 500;
+	color: #1e1e1e;
+	flex: 1;
+}
+
+.ccp-preview-post-link {
+	color: #0073aa;
+	text-decoration: none;
+	font-size: 12px;
+	padding: 4px 8px;
+	border: 1px solid #0073aa;
+	border-radius: 3px;
+	transition: all 0.2s ease;
+}
+
+.ccp-preview-post-link:hover {
+	background: #0073aa;
+	color: #fff;
+	text-decoration: none;
+}
+
+/* Loading states */
+.ccp-loading {
+	text-align: center;
+	padding: 20px;
+	color: #646970;
+}
+
+/* Responsive design */
+@media (max-width: 782px) {
+	.ccp-post-type-selector {
+		padding: 8px;
+	}
+
+	.ccp-admin-tools .ccp-tool {
+		padding: 15px;
+	}
+
+	.ccp-preview-post {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 8px;
+	}
+}

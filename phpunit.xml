@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.6/phpunit.xsd"
+  bootstrap="tests/inc/bootstrap.php"
+  colors="true"
+  convertErrorsToExceptions="true"
+  convertNoticesToExceptions="true"
+  convertWarningsToExceptions="true"
+  convertDeprecationsToExceptions="true"
+>
+  <testsuites>
+    <testsuite name="Compliant Content Publisher Test Suite">
+      <directory>tests/inc/</directory>
+      <exclude>tests/inc/bootstrap.php</exclude>
+      <exclude>tests/inc/stubs.php</exclude>
+      <exclude>tests/inc/test-utils.php</exclude>
+    </testsuite>
+  </testsuites>
+
+  <coverage processUncoveredFiles="true">
+    <include>
+      <directory suffix=".php">includes/</directory>
+    </include>
+    <exclude>
+      <directory>includes/admin/</directory>
+    </exclude>
+    <report>
+      <clover outputFile="coverage/phpunit/clover.xml"/>
+      <html outputDirectory="coverage/phpunit/html"/>
+      <text outputFile="php://stdout" showUncoveredFiles="true"/>
+    </report>
+  </coverage>
+
+  <php>
+    <const name="COMPLIANT_CONTENT_PUBLISHER__UNIT_TEST" value="true"/>
+    <env name="WP_DEBUG" value="true"/>
+  </php>
+</phpunit>

@@ -1,0 +1,395 @@
+<?php
+/**
+ * VIP-Safe Authentication Handler
+ *
+ * @package CCP
+ */
+
+namespace CCP\Auth;
+
+// Prevent direct access.
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+/**
+ * VIP-Safe Authentication Class
+ *
+ * Implements authentication methods that work on VIP:
+ * 1. Shared Secret (HMAC authentication) - Production ready
+ * 2. Basic Authentication - Development environments only
+ */
+class VIP_Safe_Auth {
+
+	/**
+	 * Authentication methods priority order
+	 */
+	const AUTH_METHODS = array(
+		'shared_secret',
+		'basic_auth', // Development only
+	);
+
+	/**
+	 * Get authentication parameters for requests
+	 *
+	 * @param string $site_url Target site URL.
+	 * @param array  $auth_config Authentication configuration array.
+	 * @param string $method HTTP method for the request (default: 'GET').
+	 * @return array Request modifications (headers, query params, etc.).
+	 */
+	public static function get_auth_params( $site_url, $auth_config = array(), $method = 'GET' ) {
+		$auth_method = self::determine_auth_method( $auth_config );
+
+		switch ( $auth_method ) {
+			case 'shared_secret':
+				$result = self::get_shared_secret_auth( $site_url, $auth_config, $method );
+				return $result;
+
+			case 'basic_auth':
+				return self::get_basic_auth( $site_url, $auth_config );
+
+			default:
+				return array();
+		}
+	}	/**
+	 * Determine the best authentication method to use
+	 *
+	 * @param array $auth_config Authentication configuration.
+	 * @return string Authentication method to use.
+	 */
+	private static function determine_auth_method( $auth_config ) {
+		// Check what auth methods are configured
+		if ( ! empty( $auth_config['shared_secret'] ) ) {
+			return 'shared_secret';
+		}
+
+		// Only allow Basic auth in development environments
+		if ( ! empty( $auth_config['username'] ) && ! empty( $auth_config['password'] ) && self::is_development_environment() ) {
+			return 'basic_auth';
+		}
+
+		return 'none';
+	}
+
+	/**
+	 * Check if the current request/context is properly authorized
+	 * This method validates that we have valid authentication credentials
+	 * and can successfully authenticate with the target site
+	 *
+	 * @param string $site_url Target site URL to test authorization against.
+	 * @param array  $auth_config Authentication configuration array.
+	 * @return bool True if properly authorized, false otherwise.
+	 */
+	public static function is_authorized( $site_url = '', $auth_config = array() ) {
+		$auth_method = self::determine_auth_method( $auth_config );
+
+		// No authentication method available
+		if ( $auth_method === 'none' ) {
+			return false;
+		}
+
+		// If we have shared secret authentication
+		if ( $auth_method === 'shared_secret' ) {
+			$shared_secret = $auth_config['shared_secret'] ?? '';
+
+			// Check if shared secret is properly configured and meets minimum requirements
+			if ( empty( $shared_secret ) || \strlen( $shared_secret ) < 16 ) {
+				return false;
+			}
+
+			// If site URL is provided, we can test if the auth headers are properly generated
+			if ( ! empty( $site_url ) ) {
+				$auth_params = self::get_shared_secret_auth( $site_url, $auth_config, 'GET' );
+				return ! empty( $auth_params['headers']['X-CCP-Timestamp'] ) &&
+				       ! empty( $auth_params['headers']['X-CCP-Signature'] );
+			}
+
+			return true; // Shared secret is present and valid format
+		}
+
+		// If we have basic authentication (development only)
+		if ( $auth_method === 'basic_auth' ) {
+			$username = $auth_config['username'] ?? '';
+			$password = $auth_config['password'] ?? '';
+
+			// Check if credentials are properly configured
+			if ( empty( $username ) || empty( $password ) ) {
+				return false;
+			}
+
+			// Check if we're in a development environment (basic auth not allowed in production)
+			if ( ! self::is_development_environment() ) {
+				return false;
+			}
+
+			// If site URL is provided, we could test the credentials (but this would make an actual request)
+			// For now, we'll just verify the credentials are present and environment is appropriate
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Test authorization against a specific site by making a lightweight request
+	 * This method actually validates that the credentials work with the target site
+	 *
+	 * @param string $site_url Target site URL.
+	 * @param array  $auth_config Authentication configuration array.
+	 * @return bool|WP_Error True if authorized, WP_Error with details if not.
+	 */
+	public static function test_authorization( $site_url, $auth_config = array() ) {
+		if ( empty( $site_url ) ) {
+			return new \WP_Error( 'invalid_url', 'Site URL is required for authorization testing' );
+		}
+
+		// First check if we have valid credentials format
+		if ( ! self::is_authorized( $site_url, $auth_config ) ) {
+			return new \WP_Error( 'invalid_credentials', 'Invalid or missing authentication credentials' );
+		}
+
+		// Make a lightweight test request to verify credentials work
+		$test_url = \trailingslashit( $site_url ) . 'wp-json/wp/v2/';
+		$auth_params = self::get_auth_params( $test_url, $auth_config, 'GET' );
+
+		$request_args = array(
+			'timeout'     => 3,
+			'redirection' => 0,
+			'user-agent'  => 'CCP-Auth-Test/1.0',
+		);
+
+		// Add authentication headers if available
+		if ( ! empty( $auth_params['headers'] ) ) {
+			$request_args['headers'] = $auth_params['headers'];
+		}
+
+		// Add query parameters for authentication if needed
+		if ( ! empty( $auth_params['query_args'] ) ) {
+			$test_url = \add_query_arg( $auth_params['query_args'], $test_url );
+		}
+
+				// Use VIP-optimized function when available, fallback to core function
+		if ( \function_exists( 'vip_safe_wp_remote_get' ) ) {
+			$response = \vip_safe_wp_remote_get( $test_url, '', 3, 5, 20, $request_args );
+		} else {
+			// On non-VIP environments, use standard wp_remote_get
+			// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.wp_remote_get_wp_remote_get -- Fallback for non-VIP environments
+			$response = \wp_remote_get( $test_url, $request_args );
+		}
+
+		if ( is_wp_error( $response ) ) {
+			return new \WP_Error( 'request_failed', 'Authorization test request failed: ' . $response->get_error_message() );
+		}
+
+		$response_code = \wp_remote_retrieve_response_code( $response );
+
+		// Check for authentication-related errors
+		if ( \in_array( $response_code, array( 401, 403 ), true ) ) {
+			$response_body = \wp_remote_retrieve_body( $response );
+			return new \WP_Error( 'auth_failed', 'Authentication failed with HTTP ' . $response_code . ': ' . $response_body );
+		}
+
+		// If we get a successful response (200) or even a 404 (endpoint exists but not found),
+		// it means authentication passed
+		if ( \in_array( $response_code, array( 200, 404 ), true ) ) {
+			return true;
+		}
+
+		// Other error codes might indicate server issues rather than auth issues
+		return new \WP_Error( 'unexpected_response', 'Unexpected response code: ' . $response_code );
+	}
+
+	/**
+	 * Shared Secret Authentication
+	 * Uses HMAC signature in custom headers that VIP allows
+	 * Compatible with the CCP VIP mu-plugin authentication handler
+	 *
+	 * @param string $site_url Target site URL.
+	 * @param array  $auth_config Authentication configuration.
+	 * @param string $method HTTP method for the request.
+	 * @return array Request modifications.
+	 */
+	private static function get_shared_secret_auth( $site_url, $auth_config, $method = 'GET' ) {
+		$shared_secret = $auth_config['shared_secret'] ?? '';
+
+		if ( empty( $shared_secret ) ) {
+			return array();
+		}
+
+		// Generate timestamp for replay protection
+		$timestamp = \time();
+
+		// Extract the REST API path portion - this should match what WP_REST_Request::get_route() returns
+		// Parse the URL to get the path component
+		$parsed_url = \wp_parse_url( $site_url );
+		$full_path = $parsed_url['path'] ?? '';
+
+		if ( \strpos( $full_path, '/wp-json/' ) !== false ) {
+			// Full REST API URL - extract everything after /wp-json
+			$wp_json_pos = \strpos( $full_path, '/wp-json/' );
+			$path = \substr( $full_path, $wp_json_pos + 8 ); // +8 to skip '/wp-json'
+
+			// Ensure path starts with / and handle empty paths
+			if ( empty( $path ) || $path[0] !== '/' ) {
+				$path = '/' . ltrim( $path, '/' );
+			}
+		} else {
+			// No wp-json in path - this shouldn't happen in normal usage
+			// Default to a common endpoint
+			$path = '/wp/v2/posts';
+		}
+
+		// Create signature string: METHOD|URI|TIMESTAMP (compatible with mu-plugin)
+		$string_to_sign = $method . '|' . $path . '|' . $timestamp;
+		$signature = \hash_hmac( 'sha256', $string_to_sign, $shared_secret );
+
+		return array(
+			'headers' => array(
+				'X-CCP-Timestamp' => $timestamp,
+				'X-CCP-Signature' => $signature,
+			),
+		);
+	}
+
+	/**
+	 * Basic Authentication (Development environments only)
+	 * Uses Authorization header with Basic auth - WILL NOT WORK on VIP production
+	 *
+	 * @param string $site_url Target site URL.
+	 * @param array  $auth_config Authentication configuration.
+	 * @return array Request modifications.
+	 */
+	private static function get_basic_auth( $site_url, $auth_config ) {
+		$username = $auth_config['username'] ?? '';
+		$password = $auth_config['password'] ?? '';
+
+		if ( empty( $username ) || empty( $password ) ) {
+			return array();
+		}
+
+		// Only allow in development environments
+		if ( ! self::is_development_environment() ) {
+			return array();
+		}
+
+		return array(
+			'headers' => array(
+				'Authorization' => 'Basic ' . base64_encode( $username . ':' . $password ),
+			),
+		);
+	}
+
+	/**
+	 * Check if we're in a development environment
+	 *
+	 * @return bool True if development environment.
+	 */
+	private static function is_development_environment() {
+		// Never allow Basic auth in VIP production environments
+		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
+			return false;
+		}
+
+		// Check for common development indicators
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			return true;
+		}
+
+		if ( defined( 'WP_LOCAL_DEV' ) && WP_LOCAL_DEV ) {
+			return true;
+		}
+
+		// Check for development domains
+		$site_url = \get_site_url();
+		$host = \wp_parse_url( $site_url, PHP_URL_HOST );
+
+		$dev_domains = array( '.test', '.local', '.dev', 'localhost', '127.0.0.1', '::1' );
+
+		foreach ( $dev_domains as $dev_domain ) {
+			if ( $host === $dev_domain ||
+				 ( function_exists( 'str_ends_with' ) && str_ends_with( $host, $dev_domain ) ) ||
+				 ( ! function_exists( 'str_ends_with' ) && substr( $host, -strlen( $dev_domain ) ) === $dev_domain ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Verify incoming authentication
+	 * This would be used on the target site to verify requests
+	 *
+	 * @return bool|WP_Error True if authenticated, WP_Error if not.
+	 */
+	public static function verify_request() {
+		// Check for shared secret authentication
+		if ( isset( $_SERVER['HTTP_X_CCP_SIGNATURE'] ) ) {
+			return self::verify_shared_secret();
+		}
+
+		return new \WP_Error( 'no_auth', \__( 'No valid authentication found.', 'ccp' ) );
+	}
+
+	/**
+	 * Verify shared secret authentication
+	 *
+	 * @return bool|WP_Error True if valid, WP_Error if not.
+	 */
+	private static function verify_shared_secret() {
+		$signature = \sanitize_text_field( $_SERVER['HTTP_X_CCP_SIGNATURE'] ?? '' );
+		$site = \sanitize_url( $_SERVER['HTTP_X_CCP_SITE'] ?? '' );
+		$timestamp = \sanitize_text_field( $_SERVER['HTTP_X_CCP_TIMESTAMP'] ?? '' );
+		$nonce = \sanitize_text_field( $_SERVER['HTTP_X_CCP_NONCE'] ?? '' );
+
+		if ( empty( $signature ) || empty( $site ) || empty( $timestamp ) || empty( $nonce ) ) {
+			return new \WP_Error( 'invalid_auth', \__( 'Missing authentication parameters.', 'ccp' ) );
+		}
+
+		// Check timestamp (prevent replay attacks)
+		if ( \abs( \time() - \intval( $timestamp ) ) > 300 ) { // 5 minute window
+			return new \WP_Error( 'expired_auth', \__( 'Authentication expired.', 'ccp' ) );
+		}
+
+		// Get shared secret for this site
+		$shared_secret = \get_option( 'ccp_shared_secret_' . \md5( $site ), '' );
+
+		if ( \empty( $shared_secret ) ) {
+			return new \WP_Error( 'unknown_site', \__( 'Unknown source site.', 'ccp' ) );
+		}
+
+		// Recreate payload and verify signature
+		$payload = array(
+			'site' => $site,
+			'timestamp' => \intval( $timestamp ),
+			'nonce' => $nonce,
+			'target' => \get_bloginfo( 'url' ),
+		);
+
+		$expected_signature = \hash_hmac( 'sha256', \wp_json_encode( $payload ), $shared_secret );
+
+		if ( ! \hash_equals( $expected_signature, $signature ) ) {
+			return new \WP_Error( 'invalid_signature', \__( 'Invalid authentication signature.', 'ccp' ) );
+		}
+
+		// Check nonce for replay protection
+		$nonce_key = 'ccp_nonce_' . md5( $nonce );
+		if ( \get_transient( $nonce_key ) ) {
+			return new \WP_Error( 'replay_attack', \__( 'Nonce already used.', 'ccp' ) );
+		}
+
+		// Store nonce to prevent replay
+		\set_transient( $nonce_key, true, 600 ); // 10 minutes
+
+		return true;
+	}
+
+	/**
+	 * Generate a secure shared secret
+	 *
+	 * @return string Generated secret.
+	 */
+	public static function generate_shared_secret() {
+		return \bin2hex( \random_bytes( 32 ) ); // 64 character hex string
+	}
+}
