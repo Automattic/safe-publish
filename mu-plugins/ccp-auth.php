@@ -1517,3 +1517,46 @@ function ccp_vip_add_mu_plugin_styles() {
     </style>
     <?php
 }
+
+/**
+ * Disable redirects for development hostnames
+ */
+add_filter( 'redirect_canonical', function( $redirect_url, $requested_url ) {
+    // Get the hostname from the request
+    $requested_host = parse_url( $requested_url, PHP_URL_HOST );
+    $site_host = parse_url( home_url(), PHP_URL_HOST );
+    
+    // Allow both localhost and host.docker.internal for the same site
+    $allowed_hosts = array( 'localhost', 'host.docker.internal');
+    
+    // If the requested host is in our allowed list and matches the site host pattern, don't redirect
+    if ( in_array( $requested_host, $allowed_hosts, true ) ) {
+        // Check if it's the same port and path
+        $requested_port = parse_url( $requested_url, PHP_URL_PORT );
+        $site_port = parse_url( home_url(), PHP_URL_PORT );
+        
+        if ( $requested_port === $site_port ) {
+            return false; // Disable redirect
+        }
+    }
+    
+    return $redirect_url;
+}, 10, 2 );
+
+/**
+ * Allow WordPress to accept requests from host.docker.internal
+ */
+add_filter( 'allowed_http_origins', function( $origins ) {
+    $site_url = home_url();
+    $site_host = parse_url( $site_url, PHP_URL_HOST );
+    $site_port = parse_url( $site_url, PHP_URL_PORT );
+    
+    // Add host.docker.internal with the same port
+    if ( $site_port ) {
+        $origins[] = 'http://host.docker.internal:' . $site_port;
+    } else {
+        $origins[] = 'http://host.docker.internal';
+    }
+    
+    return $origins;
+} );
