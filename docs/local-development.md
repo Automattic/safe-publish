@@ -16,7 +16,11 @@ To start a development environment with Xdebug enabled:
 npm run dev
 ```
 
-This will spin up a WordPress environment, build the block editor scripts, watch for changes, and open a Node.js debugging port. The WordPress environment will be available at `http://localhost:8888` (admin user: `admin`, password: `password`).
+This will spin up two WordPress environments, build the block editor scripts, set the shared secrets, and watch for changes. 
+
+The "destination" WordPress environment will be available at `http://localhost:8888` (admin user: `admin`, password: `password`). The non-prod site URL is automatically configured to `http://host.docker.internal:8889`.
+
+The "source" WordPress environment will be available at `http://localhost:8889` (admin user: `admin`, password: `password`).
 
 Stop the development environment with `Ctrl+C` and resume it by running the same command. You can also manually stop the environment with `npm run dev:stop`. Stopping the environment optionally stops the WordPress containers but preserves their state.
 
@@ -26,24 +30,6 @@ For local development, you'll need two WordPress sites to test import functional
 
 1. **Source site** (non-production) - Where content comes from
 2. **Destination site** (your dev environment) - Where content is imported to
-
-**Quick setup:**
-
-1. Start the local environment:
-   ```sh
-   npm run dev
-   ```
-
-2. Set up a source site (or use an existing staging site)
-
-3. Configure the shared secret in both sites' `wp-config.php`:
-   ```php
-   define( 'CCP_SHARED_SECRET', 'local-dev-secret-123' );
-   ```
-
-4. Copy `client-mu-plugins/ccp-auth.php` to your source site's `wp-content/mu-plugins/`
-
-5. In the CCP admin panel, enter your source site URL and test the connection
 
 ### Testing
 

@@ -15,7 +15,7 @@
         "."
     ],
     "lifecycleScripts": {
-        "afterStart": "wp-env run tests-cli wp rewrite structure '/%postname%/' && wp-env run tests-cli wp rewrite flush"
+        "afterStart": "wp-env run tests-cli wp rewrite structure '/%postname%/' && wp-env run tests-cli wp rewrite flush && wp-env run cli wp option update ccp_external_site_url 'http://host.docker.internal:8889'"
     },
     "env": {
         "tests": {
