@@ -107,9 +107,9 @@ class CCP_API extends REST_Base {
 	 *
 	 * @param \WP_REST_Request $req The REST request object.
 	 *
-	 * @return void
+	 * @return \WP_REST_Response
 	 */
-	public function update_post_content( \WP_REST_Request $req ) {
+	public function update_post_content( \WP_REST_Request $req ): \WP_REST_Response {
 		global $ccp_plugin;
 
 		$post_id = (int) $req->get_param( 'postId' );
@@ -244,11 +244,11 @@ class CCP_API extends REST_Base {
 	 *
 	 * @param \WP_REST_Request $req The REST request object.
 	 *
-	 * @return void
+	 * @return array|\WP_REST_Response
 	 * @throws \WP_Error If the local post cannot be found or if there are issues
 	 * @throws \Exception If the external post cannot be fetched or processed.
 	 */
-	public function render_diff( \WP_REST_Request $req ) {
+	public function render_diff( \WP_REST_Request $req ): array|\WP_REST_Response {
 		$external_post_id = (int) $req->get_param( 'postId' );
 		$post_type = (string) $req->get_param( 'postType' );
 		$mode = (string) $req->get_param( 'mode' );
@@ -691,7 +691,7 @@ class CCP_API extends REST_Base {
 	 * - Disallows classes (security)
 	 * - Distinguishes between invalid input and the serialized false ('b:0;')
 	 */
-	public function safe_unserialize( string $s ) {
+	public function safe_unserialize( string $s ): mixed {
 		if ( 'b:0;' === $s ) {
 			return false; // legit serialized false
 		}
@@ -714,7 +714,7 @@ class CCP_API extends REST_Base {
 	 * - Preserves order for indexed arrays
 	 * - Converts objects to ['__class__' => ClassName, ...props...]
 	 */
-	public function normalize( $v ) {
+	public function normalize( $v ): mixed {
 		if ( is_array( $v ) ) {
 			$is_sequential = array_keys( $v ) === range( 0, count( $v ) - 1 );
 			if ( $is_sequential ) {
@@ -872,7 +872,7 @@ class CCP_API extends REST_Base {
 	 * - Normalize self-closing spacing
 	 *
 	 * @param string $html HTML content.
-	 *
+	 * @return string
 	 */
 	private function add_line_breaks_for_diff( string $html ): string {
 		// Ensure each block comment is on its own line.

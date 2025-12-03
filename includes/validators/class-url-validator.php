@@ -22,7 +22,7 @@ class URL_Validator {
 	 * @param string $url The URL to validate.
 	 * @return bool True if valid, false otherwise.
 	 */
-	public static function is_valid_external_url( $url ) {
+	public static function is_valid_external_url( $url ): bool {
 		// Check if URL is valid
 		if ( ! filter_var( $url, FILTER_VALIDATE_URL ) ) {
 			return false;
@@ -56,7 +56,7 @@ class URL_Validator {
 	 * @param string $scheme The URL scheme.
 	 * @return bool True if valid scheme for the environment.
 	 */
-	private static function is_valid_scheme( $url, $scheme ) {
+	private static function is_valid_scheme( $url, $scheme ): bool {
 		// Always require HTTPS in VIP production environments
 		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
 			return 'https' === $scheme;
@@ -95,7 +95,7 @@ class URL_Validator {
 	 * @param string $url Raw URL input.
 	 * @return string|false Sanitized URL or false if invalid.
 	 */
-	public static function sanitize_external_url( $url ) {
+	public static function sanitize_external_url( $url ): string|false {
 		$sanitized_url = esc_url_raw( $url );
 
 		if ( self::is_valid_external_url( $sanitized_url ) ) {
@@ -111,7 +111,7 @@ class URL_Validator {
 	 * @param string $url Optional URL to check for development domains.
 	 * @return array
 	 */
-	public static function get_allowed_schemes( $url = '' ) {
+	public static function get_allowed_schemes( $url = '' ): array {
 		// Always require HTTPS in VIP production environments
 		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
 			return array( 'https' );
@@ -142,7 +142,7 @@ class URL_Validator {
 	 * @param string $url The URL to check.
 	 * @return bool
 	 */
-	public static function is_domain_whitelisted( $url ) {
+	public static function is_domain_whitelisted( $url ): bool {
 		$host = wp_parse_url( $url, PHP_URL_HOST );
 
 		/**

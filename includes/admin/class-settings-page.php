@@ -20,7 +20,7 @@ class Settings_Page {
 	/**
 	 * Render the settings page
 	 */
-	public function render() {
+	public function render(): void {
 		$site_url        = get_option( 'ccp_external_site_url', '' );
 		$number_of_posts = get_option( 'ccp_number_of_posts', 10 );
 		$shared_secret   = get_option( 'ccp_shared_secret', '' );
