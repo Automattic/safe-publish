@@ -38,7 +38,7 @@ class Admin_Page {
 	/**
 	 * Render the admin page
 	 */
-	public function render() {
+	public function render(): void {
 		$site_url        = get_option( 'ccp_external_site_url', '' );
 		$number_of_posts = get_option( 'ccp_number_of_posts', 10 );
 
@@ -94,7 +94,7 @@ class Admin_Page {
 	/**
 	 * Enqueue admin assets with VIP compatibility
 	 */
-	public function enqueue_assets() {
+	public function enqueue_assets(): void {
 		// Early return if not in admin or wrong page.
 		if ( ! is_admin() ) {
 			return;
@@ -112,14 +112,14 @@ class Admin_Page {
 	/**
 	 * Enqueue assets with VIP-specific optimizations
 	 */
-	private function enqueue_vip_safe_assets() {
+	private function enqueue_vip_safe_assets(): void {
 		$this->enqueue_standard_assets();
 	}
 
 	/**
 	 * Enqueue standard assets
 	 */
-	private function enqueue_standard_assets() {
+	private function enqueue_standard_assets(): void {
 		// Get posts data for localization.
 		$site_url        = get_option( 'ccp_external_site_url', '' );
 		$number_of_posts = get_option( 'ccp_number_of_posts', 10 );
@@ -319,7 +319,7 @@ class Admin_Page {
 	/**
 	 * Verify that scripts loaded properly (useful for VIP debugging).
 	 */
-	public function verify_script_loaded() {
+	public function verify_script_loaded(): void {
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG && wp_script_is( 'ccp-admin-dataviews-script', 'done' ) ) {
 			echo '<!-- CCP: Admin script loaded successfully -->';
 		} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {

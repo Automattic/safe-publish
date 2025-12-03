@@ -47,7 +47,7 @@ class Admin_Handler {
 	/**
 	 * Initialize admin functionality
 	 */
-	public function init() {
+	public function init(): void {
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		add_action( 'admin_init', array( $this, 'admin_init' ) );
 
@@ -71,7 +71,7 @@ class Admin_Handler {
 	/**
 	 * Add admin menu
 	 */
-	public function add_admin_menu() {
+	public function add_admin_menu(): void {
 		// Main menu page - Tools
 		add_menu_page(
 			__( 'Compliant Content Publisher', 'ccp' ), // Page title
@@ -97,7 +97,7 @@ class Admin_Handler {
 	/**
 	 * Admin initialization
 	 */
-	public function admin_init() {
+	public function admin_init(): void {
 		register_setting(
 			'ccp_settings',
 			'ccp_external_site_url',
@@ -153,7 +153,7 @@ class Admin_Handler {
 	 *
 	 * @param string $hook_suffix The current admin page hook suffix.
 	 */
-	public function prepare_vip_dependencies( $hook_suffix ) {
+	public function prepare_vip_dependencies( $hook_suffix ): void {
 		// Only on our specific admin page.
 		if ( 'toplevel_page_compliant-content-publisher' !== $hook_suffix ) {
 			return;
@@ -182,7 +182,7 @@ class Admin_Handler {
 	/**
 	 * Render the admin page
 	 */
-	public function render_admin_page() {
+	public function render_admin_page(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'ccp' ) );
 		}
@@ -194,7 +194,7 @@ class Admin_Handler {
 	/**
 	 * Render the settings page
 	 */
-	public function render_settings_page() {
+	public function render_settings_page(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'ccp' ) );
 		}
@@ -208,7 +208,7 @@ class Admin_Handler {
 	 *
 	 * @param string $hook_suffix The current admin page hook suffix.
 	 */
-	public function enqueue_admin_assets( $hook_suffix ) {
+	public function enqueue_admin_assets( $hook_suffix ): void {
 		// Only enqueue on our main admin page (tools page).
 		if ( 'toplevel_page_compliant-content-publisher' !== $hook_suffix ) {
 			return;
@@ -221,7 +221,7 @@ class Admin_Handler {
 	/**
 	 * AJAX handler for fetching posts
 	 */
-	public function ajax_fetch_posts() {
+	public function ajax_fetch_posts(): void {
 		// Security check
 		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
@@ -252,7 +252,7 @@ class Admin_Handler {
 	/**
 	 * AJAX handler for fetching post types
 	 */
-	public function ajax_fetch_post_types() {
+	public function ajax_fetch_post_types(): void {
 		// Security check
 		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
@@ -281,7 +281,7 @@ class Admin_Handler {
 	/**
 	 * AJAX handler for testing connection
 	 */
-	public function ajax_test_connection() {
+	public function ajax_test_connection(): void {
 		// Security check
 		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
@@ -303,7 +303,7 @@ class Admin_Handler {
 	/**
 	 * AJAX handler for creating draft post
 	 */
-	public function ajax_create_draft() {
+	public function ajax_create_draft(): void {
 		global $ccp_plugin;
 
 		// Security check
@@ -635,7 +635,7 @@ class Admin_Handler {
 	/**
 	 * AJAX handler for bulk importing posts
 	 */
-	public function ajax_bulk_import() {
+	public function ajax_bulk_import(): void {
 		// Security check
 		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
@@ -702,7 +702,7 @@ class Admin_Handler {
 	 * @param int   $session_id The import session ID.
 	 * @return array Result data for this post.
 	 */
-	private function import_single_post( $post_data, $session_id = null ) {
+	private function import_single_post( $post_data, $session_id = null ): array {
 		try {
 			$external_post_id  = absint( $post_data['id'] ?? 0 );
 			$title             = sanitize_text_field( $post_data['title'] ?? '' );
@@ -961,7 +961,7 @@ class Admin_Handler {
 	 * @param string $url URL to sanitize.
 	 * @return string
 	 */
-	public function sanitize_url( $url ) {
+	public function sanitize_url( $url ): string {
 		$url = esc_url_raw( $url );
 
 		if ( empty( $url ) ) {
@@ -987,7 +987,7 @@ class Admin_Handler {
 	 * @param mixed $value Value to sanitize.
 	 * @return int
 	 */
-	public function sanitize_number_of_posts( $value ) {
+	public function sanitize_number_of_posts( $value ): int {
 		$number = absint( $value );
 
 		if ( $number < 1 || $number > 100 ) {
@@ -1008,7 +1008,7 @@ class Admin_Handler {
 	 * @param mixed $value Value to sanitize.
 	 * @return bool
 	 */
-	public function sanitize_checkbox( $value ) {
+	public function sanitize_checkbox( $value ): bool {
 		return (bool) $value;
 	}
 
@@ -1018,7 +1018,7 @@ class Admin_Handler {
 	 * @param mixed $value Value to sanitize.
 	 * @return string
 	 */
-	public function sanitize_shared_secret( $value ) {
+	public function sanitize_shared_secret( $value ): string {
 		if ( empty( $value ) ) {
 			return '';
 		}
@@ -1044,7 +1044,7 @@ class Admin_Handler {
 	 * @param mixed $value Value to sanitize.
 	 * @return string
 	 */
-	public function sanitize_username( $value ) {
+	public function sanitize_username( $value ): string {
 		if ( ! \ccp_is_development_environment() ) {
 			return '';
 		}
@@ -1058,7 +1058,7 @@ class Admin_Handler {
 	 * @param mixed $value Value to sanitize.
 	 * @return string
 	 */
-	public function sanitize_password( $value ) {
+	public function sanitize_password( $value ): string {
 		if ( ! \ccp_is_development_environment() ) {
 			return '';
 		}
@@ -1072,7 +1072,7 @@ class Admin_Handler {
 	 *
 	 * @return array Authentication credentials array with appropriate keys.
 	 */
-	private function get_auth_credentials() {
+	private function get_auth_credentials(): array {
 		// Try VIP-safe authentication first
 		$shared_secret = get_option( 'ccp_shared_secret', '' );
 
@@ -1104,7 +1104,7 @@ class Admin_Handler {
 	 * @param string $content The post content.
 	 * @return string Processed content with oEmbeds.
 	 */
-	public function process_oembed_content( $content ) {
+	public function process_oembed_content( $content ): string {
 		if ( empty( $content ) ) {
 			return $content;
 		}
@@ -1130,7 +1130,7 @@ class Admin_Handler {
 	 * @param string $content The post content.
 	 * @return string Processed content.
 	 */
-	public function process_manual_embeds( $content ) {
+	public function process_manual_embeds( $content ): string {
 		// YouTube embed patterns
 		$content = preg_replace_callback(
 			'/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/',
@@ -1176,7 +1176,7 @@ class Admin_Handler {
 	 * @param string $content The post content.
 	 * @return bool True if content contains blocks.
 	 */
-	public function is_gutenberg_content( $content ) {
+	public function is_gutenberg_content( $content ): bool {
 		// Check for block comment syntax
 		return false !== strpos( $content, '<!-- wp:' );
 	}
@@ -1188,7 +1188,7 @@ class Admin_Handler {
 	 * @param string $site_url The source site URL.
 	 * @return string Processed content.
 	 */
-	public function process_gutenberg_blocks( $content, $site_url ) {
+	public function process_gutenberg_blocks( $content, $site_url ): string {
 		if ( empty( $content ) ) {
 			return $content;
 		}
@@ -1232,7 +1232,7 @@ class Admin_Handler {
 	 * @param string $site_url The source site URL.
 	 * @return array Processed block.
 	 */
-	public function process_single_block( $block, $site_url ) {
+	public function process_single_block( $block, $site_url ): array {
 		if ( empty( $block['blockName'] ) ) {
 			return $block;
 		}
@@ -1292,7 +1292,7 @@ class Admin_Handler {
 	 * @param string $site_url The source site URL.
 	 * @return array Processed block.
 	 */
-	public function process_image_block( $block, $site_url ) {
+	public function process_image_block( $block, $site_url ): array {
 		$original_url = '';
 
 		// First try to get URL from block attributes
@@ -1372,7 +1372,7 @@ class Admin_Handler {
 	 * @param string $site_url The source site URL.
 	 * @return array Processed block.
 	 */
-	public function process_gallery_block( $block, $site_url ) {
+	public function process_gallery_block( $block, $site_url ): array {
 		// Handle traditional gallery format with images in attributes
 		if ( ! empty( $block['attrs']['images'] ) && is_array( $block['attrs']['images'] ) ) {
 			foreach ( $block['attrs']['images'] as $index => $image ) {
@@ -1460,7 +1460,7 @@ class Admin_Handler {
 	 * @param string $site_url The source site URL.
 	 * @return array Processed block.
 	 */
-	public function process_video_block( $block, $site_url ) {
+	public function process_video_block( $block, $site_url ): array {
 		if ( ! empty( $block['attrs']['src'] ) ) {
 			$original_url = $block['attrs']['src'];
 
@@ -1488,7 +1488,7 @@ class Admin_Handler {
 	 * @param string $site_url The source site URL.
 	 * @return array Processed block.
 	 */
-	public function process_audio_block( $block, $site_url ) {
+	public function process_audio_block( $block, $site_url ): array {
 		if ( ! empty( $block['attrs']['src'] ) ) {
 			$original_url = $block['attrs']['src'];
 
@@ -1516,7 +1516,7 @@ class Admin_Handler {
 	 * @param string $site_url The source site URL.
 	 * @return array Processed block.
 	 */
-	public function process_embed_block( $block, $site_url ) {
+	public function process_embed_block( $block, $site_url ): array {
 		// Most embed blocks work with URLs that don't need media import
 		// but we can process the innerHTML for any embedded media
 		if ( ! empty( $block['innerHTML'] ) ) {
@@ -1533,7 +1533,7 @@ class Admin_Handler {
 	 * @param string $site_url The source site URL.
 	 * @return array Processed block.
 	 */
-	public function process_html_block( $block, $site_url ) {
+	public function process_html_block( $block, $site_url ): array {
 		if ( ! empty( $block['attrs']['content'] ) ) {
 			$block['attrs']['content'] = $this->api->process_and_import_media( $block['attrs']['content'], $site_url );
 		}
@@ -1552,7 +1552,7 @@ class Admin_Handler {
 	 * @param string $site_url The source site URL.
 	 * @return array Processed block.
 	 */
-	public function process_text_block( $block, $site_url ) {
+	public function process_text_block( $block, $site_url ): array {
 		// Process innerHTML which contains the actual content with potential links/media
 		if ( ! empty( $block['innerHTML'] ) ) {
 			$block['innerHTML'] = $this->api->process_and_import_media( $block['innerHTML'], $site_url );
@@ -1567,7 +1567,7 @@ class Admin_Handler {
 	 * @param string $html The HTML content.
 	 * @return string The extracted src URL or empty string if not found.
 	 */
-	public function extract_img_src_from_html( $html ) {
+	public function extract_img_src_from_html( $html ): string {
 		if ( empty( $html ) ) {
 			return '';
 		}
@@ -1607,7 +1607,7 @@ class Admin_Handler {
 	 * @param string $new_url The new image URL.
 	 * @return string The updated HTML content.
 	 */
-	public function update_img_src_in_html( $html, $old_url, $new_url ) {
+	public function update_img_src_in_html( $html, $old_url, $new_url ): string {
 		if ( empty( $html ) || empty( $old_url ) || empty( $new_url ) ) {
 			return $html;
 		}
@@ -1651,7 +1651,7 @@ class Admin_Handler {
 	 * @param int    $new_attachment_id The new attachment ID.
 	 * @return string The updated HTML content.
 	 */
-	public function update_wp_image_class( $html, $new_attachment_id ) {
+	public function update_wp_image_class( $html, $new_attachment_id ): string {
 		if ( empty( $html ) || empty( $new_attachment_id ) ) {
 			return $html;
 		}
@@ -1687,7 +1687,7 @@ class Admin_Handler {
 	 * @param string $external_site_url The external site URL to replace.
 	 * @return string Content with URLs replaced.
 	 */
-	public function replace_external_urls( $content, $external_site_url ) {
+	public function replace_external_urls( $content, $external_site_url ): string {
 		if ( empty( $content ) || empty( $external_site_url ) ) {
 			return $content;
 		}
@@ -1762,7 +1762,7 @@ class Admin_Handler {
 	 * @param string $current_site_url The current site URL.
 	 * @return string The processed URL.
 	 */
-	public function replace_url_domain( $url, $external_site_url, $current_site_url ) {
+	public function replace_url_domain( $url, $external_site_url, $current_site_url ): string {
 		// Skip empty URLs, anchors, or non-HTTP URLs
 		if ( empty( $url ) || strpos( $url, '#' ) === 0 || strpos( $url, 'mailto:' ) === 0 || strpos( $url, 'tel:' ) === 0 ) {
 			return $url;
@@ -1815,7 +1815,7 @@ class Admin_Handler {
 	/**
 	 * Debug authentication AJAX handler
 	 */
-	public function ajax_debug_auth() {
+	public function ajax_debug_auth(): void {
 		// Security check
 		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
@@ -1879,7 +1879,7 @@ class Admin_Handler {
 	 * @param string $site_url The source site URL.
 	 * @return bool True if content needs processing.
 	 */
-	private function content_needs_media_processing( $content, $site_url ) {
+	private function content_needs_media_processing( $content, $site_url ): bool {
 		if ( empty( $content ) || empty( $site_url ) ) {
 			return false;
 		}
@@ -1919,7 +1919,7 @@ class Admin_Handler {
 	/**
 	 * Temporarily disable content formatting filters during import
 	 */
-	private function disable_content_filters() {
+	private function disable_content_filters(): void {
 		global $wp_filter;
 
 		// Store filters that might affect content formatting
@@ -1946,7 +1946,7 @@ class Admin_Handler {
 	/**
 	 * Restore content formatting filters after import
 	 */
-	private function restore_content_filters() {
+	private function restore_content_filters(): void {
 		global $wp_filter;
 
 		// Restore previously disabled filters

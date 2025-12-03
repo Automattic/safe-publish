@@ -30,7 +30,7 @@ class Import_History {
 	/**
 	 * Initialize the import history functionality
 	 */
-	public function init() {
+	public function init(): void {
 		\add_action( 'init', array( $this, 'register_post_types' ) );
 		\add_action( 'admin_menu', array( $this, 'add_submenu_page' ) );
 		\add_action( 'wp_ajax_ccp_get_import_sessions', array( $this, 'ajax_get_import_sessions' ) );
@@ -44,7 +44,7 @@ class Import_History {
 	/**
 	 * Register custom post types for import tracking
 	 */
-	public function register_post_types() {
+	public function register_post_types(): void {
 		// Register import session post type
 		\register_post_type(
 			self::SESSION_POST_TYPE,
@@ -93,7 +93,7 @@ class Import_History {
 	/**
 	 * Add submenu page for import history
 	 */
-	public function add_submenu_page() {
+	public function add_submenu_page(): void {
 		\add_submenu_page(
 			'compliant-content-publisher',
 			__( 'Import History', 'ccp' ),
@@ -107,7 +107,7 @@ class Import_History {
 	/**
 	 * Render the import history page
 	 */
-	public function render_history_page() {
+	public function render_history_page(): void {
 		if ( ! \current_user_can( 'manage_options' ) ) {
 			\wp_die( \esc_html__( 'You do not have sufficient permissions to access this page.', 'ccp' ) );
 		}
@@ -186,9 +186,9 @@ class Import_History {
 	 *
 	 * @param string $source_url Source site URL
 	 * @param string $session_type Type of import (single, bulk)
-	 * @return int Session ID
+	 * @return int|\WP_Error Session ID or error
 	 */
-	public function create_session( $source_url, $session_type = 'bulk' ) {
+	public function create_session( $source_url, $session_type = 'bulk' ): int|\WP_Error {
 		$session_id = \wp_insert_post( array(
 			'post_type'   => self::SESSION_POST_TYPE,
 			'post_title'  => sprintf(
@@ -222,8 +222,9 @@ class Import_History {
 	 * @param int    $post_id WordPress post ID (if successful)
 	 * @param string $error Error message (if failed)
 	 * @param array  $changes Array of changes made
+	 * @return int|\WP_Error Log ID or error
 	 */
-	public function log_import_action( $session_id, $external_id, $title, $status, $post_id = null, $error = null, $changes = array() ) {
+	public function log_import_action( $session_id, $external_id, $title, $status, $post_id = null, $error = null, $changes = array() ): int|\WP_Error {
 		$log_data = array(
 			'session_id'    => $session_id,
 			'external_id'   => $external_id,
@@ -262,7 +263,7 @@ class Import_History {
 	 * @param int $session_id Session ID
 	 * @param string $status Status of the import (success, error, updated)
 	 */
-	public function update_session_stats( $session_id, $status ) {
+	public function update_session_stats( $session_id, $status ): void {
 		$total = (int) get_post_meta( $session_id, 'total_items', true );
 		$successful = (int) get_post_meta( $session_id, 'successful', true );
 		$failed = (int) get_post_meta( $session_id, 'failed', true );
@@ -289,7 +290,7 @@ class Import_History {
 	 *
 	 * @param int $session_id Session ID
 	 */
-	public function complete_session( $session_id ) {
+	public function complete_session( $session_id ): void {
 		update_post_meta( $session_id, 'status', 'completed' );
 		update_post_meta( $session_id, 'end_time', current_time( 'mysql' ) );
 	}
@@ -301,7 +302,7 @@ class Import_History {
 	 * @param string $old_content Previous content
 	 * @param string $new_content New content
 	 */
-	public function store_content_diff( $post_id, $old_content, $new_content ) {
+	public function store_content_diff( $post_id, $old_content, $new_content ): void {
 		$diff_data = array(
 			'old_content' => $old_content,
 			'new_content' => $new_content,
@@ -314,7 +315,7 @@ class Import_History {
 	/**
 	 * AJAX handler for getting import sessions
 	 */
-	public function ajax_get_import_sessions() {
+	public function ajax_get_import_sessions(): void {
 		\check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! \current_user_can( 'manage_options' ) ) {
@@ -368,7 +369,7 @@ class Import_History {
 	/**
 	 * AJAX handler for getting session details
 	 */
-	public function ajax_get_session_details() {
+	public function ajax_get_session_details(): void {
 		\check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -491,7 +492,7 @@ class Import_History {
 	/**
 	 * AJAX handler for rolling back a session
 	 */
-	public function ajax_rollback_session() {
+	public function ajax_rollback_session(): void {
 		\check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! \current_user_can( 'manage_options' ) ) {
@@ -613,7 +614,7 @@ class Import_History {
 	/**
 	 * Handle AJAX request for rolling back a single item
 	 */
-	public function ajax_rollback_item() {
+	public function ajax_rollback_item(): void {
 		\check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! \current_user_can( 'manage_options' ) ) {
@@ -729,7 +730,7 @@ class Import_History {
 	/**
 	 * AJAX handler for getting post diff
 	 */
-	public function ajax_get_post_diff() {
+	public function ajax_get_post_diff(): void {
 		\check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! \current_user_can( 'manage_options' ) ) {
@@ -830,7 +831,7 @@ class Import_History {
 	 * @param string $new_content New content
 	 * @return string HTML diff
 	 */
-	private function generate_comprehensive_diff_html( $old_title, $new_title, $old_excerpt, $new_excerpt, $old_content, $new_content ) {
+	private function generate_comprehensive_diff_html( $old_title, $new_title, $old_excerpt, $new_excerpt, $old_content, $new_content ): string {
 		$diff_html = '<div class="ccp-diff-container">';
 
 		// Title diff
@@ -890,7 +891,7 @@ class Import_History {
 	/**
 	 * AJAX handler for deleting a session
 	 */
-	public function ajax_delete_session() {
+	public function ajax_delete_session(): void {
 		\check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! \current_user_can( 'manage_options' ) ) {

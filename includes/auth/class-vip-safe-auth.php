@@ -37,7 +37,7 @@ class VIP_Safe_Auth {
 	 * @param string $method HTTP method for the request (default: 'GET').
 	 * @return array Request modifications (headers, query params, etc.).
 	 */
-	public static function get_auth_params( $site_url, $auth_config = array(), $method = 'GET' ) {
+	public static function get_auth_params( $site_url, $auth_config = array(), $method = 'GET' ): array {
 		$auth_method = self::determine_auth_method( $auth_config );
 
 		switch ( $auth_method ) {
@@ -51,13 +51,15 @@ class VIP_Safe_Auth {
 			default:
 				return array();
 		}
-	}	/**
+	}
+
+	/**
 	 * Determine the best authentication method to use
 	 *
 	 * @param array $auth_config Authentication configuration.
 	 * @return string Authentication method to use.
 	 */
-	private static function determine_auth_method( $auth_config ) {
+	private static function determine_auth_method( $auth_config ): string {
 		// Check what auth methods are configured
 		if ( ! empty( $auth_config['shared_secret'] ) ) {
 			return 'shared_secret';
@@ -80,7 +82,7 @@ class VIP_Safe_Auth {
 	 * @param array  $auth_config Authentication configuration array.
 	 * @return bool True if properly authorized, false otherwise.
 	 */
-	public static function is_authorized( $site_url = '', $auth_config = array() ) {
+	public static function is_authorized( $site_url = '', $auth_config = array() ): bool {
 		$auth_method = self::determine_auth_method( $auth_config );
 
 		// No authentication method available
@@ -138,7 +140,7 @@ class VIP_Safe_Auth {
 	 * @param array  $auth_config Authentication configuration array.
 	 * @return bool|WP_Error True if authorized, WP_Error with details if not.
 	 */
-	public static function test_authorization( $site_url, $auth_config = array() ) {
+	public static function test_authorization( $site_url, $auth_config = array() ): bool|\WP_Error {
 		if ( empty( $site_url ) ) {
 			return new \WP_Error( 'invalid_url', 'Site URL is required for authorization testing' );
 		}
@@ -209,7 +211,7 @@ class VIP_Safe_Auth {
 	 * @param string $method HTTP method for the request.
 	 * @return array Request modifications.
 	 */
-	private static function get_shared_secret_auth( $site_url, $auth_config, $method = 'GET' ) {
+	private static function get_shared_secret_auth( $site_url, $auth_config, $method = 'GET' ): array {
 		$shared_secret = $auth_config['shared_secret'] ?? '';
 
 		if ( empty( $shared_secret ) ) {
@@ -259,7 +261,7 @@ class VIP_Safe_Auth {
 	 * @param array  $auth_config Authentication configuration.
 	 * @return array Request modifications.
 	 */
-	private static function get_basic_auth( $site_url, $auth_config ) {
+	private static function get_basic_auth( $site_url, $auth_config ): array {
 		$username = $auth_config['username'] ?? '';
 		$password = $auth_config['password'] ?? '';
 
@@ -286,7 +288,7 @@ class VIP_Safe_Auth {
 	 *
 	 * @return bool|WP_Error True if authenticated, WP_Error if not.
 	 */
-	public static function verify_request() {
+	public static function verify_request(): bool|\WP_Error {
 		// Check for shared secret authentication
 		if ( isset( $_SERVER['HTTP_X_CCP_SIGNATURE'] ) ) {
 			return self::verify_shared_secret();
@@ -300,7 +302,7 @@ class VIP_Safe_Auth {
 	 *
 	 * @return bool|WP_Error True if valid, WP_Error if not.
 	 */
-	private static function verify_shared_secret() {
+	private static function verify_shared_secret(): bool|\WP_Error {
 		$signature = \sanitize_text_field( $_SERVER['HTTP_X_CCP_SIGNATURE'] ?? '' );
 		$site = \sanitize_url( $_SERVER['HTTP_X_CCP_SITE'] ?? '' );
 		$timestamp = \sanitize_text_field( $_SERVER['HTTP_X_CCP_TIMESTAMP'] ?? '' );
@@ -353,7 +355,7 @@ class VIP_Safe_Auth {
 	 *
 	 * @return string Generated secret.
 	 */
-	public static function generate_shared_secret() {
+	public static function generate_shared_secret(): string {
 		return \bin2hex( \random_bytes( 32 ) ); // 64 character hex string
 	}
 }
