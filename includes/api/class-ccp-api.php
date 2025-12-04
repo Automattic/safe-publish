@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class CCP_API extends REST_Base {
 
 	/**
-	 * Rest API base route.
+	 * REST API base route.
 	 *
 	 * @var string
 	 */
@@ -698,7 +698,7 @@ class CCP_API extends REST_Base {
 	 */
 	public function safe_unserialize( string $s ): mixed {
 		if ( 'b:0;' === $s ) {
-			return false; // legit serialized false
+			return false; // legitimate serialized false
 		}
 
 		// Suppress warnings and detect failure reliably

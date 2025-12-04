@@ -14,12 +14,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Rest Base Class.
+ * REST Base Class
  */
 abstract class REST_Base {
 
 	/**
-	 * Rest API base route.
+	 * REST API base route.
 	 *
 	 * @var string
 	 */

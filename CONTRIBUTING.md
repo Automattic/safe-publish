@@ -20,7 +20,7 @@ Please see our guide to setting up a [local development environment](docs/local-
 
 ## Versioning
 
-Complient Content Publisher uses [semantic versioning](https://semver.org/).
+Compliant Content Publisher uses [semantic versioning](https://semver.org/).
 
 ## Release process
 
