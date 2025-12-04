@@ -6,8 +6,9 @@ namespace CCP\Tests;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Helper Functions Test
- * Tests utility functions and helpers
+ * Helper Functions Test.
+ *
+ * Tests utility functions and helpers.
  */
 class HelperFunctionsTest extends TestCase {
 

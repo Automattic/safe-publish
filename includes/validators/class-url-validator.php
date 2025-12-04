@@ -1,6 +1,7 @@
 <?php
 /**
  * URL Validator class
+ *
  * @package CCP
  */
 
@@ -12,14 +13,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * URL Validator Class
+ * URL Validator Class.
  */
 class URL_Validator {
 
 	/**
 	 * Validates external URLs for security compliance.
 	 *
-	 * @param string $url The URL to validate.
+	 * @param string $url URL to validate.
 	 * @return bool True if valid, false otherwise.
 	 */
 	public static function is_valid_external_url( $url ): bool {
@@ -50,10 +51,10 @@ class URL_Validator {
 	}
 
 	/**
-	 * Validates URL scheme based on environment
+	 * Validates URL scheme based on environment.
 	 *
-	 * @param string $url The full URL.
-	 * @param string $scheme The URL scheme.
+	 * @param string $url    Full URL.
+	 * @param string $scheme URL scheme.
 	 * @return bool True if valid scheme for the environment.
 	 */
 	private static function is_valid_scheme( $url, $scheme ): bool {
@@ -90,7 +91,7 @@ class URL_Validator {
 	}
 
 	/**
-	 * Validates and sanitizes a URL
+	 * Validates and sanitizes a URL.
 	 *
 	 * @param string $url Raw URL input.
 	 * @return string|false Sanitized URL or false if invalid.
@@ -106,10 +107,10 @@ class URL_Validator {
 	}
 
 	/**
-	 * Get allowed URL schemes based on environment
+	 * Gets allowed URL schemes based on environment.
 	 *
-	 * @param string $url Optional URL to check for development domains.
-	 * @return array
+	 * @param string $url Optional. URL to check for development domains. Default ''.
+	 * @return array Allowed schemes.
 	 */
 	public static function get_allowed_schemes( $url = '' ): array {
 		// Always require HTTPS in VIP production environments
@@ -137,19 +138,19 @@ class URL_Validator {
 	}
 
 	/**
-	 * Check if domain is in whitelist (for future enhancement)
+	 * Checks if domain is in whitelist (for future enhancement).
 	 *
-	 * @param string $url The URL to check.
-	 * @return bool
+	 * @param string $url URL to check.
+	 * @return bool Whether the domain is whitelisted.
 	 */
 	public static function is_domain_whitelisted( $url ): bool {
 		$host = wp_parse_url( $url, PHP_URL_HOST );
 
 		/**
-		 * Filter allowed domains for external requests
+		 * Filters the allowed domains for external requests.
 		 *
-		 * @param array $allowed_domains Array of allowed domain patterns.
-		 * @param string $host The hostname being checked.
+		 * @param array  $allowed_domains Allowed domain patterns.
+		 * @param string $host            Hostname being checked.
 		 */
 		$allowed_domains = apply_filters( 'ccp_allowed_domains', array(), $host );
 

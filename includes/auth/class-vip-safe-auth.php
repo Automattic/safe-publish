@@ -13,16 +13,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * VIP-Safe Authentication Class
+ * VIP-Safe Authentication Class.
  *
  * Implements authentication methods that work on VIP:
- * 1. Shared Secret (HMAC authentication) - Production ready
- * 2. Basic Authentication - Development environments only
+ *
+ * 1. Shared Secret (HMAC authentication) - Production ready.
+ * 2. Basic Authentication - Development environments only.
  */
 class VIP_Safe_Auth {
 
 	/**
-	 * Authentication methods priority order
+	 * Authentication methods priority order.
 	 */
 	const AUTH_METHODS = array(
 		'shared_secret',
@@ -30,11 +31,11 @@ class VIP_Safe_Auth {
 	);
 
 	/**
-	 * Get authentication parameters for requests
+	 * Gets authentication parameters for requests.
 	 *
-	 * @param string $site_url Target site URL.
-	 * @param array  $auth_config Authentication configuration array.
-	 * @param string $method HTTP method for the request (default: 'GET').
+	 * @param string $site_url    Target site URL.
+	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
+	 * @param string $method      Optional. HTTP method for the request. Default 'GET'.
 	 * @return array Request modifications (headers, query params, etc.).
 	 */
 	public static function get_auth_params( $site_url, $auth_config = array(), $method = 'GET' ): array {
@@ -54,7 +55,7 @@ class VIP_Safe_Auth {
 	}
 
 	/**
-	 * Determine the best authentication method to use
+	 * Determines the best authentication method to use.
 	 *
 	 * @param array $auth_config Authentication configuration.
 	 * @return string Authentication method to use.
@@ -74,12 +75,13 @@ class VIP_Safe_Auth {
 	}
 
 	/**
-	 * Check if the current request/context is properly authorized
-	 * This method validates that we have valid authentication credentials
-	 * and can successfully authenticate with the target site
+	 * Checks if the current request/context is properly authorized.
 	 *
-	 * @param string $site_url Target site URL to test authorization against.
-	 * @param array  $auth_config Authentication configuration array.
+	 * Validates that the authentication credentials are valid and can
+	 * successfully authenticate with the target site.
+	 *
+	 * @param string $site_url    Optional. Target site URL to test authorization against. Default ''.
+	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
 	 * @return bool True if properly authorized, false otherwise.
 	 */
 	public static function is_authorized( $site_url = '', $auth_config = array() ): bool {
@@ -133,11 +135,12 @@ class VIP_Safe_Auth {
 	}
 
 	/**
-	 * Test authorization against a specific site by making a lightweight request
-	 * This method actually validates that the credentials work with the target site
+	 * Tests authorization against a site by making a lightweight request.
 	 *
-	 * @param string $site_url Target site URL.
-	 * @param array  $auth_config Authentication configuration array.
+	 * Validates that the credentials work with the target site.
+	 *
+	 * @param string $site_url    Target site URL.
+	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
 	 * @return bool|WP_Error True if authorized, WP_Error with details if not.
 	 */
 	public static function test_authorization( $site_url, $auth_config = array() ): bool|\WP_Error {
@@ -202,13 +205,14 @@ class VIP_Safe_Auth {
 	}
 
 	/**
-	 * Shared Secret Authentication
-	 * Uses HMAC signature in custom headers that VIP allows
-	 * Compatible with the CCP VIP mu-plugin authentication handler
+	 * Gets shared secret authentication parameters.
 	 *
-	 * @param string $site_url Target site URL.
+	 * Uses HMAC signature in custom headers that VIP allows.
+	 * Compatible with the CCP VIP mu-plugin authentication handler.
+	 *
+	 * @param string $site_url    Target site URL.
 	 * @param array  $auth_config Authentication configuration.
-	 * @param string $method HTTP method for the request.
+	 * @param string $method      Optional. HTTP method for the request. Default 'GET'.
 	 * @return array Request modifications.
 	 */
 	private static function get_shared_secret_auth( $site_url, $auth_config, $method = 'GET' ): array {
@@ -254,10 +258,12 @@ class VIP_Safe_Auth {
 	}
 
 	/**
-	 * Basic Authentication (Development environments only)
-	 * Uses Authorization header with Basic auth - WILL NOT WORK on VIP production
+	 * Gets basic authentication parameters (development environments only).
 	 *
-	 * @param string $site_url Target site URL.
+	 * Uses Authorization header with Basic auth.
+	 * WARNING: Will NOT work on VIP production.
+	 *
+	 * @param string $site_url    Target site URL.
 	 * @param array  $auth_config Authentication configuration.
 	 * @return array Request modifications.
 	 */
@@ -283,8 +289,9 @@ class VIP_Safe_Auth {
 
 
 	/**
-	 * Verify incoming authentication
-	 * This would be used on the target site to verify requests
+	 * Verifies incoming authentication.
+	 *
+	 * Used on the target site to verify requests.
 	 *
 	 * @return bool|WP_Error True if authenticated, WP_Error if not.
 	 */
@@ -298,7 +305,7 @@ class VIP_Safe_Auth {
 	}
 
 	/**
-	 * Verify shared secret authentication
+	 * Verifies shared secret authentication.
 	 *
 	 * @return bool|WP_Error True if valid, WP_Error if not.
 	 */
@@ -351,7 +358,7 @@ class VIP_Safe_Auth {
 	}
 
 	/**
-	 * Generate a secure shared secret
+	 * Generates a secure shared secret.
 	 *
 	 * @return string Generated secret.
 	 */

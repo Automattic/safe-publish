@@ -7,8 +7,9 @@ use PHPUnit\Framework\TestCase;
 use CCP\Validators\URL_Validator;
 
 /**
- * URL Validator Test
- * Tests URL validation and sanitization
+ * URL Validator Test.
+ *
+ * Tests URL validation and sanitization.
  */
 class URLValidatorTest extends TestCase {
 

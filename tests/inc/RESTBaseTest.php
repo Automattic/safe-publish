@@ -7,8 +7,9 @@ use PHPUnit\Framework\TestCase;
 use CCP\API\REST_Base;
 
 /**
- * REST Base Test
- * Tests the REST API base functionality
+ * REST Base Test.
+ *
+ * Tests the REST API base functionality.
  */
 class RESTBaseTest extends TestCase {
 

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CCP VIP Authentication Handler
  * Plugin URI: https://github.com/wpcomvip/x-team-sandbox
- * Description: VIP-compatible authentication handler for Compliant Content Publisher (CCP) using shared secret HMAC authentication. Reads CCP_SHARED_SECRET from environment variables.
+ * Description: VIP-compatible auth handler for CCP using shared secret HMAC.
  * Version: 1.0.0
  * Author: WPVIP
  * Author URI: https://wpvip.com
@@ -12,8 +12,8 @@
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  *
- * This mu-plugin handles authentication for Compliant Content Publisher (CCP) requests
- * on WordPress VIP environments using shared secret HMAC authentication.
+ * This mu-plugin handles authentication for Compliant Content Publisher (CCP)
+ * requests on WordPress VIP environments using shared secret HMAC authentication.
  *
  * The shared secret is read from the CCP_SHARED_SECRET environment variable
  * which should be configured in the VIP dashboard.
@@ -34,27 +34,27 @@ if ( defined( 'CCP_VIP_AUTH_LOADED' ) ) {
 define( 'CCP_VIP_AUTH_LOADED', true );
 
 /**
- * Initialize CCP authentication handler
+ * Initializes CCP authentication handler.
  */
 add_action( 'rest_api_init', 'ccp_vip_init_auth_handler' );
 
 /**
- * Add admin dashboard widget for CCP authentication status
+ * Adds admin dashboard widget for CCP authentication status.
  */
 add_action( 'wp_dashboard_setup', 'ccp_vip_add_dashboard_widget' );
 
 /**
- * Add CCP info to mu-plugins list (for better visibility)
+ * Adds CCP info to mu-plugins list (for better visibility).
  */
 add_filter( 'show_advanced_plugins', 'ccp_vip_enhance_mu_plugins_display', 10, 2 );
 
 /**
- * Add init hook to test logging immediately
+ * Adds init hook to test logging immediately.
  */
 add_action( 'init', 'ccp_vip_test_logging_on_init' );
 
 /**
- * Test logging on WordPress init to ensure logs appear
+ * Tests logging on WordPress init to ensure logs appear.
  */
 if ( ! function_exists( 'ccp_vip_test_logging_on_init' ) ) {
 	function ccp_vip_test_logging_on_init() {
@@ -84,7 +84,7 @@ if ( ! function_exists( 'ccp_vip_test_logging_on_init' ) ) {
 }
 
 /**
- * Initialize the authentication handler for REST API requests
+ * Initializes the authentication handler for REST API requests.
  */
 if ( ! function_exists( 'ccp_vip_init_auth_handler' ) ) {
     function ccp_vip_init_auth_handler() {
@@ -96,8 +96,10 @@ if ( ! function_exists( 'ccp_vip_init_auth_handler' ) ) {
 }
 
 /**
- * Handle permission checks before REST callbacks are executed
- * This intercepts the permission check that causes rest_forbidden_context errors
+ * Handles permission checks before REST callbacks are executed.
+ *
+ * This intercepts the permission check that causes rest_forbidden_context
+ * errors.
  *
  * @param WP_REST_Response|WP_HTTP_Response|WP_Error|mixed $response Result to send to the client.
  * @param array                                            $handler  Route handler used for the request.
@@ -168,7 +170,7 @@ if ( ! function_exists( 'ccp_vip_handle_permission_check' ) ) {
 }
 
 /**
- * Override REST endpoint permissions for CCP authenticated requests
+ * Overrides REST endpoint permissions for CCP authenticated requests.
  *
  * @param array $endpoints Registered REST endpoints.
  * @return array Modified endpoints.
@@ -204,7 +206,7 @@ if ( ! function_exists( 'ccp_vip_override_endpoint_permissions' ) ) {
 }
 
 /**
- * Permission callback that allows all operations for CCP authenticated requests
+ * Permission callback that allows all operations for CCP authenticated requests.
  *
  * @return bool Always true for CCP authenticated requests.
  */
@@ -226,7 +228,7 @@ if ( ! function_exists( 'ccp_vip_allow_all_permissions' ) ) {
 }
 
 /**
- * Override collection parameters to allow edit context for CCP
+ * Overrides collection parameters to allow edit context for CCP.
  *
  * @param array        $params    Collection parameters.
  * @param WP_Post_Type $post_type Post type object.
@@ -255,9 +257,9 @@ if ( ! function_exists( 'ccp_vip_override_collection_params' ) ) {
 }
 
 /**
- * Ensure edit context access for CCP authenticated requests
+ * Ensures edit context access for CCP authenticated requests.
  *
- * @param WP_REST_Response $response The response object.
+ * @param WP_REST_Response $response Response object.
  * @param WP_Post          $post     Post object.
  * @param WP_REST_Request  $request  Request object.
  * @return WP_REST_Response Modified response.
@@ -289,12 +291,12 @@ if ( ! function_exists( 'ccp_vip_ensure_edit_context_access' ) ) {
 }
 
 /**
- * VIP-Compatible Shared Secret Authentication for CCP
+ * VIP-Compatible Shared Secret Authentication for CCP.
  *
- * This function authenticates CCP requests using HMAC-SHA256 signatures
- * and reads the shared secret from VIP environment variables.
+ * Authenticates CCP requests using HMAC-SHA256 signatures and reads the shared
+ * secret from VIP environment variables.
  *
- * @param mixed           $result  Response to replace the requested version with.
+ * @param mixed           $result  Response to replace.
  * @param WP_REST_Server  $server  Server instance.
  * @param WP_REST_Request $request Request used to generate the response.
  * @return mixed Original result or WP_Error for authentication failures.
@@ -321,7 +323,7 @@ if ( ! function_exists( 'ccp_vip_authenticate_request' ) ) {
 }
 
 /**
- * Authenticate using shared secret HMAC
+ * Authenticates using shared secret HMAC.
  */
 if ( ! function_exists( 'ccp_vip_authenticate_shared_secret' ) ) {
     function ccp_vip_authenticate_shared_secret( $request, $headers, $result = null ) {
@@ -423,10 +425,11 @@ if ( ! function_exists( 'ccp_vip_authenticate_shared_secret' ) ) {
 }
 
 /**
- * Override meta capabilities for CCP authenticated requests
- * This handles capability mapping that occurs before user_has_cap
+ * Overrides meta capabilities for CCP authenticated requests.
  *
- * @param array  $caps    Required primitive capabilities for the requested action.
+ * Handles capability mapping that occurs before user_has_cap.
+ *
+ * @param array  $caps    Required primitive capabilities.
  * @param string $cap     Capability being checked.
  * @param int    $user_id User ID.
  * @param array  $args    Arguments passed to capability check.
@@ -471,8 +474,9 @@ if ( ! function_exists( 'ccp_vip_override_meta_capabilities' ) ) {
 }
 
 /**
- * Override context permissions for REST API responses
- * This specifically handles the rest_forbidden_context error
+ * Overrides context permissions for REST API responses.
+ *
+ * This specifically handles the rest_forbidden_context error.
  *
  * @param WP_REST_Response $result  Response object.
  * @param WP_REST_Server   $server  Server instance.
@@ -524,8 +528,9 @@ if ( ! function_exists( 'ccp_vip_override_context_permissions' ) ) {
 }
 
 /**
- * Set up authenticated context for CCP requests
- * Grants necessary permissions for REST API operations
+ * Sets up authenticated context for CCP requests.
+ *
+ * Grants necessary permissions for REST API operations.
  *
  * VIP 2FA COMPLIANCE NOTE:
  * This function uses a capability-based authentication approach instead of
@@ -537,7 +542,7 @@ if ( ! function_exists( 'ccp_vip_override_context_permissions' ) ) {
  * 4. More secure than bypassing 2FA requirements
  * 5. Complies with VIP platform security policies
  *
- * @param WP_REST_Request $request The authenticated request.
+ * @param WP_REST_Request $request Authenticated request.
  */
 if ( ! function_exists( 'ccp_vip_setup_authenticated_context' ) ) {
     function ccp_vip_setup_authenticated_context( $request ) {
@@ -579,12 +584,12 @@ if ( ! function_exists( 'ccp_vip_setup_authenticated_context' ) ) {
 }
 
 /**
- * Grant API capabilities for CCP authenticated requests
+ * Grants API capabilities for CCP authenticated requests.
  *
- * @param array   $allcaps Array of key/value pairs where keys represent a capability name and boolean values represent whether the user has that capability.
- * @param array   $caps    Array of required primitive capabilities for the requested action.
- * @param array   $args    Arguments that accompany the requested capability check.
- * @param WP_User $user    The user object.
+ * @param array   $allcaps User's capabilities array.
+ * @param array   $caps    Required primitive capabilities.
+ * @param array   $args    Arguments for capability check.
+ * @param WP_User $user    User object.
  * @return array Modified capabilities.
  */
 if ( ! function_exists( 'ccp_vip_grant_api_capabilities' ) ) {
@@ -621,7 +626,7 @@ if ( ! function_exists( 'ccp_vip_grant_api_capabilities' ) ) {
 }
 
 /**
- * Bypass additional permission checks for CCP authenticated requests
+ * Bypasses additional permission checks for CCP authenticated requests.
  *
  * @param mixed           $result  Response to replace the requested version with.
  * @param WP_REST_Server  $server  Server instance.
@@ -648,9 +653,9 @@ function ccp_vip_bypass_permission_checks( $result, $server, $request ) {
 }
 
 /**
- * Prepare post data for edit context when CCP is authenticated
+ * Prepares post data for edit context when CCP is authenticated.
  *
- * @param WP_REST_Response $response The response object.
+ * @param WP_REST_Response $response Response object.
  * @param WP_Post          $post     Post object.
  * @param WP_REST_Request  $request  Request object.
  * @return WP_REST_Response Modified response.
@@ -675,9 +680,9 @@ function ccp_vip_prepare_post_for_edit_context( $response, $post, $request ) {
 }
 
 /**
- * Ensure response success for valid CCP operations
+ * Ensures response success for valid CCP operations.
  *
- * @param WP_REST_Response $response The response object.
+ * @param WP_REST_Response $response Response object.
  * @param WP_REST_Server   $server   Server instance.
  * @param WP_REST_Request  $request  Request used to generate the response.
  * @return WP_REST_Response Modified response.
@@ -718,7 +723,7 @@ function ccp_vip_ensure_response_success( $response, $server, $request ) {
 }
 
 /**
- * Get shared secret from VIP environment (multiple fallback methods)
+ * Gets shared secret from VIP environment (multiple fallback methods).
  *
  * @return string Shared secret or empty string if not found.
  */
@@ -756,8 +761,9 @@ if ( ! function_exists( 'ccp_vip_get_shared_secret' ) ) {
 }
 
 /**
- * Log authentication events for monitoring and debugging
- * Enhanced for VIP dashboard visibility
+ * Logs authentication events for monitoring and debugging.
+ *
+ * Enhanced for VIP dashboard visibility.
  *
  * @param string $event Event type (AUTH_SUCCESS, SIGNATURE_INVALID, etc.).
  * @param array  $data  Additional event data.
@@ -853,7 +859,7 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 }
 
 /**
- * Process deferred logs that were queued during REST API requests
+ * Processes deferred logs that were queued during REST API requests.
  */
 if ( ! function_exists( 'ccp_vip_process_deferred_logs' ) ) {
 	function ccp_vip_process_deferred_logs() {
@@ -871,7 +877,7 @@ if ( ! function_exists( 'ccp_vip_process_deferred_logs' ) ) {
 }
 
 /**
- * Store log events in database for dashboard viewing
+ * Stores log events in database for dashboard viewing.
  *
  * @param string $event Event type.
  * @param array  $data  Event data.
@@ -902,7 +908,7 @@ if ( ! function_exists( 'ccp_vip_store_log_event' ) ) {
 }
 
 /**
- * Update authentication statistics
+ * Updates authentication statistics.
  *
  * @param string $event Event type.
  */
@@ -948,12 +954,12 @@ function ccp_vip_update_auth_stats( $event ) {
 }
 
 /**
- * Add admin notice about CCP authentication status (VIP-safe)
+ * Adds admin notice about CCP authentication status (VIP-safe).
  */
 add_action( 'admin_notices', 'ccp_vip_auth_admin_notice' );
 
 /**
- * Display admin notice about CCP authentication configuration status
+ * Displays admin notice about CCP authentication configuration status.
  */
 function ccp_vip_auth_admin_notice() {
     // Only show to administrators
@@ -991,10 +997,7 @@ function ccp_vip_auth_admin_notice() {
     }
 }
 
-/**
- * Add REST API endpoint to test CCP authentication (development only)
- * And monitoring endpoint for VIP dashboard integration
- */
+// Register test endpoint in debug mode only.
 if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
     add_action( 'rest_api_init', 'ccp_vip_register_test_endpoint' );
 }
@@ -1003,7 +1006,7 @@ if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 add_action( 'rest_api_init', 'ccp_vip_register_monitoring_endpoints' );
 
 /**
- * Register test endpoint for CCP authentication (debug mode only)
+ * Registers test endpoint for CCP authentication (debug mode only).
  */
 function ccp_vip_register_test_endpoint() {
     register_rest_route( 'ccp/v1', '/auth-test', array(
@@ -1014,7 +1017,7 @@ function ccp_vip_register_test_endpoint() {
 }
 
 /**
- * Register monitoring endpoints for authentication status
+ * Registers monitoring endpoints for authentication status.
  */
 function ccp_vip_register_monitoring_endpoints() {
     // Authentication status endpoint
@@ -1040,7 +1043,7 @@ function ccp_vip_register_monitoring_endpoints() {
 }
 
 /**
- * Permission callback for viewing auth status
+ * Permission callback for viewing auth status.
  */
 function ccp_vip_can_view_auth_status() {
     // Allow if user can manage options, or if it's a VIP monitoring request
@@ -1058,14 +1061,14 @@ function ccp_vip_can_view_auth_status() {
 }
 
 /**
- * Permission callback for managing auth
+ * Permission callback for managing auth.
  */
 function ccp_vip_can_manage_auth() {
     return current_user_can( 'manage_options' );
 }
 
 /**
- * Authentication status callback for monitoring
+ * Authentication status callback for monitoring.
  */
 function ccp_vip_auth_status_callback( $request ) {
     $shared_secret = ccp_vip_get_shared_secret();
@@ -1136,7 +1139,7 @@ function ccp_vip_auth_status_callback( $request ) {
 }
 
 /**
- * Authentication logs callback
+ * Authentication logs callback.
  */
 function ccp_vip_auth_logs_callback( $request ) {
     $recent_events = get_option( 'ccp_auth_log_events', array() );
@@ -1168,7 +1171,7 @@ function ccp_vip_auth_logs_callback( $request ) {
 }
 
 /**
- * Clear authentication logs callback
+ * Clears authentication logs callback.
  */
 function ccp_vip_clear_auth_logs_callback( $request ) {
     delete_option( 'ccp_auth_log_events' );
@@ -1186,7 +1189,7 @@ function ccp_vip_clear_auth_logs_callback( $request ) {
 }
 
 /**
- * Get the source of the shared secret for debugging
+ * Gets the source of the shared secret for debugging.
  */
 function ccp_vip_get_secret_source() {
     if ( defined( 'CCP_SHARED_SECRET' ) && ! empty( CCP_SHARED_SECRET ) ) {
@@ -1202,7 +1205,7 @@ function ccp_vip_get_secret_source() {
 }
 
 /**
- * Test endpoint callback for CCP authentication
+ * Handles test endpoint callback for CCP authentication.
  *
  * @param WP_REST_Request $request Request object.
  * @return WP_REST_Response Test response.
@@ -1235,12 +1238,12 @@ function ccp_vip_auth_test_callback( $request ) {
 }
 
 /**
- * Add CCP authentication status to Site Health (WordPress 5.2+)
+ * Adds CCP authentication status to Site Health (WordPress 5.2+).
  */
 add_filter( 'site_status_tests', 'ccp_vip_add_site_health_test' );
 
 /**
- * Add CCP authentication test to Site Health
+ * Adds CCP authentication test to Site Health.
  *
  * @param array $tests Existing Site Health tests.
  * @return array Modified tests array.
@@ -1255,7 +1258,7 @@ function ccp_vip_add_site_health_test( $tests ) {
 }
 
 /**
- * Site Health test for CCP authentication
+ * Site Health test for CCP authentication.
  *
  * @return array Site Health test result.
  */
@@ -1311,7 +1314,7 @@ function ccp_vip_site_health_test() {
 }
 
 /**
- * Add dashboard widget for CCP authentication status
+ * Adds dashboard widget for CCP authentication status.
  */
 function ccp_vip_add_dashboard_widget() {
     if ( ! current_user_can( 'manage_options' ) ) {
@@ -1326,7 +1329,7 @@ function ccp_vip_add_dashboard_widget() {
 }
 
 /**
- * Dashboard widget content for CCP authentication status
+ * Dashboard widget content for CCP authentication status.
  */
 function ccp_vip_dashboard_widget_content() {
     $shared_secret = ccp_vip_get_shared_secret();
@@ -1477,10 +1480,10 @@ function ccp_vip_dashboard_widget_content() {
 }
 
 /**
- * Enhance mu-plugins display to show CCP plugin status
+ * Enhances mu-plugins display to show CCP plugin status.
  *
- * @param bool  $show_advanced_plugins Whether to show advanced plugins.
- * @param string $type Plugin type ('mustuse', 'dropins').
+ * @param bool   $show_advanced_plugins Whether to show advanced plugins.
+ * @param string $type                  Plugin type ('mustuse', 'dropins').
  * @return bool Modified show advanced plugins value.
  */
 function ccp_vip_enhance_mu_plugins_display( $show_advanced_plugins, $type ) {
@@ -1493,7 +1496,7 @@ function ccp_vip_enhance_mu_plugins_display( $show_advanced_plugins, $type ) {
 }
 
 /**
- * Add custom styles for MU-plugin display
+ * Adds custom styles for MU-plugin display.
  */
 function ccp_vip_add_mu_plugin_styles() {
     ?>
@@ -1519,44 +1522,44 @@ function ccp_vip_add_mu_plugin_styles() {
 }
 
 /**
- * Disable redirects for development hostnames
+ * Disables redirects for development hostnames.
  */
 add_filter( 'redirect_canonical', function( $redirect_url, $requested_url ) {
     // Get the hostname from the request
     $requested_host = parse_url( $requested_url, PHP_URL_HOST );
     $site_host = parse_url( home_url(), PHP_URL_HOST );
-    
+
     // Allow both localhost and host.docker.internal for the same site
     $allowed_hosts = array( 'localhost', 'host.docker.internal');
-    
+
     // If the requested host is in our allowed list and matches the site host pattern, don't redirect
     if ( in_array( $requested_host, $allowed_hosts, true ) ) {
         // Check if it's the same port and path
         $requested_port = parse_url( $requested_url, PHP_URL_PORT );
         $site_port = parse_url( home_url(), PHP_URL_PORT );
-        
+
         if ( $requested_port === $site_port ) {
             return false; // Disable redirect
         }
     }
-    
+
     return $redirect_url;
 }, 10, 2 );
 
 /**
- * Allow WordPress to accept requests from host.docker.internal
+ * Allows WordPress to accept requests from host.docker.internal.
  */
 add_filter( 'allowed_http_origins', function( $origins ) {
     $site_url = home_url();
     $site_host = parse_url( $site_url, PHP_URL_HOST );
     $site_port = parse_url( $site_url, PHP_URL_PORT );
-    
+
     // Add host.docker.internal with the same port
     if ( $site_port ) {
         $origins[] = 'http://host.docker.internal:' . $site_port;
     } else {
         $origins[] = 'http://host.docker.internal';
     }
-    
+
     return $origins;
 } );

@@ -1,6 +1,8 @@
 <?php declare(strict_types = 1);
 /**
  * HTTP Client service for making external requests
+ *
+ * @package CCP
  */
 
 namespace CCP\API;
@@ -13,19 +15,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * HTTP Client Class
+ * HTTP Client Class.
  *
- * Provides a centralized service for making HTTP requests with VIP compatibility,
- * authentication handling, and consistent error management.
+ * Provides a centralized service for making HTTP requests with VIP
+ * compatibility, authentication handling, and error management.
  */
 class HTTP_Client {
 
 	/**
-	 * Make HTTP request with VIP compatibility
+	 * Makes HTTP request with VIP compatibility.
 	 *
-	 * @param string $url Request URL.
-	 * @param array  $auth_credentials Optional authentication credentials.
-	 * @param array  $additional_args Additional request arguments.
+	 * @param string $url              Request URL.
+	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
+	 * @param array  $additional_args  Optional. Additional request arguments. Default empty array.
 	 * @return array|\WP_Error Response or error.
 	 */
 	public function make_request( string $url, array $auth_credentials = array(), array $additional_args = array() ): array|\WP_Error {
@@ -91,10 +93,10 @@ class HTTP_Client {
 		}
 
 		/**
-		 * Filter request arguments
+		 * Filters request arguments.
 		 *
 		 * @param array  $request_args Request arguments.
-		 * @param string $url Request URL.
+		 * @param string $url          Request URL.
 		 */
 		$request_args = \apply_filters( 'ccp_request_args', $request_args, $url );
 
@@ -123,8 +125,9 @@ class HTTP_Client {
 	}
 
 	/**
-	 * Get user agent string
+	 * Gets user agent string.
 	 *
+	 * @return string User agent string.
 	 */
 	public function get_user_agent(): string {
 		$plugin_version = defined( 'CCP_VERSION' ) ? CCP_VERSION : '1.1.0';
@@ -138,10 +141,10 @@ class HTTP_Client {
 	}
 
 	/**
-	 * Make safe remote GET request with VIP compatibility
+	 * Makes safe remote GET request with VIP compatibility.
 	 *
-	 * @param string $url Request URL.
-	 * @param array  $args Request arguments.
+	 * @param string $url  Request URL.
+	 * @param array  $args Optional. Request arguments. Default empty array.
 	 * @return array|\WP_Error Response or error.
 	 */
 	public function safe_remote_get( string $url, array $args = array() ): array|\WP_Error {
@@ -155,9 +158,9 @@ class HTTP_Client {
 	}
 
 	/**
-	 * Get authentication credentials from settings or provided array
+	 * Gets authentication credentials from settings or provided array.
 	 *
-	 * @param array $provided_credentials Optional provided credentials.
+	 * @param array $provided_credentials Optional. Provided credentials. Default empty array.
 	 * @return array Authentication credentials array with appropriate keys.
 	 */
 	public function get_fallback_auth_credentials( array $provided_credentials = array() ): array {
@@ -191,7 +194,7 @@ class HTTP_Client {
 	}
 
 	/**
-	 * Check if we're in a development environment
+	 * Checks if the current environment is a development environment.
 	 *
 	 * @return bool True if development environment.
 	 */
@@ -200,9 +203,9 @@ class HTTP_Client {
 	}
 
 	/**
-	 * Determine whether to verify SSL certificates based on environment and URL
+	 * Determines whether to verify SSL certificates based on environment and URL.
 	 *
-	 * @param string $url The URL being requested.
+	 * @param string $url URL being requested.
 	 * @return bool Whether to verify SSL certificates.
 	 */
 	public function should_verify_ssl( string $url ): bool {
@@ -240,7 +243,7 @@ class HTTP_Client {
 	}
 
 	/**
-	 * Clean up temporary file with VIP compatibility
+	 * Cleans up temporary file with VIP compatibility.
 	 *
 	 * @param string $temp_file Path to temporary file.
 	 */
@@ -257,9 +260,9 @@ class HTTP_Client {
 	}
 
 	/**
-	 * Download external file using WordPress core function
+	 * Downloads external file using WordPress core function.
 	 *
-	 * @param string $url The external file URL.
+	 * @param string $url External file URL.
 	 * @return string|\WP_Error|false Path to downloaded file on success, WP_Error or false on failure.
 	 */
 	public function download_external_file( string $url ): string|\WP_Error|false {

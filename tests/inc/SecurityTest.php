@@ -6,8 +6,9 @@ namespace CCP\Tests;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Security Test
- * Tests security features and validations
+ * Security Test.
+ *
+ * Tests security features and validations.
  */
 class SecurityTest extends TestCase {
 
