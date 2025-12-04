@@ -1,7 +1,11 @@
 /**
- * Import History React component using DataViews
+ * Import History React component using DataViews.
+ *
+ * Displays a table of import sessions with details about each import operation,
+ * including success rates and rollback capabilities.
+ *
+ * @file This file defines the ImportHistory component.
  */
-import { DataViews, View } from '@wordpress/dataviews';
 import {
 	Button,
 	__experimentalVStack as VStack,
@@ -19,10 +23,25 @@ import { SessionDetailsModal } from './SessionDetailsModal';
 import { PostDiffModal } from './ImportHistoryPostDiffModal';
 import type { ImportSession, ImportLog, DataViewsField } from '../types';
 
+/**
+ * Props for the ImportHistory component.
+ *
+ * Currently empty but reserved for future props passed from PHP.
+ */
 interface ImportHistoryProps {
 	// Props can be passed from PHP if needed
 }
 
+/**
+ * Import History component.
+ *
+ * Renders a DataViews table of import sessions with filtering, sorting, and the
+ * ability to view session details or rollback imports.
+ *
+ * @param {Object} props Component props (currently unused).
+ *
+ * @return {JSX.Element} Rendered import history table.
+ */
 export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 	const [ sessions, setSessions ] = useState< ImportSession[] >( [] );
 	const [ isLoading, setIsLoading ] = useState< boolean >( true );
@@ -85,7 +104,12 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 	}, [ isSessionModalOpen, isDiffModalOpen ] );
 
 	/**
-	 * Load import sessions from the backend
+	 * Loads import sessions from the backend.
+	 *
+	 * Fetches the list of all import sessions from the WordPress AJAX endpoint
+	 * and updates the component state.
+	 *
+	 * @return {Promise<void>} Resolves when sessions are loaded.
 	 */
 	const loadImportSessions = async (): Promise< void > => {
 		setIsLoading( true );
@@ -116,7 +140,13 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 	};
 
 	/**
-	 * Handle rollback session
+	 * Handles rollback of an import session.
+	 *
+	 * Prompts for confirmation then sends a request to rollback all posts from
+	 * the specified import session.
+	 *
+	 * @param {number} sessionId ID of the session to rollback.
+	 * @return {Promise<void>} Resolves when rollback is complete.
 	 */
 	const handleRollbackSession = async ( sessionId: number ): Promise< void > => {
 		if ( ! confirm( __( 'Are you sure you want to rollback this import session? This will delete all newly created posts and restore updated posts to their previous version. This action cannot be undone.', 'ccp' ) ) ) {

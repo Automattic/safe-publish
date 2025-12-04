@@ -1,19 +1,32 @@
 /**
- * Session Details Modal Component
+ * Session Details Modal Component.
+ *
+ * Displays detailed information about an import session including individual
+ * log entries with rollback and diff viewing capabilities.
+ *
+ * @file This file defines the SessionDetailsModal component.
  */
 import {
 	Button,
-	__experimentalVStack as VStack,
 	__experimentalHStack as HStack,
+	Spinner,
 	__experimentalText as Text,
-	Spinner
+	__experimentalVStack as VStack
 } from '@wordpress/components';
-import { useState, useEffect } from '@wordpress/element';
+import { useEffect, useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import React from 'react';
 
-import type { ImportSession, ImportLog } from '../types';
+import type { ImportLog, ImportSession } from '../types';
 
+/**
+ * Props for the SessionDetailsModal component.
+ *
+ * @property {ImportSession} session    Import session to display.
+ * @property {Function}      onRollback Callback to rollback the session.
+ * @property {Function}      onViewDiff Callback to view a post diff.
+ * @property {Function}      onClose    Callback to close the modal.
+ */
 interface SessionDetailsModalProps {
 	session: ImportSession;
 	onRollback: ( sessionId: number ) => Promise< void >;
@@ -21,6 +34,20 @@ interface SessionDetailsModalProps {
 	onClose: () => void;
 }
 
+/**
+ * Session Details Modal component.
+ *
+ * Displays session statistics, individual import logs, and provides actions for
+ * rolling back individual items or viewing content diffs.
+ *
+ * @param {Object}   props            Component props.
+ * @param {ImportSession} props.session Import session to display.
+ * @param {Function} props.onRollback  Callback to rollback the session.
+ * @param {Function} props.onViewDiff  Callback to view a post diff.
+ * @param {Function} props.onClose     Callback to close the modal.
+ *
+ * @return {JSX.Element} Rendered modal content.
+ */
 export function SessionDetailsModal( {
 	session,
 	onRollback,
@@ -39,7 +66,12 @@ export function SessionDetailsModal( {
 	}, [ session.id ] );
 
 	/**
-	 * Load session details and logs
+	 * Loads session details and logs.
+	 *
+	 * Fetches the detailed log entries for the current session from the
+	 * WordPress AJAX endpoint.
+	 *
+	 * @return {Promise<void>} Resolves when details are loaded.
 	 */
 	const loadSessionDetails = async (): Promise< void > => {
 		setIsLoading( true );
@@ -71,7 +103,11 @@ export function SessionDetailsModal( {
 	};
 
 	/**
-	 * Handle rollback action
+	 * Handles the rollback action.
+	 *
+	 * Calls the parent rollback handler and manages the loading state.
+	 *
+	 * @return {Promise<void>} Resolves when rollback is complete.
 	 */
 	const handleRollback = async (): Promise< void > => {
 		setIsRollingBack( true );
@@ -83,7 +119,14 @@ export function SessionDetailsModal( {
 	};
 
 	/**
-	 * Handle individual item rollback
+	 * Handles individual item rollback.
+	 *
+	 * Prompts for confirmation then sends a request to rollback a single
+	 * imported post.
+	 *
+	 * @param {number} logId Log ID of the item to rollback.
+	 * @param {string} title Title of the post for the confirmation dialog.
+	 * @return {Promise<void>} Resolves when rollback is complete.
 	 */
 	const handleItemRollback = async ( logId: number, title: string ): Promise< void > => {
 		if ( ! window.confirm(
@@ -125,7 +168,11 @@ export function SessionDetailsModal( {
 	};
 
 	/**
-	 * Render session statistics
+	 * Renders session statistics.
+	 *
+	 * Displays a summary of total, successful, failed, and updated items.
+	 *
+	 * @return {JSX.Element} Rendered statistics display.
 	 */
 	const renderSessionStats = (): JSX.Element => (
 		<HStack spacing={ 4 } style={ { marginBottom: '16px' } }>
@@ -145,7 +192,11 @@ export function SessionDetailsModal( {
 	);
 
 	/**
-	 * Render session information
+	 * Renders session information.
+	 *
+	 * Displays the session date, user, source URL, and status.
+	 *
+	 * @return {JSX.Element} Rendered session info display.
 	 */
 	const renderSessionInfo = (): JSX.Element => (
 		<VStack spacing={ 2 } style={ { marginBottom: '24px' } }>
@@ -162,7 +213,12 @@ export function SessionDetailsModal( {
 	);
 
 	/**
-	 * Render import logs
+	 * Renders import logs.
+	 *
+	 * Displays the list of individual import log entries with actions for
+	 * viewing diffs and rolling back items.
+	 *
+	 * @return {JSX.Element} Rendered import logs list.
 	 */
 	const renderImportLogs = (): JSX.Element => {
 		if ( session.status === 'rolled_back' ) {

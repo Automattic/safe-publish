@@ -1,5 +1,10 @@
 /**
- * Post Diff Modal Component for Import History
+ * Post Diff Modal Component for Import History.
+ *
+ * Displays a modal showing the content changes for a post that was updated
+ * during an import session.
+ *
+ * @file This file defines the PostDiffModal component for import history.
  */
 import {
 	Button,
@@ -12,11 +17,29 @@ import { useState, useEffect } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import React from 'react';
 
+/**
+ * Props for the PostDiffModal component.
+ *
+ * @property {number}   postId  ID of the post to show diff for.
+ * @property {Function} onClose Callback to close the modal.
+ */
 interface PostDiffModalProps {
 	postId: number;
 	onClose: () => void;
 }
 
+/**
+ * Post Diff Modal component for import history.
+ *
+ * Fetches and displays the content diff for a post that was updated during an
+ * import session.
+ *
+ * @param {Object}   props         Component props.
+ * @param {number}   props.postId  ID of the post to show diff for.
+ * @param {Function} props.onClose Callback to close the modal.
+ *
+ * @return {JSX.Element} Rendered modal content.
+ */
 export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.Element {
 	const [ diffHtml, setDiffHtml ] = useState< string | null >( null );
 	const [ isLoading, setIsLoading ] = useState< boolean >( true );
@@ -28,7 +51,12 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 	}, [ postId ] );
 
 	/**
-	 * Load post diff from the backend
+	 * Loads post diff from the backend.
+	 *
+	 * Fetches the diff HTML for the specified post from the WordPress AJAX
+	 * endpoint.
+	 *
+	 * @return {Promise<void>} Resolves when diff is loaded.
 	 */
 	const loadPostDiff = async (): Promise< void > => {
 		setIsLoading( true );

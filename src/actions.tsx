@@ -1,3 +1,11 @@
+/**
+ * Action definitions for the DataViews component.
+ *
+ * Defines the available actions for external posts including creating drafts,
+ * bulk importing, updating posts, and viewing post diffs.
+ *
+ * @file This file defines DataViews actions for the CCP plugin.
+ */
 import {
 	Button,
 	__experimentalText as Text,
@@ -13,7 +21,16 @@ import React, { useState } from 'react';
 import PostDiffModal from './components/PostDiffModal';
 import { Post } from './types';
 
-// Response type for createDraftPost
+/**
+ * Response from creating a draft post.
+ *
+ * @property {number}  post_id        Created post ID.
+ * @property {string}  edit_url       URL to edit the post.
+ * @property {string}  message        Response message.
+ * @property {boolean} [existing]     Whether post already existed.
+ * @property {string}  [post_title]   Post title.
+ * @property {string}  [confirm_action] Action requiring confirmation.
+ */
 interface CreateDraftResponse {
 	post_id: number;
 	edit_url: string;
@@ -23,7 +40,14 @@ interface CreateDraftResponse {
 	confirm_action?: string;
 }
 
-// Response type for bulk import
+/**
+ * Response from bulk import operation.
+ *
+ * @property {number} total      Total posts processed.
+ * @property {number} successful Number of successful imports.
+ * @property {number} failed     Number of failed imports.
+ * @property {Array}  results    Individual result objects.
+ */
 interface BulkImportResponse {
 	total: number;
 	successful: number;
@@ -39,14 +63,26 @@ interface BulkImportResponse {
 	}>;
 }
 
-// API response wrapper
+/**
+ * Wrapper for API responses.
+ *
+ * @property {boolean} success Whether the request succeeded.
+ * @property {any}     data    Response data or error message.
+ */
 interface ApiResponse {
 	success: boolean;
 	data: CreateDraftResponse | BulkImportResponse | string;
 }
 
 /**
- * Create a draft post from external post data
+ * Creates a draft post from external post data.
+ *
+ * Sends the external post data to the WordPress AJAX endpoint to create a new
+ * draft post with the imported content.
+ *
+ * @param {Post} post External post data to import.
+ *
+ * @return {Promise<CreateDraftResponse>} Response containing post ID and edit URL.
  */
 const createDraftPost = async ( post: Post ): Promise< CreateDraftResponse > => {
 	const formData = new FormData();
@@ -97,7 +133,15 @@ const createDraftPost = async ( post: Post ): Promise< CreateDraftResponse > => 
 };
 
 /**
- * Import multiple posts in bulk with progress tracking
+ * Imports multiple posts in bulk with progress tracking.
+ *
+ * Sends all selected posts to the bulk import endpoint and tracks the progress
+ * of the import operation.
+ *
+ * @param {Post[]}   posts       Posts to import.
+ * @param {Function} [onProgress] Progress callback (current, total) => void.
+ *
+ * @return {Promise<BulkImportResponse>} Bulk import results.
  */
 const bulkImportPosts = async (
 	posts: Post[],

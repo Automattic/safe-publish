@@ -1,5 +1,10 @@
 /**
- * Admin Tools React component for handling test connection and preview posts
+ * Admin Tools React component for handling test connection and preview posts.
+ *
+ * Provides UI for testing the connection to external WordPress sites and
+ * previewing available posts before import.
+ *
+ * @file This file defines the AdminTools component for the CCP plugin.
  */
 import { Button, Notice, Spinner } from '@wordpress/components';
 import { useState, useEffect } from '@wordpress/element';
@@ -12,24 +17,37 @@ import type { Post } from './types';
 // Reference to global types
 /// <reference path="../types/globals.d.ts" />
 
-// Extend the window interface
-declare global {
-	interface Window {
-		ccpRefreshPosts?: ( postType?: string ) => void;
-	}
-}
-
+/**
+ * Props for the AdminTools component.
+ *
+ * @property {string} siteUrl     Initial external site URL.
+ * @property {number} numberPosts Number of posts to fetch.
+ */
 interface AdminToolsProps {
 	siteUrl: string;
 	numberPosts: number;
 }
 
+/**
+ * Result from a connection test request.
+ *
+ * @property {boolean}        success       Whether the test succeeded.
+ * @property {string|ReactNode} message     Result message to display.
+ * @property {number}         [response_time] Response time in milliseconds.
+ */
 interface TestResult {
 	success: boolean;
 	message: string | React.ReactNode;
 	response_time?: number;
 }
 
+/**
+ * Result from a preview posts request.
+ *
+ * @property {string}           type    Result type.
+ * @property {string|ReactNode} message Result message to display.
+ * @property {Post[]}           [posts] Previewed posts.
+ */
 interface PreviewResult {
 	type: string;
 	message: string | React.ReactNode;
@@ -42,7 +60,16 @@ interface ApiResponse< T > {
 }
 
 /**
- * Admin Tools component for testing connection and previewing posts
+ * Admin Tools component for testing connection and previewing posts.
+ *
+ * Renders buttons for testing the connection to the external site, previewing
+ * available posts, and selecting post types.
+ *
+ * @param {Object} props                Component props.
+ * @param {string} props.siteUrl        Initial external site URL.
+ * @param {number} props.numberPosts    Number of posts to fetch.
+ *
+ * @return {JSX.Element} Rendered AdminTools component.
  */
 export function AdminTools( {
 	siteUrl: initialSiteUrl,
@@ -82,7 +109,12 @@ export function AdminTools( {
 	};
 
 	/**
-	 * Handle post type change from PostTypeSelector
+	 * Handles post type change from PostTypeSelector.
+	 *
+	 * Updates the selected post type and triggers a DataViews refresh to load
+	 * posts of the new type.
+	 *
+	 * @param {string} postType Newly selected post type.
 	 */
 	const handlePostTypeChange = ( postType: string ): void => {
 		setSelectedPostType( postType );
@@ -93,7 +125,14 @@ export function AdminTools( {
 	};
 
 	/**
-	 * Make AJAX request to WordPress
+	 * Makes an AJAX request to WordPress.
+	 *
+	 * Sends a POST request to the WordPress AJAX endpoint with the specified
+	 * action and data.
+	 *
+	 * @param {string}                       action AJAX action to perform.
+	 * @param {Record<string, string|number>} data   Additional request data.
+	 * @return {Promise<any>} JSON response from the server.
 	 */
 	const makeRequest = async (
 		action: string,

@@ -1,5 +1,10 @@
 /**
- * DataViews implementation for displaying external posts in the admin
+ * DataViews implementation for displaying external posts in the admin.
+ *
+ * Main entry point for the external posts DataViews component that provides
+ * a table, grid, or list view of posts from external WordPress sites.
+ *
+ * @file This file defines the main DataViews component for the CCP plugin.
  */
 import { DataViews, View } from '@wordpress/dataviews';
 import { useState, useEffect } from '@wordpress/element';
@@ -18,8 +23,14 @@ import './style.scss';
 
 /**
  * DataViews component for external posts.
- * @param {Object} props       - Component props.
- * @param {Post[]} props.posts - Array of posts to display.
+ *
+ * Renders a DataViews table with search, sort, and pagination capabilities
+ * for displaying posts fetched from external WordPress sites.
+ *
+ * @param {Object} props       Component props.
+ * @param {Post[]} props.posts Posts to display.
+ *
+ * @return {JSX.Element} Rendered DataViews component.
  */
 function ExternalPostsDataView( { posts }: ExternalPostsDataViewProps ): JSX.Element {
 	const [ view, setView ] = useState< View >( {
@@ -152,11 +163,16 @@ function ExternalPostsDataView( { posts }: ExternalPostsDataViewProps ): JSX.Ele
 }
 
 /**
- * Initialize the DataViews component on page load.
+ * Initializes the DataViews component on page load.
  */
 document.addEventListener( 'DOMContentLoaded', (): void => {
 	/**
-	 * Refresh posts data (will be called by AdminTools component)
+	 * Refreshes posts data from the external site.
+	 *
+	 * Called by the AdminTools component when the post type changes
+	 * or when a manual refresh is triggered.
+	 *
+	 * @param {string} [postType] Post type to fetch. Default 'posts'.
 	 */
 	function refreshPostsData( postType: string = 'posts' ): void {
 		const dataviewContainer = document.getElementById( 'ccp-dataviews-container' );
