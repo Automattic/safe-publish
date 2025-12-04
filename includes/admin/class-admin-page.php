@@ -27,7 +27,7 @@ class Admin_Page {
 	private $api;
 
 	/**
-	 * Constructor.
+	 * Constructs the Admin_Page instance.
 	 *
 	 * @param External_Posts_API $api External Posts API instance.
 	 */
