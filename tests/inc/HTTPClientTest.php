@@ -7,8 +7,9 @@ use PHPUnit\Framework\TestCase;
 use CCP\API\HTTP_Client;
 
 /**
- * HTTP Client Test
- * Tests HTTP client functionality and VIP compatibility
+ * HTTP Client Test.
+ *
+ * Tests HTTP client functionality and VIP compatibility.
  */
 class HTTPClientTest extends TestCase {
 

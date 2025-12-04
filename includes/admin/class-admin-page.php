@@ -15,19 +15,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Admin Page Class
+ * Admin Page Class.
  */
 class Admin_Page {
 
 	/**
-	 * External Posts API instance
+	 * External Posts API instance.
 	 *
 	 * @var External_Posts_API
 	 */
 	private $api;
 
 	/**
-	 * Constructor
+	 * Constructs the Admin_Page instance.
 	 *
 	 * @param External_Posts_API $api External Posts API instance.
 	 */
@@ -36,7 +36,7 @@ class Admin_Page {
 	}
 
 	/**
-	 * Render the admin page
+	 * Renders the admin page.
 	 */
 	public function render(): void {
 		$site_url        = get_option( 'ccp_external_site_url', '' );
@@ -92,7 +92,7 @@ class Admin_Page {
 	}
 
 	/**
-	 * Enqueue admin assets with VIP compatibility
+	 * Enqueues admin assets with VIP compatibility.
 	 */
 	public function enqueue_assets(): void {
 		// Early return if not in admin or wrong page.
@@ -110,14 +110,14 @@ class Admin_Page {
 	}
 
 	/**
-	 * Enqueue assets with VIP-specific optimizations
+	 * Enqueues assets with VIP-specific optimizations.
 	 */
 	private function enqueue_vip_safe_assets(): void {
 		$this->enqueue_standard_assets();
 	}
 
 	/**
-	 * Enqueue standard assets
+	 * Enqueues standard assets.
 	 */
 	private function enqueue_standard_assets(): void {
 		// Get posts data for localization.

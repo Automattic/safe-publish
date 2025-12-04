@@ -7,8 +7,9 @@ use PHPUnit\Framework\TestCase;
 use CCP\API\CCP_API;
 
 /**
- * CCP API Test
- * Tests the REST API endpoints and functionality
+ * CCP API Test.
+ *
+ * Tests the REST API endpoints and functionality.
  */
 class CCPAPITest extends TestCase {
 

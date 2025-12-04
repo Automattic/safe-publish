@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Check if we're in a development environment
+ * Checks if the current environment is a development environment.
  *
  * @return bool True if development environment.
  */

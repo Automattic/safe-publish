@@ -1,6 +1,8 @@
 <?php declare(strict_types = 1);
 /**
  * External Posts API class
+ *
+ * @package CCP
  */
 
 namespace CCP\API;
@@ -20,29 +22,29 @@ if ( ! class_exists( 'CCP\\Auth\\VIP_Safe_Auth' ) ) {
 }
 
 /**
- * External Posts API Class
+ * External Posts API Class.
  */
 class External_Posts_API {
 
 	/**
-	 * HTTP Client instance
+	 * HTTP Client instance.
 	 *
 	 * @var HTTP_Client
 	 */
 	private $http_client;
 
 	/**
-	 * Constructor - Initialize with HTTP client
+	 * Constructs the External_Posts_API instance.
 	 */
 	public function __construct() {
 		$this->http_client = new HTTP_Client();
 	}
 
 	/**
-	 * Fetch available post types from external site
+	 * Fetches available post types from external site.
 	 *
-	 * @param string $site_url External site URL.
-	 * @param array  $auth_credentials Optional authentication credentials array with 'username' and 'password' keys.
+	 * @param string $site_url         External site URL.
+	 * @param array  $auth_credentials Optional. Authentication credentials array. Default empty array.
 	 * @return array|\WP_Error Post types data or error.
 	 */
 	public function fetch_post_types( string $site_url, array $auth_credentials = array() ): array|\WP_Error {
@@ -108,12 +110,12 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Fetch posts from external site
+	 * Fetches posts from external site.
 	 *
-	 * @param string $site_url External site URL.
-	 * @param int    $number_of_posts Number of posts to fetch.
-	 * @param array  $auth_credentials Optional authentication credentials array with 'username' and 'password' keys.
-	 * @param string $post_type Post type to fetch (default: 'posts').
+	 * @param string $site_url         External site URL.
+	 * @param int    $number_of_posts  Optional. Number of posts to fetch. Default 10.
+	 * @param array  $auth_credentials Optional. Authentication credentials array. Default empty array.
+	 * @param string $post_type        Optional. Post type to fetch. Default 'posts'.
 	 * @return array|\WP_Error Posts data or error.
 	 */
 	public function fetch_posts( string $site_url, int $number_of_posts = 10, array $auth_credentials = array(), string $post_type = 'posts' ): array|\WP_Error {
@@ -146,12 +148,13 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Build API URL
+	 * Builds API URL.
 	 *
-	 * @param string $site_url Base site URL.
-	 * @param int    $number_of_posts Number of posts.
-	 * @param array  $auth_credentials Authentication credentials.
-	 * @param string $post_type Post type to fetch.
+	 * @param string $site_url         Base site URL.
+	 * @param int    $number_of_posts  Number of posts.
+	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
+	 * @param string $post_type        Optional. Post type to fetch. Default 'posts'.
+	 * @return string Built API URL.
 	 */
 	private function build_api_url( string $site_url, int $number_of_posts, array $auth_credentials = array(), string $post_type = 'posts' ): string {
 		// Use 'posts' as default endpoint for 'post' post type, otherwise use the post type slug
@@ -173,10 +176,10 @@ class External_Posts_API {
 		}
 
 		/**
-		 * Filter API query arguments
+		 * Filters API query arguments.
 		 *
-		 * @param array  $query_args Query arguments.
-		 * @param string $site_url Site URL.
+		 * @param array  $query_args      Query arguments.
+		 * @param string $site_url        Site URL.
 		 * @param int    $number_of_posts Number of posts.
 		 */
 		$query_args = apply_filters( 'ccp_api_query_args', $query_args, $site_url, $number_of_posts );
@@ -187,10 +190,10 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Make HTTP request using shared HTTP client
+	 * Makes HTTP request using shared HTTP client.
 	 *
-	 * @param string $url Request URL.
-	 * @param array  $auth_credentials Optional authentication credentials.
+	 * @param string $url              Request URL.
+	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
 	 * @return array|\WP_Error Response or error.
 	 */
 	private function make_request( string $url, array $auth_credentials = array() ): array|\WP_Error {
@@ -198,10 +201,10 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Process API response
+	 * Processes API response.
 	 *
-	 * @param array  $response HTTP response.
-	 * @param string $post_type Post type being fetched.
+	 * @param array  $response  HTTP response.
+	 * @param string $post_type Optional. Post type being fetched. Default 'posts'.
 	 * @return array|\WP_Error Processed posts or error.
 	 */
 	private function process_response( array $response, string $post_type = 'posts' ): array|\WP_Error {
@@ -229,10 +232,10 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Sanitize a single post
+	 * Sanitizes a single post.
 	 *
-	 * @param array  $post Raw post data.
-	 * @param string $post_type Post type being processed.
+	 * @param array  $post      Raw post data.
+	 * @param string $post_type Optional. Post type being processed. Default 'posts'.
 	 * @return array|false Sanitized post or false if invalid.
 	 */
 	private function sanitize_post( array $post, string $post_type = 'posts' ): array|false {
@@ -281,16 +284,16 @@ class External_Posts_API {
 		$sanitized_post['terms'] = $incoming_terms;
 
 		/**
-		 * Filter sanitized post data
+		 * Filters sanitized post data.
 		 *
 		 * @param array $sanitized_post Sanitized post data.
-		 * @param array $post Original post data.
+		 * @param array $post           Original post data.
 		 */
 		return apply_filters( 'ccp_sanitized_post', $sanitized_post, $post );
 	}
 
 	/**
-	 * Test API connection
+	 * Tests API connection.
 	 *
 	 * @param string $site_url Site URL to test.
 	 * @return array Test results.
@@ -320,10 +323,10 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Process and import media from external post content
+	 * Processes and imports media from external post content.
 	 *
-	 * @param string $content The post content with external media URLs.
-	 * @param string $source_site_url The external site URL for resolving relative URLs.
+	 * @param string $content         Post content with external media URLs.
+	 * @param string $source_site_url External site URL for resolving relative URLs.
 	 * @return string Processed content with imported media.
 	 */
 	public function process_and_import_media( string $content, string $source_site_url ): string {
@@ -426,10 +429,10 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Import external media file to WordPress media library
+	 * Imports external media file to WordPress media library.
 	 *
-	 * @param string $media_url The external media URL.
-	 * @param string $source_site_url The source site URL for resolving relative URLs.
+	 * @param string $media_url       External media URL.
+	 * @param string $source_site_url Source site URL for resolving relative URLs.
 	 * @return string|false New media URL on success, false on failure.
 	 */
 	public function import_external_media( string $media_url, string $source_site_url ): string|false {
@@ -493,10 +496,10 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Import external media file to WordPress media library and return attachment ID
+	 * Imports external media file to media library and returns attachment ID.
 	 *
-	 * @param string $media_url The external media URL.
-	 * @param string $source_site_url The source site URL for resolving relative URLs.
+	 * @param string $media_url       External media URL.
+	 * @param string $source_site_url Source site URL for resolving relative URLs.
 	 * @return int|false Attachment ID on success, false on failure.
 	 */
 	public function import_external_media_as_attachment( string $media_url, string $source_site_url ): int|false {
@@ -615,9 +618,9 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Get attachment ID by original URL
+	 * Gets attachment ID by original URL.
 	 *
-	 * @param string $original_url The original external URL.
+	 * @param string $original_url Original external URL.
 	 * @return int|false Attachment ID on success, false on failure.
 	 */
 	private function get_attachment_by_url( string $original_url ): int|false {
@@ -665,10 +668,10 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Import featured image from external post
+	 * Imports featured image from external post.
 	 *
-	 * @param int    $featured_media_id The external featured media ID.
-	 * @param string $site_url The external site URL.
+	 * @param int    $featured_media_id External featured media ID.
+	 * @param string $site_url          External site URL.
 	 * @return int|false Attachment ID on success, false on failure.
 	 */
 	public function import_featured_image( int $featured_media_id, string $site_url ): int|false {
@@ -711,10 +714,10 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Get attachment ID by external featured media ID
+	 * Gets attachment ID by external featured media ID.
 	 *
-	 * @param int    $featured_media_id The external featured media ID.
-	 * @param string $site_url The external site URL.
+	 * @param int    $featured_media_id External featured media ID.
+	 * @param string $site_url          External site URL.
 	 * @return int|false Attachment ID on success, false on failure.
 	 */
 	private function get_attachment_by_featured_media_id( int $featured_media_id, string $site_url ): int|false {
@@ -742,10 +745,10 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Process iframe elements for embeds
+	 * Processes iframe elements for embeds.
 	 *
-	 * @param \DOMElement $iframe The iframe element.
-	 * @param string      $source_site_url The source site URL.
+	 * @param \DOMElement $iframe          Iframe element.
+	 * @param string      $source_site_url Source site URL.
 	 */
 	private function process_iframe( \DOMElement $iframe, string $source_site_url ): void {
 		$src = $iframe->getAttribute( 'src' );
@@ -778,10 +781,10 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Process embed elements
+	 * Processes embed elements.
 	 *
-	 * @param \DOMElement $embed The embed element.
-	 * @param string      $source_site_url The source site URL.
+	 * @param \DOMElement $embed           Embed element.
+	 * @param string      $source_site_url Source site URL.
 	 */
 	private function process_embed( \DOMElement $embed, string $source_site_url ): void {
 		$src = $embed->getAttribute( 'src' );
@@ -798,10 +801,10 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Process figure elements that may contain embeds
+	 * Processes figure elements that may contain embeds.
 	 *
-	 * @param \DOMElement $figure The figure element.
-	 * @param string      $source_site_url The source site URL.
+	 * @param \DOMElement $figure          Figure element.
+	 * @param string      $source_site_url Source site URL.
 	 */
 	private function process_figure_embeds( \DOMElement $figure, string $source_site_url ): void {
 		// Check if figure contains WordPress embed blocks
@@ -829,10 +832,10 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Process blockquote elements that may contain social media embeds
+	 * Processes blockquote elements that may contain social media embeds.
 	 *
-	 * @param \DOMElement $blockquote The blockquote element.
-	 * @param string      $source_site_url The source site URL.
+	 * @param \DOMElement $blockquote      Blockquote element.
+	 * @param string      $source_site_url Source site URL.
 	 */
 	private function process_blockquote_embeds( \DOMElement $blockquote, string $source_site_url ): void {
 		$class = $blockquote->getAttribute( 'class' );
@@ -856,10 +859,10 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Process oEmbed div elements
+	 * Processes oEmbed div elements.
 	 *
-	 * @param \DOMElement $oembed_div The oembed div element.
-	 * @param string      $source_site_url The source site URL.
+	 * @param \DOMElement $oembed_div      oEmbed div element.
+	 * @param string      $source_site_url Source site URL.
 	 */
 	private function process_oembed_div( \DOMElement $oembed_div, string $source_site_url ): void {
 		// Look for data attributes that might contain URLs
@@ -871,9 +874,9 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Process Twitter embed blockquotes
+	 * Processes Twitter embed blockquotes.
 	 *
-	 * @param \DOMElement $blockquote The Twitter blockquote element.
+	 * @param \DOMElement $blockquote Twitter blockquote element.
 	 */
 	private function process_twitter_embed( \DOMElement $blockquote ): void {
 		// Ensure Twitter script will be loaded in WordPress
@@ -885,9 +888,9 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Process Instagram embed blockquotes
+	 * Processes Instagram embed blockquotes.
 	 *
-	 * @param \DOMElement $blockquote The Instagram blockquote element.
+	 * @param \DOMElement $blockquote Instagram blockquote element.
 	 */
 	private function process_instagram_embed( \DOMElement $blockquote ): void {
 		// Add WordPress classes for Instagram embeds
@@ -896,10 +899,10 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Process video elements and import video files
+	 * Processes video elements and imports video files.
 	 *
-	 * @param \DOMElement $video The video element.
-	 * @param string      $source_site_url The source site URL.
+	 * @param \DOMElement $video           Video element.
+	 * @param string      $source_site_url Source site URL.
 	 */
 	private function process_video_element( \DOMElement $video, string $source_site_url ): void {
 		// Process video source elements
@@ -942,10 +945,10 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Process audio elements and import audio files
+	 * Processes audio elements and imports audio files.
 	 *
-	 * @param \DOMElement $audio The audio element.
-	 * @param string      $source_site_url The source site URL.
+	 * @param \DOMElement $audio           Audio element.
+	 * @param string      $source_site_url Source site URL.
 	 */
 	private function process_audio_element( \DOMElement $audio, string $source_site_url ): void {
 		// Process audio source elements
@@ -979,10 +982,10 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Get attachment ID from URL using VIP-optimized function when available
+	 * Gets attachment ID from URL using VIP-optimized function when available.
 	 *
-	 * @param string $url The attachment URL.
-	 * @return int The attachment ID, or 0 if not found.
+	 * @param string $url Attachment URL.
+	 * @return int Attachment ID, or 0 if not found.
 	 */
 	public function get_attachment_id_from_url( string $url ): int {
 		// Use VIP-optimized function when available, fallback to core function
@@ -996,11 +999,11 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Fetch fresh post content from external site
+	 * Fetches fresh post content from external site.
 	 *
-	 * @param int    $external_post_id External post ID.
-	 * @param string $site_url Site URL.
-	 * @param array  $auth_credentials Optional authentication credentials.
+	 * @param int    $external_post_id  External post ID.
+	 * @param string $site_url          Site URL.
+	 * @param array  $auth_credentials  Optional. Authentication credentials. Default empty array.
 	 * @return array|false Post data array on success, false on failure.
 	 */
 	public function fetch_fresh_post_content( int $external_post_id, string $site_url, array $auth_credentials = array() ): array|false {
@@ -1084,7 +1087,7 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Check if WebP is supported by WordPress
+	 * Checks if WebP is supported by WordPress.
 	 *
 	 * @return bool True if WebP is supported.
 	 */
@@ -1094,7 +1097,7 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Add WebP MIME type to allowed uploads
+	 * Adds WebP MIME type to allowed uploads.
 	 *
 	 * @param array $mime_types Current allowed MIME types.
 	 * @return array Updated MIME types with WebP support.
@@ -1105,13 +1108,11 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Handle WebP file type validation during upload
+	 * Handles WebP file type validation during upload.
 	 *
-	 * @param array  $wp_check_filetype_and_ext File data array containing 'ext', 'type', and 'proper_filename' keys.
+	 * @param array  $wp_check_filetype_and_ext File data with 'ext', 'type', 'proper_filename' keys.
 	 * @param string $file                      Full path to the file.
-	 * @param string $filename                  The name of the file (may differ from $file due to $file being in a tmp directory).
-	 * @param array  $mimes                     Key is the file extension with value as the mime type.
-	 * @param string $real_mime                 The actual mime type or false if the type cannot be determined.
+	 * @param string $filename                  File name (may differ from $file if in tmp dir).
 	 * @return array Modified file data.
 	 */
 	public function handle_webp_filetype( array $wp_check_filetype_and_ext, string $file, string $filename ): array {

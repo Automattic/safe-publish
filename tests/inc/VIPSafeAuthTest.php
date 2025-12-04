@@ -7,8 +7,9 @@ use PHPUnit\Framework\TestCase;
 use CCP\Auth\VIP_Safe_Auth;
 
 /**
- * VIP Safe Auth Test
- * Tests authentication methods and security
+ * VIP Safe Auth Test.
+ *
+ * Tests authentication methods and security.
  */
 class VIPSafeAuthTest extends TestCase {
 

@@ -13,22 +13,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Import History Class
+ * Import History Class.
  */
 class Import_History {
 
 	/**
-	 * Custom post type for import sessions
+	 * Custom post type for import sessions.
 	 */
 	const SESSION_POST_TYPE = 'ccp_import_session';
 
 	/**
-	 * Custom post type for import logs
+	 * Custom post type for import logs.
 	 */
 	const LOG_POST_TYPE = 'ccp_import_log';
 
 	/**
-	 * Initialize the import history functionality
+	 * Initializes the import history functionality.
 	 */
 	public function init(): void {
 		\add_action( 'init', array( $this, 'register_post_types' ) );
@@ -42,7 +42,7 @@ class Import_History {
 	}
 
 	/**
-	 * Register custom post types for import tracking
+	 * Registers custom post types for import tracking.
 	 */
 	public function register_post_types(): void {
 		// Register import session post type
@@ -91,7 +91,7 @@ class Import_History {
 	}
 
 	/**
-	 * Add submenu page for import history
+	 * Adds submenu page for import history.
 	 */
 	public function add_submenu_page(): void {
 		\add_submenu_page(
@@ -105,7 +105,7 @@ class Import_History {
 	}
 
 	/**
-	 * Render the import history page
+	 * Renders the import history page.
 	 */
 	public function render_history_page(): void {
 		if ( ! \current_user_can( 'manage_options' ) ) {
@@ -182,11 +182,11 @@ class Import_History {
 	}
 
 	/**
-	 * Create a new import session
+	 * Creates a new import session.
 	 *
-	 * @param string $source_url Source site URL
-	 * @param string $session_type Type of import (single, bulk)
-	 * @return int|\WP_Error Session ID or error
+	 * @param string $source_url   Source site URL.
+	 * @param string $session_type Type of import (single, bulk).
+	 * @return int|\WP_Error Session ID or error.
 	 */
 	public function create_session( $source_url, $session_type = 'bulk' ): int|\WP_Error {
 		$session_id = \wp_insert_post( array(
@@ -213,16 +213,16 @@ class Import_History {
 	}
 
 	/**
-	 * Log an import action
+	 * Logs an import action.
 	 *
-	 * @param int    $session_id Session ID
-	 * @param int    $external_id External post ID
-	 * @param string $title Post title
-	 * @param string $status Import status (success, error, updated)
-	 * @param int    $post_id WordPress post ID (if successful)
-	 * @param string $error Error message (if failed)
-	 * @param array  $changes Array of changes made
-	 * @return int|\WP_Error Log ID or error
+	 * @param int    $session_id  Session ID.
+	 * @param int    $external_id External post ID.
+	 * @param string $title       Post title.
+	 * @param string $status      Import status (success, error, updated).
+	 * @param int    $post_id     WordPress post ID (if successful).
+	 * @param string $error       Error message (if failed).
+	 * @param array  $changes     Changes made during import.
+	 * @return int|\WP_Error Log ID or error.
 	 */
 	public function log_import_action( $session_id, $external_id, $title, $status, $post_id = null, $error = null, $changes = array() ): int|\WP_Error {
 		$log_data = array(
@@ -258,10 +258,10 @@ class Import_History {
 	}
 
 	/**
-	 * Update session stats
+	 * Updates session stats.
 	 *
-	 * @param int $session_id Session ID
-	 * @param string $status Status of the import (success, error, updated)
+	 * @param int    $session_id Session ID.
+	 * @param string $status     Status of the import (success, error, updated).
 	 */
 	public function update_session_stats( $session_id, $status ): void {
 		$total = (int) get_post_meta( $session_id, 'total_items', true );
@@ -286,9 +286,9 @@ class Import_History {
 	}
 
 	/**
-	 * Complete a session
+	 * Completes a session.
 	 *
-	 * @param int $session_id Session ID
+	 * @param int $session_id Session ID.
 	 */
 	public function complete_session( $session_id ): void {
 		update_post_meta( $session_id, 'status', 'completed' );
@@ -296,11 +296,11 @@ class Import_History {
 	}
 
 	/**
-	 * Store content diff for rollback purposes
+	 * Stores content diff for rollback purposes.
 	 *
-	 * @param int    $post_id WordPress post ID
-	 * @param string $old_content Previous content
-	 * @param string $new_content New content
+	 * @param int    $post_id     WordPress post ID.
+	 * @param string $old_content Previous content.
+	 * @param string $new_content New content.
 	 */
 	public function store_content_diff( $post_id, $old_content, $new_content ): void {
 		$diff_data = array(
@@ -313,7 +313,7 @@ class Import_History {
 	}
 
 	/**
-	 * AJAX handler for getting import sessions
+	 * Handles AJAX request for getting import sessions.
 	 */
 	public function ajax_get_import_sessions(): void {
 		\check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
@@ -367,7 +367,7 @@ class Import_History {
 	}
 
 	/**
-	 * AJAX handler for getting session details
+	 * Handles AJAX request for getting session details.
 	 */
 	public function ajax_get_session_details(): void {
 		\check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
@@ -490,7 +490,7 @@ class Import_History {
 	}
 
 	/**
-	 * AJAX handler for rolling back a session
+	 * Handles AJAX request for rolling back a session.
 	 */
 	public function ajax_rollback_session(): void {
 		\check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
@@ -612,7 +612,7 @@ class Import_History {
 	}
 
 	/**
-	 * Handle AJAX request for rolling back a single item
+	 * Handles AJAX request for rolling back a single item.
 	 */
 	public function ajax_rollback_item(): void {
 		\check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
@@ -728,7 +728,7 @@ class Import_History {
 	}
 
 	/**
-	 * AJAX handler for getting post diff
+	 * Handles AJAX request for getting post diff.
 	 */
 	public function ajax_get_post_diff(): void {
 		\check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
@@ -821,15 +821,15 @@ class Import_History {
 	}
 
 	/**
-	 * Generate comprehensive HTML diff between old and new content, including title and excerpt
+	 * Generates comprehensive HTML diff between old and new content, including title and excerpt.
 	 *
-	 * @param string $old_title Old title
-	 * @param string $new_title New title
-	 * @param string $old_excerpt Old excerpt
-	 * @param string $new_excerpt New excerpt
-	 * @param string $old_content Old content
-	 * @param string $new_content New content
-	 * @return string HTML diff
+	 * @param string $old_title   Old title.
+	 * @param string $new_title   New title.
+	 * @param string $old_excerpt Old excerpt.
+	 * @param string $new_excerpt New excerpt.
+	 * @param string $old_content Old content.
+	 * @param string $new_content New content.
+	 * @return string HTML diff.
 	 */
 	private function generate_comprehensive_diff_html( $old_title, $new_title, $old_excerpt, $new_excerpt, $old_content, $new_content ): string {
 		$diff_html = '<div class="ccp-diff-container">';
@@ -889,7 +889,7 @@ class Import_History {
 	}
 
 	/**
-	 * AJAX handler for deleting a session
+	 * Handles AJAX request for deleting a session.
 	 */
 	public function ajax_delete_session(): void {
 		\check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );

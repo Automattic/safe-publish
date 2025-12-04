@@ -7,8 +7,9 @@ use PHPUnit\Framework\TestCase;
 use CCP\API\External_Posts_API;
 
 /**
- * External Posts API Test
- * Tests the external API integration functionality
+ * External Posts API Test.
+ *
+ * Tests the external API integration functionality.
  */
 class ExternalPostsAPITest extends TestCase {
 

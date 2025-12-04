@@ -3,7 +3,7 @@
 /**
  * Plugin Name: Compliant Content Publisher
  * Plugin URI: https://github.com/wpcomvip/x-team-sandbox
- * Description: A WordPress plugin allowing editors to promote content from non-production to production.
+ * Description: Enables content transfer from non-production to production environments.
  * Author: WPVIP
  * Author URI: https://wpvip.com
  * Text Domain: ccp
@@ -75,7 +75,7 @@ spl_autoload_register(
 add_action( 'plugins_loaded', 'ccp_init_plugin' );
 
 /**
- * Initialize the plugin
+ * Initializes the plugin.
  */
 function ccp_init_plugin(): void {
 	global $ccp_plugin;
@@ -89,7 +89,7 @@ function ccp_init_plugin(): void {
 }
 
 /**
- * Plugin activation hook
+ * Plugin activation hook.
  */
 register_activation_hook( __FILE__, 'ccp_activation' );
 
@@ -111,7 +111,7 @@ function ccp_activation(): void {
 }
 
 /**
- * Plugin deactivation hook
+ * Plugin deactivation hook.
  */
 register_deactivation_hook( __FILE__, 'ccp_deactivation' );
 

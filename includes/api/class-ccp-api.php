@@ -1,6 +1,8 @@
 <?php declare( strict_types=1 );
 /**
  * CCP API class
+ *
+ * @package CCP
  */
 
 namespace CCP\API;
@@ -11,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * External Posts API Class
+ * External Posts API Class.
  */
 class CCP_API extends REST_Base {
 
@@ -23,8 +25,7 @@ class CCP_API extends REST_Base {
 	const REST_BASE = 'ccp/v1';
 
 	/**
-	 * Register REST API routes.
-	 *
+	 * Registers REST API routes.
 	 */
 	public function register_routes(): void {
 		register_rest_route( self::REST_BASE, 'diff-preview', [
@@ -103,9 +104,9 @@ class CCP_API extends REST_Base {
 	}
 
 	/**
-	 * Update the content of a post.
+	 * Updates the content of a post.
 	 *
-	 * @param \WP_REST_Request $req The REST request object.
+	 * @param \WP_REST_Request $req REST request object.
 	 *
 	 * @return \WP_REST_Response
 	 */
@@ -209,7 +210,7 @@ class CCP_API extends REST_Base {
 	}
 
 	/**
-	 * Get authentication credentials from settings
+	 * Gets authentication credentials from settings.
 	 *
 	 * @return array Authentication credentials array with appropriate keys.
 	 */
@@ -240,12 +241,12 @@ class CCP_API extends REST_Base {
 	}
 
 	/**
-	 * Render the diff preview for an external post
+	 * Renders the diff preview for an external post.
 	 *
-	 * @param \WP_REST_Request $req The REST request object.
+	 * @param \WP_REST_Request $req REST request object.
 	 *
 	 * @return array|\WP_REST_Response
-	 * @throws \WP_Error If the local post cannot be found or if there are issues
+	 * @throws \WP_Error   If the local post cannot be found.
 	 * @throws \Exception If the external post cannot be fetched or processed.
 	 */
 	public function render_diff( \WP_REST_Request $req ): array|\WP_REST_Response {
@@ -687,9 +688,13 @@ class CCP_API extends REST_Base {
 	}
 
 	/**
-	 * Safely unserialize.
-	 * - Disallows classes (security)
-	 * - Distinguishes between invalid input and the serialized false ('b:0;')
+	 * Safely unserializes data.
+	 *
+	 * Disallows classes (security) and distinguishes between invalid input
+	 * and the serialized false ('b:0;').
+	 *
+	 * @param string $s Serialized string.
+	 * @return mixed Unserialized data.
 	 */
 	public function safe_unserialize( string $s ): mixed {
 		if ( 'b:0;' === $s ) {
@@ -709,10 +714,13 @@ class CCP_API extends REST_Base {
 	}
 
 	/**
-	 * Normalize data for stable comparison:
-	 * - Sorts associative array keys
-	 * - Preserves order for indexed arrays
-	 * - Converts objects to ['__class__' => ClassName, ...props...]
+	 * Normalizes data for stable comparison.
+	 *
+	 * Sorts associative array keys, preserves order for indexed arrays,
+	 * and converts objects to ['__class__' => ClassName, ...props...].
+	 *
+	 * @param mixed $v Value to normalize.
+	 * @return mixed Normalized value.
 	 */
 	public function normalize( $v ): mixed {
 		if ( is_array( $v ) ) {
@@ -744,8 +752,13 @@ class CCP_API extends REST_Base {
 	}
 
 	/**
-	 * Quick boolean: do the two serialized payloads represent the same data?
-	 * (Order of associative arrays ignored; index order preserved.)
+	 * Checks if two serialized payloads represent the same data.
+	 *
+	 * Order of associative arrays is ignored; index order is preserved.
+	 *
+	 * @param string $a First serialized string.
+	 * @param string $b Second serialized string.
+	 * @return bool True if equal, false otherwise.
 	 */
 	public function serialized_equals( string $a, string $b ): bool {
 		$va = $this->normalize( $this->safe_unserialize( $a ) );
@@ -756,8 +769,12 @@ class CCP_API extends REST_Base {
 	}
 
 	/**
-	 * Produce a human-readable deep diff between two normalized values.
-	 * Returns an array of differences: each item has path, left, right.
+	 * Produces a human-readable deep diff between two normalized values.
+	 *
+	 * @param mixed  $left  Left value to compare.
+	 * @param mixed  $right Right value to compare.
+	 * @param string $path  Optional. Current path. Default '$'.
+	 * @return array Differences found between values.
 	 */
 	public function deep_diff( $left, $right, string $path = '$' ): array {
 		if ( gettype( $left ) !== gettype( $right ) ) {
@@ -818,7 +835,11 @@ class CCP_API extends REST_Base {
 	}
 
 	/**
-	 * High-level helper: returns [hasDiff, diffs[]]
+	 * Returns whether serialized strings differ and provides the differences.
+	 *
+	 * @param string $a First serialized string.
+	 * @param string $b Second serialized string.
+	 * @return array Array with [hasDiff, diffs[]].
 	 */
 	public function serialized_diff( string $a, string $b ): array {
 		$va = $this->normalize( $this->safe_unserialize( $a ) );
@@ -829,15 +850,15 @@ class CCP_API extends REST_Base {
 	}
 
 	/**
-	 * Normalize HTML/content for wp_text_diff to reduce noise:
-	 * - Canonicalize Gutenberg blocks via parse_blocks/serialize_blocks
-	 * - Ensure block comments and tags break onto their own lines
-	 * - Collapse excessive whitespace without altering content meaning
+	 * Normalizes HTML/content for wp_text_diff to reduce noise.
+	 *
+	 * Canonicalizes Gutenberg blocks via parse_blocks/serialize_blocks,
+	 * ensures block comments and tags break onto their own lines,
+	 * and collapses excessive whitespace without altering content meaning.
 	 *
 	 * This runs only for diff visualization and does not affect saved content.
 	 *
 	 * @param string $html Raw content HTML.
-	 *
 	 * @return string Normalized content suitable for line-based diffing.
 	 */
 	private function normalize_for_diff( string $html ): string {
@@ -866,13 +887,14 @@ class CCP_API extends REST_Base {
 	}
 
 	/**
-	 * Add predictable line breaks to improve alignment in diff:
-	 * - Put Gutenberg block comments on their own lines
-	 * - Break between HTML tags: `><` -> `>\n<`
-	 * - Normalize self-closing spacing
+	 * Adds predictable line breaks to improve alignment in diff.
+	 *
+	 * Puts Gutenberg block comments on their own lines,
+	 * breaks between HTML tags (`><` -> `>\n<`),
+	 * and normalizes self-closing spacing.
 	 *
 	 * @param string $html HTML content.
-	 * @return string
+	 * @return string HTML with line breaks added.
 	 */
 	private function add_line_breaks_for_diff( string $html ): string {
 		// Ensure each block comment is on its own line.
@@ -891,11 +913,12 @@ class CCP_API extends REST_Base {
 	}
 
 	/**
-	 * Update post meta based on provided input.
+	 * Updates post meta based on provided input.
+	 *
 	 * Accepts array or object; keys are meta keys, values are meta values.
 	 *
-	 * @param int            $post_id Post ID to update meta for.
-	 * @param array|object $meta Meta to set.
+	 * @param int          $post_id Post ID to update meta for.
+	 * @param array|object $meta    Meta to set.
 	 */
 	public function update_meta( int $post_id, array|object $meta ): void {
 		// Update meta if provided (accept object or array)
@@ -908,12 +931,13 @@ class CCP_API extends REST_Base {
 	}
 
 	/**
-	 * Update post terms (taxonomies) based on provided input.
-	 * Accepts array or object; supports term IDs, slugs, names, or objects with id/term_id, slug, name.
-	 * Creates terms if they do not exist.
+	 * Updates post terms (taxonomies) based on provided input.
 	 *
-	 * @param int            $post_id Post ID to update terms for.
-	 * @param array|object $terms Terms to set, keyed by taxonomy.
+	 * Accepts array or object; supports term IDs, slugs, names, or objects
+	 * with id/term_id, slug, name. Creates terms if they do not exist.
+	 *
+	 * @param int          $post_id Post ID to update terms for.
+	 * @param array|object $terms   Terms to set, keyed by taxonomy.
 	 */
 	public function update_terms( int $post_id, array|object $terms ): void {
 		// Update terms if provided (accept array/object; supports IDs, slugs, names, or objects)
