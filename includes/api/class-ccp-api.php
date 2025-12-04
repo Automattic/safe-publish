@@ -771,8 +771,6 @@ class CCP_API extends REST_Base {
 	/**
 	 * Produces a human-readable deep diff between two normalized values.
 	 *
-	 * Each difference item has path, left, and right keys.
-	 *
 	 * @param mixed  $left  Left value to compare.
 	 * @param mixed  $right Right value to compare.
 	 * @param string $path  Optional. Current path. Default '$'.
