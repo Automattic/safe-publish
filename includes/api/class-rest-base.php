@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * REST Base Class
+ * REST Base Class.
  */
 abstract class REST_Base {
 
