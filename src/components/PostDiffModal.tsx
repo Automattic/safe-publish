@@ -115,6 +115,12 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 		};
 	}, [ items[ 0 ].id, items[ 0 ].post_type, items[ 0 ].content, items[ 0 ].excerpt ] );
 
+	/**
+	 * Handles updating the local post with incoming content.
+	 *
+	 * Sends the selected content fields (title, excerpt, meta, terms, featured
+	 * media) to the REST API to update the local post.
+	 */
 	const handleUpdatePost = async () => {
 		setIsUpdating( true );
         setUpdateError( null );

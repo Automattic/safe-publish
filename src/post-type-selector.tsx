@@ -178,7 +178,11 @@ export function PostTypeSelector( {
 	};
 
 	/**
-	 * Handle post type selection change
+	 * Handles post type selection change.
+	 *
+	 * Updates the current post type state and calls the parent callback.
+	 *
+	 * @param {string} postType Newly selected post type.
 	 */
 	const handlePostTypeChange = ( postType: string ): void => {
 		setCurrentPostType( postType );
@@ -188,7 +192,9 @@ export function PostTypeSelector( {
 	};
 
 	/**
-	 * Handle refresh button click
+	 * Handles refresh button click.
+	 *
+	 * Triggers a reload of available post types from the external site.
 	 */
 	const handleRefresh = (): void => {
 		loadPostTypes().catch( console.error );

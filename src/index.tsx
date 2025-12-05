@@ -105,7 +105,14 @@ function ExternalPostsDataView( { posts }: ExternalPostsDataViewProps ): JSX.Ele
 		},
 	];
 
-	// Handle view changes (search, sort, pagination, etc.)
+	/**
+	 * Handles view state changes.
+	 *
+	 * Applies search filtering, sorting, and updates pagination when the
+	 * DataViews view state changes.
+	 *
+	 * @param {View} newView Updated view state from DataViews.
+	 */
 	const onChangeView = ( newView: View ): void => {
 		setView( newView );
 

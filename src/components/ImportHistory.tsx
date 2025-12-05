@@ -184,7 +184,14 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 	};
 
 	/**
-	 * Handle delete session
+	 * Handles deleting an import session.
+	 *
+	 * Prompts for confirmation, then permanently removes the session and all
+	 * associated log entries.
+	 *
+	 * @param {number} sessionId ID of the session to delete.
+	 *
+	 * @return {Promise<void>} Resolves when deletion completes.
 	 */
 	const handleDeleteSession = async ( sessionId: number ): Promise< void > => {
 		if ( ! confirm( __( 'Are you sure you want to delete this import session? This will permanently remove the session and all its associated log entries. This action cannot be undone.', 'ccp' ) ) ) {
@@ -221,7 +228,9 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 	};
 
 	/**
-	 * Open session details modal
+	 * Opens the session details modal.
+	 *
+	 * @param {ImportSession} session Session to display details for.
 	 */
 	const openSessionDetails = ( session: ImportSession ): void => {
 		setSelectedSession( session );
@@ -229,7 +238,9 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 	};
 
 	/**
-	 * Open diff modal for a specific post
+	 * Opens the diff modal for a specific post.
+	 *
+	 * @param {number} postId ID of the post to show diff for.
 	 */
 	const openDiffModal = ( postId: number ): void => {
 		setDiffPostId( postId );

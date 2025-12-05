@@ -197,7 +197,20 @@ const bulkImportPosts = async (
 	}
 };
 
+/**
+ * DataViews actions for external posts.
+ *
+ * Defines the available actions that can be performed on posts in the DataViews
+ * component, including creating drafts, bulk importing, updating, and viewing
+ * diffs.
+ */
 export const actions: Action< Post >[] = [
+	/**
+	 * Create Draft action.
+	 *
+	 * Creates a new draft post from the selected external post, importing all
+	 * content including images, links, and formatting.
+	 */
 	{
 		id: 'draft',
 		label: 'Create Draft',
@@ -229,6 +242,14 @@ export const actions: Action< Post >[] = [
 				);
 			}
 
+			/**
+			 * Handles creating a draft post.
+			 *
+			 * Sends the post data to WordPress and handles confirmation if the
+			 * post already exists.
+			 *
+			 * @param {boolean} forceUpdate Whether to force update an existing post.
+			 */
 			const handleCreateDraft = ( forceUpdate = false ) => {
 				setIsLoading( true );
 				setError( null );
@@ -298,10 +319,16 @@ export const actions: Action< Post >[] = [
 				} );
 			};
 
+			/**
+			 * Handles confirming an update to an existing post.
+			 */
 			const handleConfirmUpdate = () => {
 				handleCreateDraft( true );
 			};
 
+			/**
+			 * Handles cancelling the update and redirecting to the existing post.
+			 */
 			const handleCancelUpdate = () => {
 				if ( confirmData?.edit_url ) {
 					// User chose not to update, redirect to existing post
@@ -386,6 +413,12 @@ export const actions: Action< Post >[] = [
 			);
 		},
 	},
+	/**
+	 * Bulk Import action.
+	 *
+	 * Imports multiple selected posts as drafts in a single batch operation,
+	 * with progress tracking and result summary.
+	 */
 	{
 		id: 'bulk-import',
 		label: 'Bulk Import',
@@ -418,6 +451,12 @@ export const actions: Action< Post >[] = [
 				);
 			}
 
+			/**
+			 * Handles the bulk import operation.
+			 *
+			 * Sends all selected posts to the bulk import endpoint with
+			 * progress simulation for better UX.
+			 */
 			const handleBulkImport = async () => {
 				setIsLoading( true );
 				setError( null );
@@ -459,6 +498,12 @@ export const actions: Action< Post >[] = [
 				}
 			};
 
+			/**
+			 * Handles closing the modal.
+			 *
+			 * Refreshes the page if imports were successful to show updated
+			 * post list.
+			 */
 			const handleCloseModal = () => {
 				if ( importResults && importResults.successful > 0 ) {
 					// Refresh the page to show updated post list
@@ -583,6 +628,12 @@ export const actions: Action< Post >[] = [
 			);
 		},
 	},
+	/**
+	 * Update Post action.
+	 *
+	 * Updates an existing local post with the latest content from the external
+	 * source.
+	 */
 	{
 		id: 'update',
 		label: 'Update Post',
@@ -605,8 +656,14 @@ export const actions: Action< Post >[] = [
 			);
 		},
 	},
+	/**
+	 * Post Diff action.
+	 *
+	 * Displays a visual comparison between the local post content and the
+	 * incoming external content.
+	 */
 	{
-		id: 'tertiary',
+		id: 'post-diff',
 		label: 'Post Diff',
 		icon: drafts,
 		hideModalHeader: false,

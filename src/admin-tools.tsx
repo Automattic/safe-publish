@@ -54,6 +54,12 @@ interface PreviewResult {
 	posts?: Post[];
 }
 
+/**
+ * Generic wrapper for API responses.
+ *
+ * @property {boolean} success Whether the request succeeded.
+ * @property {T}       data    Response data.
+ */
 interface ApiResponse< T > {
 	success: boolean;
 	data: T;
@@ -155,7 +161,12 @@ export function AdminTools( {
 	};
 
 	/**
-	 * Test connection to external site
+	 * Tests connection to the external site.
+	 *
+	 * Sends a test request to the external WordPress site and displays the
+	 * connection result.
+	 *
+	 * @return {Promise<void>} Resolves when the test completes.
 	 */
 	const handleTestConnection = async (): Promise< void > => {
 		const siteUrl = getExternalSiteUrl();
@@ -209,7 +220,12 @@ export function AdminTools( {
 	};
 
 	/**
-	 * Preview posts from external site
+	 * Previews posts from the external site.
+	 *
+	 * Fetches a sample of posts from the external WordPress site using the
+	 * selected post type and displays them.
+	 *
+	 * @return {Promise<void>} Resolves when the preview completes.
 	 */
 	const handlePreviewPosts = async (): Promise< void > => {
 		const siteUrl = getExternalSiteUrl();
@@ -271,11 +287,20 @@ export function AdminTools( {
 		}
 	};
 
-	// Wrapper functions to handle void returns for onClick
+	/**
+	 * Click handler for the test connection button.
+	 *
+	 * Wraps the async handleTestConnection function for use as an onClick handler.
+	 */
 	const onTestClick = (): void => {
 		handleTestConnection().catch( console.error );
 	};
 
+	/**
+	 * Click handler for the preview posts button.
+	 *
+	 * Wraps the async handlePreviewPosts function for use as an onClick handler.
+	 */
 	const onPreviewClick = (): void => {
 		handlePreviewPosts().catch( console.error );
 	};
