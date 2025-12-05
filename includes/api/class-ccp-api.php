@@ -703,7 +703,7 @@ class CCP_API extends REST_Base {
 
 		// Suppress warnings and detect failure reliably.
 		$prev = set_error_handler( function (): void {
-			/* swallow unserialize warnings */
+			// Swallow unserialize warnings.
 		} );
 		$result = unserialize( $s, [ 'allowed_classes' => false ] );
 		restore_error_handler();
