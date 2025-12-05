@@ -134,7 +134,7 @@ class Admin_Page {
 
 			if ( ! empty( $shared_secret ) ) {
 				$auth_credentials['shared_secret'] = $shared_secret;
-			} elseif ( \ccp_is_development_environment() ) {
+			} elseif ( ccp_is_development_environment() ) {
 				// Fallback to Basic auth in development environments only.
 				$username = get_option( 'ccp_username', '' );
 				$password = get_option( 'ccp_password', '' );
@@ -222,11 +222,11 @@ class Admin_Page {
 				'admin_notices',
 				function () {
 					// Only show notices in admin context, not during REST API requests.
-					if ( ! \is_admin() || \wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && \constant( 'REST_REQUEST' ) ) ) {
+					if ( ! is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && constant( 'REST_REQUEST' ) ) ) {
 						return;
 					}
 
-					if ( defined( 'WP_DEBUG' ) && \constant( 'WP_DEBUG' ) ) {
+					if ( defined( 'WP_DEBUG' ) && constant( 'WP_DEBUG' ) ) {
 						echo '<div class="notice notice-error"><p>';
 						echo '<strong>Compliant Content Publisher:</strong> Build assets are missing. ';
 						echo 'Run <code>npm run build</code> and commit the build files for VIP deployment.';

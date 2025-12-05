@@ -32,7 +32,7 @@ class HTTP_Client {
 	 */
 	public function make_request( string $url, array $auth_credentials = array(), array $additional_args = array() ): array|\WP_Error {
 		// VIP-optimized timeout (max 10 seconds recommended for VIP environments)
-		$timeout = \apply_filters( 'ccp_request_timeout', 10 );
+		$timeout = apply_filters( 'ccp_request_timeout', 10 );
 
 		// Determine SSL verification based on environment
 		$sslverify = $this->should_verify_ssl( $url );
@@ -60,7 +60,7 @@ class HTTP_Client {
 
 		// Add query parameters for authentication if needed
 		if ( ! empty( $auth_params['query_args'] ) ) {
-			$url = \add_query_arg( $auth_params['query_args'], $url );
+			$url = add_query_arg( $auth_params['query_args'], $url );
 		}
 
 		// Fallback authentication handling
@@ -78,7 +78,7 @@ class HTTP_Client {
 			}
 
 			if ( ! empty( $auth_params['query_args'] ) ) {
-				$url = \add_query_arg( $auth_params['query_args'], $url );
+				$url = add_query_arg( $auth_params['query_args'], $url );
 			}
 		}
 
@@ -98,24 +98,24 @@ class HTTP_Client {
 		 * @param array  $request_args Request arguments.
 		 * @param string $url          Request URL.
 		 */
-		$request_args = \apply_filters( 'ccp_request_args', $request_args, $url );
+		$request_args = apply_filters( 'ccp_request_args', $request_args, $url );
 
 		$response = $this->safe_remote_get( $url, $request_args );
 
-		if ( \is_wp_error( $response ) ) {
+		if ( is_wp_error( $response ) ) {
 			return new \WP_Error(
 				'request_failed',
-				\__( 'Failed to fetch data from external site.', 'ccp' ) . ' ' . $response->get_error_message()
+				__( 'Failed to fetch data from external site.', 'ccp' ) . ' ' . $response->get_error_message()
 			);
 		}
 
-		$response_code = \wp_remote_retrieve_response_code( $response );
+		$response_code = wp_remote_retrieve_response_code( $response );
 		if ( 200 !== $response_code ) {
 			return new \WP_Error(
 				'http_error',
 				sprintf(
 					/* translators: %d: HTTP response code */
-					\__( 'External site returned HTTP error %d.', 'ccp' ),
+					__( 'External site returned HTTP error %d.', 'ccp' ),
 					$response_code
 				)
 			);
@@ -131,7 +131,7 @@ class HTTP_Client {
 	 */
 	public function get_user_agent(): string {
 		$plugin_version = defined( 'CCP_VERSION' ) ? CCP_VERSION : '1.1.0';
-		$site_url = \get_bloginfo( 'url' );
+		$site_url = get_bloginfo( 'url' );
 
 		return sprintf(
 			'Compliant Content Publisher/%s; %s',
@@ -149,12 +149,12 @@ class HTTP_Client {
 	 */
 	public function safe_remote_get( string $url, array $args = array() ): array|\WP_Error {
 		// Use VIP-optimized function when available, fallback to core function
-		if ( \function_exists( 'vip_safe_wp_remote_get' ) ) {
-			return \vip_safe_wp_remote_get( $url, '', 3, 5, 20, $args );
+		if ( function_exists( 'vip_safe_wp_remote_get' ) ) {
+			return vip_safe_wp_remote_get( $url, '', 3, 5, 20, $args );
 		}
 
 		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.wp_remote_get_wp_remote_get -- Fallback for non-VIP environments
-		return \wp_remote_get( $url, $args );
+		return wp_remote_get( $url, $args );
 	}
 
 	/**
@@ -169,7 +169,7 @@ class HTTP_Client {
 		}
 
 		// Try VIP-safe authentication first
-		$shared_secret = \get_option( 'ccp_shared_secret', '' );
+		$shared_secret = get_option( 'ccp_shared_secret', '' );
 
 		if ( ! empty( $shared_secret ) ) {
 			return array(
@@ -179,8 +179,8 @@ class HTTP_Client {
 
 		// Fallback to Basic auth in development environments only
 		if ( $this->is_development_environment() ) {
-			$username = \get_option( 'ccp_username', '' );
-			$password = \get_option( 'ccp_password', '' );
+			$username = get_option( 'ccp_username', '' );
+			$password = get_option( 'ccp_password', '' );
 
 			if ( ! empty( $username ) && ! empty( $password ) ) {
 				return array(
@@ -199,7 +199,7 @@ class HTTP_Client {
 	 * @return bool True if development environment.
 	 */
 	public function is_development_environment(): bool {
-		return \ccp_is_development_environment();
+		return ccp_is_development_environment();
 	}
 
 	/**
@@ -210,12 +210,12 @@ class HTTP_Client {
 	 */
 	public function should_verify_ssl( string $url ): bool {
 		// Always verify SSL in VIP production environments
-		if ( \defined( 'WPCOM_IS_VIP_ENV' ) && \constant( 'WPCOM_IS_VIP_ENV' ) ) {
+		if ( defined( 'WPCOM_IS_VIP_ENV' ) && constant( 'WPCOM_IS_VIP_ENV' ) ) {
 			return true;
 		}
 
 		// Parse URL to check for development indicators
-		$parsed_url = \wp_parse_url( $url );
+		$parsed_url = wp_parse_url( $url );
 		$host = $parsed_url['host'] ?? '';
 
 		// Development domains where SSL verification can be disabled
@@ -231,10 +231,10 @@ class HTTP_Client {
 		// Check if this is a development domain
 		foreach ( $dev_domains as $dev_domain ) {
 			if ( $host === $dev_domain ||
-				( \function_exists( 'str_ends_with' ) && \str_ends_with( $host, $dev_domain ) ) ||
-				( ! \function_exists( 'str_ends_with' ) && substr( $host, -strlen( $dev_domain ) ) === $dev_domain ) ) {
+				( function_exists( 'str_ends_with' ) && str_ends_with( $host, $dev_domain ) ) ||
+				( ! function_exists( 'str_ends_with' ) && substr( $host, -strlen( $dev_domain ) ) === $dev_domain ) ) {
 				// Allow filtering for specific development needs
-				return \apply_filters( 'ccp_dev_ssl_verify', false, $url );
+				return apply_filters( 'ccp_dev_ssl_verify', false, $url );
 			}
 		}
 
@@ -248,12 +248,12 @@ class HTTP_Client {
 	 * @param string $temp_file Path to temporary file.
 	 */
 	public function cleanup_temp_file( string $temp_file ): void {
-		if ( empty( $temp_file ) || \is_wp_error( $temp_file ) ) {
+		if ( empty( $temp_file ) || is_wp_error( $temp_file ) ) {
 			return;
 		}
 
 		// Only attempt cleanup if file exists and is a temp file
-		if ( \file_exists( $temp_file ) && strpos( $temp_file, '/tmp/' ) !== false ) {
+		if ( file_exists( $temp_file ) && strpos( $temp_file, '/tmp/' ) !== false ) {
 			// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_unlink -- Temp file cleanup after media import, file is in /tmp/ directory
 			unlink( $temp_file );
 		}
@@ -267,6 +267,6 @@ class HTTP_Client {
 	 */
 	public function download_external_file( string $url ): string|\WP_Error|false {
 		// Use download_url for proper file handling - WordPress core function
-		return \download_url( $url );
+		return download_url( $url );
 	}
 }

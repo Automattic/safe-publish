@@ -867,9 +867,9 @@ class CCP_API extends REST_Base {
 
 		// Canonicalize Gutenberg block formatting if present.
 		if ( false !== strpos( $html, '<!-- wp:' ) && function_exists( 'parse_blocks' ) && function_exists( 'serialize_blocks' ) ) {
-			$blocks = \parse_blocks( $html );
+			$blocks = parse_blocks( $html );
 			if ( is_array( $blocks ) && ! empty( $blocks ) ) {
-				$html = \serialize_blocks( $blocks );
+				$html = serialize_blocks( $blocks );
 			}
 		}
 
