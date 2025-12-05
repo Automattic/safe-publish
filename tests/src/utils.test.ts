@@ -107,10 +107,10 @@ describe( 'sanitizePosts', () => {
 	it( 'should filter out invalid posts', () => {
 		const posts = [
 			{ id: 1, link: 'https://example.com/1', title: 'Post 1', modified: '2024-03-15' },
-			{ id: 2, link: 'https://example.com/2', title: 'Post 2' }, // missing modified
+			{ id: 2, link: 'https://example.com/2', title: 'Post 2' }, // Missing modified.
 			{ id: 3, link: 'https://example.com/3', title: 'Post 3', modified: '2024-03-16' },
 			null,
-			{ title: 'Invalid' }, // missing required fields
+			{ title: 'Invalid' }, // Missing required fields.
 		];
 
 		const result = sanitizePosts( posts as any );

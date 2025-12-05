@@ -82,14 +82,14 @@ class HTTPClientTest extends TestCase {
 	}
 
 	public function test_cleanup_temp_file_handles_non_existent_file(): void {
-		// Should not throw exception for non-existent file
+		// Should not throw exception for non-existent file.
 		$this->http_client->cleanup_temp_file( '/tmp/non_existent_file.txt' );
 
-		$this->assertTrue( true ); // If we reach here, no exception was thrown
+		$this->assertTrue( true ); // If we reach here, no exception was thrown.
 	}
 
 	public function test_cleanup_temp_file_handles_empty_string(): void {
-		// Should not throw exception for empty string
+		// Should not throw exception for empty string.
 		$this->http_client->cleanup_temp_file( '' );
 
 		$this->assertTrue( true );

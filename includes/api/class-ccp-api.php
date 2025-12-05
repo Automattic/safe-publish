@@ -146,26 +146,26 @@ class CCP_API extends REST_Base {
 		}
 
 		if ( isset( $content ) ) {
-			// Process content to import media and fix links
+			// Process content to import media and fix links.
 			$processed_content = $content;
 			if ( ! empty( $content ) ) {
-				// Extract the site URL from the external link
+				// Extract the site URL from the external link.
 				$site_url = get_option( 'ccp_external_site_url', '' );
 
 				$admin_handler = $ccp_plugin->get_admin_handler();
 				$api = $ccp_plugin->get_api();
 
-				// Check if content contains Gutenberg blocks
+				// Check if content contains Gutenberg blocks.
 				if ( $admin_handler->is_gutenberg_content( $content ) ) {
 					$processed_content = $admin_handler->process_gutenberg_blocks( $content, $site_url );
 				} else {
-					// Fallback to traditional content processing
+					// Fallback to traditional content processing.
 					$processed_content = $api->process_and_import_media( $content, $site_url );
-					// Process oEmbeds using WordPress functionality
+					// Process oEmbeds using WordPress functionality.
 					$processed_content = $admin_handler->process_oembed_content( $processed_content );
 				}
 
-				// Replace external URLs with current site URLs
+				// Replace external URLs with current site URLs.
 				$processed_content = $admin_handler->replace_external_urls( $processed_content, $site_url );
 			}
 
@@ -181,7 +181,7 @@ class CCP_API extends REST_Base {
 			], 500 );
 		}
 
-		// Import/set featured image if provided
+		// Import/set featured image if provided.
 		if ( $req->has_param( 'featuredMediaId' ) && $featured_media_id > 0 ) {
 			$api = $ccp_plugin->get_api();
 			$site_url = get_option( 'ccp_external_site_url', '' );
@@ -215,7 +215,7 @@ class CCP_API extends REST_Base {
 	 * @return array Authentication credentials array with appropriate keys.
 	 */
 	private function get_auth_credentials(): array {
-		// Try VIP-safe authentication first
+		// Try VIP-safe authentication first.
 		$shared_secret = get_option( 'ccp_shared_secret', '' );
 
 		if ( ! empty( $shared_secret ) ) {
@@ -224,7 +224,7 @@ class CCP_API extends REST_Base {
 			);
 		}
 
-		// Fallback to Basic auth in development environments only
+		// Fallback to Basic auth in development environments only.
 		if ( $this->is_development_environment() ) {
 			$username = get_option( 'ccp_username', '' );
 			$password = get_option( 'ccp_password', '' );
@@ -256,7 +256,7 @@ class CCP_API extends REST_Base {
 		$cleanup = (bool) $req->get_param( 'cleanup' );
 		$site_url = get_option( 'ccp_external_site_url', '' );
 
-		// Convert plural post types to singular for WordPress compatibility
+		// Convert plural post types to singular for WordPress compatibility.
 		$post_type_mapping = array(
 			'posts' => 'post',
 			'pages' => 'page',
@@ -266,7 +266,7 @@ class CCP_API extends REST_Base {
 
 		$mapped_post_type = isset( $post_type_mapping[ $post_type ] ) ? $post_type_mapping[ $post_type ] : $post_type;
 
-		// Find local post by external post ID
+		// Find local post by external post ID.
 		$_query = new \WP_Query( [
 			'meta_key' => 'ccp_external_post_id',
 			'meta_value' => $external_post_id, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
@@ -284,7 +284,7 @@ class CCP_API extends REST_Base {
 		// Requested context always edit.
 		$requested_context = 'edit';
 
-		// Build external API URL with conditional context param
+		// Build external API URL with conditional context param.
 		$endpoint = $post_type;
 		$api_base = trailingslashit( $site_url ) . 'wp-json/wp/v2/' . $endpoint . '/' . $external_post_id;
 		$query_args = array(
@@ -302,13 +302,13 @@ class CCP_API extends REST_Base {
 		$body = wp_remote_retrieve_body( $response );
 		$data = json_decode( $body, true );
 
-		// Build incoming structured pieces
+		// Build incoming structured pieces.
 		$incoming_title = isset( $data['title']['rendered'] ) ? $data['title']['rendered'] : '';
 		$incoming_content = isset( $data['content']['raw'] ) ? $data['content']['raw'] : ( isset( $data['content']['rendered'] ) ? $data['content']['rendered'] : '' );
 		$incoming_excerpt = isset( $data['excerpt']['rendered'] ) ? $data['excerpt']['rendered'] : '';
 		$incoming_meta = isset( $data['meta'] ) && is_array( $data['meta'] ) ? $data['meta'] : array();
 
-		// Extract terms from embedded response if available
+		// Extract terms from embedded response if available.
 		$incoming_terms = array();
 		if ( ! empty( $data['_embedded']['wp:term'] ) && is_array( $data['_embedded']['wp:term'] ) ) {
 			foreach ( $data['_embedded']['wp:term'] as $term_group ) {
@@ -322,7 +322,7 @@ class CCP_API extends REST_Base {
 			}
 		}
 
-		// Build local (current) structured pieces to compare
+		// Build local (current) structured pieces to compare.
 		$current_title = get_the_title( $local_post->ID );
 		$current_content = $local_post->post_content;
 		$current_excerpt = $local_post->post_excerpt;
@@ -363,14 +363,14 @@ class CCP_API extends REST_Base {
 			$incoming_excerpt = $light( $incoming_excerpt );
 		}
 
-		// Ensure diff renderer classes are loaded
+		// Ensure diff renderer classes are loaded.
 		if ( ! class_exists( 'WP_Text_Diff_Renderer_Table' ) ) {
 			require_once ABSPATH . 'wp-includes/wp-diff.php';
 		}
 
 		$renderer = ( 'inline' === $mode ) ? new \WP_Text_Diff_Renderer_Inline() : new \WP_Text_Diff_Renderer_Table();
 
-		// Generate content-only diff HTML
+		// Generate content-only diff HTML.
 		$content_diff = wp_text_diff(
 			$current_content,
 			$incoming_content,
@@ -388,7 +388,7 @@ class CCP_API extends REST_Base {
 		}
 
 		// --- Non-content diffs (title, excerpt, taxonomies, meta) ---
-		// Helper: build plain text rep for taxonomies and meta for diffing
+		// Helper: build plain text rep for taxonomies and meta for diffing.
 		$build_terms_text = function ( $terms_arr ) {
 			if ( empty( $terms_arr ) || ! is_array( $terms_arr ) ) {
 				return '';
@@ -407,7 +407,7 @@ class CCP_API extends REST_Base {
 			}
 			$lines = array();
 			foreach ( $meta_arr as $k => $v ) {
-				// Skip protected meta (leading underscore) and plugin internal meta (ccp_ prefix)
+				// Skip protected meta (leading underscore) and plugin internal meta (ccp_ prefix).
 				if ( 0 === strpos( $k, '_' ) || 0 === strpos( $k, 'ccp_' ) ) {
 					continue;
 				}
@@ -420,7 +420,7 @@ class CCP_API extends REST_Base {
 			return implode( "\n", $lines );
 		};
 
-		// Title diff
+		// Title diff.
 		$title_diff = wp_text_diff(
 			$current_title,
 			$incoming_title,
@@ -457,7 +457,7 @@ class CCP_API extends REST_Base {
 		$current_excerpt_for_diff = $prepare_excerpt_for_diff( $current_excerpt );
 		$incoming_excerpt_for_diff = $prepare_excerpt_for_diff( $incoming_excerpt );
 
-		// Excerpt diff (uses normalized versions to avoid false positives from wrapping <p>)
+		// Excerpt diff (uses normalized versions to avoid false positives from wrapping <p>).
 		$excerpt_diff = wp_text_diff(
 			$current_excerpt_for_diff,
 			$incoming_excerpt_for_diff,
@@ -472,7 +472,7 @@ class CCP_API extends REST_Base {
 			$excerpt_diff = '<div class="incoming-diff no-changes"><p>' . esc_html__( 'No excerpt changes detected.', 'ccp' ) . '</p></div>';
 		}
 
-		// Taxonomies diff (text representation)
+		// Taxonomies diff (text representation).
 		$current_terms_text = $build_terms_text( $current_terms );
 		$incoming_terms_text = $build_terms_text( $incoming_terms );
 		$tax_diff = wp_text_diff(
@@ -489,7 +489,7 @@ class CCP_API extends REST_Base {
 			$tax_diff = '<div class="incoming-diff no-changes"><p>' . esc_html__( 'No taxonomy changes detected.', 'ccp' ) . '</p></div>';
 		}
 
-		// Meta diff (text representation)
+		// Meta diff (text representation).
 		$current_meta_text = $build_meta_text( $current_meta );
 		$incoming_meta_text = $build_meta_text( $incoming_meta );
 		$meta_diff = wp_text_diff(
@@ -506,7 +506,7 @@ class CCP_API extends REST_Base {
 			$meta_diff = '<div class="incoming-diff no-changes"><p>' . esc_html__( 'No meta changes detected.', 'ccp' ) . '</p></div>';
 		}
 
-		// Featured media diff (with previews)
+		// Featured media diff (with previews).
 		$incoming_featured_id = isset( $data['featured_media'] ) ? absint( $data['featured_media'] ) : 0;
 		$incoming_featured_url = '';
 		if ( $incoming_featured_id && ! empty( $site_url ) ) {
@@ -565,7 +565,7 @@ class CCP_API extends REST_Base {
 		$current_rendered = $current_content;
 		$incoming_rendered = $incoming_content;
 
-		// Render blocks if present
+		// Render blocks if present.
 		if ( function_exists( 'has_blocks' ) && function_exists( 'do_blocks' ) ) {
 			if ( has_blocks( $current_rendered ) ) {
 				$current_rendered = do_blocks( $current_rendered );
@@ -575,7 +575,7 @@ class CCP_API extends REST_Base {
 			}
 		}
 
-		// Apply standard content filters (shortcodes, embeds, formatting)
+		// Apply standard content filters (shortcodes, embeds, formatting).
 		if ( function_exists( 'apply_filters' ) ) {
 			$current_rendered = apply_filters( 'the_content', $current_rendered );
 			$incoming_rendered = apply_filters( 'the_content', $incoming_rendered );
@@ -585,24 +585,24 @@ class CCP_API extends REST_Base {
 		if ( function_exists( 'parse_blocks' ) && function_exists( 'render_block' ) ) {
 
 			$normalize_block_html = static function ( string $html ): string {
-				// Remove leading/trailing whitespace
+				// Remove leading/trailing whitespace.
 				$html = trim( $html );
 
-				// Remove lazy-loading & decoding attrs that WP may add automatically
+				// Remove lazy-loading & decoding attrs that WP may add automatically.
 				$html = preg_replace( '/\sloading=("|\')lazy\1/i', '', $html );
 				$html = preg_replace( '/\sdecoding=("|\')async\1/i', '', $html );
 				$html = preg_replace( '/\sfetchpriority=("|\')high\1/i', '', $html );
 
-				// Collapse multiple spaces / newlines
+				// Collapse multiple spaces / newlines.
 				$html = preg_replace( '/\s+/', ' ', $html );
 
-				// Normalize self-closing tags spacing
+				// Normalize self-closing tags spacing.
 				$html = preg_replace( '/\s+\/>/', '/>', $html );
 
-				// Normalize wp-image-* numeric class volatility (retain class marker)
+				// Normalize wp-image-* numeric class volatility (retain class marker).
 				$html = preg_replace( '/wp-image-\d+/', 'wp-image-XXX', $html );
 
-				// Trim again
+				// Trim again.
 				return trim( $html );
 			};
 
@@ -657,7 +657,7 @@ class CCP_API extends REST_Base {
 			}
 		}
 
-		// Prepare structured response: content diff + structured incoming/current metadata + non-content diffs
+		// Prepare structured response: content diff + structured incoming/current metadata + non-content diffs.
 		return [
 			'contentDiffHtml' => $content_diff,
 			'renderedContentDiffHtml' => $rendered_content_diff ?? null,
@@ -698,10 +698,10 @@ class CCP_API extends REST_Base {
 	 */
 	public function safe_unserialize( string $s ): mixed {
 		if ( 'b:0;' === $s ) {
-			return false; // legitimate serialized false
+			return false; // Legitimate serialized false.
 		}
 
-		// Suppress warnings and detect failure reliably
+		// Suppress warnings and detect failure reliably.
 		$prev = set_error_handler( function (): void {
 			/* swallow unserialize warnings */
 		} );
@@ -737,7 +737,7 @@ class CCP_API extends REST_Base {
 				return $out;
 			}
 		} elseif ( is_object( $v ) ) {
-			// Only public props are visible via get_object_vars()
+			// Only public props are visible via get_object_vars().
 			$props = [];
 			foreach ( get_object_vars( $v ) as $k => $val ) {
 				$props[ $k ] = $this->normalize( $val );
@@ -746,7 +746,7 @@ class CCP_API extends REST_Base {
 
 			return array_merge( [ '__class__' => get_class( $v ) ], $props );
 		} else {
-			// scalars / null stay as-is
+			// scalars / null stay as-is.
 			return $v;
 		}
 	}
@@ -764,7 +764,7 @@ class CCP_API extends REST_Base {
 		$va = $this->normalize( $this->safe_unserialize( $a ) );
 		$vb = $this->normalize( $this->safe_unserialize( $b ) );
 
-		// Compare via stable JSON encoding to account for key order (safer than serialize)
+		// Compare via stable JSON encoding to account for key order (safer than serialize).
 		return wp_json_encode( $va ) === wp_json_encode( $vb );
 	}
 
@@ -791,7 +791,7 @@ class CCP_API extends REST_Base {
 		if ( is_array( $left ) ) {
 			$diffs = [];
 			$allKeys = array_unique( array_merge( array_keys( $left ), array_keys( $right ) ) );
-			// Keep order stable for readability
+			// Keep order stable for readability.
 			sort( $allKeys );
 			foreach ( $allKeys as $k ) {
 				$lHas = array_key_exists( $k, $left );
@@ -921,7 +921,7 @@ class CCP_API extends REST_Base {
 	 * @param array|object $meta    Meta to set.
 	 */
 	public function update_meta( int $post_id, array|object $meta ): void {
-		// Update meta if provided (accept object or array)
+		// Update meta if provided (accept object or array).
 		if ( ! empty( $meta ) && ( is_array( $meta ) || is_object( $meta ) ) ) {
 			$meta_array = (array) $meta;
 			foreach ( $meta_array as $meta_key => $meta_value ) {
@@ -940,7 +940,7 @@ class CCP_API extends REST_Base {
 	 * @param array|object $terms   Terms to set, keyed by taxonomy.
 	 */
 	public function update_terms( int $post_id, array|object $terms ): void {
-		// Update terms if provided (accept array/object; supports IDs, slugs, names, or objects)
+		// Update terms if provided (accept array/object; supports IDs, slugs, names, or objects).
 		if ( ! empty( $terms ) && ( is_array( $terms ) || is_object( $terms ) ) ) {
 			$terms_array = (array) $terms;
 

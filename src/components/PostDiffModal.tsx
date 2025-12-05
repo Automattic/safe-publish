@@ -18,7 +18,7 @@ interface PostDiffModalProps {
 }
 
 export default function PostDiffModal( { items, closeModal }: PostDiffModalProps ): JSX.Element {
-	const [ diffHtml, setDiffHtml ] = useState< string | null >( null ); // will hold contentDiffHtml
+	const [ diffHtml, setDiffHtml ] = useState< string | null >( null ); // Will hold contentDiffHtml.
 	const [ nonContentDiffs, setNonContentDiffs ] = useState< any >( null );
 	const [ incoming, setIncoming ] = useState< any >( null );
 	const [ current, setCurrent ] = useState< any >( null );
@@ -32,7 +32,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 	const [ renderedDiffHtml, setRenderedDiffHtml ] = useState< string | null >( null );
 	const [ showRenderedDiff, setShowRenderedDiff ] = useState< boolean >( true );
 
-	const [ blockDiffs, setBlockDiffs ] = useState< any[] >( [] ); // refine type later
+	const [ blockDiffs, setBlockDiffs ] = useState< any[] >( [] ); // Refine type later.
 	const [ showBlockView, setShowBlockView ] = useState< boolean >( true );
 
 	const [ updateOpts, setUpdateOpts ] = useState({
@@ -59,15 +59,15 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 			if ( result.error ) {
 				setError( result.error );
 			} else if ( ( result.contentDiffHtml || result.html ) && result.localPostId ) {
-				// prefer new contentDiffHtml, fallback to legacy html
+				// Prefer new contentDiffHtml, fallback to legacy html.
 				setDiffHtml( result.contentDiffHtml ?? result.html ?? null );
 				setLocalPostId( result.localPostId ?? 0 );
 
-				// structured incoming/current
+				// Structured incoming/current.
 				setIncoming( result.incoming ?? null );
 				setCurrent( result.current ?? null );
 
-				// non-content diffs (title/excerpt/tax/meta)
+				// Non-content diffs (title/excerpt/tax/meta).
 				setNonContentDiffs( result.nonContentDiffs ?? null );
 
 				setRendered( {
@@ -94,7 +94,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
         setUpdateError( null );
         setUpdateSuccess( null );
 
-        // Build payload conditionally
+        // Build payload conditionally.
         const maybeMeta = updateOpts.meta ? ( incoming?.meta ?? undefined ) : undefined;
         const maybeTerms = updateOpts.terms ? ( incoming?.terms ?? undefined ) : undefined;
         const maybeTitle = updateOpts.title ? ( incoming?.title ?? undefined ) : undefined;
@@ -104,7 +104,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
                 ? items[ 0 ].featured_media
                 : undefined;
 
-        // Optional: strip internal meta keys on send (safety)
+        // Optional: strip internal meta keys on send (safety).
         const metaToSend =
             maybeMeta && typeof maybeMeta === 'object'
                 ? Object.fromEntries(
@@ -116,7 +116,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 
         const result = await updatePostContent(
             localPostId,
-            // Content is always sent (required by the REST route)
+            // Content is always sent (required by the REST route).
             items[ 0 ].content || items[ 0 ].excerpt || '',
             window?.ccpAdminData?.restNonce,
             metaToSend,

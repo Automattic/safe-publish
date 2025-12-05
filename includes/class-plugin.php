@@ -53,21 +53,21 @@ class Plugin {
 	 * Constructs the Plugin instance.
 	 */
 	public function __construct() {
-		// Initialize components lazily
+		// Initialize components lazily.
 	}
 
 	/**
 	 * Initializes plugin.
 	 */
 	public function init(): void {
-		// Initialize components
+		// Initialize components.
 		$this->api = new External_Posts_API();
 		$this->ccp_api = new CCP_API();
 
-		// Initialize hooks
+		// Initialize hooks.
 		$this->init_hooks();
 
-		// Initialize admin functionality in admin context (including AJAX)
+		// Initialize admin functionality in admin context (including AJAX).
 		$this->admin_handler = new Admin_Handler( $this->api );
 		$this->admin_handler->init();
 	}
@@ -76,7 +76,7 @@ class Plugin {
 	 * Initializes WordPress hooks.
 	 */
 	private function init_hooks(): void {
-		// Plugin hooks are initialized through the admin handler
+		// Plugin hooks are initialized through the admin handler.
 	}
 
 	/**

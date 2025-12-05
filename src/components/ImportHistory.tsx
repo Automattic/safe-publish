@@ -20,7 +20,7 @@ import { PostDiffModal } from './ImportHistoryPostDiffModal';
 import type { ImportSession, ImportLog, DataViewsField } from '../types';
 
 interface ImportHistoryProps {
-	// Props can be passed from PHP if needed
+	// Props can be passed from PHP if needed.
 }
 
 export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
@@ -45,18 +45,18 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 		fields: [ 'date', 'user', 'items', 'status', 'source' ],
 	} );
 
-	// Pagination info for DataViews
+	// Pagination info for DataViews.
 	const [ paginationInfo, setPaginationInfo ] = useState( {
 		totalItems: 0,
 		totalPages: 1,
 	} );
 
-	// Load import sessions on component mount
+	// Load import sessions on component mount.
 	useEffect( () => {
 		loadImportSessions();
 	}, [] );
 
-	// Update pagination info when sessions change
+	// Update pagination info when sessions change.
 	useEffect( () => {
 		setPaginationInfo( {
 			totalItems: sessions.length,
@@ -64,7 +64,7 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 		} );
 	}, [ sessions, view.perPage ] );
 
-	// Handle ESC key to close modals
+	// Handle ESC key to close modals.
 	useEffect( () => {
 		const handleEscKey = ( event: KeyboardEvent ) => {
 			if ( event.key === 'Escape' ) {
@@ -141,7 +141,7 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 					.replace( '%1$d', result.data.deleted_count.toString() )
 					.replace( '%2$d', result.data.restored_count.toString() );
 				alert( message );
-				// Reload sessions and close modal
+				// Reload sessions and close modal.
 				await loadImportSessions();
 				setIsSessionModalOpen( false );
 				setSelectedSession( null );
@@ -176,7 +176,7 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 
 			if ( result.success ) {
 				alert( __( 'Session deleted successfully. %s', 'ccp' ).replace( '%s', result.data.message ) );
-				// Reload sessions and close modal if it was open
+				// Reload sessions and close modal if it was open.
 				await loadImportSessions();
 				if ( isSessionModalOpen ) {
 					setIsSessionModalOpen( false );
@@ -206,7 +206,7 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 		setIsDiffModalOpen( true );
 	};
 
-	// DataViews fields configuration
+	// DataViews fields configuration.
 	const fields: DataViewsField[] = [
 		{
 			id: 'date',
@@ -262,7 +262,7 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 		},
 	];
 
-	// DataViews actions
+	// DataViews actions.
 	const actions = [
 		{
 			id: 'view-details',
