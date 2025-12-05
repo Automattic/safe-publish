@@ -233,7 +233,7 @@ class VIP_Safe_Auth {
 		if ( \strpos( $full_path, '/wp-json/' ) !== false ) {
 			// Full REST API URL - extract everything after /wp-json.
 			$wp_json_pos = \strpos( $full_path, '/wp-json/' );
-			$path = \substr( $full_path, $wp_json_pos + 8 ); // +8 to skip '/wp-json'
+			$path = \substr( $full_path, $wp_json_pos + 8 ); // +8 to skip '/wp-json'.
 
 			// Ensure path starts with / and handle empty paths.
 			if ( empty( $path ) || $path[0] !== '/' ) {
@@ -320,7 +320,7 @@ class VIP_Safe_Auth {
 		}
 
 		// Check timestamp (prevent replay attacks).
-		if ( \abs( \time() - \intval( $timestamp ) ) > 300 ) { // 5 minute window
+		if ( \abs( \time() - \intval( $timestamp ) ) > 300 ) { // 5 minute window.
 			return new \WP_Error( 'expired_auth', \__( 'Authentication expired.', 'ccp' ) );
 		}
 
@@ -352,7 +352,7 @@ class VIP_Safe_Auth {
 		}
 
 		// Store nonce to prevent replay.
-		\set_transient( $nonce_key, true, 600 ); // 10 minutes
+		\set_transient( $nonce_key, true, 600 ); // 10 minutes.
 
 		return true;
 	}
@@ -363,6 +363,6 @@ class VIP_Safe_Auth {
 	 * @return string Generated secret.
 	 */
 	public static function generate_shared_secret(): string {
-		return \bin2hex( \random_bytes( 32 ) ); // 64 character hex string
+		return \bin2hex( \random_bytes( 32 ) ); // 64 character hex string.
 	}
 }
