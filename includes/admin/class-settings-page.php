@@ -13,12 +13,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Settings Page Class
+ * Settings Page Class.
  */
 class Settings_Page {
 
 	/**
-	 * Render the settings page
+	 * Renders the settings page.
 	 */
 	public function render(): void {
 		$site_url        = get_option( 'ccp_external_site_url', '' );
@@ -119,7 +119,7 @@ class Settings_Page {
 								</td>
 							</tr>
 
-							<?php if ( \ccp_is_development_environment() ) : ?>
+							<?php if ( ccp_is_development_environment() ) : ?>
 							<tr>
 								<th scope="row">
 									<label for="ccp_username">

@@ -7,8 +7,9 @@ use PHPUnit\Framework\TestCase;
 use CCP\Plugin;
 
 /**
- * Plugin Test
- * Tests the main plugin class initialization and core functionality
+ * Plugin Test.
+ *
+ * Tests the main plugin class initialization and core functionality.
  */
 class PluginTest extends TestCase {
 

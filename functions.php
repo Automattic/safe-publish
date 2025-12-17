@@ -11,17 +11,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Check if we're in a development environment
+ * Checks if the current environment is a development environment.
  *
  * @return bool True if development environment.
  */
 function ccp_is_development_environment(): bool {
-	// Never allow Basic auth in VIP production environments
+	// Never allow Basic auth in VIP production environments.
 	if ( defined( 'WPCOM_IS_VIP_ENV' ) && constant( 'WPCOM_IS_VIP_ENV' ) ) {
 		return false;
 	}
 
-	// Check for common development indicators
+	// Check for common development indicators.
 	if ( defined( 'WP_DEBUG' ) && constant( 'WP_DEBUG' ) ) {
 		return true;
 	}
@@ -30,7 +30,7 @@ function ccp_is_development_environment(): bool {
 		return true;
 	}
 
-	// Check for development domains
+	// Check for development domains.
 	$site_url = get_site_url();
 	$host     = wp_parse_url( $site_url, PHP_URL_HOST );
 

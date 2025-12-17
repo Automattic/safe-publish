@@ -45,7 +45,7 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 	const [ isLoading, setIsLoading ] = useState< boolean >( true );
 	const [ error, setError ] = useState< string | null >( null );
 
-	// Load post diff on component mount
+	// Load post diff on component mount.
 	useEffect( () => {
 		loadPostDiff();
 	}, [ postId ] );

@@ -6,8 +6,9 @@ namespace CCP\Tests;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Security Test
- * Tests security features and validations
+ * Security Test.
+ *
+ * Tests security features and validations.
  */
 class SecurityTest extends TestCase {
 
@@ -29,18 +30,18 @@ class SecurityTest extends TestCase {
 	public function test_url_validation_rejects_data_protocol(): void {
 		$dangerous_url = 'data:text/html,<script>alert(1)</script>';
 
-		// While this might validate as URL, we should never use it for external requests
+		// While this might validate as URL, we should never use it for external requests.
 		$parsed = wp_parse_url( $dangerous_url );
 		$this->assertEquals( 'data', $parsed['scheme'] ?? null );
 	}
 
 	public function test_sql_injection_prevention_in_meta_query(): void {
-		// Meta queries should use parameterized values
+		// Meta queries should use parameterized values.
 		$meta_query = array(
 			'meta_query' => array(
 				array(
 					'key' => 'ccp_external_post_id',
-					'value' => 123, // Should be int, not string
+					'value' => 123, // Should be int, not string.
 					'compare' => '=',
 				),
 			),
@@ -50,7 +51,7 @@ class SecurityTest extends TestCase {
 	}
 
 	public function test_nonce_validation_structure(): void {
-		// Nonces should be validated before processing
+		// Nonces should be validated before processing.
 		$nonce = 'test_nonce_value';
 
 		$this->assertIsString( $nonce );
@@ -77,7 +78,7 @@ class SecurityTest extends TestCase {
 		$signature = hash_hmac( 'sha256', $data, $secret );
 
 		$this->assertIsString( $signature );
-		$this->assertEquals( 64, strlen( $signature ) ); // SHA256 hex is 64 chars
+		$this->assertEquals( 64, strlen( $signature ) ); // SHA256 hex is 64 chars.
 	}
 
 	public function test_hmac_signature_is_deterministic(): void {
@@ -103,17 +104,17 @@ class SecurityTest extends TestCase {
 
 	public function test_timestamp_replay_protection_window(): void {
 		$current_time = time();
-		$old_timestamp = $current_time - 400; // 400 seconds ago
-		$valid_timestamp = $current_time - 100; // 100 seconds ago
+		$old_timestamp = $current_time - 400; // 400 seconds ago.
+		$valid_timestamp = $current_time - 100; // 100 seconds ago.
 
-		$replay_window = 300; // 5 minutes
+		$replay_window = 300; // 5 minutes.
 
 		$this->assertTrue( abs( $current_time - $valid_timestamp ) <= $replay_window );
 		$this->assertFalse( abs( $current_time - $old_timestamp ) <= $replay_window );
 	}
 
 	public function test_sensitive_data_not_in_plain_text(): void {
-		// Passwords and secrets should never be stored in plain text
+		// Passwords and secrets should never be stored in plain text.
 		$password = 'my_password';
 		$hashed = hash( 'sha256', $password );
 
@@ -124,10 +125,10 @@ class SecurityTest extends TestCase {
 	public function test_path_traversal_prevention(): void {
 		$malicious_path = '../../../etc/passwd';
 
-		// Should not contain directory traversal patterns
+		// Should not contain directory traversal patterns.
 		$this->assertTrue( false !== strpos( $malicious_path, '..' ) );
 
-		// Sanitized path should not have traversal
+		// Sanitized path should not have traversal.
 		$sanitized = str_replace( '..', '', $malicious_path );
 		$this->assertFalse( false !== strpos( $sanitized, '..' ) );
 	}
@@ -167,7 +168,7 @@ class SecurityTest extends TestCase {
 		$bytes1 = bin2hex( random_bytes( 16 ) );
 		$bytes2 = bin2hex( random_bytes( 16 ) );
 
-		$this->assertEquals( 32, strlen( $bytes1 ) ); // 16 bytes = 32 hex chars
-		$this->assertNotEquals( $bytes1, $bytes2 ); // Should be random
+		$this->assertEquals( 32, strlen( $bytes1 ) ); // 16 bytes = 32 hex chars.
+		$this->assertNotEquals( $bytes1, $bytes2 ); // Should be random.
 	}
 }

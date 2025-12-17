@@ -28,14 +28,14 @@ if ( ! defined( 'CCP_PLUGIN_URL' ) ) {
 	define( 'CCP_PLUGIN_URL', 'http://localhost/' );
 }
 
-// Load Composer autoloader
+// Load Composer autoloader.
 require_once __DIR__ . '/../../vendor/autoload.php';
 
-// Load test utilities and stubs
+// Load test utilities and stubs.
 require_once __DIR__ . '/stubs.php';
 require_once __DIR__ . '/test-utils.php';
 
-// Load plugin functions if they exist
+// Load plugin functions if they exist.
 if ( file_exists( __DIR__ . '/../../functions.php' ) ) {
 	require_once __DIR__ . '/../../functions.php';
 }

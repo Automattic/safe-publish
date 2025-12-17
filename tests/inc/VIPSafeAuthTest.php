@@ -7,8 +7,9 @@ use PHPUnit\Framework\TestCase;
 use CCP\Auth\VIP_Safe_Auth;
 
 /**
- * VIP Safe Auth Test
- * Tests authentication methods and security
+ * VIP Safe Auth Test.
+ *
+ * Tests authentication methods and security.
  */
 class VIPSafeAuthTest extends TestCase {
 
@@ -87,14 +88,14 @@ class VIPSafeAuthTest extends TestCase {
 			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
 		);
 
-		// Get params twice with same timestamp to verify consistency
+		// Get params twice with same timestamp to verify consistency.
 		$params1 = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
-		sleep(1); // Wait a second
+		sleep(1); // Wait a second.
 		$params2 = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
 
-		// Timestamps will be different, but signature generation process should be consistent
+		// Timestamps will be different, but signature generation process should be consistent.
 		$this->assertIsString( $params1['headers']['X-CCP-Signature'] );
 		$this->assertIsString( $params2['headers']['X-CCP-Signature'] );
-		$this->assertEquals( 64, strlen( $params1['headers']['X-CCP-Signature'] ) ); // SHA256 hex = 64 chars
+		$this->assertEquals( 64, strlen( $params1['headers']['X-CCP-Signature'] ) ); // SHA256 hex = 64 chars.
 	}
 }

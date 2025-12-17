@@ -61,7 +61,7 @@ function ExternalPostsDataView( { posts }: ExternalPostsDataViewProps ): JSX.Ele
 		totalPages: Math.ceil( posts.length / 10 ),
 	} );
 
-	// Fields configuration for DataViews (simplified for debugging)
+	// Fields configuration for DataViews (simplified for debugging).
 	const fields: DataViewsField[] = [
 		{
 			id: 'title',
@@ -75,7 +75,7 @@ function ExternalPostsDataView( { posts }: ExternalPostsDataViewProps ): JSX.Ele
 			enableSorting: true,
 			render: ( { item }: { item: Post } ): JSX.Element => {
 				const postType = item.post_type || 'post';
-				// Capitalize first letter for display
+				// Capitalize first letter for display.
 				const displayType = postType.charAt( 0 ).toUpperCase() + postType.slice( 1 );
 				return <span>{ displayType }</span>;
 			},
@@ -116,19 +116,19 @@ function ExternalPostsDataView( { posts }: ExternalPostsDataViewProps ): JSX.Ele
 	const onChangeView = ( newView: View ): void => {
 		setView( newView );
 
-		// Apply search filter
+		// Apply search filter.
 		let filtered: Post[] = searchPosts( posts, newView.search || '' );
 
-		// Apply sorting
+		// Apply sorting.
 		if ( newView.sort?.field ) {
 			filtered = sortPosts( filtered, newView.sort.field as keyof Post, newView.sort.direction );
 		}
 
-		// Update pagination info
+		// Update pagination info.
 		const paginationData = getPaginationInfo( filtered.length, newView.perPage as number );
 		setPaginationInfo( paginationData );
 
-		// Get paginated data
+		// Get paginated data.
 		const paginatedData = paginatePosts(
 			filtered,
 			newView.page as number,
@@ -138,13 +138,13 @@ function ExternalPostsDataView( { posts }: ExternalPostsDataViewProps ): JSX.Ele
 		setFilteredData( paginatedData );
 	};
 
-	// Initialize filtered data
+	// Initialize filtered data.
 	useEffect( () => {
 		onChangeView( view );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [] ); // Only run on mount
+	}, [] ); // Only run on mount.
 
-	// If we have no data, show a message
+	// If we have no data, show a message.
 	if ( filteredData.length === 0 && posts.length === 0 ) {
 		return (
 			<div className="ccp-no-data">
@@ -183,7 +183,7 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 	 */
 	function refreshPostsData( postType: string = 'posts' ): void {
 		const dataviewContainer = document.getElementById( 'ccp-dataviews-container' );
-		// Use saved settings from window.ccpAdminData instead of input field values
+		// Use saved settings from window.ccpAdminData instead of input field values.
 		const siteUrl = window.ccpAdminData?.siteUrl || '';
 		const numberPosts = window.ccpAdminData?.numPosts?.toString() || '10';
 
@@ -191,10 +191,10 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 			return;
 		}
 
-		// Show loading
+		// Show loading.
 		dataviewContainer.innerHTML = '<div class="ccp-loading"><p>Loading posts...</p></div>';
 
-		// Make request to fetch posts with selected post type
+		// Make request to fetch posts with selected post type.
 		const formData = new FormData();
 		formData.append( 'action', 'ccp_fetch_posts' );
 		formData.append( 'nonce', window.ccpAdminData.nonce );
@@ -230,13 +230,13 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 			} );
 	}
 
-	// Expose refresh function globally for the AdminTools component
+	// Expose refresh function globally for the AdminTools component.
 	window.ccpRefreshPosts = refreshPostsData;
 
-	// Initialize the AdminTools React component
+	// Initialize the AdminTools React component.
 	const adminToolsContainer = document.getElementById( 'ccp-admin-tools-container' );
 	if ( adminToolsContainer ) {
-		// Clear the loading placeholder
+		// Clear the loading placeholder.
 		adminToolsContainer.innerHTML = '';
 
 		createRoot( adminToolsContainer ).render(
@@ -247,14 +247,14 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 		);
 	}
 
-	// Initialize the DataViews component
+	// Initialize the DataViews component.
 	const dataviewContainer = document.getElementById( 'ccp-dataviews-container' );
 
 	if ( ! dataviewContainer ) {
 		return;
 	}
 
-	// Get posts data from localized script
+	// Get posts data from localized script.
 	let posts: Post[] = [];
 	try {
 		if ( window.ccpAdminData && window.ccpAdminData.postsData ) {
@@ -272,9 +272,9 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 		return;
 	}
 
-	// Clear container and render DataViews
+	// Clear container and render DataViews.
 	dataviewContainer.innerHTML = '';
 
-	// Render the DataViews component
+	// Render the DataViews component.
 	createRoot( dataviewContainer ).render( <ExternalPostsDataView posts={ posts } /> );
 } );

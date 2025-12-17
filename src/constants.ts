@@ -18,7 +18,7 @@ export const LAYOUT_TABLE = 'table';
 export const LAYOUT_GRID = 'grid';
 export const LAYOUT_LIST = 'list';
 
-// Sorting constants (kept for potential future use)
+// Sorting constants (kept for potential future use).
 export const SORTING_DIRECTIONS = [ 'asc', 'desc' ] as const;
 export const sortArrows = { asc: '↑', desc: '↓' };
 export const sortValues = { asc: 'ascending', desc: 'descending' } as const;

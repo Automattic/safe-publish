@@ -60,7 +60,7 @@ export function SessionDetailsModal( {
 	const [ isRollingBack, setIsRollingBack ] = useState< boolean >( false );
 	const [ rollingBackItemId, setRollingBackItemId ] = useState< number | null >( null );
 
-	// Load session details on component mount
+	// Load session details on component mount.
 	useEffect( () => {
 		loadSessionDetails();
 	}, [ session.id ] );
@@ -151,11 +151,11 @@ export function SessionDetailsModal( {
 			const result = await response.json();
 
 			if ( result.success ) {
-				// Show success message
+				// Show success message.
 				const actionText = result.data.action === 'restored' ? __( 'restored', 'ccp' ) : __( 'deleted', 'ccp' );
 				alert( __( 'Item successfully %s.', 'ccp' ).replace( '%s', actionText ) );
 
-				// Reload session details to update the UI
+				// Reload session details to update the UI.
 				await loadSessionDetails();
 			} else {
 				alert( __( 'Error: %s', 'ccp' ).replace( '%s', result.data || __( 'Unknown error', 'ccp' ) ) );

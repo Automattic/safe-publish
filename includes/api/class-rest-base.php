@@ -1,6 +1,8 @@
 <?php declare(strict_types = 1);
 /**
  * REST Base class
+ *
+ * @package CCP
  */
 
 namespace CCP\API;
@@ -12,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * REST Base Class
+ * REST Base Class.
  */
 abstract class REST_Base {
 
@@ -24,14 +26,14 @@ abstract class REST_Base {
 	const REST_BASE = 'ccp/v1';
 
 	/**
-	 * HTTP Client instance
+	 * HTTP Client instance.
 	 *
 	 * @var HTTP_Client
 	 */
 	protected $http_client;
 
 	/**
-	 * Constructor
+	 * Constructs the REST_Base instance.
 	 */
 	public function __construct() {
 		$this->http_client = new HTTP_Client();
@@ -39,17 +41,16 @@ abstract class REST_Base {
 	}
 
 	/**
-	 * Register REST API routes.
-	 *
+	 * Registers REST API routes.
 	 */
 	abstract public function register_routes(): void;
 
 	/**
-	 * Make HTTP request using shared HTTP client
+	 * Makes HTTP request using shared HTTP client.
 	 *
-	 * @param string $url Request URL.
-	 * @param array  $auth_credentials Optional authentication credentials.
-	 * @param array  $additional_args Additional request arguments.
+	 * @param string $url              Request URL.
+	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
+	 * @param array  $additional_args  Optional. Additional request arguments. Default empty array.
 	 * @return array|\WP_Error Response or error.
 	 */
 	public function make_request( string $url, array $auth_credentials = array(), array $additional_args = array() ): array|\WP_Error {
@@ -57,7 +58,7 @@ abstract class REST_Base {
 	}
 
 	/**
-	 * Get user agent string
+	 * Gets user agent string.
 	 *
 	 * @return string
 	 */
@@ -66,10 +67,10 @@ abstract class REST_Base {
 	}
 
 	/**
-	 * Make safe remote GET request with VIP compatibility
+	 * Makes safe remote GET request with VIP compatibility.
 	 *
-	 * @param string $url Request URL.
-	 * @param array  $args Request arguments.
+	 * @param string $url  Request URL.
+	 * @param array  $args Optional. Request arguments. Default empty array.
 	 * @return array|\WP_Error Response or error.
 	 */
 	public function safe_remote_get( string $url, array $args = array() ): array|\WP_Error {
@@ -77,7 +78,7 @@ abstract class REST_Base {
 	}
 
 	/**
-	 * Check if we're in a development environment
+	 * Checks if the current environment is a development environment.
 	 *
 	 * @return bool True if development environment.
 	 */
@@ -86,9 +87,9 @@ abstract class REST_Base {
 	}
 
 	/**
-	 * Determine whether to verify SSL certificates based on environment and URL
+	 * Determines whether to verify SSL certificates based on environment and URL.
 	 *
-	 * @param string $url The URL being requested.
+	 * @param string $url URL being requested.
 	 * @return bool Whether to verify SSL certificates.
 	 */
 	public function should_verify_ssl( string $url ): bool {

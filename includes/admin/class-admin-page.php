@@ -15,19 +15,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Admin Page Class
+ * Admin Page Class.
  */
 class Admin_Page {
 
 	/**
-	 * External Posts API instance
+	 * External Posts API instance.
 	 *
 	 * @var External_Posts_API
 	 */
 	private $api;
 
 	/**
-	 * Constructor
+	 * Constructs the Admin_Page instance.
 	 *
 	 * @param External_Posts_API $api External Posts API instance.
 	 */
@@ -36,7 +36,7 @@ class Admin_Page {
 	}
 
 	/**
-	 * Render the admin page
+	 * Renders the admin page.
 	 */
 	public function render(): void {
 		$site_url        = get_option( 'ccp_external_site_url', '' );
@@ -92,7 +92,7 @@ class Admin_Page {
 	}
 
 	/**
-	 * Enqueue admin assets with VIP compatibility
+	 * Enqueues admin assets with VIP compatibility.
 	 */
 	public function enqueue_assets(): void {
 		// Early return if not in admin or wrong page.
@@ -110,14 +110,14 @@ class Admin_Page {
 	}
 
 	/**
-	 * Enqueue assets with VIP-specific optimizations
+	 * Enqueues assets with VIP-specific optimizations.
 	 */
 	private function enqueue_vip_safe_assets(): void {
 		$this->enqueue_standard_assets();
 	}
 
 	/**
-	 * Enqueue standard assets
+	 * Enqueues standard assets.
 	 */
 	private function enqueue_standard_assets(): void {
 		// Get posts data for localization.
@@ -134,7 +134,7 @@ class Admin_Page {
 
 			if ( ! empty( $shared_secret ) ) {
 				$auth_credentials['shared_secret'] = $shared_secret;
-			} elseif ( \ccp_is_development_environment() ) {
+			} elseif ( ccp_is_development_environment() ) {
 				// Fallback to Basic auth in development environments only.
 				$username = get_option( 'ccp_username', '' );
 				$password = get_option( 'ccp_password', '' );
@@ -222,11 +222,11 @@ class Admin_Page {
 				'admin_notices',
 				function () {
 					// Only show notices in admin context, not during REST API requests.
-					if ( ! \is_admin() || \wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && \constant( 'REST_REQUEST' ) ) ) {
+					if ( ! is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && constant( 'REST_REQUEST' ) ) ) {
 						return;
 					}
 
-					if ( defined( 'WP_DEBUG' ) && \constant( 'WP_DEBUG' ) ) {
+					if ( defined( 'WP_DEBUG' ) && constant( 'WP_DEBUG' ) ) {
 						echo '<div class="notice notice-error"><p>';
 						echo '<strong>Compliant Content Publisher:</strong> Build assets are missing. ';
 						echo 'Run <code>npm run build</code> and commit the build files for VIP deployment.';

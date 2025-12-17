@@ -19,8 +19,9 @@ function get_private_property( string $class_name, string $property_name ): Refl
 }
 
 /**
- * Overrides the value of a private property on a given object. This is
- * useful when mocking the internals of a class.
+ * Overrides the value of a private property on a given object.
+ *
+ * This is useful when mocking the internals of a class.
  *
  * Note that the property will no longer be private after setAccessible is
  * called.

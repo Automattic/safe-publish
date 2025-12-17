@@ -6,8 +6,9 @@ namespace CCP\Tests;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Content Processing Test
- * Tests content manipulation and sanitization
+ * Content Processing Test.
+ *
+ * Tests content manipulation and sanitization.
  */
 class ContentProcessingTest extends TestCase {
 
