@@ -27,7 +27,7 @@ class VIP_Safe_Auth {
 	 */
 	const AUTH_METHODS = array(
 		'shared_secret',
-		'basic_auth', // Development only
+		'basic_auth', // Development only.
 	);
 
 	/**
@@ -61,12 +61,12 @@ class VIP_Safe_Auth {
 	 * @return string Authentication method to use.
 	 */
 	private static function determine_auth_method( $auth_config ): string {
-		// Check what auth methods are configured
+		// Check what auth methods are configured.
 		if ( ! empty( $auth_config['shared_secret'] ) ) {
 			return 'shared_secret';
 		}
 
-		// Only allow Basic auth in development environments
+		// Only allow Basic auth in development environments.
 		if ( ! empty( $auth_config['username'] ) && ! empty( $auth_config['password'] ) && \ccp_is_development_environment() ) {
 			return 'basic_auth';
 		}
@@ -87,47 +87,47 @@ class VIP_Safe_Auth {
 	public static function is_authorized( $site_url = '', $auth_config = array() ): bool {
 		$auth_method = self::determine_auth_method( $auth_config );
 
-		// No authentication method available
+		// No authentication method available.
 		if ( $auth_method === 'none' ) {
 			return false;
 		}
 
-		// If we have shared secret authentication
+		// If we have shared secret authentication.
 		if ( $auth_method === 'shared_secret' ) {
 			$shared_secret = $auth_config['shared_secret'] ?? '';
 
-			// Check if shared secret is properly configured and meets minimum requirements
+			// Check if shared secret is properly configured and meets minimum requirements.
 			if ( empty( $shared_secret ) || \strlen( $shared_secret ) < 16 ) {
 				return false;
 			}
 
-			// If site URL is provided, we can test if the auth headers are properly generated
+			// If site URL is provided, we can test if the auth headers are properly generated.
 			if ( ! empty( $site_url ) ) {
 				$auth_params = self::get_shared_secret_auth( $site_url, $auth_config, 'GET' );
 				return ! empty( $auth_params['headers']['X-CCP-Timestamp'] ) &&
 				       ! empty( $auth_params['headers']['X-CCP-Signature'] );
 			}
 
-			return true; // Shared secret is present and valid format
+			return true; // Shared secret is present and valid format.
 		}
 
-		// If we have basic authentication (development only)
+		// If we have basic authentication (development only).
 		if ( $auth_method === 'basic_auth' ) {
 			$username = $auth_config['username'] ?? '';
 			$password = $auth_config['password'] ?? '';
 
-			// Check if credentials are properly configured
+			// Check if credentials are properly configured.
 			if ( empty( $username ) || empty( $password ) ) {
 				return false;
 			}
 
-			// Check if we're in a development environment (basic auth not allowed in production)
+			// Check if we're in a development environment (basic auth not allowed in production).
 			if ( ! \ccp_is_development_environment() ) {
 				return false;
 			}
 
-			// If site URL is provided, we could test the credentials (but this would make an actual request)
-			// For now, we'll just verify the credentials are present and environment is appropriate
+			// If site URL is provided, we could test the credentials (but this would make an actual request).
+			// For now, we'll just verify the credentials are present and environment is appropriate.
 			return true;
 		}
 
@@ -148,12 +148,12 @@ class VIP_Safe_Auth {
 			return new \WP_Error( 'invalid_url', 'Site URL is required for authorization testing' );
 		}
 
-		// First check if we have valid credentials format
+		// First check if we have valid credentials format.
 		if ( ! self::is_authorized( $site_url, $auth_config ) ) {
 			return new \WP_Error( 'invalid_credentials', 'Invalid or missing authentication credentials' );
 		}
 
-		// Make a lightweight test request to verify credentials work
+		// Make a lightweight test request to verify credentials work.
 		$test_url = \trailingslashit( $site_url ) . 'wp-json/wp/v2/';
 		$auth_params = self::get_auth_params( $test_url, $auth_config, 'GET' );
 
@@ -163,21 +163,21 @@ class VIP_Safe_Auth {
 			'user-agent'  => 'CCP-Auth-Test/1.0',
 		);
 
-		// Add authentication headers if available
+		// Add authentication headers if available.
 		if ( ! empty( $auth_params['headers'] ) ) {
 			$request_args['headers'] = $auth_params['headers'];
 		}
 
-		// Add query parameters for authentication if needed
+		// Add query parameters for authentication if needed.
 		if ( ! empty( $auth_params['query_args'] ) ) {
 			$test_url = \add_query_arg( $auth_params['query_args'], $test_url );
 		}
 
-				// Use VIP-optimized function when available, fallback to core function
+				// Use VIP-optimized function when available, fallback to core function.
 		if ( \function_exists( 'vip_safe_wp_remote_get' ) ) {
 			$response = \vip_safe_wp_remote_get( $test_url, '', 3, 5, 20, $request_args );
 		} else {
-			// On non-VIP environments, use standard wp_remote_get
+			// On non-VIP environments, use standard wp_remote_get.
 			// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.wp_remote_get_wp_remote_get -- Fallback for non-VIP environments
 			$response = \wp_remote_get( $test_url, $request_args );
 		}
@@ -188,19 +188,19 @@ class VIP_Safe_Auth {
 
 		$response_code = \wp_remote_retrieve_response_code( $response );
 
-		// Check for authentication-related errors
+		// Check for authentication-related errors.
 		if ( \in_array( $response_code, array( 401, 403 ), true ) ) {
 			$response_body = \wp_remote_retrieve_body( $response );
 			return new \WP_Error( 'auth_failed', 'Authentication failed with HTTP ' . $response_code . ': ' . $response_body );
 		}
 
 		// If we get a successful response (200) or even a 404 (endpoint exists but not found),
-		// it means authentication passed
+		// it means authentication passed.
 		if ( \in_array( $response_code, array( 200, 404 ), true ) ) {
 			return true;
 		}
 
-		// Other error codes might indicate server issues rather than auth issues
+		// Other error codes might indicate server issues rather than auth issues.
 		return new \WP_Error( 'unexpected_response', 'Unexpected response code: ' . $response_code );
 	}
 
@@ -222,30 +222,30 @@ class VIP_Safe_Auth {
 			return array();
 		}
 
-		// Generate timestamp for replay protection
+		// Generate timestamp for replay protection.
 		$timestamp = \time();
 
-		// Extract the REST API path portion - this should match what WP_REST_Request::get_route() returns
-		// Parse the URL to get the path component
+		// Extract the REST API path portion - this should match what WP_REST_Request::get_route() returns.
+		// Parse the URL to get the path component.
 		$parsed_url = \wp_parse_url( $site_url );
 		$full_path = $parsed_url['path'] ?? '';
 
 		if ( \strpos( $full_path, '/wp-json/' ) !== false ) {
-			// Full REST API URL - extract everything after /wp-json
+			// Full REST API URL - extract everything after /wp-json.
 			$wp_json_pos = \strpos( $full_path, '/wp-json/' );
-			$path = \substr( $full_path, $wp_json_pos + 8 ); // +8 to skip '/wp-json'
+			$path = \substr( $full_path, $wp_json_pos + 8 ); // +8 to skip '/wp-json'.
 
-			// Ensure path starts with / and handle empty paths
+			// Ensure path starts with / and handle empty paths.
 			if ( empty( $path ) || $path[0] !== '/' ) {
 				$path = '/' . ltrim( $path, '/' );
 			}
 		} else {
-			// No wp-json in path - this shouldn't happen in normal usage
-			// Default to a common endpoint
+			// No wp-json in path - this shouldn't happen in normal usage.
+			// Default to a common endpoint.
 			$path = '/wp/v2/posts';
 		}
 
-		// Create signature string: METHOD|URI|TIMESTAMP (compatible with mu-plugin)
+		// Create signature string: METHOD|URI|TIMESTAMP (compatible with mu-plugin).
 		$string_to_sign = $method . '|' . $path . '|' . $timestamp;
 		$signature = \hash_hmac( 'sha256', $string_to_sign, $shared_secret );
 
@@ -275,7 +275,7 @@ class VIP_Safe_Auth {
 			return array();
 		}
 
-		// Only allow in development environments
+		// Only allow in development environments.
 		if ( ! \ccp_is_development_environment() ) {
 			return array();
 		}
@@ -296,7 +296,7 @@ class VIP_Safe_Auth {
 	 * @return bool|WP_Error True if authenticated, WP_Error if not.
 	 */
 	public static function verify_request(): bool|\WP_Error {
-		// Check for shared secret authentication
+		// Check for shared secret authentication.
 		if ( isset( $_SERVER['HTTP_X_CCP_SIGNATURE'] ) ) {
 			return self::verify_shared_secret();
 		}
@@ -319,19 +319,19 @@ class VIP_Safe_Auth {
 			return new \WP_Error( 'invalid_auth', \__( 'Missing authentication parameters.', 'ccp' ) );
 		}
 
-		// Check timestamp (prevent replay attacks)
-		if ( \abs( \time() - \intval( $timestamp ) ) > 300 ) { // 5 minute window
+		// Check timestamp (prevent replay attacks).
+		if ( \abs( \time() - \intval( $timestamp ) ) > 300 ) { // 5 minute window.
 			return new \WP_Error( 'expired_auth', \__( 'Authentication expired.', 'ccp' ) );
 		}
 
-		// Get shared secret for this site
+		// Get shared secret for this site.
 		$shared_secret = \get_option( 'ccp_shared_secret_' . \md5( $site ), '' );
 
 		if ( \empty( $shared_secret ) ) {
 			return new \WP_Error( 'unknown_site', \__( 'Unknown source site.', 'ccp' ) );
 		}
 
-		// Recreate payload and verify signature
+		// Recreate payload and verify signature.
 		$payload = array(
 			'site' => $site,
 			'timestamp' => \intval( $timestamp ),
@@ -345,14 +345,14 @@ class VIP_Safe_Auth {
 			return new \WP_Error( 'invalid_signature', \__( 'Invalid authentication signature.', 'ccp' ) );
 		}
 
-		// Check nonce for replay protection
+		// Check nonce for replay protection.
 		$nonce_key = 'ccp_nonce_' . md5( $nonce );
 		if ( \get_transient( $nonce_key ) ) {
 			return new \WP_Error( 'replay_attack', \__( 'Nonce already used.', 'ccp' ) );
 		}
 
-		// Store nonce to prevent replay
-		\set_transient( $nonce_key, true, 600 ); // 10 minutes
+		// Store nonce to prevent replay.
+		\set_transient( $nonce_key, true, 600 ); // 10 minutes.
 
 		return true;
 	}
@@ -363,6 +363,6 @@ class VIP_Safe_Auth {
 	 * @return string Generated secret.
 	 */
 	public static function generate_shared_secret(): string {
-		return \bin2hex( \random_bytes( 32 ) ); // 64 character hex string
+		return \bin2hex( \random_bytes( 32 ) ); // 64 character hex string.
 	}
 }

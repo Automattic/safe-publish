@@ -1,6 +1,6 @@
 <?php declare(strict_types = 1);
 
-// Do not require Redis running for integration tests
+// Do not require Redis running for integration tests.
 define( 'WP_REDIS_DISABLED', true );
 
 // Require composer dependencies.

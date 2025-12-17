@@ -56,7 +56,7 @@ const createDraftPost = async ( post: Post ): Promise< CreateDraftResponse > => 
 	formData.append( 'title', post.title );
 	formData.append( 'content', post.content || post.excerpt || '' );
 	formData.append( 'external_link', post.link );
-	formData.append( 'post_type', post.post_type || 'post' ); // Send the post type
+	formData.append( 'post_type', post.post_type || 'post' ); // Send the post type.
 
 	if ( post.featured_media ) {
 		formData.append( 'featured_media_id', post.featured_media.toString() );
@@ -103,13 +103,13 @@ const bulkImportPosts = async (
 	posts: Post[],
 	onProgress?: ( current: number, total: number ) => void
 ): Promise< BulkImportResponse > => {
-	// Use the proper bulk import endpoint instead of individual calls
+	// Use the proper bulk import endpoint instead of individual calls.
 	const formData = new FormData();
 	formData.append( 'action', 'ccp_bulk_import' );
 	formData.append( 'nonce', window.ccpAdminData.nonce );
 	formData.append( 'posts_data', JSON.stringify( posts ) );
 
-	// Show initial progress
+	// Show initial progress.
 	if ( onProgress ) {
 		onProgress( 0, posts.length );
 	}
@@ -131,12 +131,12 @@ const bulkImportPosts = async (
 
 		const bulkResult = result.data;
 
-		// Show completion progress
+		// Show completion progress.
 		if ( onProgress ) {
 			onProgress( posts.length, posts.length );
 		}
 
-		// Transform the backend response to match our expected format
+		// Transform the backend response to match our expected format.
 		return {
 			total: bulkResult.total || posts.length,
 			successful: bulkResult.successful || 0,
@@ -145,7 +145,7 @@ const bulkImportPosts = async (
 		};
 
 	} catch ( error ) {
-		// Show completion even on error
+		// Show completion even on error.
 		if ( onProgress ) {
 			onProgress( posts.length, posts.length );
 		}
@@ -167,7 +167,7 @@ export const actions: Action< Post >[] = [
 			const [ error, setError ] = useState< string | null >( null );
 			const [ confirmData, setConfirmData ] = useState< CreateDraftResponse | null >( null );
 
-			// Only process if exactly one item is selected
+			// Only process if exactly one item is selected.
 			if ( items.length !== 1 ) {
 				return (
 					<VStack spacing="5">
@@ -239,13 +239,13 @@ export const actions: Action< Post >[] = [
 
 					const data = result.data as CreateDraftResponse;
 
-					// Check if this is a confirmation request
+					// Check if this is a confirmation request.
 					if ( data.existing && data.confirm_action === 'update_existing' ) {
 						setConfirmData( data );
 						return;
 					}
 
-					// Redirect to edit page
+					// Redirect to edit page.
 					window.location.href = data.edit_url;
 				} )
 				.catch( err => {
@@ -260,14 +260,14 @@ export const actions: Action< Post >[] = [
 
 			const handleCancelUpdate = () => {
 				if ( confirmData?.edit_url ) {
-					// User chose not to update, redirect to existing post
+					// User chose not to update, redirect to existing post.
 					window.location.href = confirmData.edit_url;
 				} else {
 					closeModal();
 				}
 			};
 
-			// Show confirmation dialog if post exists
+			// Show confirmation dialog if post exists.
 			if ( confirmData ) {
 				return (
 					<VStack spacing="5">
@@ -356,7 +356,7 @@ export const actions: Action< Post >[] = [
 			const [ progress, setProgress ] = useState( 0 );
 			const [ importResults, setImportResults ] = useState< BulkImportResponse | null >( null );
 
-			// Only process if multiple items are selected
+			// Only process if multiple items are selected.
 			if ( items.length <= 1 ) {
 				return (
 					<VStack spacing="5">
@@ -381,13 +381,13 @@ export const actions: Action< Post >[] = [
 				setImportResults( null );
 
 				try {
-					// Simulate progress for better UX since bulk import happens in one request
+					// Simulate progress for better UX since bulk import happens in one request.
 					const progressSteps = 10;
 					const progressInterval = setInterval(() => {
 						setProgress( prevProgress => {
 							if ( prevProgress >= 90 ) {
 								clearInterval( progressInterval );
-								return 90; // Stop at 90% until we get real results
+								return 90; // Stop at 90% until we get real results.
 							}
 							return prevProgress + ( 90 / progressSteps );
 						});
@@ -397,7 +397,7 @@ export const actions: Action< Post >[] = [
 						items,
 						( current, total ) => {
 							// This won't be called much since it's a single request,
-							// but we'll use it for final completion
+							// but we'll use it for final completion.
 							if ( current === total ) {
 								clearInterval( progressInterval );
 								setProgress( 100 );
@@ -417,7 +417,7 @@ export const actions: Action< Post >[] = [
 
 			const handleCloseModal = () => {
 				if ( importResults && importResults.successful > 0 ) {
-					// Refresh the page to show updated post list
+					// Refresh the page to show updated post list.
 					window.location.reload();
 				} else {
 					closeModal();
