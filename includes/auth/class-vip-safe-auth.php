@@ -67,7 +67,7 @@ class VIP_Safe_Auth {
 		}
 
 		// Only allow Basic auth in development environments.
-		if ( ! empty( $auth_config['username'] ) && ! empty( $auth_config['password'] ) && \ccp_is_development_environment() ) {
+		if ( ! empty( $auth_config['username'] ) && ! empty( $auth_config['password'] ) && ccp_is_development_environment() ) {
 			return 'basic_auth';
 		}
 
@@ -97,7 +97,7 @@ class VIP_Safe_Auth {
 			$shared_secret = $auth_config['shared_secret'] ?? '';
 
 			// Check if shared secret is properly configured and meets minimum requirements.
-			if ( empty( $shared_secret ) || \strlen( $shared_secret ) < 16 ) {
+			if ( empty( $shared_secret ) || strlen( $shared_secret ) < 16 ) {
 				return false;
 			}
 
@@ -122,7 +122,7 @@ class VIP_Safe_Auth {
 			}
 
 			// Check if we're in a development environment (basic auth not allowed in production).
-			if ( ! \ccp_is_development_environment() ) {
+			if ( ! ccp_is_development_environment() ) {
 				return false;
 			}
 
@@ -154,7 +154,7 @@ class VIP_Safe_Auth {
 		}
 
 		// Make a lightweight test request to verify credentials work.
-		$test_url = \trailingslashit( $site_url ) . 'wp-json/wp/v2/';
+		$test_url = trailingslashit( $site_url ) . 'wp-json/wp/v2/';
 		$auth_params = self::get_auth_params( $test_url, $auth_config, 'GET' );
 
 		$request_args = array(
@@ -170,33 +170,33 @@ class VIP_Safe_Auth {
 
 		// Add query parameters for authentication if needed.
 		if ( ! empty( $auth_params['query_args'] ) ) {
-			$test_url = \add_query_arg( $auth_params['query_args'], $test_url );
+			$test_url = add_query_arg( $auth_params['query_args'], $test_url );
 		}
 
-				// Use VIP-optimized function when available, fallback to core function.
-		if ( \function_exists( 'vip_safe_wp_remote_get' ) ) {
-			$response = \vip_safe_wp_remote_get( $test_url, '', 3, 5, 20, $request_args );
+		// Use VIP-optimized function when available, fallback to core function.
+		if ( function_exists( 'vip_safe_wp_remote_get' ) ) {
+			$response = vip_safe_wp_remote_get( $test_url, '', 3, 5, 20, $request_args );
 		} else {
 			// On non-VIP environments, use standard wp_remote_get.
 			// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.wp_remote_get_wp_remote_get -- Fallback for non-VIP environments
-			$response = \wp_remote_get( $test_url, $request_args );
+			$response = wp_remote_get( $test_url, $request_args );
 		}
 
 		if ( is_wp_error( $response ) ) {
 			return new \WP_Error( 'request_failed', 'Authorization test request failed: ' . $response->get_error_message() );
 		}
 
-		$response_code = \wp_remote_retrieve_response_code( $response );
+		$response_code = wp_remote_retrieve_response_code( $response );
 
 		// Check for authentication-related errors.
-		if ( \in_array( $response_code, array( 401, 403 ), true ) ) {
-			$response_body = \wp_remote_retrieve_body( $response );
+		if ( in_array( $response_code, array( 401, 403 ), true ) ) {
+			$response_body = wp_remote_retrieve_body( $response );
 			return new \WP_Error( 'auth_failed', 'Authentication failed with HTTP ' . $response_code . ': ' . $response_body );
 		}
 
 		// If we get a successful response (200) or even a 404 (endpoint exists but not found),
 		// it means authentication passed.
-		if ( \in_array( $response_code, array( 200, 404 ), true ) ) {
+		if ( in_array( $response_code, array( 200, 404 ), true ) ) {
 			return true;
 		}
 
@@ -223,17 +223,17 @@ class VIP_Safe_Auth {
 		}
 
 		// Generate timestamp for replay protection.
-		$timestamp = \time();
+		$timestamp = time();
 
 		// Extract the REST API path portion - this should match what WP_REST_Request::get_route() returns.
 		// Parse the URL to get the path component.
-		$parsed_url = \wp_parse_url( $site_url );
+		$parsed_url = wp_parse_url( $site_url );
 		$full_path = $parsed_url['path'] ?? '';
 
-		if ( \strpos( $full_path, '/wp-json/' ) !== false ) {
+		if ( strpos( $full_path, '/wp-json/' ) !== false ) {
 			// Full REST API URL - extract everything after /wp-json.
-			$wp_json_pos = \strpos( $full_path, '/wp-json/' );
-			$path = \substr( $full_path, $wp_json_pos + 8 ); // +8 to skip '/wp-json'.
+			$wp_json_pos = strpos( $full_path, '/wp-json/' );
+			$path = substr( $full_path, $wp_json_pos + 8 ); // +8 to skip '/wp-json'.
 
 			// Ensure path starts with / and handle empty paths.
 			if ( empty( $path ) || $path[0] !== '/' ) {
@@ -247,7 +247,7 @@ class VIP_Safe_Auth {
 
 		// Create signature string: METHOD|URI|TIMESTAMP (compatible with mu-plugin).
 		$string_to_sign = $method . '|' . $path . '|' . $timestamp;
-		$signature = \hash_hmac( 'sha256', $string_to_sign, $shared_secret );
+		$signature = hash_hmac( 'sha256', $string_to_sign, $shared_secret );
 
 		return array(
 			'headers' => array(
@@ -276,7 +276,7 @@ class VIP_Safe_Auth {
 		}
 
 		// Only allow in development environments.
-		if ( ! \ccp_is_development_environment() ) {
+		if ( ! ccp_is_development_environment() ) {
 			return array();
 		}
 
@@ -301,7 +301,7 @@ class VIP_Safe_Auth {
 			return self::verify_shared_secret();
 		}
 
-		return new \WP_Error( 'no_auth', \__( 'No valid authentication found.', 'ccp' ) );
+		return new \WP_Error( 'no_auth', __( 'No valid authentication found.', 'ccp' ) );
 	}
 
 	/**
@@ -310,49 +310,49 @@ class VIP_Safe_Auth {
 	 * @return bool|WP_Error True if valid, WP_Error if not.
 	 */
 	private static function verify_shared_secret(): bool|\WP_Error {
-		$signature = \sanitize_text_field( $_SERVER['HTTP_X_CCP_SIGNATURE'] ?? '' );
-		$site = \sanitize_url( $_SERVER['HTTP_X_CCP_SITE'] ?? '' );
-		$timestamp = \sanitize_text_field( $_SERVER['HTTP_X_CCP_TIMESTAMP'] ?? '' );
-		$nonce = \sanitize_text_field( $_SERVER['HTTP_X_CCP_NONCE'] ?? '' );
+		$signature = sanitize_text_field( $_SERVER['HTTP_X_CCP_SIGNATURE'] ?? '' );
+		$site = sanitize_url( $_SERVER['HTTP_X_CCP_SITE'] ?? '' );
+		$timestamp = sanitize_text_field( $_SERVER['HTTP_X_CCP_TIMESTAMP'] ?? '' );
+		$nonce = sanitize_text_field( $_SERVER['HTTP_X_CCP_NONCE'] ?? '' );
 
 		if ( empty( $signature ) || empty( $site ) || empty( $timestamp ) || empty( $nonce ) ) {
-			return new \WP_Error( 'invalid_auth', \__( 'Missing authentication parameters.', 'ccp' ) );
+			return new \WP_Error( 'invalid_auth', __( 'Missing authentication parameters.', 'ccp' ) );
 		}
 
 		// Check timestamp (prevent replay attacks).
-		if ( \abs( \time() - \intval( $timestamp ) ) > 300 ) { // 5 minute window.
-			return new \WP_Error( 'expired_auth', \__( 'Authentication expired.', 'ccp' ) );
+		if ( abs( time() - intval( $timestamp ) ) > 300 ) { // 5 minute window.
+			return new \WP_Error( 'expired_auth', __( 'Authentication expired.', 'ccp' ) );
 		}
 
 		// Get shared secret for this site.
-		$shared_secret = \get_option( 'ccp_shared_secret_' . \md5( $site ), '' );
+		$shared_secret = get_option( 'ccp_shared_secret_' . md5( $site ), '' );
 
-		if ( \empty( $shared_secret ) ) {
-			return new \WP_Error( 'unknown_site', \__( 'Unknown source site.', 'ccp' ) );
+		if ( empty( $shared_secret ) ) {
+			return new \WP_Error( 'unknown_site', __( 'Unknown source site.', 'ccp' ) );
 		}
 
 		// Recreate payload and verify signature.
 		$payload = array(
 			'site' => $site,
-			'timestamp' => \intval( $timestamp ),
+			'timestamp' => intval( $timestamp ),
 			'nonce' => $nonce,
-			'target' => \get_bloginfo( 'url' ),
+			'target' => get_bloginfo( 'url' ),
 		);
 
-		$expected_signature = \hash_hmac( 'sha256', \wp_json_encode( $payload ), $shared_secret );
+		$expected_signature = hash_hmac( 'sha256', wp_json_encode( $payload ), $shared_secret );
 
-		if ( ! \hash_equals( $expected_signature, $signature ) ) {
-			return new \WP_Error( 'invalid_signature', \__( 'Invalid authentication signature.', 'ccp' ) );
+		if ( ! hash_equals( $expected_signature, $signature ) ) {
+			return new \WP_Error( 'invalid_signature', __( 'Invalid authentication signature.', 'ccp' ) );
 		}
 
 		// Check nonce for replay protection.
 		$nonce_key = 'ccp_nonce_' . md5( $nonce );
-		if ( \get_transient( $nonce_key ) ) {
-			return new \WP_Error( 'replay_attack', \__( 'Nonce already used.', 'ccp' ) );
+		if ( get_transient( $nonce_key ) ) {
+			return new \WP_Error( 'replay_attack', __( 'Nonce already used.', 'ccp' ) );
 		}
 
 		// Store nonce to prevent replay.
-		\set_transient( $nonce_key, true, 600 ); // 10 minutes.
+		set_transient( $nonce_key, true, 600 ); // 10 minutes.
 
 		return true;
 	}
@@ -363,6 +363,6 @@ class VIP_Safe_Auth {
 	 * @return string Generated secret.
 	 */
 	public static function generate_shared_secret(): string {
-		return \bin2hex( \random_bytes( 32 ) ); // 64 character hex string.
+		return bin2hex( random_bytes( 32 ) ); // 64 character hex string.
 	}
 }

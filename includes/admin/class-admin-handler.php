@@ -127,7 +127,7 @@ class Admin_Handler {
 		);
 
 		// Basic authentication settings (development only).
-		if ( \ccp_is_development_environment() ) {
+		if ( ccp_is_development_environment() ) {
 			register_setting(
 				'ccp_settings',
 				'ccp_username',
@@ -307,18 +307,18 @@ class Admin_Handler {
 		global $ccp_plugin;
 
 		// Security check.
-		\check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
+		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
-		if ( ! \current_user_can( 'edit_posts' ) ) {
-			\wp_send_json_error(
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			wp_send_json_error(
 				array(
-					'message' => \__( 'You do not have permission to create posts.', 'ccp' ),
+					'message' => __( 'You do not have permission to create posts.', 'ccp' ),
 					'debug' => array(
-						'user_id' => \get_current_user_id(),
+						'user_id' => get_current_user_id(),
 						'capabilities' => array(
-							'edit_posts' => \current_user_can( 'edit_posts' ),
-							'edit_pages' => \current_user_can( 'edit_pages' ),
-							'manage_options' => \current_user_can( 'manage_options' )
+							'edit_posts' => current_user_can( 'edit_posts' ),
+							'edit_pages' => current_user_can( 'edit_pages' ),
+							'manage_options' => current_user_can( 'manage_options' )
 						)
 					)
 				)
@@ -331,20 +331,20 @@ class Admin_Handler {
 
 		$ccp_api = $ccp_plugin->get_ccp_api();
 
-		$external_post_id  = \absint( $_POST['external_post_id'] ?? 0 );
-		$title             = \sanitize_text_field( $_POST['title'] ?? '' );
-		$content           = \wp_unslash( $_POST['content'] ?? '' ); // Preserve original formatting.
+		$external_post_id  = absint( $_POST['external_post_id'] ?? 0 );
+		$title             = sanitize_text_field( $_POST['title'] ?? '' );
+		$content           = wp_unslash( $_POST['content'] ?? '' ); // Preserve original formatting.
 
 		// Ensure content is properly UTF-8 encoded.
 		if ( ! mb_check_encoding( $content, 'UTF-8' ) ) {
 			$content = mb_convert_encoding( $content, 'UTF-8', 'auto' );
 		}
-		$external_link     = \esc_url_raw( $_POST['external_link'] ?? '' );
-		$featured_media_id = \absint( $_POST['featured_media_id'] ?? 0 );
-		$excerpt           = \sanitize_text_field( $_POST['excerpt'] ?? '' );
-		$meta			   = isset( $_POST['meta'] ) ? json_decode( \wp_unslash( $_POST['meta'] ) ) : array();
-		$terms			   = isset( $_POST['terms'] ) ? json_decode( \wp_unslash( $_POST['terms'] ) ) : array();
-		$raw_post_type     = \sanitize_text_field( $_POST['post_type'] ?? 'post' );
+		$external_link     = esc_url_raw( $_POST['external_link'] ?? '' );
+		$featured_media_id = absint( $_POST['featured_media_id'] ?? 0 );
+		$excerpt           = sanitize_text_field( $_POST['excerpt'] ?? '' );
+		$meta			   = isset( $_POST['meta'] ) ? json_decode( wp_unslash( $_POST['meta'] ) ) : array();
+		$terms			   = isset( $_POST['terms'] ) ? json_decode( wp_unslash( $_POST['terms'] ) ) : array();
+		$raw_post_type     = sanitize_text_field( $_POST['post_type'] ?? 'post' );
 
 		// Convert plural post types to singular for WordPress compatibility.
 		$post_type_mapping = array(
@@ -376,11 +376,11 @@ class Admin_Handler {
 		// Comment out permission checking for now to test.
 
 		if ( empty( $title ) ) {
-			\wp_send_json_error( \__( 'Post title is required.', 'ccp' ) );
+			wp_send_json_error( __( 'Post title is required.', 'ccp' ) );
 		}
 
 		if ( empty( $external_post_id ) ) {
-			\wp_send_json_error( \__( 'External post ID is required.', 'ccp' ) );
+			wp_send_json_error( __( 'External post ID is required.', 'ccp' ) );
 		}
 
 		// Check if a draft already exists for this external post.
@@ -486,7 +486,7 @@ class Admin_Handler {
 				'previous_content' => $existing_post->post_content,
 				'previous_title' => $existing_post->post_title,
 				'previous_excerpt' => $existing_post->post_excerpt,
-				'previous_featured_image' => \get_post_thumbnail_id( $existing_post->ID ),
+				'previous_featured_image' => get_post_thumbnail_id( $existing_post->ID ),
 				'previous_meta' => array(),
 				'action' => 'updated_existing',
 			);
@@ -500,7 +500,7 @@ class Admin_Handler {
 			);
 
 			foreach ( $meta_keys_to_preserve as $meta_key ) {
-				$meta_value = \get_post_meta( $existing_post->ID, $meta_key, true );
+				$meta_value = get_post_meta( $existing_post->ID, $meta_key, true );
 				if ( $meta_value !== '' ) {
 					$previous_content['previous_meta'][ $meta_key ] = $meta_value;
 				}
@@ -516,15 +516,15 @@ class Admin_Handler {
 				'post_type'    => $post_type,
 			);
 
-			$post_id = \wp_update_post( $post_data_array );
+			$post_id = wp_update_post( $post_data_array );
 
-			if ( \is_wp_error( $post_id ) ) {
-				\wp_send_json_error( $post_id->get_error_message() );
+			if ( is_wp_error( $post_id ) ) {
+				wp_send_json_error( $post_id->get_error_message() );
 			}
 
 			// Update meta data.
-			\update_post_meta( $post_id, 'ccp_external_link', $external_link );
-			\update_post_meta( $post_id, 'ccp_import_date', \current_time( 'mysql' ) );
+			update_post_meta( $post_id, 'ccp_external_link', $external_link );
+			update_post_meta( $post_id, 'ccp_import_date', current_time( 'mysql' ) );
 
 			// Import featured image if provided.
 			if ( ! empty( $featured_media_id ) && ! empty( $external_link ) ) {
@@ -532,7 +532,7 @@ class Admin_Handler {
 				$featured_attachment_id = $this->api->import_featured_image( $featured_media_id, $site_url );
 
 				if ( $featured_attachment_id ) {
-					\set_post_thumbnail( $post_id, $featured_attachment_id );
+					set_post_thumbnail( $post_id, $featured_attachment_id );
 				}
 			}
 
@@ -540,7 +540,7 @@ class Admin_Handler {
 			$ccp_api->update_meta( $post_id, $meta );
 			$ccp_api->update_terms( $post_id, $terms );
 
-			$edit_url = \admin_url( 'post.php?post=' . $post_id . '&action=edit' );
+			$edit_url = admin_url( 'post.php?post=' . $post_id . '&action=edit' );
 
 			// Log the import action with previous content for rollback.
 			$this->import_history->log_import_action(
@@ -579,26 +579,26 @@ class Admin_Handler {
 				'ccp_external_post_id' => $external_post_id,
 				'ccp_external_link'    => $external_link,
 				'ccp_imported_from'    => 'ccp',
-				'ccp_import_date'      => \current_time( 'mysql' ),
+				'ccp_import_date'      => current_time( 'mysql' ),
 			),
 		);
 
-		$post_id = \wp_insert_post( $post_data );
+		$post_id = wp_insert_post( $post_data );
 
 		// Re-enable content filters.
 		$this->restore_content_filters();
 
-		if ( \is_wp_error( $post_id ) ) {
-			\wp_send_json_error( $post_id->get_error_message() );
+		if ( is_wp_error( $post_id ) ) {
+			wp_send_json_error( $post_id->get_error_message() );
 		}
 
 		// Import featured image if provided.
 		if ( ! empty( $featured_media_id ) && ! empty( $external_link ) ) {
-			$site_url               = \wp_parse_url( $external_link, \PHP_URL_SCHEME ) . '://' . \wp_parse_url( $external_link, \PHP_URL_HOST );
+			$site_url               = wp_parse_url( $external_link, PHP_URL_SCHEME ) . '://' . wp_parse_url( $external_link, PHP_URL_HOST );
 			$featured_attachment_id = $this->api->import_featured_image( $featured_media_id, $site_url );
 
 			if ( $featured_attachment_id ) {
-				\set_post_thumbnail( $post_id, $featured_attachment_id );
+				set_post_thumbnail( $post_id, $featured_attachment_id );
 			}
 		}
 
@@ -607,7 +607,7 @@ class Admin_Handler {
 		$ccp_api->update_terms( $post_id, $terms );
 
 		// Return success with edit URL.
-		$edit_url = \admin_url( 'post.php?post=' . $post_id . '&action=edit' );
+		$edit_url = admin_url( 'post.php?post=' . $post_id . '&action=edit' );
 
 		// Log the import action and complete session.
 		$this->import_history->log_import_action(
@@ -622,7 +622,7 @@ class Admin_Handler {
 		$this->import_history->update_session_stats( $session_id, 'success' );
 		$this->import_history->complete_session( $session_id );
 
-		\wp_send_json_success(
+		wp_send_json_success(
 			array(
 				'post_id'  => $post_id,
 				'edit_url' => $edit_url,
@@ -644,7 +644,7 @@ class Admin_Handler {
 		}
 
 		// Get raw posts data with minimal sanitization to preserve JSON structure.
-		$posts_data_json = isset( $_POST['posts_data'] ) ? \stripslashes( $_POST['posts_data'] ) : '';
+		$posts_data_json = isset( $_POST['posts_data'] ) ? stripslashes( $_POST['posts_data'] ) : '';
 
 		if ( empty( $posts_data_json ) ) {
 			wp_send_json_error( __( 'Posts data is required.', 'ccp' ) );
@@ -827,7 +827,7 @@ class Admin_Handler {
 					'post_type'    => $post_type,
 				);
 
-				$post_id = \wp_update_post( $post_data_array );
+				$post_id = wp_update_post( $post_data_array );
 
 				// Re-enable content filters.
 				$this->restore_content_filters();
@@ -842,8 +842,8 @@ class Admin_Handler {
 				}
 
 				// Update meta data.
-				\update_post_meta( $post_id, 'ccp_external_link', $external_link );
-				\update_post_meta( $post_id, 'ccp_import_date', \current_time( 'mysql' ) );
+				update_post_meta( $post_id, 'ccp_external_link', $external_link );
+				update_post_meta( $post_id, 'ccp_import_date', current_time( 'mysql' ) );
 
 				$edit_url = admin_url( 'post.php?post=' . $post_id . '&action=edit' );
 
@@ -1045,7 +1045,7 @@ class Admin_Handler {
 	 * @return string Sanitized username.
 	 */
 	public function sanitize_username( $value ): string {
-		if ( ! \ccp_is_development_environment() ) {
+		if ( ! ccp_is_development_environment() ) {
 			return '';
 		}
 
@@ -1059,7 +1059,7 @@ class Admin_Handler {
 	 * @return string Sanitized password.
 	 */
 	public function sanitize_password( $value ): string {
-		if ( ! \ccp_is_development_environment() ) {
+		if ( ! ccp_is_development_environment() ) {
 			return '';
 		}
 
@@ -1083,7 +1083,7 @@ class Admin_Handler {
 		}
 
 		// Fallback to Basic auth in development environments only.
-		if ( \ccp_is_development_environment() ) {
+		if ( ccp_is_development_environment() ) {
 			$username = get_option( 'ccp_username', '' );
 			$password = get_option( 'ccp_password', '' );
 
@@ -1197,7 +1197,7 @@ class Admin_Handler {
 		$original_content = $content;
 
 		// Parse blocks using WordPress parse_blocks function.
-		$blocks = \parse_blocks( $content );
+		$blocks = parse_blocks( $content );
 
 		if ( empty( $blocks ) ) {
 			return $content;
@@ -1220,7 +1220,7 @@ class Admin_Handler {
 		);
 
 		// Serialize blocks back to content.
-		$serialized_content = \serialize_blocks( $processed_blocks );
+		$serialized_content = serialize_blocks( $processed_blocks );
 
 		return $serialized_content;
 	}
@@ -1313,7 +1313,7 @@ class Admin_Handler {
 
 			if ( $attachment_id && is_numeric( $attachment_id ) ) {
 				// Get the new URL from the attachment ID.
-				$new_url = \wp_get_attachment_url( $attachment_id );
+				$new_url = wp_get_attachment_url( $attachment_id );
 			} else {
 				// Method 2: Fallback - use original method if the first didn't work.
 				$new_url = $this->api->import_external_media( $original_url, $site_url );
@@ -1384,7 +1384,7 @@ class Admin_Handler {
 
 					if ( $attachment_id ) {
 						// Get the new URL from the attachment ID.
-						$new_url = \wp_get_attachment_url( $attachment_id );
+						$new_url = wp_get_attachment_url( $attachment_id );
 
 						if ( $new_url ) {
 							// Update block attributes.
@@ -1469,7 +1469,7 @@ class Admin_Handler {
 
 			if ( $attachment_id ) {
 				// Get the new URL from the attachment ID.
-				$new_url = \wp_get_attachment_url( $attachment_id );
+				$new_url = wp_get_attachment_url( $attachment_id );
 
 				if ( $new_url ) {
 					$block['attrs']['src'] = $new_url;
@@ -1497,7 +1497,7 @@ class Admin_Handler {
 
 			if ( $attachment_id ) {
 				// Get the new URL from the attachment ID.
-				$new_url = \wp_get_attachment_url( $attachment_id );
+				$new_url = wp_get_attachment_url( $attachment_id );
 
 				if ( $new_url ) {
 					$block['attrs']['src'] = $new_url;
@@ -1576,9 +1576,9 @@ class Admin_Handler {
 		$dom = new \DOMDocument();
 
 		// Suppress errors for malformed HTML and use UTF-8 encoding.
-		$previous_use_errors = \libxml_use_internal_errors( true );
-		$dom->loadHTML( $html, \LIBXML_HTML_NOIMPLIED | \LIBXML_HTML_NODEFDTD );
-		\libxml_use_internal_errors( $previous_use_errors );
+		$previous_use_errors = libxml_use_internal_errors( true );
+		$dom->loadHTML( $html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD );
+		libxml_use_internal_errors( $previous_use_errors );
 
 		$images = $dom->getElementsByTagName( 'img' );
 
@@ -1937,10 +1937,10 @@ class Admin_Handler {
 		}
 
 		// Specifically remove common formatting filters.
-		\remove_filter( 'the_content', 'wpautop' );
-		\remove_filter( 'the_content', 'wptexturize' );
-		\remove_filter( 'content_save_pre', 'wp_filter_post_kses' );
-		\remove_filter( 'content_filtered_save_pre', 'wp_filter_post_kses' );
+		remove_filter( 'the_content', 'wpautop' );
+		remove_filter( 'the_content', 'wptexturize' );
+		remove_filter( 'content_save_pre', 'wp_filter_post_kses' );
+		remove_filter( 'content_filtered_save_pre', 'wp_filter_post_kses' );
 	}
 
 	/**
@@ -1958,10 +1958,10 @@ class Admin_Handler {
 		$this->disabled_filters = array();
 
 		// Re-add common formatting filters with default priorities.
-		\add_filter( 'the_content', 'wpautop' );
-		\add_filter( 'the_content', 'wptexturize' );
-		\add_filter( 'content_save_pre', 'wp_filter_post_kses' );
-		\add_filter( 'content_filtered_save_pre', 'wp_filter_post_kses' );
+		add_filter( 'the_content', 'wpautop' );
+		add_filter( 'the_content', 'wptexturize' );
+		add_filter( 'content_save_pre', 'wp_filter_post_kses' );
+		add_filter( 'content_filtered_save_pre', 'wp_filter_post_kses' );
 	}
 
 }
