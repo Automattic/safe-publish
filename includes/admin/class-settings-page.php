@@ -119,7 +119,7 @@ class Settings_Page {
 								</td>
 							</tr>
 
-							<?php if ( \ccp_is_development_environment() ) : ?>
+							<?php if ( ccp_is_development_environment() ) : ?>
 							<tr>
 								<th scope="row">
 									<label for="ccp_username">

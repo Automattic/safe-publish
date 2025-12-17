@@ -61,7 +61,7 @@ class URLValidatorTest extends TestCase {
 	}
 
 	public function test_get_allowed_schemes_returns_https_for_vip(): void {
-		// Mock VIP environment
+		// Mock VIP environment.
 		if ( ! defined( 'WPCOM_IS_VIP_ENV' ) ) {
 			define( 'WPCOM_IS_VIP_ENV', true );
 		}

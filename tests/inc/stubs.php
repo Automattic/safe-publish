@@ -1,6 +1,6 @@
 <?php declare(strict_types = 1);
 
-// Create a simple mock namespace for test compatibility
+// Create a simple mock namespace for test compatibility.
 namespace RemoteDataBlocks\Tests\Mocks {
 	class MockWordPressFunctions {
 		private static $options = array();
@@ -19,7 +19,7 @@ namespace RemoteDataBlocks\Tests\Mocks {
 		}
 
 		public static function do_action( string $action, ...$args ): void {
-			// Mock implementation
+			// Mock implementation.
 		}
 
 		public static function apply_filters( string $filter, $thing, ...$args ) {
@@ -51,11 +51,11 @@ function esc_html__( string $text ): string {
 }
 
 function register_block_pattern( string $_name, array $_options ): void {
-	// Do nothing
+	// Do nothing.
 }
 
 function is_multisite(): void {
-	// Do nothing
+	// Do nothing.
 }
 
 function plugins_url( string $path ): string {
@@ -108,7 +108,7 @@ function wp_parse_url( string $url, int $component = -1 ): mixed {
 	if ( $component === -1 ) {
 		return $parsed;
 	}
-	// Return specific component (PHP_URL_HOST = 1, etc.)
+	// Return specific component (PHP_URL_HOST = 1, etc.).
 	if ( is_array( $parsed ) ) {
 		$map = array( 1 => 'host', 2 => 'scheme', 3 => 'port', 5 => 'path', 6 => 'query', 7 => 'fragment' );
 		return $parsed[ $map[$component] ] ?? null;
@@ -185,11 +185,11 @@ function get_site_url(): string {
 }
 
 function attachment_url_to_postid( string $url ): int {
-	return 0; // Return 0 for tests (not found)
+	return 0; // Return 0 for tests (not found).
 }
 
 function esc_url( string $url ): string {
-	return $url; // Basic stub for tests
+	return $url; // Basic stub for tests.
 }
 
 function trailingslashit( string $path ): string {

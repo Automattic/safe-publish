@@ -9,7 +9,7 @@ import React from 'react';
 import { PostTypeSelector } from './post-type-selector';
 import type { Post } from './types';
 
-// Reference to global types
+// Reference to global types.
 /// <reference path="../types/globals.d.ts" />
 
 // Extend the window interface
@@ -56,7 +56,7 @@ export function AdminTools( {
 
 	const [ selectedPostType, setSelectedPostType ] = useState( 'posts' );
 
-	// Auto-clear notices after 5 seconds
+	// Auto-clear notices after 5 seconds.
 	useEffect( () => {
 		if ( testResult ) {
 			const timer = setTimeout( () => {
@@ -75,9 +75,9 @@ export function AdminTools( {
 		}
 	}, [ previewResult ] );
 
-	// Get current site URL from saved settings instead of form input
+	// Get current site URL from saved settings instead of form input.
 	const getExternalSiteUrl = (): string => {
-		// Use saved settings from window.ccpAdminData
+		// Use saved settings from window.ccpAdminData.
 		return window.ccpAdminData?.siteUrl || initialSiteUrl || '';
 	};
 
@@ -86,7 +86,7 @@ export function AdminTools( {
 	 */
 	const handlePostTypeChange = ( postType: string ): void => {
 		setSelectedPostType( postType );
-		// Trigger DataViews refresh with new post type
+		// Trigger DataViews refresh with new post type.
 		if ( typeof window.ccpRefreshPosts === 'function' ) {
 			window.ccpRefreshPosts( postType );
 		}
@@ -232,7 +232,7 @@ export function AdminTools( {
 		}
 	};
 
-	// Wrapper functions to handle void returns for onClick
+	// Wrapper functions to handle void returns for onClick.
 	const onTestClick = (): void => {
 		handleTestConnection().catch( console.error );
 	};
