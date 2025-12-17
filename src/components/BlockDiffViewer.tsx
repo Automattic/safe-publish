@@ -41,7 +41,7 @@ export default function BlockDiffViewer( { blocks = [], highlight = true }: Prop
                 const currentHtml = b.current?.rendered || '';
                 const incomingHtml = b.incoming?.rendered || '';
 
-                // Client-side recheck to avoid false modified flags (whitespace/attr noise)
+                // Client-side recheck to avoid false modified flags (whitespace/attr noise).
                 if ( status === 'modified' ) {
                     if ( normalizeHtml( currentHtml ) === normalizeHtml( incomingHtml ) ) {
                         status = 'unchanged';

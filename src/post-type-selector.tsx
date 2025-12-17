@@ -43,7 +43,7 @@ export function PostTypeSelector( {
 	 * Get current site URL from saved settings (more reliable than input field)
 	 */
 	const getExternalSiteUrl = (): string => {
-		// Use saved settings from window.ccpAdminData
+		// Use saved settings from window.ccpAdminData.
 		return window.ccpAdminData?.siteUrl || siteUrl || '';
 	};
 
@@ -95,12 +95,12 @@ export function PostTypeSelector( {
 			console.log( 'CCP PostTypeSelector: API response:', response );
 
 			if ( response.success && response.data ) {
-				// Convert object to array - don't filter out anything initially
+				// Convert object to array - don't filter out anything initially.
 				const postTypeArray = Object.values( response.data );
 
 				console.log( 'CCP PostTypeSelector: Post types from API:', postTypeArray );
 
-				// Set the post types directly from the API response
+				// Set the post types directly from the API response.
 				setPostTypes( postTypeArray );
 				setLastSiteUrl( currentSiteUrl );
 			} else {
@@ -140,12 +140,12 @@ export function PostTypeSelector( {
 		loadPostTypes().catch( console.error );
 	};
 
-	// Load post types when site URL changes
+	// Load post types when site URL changes.
 	useEffect( () => {
 		loadPostTypes().catch( console.error );
 	}, [ siteUrl ] );
 
-	// Also check for changes in the form input field periodically
+	// Also check for changes in the form input field periodically.
 	useEffect( () => {
 		const checkSiteUrlChange = () => {
 			const currentSiteUrl = getExternalSiteUrl();
@@ -160,22 +160,22 @@ export function PostTypeSelector( {
 			}
 		};
 
-		// Check every 2 seconds for URL changes
+		// Check every 2 seconds for URL changes.
 		const interval = setInterval( checkSiteUrlChange, 2000 );
 
-		// Also check immediately
+		// Also check immediately.
 		checkSiteUrlChange();
 
 		return () => clearInterval( interval );
 	}, [ lastSiteUrl ] );
 
-	// Generate options for the select control
+	// Generate options for the select control.
 	const selectOptions = postTypes.map( postType => ( {
 		label: postType.label,
 		value: postType.rest_base,
 	} ) );
 
-	// Always ensure we have at least the default "posts" option
+	// Always ensure we have at least the default "posts" option.
 	if ( selectOptions.length === 0 && ! isLoading ) {
 		selectOptions.push( {
 			label: __( 'Posts (default)', 'ccp' ),

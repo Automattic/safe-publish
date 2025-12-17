@@ -228,10 +228,10 @@ describe( 'updatePostContent', () => {
 	} );
 
 	it( 'should work without window.ccpAdminData', async () => {
-		// Save original window
+		// Save original window.
 		const originalWindow = ( global as any ).window;
 
-		// Set window to undefined
+		// Set window to undefined.
 		( global as any ).window = undefined;
 
 		( global.fetch as any ).mockResolvedValue( {
@@ -242,7 +242,7 @@ describe( 'updatePostContent', () => {
 		const result = await updatePostContent( 123, 'Content', 'explicit-nonce' );
 		expect( result.success ).toBe( true );
 
-		// Restore original window
+		// Restore original window.
 		( global as any ).window = originalWindow;
 	} );
 

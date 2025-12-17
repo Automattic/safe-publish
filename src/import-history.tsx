@@ -18,9 +18,9 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 		return;
 	}
 
-	// Clear any loading placeholder
+	// Clear any loading placeholder.
 	container.innerHTML = '';
 
-	// Render the Import History component
+	// Render the Import History component.
 	createRoot( container ).render( <ImportHistory /> );
 } );

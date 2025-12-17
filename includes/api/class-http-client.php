@@ -31,10 +31,10 @@ class HTTP_Client {
 	 * @return array|\WP_Error Response or error.
 	 */
 	public function make_request( string $url, array $auth_credentials = array(), array $additional_args = array() ): array|\WP_Error {
-		// VIP-optimized timeout (max 10 seconds recommended for VIP environments)
+		// VIP-optimized timeout (max 10 seconds recommended for VIP environments).
 		$timeout = apply_filters( 'ccp_request_timeout', 10 );
 
-		// Determine SSL verification based on environment
+		// Determine SSL verification based on environment.
 		$sslverify = $this->should_verify_ssl( $url );
 
 		$request_args = array_merge(
@@ -42,15 +42,15 @@ class HTTP_Client {
 				'timeout' => $timeout,
 				'user-agent' => $this->get_user_agent(),
 				'sslverify' => $sslverify,
-				'redirection' => 0, // Prevent redirects for security
+				'redirection' => 0, // Prevent redirects for security.
 			),
 			$additional_args
 		);
 
-		// Use VIP-safe authentication instead of Basic Auth
+		// Use VIP-safe authentication instead of Basic Auth.
 		$auth_params = VIP_Safe_Auth::get_auth_params( $url, $auth_credentials, 'GET' );
 
-		// Add authentication headers if available
+		// Add authentication headers if available.
 		if ( ! empty( $auth_params['headers'] ) ) {
 			$request_args['headers'] = array_merge(
 				$request_args['headers'] ?? array(),
@@ -58,18 +58,18 @@ class HTTP_Client {
 			);
 		}
 
-		// Add query parameters for authentication if needed
+		// Add query parameters for authentication if needed.
 		if ( ! empty( $auth_params['query_args'] ) ) {
 			$url = add_query_arg( $auth_params['query_args'], $url );
 		}
 
-		// Fallback authentication handling
+		// Fallback authentication handling.
 		if ( empty( $auth_params['headers'] ) && empty( $auth_params['query_args'] ) && ! empty( $auth_credentials ) ) {
 			$auth_credentials = $this->get_fallback_auth_credentials( $auth_credentials );
-			// Retry getting auth params with fallback credentials
+			// Retry getting auth params with fallback credentials.
 			$auth_params = VIP_Safe_Auth::get_auth_params( $url, $auth_credentials, 'GET' );
 
-			// Apply the new auth params
+			// Apply the new auth params.
 			if ( ! empty( $auth_params['headers'] ) ) {
 				$request_args['headers'] = array_merge(
 					$request_args['headers'] ?? array(),
@@ -82,7 +82,7 @@ class HTTP_Client {
 			}
 		}
 
-		// Fallback to Basic Auth for backward compatibility (will fail on VIP)
+		// Fallback to Basic Auth for backward compatibility (will fail on VIP).
 		if ( empty( $auth_params ) && ! empty( $auth_credentials['username'] ) && ! empty( $auth_credentials['password'] ) ) {
 			$request_args['headers'] = array_merge(
 				$request_args['headers'] ?? array(),
@@ -148,7 +148,7 @@ class HTTP_Client {
 	 * @return array|\WP_Error Response or error.
 	 */
 	public function safe_remote_get( string $url, array $args = array() ): array|\WP_Error {
-		// Use VIP-optimized function when available, fallback to core function
+		// Use VIP-optimized function when available, fallback to core function.
 		if ( function_exists( 'vip_safe_wp_remote_get' ) ) {
 			return vip_safe_wp_remote_get( $url, '', 3, 5, 20, $args );
 		}
@@ -168,7 +168,7 @@ class HTTP_Client {
 			return $provided_credentials;
 		}
 
-		// Try VIP-safe authentication first
+		// Try VIP-safe authentication first.
 		$shared_secret = get_option( 'ccp_shared_secret', '' );
 
 		if ( ! empty( $shared_secret ) ) {
@@ -177,7 +177,7 @@ class HTTP_Client {
 			);
 		}
 
-		// Fallback to Basic auth in development environments only
+		// Fallback to Basic auth in development environments only.
 		if ( $this->is_development_environment() ) {
 			$username = get_option( 'ccp_username', '' );
 			$password = get_option( 'ccp_password', '' );
@@ -209,16 +209,16 @@ class HTTP_Client {
 	 * @return bool Whether to verify SSL certificates.
 	 */
 	public function should_verify_ssl( string $url ): bool {
-		// Always verify SSL in VIP production environments
+		// Always verify SSL in VIP production environments.
 		if ( defined( 'WPCOM_IS_VIP_ENV' ) && constant( 'WPCOM_IS_VIP_ENV' ) ) {
 			return true;
 		}
 
-		// Parse URL to check for development indicators
+		// Parse URL to check for development indicators.
 		$parsed_url = wp_parse_url( $url );
 		$host = $parsed_url['host'] ?? '';
 
-		// Development domains where SSL verification can be disabled
+		// Development domains where SSL verification can be disabled.
 		$dev_domains = array(
 			'.test',
 			'.local',
@@ -228,17 +228,17 @@ class HTTP_Client {
 			'::1',
 		);
 
-		// Check if this is a development domain
+		// Check if this is a development domain.
 		foreach ( $dev_domains as $dev_domain ) {
 			if ( $host === $dev_domain ||
 				( function_exists( 'str_ends_with' ) && str_ends_with( $host, $dev_domain ) ) ||
 				( ! function_exists( 'str_ends_with' ) && substr( $host, -strlen( $dev_domain ) ) === $dev_domain ) ) {
-				// Allow filtering for specific development needs
+				// Allow filtering for specific development needs.
 				return apply_filters( 'ccp_dev_ssl_verify', false, $url );
 			}
 		}
 
-		// For production domains, always verify SSL
+		// For production domains, always verify SSL.
 		return true;
 	}
 
@@ -252,7 +252,7 @@ class HTTP_Client {
 			return;
 		}
 
-		// Only attempt cleanup if file exists and is a temp file
+		// Only attempt cleanup if file exists and is a temp file.
 		if ( file_exists( $temp_file ) && strpos( $temp_file, '/tmp/' ) !== false ) {
 			// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_unlink -- Temp file cleanup after media import, file is in /tmp/ directory
 			unlink( $temp_file );
@@ -266,7 +266,7 @@ class HTTP_Client {
 	 * @return string|\WP_Error|false Path to downloaded file on success, WP_Error or false on failure.
 	 */
 	public function download_external_file( string $url ): string|\WP_Error|false {
-		// Use download_url for proper file handling - WordPress core function
+		// Use download_url for proper file handling - WordPress core function.
 		return download_url( $url );
 	}
 }

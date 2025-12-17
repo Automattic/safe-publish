@@ -84,7 +84,7 @@ export function sortPosts(
 		const aVal = a[ field ];
 		const bVal = b[ field ];
 
-		// Special handling for dates
+		// Special handling for dates.
 		if ( field === 'modified' ) {
 			const dateA = new Date( aVal as string );
 			const dateB = new Date( bVal as string );
@@ -93,7 +93,7 @@ export function sortPosts(
 				: dateB.getTime() - dateA.getTime();
 		}
 
-		// Default string comparison
+		// Default string comparison.
 		if ( direction === 'asc' ) {
 			return String( aVal ).localeCompare( String( bVal ) );
 		}
@@ -135,7 +135,7 @@ export function extractUrlPath( url: string ): string {
 		const urlObj = new URL( url );
 		return urlObj.pathname;
 	} catch {
-		// If URL parsing fails, try to extract path manually
+		// If URL parsing fails, try to extract path manually.
 		const match = url.match( /https?:\/\/[^/]+(.*)/ );
 		return match ? match[1] || '/' : url;
 	}

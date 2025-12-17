@@ -24,24 +24,24 @@ class URL_Validator {
 	 * @return bool True if valid, false otherwise.
 	 */
 	public static function is_valid_external_url( $url ): bool {
-		// Check if URL is valid
+		// Check if URL is valid.
 		if ( ! filter_var( $url, FILTER_VALIDATE_URL ) ) {
 			return false;
 		}
 
-		// Only allow HTTPS URLs for security
+		// Only allow HTTPS URLs for security.
 		// if ( 'https' !== wp_parse_url( $url, PHP_URL_SCHEME ) ) {
 		// 	return false;
 		// }
 
-		// Additional security: prevent localhost/private network access
+		// Additional security: prevent localhost/private network access.
 		$host = wp_parse_url( $url, PHP_URL_HOST );
 		if ( false === $host ) {
 			return false;
 		}
 
-		// Block private/local addresses for security
-		// TODO: Uncomment and implement IP validation if needed
+		// Block private/local addresses for security.
+		// TODO: Uncomment and implement IP validation if needed.
 		// $ip = gethostbyname( $host );
 		// if ( filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) === false ) {
 		// return false;
@@ -58,15 +58,15 @@ class URL_Validator {
 	 * @return bool True if valid scheme for the environment.
 	 */
 	private static function is_valid_scheme( $url, $scheme ): bool {
-		// Always require HTTPS in VIP production environments
+		// Always require HTTPS in VIP production environments.
 		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
 			return 'https' === $scheme;
 		}
 
-		// Parse URL to check for development indicators
+		// Parse URL to check for development indicators.
 		$host = wp_parse_url( $url, PHP_URL_HOST );
 
-		// Development domains where HTTP is allowed
+		// Development domains where HTTP is allowed.
 		$dev_domains = array(
 			'.test',
 			'.local',
@@ -76,17 +76,17 @@ class URL_Validator {
 			'::1'
 		);
 
-		// Check if this is a development domain
+		// Check if this is a development domain.
 		foreach ( $dev_domains as $dev_domain ) {
 			if ( $host === $dev_domain ||
 				 ( function_exists( 'str_ends_with' ) && str_ends_with( $host, $dev_domain ) ) ||
 				 ( ! function_exists( 'str_ends_with' ) && substr( $host, -strlen( $dev_domain ) ) === $dev_domain ) ) {
-				// Allow both HTTP and HTTPS for development domains
+				// Allow both HTTP and HTTPS for development domains.
 				return in_array( $scheme, array( 'http', 'https' ), true );
 			}
 		}
 
-		// For production domains, require HTTPS
+		// For production domains, require HTTPS.
 		return 'https' === $scheme;
 	}
 
@@ -113,12 +113,12 @@ class URL_Validator {
 	 * @return array Allowed schemes.
 	 */
 	public static function get_allowed_schemes( $url = '' ): array {
-		// Always require HTTPS in VIP production environments
+		// Always require HTTPS in VIP production environments.
 		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
 			return array( 'https' );
 		}
 
-		// If URL is provided, check if it's a development domain
+		// If URL is provided, check if it's a development domain.
 		if ( ! empty( $url ) ) {
 			$host = wp_parse_url( $url, PHP_URL_HOST );
 			$dev_domains = array( '.test', '.local', '.dev', 'localhost', '127.0.0.1', '::1' );
@@ -127,13 +127,13 @@ class URL_Validator {
 				if ( $host === $dev_domain ||
 					 ( function_exists( 'str_ends_with' ) && str_ends_with( $host, $dev_domain ) ) ||
 					 ( ! function_exists( 'str_ends_with' ) && substr( $host, -strlen( $dev_domain ) ) === $dev_domain ) ) {
-					// Allow both HTTP and HTTPS for development domains
+					// Allow both HTTP and HTTPS for development domains.
 					return array( 'http', 'https' );
 				}
 			}
 		}
 
-		// Default: require HTTPS for production domains
+		// Default: require HTTPS for production domains.
 		return array( 'https' );
 	}
 
@@ -155,7 +155,7 @@ class URL_Validator {
 		$allowed_domains = apply_filters( 'ccp_allowed_domains', array(), $host );
 
 		if ( empty( $allowed_domains ) ) {
-			return true; // No restrictions by default
+			return true; // No restrictions by default.
 		}
 
 		foreach ( $allowed_domains as $domain ) {

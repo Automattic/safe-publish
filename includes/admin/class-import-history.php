@@ -45,7 +45,7 @@ class Import_History {
 	 * Registers custom post types for import tracking.
 	 */
 	public function register_post_types(): void {
-		// Register import session post type
+		// Register import session post type.
 		register_post_type(
 			self::SESSION_POST_TYPE,
 			array(
@@ -67,7 +67,7 @@ class Import_History {
 			)
 		);
 
-		// Register import log post type
+		// Register import log post type.
 		register_post_type(
 			self::LOG_POST_TYPE,
 			array(
@@ -112,17 +112,17 @@ class Import_History {
 			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'ccp' ) );
 		}
 
-		// Enqueue necessary scripts and styles for React
+		// Enqueue necessary scripts and styles for React.
 		wp_enqueue_script( 'wp-element' );
 		wp_enqueue_script( 'wp-components' );
 		wp_enqueue_script( 'wp-i18n' );
 
-		// Try to enqueue wp-dataviews if available
+		// Try to enqueue wp-dataviews if available.
 		if ( wp_script_is( 'wp-dataviews', 'registered' ) ) {
 			wp_enqueue_script( 'wp-dataviews' );
 		}
 
-		// Enqueue custom CSS
+		// Enqueue custom CSS.
 		$css_file = plugin_dir_url( dirname( dirname( __FILE__ ) ) ) . 'assets/css/import-history.css';
 		wp_enqueue_style( 'ccp-import-history', $css_file, array(), '1.0.0' );
 
@@ -139,7 +139,7 @@ class Import_History {
 			);
 		}
 
-		// Enqueue the compiled import history JavaScript
+		// Enqueue the compiled import history JavaScript.
 		$js_file = plugin_dir_url( dirname( dirname( __FILE__ ) ) ) . 'build/import-history.js';
 		$js_asset_file = dirname( dirname( __FILE__ ) ) . '/build/import-history.asset.php';
 
@@ -160,7 +160,7 @@ class Import_History {
 			true
 		);
 
-		// Localize script data for React
+		// Localize script data for React.
 		wp_localize_script( 'ccp-import-history', 'ccpAdminData', array(
 			'ajaxurl' => admin_url( 'admin-ajax.php' ),
 			'nonce' => wp_create_nonce( 'ccp_ajax_nonce' ),
@@ -249,7 +249,7 @@ class Import_History {
 			),
 		) );
 
-		// Store changes as post meta if they exist
+		// Store changes as post meta if they exist.
 		if ( ! empty( $changes ) ) {
 			update_post_meta( $log_id, 'content_changes', $changes );
 		}
@@ -388,7 +388,7 @@ class Import_History {
 			wp_send_json_error( 'Session not found' );
 		}
 
-		// Get session data
+		// Get session data.
 		$total = (int) get_post_meta( $session_id, 'total_items', true );
 		$successful = (int) get_post_meta( $session_id, 'successful', true );
 		$failed = (int) get_post_meta( $session_id, 'failed', true );
@@ -417,7 +417,7 @@ class Import_History {
 			'can_rollback' => $status === 'completed' && $successful > 0,
 		);
 
-		// Get logs - but don't show details for rolled back sessions
+		// Get logs - but don't show details for rolled back sessions.
 		$formatted_logs = array();
 
 		if ( $status !== 'rolled_back' ) {
@@ -447,20 +447,20 @@ class Import_History {
 				$changes = get_post_meta( $log->ID, 'content_changes', true );
 				$has_previous_content = is_array( $changes ) && ! empty( $changes['previous_content'] );
 
-				// For debugging: also show button for updated posts even without previous content
+				// For debugging: also show button for updated posts even without previous content.
 				$is_updated_post = ( $log_status === 'updated' );
 				$should_show_changes = $has_previous_content || $is_updated_post;
 
-				// Check if this item has been individually rolled back
+				// Check if this item has been individually rolled back.
 				$is_rolled_back = get_post_meta( $log->ID, 'rolled_back', true );
 
-				// Determine if this item can be rolled back
+				// Determine if this item can be rolled back.
 				$can_rollback_item = false;
 				if ( ! $is_rolled_back && $post_id && get_post( $post_id ) ) {
-					// Can rollback if it's a success (delete) or updated with previous content (restore)
+					// Can rollback if it's a success (delete) or updated with previous content (restore).
 					$can_rollback_item = ( $log_status === 'success' ) ||
 						( $log_status === 'updated' && $has_previous_content ) ||
-						( $log_status === 'updated' && ! $has_previous_content ); // Legacy case - will delete
+						( $log_status === 'updated' && ! $has_previous_content ); // Legacy case - will delete.
 				}
 
 				$formatted_log = array(
@@ -511,7 +511,7 @@ class Import_History {
 			wp_send_json_error( 'Session not found' );
 		}
 
-		// Get all successful imports from this session
+		// Get all successful imports from this session.
 		$logs = get_posts( array(
 			'post_type'      => self::LOG_POST_TYPE,
 			'post_status'    => 'publish',
@@ -539,43 +539,43 @@ class Import_History {
 			}
 
 			if ( $status === 'success' ) {
-				// This was a newly created post - delete it
+				// This was a newly created post - delete it.
 				if ( wp_delete_post( $post_id, true ) ) {
 					$deleted_count++;
 				}
 			} elseif ( $status === 'updated' && ! empty( $changes ) && isset( $changes['previous_content'] ) ) {
-				// This was an updated post - restore previous content
+				// This was an updated post - restore previous content.
 				$restore_data = array(
 					'ID' => $post_id,
 				);
 
-				// Restore previous content if available
+				// Restore previous content if available.
 				if ( isset( $changes['previous_content'] ) ) {
 					$restore_data['post_content'] = $changes['previous_content'];
 				}
 
-				// Restore previous title if available
+				// Restore previous title if available.
 				if ( isset( $changes['previous_title'] ) ) {
 					$restore_data['post_title'] = $changes['previous_title'];
 				}
 
-				// Restore previous excerpt if available
+				// Restore previous excerpt if available.
 				if ( isset( $changes['previous_excerpt'] ) ) {
 					$restore_data['post_excerpt'] = $changes['previous_excerpt'];
 				}
 
-				// Update the post with previous content
+				// Update the post with previous content.
 				$updated = wp_update_post( $restore_data, true );
 
 				if ( ! is_wp_error( $updated ) ) {
-					// Restore previous meta data if available
+					// Restore previous meta data if available.
 					if ( isset( $changes['previous_meta'] ) && is_array( $changes['previous_meta'] ) ) {
 						foreach ( $changes['previous_meta'] as $meta_key => $meta_value ) {
 							update_post_meta( $post_id, $meta_key, $meta_value );
 						}
 					}
 
-					// Restore previous featured image if available
+					// Restore previous featured image if available.
 					if ( isset( $changes['previous_featured_image'] ) ) {
 						if ( $changes['previous_featured_image'] ) {
 							set_post_thumbnail( $post_id, $changes['previous_featured_image'] );
@@ -587,15 +587,15 @@ class Import_History {
 					$restored_count++;
 				}
 			} elseif ( $status === 'updated' ) {
-				// Updated post but no previous content stored - just delete it
-				// This handles legacy cases where previous content wasn't stored
+				// Updated post but no previous content stored - just delete it.
+				// This handles legacy cases where previous content wasn't stored.
 				if ( wp_delete_post( $post_id, true ) ) {
 					$deleted_count++;
 				}
 			}
 		}
 
-		// Mark session as rolled back
+		// Mark session as rolled back.
 		update_post_meta( $session_id, 'status', 'rolled_back' );
 		update_post_meta( $session_id, 'rollback_date', current_time( 'mysql' ) );
 		update_post_meta( $session_id, 'rollback_user', get_current_user_id() );
@@ -641,7 +641,7 @@ class Import_History {
 			wp_send_json_error( 'No post ID found for this log entry' );
 		}
 
-		// Check if the post still exists
+		// Check if the post still exists.
 		$post = get_post( $post_id );
 		if ( ! $post ) {
 			wp_send_json_error( 'The post no longer exists' );
@@ -654,7 +654,7 @@ class Import_History {
 		);
 
 		if ( $status === 'success' ) {
-			// This was a newly created post - delete it
+			// This was a newly created post - delete it.
 			if ( wp_delete_post( $post_id, true ) ) {
 				$result['action'] = 'deleted';
 				$result['message'] = 'Post successfully deleted';
@@ -662,41 +662,41 @@ class Import_History {
 				wp_send_json_error( 'Failed to delete the post' );
 			}
 		} elseif ( $status === 'updated' && ! empty( $changes ) && isset( $changes['previous_content'] ) ) {
-			// This was an updated post - restore previous content
+			// This was an updated post - restore previous content.
 			$restore_data = array(
 				'ID' => $post_id,
 			);
 
-			// Restore previous content if available
+			// Restore previous content if available.
 			if ( isset( $changes['previous_content'] ) ) {
 				$restore_data['post_content'] = $changes['previous_content'];
 			}
 
-			// Restore previous title if available
+			// Restore previous title if available.
 			if ( isset( $changes['previous_title'] ) ) {
 				$restore_data['post_title'] = $changes['previous_title'];
 			}
 
-			// Restore previous excerpt if available
+			// Restore previous excerpt if available.
 			if ( isset( $changes['previous_excerpt'] ) ) {
 				$restore_data['post_excerpt'] = $changes['previous_excerpt'];
 			}
 
-			// Update the post with previous content
+			// Update the post with previous content.
 			$updated = wp_update_post( $restore_data, true );
 
 			if ( is_wp_error( $updated ) ) {
 				wp_send_json_error( 'Failed to restore post: ' . $updated->get_error_message() );
 			}
 
-			// Restore previous meta data if available
+			// Restore previous meta data if available.
 			if ( isset( $changes['previous_meta'] ) && is_array( $changes['previous_meta'] ) ) {
 				foreach ( $changes['previous_meta'] as $meta_key => $meta_value ) {
 					update_post_meta( $post_id, $meta_key, $meta_value );
 				}
 			}
 
-			// Restore previous featured image if available
+			// Restore previous featured image if available.
 			if ( isset( $changes['previous_featured_image'] ) ) {
 				if ( $changes['previous_featured_image'] ) {
 					set_post_thumbnail( $post_id, $changes['previous_featured_image'] );
@@ -708,7 +708,7 @@ class Import_History {
 			$result['action'] = 'restored';
 			$result['message'] = 'Post successfully restored to previous version';
 		} elseif ( $status === 'updated' ) {
-			// Updated post but no previous content stored - delete it
+			// Updated post but no previous content stored - delete it.
 			if ( wp_delete_post( $post_id, true ) ) {
 				$result['action'] = 'deleted';
 				$result['message'] = 'Post deleted (no previous content available for restoration)';
@@ -719,7 +719,7 @@ class Import_History {
 			wp_send_json_error( 'Cannot rollback this item: unsupported status' );
 		}
 
-		// Mark this specific log entry as rolled back
+		// Mark this specific log entry as rolled back.
 		update_post_meta( $log_id, 'rolled_back', true );
 		update_post_meta( $log_id, 'rollback_date', current_time( 'mysql' ) );
 		update_post_meta( $log_id, 'rollback_user', get_current_user_id() );
@@ -749,7 +749,7 @@ class Import_History {
 			wp_send_json_error( 'Post not found' );
 		}
 
-		// Find the import log entry for this post to get the previous content
+		// Find the import log entry for this post to get the previous content.
 		$log_query = new \WP_Query( array(
 			'post_type'      => self::LOG_POST_TYPE,
 			'post_status'    => 'publish',
@@ -772,23 +772,23 @@ class Import_History {
 		$log_post = $log_query->posts[0];
 		$changes = get_post_meta( $log_post->ID, 'changes', true );
 
-		// For backward compatibility, handle cases where changes might not have complete data
+		// For backward compatibility, handle cases where changes might not have complete data.
 		if ( empty( $changes ) || ! is_array( $changes ) ) {
-			// Fallback: show current content vs empty for legacy logs
+			// Fallback: show current content vs empty for legacy logs.
 			$changes = array();
 		}
 
-		// Get previous content from changes array (fallback to empty if not available)
+		// Get previous content from changes array (fallback to empty if not available).
 		$old_content = $changes['previous_content'] ?? '';
 		$old_title = $changes['previous_title'] ?? '';
 		$old_excerpt = $changes['previous_excerpt'] ?? '';
 
-		// Current content
+		// Current content.
 		$new_content = $post->post_content;
 		$new_title = $post->post_title;
 		$new_excerpt = $post->post_excerpt;
 
-		// If no previous content available, show a message instead of empty diff
+		// If no previous content available, show a message instead of empty diff.
 		if ( empty( $old_content ) && empty( $old_title ) && empty( $old_excerpt ) ) {
 			$diff_html = '<div class="ccp-no-diff-message" style="padding: 20px; text-align: center; background: #f9f9f9; border-radius: 4px;">';
 			$diff_html .= '<h4>' . __( 'No Previous Content Available', 'ccp' ) . '</h4>';
@@ -807,7 +807,7 @@ class Import_History {
 			$diff_html .= '</div>';
 			$diff_html .= '</div>';
 		} else {
-			// Generate diff HTML for content, title, and excerpt
+			// Generate diff HTML for content, title, and excerpt.
 			$diff_html = $this->generate_comprehensive_diff_html(
 				$old_title, $new_title,
 				$old_excerpt, $new_excerpt,
@@ -834,7 +834,7 @@ class Import_History {
 	private function generate_comprehensive_diff_html( $old_title, $new_title, $old_excerpt, $new_excerpt, $old_content, $new_content ): string {
 		$diff_html = '<div class="ccp-diff-container">';
 
-		// Title diff
+		// Title diff.
 		if ( $old_title !== $new_title ) {
 			$diff_html .= '<div class="ccp-diff-section">';
 			$diff_html .= '<h4>' . __( 'Title Changes', 'ccp' ) . '</h4>';
@@ -851,7 +851,7 @@ class Import_History {
 			$diff_html .= '</div>';
 		}
 
-		// Excerpt diff
+		// Excerpt diff.
 		if ( $old_excerpt !== $new_excerpt ) {
 			$diff_html .= '<div class="ccp-diff-section" style="margin-top: 20px;">';
 			$diff_html .= '<h4>' . __( 'Excerpt Changes', 'ccp' ) . '</h4>';
@@ -868,7 +868,7 @@ class Import_History {
 			$diff_html .= '</div>';
 		}
 
-		// Content diff
+		// Content diff.
 		$diff_html .= '<div class="ccp-diff-section" style="margin-top: 20px;">';
 		$diff_html .= '<h4>' . __( 'Content Changes', 'ccp' ) . '</h4>';
 		$diff_html .= '<div class="ccp-diff-comparison">';
@@ -910,7 +910,7 @@ class Import_History {
 			wp_send_json_error( 'Session not found' );
 		}
 
-		// Get all logs associated with this session
+		// Get all logs associated with this session.
 		$logs = get_posts( array(
 			'post_type'      => self::LOG_POST_TYPE,
 			'post_status'    => 'publish',
@@ -920,14 +920,14 @@ class Import_History {
 
 		$deleted_logs_count = 0;
 
-		// Delete all associated logs first
+		// Delete all associated logs first.
 		foreach ( $logs as $log ) {
 			if ( wp_delete_post( $log->ID, true ) ) {
 				$deleted_logs_count++;
 			}
 		}
 
-		// Delete the session itself
+		// Delete the session itself.
 		$session_deleted = wp_delete_post( $session_id, true );
 
 		if ( $session_deleted ) {

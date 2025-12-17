@@ -19,10 +19,10 @@ class RESTBaseTest extends TestCase {
 		parent::setUp();
 		$this->rest_base = new class extends REST_Base {
 			public function register_routes(): void {
-				// Mock implementation
+				// Mock implementation.
 			}
 
-			// Expose protected method for testing
+			// Expose protected method for testing.
 			public function test_make_request( string $url, array $auth_credentials = array() ): array|\WP_Error {
 				return $this->make_request( $url, $auth_credentials );
 			}
@@ -40,7 +40,7 @@ class RESTBaseTest extends TestCase {
 	public function test_make_request_returns_wp_error_for_invalid_url(): void {
 		$result = $this->rest_base->test_make_request( 'invalid-url' );
 
-		// Should handle invalid URLs gracefully
+		// Should handle invalid URLs gracefully.
 		$this->assertTrue(
 			is_wp_error( $result ) || is_array( $result ),
 			'Expected WP_Error or array response'

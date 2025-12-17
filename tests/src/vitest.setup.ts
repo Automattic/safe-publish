@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
-// Mock WordPress global objects
+// Mock WordPress global objects.
 ( global as any ).window = {
 	ccpAdminData: {
 		ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
