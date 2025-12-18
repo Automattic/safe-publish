@@ -27,14 +27,14 @@ interface Props {
  * Uses word-level diffing to insert span elements with CSS classes
  * for added and removed content.
  *
- * @param {string} orig    Original HTML string.
- * @param {string} changed Changed HTML string.
+ * @param {string} original Original HTML string.
+ * @param {string} changed  Changed HTML string.
  *
  * @return {string} HTML string with diff highlighting spans.
  */
-function highlightHtml( orig: string, changed: string ): string {
-	if ( orig === changed ) return changed;
-	const parts: Diff[] = diffWords( orig, changed );
+function highlightHtml( original: string, changed: string ): string {
+	if ( original === changed ) return changed;
+	const parts: Diff[] = diffWords( original, changed );
 	return parts
 		.map( part => {
 			const cls = part.added ? 'ccp-inline-added' : part.removed ? 'ccp-inline-removed' : '';
