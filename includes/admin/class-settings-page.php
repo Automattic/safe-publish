@@ -7,6 +7,8 @@
 
 namespace CCP\Admin;
 
+use CCP\Utils\Environment;
+
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -119,7 +121,7 @@ class Settings_Page {
 								</td>
 							</tr>
 
-							<?php if ( ccp_is_development_environment() ) : ?>
+							<?php if ( Environment::is_development() ) : ?>
 							<tr>
 								<th scope="row">
 									<label for="ccp_username">

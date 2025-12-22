@@ -8,6 +8,7 @@
 namespace CCP\Admin;
 
 use CCP\API\External_Posts_API;
+use CCP\Utils\Environment;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -134,7 +135,7 @@ class Admin_Page {
 
 			if ( ! empty( $shared_secret ) ) {
 				$auth_credentials['shared_secret'] = $shared_secret;
-			} elseif ( ccp_is_development_environment() ) {
+			} elseif ( Environment::is_development() ) {
 				// Fallback to Basic auth in development environments only.
 				$username = get_option( 'ccp_username', '' );
 				$password = get_option( 'ccp_password', '' );

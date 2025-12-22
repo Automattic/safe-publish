@@ -8,6 +8,7 @@
 namespace CCP\API;
 
 use CCP\Auth\VIP_Safe_Auth;
+use CCP\Utils\Environment;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -199,7 +200,7 @@ class HTTP_Client {
 	 * @return bool True if development environment.
 	 */
 	public function is_development_environment(): bool {
-		return ccp_is_development_environment();
+		return Environment::is_development();
 	}
 
 	/**
