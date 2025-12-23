@@ -1,6 +1,8 @@
-<?php declare(strict_types = 1);
-
+<?php
 /**
+ * @package CCP
+ * @author WPVIP
+ *
  * Plugin Name: Compliant Content Publisher
  * Plugin URI: https://github.com/wpcomvip/x-team-sandbox
  * Description: Enables content transfer from non-production to production environments.
@@ -11,6 +13,8 @@
  * Requires at least: 6.7
  * Requires PHP: 8.1
  */
+
+declare(strict_types = 1);
 
 
 if ( ! defined( 'ABSPATH' ) ) {

@@ -1,9 +1,11 @@
-<?php declare(strict_types = 1);
+<?php
 /**
  * HTTP Client service for making external requests
  *
  * @package CCP
  */
+
+declare(strict_types = 1);
 
 namespace CCP\API;
 

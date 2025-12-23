@@ -1,9 +1,11 @@
-<?php declare( strict_types=1 );
+<?php
 /**
  * CCP API class
  *
  * @package CCP
  */
+
+declare( strict_types=1 );
 
 namespace CCP\API;
 
