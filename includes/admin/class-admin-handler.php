@@ -9,6 +9,7 @@ namespace CCP\Admin;
 
 use CCP\API\External_Posts_API;
 use CCP\Admin\Import_History;
+use CCP\Utils\Environment;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -127,7 +128,7 @@ class Admin_Handler {
 		);
 
 		// Basic authentication settings (development only).
-		if ( ccp_is_development_environment() ) {
+		if ( Environment::is_development() ) {
 			register_setting(
 				'ccp_settings',
 				'ccp_username',
@@ -1045,7 +1046,7 @@ class Admin_Handler {
 	 * @return string Sanitized username.
 	 */
 	public function sanitize_username( $value ): string {
-		if ( ! ccp_is_development_environment() ) {
+		if ( ! Environment::is_development() ) {
 			return '';
 		}
 
@@ -1059,7 +1060,7 @@ class Admin_Handler {
 	 * @return string Sanitized password.
 	 */
 	public function sanitize_password( $value ): string {
-		if ( ! ccp_is_development_environment() ) {
+		if ( ! Environment::is_development() ) {
 			return '';
 		}
 
@@ -1083,7 +1084,7 @@ class Admin_Handler {
 		}
 
 		// Fallback to Basic auth in development environments only.
-		if ( ccp_is_development_environment() ) {
+		if ( Environment::is_development() ) {
 			$username = get_option( 'ccp_username', '' );
 			$password = get_option( 'ccp_password', '' );
 

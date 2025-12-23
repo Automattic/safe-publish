@@ -12,9 +12,6 @@
     },
     "classmap": [
       "includes/"
-    ],
-    "files": [
-      "functions.php"
     ]
   },
   "autoload-dev": {

@@ -23,9 +23,6 @@ define( 'CCP_PLUGIN_FILE', __FILE__ );
 define( 'CCP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'CCP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
-// Load plugin utility functions.
-require_once CCP_PLUGIN_DIR . 'functions.php';
-
 // Autoloader for classes.
 spl_autoload_register(
 	function ( $class_name ): void {

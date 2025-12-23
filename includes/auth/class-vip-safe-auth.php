@@ -7,6 +7,8 @@
 
 namespace CCP\Auth;
 
+use CCP\Utils\Environment;
+
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -67,7 +69,7 @@ class VIP_Safe_Auth {
 		}
 
 		// Only allow Basic auth in development environments.
-		if ( ! empty( $auth_config['username'] ) && ! empty( $auth_config['password'] ) && ccp_is_development_environment() ) {
+		if ( ! empty( $auth_config['username'] ) && ! empty( $auth_config['password'] ) && Environment::is_development() ) {
 			return 'basic_auth';
 		}
 
@@ -122,7 +124,7 @@ class VIP_Safe_Auth {
 			}
 
 			// Check if we're in a development environment (basic auth not allowed in production).
-			if ( ! ccp_is_development_environment() ) {
+			if ( ! Environment::is_development() ) {
 				return false;
 			}
 
@@ -276,7 +278,7 @@ class VIP_Safe_Auth {
 		}
 
 		// Only allow in development environments.
-		if ( ! ccp_is_development_environment() ) {
+		if ( ! Environment::is_development() ) {
 			return array();
 		}
 
