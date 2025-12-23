@@ -6,6 +6,11 @@
  *
  * @file This file defines the PostDiffModal component.
  */
+import { useEffect, useState } from 'react';
+
+import BlockDiffViewer from './BlockDiffViewer';
+import { fetchDiffPreview, updatePostContent } from '../api/diff';
+import { Post } from '../types';
 import {
 	Button,
 	__experimentalText as Text,
@@ -14,11 +19,6 @@ import {
 	Spinner,
 	CheckboxControl,
 } from '@wordpress/components';
-import React, { useEffect, useState } from 'react';
-
-import { fetchDiffPreview, updatePostContent } from '../api/diff';
-import { Post } from '../types';
-import BlockDiffViewer from './BlockDiffViewer';
 
 /**
  * Props for the PostDiffModal component.
@@ -81,7 +81,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 				mode: 'split',
 				cleanup: true,
 			} );
-			if ( ! mounted ) return;
+			if ( ! mounted ) { return; }
 			if ( result.error ) {
 				setError( result.error );
 			} else if ( ( result.contentDiffHtml || result.html ) && result.localPostId ) {
@@ -107,7 +107,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 			} else {
 				setError( 'No diff available.' );
 			}
-			if ( mounted ) setIsLoading( false );
+			if ( mounted ) { setIsLoading( false ); }
 		};
 		fetchDiff();
 		return () => {
@@ -298,27 +298,27 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
                     <CheckboxControl
                         label="Title"
                         checked={ updateOpts.title }
-                        onChange={ ( val ) => setUpdateOpts( prev => ( { ...prev, title: !! val } ) ) }
+                        onChange={ ( val ) => setUpdateOpts( prev => ( { ...prev, title: Boolean(val) } ) ) }
                     />
                     <CheckboxControl
                         label="Excerpt"
                         checked={ updateOpts.excerpt }
-                        onChange={ ( val ) => setUpdateOpts( prev => ( { ...prev, excerpt: !! val } ) ) }
+                        onChange={ ( val ) => setUpdateOpts( prev => ( { ...prev, excerpt: Boolean(val) } ) ) }
                     />
                     <CheckboxControl
                         label="Meta (custom fields)"
                         checked={ updateOpts.meta }
-                        onChange={ ( val ) => setUpdateOpts( prev => ( { ...prev, meta: !! val } ) ) }
+                        onChange={ ( val ) => setUpdateOpts( prev => ( { ...prev, meta: Boolean(val) } ) ) }
                     />
                     <CheckboxControl
                         label="Terms (taxonomies)"
                         checked={ updateOpts.terms }
-                        onChange={ ( val ) => setUpdateOpts( prev => ( { ...prev, terms: !! val } ) ) }
+                        onChange={ ( val ) => setUpdateOpts( prev => ( { ...prev, terms: Boolean(val) } ) ) }
                     />
                     <CheckboxControl
                         label="Featured Image"
                         checked={ updateOpts.featuredMedia }
-                        onChange={ ( val ) => setUpdateOpts( prev => ( { ...prev, featuredMedia: !! val } ) ) }
+                        onChange={ ( val ) => setUpdateOpts( prev => ( { ...prev, featuredMedia: Boolean(val) } ) ) }
                     />
                     <Text style={ { fontSize: 12, color: '#666' } }>
                         Content is always updated. Uncheck items above to skip updating them.

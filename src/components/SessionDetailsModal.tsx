@@ -15,7 +15,6 @@ import {
 } from '@wordpress/components';
 import { useEffect, useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
-import React from 'react';
 
 import type { ImportLog, ImportSession } from '../types';
 
@@ -40,11 +39,11 @@ interface SessionDetailsModalProps {
  * Displays session statistics, individual import logs, and provides actions for
  * rolling back individual items or viewing content diffs.
  *
- * @param {Object}   props            Component props.
- * @param {ImportSession} props.session Import session to display.
- * @param {Function} props.onRollback  Callback to rollback the session.
- * @param {Function} props.onViewDiff  Callback to view a post diff.
- * @param {Function} props.onClose     Callback to close the modal.
+ * @param {Object}        props            Component props.
+ * @param {ImportSession} props.session    Import session to display.
+ * @param {Function}      props.onRollback Callback to rollback the session.
+ * @param {Function}      props.onViewDiff Callback to view a post diff.
+ * @param {Function}      props.onClose    Callback to close the modal.
  *
  * @return {JSX.Element} Rendered modal content.
  */
@@ -279,7 +278,7 @@ export function SessionDetailsModal( {
 											{ rollingBackItemId === log.id ? (
 												<>
 													<Spinner />
-													{ __( 'Rolling back...', 'ccp' ) }
+													{ __( 'Rolling back…', 'ccp' ) }
 												</>
 											) : (
 												log.rollback_action === 'restore'
@@ -332,7 +331,7 @@ export function SessionDetailsModal( {
 						{ isRollingBack ? (
 							<>
 								<Spinner />
-								{ __( 'Rolling back...', 'ccp' ) }
+								{ __( 'Rolling back…', 'ccp' ) }
 							</>
 						) : (
 							__( 'Rollback This Session', 'ccp' )
@@ -347,7 +346,7 @@ export function SessionDetailsModal( {
 				{ isLoading ? (
 					<HStack>
 						<Spinner />
-						<Text>{ __( 'Loading session details...', 'ccp' ) }</Text>
+						<Text>{ __( 'Loading session details…', 'ccp' ) }</Text>
 					</HStack>
 				) : error ? (
 					<Text style={ { color: '#d63638' } }>

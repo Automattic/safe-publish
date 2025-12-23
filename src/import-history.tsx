@@ -6,7 +6,6 @@
  *
  * @file This file is the entry point for the Import History page.
  */
-import React from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { ImportHistory } from './components/ImportHistory';
