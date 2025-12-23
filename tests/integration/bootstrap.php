@@ -7,7 +7,7 @@ define( 'WP_REDIS_DISABLED', true );
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 $_wp_tests_dir = getenv( 'WP_TESTS_DIR' );
-$_tests_dir = $_wp_tests_dir ? $_wp_tests_dir : getenv( 'WP_PHPUNIT__DIR' );
+$_tests_dir    = $_wp_tests_dir ? $_wp_tests_dir : getenv( 'WP_PHPUNIT__DIR' );
 
 if ( ! $_tests_dir ) {
 	$_tests_dir = rtrim( sys_get_temp_dir(), '/\\' ) . '/wordpress-tests-lib';

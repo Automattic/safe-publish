@@ -40,9 +40,9 @@ class HTTP_Client {
 
 		$request_args = array_merge(
 			array(
-				'timeout' => $timeout,
-				'user-agent' => $this->get_user_agent(),
-				'sslverify' => $sslverify,
+				'timeout'     => $timeout,
+				'user-agent'  => $this->get_user_agent(),
+				'sslverify'   => $sslverify,
 				'redirection' => 0, // Prevent redirects for security.
 			),
 			$additional_args
@@ -132,7 +132,7 @@ class HTTP_Client {
 	 */
 	public function get_user_agent(): string {
 		$plugin_version = defined( 'CCP_VERSION' ) ? CCP_VERSION : '1.1.0';
-		$site_url = get_bloginfo( 'url' );
+		$site_url       = get_bloginfo( 'url' );
 
 		return sprintf(
 			'Compliant Content Publisher/%s; %s',
@@ -217,7 +217,7 @@ class HTTP_Client {
 
 		// Parse URL to check for development indicators.
 		$parsed_url = wp_parse_url( $url );
-		$host = $parsed_url['host'] ?? '';
+		$host       = $parsed_url['host'] ?? '';
 
 		// Development domains where SSL verification can be disabled.
 		$dev_domains = array(

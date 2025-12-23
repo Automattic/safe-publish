@@ -63,7 +63,7 @@ class ExternalPostsAPITest extends TestCase {
 	}
 
 	public function test_get_attachment_id_from_url_returns_int(): void {
-		$url = 'https://example.com/wp-content/uploads/2024/01/image.jpg';
+		$url    = 'https://example.com/wp-content/uploads/2024/01/image.jpg';
 		$result = $this->api->get_attachment_id_from_url( $url );
 
 		$this->assertIsInt( $result );
@@ -83,12 +83,12 @@ class ExternalPostsAPITest extends TestCase {
 
 	public function test_handle_webp_filetype_handles_webp(): void {
 		$wp_check_filetype_and_ext = array(
-			'ext' => false,
-			'type' => false,
+			'ext'             => false,
+			'type'            => false,
 			'proper_filename' => false,
 		);
-		$file = '/tmp/test.webp';
-		$filename = 'test.webp';
+		$file                      = '/tmp/test.webp';
+		$filename                  = 'test.webp';
 
 		$result = $this->api->handle_webp_filetype( $wp_check_filetype_and_ext, $file, $filename );
 
@@ -100,12 +100,12 @@ class ExternalPostsAPITest extends TestCase {
 
 	public function test_handle_webp_filetype_leaves_non_webp_unchanged(): void {
 		$wp_check_filetype_and_ext = array(
-			'ext' => 'jpg',
-			'type' => 'image/jpeg',
+			'ext'             => 'jpg',
+			'type'            => 'image/jpeg',
 			'proper_filename' => false,
 		);
-		$file = '/tmp/test.jpg';
-		$filename = 'test.jpg';
+		$file                      = '/tmp/test.jpg';
+		$filename                  = 'test.jpg';
 
 		$result = $this->api->handle_webp_filetype( $wp_check_filetype_and_ext, $file, $filename );
 

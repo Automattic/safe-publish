@@ -41,7 +41,7 @@ class Admin_Handler {
 	 * @param External_Posts_API $api External Posts API instance.
 	 */
 	public function __construct( External_Posts_API $api ) {
-		$this->api = $api;
+		$this->api            = $api;
 		$this->import_history = new Import_History();
 	}
 
@@ -314,14 +314,14 @@ class Admin_Handler {
 			wp_send_json_error(
 				array(
 					'message' => __( 'You do not have permission to create posts.', 'ccp' ),
-					'debug' => array(
-						'user_id' => get_current_user_id(),
+					'debug'   => array(
+						'user_id'      => get_current_user_id(),
 						'capabilities' => array(
-							'edit_posts' => current_user_can( 'edit_posts' ),
-							'edit_pages' => current_user_can( 'edit_pages' ),
-							'manage_options' => current_user_can( 'manage_options' )
-						)
-					)
+							'edit_posts'     => current_user_can( 'edit_posts' ),
+							'edit_pages'     => current_user_can( 'edit_pages' ),
+							'manage_options' => current_user_can( 'manage_options' ),
+						),
+					),
 				)
 			);
 		}
@@ -332,9 +332,9 @@ class Admin_Handler {
 
 		$ccp_api = $ccp_plugin->get_ccp_api();
 
-		$external_post_id  = absint( $_POST['external_post_id'] ?? 0 );
-		$title             = sanitize_text_field( $_POST['title'] ?? '' );
-		$content           = wp_unslash( $_POST['content'] ?? '' ); // Preserve original formatting.
+		$external_post_id = absint( $_POST['external_post_id'] ?? 0 );
+		$title            = sanitize_text_field( $_POST['title'] ?? '' );
+		$content          = wp_unslash( $_POST['content'] ?? '' ); // Preserve original formatting.
 
 		// Ensure content is properly UTF-8 encoded.
 		if ( ! mb_check_encoding( $content, 'UTF-8' ) ) {
@@ -343,16 +343,16 @@ class Admin_Handler {
 		$external_link     = esc_url_raw( $_POST['external_link'] ?? '' );
 		$featured_media_id = absint( $_POST['featured_media_id'] ?? 0 );
 		$excerpt           = sanitize_text_field( $_POST['excerpt'] ?? '' );
-		$meta			   = isset( $_POST['meta'] ) ? json_decode( wp_unslash( $_POST['meta'] ) ) : array();
-		$terms			   = isset( $_POST['terms'] ) ? json_decode( wp_unslash( $_POST['terms'] ) ) : array();
+		$meta              = isset( $_POST['meta'] ) ? json_decode( wp_unslash( $_POST['meta'] ) ) : array();
+		$terms             = isset( $_POST['terms'] ) ? json_decode( wp_unslash( $_POST['terms'] ) ) : array();
 		$raw_post_type     = sanitize_text_field( $_POST['post_type'] ?? 'post' );
 
 		// Convert plural post types to singular for WordPress compatibility.
 		$post_type_mapping = array(
-			'posts' => 'post',
-			'pages' => 'page',
-			'attachments' => 'attachment',
-			'revisions' => 'revision',
+			'posts'          => 'post',
+			'pages'          => 'page',
+			'attachments'    => 'attachment',
+			'revisions'      => 'revision',
 			'nav_menu_items' => 'nav_menu_item',
 		);
 
@@ -415,11 +415,11 @@ class Admin_Handler {
 		if ( $existing_post && ! $force_update ) {
 			wp_send_json_success(
 				array(
-					'existing'     => true,
-					'post_id'      => $existing_post->ID,
-					'post_title'   => $existing_post->post_title,
-					'edit_url'     => admin_url( 'post.php?post=' . $existing_post->ID . '&action=edit' ),
-					'message'      => sprintf(
+					'existing'       => true,
+					'post_id'        => $existing_post->ID,
+					'post_title'     => $existing_post->post_title,
+					'edit_url'       => admin_url( 'post.php?post=' . $existing_post->ID . '&action=edit' ),
+					'message'        => sprintf(
 						__( 'Post "%s" already exists. Do you want to update it with the latest content from the external site?', 'ccp' ),
 						$existing_post->post_title
 					),
@@ -442,12 +442,12 @@ class Admin_Handler {
 				try {
 					$fresh_post_data = $this->api->fetch_fresh_post_content( $external_post_id, $configured_site_url, $auth_credentials );
 					if ( $fresh_post_data ) {
-						$title = $fresh_post_data['title'] ?? $title;
-						$content = $fresh_post_data['content'] ?? $content;
+						$title             = $fresh_post_data['title'] ?? $title;
+						$content           = $fresh_post_data['content'] ?? $content;
 						$featured_media_id = $fresh_post_data['featured_media'] ?? $featured_media_id;
-						$excerpt = $fresh_post_data['excerpt'] ?? '';
-						$meta = $fresh_post_data['meta'] ?? array();
-						$terms = $fresh_post_data['terms'] ?? array();
+						$excerpt           = $fresh_post_data['excerpt'] ?? '';
+						$meta              = $fresh_post_data['meta'] ?? array();
+						$terms             = $fresh_post_data['terms'] ?? array();
 					}
 				} catch ( Exception $e ) {
 					// Continue with provided content if fresh fetch fails.
@@ -484,12 +484,12 @@ class Admin_Handler {
 		if ( $existing_post ) {
 			// Store previous content for potential rollback.
 			$previous_content = array(
-				'previous_content' => $existing_post->post_content,
-				'previous_title' => $existing_post->post_title,
-				'previous_excerpt' => $existing_post->post_excerpt,
+				'previous_content'        => $existing_post->post_content,
+				'previous_title'          => $existing_post->post_title,
+				'previous_excerpt'        => $existing_post->post_excerpt,
 				'previous_featured_image' => get_post_thumbnail_id( $existing_post->ID ),
-				'previous_meta' => array(),
-				'action' => 'updated_existing',
+				'previous_meta'           => array(),
+				'action'                  => 'updated_existing',
 			);
 
 			// Store important meta fields that might be changed.
@@ -497,7 +497,7 @@ class Admin_Handler {
 				'_edit_last',
 				'_edit_lock',
 				'ccp_external_link',
-				'ccp_import_date'
+				'ccp_import_date',
 			);
 
 			foreach ( $meta_keys_to_preserve as $meta_key ) {
@@ -666,20 +666,20 @@ class Admin_Handler {
 		$source_url = get_option( 'ccp_external_site_url', '' );
 		$session_id = $this->import_history->create_session( $source_url, 'bulk' );
 
-		$results = array();
+		$results    = array();
 		$successful = 0;
-		$failed = 0;
+		$failed     = 0;
 
 		foreach ( $posts_data as $post_data ) {
-			$result = $this->import_single_post( $post_data, $session_id );
+			$result    = $this->import_single_post( $post_data, $session_id );
 			$results[] = $result;
 
 			if ( $result['success'] ) {
-				$successful++;
+				++$successful;
 				$status = $result['existing'] ? 'updated' : 'success';
 				$this->import_history->update_session_stats( $session_id, $status );
 			} else {
-				$failed++;
+				++$failed;
 				$this->import_history->update_session_stats( $session_id, 'error' );
 			}
 		}
@@ -687,13 +687,15 @@ class Admin_Handler {
 		// Complete the session.
 		$this->import_history->complete_session( $session_id );
 
-		wp_send_json_success( array(
-			'total' => count( $posts_data ),
-			'successful' => $successful,
-			'failed' => $failed,
-			'results' => $results,
-			'session_id' => $session_id,
-		) );
+		wp_send_json_success(
+			array(
+				'total'      => count( $posts_data ),
+				'successful' => $successful,
+				'failed'     => $failed,
+				'results'    => $results,
+				'session_id' => $session_id,
+			)
+		);
 	}
 
 	/**
@@ -705,9 +707,9 @@ class Admin_Handler {
 	 */
 	private function import_single_post( $post_data, $session_id = null ): array {
 		try {
-			$external_post_id  = absint( $post_data['id'] ?? 0 );
-			$title             = sanitize_text_field( $post_data['title'] ?? '' );
-			$content           = wp_unslash( $post_data['content'] ?? '' ); // Preserve original formatting.
+			$external_post_id = absint( $post_data['id'] ?? 0 );
+			$title            = sanitize_text_field( $post_data['title'] ?? '' );
+			$content          = wp_unslash( $post_data['content'] ?? '' ); // Preserve original formatting.
 
 			// Ensure content is properly UTF-8 encoded.
 			if ( ! mb_check_encoding( $content, 'UTF-8' ) ) {
@@ -720,18 +722,18 @@ class Admin_Handler {
 			if ( empty( $title ) || empty( $external_post_id ) ) {
 				return array(
 					'external_id' => $external_post_id,
-					'title' => $title,
-					'success' => false,
-					'error' => __( 'Missing required post data.', 'ccp' ),
+					'title'       => $title,
+					'success'     => false,
+					'error'       => __( 'Missing required post data.', 'ccp' ),
 				);
 			}
 
 			// Convert plural post types to singular for WordPress compatibility.
 			$post_type_mapping = array(
-				'posts' => 'post',
-				'pages' => 'page',
-				'attachments' => 'attachment',
-				'revisions' => 'revision',
+				'posts'          => 'post',
+				'pages'          => 'page',
+				'attachments'    => 'attachment',
+				'revisions'      => 'revision',
 				'nav_menu_items' => 'nav_menu_item',
 			);
 
@@ -807,8 +809,8 @@ class Admin_Handler {
 					try {
 						$fresh_post_data = $this->api->fetch_fresh_post_content( $external_post_id, $configured_site_url, $auth_credentials );
 						if ( $fresh_post_data ) {
-							$title = $fresh_post_data['title'] ?? $title;
-							$content = $fresh_post_data['content'] ?? $content;
+							$title             = $fresh_post_data['title'] ?? $title;
+							$content           = $fresh_post_data['content'] ?? $content;
 							$featured_media_id = $fresh_post_data['featured_media'] ?? $featured_media_id;
 						}
 					} catch ( \Exception $e ) {
@@ -836,9 +838,9 @@ class Admin_Handler {
 				if ( is_wp_error( $post_id ) ) {
 					return array(
 						'external_id' => $external_post_id,
-						'title' => $title,
-						'success' => false,
-						'error' => $post_id->get_error_message(),
+						'title'       => $title,
+						'success'     => false,
+						'error'       => $post_id->get_error_message(),
 					);
 				}
 
@@ -857,17 +859,20 @@ class Admin_Handler {
 						'updated',
 						$post_id,
 						null,
-						array( 'action' => 'updated_existing', 'previous_content_preserved' => true )
+						array(
+							'action'                     => 'updated_existing',
+							'previous_content_preserved' => true,
+						)
 					);
 				}
 
 				return array(
 					'external_id' => $external_post_id,
-					'title' => $title,
-					'success' => true,
-					'post_id' => $post_id,
-					'edit_url' => $edit_url,
-					'existing' => true,
+					'title'       => $title,
+					'success'     => true,
+					'post_id'     => $post_id,
+					'edit_url'    => $edit_url,
+					'existing'    => true,
 				);
 			} else {
 				// Create new draft post with content filtering temporarily disabled.
@@ -894,9 +899,9 @@ class Admin_Handler {
 				if ( is_wp_error( $post_id ) ) {
 					return array(
 						'external_id' => $external_post_id,
-						'title' => $title,
-						'success' => false,
-						'error' => $post_id->get_error_message(),
+						'title'       => $title,
+						'success'     => false,
+						'error'       => $post_id->get_error_message(),
 					);
 				}
 
@@ -927,11 +932,11 @@ class Admin_Handler {
 
 				return array(
 					'external_id' => $external_post_id,
-					'title' => $title,
-					'success' => true,
-					'post_id' => $post_id,
-					'edit_url' => $edit_url,
-					'existing' => false,
+					'title'       => $title,
+					'success'     => true,
+					'post_id'     => $post_id,
+					'edit_url'    => $edit_url,
+					'existing'    => false,
 				);
 			}
 		} catch ( \Exception $e ) {
@@ -949,9 +954,9 @@ class Admin_Handler {
 
 			return array(
 				'external_id' => $post_data['id'] ?? 0,
-				'title' => $post_data['title'] ?? 'Unknown',
-				'success' => false,
-				'error' => $e->getMessage(),
+				'title'       => $post_data['title'] ?? 'Unknown',
+				'success'     => false,
+				'error'       => $e->getMessage(),
 			);
 		}
 	}
@@ -1209,7 +1214,7 @@ class Admin_Handler {
 
 		if ( ! $needs_processing ) {
 			// If no external media/links found, return original content to preserve formatting.
-			return $original_content;;
+			return $original_content;
 		}
 
 		// Process each block.
@@ -1275,7 +1280,6 @@ class Admin_Handler {
 				break;
 
 			default:
-
 				// Process innerHTML for any blocks that might contain media or links.
 				if ( ! empty( $block['innerHTML'] ) ) {
 					$block['innerHTML'] = $this->api->process_and_import_media( $block['innerHTML'], $site_url );
@@ -1345,8 +1349,8 @@ class Admin_Handler {
 				if ( ! empty( $block['innerHTML'] ) ) {
 					$updated_html = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $new_url );
 					// Also update the wp-image class with the new attachment ID.
-					$updated_html         = $this->update_wp_image_class( $updated_html, $attachment_id );
-					$block['innerHTML']   = $updated_html;
+					$updated_html       = $this->update_wp_image_class( $updated_html, $attachment_id );
+					$block['innerHTML'] = $updated_html;
 				}
 
 				// Update innerContent array if it exists (used by serialize_blocks).
@@ -1355,7 +1359,7 @@ class Admin_Handler {
 						if ( is_string( $content ) ) {
 							$updated_content = $this->update_img_src_in_html( $content, $original_url, $new_url );
 							// Also update the wp-image class with the new attachment ID.
-							$updated_content                  = $this->update_wp_image_class( $updated_content, $attachment_id );
+							$updated_content                 = $this->update_wp_image_class( $updated_content, $attachment_id );
 							$block['innerContent'][ $index ] = $updated_content;
 						}
 					}
@@ -1390,12 +1394,12 @@ class Admin_Handler {
 						if ( $new_url ) {
 							// Update block attributes.
 							$block['attrs']['images'][ $index ]['url'] = $new_url;
-							$block['attrs']['images'][ $index ]['id'] = $attachment_id;
+							$block['attrs']['images'][ $index ]['id']  = $attachment_id;
 
 							// Also update innerHTML with new URL if it exists.
 							if ( ! empty( $block['innerHTML'] ) ) {
-								$updated_html = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $new_url );
-								$updated_html = $this->update_wp_image_class( $updated_html, $attachment_id );
+								$updated_html       = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $new_url );
+								$updated_html       = $this->update_wp_image_class( $updated_html, $attachment_id );
 								$block['innerHTML'] = $updated_html;
 							}
 
@@ -1403,8 +1407,8 @@ class Admin_Handler {
 							if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
 								foreach ( $block['innerContent'] as $content_index => $content ) {
 									if ( is_string( $content ) ) {
-										$updated_content = $this->update_img_src_in_html( $content, $original_url, $new_url );
-										$updated_content = $this->update_wp_image_class( $updated_content, $attachment_id );
+										$updated_content                         = $this->update_img_src_in_html( $content, $original_url, $new_url );
+										$updated_content                         = $this->update_wp_image_class( $updated_content, $attachment_id );
 										$block['innerContent'][ $content_index ] = $updated_content;
 									}
 								}
@@ -1439,7 +1443,7 @@ class Admin_Handler {
 						// null values represent positions where inner blocks should be inserted.
 						if ( isset( $block['innerBlocks'][ $inner_block_index ] ) ) {
 							$new_inner_content[] = null; // Keep the null placeholder.
-							$inner_block_index++;
+							++$inner_block_index;
 						}
 					} else {
 						// String content remains as is.
@@ -1474,7 +1478,7 @@ class Admin_Handler {
 
 				if ( $new_url ) {
 					$block['attrs']['src'] = $new_url;
-					$block['attrs']['id'] = $attachment_id;
+					$block['attrs']['id']  = $attachment_id;
 				}
 			}
 		}
@@ -1502,7 +1506,7 @@ class Admin_Handler {
 
 				if ( $new_url ) {
 					$block['attrs']['src'] = $new_url;
-					$block['attrs']['id'] = $attachment_id;
+					$block['attrs']['id']  = $attachment_id;
 				}
 			}
 		}
@@ -1618,7 +1622,7 @@ class Admin_Handler {
 
 		// Use a more targeted regex approach to avoid XML declaration issues.
 		// This is safer for block innerHTML since we're only replacing the src attribute.
-		$pattern = '/(<img[^>]+src=["\'])' . preg_quote( $old_url, '/' ) . '(["\'][^>]*>)/i';
+		$pattern     = '/(<img[^>]+src=["\'])' . preg_quote( $old_url, '/' ) . '(["\'][^>]*>)/i';
 		$replacement = '${1}' . $new_url . '${2}';
 
 		$updated_html = preg_replace( $pattern, $replacement, $html );
@@ -1658,7 +1662,7 @@ class Admin_Handler {
 		}
 
 		// Pattern to match wp-image-{number} class.
-		$pattern = '/wp-image-\d+/';
+		$pattern     = '/wp-image-\d+/';
 		$replacement = 'wp-image-' . $new_attachment_id;
 
 		$updated_html = preg_replace( $pattern, $replacement, $html );
@@ -1666,14 +1670,14 @@ class Admin_Handler {
 		// If no existing wp-image class found, add it to the img tag.
 		if ( $updated_html === $html && strpos( $html, '<img' ) !== false ) {
 			// Add wp-image class to img tag that doesn't have one.
-			$pattern = '/(<img[^>]+class=["\'])([^"\']*?)(["\'][^>]*>)/i';
-			$replacement = '${1}${2} wp-image-' . $new_attachment_id . '${3}';
+			$pattern      = '/(<img[^>]+class=["\'])([^"\']*?)(["\'][^>]*>)/i';
+			$replacement  = '${1}${2} wp-image-' . $new_attachment_id . '${3}';
 			$updated_html = preg_replace( $pattern, $replacement, $html );
 
 			// If img tag has no class attribute at all, add one.
 			if ( $updated_html === $html ) {
-				$pattern = '/(<img[^>]+)(\s*\/?>)/i';
-				$replacement = '${1} class="wp-image-' . $new_attachment_id . '"${2}';
+				$pattern      = '/(<img[^>]+)(\s*\/?>)/i';
+				$replacement  = '${1} class="wp-image-' . $new_attachment_id . '"${2}';
 				$updated_html = preg_replace( $pattern, $replacement, $html );
 			}
 		}
@@ -1694,8 +1698,8 @@ class Admin_Handler {
 		}
 
 		$current_site_url = get_site_url();
-		$external_host = wp_parse_url( $external_site_url, PHP_URL_HOST );
-		$current_host = wp_parse_url( $current_site_url, PHP_URL_HOST );
+		$external_host    = wp_parse_url( $external_site_url, PHP_URL_HOST );
+		$current_host     = wp_parse_url( $current_site_url, PHP_URL_HOST );
 
 		// Skip if URLs are the same.
 		if ( $external_host === $current_host ) {
@@ -1723,10 +1727,10 @@ class Admin_Handler {
 
 		// Process other elements that might have URLs (like images, forms, etc.).
 		$elements_with_urls = array(
-			'img' => 'src',
-			'form' => 'action',
+			'img'    => 'src',
+			'form'   => 'action',
 			'iframe' => 'src',
-			'embed' => 'src',
+			'embed'  => 'src',
 			'object' => 'data',
 		);
 
@@ -1770,7 +1774,7 @@ class Admin_Handler {
 		}
 
 		$external_host = wp_parse_url( $external_site_url, PHP_URL_HOST );
-		$url_host = wp_parse_url( $url, PHP_URL_HOST );
+		$url_host      = wp_parse_url( $url, PHP_URL_HOST );
 
 		// If URL is relative, make it absolute with external site first.
 		if ( empty( $url_host ) ) {
@@ -1786,7 +1790,7 @@ class Admin_Handler {
 
 		// Replace domain if it matches the external site.
 		if ( $url_host === $external_host ) {
-			$url_parts = wp_parse_url( $url );
+			$url_parts     = wp_parse_url( $url );
 			$current_parts = wp_parse_url( $current_site_url );
 
 			$new_url = $current_parts['scheme'] . '://' . $current_parts['host'];
@@ -1840,11 +1844,11 @@ class Admin_Handler {
 		$auth_params = \CCP\Auth\VIP_Safe_Auth::get_auth_params( $api_url, $auth_credentials, 'GET' );
 
 		$debug_info = array(
-			'site_url' => $site_url,
-			'api_url' => $api_url,
+			'site_url'                   => $site_url,
+			'api_url'                    => $api_url,
 			'auth_credentials_available' => ! empty( $auth_credentials ),
-			'auth_credentials_type' => ! empty( $auth_credentials['shared_secret'] ) ? 'shared_secret' : ( ! empty( $auth_credentials['username'] ) ? 'basic_auth' : 'none' ),
-			'auth_params' => $auth_params,
+			'auth_credentials_type'      => ! empty( $auth_credentials['shared_secret'] ) ? 'shared_secret' : ( ! empty( $auth_credentials['username'] ) ? 'basic_auth' : 'none' ),
+			'auth_params'                => $auth_params,
 		);
 
 		// Try to make the actual request.
@@ -1854,16 +1858,16 @@ class Admin_Handler {
 			if ( is_wp_error( $response ) ) {
 				$debug_info['request_error'] = $response->get_error_message();
 			} else {
-				$debug_info['response_code'] = wp_remote_retrieve_response_code( $response );
-				$debug_info['response_headers'] = wp_remote_retrieve_headers( $response );
-				$response_body = wp_remote_retrieve_body( $response );
-				$debug_info['response_body_length'] = strlen( $response_body );
+				$debug_info['response_code']         = wp_remote_retrieve_response_code( $response );
+				$debug_info['response_headers']      = wp_remote_retrieve_headers( $response );
+				$response_body                       = wp_remote_retrieve_body( $response );
+				$debug_info['response_body_length']  = strlen( $response_body );
 				$debug_info['response_body_preview'] = substr( $response_body, 0, 200 );
 
 				$json_data = json_decode( $response_body, true );
 				if ( $json_data ) {
 					$debug_info['response_json_keys'] = array_keys( $json_data );
-					$debug_info['post_types_count'] = count( $json_data );
+					$debug_info['post_types_count']   = count( $json_data );
 				}
 			}
 		} catch ( \Exception $e ) {
@@ -1964,5 +1968,4 @@ class Admin_Handler {
 		add_filter( 'content_save_pre', 'wp_filter_post_kses' );
 		add_filter( 'content_filtered_save_pre', 'wp_filter_post_kses' );
 	}
-
 }

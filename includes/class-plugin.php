@@ -61,7 +61,7 @@ class Plugin {
 	 */
 	public function init(): void {
 		// Initialize components.
-		$this->api = new External_Posts_API();
+		$this->api     = new External_Posts_API();
 		$this->ccp_api = new CCP_API();
 
 		// Initialize hooks.

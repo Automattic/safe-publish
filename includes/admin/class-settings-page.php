@@ -175,5 +175,4 @@ class Settings_Page {
 		</div>
 		<?php
 	}
-
 }

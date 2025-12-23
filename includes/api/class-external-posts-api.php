@@ -68,7 +68,7 @@ class External_Posts_API {
 			return $response;
 		}
 
-		$response_body = wp_remote_retrieve_body( $response );
+		$response_body   = wp_remote_retrieve_body( $response );
 		$post_types_data = json_decode( $response_body, true );
 
 		// Check for authentication error responses.
@@ -96,10 +96,10 @@ class External_Posts_API {
 			// Include if it has a rest_base (which means it's REST API enabled).
 			if ( ! empty( $post_type['rest_base'] ) ) {
 				$filtered_post_types[ $slug ] = array(
-					'slug' => $slug,
-					'name' => $post_type['name'] ?? $slug,
-					'label' => $post_type['name'] ?? $slug, // Use 'name' instead of nested labels.
-					'rest_base' => $post_type['rest_base'],
+					'slug'        => $slug,
+					'name'        => $post_type['name'] ?? $slug,
+					'label'       => $post_type['name'] ?? $slug, // Use 'name' instead of nested labels.
+					'rest_base'   => $post_type['rest_base'],
 					'description' => $post_type['description'] ?? '',
 				);
 			}
@@ -158,15 +158,15 @@ class External_Posts_API {
 	 */
 	private function build_api_url( string $site_url, int $number_of_posts, array $auth_credentials = array(), string $post_type = 'posts' ): string {
 		// Use 'posts' as default endpoint for 'post' post type, otherwise use the post type slug.
-		$endpoint = ( 'post' === $post_type ) ? 'posts' : $post_type;
+		$endpoint     = ( 'post' === $post_type ) ? 'posts' : $post_type;
 		$api_endpoint = trailingslashit( $site_url ) . 'wp-json/wp/v2/' . $endpoint;
 
 		$query_args = array(
-			'orderby' => 'modified',
-			'order' => 'desc',
+			'orderby'  => 'modified',
+			'order'    => 'desc',
 			'per_page' => min( $number_of_posts, 100 ), // Max 100 per request.
 			// '_fields' => 'id,link,title,modified,featured_media,content,excerpt', // Fetch all needed fields.
-			'_embed' => '1',
+			'_embed'   => '1',
 		);
 
 		// Add edit context if we have authentication credentials.
@@ -208,7 +208,7 @@ class External_Posts_API {
 	 * @return array|\WP_Error Processed posts or error.
 	 */
 	private function process_response( array $response, string $post_type = 'posts' ): array|\WP_Error {
-		$body = wp_remote_retrieve_body( $response );
+		$body  = wp_remote_retrieve_body( $response );
 		$posts = json_decode( $body, true );
 
 		if ( ! is_array( $posts ) ) {
@@ -244,20 +244,20 @@ class External_Posts_API {
 		}
 
 		$sanitized_post = array(
-			'id' => isset( $post['id'] ) ? absint( $post['id'] ) : 0,
-			'link' => isset( $post['link'] ) ? esc_url( $post['link'] ) : '#',
-			'title' => isset( $post['title']['rendered'] ) ? sanitize_text_field( wp_strip_all_tags( $post['title']['rendered'] ) ) : __( 'No Title', 'ccp' ),
-			'modified' => isset( $post['modified'] ) ? sanitize_text_field( $post['modified'] ) : '',
-			'thumbnail' => isset( $post['featured_media'] ) ? esc_url( get_the_post_thumbnail_url( $post['id'], 'thumbnail' ) ) : '', // Default to empty if no thumbnail.
+			'id'             => isset( $post['id'] ) ? absint( $post['id'] ) : 0,
+			'link'           => isset( $post['link'] ) ? esc_url( $post['link'] ) : '#',
+			'title'          => isset( $post['title']['rendered'] ) ? sanitize_text_field( wp_strip_all_tags( $post['title']['rendered'] ) ) : __( 'No Title', 'ccp' ),
+			'modified'       => isset( $post['modified'] ) ? sanitize_text_field( $post['modified'] ) : '',
+			'thumbnail'      => isset( $post['featured_media'] ) ? esc_url( get_the_post_thumbnail_url( $post['id'], 'thumbnail' ) ) : '', // Default to empty if no thumbnail.
 			'featured_media' => isset( $post['featured_media'] ) ? absint( $post['featured_media'] ) : 0,
 			// Add any other fields you need to sanitize.
-			'content' => isset( $post['content']['raw'] ) ? $post['content']['raw'] : // Use raw content without sanitization to preserve formatting.
+			'content'        => isset( $post['content']['raw'] ) ? $post['content']['raw'] : // Use raw content without sanitization to preserve formatting.
 				( isset( $post['content']['rendered'] ) ? $post['content']['rendered'] : // Fallback to rendered content without sanitization.
 					'' ),
-			'excerpt' => isset( $post['excerpt']['rendered'] ) ? wp_kses_post( $post['excerpt']['rendered'] ) : '',
-			'post_type' => sanitize_text_field( $post_type ), // Add the post type.
-			'meta' => isset( $post['meta'] ) && is_array( $post['meta'] ) ? $post['meta'] : array(),
-			'terms' => isset( $post['_embedded'] ) && is_array( $post['_embedded'] ) ? $post['_embedded'] : array(), // Use _embedded for terms and related data.
+			'excerpt'        => isset( $post['excerpt']['rendered'] ) ? wp_kses_post( $post['excerpt']['rendered'] ) : '',
+			'post_type'      => sanitize_text_field( $post_type ), // Add the post type.
+			'meta'           => isset( $post['meta'] ) && is_array( $post['meta'] ) ? $post['meta'] : array(),
+			'terms'          => isset( $post['_embedded'] ) && is_array( $post['_embedded'] ) ? $post['_embedded'] : array(), // Use _embedded for terms and related data.
 		);
 
 		// Validate required fields.
@@ -302,13 +302,13 @@ class External_Posts_API {
 		$test_url = trailingslashit( $site_url ) . 'wp-json/wp/v2/posts?per_page=1&_fields=id';
 
 		$start_time = microtime( true );
-		$response = $this->make_request( $test_url, array() );
-		$end_time = microtime( true );
+		$response   = $this->make_request( $test_url, array() );
+		$end_time   = microtime( true );
 
 		$results = array(
-			'success' => false,
+			'success'       => false,
 			'response_time' => round( ( $end_time - $start_time ) * 1000, 2 ),
-			'message' => '',
+			'message'       => '',
 		);
 
 
@@ -335,7 +335,7 @@ class External_Posts_API {
 		}
 
 		// Parse HTML content with proper UTF-8 encoding.
-		$dom = new DOMDocument('1.0', 'UTF-8');
+		$dom = new DOMDocument( '1.0', 'UTF-8' );
 
 		// Suppress libxml errors to handle malformed HTML gracefully.
 		$previous_use_errors = libxml_use_internal_errors( true );
@@ -423,7 +423,7 @@ class External_Posts_API {
 		}
 
 		// Remove the meta charset tag we added for processing.
-		$processed_content = preg_replace('/<meta http-equiv="Content-Type" content="text\/html; charset=utf-8"\s*\/?>/i', '', $processed_content);
+		$processed_content = preg_replace( '/<meta http-equiv="Content-Type" content="text\/html; charset=utf-8"\s*\/?>/i', '', $processed_content );
 
 		return $processed_content;
 	}
@@ -447,7 +447,7 @@ class External_Posts_API {
 
 		// Only import media from the same domain for security.
 		// if ( $source_domain !== $media_domain ) {
-		//  return false;
+		// return false;
 		// }
 
 		// Check if we already imported this media.
@@ -470,11 +470,11 @@ class External_Posts_API {
 
 		// Get file info.
 		$file_info = pathinfo( $media_url );
-		$filename = sanitize_file_name( $file_info['basename'] );
+		$filename  = sanitize_file_name( $file_info['basename'] );
 
 		// Prepare file array for wp_handle_sideload.
 		$file_array = array(
-			'name' => $filename,
+			'name'     => $filename,
 			'tmp_name' => $temp_file,
 		);
 
@@ -545,7 +545,7 @@ class External_Posts_API {
 
 		// Get file info and validate.
 		$file_info = pathinfo( $media_url );
-		$filename = sanitize_file_name( $file_info['basename'] ); // Sanitize filename.
+		$filename  = sanitize_file_name( $file_info['basename'] ); // Sanitize filename.
 
 		// Ensure we have a proper file extension.
 		if ( empty( $file_info['extension'] ) ) {
@@ -562,7 +562,7 @@ class External_Posts_API {
 		// Add WebP support if not natively supported.
 		if ( ! $file_type['type'] && isset( $file_info['extension'] ) && 'webp' === strtolower( $file_info['extension'] ) ) {
 			$file_type = array(
-				'ext' => 'webp',
+				'ext'  => 'webp',
 				'type' => 'image/webp',
 			);
 		}
@@ -574,18 +574,23 @@ class External_Posts_API {
 
 		// Prepare file array for media_handle_sideload.
 		$file_array = array(
-			'name' => $filename,
-			'type' => $file_type['type'],
+			'name'     => $filename,
+			'type'     => $file_type['type'],
 			'tmp_name' => $temp_file,
-			'error' => 0,
-			'size' => filesize( $temp_file ),
+			'error'    => 0,
+			'size'     => filesize( $temp_file ),
 		);
 
 		// Import to media library with error handling.
-		$attachment_id = media_handle_sideload( $file_array, 0, null, array(
-			'test_form' => false, // Skip form validation.
-			'test_type' => true,  // But keep type validation.
-		) );
+		$attachment_id = media_handle_sideload(
+			$file_array,
+			0,
+			null,
+			array(
+				'test_form' => false, // Skip form validation.
+				'test_type' => true,  // But keep type validation.
+			)
+		);
 
 		// Clean up temp file.
 		$this->http_client->cleanup_temp_file( $temp_file );
@@ -628,14 +633,14 @@ class External_Posts_API {
 		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.get_posts_get_posts -- suppress_filters is set to false for VIP caching compatibility
 		$attachments = get_posts(
 			array(
-				'post_type' => 'attachment',
-				'meta_query' => array(
+				'post_type'        => 'attachment',
+				'meta_query'       => array(
 					array(
-						'key' => 'ccp_original_url',
+						'key'   => 'ccp_original_url',
 						'value' => $original_url,
 					),
 				),
-				'numberposts' => 1,
+				'numberposts'      => 1,
 				'suppress_filters' => false, // Enable caching for VIP compatibility.
 			)
 		);
@@ -645,21 +650,21 @@ class External_Posts_API {
 		}
 
 		// If not found by URL, check by filename to prevent duplicates with different URLs.
-		$filename = basename( $original_url );
+		$filename                   = basename( $original_url );
 		$filename_without_extension = pathinfo( $filename, PATHINFO_FILENAME );
 
 		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.get_posts_get_posts -- suppress_filters is set to false for VIP caching compatibility
 		$attachments_by_filename = get_posts(
 			array(
-				'post_type' => 'attachment',
-				'meta_query' => array(
+				'post_type'        => 'attachment',
+				'meta_query'       => array(
 					array(
-						'key' => '_wp_attached_file',
-						'value' => $filename_without_extension,
+						'key'     => '_wp_attached_file',
+						'value'   => $filename_without_extension,
 						'compare' => 'LIKE',
 					),
 				),
-				'numberposts' => 1,
+				'numberposts'      => 1,
 				'suppress_filters' => false, // Enable caching for VIP compatibility.
 			)
 		);
@@ -687,14 +692,14 @@ class External_Posts_API {
 
 		// Fetch media details from external site.
 		$media_api_url = trailingslashit( $site_url ) . 'wp-json/wp/v2/media/' . $featured_media_id;
-		$response = $this->make_request( $media_api_url, array() );
+		$response      = $this->make_request( $media_api_url, array() );
 
 		if ( is_wp_error( $response ) ) {
 			return false;
 		}
 
 		$response_body = wp_remote_retrieve_body( $response );
-		$media_data = json_decode( $response_body, true );
+		$media_data    = json_decode( $response_body, true );
 		if ( empty( $media_data['source_url'] ) ) {
 			return false;
 		}
@@ -724,19 +729,19 @@ class External_Posts_API {
 		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.get_posts_get_posts -- suppress_filters is set to false for VIP caching compatibility
 		$attachments = get_posts(
 			array(
-				'post_type' => 'attachment',
-				'meta_query' => array(
+				'post_type'        => 'attachment',
+				'meta_query'       => array(
 					'relation' => 'AND',
 					array(
-						'key' => 'ccp_featured_media_id',
+						'key'   => 'ccp_featured_media_id',
 						'value' => $featured_media_id,
 					),
 					array(
-						'key' => 'ccp_imported_from',
+						'key'   => 'ccp_imported_from',
 						'value' => $site_url,
 					),
 				),
-				'numberposts' => 1,
+				'numberposts'      => 1,
 				'suppress_filters' => false, // Enable caching for VIP compatibility.
 			)
 		);
@@ -822,7 +827,7 @@ class External_Posts_API {
 		}
 
 		// Process any oembed divs.
-		$xpath = new \DOMXPath( $figure->ownerDocument );
+		$xpath       = new \DOMXPath( $figure->ownerDocument );
 		$oembed_divs = $xpath->query( './/div[contains(@class, "oembed")]', $figure );
 		if ( $oembed_divs ) {
 			foreach ( $oembed_divs as $oembed_div ) {
@@ -1119,7 +1124,7 @@ class External_Posts_API {
 		if ( ! $wp_check_filetype_and_ext['type'] && ! $wp_check_filetype_and_ext['ext'] ) {
 			$info = pathinfo( $filename );
 			if ( isset( $info['extension'] ) && 'webp' === strtolower( $info['extension'] ) ) {
-				$wp_check_filetype_and_ext['ext'] = 'webp';
+				$wp_check_filetype_and_ext['ext']  = 'webp';
 				$wp_check_filetype_and_ext['type'] = 'image/webp';
 			}
 		}
