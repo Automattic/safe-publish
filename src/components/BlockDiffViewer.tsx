@@ -1,15 +1,40 @@
+/**
+ * Block Diff Viewer component.
+ *
+ * Displays a visual comparison of Gutenberg blocks between the current and
+ * incoming post content with inline highlighting of changes.
+ *
+ * @file This file defines the BlockDiffViewer component.
+ */
 import { Diff, diffWords } from 'diff';
 import type { BlockDiff } from '../api/diff';
 import { __experimentalText as Text } from '@wordpress/components';
 
+/**
+ * Props for the BlockDiffViewer component.
+ *
+ * @property {BlockDiff[]} [blocks]    Block diff objects to display.
+ * @property {boolean}     [highlight] Enable inline word-level highlighting.
+ */
 interface Props {
 	blocks?: BlockDiff[];
 	highlight?: boolean;
 }
 
-function highlightHtml( orig: string, changed: string ): string {
-	if ( orig === changed ) return changed;
-	const parts: Diff[] = diffWords( orig, changed );
+/**
+ * Highlights differences between two HTML strings.
+ *
+ * Uses word-level diffing to insert span elements with CSS classes
+ * for added and removed content.
+ *
+ * @param {string} original Original HTML string.
+ * @param {string} changed  Changed HTML string.
+ *
+ * @return {string} HTML string with diff highlighting spans.
+ */
+function highlightHtml( original: string, changed: string ): string {
+	if ( original === changed ) return changed;
+	const parts: Diff[] = diffWords( original, changed );
 	return parts
 		.map( part => {
 			const cls = part.added ? 'ccp-inline-added' : part.removed ? 'ccp-inline-removed' : '';
@@ -19,6 +44,16 @@ function highlightHtml( orig: string, changed: string ): string {
 		.join( '' );
 }
 
+/**
+ * Normalizes HTML for comparison.
+ *
+ * Removes loading attributes, decoding hints, and normalizes whitespace to
+ * reduce false positives when comparing HTML content.
+ *
+ * @param {string} html HTML string to normalize.
+ *
+ * @return {string} Normalized HTML string.
+ */
 function normalizeHtml( html: string ): string {
     return html
         .trim()
@@ -31,6 +66,18 @@ function normalizeHtml( html: string ): string {
         .trim();
 }
 
+/**
+ * Block Diff Viewer component.
+ *
+ * Renders a visual comparison of Gutenberg blocks showing added, removed,
+ * modified, and unchanged blocks with inline highlighting.
+ *
+ * @param {Object}      props             Component props.
+ * @param {BlockDiff[]} [props.blocks]    Block diff objects to display.
+ * @param {boolean}     [props.highlight] Enable inline word-level highlighting.
+ *
+ * @return {JSX.Element} Rendered block diff viewer.
+ */
 export default function BlockDiffViewer( { blocks = [], highlight = true }: Props ): JSX.Element {
     return (
         <div className="ccp-block-diff-viewer">

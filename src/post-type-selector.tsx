@@ -1,11 +1,25 @@
 /**
- * Post Type Selector React component
+ * Post Type Selector React component.
+ *
+ * Provides a dropdown selector for choosing post types from external WordPress
+ * sites, with automatic loading and error handling.
+ *
+ * @file This file defines the PostTypeSelector component for the CCP plugin.
  */
 import { Button, SelectControl, Notice, Spinner } from '@wordpress/components';
 import { useState, useEffect } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import React from 'react';
 
+/**
+ * Represents a post type option from the external site.
+ *
+ * @property {string} slug        Post type slug.
+ * @property {string} name        Post type name.
+ * @property {string} label       Display label.
+ * @property {string} rest_base   REST API base path.
+ * @property {string} [description] Optional description.
+ */
 interface PostTypeOption {
 	slug: string;
 	name: string;
@@ -14,19 +28,42 @@ interface PostTypeOption {
 	description?: string;
 }
 
+/**
+ * Props for the PostTypeSelector component.
+ *
+ * @property {string}   siteUrl            External site URL.
+ * @property {Function} [onPostTypeChange] Callback when post type changes.
+ * @property {string}   [selectedPostType] Initially selected post type.
+ */
 interface PostTypeSelectorProps {
 	siteUrl: string;
 	onPostTypeChange?: ( postType: string ) => void;
 	selectedPostType?: string;
 }
 
+/**
+ * Generic wrapper for API responses.
+ *
+ * @property {boolean} success Whether the request succeeded.
+ * @property {T}       data    Response data.
+ */
 interface ApiResponse< T > {
 	success: boolean;
 	data: T;
 }
 
 /**
- * Post Type Selector component for choosing post types from external sites
+ * Post Type Selector component for choosing post types from external sites.
+ *
+ * Fetches available post types from the external WordPress site and provides a
+ * dropdown for selection with automatic refresh on site URL change.
+ *
+ * @param {Object}   props                    Component props.
+ * @param {string}   props.siteUrl            External site URL.
+ * @param {Function} [props.onPostTypeChange] Callback when post type changes.
+ * @param {string}   [props.selectedPostType] Initially selected post type.
+ *
+ * @return {JSX.Element} Rendered PostTypeSelector component.
  */
 export function PostTypeSelector( {
 	siteUrl,
@@ -40,7 +77,12 @@ export function PostTypeSelector( {
 	const [ lastSiteUrl, setLastSiteUrl ] = useState( siteUrl );
 
 	/**
-	 * Get current site URL from saved settings (more reliable than input field)
+	 * Gets the current site URL from saved settings.
+	 *
+	 * Retrieves the external site URL from the global admin data, which is more
+	 * reliable than reading from input fields.
+	 *
+	 * @return {string} External site URL.
 	 */
 	const getExternalSiteUrl = (): string => {
 		// Use saved settings from window.ccpAdminData.
@@ -48,7 +90,14 @@ export function PostTypeSelector( {
 	};
 
 	/**
-	 * Make AJAX request to WordPress
+	 * Makes an AJAX request to WordPress.
+	 *
+	 * Sends a POST request to the WordPress AJAX endpoint with the specified
+	 * action and data.
+	 *
+	 * @param {string}                       action AJAX action to perform.
+	 * @param {Record<string, string|number>} data   Additional request data.
+	 * @return {Promise<any>} JSON response from the server.
 	 */
 	const makeRequest = async (
 		action: string,
@@ -71,7 +120,12 @@ export function PostTypeSelector( {
 	};
 
 	/**
-	 * Load available post types from the external site
+	 * Loads available post types from the external site.
+	 *
+	 * Fetches the list of public post types from the external WordPress site
+	 * and updates the component state with the available options.
+	 *
+	 * @return {Promise<void>} Resolves when post types are loaded.
 	 */
 	const loadPostTypes = async (): Promise< void > => {
 		const currentSiteUrl = getExternalSiteUrl();
@@ -124,7 +178,11 @@ export function PostTypeSelector( {
 	};
 
 	/**
-	 * Handle post type selection change
+	 * Handles post type selection change.
+	 *
+	 * Updates the current post type state and calls the parent callback.
+	 *
+	 * @param {string} postType Newly selected post type.
 	 */
 	const handlePostTypeChange = ( postType: string ): void => {
 		setCurrentPostType( postType );
@@ -134,7 +192,9 @@ export function PostTypeSelector( {
 	};
 
 	/**
-	 * Handle refresh button click
+	 * Handles refresh button click.
+	 *
+	 * Triggers a reload of available post types from the external site.
 	 */
 	const handleRefresh = (): void => {
 		loadPostTypes().catch( console.error );

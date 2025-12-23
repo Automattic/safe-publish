@@ -1,4 +1,13 @@
 /**
+ * Constants for the Compliant Content Publisher plugin.
+ *
+ * Defines layout types, sorting constants, and other shared values used across
+ * the plugin's frontend components.
+ *
+ * @file This file defines shared constants for the CCP plugin.
+ */
+
+/**
  * WordPress dependencies
  */
 import { __ } from '@wordpress/i18n';

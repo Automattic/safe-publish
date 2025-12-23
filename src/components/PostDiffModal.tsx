@@ -1,3 +1,11 @@
+/**
+ * Post Diff Modal component.
+ *
+ * Displays a modal with a visual comparison between the current post content
+ * and incoming external content, with options to update.
+ *
+ * @file This file defines the PostDiffModal component.
+ */
 import {
 	Button,
 	__experimentalText as Text,
@@ -12,11 +20,29 @@ import { fetchDiffPreview, updatePostContent } from '../api/diff';
 import { Post } from '../types';
 import BlockDiffViewer from './BlockDiffViewer';
 
+/**
+ * Props for the PostDiffModal component.
+ *
+ * @property {Post[]}   items      Array containing the post to diff.
+ * @property {Function} closeModal Callback to close the modal.
+ */
 interface PostDiffModalProps {
 	items: Post[];
 	closeModal: () => void;
 }
 
+/**
+ * Post Diff Modal component.
+ *
+ * Fetches and displays a diff preview for the selected post, showing content
+ * changes, block-level diffs, and non-content field changes.
+ *
+ * @param {Object}   props            Component props.
+ * @param {Post[]}   props.items      Array containing the post to diff.
+ * @param {Function} props.closeModal Callback to close the modal.
+ *
+ * @return {JSX.Element} Rendered modal content.
+ */
 export default function PostDiffModal( { items, closeModal }: PostDiffModalProps ): JSX.Element {
 	const [ diffHtml, setDiffHtml ] = useState< string | null >( null ); // Will hold contentDiffHtml.
 	const [ nonContentDiffs, setNonContentDiffs ] = useState< any >( null );
@@ -89,6 +115,12 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 		};
 	}, [ items[ 0 ].id, items[ 0 ].post_type, items[ 0 ].content, items[ 0 ].excerpt ] );
 
+	/**
+	 * Handles updating the local post with incoming content.
+	 *
+	 * Sends the selected content fields (title, excerpt, meta, terms, featured
+	 * media) to the REST API to update the local post.
+	 */
 	const handleUpdatePost = async () => {
 		setIsUpdating( true );
         setUpdateError( null );
