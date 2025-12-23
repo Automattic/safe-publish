@@ -1,0 +1,19 @@
+# Build outputs
+build
+coverage
+
+# Dependencies
+node_modules
+vendor
+
+# Non-JS files
+*.php
+
+# Config files (not in tsconfig.json - type-aware rules fail)
+*.config.ts
+*.config.mts
+*.config.js
+webpack.utils.js
+
+# Test files (not in tsconfig.json)
+tests/
