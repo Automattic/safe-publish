@@ -49,21 +49,21 @@ class Import_History {
 		register_post_type(
 			self::SESSION_POST_TYPE,
 			array(
-				'labels'              => array(
+				'labels'             => array(
 					'name'          => __( 'Import Sessions', 'ccp' ),
 					'singular_name' => __( 'Import Session', 'ccp' ),
 				),
-				'public'              => false,
-				'publicly_queryable'  => false,
-				'show_ui'             => false,
-				'show_in_menu'        => false,
-				'query_var'           => false,
-				'rewrite'             => false,
-				'capability_type'     => 'post',
-				'has_archive'         => false,
-				'hierarchical'        => false,
-				'supports'            => array( 'title', 'custom-fields' ),
-				'show_in_rest'        => false,
+				'public'             => false,
+				'publicly_queryable' => false,
+				'show_ui'            => false,
+				'show_in_menu'       => false,
+				'query_var'          => false,
+				'rewrite'            => false,
+				'capability_type'    => 'post',
+				'has_archive'        => false,
+				'hierarchical'       => false,
+				'supports'           => array( 'title', 'custom-fields' ),
+				'show_in_rest'       => false,
 			)
 		);
 
@@ -71,21 +71,21 @@ class Import_History {
 		register_post_type(
 			self::LOG_POST_TYPE,
 			array(
-				'labels'              => array(
+				'labels'             => array(
 					'name'          => __( 'Import Logs', 'ccp' ),
 					'singular_name' => __( 'Import Log', 'ccp' ),
 				),
-				'public'              => false,
-				'publicly_queryable'  => false,
-				'show_ui'             => false,
-				'show_in_menu'        => false,
-				'query_var'           => false,
-				'rewrite'             => false,
-				'capability_type'     => 'post',
-				'has_archive'         => false,
-				'hierarchical'        => false,
-				'supports'            => array( 'title', 'content', 'custom-fields' ),
-				'show_in_rest'        => false,
+				'public'             => false,
+				'publicly_queryable' => false,
+				'show_ui'            => false,
+				'show_in_menu'       => false,
+				'query_var'          => false,
+				'rewrite'            => false,
+				'capability_type'    => 'post',
+				'has_archive'        => false,
+				'hierarchical'       => false,
+				'supports'           => array( 'title', 'content', 'custom-fields' ),
+				'show_in_rest'       => false,
 			)
 		);
 	}
@@ -123,7 +123,7 @@ class Import_History {
 		}
 
 		// Enqueue custom CSS.
-		$css_file = plugin_dir_url( dirname( dirname( __FILE__ ) ) ) . 'assets/css/import-history.css';
+		$css_file = plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/import-history.css';
 		wp_enqueue_style( 'ccp-import-history', $css_file, array(), '1.0.0' );
 
 		// Enqueue DataViews styles with VIP-safe versioning.
@@ -140,12 +140,12 @@ class Import_History {
 		}
 
 		// Enqueue the compiled import history JavaScript.
-		$js_file = plugin_dir_url( dirname( dirname( __FILE__ ) ) ) . 'build/import-history.js';
-		$js_asset_file = dirname( dirname( __FILE__ ) ) . '/build/import-history.asset.php';
+		$js_file       = plugin_dir_url( dirname( __DIR__ ) ) . 'build/import-history.js';
+		$js_asset_file = dirname( __DIR__ ) . '/build/import-history.asset.php';
 
 		$asset_data = array(
 			'dependencies' => array( 'wp-element', 'wp-components', 'wp-i18n' ),
-			'version' => '1.0.0',
+			'version'      => '1.0.0',
 		);
 
 		if ( file_exists( $js_asset_file ) ) {
@@ -161,11 +161,15 @@ class Import_History {
 		);
 
 		// Localize script data for React.
-		wp_localize_script( 'ccp-import-history', 'ccpAdminData', array(
-			'ajaxurl' => admin_url( 'admin-ajax.php' ),
-			'nonce' => wp_create_nonce( 'ccp_ajax_nonce' ),
-			'restNonce' => wp_create_nonce( 'wp_rest' ),
-		) );
+		wp_localize_script(
+			'ccp-import-history',
+			'ccpAdminData',
+			array(
+				'ajaxurl'   => admin_url( 'admin-ajax.php' ),
+				'nonce'     => wp_create_nonce( 'ccp_ajax_nonce' ),
+				'restNonce' => wp_create_nonce( 'wp_rest' ),
+			)
+		);
 
 		?>
 		<div class="wrap" id="ccp-import-history">
@@ -189,25 +193,27 @@ class Import_History {
 	 * @return int|\WP_Error Session ID or error.
 	 */
 	public function create_session( $source_url, $session_type = 'bulk' ): int|\WP_Error {
-		$session_id = wp_insert_post( array(
-			'post_type'   => self::SESSION_POST_TYPE,
-			'post_title'  => sprintf(
-				__( 'Import Session - %s', 'ccp' ),
-				current_time( 'Y-m-d H:i:s' )
-			),
-			'post_status' => 'publish',
-			'post_author' => get_current_user_id(),
-			'meta_input'  => array(
-				'source_url'    => $source_url,
-				'session_type'  => $session_type,
-				'total_items'   => 0,
-				'successful'    => 0,
-				'failed'        => 0,
-				'updated'       => 0,
-				'status'        => 'in_progress',
-				'start_time'    => current_time( 'mysql' ),
-			),
-		) );
+		$session_id = wp_insert_post(
+			array(
+				'post_type'   => self::SESSION_POST_TYPE,
+				'post_title'  => sprintf(
+					__( 'Import Session - %s', 'ccp' ),
+					current_time( 'Y-m-d H:i:s' )
+				),
+				'post_status' => 'publish',
+				'post_author' => get_current_user_id(),
+				'meta_input'  => array(
+					'source_url'   => $source_url,
+					'session_type' => $session_type,
+					'total_items'  => 0,
+					'successful'   => 0,
+					'failed'       => 0,
+					'updated'      => 0,
+					'status'       => 'in_progress',
+					'start_time'   => current_time( 'mysql' ),
+				),
+			)
+		);
 
 		return $session_id;
 	}
@@ -234,20 +240,22 @@ class Import_History {
 			'changes'       => $changes,
 		);
 
-		$log_id = wp_insert_post( array(
-			'post_type'    => self::LOG_POST_TYPE,
-			'post_title'   => $title,
-			'post_content' => wp_json_encode( $log_data ),
-			'post_status'  => 'publish',
-			'post_parent'  => $session_id,
-			'meta_input'   => array(
-				'session_id'  => $session_id,
-				'external_id' => $external_id,
-				'status'      => $status,
-				'post_id'     => $post_id,
-				'import_date' => current_time( 'mysql' ),
-			),
-		) );
+		$log_id = wp_insert_post(
+			array(
+				'post_type'    => self::LOG_POST_TYPE,
+				'post_title'   => $title,
+				'post_content' => wp_json_encode( $log_data ),
+				'post_status'  => 'publish',
+				'post_parent'  => $session_id,
+				'meta_input'   => array(
+					'session_id'  => $session_id,
+					'external_id' => $external_id,
+					'status'      => $status,
+					'post_id'     => $post_id,
+					'import_date' => current_time( 'mysql' ),
+				),
+			)
+		);
 
 		// Store changes as post meta if they exist.
 		if ( ! empty( $changes ) ) {
@@ -264,10 +272,10 @@ class Import_History {
 	 * @param string $status     Status of the import (success, error, updated).
 	 */
 	public function update_session_stats( $session_id, $status ): void {
-		$total = (int) get_post_meta( $session_id, 'total_items', true );
+		$total      = (int) get_post_meta( $session_id, 'total_items', true );
 		$successful = (int) get_post_meta( $session_id, 'successful', true );
-		$failed = (int) get_post_meta( $session_id, 'failed', true );
-		$updated = (int) get_post_meta( $session_id, 'updated', true );
+		$failed     = (int) get_post_meta( $session_id, 'failed', true );
+		$updated    = (int) get_post_meta( $session_id, 'updated', true );
 
 		update_post_meta( $session_id, 'total_items', $total + 1 );
 
@@ -322,23 +330,25 @@ class Import_History {
 			wp_send_json_error( 'Insufficient permissions' );
 		}
 
-		$sessions = get_posts( array(
-			'post_type'      => self::SESSION_POST_TYPE,
-			'post_status'    => 'publish',
-			'posts_per_page' => 50,
-			'orderby'        => 'date',
-			'order'          => 'DESC',
-			'meta_query'     => array(),
-		) );
+		$sessions = get_posts(
+			array(
+				'post_type'      => self::SESSION_POST_TYPE,
+				'post_status'    => 'publish',
+				'posts_per_page' => 50,
+				'orderby'        => 'date',
+				'order'          => 'DESC',
+				'meta_query'     => array(),
+			)
+		);
 
 		$formatted_sessions = array();
 
 		foreach ( $sessions as $session ) {
-			$total = (int) get_post_meta( $session->ID, 'total_items', true );
+			$total      = (int) get_post_meta( $session->ID, 'total_items', true );
 			$successful = (int) get_post_meta( $session->ID, 'successful', true );
-			$failed = (int) get_post_meta( $session->ID, 'failed', true );
-			$updated = (int) get_post_meta( $session->ID, 'updated', true );
-			$status = get_post_meta( $session->ID, 'status', true );
+			$failed     = (int) get_post_meta( $session->ID, 'failed', true );
+			$updated    = (int) get_post_meta( $session->ID, 'updated', true );
+			$status     = get_post_meta( $session->ID, 'status', true );
 			$source_url = get_post_meta( $session->ID, 'source_url', true );
 
 			$status_labels = array(
@@ -389,11 +399,11 @@ class Import_History {
 		}
 
 		// Get session data.
-		$total = (int) get_post_meta( $session_id, 'total_items', true );
+		$total      = (int) get_post_meta( $session_id, 'total_items', true );
 		$successful = (int) get_post_meta( $session_id, 'successful', true );
-		$failed = (int) get_post_meta( $session_id, 'failed', true );
-		$updated = (int) get_post_meta( $session_id, 'updated', true );
-		$status = get_post_meta( $session_id, 'status', true );
+		$failed     = (int) get_post_meta( $session_id, 'failed', true );
+		$updated    = (int) get_post_meta( $session_id, 'updated', true );
+		$status     = get_post_meta( $session_id, 'status', true );
 		$source_url = get_post_meta( $session_id, 'source_url', true );
 
 		$status_labels = array(
@@ -421,22 +431,24 @@ class Import_History {
 		$formatted_logs = array();
 
 		if ( $status !== 'rolled_back' ) {
-			$logs = get_posts( array(
-				'post_type'      => self::LOG_POST_TYPE,
-				'post_status'    => 'publish',
-				'post_parent'    => $session_id,
-				'posts_per_page' => -1,
-				'orderby'        => 'date',
-				'order'          => 'ASC',
-			) );
+			$logs = get_posts(
+				array(
+					'post_type'      => self::LOG_POST_TYPE,
+					'post_status'    => 'publish',
+					'post_parent'    => $session_id,
+					'posts_per_page' => -1,
+					'orderby'        => 'date',
+					'order'          => 'ASC',
+				)
+			);
 
 			foreach ( $logs as $log ) {
-				$log_status = get_post_meta( $log->ID, 'status', true );
-				$post_id = get_post_meta( $log->ID, 'post_id', true );
+				$log_status  = get_post_meta( $log->ID, 'status', true );
+				$post_id     = get_post_meta( $log->ID, 'post_id', true );
 				$external_id = get_post_meta( $log->ID, 'external_id', true );
 
 				$log_data = json_decode( $log->post_content, true );
-				$error = $log_data['error_message'] ?? null;
+				$error    = $log_data['error_message'] ?? null;
 
 				$status_labels = array(
 					'success' => __( 'Success', 'ccp' ),
@@ -444,11 +456,11 @@ class Import_History {
 					'error'   => __( 'Error', 'ccp' ),
 				);
 
-				$changes = get_post_meta( $log->ID, 'content_changes', true );
+				$changes              = get_post_meta( $log->ID, 'content_changes', true );
 				$has_previous_content = is_array( $changes ) && ! empty( $changes['previous_content'] );
 
 				// For debugging: also show button for updated posts even without previous content.
-				$is_updated_post = ( $log_status === 'updated' );
+				$is_updated_post     = ( $log_status === 'updated' );
 				$should_show_changes = $has_previous_content || $is_updated_post;
 
 				// Check if this item has been individually rolled back.
@@ -464,18 +476,18 @@ class Import_History {
 				}
 
 				$formatted_log = array(
-					'id'               => $log->ID,
-					'title'            => $log->post_title,
-					'status'           => $log_status,
-					'status_label'     => $status_labels[ $log_status ] ?? $log_status,
-					'external_id'      => $external_id,
-					'post_id'          => $post_id,
-					'error'            => $error,
-					'has_changes'      => $should_show_changes,
-					'edit_url'         => $post_id ? admin_url( "post.php?post={$post_id}&action=edit" ) : null,
-					'can_rollback'     => $can_rollback_item,
-					'is_rolled_back'   => $is_rolled_back,
-					'rollback_action'  => $log_status === 'success' ? 'delete' :
+					'id'              => $log->ID,
+					'title'           => $log->post_title,
+					'status'          => $log_status,
+					'status_label'    => $status_labels[ $log_status ] ?? $log_status,
+					'external_id'     => $external_id,
+					'post_id'         => $post_id,
+					'error'           => $error,
+					'has_changes'     => $should_show_changes,
+					'edit_url'        => $post_id ? admin_url( "post.php?post={$post_id}&action=edit" ) : null,
+					'can_rollback'    => $can_rollback_item,
+					'is_rolled_back'  => $is_rolled_back,
+					'rollback_action' => $log_status === 'success' ? 'delete' :
 						( $has_previous_content ? 'restore' : 'delete' ),
 				);
 
@@ -483,10 +495,12 @@ class Import_History {
 			}
 		}
 
-		wp_send_json_success( array(
-			'session' => $session_data,
-			'logs'    => $formatted_logs,
-		) );
+		wp_send_json_success(
+			array(
+				'session' => $session_data,
+				'logs'    => $formatted_logs,
+			)
+		);
 	}
 
 	/**
@@ -512,26 +526,28 @@ class Import_History {
 		}
 
 		// Get all successful imports from this session.
-		$logs = get_posts( array(
-			'post_type'      => self::LOG_POST_TYPE,
-			'post_status'    => 'publish',
-			'post_parent'    => $session_id,
-			'posts_per_page' => -1,
-			'meta_query'     => array(
-				array(
-					'key'     => 'status',
-					'value'   => array( 'success', 'updated' ),
-					'compare' => 'IN',
+		$logs = get_posts(
+			array(
+				'post_type'      => self::LOG_POST_TYPE,
+				'post_status'    => 'publish',
+				'post_parent'    => $session_id,
+				'posts_per_page' => -1,
+				'meta_query'     => array(
+					array(
+						'key'     => 'status',
+						'value'   => array( 'success', 'updated' ),
+						'compare' => 'IN',
+					),
 				),
-			),
-		) );
+			)
+		);
 
-		$deleted_count = 0;
+		$deleted_count  = 0;
 		$restored_count = 0;
 
 		foreach ( $logs as $log ) {
 			$post_id = get_post_meta( $log->ID, 'post_id', true );
-			$status = get_post_meta( $log->ID, 'status', true );
+			$status  = get_post_meta( $log->ID, 'status', true );
 			$changes = get_post_meta( $log->ID, 'content_changes', true );
 
 			if ( ! $post_id || ! get_post( $post_id ) ) {
@@ -541,7 +557,7 @@ class Import_History {
 			if ( $status === 'success' ) {
 				// This was a newly created post - delete it.
 				if ( wp_delete_post( $post_id, true ) ) {
-					$deleted_count++;
+					++$deleted_count;
 				}
 			} elseif ( $status === 'updated' && ! empty( $changes ) && isset( $changes['previous_content'] ) ) {
 				// This was an updated post - restore previous content.
@@ -584,13 +600,13 @@ class Import_History {
 						}
 					}
 
-					$restored_count++;
+					++$restored_count;
 				}
 			} elseif ( $status === 'updated' ) {
 				// Updated post but no previous content stored - just delete it.
 				// This handles legacy cases where previous content wasn't stored.
 				if ( wp_delete_post( $post_id, true ) ) {
-					$deleted_count++;
+					++$deleted_count;
 				}
 			}
 		}
@@ -600,15 +616,17 @@ class Import_History {
 		update_post_meta( $session_id, 'rollback_date', current_time( 'mysql' ) );
 		update_post_meta( $session_id, 'rollback_user', get_current_user_id() );
 
-		wp_send_json_success( array(
-			'deleted_count' => $deleted_count,
-			'restored_count' => $restored_count,
-			'message' => sprintf(
-				__( '%1$d posts deleted and %2$d posts restored successfully.', 'ccp' ),
-				$deleted_count,
-				$restored_count
-			),
-		) );
+		wp_send_json_success(
+			array(
+				'deleted_count'  => $deleted_count,
+				'restored_count' => $restored_count,
+				'message'        => sprintf(
+					__( '%1$d posts deleted and %2$d posts restored successfully.', 'ccp' ),
+					$deleted_count,
+					$restored_count
+				),
+			)
+		);
 	}
 
 	/**
@@ -634,7 +652,7 @@ class Import_History {
 		}
 
 		$post_id = get_post_meta( $log_id, 'post_id', true );
-		$status = get_post_meta( $log_id, 'status', true );
+		$status  = get_post_meta( $log_id, 'status', true );
 		$changes = get_post_meta( $log_id, 'content_changes', true );
 
 		if ( ! $post_id ) {
@@ -648,15 +666,15 @@ class Import_History {
 		}
 
 		$result = array(
-			'action' => '',
-			'post_id' => $post_id,
+			'action'     => '',
+			'post_id'    => $post_id,
 			'post_title' => $post->post_title,
 		);
 
 		if ( $status === 'success' ) {
 			// This was a newly created post - delete it.
 			if ( wp_delete_post( $post_id, true ) ) {
-				$result['action'] = 'deleted';
+				$result['action']  = 'deleted';
 				$result['message'] = 'Post successfully deleted';
 			} else {
 				wp_send_json_error( 'Failed to delete the post' );
@@ -705,12 +723,12 @@ class Import_History {
 				}
 			}
 
-			$result['action'] = 'restored';
+			$result['action']  = 'restored';
 			$result['message'] = 'Post successfully restored to previous version';
 		} elseif ( $status === 'updated' ) {
 			// Updated post but no previous content stored - delete it.
 			if ( wp_delete_post( $post_id, true ) ) {
-				$result['action'] = 'deleted';
+				$result['action']  = 'deleted';
 				$result['message'] = 'Post deleted (no previous content available for restoration)';
 			} else {
 				wp_send_json_error( 'Failed to delete the post' );
@@ -750,27 +768,29 @@ class Import_History {
 		}
 
 		// Find the import log entry for this post to get the previous content.
-		$log_query = new \WP_Query( array(
-			'post_type'      => self::LOG_POST_TYPE,
-			'post_status'    => 'publish',
-			'meta_query'     => array(
-				array(
-					'key'     => 'post_id',
-					'value'   => $post_id,
-					'compare' => '=',
+		$log_query = new \WP_Query(
+			array(
+				'post_type'      => self::LOG_POST_TYPE,
+				'post_status'    => 'publish',
+				'meta_query'     => array(
+					array(
+						'key'     => 'post_id',
+						'value'   => $post_id,
+						'compare' => '=',
+					),
 				),
-			),
-			'posts_per_page' => 1,
-			'orderby'        => 'date',
-			'order'          => 'DESC',
-		) );
+				'posts_per_page' => 1,
+				'orderby'        => 'date',
+				'order'          => 'DESC',
+			)
+		);
 
 		if ( ! $log_query->have_posts() ) {
 			wp_send_json_error( 'No import history found for this post' );
 		}
 
 		$log_post = $log_query->posts[0];
-		$changes = get_post_meta( $log_post->ID, 'changes', true );
+		$changes  = get_post_meta( $log_post->ID, 'changes', true );
 
 		// For backward compatibility, handle cases where changes might not have complete data.
 		if ( empty( $changes ) || ! is_array( $changes ) ) {
@@ -780,17 +800,17 @@ class Import_History {
 
 		// Get previous content from changes array (fallback to empty if not available).
 		$old_content = $changes['previous_content'] ?? '';
-		$old_title = $changes['previous_title'] ?? '';
+		$old_title   = $changes['previous_title'] ?? '';
 		$old_excerpt = $changes['previous_excerpt'] ?? '';
 
 		// Current content.
 		$new_content = $post->post_content;
-		$new_title = $post->post_title;
+		$new_title   = $post->post_title;
 		$new_excerpt = $post->post_excerpt;
 
 		// If no previous content available, show a message instead of empty diff.
 		if ( empty( $old_content ) && empty( $old_title ) && empty( $old_excerpt ) ) {
-			$diff_html = '<div class="ccp-no-diff-message" style="padding: 20px; text-align: center; background: #f9f9f9; border-radius: 4px;">';
+			$diff_html  = '<div class="ccp-no-diff-message" style="padding: 20px; text-align: center; background: #f9f9f9; border-radius: 4px;">';
 			$diff_html .= '<h4>' . __( 'No Previous Content Available', 'ccp' ) . '</h4>';
 			$diff_html .= '<p>' . __( 'This import was processed before content change tracking was enabled. Only the current content is available.', 'ccp' ) . '</p>';
 			$diff_html .= '<div style="background: #fff; padding: 15px; border-radius: 4px; margin-top: 15px; text-align: left;">';
@@ -809,15 +829,20 @@ class Import_History {
 		} else {
 			// Generate diff HTML for content, title, and excerpt.
 			$diff_html = $this->generate_comprehensive_diff_html(
-				$old_title, $new_title,
-				$old_excerpt, $new_excerpt,
-				$old_content, $new_content
+				$old_title,
+				$new_title,
+				$old_excerpt,
+				$new_excerpt,
+				$old_content,
+				$new_content
 			);
 		}
 
-		wp_send_json_success( array(
-			'diff_html' => $diff_html,
-		) );
+		wp_send_json_success(
+			array(
+				'diff_html' => $diff_html,
+			)
+		);
 	}
 
 	/**
@@ -911,19 +936,21 @@ class Import_History {
 		}
 
 		// Get all logs associated with this session.
-		$logs = get_posts( array(
-			'post_type'      => self::LOG_POST_TYPE,
-			'post_status'    => 'publish',
-			'post_parent'    => $session_id,
-			'posts_per_page' => -1,
-		) );
+		$logs = get_posts(
+			array(
+				'post_type'      => self::LOG_POST_TYPE,
+				'post_status'    => 'publish',
+				'post_parent'    => $session_id,
+				'posts_per_page' => -1,
+			)
+		);
 
 		$deleted_logs_count = 0;
 
 		// Delete all associated logs first.
 		foreach ( $logs as $log ) {
 			if ( wp_delete_post( $log->ID, true ) ) {
-				$deleted_logs_count++;
+				++$deleted_logs_count;
 			}
 		}
 
@@ -931,13 +958,15 @@ class Import_History {
 		$session_deleted = wp_delete_post( $session_id, true );
 
 		if ( $session_deleted ) {
-			wp_send_json_success( array(
-				'message' => sprintf(
-					__( 'Session deleted successfully. %d associated log entries were also removed.', 'ccp' ),
-					$deleted_logs_count
-				),
-				'deleted_logs' => $deleted_logs_count,
-			) );
+			wp_send_json_success(
+				array(
+					'message'      => sprintf(
+						__( 'Session deleted successfully. %d associated log entries were also removed.', 'ccp' ),
+						$deleted_logs_count
+					),
+					'deleted_logs' => $deleted_logs_count,
+				)
+			);
 		} else {
 			wp_send_json_error( 'Failed to delete session' );
 		}

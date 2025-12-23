@@ -107,7 +107,7 @@ class VIP_Safe_Auth {
 			if ( ! empty( $site_url ) ) {
 				$auth_params = self::get_shared_secret_auth( $site_url, $auth_config, 'GET' );
 				return ! empty( $auth_params['headers']['X-CCP-Timestamp'] ) &&
-				       ! empty( $auth_params['headers']['X-CCP-Signature'] );
+						! empty( $auth_params['headers']['X-CCP-Signature'] );
 			}
 
 			return true; // Shared secret is present and valid format.
@@ -156,7 +156,7 @@ class VIP_Safe_Auth {
 		}
 
 		// Make a lightweight test request to verify credentials work.
-		$test_url = trailingslashit( $site_url ) . 'wp-json/wp/v2/';
+		$test_url    = trailingslashit( $site_url ) . 'wp-json/wp/v2/';
 		$auth_params = self::get_auth_params( $test_url, $auth_config, 'GET' );
 
 		$request_args = array(
@@ -230,12 +230,12 @@ class VIP_Safe_Auth {
 		// Extract the REST API path portion - this should match what WP_REST_Request::get_route() returns.
 		// Parse the URL to get the path component.
 		$parsed_url = wp_parse_url( $site_url );
-		$full_path = $parsed_url['path'] ?? '';
+		$full_path  = $parsed_url['path'] ?? '';
 
 		if ( strpos( $full_path, '/wp-json/' ) !== false ) {
 			// Full REST API URL - extract everything after /wp-json.
 			$wp_json_pos = strpos( $full_path, '/wp-json/' );
-			$path = substr( $full_path, $wp_json_pos + 8 ); // +8 to skip '/wp-json'.
+			$path        = substr( $full_path, $wp_json_pos + 8 ); // +8 to skip '/wp-json'.
 
 			// Ensure path starts with / and handle empty paths.
 			if ( empty( $path ) || $path[0] !== '/' ) {
@@ -249,7 +249,7 @@ class VIP_Safe_Auth {
 
 		// Create signature string: METHOD|URI|TIMESTAMP (compatible with mu-plugin).
 		$string_to_sign = $method . '|' . $path . '|' . $timestamp;
-		$signature = hash_hmac( 'sha256', $string_to_sign, $shared_secret );
+		$signature      = hash_hmac( 'sha256', $string_to_sign, $shared_secret );
 
 		return array(
 			'headers' => array(
@@ -313,9 +313,9 @@ class VIP_Safe_Auth {
 	 */
 	private static function verify_shared_secret(): bool|\WP_Error {
 		$signature = sanitize_text_field( $_SERVER['HTTP_X_CCP_SIGNATURE'] ?? '' );
-		$site = sanitize_url( $_SERVER['HTTP_X_CCP_SITE'] ?? '' );
+		$site      = sanitize_url( $_SERVER['HTTP_X_CCP_SITE'] ?? '' );
 		$timestamp = sanitize_text_field( $_SERVER['HTTP_X_CCP_TIMESTAMP'] ?? '' );
-		$nonce = sanitize_text_field( $_SERVER['HTTP_X_CCP_NONCE'] ?? '' );
+		$nonce     = sanitize_text_field( $_SERVER['HTTP_X_CCP_NONCE'] ?? '' );
 
 		if ( empty( $signature ) || empty( $site ) || empty( $timestamp ) || empty( $nonce ) ) {
 			return new \WP_Error( 'invalid_auth', __( 'Missing authentication parameters.', 'ccp' ) );
@@ -335,10 +335,10 @@ class VIP_Safe_Auth {
 
 		// Recreate payload and verify signature.
 		$payload = array(
-			'site' => $site,
+			'site'      => $site,
 			'timestamp' => intval( $timestamp ),
-			'nonce' => $nonce,
-			'target' => get_bloginfo( 'url' ),
+			'nonce'     => $nonce,
+			'target'    => get_bloginfo( 'url' ),
 		);
 
 		$expected_signature = hash_hmac( 'sha256', wp_json_encode( $payload ), $shared_secret );

@@ -32,14 +32,14 @@ class HTTPClientTest extends TestCase {
 	}
 
 	public function test_should_verify_ssl_returns_bool(): void {
-		$url = 'https://example.com';
+		$url    = 'https://example.com';
 		$result = $this->http_client->should_verify_ssl( $url );
 
 		$this->assertIsBool( $result );
 	}
 
 	public function test_should_verify_ssl_returns_false_for_localhost(): void {
-		$url = 'http://localhost';
+		$url    = 'http://localhost';
 		$result = $this->http_client->should_verify_ssl( $url );
 
 		$this->assertFalse( $result );

@@ -49,13 +49,13 @@ class URLValidatorTest extends TestCase {
 	}
 
 	public function test_sanitize_external_url_returns_sanitized_url(): void {
-		$url = 'https://example.com';
+		$url       = 'https://example.com';
 		$sanitized = URL_Validator::sanitize_external_url( $url );
 		$this->assertEquals( $url, $sanitized );
 	}
 
 	public function test_sanitize_external_url_returns_false_for_invalid_url(): void {
-		$url = 'not-a-url';
+		$url       = 'not-a-url';
 		$sanitized = URL_Validator::sanitize_external_url( $url );
 		$this->assertFalse( $sanitized );
 	}

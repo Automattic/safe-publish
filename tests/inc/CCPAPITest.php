@@ -26,22 +26,22 @@ class CCPAPITest extends TestCase {
 
 	public function test_safe_unserialize_handles_false(): void {
 		$serialized = 'b:0;';
-		$result = $this->api->safe_unserialize( $serialized );
+		$result     = $this->api->safe_unserialize( $serialized );
 
 		$this->assertFalse( $result );
 	}
 
 	public function test_safe_unserialize_handles_string(): void {
 		$serialized = 's:11:"test string";';
-		$result = $this->api->safe_unserialize( $serialized );
+		$result     = $this->api->safe_unserialize( $serialized );
 
 		$this->assertEquals( 'test string', $result );
 	}
 
 	public function test_safe_unserialize_handles_array(): void {
-		$data = array( 'key' => 'value' );
+		$data       = array( 'key' => 'value' );
 		$serialized = 'a:1:{s:3:"key";s:5:"value";}';
-		$result = $this->api->safe_unserialize( $serialized );
+		$result     = $this->api->safe_unserialize( $serialized );
 
 		$this->assertEquals( $data, $result );
 	}
@@ -59,14 +59,18 @@ class CCPAPITest extends TestCase {
 	}
 
 	public function test_normalize_handles_sequential_arrays(): void {
-		$array = array( 1, 2, 3 );
+		$array  = array( 1, 2, 3 );
 		$result = $this->api->normalize( $array );
 
 		$this->assertEquals( $array, $result );
 	}
 
 	public function test_normalize_sorts_associative_arrays(): void {
-		$array = array( 'z' => 1, 'a' => 2, 'm' => 3 );
+		$array  = array(
+			'z' => 1,
+			'a' => 2,
+			'm' => 3,
+		);
 		$result = $this->api->normalize( $array );
 
 		$keys = array_keys( $result );
@@ -74,7 +78,7 @@ class CCPAPITest extends TestCase {
 	}
 
 	public function test_normalize_handles_nested_arrays(): void {
-		$array = array(
+		$array  = array(
 			'z' => array( 'nested' => 'value' ),
 			'a' => array( 'other' => 'data' ),
 		);
@@ -112,7 +116,7 @@ class CCPAPITest extends TestCase {
 	}
 
 	public function test_deep_diff_returns_empty_for_identical_values(): void {
-		$left = array( 'key' => 'value' );
+		$left  = array( 'key' => 'value' );
 		$right = array( 'key' => 'value' );
 
 		$diffs = $this->api->deep_diff( $left, $right );
@@ -121,7 +125,7 @@ class CCPAPITest extends TestCase {
 	}
 
 	public function test_deep_diff_detects_value_changes(): void {
-		$left = array( 'key' => 'value1' );
+		$left  = array( 'key' => 'value1' );
 		$right = array( 'key' => 'value2' );
 
 		$diffs = $this->api->deep_diff( $left, $right );
@@ -133,8 +137,11 @@ class CCPAPITest extends TestCase {
 	}
 
 	public function test_deep_diff_detects_added_keys(): void {
-		$left = array( 'key1' => 'value1' );
-		$right = array( 'key1' => 'value1', 'key2' => 'value2' );
+		$left  = array( 'key1' => 'value1' );
+		$right = array(
+			'key1' => 'value1',
+			'key2' => 'value2',
+		);
 
 		$diffs = $this->api->deep_diff( $left, $right );
 
@@ -144,7 +151,10 @@ class CCPAPITest extends TestCase {
 	}
 
 	public function test_deep_diff_detects_removed_keys(): void {
-		$left = array( 'key1' => 'value1', 'key2' => 'value2' );
+		$left  = array(
+			'key1' => 'value1',
+			'key2' => 'value2',
+		);
 		$right = array( 'key1' => 'value1' );
 
 		$diffs = $this->api->deep_diff( $left, $right );
@@ -155,7 +165,7 @@ class CCPAPITest extends TestCase {
 	}
 
 	public function test_deep_diff_detects_type_mismatch(): void {
-		$left = 'string';
+		$left  = 'string';
 		$right = array( 'key' => 'value' );
 
 		$diffs = $this->api->deep_diff( $left, $right );

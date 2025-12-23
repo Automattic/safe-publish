@@ -6,6 +6,7 @@
  */
 
 namespace CCP\API;
+
 use CCP\Auth\VIP_Safe_Auth;
 
 // Prevent direct access.
@@ -37,7 +38,7 @@ abstract class REST_Base {
 	 */
 	public function __construct() {
 		$this->http_client = new HTTP_Client();
-		add_action( 'rest_api_init', [ $this, 'register_routes' ] );
+		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
 	}
 
 	/**

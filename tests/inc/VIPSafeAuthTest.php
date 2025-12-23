@@ -14,7 +14,7 @@ use CCP\Auth\VIP_Safe_Auth;
 class VIPSafeAuthTest extends TestCase {
 
 	public function test_get_auth_params_with_shared_secret(): void {
-		$site_url = 'https://example.com/wp-json/wp/v2/posts';
+		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
 		$auth_config = array(
 			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
 		);
@@ -28,7 +28,7 @@ class VIPSafeAuthTest extends TestCase {
 	}
 
 	public function test_get_auth_params_with_no_credentials_returns_empty(): void {
-		$site_url = 'https://example.com/wp-json/wp/v2/posts';
+		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
 		$auth_config = array();
 
 		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
@@ -38,7 +38,7 @@ class VIPSafeAuthTest extends TestCase {
 	}
 
 	public function test_is_authorized_with_valid_shared_secret(): void {
-		$site_url = 'https://example.com';
+		$site_url    = 'https://example.com';
 		$auth_config = array(
 			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
 		);
@@ -49,7 +49,7 @@ class VIPSafeAuthTest extends TestCase {
 	}
 
 	public function test_is_authorized_with_short_shared_secret_fails(): void {
-		$site_url = 'https://example.com';
+		$site_url    = 'https://example.com';
 		$auth_config = array(
 			'shared_secret' => 'short',
 		);
@@ -60,7 +60,7 @@ class VIPSafeAuthTest extends TestCase {
 	}
 
 	public function test_is_authorized_with_no_credentials_fails(): void {
-		$site_url = 'https://example.com';
+		$site_url    = 'https://example.com';
 		$auth_config = array();
 
 		$result = VIP_Safe_Auth::is_authorized( $site_url, $auth_config );
@@ -83,14 +83,14 @@ class VIPSafeAuthTest extends TestCase {
 	}
 
 	public function test_signature_generation_is_consistent(): void {
-		$site_url = 'https://example.com/wp-json/wp/v2/posts';
+		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
 		$auth_config = array(
 			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
 		);
 
 		// Get params twice with same timestamp to verify consistency.
 		$params1 = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
-		sleep(1); // Wait a second.
+		sleep( 1 ); // Wait a second.
 		$params2 = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
 
 		// Timestamps will be different, but signature generation process should be consistent.

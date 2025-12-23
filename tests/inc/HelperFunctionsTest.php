@@ -25,7 +25,7 @@ class HelperFunctionsTest extends TestCase {
 	}
 
 	public function test_reflection_on_simple_class(): void {
-		$test_class = new class {
+		$test_class = new class() {
 			private $test_property = 'initial_value';
 
 			public function get_property() {
@@ -34,14 +34,14 @@ class HelperFunctionsTest extends TestCase {
 		};
 
 		$reflector = new \ReflectionClass( $test_class );
-		$property = $reflector->getProperty( 'test_property' );
+		$property  = $reflector->getProperty( 'test_property' );
 		$property->setAccessible( true );
 
 		$this->assertEquals( 'initial_value', $property->getValue( $test_class ) );
 	}
 
 	public function test_set_and_get_private_property(): void {
-		$test_class = new class {
+		$test_class = new class() {
 			private $test_value = 'original';
 
 			public function getValue() {
@@ -56,7 +56,7 @@ class HelperFunctionsTest extends TestCase {
 	}
 
 	public function test_path_parsing(): void {
-		$url = 'https://example.com/wp-content/uploads/2024/01/image.jpg';
+		$url  = 'https://example.com/wp-content/uploads/2024/01/image.jpg';
 		$path = wp_parse_url( $url, PHP_URL_PATH );
 
 		$this->assertIsString( $path );
@@ -65,7 +65,7 @@ class HelperFunctionsTest extends TestCase {
 	}
 
 	public function test_filename_extraction(): void {
-		$url = 'https://example.com/wp-content/uploads/2024/01/test-image.jpg';
+		$url      = 'https://example.com/wp-content/uploads/2024/01/test-image.jpg';
 		$filename = basename( $url );
 
 		$this->assertEquals( 'test-image.jpg', $filename );
@@ -73,7 +73,7 @@ class HelperFunctionsTest extends TestCase {
 
 	public function test_extension_extraction(): void {
 		$filename = 'test-image.jpg';
-		$info = pathinfo( $filename );
+		$info     = pathinfo( $filename );
 
 		$this->assertArrayHasKey( 'extension', $info );
 		$this->assertEquals( 'jpg', $info['extension'] );
@@ -99,7 +99,7 @@ class HelperFunctionsTest extends TestCase {
 	}
 
 	public function test_wp_parse_url_helper(): void {
-		$url = 'https://example.com:8080/path?query=value#fragment';
+		$url    = 'https://example.com:8080/path?query=value#fragment';
 		$parsed = wp_parse_url( $url );
 
 		$this->assertIsArray( $parsed );
@@ -110,7 +110,11 @@ class HelperFunctionsTest extends TestCase {
 	}
 
 	public function test_array_manipulation(): void {
-		$array = array( 'a' => 1, 'b' => 2, 'c' => 3 );
+		$array = array(
+			'a' => 1,
+			'b' => 2,
+			'c' => 3,
+		);
 
 		$this->assertTrue( array_key_exists( 'a', $array ) );
 		$this->assertEquals( 1, $array['a'] );
@@ -121,7 +125,10 @@ class HelperFunctionsTest extends TestCase {
 	}
 
 	public function test_json_encode_decode(): void {
-		$data = array( 'key' => 'value', 'number' => 42 );
+		$data = array(
+			'key'    => 'value',
+			'number' => 42,
+		);
 		$json = wp_json_encode( $data );
 
 		$this->assertIsString( $json );

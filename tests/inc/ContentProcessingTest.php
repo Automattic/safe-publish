@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
 class ContentProcessingTest extends TestCase {
 
 	public function test_gutenberg_block_detection(): void {
-		$content_with_blocks = '<!-- wp:paragraph --><p>Test content</p><!-- /wp:paragraph -->';
+		$content_with_blocks    = '<!-- wp:paragraph --><p>Test content</p><!-- /wp:paragraph -->';
 		$content_without_blocks = '<p>Regular HTML content</p>';
 
 		$this->assertTrue( false !== strpos( $content_with_blocks, '<!-- wp:' ) );
@@ -66,7 +66,7 @@ class ContentProcessingTest extends TestCase {
 
 	public function test_media_file_extensions(): void {
 		$extensions = array( '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.mp4', '.mov', '.mp3' );
-		$test_url = 'https://example.com/image.jpg';
+		$test_url   = 'https://example.com/image.jpg';
 
 		$has_media = false;
 		foreach ( $extensions as $ext ) {
@@ -81,7 +81,7 @@ class ContentProcessingTest extends TestCase {
 
 	public function test_oembed_url_patterns(): void {
 		$youtube_url = 'https://www.youtube.com/watch?v=abc123';
-		$vimeo_url = 'https://vimeo.com/123456789';
+		$vimeo_url   = 'https://vimeo.com/123456789';
 		$twitter_url = 'https://twitter.com/user/status/123456';
 
 		$this->assertTrue( false !== strpos( $youtube_url, 'youtube.com' ) );
@@ -90,8 +90,8 @@ class ContentProcessingTest extends TestCase {
 	}
 
 	public function test_relative_url_detection(): void {
-		$absolute_url = 'https://example.com/path/to/file.jpg';
-		$relative_url = '/path/to/file.jpg';
+		$absolute_url      = 'https://example.com/path/to/file.jpg';
+		$relative_url      = '/path/to/file.jpg';
 		$protocol_relative = '//cdn.example.com/file.jpg';
 
 		$this->assertTrue( filter_var( $absolute_url, FILTER_VALIDATE_URL ) !== false );

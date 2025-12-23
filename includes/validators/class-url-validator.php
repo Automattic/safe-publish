@@ -31,7 +31,7 @@ class URL_Validator {
 
 		// Only allow HTTPS URLs for security.
 		// if ( 'https' !== wp_parse_url( $url, PHP_URL_SCHEME ) ) {
-		// 	return false;
+		// return false;
 		// }
 
 		// Additional security: prevent localhost/private network access.
@@ -73,14 +73,14 @@ class URL_Validator {
 			'.dev',
 			'localhost',
 			'127.0.0.1',
-			'::1'
+			'::1',
 		);
 
 		// Check if this is a development domain.
 		foreach ( $dev_domains as $dev_domain ) {
 			if ( $host === $dev_domain ||
-				 ( function_exists( 'str_ends_with' ) && str_ends_with( $host, $dev_domain ) ) ||
-				 ( ! function_exists( 'str_ends_with' ) && substr( $host, -strlen( $dev_domain ) ) === $dev_domain ) ) {
+				( function_exists( 'str_ends_with' ) && str_ends_with( $host, $dev_domain ) ) ||
+				( ! function_exists( 'str_ends_with' ) && substr( $host, -strlen( $dev_domain ) ) === $dev_domain ) ) {
 				// Allow both HTTP and HTTPS for development domains.
 				return in_array( $scheme, array( 'http', 'https' ), true );
 			}
@@ -120,13 +120,13 @@ class URL_Validator {
 
 		// If URL is provided, check if it's a development domain.
 		if ( ! empty( $url ) ) {
-			$host = wp_parse_url( $url, PHP_URL_HOST );
+			$host        = wp_parse_url( $url, PHP_URL_HOST );
 			$dev_domains = array( '.test', '.local', '.dev', 'localhost', '127.0.0.1', '::1' );
 
 			foreach ( $dev_domains as $dev_domain ) {
 				if ( $host === $dev_domain ||
-					 ( function_exists( 'str_ends_with' ) && str_ends_with( $host, $dev_domain ) ) ||
-					 ( ! function_exists( 'str_ends_with' ) && substr( $host, -strlen( $dev_domain ) ) === $dev_domain ) ) {
+					( function_exists( 'str_ends_with' ) && str_ends_with( $host, $dev_domain ) ) ||
+					( ! function_exists( 'str_ends_with' ) && substr( $host, -strlen( $dev_domain ) ) === $dev_domain ) ) {
 					// Allow both HTTP and HTTPS for development domains.
 					return array( 'http', 'https' );
 				}

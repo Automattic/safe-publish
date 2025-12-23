@@ -56,7 +56,7 @@ spl_autoload_register(
 		// VIP-safe file inclusion with proper validation.
 		// Ensure the file path is within the plugin directory for security.
 		$real_plugin_dir = realpath( CCP_PLUGIN_DIR );
-		$real_file_path = realpath( $file_path );
+		$real_file_path  = realpath( $file_path );
 
 		// Validate that the file exists and is within the plugin directory.
 		if ( $real_file_path &&

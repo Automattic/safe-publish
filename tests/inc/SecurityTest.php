@@ -40,8 +40,8 @@ class SecurityTest extends TestCase {
 		$meta_query = array(
 			'meta_query' => array(
 				array(
-					'key' => 'ccp_external_post_id',
-					'value' => 123, // Should be int, not string.
+					'key'     => 'ccp_external_post_id',
+					'value'   => 123, // Should be int, not string.
 					'compare' => '=',
 				),
 			),
@@ -73,7 +73,7 @@ class SecurityTest extends TestCase {
 
 	public function test_hmac_signature_generation(): void {
 		$secret = 'test_secret_key_that_is_long_enough';
-		$data = 'GET|/wp/v2/posts|' . time();
+		$data   = 'GET|/wp/v2/posts|' . time();
 
 		$signature = hash_hmac( 'sha256', $data, $secret );
 
@@ -83,7 +83,7 @@ class SecurityTest extends TestCase {
 
 	public function test_hmac_signature_is_deterministic(): void {
 		$secret = 'test_secret_key';
-		$data = 'test_data';
+		$data   = 'test_data';
 
 		$sig1 = hash_hmac( 'sha256', $data, $secret );
 		$sig2 = hash_hmac( 'sha256', $data, $secret );
@@ -93,8 +93,8 @@ class SecurityTest extends TestCase {
 
 	public function test_hmac_signature_changes_with_different_data(): void {
 		$secret = 'test_secret_key';
-		$data1 = 'test_data_1';
-		$data2 = 'test_data_2';
+		$data1  = 'test_data_1';
+		$data2  = 'test_data_2';
 
 		$sig1 = hash_hmac( 'sha256', $data1, $secret );
 		$sig2 = hash_hmac( 'sha256', $data2, $secret );
@@ -103,8 +103,8 @@ class SecurityTest extends TestCase {
 	}
 
 	public function test_timestamp_replay_protection_window(): void {
-		$current_time = time();
-		$old_timestamp = $current_time - 400; // 400 seconds ago.
+		$current_time    = time();
+		$old_timestamp   = $current_time - 400; // 400 seconds ago.
 		$valid_timestamp = $current_time - 100; // 100 seconds ago.
 
 		$replay_window = 300; // 5 minutes.
@@ -116,7 +116,7 @@ class SecurityTest extends TestCase {
 	public function test_sensitive_data_not_in_plain_text(): void {
 		// Passwords and secrets should never be stored in plain text.
 		$password = 'my_password';
-		$hashed = hash( 'sha256', $password );
+		$hashed   = hash( 'sha256', $password );
 
 		$this->assertNotEquals( $password, $hashed );
 		$this->assertEquals( 64, strlen( $hashed ) );
@@ -135,7 +135,7 @@ class SecurityTest extends TestCase {
 
 	public function test_file_extension_validation(): void {
 		$valid_extensions = array( 'jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf' );
-		$test_filename = 'image.jpg';
+		$test_filename    = 'image.jpg';
 
 		$ext = strtolower( pathinfo( $test_filename, PATHINFO_EXTENSION ) );
 
@@ -158,7 +158,7 @@ class SecurityTest extends TestCase {
 
 	public function test_xss_prevention_in_output(): void {
 		$user_input = '<script>alert("xss")</script>';
-		$escaped = htmlspecialchars( $user_input, ENT_QUOTES, 'UTF-8' );
+		$escaped    = htmlspecialchars( $user_input, ENT_QUOTES, 'UTF-8' );
 
 		$this->assertStringNotContainsString( '<script>', $escaped );
 		$this->assertStringContainsString( '&lt;script&gt;', $escaped );
