@@ -9,15 +9,14 @@
 import { Button, SelectControl, Notice, Spinner } from '@wordpress/components';
 import { useState, useEffect } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
-import React from 'react';
 
 /**
  * Represents a post type option from the external site.
  *
- * @property {string} slug        Post type slug.
- * @property {string} name        Post type name.
- * @property {string} label       Display label.
- * @property {string} rest_base   REST API base path.
+ * @property {string} slug          Post type slug.
+ * @property {string} name          Post type name.
+ * @property {string} label         Display label.
+ * @property {string} rest_base     REST API base path.
  * @property {string} [description] Optional description.
  */
 interface PostTypeOption {
@@ -95,7 +94,7 @@ export function PostTypeSelector( {
 	 * Sends a POST request to the WordPress AJAX endpoint with the specified
 	 * action and data.
 	 *
-	 * @param {string}                       action AJAX action to perform.
+	 * @param {string}                        action AJAX action to perform.
 	 * @param {Record<string, string|number>} data   Additional request data.
 	 * @return {Promise<any>} JSON response from the server.
 	 */
@@ -263,7 +262,7 @@ export function PostTypeSelector( {
 					{ isLoading ? (
 						<>
 							<Spinner />
-							{ __( 'Loading...', 'ccp' ) }
+							{ __( 'Loading…', 'ccp' ) }
 						</>
 					) : (
 						__( 'Refresh', 'ccp' )

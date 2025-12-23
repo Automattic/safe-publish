@@ -6,6 +6,11 @@
  *
  * @file This file defines DataViews actions for the CCP plugin.
  */
+import { drafts, update, download } from '@wordpress/icons';
+import { useState } from 'react';
+
+import PostDiffModal from './components/PostDiffModal';
+import { Post } from './types';
 import {
 	Button,
 	__experimentalText as Text,
@@ -15,20 +20,15 @@ import {
 	ProgressBar,
 } from '@wordpress/components';
 import { Action } from '@wordpress/dataviews/build-types';
-import { drafts, update, download } from '@wordpress/icons';
-import React, { useState } from 'react';
-
-import PostDiffModal from './components/PostDiffModal';
-import { Post } from './types';
 
 /**
  * Response from creating a draft post.
  *
- * @property {number}  post_id        Created post ID.
- * @property {string}  edit_url       URL to edit the post.
- * @property {string}  message        Response message.
- * @property {boolean} [existing]     Whether post already existed.
- * @property {string}  [post_title]   Post title.
+ * @property {number}  post_id          Created post ID.
+ * @property {string}  edit_url         URL to edit the post.
+ * @property {string}  message          Response message.
+ * @property {boolean} [existing]       Whether post already existed.
+ * @property {string}  [post_title]     Post title.
  * @property {string}  [confirm_action] Action requiring confirmation.
  */
 interface CreateDraftResponse {
@@ -138,7 +138,7 @@ const createDraftPost = async ( post: Post ): Promise< CreateDraftResponse > => 
  * Sends all selected posts to the bulk import endpoint and tracks the progress
  * of the import operation.
  *
- * @param {Post[]}   posts       Posts to import.
+ * @param {Post[]}   posts        Posts to import.
  * @param {Function} [onProgress] Progress callback (current, total) => void.
  *
  * @return {Promise<BulkImportResponse>} Bulk import results.
@@ -560,8 +560,8 @@ export const actions: Action< Post >[] = [
 										const created = importResults.results.filter( r => r.success && !r.existing ).length;
 										const updated = importResults.results.filter( r => r.success && r.existing ).length;
 										const parts = [];
-										if ( created > 0 ) parts.push( `${ created } created` );
-										if ( updated > 0 ) parts.push( `${ updated } updated with latest content` );
+										if ( created > 0 ) { parts.push( `${ created } created` ); }
+										if ( updated > 0 ) { parts.push( `${ updated } updated with latest content` ); }
 										return parts.join( ', ' );
 									} )() }
 								</Text>

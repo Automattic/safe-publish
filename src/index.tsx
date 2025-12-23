@@ -6,16 +6,15 @@
  *
  * @file This file defines the main DataViews component for the CCP plugin.
  */
-import { DataViews, View } from '@wordpress/dataviews';
-import { useState, useEffect } from '@wordpress/element';
-import { __ } from '@wordpress/i18n';
-import React from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { actions } from './actions';
 import { AdminTools } from './admin-tools';
 import { LAYOUT_GRID, LAYOUT_LIST, LAYOUT_TABLE } from './constants';
 import { sanitizePosts, searchPosts, sortPosts, paginatePosts, getPaginationInfo, extractUrlPath } from './utils';
+import { DataViews, View } from '@wordpress/dataviews';
+import { useState, useEffect } from '@wordpress/element';
+import { __ } from '@wordpress/i18n';
 
 import type { Post, ExternalPostsDataViewProps, DataViewsField, PaginationInfo } from './types';
 

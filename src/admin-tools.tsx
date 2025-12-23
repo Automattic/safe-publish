@@ -6,16 +6,13 @@
  *
  * @file This file defines the AdminTools component for the CCP plugin.
  */
+import { PostTypeSelector } from './post-type-selector';
 import { Button, Notice, Spinner } from '@wordpress/components';
 import { useState, useEffect } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
-import React from 'react';
 
-import { PostTypeSelector } from './post-type-selector';
 import type { Post } from './types';
-
-// Reference to global types.
-/// <reference path="../types/globals.d.ts" />
+import type { ReactNode } from 'react';
 
 /**
  * Props for the AdminTools component.
@@ -31,13 +28,13 @@ interface AdminToolsProps {
 /**
  * Result from a connection test request.
  *
- * @property {boolean}        success       Whether the test succeeded.
- * @property {string|ReactNode} message     Result message to display.
- * @property {number}         [response_time] Response time in milliseconds.
+ * @property {boolean}          success         Whether the test succeeded.
+ * @property {string|ReactNode} message         Result message to display.
+ * @property {number}           [response_time] Response time in milliseconds.
  */
 interface TestResult {
 	success: boolean;
-	message: string | React.ReactNode;
+	message: string | ReactNode;
 	response_time?: number;
 }
 
@@ -50,7 +47,7 @@ interface TestResult {
  */
 interface PreviewResult {
 	type: string;
-	message: string | React.ReactNode;
+	message: string | ReactNode;
 	posts?: Post[];
 }
 
@@ -71,9 +68,9 @@ interface ApiResponse< T > {
  * Renders buttons for testing the connection to the external site, previewing
  * available posts, and selecting post types.
  *
- * @param {Object} props                Component props.
- * @param {string} props.siteUrl        Initial external site URL.
- * @param {number} props.numberPosts    Number of posts to fetch.
+ * @param {Object} props             Component props.
+ * @param {string} props.siteUrl     Initial external site URL.
+ * @param {number} props.numberPosts Number of posts to fetch.
  *
  * @return {JSX.Element} Rendered AdminTools component.
  */
@@ -136,7 +133,7 @@ export function AdminTools( {
 	 * Sends a POST request to the WordPress AJAX endpoint with the specified
 	 * action and data.
 	 *
-	 * @param {string}                       action AJAX action to perform.
+	 * @param {string}                        action AJAX action to perform.
 	 * @param {Record<string, string|number>} data   Additional request data.
 	 * @return {Promise<any>} JSON response from the server.
 	 */
@@ -315,7 +312,7 @@ export function AdminTools( {
 					{ testLoading ? (
 						<>
 							<Spinner />
-							{ __( 'Testing...', 'ccp' ) }
+							{ __( 'Testing…', 'ccp' ) }
 						</>
 					) : (
 						__( 'Test Connection', 'ccp' )
@@ -347,7 +344,7 @@ export function AdminTools( {
 					{ previewLoading ? (
 						<>
 							<Spinner />
-							{ __( 'Loading...', 'ccp' ) }
+							{ __( 'Loading…', 'ccp' ) }
 						</>
 					) : (
 						__( 'Preview Posts', 'ccp' )

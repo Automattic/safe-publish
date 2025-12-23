@@ -10,18 +10,18 @@
 /**
  * Represents a post from an external WordPress site.
  *
- * @property {number}      id               Unique post ID.
- * @property {string}      link             Permalink URL of the post.
- * @property {string}      title            Post title.
- * @property {string}      modified         Last modified date in ISO format.
- * @property {string}      [content]        Full post content.
- * @property {string}      [excerpt]        Post excerpt.
- * @property {string}      [author]         Post author name.
- * @property {string}      [status]         Post status.
- * @property {number}      [featured_media] Featured image attachment ID.
- * @property {string}      [post_type]      Post type slug.
- * @property {Array<any>}  [meta]           Post meta fields.
- * @property {Array<any>}  [terms]          Taxonomy terms assigned to the post.
+ * @property {number}     id               Unique post ID.
+ * @property {string}     link             Permalink URL of the post.
+ * @property {string}     title            Post title.
+ * @property {string}     modified         Last modified date in ISO format.
+ * @property {string}     [content]        Full post content.
+ * @property {string}     [excerpt]        Post excerpt.
+ * @property {string}     [author]         Post author name.
+ * @property {string}     [status]         Post status.
+ * @property {number}     [featured_media] Featured image attachment ID.
+ * @property {string}     [post_type]      Post type slug.
+ * @property {Array<any>} [meta]           Post meta fields.
+ * @property {Array<any>} [terms]          Taxonomy terms assigned to the post.
  */
 export interface Post {
 	id: number;
@@ -50,15 +50,15 @@ export interface ExternalPostsDataViewProps {
 /**
  * Admin data passed from PHP via wp_localize_script.
  *
- * @property {string}   ajaxurl     WordPress AJAX URL.
- * @property {string}   nonce       Security nonce for AJAX requests.
- * @property {string}   restNonce   Security nonce for REST API requests.
- * @property {string}   siteUrl     External site URL.
- * @property {string}   settingsUrl URL to the plugin settings page.
- * @property {number}   numPosts    Number of posts to fetch.
- * @property {string}   containerId Container element ID.
- * @property {any[]}    postsData   Raw posts data from PHP.
- * @property {Object}   strings     Localized UI strings.
+ * @property {string} ajaxurl     WordPress AJAX URL.
+ * @property {string} nonce       Security nonce for AJAX requests.
+ * @property {string} restNonce   Security nonce for REST API requests.
+ * @property {string} siteUrl     External site URL.
+ * @property {string} settingsUrl URL to the plugin settings page.
+ * @property {number} numPosts    Number of posts to fetch.
+ * @property {string} containerId Container element ID.
+ * @property {any[]}  postsData   Raw posts data from PHP.
+ * @property {Object} strings     Localized UI strings.
  */
 export interface AdminData {
 	ajaxurl: string;
@@ -103,18 +103,18 @@ export interface DataViewsField {
 /**
  * State object for DataViews component.
  *
- * @property {'table'|'grid'|'list'} type             Current view type.
- * @property {number}                perPage          Items per page.
- * @property {number}                page             Current page number.
- * @property {Object}                sort             Sort configuration.
- * @property {string}                search           Current search term.
- * @property {any[]}                 filters          Active filters.
- * @property {string[]}              hiddenFields     Hidden field IDs.
- * @property {Object}                layout           Layout configuration.
- * @property {string[]}              fields           Visible field IDs.
- * @property {string}                [titleField]     Title field ID.
+ * @property {'table'|'grid'|'list'} type               Current view type.
+ * @property {number}                perPage            Items per page.
+ * @property {number}                page               Current page number.
+ * @property {Object}                sort               Sort configuration.
+ * @property {string}                search             Current search term.
+ * @property {any[]}                 filters            Active filters.
+ * @property {string[]}              hiddenFields       Hidden field IDs.
+ * @property {Object}                layout             Layout configuration.
+ * @property {string[]}              fields             Visible field IDs.
+ * @property {string}                [titleField]       Title field ID.
  * @property {string}                [descriptionField] Description field ID.
- * @property {string}                [mediaField]     Media field ID.
+ * @property {string}                [mediaField]       Media field ID.
  */
 export interface DataViewsState {
 	type: 'table' | 'grid' | 'list';

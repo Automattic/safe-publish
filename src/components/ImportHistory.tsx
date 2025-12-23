@@ -6,6 +6,10 @@
  *
  * @file This file defines the ImportHistory component.
  */
+import { close } from '@wordpress/icons';
+
+import { PostDiffModal } from './ImportHistoryPostDiffModal';
+import { SessionDetailsModal } from './SessionDetailsModal';
 import {
 	Button,
 	__experimentalVStack as VStack,
@@ -14,13 +18,11 @@ import {
 	Spinner,
 	Icon
 } from '@wordpress/components';
+import { DataViews, View } from '@wordpress/dataviews';
 import { useState, useEffect } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
-import { close } from '@wordpress/icons';
-import React from 'react';
 
-import { SessionDetailsModal } from './SessionDetailsModal';
-import { PostDiffModal } from './ImportHistoryPostDiffModal';
+
 import type { ImportSession, ImportLog, DataViewsField } from '../types';
 
 /**
@@ -348,7 +350,7 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 			<VStack>
 				<HStack>
 					<Spinner />
-					<Text>{ __( 'Loading import sessions...', 'ccp' ) }</Text>
+					<Text>{ __( 'Loading import sessions…', 'ccp' ) }</Text>
 				</HStack>
 			</VStack>
 		);

@@ -15,7 +15,6 @@ import {
 } from '@wordpress/components';
 import { useState, useEffect } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
-import React from 'react';
 
 /**
  * Props for the PostDiffModal component.
@@ -92,7 +91,7 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 			{ isLoading ? (
 				<HStack>
 					<Spinner />
-					<Text>{ __( 'Loading changes...', 'ccp' ) }</Text>
+					<Text>{ __( 'Loading changes…', 'ccp' ) }</Text>
 				</HStack>
 			) : error ? (
 				<Text style={ { color: '#d63638' } }>

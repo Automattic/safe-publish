@@ -7,8 +7,10 @@
  * @file This file defines the BlockDiffViewer component.
  */
 import { Diff, diffWords } from 'diff';
-import type { BlockDiff } from '../api/diff';
+
 import { __experimentalText as Text } from '@wordpress/components';
+
+import type { BlockDiff } from '../api/diff';
 
 /**
  * Props for the BlockDiffViewer component.
@@ -33,12 +35,12 @@ interface Props {
  * @return {string} HTML string with diff highlighting spans.
  */
 function highlightHtml( original: string, changed: string ): string {
-	if ( original === changed ) return changed;
+	if ( original === changed ) { return changed; }
 	const parts: Diff[] = diffWords( original, changed );
 	return parts
 		.map( part => {
 			const cls = part.added ? 'ccp-inline-added' : part.removed ? 'ccp-inline-removed' : '';
-			if ( ! cls ) return part.value;
+			if ( ! cls ) { return part.value; }
 			return `<span class="${ cls }">${ part.value }</span>`;
 		} )
 		.join( '' );
