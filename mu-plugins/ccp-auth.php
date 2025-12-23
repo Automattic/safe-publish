@@ -200,7 +200,7 @@ if ( ! function_exists( 'ccp_vip_override_endpoint_permissions' ) ) {
 			if ( isset( $endpoints[ $route ] ) ) {
 				foreach ( $endpoints[ $route ] as &$handler ) {
 					// Override the permission callback for GET requests.
-					if ( isset( $handler['methods'] ) && ( $handler['methods'] === 'GET' || strpos( $handler['methods'], 'GET' ) !== false ) ) {
+					if ( isset( $handler['methods'] ) && ( 'GET' === $handler['methods'] || false !== strpos( $handler['methods'], 'GET' ) ) ) {
 						$handler['permission_callback'] = 'ccp_vip_allow_all_permissions';
 
 						ccp_vip_log_auth_event(
