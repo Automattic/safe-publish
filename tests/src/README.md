@@ -2,6 +2,8 @@
 
 This directory contains the Vitest test suite for the Compliant Content Publisher plugin's TypeScript/React components.
 
+> **Note**: PHP unit and integration tests are documented in [../README.md](../README.md)
+
 ## Test Structure
 
 ```

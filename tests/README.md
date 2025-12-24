@@ -2,11 +2,13 @@
 
 This directory contains comprehensive unit tests for the Compliant Content Publisher WordPress plugin.
 
+> **Note**: JavaScript/TypeScript tests are documented in [src/README.md](src/README.md)
+
 ## Test Structure
 
 ```
 tests/
-├── inc/                           # Unit tests (PHPUnit)
+├── unit/                          # Unit tests (PHPUnit)
 │   ├── bootstrap.php             # Test bootstrap and setup
 │   ├── stubs.php                 # WordPress function stubs
 │   ├── test-utils.php            # Testing utility functions
@@ -16,14 +18,19 @@ tests/
 │   ├── HTTPClientTest.php        # HTTP client tests
 │   ├── ExternalPostsAPITest.php  # External API tests
 │   ├── CCPAPITest.php            # REST API tests
-│   ├── RESTBaseTest.php          # REST base class tests
-│   ├── ContentProcessingTest.php # Content processing tests
-│   ├── HelperFunctionsTest.php   # Helper function tests
-│   └── SecurityTest.php          # Security feature tests
+│   └── RESTBaseTest.php          # REST base class tests
 ├── integration/                   # Integration tests (WP Test Suite)
 │   └── bootstrap.php             # Integration test bootstrap
 ├── e2e/                          # End-to-end tests (Playwright)
-└── src/                          # Test fixtures and mocks
+│   └── settings/                 # Settings page tests
+└── src/                          # JavaScript/TypeScript tests (Vitest)
+    ├── vitest.setup.ts           # Test setup and configuration
+    ├── utils.test.ts             # Utility function tests
+    ├── constants.test.ts         # Constants tests
+    ├── types.test.ts             # TypeScript types tests
+    ├── actions.test.tsx          # Action modal tests
+    └── api/
+        └── diff.test.ts          # Diff API tests
 ```
 
 ## Running Tests
@@ -43,13 +50,13 @@ composer test-coverage
 ### Specific Test File
 
 ```bash
-vendor/bin/phpunit tests/inc/PluginTest.php
+vendor/bin/phpunit tests/unit/PluginTest.php
 ```
 
 ### Specific Test Method
 
 ```bash
-vendor/bin/phpunit --filter test_plugin_initializes tests/inc/PluginTest.php
+vendor/bin/phpunit --filter test_plugin_initializes tests/unit/PluginTest.php
 ```
 
 ### Run Tests with Detailed Output
@@ -105,32 +112,10 @@ The test suite provides comprehensive coverage for:
   - Secret generation
   - Timestamp verification
 
-- **Security Features** (`SecurityTest.php`)
-  - Authentication credential validation
-  - XSS prevention
-  - SQL injection prevention
-  - Path traversal prevention
-  - HMAC signature verification
-  - Replay attack protection
-  - File type validation
-  - MIME type validation
-
-### Content Processing
-- **Content Processing** (`ContentProcessingTest.php`)
-  - Gutenberg block detection
-  - Image extraction
-  - URL extraction
-  - Media file handling
-  - oEmbed patterns
-  - HTML entity handling
-
-### Utilities
-- **Helper Functions** (`HelperFunctionsTest.php`)
-  - Reflection helpers
-  - Path parsing
-  - Filename extraction
-  - Array manipulation
-  - JSON encoding/decoding
+- **REST Base** (`RESTBaseTest.php`)
+  - Base REST controller functionality
+  - Route registration
+  - Request handling
 
 ## Test Requirements
 

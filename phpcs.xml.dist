@@ -84,4 +84,21 @@
     	<exclude-pattern>/</exclude-pattern>
  	</rule>
 
+	<!-- Exclude stubs.php from specific rules since it must mimic WordPress core functions -->
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<exclude-pattern>tests/unit/stubs.php</exclude-pattern>
+	</rule>
+	<rule ref="Squiz.Commenting">
+		<exclude-pattern>tests/unit/stubs.php</exclude-pattern>
+	</rule>
+	<rule ref="Generic.CodeAnalysis.UnusedFunctionParameter">
+		<exclude-pattern>tests/unit/stubs.php</exclude-pattern>
+	</rule>
+	<rule ref="Universal.NamingConventions.NoReservedKeywordParameterNames">
+		<exclude-pattern>tests/unit/stubs.php</exclude-pattern>
+	</rule>
+	<rule ref="Universal.Files.SeparateFunctionsFromOO">
+		<exclude-pattern>tests/unit/stubs.php</exclude-pattern>
+	</rule>
+
 </ruleset>
