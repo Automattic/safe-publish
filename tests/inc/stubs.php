@@ -1,4 +1,6 @@
-<?php declare(strict_types = 1);
+<?php
+
+declare(strict_types = 1);
 
 // Create a simple mock namespace for test compatibility.
 namespace RemoteDataBlocks\Tests\Mocks {
