@@ -94,6 +94,11 @@ function ccp_init_plugin(): void {
  */
 register_activation_hook( __FILE__, 'ccp_activation' );
 
+/**
+ * Plugin activation callback.
+ *
+ * Sets default options and flushes rewrite rules.
+ */
 function ccp_activation(): void {
 	// Set default options.
 	if ( false === get_option( 'ccp_external_site_url' ) ) {
@@ -116,6 +121,11 @@ function ccp_activation(): void {
  */
 register_deactivation_hook( __FILE__, 'ccp_deactivation' );
 
+/**
+ * Plugin deactivation callback.
+ *
+ * Flushes rewrite rules when plugin is deactivated.
+ */
 function ccp_deactivation(): void {
 	// Flush rewrite rules (only in non-VIP environments).
 	if ( ! defined( 'WPCOM_IS_VIP_ENV' ) || ! WPCOM_IS_VIP_ENV ) {

@@ -1,4 +1,9 @@
 <?php
+/**
+ * WordPress function stubs for testing.
+ *
+ * @package Compliant_Content_Publisher
+ */
 
 declare(strict_types = 1);
 

@@ -1,4 +1,10 @@
 <?php
+/**
+ * VIP Safe Auth Test file.
+ *
+ * @package CompliantContentPublisher
+ */
+
 declare(strict_types=1);
 
 namespace CCP\Tests;
@@ -13,6 +19,9 @@ use CCP\Auth\VIP_Safe_Auth;
  */
 class VIPSafeAuthTest extends TestCase {
 
+	/**
+	 * Verifies that auth params include proper headers with shared secret.
+	 */
 	public function test_get_auth_params_with_shared_secret(): void {
 		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
 		$auth_config = array(
@@ -27,6 +36,9 @@ class VIPSafeAuthTest extends TestCase {
 		$this->assertArrayHasKey( 'X-CCP-Signature', $params['headers'] );
 	}
 
+	/**
+	 * Verifies that auth params return empty array without credentials.
+	 */
 	public function test_get_auth_params_with_no_credentials_returns_empty(): void {
 		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
 		$auth_config = array();
@@ -37,6 +49,9 @@ class VIPSafeAuthTest extends TestCase {
 		$this->assertEmpty( $params );
 	}
 
+	/**
+	 * Verifies that valid shared secrets pass authorization.
+	 */
 	public function test_is_authorized_with_valid_shared_secret(): void {
 		$site_url    = 'https://example.com';
 		$auth_config = array(
@@ -48,6 +63,9 @@ class VIPSafeAuthTest extends TestCase {
 		$this->assertTrue( $result );
 	}
 
+	/**
+	 * Verifies that short shared secrets fail authorization.
+	 */
 	public function test_is_authorized_with_short_shared_secret_fails(): void {
 		$site_url    = 'https://example.com';
 		$auth_config = array(
@@ -59,6 +77,9 @@ class VIPSafeAuthTest extends TestCase {
 		$this->assertFalse( $result );
 	}
 
+	/**
+	 * Verifies that authorization fails without credentials.
+	 */
 	public function test_is_authorized_with_no_credentials_fails(): void {
 		$site_url    = 'https://example.com';
 		$auth_config = array();
@@ -68,6 +89,9 @@ class VIPSafeAuthTest extends TestCase {
 		$this->assertFalse( $result );
 	}
 
+	/**
+	 * Verifies that generated shared secrets meet minimum length requirements.
+	 */
 	public function test_generate_shared_secret_creates_long_secret(): void {
 		$secret = VIP_Safe_Auth::generate_shared_secret();
 
@@ -75,6 +99,9 @@ class VIPSafeAuthTest extends TestCase {
 		$this->assertGreaterThanOrEqual( 32, strlen( $secret ) );
 	}
 
+	/**
+	 * Verifies that generated shared secrets are unique.
+	 */
 	public function test_generate_shared_secret_creates_unique_secrets(): void {
 		$secret1 = VIP_Safe_Auth::generate_shared_secret();
 		$secret2 = VIP_Safe_Auth::generate_shared_secret();
@@ -82,6 +109,9 @@ class VIPSafeAuthTest extends TestCase {
 		$this->assertNotEquals( $secret1, $secret2 );
 	}
 
+	/**
+	 * Verifies that signature generation produces consistent format.
+	 */
 	public function test_signature_generation_is_consistent(): void {
 		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
 		$auth_config = array(
