@@ -84,10 +84,17 @@
     	<exclude-pattern>/</exclude-pattern>
  	</rule>
 
-	<!-- Exclude stubs.php from specific rules since it must mimic WordPress core functions -->
-	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
-		<exclude-pattern>tests/unit/stubs.php</exclude-pattern>
+	<!-- Allow comments after statements -->
+	<rule ref="Squiz.Commenting.PostStatementComment">
+		<exclude-pattern>/</exclude-pattern>
 	</rule>
+
+	<!-- Allow missing end comments for long conditions -->
+	<rule ref="Squiz.Commenting.LongConditionClosingComment">
+		<exclude-pattern>/</exclude-pattern>
+	</rule>
+
+	<!-- Exclude stubs.php from specific rules since it must mimic WordPress core functions -->
 	<rule ref="Squiz.Commenting">
 		<exclude-pattern>tests/unit/stubs.php</exclude-pattern>
 	</rule>
@@ -99,6 +106,12 @@
 	</rule>
 	<rule ref="Universal.Files.SeparateFunctionsFromOO">
 		<exclude-pattern>tests/unit/stubs.php</exclude-pattern>
+	</rule>
+
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<exclude-pattern>tests/**/bootstrap.php</exclude-pattern>
+		<exclude-pattern>tests/unit/stubs.php</exclude-pattern>
+		<exclude-pattern>tests/unit/test-utils.php</exclude-pattern>
 	</rule>
 
 </ruleset>

@@ -29,10 +29,16 @@ class URL_Validator {
 			return false;
 		}
 
-		// Only allow HTTPS URLs for security.
-		// if ( 'https' !== wp_parse_url( $url, PHP_URL_SCHEME ) ) {
-		// return false;
-		// }
+		/*
+		 * TODO: Check if we want/need this.
+		 *
+		 * Only allow HTTPS URLs for security.
+		 * Uncomment to enforce HTTPS-only validation:
+		 *
+		 * if ( 'https' !== wp_parse_url( $url, PHP_URL_SCHEME ) ) {
+		 *     return false;
+		 * }
+		 */
 
 		// Additional security: prevent localhost/private network access.
 		$host = wp_parse_url( $url, PHP_URL_HOST );
@@ -40,12 +46,15 @@ class URL_Validator {
 			return false;
 		}
 
-		// Block private/local addresses for security.
-		// TODO: Uncomment and implement IP validation if needed.
-		// $ip = gethostbyname( $host );
-		// if ( filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) === false ) {
-		// return false;
-		// }
+		/*
+		 * Block private/local addresses for security.
+		 * TODO: Uncomment and implement IP validation if needed.
+		 *
+		 * $ip = gethostbyname( $host );
+		 * if ( filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) === false ) {
+		 *     return false;
+		 * }
+		 */
 
 		return true;
 	}

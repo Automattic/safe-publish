@@ -75,23 +75,23 @@ class Admin_Handler {
 	public function add_admin_menu(): void {
 		// Main menu page - Tools.
 		add_menu_page(
-			__( 'Compliant Content Publisher', 'ccp' ), // Page title
-			__( 'CC Publisher', 'ccp' ),                // Menu title
-			'manage_options',                            // Capability
-			'compliant-content-publisher',               // Menu slug
-			array( $this, 'render_admin_page' ),        // Callback
-			'dashicons-external',                        // Icon
-			99                                           // Position
+			__( 'Compliant Content Publisher', 'ccp' ),
+			__( 'CC Publisher', 'ccp' ),
+			'manage_options',
+			'compliant-content-publisher',
+			array( $this, 'render_admin_page' ),
+			'dashicons-external',
+			99
 		);
 
 		// Settings submenu page.
 		add_submenu_page(
-			'compliant-content-publisher',               // Parent slug
-			__( 'CCP Settings', 'ccp' ),                // Page title
-			__( 'Settings', 'ccp' ),                     // Menu title
-			'manage_options',                            // Capability
-			'ccp-settings',                              // Menu slug
-			array( $this, 'render_settings_page' )      // Callback
+			'compliant-content-publisher',
+			__( 'CCP Settings', 'ccp' ),
+			__( 'Settings', 'ccp' ),
+			'manage_options',
+			'ccp-settings',
+			array( $this, 'render_settings_page' )
 		);
 	}
 
@@ -364,15 +364,14 @@ class Admin_Handler {
 		// Just ensure the post type exists.
 		if ( ! post_type_exists( $post_type ) ) {
 			$post_type = 'post';
-		} else {
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedElseif
+		} elseif ( current_user_can( 'manage_options' ) ) {
 			// More permissive check - if user is admin or has manage_options, allow any post type.
-			if ( current_user_can( 'manage_options' ) ) {
-				// Admin can create any post type that exists.
-			} elseif ( 'page' === $post_type && ! current_user_can( 'edit_pages' ) ) {
-				$post_type = 'post'; // Fallback to post if can't create pages.
-			} elseif ( 'page' !== $post_type && ! current_user_can( 'edit_posts' ) ) {
-				$post_type = 'post'; // Fallback for other post types.
-			}
+			// Admin can create any post type that exists.
+		} elseif ( 'page' === $post_type && ! current_user_can( 'edit_pages' ) ) {
+			$post_type = 'post'; // Fallback to post if can't create pages.
+		} elseif ( 'page' !== $post_type && ! current_user_can( 'edit_posts' ) ) {
+			$post_type = 'post'; // Fallback for other post types.
 		}
 		// Comment out permission checking for now to test.
 
@@ -420,6 +419,7 @@ class Admin_Handler {
 					'post_title'     => $existing_post->post_title,
 					'edit_url'       => admin_url( 'post.php?post=' . $existing_post->ID . '&action=edit' ),
 					'message'        => sprintf(
+						/* translators: %s: title of the existing post */
 						__( 'Post "%s" already exists. Do you want to update it with the latest content from the external site?', 'ccp' ),
 						$existing_post->post_title
 					),
@@ -478,8 +478,13 @@ class Admin_Handler {
 			}
 		}
 
-		// Apply sanitization after processing to preserve formatting during processing.
-		// $processed_content = \wp_kses_post( $processed_content );
+		/**
+		 * Apply sanitization after processing to preserve formatting during processing.
+		 *
+		 * TODO: Check if we want/need this.
+		 *
+		 * $processed_content = \wp_kses_post( $processed_content );
+		 */
 
 		if ( $existing_post ) {
 			// Store previous content for potential rollback.
@@ -813,6 +818,7 @@ class Admin_Handler {
 							$content           = $fresh_post_data['content'] ?? $content;
 							$featured_media_id = $fresh_post_data['featured_media'] ?? $featured_media_id;
 						}
+					// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 					} catch ( \Exception $e ) {
 						// Continue with provided content if fresh fetch fails.
 					}
@@ -1682,7 +1688,7 @@ class Admin_Handler {
 			}
 		}
 
-		return $updated_html ?: $html;
+		return $updated_html ? $updated_html : $html;
 	}
 
 	/**
@@ -1749,14 +1755,17 @@ class Admin_Handler {
 
 		// Return processed content.
 		$processed_content = '';
+		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
 		foreach ( $dom->childNodes as $child ) {
 			if ( $child->nodeType === \XML_DOCUMENT_TYPE_NODE ) {
 				continue;
 			}
+
 			$processed_content .= $dom->saveHTML( $child );
 		}
+		// phpcs:enable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
 
-		return $processed_content ?: $content;
+		return $processed_content ? $processed_content : $content;
 	}
 
 	/**
@@ -1956,6 +1965,7 @@ class Admin_Handler {
 
 		// Restore previously disabled filters.
 		foreach ( $this->disabled_filters as $filter_name => $filter_callbacks ) {
+			// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
 			$wp_filter[ $filter_name ] = $filter_callbacks;
 		}
 

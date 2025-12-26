@@ -124,6 +124,7 @@ if ( ! function_exists( 'ccp_vip_handle_permission_check' ) ) {
 		// For CCP authenticated requests, temporarily override permission checks.
 		add_filter(
 			'user_has_cap',
+			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			function ( $allcaps, $caps, $args, $user ): array {
 				// Grant comprehensive permissions for CCP operations.
 				$ccp_caps = array(
@@ -294,6 +295,7 @@ if ( ! function_exists( 'ccp_vip_ensure_edit_context_access' ) ) {
 		// Force edit context access by temporarily granting permissions.
 		add_filter(
 			'user_has_cap',
+			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			function ( $allcaps, $caps, $args, $user ): array {
 				$allcaps['edit_posts']         = true;
 				$allcaps['edit_others_posts']  = true;
@@ -333,6 +335,7 @@ if ( ! function_exists( 'ccp_vip_authenticate_request' ) ) {
 	function ccp_vip_authenticate_request( $result, $server, $request ): WP_REST_Response|WP_Error|null {
 		// Only authenticate WordPress REST API endpoints.
 		$route = $request->get_route();
+
 		if ( ! $route || strpos( $route, '/wp/v2/' ) !== 0 ) {
 			return $result;
 		}
@@ -343,10 +346,10 @@ if ( ! function_exists( 'ccp_vip_authenticate_request' ) ) {
 		if ( isset( $headers['x_ccp_timestamp'] ) && isset( $headers['x_ccp_signature'] ) ) {
 			// Shared Secret Authentication.
 			return ccp_vip_authenticate_shared_secret( $request, $headers, $result );
-		} else {
-			// No CCP auth headers present, continue with normal WordPress authentication.
-			return $result;
 		}
+
+		// No CCP auth headers present, continue with normal WordPress authentication.
+		return $result;
 	}
 }
 
@@ -481,7 +484,7 @@ if ( ! function_exists( 'ccp_vip_override_meta_capabilities' ) ) {
 	 * @param array  $args    Arguments passed to capability check.
 	 * @return array Modified capabilities.
 	 */
-	function ccp_vip_override_meta_capabilities( $caps, $cap, $user_id, $args ): array {
+	function ccp_vip_override_meta_capabilities( $caps, $cap, $user_id, $args ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		// Only apply to CCP authenticated requests.
 		if ( empty( $GLOBALS['ccp_authenticated'] ) ) {
 			return $caps;
@@ -651,7 +654,7 @@ if ( ! function_exists( 'ccp_vip_grant_api_capabilities' ) ) {
 	 * @param WP_User $user    User object.
 	 * @return array Modified capabilities.
 	 */
-	function ccp_vip_grant_api_capabilities( $allcaps, $caps, $args, $user ): array {
+	function ccp_vip_grant_api_capabilities( $allcaps, $caps, $args, $user ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		// Only apply to CCP authenticated requests.
 		if ( empty( $GLOBALS['ccp_authenticated'] ) ) {
 			return $allcaps;
@@ -694,7 +697,7 @@ if ( ! function_exists( 'ccp_vip_grant_api_capabilities' ) ) {
  * @param WP_REST_Request                $request Request used to generate the response.
  * @return WP_REST_Response|WP_Error|null Original result, unchanged.
  */
-function ccp_vip_bypass_permission_checks( $result, $server, $request ): WP_REST_Response|WP_Error|null {
+function ccp_vip_bypass_permission_checks( $result, $server, $request ): WP_REST_Response|WP_Error|null { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 	// Only apply to CCP authenticated requests.
 	if ( empty( $GLOBALS['ccp_authenticated'] ) ) {
 		return $result;
@@ -859,6 +862,7 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 		}
 
 		// Ensure we can log even when WordPress functions aren't available.
+		// phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_date
 		$timestamp = function_exists( 'current_time' ) ? current_time( 'mysql' ) : date( 'Y-m-d H:i:s' );
 		$site_url  = function_exists( 'get_site_url' ) ? get_site_url() : ( $_SERVER['HTTP_HOST'] ?? 'unknown' );
 
@@ -875,21 +879,23 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 		);
 
 		// Simple, reliable log message format.
-		$log_message = '[CCP-Auth-VIP] ' . $event . ': ' . json_encode( $log_data, JSON_UNESCAPED_SLASHES );
+		$log_message = '[CCP-Auth-VIP] ' . $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES );
 
 		error_log( $log_message );
 
 		// Backup logging methods.
 
 		// 1. Direct file write as backup (VIP-safe location).
-		$log_file     = '/tmp/ccp-auth-vip.log';
+		$log_file = get_temp_dir() . 'ccp-auth-vip.log';
+		// phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_date
 		$file_message = date( 'Y-m-d H:i:s' ) . ' ' . $log_message . "\n";
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_file_put_contents
 		@file_put_contents( $log_file, $file_message, FILE_APPEND | LOCK_EX );
 
 		// 2. PHP syslog for additional visibility.
 		if ( function_exists( 'syslog' ) ) {
 			openlog( 'CCP-Auth-VIP', LOG_PID, LOG_USER );
-			syslog( LOG_INFO, $event . ': ' . json_encode( $log_data, JSON_UNESCAPED_SLASHES ) );
+			syslog( LOG_INFO, $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES ) );
 			closelog();
 		}
 
@@ -898,6 +904,9 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 			// Send critical events to VIP IRC monitoring.
 			$critical_events = array( 'AUTH_SUCCESS', 'SIGNATURE_INVALID', 'NO_SECRET_CONFIGURED', 'SYSTEM_USER_CREATED' );
 			if ( in_array( $event, $critical_events, true ) ) {
+				/**
+				 * TODO: Check if we want/need this.
+				 */
 				wpcom_vip_irc( 'CCP-Auth', $log_message );
 			}
 		}
@@ -1068,14 +1077,11 @@ function ccp_vip_auth_admin_notice(): void {
 		echo '<p><strong>CCP Authentication:</strong> Shared secret is too short (' . $secret_length . ' characters). ';
 		echo 'Use at least 32 characters for security.</p>';
 		echo '</div>';
-	} else {
-		// Only show success notice in debug mode to avoid clutter.
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			echo '<div class="notice notice-success is-dismissible">';
-			echo '<p><strong>CCP Authentication:</strong> ✅ Configured successfully ';
-			echo '(' . $secret_length . ' character secret).</p>';
-			echo '</div>';
-		}
+	} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		echo '<div class="notice notice-success is-dismissible">';
+		echo '<p><strong>CCP Authentication:</strong> ✅ Configured successfully ';
+		echo '(' . $secret_length . ' character secret).</p>';
+		echo '</div>';
 	}
 }
 
@@ -1175,7 +1181,7 @@ function ccp_vip_can_manage_auth(): bool {
  * @param WP_REST_Request $request REST request object.
  * @return WP_REST_Response Response containing auth status data.
  */
-function ccp_vip_auth_status_callback( $request ): WP_REST_Response {
+function ccp_vip_auth_status_callback( $request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 	$shared_secret = ccp_vip_get_shared_secret();
 	$stats         = get_option( 'ccp_auth_stats', array() );
 	$recent_events = get_option( 'ccp_auth_log_events', array() );
@@ -1260,8 +1266,10 @@ function ccp_vip_auth_status_callback( $request ): WP_REST_Response {
  */
 function ccp_vip_auth_logs_callback( $request ): WP_REST_Response {
 	$recent_events = get_option( 'ccp_auth_log_events', array() );
-	$limit         = min( (int) $request->get_param( 'limit' ) ?: 50, 100 );
-	$offset        = (int) $request->get_param( 'offset' ) ?: 0;
+	$limit_value   = (int) $request->get_param( 'limit' );
+	$limit         = min( $limit_value ? $limit_value : 50, 100 );
+	$offset_value  = (int) $request->get_param( 'offset' );
+	$offset        = $offset_value ? $offset_value : 0;
 
 	// Filter by event type if specified.
 	$event_type = $request->get_param( 'event_type' );
@@ -1299,14 +1307,15 @@ function ccp_vip_auth_logs_callback( $request ): WP_REST_Response {
  * @param WP_REST_Request $request REST request object.
  * @return WP_REST_Response Response confirming logs were cleared.
  */
-function ccp_vip_clear_auth_logs_callback( $request ): WP_REST_Response {
+function ccp_vip_clear_auth_logs_callback( $request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 	delete_option( 'ccp_auth_log_events' );
 	delete_option( 'ccp_auth_stats' );
+	$user_id = get_current_user_id();
 
 	ccp_vip_log_auth_event(
 		'LOGS_CLEARED',
 		array(
-			'cleared_by' => get_current_user_id() ?: 'unknown',
+			'cleared_by' => $user_id ? $user_id : 'unknown',
 			'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
 		)
 	);
@@ -1390,7 +1399,7 @@ add_filter( 'site_status_tests', 'ccp_vip_add_site_health_test' );
  */
 function ccp_vip_add_site_health_test( $tests ): array {
 	$tests['direct']['ccp_auth'] = array(
-		'label' => __( 'CCP Authentication Configuration' ),
+		'label' => __( 'CCP Authentication Configuration', 'ccp' ),
 		'test'  => 'ccp_vip_site_health_test',
 	);
 
@@ -1408,15 +1417,15 @@ function ccp_vip_site_health_test(): array {
 
 	if ( empty( $shared_secret ) ) {
 		return array(
-			'label'       => __( 'CCP Authentication not configured' ),
+			'label'       => __( 'CCP Authentication not configured', 'ccp' ),
 			'status'      => 'recommended',
 			'badge'       => array(
-				'label' => __( 'CCP' ),
+				'label' => __( 'CCP', 'ccp' ),
 				'color' => 'orange',
 			),
 			'description' => sprintf(
 				'<p>%s</p>',
-				__( 'The CCP (Compliant Content Publisher) shared secret is not configured. If you plan to use CCP, set the CCP_SHARED_SECRET environment variable.' )
+				__( 'The CCP (Compliant Content Publisher) shared secret is not configured. If you plan to use CCP, set the CCP_SHARED_SECRET environment variable.', 'ccp' )
 			),
 			'test'        => 'ccp_auth',
 		);
@@ -1424,30 +1433,32 @@ function ccp_vip_site_health_test(): array {
 
 	if ( $secret_length < 32 ) {
 		return array(
-			'label'       => __( 'CCP Authentication secret too short' ),
+			'label'       => __( 'CCP Authentication secret too short', 'ccp' ),
 			'status'      => 'critical',
 			'badge'       => array(
-				'label' => __( 'CCP' ),
+				'label' => __( 'CCP', 'ccp' ),
 				'color' => 'red',
 			),
 			'description' => sprintf(
 				'<p>%s</p>',
-				sprintf( __( 'The CCP shared secret is only %d characters long. For security, use at least 32 characters.' ), $secret_length )
+				/* translators: %d: length of the shared secret in characters */
+				sprintf( __( 'The CCP shared secret is only %d characters long. For security, use at least 32 characters.', 'ccp' ), $secret_length )
 			),
 			'test'        => 'ccp_auth',
 		);
 	}
 
 	return array(
-		'label'       => __( 'CCP Authentication configured correctly' ),
+		'label'       => __( 'CCP Authentication configured correctly', 'ccp' ),
 		'status'      => 'good',
 		'badge'       => array(
-			'label' => __( 'CCP' ),
+			'label' => __( 'CCP', 'ccp' ),
 			'color' => 'green',
 		),
 		'description' => sprintf(
 			'<p>%s</p>',
-			sprintf( __( 'CCP authentication is properly configured with a %d-character shared secret.' ), $secret_length )
+			/* translators: %d: length of the shared secret in characters */
+			sprintf( __( 'CCP authentication is properly configured with a %d-character shared secret.', 'ccp' ), $secret_length )
 		),
 		'test'        => 'ccp_auth',
 	);
@@ -1668,8 +1679,8 @@ add_filter(
 	'redirect_canonical',
 	function ( $redirect_url, $requested_url ): string|false {
 		// Get the hostname from the request.
-		$requested_host = parse_url( $requested_url, PHP_URL_HOST );
-		$site_host      = parse_url( home_url(), PHP_URL_HOST );
+		$requested_host = wp_parse_url( $requested_url, PHP_URL_HOST );
+		$site_host      = wp_parse_url( home_url(), PHP_URL_HOST );
 
 		// Allow both localhost and host.docker.internal for the same site.
 		$allowed_hosts = array( 'localhost', 'host.docker.internal' );
@@ -1677,8 +1688,8 @@ add_filter(
 		// If the requested host is in our allowed list and matches the site host pattern, don't redirect.
 		if ( in_array( $requested_host, $allowed_hosts, true ) ) {
 			// Check if it's the same port and path.
-			$requested_port = parse_url( $requested_url, PHP_URL_PORT );
-			$site_port      = parse_url( home_url(), PHP_URL_PORT );
+			$requested_port = wp_parse_url( $requested_url, PHP_URL_PORT );
+			$site_port      = wp_parse_url( home_url(), PHP_URL_PORT );
 
 			if ( $requested_port === $site_port ) {
 				return false; // Disable redirect.
@@ -1698,8 +1709,8 @@ add_filter(
 	'allowed_http_origins',
 	function ( $origins ): array {
 		$site_url  = home_url();
-		$site_host = parse_url( $site_url, PHP_URL_HOST );
-		$site_port = parse_url( $site_url, PHP_URL_PORT );
+		$site_host = wp_parse_url( $site_url, PHP_URL_HOST );
+		$site_port = wp_parse_url( $site_url, PHP_URL_PORT );
 
 		// Add host.docker.internal with the same port.
 		if ( $site_port ) {
