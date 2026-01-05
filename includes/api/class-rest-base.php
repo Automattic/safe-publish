@@ -1,9 +1,11 @@
-<?php declare(strict_types = 1);
+<?php
 /**
  * REST Base class
  *
  * @package CCP
  */
+
+declare(strict_types = 1);
 
 namespace CCP\API;
 
