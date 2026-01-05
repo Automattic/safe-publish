@@ -392,7 +392,7 @@ class CCP_API extends REST_Base {
 			require_once ABSPATH . 'wp-includes/wp-diff.php';
 		}
 
-		$renderer = ( 'inline' === $mode ) ? new \WP_Text_Diff_Renderer_Inline() : new \WP_Text_Diff_Renderer_Table();
+		$renderer = ( 'inline' === $mode ) ? new \WP_Text_Diff_Renderer_inline() : new \WP_Text_Diff_Renderer_Table();
 
 		// Generate content-only diff HTML.
 		$content_diff = wp_text_diff(
@@ -601,7 +601,9 @@ class CCP_API extends REST_Base {
 
 		// Apply standard content filters (shortcodes, embeds, formatting).
 		if ( function_exists( 'apply_filters' ) ) {
-			$current_rendered  = apply_filters( 'the_content', $current_rendered );
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
+			$current_rendered = apply_filters( 'the_content', $current_rendered );
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 			$incoming_rendered = apply_filters( 'the_content', $incoming_rendered );
 		}
 
@@ -718,20 +720,15 @@ class CCP_API extends REST_Base {
 	 *
 	 * @param string $s Serialized string.
 	 * @return mixed Unserialized data.
+	 * @throws \InvalidArgumentException If the serialized string is invalid.
 	 */
 	public function safe_unserialize( string $s ): mixed {
 		if ( 'b:0;' === $s ) {
 			return false; // Legitimate serialized false.
 		}
 
-		// Suppress warnings and detect failure reliably.
-		$prev   = set_error_handler(
-			function (): void {
-				// Swallow unserialize warnings.
-			}
-		);
-		$result = unserialize( $s, array( 'allowed_classes' => false ) );
-		restore_error_handler();
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.PHP.DiscouragedPHPFunctions.serialize_unserialize
+		$result = @unserialize( $s, array( 'allowed_classes' => false ) );
 
 		if ( false === $result && 'b:0;' !== $s ) {
 			throw new \InvalidArgumentException( 'Invalid serialized string.' );
@@ -816,22 +813,22 @@ class CCP_API extends REST_Base {
 		}
 
 		if ( is_array( $left ) ) {
-			$diffs   = array();
-			$allKeys = array_unique( array_merge( array_keys( $left ), array_keys( $right ) ) );
+			$diffs    = array();
+			$all_keys = array_unique( array_merge( array_keys( $left ), array_keys( $right ) ) );
 			// Keep order stable for readability.
-			sort( $allKeys );
-			foreach ( $allKeys as $k ) {
-				$lHas = array_key_exists( $k, $left );
-				$rHas = array_key_exists( $k, $right );
-				$p    = $path . ( is_int( $k ) ? "[$k]" : "['$k']" );
-				if ( ! $lHas ) {
+			sort( $all_keys );
+			foreach ( $all_keys as $k ) {
+				$l_has = array_key_exists( $k, $left );
+				$r_has = array_key_exists( $k, $right );
+				$p     = $path . ( is_int( $k ) ? "[$k]" : "['$k']" );
+				if ( ! $l_has ) {
 					$diffs[] = array(
 						'path'  => $p,
 						'left'  => null,
 						'right' => $right[ $k ],
 						'note'  => 'added',
 					);
-				} elseif ( ! $rHas ) {
+				} elseif ( ! $r_has ) {
 					$diffs[] = array(
 						'path'  => $p,
 						'left'  => $left[ $k ],
@@ -900,13 +897,13 @@ class CCP_API extends REST_Base {
 			}
 		}
 
-		// Insert consistent line breaks to help the line-based diff:
+		// Insert consistent line breaks to help the line-based diff.
 		$html = $this->add_line_breaks_for_diff( $html );
 
-		// Normalize trivial whitespace:
-		// - collapse runs of spaces/tabs
-		// - collapse many blank lines to max 1 blank line
+		// Collapse runs of spaces/tabs.
 		$html = preg_replace( "/[ \t]+/", ' ', $html );
+
+		// Collapse many blank lines to max 1 blank line.
 		$html = preg_replace( "/\n{3,}/", "\n\n", $html );
 
 		// Trim edges for diff neatness.

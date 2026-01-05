@@ -417,6 +417,7 @@ class External_Posts_API {
 		$processed_content = '';
 
 		if ( $body ) {
+			// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
 			foreach ( $body->childNodes as $child ) {
 				$processed_content .= $dom->saveHTML( $child );
 			}
@@ -443,14 +444,20 @@ class External_Posts_API {
 			$media_url = rtrim( $source_site_url, '/' ) . '/' . ltrim( $media_url, '/' );
 		}
 
-		// Check if media is from the same domain as source.
-		// $source_domain = wp_parse_url( $source_site_url, PHP_URL_HOST );
-		// $media_domain  = wp_parse_url( $media_url, PHP_URL_HOST );
-
-		// Only import media from the same domain for security.
-		// if ( $source_domain !== $media_domain ) {
-		// return false;
-		// }
+		/*
+		 * TODO: Check if we want/need this.
+		 *
+		 * Check if media is from the same domain as source.
+		 * Uncomment to enable same-domain validation:
+		 *
+		 * $source_domain = wp_parse_url( $source_site_url, PHP_URL_HOST );
+		 * $media_domain  = wp_parse_url( $media_url, PHP_URL_HOST );
+		 *
+		 * Only import media from the same domain for security.
+		 * if ( $source_domain !== $media_domain ) {
+		 *     return false;
+		 * }
+		 */
 
 		// Check if we already imported this media.
 		$existing_attachment = $this->get_attachment_by_url( $media_url );
@@ -526,6 +533,7 @@ class External_Posts_API {
 		// Temporarily enable WebP uploads during import.
 		$webp_filter_added = false;
 		if ( ! $this->is_webp_supported() ) {
+			// phpcs:ignore WordPressVIPMinimum.Hooks.RestrictedHooks.upload_mimes
 			add_filter( 'upload_mimes', array( $this, 'add_webp_mime_type' ) );
 			$webp_filter_added = true;
 			error_log( 'CCP: Added WebP MIME type filter for ' . $media_url );
@@ -829,6 +837,7 @@ class External_Posts_API {
 		}
 
 		// Process any oembed divs.
+		// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
 		$xpath       = new \DOMXPath( $figure->ownerDocument );
 		$oembed_divs = $xpath->query( './/div[contains(@class, "oembed")]', $figure );
 		if ( $oembed_divs ) {
@@ -1024,7 +1033,11 @@ class External_Posts_API {
 
 		$query_args = array(
 			'_embed' => '1',
-			// '_fields' => 'id,link,title,modified,featured_media,content,excerpt,tags,categories,meta', // Fetch all needed fields
+			/**
+			 * TODO: Check if we want/need this.
+			 *
+			 * '_fields' => 'id,link,title,modified,featured_media,content,excerpt,tags,categories,meta', // Fetch all needed fields
+			 */
 		);
 
 		// If user and password are provided add edit context.

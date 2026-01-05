@@ -197,6 +197,7 @@ class Import_History {
 			array(
 				'post_type'   => self::SESSION_POST_TYPE,
 				'post_title'  => sprintf(
+					/* translators: %s: timestamp of the import session */
 					__( 'Import Session - %s', 'ccp' ),
 					current_time( 'Y-m-d H:i:s' )
 				),
@@ -621,6 +622,7 @@ class Import_History {
 				'deleted_count'  => $deleted_count,
 				'restored_count' => $restored_count,
 				'message'        => sprintf(
+					/* translators: 1: number of posts deleted, 2: number of posts restored */
 					__( '%1$d posts deleted and %2$d posts restored successfully.', 'ccp' ),
 					$deleted_count,
 					$restored_count
@@ -961,6 +963,7 @@ class Import_History {
 			wp_send_json_success(
 				array(
 					'message'      => sprintf(
+						/* translators: %d: number of log entries removed */
 						__( 'Session deleted successfully. %d associated log entries were also removed.', 'ccp' ),
 						$deleted_logs_count
 					),
