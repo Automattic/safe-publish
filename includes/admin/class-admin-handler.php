@@ -409,7 +409,7 @@ class Admin_Handler {
 		}
 
 		// Check if user wants to force update (confirmation received).
-		$force_update = isset( $_POST['force_update'] ) && $_POST['force_update'] === 'true';
+		$force_update = isset( $_POST['force_update'] ) && 'true' === $_POST['force_update'];
 
 		// If post exists and no force update, ask for confirmation.
 		if ( $existing_post && ! $force_update ) {
@@ -502,7 +502,7 @@ class Admin_Handler {
 
 			foreach ( $meta_keys_to_preserve as $meta_key ) {
 				$meta_value = get_post_meta( $existing_post->ID, $meta_key, true );
-				if ( $meta_value !== '' ) {
+				if ( '' !== $meta_value ) {
 					$previous_content['previous_meta'][ $meta_key ] = $meta_value;
 				}
 			}
@@ -1423,7 +1423,7 @@ class Admin_Handler {
 		if ( ! empty( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] ) ) {
 			foreach ( $block['innerBlocks'] as $index => $inner_block ) {
 				// Process nested image blocks using the existing process_image_block function.
-				if ( ! empty( $inner_block['blockName'] ) && $inner_block['blockName'] === 'core/image' ) {
+				if ( ! empty( $inner_block['blockName'] ) && 'core/image' === $inner_block['blockName'] ) {
 					$block['innerBlocks'][ $index ] = $this->process_image_block( $inner_block, $site_url );
 				} else {
 					// Process other types of inner blocks recursively.
@@ -1628,7 +1628,7 @@ class Admin_Handler {
 		$updated_html = preg_replace( $pattern, $replacement, $html );
 
 		// If regex replacement worked, apply minimal normalization.
-		if ( $updated_html !== null && $updated_html !== $html ) {
+		if ( null !== $updated_html && $updated_html !== $html ) {
 			// Only normalize Gutenberg-specific spacing - preserve other whitespace.
 			// Gutenberg requires NO space before /> for self-closing tags.
 			$updated_html = preg_replace( '/\s+\/>/', '/>', $updated_html );
@@ -1750,7 +1750,7 @@ class Admin_Handler {
 		// Return processed content.
 		$processed_content = '';
 		foreach ( $dom->childNodes as $child ) {
-			if ( $child->nodeType === \XML_DOCUMENT_TYPE_NODE ) {
+			if ( \XML_DOCUMENT_TYPE_NODE === $child->nodeType ) {
 				continue;
 			}
 			$processed_content .= $dom->saveHTML( $child );

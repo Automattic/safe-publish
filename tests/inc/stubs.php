@@ -105,7 +105,7 @@ namespace {
 	function wp_parse_url( string $url, int $component = -1 ): mixed {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
 		$parsed = parse_url( $url );
-		if ( $component === -1 ) {
+		if ( -1 === $component ) {
 			return $parsed;
 		}
 		// Return specific component (PHP_URL_HOST = 1, etc.).
