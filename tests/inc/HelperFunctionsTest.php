@@ -1,4 +1,10 @@
 <?php
+/**
+ * Helper Functions Test file.
+ *
+ * @package CompliantContentPublisher
+ */
+
 declare(strict_types=1);
 
 namespace CCP\Tests;
@@ -12,22 +18,38 @@ use PHPUnit\Framework\TestCase;
  */
 class HelperFunctionsTest extends TestCase {
 
+	/**
+	 * Verifies that get_private_property helper function is available.
+	 */
 	public function test_get_private_property_helper_exists(): void {
 		$this->assertTrue( function_exists( 'get_private_property' ) );
 	}
 
+	/**
+	 * Verifies that get_private_method helper function is available.
+	 */
 	public function test_get_private_method_helper_exists(): void {
 		$this->assertTrue( function_exists( 'get_private_method' ) );
 	}
 
+	/**
+	 * Verifies that set_private_property helper function is available.
+	 */
 	public function test_set_private_property_helper_exists(): void {
 		$this->assertTrue( function_exists( 'set_private_property' ) );
 	}
 
+	/**
+	 * Verifies that reflection can access private properties.
+	 */
 	public function test_reflection_on_simple_class(): void {
 		$test_class = new class() {
+			/** @var string Test property. */
 			private $test_property = 'initial_value';
 
+			/**
+			 * Gets property value.
+			 */
 			public function get_property() {
 				return $this->test_property;
 			}
@@ -40,11 +62,18 @@ class HelperFunctionsTest extends TestCase {
 		$this->assertEquals( 'initial_value', $property->getValue( $test_class ) );
 	}
 
+	/**
+	 * Verifies that private properties can be set and retrieved.
+	 */
 	public function test_set_and_get_private_property(): void {
 		$test_class = new class() {
+			/** @var string Test value. */
 			private $test_value = 'original';
 
-			public function getValue() {
+			/**
+			 * Gets value.
+			 */
+			public function get_value() {
 				return $this->test_value;
 			}
 		};
@@ -52,9 +81,12 @@ class HelperFunctionsTest extends TestCase {
 		$class_name = get_class( $test_class );
 		set_private_property( $class_name, $test_class, 'test_value', 'modified' );
 
-		$this->assertEquals( 'modified', $test_class->getValue() );
+		$this->assertEquals( 'modified', $test_class->get_value() );
 	}
 
+	/**
+	 * Verifies that URL paths are correctly parsed.
+	 */
 	public function test_path_parsing(): void {
 		$url  = 'https://example.com/wp-content/uploads/2024/01/image.jpg';
 		$path = wp_parse_url( $url, PHP_URL_PATH );
@@ -64,6 +96,9 @@ class HelperFunctionsTest extends TestCase {
 		$this->assertEquals( '/wp-content/uploads/2024/01/image.jpg', $path );
 	}
 
+	/**
+	 * Verifies that filenames are correctly extracted from URLs.
+	 */
 	public function test_filename_extraction(): void {
 		$url      = 'https://example.com/wp-content/uploads/2024/01/test-image.jpg';
 		$filename = basename( $url );
@@ -71,6 +106,9 @@ class HelperFunctionsTest extends TestCase {
 		$this->assertEquals( 'test-image.jpg', $filename );
 	}
 
+	/**
+	 * Verifies that file extensions are correctly extracted from filenames.
+	 */
 	public function test_extension_extraction(): void {
 		$filename = 'test-image.jpg';
 		$info     = pathinfo( $filename );
@@ -80,6 +118,9 @@ class HelperFunctionsTest extends TestCase {
 		$this->assertEquals( 'test-image', $info['filename'] );
 	}
 
+	/**
+	 * Verifies that WordPress sanitization functions are available.
+	 */
 	public function test_sanitize_functions_exist(): void {
 		$functions = array(
 			'sanitize_text_field',
@@ -98,6 +139,9 @@ class HelperFunctionsTest extends TestCase {
 		}
 	}
 
+	/**
+	 * Verifies that wp_parse_url correctly parses URL components.
+	 */
 	public function test_wp_parse_url_helper(): void {
 		$url    = 'https://example.com:8080/path?query=value#fragment';
 		$parsed = wp_parse_url( $url );
@@ -109,6 +153,9 @@ class HelperFunctionsTest extends TestCase {
 		$this->assertEquals( '/path', $parsed['path'] ?? null );
 	}
 
+	/**
+	 * Verifies that array operations work as expected.
+	 */
 	public function test_array_manipulation(): void {
 		$array = array(
 			'a' => 1,
@@ -124,6 +171,9 @@ class HelperFunctionsTest extends TestCase {
 		$this->assertEquals( array( 'a', 'b', 'c' ), $keys );
 	}
 
+	/**
+	 * Verifies that JSON encoding and decoding preserve data structure.
+	 */
 	public function test_json_encode_decode(): void {
 		$data = array(
 			'key'    => 'value',

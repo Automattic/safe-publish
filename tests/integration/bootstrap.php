@@ -1,4 +1,11 @@
-<?php declare(strict_types = 1);
+<?php
+/**
+ * PHPUnit bootstrap file for integration tests.
+ *
+ * @package Compliant_Content_Publisher
+ */
+
+declare(strict_types = 1);
 
 // Do not require Redis running for integration tests.
 define( 'WP_REDIS_DISABLED', true );

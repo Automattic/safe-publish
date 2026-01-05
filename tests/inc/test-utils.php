@@ -1,4 +1,9 @@
 <?php
+/**
+ * Test utility functions.
+ *
+ * @package Compliant_Content_Publisher
+ */
 
 declare(strict_types = 1);
 

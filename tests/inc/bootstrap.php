@@ -1,4 +1,9 @@
 <?php
+/**
+ * PHPUnit bootstrap file for unit tests.
+ *
+ * @package Compliant_Content_Publisher
+ */
 
 declare(strict_types = 1);
 

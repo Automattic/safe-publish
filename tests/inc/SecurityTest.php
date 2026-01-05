@@ -1,4 +1,10 @@
 <?php
+/**
+ * Security Test file.
+ *
+ * @package CompliantContentPublisher
+ */
+
 declare(strict_types=1);
 
 namespace CCP\Tests;
@@ -12,6 +18,9 @@ use PHPUnit\Framework\TestCase;
  */
 class SecurityTest extends TestCase {
 
+	/**
+	 * Verifies that authentication credentials meet minimum security requirements.
+	 */
 	public function test_authentication_credentials_not_empty(): void {
 		$valid_credentials = array(
 			'shared_secret' => 'test_secret_that_is_long_enough_32chars',
@@ -21,12 +30,18 @@ class SecurityTest extends TestCase {
 		$this->assertGreaterThanOrEqual( 16, strlen( $valid_credentials['shared_secret'] ) );
 	}
 
+	/**
+	 * Verifies that dangerous JavaScript protocol URLs are rejected.
+	 */
 	public function test_url_validation_rejects_javascript_protocol(): void {
 		$dangerous_url = 'javascript:alert(1)';
 
 		$this->assertFalse( filter_var( $dangerous_url, FILTER_VALIDATE_URL ) );
 	}
 
+	/**
+	 * Verifies that data protocol URLs are properly identified.
+	 */
 	public function test_url_validation_rejects_data_protocol(): void {
 		$dangerous_url = 'data:text/html,<script>alert(1)</script>';
 
@@ -35,6 +50,9 @@ class SecurityTest extends TestCase {
 		$this->assertEquals( 'data', $parsed['scheme'] ?? null );
 	}
 
+	/**
+	 * Verifies that meta queries use proper type safety to prevent SQL injection.
+	 */
 	public function test_sql_injection_prevention_in_meta_query(): void {
 		// Meta queries should use parameterized values.
 		$meta_query = array(
@@ -50,6 +68,9 @@ class SecurityTest extends TestCase {
 		$this->assertIsInt( $meta_query['meta_query'][0]['value'] );
 	}
 
+	/**
+	 * Verifies that nonce values have proper structure.
+	 */
 	public function test_nonce_validation_structure(): void {
 		// Nonces should be validated before processing.
 		$nonce = 'test_nonce_value';
@@ -58,6 +79,9 @@ class SecurityTest extends TestCase {
 		$this->assertNotEmpty( $nonce );
 	}
 
+	/**
+	 * Verifies that capability constants are properly defined.
+	 */
 	public function test_capability_checks_exist(): void {
 		$capabilities = array(
 			'manage_options',
@@ -71,6 +95,9 @@ class SecurityTest extends TestCase {
 		}
 	}
 
+	/**
+	 * Verifies that HMAC signatures are generated in correct format.
+	 */
 	public function test_hmac_signature_generation(): void {
 		$secret = 'test_secret_key_that_is_long_enough';
 		$data   = 'GET|/wp/v2/posts|' . time();
@@ -81,6 +108,9 @@ class SecurityTest extends TestCase {
 		$this->assertEquals( 64, strlen( $signature ) ); // SHA256 hex is 64 chars.
 	}
 
+	/**
+	 * Verifies that HMAC signatures are deterministic for identical inputs.
+	 */
 	public function test_hmac_signature_is_deterministic(): void {
 		$secret = 'test_secret_key';
 		$data   = 'test_data';
@@ -91,6 +121,9 @@ class SecurityTest extends TestCase {
 		$this->assertEquals( $sig1, $sig2 );
 	}
 
+	/**
+	 * Verifies that HMAC signatures change when input data changes.
+	 */
 	public function test_hmac_signature_changes_with_different_data(): void {
 		$secret = 'test_secret_key';
 		$data1  = 'test_data_1';
@@ -102,6 +135,9 @@ class SecurityTest extends TestCase {
 		$this->assertNotEquals( $sig1, $sig2 );
 	}
 
+	/**
+	 * Verifies that timestamp replay protection enforces time window.
+	 */
 	public function test_timestamp_replay_protection_window(): void {
 		$current_time    = time();
 		$old_timestamp   = $current_time - 400; // 400 seconds ago.
@@ -113,6 +149,9 @@ class SecurityTest extends TestCase {
 		$this->assertFalse( abs( $current_time - $old_timestamp ) <= $replay_window );
 	}
 
+	/**
+	 * Verifies that sensitive data is properly hashed and not stored in plain text.
+	 */
 	public function test_sensitive_data_not_in_plain_text(): void {
 		// Passwords and secrets should never be stored in plain text.
 		$password = 'my_password';
@@ -122,6 +161,9 @@ class SecurityTest extends TestCase {
 		$this->assertEquals( 64, strlen( $hashed ) );
 	}
 
+	/**
+	 * Verifies that directory traversal patterns are properly sanitized.
+	 */
 	public function test_path_traversal_prevention(): void {
 		$malicious_path = '../../../etc/passwd';
 
@@ -133,6 +175,9 @@ class SecurityTest extends TestCase {
 		$this->assertFalse( false !== strpos( $sanitized, '..' ) );
 	}
 
+	/**
+	 * Verifies that file extensions are validated against allowed list.
+	 */
 	public function test_file_extension_validation(): void {
 		$valid_extensions = array( 'jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf' );
 		$test_filename    = 'image.jpg';
@@ -142,6 +187,9 @@ class SecurityTest extends TestCase {
 		$this->assertContains( $ext, $valid_extensions );
 	}
 
+	/**
+	 * Verifies that MIME types are validated against allowed list.
+	 */
 	public function test_mime_type_validation(): void {
 		$valid_mime_types = array(
 			'image/jpeg',
@@ -156,6 +204,9 @@ class SecurityTest extends TestCase {
 		$this->assertContains( $test_mime, $valid_mime_types );
 	}
 
+	/**
+	 * Verifies that user input is properly escaped to prevent XSS attacks.
+	 */
 	public function test_xss_prevention_in_output(): void {
 		$user_input = '<script>alert("xss")</script>';
 		$escaped    = htmlspecialchars( $user_input, ENT_QUOTES, 'UTF-8' );
@@ -164,6 +215,9 @@ class SecurityTest extends TestCase {
 		$this->assertStringContainsString( '&lt;script&gt;', $escaped );
 	}
 
+	/**
+	 * Verifies that random bytes are cryptographically secure and unique.
+	 */
 	public function test_random_bytes_generation(): void {
 		$bytes1 = bin2hex( random_bytes( 16 ) );
 		$bytes2 = bin2hex( random_bytes( 16 ) );

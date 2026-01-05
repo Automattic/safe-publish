@@ -1,4 +1,10 @@
 <?php
+/**
+ * External Posts API Test.
+ *
+ * @package Compliant_Content_Publisher
+ */
+
 declare(strict_types=1);
 
 namespace CCP\Tests;
@@ -13,17 +19,29 @@ use CCP\API\External_Posts_API;
  */
 class ExternalPostsAPITest extends TestCase {
 
+	/**
+	 * @var External_Posts_API External Posts API instance for testing.
+	 */
 	private External_Posts_API $api;
 
+	/**
+	 * Sets up test fixtures.
+	 */
 	protected function setUp(): void {
 		parent::setUp();
 		$this->api = new External_Posts_API();
 	}
 
+	/**
+	 * Verifies that the External Posts API initializes correctly.
+	 */
 	public function test_api_initializes(): void {
 		$this->assertInstanceOf( External_Posts_API::class, $this->api );
 	}
 
+	/**
+	 * Verifies that fetch_posts returns an error for invalid URLs.
+	 */
 	public function test_fetch_posts_with_invalid_url_returns_error(): void {
 		$result = $this->api->fetch_posts( 'invalid-url', 10 );
 
@@ -31,6 +49,9 @@ class ExternalPostsAPITest extends TestCase {
 		$this->assertEquals( 'invalid_url', $result->get_error_code() );
 	}
 
+	/**
+	 * Verifies that fetch_posts returns an error for empty URLs.
+	 */
 	public function test_fetch_posts_with_empty_url_returns_error(): void {
 		$result = $this->api->fetch_posts( '', 10 );
 
@@ -38,6 +59,9 @@ class ExternalPostsAPITest extends TestCase {
 		$this->assertEquals( 'invalid_url', $result->get_error_code() );
 	}
 
+	/**
+	 * Verifies that fetch_post_types returns an error for invalid URLs.
+	 */
 	public function test_fetch_post_types_with_invalid_url_returns_error(): void {
 		$result = $this->api->fetch_post_types( 'invalid-url' );
 
@@ -45,6 +69,9 @@ class ExternalPostsAPITest extends TestCase {
 		$this->assertEquals( 'invalid_url', $result->get_error_code() );
 	}
 
+	/**
+	 * Verifies that fetch_post_types returns an error for empty URLs.
+	 */
 	public function test_fetch_post_types_with_empty_url_returns_error(): void {
 		$result = $this->api->fetch_post_types( '' );
 
@@ -52,6 +79,9 @@ class ExternalPostsAPITest extends TestCase {
 		$this->assertEquals( 'invalid_url', $result->get_error_code() );
 	}
 
+	/**
+	 * Verifies that test_connection returns an array structure.
+	 */
 	public function test_test_connection_returns_array(): void {
 		// This will fail to connect but should return proper array structure.
 		$result = $this->api->test_connection( 'https://example.com' );
@@ -62,6 +92,9 @@ class ExternalPostsAPITest extends TestCase {
 		$this->assertArrayHasKey( 'message', $result );
 	}
 
+	/**
+	 * Verifies that get_attachment_id_from_url returns an integer.
+	 */
 	public function test_get_attachment_id_from_url_returns_int(): void {
 		$url    = 'https://example.com/wp-content/uploads/2024/01/image.jpg';
 		$result = $this->api->get_attachment_id_from_url( $url );
@@ -69,6 +102,9 @@ class ExternalPostsAPITest extends TestCase {
 		$this->assertIsInt( $result );
 	}
 
+	/**
+	 * Verifies that add_webp_mime_type adds WebP mime type.
+	 */
 	public function test_add_webp_mime_type_adds_webp(): void {
 		$mime_types = array(
 			'jpg' => 'image/jpeg',
@@ -81,6 +117,9 @@ class ExternalPostsAPITest extends TestCase {
 		$this->assertEquals( 'image/webp', $result['webp'] );
 	}
 
+	/**
+	 * Verifies that handle_webp_filetype handles WebP files correctly.
+	 */
 	public function test_handle_webp_filetype_handles_webp(): void {
 		$wp_check_filetype_and_ext = array(
 			'ext'             => false,
@@ -98,6 +137,9 @@ class ExternalPostsAPITest extends TestCase {
 		$this->assertEquals( 'image/webp', $result['type'] );
 	}
 
+	/**
+	 * Verifies that handle_webp_filetype leaves non-WebP files unchanged.
+	 */
 	public function test_handle_webp_filetype_leaves_non_webp_unchanged(): void {
 		$wp_check_filetype_and_ext = array(
 			'ext'             => 'jpg',
@@ -112,18 +154,27 @@ class ExternalPostsAPITest extends TestCase {
 		$this->assertEquals( $wp_check_filetype_and_ext, $result );
 	}
 
+	/**
+	 * Verifies that fetch_fresh_post_content returns false for invalid URLs.
+	 */
 	public function test_fetch_fresh_post_content_with_invalid_url_returns_false(): void {
 		$result = $this->api->fetch_fresh_post_content( 123, 'invalid-url' );
 
 		$this->assertFalse( $result );
 	}
 
+	/**
+	 * Verifies that import_featured_image returns false for empty post IDs.
+	 */
 	public function test_import_featured_image_with_empty_id_returns_false(): void {
 		$result = $this->api->import_featured_image( 0, 'https://example.com' );
 
 		$this->assertFalse( $result );
 	}
 
+	/**
+	 * Verifies that import_featured_image returns false for empty site URLs.
+	 */
 	public function test_import_featured_image_with_empty_site_url_returns_false(): void {
 		$result = $this->api->import_featured_image( 123, '' );
 
