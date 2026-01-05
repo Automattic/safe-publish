@@ -16,10 +16,10 @@
   },
   "autoload-dev": {
     "psr-4": {
-      "CCP\\Tests\\": "tests/inc/"
+      "CCP\\Tests\\": "tests/unit/"
     },
     "classmap": [
-      "tests/inc/"
+      "tests/unit/"
     ]
   },
   "scripts": {

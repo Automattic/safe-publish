@@ -2,7 +2,7 @@
 <phpunit
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.6/phpunit.xsd"
-  bootstrap="tests/inc/bootstrap.php"
+  bootstrap="tests/unit/bootstrap.php"
   colors="true"
   convertErrorsToExceptions="true"
   convertNoticesToExceptions="true"
@@ -11,10 +11,10 @@
 >
   <testsuites>
     <testsuite name="Compliant Content Publisher Test Suite">
-      <directory>tests/inc/</directory>
-      <exclude>tests/inc/bootstrap.php</exclude>
-      <exclude>tests/inc/stubs.php</exclude>
-      <exclude>tests/inc/test-utils.php</exclude>
+      <directory>tests/unit/</directory>
+      <exclude>tests/unit/bootstrap.php</exclude>
+      <exclude>tests/unit/stubs.php</exclude>
+      <exclude>tests/unit/test-utils.php</exclude>
     </testsuite>
   </testsuites>
 
