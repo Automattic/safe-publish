@@ -90,12 +90,12 @@ class VIP_Safe_Auth {
 		$auth_method = self::determine_auth_method( $auth_config );
 
 		// No authentication method available.
-		if ( $auth_method === 'none' ) {
+		if ( 'none' === $auth_method ) {
 			return false;
 		}
 
 		// If we have shared secret authentication.
-		if ( $auth_method === 'shared_secret' ) {
+		if ( 'shared_secret' === $auth_method ) {
 			$shared_secret = $auth_config['shared_secret'] ?? '';
 
 			// Check if shared secret is properly configured and meets minimum requirements.
@@ -114,7 +114,7 @@ class VIP_Safe_Auth {
 		}
 
 		// If we have basic authentication (development only).
-		if ( $auth_method === 'basic_auth' ) {
+		if ( 'basic_auth' === $auth_method ) {
 			$username = $auth_config['username'] ?? '';
 			$password = $auth_config['password'] ?? '';
 
@@ -238,7 +238,7 @@ class VIP_Safe_Auth {
 			$path        = substr( $full_path, $wp_json_pos + 8 ); // +8 to skip '/wp-json'.
 
 			// Ensure path starts with / and handle empty paths.
-			if ( empty( $path ) || $path[0] !== '/' ) {
+			if ( empty( $path ) || '/' !== $path[0] ) {
 				$path = '/' . ltrim( $path, '/' );
 			}
 		} else {

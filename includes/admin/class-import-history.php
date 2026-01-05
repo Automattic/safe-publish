@@ -369,7 +369,7 @@ class Import_History {
 				'status'       => $status,
 				'status_label' => $status_labels[ $status ] ?? $status,
 				'source_url'   => $source_url,
-				'can_rollback' => ( $status === 'completed' && $successful > 0 ),
+				'can_rollback' => ( 'completed' === $status && $successful > 0 ),
 			);
 		}
 
@@ -394,7 +394,7 @@ class Import_History {
 
 		$session = get_post( $session_id );
 
-		if ( ! $session || $session->post_type !== self::SESSION_POST_TYPE ) {
+		if ( ! $session || self::SESSION_POST_TYPE !== $session->post_type ) {
 			wp_send_json_error( 'Session not found' );
 		}
 
@@ -424,13 +424,13 @@ class Import_History {
 			'status'       => $status,
 			'status_label' => $status_labels[ $status ] ?? $status,
 			'source_url'   => $source_url,
-			'can_rollback' => $status === 'completed' && $successful > 0,
+			'can_rollback' => 'completed' === $status && $successful > 0,
 		);
 
 		// Get logs - but don't show details for rolled back sessions.
 		$formatted_logs = array();
 
-		if ( $status !== 'rolled_back' ) {
+		if ( 'rolled_back' !== $status ) {
 			$logs = get_posts(
 				array(
 					'post_type'      => self::LOG_POST_TYPE,
@@ -460,7 +460,7 @@ class Import_History {
 				$has_previous_content = is_array( $changes ) && ! empty( $changes['previous_content'] );
 
 				// For debugging: also show button for updated posts even without previous content.
-				$is_updated_post     = ( $log_status === 'updated' );
+				$is_updated_post     = ( 'updated' === $log_status );
 				$should_show_changes = $has_previous_content || $is_updated_post;
 
 				// Check if this item has been individually rolled back.
@@ -470,9 +470,9 @@ class Import_History {
 				$can_rollback_item = false;
 				if ( ! $is_rolled_back && $post_id && get_post( $post_id ) ) {
 					// Can rollback if it's a success (delete) or updated with previous content (restore).
-					$can_rollback_item = ( $log_status === 'success' ) ||
-						( $log_status === 'updated' && $has_previous_content ) ||
-						( $log_status === 'updated' && ! $has_previous_content ); // Legacy case - will delete.
+					$can_rollback_item = ( 'success' === $log_status ) ||
+						( 'updated' === $log_status && $has_previous_content ) ||
+						( 'updated' === $log_status && ! $has_previous_content ); // Legacy case - will delete.
 				}
 
 				$formatted_log = array(
@@ -487,7 +487,7 @@ class Import_History {
 					'edit_url'        => $post_id ? admin_url( "post.php?post={$post_id}&action=edit" ) : null,
 					'can_rollback'    => $can_rollback_item,
 					'is_rolled_back'  => $is_rolled_back,
-					'rollback_action' => $log_status === 'success' ? 'delete' :
+					'rollback_action' => 'success' === $log_status ? 'delete' :
 						( $has_previous_content ? 'restore' : 'delete' ),
 				);
 
@@ -521,7 +521,7 @@ class Import_History {
 
 		$session = get_post( $session_id );
 
-		if ( ! $session || $session->post_type !== self::SESSION_POST_TYPE ) {
+		if ( ! $session || self::SESSION_POST_TYPE !== $session->post_type ) {
 			wp_send_json_error( 'Session not found' );
 		}
 
@@ -554,12 +554,12 @@ class Import_History {
 				continue;
 			}
 
-			if ( $status === 'success' ) {
+			if ( 'success' === $status ) {
 				// This was a newly created post - delete it.
 				if ( wp_delete_post( $post_id, true ) ) {
 					++$deleted_count;
 				}
-			} elseif ( $status === 'updated' && ! empty( $changes ) && isset( $changes['previous_content'] ) ) {
+			} elseif ( 'updated' === $status && ! empty( $changes ) && isset( $changes['previous_content'] ) ) {
 				// This was an updated post - restore previous content.
 				$restore_data = array(
 					'ID' => $post_id,
@@ -602,7 +602,7 @@ class Import_History {
 
 					++$restored_count;
 				}
-			} elseif ( $status === 'updated' ) {
+			} elseif ( 'updated' === $status ) {
 				// Updated post but no previous content stored - just delete it.
 				// This handles legacy cases where previous content wasn't stored.
 				if ( wp_delete_post( $post_id, true ) ) {
@@ -647,7 +647,7 @@ class Import_History {
 
 		$log = get_post( $log_id );
 
-		if ( ! $log || $log->post_type !== self::LOG_POST_TYPE ) {
+		if ( ! $log || self::LOG_POST_TYPE !== $log->post_type ) {
 			wp_send_json_error( 'Import log not found' );
 		}
 
@@ -671,7 +671,7 @@ class Import_History {
 			'post_title' => $post->post_title,
 		);
 
-		if ( $status === 'success' ) {
+		if ( 'success' === $status ) {
 			// This was a newly created post - delete it.
 			if ( wp_delete_post( $post_id, true ) ) {
 				$result['action']  = 'deleted';
@@ -679,7 +679,7 @@ class Import_History {
 			} else {
 				wp_send_json_error( 'Failed to delete the post' );
 			}
-		} elseif ( $status === 'updated' && ! empty( $changes ) && isset( $changes['previous_content'] ) ) {
+		} elseif ( 'updated' === $status && ! empty( $changes ) && isset( $changes['previous_content'] ) ) {
 			// This was an updated post - restore previous content.
 			$restore_data = array(
 				'ID' => $post_id,
@@ -725,7 +725,7 @@ class Import_History {
 
 			$result['action']  = 'restored';
 			$result['message'] = 'Post successfully restored to previous version';
-		} elseif ( $status === 'updated' ) {
+		} elseif ( 'updated' === $status ) {
 			// Updated post but no previous content stored - delete it.
 			if ( wp_delete_post( $post_id, true ) ) {
 				$result['action']  = 'deleted';
@@ -931,7 +931,7 @@ class Import_History {
 
 		$session = get_post( $session_id );
 
-		if ( ! $session || $session->post_type !== self::SESSION_POST_TYPE ) {
+		if ( ! $session || self::SESSION_POST_TYPE !== $session->post_type ) {
 			wp_send_json_error( 'Session not found' );
 		}
 
