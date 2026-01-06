@@ -1081,13 +1081,13 @@ function ccp_vip_auth_admin_notice(): void {
 		echo '</div>';
 	} elseif ( $secret_length < 32 ) {
 		echo '<div class="notice notice-error">';
-		echo '<p><strong>CCP Authentication:</strong> Shared secret is too short (' . esc_html( $secret_length ) . ' characters). ';
+		echo '<p><strong>CCP Authentication:</strong> Shared secret is too short (' . absint( $secret_length ) . ' characters). ';
 		echo 'Use at least 32 characters for security.</p>';
 		echo '</div>';
 	} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 		echo '<div class="notice notice-success is-dismissible">';
 		echo '<p><strong>CCP Authentication:</strong> ✅ Configured successfully ';
-		echo '(' . esc_html( $secret_length ) . ' character secret).</p>';
+		echo '(' . absint( $secret_length ) . ' character secret).</p>';
 		echo '</div>';
 	}
 }
@@ -1508,10 +1508,10 @@ function ccp_vip_dashboard_widget_content(): void {
 		echo '<p><a href="https://dashboard.wpvip.com/" target="_blank">Open VIP Dashboard →</a></p>';
 	} elseif ( $secret_length < 32 ) {
 		echo '<p><span style="color: #dba617;">⚠️</span> <strong>Secret Too Short</strong></p>';
-		echo '<p>Current length: ' . esc_html( $secret_length ) . ' characters. Recommend 32+ for security.</p>';
+		echo '<p>Current length: ' . absint( $secret_length ) . ' characters. Recommend 32+ for security.</p>';
 	} else {
 		echo '<p><span style="color: #00a32a;">✅</span> <strong>Properly Configured</strong></p>';
-		echo '<p>Secret length: ' . esc_html( $secret_length ) . ' characters</p>';
+		echo '<p>Secret length: ' . absint( $secret_length ) . ' characters</p>';
 		echo '<p><strong>✅ VIP 2FA Compliant:</strong> Uses capability-based authentication (no user creation)</p>';
 		echo '<p><strong>✅ Editing Permissions:</strong> Enabled for CCP authenticated requests</p>';
 
