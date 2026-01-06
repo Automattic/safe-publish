@@ -907,12 +907,12 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 			closelog();
 		}
 
-		// 4. Store recent events in database for dashboard viewing (only if WordPress is loaded).
+		// 3. Store recent events in database for dashboard viewing (only if WordPress is loaded).
 		if ( function_exists( 'get_option' ) ) {
 			ccp_vip_store_log_event( $event, $log_data );
 		}
 
-		// 5. New Relic custom events (if available).
+		// 4. New Relic custom events (if available).
 		if ( function_exists( 'newrelic_record_custom_event' ) ) {
 			newrelic_record_custom_event(
 				'CCP_Auth_Event',
@@ -925,17 +925,17 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 			);
 		}
 
-		// 6. WordPress debug log (if WP_DEBUG_LOG is enabled).
+		// 5. WordPress debug log (if WP_DEBUG_LOG is enabled).
 		if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG && function_exists( 'wp_debug_log' ) ) {
 			wp_debug_log( $log_message );
 		}
 
-		// 7. Trigger WordPress action for other monitoring plugins (only if WordPress is loaded).
+		// 6. Trigger WordPress action for other monitoring plugins (only if WordPress is loaded).
 		if ( function_exists( 'do_action' ) ) {
 			do_action( 'ccp_auth_event_logged', $event, $log_data );
 		}
 
-		// 8. Force immediate log write for VIP (bypass buffering).
+		// 7. Force immediate log write for VIP (bypass buffering).
 		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV && function_exists( 'fastcgi_finish_request' ) ) {
 			fastcgi_finish_request();
 		}
