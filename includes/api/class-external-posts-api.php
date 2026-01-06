@@ -640,17 +640,13 @@ class External_Posts_API {
 	 */
 	private function get_attachment_by_url( string $original_url ): int|false {
 		// First, check by the exact URL.
-		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.get_posts_get_posts -- suppress_filters is set to false for VIP caching compatibility
 		$attachments = get_posts(
 			array(
 				'post_type'        => 'attachment',
-				'meta_query'       => array(
-					array(
-						'key'   => 'ccp_original_url',
-						'value' => $original_url,
-					),
-				),
-				'numberposts'      => 1,
+				'meta_key'         => 'ccp_original_url',
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'meta_value'       => $original_url,
+				'posts_per_page'   => 1,
 				'suppress_filters' => false, // Enable caching for VIP compatibility.
 			)
 		);
@@ -663,10 +659,10 @@ class External_Posts_API {
 		$filename                   = basename( $original_url );
 		$filename_without_extension = pathinfo( $filename, PATHINFO_FILENAME );
 
-		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.get_posts_get_posts -- suppress_filters is set to false for VIP caching compatibility
 		$attachments_by_filename = get_posts(
 			array(
 				'post_type'        => 'attachment',
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
 				'meta_query'       => array(
 					array(
 						'key'     => '_wp_attached_file',
@@ -674,7 +670,7 @@ class External_Posts_API {
 						'compare' => 'LIKE',
 					),
 				),
-				'numberposts'      => 1,
+				'posts_per_page'   => 1,
 				'suppress_filters' => false, // Enable caching for VIP compatibility.
 			)
 		);
@@ -736,10 +732,10 @@ class External_Posts_API {
 	 * @return int|false Attachment ID on success, false on failure.
 	 */
 	private function get_attachment_by_featured_media_id( int $featured_media_id, string $site_url ): int|false {
-		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.get_posts_get_posts -- suppress_filters is set to false for VIP caching compatibility
 		$attachments = get_posts(
 			array(
 				'post_type'        => 'attachment',
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
 				'meta_query'       => array(
 					'relation' => 'AND',
 					array(
@@ -751,7 +747,7 @@ class External_Posts_API {
 						'value' => $site_url,
 					),
 				),
-				'numberposts'      => 1,
+				'posts_per_page'   => 1,
 				'suppress_filters' => false, // Enable caching for VIP compatibility.
 			)
 		);

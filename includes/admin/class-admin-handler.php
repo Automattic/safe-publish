@@ -390,20 +390,13 @@ class Admin_Handler {
 		}
 
 		// Check if a draft already exists for this external post.
-		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.get_posts_get_posts,WordPressVIPMinimum.Performance.MetaQueryUsage.MetaQueryUsage -- suppress_filters is set to false for VIP caching compatibility
 		$existing_posts = get_posts(
 			array(
-				// phpcs:disable WordPressVIPMinimum.Performance.MetaQueryUsage.MetaQueryUsage
-				'meta_query'       => array(
-					array(
-						'key'     => 'ccp_external_post_id',
-						'value'   => $external_post_id,
-						'compare' => '=',
-					),
-				),
-				// phpcs:enable WordPressVIPMinimum.Performance.MetaQueryUsage.MetaQueryUsage
+				'meta_key'         => 'ccp_external_post_id',
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'meta_value'       => $external_post_id,
 				'post_status'      => array( 'draft', 'publish', 'pending', 'private' ),
-				'numberposts'      => 1,
+				'posts_per_page'   => 1,
 				'suppress_filters' => false, // Enable caching for VIP compatibility.
 			)
 		);
@@ -783,20 +776,13 @@ class Admin_Handler {
 			}
 
 			// Check if a draft already exists for this external post.
-			// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.get_posts_get_posts,WordPressVIPMinimum.Performance.MetaQueryUsage.MetaQueryUsage -- suppress_filters is set to false for VIP caching compatibility
 			$existing_posts = get_posts(
 				array(
-					// phpcs:disable WordPressVIPMinimum.Performance.MetaQueryUsage.MetaQueryUsage
-					'meta_query'       => array(
-						array(
-							'key'     => 'ccp_external_post_id',
-							'value'   => $external_post_id,
-							'compare' => '=',
-						),
-					),
-					// phpcs:enable WordPressVIPMinimum.Performance.MetaQueryUsage.MetaQueryUsage
+					'meta_key'         => 'ccp_external_post_id',
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => $external_post_id,
 					'post_status'      => array( 'draft', 'publish', 'pending', 'private' ),
-					'numberposts'      => 1,
+					'posts_per_page'   => 1,
 					'suppress_filters' => false, // Enable caching for VIP compatibility.
 				)
 			);
