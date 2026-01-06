@@ -815,7 +815,8 @@ if ( ! function_exists( 'ccp_vip_get_shared_secret' ) ) {
 
 		// Method 3: $_ENV superglobal (fallback for some hosting environments).
 		if ( isset( $_ENV['CCP_SHARED_SECRET'] ) && ! empty( $_ENV['CCP_SHARED_SECRET'] ) ) {
-			// Sanitize environment variable to satisfy WordPress security requirements.
+			// Cryptographic secret not sanitized; used directly for HMAC authentication.
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 			$env_secret = trim( $_ENV['CCP_SHARED_SECRET'] );
 			// Validate that it contains only safe characters for a secret key.
 			if ( ! empty( $env_secret ) && strlen( $env_secret ) >= 16 && preg_match( '/^[a-zA-Z0-9\-_+=\/]+$/', $env_secret ) ) {
@@ -864,15 +865,21 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 		// Ensure we can log even when WordPress functions aren't available.
 		// phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_date
 		$timestamp = function_exists( 'current_time' ) ? current_time( 'mysql' ) : date( 'Y-m-d H:i:s' );
-		$site_url  = function_exists( 'get_site_url' ) ? get_site_url() : ( $_SERVER['HTTP_HOST'] ?? 'unknown' );
+		// Data only used for logging; escaped with esc_html() when output to HTML in dashboard widget.
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$site_url = function_exists( 'get_site_url' ) ? get_site_url() : ( $_SERVER['HTTP_HOST'] ?? 'unknown' );
 
 		$log_data = array_merge(
 			array(
 				'event'       => $event,
 				'timestamp'   => $timestamp,
 				'site_url'    => $site_url,
+				// Data only used for logging; escaped with esc_html() when output to HTML in dashboard widget.
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 				'ip'          => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 				'user_agent'  => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 				'request_uri' => $_SERVER['REQUEST_URI'] ?? 'unknown',
 			),
 			$data
@@ -1074,13 +1081,13 @@ function ccp_vip_auth_admin_notice(): void {
 		echo '</div>';
 	} elseif ( $secret_length < 32 ) {
 		echo '<div class="notice notice-error">';
-		echo '<p><strong>CCP Authentication:</strong> Shared secret is too short (' . $secret_length . ' characters). ';
+		echo '<p><strong>CCP Authentication:</strong> Shared secret is too short (' . absint( $secret_length ) . ' characters). ';
 		echo 'Use at least 32 characters for security.</p>';
 		echo '</div>';
 	} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 		echo '<div class="notice notice-success is-dismissible">';
 		echo '<p><strong>CCP Authentication:</strong> ✅ Configured successfully ';
-		echo '(' . $secret_length . ' character secret).</p>';
+		echo '(' . absint( $secret_length ) . ' character secret).</p>';
 		echo '</div>';
 	}
 }
@@ -1158,6 +1165,8 @@ function ccp_vip_can_view_auth_status(): bool {
 	}
 
 	// Allow VIP monitoring systems (check for specific user agents or IPs).
+	// User agent not sanitized; only used for string comparison, not storage or output.
+	// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 	$user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
 	if ( strpos( $user_agent, 'WPVIP-Monitor' ) !== false ) {
 		return true;
@@ -1316,6 +1325,8 @@ function ccp_vip_clear_auth_logs_callback( $request ): WP_REST_Response { // php
 		'LOGS_CLEARED',
 		array(
 			'cleared_by' => $user_id ? $user_id : 'unknown',
+			// Data only used for logging; not output to HTML.
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 			'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
 		)
 	);
@@ -1497,10 +1508,10 @@ function ccp_vip_dashboard_widget_content(): void {
 		echo '<p><a href="https://dashboard.wpvip.com/" target="_blank">Open VIP Dashboard →</a></p>';
 	} elseif ( $secret_length < 32 ) {
 		echo '<p><span style="color: #dba617;">⚠️</span> <strong>Secret Too Short</strong></p>';
-		echo '<p>Current length: ' . $secret_length . ' characters. Recommend 32+ for security.</p>';
+		echo '<p>Current length: ' . absint( $secret_length ) . ' characters. Recommend 32+ for security.</p>';
 	} else {
 		echo '<p><span style="color: #00a32a;">✅</span> <strong>Properly Configured</strong></p>';
-		echo '<p>Secret length: ' . $secret_length . ' characters</p>';
+		echo '<p>Secret length: ' . absint( $secret_length ) . ' characters</p>';
 		echo '<p><strong>✅ VIP 2FA Compliant:</strong> Uses capability-based authentication (no user creation)</p>';
 		echo '<p><strong>✅ Editing Permissions:</strong> Enabled for CCP authenticated requests</p>';
 
@@ -1517,9 +1528,9 @@ function ccp_vip_dashboard_widget_content(): void {
 		echo '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">';
 
 		echo '<div>';
-		echo '<strong>Total Requests:</strong> ' . ( $stats['total_requests'] ?? 0 );
-		echo '<br><strong>Successful:</strong> <span style="color: #00a32a;">' . ( $stats['successful_auths'] ?? 0 ) . '</span>';
-		echo '<br><strong>Failed:</strong> <span style="color: #d63638;">' . ( $stats['failed_auths'] ?? 0 ) . '</span>';
+		echo '<strong>Total Requests:</strong> ' . esc_html( $stats['total_requests'] ?? 0 );
+		echo '<br><strong>Successful:</strong> <span style="color: #00a32a;">' . esc_html( $stats['successful_auths'] ?? 0 ) . '</span>';
+		echo '<br><strong>Failed:</strong> <span style="color: #d63638;">' . esc_html( $stats['failed_auths'] ?? 0 ) . '</span>';
 		echo '</div>';
 
 		echo '<div>';
@@ -1538,7 +1549,7 @@ function ccp_vip_dashboard_widget_content(): void {
 		if ( $total > 0 ) {
 			$success_rate = round( ( ( $stats['successful_auths'] ?? 0 ) / $total ) * 100, 1 );
 			$color        = $success_rate >= 95 ? '#00a32a' : ( $success_rate >= 80 ? '#dba617' : '#d63638' );
-			echo '<p><strong>Success Rate:</strong> <span style="color: ' . $color . ';">' . $success_rate . '%</span></p>';
+			echo '<p><strong>Success Rate:</strong> <span style="color: ' . esc_attr( $color ) . ';">' . esc_html( $success_rate ) . '%</span></p>';
 		}
 	}
 
@@ -1571,8 +1582,8 @@ function ccp_vip_dashboard_widget_content(): void {
 				$color = '#dba617';
 			}
 
-			echo '<div style="margin-bottom: 5px; padding: 5px; background: #f9f9f9; border-left: 3px solid ' . $color . ';">';
-			echo '<span style="color: ' . $color . ';">' . $icon . '</span> ';
+			echo '<div style="margin-bottom: 5px; padding: 5px; background: #f9f9f9; border-left: 3px solid ' . esc_attr( $color ) . ';">';
+			echo '<span style="color: ' . esc_attr( $color ) . ';">' . esc_html( $icon ) . '</span> ';
 			echo '<strong>' . esc_html( $event_type ) . '</strong> ';
 			echo '<small style="color: #666;">(' . esc_html( $ip ) . ')</small>';
 			echo '<br><small>' . esc_html( $timestamp ) . '</small>';
