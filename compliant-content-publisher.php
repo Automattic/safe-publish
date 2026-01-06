@@ -51,10 +51,10 @@ spl_autoload_register(
 			$file_path .= 'api/class-' . str_replace( 'api/', '', $class_path ) . '.php';
 		} elseif ( 0 === strpos( $class_path, 'auth/' ) ) {
 			$file_path .= 'auth/class-' . str_replace( 'auth/', '', $class_path ) . '.php';
-		} elseif ( 0 === strpos( $class_path, 'validators/' ) ) {
-			$file_path .= 'validators/class-' . str_replace( 'validators/', '', $class_path ) . '.php';
 		} elseif ( 0 === strpos( $class_path, 'utils/' ) ) {
 			$file_path .= 'utils/class-' . str_replace( 'utils/', '', $class_path ) . '.php';
+		} elseif ( 0 === strpos( $class_path, 'validators/' ) ) {
+			$file_path .= 'validators/class-' . str_replace( 'validators/', '', $class_path ) . '.php';
 		} else {
 			$file_path .= 'class-' . $class_path . '.php';
 		}
