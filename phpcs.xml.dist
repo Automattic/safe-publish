@@ -47,6 +47,29 @@
 		https://github.com/Automattic/VIP-Coding-Standards -->
 	<rule ref="WordPress-VIP-Go"/>
 
+	<!-- Prevent deprecation warnings under PHPCS 3.x -->
+	<rule ref="WordPressVIPMinimum.JS.Window">
+		<exclude name="WordPressVIPMinimum.JS.Window"/>
+	</rule>
+	<rule ref="WordPressVIPMinimum.JS.DangerouslySetInnerHTML">
+		<exclude name="WordPressVIPMinimum.JS.DangerouslySetInnerHTML"/>
+	</rule>
+	<rule ref="WordPressVIPMinimum.JS.InnerHTML">
+		<exclude name="WordPressVIPMinimum.JS.InnerHTML"/>
+	</rule>
+	<rule ref="WordPressVIPMinimum.JS.StrippingTags">
+		<exclude name="WordPressVIPMinimum.JS.StrippingTags"/>
+	</rule>
+	<rule ref="WordPressVIPMinimum.JS.StringConcat">
+		<exclude name="WordPressVIPMinimum.JS.StringConcat"/>
+	</rule>
+	<rule ref="WordPressVIPMinimum.JS.HTMLExecutingFunctions">
+		<exclude name="WordPressVIPMinimum.JS.HTMLExecutingFunctions"/>
+	</rule>
+	<rule ref="Generic.Functions.CallTimePassByReference">
+		<exclude name="Generic.Functions.CallTimePassByReference"/>
+	</rule>
+
 	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
 		<properties>
 			<property name="prefixes" type="array">
