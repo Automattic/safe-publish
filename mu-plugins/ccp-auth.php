@@ -1075,20 +1075,36 @@ function ccp_vip_auth_admin_notice(): void {
 	$secret_length = strlen( $shared_secret );
 
 	if ( empty( $shared_secret ) ) {
-		echo '<div class="notice notice-warning">';
-		echo '<p><strong>CCP Authentication:</strong> Shared secret not configured. ';
-		echo 'Set the <code>CCP_SHARED_SECRET</code> environment variable in VIP dashboard to enable CCP authentication.</p>';
-		echo '</div>';
+		wp_admin_notice(
+			__( 'CCP Authentication: Shared secret not configured. Set the <code>CCP_SHARED_SECRET</code> environment variable in VIP dashboard to enable CCP authentication.', 'ccp' ),
+			[
+				'icon' => 'warning',
+				'type' => 'warning'
+			],
+		);
 	} elseif ( $secret_length < 32 ) {
-		echo '<div class="notice notice-error">';
-		echo '<p><strong>CCP Authentication:</strong> Shared secret is too short (' . absint( $secret_length ) . ' characters). ';
-		echo 'Use at least 32 characters for security.</p>';
-		echo '</div>';
+		wp_admin_notice(
+			sprintf(
+				__( 'CCP Authentication: Shared secret is too short ( %d character secret). Use at least 32 characters for security.', 'ccp' ),
+				absint( $secret_length )
+			),
+			[
+				'icon' => 'warning',
+				'type' => 'warning'
+			],
+		);
 	} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-		echo '<div class="notice notice-success is-dismissible">';
-		echo '<p><strong>CCP Authentication:</strong> ✅ Configured successfully ';
-		echo '(' . absint( $secret_length ) . ' character secret).</p>';
-		echo '</div>';
+		wp_admin_notice(
+			sprintf(
+				__( 'CCP Authentication: Configured successfully ✅ ( %d character secret).', 'ccp' ),
+				absint( $secret_length )
+			),
+			[
+				'dismissible' => true,
+				'icon' => 'warning',
+				'type' => 'warning'
+			],
+		);
 	}
 }
 
