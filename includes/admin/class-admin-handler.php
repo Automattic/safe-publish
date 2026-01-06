@@ -334,7 +334,9 @@ class Admin_Handler {
 
 		$external_post_id = absint( $_POST['external_post_id'] ?? 0 );
 		$title            = sanitize_text_field( $_POST['title'] ?? '' );
-		$content          = wp_unslash( $_POST['content'] ?? '' ); // Preserve original formatting.
+		// Preserve Gutenberg block structure; sanitized after processing.
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$content = wp_unslash( $_POST['content'] ?? '' );
 
 		// Ensure content is properly UTF-8 encoded.
 		if ( ! mb_check_encoding( $content, 'UTF-8' ) ) {
@@ -343,9 +345,13 @@ class Admin_Handler {
 		$external_link     = esc_url_raw( $_POST['external_link'] ?? '' );
 		$featured_media_id = absint( $_POST['featured_media_id'] ?? 0 );
 		$excerpt           = sanitize_text_field( $_POST['excerpt'] ?? '' );
-		$meta              = isset( $_POST['meta'] ) ? json_decode( wp_unslash( $_POST['meta'] ) ) : array();
-		$terms             = isset( $_POST['terms'] ) ? json_decode( wp_unslash( $_POST['terms'] ) ) : array();
-		$raw_post_type     = sanitize_text_field( $_POST['post_type'] ?? 'post' );
+		// JSON string not sanitized to preserve structure; sanitized in update_meta().
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$meta = isset( $_POST['meta'] ) ? json_decode( wp_unslash( $_POST['meta'] ) ) : array();
+		// JSON string not sanitized to preserve structure; sanitized in update_terms().
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$terms         = isset( $_POST['terms'] ) ? json_decode( wp_unslash( $_POST['terms'] ) ) : array();
+		$raw_post_type = sanitize_text_field( $_POST['post_type'] ?? 'post' );
 
 		// Convert plural post types to singular for WordPress compatibility.
 		$post_type_mapping = array(
@@ -478,13 +484,8 @@ class Admin_Handler {
 			}
 		}
 
-		/**
-		 * Apply sanitization after processing to preserve formatting during processing.
-		 *
-		 * TODO: Check if we want/need this.
-		 *
-		 * $processed_content = \wp_kses_post( $processed_content );
-		 */
+		// Apply sanitization after processing to preserve formatting during processing.
+		$processed_content = \wp_kses_post( $processed_content );
 
 		if ( $existing_post ) {
 			// Store previous content for potential rollback.
@@ -649,8 +650,9 @@ class Admin_Handler {
 			wp_die( -1, 403 );
 		}
 
-		// Get raw posts data with minimal sanitization to preserve JSON structure.
-		$posts_data_json = isset( $_POST['posts_data'] ) ? stripslashes( $_POST['posts_data'] ) : '';
+		// JSON string not sanitized to preserve structure; validated after decode.
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$posts_data_json = isset( $_POST['posts_data'] ) ? wp_unslash( $_POST['posts_data'] ) : '';
 
 		if ( empty( $posts_data_json ) ) {
 			wp_send_json_error( __( 'Posts data is required.', 'ccp' ) );
