@@ -338,7 +338,8 @@ class Import_History {
 				'posts_per_page' => 50,
 				'orderby'        => 'date',
 				'order'          => 'DESC',
-				'meta_query'     => array(),
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query'     => array(), // Empty meta_query.
 			)
 		);
 
@@ -533,7 +534,8 @@ class Import_History {
 				'post_status'    => 'publish',
 				'post_parent'    => $session_id,
 				'posts_per_page' => -1,
-				'meta_query'     => array(
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query'     => array( // Admin-only operation, scoped by post_parent.
 					array(
 						'key'     => 'status',
 						'value'   => array( 'success', 'updated' ),
@@ -774,13 +776,9 @@ class Import_History {
 			array(
 				'post_type'      => self::LOG_POST_TYPE,
 				'post_status'    => 'publish',
-				'meta_query'     => array(
-					array(
-						'key'     => 'post_id',
-						'value'   => $post_id,
-						'compare' => '=',
-					),
-				),
+				'meta_key'       => 'post_id',
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'meta_value'     => $post_id,
 				'posts_per_page' => 1,
 				'orderby'        => 'date',
 				'order'          => 'DESC',
