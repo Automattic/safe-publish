@@ -449,7 +449,7 @@ class Admin_Handler {
 						$terms             = $fresh_post_data['terms'] ?? array();
 					}
 				} catch ( Exception $e ) {
-					// Continue with provided content if fresh fetch fails.
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					error_log( 'CCP: Failed to fetch fresh content for update - ' . $e->getMessage() );
 				}
 			}
