@@ -291,11 +291,12 @@ class CCP_API extends REST_Base {
 		// Find local post by external post ID.
 		$_query = new \WP_Query(
 			array(
-				'meta_key'   => 'ccp_external_post_id',
-				'meta_value' => $external_post_id, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-			'post_type'      => $mapped_post_type,
-			'post_status'    => array( 'draft', 'publish', 'pending' ),
-			'numberposts'    => 1,
+				'meta_key'       => 'ccp_external_post_id',
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'meta_value'     => $external_post_id,
+				'post_type'      => $mapped_post_type,
+				'post_status'    => array( 'draft', 'publish', 'pending' ),
+				'posts_per_page' => 1,
 			)
 		);
 

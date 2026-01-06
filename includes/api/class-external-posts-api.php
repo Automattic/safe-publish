@@ -646,7 +646,7 @@ class External_Posts_API {
 				'meta_key'         => 'ccp_original_url',
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'       => $original_url,
-				'numberposts'      => 1,
+				'posts_per_page'   => 1,
 				'suppress_filters' => false, // Enable caching for VIP compatibility.
 			)
 		);
@@ -670,7 +670,7 @@ class External_Posts_API {
 						'compare' => 'LIKE',
 					),
 				),
-				'numberposts'      => 1,
+				'posts_per_page'   => 1,
 				'suppress_filters' => false, // Enable caching for VIP compatibility.
 			)
 		);
@@ -747,7 +747,7 @@ class External_Posts_API {
 						'value' => $site_url,
 					),
 				),
-				'numberposts'      => 1,
+				'posts_per_page'   => 1,
 				'suppress_filters' => false, // Enable caching for VIP compatibility.
 			)
 		);

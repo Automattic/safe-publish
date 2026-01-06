@@ -390,7 +390,7 @@ class Admin_Handler {
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'       => $external_post_id,
 				'post_status'      => array( 'draft', 'publish', 'pending', 'private' ),
-				'numberposts'      => 1,
+				'posts_per_page'   => 1,
 				'suppress_filters' => false, // Enable caching for VIP compatibility.
 			)
 		);
@@ -780,7 +780,7 @@ class Admin_Handler {
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => $external_post_id,
 					'post_status'      => array( 'draft', 'publish', 'pending', 'private' ),
-					'numberposts'      => 1,
+					'posts_per_page'   => 1,
 					'suppress_filters' => false, // Enable caching for VIP compatibility.
 				)
 			);
