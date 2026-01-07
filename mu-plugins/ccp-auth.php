@@ -875,9 +875,9 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 				'timestamp'   => $timestamp,
 				'site_url'    => $site_url,
 				// Data only used for logging; escaped with esc_html() when output to HTML in dashboard widget.
-				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.ServerVariables.UserControlledHeaders,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__REMOTE_ADDR__
 				'ip'          => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
-				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__HTTP_USER_AGENT__
 				'user_agent'  => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
 				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 				'request_uri' => $_SERVER['REQUEST_URI'] ?? 'unknown',
@@ -888,6 +888,7 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 		// Simple, reliable log message format.
 		$log_message = '[CCP-Auth-VIP] ' . $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES );
 
+		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		error_log( $log_message );
 
 		// Backup logging methods.
@@ -906,24 +907,12 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 			closelog();
 		}
 
-		// 3. VIP-specific logging if available.
-		if ( function_exists( 'wpcom_vip_irc' ) ) {
-			// Send critical events to VIP IRC monitoring.
-			$critical_events = array( 'AUTH_SUCCESS', 'SIGNATURE_INVALID', 'NO_SECRET_CONFIGURED', 'SYSTEM_USER_CREATED' );
-			if ( in_array( $event, $critical_events, true ) ) {
-				/**
-				 * TODO: Check if we want/need this.
-				 */
-				wpcom_vip_irc( 'CCP-Auth', $log_message );
-			}
-		}
-
-		// 4. Store recent events in database for dashboard viewing (only if WordPress is loaded).
+		// 3. Store recent events in database for dashboard viewing (only if WordPress is loaded).
 		if ( function_exists( 'get_option' ) ) {
 			ccp_vip_store_log_event( $event, $log_data );
 		}
 
-		// 5. New Relic custom events (if available).
+		// 4. New Relic custom events (if available).
 		if ( function_exists( 'newrelic_record_custom_event' ) ) {
 			newrelic_record_custom_event(
 				'CCP_Auth_Event',
@@ -936,17 +925,17 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 			);
 		}
 
-		// 6. WordPress debug log (if WP_DEBUG_LOG is enabled).
+		// 5. WordPress debug log (if WP_DEBUG_LOG is enabled).
 		if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG && function_exists( 'wp_debug_log' ) ) {
 			wp_debug_log( $log_message );
 		}
 
-		// 7. Trigger WordPress action for other monitoring plugins (only if WordPress is loaded).
+		// 6. Trigger WordPress action for other monitoring plugins (only if WordPress is loaded).
 		if ( function_exists( 'do_action' ) ) {
 			do_action( 'ccp_auth_event_logged', $event, $log_data );
 		}
 
-		// 8. Force immediate log write for VIP (bypass buffering).
+		// 7. Force immediate log write for VIP (bypass buffering).
 		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV && function_exists( 'fastcgi_finish_request' ) ) {
 			fastcgi_finish_request();
 		}
@@ -1077,33 +1066,35 @@ function ccp_vip_auth_admin_notice(): void {
 	if ( empty( $shared_secret ) ) {
 		wp_admin_notice(
 			__( 'CCP Authentication: Shared secret not configured. Set the <code>CCP_SHARED_SECRET</code> environment variable in VIP dashboard to enable CCP authentication.', 'ccp' ),
-			[
+			array(
 				'icon' => 'warning',
-				'type' => 'warning'
-			],
+				'type' => 'warning',
+			),
 		);
 	} elseif ( $secret_length < 32 ) {
 		wp_admin_notice(
 			sprintf(
+				/* translators: %d: Length of the shared secret in characters */
 				__( 'CCP Authentication: Shared secret is too short ( %d character secret). Use at least 32 characters for security.', 'ccp' ),
 				absint( $secret_length )
 			),
-			[
+			array(
 				'icon' => 'warning',
-				'type' => 'warning'
-			],
+				'type' => 'warning',
+			),
 		);
 	} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 		wp_admin_notice(
 			sprintf(
+				/* translators: %d: Length of the shared secret in characters */
 				__( 'CCP Authentication: Configured successfully ✅ ( %d character secret).', 'ccp' ),
 				absint( $secret_length )
 			),
-			[
+			array(
 				'dismissible' => true,
-				'icon' => 'warning',
-				'type' => 'warning'
-			],
+				'icon'        => 'warning',
+				'type'        => 'warning',
+			),
 		);
 	}
 }
@@ -1182,7 +1173,7 @@ function ccp_vip_can_view_auth_status(): bool {
 
 	// Allow VIP monitoring systems (check for specific user agents or IPs).
 	// User agent not sanitized; only used for string comparison, not storage or output.
-	// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+	// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__HTTP_USER_AGENT__
 	$user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
 	if ( strpos( $user_agent, 'WPVIP-Monitor' ) !== false ) {
 		return true;
@@ -1342,7 +1333,7 @@ function ccp_vip_clear_auth_logs_callback( $request ): WP_REST_Response { // php
 		array(
 			'cleared_by' => $user_id ? $user_id : 'unknown',
 			// Data only used for logging; not output to HTML.
-			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__HTTP_USER_AGENT__
 			'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
 		)
 	);
