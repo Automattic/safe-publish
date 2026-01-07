@@ -536,7 +536,6 @@ class External_Posts_API {
 			// phpcs:ignore WordPressVIPMinimum.Hooks.RestrictedHooks.upload_mimes
 			add_filter( 'upload_mimes', array( $this, 'add_webp_mime_type' ) );
 			$webp_filter_added = true;
-			error_log( 'CCP: Added WebP MIME type filter for ' . $media_url );
 		}
 
 		// Also add a filter specifically for media_handle_sideload to bypass restrictions.
@@ -614,13 +613,14 @@ class External_Posts_API {
 		remove_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ) );
 
 		if ( is_wp_error( $attachment_id ) ) {
-			// Log the error for debugging WebP issues.
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			error_log( 'CCP: Failed to import media ' . $media_url . ' - Error: ' . $attachment_id->get_error_message() );
 			return false;
 		}
 
 		// Verify the attachment was actually created.
 		if ( ! $attachment_id || ! is_numeric( $attachment_id ) ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			error_log( 'CCP: media_handle_sideload returned invalid attachment ID for ' . $media_url );
 			return false;
 		}
