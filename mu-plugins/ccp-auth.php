@@ -1527,7 +1527,7 @@ function ccp_vip_dashboard_widget_content(): void {
 		echo '<p>Current length: ' . absint( $secret_length ) . ' characters. Recommend 32+ for security.</p>';
 	} else {
 		echo '<p><span style="color: #00a32a;">✅</span> <strong>Properly Configured</strong></p>';
-		echo '<p>Secret length: ' . absint( $secret_length ) . ' characters</p>';
+		echo '<p><strong>✅ Secret length:</strong> ' . absint( $secret_length ) . ' characters</p>';
 		echo '<p><strong>✅ VIP 2FA Compliant:</strong> Uses capability-based authentication (no user creation)</p>';
 		echo '<p><strong>✅ Editing Permissions:</strong> Enabled for CCP authenticated requests</p>';
 
