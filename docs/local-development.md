@@ -86,7 +86,6 @@ The development environment includes:
 
 - **Xdebug** for PHP debugging (port 9003)
 - **Node.js debugging port** for JavaScript debugging
-- **Query Monitor plugin** for performance profiling
 
 **Enable WordPress debug mode:**
 
