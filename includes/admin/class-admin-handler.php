@@ -338,7 +338,7 @@ class Admin_Handler {
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		$content = wp_unslash( $_POST['content'] ?? '' );
 
-		// Ensure content is  UTF-8 encoded.
+		// Ensure content is UTF-8 encoded.
 		if ( ! mb_check_encoding( $content, 'UTF-8' ) ) {
 			$content = mb_convert_encoding( $content, 'UTF-8', 'auto' );
 		}
