@@ -143,7 +143,7 @@ This guide helps you resolve common issues with Compliant Content Publisher. If 
 
 2. **Verify Gutenberg blocks are valid**:
    - Switch to code editor view
-   - Check block comments are properly closed
+   - Check block comments are  closed
    - Look for corrupted block syntax
 
 3. **Test with simple content**:

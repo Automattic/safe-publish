@@ -77,14 +77,14 @@ class VIP_Safe_Auth {
 	}
 
 	/**
-	 * Checks if the current request/context is properly authorized.
+	 * Checks if the current request/context is correctly authorized.
 	 *
 	 * Validates that the authentication credentials are valid and can
 	 * successfully authenticate with the target site.
 	 *
 	 * @param string $site_url    Optional. Target site URL to test authorization against. Default ''.
 	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
-	 * @return bool True if properly authorized, false otherwise.
+	 * @return bool True if correctly authorized, false otherwise.
 	 */
 	public static function is_authorized( $site_url = '', $auth_config = array() ): bool {
 		$auth_method = self::determine_auth_method( $auth_config );
@@ -98,7 +98,7 @@ class VIP_Safe_Auth {
 		if ( 'shared_secret' === $auth_method ) {
 			$shared_secret = $auth_config['shared_secret'] ?? '';
 
-			// Check if shared secret is properly configured and meets minimum requirements.
+			// Check if shared secret is  configured and meets minimum requirements.
 			if ( empty( $shared_secret ) || strlen( $shared_secret ) < 16 ) {
 				return false;
 			}
