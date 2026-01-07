@@ -156,20 +156,4 @@ Playgrounds do not closely mirror production environments and are missing persis
 
 ## Troubleshooting
 
-**Can't connect to external site:**
-- Check HTTPS is working
-- Verify shared secret matches
-- Ensure MU plugin is installed
-- Check firewall/network settings
-
-**JavaScript not updating:**
-- Clear browser cache
-- Run `npm run build` manually
-- Check console for errors
-
-**PHP changes not reflecting:**
-- Clear object cache
-- Restart Docker containers
-- Check for PHP errors in logs
-
 See the [Troubleshooting Guide](troubleshooting.md) for more help.
