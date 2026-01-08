@@ -39,6 +39,7 @@ class Admin_Handler {
 	 * Constructs the Admin_Handler instance.
 	 *
 	 * @param External_Posts_API $api External Posts API instance.
+	 * @psalm-suppress PossiblyUnusedParam
 	 */
 	public function __construct( External_Posts_API $api ) {
 		$this->api            = $api;
@@ -1304,8 +1305,6 @@ class Admin_Handler {
 
 		// If we found a URL, process it.
 		if ( ! empty( $original_url ) ) {
-			$attachment_id = false;
-			$new_url       = false;
 
 			// Method 1: Try to import and get attachment ID directly.
 			$attachment_id = $this->api->import_external_media_as_attachment( $original_url, $site_url );
@@ -1610,9 +1609,6 @@ class Admin_Handler {
 		if ( empty( $html ) || empty( $old_url ) || empty( $new_url ) ) {
 			return $html;
 		}
-
-		// Store original formatting by preserving whitespace context.
-		$original_html = $html;
 
 		// Use a more targeted regex approach to avoid XML declaration issues.
 		// This is safer for block innerHTML since we're only replacing the src attribute.

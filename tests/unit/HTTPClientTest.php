@@ -27,6 +27,7 @@ class HTTPClientTest extends TestCase {
 	/**
 	 * Sets up test fixtures.
 	 */
+	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
 		$this->http_client = new HTTP_Client();

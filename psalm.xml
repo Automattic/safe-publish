@@ -24,16 +24,27 @@
     <issueHandlers>
         <PossiblyUnusedReturnValue errorLevel="suppress"/>
         <PossiblyUnusedMethod errorLevel="suppress"/>
-        <UndefinedGlobalVariable>
-            <errorLevel type="suppress">
-                <file name="**/render.php" />
-            </errorLevel>
-        </UndefinedGlobalVariable>
         <UnusedClass>
             <errorLevel type="suppress">
                 <directory name="tests/" />
             </errorLevel>
         </UnusedClass>
+        <UnusedParam>
+            <errorLevel type="suppress">
+                <file name="tests/unit/stubs.php" />
+                <file name="mu-plugins/ccp-auth.php" />
+            </errorLevel>
+        </UnusedParam>
+        <UnusedClosureParam>
+            <errorLevel type="suppress">
+                <file name="mu-plugins/ccp-auth.php" />
+            </errorLevel>
+        </UnusedClosureParam>
+        <UnusedVariable>
+            <errorLevel type="suppress">
+                <file name="tests/unit/stubs.php" />
+            </errorLevel>
+        </UnusedVariable>
     </issueHandlers>
     <stubs>
         <file name="vendor/php-stubs/wordpress-globals/wordpress-globals.php"/>

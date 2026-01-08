@@ -144,6 +144,7 @@ class VIP_Safe_Auth {
 	 * @param string $site_url    Target site URL.
 	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
 	 * @return bool|WP_Error True if authorized, WP_Error with details if not.
+	 * @psalm-suppress PossiblyUnusedParam
 	 */
 	public static function test_authorization( $site_url, $auth_config = array() ): bool|\WP_Error {
 		if ( empty( $site_url ) ) {

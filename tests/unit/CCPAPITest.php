@@ -27,6 +27,7 @@ class CCPAPITest extends TestCase {
 	/**
 	 * Sets up test fixtures.
 	 */
+	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
 		$this->api = new CCP_API();

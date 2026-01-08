@@ -1698,7 +1698,6 @@ add_filter(
 	function ( $redirect_url, $requested_url ): string|false {
 		// Get the hostname from the request.
 		$requested_host = wp_parse_url( $requested_url, PHP_URL_HOST );
-		$site_host      = wp_parse_url( home_url(), PHP_URL_HOST );
 
 		// Allow both localhost and host.docker.internal for the same site.
 		$allowed_hosts = array( 'localhost', 'host.docker.internal' );
@@ -1727,7 +1726,6 @@ add_filter(
 	'allowed_http_origins',
 	function ( $origins ): array {
 		$site_url  = home_url();
-		$site_host = wp_parse_url( $site_url, PHP_URL_HOST );
 		$site_port = wp_parse_url( $site_url, PHP_URL_PORT );
 
 		// Add host.docker.internal with the same port.

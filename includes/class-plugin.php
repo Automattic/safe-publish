@@ -43,13 +43,6 @@ class Plugin {
 	private $admin_handler;
 
 	/**
-	 * Cache handler instance.
-	 *
-	 * @var Cache_Handler
-	 */
-	private $cache_handler;
-
-	/**
 	 * Constructs the Plugin instance.
 	 */
 	public function __construct() {

@@ -29,6 +29,7 @@ class CCP_API extends REST_Base {
 	/**
 	 * Registers REST API routes.
 	 */
+	#[\Override]
 	public function register_routes(): void {
 		register_rest_route(
 			self::REST_BASE,
@@ -267,8 +268,7 @@ class CCP_API extends REST_Base {
 	 *
 	 * @param \WP_REST_Request $req REST request object.
 	 *
-	 * @return array|\WP_REST_Response
-	 * @throws \WP_Error   If the local post cannot be found.
+	 * @return array|\WP_REST_Response|\WP_Error Array on success, WP_Error if post not found.
 	 * @throws \Exception If the external post cannot be fetched or processed.
 	 */
 	public function render_diff( \WP_REST_Request $req ): array|\WP_REST_Response {
@@ -390,6 +390,7 @@ class CCP_API extends REST_Base {
 
 		// Ensure diff renderer classes are loaded.
 		if ( ! class_exists( 'WP_Text_Diff_Renderer_Table' ) ) {
+			/** @psalm-suppress MissingFile */
 			require_once ABSPATH . 'wp-includes/wp-diff.php';
 		}
 
@@ -461,7 +462,7 @@ class CCP_API extends REST_Base {
 		}
 
 		// Normalize excerpts so a simple wrapping <p>...</p> does not create a false diff.
-		$prepare_excerpt_for_diff = static function ( $excerpt ) {
+		$prepare_excerpt_for_diff = static function ( $excerpt ): string {
 			$excerpt = trim( (string) $excerpt );
 
 			// If entire excerpt is wrapped in a single <p>...</p>, strip that outer pair only.

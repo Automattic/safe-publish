@@ -27,12 +27,14 @@ class RESTBaseTest extends TestCase {
 	/**
 	 * Sets up test fixtures.
 	 */
+	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
 		$this->rest_base = new class() extends REST_Base {
 			/**
 			 * Registers routes.
 			 */
+			#[\Override]
 			public function register_routes(): void {
 				// Mock implementation.
 			}
