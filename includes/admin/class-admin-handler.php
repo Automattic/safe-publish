@@ -338,7 +338,7 @@ class Admin_Handler {
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		$content = wp_unslash( $_POST['content'] ?? '' );
 
-		// Ensure content is properly UTF-8 encoded.
+		// Ensure content is UTF-8 encoded.
 		if ( ! mb_check_encoding( $content, 'UTF-8' ) ) {
 			$content = mb_convert_encoding( $content, 'UTF-8', 'auto' );
 		}
@@ -711,7 +711,7 @@ class Admin_Handler {
 			$title            = sanitize_text_field( $post_data['title'] ?? '' );
 			$content          = wp_unslash( $post_data['content'] ?? '' ); // Preserve original formatting.
 
-			// Ensure content is properly UTF-8 encoded.
+			// Ensure content is UTF-8 encoded.
 			if ( ! mb_check_encoding( $content, 'UTF-8' ) ) {
 				$content = mb_convert_encoding( $content, 'UTF-8', 'auto' );
 			}
