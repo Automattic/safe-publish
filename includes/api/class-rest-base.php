@@ -9,7 +9,7 @@ declare(strict_types = 1);
 
 namespace CCP\API;
 
-use CCP\Auth\VIP_Safe_Auth;
+use WP_Error;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -54,9 +54,9 @@ abstract class REST_Base {
 	 * @param string $url              Request URL.
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
 	 * @param array  $additional_args  Optional. Additional request arguments. Default empty array.
-	 * @return array|\WP_Error Response or error.
+	 * @return array|WP_Error Response or error.
 	 */
-	public function make_request( string $url, array $auth_credentials = array(), array $additional_args = array() ): array|\WP_Error {
+	public function make_request( string $url, array $auth_credentials = array(), array $additional_args = array() ): array|WP_Error {
 		return $this->http_client->make_request( $url, $auth_credentials, $additional_args );
 	}
 
@@ -74,9 +74,9 @@ abstract class REST_Base {
 	 *
 	 * @param string $url  Request URL.
 	 * @param array  $args Optional. Request arguments. Default empty array.
-	 * @return array|\WP_Error Response or error.
+	 * @return array|WP_Error Response or error.
 	 */
-	public function safe_remote_get( string $url, array $args = array() ): array|\WP_Error {
+	public function safe_remote_get( string $url, array $args = array() ): array|WP_Error {
 		return $this->http_client->safe_remote_get( $url, $args );
 	}
 

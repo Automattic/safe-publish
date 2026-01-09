@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Admin Page Class.
  */
-class Admin_Page {
+final class Admin_Page {
 
 	/**
 	 * External Posts API instance.

@@ -11,6 +11,7 @@ namespace CCP\API;
 
 use CCP\Auth\VIP_Safe_Auth;
 use CCP\Utils\Environment;
+use WP_Error;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -23,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Provides a centralized service for making HTTP requests with VIP
  * compatibility, authentication handling, and error management.
  */
-class HTTP_Client {
+final class HTTP_Client {
 
 	/**
 	 * Makes HTTP request with VIP compatibility.
@@ -31,9 +32,9 @@ class HTTP_Client {
 	 * @param string $url              Request URL.
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
 	 * @param array  $additional_args  Optional. Additional request arguments. Default empty array.
-	 * @return array|\WP_Error Response or error.
+	 * @return array|WP_Error Response or error.
 	 */
-	public function make_request( string $url, array $auth_credentials = array(), array $additional_args = array() ): array|\WP_Error {
+	public function make_request( string $url, array $auth_credentials = array(), array $additional_args = array() ): array|WP_Error {
 		// VIP-optimized timeout (max 10 seconds recommended for VIP environments).
 		$timeout = apply_filters( 'ccp_request_timeout', 10 );
 
@@ -106,7 +107,7 @@ class HTTP_Client {
 		$response = $this->safe_remote_get( $url, $request_args );
 
 		if ( is_wp_error( $response ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'request_failed',
 				__( 'Failed to fetch data from external site.', 'ccp' ) . ' ' . $response->get_error_message()
 			);
@@ -114,7 +115,7 @@ class HTTP_Client {
 
 		$response_code = wp_remote_retrieve_response_code( $response );
 		if ( 200 !== $response_code ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'http_error',
 				sprintf(
 					/* translators: %d: HTTP response code */
@@ -148,9 +149,9 @@ class HTTP_Client {
 	 *
 	 * @param string $url  Request URL.
 	 * @param array  $args Optional. Request arguments. Default empty array.
-	 * @return array|\WP_Error Response or error.
+	 * @return array|WP_Error Response or error.
 	 */
-	public function safe_remote_get( string $url, array $args = array() ): array|\WP_Error {
+	public function safe_remote_get( string $url, array $args = array() ): array|WP_Error {
 		// Use VIP-optimized function when available, fallback to core function.
 		if ( function_exists( 'vip_safe_wp_remote_get' ) ) {
 			return vip_safe_wp_remote_get( $url, '', 3, 5, 20, $args );
@@ -266,9 +267,9 @@ class HTTP_Client {
 	 * Downloads external file using WordPress core function.
 	 *
 	 * @param string $url External file URL.
-	 * @return string|\WP_Error|false Path to downloaded file on success, WP_Error or false on failure.
+	 * @return string|WP_Error|false Path to downloaded file on success, WP_Error or false on failure.
 	 */
-	public function download_external_file( string $url ): string|\WP_Error|false {
+	public function download_external_file( string $url ): string|WP_Error|false {
 		// Use download_url for proper file handling - WordPress core function.
 		return download_url( $url );
 	}
