@@ -6,7 +6,7 @@
  *
  * @file This file defines the PostDiffModal component.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from '@wordpress/element';
 
 import BlockDiffViewer from './BlockDiffViewer';
 import { fetchDiffPreview, updatePostContent } from '../api/diff';
@@ -28,7 +28,7 @@ import {
  */
 interface PostDiffModalProps {
 	items: Post[];
-	closeModal: () => void;
+	closeModal?: () => void;
 }
 
 /**
@@ -161,7 +161,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
         if ( result.success ) {
             setUpdateSuccess( 'Post updated successfully.' );
             setTimeout( () => {
-                closeModal();
+                closeModal?.();
             }, 500 );
         } else {
             setUpdateError( result.error || 'Failed to update post.' );

@@ -7,7 +7,7 @@
  * @file This file defines DataViews actions for the CCP plugin.
  */
 import { drafts, update, download } from '@wordpress/icons';
-import { useState } from 'react';
+import { useState } from '@wordpress/element';
 
 import PostDiffModal from './components/PostDiffModal';
 import { Post } from './types';
@@ -109,9 +109,6 @@ const createDraftPost = async ( post: Post ): Promise< CreateDraftResponse > => 
 	if ( post.terms ) {
 		formData.append( 'terms', JSON.stringify( post.terms ) );
 	}
-
-	console.log(formData);
-	return false;
 
 	const response = await fetch( window.ccpAdminData.ajaxurl, {
 		method: 'POST',
@@ -334,7 +331,7 @@ export const actions: Action< Post >[] = [
 					// User chose not to update, redirect to existing post.
 					window.location.href = confirmData.edit_url;
 				} else {
-					closeModal();
+					closeModal?.();
 				}
 			};
 
@@ -509,7 +506,7 @@ export const actions: Action< Post >[] = [
 					// Refresh the page to show updated post list.
 					window.location.reload();
 				} else {
-					closeModal();
+					closeModal?.();
 				}
 			};
 

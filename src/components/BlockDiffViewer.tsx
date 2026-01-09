@@ -6,7 +6,7 @@
  *
  * @file This file defines the BlockDiffViewer component.
  */
-import { Diff, diffWords } from 'diff';
+import { Change, diffWords } from 'diff';
 
 import { __experimentalText as Text } from '@wordpress/components';
 
@@ -36,7 +36,7 @@ interface Props {
  */
 function highlightHtml( original: string, changed: string ): string {
 	if ( original === changed ) { return changed; }
-	const parts: Diff[] = diffWords( original, changed );
+	const parts: Change[] = diffWords( original, changed );
 	return parts
 		.map( part => {
 			const cls = part.added ? 'ccp-inline-added' : part.removed ? 'ccp-inline-removed' : '';
