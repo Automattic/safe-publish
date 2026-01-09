@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Main Plugin Class.
  */
-class Plugin {
+final class Plugin {
 
 	/**
 	 * External Posts API instance.
@@ -84,7 +84,7 @@ class Plugin {
 	/**
 	 * Gets admin handler instance.
 	 *
-	 * @return Admin_Handler|null Admin handler instance or null.
+	 * @return ?Admin_Handler Admin handler instance or null.
 	 */
 	public function get_admin_handler(): ?Admin_Handler {
 		return $this->admin_handler ?? null;
@@ -93,7 +93,7 @@ class Plugin {
 	/**
 	 * Gets CCP API instance.
 	 *
-	 * @return CCP_API|null CCP API instance or null.
+	 * @return ?CCP_API CCP API instance or null.
 	 */
 	public function get_ccp_api(): ?CCP_API {
 		return $this->ccp_api ?? null;

@@ -9,6 +9,13 @@ declare( strict_types=1 );
 
 namespace CCP\API;
 
+use Exception;
+use stdClass;
+use WP_Error;
+use WP_Query;
+use WP_REST_Request;
+use WP_REST_Response;
+
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -17,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * External Posts API Class.
  */
-class CCP_API extends REST_Base {
+final class CCP_API extends REST_Base {
 
 	/**
 	 * REST API base route.
@@ -71,10 +78,10 @@ class CCP_API extends REST_Base {
 			'update-post',
 			array(
 				'methods'             => 'POST',
-				'permission_callback' => function ( \WP_REST_Request $request ) {
+				'permission_callback' => function ( WP_REST_Request $request ) {
 					$post_id = (int) $request->get_param( 'postId' );
 					if ( ! $post_id ) {
-						return new \WP_Error( 'rest_missing_param', __( 'postId is required', 'ccp' ), array( 'status' => 400 ) );
+						return new WP_Error( 'rest_missing_param', __( 'postId is required', 'ccp' ), array( 'status' => 400 ) );
 					}
 
 					return current_user_can( 'edit_post', $post_id );
@@ -117,11 +124,11 @@ class CCP_API extends REST_Base {
 	/**
 	 * Updates the content of a post.
 	 *
-	 * @param \WP_REST_Request $req REST request object.
+	 * @param WP_REST_Request $req REST request object.
 	 *
-	 * @return \WP_REST_Response
+	 * @return WP_REST_Response
 	 */
-	public function update_post_content( \WP_REST_Request $req ): \WP_REST_Response {
+	public function update_post_content( WP_REST_Request $req ): WP_REST_Response {
 		global $ccp_plugin;
 
 		$post_id           = (int) $req->get_param( 'postId' );
@@ -133,7 +140,7 @@ class CCP_API extends REST_Base {
 		$featured_media_id = (int) $req->get_param( 'featuredMediaId' );
 
 		if ( ! $post_id ) {
-			return new \WP_REST_Response(
+			return new WP_REST_Response(
 				array(
 					'success' => false,
 					'error'   => __( 'Missing postId', 'ccp' ),
@@ -143,7 +150,7 @@ class CCP_API extends REST_Base {
 		}
 
 		if ( ! current_user_can( 'edit_post', $post_id ) ) {
-			return new \WP_REST_Response(
+			return new WP_REST_Response(
 				array(
 					'success' => false,
 					'error'   => __( 'Insufficient permissions', 'ccp' ),
@@ -192,7 +199,7 @@ class CCP_API extends REST_Base {
 		$result = wp_update_post( $postarr, true );
 
 		if ( is_wp_error( $result ) ) {
-			return new \WP_REST_Response(
+			return new WP_REST_Response(
 				array(
 					'success' => false,
 					'error'   => $result->get_error_message(),
@@ -223,7 +230,7 @@ class CCP_API extends REST_Base {
 			$this->update_terms( $post_id, $terms );
 		}
 
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			array(
 				'success' => true,
 				'post_id' => $result,
@@ -266,12 +273,12 @@ class CCP_API extends REST_Base {
 	/**
 	 * Renders the diff preview for an external post.
 	 *
-	 * @param \WP_REST_Request $req REST request object.
+	 * @param WP_REST_Request $req REST request object.
 	 *
-	 * @return array|\WP_REST_Response|\WP_Error Array on success, WP_Error if post not found.
-	 * @throws \Exception If the external post cannot be fetched or processed.
+	 * @return array|WP_REST_Response|WP_Error Array on success, WP_Error if post not found.
+	 * @throws Exception If the external post cannot be fetched or processed.
 	 */
-	public function render_diff( \WP_REST_Request $req ): array|\WP_REST_Response {
+	public function render_diff( WP_REST_Request $req ): array|WP_REST_Response {
 		$external_post_id = (int) $req->get_param( 'postId' );
 		$post_type        = (string) $req->get_param( 'postType' );
 		$mode             = (string) $req->get_param( 'mode' );
@@ -289,7 +296,7 @@ class CCP_API extends REST_Base {
 		$mapped_post_type = isset( $post_type_mapping[ $post_type ] ) ? $post_type_mapping[ $post_type ] : $post_type;
 
 		// Find local post by external post ID.
-		$_query = new \WP_Query(
+		$_query = new WP_Query(
 			array(
 				'meta_key'       => 'ccp_external_post_id',
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
@@ -301,7 +308,7 @@ class CCP_API extends REST_Base {
 		);
 
 		if ( ! $_query->have_posts() ) {
-			return new \WP_REST_Response( array( 'error' => 'No matching post found in current site.' ), 404 );
+			return new WP_REST_Response( array( 'error' => 'No matching post found in current site.' ), 404 );
 		}
 
 		$local_post = $_query->posts[0];
@@ -321,7 +328,7 @@ class CCP_API extends REST_Base {
 		$response = $this->make_request( $external_api_url, $this->get_auth_credentials() );
 
 		if ( is_wp_error( $response ) ) {
-			return new \WP_REST_Response( array( 'error' => 'Failed to fetch external post.' ), 500 );
+			return new WP_REST_Response( array( 'error' => 'Failed to fetch external post.' ), 500 );
 		}
 
 		$body = wp_remote_retrieve_body( $response );
@@ -375,7 +382,7 @@ class CCP_API extends REST_Base {
 			$incoming_content = $this->normalize_for_diff( $incoming_content );
 
 			// Titles/excerpts are simpler, keep light normalization.
-			$light            = static function ( $text ) {
+			$light            = static function ( $text ): string {
 				$text = str_replace( array( "\r\n", "\r" ), "\n", (string) $text );
 				$text = preg_replace( "/[ \t]+/", ' ', $text );
 				$text = preg_replace( "/\n{3,}/", "\n\n", $text );
@@ -415,7 +422,7 @@ class CCP_API extends REST_Base {
 
 		// --- Non-content diffs (title, excerpt, taxonomies, meta) ---
 		// Helper: build plain text rep for taxonomies and meta for diffing.
-		$build_terms_text = function ( $terms_arr ) {
+		$build_terms_text = function ( $terms_arr ): string {
 			if ( empty( $terms_arr ) || ! is_array( $terms_arr ) ) {
 				return '';
 			}
@@ -427,7 +434,7 @@ class CCP_API extends REST_Base {
 			return implode( "\n", $lines );
 		};
 
-		$build_meta_text = function ( $meta_arr ) {
+		$build_meta_text = function ( $meta_arr ): string {
 			if ( empty( $meta_arr ) || ! is_array( $meta_arr ) ) {
 				return '';
 			}
@@ -670,13 +677,13 @@ class CCP_API extends REST_Base {
 					'status'   => $status,
 					'current'  => $cur ? array(
 						'name'       => $cur_name,
-						'attrs'      => $cur['attrs'] ?? new \stdClass(),
+						'attrs'      => $cur['attrs'] ?? new stdClass(),
 						'rendered'   => wp_kses_post( $cur_rendered ),
 						'normalized' => $norm_cur,
 					) : null,
 					'incoming' => $inc ? array(
 						'name'       => $inc_name,
-						'attrs'      => $inc['attrs'] ?? new \stdClass(),
+						'attrs'      => $inc['attrs'] ?? new stdClass(),
 						'rendered'   => wp_kses_post( $inc_rendered ),
 						'normalized' => $norm_inc,
 					) : null,
@@ -687,7 +694,7 @@ class CCP_API extends REST_Base {
 		// Prepare structured response: content diff + structured incoming/current metadata + non-content diffs.
 		return array(
 			'contentDiffHtml'         => $content_diff,
-			'renderedContentDiffHtml' => $rendered_content_diff ?? null,
+			'renderedContentDiffHtml' => null,
 			'blockDiffs'              => $block_diffs,
 			'nonContentDiffs'         => array(
 				'title'         => $title_diff ?? null,
@@ -920,9 +927,9 @@ class CCP_API extends REST_Base {
 	 * and normalizes self-closing spacing.
 	 *
 	 * @param string $html HTML content.
-	 * @return string HTML with line breaks added.
+	 * @return ?string HTML with line breaks added.
 	 */
-	private function add_line_breaks_for_diff( string $html ): string {
+	private function add_line_breaks_for_diff( string $html ): ?string {
 		// Ensure each block comment is on its own line.
 		$html = preg_replace( '/\s*(<!--\s*\/?wp:[^>]+-->)\s*/', "\n$1\n", $html );
 

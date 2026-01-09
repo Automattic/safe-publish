@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Settings Page Class.
  */
-class Settings_Page {
+final class Settings_Page {
 
 	/**
 	 * Renders the settings page.

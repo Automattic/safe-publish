@@ -533,9 +533,9 @@ if ( ! function_exists( 'ccp_vip_override_context_permissions' ) ) {
 	 * @param WP_REST_Response|WP_Error $result  Response object.
 	 * @param WP_REST_Server            $server  Server instance.
 	 * @param WP_REST_Request           $request Request object.
-	 * @return WP_REST_Response Modified or re-dispatched response.
+	 * @return WP_REST_Response|WP_Error Modified or re-dispatched response.
 	 */
-	function ccp_vip_override_context_permissions( $result, $server, $request ): WP_REST_Response {
+	function ccp_vip_override_context_permissions( $result, $server, $request ): WP_REST_Response|WP_Error {
 		// Only apply to CCP authenticated requests.
 		if ( empty( $GLOBALS['ccp_authenticated'] ) ) {
 			return $result;

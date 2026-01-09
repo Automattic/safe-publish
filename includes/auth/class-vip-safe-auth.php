@@ -8,6 +8,7 @@
 namespace CCP\Auth;
 
 use CCP\Utils\Environment;
+use WP_Error;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -22,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * 1. Shared Secret (HMAC authentication) - Production ready.
  * 2. Basic Authentication - Development environments only.
  */
-class VIP_Safe_Auth {
+final class VIP_Safe_Auth {
 
 	/**
 	 * Authentication methods priority order.
@@ -144,16 +145,15 @@ class VIP_Safe_Auth {
 	 * @param string $site_url    Target site URL.
 	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
 	 * @return bool|WP_Error True if authorized, WP_Error with details if not.
-	 * @psalm-suppress PossiblyUnusedParam
 	 */
-	public static function test_authorization( $site_url, $auth_config = array() ): bool|\WP_Error {
+	public static function test_authorization( $site_url, $auth_config = array() ): bool|WP_Error {
 		if ( empty( $site_url ) ) {
-			return new \WP_Error( 'invalid_url', 'Site URL is required for authorization testing' );
+			return new WP_Error( 'invalid_url', 'Site URL is required for authorization testing' );
 		}
 
 		// First check if we have valid credentials format.
 		if ( ! self::is_authorized( $site_url, $auth_config ) ) {
-			return new \WP_Error( 'invalid_credentials', 'Invalid or missing authentication credentials' );
+			return new WP_Error( 'invalid_credentials', 'Invalid or missing authentication credentials' );
 		}
 
 		// Make a lightweight test request to verify credentials work.
@@ -186,7 +186,7 @@ class VIP_Safe_Auth {
 		}
 
 		if ( is_wp_error( $response ) ) {
-			return new \WP_Error( 'request_failed', 'Authorization test request failed: ' . $response->get_error_message() );
+			return new WP_Error( 'request_failed', 'Authorization test request failed: ' . $response->get_error_message() );
 		}
 
 		$response_code = wp_remote_retrieve_response_code( $response );
@@ -194,7 +194,7 @@ class VIP_Safe_Auth {
 		// Check for authentication-related errors.
 		if ( in_array( $response_code, array( 401, 403 ), true ) ) {
 			$response_body = wp_remote_retrieve_body( $response );
-			return new \WP_Error( 'auth_failed', 'Authentication failed with HTTP ' . $response_code . ': ' . $response_body );
+			return new WP_Error( 'auth_failed', 'Authentication failed with HTTP ' . $response_code . ': ' . $response_body );
 		}
 
 		// If we get a successful response (200) or even a 404 (endpoint exists but not found),
@@ -204,7 +204,7 @@ class VIP_Safe_Auth {
 		}
 
 		// Other error codes might indicate server issues rather than auth issues.
-		return new \WP_Error( 'unexpected_response', 'Unexpected response code: ' . $response_code );
+		return new WP_Error( 'unexpected_response', 'Unexpected response code: ' . $response_code );
 	}
 
 	/**
@@ -298,13 +298,13 @@ class VIP_Safe_Auth {
 	 *
 	 * @return bool|WP_Error True if authenticated, WP_Error if not.
 	 */
-	public static function verify_request(): bool|\WP_Error {
+	public static function verify_request(): bool|WP_Error {
 		// Check for shared secret authentication.
 		if ( isset( $_SERVER['HTTP_X_CCP_SIGNATURE'] ) ) {
 			return self::verify_shared_secret();
 		}
 
-		return new \WP_Error( 'no_auth', __( 'No valid authentication found.', 'ccp' ) );
+		return new WP_Error( 'no_auth', __( 'No valid authentication found.', 'ccp' ) );
 	}
 
 	/**
@@ -312,26 +312,26 @@ class VIP_Safe_Auth {
 	 *
 	 * @return bool|WP_Error True if valid, WP_Error if not.
 	 */
-	private static function verify_shared_secret(): bool|\WP_Error {
+	private static function verify_shared_secret(): bool|WP_Error {
 		$signature = sanitize_text_field( $_SERVER['HTTP_X_CCP_SIGNATURE'] ?? '' );
 		$site      = sanitize_url( $_SERVER['HTTP_X_CCP_SITE'] ?? '' );
 		$timestamp = sanitize_text_field( $_SERVER['HTTP_X_CCP_TIMESTAMP'] ?? '' );
 		$nonce     = sanitize_text_field( $_SERVER['HTTP_X_CCP_NONCE'] ?? '' );
 
 		if ( empty( $signature ) || empty( $site ) || empty( $timestamp ) || empty( $nonce ) ) {
-			return new \WP_Error( 'invalid_auth', __( 'Missing authentication parameters.', 'ccp' ) );
+			return new WP_Error( 'invalid_auth', __( 'Missing authentication parameters.', 'ccp' ) );
 		}
 
 		// Check timestamp (prevent replay attacks).
 		if ( abs( time() - intval( $timestamp ) ) > 300 ) { // 5 minute window.
-			return new \WP_Error( 'expired_auth', __( 'Authentication expired.', 'ccp' ) );
+			return new WP_Error( 'expired_auth', __( 'Authentication expired.', 'ccp' ) );
 		}
 
 		// Get shared secret for this site.
 		$shared_secret = get_option( 'ccp_shared_secret_' . md5( $site ), '' );
 
 		if ( empty( $shared_secret ) ) {
-			return new \WP_Error( 'unknown_site', __( 'Unknown source site.', 'ccp' ) );
+			return new WP_Error( 'unknown_site', __( 'Unknown source site.', 'ccp' ) );
 		}
 
 		// Recreate payload and verify signature.
@@ -345,13 +345,13 @@ class VIP_Safe_Auth {
 		$expected_signature = hash_hmac( 'sha256', wp_json_encode( $payload ), $shared_secret );
 
 		if ( ! hash_equals( $expected_signature, $signature ) ) {
-			return new \WP_Error( 'invalid_signature', __( 'Invalid authentication signature.', 'ccp' ) );
+			return new WP_Error( 'invalid_signature', __( 'Invalid authentication signature.', 'ccp' ) );
 		}
 
 		// Check nonce for replay protection.
 		$nonce_key = 'ccp_nonce_' . md5( $nonce );
 		if ( get_transient( $nonce_key ) ) {
-			return new \WP_Error( 'replay_attack', __( 'Nonce already used.', 'ccp' ) );
+			return new WP_Error( 'replay_attack', __( 'Nonce already used.', 'ccp' ) );
 		}
 
 		// Store nonce to prevent replay.

@@ -7,6 +7,9 @@
 
 namespace CCP\Admin;
 
+use WP_Error;
+use WP_Query;
+
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -15,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Import History Class.
  */
-class Import_History {
+final class Import_History {
 
 	/**
 	 * Custom post type for import sessions.
@@ -190,9 +193,9 @@ class Import_History {
 	 *
 	 * @param string $source_url   Source site URL.
 	 * @param string $session_type Type of import (single, bulk).
-	 * @return int|\WP_Error Session ID or error.
+	 * @return int|WP_Error Session ID or error.
 	 */
-	public function create_session( $source_url, $session_type = 'bulk' ): int|\WP_Error {
+	public function create_session( $source_url, $session_type = 'bulk' ): int|WP_Error {
 		$session_id = wp_insert_post(
 			array(
 				'post_type'   => self::SESSION_POST_TYPE,
@@ -229,9 +232,9 @@ class Import_History {
 	 * @param int    $post_id     WordPress post ID (if successful).
 	 * @param string $error       Error message (if failed).
 	 * @param array  $changes     Changes made during import.
-	 * @return int|\WP_Error Log ID or error.
+	 * @return int|WP_Error Log ID or error.
 	 */
-	public function log_import_action( $session_id, $external_id, $title, $status, $post_id = null, $error = null, $changes = array() ): int|\WP_Error {
+	public function log_import_action( $session_id, $external_id, $title, $status, $post_id = null, $error = null, $changes = array() ): int|WP_Error {
 		$log_data = array(
 			'session_id'    => $session_id,
 			'external_id'   => $external_id,
@@ -772,7 +775,7 @@ class Import_History {
 		}
 
 		// Find the import log entry for this post to get the previous content.
-		$log_query = new \WP_Query(
+		$log_query = new WP_Query(
 			array(
 				'post_type'      => self::LOG_POST_TYPE,
 				'post_status'    => 'publish',

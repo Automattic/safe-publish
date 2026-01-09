@@ -10,6 +10,7 @@ namespace CCP\Admin;
 use CCP\API\External_Posts_API;
 use CCP\Admin\Import_History;
 use CCP\Utils\Environment;
+use Exception;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -19,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Admin Handler Class.
  */
-class Admin_Handler {
+final class Admin_Handler {
 
 	/**
 	 * External Posts API instance.
@@ -426,7 +427,6 @@ class Admin_Handler {
 					'confirm_action' => 'update_existing',
 				)
 			);
-			return;
 		}
 
 		// Fetch fresh content from external site if updating existing post.
@@ -564,7 +564,6 @@ class Admin_Handler {
 					'existing' => true,
 				)
 			);
-			return; // Exit here to prevent creating a new post.
 		}
 
 		// Create new draft post with content filtering temporarily disabled.
@@ -804,11 +803,10 @@ class Admin_Handler {
 						$fresh_post_data = $this->api->fetch_fresh_post_content( $external_post_id, $configured_site_url, $auth_credentials );
 						if ( $fresh_post_data ) {
 							$title             = $fresh_post_data['title'] ?? $title;
-							$content           = $fresh_post_data['content'] ?? $content;
 							$featured_media_id = $fresh_post_data['featured_media'] ?? $featured_media_id;
 						}
 					// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-					} catch ( \Exception $e ) {
+					} catch ( Exception $e ) {
 						// Continue with provided content if fresh fetch fails.
 					}
 				}
@@ -934,7 +932,7 @@ class Admin_Handler {
 					'existing'    => false,
 				);
 			}
-		} catch ( \Exception $e ) {
+		} catch ( Exception $e ) {
 			// Log the error.
 			if ( $session_id ) {
 				$this->import_history->log_import_action(
@@ -1103,9 +1101,9 @@ class Admin_Handler {
 	 * Processes content to handle oEmbed URLs.
 	 *
 	 * @param string $content Post content.
-	 * @return string Processed content with oEmbeds.
+	 * @return ?string Processed content with oEmbeds.
 	 */
-	public function process_oembed_content( $content ): string {
+	public function process_oembed_content( $content ): ?string {
 		if ( empty( $content ) ) {
 			return $content;
 		}
@@ -1129,9 +1127,9 @@ class Admin_Handler {
 	 * Processes manual embed patterns.
 	 *
 	 * @param string $content Post content.
-	 * @return string Processed content.
+	 * @return ?string Processed content.
 	 */
-	public function process_manual_embeds( $content ): string {
+	public function process_manual_embeds( $content ): ?string {
 		// YouTube embed patterns.
 		$content = preg_replace_callback(
 			'/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/',
@@ -1603,9 +1601,9 @@ class Admin_Handler {
 	 * @param string $html    HTML content.
 	 * @param string $old_url Old image URL to replace.
 	 * @param string $new_url New image URL.
-	 * @return string Updated HTML content.
+	 * @return ?string Updated HTML content.
 	 */
-	public function update_img_src_in_html( $html, $old_url, $new_url ): string {
+	public function update_img_src_in_html( $html, $old_url, $new_url ): ?string {
 		if ( empty( $html ) || empty( $old_url ) || empty( $new_url ) ) {
 			return $html;
 		}
@@ -1863,7 +1861,7 @@ class Admin_Handler {
 					$debug_info['post_types_count']   = count( $json_data );
 				}
 			}
-		} catch ( \Exception $e ) {
+		} catch ( Exception $e ) {
 			$debug_info['exception'] = $e->getMessage();
 		}
 
