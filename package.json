@@ -62,8 +62,9 @@
     "@testing-library/jest-dom": "6.6.3",
     "@testing-library/react": "16.3.0",
     "@testing-library/user-event": "^14.6.1",
-    "@types/react": "^19.1.8",
-    "@types/react-dom": "^19.1.6",
+    "@types/diff": "^7.0.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/wordpress__block-editor": "11.5.16",
     "@types/wordpress__blocks": "12.5.17",
@@ -118,7 +119,6 @@
     "@wordpress/dataviews": "^4.22.0",
     "@wordpress/i18n": "^5.26.0",
     "diff": "^5.2.0",
-    "react": "^19.1.1",
     "react-syntax-highlighter": "^15.6.1"
   }
 }
