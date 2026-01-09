@@ -31,6 +31,7 @@ class Admin_Page {
 	 * Constructs the Admin_Page instance.
 	 *
 	 * @param External_Posts_API $api External Posts API instance.
+	 * @psalm-suppress PossiblyUnusedParam
 	 */
 	public function __construct( External_Posts_API $api ) {
 		$this->api = $api;
@@ -40,8 +41,7 @@ class Admin_Page {
 	 * Renders the admin page.
 	 */
 	public function render(): void {
-		$site_url        = get_option( 'ccp_external_site_url', '' );
-		$number_of_posts = get_option( 'ccp_number_of_posts', 10 );
+		$site_url = get_option( 'ccp_external_site_url', '' );
 
 		?>
 		<div class="wrap" id="ccp-admin-page">

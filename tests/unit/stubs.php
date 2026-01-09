@@ -71,6 +71,9 @@ function trailingslashit( string $path ): string {
 	return rtrim( $path, '/' ) . '/';
 }
 
+/**
+ * @psalm-return array<never, never>
+ */
 function wp_remote_get( string $url, array $args = array() ): array {
 	return array();
 }

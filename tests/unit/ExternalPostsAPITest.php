@@ -27,6 +27,7 @@ class ExternalPostsAPITest extends TestCase {
 	/**
 	 * Sets up test fixtures.
 	 */
+	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
 		$this->api = new External_Posts_API();

@@ -60,46 +60,6 @@ class URL_Validator {
 	}
 
 	/**
-	 * Validates URL scheme based on environment.
-	 *
-	 * @param string $url    Full URL.
-	 * @param string $scheme URL scheme.
-	 * @return bool True if valid scheme for the environment.
-	 */
-	private static function is_valid_scheme( $url, $scheme ): bool {
-		// Always require HTTPS in VIP production environments.
-		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
-			return 'https' === $scheme;
-		}
-
-		// Parse URL to check for development indicators.
-		$host = wp_parse_url( $url, PHP_URL_HOST );
-
-		// Development domains where HTTP is allowed.
-		$dev_domains = array(
-			'.test',
-			'.local',
-			'.dev',
-			'localhost',
-			'127.0.0.1',
-			'::1',
-		);
-
-		// Check if this is a development domain.
-		foreach ( $dev_domains as $dev_domain ) {
-			if ( $host === $dev_domain ||
-				( function_exists( 'str_ends_with' ) && str_ends_with( $host, $dev_domain ) ) ||
-				( ! function_exists( 'str_ends_with' ) && substr( $host, -strlen( $dev_domain ) ) === $dev_domain ) ) {
-				// Allow both HTTP and HTTPS for development domains.
-				return in_array( $scheme, array( 'http', 'https' ), true );
-			}
-		}
-
-		// For production domains, require HTTPS.
-		return 'https' === $scheme;
-	}
-
-	/**
 	 * Validates and sanitizes a URL.
 	 *
 	 * @param string $url Raw URL input.
