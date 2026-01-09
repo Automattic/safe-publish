@@ -7,6 +7,7 @@ SCRIPT_MODE=${1:-start} # "build" or "start". Default is "start".
 # Set WordPress port and home URL.
 PORT="${WP_ENV_PORT-8888}"
 WP_HOME="${WP_ENV_HOME_URL-http://localhost:$PORT}"
+TEST_PORT="${WP_ENV_TEST_PORT-8889}"
 
 cleanup() {
     echo ""
@@ -73,9 +74,16 @@ start_wordpress() {
 
 open_browser() {
     WP_ADMIN="http://localhost:$PORT/wp-admin/"
+    TEST_URL="http://localhost:$TEST_PORT/wp-admin/"
 
     echo ""
+    echo "> CCP Target Site"
     echo "> 🌐 $WP_ADMIN"
+    echo "> 🔑 Username: admin"
+    echo "> 🔑 Password: password"
+    echo ""
+    echo "> CCP Source Site"
+    echo "> 🌐 $TEST_URL"
     echo "> 🔑 Username: admin"
     echo "> 🔑 Password: password"
     echo ""
