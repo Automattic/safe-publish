@@ -46,7 +46,7 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 
 	// Load post diff on component mount.
 	useEffect( () => {
-		loadPostDiff();
+		void loadPostDiff();
 	}, [ postId ] );
 
 	/**
@@ -86,18 +86,32 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 		}
 	};
 
-	return (
-		<VStack spacing={ 4 }>
-			{ isLoading ? (
+	/**
+	 * Renders the appropriate content based on loading/error/data state.
+	 *
+	 * @return {JSX.Element} Loading spinner, error message, diff HTML, or no changes message.
+	 */
+	const renderContent = () => {
+		if ( isLoading ) {
+			return (
 				<HStack>
 					<Spinner />
 					<Text>{ __( 'Loading changes…', 'ccp' ) }</Text>
 				</HStack>
-			) : error ? (
+			);
+		}
+
+		if ( error ) {
+			return (
 				<Text style={ { color: '#d63638' } }>
-					{ __( 'Error: %s', 'ccp' ).replace( '%s', error ) }
+					{ /* translators: %s is the error message */
+					__( 'Error: %s', 'ccp' ).replace( '%s', error ) }
 				</Text>
-			) : diffHtml ? (
+			);
+		}
+
+		if ( diffHtml ) {
+			return (
 				<div
 					style={ {
 						maxHeight: '60vh',
@@ -109,9 +123,15 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 					} }
 					dangerouslySetInnerHTML={ { __html: diffHtml } }
 				/>
-			) : (
-				<Text>{ __( 'No changes available.', 'ccp' ) }</Text>
-			) }
+			);
+		}
+
+		return <Text>{ __( 'No changes available.', 'ccp' ) }</Text>;
+	};
+
+	return (
+		<VStack spacing={ 4 }>
+			{ renderContent() }
 
 			<HStack justify="right">
 				<Button variant="tertiary" onClick={ onClose }>

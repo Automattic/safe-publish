@@ -7,7 +7,7 @@
  * @file This file defines DataViews actions for the CCP plugin.
  */
 import { drafts, update, download } from '@wordpress/icons';
-import { useState } from '@wordpress/element';
+
 
 import PostDiffModal from './components/PostDiffModal';
 import { Post } from './types';
@@ -20,6 +20,7 @@ import {
 	ProgressBar,
 } from '@wordpress/components';
 import { Action } from '@wordpress/dataviews/build-types';
+import { useState } from '@wordpress/element';
 
 /**
  * Response from creating a draft post.
@@ -62,72 +63,6 @@ interface BulkImportResponse {
 		existing?: boolean;
 	}>;
 }
-
-/**
- * Wrapper for API responses.
- *
- * @property {boolean} success Whether the request succeeded.
- * @property {any}     data    Response data or error message.
- */
-interface ApiResponse {
-	success: boolean;
-	data: CreateDraftResponse | BulkImportResponse | string;
-}
-
-/**
- * Creates a draft post from external post data.
- *
- * Sends the external post data to the WordPress AJAX endpoint to create a new
- * draft post with the imported content.
- *
- * @param {Post} post External post data to import.
- *
- * @return {Promise<CreateDraftResponse>} Response containing post ID and edit URL.
- */
-const createDraftPost = async ( post: Post ): Promise< CreateDraftResponse > => {
-	const formData = new FormData();
-	formData.append( 'action', 'ccp_create_draft' );
-	formData.append( 'nonce', window.ccpAdminData.nonce );
-	formData.append( 'external_post_id', post.id.toString() );
-	formData.append( 'title', post.title );
-	formData.append( 'content', post.content || post.excerpt || '' );
-	formData.append( 'external_link', post.link );
-	formData.append( 'post_type', post.post_type || 'post' ); // Send the post type.
-
-	if ( post.featured_media ) {
-		formData.append( 'featured_media_id', post.featured_media.toString() );
-	}
-
-	if ( post.excerpt ) {
-		formData.append( 'excerpt', post.excerpt );
-	}
-
-	if ( post.meta ) {
-		formData.append( 'meta', JSON.stringify( post.meta ) );
-	}
-
-	if ( post.terms ) {
-		formData.append( 'terms', JSON.stringify( post.terms ) );
-	}
-
-	const response = await fetch( window.ccpAdminData.ajaxurl, {
-		method: 'POST',
-		body: formData,
-		headers: {
-			'Accept': 'application/json; charset=utf-8',
-		},
-	} );
-
-	const result = ( await response.json() ) as ApiResponse;
-
-	if ( ! result.success ) {
-		const errorMessage =
-			typeof result.data === 'string' ? result.data : 'Failed to create draft post';
-		throw new Error( errorMessage );
-	}
-
-	return result.data as CreateDraftResponse;
-};
 
 /**
  * Imports multiple posts in bulk with progress tracking.
@@ -571,19 +506,27 @@ export const actions: Action< Post >[] = [
 
 							{ importResults.results.length > 0 && (
 								<div className="ccp-import-results">
-									{ importResults.results.map( ( result, index ) => (
+								{ importResults.results.map( ( result, index ) => {
+									let status;
+									if ( ! result.success ) {
+										status = 'Failed';
+									} else if ( result.existing ) {
+										status = 'Updated';
+									} else {
+										status = 'Created';
+									}
+
+									return (
 										<div key={ index } className="ccp-import-result-item">
 											<span className={ `ccp-result-title ${ result.success ? 'success' : 'error' }` }>
 												{ result.title }
 											</span>
 											<span className="ccp-result-status">
-												{ result.success
-													? ( result.existing ? 'Updated' : 'Created' )
-													: 'Failed'
-												}
+												{ status }
 											</span>
 										</div>
-									) ) }
+									);
+								} ) }
 								</div>
 							) }
 						</VStack>
@@ -606,7 +549,7 @@ export const actions: Action< Post >[] = [
 							<Button
 								__next40pxDefaultSize
 								variant="primary"
-								onClick={ handleBulkImport }
+								onClick={ () => void handleBulkImport() }
 								disabled={ isLoading }
 								data-action-id="bulk-import"
 							>

@@ -6,7 +6,6 @@
  *
  * @file This file defines the PostDiffModal component.
  */
-import { useEffect, useState } from '@wordpress/element';
 
 import BlockDiffViewer from './BlockDiffViewer';
 import { fetchDiffPreview, updatePostContent } from '../api/diff';
@@ -19,6 +18,7 @@ import {
 	Spinner,
 	CheckboxControl,
 } from '@wordpress/components';
+import { useEffect, useState } from '@wordpress/element';
 
 /**
  * Props for the PostDiffModal component.
@@ -47,14 +47,12 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 	const [ diffHtml, setDiffHtml ] = useState< string | null >( null ); // Will hold contentDiffHtml.
 	const [ nonContentDiffs, setNonContentDiffs ] = useState< any >( null );
 	const [ incoming, setIncoming ] = useState< any >( null );
-	const [ current, setCurrent ] = useState< any >( null );
 	const [ localPostId, setLocalPostId ] = useState< number >( 0 );
 	const [ isLoading, setIsLoading ] = useState( true );
 	const [ error, setError ] = useState< string | null >( null );
 	const [ isUpdating, setIsUpdating ] = useState( false );
 	const [ updateError, setUpdateError ] = useState< string | null >( null );
 	const [ updateSuccess, setUpdateSuccess ] = useState< string | null >( null );
-	const [ rendered, setRendered ] = useState< { incoming?: string; current?: string } >( {} );
 	const [ renderedDiffHtml, setRenderedDiffHtml ] = useState< string | null >( null );
 	const [ showRenderedDiff, setShowRenderedDiff ] = useState< boolean >( true );
 
@@ -89,17 +87,11 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 				setDiffHtml( result.contentDiffHtml ?? result.html ?? null );
 				setLocalPostId( result.localPostId ?? 0 );
 
-				// Structured incoming/current.
+				// Structured incoming data for updates.
 				setIncoming( result.incoming ?? null );
-				setCurrent( result.current ?? null );
 
 				// Non-content diffs (title/excerpt/tax/meta).
 				setNonContentDiffs( result.nonContentDiffs ?? null );
-
-				setRendered( {
-					incoming: result.incomingRenderedHtml,
-					current: result.currentRenderedHtml,
-				} );
 
 				setRenderedDiffHtml( result.renderedContentDiffHtml ?? null );
 
@@ -109,7 +101,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 			}
 			if ( mounted ) { setIsLoading( false ); }
 		};
-		fetchDiff();
+		void fetchDiff();
 		return () => {
 			mounted = false;
 		};
@@ -333,7 +325,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 					<Button
 						__next40pxDefaultSize
 						variant="primary"
-						onClick={ handleUpdatePost }
+						onClick={ () => void handleUpdatePost() }
 						disabled={ isUpdating || isLoading }
 						style={ { marginLeft: 8 } }
 					>

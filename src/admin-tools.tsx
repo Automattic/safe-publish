@@ -8,8 +8,8 @@
  */
 import { PostTypeSelector } from './post-type-selector';
 import { Button, Notice, Spinner } from '@wordpress/components';
-import { useState, useEffect } from '@wordpress/element';
-import { __ } from '@wordpress/i18n';
+import { useState, useEffect, createInterpolateElement } from '@wordpress/element';
+import { __, sprintf } from '@wordpress/i18n';
 
 import type { Post } from './types';
 import type { ReactNode } from 'react';
@@ -49,17 +49,6 @@ interface PreviewResult {
 	type: string;
 	message: string | ReactNode;
 	posts?: Post[];
-}
-
-/**
- * Generic wrapper for API responses.
- *
- * @property {boolean} success Whether the request succeeded.
- * @property {T}       data    Response data.
- */
-interface ApiResponse< T > {
-	success: boolean;
-	data: T;
 }
 
 /**
@@ -172,12 +161,11 @@ export function AdminTools( {
 			const settingsUrl = window.ccpAdminData?.settingsUrl || '/wp-admin/admin.php?page=ccp-settings';
 			setTestResult( {
 				success: false,
-				message: (
-					<>
-						{ __( 'Please enter a site URL in the ', 'ccp' ) }
-						<a href={ settingsUrl }>{ __( 'settings page', 'ccp' ) }</a>
-						{ __( ' first.', 'ccp' ) }
-					</>
+				message: createInterpolateElement(
+					__( 'Please enter a site URL in the <link>settings page</link> first.', 'ccp' ),
+					{
+						link: <a href={ settingsUrl }>link</a>,
+					}
 				),
 			} );
 			return;
@@ -231,12 +219,11 @@ export function AdminTools( {
 			const settingsUrl = window.ccpAdminData?.settingsUrl || '/wp-admin/admin.php?page=ccp-settings';
 			setPreviewResult( {
 				type: 'error',
-				message: (
-					<>
-						{ __( 'Please enter a site URL in the ', 'ccp' ) }
-						<a href={ settingsUrl }>{ __( 'settings page', 'ccp' ) }</a>
-						{ __( ' first.', 'ccp' ) }
-					</>
+				message: createInterpolateElement(
+					__( 'Please enter a site URL in the <link>settings page</link> first.', 'ccp' ),
+					{
+						link: <a href={ settingsUrl }>link</a>,
+					}
 				),
 			} );
 			return;
@@ -256,9 +243,11 @@ export function AdminTools( {
 				if ( response.data.length > 0 ) {
 					setPreviewResult( {
 						type: 'success',
-						message: __(
-							`Found ${ response.data.length } posts from post type: ${ selectedPostType }`,
-							'ccp'
+						message: sprintf(
+							/* translators: 1: number of posts, 2: post type name */
+							__( 'Found %1$d posts from post type: %2$s', 'ccp' ),
+							response.data.length,
+							selectedPostType
 						),
 						posts: response.data,
 					} );
@@ -290,7 +279,11 @@ export function AdminTools( {
 	 * Wraps the async handleTestConnection function for use as an onClick handler.
 	 */
 	const onTestClick = (): void => {
-		handleTestConnection().catch( console.error );
+		handleTestConnection().catch( ( error ) => {
+			// Only unexpected errors should reach here.
+			// eslint-disable-next-line no-console
+			console.error( 'Unexpected error in handleTestConnection:', error );
+		} );
 	};
 
 	/**
@@ -299,7 +292,11 @@ export function AdminTools( {
 	 * Wraps the async handlePreviewPosts function for use as an onClick handler.
 	 */
 	const onPreviewClick = (): void => {
-		handlePreviewPosts().catch( console.error );
+		handlePreviewPosts().catch( ( error ) => {
+			// Only unexpected errors should reach here.
+			// eslint-disable-next-line no-console
+			console.error( 'Unexpected error in handlePreviewPosts:', error );
+		} );
 	};
 
 	return (

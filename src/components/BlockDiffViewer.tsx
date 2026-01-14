@@ -39,7 +39,13 @@ function highlightHtml( original: string, changed: string ): string {
 	const parts: Change[] = diffWords( original, changed );
 	return parts
 		.map( part => {
-			const cls = part.added ? 'ccp-inline-added' : part.removed ? 'ccp-inline-removed' : '';
+			let cls = '';
+			if ( part.added ) {
+				cls = 'ccp-inline-added';
+			} else if ( part.removed ) {
+				cls = 'ccp-inline-removed';
+			}
+
 			if ( ! cls ) { return part.value; }
 			return `<span class="${ cls }">${ part.value }</span>`;
 		} )
