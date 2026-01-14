@@ -111,7 +111,8 @@
   },
   "lint-staged": {
     "*.php": [
-      "vendor/bin/phpcs"
+      "vendor/bin/phpcs",
+      "vendor/bin/psalm.phar --no-cache"
     ]
   },
   "dependencies": {
