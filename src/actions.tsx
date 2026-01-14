@@ -8,7 +8,6 @@
  */
 import { drafts, update, download } from '@wordpress/icons';
 
-
 import PostDiffModal from './components/PostDiffModal';
 import { Post } from './types';
 import {
