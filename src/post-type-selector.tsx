@@ -7,7 +7,7 @@
  * @file This file defines the PostTypeSelector component for the CCP plugin.
  */
 import { Button, SelectControl, Notice, Spinner } from '@wordpress/components';
-import { useState, useEffect } from '@wordpress/element';
+import { useState, useEffect, createInterpolateElement } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
 /**
@@ -43,6 +43,7 @@ interface PostTypeSelectorProps {
 /**
  * Generic wrapper for API responses.
  *
+ * @template T
  * @property {boolean} success Whether the request succeeded.
  * @property {T}       data    Response data.
  */
@@ -158,18 +159,21 @@ export function PostTypeSelector( {
 				setLastSiteUrl( currentSiteUrl );
 			} else {
 				console.error( 'CCP PostTypeSelector: API error:', response );
-				const errorMessage =
-					typeof response.data === 'string'
-						? response.data
-						: response.data
-						? JSON.stringify( response.data )
-						: 'Failed to load post types';
+				let errorMessage;
+				if ( typeof response.data === 'string' ) {
+					errorMessage = response.data;
+				} else if ( response.data ) {
+					errorMessage = JSON.stringify( response.data );
+				} else {
+					errorMessage = 'Failed to load post types';
+				}
 				setError( errorMessage );
 				setPostTypes( [] );
 			}
 		} catch ( err ) {
 			console.error( 'CCP PostTypeSelector: Network error:', err );
-			setError( __( 'Network error while loading post types: ' + String( err ), 'ccp' ) );
+			/* translators: %s is the error message */
+			setError( __( 'Network error while loading post types: %s', 'ccp' ).replace( '%s', String( err ) ) );
 			setPostTypes( [] );
 		} finally {
 			setIsLoading( false );
@@ -278,11 +282,12 @@ export function PostTypeSelector( {
 
 			{ ! getExternalSiteUrl() && (
 				<Notice status="info" isDismissible={ false }>
-					{ __( 'Please enter a site URL in the ', 'ccp' ) }
-					<a href={ window.ccpAdminData?.settingsUrl || '/wp-admin/admin.php?page=ccp-settings' }>
-						{ __( 'settings page', 'ccp' ) }
-					</a>
-					{ __( ' to load available post types.', 'ccp' ) }
+					{ createInterpolateElement(
+						__( 'Please enter a site URL in the <link>settings page</link> to load available post types.', 'ccp' ),
+						{
+							link: <a href={ window.ccpAdminData?.settingsUrl || '/wp-admin/admin.php?page=ccp-settings' }>link</a>,
+						}
+					) }
 				</Notice>
 			) }
 		</div>

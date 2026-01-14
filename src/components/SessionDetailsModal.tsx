@@ -61,7 +61,7 @@ export function SessionDetailsModal( {
 
 	// Load session details on component mount.
 	useEffect( () => {
-		loadSessionDetails();
+		void loadSessionDetails();
 	}, [ session.id ] );
 
 	/**
@@ -129,6 +129,7 @@ export function SessionDetailsModal( {
 	 */
 	const handleItemRollback = async ( logId: number, title: string ): Promise< void > => {
 		if ( ! window.confirm(
+			/* translators: %s is the post title */
 			__( 'Are you sure you want to rollback "%s"? This action cannot be undone.', 'ccp' ).replace( '%s', title )
 		) ) {
 			return;
@@ -152,11 +153,13 @@ export function SessionDetailsModal( {
 			if ( result.success ) {
 				// Show success message.
 				const actionText = result.data.action === 'restored' ? __( 'restored', 'ccp' ) : __( 'deleted', 'ccp' );
+				/* translators: %s is the action performed (restored or deleted) */
 				alert( __( 'Item successfully %s.', 'ccp' ).replace( '%s', actionText ) );
 
 				// Reload session details to update the UI.
 				await loadSessionDetails();
 			} else {
+				/* translators: %s is the error message */
 				alert( __( 'Error: %s', 'ccp' ).replace( '%s', result.data || __( 'Unknown error', 'ccp' ) ) );
 			}
 		} catch ( err ) {
@@ -176,16 +179,20 @@ export function SessionDetailsModal( {
 	const renderSessionStats = (): JSX.Element => (
 		<HStack spacing={ 4 } style={ { marginBottom: '16px' } }>
 			<div className="ccp-stat">
-				<Text>{ __( 'Total: %d', 'ccp' ).replace( '%d', session.total_items.toString() ) }</Text>
+				<Text>{ /* translators: %d is the total number of items */
+				__( 'Total: %d', 'ccp' ).replace( '%d', session.total_items.toString() ) }</Text>
 			</div>
 			<div className="ccp-stat">
-				<Text>{ __( 'Successful: %d', 'ccp' ).replace( '%d', session.successful.toString() ) }</Text>
+				<Text>{ /* translators: %d is the number of successful items */
+				__( 'Successful: %d', 'ccp' ).replace( '%d', session.successful.toString() ) }</Text>
 			</div>
 			<div className="ccp-stat">
-				<Text>{ __( 'Failed: %d', 'ccp' ).replace( '%d', session.failed.toString() ) }</Text>
+				<Text>{ /* translators: %d is the number of failed items */
+				__( 'Failed: %d', 'ccp' ).replace( '%d', session.failed.toString() ) }</Text>
 			</div>
 			<div className="ccp-stat">
-				<Text>{ __( 'Updated: %d', 'ccp' ).replace( '%d', session.updated.toString() ) }</Text>
+				<Text>{ /* translators: %d is the number of updated items */
+				__( 'Updated: %d', 'ccp' ).replace( '%d', session.updated.toString() ) }</Text>
 			</div>
 		</HStack>
 	);
@@ -262,7 +269,7 @@ export function SessionDetailsModal( {
 										<Button
 											variant="tertiary"
 											size="compact"
-											onClick={ () => onViewDiff( log.post_id! ) }
+											onClick={ () => log.post_id && onViewDiff( log.post_id ) }
 										>
 											{ __( 'View Changes', 'ccp' ) }
 										</Button>
@@ -272,19 +279,25 @@ export function SessionDetailsModal( {
 											variant="primary"
 											isDestructive
 											size="compact"
-											onClick={ () => handleItemRollback( log.id, log.title ) }
+											onClick={ () => void handleItemRollback( log.id, log.title ) }
 											disabled={ rollingBackItemId === log.id }
 										>
-											{ rollingBackItemId === log.id ? (
-												<>
-													<Spinner />
-													{ __( 'Rolling back…', 'ccp' ) }
-												</>
-											) : (
-												log.rollback_action === 'restore'
-													? __( 'Restore', 'ccp' )
-													: __( 'Delete', 'ccp' )
-											) }
+										{ ( () => {
+											if ( rollingBackItemId === log.id ) {
+												return (
+													<>
+														<Spinner />
+														{ __( 'Rolling back…', 'ccp' ) }
+													</>
+												);
+											}
+
+											if ( log.rollback_action === 'restore' ) {
+												return __( 'Restore', 'ccp' );
+											}
+
+											return __( 'Delete', 'ccp' );
+										} )() }
 										</Button>
 									) }
 									{ log.is_rolled_back && (
@@ -298,12 +311,14 @@ export function SessionDetailsModal( {
 								<span className={ `ccp-status-${ log.status }` }>
 									{ log.status_label }
 								</span>
-								<Text>{ __( 'External ID: %s', 'ccp' ).replace( '%s', log.external_id ) }</Text>
+								<Text>{ /* translators: %s is the external ID of the imported item */
+								__( 'External ID: %s', 'ccp' ).replace( '%s', log.external_id ) }</Text>
 								{ log.error && (
 									<>
 										<Text>|</Text>
 										<Text style={ { color: '#d63638' } }>
-											{ __( 'Error: %s', 'ccp' ).replace( '%s', log.error ) }
+											{ /* translators: %s is the error message */
+											__( 'Error: %s', 'ccp' ).replace( '%s', log.error ) }
 										</Text>
 									</>
 								) }
@@ -325,7 +340,7 @@ export function SessionDetailsModal( {
 					<Button
 						variant="primary"
 						isDestructive
-						onClick={ handleRollback }
+						onClick={ () => void handleRollback() }
 						disabled={ isRollingBack }
 					>
 						{ isRollingBack ? (
@@ -343,18 +358,27 @@ export function SessionDetailsModal( {
 			<VStack spacing={ 2 }>
 				<Text as="h3">{ __( 'Import Details', 'ccp' ) }</Text>
 
-				{ isLoading ? (
-					<HStack>
-						<Spinner />
-						<Text>{ __( 'Loading session details…', 'ccp' ) }</Text>
-					</HStack>
-				) : error ? (
-					<Text style={ { color: '#d63638' } }>
-						{ __( 'Error: %s', 'ccp' ).replace( '%s', error ) }
-					</Text>
-				) : (
-					renderImportLogs()
-				) }
+				{ ( () => {
+					if ( isLoading ) {
+						return (
+							<HStack>
+								<Spinner />
+								<Text>{ __( 'Loading session details…', 'ccp' ) }</Text>
+							</HStack>
+						);
+					}
+
+					if ( error ) {
+						return (
+							<Text style={ { color: '#d63638' } }>
+								{ /* translators: %s is the error message */
+								__( 'Error: %s', 'ccp' ).replace( '%s', error ) }
+							</Text>
+						);
+					}
+
+					return renderImportLogs();
+				} )() }
 			</VStack>
 
 			<HStack justify="right">

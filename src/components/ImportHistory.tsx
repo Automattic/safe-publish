@@ -23,16 +23,7 @@ import { useState, useEffect } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
 
-import type { ImportSession, ImportLog, DataViewsField } from '../types';
-
-/**
- * Props for the ImportHistory component.
- *
- * Currently empty but reserved for future props passed from PHP.
- */
-interface ImportHistoryProps {
-	// Props can be passed from PHP if needed.
-}
+import type { ImportSession, DataViewsField } from '../types';
 
 /**
  * Import History component.
@@ -40,11 +31,9 @@ interface ImportHistoryProps {
  * Renders a DataViews table of import sessions with filtering, sorting, and the
  * ability to view session details or rollback imports.
  *
- * @param {Object} props Component props (currently unused).
- *
  * @return {JSX.Element} Rendered import history table.
  */
-export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
+export function ImportHistory(): JSX.Element {
 	const [ sessions, setSessions ] = useState< ImportSession[] >( [] );
 	const [ isLoading, setIsLoading ] = useState< boolean >( true );
 	const [ error, setError ] = useState< string | null >( null );
@@ -74,7 +63,7 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 
 	// Load import sessions on component mount.
 	useEffect( () => {
-		loadImportSessions();
+		void loadImportSessions();
 	}, [] );
 
 	// Update pagination info when sessions change.
@@ -169,6 +158,7 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 			const result = await response.json();
 
 			if ( result.success ) {
+				/* translators: %1$d is the number of deleted posts, %2$d is the number of restored posts */
 				const message = __( 'Session rolled back successfully. %1$d posts were deleted and %2$d posts were restored to their previous version.', 'ccp' )
 					.replace( '%1$d', result.data.deleted_count.toString() )
 					.replace( '%2$d', result.data.restored_count.toString() );
@@ -178,6 +168,7 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 				setIsSessionModalOpen( false );
 				setSelectedSession( null );
 			} else {
+				/* translators: %s is the error message */
 				alert( __( 'Error rolling back session: %s', 'ccp' ).replace( '%s', result.data ) );
 			}
 		} catch ( err ) {
@@ -214,6 +205,7 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 			const result = await response.json();
 
 			if ( result.success ) {
+				/* translators: %s is the success message from the server */
 				alert( __( 'Session deleted successfully. %s', 'ccp' ).replace( '%s', result.data.message ) );
 				// Reload sessions and close modal if it was open.
 				await loadImportSessions();
@@ -222,6 +214,7 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 					setSelectedSession( null );
 				}
 			} else {
+				/* translators: %s is the error message */
 				alert( __( 'Error deleting session: %s', 'ccp' ).replace( '%s', result.data ) );
 			}
 		} catch ( err ) {
@@ -328,7 +321,7 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 			},
 			callback: ( items: ImportSession[] ): void => {
 				if ( items.length === 1 ) {
-					handleRollbackSession( items[0].id );
+					void handleRollbackSession( items[0].id );
 				}
 			},
 		},
@@ -339,7 +332,7 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 			supportsBulk: false,
 			callback: ( items: ImportSession[] ): void => {
 				if ( items.length === 1 ) {
-					handleDeleteSession( items[0].id );
+					void handleDeleteSession( items[0].id );
 				}
 			},
 		},
@@ -360,9 +353,10 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 		return (
 			<VStack>
 				<Text style={ { color: '#d63638' } }>
-					{ __( 'Error: %s', 'ccp' ).replace( '%s', error ) }
+					{ /* translators: %s is the error message */
+					__( 'Error: %s', 'ccp' ).replace( '%s', error ) }
 				</Text>
-				<Button variant="secondary" onClick={ loadImportSessions }>
+				<Button variant="secondary" onClick={ () => void loadImportSessions() }>
 					{ __( 'Retry', 'ccp' ) }
 				</Button>
 			</VStack>
@@ -414,10 +408,20 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 						alignItems: 'center',
 						justifyContent: 'center'
 					} }
+					role="button"
+					tabIndex={ 0 }
 					onClick={ () => {
 						setIsSessionModalOpen( false );
 						setSelectedSession( null );
 					} }
+					onKeyDown={ (event) => {
+						if ( event.key === 'Escape' || event.key === 'Enter' || event.key === ' ' ) {
+							event.preventDefault();
+							setIsSessionModalOpen( false );
+							setSelectedSession( null );
+						}
+					} }
+					aria-label={ __( 'Close modal', 'ccp' ) }
 				>
 					<div
 						className="ccp-modal-content components-modal__frame"
@@ -432,7 +436,9 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 							display: 'flex',
 							flexDirection: 'column'
 						} }
-						onClick={ (e) => e.stopPropagation() }
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="session-details-title"
 					>
 						{/* Modal Header */}
 						<div
@@ -501,10 +507,20 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 						alignItems: 'center',
 						justifyContent: 'center'
 					} }
+					role="button"
+					tabIndex={ 0 }
 					onClick={ () => {
 						setIsDiffModalOpen( false );
 						setDiffPostId( null );
 					} }
+					onKeyDown={ (event) => {
+						if ( event.key === 'Escape' || event.key === 'Enter' || event.key === ' ' ) {
+							event.preventDefault();
+							setIsDiffModalOpen( false );
+							setDiffPostId( null );
+						}
+					} }
+					aria-label={ __( 'Close modal', 'ccp' ) }
 				>
 					<div
 						className="ccp-modal-content components-modal__frame"
@@ -519,7 +535,10 @@ export function ImportHistory( {}: ImportHistoryProps ): JSX.Element {
 							display: 'flex',
 							flexDirection: 'column'
 						} }
-						onClick={ (e) => e.stopPropagation() }
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="post-diff-title"
+
 					>
 						{/* Modal Header */}
 						<div
