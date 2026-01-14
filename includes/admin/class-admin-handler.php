@@ -40,7 +40,6 @@ final class Admin_Handler {
 	 * Constructs the Admin_Handler instance.
 	 *
 	 * @param External_Posts_API $api External Posts API instance.
-	 * @psalm-suppress PossiblyUnusedParam
 	 */
 	public function __construct( External_Posts_API $api ) {
 		$this->api            = $api;

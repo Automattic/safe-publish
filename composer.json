@@ -25,7 +25,7 @@
   "scripts": {
     "phpcs": "phpcs",
     "phpcs-fix": "phpcbf",
-    "psalm": "./.psalm-workaround.sh --no-cache",
+    "psalm": "psalm.phar --no-cache",
     "test": "phpunit",
     "test-coverage": "phpunit --coverage-clover ./coverage/phpunit/clover.xml"
   },
