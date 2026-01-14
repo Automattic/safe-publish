@@ -18,11 +18,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-// Ensure the VIP_Safe_Auth class is loaded.
-if ( ! class_exists( 'CCP\\Auth\\VIP_Safe_Auth' ) ) {
-	require_once CCP_PLUGIN_DIR . 'includes/auth/class-vip-safe-auth.php';
-}
-
 /**
  * External Posts API Class.
  */
@@ -198,7 +193,7 @@ class External_Posts_API {
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
 	 * @return array|\WP_Error Response or error.
 	 */
-	private function make_request( string $url, array $auth_credentials = array() ): array|\WP_Error {
+	public function make_request( string $url, array $auth_credentials = array() ): array|\WP_Error {
 		return $this->http_client->make_request( $url, $auth_credentials );
 	}
 
@@ -322,6 +317,19 @@ class External_Posts_API {
 		}
 
 		return $results;
+	}
+
+	/**
+	 * Ensures WordPress media functions are loaded.
+	 *
+	 * @psalm-suppress MissingFile
+	 */
+	private function ensure_media_functions_loaded(): void {
+		if ( ! function_exists( 'media_handle_sideload' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/media.php';
+			require_once ABSPATH . 'wp-admin/includes/file.php';
+			require_once ABSPATH . 'wp-admin/includes/image.php';
+		}
 	}
 
 	/**
@@ -465,10 +473,7 @@ class External_Posts_API {
 			return wp_get_attachment_url( $existing_attachment );
 		}
 
-		// Download and import the media.
-		require_once ABSPATH . 'wp-admin/includes/media.php';
-		require_once ABSPATH . 'wp-admin/includes/file.php';
-		require_once ABSPATH . 'wp-admin/includes/image.php';
+		$this->ensure_media_functions_loaded();
 
 		// Download file.
 		$temp_file = download_url( $media_url );
@@ -525,10 +530,7 @@ class External_Posts_API {
 			return $existing_attachment;
 		}
 
-		// Download and import the media.
-		require_once ABSPATH . 'wp-admin/includes/media.php';
-		require_once ABSPATH . 'wp-admin/includes/file.php';
-		require_once ABSPATH . 'wp-admin/includes/image.php';
+		$this->ensure_media_functions_loaded();
 
 		// Temporarily enable WebP uploads during import.
 		$webp_filter_added = false;
@@ -1130,6 +1132,8 @@ class External_Posts_API {
 	 * @param string $file                      Full path to the file.
 	 * @param string $filename                  File name (may differ from $file if in tmp dir).
 	 * @return array Modified file data.
+	 *
+	 * @psalm-suppress PossiblyUnusedParam Parameter $file is required by WordPress filter signature.
 	 */
 	public function handle_webp_filetype( array $wp_check_filetype_and_ext, string $file, string $filename ): array {
 		if ( ! $wp_check_filetype_and_ext['type'] && ! $wp_check_filetype_and_ext['ext'] ) {

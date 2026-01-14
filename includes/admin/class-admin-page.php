@@ -31,7 +31,6 @@ final class Admin_Page {
 	 * Constructs the Admin_Page instance.
 	 *
 	 * @param External_Posts_API $api External Posts API instance.
-	 * @psalm-suppress PossiblyUnusedParam
 	 */
 	public function __construct( External_Posts_API $api ) {
 		$this->api = $api;
