@@ -322,8 +322,6 @@ class External_Posts_API {
 	/**
 	 * Ensures WordPress media functions are loaded.
 	 *
-	 * @return void
-	 *
 	 * @psalm-suppress MissingFile
 	 */
 	private function ensure_media_functions_loaded(): void {
