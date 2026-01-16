@@ -35,5 +35,5 @@ coverage
 .idea/*
 !.idea/runConfigurations/
 .vscode/*
-!.vscode/launch.json
+!.vscode/*.example
 .zed
