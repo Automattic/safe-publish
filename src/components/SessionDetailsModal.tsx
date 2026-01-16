@@ -11,7 +11,8 @@ import {
 	__experimentalHStack as HStack,
 	Spinner,
 	__experimentalText as Text,
-	__experimentalVStack as VStack
+	__experimentalVStack as VStack,
+	Notice
 } from '@wordpress/components';
 import { useEffect, useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
@@ -58,6 +59,7 @@ export function SessionDetailsModal( {
 	const [ error, setError ] = useState< string | null >( null );
 	const [ isRollingBack, setIsRollingBack ] = useState< boolean >( false );
 	const [ rollingBackItemId, setRollingBackItemId ] = useState< number | null >( null );
+	const [ noticeMessage, setNoticeMessage ] = useState< { type: 'success' | 'error'; message: string } | null >( null );
 
 	// Load session details on component mount.
 	useEffect( () => {
@@ -155,17 +157,16 @@ export function SessionDetailsModal( {
 				// Show success message.
 				const actionText = result.data.action === 'restored' ? __( 'restored', 'ccp' ) : __( 'deleted', 'ccp' );
 				/* translators: %s is the action performed (restored or deleted) */
-				alert( __( 'Item successfully %s.', 'ccp' ).replace( '%s', actionText ) ); // eslint-disable-line no-alert
+				setNoticeMessage( { type: 'success', message: __( 'Item successfully %s.', 'ccp' ).replace( '%s', actionText ) } );
 
 				// Reload session details to update the UI.
 				await loadSessionDetails();
 			} else {
 				/* translators: %s is the error message */
-				alert( __( 'Error: %s', 'ccp' ).replace( '%s', result.data || __( 'Unknown error', 'ccp' ) ) ); // eslint-disable-line no-alert
+				setNoticeMessage( { type: 'error', message: __( 'Error: %s', 'ccp' ).replace( '%s', result.data || __( 'Unknown error', 'ccp' ) ) } );
 			}
 		} catch ( err ) {
-			// eslint-disable-next-line no-alert
-			alert( __( 'Network error while rolling back item.', 'ccp' ) );
+			setNoticeMessage( { type: 'error', message: __( 'Network error while rolling back item.', 'ccp' ) } );
 		} finally {
 			setRollingBackItemId( null );
 		}
@@ -336,6 +337,15 @@ export function SessionDetailsModal( {
 		<VStack spacing={ 4 }>
 			{ renderSessionStats() }
 			{ renderSessionInfo() }
+
+			{ noticeMessage && (
+				<Notice
+					status={ noticeMessage.type }
+					onRemove={ () => setNoticeMessage( null ) }
+				>
+					{ noticeMessage.message }
+				</Notice>
+			) }
 
 			{ session.can_rollback && (
 				<HStack justify="left" style={ { marginBottom: '16px' } }>

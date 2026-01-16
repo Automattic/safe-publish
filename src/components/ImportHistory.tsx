@@ -16,7 +16,8 @@ import {
 	__experimentalHStack as HStack,
 	__experimentalText as Text,
 	Spinner,
-	Icon
+	Icon,
+	Notice
 } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
 import { useState, useEffect } from '@wordpress/element';
@@ -41,6 +42,7 @@ export function ImportHistory(): JSX.Element {
 	const [ isSessionModalOpen, setIsSessionModalOpen ] = useState< boolean >( false );
 	const [ isDiffModalOpen, setIsDiffModalOpen ] = useState< boolean >( false );
 	const [ diffPostId, setDiffPostId ] = useState< number | null >( null );
+	const [ noticeMessage, setNoticeMessage ] = useState< { type: 'success' | 'error'; message: string } | null >( null );
 
 	const [ view, setView ] = useState< View >( {
 		type: 'table',
@@ -163,19 +165,17 @@ export function ImportHistory(): JSX.Element {
 				const message = __( 'Session rolled back successfully. %1$d posts were deleted and %2$d posts were restored to their previous version.', 'ccp' )
 					.replace( '%1$d', result.data.deleted_count.toString() )
 					.replace( '%2$d', result.data.restored_count.toString() );
-				// eslint-disable-next-line no-alert
-				alert( message );
+				setNoticeMessage( { type: 'success', message } );
 				// Reload sessions and close modal.
 				await loadImportSessions();
 				setIsSessionModalOpen( false );
 				setSelectedSession( null );
 			} else {
 				/* translators: %s is the error message */
-				alert( __( 'Error rolling back session: %s', 'ccp' ).replace( '%s', result.data ) ); // eslint-disable-line no-alert
+				setNoticeMessage( { type: 'error', message: __( 'Error rolling back session: %s', 'ccp' ).replace( '%s', result.data ) } );
 			}
 		} catch ( err ) {
-			// eslint-disable-next-line no-alert
-			alert( __( 'Error rolling back session.', 'ccp' ) );
+			setNoticeMessage( { type: 'error', message: __( 'Error rolling back session.', 'ccp' ) } );
 		}
 	};
 
@@ -210,7 +210,7 @@ export function ImportHistory(): JSX.Element {
 
 			if ( result.success ) {
 				/* translators: %s is the success message from the server */
-				alert( __( 'Session deleted successfully. %s', 'ccp' ).replace( '%s', result.data.message ) ); // eslint-disable-line no-alert
+				setNoticeMessage( { type: 'success', message: __( 'Session deleted successfully. %s', 'ccp' ).replace( '%s', result.data.message ) } );
 				// Reload sessions and close modal if it was open.
 				await loadImportSessions();
 				if ( isSessionModalOpen ) {
@@ -219,11 +219,10 @@ export function ImportHistory(): JSX.Element {
 				}
 			} else {
 				/* translators: %s is the error message */
-				alert( __( 'Error deleting session: %s', 'ccp' ).replace( '%s', result.data ) ); // eslint-disable-line no-alert
+				setNoticeMessage( { type: 'error', message: __( 'Error deleting session: %s', 'ccp' ).replace( '%s', result.data ) } );
 			}
 		} catch ( err ) {
-			// eslint-disable-next-line no-alert
-			alert( __( 'Error deleting session.', 'ccp' ) );
+			setNoticeMessage( { type: 'error', message: __( 'Error deleting session.', 'ccp' ) } );
 		}
 	};
 
@@ -377,6 +376,15 @@ export function ImportHistory(): JSX.Element {
 				<Text>
 					{ __( 'Track and manage your content import sessions with detailed change logs and rollback capabilities.', 'ccp' ) }
 				</Text>
+
+				{ noticeMessage && (
+					<Notice
+						status={ noticeMessage.type }
+						onRemove={ () => setNoticeMessage( null ) }
+					>
+						{ noticeMessage.message }
+					</Notice>
+				) }
 
 				{ sessions.length === 0 ? (
 					<Text>{ __( 'No import sessions found.', 'ccp' ) }</Text>
