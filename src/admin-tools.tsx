@@ -8,7 +8,7 @@
  */
 import { PostTypeSelector } from './post-type-selector';
 import { Button, Notice, Spinner } from '@wordpress/components';
-import { useState, useEffect, createInterpolateElement } from '@wordpress/element';
+import { useState, createInterpolateElement } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
 import type { Post } from './types';
@@ -74,25 +74,6 @@ export function AdminTools( {
 	const [ previewResult, setPreviewResult ] = useState< PreviewResult | null >( null );
 
 	const [ selectedPostType, setSelectedPostType ] = useState( 'posts' );
-
-	// Auto-clear notices after 5 seconds.
-	useEffect( () => {
-		if ( testResult ) {
-			const timer = setTimeout( () => {
-				setTestResult( null );
-			}, 5000 );
-			return () => clearTimeout( timer );
-		}
-	}, [ testResult ] );
-
-	useEffect( () => {
-		if ( previewResult ) {
-			const timer = setTimeout( () => {
-				setPreviewResult( null );
-			}, 5000 );
-			return () => clearTimeout( timer );
-		}
-	}, [ previewResult ] );
 
 	// Get current site URL from saved settings instead of form input.
 	const getExternalSiteUrl = (): string => {
@@ -318,7 +299,7 @@ export function AdminTools( {
 				{ testResult && (
 					<Notice
 						status={ testResult.success ? 'success' : 'error' }
-						isDismissible={ false }
+						onRemove={ () => setTestResult( null ) }
 						className="ccp-test-result"
 					>
 						{ testResult.message }
@@ -351,7 +332,7 @@ export function AdminTools( {
 					<>
 						<Notice
 							status={ previewResult.type as 'success' | 'error' | 'info' | 'warning' }
-							isDismissible={ false }
+							onRemove={ () => setPreviewResult( null ) }
 							className="ccp-preview-result"
 						>
 							{ previewResult.message }

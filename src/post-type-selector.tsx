@@ -269,13 +269,13 @@ export function PostTypeSelector( {
 			</div>
 
 			{ error && (
-				<Notice status="error" isDismissible={ false }>
+				<Notice status="error" onRemove={ () => setError( null ) }>
 					{ error }
 				</Notice>
 			) }
 
 			{ ! getExternalSiteUrl() && (
-				<Notice status="info" isDismissible={ false }>
+				<Notice status="info">
 					{ createInterpolateElement(
 						__( 'Please enter a site URL in the <link>settings page</link> to load available post types.', 'ccp' ),
 						{
