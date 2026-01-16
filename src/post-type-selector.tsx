@@ -136,7 +136,6 @@ export function PostTypeSelector( {
 			return;
 		}
 
-		console.log( 'CCP PostTypeSelector: Loading post types for:', currentSiteUrl );
 		setIsLoading( true );
 		setError( null );
 
@@ -146,18 +145,15 @@ export function PostTypeSelector( {
 				{ site_url: currentSiteUrl }
 			);
 
-			console.log( 'CCP PostTypeSelector: API response:', response );
-
 			if ( response.success && response.data ) {
 				// Convert object to array - don't filter out anything initially.
 				const postTypeArray = Object.values( response.data );
-
-				console.log( 'CCP PostTypeSelector: Post types from API:', postTypeArray );
 
 				// Set the post types directly from the API response.
 				setPostTypes( postTypeArray );
 				setLastSiteUrl( currentSiteUrl );
 			} else {
+				// eslint-disable-next-line no-console
 				console.error( 'CCP PostTypeSelector: API error:', response );
 				let errorMessage;
 				if ( typeof response.data === 'string' ) {
@@ -171,6 +167,7 @@ export function PostTypeSelector( {
 				setPostTypes( [] );
 			}
 		} catch ( err ) {
+			// eslint-disable-next-line no-console
 			console.error( 'CCP PostTypeSelector: Network error:', err );
 			/* translators: %s is the error message */
 			setError( __( 'Network error while loading post types: %s', 'ccp' ).replace( '%s', String( err ) ) );
@@ -200,11 +197,13 @@ export function PostTypeSelector( {
 	 * Triggers a reload of available post types from the external site.
 	 */
 	const handleRefresh = (): void => {
+		// eslint-disable-next-line no-console
 		loadPostTypes().catch( console.error );
 	};
 
 	// Load post types when site URL changes.
 	useEffect( () => {
+		// eslint-disable-next-line no-console
 		loadPostTypes().catch( console.error );
 	}, [ siteUrl ] );
 
@@ -213,12 +212,7 @@ export function PostTypeSelector( {
 		const checkSiteUrlChange = () => {
 			const currentSiteUrl = getExternalSiteUrl();
 			if ( currentSiteUrl !== lastSiteUrl && currentSiteUrl ) {
-				console.log(
-					'CCP PostTypeSelector: Site URL changed from',
-					lastSiteUrl,
-					'to',
-					currentSiteUrl
-				);
+				// eslint-disable-next-line no-console
 				loadPostTypes().catch( console.error );
 			}
 		};

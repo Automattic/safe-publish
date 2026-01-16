@@ -128,6 +128,7 @@ export function SessionDetailsModal( {
 	 * @return {Promise<void>} Resolves when rollback is complete.
 	 */
 	const handleItemRollback = async ( logId: number, title: string ): Promise< void > => {
+		// eslint-disable-next-line no-alert
 		if ( ! window.confirm(
 			/* translators: %s is the post title */
 			__( 'Are you sure you want to rollback "%s"? This action cannot be undone.', 'ccp' ).replace( '%s', title )
@@ -154,15 +155,16 @@ export function SessionDetailsModal( {
 				// Show success message.
 				const actionText = result.data.action === 'restored' ? __( 'restored', 'ccp' ) : __( 'deleted', 'ccp' );
 				/* translators: %s is the action performed (restored or deleted) */
-				alert( __( 'Item successfully %s.', 'ccp' ).replace( '%s', actionText ) );
+				alert( __( 'Item successfully %s.', 'ccp' ).replace( '%s', actionText ) ); // eslint-disable-line no-alert
 
 				// Reload session details to update the UI.
 				await loadSessionDetails();
 			} else {
 				/* translators: %s is the error message */
-				alert( __( 'Error: %s', 'ccp' ).replace( '%s', result.data || __( 'Unknown error', 'ccp' ) ) );
+				alert( __( 'Error: %s', 'ccp' ).replace( '%s', result.data || __( 'Unknown error', 'ccp' ) ) ); // eslint-disable-line no-alert
 			}
 		} catch ( err ) {
+			// eslint-disable-next-line no-alert
 			alert( __( 'Network error while rolling back item.', 'ccp' ) );
 		} finally {
 			setRollingBackItemId( null );
