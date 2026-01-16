@@ -140,6 +140,7 @@ export function ImportHistory(): JSX.Element {
 	 * @return {Promise<void>} Resolves when rollback is complete.
 	 */
 	const handleRollbackSession = async ( sessionId: number ): Promise< void > => {
+		// eslint-disable-next-line no-alert
 		if ( ! confirm( __( 'Are you sure you want to rollback this import session? This will delete all newly created posts and restore updated posts to their previous version. This action cannot be undone.', 'ccp' ) ) ) {
 			return;
 		}
@@ -162,6 +163,7 @@ export function ImportHistory(): JSX.Element {
 				const message = __( 'Session rolled back successfully. %1$d posts were deleted and %2$d posts were restored to their previous version.', 'ccp' )
 					.replace( '%1$d', result.data.deleted_count.toString() )
 					.replace( '%2$d', result.data.restored_count.toString() );
+				// eslint-disable-next-line no-alert
 				alert( message );
 				// Reload sessions and close modal.
 				await loadImportSessions();
@@ -169,9 +171,10 @@ export function ImportHistory(): JSX.Element {
 				setSelectedSession( null );
 			} else {
 				/* translators: %s is the error message */
-				alert( __( 'Error rolling back session: %s', 'ccp' ).replace( '%s', result.data ) );
+				alert( __( 'Error rolling back session: %s', 'ccp' ).replace( '%s', result.data ) ); // eslint-disable-line no-alert
 			}
 		} catch ( err ) {
+			// eslint-disable-next-line no-alert
 			alert( __( 'Error rolling back session.', 'ccp' ) );
 		}
 	};
@@ -187,6 +190,7 @@ export function ImportHistory(): JSX.Element {
 	 * @return {Promise<void>} Resolves when deletion completes.
 	 */
 	const handleDeleteSession = async ( sessionId: number ): Promise< void > => {
+		// eslint-disable-next-line no-alert
 		if ( ! confirm( __( 'Are you sure you want to delete this import session? This will permanently remove the session and all its associated log entries. This action cannot be undone.', 'ccp' ) ) ) {
 			return;
 		}
@@ -206,7 +210,7 @@ export function ImportHistory(): JSX.Element {
 
 			if ( result.success ) {
 				/* translators: %s is the success message from the server */
-				alert( __( 'Session deleted successfully. %s', 'ccp' ).replace( '%s', result.data.message ) );
+				alert( __( 'Session deleted successfully. %s', 'ccp' ).replace( '%s', result.data.message ) ); // eslint-disable-line no-alert
 				// Reload sessions and close modal if it was open.
 				await loadImportSessions();
 				if ( isSessionModalOpen ) {
@@ -215,9 +219,10 @@ export function ImportHistory(): JSX.Element {
 				}
 			} else {
 				/* translators: %s is the error message */
-				alert( __( 'Error deleting session: %s', 'ccp' ).replace( '%s', result.data ) );
+				alert( __( 'Error deleting session: %s', 'ccp' ).replace( '%s', result.data ) ); // eslint-disable-line no-alert
 			}
 		} catch ( err ) {
+			// eslint-disable-next-line no-alert
 			alert( __( 'Error deleting session.', 'ccp' ) );
 		}
 	};
