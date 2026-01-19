@@ -395,7 +395,7 @@ export const actions: Action< Post >[] = [
 					setImportResults( result );
 					setProgress( 100 );
 				} catch ( err ) {
-				setError( err instanceof Error ? err.message : __( 'Unknown error occurred', 'ccp' ) );
+					setError( err instanceof Error ? err.message : __( 'Unknown error occurred', 'ccp' ) );
 				} finally {
 					setIsLoading( false );
 				}
