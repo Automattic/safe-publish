@@ -10,6 +10,7 @@
 import BlockDiffViewer from './BlockDiffViewer';
 import { fetchDiffPreview, updatePostContent } from '../api/diff';
 import { Post } from '../types';
+import { getErrorMessage } from '../utils';
 import {
 	Button,
 	__experimentalText as Text,
@@ -19,6 +20,9 @@ import {
 	CheckboxControl,
 } from '@wordpress/components';
 import { useEffect, useState } from '@wordpress/element';
+import { __ } from '@wordpress/i18n';
+
+import type { BlockDiff, DiffPreviewResult } from '../api/diff';
 
 /**
  * Props for the PostDiffModal component.
@@ -45,8 +49,8 @@ interface PostDiffModalProps {
  */
 export default function PostDiffModal( { items, closeModal }: PostDiffModalProps ): JSX.Element {
 	const [ diffHtml, setDiffHtml ] = useState< string | null >( null ); // Will hold contentDiffHtml.
-	const [ nonContentDiffs, setNonContentDiffs ] = useState< any >( null );
-	const [ incoming, setIncoming ] = useState< any >( null );
+	const [ nonContentDiffs, setNonContentDiffs ] = useState< DiffPreviewResult['nonContentDiffs'] >( undefined );
+	const [ incoming, setIncoming ] = useState< DiffPreviewResult['incoming'] >( undefined );
 	const [ localPostId, setLocalPostId ] = useState< number >( 0 );
 	const [ isLoading, setIsLoading ] = useState( true );
 	const [ error, setError ] = useState< string | null >( null );
@@ -56,16 +60,27 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 	const [ renderedDiffHtml, setRenderedDiffHtml ] = useState< string | null >( null );
 	const [ showRenderedDiff, setShowRenderedDiff ] = useState< boolean >( true );
 
-	const [ blockDiffs, setBlockDiffs ] = useState< any[] >( [] ); // Refine type later.
+	const [ blockDiffs, setBlockDiffs ] = useState< BlockDiff[] >( [] );
 	const [ showBlockView, setShowBlockView ] = useState< boolean >( true );
 
-	const [ updateOpts, setUpdateOpts ] = useState({
+	const [ updateOpts, setUpdateOpts ] = useState< {
+		title: boolean;
+		excerpt: boolean;
+		meta: boolean;
+		terms: boolean;
+		featuredMedia: boolean;
+	} >( {
         title: true,
         excerpt: true,
         meta: true,
         terms: true,
         featuredMedia: true,
-    });
+    } );
+
+	const firstItemId = items[ 0 ].id;
+	const firstItemPostType = items[ 0 ].post_type;
+	const firstItemContent = items[ 0 ].content;
+	const firstItemExcerpt = items[ 0 ].excerpt;
 
 	useEffect( () => {
 		let mounted = true;
@@ -73,9 +88,9 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 			setIsLoading( true );
 			setError( null );
 			const result = await fetchDiffPreview( {
-				postId: items[ 0 ].id,
-				postType: items[ 0 ].post_type,
-				content: items[ 0 ].content || items[ 0 ].excerpt || '',
+				postId: firstItemId,
+				postType: firstItemPostType,
+				content: firstItemContent || firstItemExcerpt || '',
 				mode: 'split',
 				cleanup: true,
 			} );
@@ -88,16 +103,16 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 				setLocalPostId( result.localPostId ?? 0 );
 
 				// Structured incoming data for updates.
-				setIncoming( result.incoming ?? null );
+				setIncoming( result.incoming ?? undefined );
 
 				// Non-content diffs (title/excerpt/tax/meta).
-				setNonContentDiffs( result.nonContentDiffs ?? null );
+				setNonContentDiffs( result.nonContentDiffs ?? undefined );
 
 				setRenderedDiffHtml( result.renderedContentDiffHtml ?? null );
 
 				setBlockDiffs( result.blockDiffs || [] );
 			} else {
-				setError( 'No diff available.' );
+				setError( __( 'No diff available.', 'ccp' ) );
 			}
 			if ( mounted ) { setIsLoading( false ); }
 		};
@@ -105,7 +120,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 		return () => {
 			mounted = false;
 		};
-	}, [ items[ 0 ].id, items[ 0 ].post_type, items[ 0 ].content, items[ 0 ].excerpt ] );
+	}, [ firstItemId, firstItemPostType, firstItemContent, firstItemExcerpt ] );
 
 	/**
 	 * Handles updating the local post with incoming content.
@@ -151,12 +166,12 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
         );
 
         if ( result.success ) {
-            setUpdateSuccess( 'Post updated successfully.' );
+            setUpdateSuccess( __( 'Post updated successfully.', 'ccp' ) );
             setTimeout( () => {
                 closeModal?.();
             }, 500 );
         } else {
-            setUpdateError( result.error || 'Failed to update post.' );
+            setUpdateError( getErrorMessage( result, __( 'Failed to update post.', 'ccp' ) ) );
         }
         setIsUpdating( false );
 	};

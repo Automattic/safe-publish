@@ -7,7 +7,55 @@
  * @file This file defines utility functions for the CCP plugin.
  */
 
-import type { Post } from './types';
+import { __ } from '@wordpress/i18n';
+
+import type { Post, JsonValue } from './types';
+
+/**
+ * Extracts a human-readable error message from an API response.
+ *
+ * @param {Object}    response         The API response object.
+ * @param {boolean}   response.success Always false for error responses.
+ * @param {JsonValue} [response.data]  Optional error data from WordPress.
+ * @param {string}    [response.error] Optional custom error message.
+ * @param {string}    [fallback]       Fallback message if no error found.
+ *
+ * @return {string} The extracted error message.
+ */
+export function getErrorMessage(
+	response: { success: false; data?: JsonValue; error?: string },
+	fallback: string = 'An unknown error occurred'
+): string {
+	if ( typeof response.error === 'string' && response.error ) {
+		return response.error;
+	}
+
+	// Check WordPress wp_send_json_error data field.
+	if ( response.data !== undefined && response.data !== null ) {
+		if ( typeof response.data === 'string' ) {
+			return response.data;
+		}
+
+		// If it's an object with a message property, extract that.
+		if (
+			typeof response.data === 'object' &&
+			! Array.isArray( response.data ) &&
+			'message' in response.data &&
+			typeof response.data.message === 'string'
+		) {
+			return response.data.message;
+		}
+
+		// For other objects/arrays, serialize to JSON.
+		try {
+			return JSON.stringify( response.data );
+		} catch {
+			return String( response.data );
+		}
+	}
+
+	return fallback;
+}
 
 /**
  * Formats a date string for display.
@@ -19,8 +67,9 @@ import type { Post } from './types';
 export function formatDate( dateString: string ): string {
 	const date = new Date( dateString );
 	if ( isNaN( date.getTime() ) ) {
-		return 'Invalid Date';
+		return __( 'Invalid Date', 'ccp' );
 	}
+
 	return date.toLocaleDateString();
 }
 
@@ -34,37 +83,41 @@ export function formatDate( dateString: string ): string {
 export function formatDateTime( dateString: string ): string {
 	const date = new Date( dateString );
 	if ( isNaN( date.getTime() ) ) {
-		return 'Invalid Date';
+		return __( 'Invalid Date', 'ccp' );
 	}
+
 	return date.toLocaleString();
 }
 
 /**
  * Validates if a post object has required properties.
  *
- * @param {any} post Object to validate as a Post.
+ * @param {unknown} post Object to validate as a Post.
  *
  * @return {boolean} True if the object is a valid Post, false otherwise.
  */
-export function isValidPost( post: any ): post is Post {
+export function isValidPost( post: unknown ): post is Post {
+	if ( typeof post !== 'object' || post === null ) {
+		return false;
+	}
+
+	const postRecord = post as Record<string, unknown>;
 	return (
-		typeof post === 'object' &&
-		post !== null &&
-		typeof post.id === 'number' &&
-		typeof post.link === 'string' &&
-		typeof post.title === 'string' &&
-		typeof post.modified === 'string'
+		typeof postRecord.id === 'number' &&
+		typeof postRecord.link === 'string' &&
+		typeof postRecord.title === 'string' &&
+		typeof postRecord.modified === 'string'
 	);
 }
 
 /**
  * Sanitizes posts array, filtering out invalid posts.
  *
- * @param {any[]} posts Potential post objects to sanitize.
+ * @param {unknown[]} posts Potential post objects to sanitize.
  *
  * @return {Post[]} Array containing only valid Post objects.
  */
-export function sanitizePosts( posts: any[] ): Post[] {
+export function sanitizePosts( posts: unknown[] ): Post[] {
 	if ( ! Array.isArray( posts ) ) {
 		return [];
 	}
@@ -103,9 +156,12 @@ export function sortPosts(
 	field: keyof Post,
 	direction: 'asc' | 'desc' = 'desc'
 ): Post[] {
-	return [ ...posts ].sort( ( a, b ) => {
-		const aVal = a[ field ];
-		const bVal = b[ field ];
+	return [ ...posts ].sort( ( postA, postB ) => {
+		/* eslint-disable security/detect-object-injection */
+		// TypeScript ensures 'field' is a valid Post key, making this type-safe.
+		const aVal = postA[ field ];
+		const bVal = postB[ field ];
+		/* eslint-enable security/detect-object-injection */
 
 		// Special handling for dates.
 		if ( field === 'modified' ) {

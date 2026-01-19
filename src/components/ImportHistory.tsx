@@ -10,6 +10,7 @@ import { close } from '@wordpress/icons';
 
 import { PostDiffModal } from './ImportHistoryPostDiffModal';
 import { SessionDetailsModal } from './SessionDetailsModal';
+import { getErrorMessage } from '../utils';
 import {
 	Button,
 	__experimentalVStack as VStack,
@@ -23,8 +24,13 @@ import { DataViews, View } from '@wordpress/dataviews';
 import { useState, useEffect } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
-
-import type { ImportSession, DataViewsField } from '../types';
+import type {
+	ApiResponse,
+	DataViewsField,
+	DeleteSessionData,
+	ImportSession,
+	RollbackSessionData,
+} from '../types';
 
 /**
  * Import History component.
@@ -118,12 +124,12 @@ export function ImportHistory(): JSX.Element {
 				body: formData,
 			} );
 
-			const result = await response.json();
+			const result = await response.json() as ApiResponse<ImportSession[]>;
 
-			if ( result.success && result.data ) {
+			if ( result.success ) {
 				setSessions( result.data );
 			} else {
-				setError( result.data || __( 'Failed to load import sessions.', 'ccp' ) );
+				setError( getErrorMessage( result, __( 'Failed to load import sessions.', 'ccp' ) ) );
 			}
 		} catch ( err ) {
 			setError( __( 'Network error while loading import sessions.', 'ccp' ) );
@@ -158,13 +164,20 @@ export function ImportHistory(): JSX.Element {
 				body: formData,
 			} );
 
-			const result = await response.json();
+			const result = await response.json() as ApiResponse<RollbackSessionData>;
 
 			if ( result.success ) {
+				const { deleted_count: deletedCount, restored_count: restoredCount } = result.data;
+
+				if ( typeof deletedCount !== 'number' || typeof restoredCount !== 'number' ) {
+					setNoticeMessage( { type: 'error', message: __( 'Invalid rollback response from server.', 'ccp' ) } );
+					return;
+				}
+
 				/* translators: %1$d is the number of deleted posts, %2$d is the number of restored posts */
 				const message = __( 'Session rolled back successfully. %1$d posts were deleted and %2$d posts were restored to their previous version.', 'ccp' )
-					.replace( '%1$d', result.data.deleted_count.toString() )
-					.replace( '%2$d', result.data.restored_count.toString() );
+					.replace( '%1$d', deletedCount.toString() )
+					.replace( '%2$d', restoredCount.toString() );
 				setNoticeMessage( { type: 'success', message } );
 				// Reload sessions and close modal.
 				await loadImportSessions();
@@ -172,7 +185,8 @@ export function ImportHistory(): JSX.Element {
 				setSelectedSession( null );
 			} else {
 				/* translators: %s is the error message */
-				setNoticeMessage( { type: 'error', message: __( 'Error rolling back session: %s', 'ccp' ).replace( '%s', result.data ) } );
+				setNoticeMessage( { type: 'error', message: __( 'Error rolling back session: %s', 'ccp' )
+					.replace( '%s', getErrorMessage( result, '' ) ) } );
 			}
 		} catch ( err ) {
 			setNoticeMessage( { type: 'error', message: __( 'Error rolling back session.', 'ccp' ) } );
@@ -206,11 +220,14 @@ export function ImportHistory(): JSX.Element {
 				body: formData,
 			} );
 
-			const result = await response.json();
+			const result = await response.json() as ApiResponse<DeleteSessionData>;
 
 			if ( result.success ) {
+				const message = result.data.message || '';
+
 				/* translators: %s is the success message from the server */
-				setNoticeMessage( { type: 'success', message: __( 'Session deleted successfully. %s', 'ccp' ).replace( '%s', result.data.message ) } );
+				setNoticeMessage( { type: 'success', message: __( 'Session deleted successfully. %s', 'ccp' )
+					.replace( '%s', message ) } );
 				// Reload sessions and close modal if it was open.
 				await loadImportSessions();
 				if ( isSessionModalOpen ) {
@@ -219,7 +236,8 @@ export function ImportHistory(): JSX.Element {
 				}
 			} else {
 				/* translators: %s is the error message */
-				setNoticeMessage( { type: 'error', message: __( 'Error deleting session: %s', 'ccp' ).replace( '%s', result.data ) } );
+				setNoticeMessage( { type: 'error', message: __( 'Error deleting session: %s', 'ccp' )
+					.replace( '%s', getErrorMessage( result, '' ) ) } );
 			}
 		} catch ( err ) {
 			setNoticeMessage( { type: 'error', message: __( 'Error deleting session.', 'ccp' ) } );
@@ -310,7 +328,7 @@ export function ImportHistory(): JSX.Element {
 			isPrimary: true,
 			supportsBulk: false,
 			callback: ( items: ImportSession[] ): void => {
-				if ( items.length === 1 ) {
+				if ( 1 === items.length ) {
 					openSessionDetails( items[0] );
 				}
 			},
@@ -321,10 +339,10 @@ export function ImportHistory(): JSX.Element {
 			isDestructive: true,
 			supportsBulk: false,
 			isEligible: ( item: ImportSession ): boolean => {
-				return item.status === 'completed' && item.successful > 0;
+				return 'completed' === item.status && item.successful > 0;
 			},
 			callback: ( items: ImportSession[] ): void => {
-				if ( items.length === 1 ) {
+				if ( 1 === items.length ) {
 					void handleRollbackSession( items[0].id );
 				}
 			},
@@ -335,7 +353,7 @@ export function ImportHistory(): JSX.Element {
 			isDestructive: true,
 			supportsBulk: false,
 			callback: ( items: ImportSession[] ): void => {
-				if ( items.length === 1 ) {
+				if ( 1 === items.length ) {
 					void handleDeleteSession( items[0].id );
 				}
 			},

@@ -6,6 +6,7 @@
  *
  * @file This file defines the PostDiffModal component for import history.
  */
+import { getErrorMessage } from '../utils';
 import {
 	Button,
 	__experimentalVStack as VStack,
@@ -13,8 +14,10 @@ import {
 	__experimentalText as Text,
 	Spinner
 } from '@wordpress/components';
-import { useState, useEffect } from '@wordpress/element';
+import { useState, useEffect, useCallback } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
+
+import type { ApiResponse, DiffHtmlData } from '../types';
 
 /**
  * Props for the PostDiffModal component.
@@ -44,11 +47,6 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 	const [ isLoading, setIsLoading ] = useState< boolean >( true );
 	const [ error, setError ] = useState< string | null >( null );
 
-	// Load post diff on component mount.
-	useEffect( () => {
-		void loadPostDiff();
-	}, [ postId ] );
-
 	/**
 	 * Loads post diff from the backend.
 	 *
@@ -57,7 +55,7 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 	 *
 	 * @return {Promise<void>} Resolves when diff is loaded.
 	 */
-	const loadPostDiff = async (): Promise< void > => {
+	const loadPostDiff = useCallback( async (): Promise< void > => {
 		setIsLoading( true );
 		setError( null );
 
@@ -72,19 +70,24 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 				body: formData,
 			} );
 
-			const result = await response.json();
+			const result = await response.json() as ApiResponse<DiffHtmlData>;
 
-			if ( result.success && result.data ) {
+			if ( result.success ) {
 				setDiffHtml( result.data.diff_html );
 			} else {
-				setError( result.data || __( 'Failed to load content changes.', 'ccp' ) );
+				setError( getErrorMessage( result, __( 'Failed to load content changes.', 'ccp' ) ) );
 			}
 		} catch ( err ) {
 			setError( __( 'Network error while loading content changes.', 'ccp' ) );
 		} finally {
 			setIsLoading( false );
 		}
-	};
+	}, [ postId ] );
+
+	// Load post diff on component mount.
+	useEffect( () => {
+		void loadPostDiff();
+	}, [ loadPostDiff ] );
 
 	/**
 	 * Renders the appropriate content based on loading/error/data state.

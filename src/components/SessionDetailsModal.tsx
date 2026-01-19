@@ -6,6 +6,7 @@
  *
  * @file This file defines the SessionDetailsModal component.
  */
+import { getErrorMessage } from '../utils';
 import {
 	Button,
 	__experimentalHStack as HStack,
@@ -14,10 +15,16 @@ import {
 	__experimentalVStack as VStack,
 	Notice
 } from '@wordpress/components';
-import { useEffect, useState } from '@wordpress/element';
+import { useEffect, useState, useCallback } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
-import type { ImportLog, ImportSession } from '../types';
+import type {
+	ApiResponse,
+	ImportLog,
+	ImportSession,
+	RollbackItemData,
+	SessionDetailsData,
+} from '../types';
 
 /**
  * Props for the SessionDetailsModal component.
@@ -61,11 +68,6 @@ export function SessionDetailsModal( {
 	const [ rollingBackItemId, setRollingBackItemId ] = useState< number | null >( null );
 	const [ noticeMessage, setNoticeMessage ] = useState< { type: 'success' | 'error'; message: string } | null >( null );
 
-	// Load session details on component mount.
-	useEffect( () => {
-		void loadSessionDetails();
-	}, [ session.id ] );
-
 	/**
 	 * Loads session details and logs.
 	 *
@@ -74,7 +76,7 @@ export function SessionDetailsModal( {
 	 *
 	 * @return {Promise<void>} Resolves when details are loaded.
 	 */
-	const loadSessionDetails = async (): Promise< void > => {
+	const loadSessionDetails = useCallback( async (): Promise< void > => {
 		setIsLoading( true );
 		setError( null );
 
@@ -89,19 +91,24 @@ export function SessionDetailsModal( {
 				body: formData,
 			} );
 
-			const result = await response.json();
+			const result = await response.json() as ApiResponse<SessionDetailsData>;
 
-			if ( result.success && result.data ) {
+			if ( result.success ) {
 				setLogs( result.data.logs || [] );
 			} else {
-				setError( result.data || __( 'Failed to load session details.', 'ccp' ) );
+				setError( getErrorMessage( result, __( 'Failed to load session details.', 'ccp' ) ) );
 			}
 		} catch ( err ) {
 			setError( __( 'Network error while loading session details.', 'ccp' ) );
 		} finally {
 			setIsLoading( false );
 		}
-	};
+	}, [ session.id ] );
+
+	// Load session details on component mount.
+	useEffect( () => {
+		void loadSessionDetails();
+	}, [ loadSessionDetails ] );
 
 	/**
 	 * Handles the rollback action.
@@ -151,19 +158,21 @@ export function SessionDetailsModal( {
 				body: formData,
 			} );
 
-			const result = await response.json();
+			const result = await response.json() as ApiResponse<RollbackItemData>;
 
 			if ( result.success ) {
 				// Show success message.
-				const actionText = result.data.action === 'restored' ? __( 'restored', 'ccp' ) : __( 'deleted', 'ccp' );
+				const actionText = 'restored' === result.data.action ? __( 'restored', 'ccp' ) : __( 'deleted', 'ccp' );
 				/* translators: %s is the action performed (restored or deleted) */
-				setNoticeMessage( { type: 'success', message: __( 'Item successfully %s.', 'ccp' ).replace( '%s', actionText ) } );
+				setNoticeMessage( { type: 'success', message: __( 'Item successfully %s.', 'ccp' )
+					.replace( '%s', actionText ) } );
 
 				// Reload session details to update the UI.
 				await loadSessionDetails();
 			} else {
 				/* translators: %s is the error message */
-				setNoticeMessage( { type: 'error', message: __( 'Error: %s', 'ccp' ).replace( '%s', result.data || __( 'Unknown error', 'ccp' ) ) } );
+				setNoticeMessage( { type: 'error', message: __( 'Error: %s', 'ccp' )
+					.replace( '%s', getErrorMessage( result, __( 'Unknown error', 'ccp' ) ) ) } );
 			}
 		} catch ( err ) {
 			setNoticeMessage( { type: 'error', message: __( 'Network error while rolling back item.', 'ccp' ) } );
@@ -230,7 +239,7 @@ export function SessionDetailsModal( {
 	 * @return {JSX.Element} Rendered import logs list.
 	 */
 	const renderImportLogs = (): JSX.Element => {
-		if ( session.status === 'rolled_back' ) {
+		if ( 'rolled_back' === session.status ) {
 			return (
 				<div className="ccp-log-item">
 					<Text><strong>{ __( 'This session has been rolled back.', 'ccp' ) }</strong></Text>
@@ -239,7 +248,7 @@ export function SessionDetailsModal( {
 			);
 		}
 
-		if ( logs.length === 0 ) {
+		if ( 0 === logs.length ) {
 			return (
 				<Text>{ __( 'No detailed logs available for this session.', 'ccp' ) }</Text>
 			);

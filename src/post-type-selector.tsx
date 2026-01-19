@@ -6,8 +6,15 @@
  *
  * @file This file defines the PostTypeSelector component for the CCP plugin.
  */
+import { ApiResponse } from './types';
+import { getErrorMessage } from './utils';
 import { Button, SelectControl, Notice, Spinner } from '@wordpress/components';
-import { useState, useEffect, createInterpolateElement } from '@wordpress/element';
+import {
+	createInterpolateElement,
+	useCallback,
+	useEffect,
+	useState,
+} from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
 /**
@@ -38,18 +45,6 @@ interface PostTypeSelectorProps {
 	siteUrl: string;
 	onPostTypeChange?: ( postType: string ) => void;
 	selectedPostType?: string;
-}
-
-/**
- * Generic wrapper for API responses.
- *
- * @template T
- * @property {boolean} success Whether the request succeeded.
- * @property {T}       data    Response data.
- */
-interface ApiResponse< T > {
-	success: boolean;
-	data: T;
 }
 
 /**
@@ -84,10 +79,10 @@ export function PostTypeSelector( {
 	 *
 	 * @return {string} External site URL.
 	 */
-	const getExternalSiteUrl = (): string => {
+	const getExternalSiteUrl = useCallback( (): string => {
 		// Use saved settings from window.ccpAdminData.
 		return window.ccpAdminData?.siteUrl || siteUrl || '';
-	};
+	}, [ siteUrl ] );
 
 	/**
 	 * Makes an AJAX request to WordPress.
@@ -99,10 +94,10 @@ export function PostTypeSelector( {
 	 * @param {Record<string, string|number>} data   Additional request data.
 	 * @return {Promise<any>} JSON response from the server.
 	 */
-	const makeRequest = async (
+	const makeRequest = useCallback( async (
 		action: string,
 		data: Record< string, string | number > = {}
-	): Promise< any > => {
+	): Promise< unknown > => {
 		const formData = new FormData();
 		formData.append( 'action', action );
 		formData.append( 'nonce', window.ccpAdminData.nonce );
@@ -117,7 +112,7 @@ export function PostTypeSelector( {
 		} );
 
 		return response.json();
-	};
+	}, [] );
 
 	/**
 	 * Loads available post types from the external site.
@@ -127,7 +122,7 @@ export function PostTypeSelector( {
 	 *
 	 * @return {Promise<void>} Resolves when post types are loaded.
 	 */
-	const loadPostTypes = async (): Promise< void > => {
+	const loadPostTypes = useCallback( async (): Promise< void > => {
 		const currentSiteUrl = getExternalSiteUrl();
 
 		if ( ! currentSiteUrl ) {
@@ -140,12 +135,12 @@ export function PostTypeSelector( {
 		setError( null );
 
 		try {
-			const response: ApiResponse< Record< string, PostTypeOption > > = await makeRequest(
+			const response = await makeRequest(
 				'ccp_fetch_post_types',
 				{ site_url: currentSiteUrl }
-			);
+			) as ApiResponse< Record< string, PostTypeOption > >;
 
-			if ( response.success && response.data ) {
+			if ( response.success ) {
 				// Convert object to array - don't filter out anything initially.
 				const postTypeArray = Object.values( response.data );
 
@@ -155,15 +150,7 @@ export function PostTypeSelector( {
 			} else {
 				// eslint-disable-next-line no-console
 				console.error( 'CCP PostTypeSelector: API error:', response );
-				let errorMessage;
-				if ( typeof response.data === 'string' ) {
-					errorMessage = response.data;
-				} else if ( response.data ) {
-					errorMessage = JSON.stringify( response.data );
-				} else {
-					errorMessage = 'Failed to load post types';
-				}
-				setError( errorMessage );
+				setError( getErrorMessage( response, __( 'Failed to load post types', 'ccp' ) ) );
 				setPostTypes( [] );
 			}
 		} catch ( err ) {
@@ -175,7 +162,7 @@ export function PostTypeSelector( {
 		} finally {
 			setIsLoading( false );
 		}
-	};
+	}, [ getExternalSiteUrl, makeRequest ] );
 
 	/**
 	 * Handles post type selection change.
@@ -205,7 +192,7 @@ export function PostTypeSelector( {
 	useEffect( () => {
 		// eslint-disable-next-line no-console
 		loadPostTypes().catch( console.error );
-	}, [ siteUrl ] );
+	}, [ siteUrl, loadPostTypes ] );
 
 	// Also check for changes in the form input field periodically.
 	useEffect( () => {
@@ -224,7 +211,7 @@ export function PostTypeSelector( {
 		checkSiteUrlChange();
 
 		return () => clearInterval( interval );
-	}, [ lastSiteUrl ] );
+	}, [ lastSiteUrl, getExternalSiteUrl, loadPostTypes ] );
 
 	// Generate options for the select control.
 	const selectOptions = postTypes.map( postType => ( {
@@ -233,7 +220,7 @@ export function PostTypeSelector( {
 	} ) );
 
 	// Always ensure we have at least the default "posts" option.
-	if ( selectOptions.length === 0 && ! isLoading ) {
+	if ( 0 === selectOptions.length && ! isLoading ) {
 		selectOptions.push( {
 			label: __( 'Posts (default)', 'ccp' ),
 			value: 'posts',
