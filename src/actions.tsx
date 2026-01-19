@@ -131,7 +131,7 @@ export const actions: Action< Post >[] = [
 								variant="primary"
 								onClick={ closeModal }
 							>
-								OK
+								{ __( 'OK', 'ccp' ) }
 							</Button>
 						</HStack>
 					</VStack>
@@ -207,7 +207,7 @@ export const actions: Action< Post >[] = [
 
 					// Validate edit URL before redirecting.
 					if ( ! data.edit_url || typeof data.edit_url !== 'string' ) {
-						setError( 'Invalid response: missing edit URL' );
+					setError( __( 'Invalid response: missing edit URL', 'ccp' ) );
 						return;
 					}
 
@@ -215,7 +215,7 @@ export const actions: Action< Post >[] = [
 					window.location.href = data.edit_url;
 				} )
 				.catch( err => {
-					setError( err instanceof Error ? err.message : 'Unknown error occurred' );
+					setError( err instanceof Error ? err.message : __( 'Unknown error occurred', 'ccp' ) );
 					setIsLoading( false );
 				} );
 			};
@@ -243,10 +243,10 @@ export const actions: Action< Post >[] = [
 			if ( confirmData ) {
 				return (
 					<VStack spacing="5">
-						<Text style={ { fontWeight: 'bold' } }>Post Already Exists</Text>
+						<Text style={ { fontWeight: 'bold' } }>{ __( 'Post Already Exists', 'ccp' ) }</Text>
 						<Text>{ confirmData.message }</Text>
 						<Text style={ { fontSize: '0.9em', color: '#666' } }>
-							Updating will fetch the latest content from the external site and replace the current content.
+						{ __( 'Updating will fetch the latest content from the external site and replace the current content.', 'ccp' ) }
 						</Text>
 						{ error && <Text style={ { color: '#d63638' } }>{ error }</Text> }
 						<HStack justify="right">
@@ -256,7 +256,7 @@ export const actions: Action< Post >[] = [
 								onClick={ handleCancelUpdate }
 								disabled={ isLoading }
 							>
-								Edit Existing
+								{ __( 'Edit Existing', 'ccp' ) }
 							</Button>
 							<Button
 								__next40pxDefaultSize
@@ -267,10 +267,10 @@ export const actions: Action< Post >[] = [
 								{ isLoading ? (
 									<>
 										<Spinner />
-										Updating...
+										{ __( 'Updating…', 'ccp' ) }
 									</>
 								) : (
-									'Update with Latest'
+									__( 'Update with Latest', 'ccp' )
 								) }
 							</Button>
 						</HStack>
@@ -294,7 +294,7 @@ export const actions: Action< Post >[] = [
 							onClick={ closeModal }
 							disabled={ isLoading }
 						>
-							Cancel
+							{ __( 'Cancel', 'ccp' ) }
 						</Button>
 						<Button
 							__next40pxDefaultSize
@@ -305,10 +305,10 @@ export const actions: Action< Post >[] = [
 							{ isLoading ? (
 								<>
 									<Spinner />
-									Importing...
+									{ __( 'Importing…', 'ccp' ) }
 								</>
 							) : (
-								'Create Draft'
+								__( 'Create Draft', 'ccp' )
 							) }
 						</Button>
 					</HStack>
@@ -347,7 +347,7 @@ export const actions: Action< Post >[] = [
 								variant="primary"
 								onClick={ closeModal }
 							>
-								OK
+								{ __( 'OK', 'ccp' ) }
 							</Button>
 						</HStack>
 					</VStack>
@@ -395,7 +395,7 @@ export const actions: Action< Post >[] = [
 					setImportResults( result );
 					setProgress( 100 );
 				} catch ( err ) {
-					setError( err instanceof Error ? err.message : 'Unknown error occurred' );
+				setError( err instanceof Error ? err.message : __( 'Unknown error occurred', 'ccp' ) );
 				} finally {
 					setIsLoading( false );
 				}
@@ -496,11 +496,11 @@ export const actions: Action< Post >[] = [
 								{ importResults.results.map( ( result, index ) => {
 									let status;
 									if ( ! result.success ) {
-										status = 'Failed';
+									status = __( 'Failed', 'ccp' );
 									} else if ( result.existing ) {
-										status = 'Updated';
+										status = __( 'Updated', 'ccp' );
 									} else {
-										status = 'Created';
+										status = __( 'Created', 'ccp' );
 									}
 
 									return (
@@ -530,7 +530,7 @@ export const actions: Action< Post >[] = [
 							onClick={ handleCloseModal }
 							disabled={ isLoading }
 						>
-							{ importResults ? 'Close' : 'Cancel' }
+							{ importResults ? __( 'Close', 'ccp' ) : __( 'Cancel', 'ccp' ) }
 						</Button>
 						{ ! importResults && (
 							<Button
@@ -543,10 +543,11 @@ export const actions: Action< Post >[] = [
 								{ isLoading ? (
 									<>
 										<Spinner />
-										Importing...
+										{ __( 'Importing…', 'ccp' ) }
 									</>
 								) : (
-									`Import ${ items.length } Posts`
+									/* translators: %d is the number of posts */
+									__( 'Import %d Posts', 'ccp' ).replace( '%d', items.length.toString() )
 								) }
 							</Button>
 						) }

@@ -937,7 +937,7 @@ final class Admin_Handler {
 				$this->import_history->log_import_action(
 					$session_id,
 					$post_data['id'] ?? 0,
-					$post_data['title'] ?? 'Unknown',
+					$post_data['title'] ?? __( 'Unknown', 'ccp' ),
 					'error',
 					null,
 					$e->getMessage()
@@ -946,7 +946,7 @@ final class Admin_Handler {
 
 			return array(
 				'external_id' => $post_data['id'] ?? 0,
-				'title'       => $post_data['title'] ?? 'Unknown',
+				'title'       => $post_data['title'] ?? __( 'Unknown', 'ccp' ),
 				'success'     => false,
 				'error'       => $e->getMessage(),
 			);

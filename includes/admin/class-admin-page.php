@@ -54,7 +54,7 @@ final class Admin_Page {
 					<!-- React Admin Tools component will be mounted here -->
 					<div id="ccp-admin-tools-container">
 						<div class="ccp-loading">
-							<p><?php esc_html_e( 'Loading tools...', 'ccp' ); ?></p>
+							<p><?php esc_html_e( 'Loading tools…', 'ccp' ); ?></p>
 						</div>
 					</div>
 
@@ -81,7 +81,7 @@ final class Admin_Page {
 					<?php else : ?>
 						<div id="ccp-dataviews-container">
 							<div class="ccp-loading">
-								<p><?php esc_html_e( 'Loading posts...', 'ccp' ); ?></p>
+								<p><?php esc_html_e( 'Loading posts…', 'ccp' ); ?></p>
 							</div>
 						</div>
 					<?php endif; ?>
@@ -228,8 +228,10 @@ final class Admin_Page {
 
 					if ( defined( 'WP_DEBUG' ) && constant( 'WP_DEBUG' ) ) {
 						echo '<div class="notice notice-error"><p>';
-						echo '<strong>Compliant Content Publisher:</strong> Build assets are missing. ';
-						echo 'Run <code>npm run build</code> and commit the build files for VIP deployment.';
+						echo '<strong>' . esc_html__( 'Compliant Content Publisher:', 'ccp' ) . '</strong> ';
+						echo esc_html__( 'Build assets are missing.', 'ccp' ) . ' ';
+						/* translators: npm run build is a command and should not be translated */
+						echo esc_html__( 'Run <code>npm run build</code> and commit the build files for VIP deployment.', 'ccp' );
 						echo '</p></div>';
 					}
 				}
@@ -302,7 +304,7 @@ final class Admin_Page {
 				'containerId' => 'ccp-dataviews-container',
 				'postsData'   => $posts_data,
 				'strings'     => array(
-					'loading'      => __( 'Loading posts...', 'ccp' ),
+					'loading'      => __( 'Loading posts…', 'ccp' ),
 					'error'        => __( 'Error loading posts.', 'ccp' ),
 					'noResults'    => __( 'No posts found.', 'ccp' ),
 					'title'        => __( 'Title', 'ccp' ),

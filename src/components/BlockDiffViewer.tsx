@@ -9,6 +9,7 @@
 import { Change, diffWords } from 'diff';
 
 import { __experimentalText as Text } from '@wordpress/components';
+import { __ } from '@wordpress/i18n';
 
 import type { BlockDiff } from '../api/diff';
 
@@ -92,7 +93,7 @@ export default function BlockDiffViewer( { blocks = [], highlight = true }: Prop
             { blocks.map( block => {
                 let status = block.status;
                 const key = `${ block.index }-${ block.status }`;
-                const title = block.incoming?.name || block.current?.name || 'unknown';
+                const title = block.incoming?.name || block.current?.name || __( 'unknown', 'ccp' );
                 const currentHtml = block.current?.rendered || '';
                 const incomingHtml = block.incoming?.rendered || '';
 
@@ -114,7 +115,7 @@ export default function BlockDiffViewer( { blocks = [], highlight = true }: Prop
                     <div key={ key } className={ `ccp-block-diff ccp-block-${ status }` }>
                         <div className="ccp-block-diff__header">
                             <Text>
-                                { title || 'Block' }{' '}
+                                { title || __( 'Block', 'ccp' ) }{ ' ' }
                                 <span className={ `ccp-badge ccp-${ status }` }>{ status }</span>
                                 { hasImage && block.status === 'modified' && status !== 'unchanged' && (
                                     <span className="ccp-badge" style={ { background: '#6b7280', color: '#fff' } }>
