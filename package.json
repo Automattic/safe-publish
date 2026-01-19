@@ -18,7 +18,7 @@
     "check-types": "tsc --noEmit",
     "cmd:build": "wp-scripts build --webpack-src-dir=src --output-path=build",
     "cmd:format": "prettier '**/*.(js|json|jsx|md|ts|tsx|yml|yaml)'",
-    "cmd:lint": "eslint --ext 'js,jsx,ts,tsx' --quiet",
+    "cmd:lint": "eslint --ext 'js,jsx,ts,tsx'",
     "dev": "./bin/start",
     "dev:build": "./bin/start build",
     "dev:destroy": "./bin/stop destroy",

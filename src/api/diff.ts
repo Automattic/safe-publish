@@ -7,6 +7,10 @@
  * @file This file defines the diff API functions for the CCP plugin.
  */
 
+import { __ } from '@wordpress/i18n';
+
+import type { JsonObject, JsonValue } from '../types';
+
 /**
  * Payload for requesting a diff preview.
  *
@@ -37,12 +41,12 @@ export interface BlockDiff {
 	status: 'unchanged' | 'added' | 'removed' | 'modified';
 	current?: {
 		name?: string;
-		attrs?: Record< string, any >;
+		attrs?: JsonObject;
 		rendered: string;
 	} | null;
 	incoming?: {
 		name?: string;
-		attrs?: Record< string, any >;
+		attrs?: JsonObject;
 		rendered: string;
 	} | null;
 }
@@ -78,13 +82,13 @@ export interface DiffPreviewResult {
 	incoming?: {
 		title?: string;
 		excerpt?: string;
-		meta?: Record< string, any >;
+		meta?: JsonObject;
 		terms?: Record< string, string[] >;
 	};
 	current?: {
 		title?: string;
 		excerpt?: string;
-		meta?: Record< string, any >;
+		meta?: JsonObject;
 		terms?: Record< string, string[] >;
 	};
 	html?: string;
@@ -111,16 +115,22 @@ export async function fetchDiffPreview(
 		body: JSON.stringify( payload ),
 	} );
 	if ( ! res.ok ) {
-		const text = await res.text().catch( () => 'Failed to fetch diff' );
+		const text = await res.text().catch( () => __( 'Failed to fetch diff', 'ccp' ) );
 		return { error: text };
 	}
-	return res.json();
+
+	return res.json() as Promise<DiffPreviewResult>;
 }
 
-export interface UpdatePostResult {
-	success: boolean;
-	error?: string;
-}
+/**
+ * Result from updating a post's content.
+ *
+ * Discriminated union where success=true has no additional data,
+ * and success=false may contain error information in either field.
+ */
+export type UpdatePostResult =
+	| { success: true }
+	| { success: false; data?: JsonValue; error?: string };
 
 /**
  * Updates a post's content via the REST API.
@@ -131,7 +141,7 @@ export interface UpdatePostResult {
  * @param {number}                   postId            Post ID to update.
  * @param {string}                   content           New post content.
  * @param {string}                   [nonce]           REST API nonce.
- * @param {Record<string, any>}      [meta]            Meta fields to update.
+ * @param {JsonObject}               [meta]            Meta fields to update.
  * @param {Record<string, string[]>} [terms]           Taxonomy terms to update.
  * @param {string}                   [title]           New post title.
  * @param {string}                   [excerpt]         New post excerpt.
@@ -143,19 +153,19 @@ export async function updatePostContent(
 	postId: number,
 	content: string,
 	nonce?: string,
-	meta?: Record< string, any >,
+	meta?: JsonObject,
 	terms?: Record< string, string[] >,
 	title?: string,
 	excerpt?: string,
 	featuredMediaId?: number
 ): Promise< UpdatePostResult > {
 	const headers: Record< string, string > = { 'Content-Type': 'application/json' };
-	const wpNonce = nonce || ( window as any )?.ccpAdminData?.restNonce;
+	const wpNonce = nonce || window.ccpAdminData?.restNonce;
 	if ( wpNonce ) {
 		headers[ 'X-WP-Nonce' ] = wpNonce;
 	}
 
-	const body: Record< string, any > = {
+	const body: Record< string, JsonValue > = {
 		postId,
 		content,
 		...( typeof title !== 'undefined' ? { title } : {} ),
@@ -176,11 +186,20 @@ export async function updatePostContent(
 		return { success: false, error: text || `HTTP ${ res.status }` };
 	}
 
-	const data = await res.json().catch( () => null );
+	const data = await res.json().catch( () => null ) as { success?: boolean; error?: string; data?: JsonValue } | null;
 
-	if ( data && data.success === true ) {
+	if ( true === data?.success ) {
 		return { success: true };
 	}
 
-	return { success: false, error: data && data.error ? data.error : 'Invalid response' };
+	// Treat the entire response as an error response.
+	if ( data && ( data.error || data.data ) ) {
+		return {
+			success: false,
+			error: data.error,
+			data: data.data,
+		};
+	}
+
+	return { success: false, error: __( 'Invalid response from server', 'ccp' ) };
 }

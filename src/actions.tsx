@@ -9,7 +9,13 @@
 import { drafts, update, download } from '@wordpress/icons';
 
 import PostDiffModal from './components/PostDiffModal';
-import { Post } from './types';
+import {
+	ApiResponse,
+	BulkImportResponse,
+	CreateDraftResponse,
+	Post,
+} from './types';
+import { getErrorMessage } from './utils';
 import {
 	Button,
 	__experimentalText as Text,
@@ -20,48 +26,7 @@ import {
 } from '@wordpress/components';
 import { Action } from '@wordpress/dataviews/build-types';
 import { useState } from '@wordpress/element';
-
-/**
- * Response from creating a draft post.
- *
- * @property {number}  post_id          Created post ID.
- * @property {string}  edit_url         URL to edit the post.
- * @property {string}  message          Response message.
- * @property {boolean} [existing]       Whether post already existed.
- * @property {string}  [post_title]     Post title.
- * @property {string}  [confirm_action] Action requiring confirmation.
- */
-interface CreateDraftResponse {
-	post_id: number;
-	edit_url: string;
-	message: string;
-	existing?: boolean;
-	post_title?: string;
-	confirm_action?: string;
-}
-
-/**
- * Response from bulk import operation.
- *
- * @property {number} total      Total posts processed.
- * @property {number} successful Number of successful imports.
- * @property {number} failed     Number of failed imports.
- * @property {Array}  results    Individual result objects.
- */
-interface BulkImportResponse {
-	total: number;
-	successful: number;
-	failed: number;
-	results: Array<{
-		external_id: number;
-		title: string;
-		success: boolean;
-		post_id?: number;
-		edit_url?: string;
-		error?: string;
-		existing?: boolean;
-	}>;
-}
+import { __ } from '@wordpress/i18n';
 
 /**
  * Imports multiple posts in bulk with progress tracking.
@@ -98,10 +63,10 @@ const bulkImportPosts = async (
 			},
 		} );
 
-		const result = await response.json();
+		const result = await response.json() as ApiResponse<BulkImportResponse>;
 
 		if ( ! result.success ) {
-			throw new Error( typeof result.data === 'string' ? result.data : 'Bulk import failed' );
+			throw new Error( getErrorMessage( result, __( 'Bulk import failed', 'ccp' ) ) );
 		}
 
 		const bulkResult = result.data;
@@ -144,7 +109,7 @@ export const actions: Action< Post >[] = [
 	 */
 	{
 		id: 'draft',
-		label: 'Create Draft',
+		label: __( 'Create Draft', 'ccp' ),
 		isPrimary: true,
 		icon: drafts,
 		hideModalHeader: true,
@@ -156,10 +121,10 @@ export const actions: Action< Post >[] = [
 			const [ confirmData, setConfirmData ] = useState< CreateDraftResponse | null >( null );
 
 			// Only process if exactly one item is selected.
-			if ( items.length !== 1 ) {
+			if ( 1 !== items.length ) {
 				return (
 					<VStack spacing="5">
-						<Text>Please select exactly one post to create a draft.</Text>
+					<Text>{ __( 'Please select exactly one post to create a draft.', 'ccp' ) }</Text>
 						<HStack justify="right">
 							<Button
 								__next40pxDefaultSize
@@ -222,22 +187,27 @@ export const actions: Action< Post >[] = [
 						'Accept': 'application/json; charset=utf-8',
 					},
 				} )
-				.then( response => response.json() )
-				.then( result => {
+				.then( response => response.json() as Promise<ApiResponse<CreateDraftResponse>> )
+				.then( ( result ) => {
 					setIsLoading( false );
 
 					if ( ! result.success ) {
-						const errorMessage =
-							typeof result.data === 'string' ? result.data : 'Failed to create draft post';
-						setError( errorMessage );
+						setError( getErrorMessage( result, __( 'Failed to create draft post', 'ccp' ) ) );
+
 						return;
 					}
 
-					const data = result.data as CreateDraftResponse;
+					const data = result.data;
 
 					// Check if this is a confirmation request.
-					if ( data.existing && data.confirm_action === 'update_existing' ) {
+					if ( data.existing && 'update_existing' === data.confirm_action ) {
 						setConfirmData( data );
+						return;
+					}
+
+					// Validate edit URL before redirecting.
+					if ( ! data.edit_url || typeof data.edit_url !== 'string' ) {
+						setError( 'Invalid response: missing edit URL' );
 						return;
 					}
 
@@ -261,7 +231,7 @@ export const actions: Action< Post >[] = [
 			 * Handles cancelling the update and redirecting to the existing post.
 			 */
 			const handleCancelUpdate = () => {
-				if ( confirmData?.edit_url ) {
+				if ( confirmData?.edit_url && typeof confirmData.edit_url === 'string' ) {
 					// User chose not to update, redirect to existing post.
 					window.location.href = confirmData.edit_url;
 				} else {
@@ -310,9 +280,11 @@ export const actions: Action< Post >[] = [
 
 			return (
 				<VStack spacing="5">
-					<Text>{ `Create a draft for "${ items[ 0 ].title }"?` }</Text>
+					<Text>{ /* translators: %s is the post title */
+						__( 'Create a draft for "%s"?', 'ccp' ).replace( '%s', items[ 0 ].title ) }
+					</Text>
 					<Text style={ { fontSize: '0.9em', color: '#666' } }>
-						This will import the post content including images, links, and formatting.
+						{ __( 'This will import the post content including images, links, and formatting.', 'ccp' ) }
 					</Text>
 					{ error && <Text style={ { color: '#d63638' } }>{ error }</Text> }
 					<HStack justify="right">
@@ -352,7 +324,7 @@ export const actions: Action< Post >[] = [
 	 */
 	{
 		id: 'bulk-import',
-		label: 'Bulk Import',
+		label: __( 'Bulk Import', 'ccp' ),
 		isPrimary: false,
 		icon: download,
 		hideModalHeader: true,
@@ -368,7 +340,7 @@ export const actions: Action< Post >[] = [
 			if ( items.length <= 1 ) {
 				return (
 					<VStack spacing="5">
-						<Text>Please select multiple posts to use bulk import.</Text>
+						<Text>{ __( 'Please select multiple posts to use bulk import.', 'ccp' ) }</Text>
 						<HStack justify="right">
 							<Button
 								__next40pxDefaultSize
@@ -447,32 +419,37 @@ export const actions: Action< Post >[] = [
 			return (
 				<VStack spacing="5" style={ { minWidth: '400px' } } className="ccp-bulk-import-modal">
 					<Text>
-						{ `Import ${ items.length } selected posts as drafts?` }
+						{ /* translators: %d is the number of posts */
+						__( 'Import %d selected posts as drafts?', 'ccp' ).replace( '%d', items.length.toString() ) }
 					</Text>
 
 					{ ! importResults && (
 						<VStack spacing="2">
 							<Text style={ { fontSize: '0.9em', color: '#666' } }>
-								This will import all selected posts including their content, images, links, and formatting.
+								{ __( 'This will import all selected posts including their content, images, links, and formatting.', 'ccp' ) }
 							</Text>
 							<Text style={ { fontSize: '0.8em', color: '#d63638', fontWeight: 'bold' } }>
-								⚠️ Note: Posts that already exist will be automatically updated with the latest content from the external site.
+								{ __( '⚠️ Note: Posts that already exist will be automatically updated with the latest content from the external site.', 'ccp' ) }
 							</Text>
 						</VStack>
 					) }
 
 					{ isLoading && (
 						<VStack spacing="3" className="ccp-bulk-import-progress">
-							<Text>Importing posts as a batch...</Text>
+							<Text>{ __( 'Importing posts as a batch…', 'ccp' ) }</Text>
 							<ProgressBar value={ progress } />
 							<Text style={ { fontSize: '0.8em', color: '#666' } }>
 								{ progress === 100
-									? 'Batch import completed!'
-									: `Processing bulk import... ${ Math.round(progress) }% complete`
+									? __( 'Batch import completed!', 'ccp' )
+									: /* translators: %d is the percentage complete */
+									__( 'Processing bulk import… %d%% complete', 'ccp' )
+										.replace( '%d', Math.round(progress).toString() )
 								}
 							</Text>
 							<Text style={ { fontSize: '0.75em', color: '#999' } }>
-								All { items.length } posts will be imported in a single session
+								{ /* translators: %d is the number of posts */
+								__( 'All %d posts will be imported in a single session', 'ccp' )
+									.replace( '%d', items.length.toString() ) }
 							</Text>
 						</VStack>
 					) }
@@ -480,26 +457,37 @@ export const actions: Action< Post >[] = [
 					{ importResults && (
 						<VStack spacing="3">
 							<Text style={ { color: '#008a20', fontWeight: 'bold' } }>
-								Import completed!
+								{ __( 'Import completed!', 'ccp' ) }
 							</Text>
 							<Text>
-								Successfully imported: { importResults.successful } of { importResults.total } posts
+								{ /* translators: 1: successful count, 2: total count */
+								__( 'Successfully imported: %1$d of %2$d posts', 'ccp' )
+									.replace( '%1$d', importResults.successful.toString() )
+									.replace( '%2$d', importResults.total.toString() ) }
 							</Text>
 							{ importResults.successful > 0 && (
 								<Text style={ { fontSize: '0.9em', color: '#666' } }>
 									{ (() => {
-										const created = importResults.results.filter( r => r.success && !r.existing ).length;
-										const updated = importResults.results.filter( r => r.success && r.existing ).length;
+										const created = importResults.results.filter( result => result.success && !result.existing ).length;
+										const updated = importResults.results.filter( result => result.success && result.existing ).length;
 										const parts = [];
-										if ( created > 0 ) { parts.push( `${ created } created` ); }
-										if ( updated > 0 ) { parts.push( `${ updated } updated with latest content` ); }
+										if ( created > 0 ) {
+											/* translators: %d is the number of posts created */
+											parts.push( __( '%d created', 'ccp' ).replace( '%d', created.toString() ) );
+										}
+										if ( updated > 0 ) {
+											/* translators: %d is the number of posts updated */
+											parts.push( __( '%d updated with latest content', 'ccp' )
+												.replace( '%d', updated.toString() ) );
+										}
 										return parts.join( ', ' );
 									} )() }
 								</Text>
 							) }
 							{ importResults.failed > 0 && (
 								<Text style={ { color: '#d63638' } }>
-									Failed imports: { importResults.failed }
+									{ /* translators: %d is the number of failed imports */
+									__( 'Failed imports: %d', 'ccp' ).replace( '%d', importResults.failed.toString() ) }
 								</Text>
 							) }
 
@@ -575,20 +563,22 @@ export const actions: Action< Post >[] = [
 	 */
 	{
 		id: 'update',
-		label: 'Update Post',
+		label: __( 'Update Post', 'ccp' ),
 		icon: update,
 		hideModalHeader: false,
 		supportsBulk: true,
 		RenderModal: ( { items, closeModal } ) => {
 			return (
 				<VStack spacing="5">
-					<Text>{ `Are you sure you want to update "${ items[ 0 ].title }"?` }</Text>
+					<Text>{ /* translators: %s is the post title */
+						__( 'Are you sure you want to update "%s"?', 'ccp' ).replace( '%s', items[ 0 ].title ) }
+					</Text>
 					<HStack justify="right">
 						<Button __next40pxDefaultSize variant="tertiary" onClick={ closeModal }>
-							Cancel
+							{ __( 'Cancel', 'ccp' ) }
 						</Button>
 						<Button __next40pxDefaultSize variant="primary" onClick={ closeModal }>
-							Update Post
+							{ __( 'Update Post', 'ccp' ) }
 						</Button>
 					</HStack>
 				</VStack>
@@ -603,7 +593,7 @@ export const actions: Action< Post >[] = [
 	 */
 	{
 		id: 'post-diff',
-		label: 'Post Diff',
+		label: __( 'Post Diff', 'ccp' ),
 		icon: drafts,
 		hideModalHeader: false,
 		supportsBulk: false,

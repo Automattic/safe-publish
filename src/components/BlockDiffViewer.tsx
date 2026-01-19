@@ -89,12 +89,12 @@ function normalizeHtml( html: string ): string {
 export default function BlockDiffViewer( { blocks = [], highlight = true }: Props ): JSX.Element {
     return (
         <div className="ccp-block-diff-viewer">
-            { blocks.map( b => {
-                let status = b.status;
-                const key = `${ b.index }-${ b.status }`;
-                const title = b.incoming?.name || b.current?.name || 'unknown';
-                const currentHtml = b.current?.rendered || '';
-                const incomingHtml = b.incoming?.rendered || '';
+            { blocks.map( block => {
+                let status = block.status;
+                const key = `${ block.index }-${ block.status }`;
+                const title = block.incoming?.name || block.current?.name || 'unknown';
+                const currentHtml = block.current?.rendered || '';
+                const incomingHtml = block.incoming?.rendered || '';
 
                 // Client-side recheck to avoid false modified flags (whitespace/attr noise).
                 if ( status === 'modified' ) {
@@ -116,7 +116,7 @@ export default function BlockDiffViewer( { blocks = [], highlight = true }: Prop
                             <Text>
                                 { title || 'Block' }{' '}
                                 <span className={ `ccp-badge ccp-${ status }` }>{ status }</span>
-                                { hasImage && b.status === 'modified' && status !== 'unchanged' && (
+                                { hasImage && block.status === 'modified' && status !== 'unchanged' && (
                                     <span className="ccp-badge" style={ { background: '#6b7280', color: '#fff' } }>
                                         image (no inline diff)
                                     </span>

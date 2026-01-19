@@ -7,11 +7,12 @@
  * @file This file defines the AdminTools component for the CCP plugin.
  */
 import { PostTypeSelector } from './post-type-selector';
+import { getErrorMessage } from './utils';
 import { Button, Notice, Spinner } from '@wordpress/components';
 import { useState, createInterpolateElement } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
-import type { Post } from './types';
+import type { Post, ApiResponse, ConnectionTestData } from './types';
 import type { ReactNode } from 'react';
 
 /**
@@ -107,10 +108,10 @@ export function AdminTools( {
 	 * @param {Record<string, string|number>} data   Additional request data.
 	 * @return {Promise<any>} JSON response from the server.
 	 */
-	const makeRequest = async (
+	const makeRequest = async <T = unknown>(
 		action: string,
 		data: Record< string, string | number > = {}
-	): Promise< any > => {
+	): Promise< ApiResponse<T> > => {
 		const formData = new FormData();
 		formData.append( 'action', action );
 		formData.append( 'nonce', window.ccpAdminData.nonce );
@@ -124,7 +125,7 @@ export function AdminTools( {
 			body: formData,
 		} );
 
-		return response.json();
+		return response.json() as Promise<ApiResponse<T>>;
 	};
 
 	/**
@@ -156,7 +157,7 @@ export function AdminTools( {
 		setTestResult( null );
 
 		try {
-			const response = await makeRequest( 'ccp_test_connection', {
+			const response = await makeRequest<ConnectionTestData>( 'ccp_test_connection', {
 				site_url: siteUrl,
 			} );
 
@@ -172,7 +173,7 @@ export function AdminTools( {
 			} else {
 				setTestResult( {
 					success: false,
-					message: response.data?.message || __( 'Connection test failed.', 'ccp' ),
+					message: getErrorMessage( response, __( 'Connection test failed.', 'ccp' ) ),
 				} );
 			}
 		} catch ( error ) {
@@ -214,7 +215,7 @@ export function AdminTools( {
 		setPreviewResult( null );
 
 		try {
-			const response = await makeRequest( 'ccp_fetch_posts', {
+			const response = await makeRequest<Post[]>( 'ccp_fetch_posts', {
 				site_url: siteUrl,
 				number_of_posts: numberPosts,
 				post_type: selectedPostType,

@@ -11,12 +11,26 @@ import { createRoot } from 'react-dom/client';
 import { actions } from './actions';
 import { AdminTools } from './admin-tools';
 import { LAYOUT_GRID, LAYOUT_LIST, LAYOUT_TABLE } from './constants';
-import { sanitizePosts, searchPosts, sortPosts, paginatePosts, getPaginationInfo, extractUrlPath } from './utils';
+import {
+	extractUrlPath,
+	getErrorMessage,
+	getPaginationInfo,
+	paginatePosts,
+	sanitizePosts,
+	searchPosts,
+	sortPosts,
+} from './utils';
 import { DataViews, View } from '@wordpress/dataviews';
 import { useState, useEffect } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
-import type { Post, ExternalPostsDataViewProps, DataViewsField, PaginationInfo } from './types';
+import type {
+	ApiResponse,
+	DataViewsField,
+	ExternalPostsDataViewProps,
+	PaginationInfo,
+	Post,
+} from './types';
 
 import './style.scss';
 
@@ -144,7 +158,7 @@ function ExternalPostsDataView( { posts }: ExternalPostsDataViewProps ): JSX.Ele
 	}, [] ); // Only run on mount.
 
 	// If we have no data, show a message.
-	if ( filteredData.length === 0 && posts.length === 0 ) {
+	if ( 0 === filteredData.length && 0 === posts.length ) {
 		return (
 			<div className="ccp-no-data">
 				<p>{ __( 'No posts available to display.', 'ccp' ) }</p>
@@ -191,7 +205,7 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 		}
 
 		// Show loading.
-		dataviewContainer.innerHTML = '<div class="ccp-loading"><p>Loading posts...</p></div>';
+		dataviewContainer.innerHTML = `<div class="ccp-loading"><p>${ __( 'Loading posts…', 'ccp' ) }</p></div>`;
 
 		// Make request to fetch posts with selected post type.
 		const formData = new FormData();
@@ -206,26 +220,26 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 			body: formData,
 		} )
 			.then( response => response.json() )
-			.then( result => {
-				if ( result.success && result.data ) {
+			.then( ( result: ApiResponse<Post[]> ) => {
+				if ( result.success ) {
 					const posts = sanitizePosts( result.data );
-					if ( posts.length === 0 ) {
+					if ( 0 === posts.length ) {
 						dataviewContainer.innerHTML =
-							'<p class="ccp-no-posts">No posts available for the selected post type.</p>';
+							`<p class="ccp-no-posts">${ __( 'No posts available for the selected post type.', 'ccp' ) }</p>`;
 					} else {
 						dataviewContainer.innerHTML = '';
 						createRoot( dataviewContainer ).render( <ExternalPostsDataView posts={ posts } /> );
 					}
 				} else {
+					const errorMessage = getErrorMessage( result, __( 'Unknown error', 'ccp' ) );
 					dataviewContainer.innerHTML =
-						'<p class="ccp-error-message">Failed to load posts: ' +
-						( result.data || 'Unknown error' ) +
-						'</p>';
+						/* translators: %s is the error message */
+						`<p class="ccp-error-message">${ __( 'Failed to load posts: %s', 'ccp' ).replace( '%s', errorMessage ) }</p>`;
 				}
 			} )
 			.catch( () => {
 				dataviewContainer.innerHTML =
-					'<p class="ccp-error-message">Network error while loading posts.</p>';
+					`<p class="ccp-error-message">${ __( 'Network error while loading posts.', 'ccp' ) }</p>`;
 			} );
 	}
 
@@ -261,13 +275,13 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 			posts = sanitizePosts( rawPosts );
 		}
 	} catch ( error ) {
-		dataviewContainer.innerHTML = `<p class="ccp-error-message">Failed to load posts data.</p>`;
+		dataviewContainer.innerHTML = `<p class="ccp-error-message">${ __( 'Failed to load posts data.', 'ccp' ) }</p>`;
 		return;
 	}
 
 	// If no posts, show the message from PHP and exit.
-	if ( posts.length === 0 ) {
-		dataviewContainer.innerHTML = `<p class="ccp-no-posts">No posts available to display.</p>`;
+	if ( 0 === posts.length ) {
+		dataviewContainer.innerHTML = `<p class="ccp-no-posts">${ __( 'No posts available to display.', 'ccp' ) }</p>`;
 		return;
 	}
 
