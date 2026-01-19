@@ -102,6 +102,8 @@ define( 'SCRIPT_DEBUG', true );
 tail -f wp-content/debug.log
 ```
 
+**VSCode users:** You can rename `.vscode/launch.json.example` to `.vscode/launch.json` to enable Xdebug debugging in the editor.
+
 ### Database Access
 
 Access the MySQL database:
