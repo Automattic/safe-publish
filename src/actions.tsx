@@ -207,7 +207,7 @@ export const actions: Action< Post >[] = [
 
 					// Validate edit URL before redirecting.
 					if ( ! data.edit_url || typeof data.edit_url !== 'string' ) {
-					setError( __( 'Invalid response: missing edit URL', 'ccp' ) );
+						setError( __( 'Invalid response: missing edit URL', 'ccp' ) );
 						return;
 					}
 
@@ -246,7 +246,7 @@ export const actions: Action< Post >[] = [
 						<Text style={ { fontWeight: 'bold' } }>{ __( 'Post Already Exists', 'ccp' ) }</Text>
 						<Text>{ confirmData.message }</Text>
 						<Text style={ { fontSize: '0.9em', color: '#666' } }>
-						{ __( 'Updating will fetch the latest content from the external site and replace the current content.', 'ccp' ) }
+							{ __( 'Updating will fetch the latest content from the external site and replace the current content.', 'ccp' ) }
 						</Text>
 						{ error && <Text style={ { color: '#d63638' } }>{ error }</Text> }
 						<HStack justify="right">
@@ -496,7 +496,7 @@ export const actions: Action< Post >[] = [
 								{ importResults.results.map( ( result, index ) => {
 									let status;
 									if ( ! result.success ) {
-									status = __( 'Failed', 'ccp' );
+										status = __( 'Failed', 'ccp' );
 									} else if ( result.existing ) {
 										status = __( 'Updated', 'ccp' );
 									} else {
