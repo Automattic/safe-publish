@@ -115,7 +115,7 @@ export default function BlockDiffViewer( { blocks = [], highlight = true }: Prop
                     <div key={ key } className={ `ccp-block-diff ccp-block-${ status }` }>
                         <div className="ccp-block-diff__header">
                             <Text>
-                                { title || __( 'Block', 'ccp' ) }{ ' ' }
+                                { title || __( 'Block', 'ccp' ) }
                                 <span className={ `ccp-badge ccp-${ status }` }>{ status }</span>
                                 { hasImage && block.status === 'modified' && status !== 'unchanged' && (
                                     <span className="ccp-badge" style={ { background: '#6b7280', color: '#fff' } }>
