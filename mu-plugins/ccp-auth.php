@@ -1511,7 +1511,7 @@ function ccp_vip_dashboard_widget_content(): void {
 	// Authentication Status.
 	if ( empty( $shared_secret ) ) {
 		echo '<p><span style="color: #d63638;">❌</span> <strong>' . esc_html__( 'Not Configured', 'ccp' ) . '</strong></p>';
-		echo '<p>' . esc_html__( 'Set the CCP_SHARED_SECRET environment variable in VIP dashboard.', 'ccp' ) . '</p>';
+		echo '<p>' . esc_html__( 'Set the <code>CCP_SHARED_SECRET</code> environment variable in VIP dashboard.', 'ccp' ) . '</p>';
 		echo '<p><a href="https://dashboard.wpvip.com/" target="_blank">' . esc_html__( 'Open VIP Dashboard →', 'ccp' ) . '</a></p>';
 	} elseif ( $secret_length < 32 ) {
 		echo '<p><span style="color: #dba617;">⚠️</span> <strong>' . esc_html__( 'Secret Too Short', 'ccp' ) . '</strong></p>';
