@@ -229,7 +229,7 @@ final class Admin_Page {
 					if ( defined( 'WP_DEBUG' ) && constant( 'WP_DEBUG' ) ) {
 						echo '<div class="notice notice-error"><p>';
 						echo '<strong>' . esc_html__( 'Compliant Content Publisher:', 'ccp' ) . '</strong> ';
-						echo esc_html__( 'Build assets are missing.', 'ccp' ) . ' ';
+						echo esc_html__( 'Build assets are missing. ', 'ccp' );
 						/* translators: npm run build is a command and should not be translated */
 						echo esc_html__( 'Run <code>npm run build</code> and commit the build files for VIP deployment.', 'ccp' );
 						echo '</p></div>';

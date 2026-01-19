@@ -1645,7 +1645,7 @@ function ccp_vip_dashboard_widget_content(): void {
 	echo '<li>' . esc_html__( 'VIP Error Log:', 'ccp' ) . ' <code>/tmp/error_log</code></li>';
 	echo '<li>' . esc_html__( 'WordPress Debug Log:', 'ccp' ) . ' <code>/wp-content/debug.log</code></li>';
 	echo '<li>' . esc_html__( 'Database Events:', 'ccp' ) . ' <code>wp_options.ccp_auth_log_events</code></li>';
-	echo '<li>' . esc_html__( 'New Relic:', 'ccp' ) . ' ' . esc_html__( 'Custom Events → CCP_Auth_Event', 'ccp' ) . '</li>';
+	echo '<li>' . esc_html__( 'New Relic:', 'ccp' ) . ' <code>Custom Events → CCP_Auth_Event</code></li>';
 	echo '</ul>';
 
 	echo '</div>';
