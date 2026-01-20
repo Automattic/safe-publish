@@ -28,7 +28,7 @@ Compliant Content Publisher is ideal for:
 
 ## Requirements
 
-- **PHP**: 8.1 or higher
+- **PHP**: 8.2 or higher
 - **WordPress**: 6.7 or higher
 - **HTTPS**: Required for secure communication between sites
 - Administrator privileges on both source and destination sites

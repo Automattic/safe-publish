@@ -120,7 +120,7 @@ The test suite provides comprehensive coverage for:
 ## Test Requirements
 
 ### PHP Requirements
-- PHP 8.1 or higher
+- PHP 8.2 or higher
 - PHPUnit 9.x
 - Required PHP extensions:
   - json
