@@ -181,7 +181,7 @@ final class Import_History {
 			<!-- React component will be rendered here -->
 			<div id="ccp-import-history-container">
 				<div class="ccp-loading">
-					<p><?php esc_html_e( 'Loading import history...', 'ccp' ); ?></p>
+					<p><?php esc_html_e( 'Loading import history…', 'ccp' ); ?></p>
 				</div>
 			</div>
 		</div>
@@ -331,7 +331,7 @@ final class Import_History {
 		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( 'Insufficient permissions' );
+			wp_send_json_error( __( 'Insufficient permissions', 'ccp' ) );
 		}
 
 		$sessions = get_posts(
@@ -388,19 +388,19 @@ final class Import_History {
 		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( 'Insufficient permissions' );
+			wp_send_json_error( __( 'Insufficient permissions', 'ccp' ) );
 		}
 
 		$session_id = absint( $_POST['session_id'] ?? 0 );
 
 		if ( ! $session_id ) {
-			wp_send_json_error( 'Invalid session ID' );
+			wp_send_json_error( __( 'Invalid session ID', 'ccp' ) );
 		}
 
 		$session = get_post( $session_id );
 
 		if ( ! $session || self::SESSION_POST_TYPE !== $session->post_type ) {
-			wp_send_json_error( 'Session not found' );
+			wp_send_json_error( __( 'Session not found', 'ccp' ) );
 		}
 
 		// Get session data.
@@ -515,19 +515,19 @@ final class Import_History {
 		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( 'Insufficient permissions' );
+			wp_send_json_error( __( 'Insufficient permissions', 'ccp' ) );
 		}
 
 		$session_id = absint( $_POST['session_id'] ?? 0 );
 
 		if ( ! $session_id ) {
-			wp_send_json_error( 'Invalid session ID' );
+			wp_send_json_error( __( 'Invalid session ID', 'ccp' ) );
 		}
 
 		$session = get_post( $session_id );
 
 		if ( ! $session || self::SESSION_POST_TYPE !== $session->post_type ) {
-			wp_send_json_error( 'Session not found' );
+			wp_send_json_error( __( 'Session not found', 'ccp' ) );
 		}
 
 		// Get all successful imports from this session.
@@ -643,19 +643,19 @@ final class Import_History {
 		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( 'Insufficient permissions' );
+			wp_send_json_error( __( 'Insufficient permissions', 'ccp' ) );
 		}
 
 		$log_id = absint( $_POST['log_id'] ?? 0 );
 
 		if ( ! $log_id ) {
-			wp_send_json_error( 'Invalid log ID' );
+			wp_send_json_error( __( 'Invalid log ID', 'ccp' ) );
 		}
 
 		$log = get_post( $log_id );
 
 		if ( ! $log || self::LOG_POST_TYPE !== $log->post_type ) {
-			wp_send_json_error( 'Import log not found' );
+			wp_send_json_error( __( 'Import log not found', 'ccp' ) );
 		}
 
 		$post_id = get_post_meta( $log_id, 'post_id', true );
@@ -663,13 +663,13 @@ final class Import_History {
 		$changes = get_post_meta( $log_id, 'content_changes', true );
 
 		if ( ! $post_id ) {
-			wp_send_json_error( 'No post ID found for this log entry' );
+			wp_send_json_error( __( 'No post ID found for this log entry', 'ccp' ) );
 		}
 
 		// Check if the post still exists.
 		$post = get_post( $post_id );
 		if ( ! $post ) {
-			wp_send_json_error( 'The post no longer exists' );
+			wp_send_json_error( __( 'The post no longer exists', 'ccp' ) );
 		}
 
 		$result = array(
@@ -682,9 +682,9 @@ final class Import_History {
 			// This was a newly created post - delete it.
 			if ( wp_delete_post( $post_id, true ) ) {
 				$result['action']  = 'deleted';
-				$result['message'] = 'Post successfully deleted';
+				$result['message'] = __( 'Post successfully deleted', 'ccp' );
 			} else {
-				wp_send_json_error( 'Failed to delete the post' );
+				wp_send_json_error( __( 'Failed to delete the post', 'ccp' ) );
 			}
 		} elseif ( 'updated' === $status && ! empty( $changes ) && isset( $changes['previous_content'] ) ) {
 			// This was an updated post - restore previous content.
@@ -711,7 +711,7 @@ final class Import_History {
 			$updated = wp_update_post( $restore_data, true );
 
 			if ( is_wp_error( $updated ) ) {
-				wp_send_json_error( 'Failed to restore post: ' . $updated->get_error_message() );
+				wp_send_json_error( __( 'Failed to restore post: ', 'ccp' ) . $updated->get_error_message() );
 			}
 
 			// Restore previous meta data if available.
@@ -731,17 +731,17 @@ final class Import_History {
 			}
 
 			$result['action']  = 'restored';
-			$result['message'] = 'Post successfully restored to previous version';
+			$result['message'] = __( 'Post successfully restored to previous version', 'ccp' );
 		} elseif ( 'updated' === $status ) {
 			// Updated post but no previous content stored - delete it.
 			if ( wp_delete_post( $post_id, true ) ) {
 				$result['action']  = 'deleted';
-				$result['message'] = 'Post deleted (no previous content available for restoration)';
+				$result['message'] = __( 'Post deleted (no previous content available for restoration)', 'ccp' );
 			} else {
-				wp_send_json_error( 'Failed to delete the post' );
+				wp_send_json_error( __( 'Failed to delete the post', 'ccp' ) );
 			}
 		} else {
-			wp_send_json_error( 'Cannot rollback this item: unsupported status' );
+			wp_send_json_error( __( 'Cannot rollback this item: unsupported status', 'ccp' ) );
 		}
 
 		// Mark this specific log entry as rolled back.
@@ -759,19 +759,19 @@ final class Import_History {
 		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( 'Insufficient permissions' );
+			wp_send_json_error( __( 'Insufficient permissions', 'ccp' ) );
 		}
 
 		$post_id = absint( $_POST['post_id'] ?? 0 );
 
 		if ( ! $post_id ) {
-			wp_send_json_error( 'Invalid post ID' );
+			wp_send_json_error( __( 'Invalid post ID', 'ccp' ) );
 		}
 
 		$post = get_post( $post_id );
 
 		if ( ! $post ) {
-			wp_send_json_error( 'Post not found' );
+			wp_send_json_error( __( 'Post not found', 'ccp' ) );
 		}
 
 		// Find the import log entry for this post to get the previous content.
@@ -789,7 +789,7 @@ final class Import_History {
 		);
 
 		if ( ! $log_query->have_posts() ) {
-			wp_send_json_error( 'No import history found for this post' );
+			wp_send_json_error( __( 'No import history found for this post', 'ccp' ) );
 		}
 
 		$log_post = $log_query->posts[0];
@@ -923,19 +923,19 @@ final class Import_History {
 		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( 'Insufficient permissions' );
+			wp_send_json_error( __( 'Insufficient permissions', 'ccp' ) );
 		}
 
 		$session_id = absint( $_POST['session_id'] ?? 0 );
 
 		if ( ! $session_id ) {
-			wp_send_json_error( 'Invalid session ID' );
+			wp_send_json_error( __( 'Invalid session ID', 'ccp' ) );
 		}
 
 		$session = get_post( $session_id );
 
 		if ( ! $session || self::SESSION_POST_TYPE !== $session->post_type ) {
-			wp_send_json_error( 'Session not found' );
+			wp_send_json_error( __( 'Session not found', 'ccp' ) );
 		}
 
 		// Get all logs associated with this session.
@@ -964,7 +964,7 @@ final class Import_History {
 			wp_send_json_success(
 				array(
 					'message'      => sprintf(
-						/* translators: %d: number of log entries removed */
+						/* translators: %d: number of associated log entries that were removed */
 						__( 'Session deleted successfully. %d associated log entries were also removed.', 'ccp' ),
 						$deleted_logs_count
 					),
@@ -972,7 +972,7 @@ final class Import_History {
 				)
 			);
 		} else {
-			wp_send_json_error( 'Failed to delete session' );
+			wp_send_json_error( __( 'Failed to delete session', 'ccp' ) );
 		}
 	}
 }

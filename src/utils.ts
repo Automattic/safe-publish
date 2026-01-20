@@ -24,7 +24,7 @@ import type { Post, JsonValue } from './types';
  */
 export function getErrorMessage(
 	response: { success: false; data?: JsonValue; error?: string },
-	fallback: string = 'An unknown error occurred'
+	fallback: string = __( 'An unknown error occurred', 'ccp' )
 ): string {
 	if ( typeof response.error === 'string' && response.error ) {
 		return response.error;

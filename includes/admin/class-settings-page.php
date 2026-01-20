@@ -61,7 +61,7 @@ final class Settings_Page {
 										name="ccp_external_site_url"
 										value="<?php echo esc_attr( $site_url ); ?>"
 										class="regular-text"
-										placeholder="https://example.com"
+										placeholder="<?php echo esc_attr__( 'https://example.com', 'ccp' ); ?>"
 									/>
 									<p class="description">
 										<?php esc_html_e( 'Enter the URL of the non-prod WordPress site to fetch posts from.', 'ccp' ); ?>
@@ -112,7 +112,7 @@ final class Settings_Page {
 										name="ccp_shared_secret"
 										value="<?php echo esc_attr( $shared_secret ); ?>"
 										class="regular-text"
-										placeholder="Enter a secure shared secret (32+ characters)"
+										placeholder="<?php echo esc_attr__( 'Enter a secure shared secret (32+ characters)', 'ccp' ); ?>"
 										autocomplete="new-password"
 									/>
 									<p class="description">
@@ -135,7 +135,7 @@ final class Settings_Page {
 										name="ccp_username"
 										value="<?php echo esc_attr( $username ); ?>"
 										class="regular-text"
-										placeholder="Username for Basic authentication"
+										placeholder="<?php echo esc_attr__( 'Username for Basic authentication', 'ccp' ); ?>"
 										autocomplete="username"
 									/>
 									<p class="description">
@@ -157,7 +157,7 @@ final class Settings_Page {
 										name="ccp_password"
 										value="<?php echo esc_attr( $password ); ?>"
 										class="regular-text"
-										placeholder="Password for Basic authentication"
+										placeholder="<?php echo esc_attr__( 'Password for Basic authentication', 'ccp' ); ?>"
 										autocomplete="current-password"
 									/>
 									<p class="description">

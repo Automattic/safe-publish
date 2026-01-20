@@ -148,12 +148,12 @@ final class VIP_Safe_Auth {
 	 */
 	public static function test_authorization( $site_url, $auth_config = array() ): bool|WP_Error {
 		if ( empty( $site_url ) ) {
-			return new WP_Error( 'invalid_url', 'Site URL is required for authorization testing' );
+			return new WP_Error( 'invalid_url', __( 'Site URL is required for authorization testing', 'ccp' ) );
 		}
 
 		// First check if we have valid credentials format.
 		if ( ! self::is_authorized( $site_url, $auth_config ) ) {
-			return new WP_Error( 'invalid_credentials', 'Invalid or missing authentication credentials' );
+			return new WP_Error( 'invalid_credentials', __( 'Invalid or missing authentication credentials', 'ccp' ) );
 		}
 
 		// Make a lightweight test request to verify credentials work.
@@ -186,7 +186,7 @@ final class VIP_Safe_Auth {
 		}
 
 		if ( is_wp_error( $response ) ) {
-			return new WP_Error( 'request_failed', 'Authorization test request failed: ' . $response->get_error_message() );
+			return new WP_Error( 'request_failed', __( 'Authorization test request failed: ', 'ccp' ) . $response->get_error_message() );
 		}
 
 		$response_code = wp_remote_retrieve_response_code( $response );
@@ -194,7 +194,15 @@ final class VIP_Safe_Auth {
 		// Check for authentication-related errors.
 		if ( in_array( $response_code, array( 401, 403 ), true ) ) {
 			$response_body = wp_remote_retrieve_body( $response );
-			return new WP_Error( 'auth_failed', 'Authentication failed with HTTP ' . $response_code . ': ' . $response_body );
+			return new WP_Error(
+				'auth_failed',
+				sprintf(
+					/* translators: 1: HTTP response code, 2: response body message */
+					__( 'Authentication failed with HTTP %1$d: %2$s', 'ccp' ),
+					$response_code,
+					$response_body
+				)
+			);
 		}
 
 		// If we get a successful response (200) or even a 404 (endpoint exists but not found),
@@ -204,7 +212,14 @@ final class VIP_Safe_Auth {
 		}
 
 		// Other error codes might indicate server issues rather than auth issues.
-		return new WP_Error( 'unexpected_response', 'Unexpected response code: ' . $response_code );
+		return new WP_Error(
+			'unexpected_response',
+			sprintf(
+				/* translators: %d: HTTP response code */
+				__( 'Unexpected response code: %d', 'ccp' ),
+				$response_code
+			)
+		);
 	}
 
 	/**

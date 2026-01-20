@@ -308,7 +308,7 @@ final class CCP_API extends REST_Base {
 		);
 
 		if ( ! $_query->have_posts() ) {
-			return new WP_REST_Response( array( 'error' => 'No matching post found in current site.' ), 404 );
+			return new WP_REST_Response( array( 'error' => __( 'No matching post found in current site.', 'ccp' ) ), 404 );
 		}
 
 		$local_post = $_query->posts[0];
@@ -328,7 +328,7 @@ final class CCP_API extends REST_Base {
 		$response = $this->make_request( $external_api_url, $this->get_auth_credentials() );
 
 		if ( is_wp_error( $response ) ) {
-			return new WP_REST_Response( array( 'error' => 'Failed to fetch external post.' ), 500 );
+			return new WP_REST_Response( array( 'error' => __( 'Failed to fetch external post.', 'ccp' ) ), 500 );
 		}
 
 		$body = wp_remote_retrieve_body( $response );

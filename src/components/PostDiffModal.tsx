@@ -183,13 +183,13 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 			{ isLoading && (
 				<HStack>
 					<Spinner />
-					<Text>Loading diff...</Text>
+					<Text>{ __( 'Loading diff…', 'ccp' ) }</Text>
 				</HStack>
 			) }
 
 			{ error && <Text style={ { color: '#d63638' } }>{ error }</Text> }
 
-			<Text as="h2">Content Diff</Text>
+			<Text as="h2">{ __( 'Content Diff', 'ccp' ) }</Text>
 
 			{ /* Content-only diff */ }
 			<HStack style={ { gap: 8, marginTop: 12 } }>
@@ -198,7 +198,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 					onClick={ () => setShowBlockView( true ) }
 					size="small"
 				>
-					Block View
+					{ __( 'Block View', 'ccp' ) }
 				</Button>
 				{ renderedDiffHtml && (
 					<Button
@@ -209,7 +209,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 						} }
 						size="small"
 					>
-						Rendered Table Diff
+						{ __( 'Rendered Table Diff', 'ccp' ) }
 					</Button>
 				) }
 				{ diffHtml && (
@@ -221,7 +221,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 						} }
 						size="small"
 					>
-						Source Diff
+						{ __( 'Source Diff', 'ccp' ) }
 					</Button>
 				) }
 			</HStack>
@@ -263,14 +263,14 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 			{ /* Title + excerpt diff shown separately (not part of content diff) */ }
 			{ nonContentDiffs?.title && (
 				<section style={ { marginTop: 12 } }>
-					<Text as="h2">Title Diff</Text>
+					<Text as="h2">{ __( 'Title Diff', 'ccp' ) }</Text>
 					<div dangerouslySetInnerHTML={ { __html: nonContentDiffs.title } } />
 				</section>
 			) }
 
 			{ nonContentDiffs?.excerpt && (
 				<section style={ { marginTop: 12 } }>
-					<Text as="h2">Excerpt Diff</Text>
+					<Text as="h2">{ __( 'Excerpt Diff', 'ccp' ) }</Text>
 					<div dangerouslySetInnerHTML={ { __html: nonContentDiffs.excerpt } } />
 				</section>
 			) }
@@ -278,7 +278,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 			{ /* Taxonomies diff */ }
 			{ nonContentDiffs?.taxonomies && (
 				<section style={ { marginTop: 12 } }>
-					<Text as="h2">Taxonomies Diff</Text>
+					<Text as="h2">{ __( 'Taxonomies Diff', 'ccp' ) }</Text>
 					<div dangerouslySetInnerHTML={ { __html: nonContentDiffs.taxonomies } } />
 				</section>
 			) }
@@ -286,7 +286,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 			{ /* Meta diff */ }
 			{ nonContentDiffs?.meta && (
 				<section style={ { marginTop: 12 } }>
-					<Text as="h2">Meta / Custom Fields Diff</Text>
+					<Text as="h2">{ __( 'Meta / Custom Fields Diff', 'ccp' ) }</Text>
 					<div dangerouslySetInnerHTML={ { __html: nonContentDiffs.meta } } />
 				</section>
 			) }
@@ -294,41 +294,41 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 			{ /* Featured image diff */ }
 			{ nonContentDiffs?.featuredMedia && (
 				<section style={ { marginTop: 12 } }>
-					<Text as="h2">Featured Image Diff</Text>
+					<Text as="h2">{ __( 'Featured Image Diff', 'ccp' ) }</Text>
 					<div dangerouslySetInnerHTML={ { __html: nonContentDiffs.featuredMedia } } />
 				</section>
 			) }
 
 			<section style={ { marginTop: 16, borderTop: '1px solid #eee', paddingTop: 12 } }>
-                <Text as="h2">What to update</Text>
+                <Text as="h2">{ __( 'What to update', 'ccp' ) }</Text>
                 <VStack spacing="2" style={ { marginTop: 6 } }>
                     <CheckboxControl
-                        label="Title"
+                        label={ __( 'Title', 'ccp' ) }
                         checked={ updateOpts.title }
                         onChange={ ( val ) => setUpdateOpts( prev => ( { ...prev, title: Boolean(val) } ) ) }
                     />
                     <CheckboxControl
-                        label="Excerpt"
+                        label={ __( 'Excerpt', 'ccp' ) }
                         checked={ updateOpts.excerpt }
                         onChange={ ( val ) => setUpdateOpts( prev => ( { ...prev, excerpt: Boolean(val) } ) ) }
                     />
                     <CheckboxControl
-                        label="Meta (custom fields)"
+                        label={ __( 'Meta (custom fields)', 'ccp' ) }
                         checked={ updateOpts.meta }
                         onChange={ ( val ) => setUpdateOpts( prev => ( { ...prev, meta: Boolean(val) } ) ) }
                     />
                     <CheckboxControl
-                        label="Terms (taxonomies)"
+                        label={ __( 'Terms (taxonomies)', 'ccp' ) }
                         checked={ updateOpts.terms }
                         onChange={ ( val ) => setUpdateOpts( prev => ( { ...prev, terms: Boolean(val) } ) ) }
                     />
                     <CheckboxControl
-                        label="Featured Image"
+                        label={ __( 'Featured Image', 'ccp' ) }
                         checked={ updateOpts.featuredMedia }
                         onChange={ ( val ) => setUpdateOpts( prev => ( { ...prev, featuredMedia: Boolean(val) } ) ) }
                     />
                     <Text style={ { fontSize: 12, color: '#666' } }>
-                        Content is always updated. Uncheck items above to skip updating them.
+                        { __( 'Content is always updated. Uncheck items above to skip updating them.', 'ccp' ) }
                     </Text>
                 </VStack>
             </section>
@@ -344,7 +344,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 						disabled={ isUpdating || isLoading }
 						style={ { marginLeft: 8 } }
 					>
-						{ isUpdating ? <Spinner /> : 'Update Post' }
+						{ isUpdating ? <Spinner /> : __( 'Update Post', 'ccp' ) }
 					</Button>
 				) }
 				<Button
@@ -353,7 +353,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 					onClick={ closeModal }
 					disabled={ isUpdating }
 				>
-					Close
+					{ __( 'Close', 'ccp' ) }
 				</Button>
 			</HStack>
 		</VStack>
