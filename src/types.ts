@@ -242,14 +242,14 @@ export interface AdminData {
  * @property {boolean}  [enableHiding]       Whether the field can be hidden.
  * @property {Function} [sort]               Custom sort function.
  */
-export interface DataViewsField {
+export interface DataViewsField<T = Post> {
 	id: string;
 	label: string;
-	render?: ( args: { item: Post } ) => JSX.Element;
+	render?: ( args: { item: T } ) => JSX.Element;
 	enableSorting?: boolean;
 	enableGlobalSearch?: boolean;
 	enableHiding?: boolean;
-	sort?: ( a: Post, b: Post, direction: 'asc' | 'desc' ) => number;
+	sort?: ( a: T, b: T, direction: 'asc' | 'desc' ) => number;
 }
 
 /**

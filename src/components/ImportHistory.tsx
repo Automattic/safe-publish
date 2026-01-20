@@ -265,7 +265,7 @@ export function ImportHistory(): JSX.Element {
 	};
 
 	// DataViews fields configuration.
-	const fields: DataViewsField[] = [
+	const fields: DataViewsField<ImportSession>[] = [
 		{
 			id: 'date',
 			label: __( 'Date', 'ccp' ),

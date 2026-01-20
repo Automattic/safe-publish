@@ -75,7 +75,7 @@ function ExternalPostsDataView( { posts }: ExternalPostsDataViewProps ): JSX.Ele
 	} );
 
 	// Fields configuration for DataViews (simplified for debugging).
-	const fields: DataViewsField[] = [
+	const fields: DataViewsField<Post>[] = [
 		{
 			id: 'title',
 			label: __( 'Title', 'ccp' ),
