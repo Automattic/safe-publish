@@ -1510,20 +1510,28 @@ function ccp_vip_dashboard_widget_content(): void {
 
 	// Authentication Status.
 	if ( empty( $shared_secret ) ) {
-		echo '<p><span style="color: #d63638;">❌</span> <strong>Not Configured</strong></p>';
-		echo '<p>Set the <code>CCP_SHARED_SECRET</code> environment variable in VIP dashboard.</p>';
-		echo '<p><a href="https://dashboard.wpvip.com/" target="_blank">Open VIP Dashboard →</a></p>';
+		echo '<p><span style="color: #d63638;">❌</span> <strong>' . esc_html__( 'Not Configured', 'ccp' ) . '</strong></p>';
+		echo '<p>' . esc_html__( 'Set the <code>CCP_SHARED_SECRET</code> environment variable in VIP dashboard.', 'ccp' ) . '</p>';
+		echo '<p><a href="https://dashboard.wpvip.com/" target="_blank">' . esc_html__( 'Open VIP Dashboard →', 'ccp' ) . '</a></p>';
 	} elseif ( $secret_length < 32 ) {
-		echo '<p><span style="color: #dba617;">⚠️</span> <strong>Secret Too Short</strong></p>';
-		echo '<p>Current length: ' . absint( $secret_length ) . ' characters. Recommend 32+ for security.</p>';
+		echo '<p><span style="color: #dba617;">⚠️</span> <strong>' . esc_html__( 'Secret Too Short', 'ccp' ) . '</strong></p>';
+		echo '<p>' . sprintf(
+			/* translators: %d is the current secret length in characters */
+			esc_html__( 'Current length: %d characters. Recommend 32+ for security.', 'ccp' ),
+			absint( $secret_length )
+		) . '</p>';
 	} else {
-		echo '<p><span style="color: #00a32a;">✅</span> <strong>Properly Configured</strong></p>';
-		echo '<p><strong>✅ Secret length:</strong> ' . absint( $secret_length ) . ' characters</p>';
-		echo '<p><strong>✅ VIP 2FA Compliant:</strong> Uses capability-based authentication (no user creation)</p>';
-		echo '<p><strong>✅ Editing Permissions:</strong> Enabled for CCP authenticated requests</p>';
+		echo '<p><span style="color: #00a32a;">✅</span> <strong>' . esc_html__( 'Properly Configured', 'ccp' ) . '</strong></p>';
+		echo '<p><strong>✅ ' . esc_html__( 'Secret length:', 'ccp' ) . '</strong> ' . sprintf(
+			/* translators: %d is the secret length in characters */
+			esc_html__( '%d characters', 'ccp' ),
+			absint( $secret_length )
+		) . '</p>';
+		echo '<p><strong>✅ ' . esc_html__( 'VIP 2FA Compliant:', 'ccp' ) . '</strong> ' . esc_html__( 'Uses capability-based authentication (no user creation)', 'ccp' ) . '</p>';
+		echo '<p><strong>✅ ' . esc_html__( 'Editing Permissions:', 'ccp' ) . '</strong> ' . esc_html__( 'Enabled for CCP authenticated requests', 'ccp' ) . '</p>';
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			echo '<p><a href="/wp-json/ccp/v1/auth-test" target="_blank">Test Authentication →</a></p>';
+			echo '<p><a href="/wp-json/ccp/v1/auth-test" target="_blank">' . esc_html__( 'Test Authentication →', 'ccp' ) . '</a></p>';
 		}
 	}
 
@@ -1531,21 +1539,21 @@ function ccp_vip_dashboard_widget_content(): void {
 
 	// Authentication Statistics.
 	if ( ! empty( $stats ) ) {
-		echo '<h4 style="margin: 10px 0;">📊 Authentication Statistics</h4>';
+		echo '<h4 style="margin: 10px 0;">' . esc_html__( '📊 Authentication Statistics', 'ccp' ) . '</h4>';
 		echo '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">';
 
 		echo '<div>';
-		echo '<strong>Total Requests:</strong> ' . esc_html( $stats['total_requests'] ?? 0 );
-		echo '<br><strong>Successful:</strong> <span style="color: #00a32a;">' . esc_html( $stats['successful_auths'] ?? 0 ) . '</span>';
-		echo '<br><strong>Failed:</strong> <span style="color: #d63638;">' . esc_html( $stats['failed_auths'] ?? 0 ) . '</span>';
+		echo '<strong>' . esc_html__( 'Total Requests:', 'ccp' ) . '</strong> ' . esc_html( $stats['total_requests'] ?? 0 );
+		echo '<br><strong>' . esc_html__( 'Successful:', 'ccp' ) . '</strong> <span style="color: #00a32a;">' . esc_html( $stats['successful_auths'] ?? 0 ) . '</span>';
+		echo '<br><strong>' . esc_html__( 'Failed:', 'ccp' ) . '</strong> <span style="color: #d63638;">' . esc_html( $stats['failed_auths'] ?? 0 ) . '</span>';
 		echo '</div>';
 
 		echo '<div>';
 		if ( ! empty( $stats['last_success'] ) ) {
-			echo '<strong>Last Success:</strong><br><small>' . esc_html( $stats['last_success'] ) . '</small>';
+			echo '<strong>' . esc_html__( 'Last Success:', 'ccp' ) . '</strong><br><small>' . esc_html( $stats['last_success'] ) . '</small>';
 		}
 		if ( ! empty( $stats['last_failure'] ) ) {
-			echo '<br><strong>Last Failure:</strong><br><small style="color: #d63638;">' . esc_html( $stats['last_failure'] ) . '</small>';
+			echo '<br><strong>' . esc_html__( 'Last Failure:', 'ccp' ) . '</strong><br><small style="color: #d63638;">' . esc_html( $stats['last_failure'] ) . '</small>';
 		}
 		echo '</div>';
 
@@ -1556,14 +1564,14 @@ function ccp_vip_dashboard_widget_content(): void {
 		if ( $total > 0 ) {
 			$success_rate = round( ( ( $stats['successful_auths'] ?? 0 ) / $total ) * 100, 1 );
 			$color        = $success_rate >= 95 ? '#00a32a' : ( $success_rate >= 80 ? '#dba617' : '#d63638' );
-			echo '<p><strong>Success Rate:</strong> <span style="color: ' . esc_attr( $color ) . ';">' . esc_html( $success_rate ) . '%</span></p>';
+			echo '<p><strong>' . esc_html__( 'Success Rate:', 'ccp' ) . '</strong> <span style="color: ' . esc_attr( $color ) . ';">' . esc_html( $success_rate ) . '%</span></p>';
 		}
 	}
 
 	// Recent Events.
 	if ( ! empty( $recent_events ) ) {
 		echo '<hr style="margin: 15px 0;">';
-		echo '<h4 style="margin: 10px 0;">📋 Recent Authentication Events</h4>';
+		echo '<h4 style="margin: 10px 0;">' . esc_html__( '📋 Recent Authentication Events', 'ccp' ) . '</h4>';
 		echo '<div style="max-height: 200px; overflow-y: auto; font-size: 12px;">';
 
 		// Show last 10 events.
@@ -1613,38 +1621,38 @@ function ccp_vip_dashboard_widget_content(): void {
 
 	// Debug Information.
 	echo '<details style="margin-top: 10px;">';
-	echo '<summary style="cursor: pointer; font-weight: bold;">🔧 Debug Information</summary>';
+	echo '<summary style="cursor: pointer; font-weight: bold;">' . esc_html__( '🔧 Debug Information', 'ccp' ) . '</summary>';
 	echo '<div style="margin-top: 10px; font-size: 12px;">';
 
-	echo '<p><strong>Environment:</strong> ' . ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ? 'VIP Production' : 'Development/Staging' ) . '</p>';
-	echo '<p><strong>Debug Mode:</strong> ' . ( defined( 'WP_DEBUG' ) && WP_DEBUG ? 'Enabled' : 'Disabled' ) . '</p>';
-	echo '<p><strong>Secret Source:</strong> ';
+	echo '<p><strong>' . esc_html__( 'Environment:', 'ccp' ) . '</strong> ' . ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ? esc_html__( 'VIP Production', 'ccp' ) : esc_html__( 'Development/Staging', 'ccp' ) ) . '</p>';
+	echo '<p><strong>' . esc_html__( 'Debug Mode:', 'ccp' ) . '</strong> ' . ( defined( 'WP_DEBUG' ) && WP_DEBUG ? esc_html__( 'Enabled', 'ccp' ) : esc_html__( 'Disabled', 'ccp' ) ) . '</p>';
+	echo '<p><strong>' . esc_html__( 'Secret Source:', 'ccp' ) . '</strong> ';
 
 	if ( defined( 'CCP_SHARED_SECRET' ) && ! empty( CCP_SHARED_SECRET ) ) {
-		echo 'Environment Variable (CCP_SHARED_SECRET)';
+		echo esc_html__( 'Environment Variable (CCP_SHARED_SECRET)', 'ccp' );
 	} elseif ( ! empty( getenv( 'CCP_SHARED_SECRET' ) ) ) {
-		echo 'Environment Variable (getenv)';
+		echo esc_html__( 'Environment Variable (getenv)', 'ccp' );
 	} elseif ( ! empty( get_option( 'ccp_shared_secret' ) ) ) {
-		echo 'WordPress Option (ccp_shared_secret)';
+		echo esc_html__( 'WordPress Option (ccp_shared_secret)', 'ccp' );
 	} else {
-		echo 'Not configured';
+		echo esc_html__( 'Not configured', 'ccp' );
 	}
 	echo '</p>';
 
 	// Show log file locations.
-	echo '<p><strong>Log Locations:</strong></p>';
+	echo '<p><strong>' . esc_html__( 'Log Locations:', 'ccp' ) . '</strong></p>';
 	echo '<ul style="margin-left: 20px; font-size: 11px;">';
-	echo '<li>VIP Error Log: <code>/tmp/error_log</code></li>';
-	echo '<li>WordPress Debug Log: <code>/wp-content/debug.log</code></li>';
-	echo '<li>Database Events: <code>wp_options.ccp_auth_log_events</code></li>';
-	echo '<li>New Relic: Custom Events → CCP_Auth_Event</li>';
+	echo '<li>' . esc_html__( 'VIP Error Log:', 'ccp' ) . ' <code>/tmp/error_log</code></li>';
+	echo '<li>' . esc_html__( 'WordPress Debug Log:', 'ccp' ) . ' <code>/wp-content/debug.log</code></li>';
+	echo '<li>' . esc_html__( 'Database Events:', 'ccp' ) . ' <code>wp_options.ccp_auth_log_events</code></li>';
+	echo '<li>' . esc_html__( 'New Relic:', 'ccp' ) . ' Custom Events → CCP_Auth_Event</li>';
 	echo '</ul>';
 
 	echo '</div>';
 	echo '</details>';
 
 	echo '<hr style="margin: 15px 0;">';
-	echo '<p><small>MU-Plugin: CCP VIP Authentication Handler with Enhanced Logging v1.1.0</small></p>';
+	echo '<p><small>' . esc_html__( 'MU-Plugin: CCP VIP Authentication Handler with Enhanced Logging v1.1.0', 'ccp' ) . '</small></p>';
 	echo '</div>';
 }
 

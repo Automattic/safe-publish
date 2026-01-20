@@ -72,14 +72,15 @@ class External_Posts_API {
 		if ( is_array( $post_types_data ) && isset( $post_types_data['code'] ) ) {
 			return new \WP_Error(
 				'api_error',
-				$post_types_data['message'] ?? 'Unknown API error occurred.'
+				$post_types_data['message'] ?? __( 'Unknown API error occurred.', 'ccp' )
 			);
 		}
 
 		if ( empty( $post_types_data ) || ! is_array( $post_types_data ) ) {
 			$error_msg = sprintf(
-				'No post types found. Response: %s',
-				substr( $response_body, 0, 200 ) . ( strlen( $response_body ) > 200 ? '...' : '' )
+				/* translators: %s: Response body snippet */
+				__( 'No post types found. Response: %s', 'ccp' ),
+				substr( $response_body, 0, 200 ) . ( strlen( $response_body ) > 200 ? '…' : '' )
 			);
 			return new \WP_Error(
 				'no_post_types',
@@ -1132,8 +1133,6 @@ class External_Posts_API {
 	 * @param string $file                      Full path to the file.
 	 * @param string $filename                  File name (may differ from $file if in tmp dir).
 	 * @return array Modified file data.
-	 *
-	 * @psalm-suppress PossiblyUnusedParam Parameter $file is required by WordPress filter signature.
 	 */
 	public function handle_webp_filetype( array $wp_check_filetype_and_ext, string $file, string $filename ): array {
 		if ( ! $wp_check_filetype_and_ext['type'] && ! $wp_check_filetype_and_ext['ext'] ) {

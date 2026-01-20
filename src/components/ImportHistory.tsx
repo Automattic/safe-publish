@@ -22,7 +22,7 @@ import {
 } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
 import { useState, useEffect } from '@wordpress/element';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
 import type {
 	ApiResponse,
@@ -265,7 +265,7 @@ export function ImportHistory(): JSX.Element {
 	};
 
 	// DataViews fields configuration.
-	const fields: DataViewsField[] = [
+	const fields: DataViewsField<ImportSession>[] = [
 		{
 			id: 'date',
 			label: __( 'Date', 'ccp' ),
@@ -294,9 +294,14 @@ export function ImportHistory(): JSX.Element {
 			enableSorting: false,
 			render: ( { item }: { item: ImportSession } ): JSX.Element => (
 				<span>
-					{ item.total_items } total
-					({ item.successful } successful, { item.failed } failed
-					{ item.updated > 0 && `, ${ item.updated } updated` })
+					{ /* translators: %d is the total number of items */
+					__( '%d total', 'ccp' ).replace( '%d', item.total_items.toString() ) }
+					({ /* translators: 1: number of successful items, 2: number of failed items */
+					sprintf( __( '%1$d successful, %2$d failed', 'ccp' ), item.successful, item.failed ) }
+					{ item.updated > 0 && (
+						/* translators: %d is the number of updated items */
+						sprintf( __( ', %d updated', 'ccp' ), item.updated )
+					) })
 				</span>
 			),
 		},

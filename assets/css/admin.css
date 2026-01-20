@@ -150,6 +150,7 @@
 }
 
 @media (max-width: 782px) {
+
 	.ccp-admin-container {
 		grid-template-columns: 1fr;
 	}

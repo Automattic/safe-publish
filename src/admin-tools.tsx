@@ -163,7 +163,12 @@ export function AdminTools( {
 
 			if ( response.success ) {
 				const message = response.data.response_time
-					? `${ response.data.message } (Response time: ${ response.data.response_time }ms)`
+					? sprintf(
+						/* translators: 1: connection message, 2: response time in milliseconds */
+						__( '%1$s (Response time: %2$dms)', 'ccp' ),
+						response.data.message,
+						response.data.response_time
+					)
 					: response.data.message;
 
 				setTestResult( {
