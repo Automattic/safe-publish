@@ -16,7 +16,7 @@ To start a development environment with Xdebug enabled:
 npm run dev
 ```
 
-This will spin up two WordPress environments, build the block editor scripts, set the shared secrets, and watch for changes. 
+This will spin up two WordPress environments, build the block editor scripts, set the shared secrets, and watch for changes.
 
 The "destination" WordPress environment will be available at `http://localhost:8888` (admin user: `admin`, password: `password`). The non-prod site URL is automatically configured to `http://host.docker.internal:8889`.
 
@@ -30,6 +30,20 @@ For local development, you'll need two WordPress sites to test import functional
 
 1. **Source site** (non-production) - Where content comes from
 2. **Destination site** (your dev environment) - Where content is imported to
+
+### Code Quality
+
+Before committing, validate and fix code quality:
+
+```sh
+# Check all code (linting, formatting, types)
+npm run check
+
+# Auto-fix all fixable issues
+npm run fix
+```
+
+The pre-commit hook automatically runs linting and formatting on staged files, auto-fixing what it can and blocking commits with unfixable errors.
 
 ### Testing
 
@@ -90,6 +104,7 @@ The development environment includes:
 **Enable WordPress debug mode:**
 
 Add to `wp-config.php` in your local environment:
+
 ```php
 define( 'WP_DEBUG', true );
 define( 'WP_DEBUG_LOG', true );
@@ -98,6 +113,7 @@ define( 'SCRIPT_DEBUG', true );
 ```
 
 **View debug logs:**
+
 ```sh
 tail -f wp-content/debug.log
 ```
@@ -119,17 +135,20 @@ docker exec -it <container-id> mysql -u root -ppassword wordpress
 ### Common Development Tasks
 
 **Reset plugin settings:**
+
 ```sh
 npm run wp-cli option delete ccp_external_site_url
 npm run wp-cli option delete ccp_number_of_posts
 ```
 
 **Clear import history:**
+
 ```sh
 npm run wp-cli db query "TRUNCATE TABLE wp_ccp_import_history"
 ```
 
 **Test authentication:**
+
 ```sh
 # Test connection to external site
 curl -H "X-CCP-Secret: your-secret" https://staging.example.com/wp-json/wp/v2/posts
