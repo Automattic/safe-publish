@@ -1,0 +1,23 @@
+# Code files - use ESLint/wp-scripts for formatting
+**/*.ts
+**/*.tsx
+**/*.js
+**/*.jsx
+**/*.mts
+**/*.mjs
+**/*.cjs
+**/*.cts
+
+# Styles - use wp-scripts lint-style
+**/*.css
+**/*.scss
+
+# Build output
+build/
+node_modules/
+vendor/
+
+# WordPress core
+wp-content/
+wp-includes/
+wp-admin/
