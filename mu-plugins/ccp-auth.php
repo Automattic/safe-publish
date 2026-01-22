@@ -1067,6 +1067,7 @@ function ccp_vip_auth_admin_notice(): void {
 		wp_admin_notice(
 			__( 'CCP Authentication: Shared secret not configured. Set the <code>CCP_SHARED_SECRET</code> environment variable in VIP dashboard to enable CCP authentication.', 'ccp' ),
 			array(
+				'icon' => 'warning',
 				'type' => 'warning',
 			),
 		);
@@ -1078,6 +1079,7 @@ function ccp_vip_auth_admin_notice(): void {
 				absint( $secret_length )
 			),
 			array(
+				'icon' => 'warning',
 				'type' => 'warning',
 			),
 		);
@@ -1090,6 +1092,7 @@ function ccp_vip_auth_admin_notice(): void {
 			),
 			array(
 				'dismissible' => true,
+				'icon'        => 'warning',
 				'type'        => 'warning',
 			),
 		);
@@ -1561,7 +1564,7 @@ function ccp_vip_dashboard_widget_content(): void {
 		if ( $total > 0 ) {
 			$success_rate = round( ( ( $stats['successful_auths'] ?? 0 ) / $total ) * 100, 1 );
 			$color        = $success_rate >= 95 ? '#00a32a' : ( $success_rate >= 80 ? '#dba617' : '#d63638' );
-			echo '<p><strong>' . esc_html__( 'Success Rate:', 'ccp' ) . '</strong> <span style="color: ' . esc_attr( $color ) . ';">' . esc_html( (string) $success_rate ) . '%</span></p>';
+			echo '<p><strong>' . esc_html__( 'Success Rate:', 'ccp' ) . '</strong> <span style="color: ' . esc_attr( $color ) . ';">' . esc_html( $success_rate ) . '%</span></p>';
 		}
 	}
 

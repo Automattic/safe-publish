@@ -228,7 +228,7 @@ final class Admin_Handler {
 		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Forbidden', 403 );
+			wp_die( -1, 403 );
 		}
 
 		$site_url        = sanitize_text_field( $_POST['site_url'] ?? '' );
@@ -259,7 +259,7 @@ final class Admin_Handler {
 		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Forbidden', 403 );
+			wp_die( -1, 403 );
 		}
 
 		$site_url = sanitize_text_field( $_POST['site_url'] ?? '' );
@@ -288,7 +288,7 @@ final class Admin_Handler {
 		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Forbidden', 403 );
+			wp_die( -1, 403 );
 		}
 
 		$site_url = sanitize_text_field( $_POST['site_url'] ?? '' );
@@ -639,7 +639,7 @@ final class Admin_Handler {
 		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'edit_posts' ) ) {
-			wp_die( 'Forbidden', 403 );
+			wp_die( -1, 403 );
 		}
 
 		// JSON string not sanitized to preserve structure; validated after decode.
@@ -1579,12 +1579,10 @@ final class Admin_Handler {
 
 		if ( $images->length > 0 ) {
 			$img = $images->item( 0 ); // Get the first image.
-			if ( $img instanceof \DOMElement ) {
-				$src = $img->getAttribute( 'src' );
+			$src = $img->getAttribute( 'src' );
 
-				if ( ! empty( $src ) ) {
-					return trim( $src );
-				}
+			if ( ! empty( $src ) ) {
+				return trim( $src );
 			}
 		}
 
@@ -1817,7 +1815,7 @@ final class Admin_Handler {
 		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Forbidden', 403 );
+			wp_die( -1, 403 );
 		}
 
 		$site_url = sanitize_text_field( $_POST['site_url'] ?? '' );

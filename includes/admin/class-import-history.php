@@ -244,13 +244,11 @@ final class Import_History {
 			'changes'       => $changes,
 		);
 
-		$log_content = wp_json_encode( $log_data );
-
 		$log_id = wp_insert_post(
 			array(
 				'post_type'    => self::LOG_POST_TYPE,
 				'post_title'   => $title,
-				'post_content' => false !== $log_content ? $log_content : '',
+				'post_content' => wp_json_encode( $log_data ),
 				'post_status'  => 'publish',
 				'post_parent'  => $session_id,
 				'meta_input'   => array(
@@ -368,7 +366,7 @@ final class Import_History {
 			$formatted_sessions[] = array(
 				'id'           => $session->ID,
 				'date'         => get_the_date( 'Y-m-d H:i:s', $session ),
-				'user'         => get_the_author_meta( 'display_name', (int) $session->post_author ),
+				'user'         => get_the_author_meta( 'display_name', $session->post_author ),
 				'total_items'  => $total,
 				'successful'   => $successful,
 				'failed'       => $failed,

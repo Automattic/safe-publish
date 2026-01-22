@@ -70,7 +70,6 @@ class RESTBaseTest extends TestCase {
 	 * Verifies that make_request returns WP_Error for invalid URLs.
 	 */
 	public function test_make_request_returns_wp_error_for_invalid_url(): void {
-		/** @psalm-suppress UndefinedMethod - Method exists in anonymous class extending REST_Base */
 		$result = $this->rest_base->test_make_request( 'invalid-url' );
 
 		// Should handle invalid URLs gracefully.

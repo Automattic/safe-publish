@@ -584,19 +584,16 @@ class External_Posts_API {
 			return false;
 		}
 
-		$file_size = filesize( $temp_file );
-
 		// Prepare file array for media_handle_sideload.
 		$file_array = array(
 			'name'     => $filename,
 			'type'     => $file_type['type'],
 			'tmp_name' => $temp_file,
 			'error'    => 0,
-			'size'     => $file_size ? $file_size : 0,
+			'size'     => filesize( $temp_file ),
 		);
 
 		// Import to media library with error handling.
-		/** @psalm-suppress InvalidArgument - $_FILES['size'] is int */
 		$attachment_id = media_handle_sideload(
 			$file_array,
 			0,
