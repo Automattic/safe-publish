@@ -86,7 +86,7 @@ add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
         $post->post_title,
         $source_url
     );
-    
+
     // Send to Slack webhook
     wp_remote_post( 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL', [
         'body' => json_encode( [ 'text' => $message ] ),
@@ -102,7 +102,7 @@ Import and map custom fields:
 add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
     // Get source post data
     $source_post = get_post_meta( $post_id, '_ccp_source_data', true );
-    
+
     // Map custom fields
     if ( isset( $source_post['acf'] ) ) {
         foreach ( $source_post['acf'] as $key => $value ) {

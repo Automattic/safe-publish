@@ -61,15 +61,18 @@ The plugin supports two authentication methods:
 You have three ways to import content:
 
 **1. Single Post Import**
+
 - Click the **Create Draft** action on any post
 - The post will be imported as a draft with all content, metadata, and images
 
 **2. Bulk Import**
+
 - Select multiple posts using checkboxes
 - Click **Bulk Import** in the bulk actions menu
 - All selected posts will be imported as drafts
 
 **3. Preview Before Import**
+
 - Click **Post Diff** to see a side-by-side comparison
 - Review the content before importing
 - Useful for verifying changes or troubleshooting
