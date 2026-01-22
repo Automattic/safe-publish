@@ -72,7 +72,7 @@ function trailingslashit( string $path ): string {
 }
 
 /**
- * @psalm-return array<never, never>
+ * @psalm-suppress InvalidReturnStatement
  */
 function wp_remote_get( string $url, array $args = array() ): array {
 	return array();
