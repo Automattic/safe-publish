@@ -401,8 +401,6 @@ final class CCP_API extends REST_Base {
 			require_once ABSPATH . 'wp-includes/wp-diff.php';
 		}
 
-		$renderer = ( 'inline' === $mode ) ? new \WP_Text_Diff_Renderer_inline() : new \WP_Text_Diff_Renderer_Table();
-
 		// Generate content-only diff HTML.
 		$content_diff = wp_text_diff(
 			$current_content,
@@ -410,9 +408,7 @@ final class CCP_API extends REST_Base {
 			array(
 				'title_left'      => __( 'Current Content', 'ccp' ),
 				'title_right'     => __( 'Incoming Content', 'ccp' ),
-				'wrap'            => '<div class="incoming-content-diff">%s</div>',
 				'show_split_view' => ( 'split' === $mode ),
-				'renderer'        => $renderer,
 			)
 		);
 
@@ -460,8 +456,6 @@ final class CCP_API extends REST_Base {
 			array(
 				'title_left'  => __( 'Current Title', 'ccp' ),
 				'title_right' => __( 'Incoming Title', 'ccp' ),
-				'wrap'        => '<div class="incoming-title-diff">%s</div>',
-				'renderer'    => $renderer,
 			)
 		);
 		if ( '' === $title_diff ) {
@@ -497,8 +491,6 @@ final class CCP_API extends REST_Base {
 			array(
 				'title_left'  => __( 'Current Excerpt', 'ccp' ),
 				'title_right' => __( 'Incoming Excerpt', 'ccp' ),
-				'wrap'        => '<div class="incoming-excerpt-diff">%s</div>',
-				'renderer'    => $renderer,
 			)
 		);
 		if ( '' === $excerpt_diff ) {
@@ -514,8 +506,6 @@ final class CCP_API extends REST_Base {
 			array(
 				'title_left'  => __( 'Current Taxonomies', 'ccp' ),
 				'title_right' => __( 'Incoming Taxonomies', 'ccp' ),
-				'wrap'        => '<div class="incoming-taxonomies-diff">%s</div>',
-				'renderer'    => $renderer,
 			)
 		);
 		if ( '' === $tax_diff ) {
@@ -531,8 +521,6 @@ final class CCP_API extends REST_Base {
 			array(
 				'title_left'  => __( 'Current Meta', 'ccp' ),
 				'title_right' => __( 'Incoming Meta', 'ccp' ),
-				'wrap'        => '<div class="incoming-meta-diff">%s</div>',
-				'renderer'    => $renderer,
 			)
 		);
 		if ( '' === $meta_diff ) {
@@ -566,8 +554,6 @@ final class CCP_API extends REST_Base {
 			array(
 				'title_left'  => __( 'Current Featured Image', 'ccp' ),
 				'title_right' => __( 'Incoming Featured Image', 'ccp' ),
-				'wrap'        => '<div class="incoming-featured-media-diff">%s</div>',
-				'renderer'    => $renderer,
 			)
 		);
 		if ( '' === $featured_media_diff ) {
