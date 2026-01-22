@@ -51,15 +51,15 @@ Each import record includes:
 
 The import history table displays:
 
-| Column | Description |
-|--------|-------------|
-| Date | When the import occurred |
-| User | Who performed the import |
-| Source | External site URL |
-| Post Title | Title of imported content |
-| Status | Success/Failed indicator |
-| Destination | Link to imported post |
-| Actions | View details, delete record |
+| Column      | Description                 |
+| ----------- | --------------------------- |
+| Date        | When the import occurred    |
+| User        | Who performed the import    |
+| Source      | External site URL           |
+| Post Title  | Title of imported content   |
+| Status      | Success/Failed indicator    |
+| Destination | Link to imported post       |
+| Actions     | View details, delete record |
 
 ### Sorting
 

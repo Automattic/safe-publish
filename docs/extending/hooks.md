@@ -21,6 +21,7 @@ Fires when CCP is fully loaded and initialized.
 **Parameters:** None
 
 **Example:**
+
 ```php
 add_action( 'ccp_init', function() {
     // Initialize your custom functionality
@@ -33,10 +34,12 @@ add_action( 'ccp_init', function() {
 Fires after a post is successfully imported.
 
 **Parameters:**
+
 - `int $post_id` - The ID of the newly created post
 - `string $source_url` - The URL of the source post
 
 **Example:**
+
 ```php
 add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
     // Send notification
@@ -56,11 +59,13 @@ add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
 Fires when an import attempt fails.
 
 **Parameters:**
+
 - `WP_Error $error` - The error object
 - `array $post_data` - The post data that failed to import
 - `string $source_url` - The URL of the source post
 
 **Example:**
+
 ```php
 add_action( 'ccp_import_failed', function( $error, $post_data, $source_url ) {
     error_log( sprintf(
@@ -79,11 +84,13 @@ add_action( 'ccp_import_failed', function( $error, $post_data, $source_url ) {
 Fires after a media item is successfully imported.
 
 **Parameters:**
+
 - `int $attachment_id` - The ID of the imported media attachment
 - `string $source_url` - The URL of the source media file
 - `int $post_id` - The post this media belongs to
 
 **Example:**
+
 ```php
 add_action( 'ccp_media_imported', function( $attachment_id, $source_url, $post_id ) {
     // Add custom metadata
@@ -97,9 +104,11 @@ add_action( 'ccp_media_imported', function( $attachment_id, $source_url, $post_i
 Fires at the start of a bulk import operation.
 
 **Parameters:**
+
 - `array $post_ids` - Array of post IDs to be imported
 
 **Example:**
+
 ```php
 add_action( 'ccp_bulk_import_start', function( $post_ids ) {
     update_option( 'ccp_bulk_import_in_progress', true );
@@ -112,9 +121,11 @@ add_action( 'ccp_bulk_import_start', function( $post_ids ) {
 Fires when a bulk import operation completes.
 
 **Parameters:**
+
 - `array $results` - Array of import results (success/failure for each post)
 
 **Example:**
+
 ```php
 add_action( 'ccp_bulk_import_complete', function( $results ) {
     update_option( 'ccp_bulk_import_in_progress', false );
@@ -140,12 +151,14 @@ Filters allow you to modify data as it flows through the plugin. Always return t
 Filter whether to validate the source URL.
 
 **Parameters:**
+
 - `bool $should_validate` - Whether to validate (default: true)
 - `string $url` - The URL being validated
 
 **Returns:** `bool`
 
 **Example:**
+
 ```php
 add_filter( 'ccp_validate_url', function( $should_validate, $url ) {
     // Skip validation for trusted internal URLs
@@ -161,11 +174,13 @@ add_filter( 'ccp_validate_url', function( $should_validate, $url ) {
 Filter post data before importing.
 
 **Parameters:**
+
 - `array $post_data` - The post data to be imported
 
 **Returns:** `array` - Modified post data
 
 **Example:**
+
 ```php
 add_filter( 'ccp_pre_import_post', function( $post_data ) {
     // Change post status
@@ -190,12 +205,14 @@ add_filter( 'ccp_pre_import_post', function( $post_data ) {
 Filter post data validation results.
 
 **Parameters:**
+
 - `bool|WP_Error $is_valid` - Validation result
 - `array $post_data` - The post data being validated
 
 **Returns:** `bool|WP_Error`
 
 **Example:**
+
 ```php
 add_filter( 'ccp_validate_post_data', function( $is_valid, $post_data ) {
     // Custom validation rule
@@ -224,12 +241,14 @@ add_filter( 'ccp_validate_post_data', function( $is_valid, $post_data ) {
 Filter authentication headers sent to the external site.
 
 **Parameters:**
+
 - `array $headers` - HTTP request headers
 - `string $site_url` - The external site URL
 
 **Returns:** `array` - Modified headers
 
 **Example:**
+
 ```php
 add_filter( 'ccp_authentication_headers', function( $headers, $site_url ) {
     // Add custom authentication token
@@ -249,6 +268,7 @@ add_filter( 'ccp_authentication_headers', function( $headers, $site_url ) {
 Filter whether to import a specific media file.
 
 **Parameters:**
+
 - `bool $should_import` - Whether to import (default: true)
 - `string $image_url` - The image URL
 - `int $post_id` - The post ID
@@ -256,6 +276,7 @@ Filter whether to import a specific media file.
 **Returns:** `bool`
 
 **Example:**
+
 ```php
 add_filter( 'ccp_import_media', function( $should_import, $image_url, $post_id ) {
     // Skip images from CDN (already accessible)
@@ -278,12 +299,14 @@ add_filter( 'ccp_import_media', function( $should_import, $image_url, $post_id )
 Filter the timeout for media downloads (in seconds).
 
 **Parameters:**
+
 - `int $timeout` - Timeout in seconds (default: 30)
 - `string $image_url` - The image URL being downloaded
 
 **Returns:** `int`
 
 **Example:**
+
 ```php
 add_filter( 'ccp_media_import_timeout', function( $timeout, $image_url ) {
     // Increase timeout for large files
@@ -299,11 +322,13 @@ add_filter( 'ccp_media_import_timeout', function( $timeout, $image_url ) {
 Filter the list of supported post types.
 
 **Parameters:**
+
 - `array $post_types` - Array of post type slugs
 
 **Returns:** `array`
 
 **Example:**
+
 ```php
 add_filter( 'ccp_supported_post_types', function( $post_types ) {
     // Add custom post types
@@ -322,11 +347,13 @@ add_filter( 'ccp_supported_post_types', function( $post_types ) {
 Filter the REST API namespace.
 
 **Parameters:**
+
 - `string $namespace` - The namespace (default: 'ccp/v1')
 
 **Returns:** `string`
 
 **Example:**
+
 ```php
 add_filter( 'ccp_rest_api_namespace', function( $namespace ) {
     return 'my-custom-namespace/v1';
@@ -338,11 +365,13 @@ add_filter( 'ccp_rest_api_namespace', function( $namespace ) {
 Filter how many days to retain import history.
 
 **Parameters:**
+
 - `int $days` - Number of days (default: 0 = unlimited)
 
 **Returns:** `int`
 
 **Example:**
+
 ```php
 add_filter( 'ccp_import_history_retention_days', function( $days ) {
     return 90; // Keep 90 days of history
@@ -354,12 +383,14 @@ add_filter( 'ccp_import_history_retention_days', function( $days ) {
 Filter HTTP request arguments before making requests to external site.
 
 **Parameters:**
+
 - `array $args` - Request arguments
 - `string $url` - The URL being requested
 
 **Returns:** `array`
 
 **Example:**
+
 ```php
 add_filter( 'ccp_http_request_args', function( $args, $url ) {
     // Increase timeout for slow sites
