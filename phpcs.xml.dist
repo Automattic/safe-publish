@@ -77,6 +77,8 @@
 				<element value="CCP"/>
 			</property>
 		</properties>
+		<!-- TODO: Remove the ShortPrefixPassed rule when the prefix gets updated -->
+		<exclude name="WordPress.NamingConventions.PrefixAllGlobals.ShortPrefixPassed"/>
 	</rule>
 
 	<rule ref="WordPress.WP.I18n">

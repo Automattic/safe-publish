@@ -13,18 +13,18 @@
     "compliant-content-publisher.php"
   ],
   "scripts": {
-    "build": "npm run cmd:build",
+    "build": "wp-scripts build --webpack-src-dir=src --output-path=build",
     "build:docs:ai": "npx repomix --include='docs/**/*.md,example/**' --ignore='docs/extending/ai-prompts.md,docs/for-ai.md,docs/index.md,docs/quickstart.md' --style=markdown --output='docs/for-ai.md'",
+    "check": "npm run lint:all && npm run format:check && npm run check-types",
     "check-types": "tsc --noEmit",
-    "cmd:build": "wp-scripts build --webpack-src-dir=src --output-path=build",
-    "cmd:format": "prettier '**/*.(js|json|jsx|md|ts|tsx|yml|yaml)'",
     "cmd:lint": "eslint --ext 'js,jsx,ts,tsx'",
     "dev": "./bin/start",
     "dev:build": "./bin/start build",
     "dev:destroy": "./bin/stop destroy",
     "dev:stop": "./bin/stop",
-    "format": "npm run cmd:format -- --write",
-    "format:check": "npm run cmd:format -- --check",
+    "fix": "npm run lint:fix && npm run format && npm run lint:css:fix && npm run lint:phpcs:fix",
+    "format": "prettier '**/*.(json|md|yml|yaml)' --write",
+    "format:check": "prettier '**/*.(json|md|yml|yaml)' --check",
     "lint": "npm run cmd:lint .",
     "lint:all": "npm run lint:js && npm run lint:css && npm run lint:php",
     "lint:fix": "npm run cmd:lint . -- --fix",
@@ -110,6 +110,18 @@
     "extends": "./node_modules/@wordpress/scripts/config/.stylelintrc.json"
   },
   "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "eslint"
+    ],
+    "*.{css,scss}": [
+      "wp-scripts lint-style --fix",
+      "wp-scripts lint-style"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write",
+      "prettier --check"
+    ],
     "*.php": [
       "vendor/bin/phpcs",
       "vendor/bin/psalm.phar --no-cache"

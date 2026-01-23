@@ -293,12 +293,14 @@ add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
 ### Custom Post Type Not Appearing
 
 **Check REST API support:**
+
 ```bash
 # Test if post type is available via REST API
 curl https://your-staging-site.com/wp-json/wp/v2/your-post-type
 ```
 
 **Common issues:**
+
 - `show_in_rest` not set to `true`
 - Custom rest_base not matching
 - REST API disabled on source site
@@ -306,6 +308,7 @@ curl https://your-staging-site.com/wp-json/wp/v2/your-post-type
 ### Custom Fields Not Importing
 
 **Expose fields in REST API:**
+
 ```php
 add_action( 'rest_api_init', function() {
     register_rest_field( 'your_post_type', 'your_field', [
@@ -319,6 +322,7 @@ add_action( 'rest_api_init', function() {
 ### Taxonomies Not Importing
 
 **Check taxonomy REST support:**
+
 ```php
 // Ensure taxonomy is exposed
 register_taxonomy( 'your_taxonomy', 'your_post_type', [

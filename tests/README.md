@@ -70,12 +70,14 @@ vendor/bin/phpunit --verbose
 The test suite provides comprehensive coverage for:
 
 ### Core Plugin Components
+
 - **Plugin Class** (`PluginTest.php`)
   - Plugin initialization
   - Component instantiation
   - API getter methods
 
 ### API & Integration
+
 - **External Posts API** (`ExternalPostsAPITest.php`)
   - Post fetching and validation
   - Post type fetching
@@ -99,6 +101,7 @@ The test suite provides comprehensive coverage for:
   - Environment detection
 
 ### Security & Validation
+
 - **URL Validator** (`URLValidatorTest.php`)
   - URL format validation
   - HTTPS enforcement (VIP)
@@ -120,6 +123,7 @@ The test suite provides comprehensive coverage for:
 ## Test Requirements
 
 ### PHP Requirements
+
 - PHP 8.2 or higher
 - PHPUnit 9.x
 - Required PHP extensions:
@@ -129,6 +133,7 @@ The test suite provides comprehensive coverage for:
   - dom
 
 ### Dependencies
+
 All test dependencies are managed via Composer:
 
 ```json
@@ -212,6 +217,7 @@ class MyTest extends TestCase {
 ## Continuous Integration
 
 Tests are automatically run on:
+
 - Pull requests
 - Commits to main branches
 - Pre-deployment checks
@@ -219,6 +225,7 @@ Tests are automatically run on:
 ### CI Configuration
 
 Tests should pass with:
+
 - No failures
 - No errors
 - No warnings
@@ -229,23 +236,27 @@ Tests should pass with:
 ### Common Issues
 
 **Issue**: Tests fail with "Class not found"
+
 ```bash
 # Solution: Regenerate autoloader
 composer dump-autoload
 ```
 
 **Issue**: WordPress functions not found
+
 ```bash
 # Solution: Check stubs.php is loaded in bootstrap.php
 ```
 
 **Issue**: Coverage not generated
+
 ```bash
 # Solution: Install xdebug
 pecl install xdebug
 ```
 
 **Issue**: Tests run slowly
+
 ```bash
 # Solution: Run specific test files or use filters
 vendor/bin/phpunit --filter ClassName
@@ -269,6 +280,7 @@ open coverage/phpunit/html/index.html
 ## Contributing
 
 When adding new features:
+
 1. Write tests first (TDD)
 2. Ensure all tests pass
 3. Maintain or improve coverage

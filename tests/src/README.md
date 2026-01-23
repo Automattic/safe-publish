@@ -20,26 +20,31 @@ tests/src/
 ## Running Tests
 
 ### Run all tests
+
 ```bash
 npm run test:js
 ```
 
 ### Run tests in watch mode
+
 ```bash
 npm run test:js:watch
 ```
 
 ### Run tests with coverage
+
 ```bash
 npm run test:js:coverage
 ```
 
 ### Run specific test file
+
 ```bash
 npx vitest tests/src/utils.test.ts
 ```
 
 ### Run tests matching a pattern
+
 ```bash
 npx vitest --grep "formatDate"
 ```
@@ -49,6 +54,7 @@ npx vitest --grep "formatDate"
 The test suite covers:
 
 ### ✅ Utility Functions (`utils.test.ts` - 85+ tests)
+
 - `formatDate()` - Date formatting
 - `formatDateTime()` - Date/time formatting
 - `isValidPost()` - Post validation
@@ -60,6 +66,7 @@ The test suite covers:
 - `extractUrlPath()` - URL path extraction
 
 ### ✅ API Functions (`api/diff.test.ts` - 25+ tests)
+
 - `fetchDiffPreview()` - Fetching diff previews
   - Successful requests
   - Error handling
@@ -73,12 +80,14 @@ The test suite covers:
   - Invalid JSON handling
 
 ### ✅ Constants (`constants.test.ts` - 10+ tests)
+
 - Layout constants (table, grid, list)
 - Sorting directions
 - Sort arrows and values
 - Sort labels and icons
 
 ### ✅ TypeScript Types (`types.test.ts` - 15+ tests)
+
 - `Post` interface validation
 - `ImportSession` interface validation
 - `ImportLog` interface validation
@@ -86,6 +95,7 @@ The test suite covers:
 - Type safety checks
 
 ### ✅ Actions (`actions.test.tsx` - 15+ tests)
+
 - Draft action modal
 - Bulk import action modal
 - Update action modal
@@ -120,6 +130,7 @@ The test suite covers:
 ### Test Setup (vitest.setup.ts)
 
 The setup file:
+
 - Imports `@testing-library/jest-dom` matchers
 - Sets up `cleanup()` to run after each test
 - Mocks `window.ccpAdminData` global object
@@ -192,6 +203,7 @@ describe('API function', () => {
 ### Custom Matchers
 
 From `@testing-library/jest-dom`:
+
 - `toBeInTheDocument()` - Element is in the DOM
 - `toBeVisible()` - Element is visible
 - `toHaveTextContent()` - Element has text content
@@ -202,12 +214,14 @@ From `@testing-library/jest-dom`:
 ## Coverage Goals
 
 Target coverage metrics:
+
 - **Statements**: 80%+
 - **Branches**: 75%+
 - **Functions**: 80%+
 - **Lines**: 80%+
 
 ### Excluded from Coverage
+
 - Entry point files (`index.tsx`, `import-history.tsx`, `admin-tools.tsx`)
 - Test files
 - Build artifacts
@@ -215,15 +229,19 @@ Target coverage metrics:
 ## Common Issues
 
 ### Issue: Import alias not resolving
+
 **Solution**: Check that `vitest.config.mts` has the correct alias configuration and that you're using `@/` prefix.
 
 ### Issue: DOM methods not available
+
 **Solution**: Ensure `environment: 'happy-dom'` is set in vitest config.
 
 ### Issue: TypeScript errors in tests
+
 **Solution**: Make sure TypeScript types are correctly imported and `tsconfig.json` includes the test directory.
 
 ### Issue: Tests fail with "Cannot find module"
+
 **Solution**: Check that the module path is correct and uses the `@/` alias. Ensure the file exists in `src/`.
 
 ## Best Practices
@@ -240,6 +258,7 @@ Target coverage metrics:
 ## CI/CD Integration
 
 Tests run automatically on:
+
 - Pre-commit (via husky)
 - Pull requests
 - Main branch pushes
@@ -269,16 +288,19 @@ Tests run automatically on:
 ## Troubleshooting
 
 ### Debug a specific test
+
 ```bash
 npx vitest --inspect-brk tests/src/utils.test.ts
 ```
 
 ### Run tests with verbose output
+
 ```bash
 npx vitest --reporter=verbose
 ```
 
 ### Clear cache and run tests
+
 ```bash
 npx vitest --clearCache && npm run test:js
 ```
@@ -286,6 +308,7 @@ npx vitest --clearCache && npm run test:js
 ## Contributing
 
 When adding new functionality:
+
 1. Write tests alongside your code
 2. Ensure all tests pass: `npm run test:js`
 3. Check coverage: `npm run test:js:coverage`

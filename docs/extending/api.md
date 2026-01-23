@@ -55,6 +55,7 @@ curl https://your-site.com/wp-json/ccp/v1/status
 ```
 
 **Response:**
+
 ```json
 {
   "version": "1.0.0",
@@ -78,6 +79,7 @@ curl -X POST https://your-site.com/wp-json/ccp/v1/import \
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -88,6 +90,7 @@ curl -X POST https://your-site.com/wp-json/ccp/v1/import \
 ```
 
 **Response (Error):**
+
 ```json
 {
   "success": false,
@@ -115,6 +118,7 @@ curl -X POST https://your-site.com/wp-json/ccp/v1/bulk-import \
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -148,6 +152,7 @@ curl https://your-site.com/wp-json/ccp/v1/history \
 ```
 
 **Query Parameters:**
+
 - `page` (int) - Page number (default: 1)
 - `per_page` (int) - Results per page (default: 20, max: 100)
 - `status` (string) - Filter by status: 'success' or 'failed'
@@ -156,6 +161,7 @@ curl https://your-site.com/wp-json/ccp/v1/history \
 - `before` (string) - Before date (ISO 8601 format)
 
 **Response:**
+
 ```json
 {
   "total": 145,
@@ -382,6 +388,7 @@ Standard error responses:
 ```
 
 **Common error codes:**
+
 - `rest_forbidden` - Permission denied
 - `invalid_param` - Invalid parameter
 - `import_failed` - Import operation failed
@@ -391,6 +398,7 @@ Standard error responses:
 ## Security Considerations
 
 1. **Always verify permissions:**
+
 ```php
 'permission_callback' => function() {
     return current_user_can( 'manage_options' );
@@ -398,6 +406,7 @@ Standard error responses:
 ```
 
 2. **Validate input parameters:**
+
 ```php
 'args' => [
     'post_id' => [
@@ -410,6 +419,7 @@ Standard error responses:
 ```
 
 3. **Use nonces for same-site requests:**
+
 ```javascript
 'X-WP-Nonce': wpApiSettings.nonce
 ```

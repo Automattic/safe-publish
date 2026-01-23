@@ -44,6 +44,7 @@ This guide helps you resolve common issues with Compliant Content Publisher. If 
    - Check for firewall rules blocking the connection
 
 2. **Increase PHP timeout limits**:
+
    ```php
    // In wp-config.php
    set_time_limit( 300 ); // 5 minutes
@@ -193,6 +194,7 @@ This guide helps you resolve common issues with Compliant Content Publisher. If 
    - Optimize images before importing
 
 2. **Increase PHP limits**:
+
    ```php
    // In wp-config.php or php.ini
    max_execution_time = 300

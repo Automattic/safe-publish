@@ -13,6 +13,7 @@ The shared secret method is the most secure and recommended for production envir
    - If the `mu-plugins` directory doesn't exist, create it
 
 2. **On both sites** (production and non-production), add this line to `wp-config.php`:
+
    ```php
    define( 'CCP_SHARED_SECRET', 'your-secure-random-string-here' );
    ```

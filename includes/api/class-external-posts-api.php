@@ -1130,11 +1130,11 @@ class External_Posts_API {
 	 * Handles WebP file type validation during upload.
 	 *
 	 * @param array  $wp_check_filetype_and_ext File data with 'ext', 'type', 'proper_filename' keys.
-	 * @param string $file                      Full path to the file.
+	 * @param string $_file                     Full path to the file.
 	 * @param string $filename                  File name (may differ from $file if in tmp dir).
 	 * @return array Modified file data.
 	 */
-	public function handle_webp_filetype( array $wp_check_filetype_and_ext, string $file, string $filename ): array {
+	public function handle_webp_filetype( array $wp_check_filetype_and_ext, string $_file, string $filename ): array {
 		if ( ! $wp_check_filetype_and_ext['type'] && ! $wp_check_filetype_and_ext['ext'] ) {
 			$info = pathinfo( $filename );
 			if ( isset( $info['extension'] ) && 'webp' === strtolower( $info['extension'] ) ) {
