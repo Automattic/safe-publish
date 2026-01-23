@@ -1561,7 +1561,11 @@ function ccp_vip_dashboard_widget_content(): void {
 		if ( $total > 0 ) {
 			$success_rate = round( ( ( $stats['successful_auths'] ?? 0 ) / $total ) * 100, 1 );
 			$color        = $success_rate >= 95 ? '#00a32a' : ( $success_rate >= 80 ? '#dba617' : '#d63638' );
-			echo '<p><strong>' . esc_html__( 'Success Rate:', 'ccp' ) . '</strong> <span style="color: ' . esc_attr( $color ) . ';">' . esc_html( (string) $success_rate ) . '%</span></p>';
+			printf(
+			 esc_html__( '<p><strong>Success Rate:</strong> <span style="color: %s">%f%%</span></p>', 'ccp' ),
+			 esc_attr( $color ),
+			 float( $success_rate )
+			 );
 		}
 	}
 
