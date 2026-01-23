@@ -136,10 +136,10 @@ All test dependencies are managed via Composer:
   "require-dev": {
     "phpunit/phpunit": "^9",
     "mockery/mockery": "^1.6",
-    "wp-phpunit/wp-phpunit": "^6.7",
+    "wp-phpunit/wp-phpunit": "^6.8",
     "yoast/phpunit-polyfills": "^4.0",
-    "php-stubs/wordpress-stubs": "^6.6",
-    "php-stubs/wordpress-tests-stubs": "^6.7"
+    "php-stubs/wordpress-stubs": "^6.8",
+    "php-stubs/wordpress-tests-stubs": "^6.8"
   }
 }
 ```

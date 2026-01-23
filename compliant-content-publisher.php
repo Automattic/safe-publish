@@ -10,7 +10,7 @@
  * Author URI: https://wpvip.com
  * Text Domain: ccp
  * Version: 1.0.0
- * Requires at least: 6.7
+ * Requires at least: 6.8
  * Requires PHP: 8.2
  */
 

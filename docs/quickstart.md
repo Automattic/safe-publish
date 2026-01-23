@@ -4,7 +4,7 @@ Get started with Compliant Content Publisher in minutes. This guide will walk yo
 
 ## Prerequisites
 
-- WordPress 6.7 or higher
+- WordPress 6.8 or higher
 - PHP 8.2 or higher
 - Access to both your production and non-production WordPress sites
 - Administrator privileges on both sites

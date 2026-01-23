@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "e6f22ff0d2388182a2ad05f46cd3becc",
+    "content-hash": "c836d28b94492feb1051f8e1b8e07e80",
     "packages": [
         {
             "name": "erusev/parsedown",
@@ -1504,16 +1504,16 @@
         },
         {
             "name": "php-stubs/wordpress-stubs",
-            "version": "v6.7.4",
+            "version": "v6.8.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/php-stubs/wordpress-stubs.git",
-                "reference": "9317edf49ed6b8b35480ed1edffefa26d60aa704"
+                "reference": "abeb5a8b58fda7ac21f15ee596f302f2959a7114"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/php-stubs/wordpress-stubs/zipball/9317edf49ed6b8b35480ed1edffefa26d60aa704",
-                "reference": "9317edf49ed6b8b35480ed1edffefa26d60aa704",
+                "url": "https://api.github.com/repos/php-stubs/wordpress-stubs/zipball/abeb5a8b58fda7ac21f15ee596f302f2959a7114",
+                "reference": "abeb5a8b58fda7ac21f15ee596f302f2959a7114",
                 "shasum": ""
             },
             "conflict": {
@@ -1549,22 +1549,22 @@
             ],
             "support": {
                 "issues": "https://github.com/php-stubs/wordpress-stubs/issues",
-                "source": "https://github.com/php-stubs/wordpress-stubs/tree/v6.7.4"
+                "source": "https://github.com/php-stubs/wordpress-stubs/tree/v6.8.3"
             },
-            "time": "2025-09-30T20:58:01+00:00"
+            "time": "2025-09-30T20:58:47+00:00"
         },
         {
             "name": "php-stubs/wordpress-tests-stubs",
-            "version": "v6.7.4",
+            "version": "v6.8.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/php-stubs/wordpress-tests-stubs.git",
-                "reference": "6786be43a44f93f65cddf002909a6a3b1cdc7254"
+                "reference": "d4150b043511df8907cae8426ea4f2812c97f686"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/php-stubs/wordpress-tests-stubs/zipball/6786be43a44f93f65cddf002909a6a3b1cdc7254",
-                "reference": "6786be43a44f93f65cddf002909a6a3b1cdc7254",
+                "url": "https://api.github.com/repos/php-stubs/wordpress-tests-stubs/zipball/d4150b043511df8907cae8426ea4f2812c97f686",
+                "reference": "d4150b043511df8907cae8426ea4f2812c97f686",
                 "shasum": ""
             },
             "require-dev": {
@@ -1589,9 +1589,9 @@
             ],
             "support": {
                 "issues": "https://github.com/php-stubs/wordpress-tests-stubs/issues",
-                "source": "https://github.com/php-stubs/wordpress-tests-stubs/tree/v6.7.4"
+                "source": "https://github.com/php-stubs/wordpress-tests-stubs/tree/v6.8.3"
             },
-            "time": "2025-10-04T10:23:08+00:00"
+            "time": "2025-10-04T10:23:20+00:00"
         },
         {
             "name": "phpcompatibility/php-compatibility",
