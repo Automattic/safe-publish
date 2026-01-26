@@ -124,7 +124,7 @@ The test suite provides comprehensive coverage for:
 
 ### PHP Requirements
 
-- PHP 8.1 or higher
+- PHP 8.2 or higher
 - PHPUnit 9.x
 - Required PHP extensions:
   - json
@@ -141,10 +141,10 @@ All test dependencies are managed via Composer:
   "require-dev": {
     "phpunit/phpunit": "^9",
     "mockery/mockery": "^1.6",
-    "wp-phpunit/wp-phpunit": "^6.7",
+    "wp-phpunit/wp-phpunit": "^6.8",
     "yoast/phpunit-polyfills": "^4.0",
-    "php-stubs/wordpress-stubs": "^6.6",
-    "php-stubs/wordpress-tests-stubs": "^6.7"
+    "php-stubs/wordpress-stubs": "^6.8",
+    "php-stubs/wordpress-tests-stubs": "^6.8"
   }
 }
 ```

@@ -4,8 +4,8 @@ Get started with Safe Publish in minutes. This guide will walk you through setti
 
 ## Prerequisites
 
-- WordPress 6.7 or higher
-- PHP 8.1 or higher
+- WordPress 6.8 or higher
+- PHP 8.2 or higher
 - Access to both your production and non-production WordPress sites
 - Administrator privileges on both sites
 
