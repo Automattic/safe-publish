@@ -2,7 +2,7 @@
 /**
  * PHPUnit bootstrap file for integration tests.
  *
- * @package Compliant_Content_Publisher
+ * @package Safe_Publish
  */
 
 declare(strict_types = 1);
@@ -38,7 +38,7 @@ require_once $_tests_dir . '/includes/functions.php';
  * Manually load the plugin being tested.
  */
 function _manually_load_plugin(): void {
-	require __DIR__ . '/../../compliant-content-publisher.php';
+	require __DIR__ . '/../../safe-publish.php';
 }
 
 tests_add_filter( 'muplugins_loaded', '_manually_load_plugin' );

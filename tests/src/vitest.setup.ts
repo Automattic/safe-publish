@@ -4,13 +4,13 @@ import { afterEach } from 'vitest';
 
 // Mock WordPress global objects.
 ( global as any ).window = {
-	ccpAdminData: {
+	safePublishAdminData: {
 		ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
 		nonce: 'test-nonce',
 		restNonce: 'test-rest-nonce',
 		siteUrl: 'https://example.com',
 		numPosts: 10,
-		containerId: 'ccp-admin-posts',
+		containerId: 'safe-publish-admin-posts',
 		postsData: [],
 		strings: {
 			loading: 'Loading...',

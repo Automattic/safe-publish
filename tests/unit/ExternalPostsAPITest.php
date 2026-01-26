@@ -2,15 +2,15 @@
 /**
  * External Posts API Test.
  *
- * @package Compliant_Content_Publisher
+ * @package Safe_Publish
  */
 
 declare(strict_types=1);
 
-namespace CCP\Tests;
+namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
-use CCP\API\External_Posts_API;
+use Safe_Publish\API\External_Posts_API;
 
 /**
  * External Posts API Test.

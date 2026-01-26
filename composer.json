@@ -1,5 +1,5 @@
 {
-  "name": "automattic/compliant-content-publisher",
+  "name": "automattic/safe-publish",
   "authors": [
     {
       "name": "WPVIP"
@@ -8,7 +8,7 @@
   "license": "GPL-2.0-or-later",
   "autoload": {
     "psr-4": {
-      "CCP\\": "includes/"
+      "Safe_Publish\\": "includes/"
     },
     "classmap": [
       "includes/"
@@ -16,7 +16,7 @@
   },
   "autoload-dev": {
     "psr-4": {
-      "CCP\\Tests\\": "tests/unit/"
+      "Safe_Publish\\Tests\\": "tests/unit/"
     },
     "classmap": [
       "tests/unit/"

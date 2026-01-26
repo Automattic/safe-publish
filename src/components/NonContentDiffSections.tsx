@@ -39,31 +39,31 @@ export default function NonContentDiffSections( {
 		<>
 			{ nonContentDiffs.title && (
 				<section style={ { marginTop: 12 } }>
-					<Text as="h2">{ __( 'Title Diff', 'ccp' ) }</Text>
+					<Text as="h2">{ __( 'Title Diff', 'safe-publish' ) }</Text>
 					<div dangerouslySetInnerHTML={ { __html: nonContentDiffs.title } } />
 				</section>
 			) }
 			{ nonContentDiffs.excerpt && (
 				<section style={ { marginTop: 12 } }>
-					<Text as="h2">{ __( 'Excerpt Diff', 'ccp' ) }</Text>
+					<Text as="h2">{ __( 'Excerpt Diff', 'safe-publish' ) }</Text>
 					<div dangerouslySetInnerHTML={ { __html: nonContentDiffs.excerpt } } />
 				</section>
 			) }
 			{ nonContentDiffs.taxonomies && (
 				<section style={ { marginTop: 12 } }>
-					<Text as="h2">{ __( 'Taxonomies Diff', 'ccp' ) }</Text>
+					<Text as="h2">{ __( 'Taxonomies Diff', 'safe-publish' ) }</Text>
 					<div dangerouslySetInnerHTML={ { __html: nonContentDiffs.taxonomies } } />
 				</section>
 			) }
 			{ nonContentDiffs.meta && (
 				<section style={ { marginTop: 12 } }>
-					<Text as="h2">{ __( 'Meta / Custom Fields Diff', 'ccp' ) }</Text>
+					<Text as="h2">{ __( 'Meta / Custom Fields Diff', 'safe-publish' ) }</Text>
 					<div dangerouslySetInnerHTML={ { __html: nonContentDiffs.meta } } />
 				</section>
 			) }
 			{ nonContentDiffs.featuredMedia && (
 				<section style={ { marginTop: 12 } }>
-					<Text as="h2">{ __( 'Featured Image Diff', 'ccp' ) }</Text>
+					<Text as="h2">{ __( 'Featured Image Diff', 'safe-publish' ) }</Text>
 					<div dangerouslySetInnerHTML={ { __html: nonContentDiffs.featuredMedia } } />
 				</section>
 			) }

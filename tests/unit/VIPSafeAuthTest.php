@@ -2,15 +2,15 @@
 /**
  * VIP Safe Auth Test file.
  *
- * @package CompliantContentPublisher
+ * @package Safe_Publish
  */
 
 declare(strict_types=1);
 
-namespace CCP\Tests;
+namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
-use CCP\Auth\VIP_Safe_Auth;
+use Safe_Publish\Auth\VIP_Safe_Auth;
 
 /**
  * VIP Safe Auth Test.
@@ -32,8 +32,8 @@ class VIPSafeAuthTest extends TestCase {
 
 		$this->assertIsArray( $params );
 		$this->assertArrayHasKey( 'headers', $params );
-		$this->assertArrayHasKey( 'X-CCP-Timestamp', $params['headers'] );
-		$this->assertArrayHasKey( 'X-CCP-Signature', $params['headers'] );
+		$this->assertArrayHasKey( 'X-Safe-Publish-Timestamp', $params['headers'] );
+		$this->assertArrayHasKey( 'X-Safe-Publish-Signature', $params['headers'] );
 	}
 
 	/**
@@ -124,8 +124,8 @@ class VIPSafeAuthTest extends TestCase {
 		$params2 = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
 
 		// Timestamps will be different, but signature generation process should be consistent.
-		$this->assertIsString( $params1['headers']['X-CCP-Signature'] );
-		$this->assertIsString( $params2['headers']['X-CCP-Signature'] );
-		$this->assertEquals( 64, strlen( $params1['headers']['X-CCP-Signature'] ) ); // SHA256 hex = 64 chars.
+		$this->assertIsString( $params1['headers']['X-Safe-Publish-Signature'] );
+		$this->assertIsString( $params2['headers']['X-Safe-Publish-Signature'] );
+		$this->assertEquals( 64, strlen( $params1['headers']['X-Safe-Publish-Signature'] ) ); // SHA256 hex = 64 chars.
 	}
 }

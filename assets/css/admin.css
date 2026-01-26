@@ -1,5 +1,5 @@
-/* Compliant Content Publisher Admin Styles */
-.ccp-admin-container {
+/* Safe Publish Admin Styles */
+.safe-publish-admin-container {
 	display: grid;
 	grid-template-columns: 2fr 1fr;
 	gap: 20px;
@@ -7,20 +7,20 @@
 }
 
 /* Settings page has single column layout */
-#ccp-settings-page .ccp-admin-container {
+#safe-publish-settings-page .safe-publish-admin-container {
 	grid-template-columns: 1fr;
 	max-width: 800px;
 }
 
-.ccp-settings-section,
-.ccp-tools-section {
+.safe-publish-settings-section,
+.safe-publish-tools-section {
 	background: #fff;
 	border: 1px solid #c3c4c7;
 	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
 	padding: 20px;
 }
 
-.ccp-dataviews-section {
+.safe-publish-dataviews-section {
 	grid-column: 1 / -1;
 	background: #fff;
 	border: 1px solid #c3c4c7;
@@ -29,26 +29,26 @@
 	margin-top: 20px;
 }
 
-.ccp-dataviews-section h2 {
+.safe-publish-dataviews-section h2 {
 	margin-top: 0;
 	margin-bottom: 15px;
 	border-bottom: 1px solid #dcdcde;
 	padding-bottom: 10px;
 }
 
-#ccp-dataviews-container {
+#safe-publish-dataviews-container {
 	margin-top: 20px;
 	min-height: 400px;
 }
 
-.ccp-loading {
+.safe-publish-loading {
 	text-align: center;
 	padding: 40px 20px;
 	color: #666;
 	font-style: italic;
 }
 
-.ccp-error {
+.safe-publish-error {
 	background: #f8d7da;
 	border: 1px solid #f5c6cb;
 	color: #721c24;
@@ -57,7 +57,7 @@
 	margin: 20px 0;
 }
 
-.ccp-no-results {
+.safe-publish-no-results {
 	background: #d1ecf1;
 	border: 1px solid #bee5eb;
 	color: #0c5460;
@@ -67,25 +67,25 @@
 	text-align: center;
 }
 
-.ccp-results {
+.safe-publish-results {
 	margin-top: 15px;
 	padding: 10px 15px;
 	border-radius: 4px;
 }
 
-.ccp-results.success {
+.safe-publish-results.success {
 	background: #d1e7dd;
 	border: 1px solid #badbcc;
 	color: #0f5132;
 }
 
-.ccp-results.error {
+.safe-publish-results.error {
 	background: #f8d7da;
 	border: 1px solid #f5c6cb;
 	color: #721c24;
 }
 
-.ccp-results.info {
+.safe-publish-results.info {
 	background: #d1ecf1;
 	border: 1px solid #bee5eb;
 	color: #0c5460;
@@ -151,7 +151,7 @@
 
 @media (max-width: 782px) {
 
-	.ccp-admin-container {
+	.safe-publish-admin-container {
 		grid-template-columns: 1fr;
 	}
 
@@ -163,37 +163,37 @@
 }
 
 /* Admin Tools Styles */
-.ccp-tool {
+.safe-publish-tool {
 	border-bottom: 1px solid #dcdcde;
 	margin-bottom: 20px;
 	padding-bottom: 20px;
 }
 
-.ccp-tool:last-child {
+.safe-publish-tool:last-child {
 	border-bottom: none;
 	margin-bottom: 0;
 }
 
-.ccp-tool h3 {
+.safe-publish-tool h3 {
 	margin: 0 0 10px 0;
 	font-size: 14px;
 	font-weight: 600;
 }
 
-.ccp-tool p {
+.safe-publish-tool p {
 	margin: 0 0 15px 0;
 	color: #646970;
 }
 
 /* WordPress Components Notice styles */
-.ccp-test-result,
-.ccp-preview-result,
-.ccp-cache-result {
+.safe-publish-test-result,
+.safe-publish-preview-result,
+.safe-publish-cache-result {
 	margin-top: 15px;
 }
 
 /* Preview posts styling */
-.ccp-preview-posts {
+.safe-publish-preview-posts {
 	margin-top: 15px;
 	max-height: 300px;
 	overflow-y: auto;
@@ -201,7 +201,7 @@
 	border-radius: 4px;
 }
 
-.ccp-preview-post {
+.safe-publish-preview-post {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
@@ -209,21 +209,21 @@
 	border-bottom: 1px solid #f0f0f1;
 }
 
-.ccp-preview-post:last-child {
+.safe-publish-preview-post:last-child {
 	border-bottom: none;
 }
 
-.ccp-preview-post-title {
+.safe-publish-preview-post-title {
 	font-weight: 500;
 	color: #1d2327;
 }
 
-.ccp-preview-post-link {
+.safe-publish-preview-post-link {
 	color: #0073aa;
 	text-decoration: none;
 	font-size: 13px;
 }
 
-.ccp-preview-post-link:hover {
+.safe-publish-preview-post-link:hover {
 	text-decoration: underline;
 }

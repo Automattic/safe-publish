@@ -19,7 +19,7 @@ import './style.scss';
  * content is loaded.
  */
 document.addEventListener( 'DOMContentLoaded', (): void => {
-	const container = document.getElementById( 'ccp-import-history-container' );
+	const container = document.getElementById( 'safe-publish-import-history-container' );
 
 	if ( ! container ) {
 		return;

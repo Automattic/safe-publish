@@ -1,10 +1,10 @@
 /**
- * Type definitions for Compliant Content Publisher plugin.
+ * Type definitions for Safe Publish plugin.
  *
  * Contains all TypeScript interfaces and type definitions used throughout the
  * plugin's frontend components.
  *
- * @file This file defines the TypeScript types for the CCP plugin.
+ * @file This file defines the TypeScript types for the Safe Publish plugin.
  */
 
 /**
@@ -362,8 +362,8 @@ export interface ImportLog {
 
 declare global {
 	interface Window {
-		ccpAdminData: AdminData;
-		ccpRefreshPosts: ( postType?: string ) => void;
+		safePublishAdminData: AdminData;
+		safePublishRefreshPosts: ( postType?: string ) => void;
 	}
 
 	interface HTMLElement {

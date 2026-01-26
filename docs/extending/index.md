@@ -1,9 +1,9 @@
-# Extending Compliant Content Publisher
+# Extending Safe Publish
 
 > [!TIP]
 > Make sure you've read the [core concepts](../concepts/index.md) before extending the plugin.
 
-Compliant Content Publisher provides hooks, filters, and extensibility points to customize its behavior. Whether you need to modify the import process, add custom validation, or integrate with other systems, the plugin offers flexible options for developers.
+Safe Publish provides hooks, filters, and extensibility points to customize its behavior. Whether you need to modify the import process, add custom validation, or integrate with other systems, the plugin offers flexible options for developers.
 
 ## Extension Points
 
@@ -33,14 +33,14 @@ Use filters to customize how content is imported:
 
 ```php
 // Modify post data before import
-add_filter( 'ccp_pre_import_post', function( $post_data ) {
+add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
     // Add custom logic
     $post_data['post_status'] = 'pending'; // Override to pending instead of draft
     return $post_data;
 } );
 
 // After successful import
-add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
+add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
     // Notify team, trigger workflows, etc.
     do_action( 'my_custom_workflow', $post_id );
 }, 10, 2 );
@@ -51,7 +51,7 @@ add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
 Add your own validation rules:
 
 ```php
-add_filter( 'ccp_validate_post_data', function( $is_valid, $post_data ) {
+add_filter( 'safe_publish_validate_post_data', function( $is_valid, $post_data ) {
     // Custom validation logic
     if ( empty( $post_data['custom_field'] ) ) {
         return new WP_Error( 'missing_field', 'Required field missing' );
@@ -65,7 +65,7 @@ add_filter( 'ccp_validate_post_data', function( $is_valid, $post_data ) {
 Implement custom authentication methods:
 
 ```php
-add_filter( 'ccp_authentication_headers', function( $headers, $site_url ) {
+add_filter( 'safe_publish_authentication_headers', function( $headers, $site_url ) {
     // Add custom authentication headers
     $headers['X-Custom-Auth'] = 'your-token';
     return $headers;
@@ -79,7 +79,7 @@ add_filter( 'ccp_authentication_headers', function( $headers, $site_url ) {
 Notify your team when content is imported:
 
 ```php
-add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
+add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
     $post = get_post( $post_id );
     $message = sprintf(
         'New post imported: %s from %s',
@@ -99,9 +99,9 @@ add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
 Import and map custom fields:
 
 ```php
-add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
+add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
     // Get source post data
-    $source_post = get_post_meta( $post_id, '_ccp_source_data', true );
+    $source_post = get_post_meta( $post_id, '_safe_publish_source_data', true );
 
     // Map custom fields
     if ( isset( $source_post['acf'] ) ) {
@@ -117,7 +117,7 @@ add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
 Auto-publish certain types of content:
 
 ```php
-add_filter( 'ccp_pre_import_post', function( $post_data ) {
+add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
     // Auto-publish posts from specific category
     if ( in_array( 'auto-publish', $post_data['categories'] ?? [] ) ) {
         $post_data['post_status'] = 'publish';
@@ -145,12 +145,12 @@ Set up a development environment for testing your extensions:
 Always handle errors gracefully:
 
 ```php
-add_filter( 'ccp_pre_import_post', function( $post_data ) {
+add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
     try {
         // Your custom logic
         return $post_data;
     } catch ( Exception $e ) {
-        error_log( 'CCP Extension Error: ' . $e->getMessage() );
+        error_log( 'Safe Publish Extension Error: ' . $e->getMessage() );
         return $post_data; // Return unchanged on error
     }
 } );
@@ -164,7 +164,7 @@ add_filter( 'ccp_pre_import_post', function( $post_data ) {
 
 ### 4. VIP Compatibility
 
-When extending CCP on WordPress VIP:
+When extending Safe Publish on WordPress VIP:
 
 - Follow [VIP coding standards](https://docs.wpvip.com/technical-references/vip-codebase/)
 - Avoid filesystem writes

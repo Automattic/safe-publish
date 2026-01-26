@@ -32,12 +32,12 @@
         <UnusedParam>
             <errorLevel type="suppress">
                 <file name="tests/unit/stubs.php" />
-                <file name="mu-plugins/ccp-auth.php" />
+                <file name="mu-plugins/safe-publish-auth.php" />
             </errorLevel>
         </UnusedParam>
         <UnusedClosureParam>
             <errorLevel type="suppress">
-                <file name="mu-plugins/ccp-auth.php" />
+                <file name="mu-plugins/safe-publish-auth.php" />
             </errorLevel>
         </UnusedClosureParam>
         <UnusedVariable>
@@ -51,6 +51,6 @@
         <file name="vendor/php-stubs/wordpress-stubs/wordpress-stubs.php"/>
         <file name="vendor/php-stubs/wordpress-tests-stubs/wordpress-tests-stubs.php" preloadClasses="true"/>
         <file name="tests/unit/test-utils.php"/>
-        <file name="compliant-content-publisher.php"/>
+        <file name="safe-publish.php"/>
     </stubs>
 </psalm>

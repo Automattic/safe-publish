@@ -66,35 +66,35 @@ export default function UpdateOptionsPanel( {
 
 	return (
 		<section style={ { marginTop: 16, borderTop: '1px solid #eee', paddingTop: 12 } }>
-			<Text as="h2">{ __( 'What to update', 'ccp' ) }</Text>
+			<Text as="h2">{ __( 'What to update', 'safe-publish' ) }</Text>
 			<VStack spacing="2" style={ { marginTop: 6 } }>
 				<CheckboxControl
-					label={ __( 'Title', 'ccp' ) }
+					label={ __( 'Title', 'safe-publish' ) }
 					checked={ updateOpts.title }
 					onChange={ ( val ) => handleChange( 'title', Boolean( val ) ) }
 				/>
 				<CheckboxControl
-					label={ __( 'Excerpt', 'ccp' ) }
+					label={ __( 'Excerpt', 'safe-publish' ) }
 					checked={ updateOpts.excerpt }
 					onChange={ ( val ) => handleChange( 'excerpt', Boolean( val ) ) }
 				/>
 				<CheckboxControl
-					label={ __( 'Meta (custom fields)', 'ccp' ) }
+					label={ __( 'Meta (custom fields)', 'safe-publish' ) }
 					checked={ updateOpts.meta }
 					onChange={ ( val ) => handleChange( 'meta', Boolean( val ) ) }
 				/>
 				<CheckboxControl
-					label={ __( 'Terms (taxonomies)', 'ccp' ) }
+					label={ __( 'Terms (taxonomies)', 'safe-publish' ) }
 					checked={ updateOpts.terms }
 					onChange={ ( val ) => handleChange( 'terms', Boolean( val ) ) }
 				/>
 				<CheckboxControl
-					label={ __( 'Featured Image', 'ccp' ) }
+					label={ __( 'Featured Image', 'safe-publish' ) }
 					checked={ updateOpts.featuredMedia }
 					onChange={ ( val ) => handleChange( 'featuredMedia', Boolean( val ) ) }
 				/>
 				<Text style={ { fontSize: 12, color: '#666' } }>
-					{ __( 'Content is always updated. Uncheck items above to skip updating them.', 'ccp' ) }
+					{ __( 'Content is always updated. Uncheck items above to skip updating them.', 'safe-publish' ) }
 				</Text>
 			</VStack>
 		</section>

@@ -52,7 +52,7 @@ export default function DiffViewSelector( {
 				onClick={ () => onViewChange( true, showRenderedDiff ) }
 				size="small"
 			>
-				{ __( 'Block View', 'ccp' ) }
+				{ __( 'Block View', 'safe-publish' ) }
 			</Button>
 			{ hasRenderedDiffHtml && (
 				<Button
@@ -60,7 +60,7 @@ export default function DiffViewSelector( {
 					onClick={ () => onViewChange( false, true ) }
 					size="small"
 				>
-					{ __( 'Rendered Table Diff', 'ccp' ) }
+					{ __( 'Rendered Table Diff', 'safe-publish' ) }
 				</Button>
 			) }
 			{ hasDiffHtml && (
@@ -69,7 +69,7 @@ export default function DiffViewSelector( {
 					onClick={ () => onViewChange( false, false ) }
 					size="small"
 				>
-					{ __( 'Source Diff', 'ccp' ) }
+					{ __( 'Source Diff', 'safe-publish' ) }
 				</Button>
 			) }
 		</HStack>

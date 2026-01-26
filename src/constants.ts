@@ -1,10 +1,10 @@
 /**
- * Constants for the Compliant Content Publisher plugin.
+ * Constants for the Safe Publish plugin.
  *
  * Defines layout types, sorting constants, and other shared values used across
  * the plugin's frontend components.
  *
- * @file This file defines shared constants for the CCP plugin.
+ * @file This file defines shared constants for the Safe Publish plugin.
  */
 
 /**

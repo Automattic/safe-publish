@@ -2,15 +2,15 @@
 /**
  * External Posts API class
  *
- * @package CCP
+ * @package Safe_Publish
  */
 
 declare(strict_types = 1);
 
-namespace CCP\API;
+namespace Safe_Publish\API;
 
-use CCP\Validators\URL_Validator;
-use CCP\Auth\VIP_Safe_Auth;
+use Safe_Publish\Validators\URL_Validator;
+use Safe_Publish\Auth\VIP_Safe_Auth;
 use DOMDocument;
 
 // Prevent direct access.
@@ -49,7 +49,7 @@ class External_Posts_API {
 		if ( ! URL_Validator::is_valid_external_url( $site_url ) ) {
 			return new \WP_Error(
 				'invalid_url',
-				__( 'Invalid URL provided.', 'ccp' )
+				__( 'Invalid URL provided.', 'safe-publish' )
 			);
 		}
 
@@ -72,14 +72,14 @@ class External_Posts_API {
 		if ( is_array( $post_types_data ) && isset( $post_types_data['code'] ) ) {
 			return new \WP_Error(
 				'api_error',
-				$post_types_data['message'] ?? __( 'Unknown API error occurred.', 'ccp' )
+				$post_types_data['message'] ?? __( 'Unknown API error occurred.', 'safe-publish' )
 			);
 		}
 
 		if ( empty( $post_types_data ) || ! is_array( $post_types_data ) ) {
 			$error_msg = sprintf(
 				/* translators: %s: Response body snippet */
-				__( 'No post types found. Response: %s', 'ccp' ),
+				__( 'No post types found. Response: %s', 'safe-publish' ),
 				substr( $response_body, 0, 200 ) . ( strlen( $response_body ) > 200 ? '…' : '' )
 			);
 			return new \WP_Error(
@@ -121,7 +121,7 @@ class External_Posts_API {
 		if ( ! URL_Validator::is_valid_external_url( $site_url ) ) {
 			return new \WP_Error(
 				'invalid_url',
-				__( 'Invalid URL provided.', 'ccp' )
+				__( 'Invalid URL provided.', 'safe-publish' )
 			);
 		}
 
@@ -180,7 +180,7 @@ class External_Posts_API {
 		 * @param string $site_url        Site URL.
 		 * @param int    $number_of_posts Number of posts.
 		 */
-		$query_args = apply_filters( 'ccp_api_query_args', $query_args, $site_url, $number_of_posts );
+		$query_args = apply_filters( 'safe_publish_api_query_args', $query_args, $site_url, $number_of_posts );
 
 		$final_url = add_query_arg( $query_args, $api_endpoint );
 
@@ -212,7 +212,7 @@ class External_Posts_API {
 		if ( ! is_array( $posts ) ) {
 			return new \WP_Error(
 				'invalid_response',
-				__( 'Invalid response from external API.', 'ccp' ),
+				__( 'Invalid response from external API.', 'safe-publish' ),
 				array( 'response_body' => $body )
 			);
 		}
@@ -244,7 +244,7 @@ class External_Posts_API {
 		$sanitized_post = array(
 			'id'             => isset( $post['id'] ) ? absint( $post['id'] ) : 0,
 			'link'           => isset( $post['link'] ) ? esc_url( $post['link'] ) : '#',
-			'title'          => isset( $post['title']['rendered'] ) ? sanitize_text_field( wp_strip_all_tags( $post['title']['rendered'] ) ) : __( 'No Title', 'ccp' ),
+			'title'          => isset( $post['title']['rendered'] ) ? sanitize_text_field( wp_strip_all_tags( $post['title']['rendered'] ) ) : __( 'No Title', 'safe-publish' ),
 			'modified'       => isset( $post['modified'] ) ? sanitize_text_field( $post['modified'] ) : '',
 			'thumbnail'      => isset( $post['featured_media'] ) ? esc_url( get_the_post_thumbnail_url( $post['id'], 'thumbnail' ) ) : '', // Default to empty if no thumbnail.
 			'featured_media' => isset( $post['featured_media'] ) ? absint( $post['featured_media'] ) : 0,
@@ -287,7 +287,7 @@ class External_Posts_API {
 		 * @param array $sanitized_post Sanitized post data.
 		 * @param array $post           Original post data.
 		 */
-		return apply_filters( 'ccp_sanitized_post', $sanitized_post, $post );
+		return apply_filters( 'safe_publish_sanitized_post', $sanitized_post, $post );
 	}
 
 	/**
@@ -314,7 +314,7 @@ class External_Posts_API {
 			$results['message'] = $response->get_error_message();
 		} else {
 			$results['success'] = true;
-			$results['message'] = __( 'Connection successful.', 'ccp' );
+			$results['message'] = __( 'Connection successful.', 'safe-publish' );
 		}
 
 		return $results;
@@ -504,8 +504,8 @@ class External_Posts_API {
 		}
 
 		// Store the original URL as meta for tracking.
-		update_post_meta( $attachment_id, 'ccp_original_url', $media_url );
-		update_post_meta( $attachment_id, 'ccp_imported_from', $source_site_url );
+		update_post_meta( $attachment_id, 'safe_publish_original_url', $media_url );
+		update_post_meta( $attachment_id, 'safe_publish_imported_from', $source_site_url );
 
 		return wp_get_attachment_url( $attachment_id );
 	}
@@ -620,20 +620,20 @@ class External_Posts_API {
 
 		if ( is_wp_error( $attachment_id ) ) {
 			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-			error_log( 'CCP: Failed to import media ' . $media_url . ' - Error: ' . $attachment_id->get_error_message() );
+			error_log( 'Safe Publish: Failed to import media ' . $media_url . ' - Error: ' . $attachment_id->get_error_message() );
 			return false;
 		}
 
 		// Verify the attachment was actually created.
 		if ( ! $attachment_id || ! is_numeric( $attachment_id ) ) {
 			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-			error_log( 'CCP: media_handle_sideload returned invalid attachment ID for ' . $media_url );
+			error_log( 'Safe Publish: media_handle_sideload returned invalid attachment ID for ' . $media_url );
 			return false;
 		}
 
 		// Store the original URL as meta for tracking.
-		update_post_meta( $attachment_id, 'ccp_original_url', $media_url );
-		update_post_meta( $attachment_id, 'ccp_imported_from', $source_site_url );
+		update_post_meta( $attachment_id, 'safe_publish_original_url', $media_url );
+		update_post_meta( $attachment_id, 'safe_publish_imported_from', $source_site_url );
 
 		return $attachment_id;
 	}
@@ -649,7 +649,7 @@ class External_Posts_API {
 		$attachments = get_posts(
 			array(
 				'post_type'        => 'attachment',
-				'meta_key'         => 'ccp_original_url',
+				'meta_key'         => 'safe_publish_original_url',
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'       => $original_url,
 				'posts_per_page'   => 1,
@@ -721,8 +721,8 @@ class External_Posts_API {
 
 		if ( $attachment_id ) {
 			// Store additional metadata for featured images.
-			update_post_meta( $attachment_id, 'ccp_featured_media_id', $featured_media_id );
-			update_post_meta( $attachment_id, 'ccp_media_type', 'featured_image' );
+			update_post_meta( $attachment_id, 'safe_publish_featured_media_id', $featured_media_id );
+			update_post_meta( $attachment_id, 'safe_publish_media_type', 'featured_image' );
 
 			return $attachment_id;
 		}
@@ -745,11 +745,11 @@ class External_Posts_API {
 				'meta_query'       => array(
 					'relation' => 'AND',
 					array(
-						'key'   => 'ccp_featured_media_id',
+						'key'   => 'safe_publish_featured_media_id',
 						'value' => $featured_media_id,
 					),
 					array(
-						'key'   => 'ccp_imported_from',
+						'key'   => 'safe_publish_imported_from',
 						'value' => $site_url,
 					),
 				),

@@ -2,15 +2,15 @@
 /**
  * Plugin Test.
  *
- * @package Compliant_Content_Publisher
+ * @package Safe_Publish
  */
 
 declare(strict_types=1);
 
-namespace CCP\Tests;
+namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
-use CCP\Plugin;
+use Safe_Publish\Plugin;
 
 /**
  * Plugin Test.
@@ -48,7 +48,7 @@ class PluginTest extends TestCase {
 
 		$this->assertNotNull( $this->plugin->get_api() );
 		$this->assertNotNull( $this->plugin->get_admin_handler() );
-		$this->assertNotNull( $this->plugin->get_ccp_api() );
+		$this->assertNotNull( $this->plugin->get_safe_publish_api() );
 	}
 
 	/**
@@ -58,7 +58,7 @@ class PluginTest extends TestCase {
 		$this->plugin->init();
 
 		$api = $this->plugin->get_api();
-		$this->assertInstanceOf( \CCP\API\External_Posts_API::class, $api );
+		$this->assertInstanceOf( \Safe_Publish\API\External_Posts_API::class, $api );
 	}
 
 	/**
@@ -68,17 +68,17 @@ class PluginTest extends TestCase {
 		$this->plugin->init();
 
 		$admin_handler = $this->plugin->get_admin_handler();
-		$this->assertInstanceOf( \CCP\Admin\Admin_Handler::class, $admin_handler );
+		$this->assertInstanceOf( \Safe_Publish\Admin\Admin_Handler::class, $admin_handler );
 	}
 
 	/**
-	 * Verifies that get_ccp_api returns a CCP_API instance.
+	 * Verifies that get_safe_publish_api returns a Safe_Publish_API instance.
 	 */
-	public function test_get_ccp_api_returns_ccp_api(): void {
+	public function test_get_safe_publish_api_returns_safe_publish_api(): void {
 		$this->plugin->init();
 
-		$ccp_api = $this->plugin->get_ccp_api();
-		$this->assertInstanceOf( \CCP\API\CCP_API::class, $ccp_api );
+		$safe_publish_api = $this->plugin->get_safe_publish_api();
+		$this->assertInstanceOf( \Safe_Publish\API\Safe_Publish_API::class, $safe_publish_api );
 	}
 
 	/**

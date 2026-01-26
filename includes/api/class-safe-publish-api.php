@@ -1,13 +1,13 @@
 <?php
 /**
- * CCP API class
+ * Safe Publish API class
  *
- * @package CCP
+ * @package Safe_Publish
  */
 
 declare( strict_types=1 );
 
-namespace CCP\API;
+namespace Safe_Publish\API;
 
 use Exception;
 use stdClass;
@@ -22,16 +22,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * External Posts API Class.
+ * Safe_Publish API Class.
  */
-final class CCP_API extends REST_Base {
+final class Safe_Publish_API extends REST_Base {
 
 	/**
 	 * REST API base route.
 	 *
 	 * @var string
 	 */
-	const REST_BASE = 'ccp/v1';
+	const REST_BASE = 'safe-publish/v1';
 
 	/**
 	 * Registers REST API routes.
@@ -81,7 +81,7 @@ final class CCP_API extends REST_Base {
 				'permission_callback' => function ( WP_REST_Request $request ) {
 					$post_id = (int) $request->get_param( 'postId' );
 					if ( ! $post_id ) {
-						return new WP_Error( 'rest_missing_param', __( 'postId is required', 'ccp' ), array( 'status' => 400 ) );
+						return new WP_Error( 'rest_missing_param', __( 'postId is required', 'safe-publish' ), array( 'status' => 400 ) );
 					}
 
 					return current_user_can( 'edit_post', $post_id );
@@ -129,7 +129,7 @@ final class CCP_API extends REST_Base {
 	 * @return WP_REST_Response
 	 */
 	public function update_post_content( WP_REST_Request $req ): WP_REST_Response {
-		global $ccp_plugin;
+		global $safe_publish_plugin;
 
 		$post_id           = (int) $req->get_param( 'postId' );
 		$content           = $req->get_param( 'content' );
@@ -143,7 +143,7 @@ final class CCP_API extends REST_Base {
 			return new WP_REST_Response(
 				array(
 					'success' => false,
-					'error'   => __( 'Missing postId', 'ccp' ),
+					'error'   => __( 'Missing postId', 'safe-publish' ),
 				),
 				400
 			);
@@ -153,7 +153,7 @@ final class CCP_API extends REST_Base {
 			return new WP_REST_Response(
 				array(
 					'success' => false,
-					'error'   => __( 'Insufficient permissions', 'ccp' ),
+					'error'   => __( 'Insufficient permissions', 'safe-publish' ),
 				),
 				403
 			);
@@ -174,10 +174,10 @@ final class CCP_API extends REST_Base {
 			$processed_content = $content;
 			if ( ! empty( $content ) ) {
 				// Extract the site URL from the external link.
-				$site_url = get_option( 'ccp_external_site_url', '' );
+				$site_url = get_option( 'safe_publish_external_site_url', '' );
 
-				$admin_handler = $ccp_plugin->get_admin_handler();
-				$api           = $ccp_plugin->get_api();
+				$admin_handler = $safe_publish_plugin->get_admin_handler();
+				$api           = $safe_publish_plugin->get_api();
 
 				// Check if content contains Gutenberg blocks.
 				if ( $admin_handler->is_gutenberg_content( $content ) ) {
@@ -210,8 +210,8 @@ final class CCP_API extends REST_Base {
 
 		// Import/set featured image if provided.
 		if ( $req->has_param( 'featuredMediaId' ) && $featured_media_id > 0 ) {
-			$api      = $ccp_plugin->get_api();
-			$site_url = get_option( 'ccp_external_site_url', '' );
+			$api      = $safe_publish_plugin->get_api();
+			$site_url = get_option( 'safe_publish_external_site_url', '' );
 			if ( $api && ! empty( $site_url ) ) {
 				$attachment_id = $api->import_featured_image( $featured_media_id, $site_url );
 				if ( $attachment_id ) {
@@ -246,7 +246,7 @@ final class CCP_API extends REST_Base {
 	 */
 	private function get_auth_credentials(): array {
 		// Try VIP-safe authentication first.
-		$shared_secret = get_option( 'ccp_shared_secret', '' );
+		$shared_secret = get_option( 'safe_publish_shared_secret', '' );
 
 		if ( ! empty( $shared_secret ) ) {
 			return array(
@@ -256,8 +256,8 @@ final class CCP_API extends REST_Base {
 
 		// Fallback to Basic auth in development environments only.
 		if ( $this->is_development_environment() ) {
-			$username = get_option( 'ccp_username', '' );
-			$password = get_option( 'ccp_password', '' );
+			$username = get_option( 'safe_publish_username', '' );
+			$password = get_option( 'safe_publish_password', '' );
 
 			if ( ! empty( $username ) && ! empty( $password ) ) {
 				return array(
@@ -283,7 +283,7 @@ final class CCP_API extends REST_Base {
 		$post_type        = (string) $req->get_param( 'postType' );
 		$mode             = (string) $req->get_param( 'mode' );
 		$cleanup          = (bool) $req->get_param( 'cleanup' );
-		$site_url         = get_option( 'ccp_external_site_url', '' );
+		$site_url         = get_option( 'safe_publish_external_site_url', '' );
 
 		// Convert plural post types to singular for WordPress compatibility.
 		$post_type_mapping = array(
@@ -298,7 +298,7 @@ final class CCP_API extends REST_Base {
 		// Find local post by external post ID.
 		$_query = new WP_Query(
 			array(
-				'meta_key'       => 'ccp_external_post_id',
+				'meta_key'       => 'safe_publish_external_post_id',
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'     => $external_post_id,
 				'post_type'      => $mapped_post_type,
@@ -308,7 +308,7 @@ final class CCP_API extends REST_Base {
 		);
 
 		if ( ! $_query->have_posts() ) {
-			return new WP_REST_Response( array( 'error' => __( 'No matching post found in current site.', 'ccp' ) ), 404 );
+			return new WP_REST_Response( array( 'error' => __( 'No matching post found in current site.', 'safe-publish' ) ), 404 );
 		}
 
 		$local_post = $_query->posts[0];
@@ -328,7 +328,7 @@ final class CCP_API extends REST_Base {
 		$response = $this->make_request( $external_api_url, $this->get_auth_credentials() );
 
 		if ( is_wp_error( $response ) ) {
-			return new WP_REST_Response( array( 'error' => __( 'Failed to fetch external post.', 'ccp' ) ), 500 );
+			return new WP_REST_Response( array( 'error' => __( 'Failed to fetch external post.', 'safe-publish' ) ), 500 );
 		}
 
 		$body = wp_remote_retrieve_body( $response );
@@ -406,14 +406,14 @@ final class CCP_API extends REST_Base {
 			$current_content,
 			$incoming_content,
 			array(
-				'title_left'      => __( 'Current Content', 'ccp' ),
-				'title_right'     => __( 'Incoming Content', 'ccp' ),
+				'title_left'      => __( 'Current Content', 'safe-publish' ),
+				'title_right'     => __( 'Incoming Content', 'safe-publish' ),
 				'show_split_view' => ( 'split' === $mode ),
 			)
 		);
 
 		if ( '' === $content_diff ) {
-			$content_diff = '<div class="incoming-diff no-changes"><p>' . esc_html__( 'No content changes detected.', 'ccp' ) . '</p></div>';
+			$content_diff = '<div class="incoming-diff no-changes"><p>' . esc_html__( 'No content changes detected.', 'safe-publish' ) . '</p></div>';
 		}
 
 		// --- Non-content diffs (title, excerpt, taxonomies, meta) ---
@@ -436,8 +436,8 @@ final class CCP_API extends REST_Base {
 			}
 			$lines = array();
 			foreach ( $meta_arr as $k => $v ) {
-				// Skip protected meta (leading underscore) and plugin internal meta (ccp_ prefix).
-				if ( 0 === strpos( $k, '_' ) || 0 === strpos( $k, 'ccp_' ) ) {
+				// Skip protected meta (leading underscore) and plugin internal meta (safe_publish_ prefix).
+				if ( 0 === strpos( $k, '_' ) || 0 === strpos( $k, 'safe_publish_' ) ) {
 					continue;
 				}
 				$val = is_array( $v ) ? ( isset( $v[0] ) ? $v[0] : wp_json_encode( $v ) ) : $v;
@@ -454,12 +454,12 @@ final class CCP_API extends REST_Base {
 			$current_title,
 			$incoming_title,
 			array(
-				'title_left'  => __( 'Current Title', 'ccp' ),
-				'title_right' => __( 'Incoming Title', 'ccp' ),
+				'title_left'  => __( 'Current Title', 'safe-publish' ),
+				'title_right' => __( 'Incoming Title', 'safe-publish' ),
 			)
 		);
 		if ( '' === $title_diff ) {
-			$title_diff = '<div class="incoming-diff no-changes"><p>' . esc_html__( 'No title changes detected.', 'ccp' ) . '</p></div>';
+			$title_diff = '<div class="incoming-diff no-changes"><p>' . esc_html__( 'No title changes detected.', 'safe-publish' ) . '</p></div>';
 		}
 
 		// Normalize excerpts so a simple wrapping <p>...</p> does not create a false diff.
@@ -489,12 +489,12 @@ final class CCP_API extends REST_Base {
 			$current_excerpt_for_diff,
 			$incoming_excerpt_for_diff,
 			array(
-				'title_left'  => __( 'Current Excerpt', 'ccp' ),
-				'title_right' => __( 'Incoming Excerpt', 'ccp' ),
+				'title_left'  => __( 'Current Excerpt', 'safe-publish' ),
+				'title_right' => __( 'Incoming Excerpt', 'safe-publish' ),
 			)
 		);
 		if ( '' === $excerpt_diff ) {
-			$excerpt_diff = '<div class="incoming-diff no-changes"><p>' . esc_html__( 'No excerpt changes detected.', 'ccp' ) . '</p></div>';
+			$excerpt_diff = '<div class="incoming-diff no-changes"><p>' . esc_html__( 'No excerpt changes detected.', 'safe-publish' ) . '</p></div>';
 		}
 
 		// Taxonomies diff (text representation).
@@ -504,12 +504,12 @@ final class CCP_API extends REST_Base {
 			$current_terms_text,
 			$incoming_terms_text,
 			array(
-				'title_left'  => __( 'Current Taxonomies', 'ccp' ),
-				'title_right' => __( 'Incoming Taxonomies', 'ccp' ),
+				'title_left'  => __( 'Current Taxonomies', 'safe-publish' ),
+				'title_right' => __( 'Incoming Taxonomies', 'safe-publish' ),
 			)
 		);
 		if ( '' === $tax_diff ) {
-			$tax_diff = '<div class="incoming-diff no-changes"><p>' . esc_html__( 'No taxonomy changes detected.', 'ccp' ) . '</p></div>';
+			$tax_diff = '<div class="incoming-diff no-changes"><p>' . esc_html__( 'No taxonomy changes detected.', 'safe-publish' ) . '</p></div>';
 		}
 
 		// Meta diff (text representation).
@@ -519,12 +519,12 @@ final class CCP_API extends REST_Base {
 			$current_meta_text,
 			$incoming_meta_text,
 			array(
-				'title_left'  => __( 'Current Meta', 'ccp' ),
-				'title_right' => __( 'Incoming Meta', 'ccp' ),
+				'title_left'  => __( 'Current Meta', 'safe-publish' ),
+				'title_right' => __( 'Incoming Meta', 'safe-publish' ),
 			)
 		);
 		if ( '' === $meta_diff ) {
-			$meta_diff = '<div class="incoming-diff no-changes"><p>' . esc_html__( 'No meta changes detected.', 'ccp' ) . '</p></div>';
+			$meta_diff = '<div class="incoming-diff no-changes"><p>' . esc_html__( 'No meta changes detected.', 'safe-publish' ) . '</p></div>';
 		}
 
 		// Featured media diff (with previews).
@@ -552,12 +552,12 @@ final class CCP_API extends REST_Base {
 			$current_featured_text,
 			$incoming_featured_text,
 			array(
-				'title_left'  => __( 'Current Featured Image', 'ccp' ),
-				'title_right' => __( 'Incoming Featured Image', 'ccp' ),
+				'title_left'  => __( 'Current Featured Image', 'safe-publish' ),
+				'title_right' => __( 'Incoming Featured Image', 'safe-publish' ),
 			)
 		);
 		if ( '' === $featured_media_diff ) {
-			$featured_media_diff = '<div class="incoming-diff no-changes"><p>' . esc_html__( 'No featured image changes detected.', 'ccp' ) . '</p></div>';
+			$featured_media_diff = '<div class="incoming-diff no-changes"><p>' . esc_html__( 'No featured image changes detected.', 'safe-publish' ) . '</p></div>';
 		}
 
 		$featured_media_preview = sprintf(
@@ -571,10 +571,10 @@ final class CCP_API extends REST_Base {
                     <div style="margin-top:8px;">%4$s</div>
                 </div>
             </div>',
-			esc_html__( 'Current', 'ccp' ),
-			$current_featured_url ? '<img alt="" src="' . esc_url( $current_featured_url ) . '" style="max-width:100%;height:auto;" />' : '<em>' . esc_html__( 'None', 'ccp' ) . '</em>',
-			esc_html__( 'Incoming', 'ccp' ),
-			$incoming_featured_url ? '<img alt="" src="' . esc_url( $incoming_featured_url ) . '" style="max-width:100%;height:auto;" />' : '<em>' . esc_html__( 'None', 'ccp' ) . '</em>'
+			esc_html__( 'Current', 'safe-publish' ),
+			$current_featured_url ? '<img alt="" src="' . esc_url( $current_featured_url ) . '" style="max-width:100%;height:auto;" />' : '<em>' . esc_html__( 'None', 'safe-publish' ) . '</em>',
+			esc_html__( 'Incoming', 'safe-publish' ),
+			$incoming_featured_url ? '<img alt="" src="' . esc_url( $incoming_featured_url ) . '" style="max-width:100%;height:auto;" />' : '<em>' . esc_html__( 'None', 'safe-publish' ) . '</em>'
 		);
 
 		$featured_media_html = $featured_media_diff . $featured_media_preview;

@@ -1,16 +1,16 @@
 # REST API Extension
 
-Compliant Content Publisher provides REST API endpoints for programmatic access. This guide explains how to use and extend the API.
+Safe Publish provides REST API endpoints for programmatic access. This guide explains how to use and extend the API.
 
 ## Base API Endpoints
 
-The plugin registers endpoints under the `ccp/v1` namespace:
+The plugin registers endpoints under the `safe-publish/v1` namespace:
 
-- `GET /wp-json/ccp/v1/status` - Plugin status and version
-- `POST /wp-json/ccp/v1/import` - Import a single post
-- `POST /wp-json/ccp/v1/bulk-import` - Bulk import multiple posts
-- `GET /wp-json/ccp/v1/history` - Get import history
-- `GET /wp-json/ccp/v1/post-types` - Get available post types from external site
+- `GET /wp-json/safe-publish/v1/status` - Plugin status and version
+- `POST /wp-json/safe-publish/v1/import` - Import a single post
+- `POST /wp-json/safe-publish/v1/bulk-import` - Bulk import multiple posts
+- `GET /wp-json/safe-publish/v1/history` - Get import history
+- `GET /wp-json/safe-publish/v1/post-types` - Get available post types from external site
 
 ## Authentication
 
@@ -21,7 +21,7 @@ API requests require proper WordPress authentication. Use one of these methods:
 WordPress 5.6+ supports application passwords:
 
 ```bash
-curl -X POST https://your-site.com/wp-json/ccp/v1/import \
+curl -X POST https://your-site.com/wp-json/safe-publish/v1/import \
   -u "username:xxxx xxxx xxxx xxxx xxxx xxxx" \
   -H "Content-Type: application/json" \
   -d '{"source_url": "https://staging.com/post-123", "post_id": 123}'
@@ -32,7 +32,7 @@ curl -X POST https://your-site.com/wp-json/ccp/v1/import \
 When making requests from the same site:
 
 ```javascript
-fetch('/wp-json/ccp/v1/import', {
+fetch('/wp-json/safe-publish/v1/import', {
   method: 'POST',
   credentials: 'include',
   headers: {
@@ -51,7 +51,7 @@ fetch('/wp-json/ccp/v1/import', {
 ### Get Plugin Status
 
 ```bash
-curl https://your-site.com/wp-json/ccp/v1/status
+curl https://your-site.com/wp-json/safe-publish/v1/status
 ```
 
 **Response:**
@@ -68,7 +68,7 @@ curl https://your-site.com/wp-json/ccp/v1/status
 ### Import a Single Post
 
 ```bash
-curl -X POST https://your-site.com/wp-json/ccp/v1/import \
+curl -X POST https://your-site.com/wp-json/safe-publish/v1/import \
   -u "username:app-password" \
   -H "Content-Type: application/json" \
   -d '{
@@ -105,7 +105,7 @@ curl -X POST https://your-site.com/wp-json/ccp/v1/import \
 ### Bulk Import
 
 ```bash
-curl -X POST https://your-site.com/wp-json/ccp/v1/bulk-import \
+curl -X POST https://your-site.com/wp-json/safe-publish/v1/bulk-import \
   -u "username:app-password" \
   -H "Content-Type: application/json" \
   -d '{
@@ -147,7 +147,7 @@ curl -X POST https://your-site.com/wp-json/ccp/v1/bulk-import \
 ### Get Import History
 
 ```bash
-curl https://your-site.com/wp-json/ccp/v1/history \
+curl https://your-site.com/wp-json/safe-publish/v1/history \
   -u "username:app-password"
 ```
 
@@ -188,9 +188,9 @@ curl https://your-site.com/wp-json/ccp/v1/history \
 
 ```php
 add_action( 'rest_api_init', function() {
-    register_rest_route( 'ccp/v1', '/custom-action', [
+    register_rest_route( 'safe-publish/v1', '/custom-action', [
         'methods' => 'POST',
-        'callback' => 'ccp_custom_action_handler',
+        'callback' => 'safe_publish_custom_action_handler',
         'permission_callback' => function() {
             return current_user_can( 'manage_options' );
         },
@@ -206,7 +206,7 @@ add_action( 'rest_api_init', function() {
     ] );
 } );
 
-function ccp_custom_action_handler( WP_REST_Request $request ) {
+function safe_publish_custom_action_handler( WP_REST_Request $request ) {
     $post_id = $request->get_param( 'post_id' );
 
     // Your custom logic here
@@ -223,7 +223,7 @@ function ccp_custom_action_handler( WP_REST_Request $request ) {
 Modify response data for existing endpoints:
 
 ```php
-add_filter( 'rest_prepare_ccp_history', function( $response, $item, $request ) {
+add_filter( 'rest_prepare_safe_publish_history', function( $response, $item, $request ) {
     $data = $response->get_data();
 
     // Add custom fields
@@ -240,8 +240,8 @@ Create webhooks to notify external systems:
 
 ```php
 // Trigger webhook after successful import
-add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
-    $webhook_url = get_option( 'ccp_webhook_url' );
+add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
+    $webhook_url = get_option( 'safe_publish_webhook_url' );
 
     if ( ! $webhook_url ) {
         return;
@@ -269,14 +269,14 @@ add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
 Create a simple JavaScript client:
 
 ```javascript
-class CCPClient {
+class SafePublishClient {
     constructor(baseUrl, credentials) {
         this.baseUrl = baseUrl;
         this.credentials = credentials;
     }
 
     async import(postId, postType = 'post') {
-        const response = await fetch(`${this.baseUrl}/wp-json/ccp/v1/import`, {
+        const response = await fetch(`${this.baseUrl}/wp-json/safe-publish/v1/import`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -289,7 +289,7 @@ class CCPClient {
     }
 
     async bulkImport(posts) {
-        const response = await fetch(`${this.baseUrl}/wp-json/ccp/v1/bulk-import`, {
+        const response = await fetch(`${this.baseUrl}/wp-json/safe-publish/v1/bulk-import`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -304,7 +304,7 @@ class CCPClient {
     async getHistory(params = {}) {
         const queryString = new URLSearchParams(params).toString();
         const response = await fetch(
-            `${this.baseUrl}/wp-json/ccp/v1/history?${queryString}`,
+            `${this.baseUrl}/wp-json/safe-publish/v1/history?${queryString}`,
             {
                 headers: {
                     'Authorization': `Basic ${btoa(this.credentials)}`
@@ -317,7 +317,7 @@ class CCPClient {
 }
 
 // Usage
-const client = new CCPClient(
+const client = new SafePublishClient(
     'https://your-site.com',
     'username:app-password'
 );
@@ -347,13 +347,13 @@ Implement custom rate limiting:
 
 ```php
 add_filter( 'rest_pre_dispatch', function( $result, $server, $request ) {
-    // Only apply to CCP endpoints
-    if ( strpos( $request->get_route(), '/ccp/v1/' ) !== 0 ) {
+    // Only apply to Safe Publish endpoints
+    if ( strpos( $request->get_route(), '/safe-publish/v1/' ) !== 0 ) {
         return $result;
     }
 
     $user_id = get_current_user_id();
-    $rate_key = 'ccp_rate_limit_' . $user_id;
+    $rate_key = 'safe_publish_rate_limit_' . $user_id;
     $max_requests = 60; // 60 requests
     $time_window = 60; // per minute
 

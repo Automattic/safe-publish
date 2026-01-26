@@ -1,6 +1,6 @@
 # Authentication
 
-Compliant Content Publisher supports two authentication methods for secure communication between your production and non-production WordPress sites.
+Safe Publish supports two authentication methods for secure communication between your production and non-production WordPress sites.
 
 ## Shared Secret Authentication (Recommended)
 
@@ -9,13 +9,13 @@ The shared secret method is the most secure and recommended for production envir
 ### Setup
 
 1. **On the non-production site**, install the included MU plugin:
-   - Copy `/client-mu-plugins/ccp-auth.php` to your non-prod site's `wp-content/mu-plugins/` directory
+   - Copy `/mu-plugins/safe-publish-auth.php` to your non-prod site's `wp-content/mu-plugins/` directory
    - If the `mu-plugins` directory doesn't exist, create it
 
 2. **On both sites** (production and non-production), add this line to `wp-config.php`:
 
    ```php
-   define( 'CCP_SHARED_SECRET', 'your-secure-random-string-here' );
+   define( 'SAFE_PUBLISH_SHARED_SECRET', 'your-secure-random-string-here' );
    ```
 
 3. **Generate a secure secret**:
@@ -24,14 +24,14 @@ The shared secret method is the most secure and recommended for production envir
    - Store it securely (treat it like a password)
 
 4. **Verify the setup**:
-   - In the CCP admin panel, click "Test Connection"
+   - In the Safe Publish admin panel, click "Test Connection"
    - You should see a success message if authentication is working
 
 ### How it Works
 
 The shared secret authentication flow:
 
-1. Production site includes the shared secret in the `X-CCP-Secret` header
+1. Production site includes the shared secret in the `X-Safe-Publish-Secret` header
 2. Non-production site's MU plugin validates the header against its configured secret
 3. If valid, the request is authenticated and granted access to the REST API
 4. No user credentials are transmitted
@@ -53,7 +53,7 @@ Basic authentication uses WordPress username and password credentials. This meth
    - [Application Passwords](https://wordpress.org/plugins/application-passwords/) (WordPress 5.6+)
    - Or [Basic Auth Plugin](https://github.com/WP-API/Basic-Auth)
 
-2. **In CCP settings**, enter:
+2. **In Safe Publish settings**, enter:
    - Username of a user with sufficient permissions
    - Password or application password
 
@@ -98,7 +98,7 @@ Use basic authentication only when:
 
 ## REST API Endpoints
 
-CCP uses these WordPress REST API endpoints:
+Safe Publish uses these WordPress REST API endpoints:
 
 - `/wp-json/wp/v2/types` - Fetch available post types
 - `/wp-json/wp/v2/posts` - Fetch posts

@@ -1,6 +1,6 @@
 # Import Process
 
-This guide explains how Compliant Content Publisher imports content from external WordPress sites. Understanding this process helps you troubleshoot issues and optimize your workflow.
+This guide explains how Safe Publish imports content from external WordPress sites. Understanding this process helps you troubleshoot issues and optimize your workflow.
 
 ## Overview
 
@@ -17,7 +17,7 @@ The import process consists of six main stages:
 
 ### What Happens
 
-- CCP sends an authenticated request to the external site's REST API
+- Safe Publish sends an authenticated request to the external site's REST API
 - The endpoint `/wp-json/wp/v2/{post_type}/{post_id}` is queried
 - Additional data is fetched (featured image, author, meta data)
 - Response is received and decoded
@@ -153,7 +153,7 @@ For each image found:
   - Tags (created if they don't exist)
   - Excerpt (if present)
   - Featured image (from media import)
-- Original source URL stored in post meta: `_ccp_source_url`
+- Original source URL stored in post meta: `_safe_publish_source_url`
 
 ### Post Status
 
@@ -239,18 +239,18 @@ Customize the import process with filters:
 
 ```php
 // Modify post data before import
-add_filter( 'ccp_pre_import_post', function( $post_data ) {
+add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
     // Modify $post_data
     return $post_data;
 } );
 
 // After successful import
-add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
+add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
     // Custom logic after import
 }, 10, 2 );
 
 // Modify image download behavior
-add_filter( 'ccp_import_media', function( $should_import, $image_url ) {
+add_filter( 'safe_publish_import_media', function( $should_import, $image_url ) {
     // Decide whether to import specific images
     return $should_import;
 }, 10, 2 );

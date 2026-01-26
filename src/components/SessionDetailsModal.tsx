@@ -82,11 +82,11 @@ export function SessionDetailsModal( {
 
 		try {
 			const formData = new FormData();
-			formData.append( 'action', 'ccp_get_session_details' );
-			formData.append( 'nonce', window.ccpAdminData.nonce );
+			formData.append( 'action', 'safe_publish_get_session_details' );
+			formData.append( 'nonce', window.safePublishAdminData.nonce );
 			formData.append( 'session_id', session.id.toString() );
 
-			const response = await fetch( window.ccpAdminData.ajaxurl, {
+			const response = await fetch( window.safePublishAdminData.ajaxurl, {
 				method: 'POST',
 				body: formData,
 			} );
@@ -96,10 +96,10 @@ export function SessionDetailsModal( {
 			if ( result.success ) {
 				setLogs( result.data.logs || [] );
 			} else {
-				setError( getErrorMessage( result, __( 'Failed to load session details.', 'ccp' ) ) );
+				setError( getErrorMessage( result, __( 'Failed to load session details.', 'safe-publish' ) ) );
 			}
 		} catch ( err ) {
-			setError( __( 'Network error while loading session details.', 'ccp' ) );
+			setError( __( 'Network error while loading session details.', 'safe-publish' ) );
 		} finally {
 			setIsLoading( false );
 		}
@@ -140,7 +140,7 @@ export function SessionDetailsModal( {
 		// eslint-disable-next-line no-alert
 		if ( ! window.confirm(
 			/* translators: %s is the post title */
-			__( 'Are you sure you want to rollback "%s"? This action cannot be undone.', 'ccp' ).replace( '%s', title )
+			__( 'Are you sure you want to rollback "%s"? This action cannot be undone.', 'safe-publish' ).replace( '%s', title )
 		) ) {
 			return;
 		}
@@ -149,11 +149,11 @@ export function SessionDetailsModal( {
 
 		try {
 			const formData = new FormData();
-			formData.append( 'action', 'ccp_rollback_item' );
-			formData.append( 'nonce', window.ccpAdminData.nonce );
+			formData.append( 'action', 'safe_publish_rollback_item' );
+			formData.append( 'nonce', window.safePublishAdminData.nonce );
 			formData.append( 'log_id', logId.toString() );
 
-			const response = await fetch( window.ccpAdminData.ajaxurl, {
+			const response = await fetch( window.safePublishAdminData.ajaxurl, {
 				method: 'POST',
 				body: formData,
 			} );
@@ -162,20 +162,20 @@ export function SessionDetailsModal( {
 
 			if ( result.success ) {
 				// Show success message.
-				const actionText = 'restored' === result.data.action ? __( 'restored', 'ccp' ) : __( 'deleted', 'ccp' );
+				const actionText = 'restored' === result.data.action ? __( 'restored', 'safe-publish' ) : __( 'deleted', 'safe-publish' );
 				/* translators: %s is the action performed (restored or deleted) */
-				setNoticeMessage( { type: 'success', message: __( 'Item successfully %s.', 'ccp' )
+				setNoticeMessage( { type: 'success', message: __( 'Item successfully %s.', 'safe-publish' )
 					.replace( '%s', actionText ) } );
 
 				// Reload session details to update the UI.
 				await loadSessionDetails();
 			} else {
 				/* translators: %s is the error message */
-				setNoticeMessage( { type: 'error', message: __( 'Error: %s', 'ccp' )
-					.replace( '%s', getErrorMessage( result, __( 'Unknown error', 'ccp' ) ) ) } );
+				setNoticeMessage( { type: 'error', message: __( 'Error: %s', 'safe-publish' )
+					.replace( '%s', getErrorMessage( result, __( 'Unknown error', 'safe-publish' ) ) ) } );
 			}
 		} catch ( err ) {
-			setNoticeMessage( { type: 'error', message: __( 'Network error while rolling back item.', 'ccp' ) } );
+			setNoticeMessage( { type: 'error', message: __( 'Network error while rolling back item.', 'safe-publish' ) } );
 		} finally {
 			setRollingBackItemId( null );
 		}
@@ -190,21 +190,21 @@ export function SessionDetailsModal( {
 	 */
 	const renderSessionStats = (): JSX.Element => (
 		<HStack spacing={ 4 } style={ { marginBottom: '16px' } }>
-			<div className="ccp-stat">
+			<div className="safe-publish-stat">
 				<Text>{ /* translators: %d is the total number of items */
-				__( 'Total: %d', 'ccp' ).replace( '%d', session.total_items.toString() ) }</Text>
+				__( 'Total: %d', 'safe-publish' ).replace( '%d', session.total_items.toString() ) }</Text>
 			</div>
-			<div className="ccp-stat">
+			<div className="safe-publish-stat">
 				<Text>{ /* translators: %d is the number of successful items */
-				__( 'Successful: %d', 'ccp' ).replace( '%d', session.successful.toString() ) }</Text>
+				__( 'Successful: %d', 'safe-publish' ).replace( '%d', session.successful.toString() ) }</Text>
 			</div>
-			<div className="ccp-stat">
+			<div className="safe-publish-stat">
 				<Text>{ /* translators: %d is the number of failed items */
-				__( 'Failed: %d', 'ccp' ).replace( '%d', session.failed.toString() ) }</Text>
+				__( 'Failed: %d', 'safe-publish' ).replace( '%d', session.failed.toString() ) }</Text>
 			</div>
-			<div className="ccp-stat">
+			<div className="safe-publish-stat">
 				<Text>{ /* translators: %d is the number of updated items */
-				__( 'Updated: %d', 'ccp' ).replace( '%d', session.updated.toString() ) }</Text>
+				__( 'Updated: %d', 'safe-publish' ).replace( '%d', session.updated.toString() ) }</Text>
 			</div>
 		</HStack>
 	);
@@ -218,12 +218,12 @@ export function SessionDetailsModal( {
 	 */
 	const renderSessionInfo = (): JSX.Element => (
 		<VStack spacing={ 2 } style={ { marginBottom: '24px' } }>
-			<Text><strong>{ __( 'Date:', 'ccp' ) }</strong> { session.date }</Text>
-			<Text><strong>{ __( 'User:', 'ccp' ) }</strong> { session.user }</Text>
-			<Text><strong>{ __( 'Source:', 'ccp' ) }</strong> { session.source_url }</Text>
+			<Text><strong>{ __( 'Date:', 'safe-publish' ) }</strong> { session.date }</Text>
+			<Text><strong>{ __( 'User:', 'safe-publish' ) }</strong> { session.user }</Text>
+			<Text><strong>{ __( 'Source:', 'safe-publish' ) }</strong> { session.source_url }</Text>
 			<Text>
-				<strong>{ __( 'Status:', 'ccp' ) } </strong>
-				<span className={ `ccp-status-${ session.status }` }>
+				<strong>{ __( 'Status:', 'safe-publish' ) } </strong>
+				<span className={ `safe-publish-status-${ session.status }` }>
 					{ session.status_label }
 				</span>
 			</Text>
@@ -241,23 +241,23 @@ export function SessionDetailsModal( {
 	const renderImportLogs = (): JSX.Element => {
 		if ( 'rolled_back' === session.status ) {
 			return (
-				<div className="ccp-log-item">
-					<Text><strong>{ __( 'This session has been rolled back.', 'ccp' ) }</strong></Text>
-					<Text>{ __( 'All imported posts from this session have been deleted and are no longer available.', 'ccp' ) }</Text>
+				<div className="safe-publish-log-item">
+					<Text><strong>{ __( 'This session has been rolled back.', 'safe-publish' ) }</strong></Text>
+					<Text>{ __( 'All imported posts from this session have been deleted and are no longer available.', 'safe-publish' ) }</Text>
 				</div>
 			);
 		}
 
 		if ( 0 === logs.length ) {
 			return (
-				<Text>{ __( 'No detailed logs available for this session.', 'ccp' ) }</Text>
+				<Text>{ __( 'No detailed logs available for this session.', 'safe-publish' ) }</Text>
 			);
 		}
 
 		return (
 			<VStack spacing={ 2 }>
 				{ logs.map( ( log ) => (
-					<div key={ log.id } className="ccp-log-item" style={ {
+					<div key={ log.id } className="safe-publish-log-item" style={ {
 						background: '#fff',
 						border: '1px solid #ddd',
 						borderRadius: '4px',
@@ -274,7 +274,7 @@ export function SessionDetailsModal( {
 											href={ log.edit_url }
 											target="_blank"
 										>
-											{ __( 'Edit Post', 'ccp' ) }
+											{ __( 'Edit Post', 'safe-publish' ) }
 										</Button>
 									) }
 									{ log.has_changes && log.post_id && ! log.is_rolled_back && (
@@ -283,7 +283,7 @@ export function SessionDetailsModal( {
 											size="compact"
 											onClick={ () => log.post_id && onViewDiff( log.post_id ) }
 										>
-											{ __( 'View Changes', 'ccp' ) }
+											{ __( 'View Changes', 'safe-publish' ) }
 										</Button>
 									) }
 									{ log.can_rollback && ! log.is_rolled_back && (
@@ -299,38 +299,38 @@ export function SessionDetailsModal( {
 												return (
 													<>
 														<Spinner />
-														{ __( 'Rolling back…', 'ccp' ) }
+														{ __( 'Rolling back…', 'safe-publish' ) }
 													</>
 												);
 											}
 
 											if ( log.rollback_action === 'restore' ) {
-												return __( 'Restore', 'ccp' );
+												return __( 'Restore', 'safe-publish' );
 											}
 
-											return __( 'Delete', 'ccp' );
+											return __( 'Delete', 'safe-publish' );
 										} )() }
 										</Button>
 									) }
 									{ log.is_rolled_back && (
 										<Text style={ { color: '#d63638', fontWeight: 'bold' } }>
-											{ __( 'Rolled Back', 'ccp' ) }
+											{ __( 'Rolled Back', 'safe-publish' ) }
 										</Text>
 									) }
 								</HStack>
 							</HStack>
 							<HStack spacing={ 2 }>
-								<span className={ `ccp-status-${ log.status }` }>
+								<span className={ `safe-publish-status-${ log.status }` }>
 									{ log.status_label }
 								</span>
 								<Text>{ /* translators: %s is the external ID of the imported item */
-								__( 'External ID: %s', 'ccp' ).replace( '%s', log.external_id ) }</Text>
+								__( 'External ID: %s', 'safe-publish' ).replace( '%s', log.external_id ) }</Text>
 								{ log.error && (
 									<>
 										<Text>|</Text>
 										<Text style={ { color: '#d63638' } }>
 											{ /* translators: %s is the error message */
-											__( 'Error: %s', 'ccp' ).replace( '%s', log.error ) }
+											__( 'Error: %s', 'safe-publish' ).replace( '%s', log.error ) }
 										</Text>
 									</>
 								) }
@@ -367,24 +367,24 @@ export function SessionDetailsModal( {
 						{ isRollingBack ? (
 							<>
 								<Spinner />
-								{ __( 'Rolling back…', 'ccp' ) }
+								{ __( 'Rolling back…', 'safe-publish' ) }
 							</>
 						) : (
-							__( 'Rollback This Session', 'ccp' )
+							__( 'Rollback This Session', 'safe-publish' )
 						) }
 					</Button>
 				</HStack>
 			) }
 
 			<VStack spacing={ 2 }>
-				<Text as="h3">{ __( 'Import Details', 'ccp' ) }</Text>
+				<Text as="h3">{ __( 'Import Details', 'safe-publish' ) }</Text>
 
 				{ ( () => {
 					if ( isLoading ) {
 						return (
 							<HStack>
 								<Spinner />
-								<Text>{ __( 'Loading session details…', 'ccp' ) }</Text>
+								<Text>{ __( 'Loading session details…', 'safe-publish' ) }</Text>
 							</HStack>
 						);
 					}
@@ -393,7 +393,7 @@ export function SessionDetailsModal( {
 						return (
 							<Text style={ { color: '#d63638' } }>
 								{ /* translators: %s is the error message */
-								__( 'Error: %s', 'ccp' ).replace( '%s', error ) }
+								__( 'Error: %s', 'safe-publish' ).replace( '%s', error ) }
 							</Text>
 						);
 					}
@@ -404,7 +404,7 @@ export function SessionDetailsModal( {
 
 			<HStack justify="right">
 				<Button variant="tertiary" onClick={ onClose }>
-					{ __( 'Close', 'ccp' ) }
+					{ __( 'Close', 'safe-publish' ) }
 				</Button>
 			</HStack>
 		</VStack>

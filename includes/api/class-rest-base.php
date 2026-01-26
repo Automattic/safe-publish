@@ -2,12 +2,12 @@
 /**
  * REST Base class
  *
- * @package CCP
+ * @package Safe_Publish
  */
 
 declare(strict_types = 1);
 
-namespace CCP\API;
+namespace Safe_Publish\API;
 
 use WP_Error;
 
@@ -26,7 +26,7 @@ abstract class REST_Base {
 	 *
 	 * @var string
 	 */
-	const REST_BASE = 'ccp/v1';
+	const REST_BASE = 'safe-publish/v1';
 
 	/**
 	 * HTTP Client instance.

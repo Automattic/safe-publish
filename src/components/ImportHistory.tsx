@@ -116,10 +116,10 @@ export function ImportHistory(): JSX.Element {
 
 		try {
 			const formData = new FormData();
-			formData.append( 'action', 'ccp_get_import_sessions' );
-			formData.append( 'nonce', window.ccpAdminData.nonce );
+			formData.append( 'action', 'safe_publish_get_import_sessions' );
+			formData.append( 'nonce', window.safePublishAdminData.nonce );
 
-			const response = await fetch( window.ccpAdminData.ajaxurl, {
+			const response = await fetch( window.safePublishAdminData.ajaxurl, {
 				method: 'POST',
 				body: formData,
 			} );
@@ -129,10 +129,10 @@ export function ImportHistory(): JSX.Element {
 			if ( result.success ) {
 				setSessions( result.data );
 			} else {
-				setError( getErrorMessage( result, __( 'Failed to load import sessions.', 'ccp' ) ) );
+				setError( getErrorMessage( result, __( 'Failed to load import sessions.', 'safe-publish' ) ) );
 			}
 		} catch ( err ) {
-			setError( __( 'Network error while loading import sessions.', 'ccp' ) );
+			setError( __( 'Network error while loading import sessions.', 'safe-publish' ) );
 		} finally {
 			setIsLoading( false );
 		}
@@ -149,17 +149,17 @@ export function ImportHistory(): JSX.Element {
 	 */
 	const handleRollbackSession = async ( sessionId: number ): Promise< void > => {
 		// eslint-disable-next-line no-alert
-		if ( ! confirm( __( 'Are you sure you want to rollback this import session? This will delete all newly created posts and restore updated posts to their previous version. This action cannot be undone.', 'ccp' ) ) ) {
+		if ( ! confirm( __( 'Are you sure you want to rollback this import session? This will delete all newly created posts and restore updated posts to their previous version. This action cannot be undone.', 'safe-publish' ) ) ) {
 			return;
 		}
 
 		try {
 			const formData = new FormData();
-			formData.append( 'action', 'ccp_rollback_session' );
-			formData.append( 'nonce', window.ccpAdminData.nonce );
+			formData.append( 'action', 'safe_publish_rollback_session' );
+			formData.append( 'nonce', window.safePublishAdminData.nonce );
 			formData.append( 'session_id', sessionId.toString() );
 
-			const response = await fetch( window.ccpAdminData.ajaxurl, {
+			const response = await fetch( window.safePublishAdminData.ajaxurl, {
 				method: 'POST',
 				body: formData,
 			} );
@@ -170,12 +170,12 @@ export function ImportHistory(): JSX.Element {
 				const { deleted_count: deletedCount, restored_count: restoredCount } = result.data;
 
 				if ( typeof deletedCount !== 'number' || typeof restoredCount !== 'number' ) {
-					setNoticeMessage( { type: 'error', message: __( 'Invalid rollback response from server.', 'ccp' ) } );
+					setNoticeMessage( { type: 'error', message: __( 'Invalid rollback response from server.', 'safe-publish' ) } );
 					return;
 				}
 
 				/* translators: %1$d is the number of deleted posts, %2$d is the number of restored posts */
-				const message = __( 'Session rolled back successfully. %1$d posts were deleted and %2$d posts were restored to their previous version.', 'ccp' )
+				const message = __( 'Session rolled back successfully. %1$d posts were deleted and %2$d posts were restored to their previous version.', 'safe-publish' )
 					.replace( '%1$d', deletedCount.toString() )
 					.replace( '%2$d', restoredCount.toString() );
 				setNoticeMessage( { type: 'success', message } );
@@ -185,11 +185,11 @@ export function ImportHistory(): JSX.Element {
 				setSelectedSession( null );
 			} else {
 				/* translators: %s is the error message */
-				setNoticeMessage( { type: 'error', message: __( 'Error rolling back session: %s', 'ccp' )
+				setNoticeMessage( { type: 'error', message: __( 'Error rolling back session: %s', 'safe-publish' )
 					.replace( '%s', getErrorMessage( result, '' ) ) } );
 			}
 		} catch ( err ) {
-			setNoticeMessage( { type: 'error', message: __( 'Error rolling back session.', 'ccp' ) } );
+			setNoticeMessage( { type: 'error', message: __( 'Error rolling back session.', 'safe-publish' ) } );
 		}
 	};
 
@@ -205,17 +205,17 @@ export function ImportHistory(): JSX.Element {
 	 */
 	const handleDeleteSession = async ( sessionId: number ): Promise< void > => {
 		// eslint-disable-next-line no-alert
-		if ( ! confirm( __( 'Are you sure you want to delete this import session? This will permanently remove the session and all its associated log entries. This action cannot be undone.', 'ccp' ) ) ) {
+		if ( ! confirm( __( 'Are you sure you want to delete this import session? This will permanently remove the session and all its associated log entries. This action cannot be undone.', 'safe-publish' ) ) ) {
 			return;
 		}
 
 		try {
 			const formData = new FormData();
-			formData.append( 'action', 'ccp_delete_session' );
-			formData.append( 'nonce', window.ccpAdminData.nonce );
+			formData.append( 'action', 'safe_publish_delete_session' );
+			formData.append( 'nonce', window.safePublishAdminData.nonce );
 			formData.append( 'session_id', sessionId.toString() );
 
-			const response = await fetch( window.ccpAdminData.ajaxurl, {
+			const response = await fetch( window.safePublishAdminData.ajaxurl, {
 				method: 'POST',
 				body: formData,
 			} );
@@ -226,7 +226,7 @@ export function ImportHistory(): JSX.Element {
 				const message = result.data.message || '';
 
 				/* translators: %s is the success message from the server */
-				setNoticeMessage( { type: 'success', message: __( 'Session deleted successfully. %s', 'ccp' )
+				setNoticeMessage( { type: 'success', message: __( 'Session deleted successfully. %s', 'safe-publish' )
 					.replace( '%s', message ) } );
 				// Reload sessions and close modal if it was open.
 				await loadImportSessions();
@@ -236,11 +236,11 @@ export function ImportHistory(): JSX.Element {
 				}
 			} else {
 				/* translators: %s is the error message */
-				setNoticeMessage( { type: 'error', message: __( 'Error deleting session: %s', 'ccp' )
+				setNoticeMessage( { type: 'error', message: __( 'Error deleting session: %s', 'safe-publish' )
 					.replace( '%s', getErrorMessage( result, '' ) ) } );
 			}
 		} catch ( err ) {
-			setNoticeMessage( { type: 'error', message: __( 'Error deleting session.', 'ccp' ) } );
+			setNoticeMessage( { type: 'error', message: __( 'Error deleting session.', 'safe-publish' ) } );
 		}
 	};
 
@@ -268,7 +268,7 @@ export function ImportHistory(): JSX.Element {
 	const fields: DataViewsField<ImportSession>[] = [
 		{
 			id: 'date',
-			label: __( 'Date', 'ccp' ),
+			label: __( 'Date', 'safe-publish' ),
 			enableSorting: true,
 			render: ( { item }: { item: ImportSession } ): JSX.Element => (
 				<Button
@@ -282,7 +282,7 @@ export function ImportHistory(): JSX.Element {
 		},
 		{
 			id: 'user',
-			label: __( 'User', 'ccp' ),
+			label: __( 'User', 'safe-publish' ),
 			enableSorting: true,
 			render: ( { item }: { item: ImportSession } ): JSX.Element => (
 				<span>{ item.user }</span>
@@ -290,34 +290,34 @@ export function ImportHistory(): JSX.Element {
 		},
 		{
 			id: 'items',
-			label: __( 'Items', 'ccp' ),
+			label: __( 'Items', 'safe-publish' ),
 			enableSorting: false,
 			render: ( { item }: { item: ImportSession } ): JSX.Element => (
 				<span>
 					{ /* translators: %d is the total number of items */
-					__( '%d total', 'ccp' ).replace( '%d', item.total_items.toString() ) }
+					__( '%d total', 'safe-publish' ).replace( '%d', item.total_items.toString() ) }
 					({ /* translators: 1: number of successful items, 2: number of failed items */
-					sprintf( __( '%1$d successful, %2$d failed', 'ccp' ), item.successful, item.failed ) }
+					sprintf( __( '%1$d successful, %2$d failed', 'safe-publish' ), item.successful, item.failed ) }
 					{ item.updated > 0 && (
 						/* translators: %d is the number of updated items */
-						sprintf( __( ', %d updated', 'ccp' ), item.updated )
+						sprintf( __( ', %d updated', 'safe-publish' ), item.updated )
 					) })
 				</span>
 			),
 		},
 		{
 			id: 'status',
-			label: __( 'Status', 'ccp' ),
+			label: __( 'Status', 'safe-publish' ),
 			enableSorting: true,
 			render: ( { item }: { item: ImportSession } ): JSX.Element => (
-				<span className={ `ccp-status-${ item.status }` }>
+				<span className={ `safe-publish-status-${ item.status }` }>
 					{ item.status_label }
 				</span>
 			),
 		},
 		{
 			id: 'source',
-			label: __( 'Source', 'ccp' ),
+			label: __( 'Source', 'safe-publish' ),
 			enableSorting: false,
 			render: ( { item }: { item: ImportSession } ): JSX.Element => (
 				<span>{ item.source_url }</span>
@@ -329,7 +329,7 @@ export function ImportHistory(): JSX.Element {
 	const actions = [
 		{
 			id: 'view-details',
-			label: __( 'View Details', 'ccp' ),
+			label: __( 'View Details', 'safe-publish' ),
 			isPrimary: true,
 			supportsBulk: false,
 			callback: ( items: ImportSession[] ): void => {
@@ -340,7 +340,7 @@ export function ImportHistory(): JSX.Element {
 		},
 		{
 			id: 'rollback',
-			label: __( 'Rollback', 'ccp' ),
+			label: __( 'Rollback', 'safe-publish' ),
 			isDestructive: true,
 			supportsBulk: false,
 			isEligible: ( item: ImportSession ): boolean => {
@@ -354,7 +354,7 @@ export function ImportHistory(): JSX.Element {
 		},
 		{
 			id: 'delete',
-			label: __( 'Delete', 'ccp' ),
+			label: __( 'Delete', 'safe-publish' ),
 			isDestructive: true,
 			supportsBulk: false,
 			callback: ( items: ImportSession[] ): void => {
@@ -370,7 +370,7 @@ export function ImportHistory(): JSX.Element {
 			<VStack>
 				<HStack>
 					<Spinner />
-					<Text>{ __( 'Loading import sessions…', 'ccp' ) }</Text>
+					<Text>{ __( 'Loading import sessions…', 'safe-publish' ) }</Text>
 				</HStack>
 			</VStack>
 		);
@@ -381,23 +381,23 @@ export function ImportHistory(): JSX.Element {
 			<VStack>
 				<Text style={ { color: '#d63638' } }>
 					{ /* translators: %s is the error message */
-					__( 'Error: %s', 'ccp' ).replace( '%s', error ) }
+					__( 'Error: %s', 'safe-publish' ).replace( '%s', error ) }
 				</Text>
 				<Button variant="secondary" onClick={ () => void loadImportSessions() }>
-					{ __( 'Retry', 'ccp' ) }
+					{ __( 'Retry', 'safe-publish' ) }
 				</Button>
 			</VStack>
 		);
 	}
 
 	return (
-		<div className="ccp-import-history">
+		<div className="safe-publish-import-history">
 			<VStack spacing={ 4 }>
 				<Text as="h2">
-					{ __( 'Import History', 'ccp' ) }
+					{ __( 'Import History', 'safe-publish' ) }
 				</Text>
 				<Text>
-					{ __( 'Track and manage your content import sessions with detailed change logs and rollback capabilities.', 'ccp' ) }
+					{ __( 'Track and manage your content import sessions with detailed change logs and rollback capabilities.', 'safe-publish' ) }
 				</Text>
 
 				{ noticeMessage && (
@@ -410,7 +410,7 @@ export function ImportHistory(): JSX.Element {
 				) }
 
 				{ sessions.length === 0 ? (
-					<Text>{ __( 'No import sessions found.', 'ccp' ) }</Text>
+					<Text>{ __( 'No import sessions found.', 'safe-publish' ) }</Text>
 				) : (
 					<DataViews
 						data={ sessions }
@@ -431,7 +431,7 @@ export function ImportHistory(): JSX.Element {
 			{/* Session Details Modal */}
 			{ isSessionModalOpen && selectedSession && (
 				<div
-					className="ccp-modal-backdrop"
+					className="safe-publish-modal-backdrop"
 					style={ {
 						position: 'fixed',
 						top: 0,
@@ -457,10 +457,10 @@ export function ImportHistory(): JSX.Element {
 							setSelectedSession( null );
 						}
 					} }
-					aria-label={ __( 'Close modal', 'ccp' ) }
+					aria-label={ __( 'Close modal', 'safe-publish' ) }
 				>
 					<div
-						className="ccp-modal-content components-modal__frame"
+						className="safe-publish-modal-content components-modal__frame"
 						style={ {
 							backgroundColor: 'white',
 							borderRadius: '2px',
@@ -489,7 +489,7 @@ export function ImportHistory(): JSX.Element {
 							} }
 						>
 							<h1 className="components-modal__header-heading">
-								{ __( 'Session Details', 'ccp' ) }
+								{ __( 'Session Details', 'safe-publish' ) }
 							</h1>
 							<Button
 								variant="tertiary"
@@ -497,7 +497,7 @@ export function ImportHistory(): JSX.Element {
 									setIsSessionModalOpen( false );
 									setSelectedSession( null );
 								} }
-								aria-label={ __( 'Close dialog', 'ccp' ) }
+								aria-label={ __( 'Close dialog', 'safe-publish' ) }
 								style={ { minWidth: '36px', width: '36px', height: '36px' } }
 							>
 								<Icon icon={ close } size={ 18 } />
@@ -530,7 +530,7 @@ export function ImportHistory(): JSX.Element {
 			{/* Post Diff Modal */}
 			{ isDiffModalOpen && diffPostId && (
 				<div
-					className="ccp-modal-backdrop"
+					className="safe-publish-modal-backdrop"
 					style={ {
 						position: 'fixed',
 						top: 0,
@@ -556,10 +556,10 @@ export function ImportHistory(): JSX.Element {
 							setDiffPostId( null );
 						}
 					} }
-					aria-label={ __( 'Close modal', 'ccp' ) }
+					aria-label={ __( 'Close modal', 'safe-publish' ) }
 				>
 					<div
-						className="ccp-modal-content components-modal__frame"
+						className="safe-publish-modal-content components-modal__frame"
 						style={ {
 							backgroundColor: 'white',
 							borderRadius: '2px',
@@ -589,7 +589,7 @@ export function ImportHistory(): JSX.Element {
 							} }
 						>
 							<h1 className="components-modal__header-heading">
-								{ __( 'Content Changes', 'ccp' ) }
+								{ __( 'Content Changes', 'safe-publish' ) }
 							</h1>
 							<Button
 								variant="tertiary"
@@ -597,7 +597,7 @@ export function ImportHistory(): JSX.Element {
 									setIsDiffModalOpen( false );
 									setDiffPostId( null );
 								} }
-								aria-label={ __( 'Close dialog', 'ccp' ) }
+								aria-label={ __( 'Close dialog', 'safe-publish' ) }
 								style={ { minWidth: '36px', width: '36px', height: '36px' } }
 							>
 								<Icon icon={ close } size={ 18 } />

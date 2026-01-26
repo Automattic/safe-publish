@@ -61,11 +61,11 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 
 		try {
 			const formData = new FormData();
-			formData.append( 'action', 'ccp_get_post_diff' );
-			formData.append( 'nonce', window.ccpAdminData.nonce );
+			formData.append( 'action', 'safe_publish_get_post_diff' );
+			formData.append( 'nonce', window.safePublishAdminData.nonce );
 			formData.append( 'post_id', postId.toString() );
 
-			const response = await fetch( window.ccpAdminData.ajaxurl, {
+			const response = await fetch( window.safePublishAdminData.ajaxurl, {
 				method: 'POST',
 				body: formData,
 			} );
@@ -75,10 +75,10 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 			if ( result.success ) {
 				setDiffHtml( result.data.diff_html );
 			} else {
-				setError( getErrorMessage( result, __( 'Failed to load content changes.', 'ccp' ) ) );
+				setError( getErrorMessage( result, __( 'Failed to load content changes.', 'safe-publish' ) ) );
 			}
 		} catch ( err ) {
-			setError( __( 'Network error while loading content changes.', 'ccp' ) );
+			setError( __( 'Network error while loading content changes.', 'safe-publish' ) );
 		} finally {
 			setIsLoading( false );
 		}
@@ -99,7 +99,7 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 			return (
 				<HStack>
 					<Spinner />
-					<Text>{ __( 'Loading changes…', 'ccp' ) }</Text>
+					<Text>{ __( 'Loading changes…', 'safe-publish' ) }</Text>
 				</HStack>
 			);
 		}
@@ -108,7 +108,7 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 			return (
 				<Text style={ { color: '#d63638' } }>
 					{ /* translators: %s is the error message */
-					__( 'Error: %s', 'ccp' ).replace( '%s', error ) }
+					__( 'Error: %s', 'safe-publish' ).replace( '%s', error ) }
 				</Text>
 			);
 		}
@@ -129,7 +129,7 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 			);
 		}
 
-		return <Text>{ __( 'No changes available.', 'ccp' ) }</Text>;
+		return <Text>{ __( 'No changes available.', 'safe-publish' ) }</Text>;
 	};
 
 	return (
@@ -138,7 +138,7 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 
 			<HStack justify="right">
 				<Button variant="tertiary" onClick={ onClose }>
-					{ __( 'Close', 'ccp' ) }
+					{ __( 'Close', 'safe-publish' ) }
 				</Button>
 			</HStack>
 		</VStack>

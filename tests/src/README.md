@@ -1,6 +1,6 @@
 # Vitest Test Suite
 
-This directory contains the Vitest test suite for the Compliant Content Publisher plugin's TypeScript/React components.
+This directory contains the Vitest test suite for the Safe Publish plugin's TypeScript/React components.
 
 > **Note**: PHP unit and integration tests are documented in [../README.md](../README.md)
 
@@ -133,7 +133,7 @@ The setup file:
 
 - Imports `@testing-library/jest-dom` matchers
 - Sets up `cleanup()` to run after each test
-- Mocks `window.ccpAdminData` global object
+- Mocks `window.safePublishAdminData` global object
 - Provides default WordPress environment
 
 ## Writing Tests

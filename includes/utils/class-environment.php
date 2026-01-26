@@ -2,10 +2,10 @@
 /**
  * Environment utility class
  *
- * @package CCP
+ * @package Safe_Publish
  */
 
-namespace CCP\Utils;
+namespace Safe_Publish\Utils;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {

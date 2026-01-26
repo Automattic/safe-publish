@@ -39,14 +39,14 @@ fi
 
 release_type=$1
 
-# Get current version from compliant-content-publisher.php
-php_file="compliant-content-publisher.php"
+# Get current version from safe-publish.php
+php_file="safe-publish.php"
 current_version=$(sed -n "s/.*Version: \([0-9.]*\).*/\1/p" "$php_file")
 new_version=$(increment_version "$current_version" "$release_type")
 
-# Update compliant-content-publisher.php
+# Update safe-publish.php
 sed -i.bak "s/Version: $current_version/Version: $new_version/" "$php_file"
-sed -i.bak "s/define( 'CCP_VERSION', '$current_version' );/define( 'CCP_VERSION', '$new_version' );/" "$php_file"
+sed -i.bak "s/define( 'SAFE_PUBLISH_VERSION', '$current_version' );/define( 'SAFE_PUBLISH_VERSION', '$new_version' );/" "$php_file"
 rm "${php_file}.bak"
 
 echo "Updated $php_file from $current_version to $new_version"

@@ -1,6 +1,6 @@
 # Quickstart
 
-Get started with Compliant Content Publisher in minutes. This guide will walk you through setting up the plugin and importing your first post from a non-production WordPress site.
+Get started with Safe Publish in minutes. This guide will walk you through setting up the plugin and importing your first post from a non-production WordPress site.
 
 ## Prerequisites
 
@@ -17,7 +17,7 @@ Get started with Compliant Content Publisher in minutes. This guide will walk yo
 
 ## Step 2: Configure the Plugin
 
-1. Navigate to **CC Publisher** in your WordPress admin sidebar
+1. Navigate to **Safe Publish** in your WordPress admin sidebar
 2. Enter your **non-production site URL** (e.g., `https://staging.example.com`)
 3. Set the **number of posts** to fetch (default: 10, recommended: 10-50)
 4. Click **Save Settings**
@@ -28,18 +28,18 @@ The plugin supports two authentication methods:
 
 ### Option A: Shared Secret (Recommended for Production)
 
-1. On your **non-production site**, install the included `ccp-auth.php` mu-plugin:
-   - Copy `client-mu-plugins/ccp-auth.php` to your non-prod site's `wp-content/mu-plugins/` directory
+1. On your **non-production site**, install the included `safe-publish-auth.php` mu-plugin:
+   - Copy `mu-plugins/safe-publish-auth.php` to your non-prod site's `wp-content/mu-plugins/` directory
 2. Define a shared secret in both sites' `wp-config.php`:
    ```php
-   define( 'CCP_SHARED_SECRET', 'your-secure-random-string-here' );
+   define( 'SAFE_PUBLISH_SHARED_SECRET', 'your-secure-random-string-here' );
    ```
 3. The plugin will automatically use this for secure authentication
 
 ### Option B: Basic Authentication (Development Only)
 
 1. On your **non-production site**, install a basic auth plugin
-2. In the CC Publisher settings, enter the username and password
+2. In the Safe Publish settings, enter the username and password
 3. **Note**: This method is only recommended for local development environments
 
 ## Step 4: Test the Connection

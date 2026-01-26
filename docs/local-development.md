@@ -126,7 +126,7 @@ Access the MySQL database:
 
 ```sh
 # Using WP-CLI
-npm run wp-cli db query "SELECT * FROM wp_ccp_import_history LIMIT 10"
+npm run wp-cli db query "SELECT * FROM wp_safe_publish_import_history LIMIT 10"
 
 # Or connect directly
 docker exec -it <container-id> mysql -u root -ppassword wordpress
@@ -137,21 +137,21 @@ docker exec -it <container-id> mysql -u root -ppassword wordpress
 **Reset plugin settings:**
 
 ```sh
-npm run wp-cli option delete ccp_external_site_url
-npm run wp-cli option delete ccp_number_of_posts
+npm run wp-cli option delete safe_publish_external_site_url
+npm run wp-cli option delete safe_publish_number_of_posts
 ```
 
 **Clear import history:**
 
 ```sh
-npm run wp-cli db query "TRUNCATE TABLE wp_ccp_import_history"
+npm run wp-cli db query "TRUNCATE TABLE wp_safe_publish_import_history"
 ```
 
 **Test authentication:**
 
 ```sh
 # Test connection to external site
-curl -H "X-CCP-Secret: your-secret" https://staging.example.com/wp-json/wp/v2/posts
+curl -H "X-Safe-Publish-Secret: your-secret" https://staging.example.com/wp-json/wp/v2/posts
 ```
 
 ## Local playground

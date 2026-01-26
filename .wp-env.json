@@ -4,7 +4,7 @@
     "WP_DEBUG_DISPLAY": true,
     "WP_DEVELOPMENT_MODE": "plugin",
     "WP_ENVIRONMENT_TYPE": "development",
-    "CCP_SHARED_SECRET": "local-dev-secret-4ilEg6NA3K1lLJV"
+    "SAFE_PUBLISH_SHARED_SECRET": "local-dev-secret-4ilEg6NA3K1lLJV"
   },
   "mappings": {
     ".htaccess": "./bin/conf/htaccess",
@@ -13,7 +13,7 @@
   "core": "WordPress/WordPress#master",
   "plugins": ["."],
   "lifecycleScripts": {
-    "afterStart": "wp-env run cli wp option update blogname 'CCP Target' && wp-env run tests-cli wp option update blogname 'CCP Source' && wp-env run tests-cli wp rewrite structure '/%postname%/' && wp-env run tests-cli wp rewrite flush && wp-env run cli wp option update ccp_external_site_url 'http://host.docker.internal:8889'"
+    "afterStart": "wp-env run cli wp option update blogname 'Safe Publish Target' && wp-env run tests-cli wp option update blogname 'Safe Publish Source' && wp-env run tests-cli wp rewrite structure '/%postname%/' && wp-env run tests-cli wp rewrite flush && wp-env run cli wp option update safe_publish_external_site_url 'http://host.docker.internal:8889'"
   },
   "env": {
     "tests": {
@@ -21,7 +21,7 @@
         "WP_DEBUG_DISPLAY": true,
         "WP_DEVELOPMENT_MODE": "plugin",
         "WP_ENVIRONMENT_TYPE": "development",
-        "CCP_SHARED_SECRET": "local-dev-secret-4ilEg6NA3K1lLJV"
+        "SAFE_PUBLISH_SHARED_SECRET": "local-dev-secret-4ilEg6NA3K1lLJV"
       },
       "mappings": {
         ".htaccess": "./bin/conf/htaccess",

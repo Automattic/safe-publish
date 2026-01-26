@@ -98,13 +98,13 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 			{ isLoading && (
 				<HStack>
 					<Spinner />
-					<Text>{ __( 'Loading diff…', 'ccp' ) }</Text>
+					<Text>{ __( 'Loading diff…', 'safe-publish' ) }</Text>
 				</HStack>
 			) }
 
 			{ error && <Text style={ { color: '#d63638' } }>{ error }</Text> }
 
-			<Text as="h2">{ __( 'Content Diff', 'ccp' ) }</Text>
+			<Text as="h2">{ __( 'Content Diff', 'safe-publish' ) }</Text>
 
 			<DiffViewSelector
 				showBlockView={ showBlockView }
@@ -166,7 +166,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 						disabled={ isUpdating || isLoading }
 						style={ { marginLeft: 8 } }
 					>
-						{ isUpdating ? <Spinner /> : __( 'Update Post', 'ccp' ) }
+						{ isUpdating ? <Spinner /> : __( 'Update Post', 'safe-publish' ) }
 					</Button>
 				) }
 				<Button
@@ -175,7 +175,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 					onClick={ closeModal }
 					disabled={ isUpdating }
 				>
-					{ __( 'Close', 'ccp' ) }
+					{ __( 'Close', 'safe-publish' ) }
 				</Button>
 			</HStack>
 		</VStack>

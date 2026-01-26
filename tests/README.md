@@ -1,6 +1,6 @@
-# Compliant Content Publisher - Test Suite
+# Safe Publish - Test Suite
 
-This directory contains comprehensive unit tests for the Compliant Content Publisher WordPress plugin.
+This directory contains comprehensive unit tests for the Safe Publish WordPress plugin.
 
 > **Note**: JavaScript/TypeScript tests are documented in [src/README.md](src/README.md)
 
@@ -17,9 +17,9 @@ tests/
 │   ├── VIPSafeAuthTest.php       # Authentication tests
 │   ├── HTTPClientTest.php        # HTTP client tests
 │   ├── ExternalPostsAPITest.php  # External API tests
-│   ├── CCPAPITest.php            # REST API tests
+│   ├── SafePublishAPITest.php    # REST API tests
 │   └── RESTBaseTest.php          # REST base class tests
-├── integration/                   # Integration tests (WP Test Suite)
+├── integration/                  # Integration tests (WP Test Suite)
 │   └── bootstrap.php             # Integration test bootstrap
 ├── e2e/                          # End-to-end tests (Playwright)
 │   └── settings/                 # Settings page tests
@@ -86,7 +86,7 @@ The test suite provides comprehensive coverage for:
   - WebP support
   - Fresh content fetching
 
-- **CCP REST API** (`CCPAPITest.php`)
+- **Safe Publish REST API** (`SafePublishAPITest.php`)
   - Serialization/deserialization
   - Data normalization
   - Deep diff functionality
@@ -157,7 +157,7 @@ All test dependencies are managed via Composer:
 <?php
 declare(strict_types=1);
 
-namespace CCP\Tests;
+namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
 

@@ -10,7 +10,7 @@
   convertDeprecationsToExceptions="true"
   >
   <testsuites>
-    <testsuite name="Compliant Content Publisher Integration Tests">
+    <testsuite name="Safe Publish Integration Tests">
       <directory>tests/integration/</directory>
     </testsuite>
   </testsuites>

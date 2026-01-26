@@ -42,9 +42,9 @@ function highlightHtml( original: string, changed: string ): string {
 		.map( part => {
 			let cls = '';
 			if ( part.added ) {
-				cls = 'ccp-inline-added';
+				cls = 'safe-publish-inline-added';
 			} else if ( part.removed ) {
-				cls = 'ccp-inline-removed';
+				cls = 'safe-publish-inline-removed';
 			}
 
 			if ( ! cls ) { return part.value; }
@@ -89,11 +89,11 @@ function normalizeHtml( html: string ): string {
  */
 export default function BlockDiffViewer( { blocks = [], highlight = true }: Props ): JSX.Element {
     return (
-        <div className="ccp-block-diff-viewer">
+        <div className="safe-publish-block-diff-viewer">
             { blocks.map( block => {
                 let status = block.status;
                 const key = `${ block.index }-${ block.status }`;
-                const title = block.incoming?.name || block.current?.name || __( 'unknown', 'ccp' );
+                const title = block.incoming?.name || block.current?.name || __( 'unknown', 'safe-publish' );
                 const currentHtml = block.current?.rendered || '';
                 const incomingHtml = block.incoming?.rendered || '';
 
@@ -112,31 +112,31 @@ export default function BlockDiffViewer( { blocks = [], highlight = true }: Prop
                 }
 
                 return (
-                    <div key={ key } className={ `ccp-block-diff ccp-block-${ status }` }>
-                        <div className="ccp-block-diff__header">
+                    <div key={ key } className={ `safe-publish-block-diff safe-publish-block-${ status }` }>
+                        <div className="safe-publish-block-diff__header">
                             <Text>
-                                { title || __( 'Block', 'ccp' ) }
-                                <span className={ `ccp-badge ccp-${ status }` }>{ status }</span>
+                                { title || __( 'Block', 'safe-publish' ) }
+                                <span className={ `safe-publish-badge safe-publish-${ status }` }>{ status }</span>
                                 { hasImage && block.status === 'modified' && status !== 'unchanged' && (
-                                    <span className="ccp-badge" style={ { background: '#6b7280', color: '#fff' } }>
+                                    <span className="safe-publish-badge" style={ { background: '#6b7280', color: '#fff' } }>
                                         image (no inline diff)
                                     </span>
                                 ) }
                             </Text>
                         </div>
                         { status === 'removed' && (
-                            <div className="ccp-block-diff__removed" dangerouslySetInnerHTML={ { __html: currentHtml } } />
+                            <div className="safe-publish-block-diff__removed" dangerouslySetInnerHTML={ { __html: currentHtml } } />
                         ) }
                         { status === 'added' && (
-                            <div className="ccp-block-diff__added" dangerouslySetInnerHTML={ { __html: incomingHtml } } />
+                            <div className="safe-publish-block-diff__added" dangerouslySetInnerHTML={ { __html: incomingHtml } } />
                         ) }
                         { status === 'unchanged' && (
-                            <div className="ccp-block-diff__unchanged" dangerouslySetInnerHTML={ { __html: currentHtml } } />
+                            <div className="safe-publish-block-diff__unchanged" dangerouslySetInnerHTML={ { __html: currentHtml } } />
                         ) }
                         { status === 'modified' && (
-                            <div className="ccp-block-diff__modified">
-                                <div className="ccp-block-diff__col ccp-before" dangerouslySetInnerHTML={ { __html: currentHtml } } />
-                                <div className="ccp-block-diff__col ccp-after" dangerouslySetInnerHTML={ { __html: modifiedIncoming } } />
+                            <div className="safe-publish-block-diff__modified">
+                                <div className="safe-publish-block-diff__col safe-publish-before" dangerouslySetInnerHTML={ { __html: currentHtml } } />
+                                <div className="safe-publish-block-diff__col safe-publish-after" dangerouslySetInnerHTML={ { __html: modifiedIncoming } } />
                             </div>
                         ) }
                     </div>

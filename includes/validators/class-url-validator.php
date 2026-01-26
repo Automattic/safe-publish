@@ -2,10 +2,10 @@
 /**
  * URL Validator class
  *
- * @package CCP
+ * @package Safe_Publish
  */
 
-namespace CCP\Validators;
+namespace Safe_Publish\Validators;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -121,7 +121,7 @@ class URL_Validator {
 		 * @param array  $allowed_domains Allowed domain patterns.
 		 * @param string $host            Hostname being checked.
 		 */
-		$allowed_domains = apply_filters( 'ccp_allowed_domains', array(), $host );
+		$allowed_domains = apply_filters( 'safe_publish_allowed_domains', array(), $host );
 
 		if ( empty( $allowed_domains ) ) {
 			return true; // No restrictions by default.

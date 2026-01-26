@@ -2,14 +2,14 @@
 /**
  * Main Plugin class
  *
- * @package CCP
+ * @package Safe_Publish
  */
 
-namespace CCP;
+namespace Safe_Publish;
 
-use CCP\Admin\Admin_Handler;
-use CCP\API\External_Posts_API;
-use CCP\API\CCP_API;
+use Safe_Publish\Admin\Admin_Handler;
+use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Safe_Publish_API;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -29,11 +29,11 @@ final class Plugin {
 	private $api;
 
 	/**
-	 * CCP API instance.
+	 * Safe Publish API instance.
 	 *
-	 * @var CCP_API
+	 * @var Safe_Publish_API
 	 */
-	private $ccp_api;
+	private $safe_publish_api;
 
 	/**
 	 * Admin handler instance.
@@ -54,8 +54,8 @@ final class Plugin {
 	 */
 	public function init(): void {
 		// Initialize components.
-		$this->api     = new External_Posts_API();
-		$this->ccp_api = new CCP_API();
+		$this->api              = new External_Posts_API();
+		$this->safe_publish_api = new Safe_Publish_API();
 
 		// Initialize hooks.
 		$this->init_hooks();
@@ -91,11 +91,11 @@ final class Plugin {
 	}
 
 	/**
-	 * Gets CCP API instance.
+	 * Gets Safe Publish API instance.
 	 *
-	 * @return ?CCP_API CCP API instance or null.
+	 * @return ?Safe_Publish_API Safe Publish API instance or null.
 	 */
-	public function get_ccp_api(): ?CCP_API {
-		return $this->ccp_api ?? null;
+	public function get_safe_publish_api(): ?Safe_Publish_API {
+		return $this->safe_publish_api ?? null;
 	}
 }

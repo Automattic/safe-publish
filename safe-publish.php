@@ -1,14 +1,14 @@
 <?php
 /**
- * @package CCP
+ * @package Safe_Publish
  * @author WPVIP
  *
- * Plugin Name: Compliant Content Publisher
- * Plugin URI: https://github.com/wpcomvip/x-team-sandbox
+ * Plugin Name: Safe Publish
+ * Plugin URI: https://github.com/Automattic/safe-publish
  * Description: Enables content transfer from non-production to production environments.
  * Author: WPVIP
  * Author URI: https://wpvip.com
- * Text Domain: ccp
+ * Text Domain: safe-publish
  * Version: 1.0.0
  * Requires at least: 6.7
  * Requires PHP: 8.1
@@ -22,27 +22,27 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define plugin constants.
-define( 'CCP_VERSION', '1.1.0' );
-define( 'CCP_PLUGIN_FILE', __FILE__ );
-define( 'CCP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
-define( 'CCP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+define( 'SAFE_PUBLISH_VERSION', '1.1.0' );
+define( 'SAFE_PUBLISH_PLUGIN_FILE', __FILE__ );
+define( 'SAFE_PUBLISH_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+define( 'SAFE_PUBLISH_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
 // Autoloader for classes.
 spl_autoload_register(
 	function ( $class_name ): void {
-		// Only autoload CCP classes.
-		if ( 0 !== strpos( $class_name, 'CCP\\' ) ) {
+		// Only autoload Safe_Publish classes.
+		if ( 0 !== strpos( $class_name, 'Safe_Publish\\' ) ) {
 				return;
 		}
 
 		// Convert namespace to file path.
-		$class_path = str_replace( 'CCP\\', '', $class_name );
+		$class_path = str_replace( 'Safe_Publish\\', '', $class_name );
 		$class_path = str_replace( '\\', '/', $class_path );
 		$class_path = strtolower( $class_path );
 		$class_path = str_replace( '_', '-', $class_path );
 
 		// Map class names to file paths.
-		$file_path = CCP_PLUGIN_DIR . 'includes/';
+		$file_path = SAFE_PUBLISH_PLUGIN_DIR . 'includes/';
 
 		// Handle specific namespace mappings.
 		if ( 0 === strpos( $class_path, 'admin/' ) ) {
@@ -61,7 +61,7 @@ spl_autoload_register(
 
 		// VIP-safe file inclusion with proper validation.
 		// Ensure the file path is within the plugin directory for security.
-		$real_plugin_dir = realpath( CCP_PLUGIN_DIR );
+		$real_plugin_dir = realpath( SAFE_PUBLISH_PLUGIN_DIR );
 		$real_file_path  = realpath( $file_path );
 
 		// Validate that the file exists and is within the plugin directory.
@@ -75,40 +75,40 @@ spl_autoload_register(
 );
 
 // Initialize the plugin.
-add_action( 'plugins_loaded', 'ccp_init_plugin' );
+add_action( 'plugins_loaded', 'safe_publish_init_plugin' );
 
 /**
  * Initializes the plugin.
  */
-function ccp_init_plugin(): void {
-	global $ccp_plugin;
+function safe_publish_init_plugin(): void {
+	global $safe_publish_plugin;
 
 	// Load text domain.
-	load_plugin_textdomain( 'ccp', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+	load_plugin_textdomain( 'safe-publish', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
 
 	// Initialize the main plugin class.
-	$ccp_plugin = new \CCP\Plugin();
-	$ccp_plugin->init();
+	$safe_publish_plugin = new \Safe_Publish\Plugin();
+	$safe_publish_plugin->init();
 }
 
 /**
  * Plugin activation hook.
  */
-register_activation_hook( __FILE__, 'ccp_activation' );
+register_activation_hook( __FILE__, 'safe_publish_activation' );
 
 /**
  * Plugin activation callback.
  *
  * Sets default options and flushes rewrite rules.
  */
-function ccp_activation(): void {
+function safe_publish_activation(): void {
 	// Set default options.
-	if ( false === get_option( 'ccp_external_site_url' ) ) {
-		update_option( 'ccp_external_site_url', '' );
+	if ( false === get_option( 'safe_publish_external_site_url' ) ) {
+		update_option( 'safe_publish_external_site_url', '' );
 	}
 
-	if ( false === get_option( 'ccp_number_of_posts' ) ) {
-		update_option( 'ccp_number_of_posts', 10 );
+	if ( false === get_option( 'safe_publish_number_of_posts' ) ) {
+		update_option( 'safe_publish_number_of_posts', 10 );
 	}
 
 	// Flush rewrite rules if needed (only in non-VIP environments).
@@ -121,14 +121,14 @@ function ccp_activation(): void {
 /**
  * Plugin deactivation hook.
  */
-register_deactivation_hook( __FILE__, 'ccp_deactivation' );
+register_deactivation_hook( __FILE__, 'safe_publish_deactivation' );
 
 /**
  * Plugin deactivation callback.
  *
  * Flushes rewrite rules when plugin is deactivated.
  */
-function ccp_deactivation(): void {
+function safe_publish_deactivation(): void {
 	// Flush rewrite rules (only in non-VIP environments).
 	if ( ! defined( 'WPCOM_IS_VIP_ENV' ) || ! WPCOM_IS_VIP_ENV ) {
 		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.flush_rewrite_rules_flush_rewrite_rules -- Only executed in non-VIP environments

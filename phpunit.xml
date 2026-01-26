@@ -10,7 +10,7 @@
   convertDeprecationsToExceptions="true"
 >
   <testsuites>
-    <testsuite name="Compliant Content Publisher Test Suite">
+    <testsuite name="Safe Publish Test Suite">
       <directory>tests/unit/</directory>
       <exclude>tests/unit/bootstrap.php</exclude>
       <exclude>tests/unit/stubs.php</exclude>
@@ -33,7 +33,7 @@
   </coverage>
 
   <php>
-    <const name="COMPLIANT_CONTENT_PUBLISHER__UNIT_TEST" value="true"/>
+    <const name="SAFE_PUBLISH__UNIT_TEST" value="true"/>
     <env name="WP_DEBUG" value="true"/>
   </php>
 </phpunit>
