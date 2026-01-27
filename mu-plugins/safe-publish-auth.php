@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: CCP VIP Authentication Handler
- * Plugin URI: https://github.com/wpcomvip/x-team-sandbox
- * Description: VIP-compatible auth handler for CCP using shared secret HMAC.
+ * Plugin Name: Safe Publish VIP Authentication Handler
+ * Plugin URI: https://github.com/Automattic/safe-publish
+ * Description: VIP-compatible auth handler for Safe Publish using shared secret HMAC.
  * Version: 1.0.0
  * Author: WPVIP
  * Author URI: https://wpvip.com
@@ -12,13 +12,13 @@
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  *
- * This mu-plugin handles authentication for Compliant Content Publisher (CCP)
+ * This mu-plugin handles authentication for Safe Publish
  * requests on WordPress VIP environments using shared secret HMAC authentication.
  *
- * The shared secret is read from the CCP_SHARED_SECRET environment variable
+ * The shared secret is read from the SAFE_PUBLISH_SHARED_SECRET environment variable
  * which should be configured in the VIP dashboard.
  *
- * @package CCP_Auth
+ * @package Safe_Publish_Auth
  * @version 1.0.0
  */
 
@@ -28,51 +28,51 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Prevent multiple inclusions.
-if ( defined( 'CCP_VIP_AUTH_LOADED' ) ) {
+if ( defined( 'SAFE_PUBLISH_VIP_AUTH_LOADED' ) ) {
 	return;
 }
-define( 'CCP_VIP_AUTH_LOADED', true );
+define( 'SAFE_PUBLISH_VIP_AUTH_LOADED', true );
 
 /**
- * Initializes CCP authentication handler.
+ * Initializes Safe Publish authentication handler.
  */
-add_action( 'rest_api_init', 'ccp_vip_init_auth_handler' );
+add_action( 'rest_api_init', 'safe_publish_vip_init_auth_handler' );
 
 /**
- * Adds admin dashboard widget for CCP authentication status.
+ * Adds admin dashboard widget for Safe Publish authentication status.
  */
-add_action( 'wp_dashboard_setup', 'ccp_vip_add_dashboard_widget' );
+add_action( 'wp_dashboard_setup', 'safe_publish_vip_add_dashboard_widget' );
 
 /**
- * Adds CCP info to mu-plugins list (for better visibility).
+ * Adds Safe Publish info to mu-plugins list (for better visibility).
  */
-add_filter( 'show_advanced_plugins', 'ccp_vip_enhance_mu_plugins_display', 10, 2 );
+add_filter( 'show_advanced_plugins', 'safe_publish_vip_enhance_mu_plugins_display', 10, 2 );
 
 /**
  * Adds init hook to test logging immediately.
  */
-add_action( 'init', 'ccp_vip_test_logging_on_init' );
+add_action( 'init', 'safe_publish_vip_test_logging_on_init' );
 
-if ( ! function_exists( 'ccp_vip_test_logging_on_init' ) ) {
+if ( ! function_exists( 'safe_publish_vip_test_logging_on_init' ) ) {
 	/**
 	 * Tests logging on WordPress init to ensure logs appear.
 	 */
-	function ccp_vip_test_logging_on_init(): void {
+	function safe_publish_vip_test_logging_on_init(): void {
 		// Skip if this is a REST API request to avoid header issues.
 		if ( defined( 'REST_REQUEST' ) && constant( 'REST_REQUEST' ) ) {
 			return;
 		}
 
 		// Only run once per day to avoid spam.
-		$last_test = get_option( 'ccp_auth_last_log_test', 0 );
+		$last_test = get_option( 'safe_publish_auth_last_log_test', 0 );
 		if ( time() - $last_test < 86400 ) { // 24 hours
 			return;
 		}
 
-		update_option( 'ccp_auth_last_log_test', time(), false );
+		update_option( 'safe_publish_auth_last_log_test', time(), false );
 
 		// Force a test log entry.
-		ccp_vip_log_auth_event(
+		safe_publish_vip_log_auth_event(
 			'INIT_LOG_TEST',
 			array(
 				'purpose'           => 'Testing VIP logging visibility',
@@ -86,19 +86,19 @@ if ( ! function_exists( 'ccp_vip_test_logging_on_init' ) ) {
 	}
 }
 
-if ( ! function_exists( 'ccp_vip_init_auth_handler' ) ) {
+if ( ! function_exists( 'safe_publish_vip_init_auth_handler' ) ) {
 	/**
 	 * Initializes the authentication handler for REST API requests.
 	 */
-	function ccp_vip_init_auth_handler(): void {
-		add_filter( 'rest_pre_dispatch', 'ccp_vip_authenticate_request', 10, 3 );
+	function safe_publish_vip_init_auth_handler(): void {
+		add_filter( 'rest_pre_dispatch', 'safe_publish_vip_authenticate_request', 10, 3 );
 
-		// Add early permission override for CCP requests.
-		add_filter( 'rest_request_before_callbacks', 'ccp_vip_handle_permission_check', 10, 3 );
+		// Add early permission override for Safe Publish requests.
+		add_filter( 'rest_request_before_callbacks', 'safe_publish_vip_handle_permission_check', 10, 3 );
 	}
 }
 
-if ( ! function_exists( 'ccp_vip_handle_permission_check' ) ) {
+if ( ! function_exists( 'safe_publish_vip_handle_permission_check' ) ) {
 	/**
 	 * Handles permission checks before REST callbacks are executed.
 	 *
@@ -109,9 +109,9 @@ if ( ! function_exists( 'ccp_vip_handle_permission_check' ) ) {
 	 * @param WP_REST_Request                                 $request  Request used to generate the response.
 	 * @return WP_REST_Response|WP_HTTP_Response|WP_Error|null Modified response.
 	 */
-	function ccp_vip_handle_permission_check( $response, $handler, $request ): WP_REST_Response|WP_HTTP_Response|WP_Error|null {
-		// Only apply to CCP authenticated requests.
-		if ( empty( $GLOBALS['ccp_authenticated'] ) ) {
+	function safe_publish_vip_handle_permission_check( $response, $handler, $request ): WP_REST_Response|WP_HTTP_Response|WP_Error|null {
+		// Only apply to Safe Publish authenticated requests.
+		if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
 			return $response;
 		}
 
@@ -121,13 +121,13 @@ if ( ! function_exists( 'ccp_vip_handle_permission_check' ) ) {
 			return $response;
 		}
 
-		// For CCP authenticated requests, temporarily override permission checks.
+		// For Safe Publish authenticated requests, temporarily override permission checks.
 		add_filter(
 			'user_has_cap',
 			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			function ( $allcaps, $caps, $args, $user ): array {
-				// Grant comprehensive permissions for CCP operations.
-				$ccp_caps = array(
+				// Grant comprehensive permissions for Safe Publish operations.
+				$safe_publish_caps = array(
 					'read',
 					'edit_posts',
 					'edit_others_posts',
@@ -156,7 +156,7 @@ if ( ! function_exists( 'ccp_vip_handle_permission_check' ) ) {
 					'unfiltered_html',
 				);
 
-				foreach ( $ccp_caps as $cap ) {
+				foreach ( $safe_publish_caps as $cap ) {
 					$allcaps[ $cap ] = true;
 				}
 
@@ -166,7 +166,7 @@ if ( ! function_exists( 'ccp_vip_handle_permission_check' ) ) {
 			4
 		); // High priority to ensure it runs early.
 
-		ccp_vip_log_auth_event(
+		safe_publish_vip_log_auth_event(
 			'PERMISSION_CHECK_INTERCEPTED',
 			array(
 				'route'            => $route,
@@ -180,16 +180,16 @@ if ( ! function_exists( 'ccp_vip_handle_permission_check' ) ) {
 	}
 }
 
-if ( ! function_exists( 'ccp_vip_override_endpoint_permissions' ) ) {
+if ( ! function_exists( 'safe_publish_vip_override_endpoint_permissions' ) ) {
 	/**
-	 * Overrides REST endpoint permissions for CCP authenticated requests.
+	 * Overrides REST endpoint permissions for Safe Publish authenticated requests.
 	 *
 	 * @param array $endpoints Registered REST endpoints.
 	 * @return array Modified endpoints.
 	 */
-	function ccp_vip_override_endpoint_permissions( $endpoints ): array {
-		// Only apply to CCP authenticated requests.
-		if ( empty( $GLOBALS['ccp_authenticated'] ) ) {
+	function safe_publish_vip_override_endpoint_permissions( $endpoints ): array {
+		// Only apply to Safe Publish authenticated requests.
+		if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
 			return $endpoints;
 		}
 
@@ -201,9 +201,9 @@ if ( ! function_exists( 'ccp_vip_override_endpoint_permissions' ) ) {
 				foreach ( $endpoints[ $route ] as &$handler ) {
 					// Override the permission callback for GET requests.
 					if ( isset( $handler['methods'] ) && ( 'GET' === $handler['methods'] || false !== strpos( $handler['methods'], 'GET' ) ) ) {
-						$handler['permission_callback'] = 'ccp_vip_allow_all_permissions';
+						$handler['permission_callback'] = 'safe_publish_vip_allow_all_permissions';
 
-						ccp_vip_log_auth_event(
+						safe_publish_vip_log_auth_event(
 							'PERMISSION_CALLBACK_OVERRIDDEN',
 							array(
 								'route'   => $route,
@@ -219,20 +219,20 @@ if ( ! function_exists( 'ccp_vip_override_endpoint_permissions' ) ) {
 	}
 }
 
-if ( ! function_exists( 'ccp_vip_allow_all_permissions' ) ) {
+if ( ! function_exists( 'safe_publish_vip_allow_all_permissions' ) ) {
 	/**
-	 * Permission callback that allows all operations for CCP authenticated requests.
+	 * Permission callback that allows all operations for Safe Publish authenticated requests.
 	 *
 	 * @param WP_REST_Request|null $request Optional. REST request object.
-	 * @return bool True for CCP authenticated requests, otherwise result of capability check.
+	 * @return bool True for Safe Publish authenticated requests, otherwise result of capability check.
 	 */
-	function ccp_vip_allow_all_permissions( $request = null ): bool {
-		// Only apply to CCP authenticated requests.
-		if ( empty( $GLOBALS['ccp_authenticated'] ) ) {
+	function safe_publish_vip_allow_all_permissions( $request = null ): bool {
+		// Only apply to Safe Publish authenticated requests.
+		if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
 			return current_user_can( 'read' ); // Fallback to normal permission check.
 		}
 
-		ccp_vip_log_auth_event(
+		safe_publish_vip_log_auth_event(
 			'PERMISSION_OVERRIDE_APPLIED',
 			array(
 				'route'   => $request ? $request->get_route() : 'unknown',
@@ -245,26 +245,26 @@ if ( ! function_exists( 'ccp_vip_allow_all_permissions' ) ) {
 	}
 }
 
-if ( ! function_exists( 'ccp_vip_override_collection_params' ) ) {
+if ( ! function_exists( 'safe_publish_vip_override_collection_params' ) ) {
 	/**
-	 * Overrides collection parameters to allow edit context for CCP.
+	 * Overrides collection parameters to allow edit context for Safe Publish.
 	 *
 	 * @param array        $params    Collection parameters.
 	 * @param WP_Post_Type $post_type Post type object.
 	 * @return array Modified collection parameters.
 	 */
-	function ccp_vip_override_collection_params( $params, $post_type ): array {
-		// Only apply to CCP authenticated requests.
-		if ( empty( $GLOBALS['ccp_authenticated'] ) ) {
+	function safe_publish_vip_override_collection_params( $params, $post_type ): array {
+		// Only apply to Safe Publish authenticated requests.
+		if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
 			return $params;
 		}
 
-		// Allow edit context without restrictions for CCP.
+		// Allow edit context without restrictions for Safe Publish.
 		if ( isset( $params['context'] ) ) {
 			$params['context']['default'] = 'edit';
 			unset( $params['context']['required'] );
 
-			ccp_vip_log_auth_event(
+			safe_publish_vip_log_auth_event(
 				'COLLECTION_PARAMS_OVERRIDDEN',
 				array(
 					'post_type'       => $post_type->name,
@@ -277,18 +277,18 @@ if ( ! function_exists( 'ccp_vip_override_collection_params' ) ) {
 	}
 }
 
-if ( ! function_exists( 'ccp_vip_ensure_edit_context_access' ) ) {
+if ( ! function_exists( 'safe_publish_vip_ensure_edit_context_access' ) ) {
 	/**
-	 * Ensures edit context access for CCP authenticated requests.
+	 * Ensures edit context access for Safe Publish authenticated requests.
 	 *
 	 * @param WP_REST_Response $response Response object.
 	 * @param WP_Post          $post     Post object.
 	 * @param WP_REST_Request  $request  Request object.
 	 * @return WP_REST_Response Response object, unchanged.
 	 */
-	function ccp_vip_ensure_edit_context_access( $response, $post, $request ): WP_REST_Response {
-		// Only apply to CCP authenticated requests.
-		if ( empty( $GLOBALS['ccp_authenticated'] ) ) {
+	function safe_publish_vip_ensure_edit_context_access( $response, $post, $request ): WP_REST_Response {
+		// Only apply to Safe Publish authenticated requests.
+		if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
 			return $response;
 		}
 
@@ -307,7 +307,7 @@ if ( ! function_exists( 'ccp_vip_ensure_edit_context_access' ) ) {
 			4
 		);
 
-		ccp_vip_log_auth_event(
+		safe_publish_vip_log_auth_event(
 			'EDIT_CONTEXT_ACCESS_ENSURED',
 			array(
 				'post_id'   => $post->ID,
@@ -320,11 +320,11 @@ if ( ! function_exists( 'ccp_vip_ensure_edit_context_access' ) ) {
 	}
 }
 
-if ( ! function_exists( 'ccp_vip_authenticate_request' ) ) {
+if ( ! function_exists( 'safe_publish_vip_authenticate_request' ) ) {
 	/**
-	 * VIP-Compatible Shared Secret Authentication for CCP.
+	 * VIP-Compatible Shared Secret Authentication for Safe Publish.
 	 *
-	 * Authenticates CCP requests using HMAC-SHA256 signatures and reads the shared
+	 * Authenticates Safe Publish requests using HMAC-SHA256 signatures and reads the shared
 	 * secret from VIP environment variables.
 	 *
 	 * @param WP_REST_Response|WP_Error|null $result  Response to replace.
@@ -332,7 +332,7 @@ if ( ! function_exists( 'ccp_vip_authenticate_request' ) ) {
 	 * @param WP_REST_Request                $request Request used to generate the response.
 	 * @return WP_REST_Response|WP_Error|null Original result or WP_Error for authentication failures.
 	 */
-	function ccp_vip_authenticate_request( $result, $server, $request ): WP_REST_Response|WP_Error|null {
+	function safe_publish_vip_authenticate_request( $result, $server, $request ): WP_REST_Response|WP_Error|null {
 		// Only authenticate WordPress REST API endpoints.
 		$route = $request->get_route();
 
@@ -342,18 +342,18 @@ if ( ! function_exists( 'ccp_vip_authenticate_request' ) ) {
 
 		$headers = $request->get_headers();
 
-		// Check for CCP authentication headers (shared secret only).
-		if ( isset( $headers['x_ccp_timestamp'] ) && isset( $headers['x_ccp_signature'] ) ) {
+		// Check for Safe Publish authentication headers (shared secret only).
+		if ( isset( $headers['x_safe_publish_timestamp'] ) && isset( $headers['x_safe_publish_signature'] ) ) {
 			// Shared Secret Authentication.
-			return ccp_vip_authenticate_shared_secret( $request, $headers, $result );
+			return safe_publish_vip_authenticate_shared_secret( $request, $headers, $result );
 		}
 
-		// No CCP auth headers present, continue with normal WordPress authentication.
+		// No Safe Publish auth headers present, continue with normal WordPress authentication.
 		return $result;
 	}
 }
 
-if ( ! function_exists( 'ccp_vip_authenticate_shared_secret' ) ) {
+if ( ! function_exists( 'safe_publish_vip_authenticate_shared_secret' ) ) {
 	/**
 	 * Authenticates using shared secret HMAC.
 	 *
@@ -362,14 +362,14 @@ if ( ! function_exists( 'ccp_vip_authenticate_shared_secret' ) ) {
 	 * @param WP_REST_Response|WP_Error|null $result  Optional. Original result to pass through on success.
 	 * @return WP_REST_Response|WP_Error|null Original result on success, or WP_Error on failure.
 	 */
-	function ccp_vip_authenticate_shared_secret( $request, $headers, $result = null ): WP_REST_Response|WP_Error|null {
+	function safe_publish_vip_authenticate_shared_secret( $request, $headers, $result = null ): WP_REST_Response|WP_Error|null {
 		$route = $request->get_route();
 
 		// Get shared secret from VIP environment.
-		$shared_secret = ccp_vip_get_shared_secret();
+		$shared_secret = safe_publish_vip_get_shared_secret();
 
 		if ( empty( $shared_secret ) ) {
-			ccp_vip_log_auth_event(
+			safe_publish_vip_log_auth_event(
 				'NO_SECRET_CONFIGURED',
 				array(
 					'route'  => $route,
@@ -378,14 +378,14 @@ if ( ! function_exists( 'ccp_vip_authenticate_shared_secret' ) ) {
 			);
 
 			return new WP_Error(
-				'ccp_auth_no_secret',
-				'CCP shared secret not configured in VIP environment',
+				'safe_publish_auth_no_secret',
+				'Safe Publish shared secret not configured in VIP environment',
 				array( 'status' => 500 )
 			);
 		}
 
-		$timestamp = $headers['x_ccp_timestamp'][0];
-		$signature = $headers['x_ccp_signature'][0];
+		$timestamp = $headers['x_safe_publish_timestamp'][0];
+		$signature = $headers['x_safe_publish_signature'][0];
 		$method    = $request->get_method();
 		$uri       = $request->get_route();
 
@@ -395,10 +395,10 @@ if ( ! function_exists( 'ccp_vip_authenticate_shared_secret' ) ) {
 		$time_diff    = abs( $current_time - $request_time );
 
 		// Allow 5-minute window for clock differences (configurable).
-		$max_time_diff = apply_filters( 'ccp_auth_max_time_diff', 300 );
+		$max_time_diff = apply_filters( 'safe_publish_auth_max_time_diff', 300 );
 
 		if ( $time_diff > $max_time_diff ) {
-			ccp_vip_log_auth_event(
+			safe_publish_vip_log_auth_event(
 				'TIMESTAMP_EXPIRED',
 				array(
 					'route'        => $route,
@@ -411,7 +411,7 @@ if ( ! function_exists( 'ccp_vip_authenticate_shared_secret' ) ) {
 			);
 
 			return new WP_Error(
-				'ccp_auth_expired',
+				'safe_publish_auth_expired',
 				sprintf( 'Request timestamp expired (difference: %d seconds)', $time_diff ),
 				array( 'status' => 401 )
 			);
@@ -423,7 +423,7 @@ if ( ! function_exists( 'ccp_vip_authenticate_shared_secret' ) ) {
 
 		// Verify signature using constant-time comparison.
 		if ( ! hash_equals( $expected_signature, $signature ) ) {
-			ccp_vip_log_auth_event(
+			safe_publish_vip_log_auth_event(
 				'SIGNATURE_INVALID',
 				array(
 					'route'               => $route,
@@ -436,14 +436,14 @@ if ( ! function_exists( 'ccp_vip_authenticate_shared_secret' ) ) {
 			);
 
 			return new WP_Error(
-				'ccp_auth_invalid',
-				'Invalid CCP authentication signature',
+				'safe_publish_auth_invalid',
+				'Invalid Safe Publish authentication signature',
 				array( 'status' => 401 )
 			);
 		}
 
 		// Authentication successful.
-		ccp_vip_log_auth_event(
+		safe_publish_vip_log_auth_event(
 			'AUTH_SUCCESS',
 			array(
 				'route'      => $route,
@@ -453,28 +453,28 @@ if ( ! function_exists( 'ccp_vip_authenticate_shared_secret' ) ) {
 			)
 		);
 
-		// Add custom header to indicate successful CCP authentication (only if headers not sent).
+		// Add custom header to indicate successful Safe Publish authentication (only if headers not sent).
 		if ( ! headers_sent() ) {
-			header( 'X-CCP-Auth: success' );
+			header( 'X-Safe-Publish-Auth: success' );
 		}
 
-		// Set up user context and permissions for CCP authenticated requests.
-		ccp_vip_setup_authenticated_context( $request );
+		// Set up user context and permissions for Safe Publish authenticated requests.
+		safe_publish_vip_setup_authenticated_context( $request );
 
 		// Add immediate permission override for this specific request.
-		add_filter( 'map_meta_cap', 'ccp_vip_override_meta_capabilities', 10, 4 );
+		add_filter( 'map_meta_cap', 'safe_publish_vip_override_meta_capabilities', 10, 4 );
 
 		// Override REST permission checks specifically for context=edit.
-		add_filter( 'rest_post_dispatch', 'ccp_vip_override_context_permissions', 5, 3 );
+		add_filter( 'rest_post_dispatch', 'safe_publish_vip_override_context_permissions', 5, 3 );
 
 		// Continue with the authenticated request.
 		return $result;
 	}
 }
 
-if ( ! function_exists( 'ccp_vip_override_meta_capabilities' ) ) {
+if ( ! function_exists( 'safe_publish_vip_override_meta_capabilities' ) ) {
 	/**
-	 * Overrides meta capabilities for CCP authenticated requests.
+	 * Overrides meta capabilities for Safe Publish authenticated requests.
 	 *
 	 * Handles capability mapping that occurs before user_has_cap.
 	 *
@@ -484,9 +484,9 @@ if ( ! function_exists( 'ccp_vip_override_meta_capabilities' ) ) {
 	 * @param array  $args    Arguments passed to capability check.
 	 * @return array Modified capabilities.
 	 */
-	function ccp_vip_override_meta_capabilities( $caps, $cap, $user_id, $args ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-		// Only apply to CCP authenticated requests.
-		if ( empty( $GLOBALS['ccp_authenticated'] ) ) {
+	function safe_publish_vip_override_meta_capabilities( $caps, $cap, $user_id, $args ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		// Only apply to Safe Publish authenticated requests.
+		if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
 			return $caps;
 		}
 
@@ -507,7 +507,7 @@ if ( ! function_exists( 'ccp_vip_override_meta_capabilities' ) ) {
 		);
 
 		if ( in_array( $cap, $edit_caps, true ) ) {
-			ccp_vip_log_auth_event(
+			safe_publish_vip_log_auth_event(
 				'META_CAP_OVERRIDE',
 				array(
 					'capability'    => $cap,
@@ -524,7 +524,7 @@ if ( ! function_exists( 'ccp_vip_override_meta_capabilities' ) ) {
 	}
 }
 
-if ( ! function_exists( 'ccp_vip_override_context_permissions' ) ) {
+if ( ! function_exists( 'safe_publish_vip_override_context_permissions' ) ) {
 	/**
 	 * Overrides context permissions for REST API responses.
 	 *
@@ -535,15 +535,15 @@ if ( ! function_exists( 'ccp_vip_override_context_permissions' ) ) {
 	 * @param WP_REST_Request           $request Request object.
 	 * @return WP_REST_Response|WP_Error Modified or re-dispatched response.
 	 */
-	function ccp_vip_override_context_permissions( $result, $server, $request ): WP_REST_Response|WP_Error {
-		// Only apply to CCP authenticated requests.
-		if ( empty( $GLOBALS['ccp_authenticated'] ) ) {
+	function safe_publish_vip_override_context_permissions( $result, $server, $request ): WP_REST_Response|WP_Error {
+		// Only apply to Safe Publish authenticated requests.
+		if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
 			return $result;
 		}
 
 		// If we received a forbidden context error, override it.
 		if ( is_wp_error( $result ) && $result->get_error_code() === 'rest_forbidden_context' ) {
-			ccp_vip_log_auth_event(
+			safe_publish_vip_log_auth_event(
 				'CONTEXT_ERROR_OVERRIDDEN',
 				array(
 					'original_error' => $result->get_error_message(),
@@ -554,7 +554,7 @@ if ( ! function_exists( 'ccp_vip_override_context_permissions' ) ) {
 			);
 
 			// Re-dispatch the request with elevated permissions.
-			$GLOBALS['ccp_context_override'] = true;
+			$GLOBALS['safe_publish_context_override'] = true;
 
 			// Temporarily grant all capabilities.
 			add_filter(
@@ -576,7 +576,7 @@ if ( ! function_exists( 'ccp_vip_override_context_permissions' ) ) {
 			// Try to re-process the request.
 			$new_result = $server->dispatch( $request );
 
-			unset( $GLOBALS['ccp_context_override'] );
+			unset( $GLOBALS['safe_publish_context_override'] );
 
 			return $new_result;
 		}
@@ -585,9 +585,9 @@ if ( ! function_exists( 'ccp_vip_override_context_permissions' ) ) {
 	}
 }
 
-if ( ! function_exists( 'ccp_vip_setup_authenticated_context' ) ) {
+if ( ! function_exists( 'safe_publish_vip_setup_authenticated_context' ) ) {
 	/**
-	 * Sets up authenticated context for CCP requests.
+	 * Sets up authenticated context for Safe Publish requests.
 	 *
 	 * Grants necessary permissions for REST API operations.
 	 *
@@ -603,16 +603,16 @@ if ( ! function_exists( 'ccp_vip_setup_authenticated_context' ) ) {
 	 *
 	 * @param WP_REST_Request $request Authenticated REST request.
 	 */
-	function ccp_vip_setup_authenticated_context( $request ): void {
-		// Mark this request as CCP authenticated for later reference.
-		$GLOBALS['ccp_authenticated'] = true;
+	function safe_publish_vip_setup_authenticated_context( $request ): void {
+		// Mark this request as Safe Publish authenticated for later reference.
+		$GLOBALS['safe_publish_authenticated'] = true;
 
 		// Always add the capability filter first as a safety net.
-		add_filter( 'user_has_cap', 'ccp_vip_grant_api_capabilities', 10, 4 );
+		add_filter( 'user_has_cap', 'safe_publish_vip_grant_api_capabilities', 10, 4 );
 
 		// VIP-friendly approach: Use capability system without creating actual users.
 		// This avoids 2FA requirements and is more secure.
-		ccp_vip_log_auth_event(
+		safe_publish_vip_log_auth_event(
 			'CAPABILITY_BASED_AUTH_SETUP',
 			array(
 				'route'    => $request->get_route(),
@@ -624,29 +624,29 @@ if ( ! function_exists( 'ccp_vip_setup_authenticated_context' ) ) {
 
 		// Set a virtual user context for logging purposes only.
 		// This doesn't actually log in a user, just provides context.
-		$GLOBALS['ccp_virtual_user'] = (object) array(
+		$GLOBALS['safe_publish_virtual_user'] = (object) array(
 			'ID'           => 0,
-			'user_login'   => 'ccp-system',
-			'user_email'   => 'ccp-system@virtual',
-			'display_name' => 'CCP System (Virtual)',
+			'user_login'   => 'safe-publish-system',
+			'user_email'   => 'safe-publish-system@virtual',
+			'display_name' => 'Safe Publish System (Virtual)',
 		);
 
-		// Add filter to bypass additional permission checks for CCP requests.
-		add_filter( 'rest_pre_dispatch', 'ccp_vip_bypass_permission_checks', 11, 3 );
+		// Add filter to bypass additional permission checks for Safe Publish requests.
+		add_filter( 'rest_pre_dispatch', 'safe_publish_vip_bypass_permission_checks', 11, 3 );
 
 		// Add direct permission callback overrides for post types.
-		add_filter( 'rest_post_collection_params', 'ccp_vip_override_collection_params', 10, 2 );
-		add_filter( 'rest_prepare_post', 'ccp_vip_ensure_edit_context_access', 10, 3 );
-		add_filter( 'rest_prepare_page', 'ccp_vip_ensure_edit_context_access', 10, 3 );
+		add_filter( 'rest_post_collection_params', 'safe_publish_vip_override_collection_params', 10, 2 );
+		add_filter( 'rest_prepare_post', 'safe_publish_vip_ensure_edit_context_access', 10, 3 );
+		add_filter( 'rest_prepare_page', 'safe_publish_vip_ensure_edit_context_access', 10, 3 );
 
 		// Override permission checks at the endpoint level.
-		add_filter( 'rest_endpoints', 'ccp_vip_override_endpoint_permissions' );
+		add_filter( 'rest_endpoints', 'safe_publish_vip_override_endpoint_permissions' );
 	}
 }
 
-if ( ! function_exists( 'ccp_vip_grant_api_capabilities' ) ) {
+if ( ! function_exists( 'safe_publish_vip_grant_api_capabilities' ) ) {
 	/**
-	 * Grants API capabilities for CCP authenticated requests.
+	 * Grants API capabilities for Safe Publish authenticated requests.
 	 *
 	 * @param array   $allcaps All capabilities for the user.
 	 * @param array   $caps    Required capabilities.
@@ -654,9 +654,9 @@ if ( ! function_exists( 'ccp_vip_grant_api_capabilities' ) ) {
 	 * @param WP_User $user    User object.
 	 * @return array Modified capabilities.
 	 */
-	function ccp_vip_grant_api_capabilities( $allcaps, $caps, $args, $user ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-		// Only apply to CCP authenticated requests.
-		if ( empty( $GLOBALS['ccp_authenticated'] ) ) {
+	function safe_publish_vip_grant_api_capabilities( $allcaps, $caps, $args, $user ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		// Only apply to Safe Publish authenticated requests.
+		if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
 			return $allcaps;
 		}
 
@@ -672,12 +672,12 @@ if ( ! function_exists( 'ccp_vip_grant_api_capabilities' ) ) {
 
 		// Log the capability grant for debugging (use virtual user info).
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			$virtual_user = $GLOBALS['ccp_virtual_user'] ?? (object) array( 'ID' => 0 );
-			ccp_vip_log_auth_event(
+			$virtual_user = $GLOBALS['safe_publish_virtual_user'] ?? (object) array( 'ID' => 0 );
+			safe_publish_vip_log_auth_event(
 				'CAPABILITIES_GRANTED',
 				array(
 					'user_id'            => $virtual_user->ID,
-					'user_type'          => 'virtual_ccp_user',
+					'user_type'          => 'virtual_safe_publish_user',
 					'requested_caps'     => $caps,
 					'granted_caps_count' => count( array_filter( $allcaps ) ),
 					'vip_2fa_bypass'     => 'capability_based_auth',
@@ -690,50 +690,50 @@ if ( ! function_exists( 'ccp_vip_grant_api_capabilities' ) ) {
 }
 
 /**
- * Bypasses additional permission checks for CCP authenticated requests.
+ * Bypasses additional permission checks for Safe Publish authenticated requests.
  *
  * @param WP_REST_Response|WP_Error|null $result  Response to replace the requested version with.
  * @param WP_REST_Server                 $server  Server instance.
  * @param WP_REST_Request                $request Request used to generate the response.
  * @return WP_REST_Response|WP_Error|null Original result, unchanged.
  */
-function ccp_vip_bypass_permission_checks( $result, $server, $request ): WP_REST_Response|WP_Error|null { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-	// Only apply to CCP authenticated requests.
-	if ( empty( $GLOBALS['ccp_authenticated'] ) ) {
+function safe_publish_vip_bypass_permission_checks( $result, $server, $request ): WP_REST_Response|WP_Error|null { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+	// Only apply to Safe Publish authenticated requests.
+	if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
 		return $result;
 	}
 
-	// Add filter to allow edit context for CCP authenticated requests.
+	// Add filter to allow edit context for Safe Publish authenticated requests.
 	add_filter( 'rest_allow_anonymous_comments', '__return_true' );
 
 	// Add specific permission callback override for posts and other post types.
-	add_filter( 'rest_prepare_post', 'ccp_vip_prepare_post_for_edit_context', 10, 3 );
-	add_filter( 'rest_prepare_page', 'ccp_vip_prepare_post_for_edit_context', 10, 3 );
+	add_filter( 'rest_prepare_post', 'safe_publish_vip_prepare_post_for_edit_context', 10, 3 );
+	add_filter( 'rest_prepare_page', 'safe_publish_vip_prepare_post_for_edit_context', 10, 3 );
 
 	// Override specific permission checks for edit context.
-	add_filter( 'rest_post_dispatch', 'ccp_vip_ensure_response_success', 10, 3 );
+	add_filter( 'rest_post_dispatch', 'safe_publish_vip_ensure_response_success', 10, 3 );
 
 	return $result;
 }
 
 /**
- * Prepares post data for edit context when CCP is authenticated.
+ * Prepares post data for edit context when Safe Publish is authenticated.
  *
  * @param WP_REST_Response $response Response object.
  * @param WP_Post          $post     Post object.
  * @param WP_REST_Request  $request  Request object.
  * @return WP_REST_Response Response object, unchanged.
  */
-function ccp_vip_prepare_post_for_edit_context( $response, $post, $request ): WP_REST_Response {
-	// Only apply to CCP authenticated requests.
-	if ( empty( $GLOBALS['ccp_authenticated'] ) ) {
+function safe_publish_vip_prepare_post_for_edit_context( $response, $post, $request ): WP_REST_Response {
+	// Only apply to Safe Publish authenticated requests.
+	if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
 		return $response;
 	}
 
 	// If this is an edit context request, ensure we return the full data.
 	if ( 'edit' === $request->get_param( 'context' ) ) {
-		// Log that we're allowing edit context for CCP.
-		ccp_vip_log_auth_event(
+		// Log that we're allowing edit context for Safe Publish.
+		safe_publish_vip_log_auth_event(
 			'EDIT_CONTEXT_ALLOWED',
 			array(
 				'post_id'   => $post->ID,
@@ -747,16 +747,16 @@ function ccp_vip_prepare_post_for_edit_context( $response, $post, $request ): WP
 }
 
 /**
- * Ensures response success for valid CCP operations.
+ * Ensures response success for valid Safe Publish operations.
  *
  * @param WP_REST_Response|WP_Error $response Response object.
  * @param WP_REST_Server            $server   Server instance.
  * @param WP_REST_Request           $request  Request used to generate the response.
  * @return WP_REST_Response|WP_Error Response, potentially modified.
  */
-function ccp_vip_ensure_response_success( $response, $server, $request ): WP_REST_Response|WP_Error {
-	// Only apply to CCP authenticated requests.
-	if ( empty( $GLOBALS['ccp_authenticated'] ) ) {
+function safe_publish_vip_ensure_response_success( $response, $server, $request ): WP_REST_Response|WP_Error {
+	// Only apply to Safe Publish authenticated requests.
+	if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
 		return $response;
 	}
 
@@ -766,7 +766,7 @@ function ccp_vip_ensure_response_success( $response, $server, $request ): WP_RES
 
 		// Handle specific REST permission errors.
 		if ( in_array( $error_code, array( 'rest_forbidden', 'rest_cannot_edit', 'rest_forbidden_context' ), true ) ) {
-			ccp_vip_log_auth_event(
+			safe_publish_vip_log_auth_event(
 				'PERMISSION_ERROR_INTERCEPTED',
 				array(
 					'error_code'    => $error_code,
@@ -779,9 +779,9 @@ function ccp_vip_ensure_response_success( $response, $server, $request ): WP_RES
 
 			// If this is a context permission error, we might need to handle it differently.
 			if ( 'rest_forbidden_context' === $error_code ) {
-				// For CCP authenticated requests, we should allow edit context.
+				// For Safe Publish authenticated requests, we should allow edit context.
 				// This is a fallback - the proper fix should be in the capability system above.
-				ccp_vip_log_auth_event(
+				safe_publish_vip_log_auth_event(
 					'CONTEXT_PERMISSION_OVERRIDE_NEEDED',
 					array(
 						'route'          => $request->get_route(),
@@ -795,29 +795,29 @@ function ccp_vip_ensure_response_success( $response, $server, $request ): WP_RES
 	return $response;
 }
 
-if ( ! function_exists( 'ccp_vip_get_shared_secret' ) ) {
+if ( ! function_exists( 'safe_publish_vip_get_shared_secret' ) ) {
 	/**
 	 * Gets shared secret from VIP environment (multiple fallback methods).
 	 *
 	 * @return string Shared secret, or empty string if not found.
 	 */
-	function ccp_vip_get_shared_secret(): string {
+	function safe_publish_vip_get_shared_secret(): string {
 		// Method 1: VIP constant (preferred - set in vip-config.php).
-		if ( defined( 'CCP_SHARED_SECRET' ) && ! empty( CCP_SHARED_SECRET ) ) {
-			return CCP_SHARED_SECRET;
+		if ( defined( 'SAFE_PUBLISH_SHARED_SECRET' ) && ! empty( SAFE_PUBLISH_SHARED_SECRET ) ) {
+			return SAFE_PUBLISH_SHARED_SECRET;
 		}
 
 		// Method 2: Direct environment variable access.
-		$env_secret = getenv( 'CCP_SHARED_SECRET' );
+		$env_secret = getenv( 'SAFE_PUBLISH_SHARED_SECRET' );
 		if ( ! empty( $env_secret ) ) {
 			return $env_secret;
 		}
 
 		// Method 3: $_ENV superglobal (fallback for some hosting environments).
-		if ( isset( $_ENV['CCP_SHARED_SECRET'] ) && ! empty( $_ENV['CCP_SHARED_SECRET'] ) ) {
+		if ( isset( $_ENV['SAFE_PUBLISH_SHARED_SECRET'] ) && ! empty( $_ENV['SAFE_PUBLISH_SHARED_SECRET'] ) ) {
 			// Cryptographic secret not sanitized; used directly for HMAC authentication.
 			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-			$env_secret = trim( $_ENV['CCP_SHARED_SECRET'] );
+			$env_secret = trim( $_ENV['SAFE_PUBLISH_SHARED_SECRET'] );
 			// Validate that it contains only safe characters for a secret key.
 			if ( ! empty( $env_secret ) && strlen( $env_secret ) >= 16 && preg_match( '/^[a-zA-Z0-9\-_+=\/]+$/', $env_secret ) ) {
 				return $env_secret;
@@ -825,7 +825,7 @@ if ( ! function_exists( 'ccp_vip_get_shared_secret' ) ) {
 		}
 
 		// Method 4: WordPress option (fallback for non-VIP or development).
-		$option_secret = get_option( 'ccp_shared_secret', '' );
+		$option_secret = get_option( 'safe_publish_shared_secret', '' );
 		if ( ! empty( $option_secret ) ) {
 			return $option_secret;
 		}
@@ -834,7 +834,7 @@ if ( ! function_exists( 'ccp_vip_get_shared_secret' ) ) {
 	}
 }
 
-if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
+if ( ! function_exists( 'safe_publish_vip_log_auth_event' ) ) {
 	/**
 	 * Logs authentication events for monitoring and debugging.
 	 *
@@ -843,21 +843,21 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 	 * @param string $event Event type (AUTH_SUCCESS, SIGNATURE_INVALID, etc.).
 	 * @param array  $data  Optional. Additional event data. Default empty array.
 	 */
-	function ccp_vip_log_auth_event( $event, $data = array() ): void {
+	function safe_publish_vip_log_auth_event( $event, $data = array() ): void {
 		// Skip logging during REST API requests to prevent header issues.
 		if ( defined( 'REST_REQUEST' ) && constant( 'REST_REQUEST' ) && ! headers_sent() ) {
 			// Queue the log for later processing.
-			if ( ! isset( $GLOBALS['ccp_deferred_logs'] ) ) {
-				$GLOBALS['ccp_deferred_logs'] = array();
+			if ( ! isset( $GLOBALS['safe_publish_deferred_logs'] ) ) {
+				$GLOBALS['safe_publish_deferred_logs'] = array();
 			}
-			$GLOBALS['ccp_deferred_logs'][] = array(
+			$GLOBALS['safe_publish_deferred_logs'][] = array(
 				'event' => $event,
 				'data'  => $data,
 			);
 
 			// Register shutdown hook to process deferred logs.
-			if ( ! has_action( 'shutdown', 'ccp_vip_process_deferred_logs' ) ) {
-				add_action( 'shutdown', 'ccp_vip_process_deferred_logs' );
+			if ( ! has_action( 'shutdown', 'safe_publish_vip_process_deferred_logs' ) ) {
+				add_action( 'shutdown', 'safe_publish_vip_process_deferred_logs' );
 			}
 			return;
 		}
@@ -886,7 +886,7 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 		);
 
 		// Simple, reliable log message format.
-		$log_message = '[CCP-Auth-VIP] ' . $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES );
+		$log_message = '[Safe-Publish-Auth-VIP] ' . $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES );
 
 		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		error_log( $log_message );
@@ -894,7 +894,7 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 		// Backup logging methods.
 
 		// 1. Direct file write as backup (VIP-safe location).
-		$log_file = get_temp_dir() . 'ccp-auth-vip.log';
+		$log_file = get_temp_dir() . 'safe-publish-auth-vip.log';
 		// phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_date
 		$file_message = date( 'Y-m-d H:i:s' ) . ' ' . $log_message . "\n";
 		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_file_put_contents
@@ -902,20 +902,20 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 
 		// 2. PHP syslog for additional visibility.
 		if ( function_exists( 'syslog' ) ) {
-			openlog( 'CCP-Auth-VIP', LOG_PID, LOG_USER );
+			openlog( 'Safe-Publish-Auth-VIP', LOG_PID, LOG_USER );
 			syslog( LOG_INFO, $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES ) );
 			closelog();
 		}
 
 		// 3. Store recent events in database for dashboard viewing (only if WordPress is loaded).
 		if ( function_exists( 'get_option' ) ) {
-			ccp_vip_store_log_event( $event, $log_data );
+			safe_publish_vip_store_log_event( $event, $log_data );
 		}
 
 		// 4. New Relic custom events (if available).
 		if ( function_exists( 'newrelic_record_custom_event' ) ) {
 			newrelic_record_custom_event(
-				'CCP_Auth_Event',
+				'Safe_Publish_Auth_Event',
 				array(
 					'event_type' => $event,
 					'site_url'   => $site_url,
@@ -932,7 +932,7 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 
 		// 6. Trigger WordPress action for other monitoring plugins (only if WordPress is loaded).
 		if ( function_exists( 'do_action' ) ) {
-			do_action( 'ccp_auth_event_logged', $event, $log_data );
+			do_action( 'safe_publish_auth_event_logged', $event, $log_data );
 		}
 
 		// 7. Force immediate log write for VIP (bypass buffering).
@@ -942,34 +942,34 @@ if ( ! function_exists( 'ccp_vip_log_auth_event' ) ) {
 	}
 }
 
-if ( ! function_exists( 'ccp_vip_process_deferred_logs' ) ) {
+if ( ! function_exists( 'safe_publish_vip_process_deferred_logs' ) ) {
 	/**
 	 * Processes deferred logs that were queued during REST API requests.
 	 */
-	function ccp_vip_process_deferred_logs(): void {
-		if ( ! isset( $GLOBALS['ccp_deferred_logs'] ) || empty( $GLOBALS['ccp_deferred_logs'] ) ) {
+	function safe_publish_vip_process_deferred_logs(): void {
+		if ( ! isset( $GLOBALS['safe_publish_deferred_logs'] ) || empty( $GLOBALS['safe_publish_deferred_logs'] ) ) {
 			return;
 		}
 
-		foreach ( $GLOBALS['ccp_deferred_logs'] as $log_entry ) {
-			ccp_vip_log_auth_event( $log_entry['event'], $log_entry['data'] );
+		foreach ( $GLOBALS['safe_publish_deferred_logs'] as $log_entry ) {
+			safe_publish_vip_log_auth_event( $log_entry['event'], $log_entry['data'] );
 		}
 
 		// Clear the queue.
-		unset( $GLOBALS['ccp_deferred_logs'] );
+		unset( $GLOBALS['safe_publish_deferred_logs'] );
 	}
 }
 
-if ( ! function_exists( 'ccp_vip_store_log_event' ) ) {
+if ( ! function_exists( 'safe_publish_vip_store_log_event' ) ) {
 	/**
 	 * Stores log events in database for dashboard viewing.
 	 *
 	 * @param string $event Event type.
 	 * @param array  $data  Event data to store.
 	 */
-	function ccp_vip_store_log_event( $event, $data ): void {
+	function safe_publish_vip_store_log_event( $event, $data ): void {
 		// Get existing log events (keep last 100 events).
-		$log_events = get_option( 'ccp_auth_log_events', array() );
+		$log_events = get_option( 'safe_publish_auth_log_events', array() );
 
 		// Add new event.
 		$log_events[] = array(
@@ -984,10 +984,10 @@ if ( ! function_exists( 'ccp_vip_store_log_event' ) ) {
 		}
 
 		// Update option.
-		update_option( 'ccp_auth_log_events', $log_events, false );
+		update_option( 'safe_publish_auth_log_events', $log_events, false );
 
 		// Also update summary statistics.
-		ccp_vip_update_auth_stats( $event );
+		safe_publish_vip_update_auth_stats( $event );
 	}
 }
 
@@ -996,9 +996,9 @@ if ( ! function_exists( 'ccp_vip_store_log_event' ) ) {
  *
  * @param string $event Event type to record.
  */
-function ccp_vip_update_auth_stats( $event ): void {
+function safe_publish_vip_update_auth_stats( $event ): void {
 	$stats = get_option(
-		'ccp_auth_stats',
+		'safe_publish_auth_stats',
 		array(
 			'total_requests'   => 0,
 			'successful_auths' => 0,
@@ -1037,18 +1037,18 @@ function ccp_vip_update_auth_stats( $event ): void {
 	// Keep only last 30 days of daily stats.
 	$stats['daily_stats'] = array_slice( $stats['daily_stats'], -30, null, true );
 
-	update_option( 'ccp_auth_stats', $stats, false );
+	update_option( 'safe_publish_auth_stats', $stats, false );
 }
 
 /**
- * Adds admin notice about CCP authentication status (VIP-safe).
+ * Adds admin notice about Safe Publish authentication status (VIP-safe).
  */
-add_action( 'admin_notices', 'ccp_vip_auth_admin_notice' );
+add_action( 'admin_notices', 'safe_publish_vip_auth_admin_notice' );
 
 /**
- * Displays admin notice about CCP authentication configuration status.
+ * Displays admin notice about Safe Publish authentication configuration status.
  */
-function ccp_vip_auth_admin_notice(): void {
+function safe_publish_vip_auth_admin_notice(): void {
 	// Only show to administrators.
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
@@ -1060,12 +1060,12 @@ function ccp_vip_auth_admin_notice(): void {
 		return;
 	}
 
-	$shared_secret = ccp_vip_get_shared_secret();
+	$shared_secret = safe_publish_vip_get_shared_secret();
 	$secret_length = strlen( $shared_secret );
 
 	if ( empty( $shared_secret ) ) {
 		wp_admin_notice(
-			__( 'CCP Authentication: Shared secret not configured. Set the <code>CCP_SHARED_SECRET</code> environment variable in VIP dashboard to enable CCP authentication.', 'ccp' ),
+			__( 'Safe Publish Authentication: Shared secret not configured. Set the <code>SAFE_PUBLISH_SHARED_SECRET</code> environment variable in VIP dashboard to enable Safe Publish authentication.', 'safe-publish' ),
 			array(
 				'type' => 'warning',
 			),
@@ -1074,7 +1074,7 @@ function ccp_vip_auth_admin_notice(): void {
 		wp_admin_notice(
 			sprintf(
 				/* translators: %d: Length of the shared secret in characters */
-				__( 'CCP Authentication: Shared secret is too short ( %d character secret). Use at least 32 characters for security.', 'ccp' ),
+				__( 'Safe Publish Authentication: Shared secret is too short ( %d character secret). Use at least 32 characters for security.', 'safe-publish' ),
 				absint( $secret_length )
 			),
 			array(
@@ -1085,7 +1085,7 @@ function ccp_vip_auth_admin_notice(): void {
 		wp_admin_notice(
 			sprintf(
 				/* translators: %d: Length of the shared secret in characters */
-				__( 'CCP Authentication: Configured successfully ✅ ( %d character secret).', 'ccp' ),
+				__( 'Safe Publish Authentication: Configured successfully ✅ ( %d character secret).', 'safe-publish' ),
 				absint( $secret_length )
 			),
 			array(
@@ -1098,22 +1098,22 @@ function ccp_vip_auth_admin_notice(): void {
 
 // Register test endpoint in debug mode only.
 if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-	add_action( 'rest_api_init', 'ccp_vip_register_test_endpoint' );
+	add_action( 'rest_api_init', 'safe_publish_vip_register_test_endpoint' );
 }
 
 // Always register monitoring endpoint.
-add_action( 'rest_api_init', 'ccp_vip_register_monitoring_endpoints' );
+add_action( 'rest_api_init', 'safe_publish_vip_register_monitoring_endpoints' );
 
 /**
- * Registers test endpoint for CCP authentication (debug mode only).
+ * Registers test endpoint for Safe Publish authentication (debug mode only).
  */
-function ccp_vip_register_test_endpoint(): void {
+function safe_publish_vip_register_test_endpoint(): void {
 	register_rest_route(
-		'ccp/v1',
+		'safe-publish/v1',
 		'/auth-test',
 		array(
 			'methods'             => 'GET',
-			'callback'            => 'ccp_vip_auth_test_callback',
+			'callback'            => 'safe_publish_vip_auth_test_callback',
 			'permission_callback' => '__return_true', // Public endpoint for testing.
 		)
 	);
@@ -1122,37 +1122,37 @@ function ccp_vip_register_test_endpoint(): void {
 /**
  * Registers monitoring endpoints for authentication status.
  */
-function ccp_vip_register_monitoring_endpoints(): void {
+function safe_publish_vip_register_monitoring_endpoints(): void {
 	// Authentication status endpoint.
 	register_rest_route(
-		'ccp/v1',
+		'safe-publish/v1',
 		'/auth-status',
 		array(
 			'methods'             => 'GET',
-			'callback'            => 'ccp_vip_auth_status_callback',
-			'permission_callback' => 'ccp_vip_can_view_auth_status',
+			'callback'            => 'safe_publish_vip_auth_status_callback',
+			'permission_callback' => 'safe_publish_vip_can_view_auth_status',
 		)
 	);
 
 	// Authentication logs endpoint.
 	register_rest_route(
-		'ccp/v1',
+		'safe-publish/v1',
 		'/auth-logs',
 		array(
 			'methods'             => 'GET',
-			'callback'            => 'ccp_vip_auth_logs_callback',
-			'permission_callback' => 'ccp_vip_can_view_auth_status',
+			'callback'            => 'safe_publish_vip_auth_logs_callback',
+			'permission_callback' => 'safe_publish_vip_can_view_auth_status',
 		)
 	);
 
 	// Clear logs endpoint (for maintenance).
 	register_rest_route(
-		'ccp/v1',
+		'safe-publish/v1',
 		'/auth-logs',
 		array(
 			'methods'             => 'DELETE',
-			'callback'            => 'ccp_vip_clear_auth_logs_callback',
-			'permission_callback' => 'ccp_vip_can_manage_auth',
+			'callback'            => 'safe_publish_vip_clear_auth_logs_callback',
+			'permission_callback' => 'safe_publish_vip_can_manage_auth',
 		)
 	);
 }
@@ -1162,7 +1162,7 @@ function ccp_vip_register_monitoring_endpoints(): void {
  *
  * @return bool True if user can view auth status, false otherwise.
  */
-function ccp_vip_can_view_auth_status(): bool {
+function safe_publish_vip_can_view_auth_status(): bool {
 	// Allow if user can manage options, or if it's a VIP monitoring request.
 	if ( current_user_can( 'manage_options' ) ) {
 		return true;
@@ -1184,7 +1184,7 @@ function ccp_vip_can_view_auth_status(): bool {
  *
  * @return bool True if user can manage auth, false otherwise.
  */
-function ccp_vip_can_manage_auth(): bool {
+function safe_publish_vip_can_manage_auth(): bool {
 	return current_user_can( 'manage_options' );
 }
 
@@ -1194,10 +1194,10 @@ function ccp_vip_can_manage_auth(): bool {
  * @param WP_REST_Request $request REST request object.
  * @return WP_REST_Response Response containing auth status data.
  */
-function ccp_vip_auth_status_callback( $request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-	$shared_secret = ccp_vip_get_shared_secret();
-	$stats         = get_option( 'ccp_auth_stats', array() );
-	$recent_events = get_option( 'ccp_auth_log_events', array() );
+function safe_publish_vip_auth_status_callback( $request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	$shared_secret = safe_publish_vip_get_shared_secret();
+	$stats         = get_option( 'safe_publish_auth_stats', array() );
+	$recent_events = get_option( 'safe_publish_auth_log_events', array() );
 
 	// Calculate health score.
 	$health_score = 100;
@@ -1250,7 +1250,7 @@ function ccp_vip_auth_status_callback( $request ): WP_REST_Response { // phpcs:i
 			'configuration'       => array(
 				'shared_secret_configured' => ! empty( $shared_secret ),
 				'secret_length'            => strlen( $shared_secret ),
-				'secret_source'            => ccp_vip_get_secret_source(),
+				'secret_source'            => safe_publish_vip_get_secret_source(),
 				'vip_environment'          => defined( 'WPCOM_IS_VIP_ENV' ) ? WPCOM_IS_VIP_ENV : false,
 				'debug_mode'               => defined( 'WP_DEBUG' ) ? WP_DEBUG : false,
 			),
@@ -1277,8 +1277,8 @@ function ccp_vip_auth_status_callback( $request ): WP_REST_Response { // phpcs:i
  * @param WP_REST_Request $request REST request object.
  * @return WP_REST_Response Response containing auth logs data.
  */
-function ccp_vip_auth_logs_callback( $request ): WP_REST_Response {
-	$recent_events = get_option( 'ccp_auth_log_events', array() );
+function safe_publish_vip_auth_logs_callback( $request ): WP_REST_Response {
+	$recent_events = get_option( 'safe_publish_auth_log_events', array() );
 	$limit_value   = (int) $request->get_param( 'limit' );
 	$limit         = min( $limit_value ? $limit_value : 50, 100 );
 	$offset_value  = (int) $request->get_param( 'offset' );
@@ -1320,12 +1320,12 @@ function ccp_vip_auth_logs_callback( $request ): WP_REST_Response {
  * @param WP_REST_Request $request REST request object.
  * @return WP_REST_Response Response confirming logs were cleared.
  */
-function ccp_vip_clear_auth_logs_callback( $request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-	delete_option( 'ccp_auth_log_events' );
-	delete_option( 'ccp_auth_stats' );
+function safe_publish_vip_clear_auth_logs_callback( $request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	delete_option( 'safe_publish_auth_log_events' );
+	delete_option( 'safe_publish_auth_stats' );
 	$user_id = get_current_user_id();
 
-	ccp_vip_log_auth_event(
+	safe_publish_vip_log_auth_event(
 		'LOGS_CLEARED',
 		array(
 			'cleared_by' => $user_id ? $user_id : 'unknown',
@@ -1349,34 +1349,34 @@ function ccp_vip_clear_auth_logs_callback( $request ): WP_REST_Response { // php
  *
  * @return string Source of the secret ('constant', 'environment', 'option', or 'none').
  */
-function ccp_vip_get_secret_source(): string {
-	if ( defined( 'CCP_SHARED_SECRET' ) && ! empty( CCP_SHARED_SECRET ) ) {
+function safe_publish_vip_get_secret_source(): string {
+	if ( defined( 'SAFE_PUBLISH_SHARED_SECRET' ) && ! empty( SAFE_PUBLISH_SHARED_SECRET ) ) {
 		return 'constant';
 	}
-	if ( ! empty( getenv( 'CCP_SHARED_SECRET' ) ) ) {
+	if ( ! empty( getenv( 'SAFE_PUBLISH_SHARED_SECRET' ) ) ) {
 		return 'environment';
 	}
-	if ( ! empty( get_option( 'ccp_shared_secret' ) ) ) {
+	if ( ! empty( get_option( 'safe_publish_shared_secret' ) ) ) {
 		return 'option';
 	}
 	return 'none';
 }
 
 /**
- * Handles test endpoint callback for CCP authentication.
+ * Handles test endpoint callback for Safe Publish authentication.
  *
  * @param WP_REST_Request $request Request object.
  * @return WP_REST_Response Response containing test results.
  */
-function ccp_vip_auth_test_callback( $request ): WP_REST_Response {
-	$headers         = $request->get_headers();
-	$has_ccp_headers = isset( $headers['x_ccp_timestamp'] ) && isset( $headers['x_ccp_signature'] );
+function safe_publish_vip_auth_test_callback( $request ): WP_REST_Response {
+	$headers                  = $request->get_headers();
+	$has_safe_publish_headers = isset( $headers['x_safe_publish_timestamp'] ) && isset( $headers['x_safe_publish_signature'] );
 
 	// Force generate test logs to verify VIP logging.
-	ccp_vip_log_auth_event(
+	safe_publish_vip_log_auth_event(
 		'TEST_ENDPOINT_ACCESSED',
 		array(
-			'headers_present' => $has_ccp_headers,
+			'headers_present' => $has_safe_publish_headers,
 			'user_agent'      => $request->get_header( 'user_agent' ),
 			'test_type'       => 'manual_endpoint_test',
 		)
@@ -1384,14 +1384,14 @@ function ccp_vip_auth_test_callback( $request ): WP_REST_Response {
 
 	return new WP_REST_Response(
 		array(
-			'message'                  => 'CCP Authentication Test Endpoint',
-			'timestamp'                => current_time( 'mysql' ),
-			'ccp_headers_present'      => $has_ccp_headers,
-			'shared_secret_configured' => ! empty( ccp_vip_get_shared_secret() ),
-			'secret_length'            => strlen( ccp_vip_get_shared_secret() ),
-			'vip_environment'          => defined( 'WPCOM_IS_VIP_ENV' ) ? WPCOM_IS_VIP_ENV : false,
-			'debug_mode'               => defined( 'WP_DEBUG' ) ? WP_DEBUG : false,
-			'logging_info'             => array(
+			'message'                      => 'Safe Publish Authentication Test Endpoint',
+			'timestamp'                    => current_time( 'mysql' ),
+			'safe_publish_headers_present' => $has_safe_publish_headers,
+			'shared_secret_configured'     => ! empty( safe_publish_vip_get_shared_secret() ),
+			'secret_length'                => strlen( safe_publish_vip_get_shared_secret() ),
+			'vip_environment'              => defined( 'WPCOM_IS_VIP_ENV' ) ? WPCOM_IS_VIP_ENV : false,
+			'debug_mode'                   => defined( 'WP_DEBUG' ) ? WP_DEBUG : false,
+			'logging_info'                 => array(
 				'error_log_available' => function_exists( 'error_log' ),
 				'syslog_available'    => function_exists( 'syslog' ),
 				'log_test_generated'  => true,
@@ -1402,133 +1402,133 @@ function ccp_vip_auth_test_callback( $request ): WP_REST_Response {
 }
 
 /**
- * Adds CCP authentication status to Site Health (WordPress 5.2+).
+ * Adds Safe Publish authentication status to Site Health (WordPress 5.2+).
  */
-add_filter( 'site_status_tests', 'ccp_vip_add_site_health_test' );
+add_filter( 'site_status_tests', 'safe_publish_vip_add_site_health_test' );
 
 /**
- * Adds CCP authentication test to Site Health.
+ * Adds Safe Publish authentication test to Site Health.
  *
  * @param array $tests Existing Site Health tests.
- * @return array Modified tests array with CCP auth test added.
+ * @return array Modified tests array with Safe Publish auth test added.
  */
-function ccp_vip_add_site_health_test( $tests ): array {
-	$tests['direct']['ccp_auth'] = array(
-		'label' => __( 'CCP Authentication Configuration', 'ccp' ),
-		'test'  => 'ccp_vip_site_health_test',
+function safe_publish_vip_add_site_health_test( $tests ): array {
+	$tests['direct']['safe_publish_auth'] = array(
+		'label' => __( 'Safe Publish Authentication Configuration', 'safe-publish' ),
+		'test'  => 'safe_publish_vip_site_health_test',
 	);
 
 	return $tests;
 }
 
 /**
- * Site Health test for CCP authentication.
+ * Site Health test for Safe Publish authentication.
  *
  * @return array Site Health test result.
  */
-function ccp_vip_site_health_test(): array {
-	$shared_secret = ccp_vip_get_shared_secret();
+function safe_publish_vip_site_health_test(): array {
+	$shared_secret = safe_publish_vip_get_shared_secret();
 	$secret_length = strlen( $shared_secret );
 
 	if ( empty( $shared_secret ) ) {
 		return array(
-			'label'       => __( 'CCP Authentication not configured', 'ccp' ),
+			'label'       => __( 'Safe Publish Authentication not configured', 'safe-publish' ),
 			'status'      => 'recommended',
 			'badge'       => array(
-				'label' => __( 'CCP', 'ccp' ),
+				'label' => __( 'Safe Publish', 'safe-publish' ),
 				'color' => 'orange',
 			),
 			'description' => sprintf(
 				'<p>%s</p>',
-				__( 'The CCP (Compliant Content Publisher) shared secret is not configured. If you plan to use CCP, set the CCP_SHARED_SECRET environment variable.', 'ccp' )
+				__( 'The Safe Publish shared secret is not configured. If you plan to use Safe Publish, set the SAFE_PUBLISH_SHARED_SECRET environment variable.', 'safe-publish' )
 			),
-			'test'        => 'ccp_auth',
+			'test'        => 'safe_publish_auth',
 		);
 	}
 
 	if ( $secret_length < 32 ) {
 		return array(
-			'label'       => __( 'CCP Authentication secret too short', 'ccp' ),
+			'label'       => __( 'Safe Publish Authentication secret too short', 'safe-publish' ),
 			'status'      => 'critical',
 			'badge'       => array(
-				'label' => __( 'CCP', 'ccp' ),
+				'label' => __( 'Safe Publish', 'safe-publish' ),
 				'color' => 'red',
 			),
 			'description' => sprintf(
 				'<p>%s</p>',
 				/* translators: %d: length of the shared secret in characters */
-				sprintf( __( 'The CCP shared secret is only %d characters long. For security, use at least 32 characters.', 'ccp' ), $secret_length )
+				sprintf( __( 'The Safe Publish shared secret is only %d characters long. For security, use at least 32 characters.', 'safe-publish' ), $secret_length )
 			),
-			'test'        => 'ccp_auth',
+			'test'        => 'safe_publish_auth',
 		);
 	}
 
 	return array(
-		'label'       => __( 'CCP Authentication configured correctly', 'ccp' ),
+		'label'       => __( 'Safe Publish Authentication configured correctly', 'safe-publish' ),
 		'status'      => 'good',
 		'badge'       => array(
-			'label' => __( 'CCP', 'ccp' ),
+			'label' => __( 'Safe Publish', 'safe-publish' ),
 			'color' => 'green',
 		),
 		'description' => sprintf(
 			'<p>%s</p>',
 			/* translators: %d: length of the shared secret in characters */
-			sprintf( __( 'CCP authentication is properly configured with a %d-character shared secret.', 'ccp' ), $secret_length )
+			sprintf( __( 'Safe Publish authentication is properly configured with a %d-character shared secret.', 'safe-publish' ), $secret_length )
 		),
-		'test'        => 'ccp_auth',
+		'test'        => 'safe_publish_auth',
 	);
 }
 
 /**
- * Adds dashboard widget for CCP authentication status.
+ * Adds dashboard widget for Safe Publish authentication status.
  */
-function ccp_vip_add_dashboard_widget(): void {
+function safe_publish_vip_add_dashboard_widget(): void {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
 	}
 
 	wp_add_dashboard_widget(
-		'ccp_auth_status',
-		'CCP Authentication Status',
-		'ccp_vip_dashboard_widget_content'
+		'safe_publish_auth_status',
+		'Safe Publish Authentication Status',
+		'safe_publish_vip_dashboard_widget_content'
 	);
 }
 
 /**
- * Dashboard widget content for CCP authentication status.
+ * Dashboard widget content for Safe Publish authentication status.
  */
-function ccp_vip_dashboard_widget_content(): void {
-	$shared_secret = ccp_vip_get_shared_secret();
+function safe_publish_vip_dashboard_widget_content(): void {
+	$shared_secret = safe_publish_vip_get_shared_secret();
 	$secret_length = strlen( $shared_secret );
-	$stats         = get_option( 'ccp_auth_stats', array() );
-	$recent_events = get_option( 'ccp_auth_log_events', array() );
+	$stats         = get_option( 'safe_publish_auth_stats', array() );
+	$recent_events = get_option( 'safe_publish_auth_log_events', array() );
 
-	echo '<div class="ccp-dashboard-widget">';
+	echo '<div class="safe-publish-dashboard-widget">';
 
 	// Authentication Status.
 	if ( empty( $shared_secret ) ) {
-		echo '<p><span style="color: #d63638;">❌</span> <strong>' . esc_html__( 'Not Configured', 'ccp' ) . '</strong></p>';
-		echo '<p>' . esc_html__( 'Set the <code>CCP_SHARED_SECRET</code> environment variable in VIP dashboard.', 'ccp' ) . '</p>';
-		echo '<p><a href="https://dashboard.wpvip.com/" target="_blank">' . esc_html__( 'Open VIP Dashboard →', 'ccp' ) . '</a></p>';
+		echo '<p><span style="color: #d63638;">❌</span> <strong>' . esc_html__( 'Not Configured', 'safe-publish' ) . '</strong></p>';
+		echo '<p>' . esc_html__( 'Set the <code>SAFE_PUBLISH_SHARED_SECRET</code> environment variable in VIP dashboard.', 'safe-publish' ) . '</p>';
+		echo '<p><a href="https://dashboard.wpvip.com/" target="_blank">' . esc_html__( 'Open VIP Dashboard →', 'safe-publish' ) . '</a></p>';
 	} elseif ( $secret_length < 32 ) {
-		echo '<p><span style="color: #dba617;">⚠️</span> <strong>' . esc_html__( 'Secret Too Short', 'ccp' ) . '</strong></p>';
+		echo '<p><span style="color: #dba617;">⚠️</span> <strong>' . esc_html__( 'Secret Too Short', 'safe-publish' ) . '</strong></p>';
 		echo '<p>' . sprintf(
 			/* translators: %d is the current secret length in characters */
-			esc_html__( 'Current length: %d characters. Recommend 32+ for security.', 'ccp' ),
+			esc_html__( 'Current length: %d characters. Recommend 32+ for security.', 'safe-publish' ),
 			absint( $secret_length )
 		) . '</p>';
 	} else {
-		echo '<p><span style="color: #00a32a;">✅</span> <strong>' . esc_html__( 'Properly Configured', 'ccp' ) . '</strong></p>';
-		echo '<p><strong>✅ ' . esc_html__( 'Secret length:', 'ccp' ) . '</strong> ' . sprintf(
+		echo '<p><span style="color: #00a32a;">✅</span> <strong>' . esc_html__( 'Properly Configured', 'safe-publish' ) . '</strong></p>';
+		echo '<p><strong>✅ ' . esc_html__( 'Secret length:', 'safe-publish' ) . '</strong> ' . sprintf(
 			/* translators: %d is the secret length in characters */
-			esc_html__( '%d characters', 'ccp' ),
+			esc_html__( '%d characters', 'safe-publish' ),
 			absint( $secret_length )
 		) . '</p>';
-		echo '<p><strong>✅ ' . esc_html__( 'VIP 2FA Compliant:', 'ccp' ) . '</strong> ' . esc_html__( 'Uses capability-based authentication (no user creation)', 'ccp' ) . '</p>';
-		echo '<p><strong>✅ ' . esc_html__( 'Editing Permissions:', 'ccp' ) . '</strong> ' . esc_html__( 'Enabled for CCP authenticated requests', 'ccp' ) . '</p>';
+		echo '<p><strong>✅ ' . esc_html__( 'VIP 2FA Compliant:', 'safe-publish' ) . '</strong> ' . esc_html__( 'Uses capability-based authentication (no user creation)', 'safe-publish' ) . '</p>';
+		echo '<p><strong>✅ ' . esc_html__( 'Editing Permissions:', 'safe-publish' ) . '</strong> ' . esc_html__( 'Enabled for Safe Publish authenticated requests', 'safe-publish' ) . '</p>';
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			echo '<p><a href="/wp-json/ccp/v1/auth-test" target="_blank">' . esc_html__( 'Test Authentication →', 'ccp' ) . '</a></p>';
+			echo '<p><a href="/wp-json/safe-publish/v1/auth-test" target="_blank">' . esc_html__( 'Test Authentication →', 'safe-publish' ) . '</a></p>';
 		}
 	}
 
@@ -1536,21 +1536,21 @@ function ccp_vip_dashboard_widget_content(): void {
 
 	// Authentication Statistics.
 	if ( ! empty( $stats ) ) {
-		echo '<h4 style="margin: 10px 0;">' . esc_html__( '📊 Authentication Statistics', 'ccp' ) . '</h4>';
+		echo '<h4 style="margin: 10px 0;">' . esc_html__( '📊 Authentication Statistics', 'safe-publish' ) . '</h4>';
 		echo '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">';
 
 		echo '<div>';
-		echo '<strong>' . esc_html__( 'Total Requests:', 'ccp' ) . '</strong> ' . esc_html( $stats['total_requests'] ?? 0 );
-		echo '<br><strong>' . esc_html__( 'Successful:', 'ccp' ) . '</strong> <span style="color: #00a32a;">' . esc_html( $stats['successful_auths'] ?? 0 ) . '</span>';
-		echo '<br><strong>' . esc_html__( 'Failed:', 'ccp' ) . '</strong> <span style="color: #d63638;">' . esc_html( $stats['failed_auths'] ?? 0 ) . '</span>';
+		echo '<strong>' . esc_html__( 'Total Requests:', 'safe-publish' ) . '</strong> ' . esc_html( $stats['total_requests'] ?? 0 );
+		echo '<br><strong>' . esc_html__( 'Successful:', 'safe-publish' ) . '</strong> <span style="color: #00a32a;">' . esc_html( $stats['successful_auths'] ?? 0 ) . '</span>';
+		echo '<br><strong>' . esc_html__( 'Failed:', 'safe-publish' ) . '</strong> <span style="color: #d63638;">' . esc_html( $stats['failed_auths'] ?? 0 ) . '</span>';
 		echo '</div>';
 
 		echo '<div>';
 		if ( ! empty( $stats['last_success'] ) ) {
-			echo '<strong>' . esc_html__( 'Last Success:', 'ccp' ) . '</strong><br><small>' . esc_html( $stats['last_success'] ) . '</small>';
+			echo '<strong>' . esc_html__( 'Last Success:', 'safe-publish' ) . '</strong><br><small>' . esc_html( $stats['last_success'] ) . '</small>';
 		}
 		if ( ! empty( $stats['last_failure'] ) ) {
-			echo '<br><strong>' . esc_html__( 'Last Failure:', 'ccp' ) . '</strong><br><small style="color: #d63638;">' . esc_html( $stats['last_failure'] ) . '</small>';
+			echo '<br><strong>' . esc_html__( 'Last Failure:', 'safe-publish' ) . '</strong><br><small style="color: #d63638;">' . esc_html( $stats['last_failure'] ) . '</small>';
 		}
 		echo '</div>';
 
@@ -1563,7 +1563,7 @@ function ccp_vip_dashboard_widget_content(): void {
 			$color        = $success_rate >= 95 ? '#00a32a' : ( $success_rate >= 80 ? '#dba617' : '#d63638' );
 			printf(
 				'<p><strong>%s</strong> <span style="color: %s">%s%%</span></p>',
-				esc_html__( 'Success Rate:', 'ccp' ),
+				esc_html__( 'Success Rate:', 'safe-publish' ),
 				esc_attr( $color ),
 				esc_html( number_format_i18n( $success_rate, 1 ) )
 			);
@@ -1573,7 +1573,7 @@ function ccp_vip_dashboard_widget_content(): void {
 	// Recent Events.
 	if ( ! empty( $recent_events ) ) {
 		echo '<hr style="margin: 15px 0;">';
-		echo '<h4 style="margin: 10px 0;">' . esc_html__( '📋 Recent Authentication Events', 'ccp' ) . '</h4>';
+		echo '<h4 style="margin: 10px 0;">' . esc_html__( '📋 Recent Authentication Events', 'safe-publish' ) . '</h4>';
 		echo '<div style="max-height: 200px; overflow-y: auto; font-size: 12px;">';
 
 		// Show last 10 events.
@@ -1623,52 +1623,52 @@ function ccp_vip_dashboard_widget_content(): void {
 
 	// Debug Information.
 	echo '<details style="margin-top: 10px;">';
-	echo '<summary style="cursor: pointer; font-weight: bold;">' . esc_html__( '🔧 Debug Information', 'ccp' ) . '</summary>';
+	echo '<summary style="cursor: pointer; font-weight: bold;">' . esc_html__( '🔧 Debug Information', 'safe-publish' ) . '</summary>';
 	echo '<div style="margin-top: 10px; font-size: 12px;">';
 
-	echo '<p><strong>' . esc_html__( 'Environment:', 'ccp' ) . '</strong> ' . ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ? esc_html__( 'VIP Production', 'ccp' ) : esc_html__( 'Development/Staging', 'ccp' ) ) . '</p>';
-	echo '<p><strong>' . esc_html__( 'Debug Mode:', 'ccp' ) . '</strong> ' . ( defined( 'WP_DEBUG' ) && WP_DEBUG ? esc_html__( 'Enabled', 'ccp' ) : esc_html__( 'Disabled', 'ccp' ) ) . '</p>';
-	echo '<p><strong>' . esc_html__( 'Secret Source:', 'ccp' ) . '</strong> ';
+	echo '<p><strong>' . esc_html__( 'Environment:', 'safe-publish' ) . '</strong> ' . ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ? esc_html__( 'VIP Production', 'safe-publish' ) : esc_html__( 'Development/Staging', 'safe-publish' ) ) . '</p>';
+	echo '<p><strong>' . esc_html__( 'Debug Mode:', 'safe-publish' ) . '</strong> ' . ( defined( 'WP_DEBUG' ) && WP_DEBUG ? esc_html__( 'Enabled', 'safe-publish' ) : esc_html__( 'Disabled', 'safe-publish' ) ) . '</p>';
+	echo '<p><strong>' . esc_html__( 'Secret Source:', 'safe-publish' ) . '</strong> ';
 
-	if ( defined( 'CCP_SHARED_SECRET' ) && ! empty( CCP_SHARED_SECRET ) ) {
-		echo esc_html__( 'Environment Variable (CCP_SHARED_SECRET)', 'ccp' );
-	} elseif ( ! empty( getenv( 'CCP_SHARED_SECRET' ) ) ) {
-		echo esc_html__( 'Environment Variable (getenv)', 'ccp' );
-	} elseif ( ! empty( get_option( 'ccp_shared_secret' ) ) ) {
-		echo esc_html__( 'WordPress Option (ccp_shared_secret)', 'ccp' );
+	if ( defined( 'SAFE_PUBLISH_SHARED_SECRET' ) && ! empty( SAFE_PUBLISH_SHARED_SECRET ) ) {
+		echo esc_html__( 'Environment Variable (SAFE_PUBLISH_SHARED_SECRET)', 'safe-publish' );
+	} elseif ( ! empty( getenv( 'SAFE_PUBLISH_SHARED_SECRET' ) ) ) {
+		echo esc_html__( 'Environment Variable (getenv)', 'safe-publish' );
+	} elseif ( ! empty( get_option( 'safe_publish_shared_secret' ) ) ) {
+		echo esc_html__( 'WordPress Option (safe_publish_shared_secret)', 'safe-publish' );
 	} else {
-		echo esc_html__( 'Not configured', 'ccp' );
+		echo esc_html__( 'Not configured', 'safe-publish' );
 	}
 	echo '</p>';
 
 	// Show log file locations.
-	echo '<p><strong>' . esc_html__( 'Log Locations:', 'ccp' ) . '</strong></p>';
+	echo '<p><strong>' . esc_html__( 'Log Locations:', 'safe-publish' ) . '</strong></p>';
 	echo '<ul style="margin-left: 20px; font-size: 11px;">';
-	echo '<li>' . esc_html__( 'VIP Error Log:', 'ccp' ) . ' <code>/tmp/error_log</code></li>';
-	echo '<li>' . esc_html__( 'WordPress Debug Log:', 'ccp' ) . ' <code>/wp-content/debug.log</code></li>';
-	echo '<li>' . esc_html__( 'Database Events:', 'ccp' ) . ' <code>wp_options.ccp_auth_log_events</code></li>';
-	echo '<li>' . esc_html__( 'New Relic:', 'ccp' ) . ' Custom Events → CCP_Auth_Event</li>';
+	echo '<li>' . esc_html__( 'VIP Error Log:', 'safe-publish' ) . ' <code>/tmp/error_log</code></li>';
+	echo '<li>' . esc_html__( 'WordPress Debug Log:', 'safe-publish' ) . ' <code>/wp-content/debug.log</code></li>';
+	echo '<li>' . esc_html__( 'Database Events:', 'safe-publish' ) . ' <code>wp_options.safe_publish_auth_log_events</code></li>';
+	echo '<li>' . esc_html__( 'New Relic:', 'safe-publish' ) . ' Custom Events → Safe_Publish_Auth_Event</li>';
 	echo '</ul>';
 
 	echo '</div>';
 	echo '</details>';
 
 	echo '<hr style="margin: 15px 0;">';
-	echo '<p><small>' . esc_html__( 'MU-Plugin: CCP VIP Authentication Handler with Enhanced Logging v1.1.0', 'ccp' ) . '</small></p>';
+	echo '<p><small>' . esc_html__( 'MU-Plugin: Safe Publish VIP Authentication Handler with Enhanced Logging v1.1.0', 'safe-publish' ) . '</small></p>';
 	echo '</div>';
 }
 
 /**
- * Enhances mu-plugins display to show CCP plugin status.
+ * Enhances mu-plugins display to show Safe Publish plugin status.
  *
  * @param bool   $show_advanced_plugins Whether to show advanced plugins.
  * @param string $type                  Plugin type ('mustuse', 'dropins').
  * @return bool Show advanced plugins value, unchanged.
  */
-function ccp_vip_enhance_mu_plugins_display( $show_advanced_plugins, $type ): bool {
+function safe_publish_vip_enhance_mu_plugins_display( $show_advanced_plugins, $type ): bool {
 	if ( 'mustuse' === $type && current_user_can( 'manage_options' ) ) {
 		// Add custom CSS for better MU-plugin visibility.
-		add_action( 'admin_footer', 'ccp_vip_add_mu_plugin_styles' );
+		add_action( 'admin_footer', 'safe_publish_vip_add_mu_plugin_styles' );
 	}
 
 	return $show_advanced_plugins;
@@ -1677,21 +1677,21 @@ function ccp_vip_enhance_mu_plugins_display( $show_advanced_plugins, $type ): bo
 /**
  * Adds custom styles for MU-plugin display.
  */
-function ccp_vip_add_mu_plugin_styles(): void {
+function safe_publish_vip_add_mu_plugin_styles(): void {
 	?>
 	<style>
-	.mu-plugin[data-plugin="ccp-auth.php"] {
+	.mu-plugin[data-plugin="safe-publish-auth.php"] {
 		background-color: #f0f6fc;
 		border-left: 4px solid #0073aa;
 		padding: 10px;
 	}
-	.mu-plugin[data-plugin="ccp-auth.php"] .plugin-title strong {
+	.mu-plugin[data-plugin="safe-publish-auth.php"] .plugin-title strong {
 		color: #0073aa;
 	}
-	.ccp-dashboard-widget {
+	.safe-publish-dashboard-widget {
 		font-size: 13px;
 	}
-	.ccp-dashboard-widget code {
+	.safe-publish-dashboard-widget code {
 		background: #f1f1f1;
 		padding: 2px 4px;
 		border-radius: 3px;

@@ -2,15 +2,15 @@
 /**
  * URL Validator Test file.
  *
- * @package CompliantContentPublisher
+ * @package Safe_Publish
  */
 
 declare(strict_types=1);
 
-namespace CCP\Tests;
+namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
-use CCP\Validators\URL_Validator;
+use Safe_Publish\Validators\URL_Validator;
 
 /**
  * URL Validator Test.

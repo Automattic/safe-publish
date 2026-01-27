@@ -4,7 +4,7 @@
  * Defines the available actions for external posts including creating drafts,
  * bulk importing, updating posts, and viewing post diffs.
  *
- * @file This file defines DataViews actions for the CCP plugin.
+ * @file This file defines DataViews actions for the Safe Publish plugin.
  */
 import { drafts, update, download } from '@wordpress/icons';
 
@@ -45,8 +45,8 @@ const bulkImportPosts = async (
 ): Promise< BulkImportResponse > => {
 	// Use the proper bulk import endpoint instead of individual calls.
 	const formData = new FormData();
-	formData.append( 'action', 'ccp_bulk_import' );
-	formData.append( 'nonce', window.ccpAdminData.nonce );
+	formData.append( 'action', 'safe_publish_bulk_import' );
+	formData.append( 'nonce', window.safePublishAdminData.nonce );
 	formData.append( 'posts_data', JSON.stringify( posts ) );
 
 	// Show initial progress.
@@ -55,7 +55,7 @@ const bulkImportPosts = async (
 	}
 
 	try {
-		const response = await fetch( window.ccpAdminData.ajaxurl, {
+		const response = await fetch( window.safePublishAdminData.ajaxurl, {
 			method: 'POST',
 			body: formData,
 			headers: {
@@ -66,7 +66,7 @@ const bulkImportPosts = async (
 		const result = await response.json() as ApiResponse<BulkImportResponse>;
 
 		if ( ! result.success ) {
-			throw new Error( getErrorMessage( result, __( 'Bulk import failed', 'ccp' ) ) );
+			throw new Error( getErrorMessage( result, __( 'Bulk import failed', 'safe-publish' ) ) );
 		}
 
 		const bulkResult = result.data;
@@ -109,7 +109,7 @@ export const actions: Action< Post >[] = [
 	 */
 	{
 		id: 'draft',
-		label: __( 'Create Draft', 'ccp' ),
+		label: __( 'Create Draft', 'safe-publish' ),
 		isPrimary: true,
 		icon: drafts,
 		hideModalHeader: true,
@@ -124,14 +124,14 @@ export const actions: Action< Post >[] = [
 			if ( 1 !== items.length ) {
 				return (
 					<VStack spacing="5">
-					<Text>{ __( 'Please select exactly one post to create a draft.', 'ccp' ) }</Text>
+					<Text>{ __( 'Please select exactly one post to create a draft.', 'safe-publish' ) }</Text>
 						<HStack justify="right">
 							<Button
 								__next40pxDefaultSize
 								variant="primary"
 								onClick={ closeModal }
 							>
-								{ __( 'OK', 'ccp' ) }
+								{ __( 'OK', 'safe-publish' ) }
 							</Button>
 						</HStack>
 					</VStack>
@@ -152,8 +152,8 @@ export const actions: Action< Post >[] = [
 				setConfirmData( null );
 
 				const formData = new FormData();
-				formData.append( 'action', 'ccp_create_draft' );
-				formData.append( 'nonce', window.ccpAdminData.nonce );
+				formData.append( 'action', 'safe_publish_create_draft' );
+				formData.append( 'nonce', window.safePublishAdminData.nonce );
 				formData.append( 'external_post_id', items[ 0 ].id.toString() );
 				formData.append( 'title', items[ 0 ].title );
 				formData.append( 'content', items[ 0 ].content || items[ 0 ].excerpt || '' );
@@ -180,7 +180,7 @@ export const actions: Action< Post >[] = [
 					formData.append( 'terms', JSON.stringify( items[ 0 ].terms ) );
 				}
 
-				fetch( window.ccpAdminData.ajaxurl, {
+				fetch( window.safePublishAdminData.ajaxurl, {
 					method: 'POST',
 					body: formData,
 					headers: {
@@ -192,7 +192,7 @@ export const actions: Action< Post >[] = [
 					setIsLoading( false );
 
 					if ( ! result.success ) {
-						setError( getErrorMessage( result, __( 'Failed to create draft post', 'ccp' ) ) );
+						setError( getErrorMessage( result, __( 'Failed to create draft post', 'safe-publish' ) ) );
 
 						return;
 					}
@@ -207,7 +207,7 @@ export const actions: Action< Post >[] = [
 
 					// Validate edit URL before redirecting.
 					if ( ! data.edit_url || typeof data.edit_url !== 'string' ) {
-						setError( __( 'Invalid response: missing edit URL', 'ccp' ) );
+						setError( __( 'Invalid response: missing edit URL', 'safe-publish' ) );
 						return;
 					}
 
@@ -215,7 +215,7 @@ export const actions: Action< Post >[] = [
 					window.location.href = data.edit_url;
 				} )
 				.catch( err => {
-					setError( err instanceof Error ? err.message : __( 'Unknown error occurred', 'ccp' ) );
+					setError( err instanceof Error ? err.message : __( 'Unknown error occurred', 'safe-publish' ) );
 					setIsLoading( false );
 				} );
 			};
@@ -243,10 +243,10 @@ export const actions: Action< Post >[] = [
 			if ( confirmData ) {
 				return (
 					<VStack spacing="5">
-						<Text style={ { fontWeight: 'bold' } }>{ __( 'Post Already Exists', 'ccp' ) }</Text>
+						<Text style={ { fontWeight: 'bold' } }>{ __( 'Post Already Exists', 'safe-publish' ) }</Text>
 						<Text>{ confirmData.message }</Text>
 						<Text style={ { fontSize: '0.9em', color: '#666' } }>
-							{ __( 'Updating will fetch the latest content from the external site and replace the current content.', 'ccp' ) }
+							{ __( 'Updating will fetch the latest content from the external site and replace the current content.', 'safe-publish' ) }
 						</Text>
 						{ error && <Text style={ { color: '#d63638' } }>{ error }</Text> }
 						<HStack justify="right">
@@ -256,7 +256,7 @@ export const actions: Action< Post >[] = [
 								onClick={ handleCancelUpdate }
 								disabled={ isLoading }
 							>
-								{ __( 'Edit Existing', 'ccp' ) }
+								{ __( 'Edit Existing', 'safe-publish' ) }
 							</Button>
 							<Button
 								__next40pxDefaultSize
@@ -267,10 +267,10 @@ export const actions: Action< Post >[] = [
 								{ isLoading ? (
 									<>
 										<Spinner />
-										{ __( 'Updating…', 'ccp' ) }
+										{ __( 'Updating…', 'safe-publish' ) }
 									</>
 								) : (
-									__( 'Update with Latest', 'ccp' )
+									__( 'Update with Latest', 'safe-publish' )
 								) }
 							</Button>
 						</HStack>
@@ -281,10 +281,10 @@ export const actions: Action< Post >[] = [
 			return (
 				<VStack spacing="5">
 					<Text>{ /* translators: %s is the post title */
-						__( 'Create a draft for "%s"?', 'ccp' ).replace( '%s', items[ 0 ].title ) }
+						__( 'Create a draft for "%s"?', 'safe-publish' ).replace( '%s', items[ 0 ].title ) }
 					</Text>
 					<Text style={ { fontSize: '0.9em', color: '#666' } }>
-						{ __( 'This will import the post content including images, links, and formatting.', 'ccp' ) }
+						{ __( 'This will import the post content including images, links, and formatting.', 'safe-publish' ) }
 					</Text>
 					{ error && <Text style={ { color: '#d63638' } }>{ error }</Text> }
 					<HStack justify="right">
@@ -294,7 +294,7 @@ export const actions: Action< Post >[] = [
 							onClick={ closeModal }
 							disabled={ isLoading }
 						>
-							{ __( 'Cancel', 'ccp' ) }
+							{ __( 'Cancel', 'safe-publish' ) }
 						</Button>
 						<Button
 							__next40pxDefaultSize
@@ -305,10 +305,10 @@ export const actions: Action< Post >[] = [
 							{ isLoading ? (
 								<>
 									<Spinner />
-									{ __( 'Importing…', 'ccp' ) }
+									{ __( 'Importing…', 'safe-publish' ) }
 								</>
 							) : (
-								__( 'Create Draft', 'ccp' )
+								__( 'Create Draft', 'safe-publish' )
 							) }
 						</Button>
 					</HStack>
@@ -324,7 +324,7 @@ export const actions: Action< Post >[] = [
 	 */
 	{
 		id: 'bulk-import',
-		label: __( 'Bulk Import', 'ccp' ),
+		label: __( 'Bulk Import', 'safe-publish' ),
 		isPrimary: false,
 		icon: download,
 		hideModalHeader: true,
@@ -340,14 +340,14 @@ export const actions: Action< Post >[] = [
 			if ( items.length <= 1 ) {
 				return (
 					<VStack spacing="5">
-						<Text>{ __( 'Please select multiple posts to use bulk import.', 'ccp' ) }</Text>
+						<Text>{ __( 'Please select multiple posts to use bulk import.', 'safe-publish' ) }</Text>
 						<HStack justify="right">
 							<Button
 								__next40pxDefaultSize
 								variant="primary"
 								onClick={ closeModal }
 							>
-								{ __( 'OK', 'ccp' ) }
+								{ __( 'OK', 'safe-publish' ) }
 							</Button>
 						</HStack>
 					</VStack>
@@ -395,7 +395,7 @@ export const actions: Action< Post >[] = [
 					setImportResults( result );
 					setProgress( 100 );
 				} catch ( err ) {
-					setError( err instanceof Error ? err.message : __( 'Unknown error occurred', 'ccp' ) );
+					setError( err instanceof Error ? err.message : __( 'Unknown error occurred', 'safe-publish' ) );
 				} finally {
 					setIsLoading( false );
 				}
@@ -417,38 +417,38 @@ export const actions: Action< Post >[] = [
 			};
 
 			return (
-				<VStack spacing="5" style={ { minWidth: '400px' } } className="ccp-bulk-import-modal">
+				<VStack spacing="5" style={ { minWidth: '400px' } } className="safe-publish-bulk-import-modal">
 					<Text>
 						{ /* translators: %d is the number of posts */
-						__( 'Import %d selected posts as drafts?', 'ccp' ).replace( '%d', items.length.toString() ) }
+						__( 'Import %d selected posts as drafts?', 'safe-publish' ).replace( '%d', items.length.toString() ) }
 					</Text>
 
 					{ ! importResults && (
 						<VStack spacing="2">
 							<Text style={ { fontSize: '0.9em', color: '#666' } }>
-								{ __( 'This will import all selected posts including their content, images, links, and formatting.', 'ccp' ) }
+								{ __( 'This will import all selected posts including their content, images, links, and formatting.', 'safe-publish' ) }
 							</Text>
 							<Text style={ { fontSize: '0.8em', color: '#d63638', fontWeight: 'bold' } }>
-								{ __( '⚠️ Note: Posts that already exist will be automatically updated with the latest content from the external site.', 'ccp' ) }
+								{ __( '⚠️ Note: Posts that already exist will be automatically updated with the latest content from the external site.', 'safe-publish' ) }
 							</Text>
 						</VStack>
 					) }
 
 					{ isLoading && (
-						<VStack spacing="3" className="ccp-bulk-import-progress">
-							<Text>{ __( 'Importing posts as a batch…', 'ccp' ) }</Text>
+						<VStack spacing="3" className="safe-publish-bulk-import-progress">
+							<Text>{ __( 'Importing posts as a batch…', 'safe-publish' ) }</Text>
 							<ProgressBar value={ progress } />
 							<Text style={ { fontSize: '0.8em', color: '#666' } }>
 								{ progress === 100
-									? __( 'Batch import completed!', 'ccp' )
+									? __( 'Batch import completed!', 'safe-publish' )
 									: /* translators: %d is the percentage complete */
-									__( 'Processing bulk import… %d%% complete', 'ccp' )
+									__( 'Processing bulk import… %d%% complete', 'safe-publish' )
 										.replace( '%d', Math.round(progress).toString() )
 								}
 							</Text>
 							<Text style={ { fontSize: '0.75em', color: '#999' } }>
 								{ /* translators: %d is the number of posts */
-								__( 'All %d posts will be imported in a single session', 'ccp' )
+								__( 'All %d posts will be imported in a single session', 'safe-publish' )
 									.replace( '%d', items.length.toString() ) }
 							</Text>
 						</VStack>
@@ -457,11 +457,11 @@ export const actions: Action< Post >[] = [
 					{ importResults && (
 						<VStack spacing="3">
 							<Text style={ { color: '#008a20', fontWeight: 'bold' } }>
-								{ __( 'Import completed!', 'ccp' ) }
+								{ __( 'Import completed!', 'safe-publish' ) }
 							</Text>
 							<Text>
 								{ /* translators: 1: successful count, 2: total count */
-								__( 'Successfully imported: %1$d of %2$d posts', 'ccp' )
+								__( 'Successfully imported: %1$d of %2$d posts', 'safe-publish' )
 									.replace( '%1$d', importResults.successful.toString() )
 									.replace( '%2$d', importResults.total.toString() ) }
 							</Text>
@@ -473,11 +473,11 @@ export const actions: Action< Post >[] = [
 										const parts = [];
 										if ( created > 0 ) {
 											/* translators: %d is the number of posts created */
-											parts.push( __( '%d created', 'ccp' ).replace( '%d', created.toString() ) );
+											parts.push( __( '%d created', 'safe-publish' ).replace( '%d', created.toString() ) );
 										}
 										if ( updated > 0 ) {
 											/* translators: %d is the number of posts updated */
-											parts.push( __( '%d updated with latest content', 'ccp' )
+											parts.push( __( '%d updated with latest content', 'safe-publish' )
 												.replace( '%d', updated.toString() ) );
 										}
 										return parts.join( ', ' );
@@ -487,28 +487,28 @@ export const actions: Action< Post >[] = [
 							{ importResults.failed > 0 && (
 								<Text style={ { color: '#d63638' } }>
 									{ /* translators: %d is the number of failed imports */
-									__( 'Failed imports: %d', 'ccp' ).replace( '%d', importResults.failed.toString() ) }
+									__( 'Failed imports: %d', 'safe-publish' ).replace( '%d', importResults.failed.toString() ) }
 								</Text>
 							) }
 
 							{ importResults.results.length > 0 && (
-								<div className="ccp-import-results">
+								<div className="safe-publish-import-results">
 								{ importResults.results.map( ( result, index ) => {
 									let status;
 									if ( ! result.success ) {
-										status = __( 'Failed', 'ccp' );
+										status = __( 'Failed', 'safe-publish' );
 									} else if ( result.existing ) {
-										status = __( 'Updated', 'ccp' );
+										status = __( 'Updated', 'safe-publish' );
 									} else {
-										status = __( 'Created', 'ccp' );
+										status = __( 'Created', 'safe-publish' );
 									}
 
 									return (
-										<div key={ index } className="ccp-import-result-item">
-											<span className={ `ccp-result-title ${ result.success ? 'success' : 'error' }` }>
+										<div key={ index } className="safe-publish-import-result-item">
+											<span className={ `safe-publish-result-title ${ result.success ? 'success' : 'error' }` }>
 												{ result.title }
 											</span>
-											<span className="ccp-result-status">
+											<span className="safe-publish-result-status">
 												{ status }
 											</span>
 										</div>
@@ -530,7 +530,7 @@ export const actions: Action< Post >[] = [
 							onClick={ handleCloseModal }
 							disabled={ isLoading }
 						>
-							{ importResults ? __( 'Close', 'ccp' ) : __( 'Cancel', 'ccp' ) }
+							{ importResults ? __( 'Close', 'safe-publish' ) : __( 'Cancel', 'safe-publish' ) }
 						</Button>
 						{ ! importResults && (
 							<Button
@@ -543,11 +543,11 @@ export const actions: Action< Post >[] = [
 								{ isLoading ? (
 									<>
 										<Spinner />
-										{ __( 'Importing…', 'ccp' ) }
+										{ __( 'Importing…', 'safe-publish' ) }
 									</>
 								) : (
 									/* translators: %d is the number of posts */
-									__( 'Import %d Posts', 'ccp' ).replace( '%d', items.length.toString() )
+									__( 'Import %d Posts', 'safe-publish' ).replace( '%d', items.length.toString() )
 								) }
 							</Button>
 						) }
@@ -564,7 +564,7 @@ export const actions: Action< Post >[] = [
 	 */
 	{
 		id: 'update',
-		label: __( 'Update Post', 'ccp' ),
+		label: __( 'Update Post', 'safe-publish' ),
 		icon: update,
 		hideModalHeader: false,
 		supportsBulk: true,
@@ -572,14 +572,14 @@ export const actions: Action< Post >[] = [
 			return (
 				<VStack spacing="5">
 					<Text>{ /* translators: %s is the post title */
-						__( 'Are you sure you want to update "%s"?', 'ccp' ).replace( '%s', items[ 0 ].title ) }
+						__( 'Are you sure you want to update "%s"?', 'safe-publish' ).replace( '%s', items[ 0 ].title ) }
 					</Text>
 					<HStack justify="right">
 						<Button __next40pxDefaultSize variant="tertiary" onClick={ closeModal }>
-							{ __( 'Cancel', 'ccp' ) }
+							{ __( 'Cancel', 'safe-publish' ) }
 						</Button>
 						<Button __next40pxDefaultSize variant="primary" onClick={ closeModal }>
-							{ __( 'Update Post', 'ccp' ) }
+							{ __( 'Update Post', 'safe-publish' ) }
 						</Button>
 					</HStack>
 				</VStack>
@@ -594,7 +594,7 @@ export const actions: Action< Post >[] = [
 	 */
 	{
 		id: 'post-diff',
-		label: __( 'Post Diff', 'ccp' ),
+		label: __( 'Post Diff', 'safe-publish' ),
 		icon: drafts,
 		hideModalHeader: false,
 		supportsBulk: false,

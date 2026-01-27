@@ -1,5 +1,5 @@
 /* Import History Styles */
-.ccp-import-history {
+.safe-publish-import-history {
 	margin: 20px 0;
 	grid-column: 1 / -1;
 	background: #fff;
@@ -10,16 +10,16 @@
 }
 
 /* DataViews Container */
-.ccp-import-history .dataviews-view-grid,
-.ccp-import-history .dataviews-view-table,
-.ccp-import-history .dataviews-view-list {
+.safe-publish-import-history .dataviews-view-grid,
+.safe-publish-import-history .dataviews-view-table,
+.safe-publish-import-history .dataviews-view-list {
 	background: #fff;
 	border: 1px solid #c3c4c7;
 	border-radius: 4px;
 	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
 }
 
-.ccp-import-history h2 {
+.safe-publish-import-history h2 {
 	margin-top: 0;
 	margin-bottom: 15px;
 	border-bottom: 1px solid #dcdcde;
@@ -28,26 +28,26 @@
 }
 
 /* DataViews Table */
-.ccp-import-history .dataviews-view-table {
+.safe-publish-import-history .dataviews-view-table {
 	width: 100%;
 	border-collapse: collapse;
 	margin: 40px 0;
 	border: none;
 }
 
-.ccp-import-history .dataviews-wrapper {
+.safe-publish-import-history .dataviews-wrapper {
 	overflow-x: hidden;
 }
 
-.ccp-import-history .dataviews-view-table__table th,
-.ccp-import-history .dataviews-view-table__table td {
+.safe-publish-import-history .dataviews-view-table__table th,
+.safe-publish-import-history .dataviews-view-table__table td {
 	padding: 12px 16px;
 	text-align: left;
 	border-bottom: 1px solid #f0f0f1;
 	vertical-align: middle;
 }
 
-.ccp-import-history .dataviews-view-table__table th {
+.safe-publish-import-history .dataviews-view-table__table th {
 	background-color: #f6f7f7;
 	font-weight: 600;
 	color: #1d2327;
@@ -57,21 +57,21 @@
 	z-index: 1;
 }
 
-.ccp-import-history .dataviews-view-table__table tbody tr:hover {
+.safe-publish-import-history .dataviews-view-table__table tbody tr:hover {
 	background-color: #f6f7f7;
 }
 
-.ccp-import-history .dataviews-view-table__table tbody tr:last-child td {
+.safe-publish-import-history .dataviews-view-table__table tbody tr:last-child td {
 	border-bottom: none;
 }
 
 /* DataViews Actions */
-.ccp-import-history .dataviews-view-table__actions-column {
+.safe-publish-import-history .dataviews-view-table__actions-column {
 	width: 120px;
 	text-align: right;
 }
 
-.ccp-import-history .dataviews-item-actions {
+.safe-publish-import-history .dataviews-item-actions {
 	display: flex;
 	gap: 8px;
 	justify-content: flex-end;
@@ -79,7 +79,7 @@
 }
 
 /* DataViews Bulk Actions */
-.ccp-import-history .dataviews-bulk-actions {
+.safe-publish-import-history .dataviews-bulk-actions {
 	padding: 12px 20px;
 	background: #dbeafe;
 	border-bottom: 1px solid #bfdbfe;
@@ -89,69 +89,69 @@
 }
 
 /* DataViews No Results */
-.ccp-import-history .dataviews-no-results {
+.safe-publish-import-history .dataviews-no-results {
 	text-align: center;
 	padding: 40px 20px;
 	color: #646970;
 }
 
 /* Search and Filters */
-.ccp-import-history .dataviews-search {
+.safe-publish-import-history .dataviews-search {
 	max-width: 280px;
 }
 
-.ccp-import-history .dataviews-filters__search-input {
+.safe-publish-import-history .dataviews-filters__search-input {
 	width: 100%;
 }
 
 /* View Switcher */
-.ccp-import-history .dataviews-view-switcher {
+.safe-publish-import-history .dataviews-view-switcher {
 	display: flex;
 	gap: 4px;
 }
 
 /* Custom Button Styles for DataViews */
-.ccp-import-history .components-button.is-primary {
+.safe-publish-import-history .components-button.is-primary {
 	background: #2271b1;
 	border-color: #2271b1;
 	color: #fff;
 }
 
-.ccp-import-history .components-button.is-primary:hover {
+.safe-publish-import-history .components-button.is-primary:hover {
 	background: #135e96;
 	border-color: #135e96;
 }
 
-.ccp-import-history .components-button.is-destructive {
+.safe-publish-import-history .components-button.is-destructive {
 	background: #d63638;
 	border-color: #d63638;
 	color: #fff;
 }
 
-.ccp-import-history .components-button.is-destructive:hover {
+.safe-publish-import-history .components-button.is-destructive:hover {
 	background: #b32d2e;
 	border-color: #b32d2e;
 }
 
-.ccp-import-history .components-button.is-link {
+.safe-publish-import-history .components-button.is-link {
 	color: #2271b1;
 	text-decoration: none;
 }
 
-.ccp-import-history .components-button.is-link:hover {
+.safe-publish-import-history .components-button.is-link:hover {
 	color: #135e96;
 	text-decoration: underline;
 }
 
 /* Session Stats */
-.ccp-session-stats {
+.safe-publish-session-stats {
 	display: flex;
 	gap: 15px;
 	margin: 16px 0;
 	flex-wrap: wrap;
 }
 
-.ccp-stat {
+.safe-publish-stat {
 	background: #fff;
 	padding: 12px 16px;
 	border: 1px solid #c3c4c7;
@@ -162,7 +162,7 @@
 	text-align: center;
 }
 
-.ccp-stat strong {
+.safe-publish-stat strong {
 	display: block;
 	font-size: 18px;
 	color: #1d2327;
@@ -170,7 +170,7 @@
 }
 
 /* Log Items */
-.ccp-log-item {
+.safe-publish-log-item {
 	background: #fff;
 	border: 1px solid #c3c4c7;
 	border-radius: 4px;
@@ -179,11 +179,11 @@
 	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
 }
 
-.ccp-log-item:hover {
+.safe-publish-log-item:hover {
 	border-color: #8c8f94;
 }
 
-.ccp-log-header {
+.safe-publish-log-header {
 	display: flex;
 	justify-content: space-between;
 	align-items: flex-start;
@@ -191,7 +191,7 @@
 	gap: 16px;
 }
 
-.ccp-log-title {
+.safe-publish-log-title {
 	font-weight: 600;
 	font-size: 14px;
 	color: #1d2327;
@@ -199,14 +199,14 @@
 	flex: 1;
 }
 
-.ccp-log-actions {
+.safe-publish-log-actions {
 	display: flex;
 	gap: 8px;
 	align-items: center;
 	flex-shrink: 0;
 }
 
-.ccp-log-meta {
+.safe-publish-log-meta {
 	display: flex;
 	gap: 8px;
 	align-items: center;
@@ -216,38 +216,38 @@
 }
 
 /* Status indicators */
-.ccp-status-success {
+.safe-publish-status-success {
 	color: #00a32a;
 	font-weight: 600;
 }
 
-.ccp-status-error {
+.safe-publish-status-error {
 	color: #d63638;
 	font-weight: 600;
 }
 
-.ccp-status-updated {
+.safe-publish-status-updated {
 	color: #dba617;
 	font-weight: 600;
 }
 
-.ccp-status-completed {
+.safe-publish-status-completed {
 	color: #00a32a;
 	font-weight: 600;
 }
 
-.ccp-status-in_progress {
+.safe-publish-status-in_progress {
 	color: #2271b1;
 	font-weight: 600;
 }
 
-.ccp-status-rolled_back {
+.safe-publish-status-rolled_back {
 	color: #646970;
 	font-weight: 600;
 }
 
 /* Modal Styles */
-.ccp-modal-backdrop {
+.safe-publish-modal-backdrop {
 	position: fixed !important;
 	top: 0 !important;
 	left: 0 !important;
@@ -260,7 +260,7 @@
 	justify-content: center !important;
 }
 
-.ccp-modal-content {
+.safe-publish-modal-content {
 	background-color: #fff !important;
 	border-radius: 2px !important;
 	box-shadow: 0 3px 30px rgba(25, 30, 35, 0.1) !important;
@@ -270,19 +270,19 @@
 	overflow: hidden !important;
 }
 
-.ccp-modal-content .components-modal__header {
+.safe-publish-modal-content .components-modal__header {
 	border-bottom: 1px solid #e0e0e0 !important;
 	padding: 16px 24px !important;
 	min-height: 56px !important;
 }
 
-.ccp-modal-content .components-modal__content {
+.safe-publish-modal-content .components-modal__content {
 	flex: 1 !important;
 	overflow: auto !important;
 	padding: 24px !important;
 }
 
-.ccp-modal-content .components-modal__header-heading {
+.safe-publish-modal-content .components-modal__header-heading {
 	margin: 0 !important;
 	font-size: 20px !important;
 	font-weight: 600 !important;
@@ -290,7 +290,7 @@
 }
 
 /* Session Info */
-.ccp-session-info {
+.safe-publish-session-info {
 	background: #f6f7f7;
 	border: 1px solid #c3c4c7;
 	border-radius: 4px;
@@ -298,25 +298,25 @@
 	margin: 16px 0;
 }
 
-.ccp-session-info dl {
+.safe-publish-session-info dl {
 	display: grid;
 	grid-template-columns: auto 1fr;
 	gap: 8px 16px;
 	margin: 0;
 }
 
-.ccp-session-info dt {
+.safe-publish-session-info dt {
 	font-weight: 600;
 	color: #1d2327;
 }
 
-.ccp-session-info dd {
+.safe-publish-session-info dd {
 	margin: 0;
 	color: #646970;
 }
 
 /* Diff Container */
-.ccp-diff-container {
+.safe-publish-diff-container {
 	font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, Courier, monospace;
 	font-size: 13px;
 	line-height: 1.45;
@@ -329,14 +329,14 @@
 	max-height: 400px;
 }
 
-.ccp-diff-added {
+.safe-publish-diff-added {
 	background-color: #d1f2a5;
 	color: #1a7f37;
 	padding: 0 4px;
 	margin: 0 -4px;
 }
 
-.ccp-diff-removed {
+.safe-publish-diff-removed {
 	background-color: #ffd8da;
 	color: #cf222e;
 	padding: 0 4px;
@@ -344,7 +344,7 @@
 }
 
 /* Loading states */
-.ccp-loading {
+.safe-publish-loading {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -356,71 +356,71 @@
 /* Responsive design */
 @media ( max-width: 768px ) {
 
-	.ccp-import-history .dataviews-view-table__table th,
-	.ccp-import-history .dataviews-view-table__table td {
+	.safe-publish-import-history .dataviews-view-table__table th,
+	.safe-publish-import-history .dataviews-view-table__table td {
 		padding: 8px 12px;
 		font-size: 14px;
 	}
 
-	.ccp-session-stats {
+	.safe-publish-session-stats {
 		flex-direction: column;
 		gap: 8px;
 	}
 
-	.ccp-stat {
+	.safe-publish-stat {
 		min-width: auto;
 		text-align: left;
 	}
 
-	.ccp-log-header {
+	.safe-publish-log-header {
 		flex-direction: column;
 		align-items: flex-start;
 		gap: 12px;
 	}
 
-	.ccp-log-actions {
+	.safe-publish-log-actions {
 		width: 100%;
 		justify-content: flex-start;
 	}
 
-	.ccp-log-meta {
+	.safe-publish-log-meta {
 		flex-direction: column;
 		align-items: flex-start;
 		gap: 4px;
 	}
 
-	.ccp-modal-content {
+	.safe-publish-modal-content {
 		width: 95% !important;
 		max-width: none !important;
 		margin: 10px !important;
 	}
 
-	.ccp-modal-content .components-modal__content {
+	.safe-publish-modal-content .components-modal__content {
 		padding: 16px !important;
 	}
 }
 
 @media ( max-width: 480px ) {
 
-	.ccp-import-history .dataviews-filters__container {
+	.safe-publish-import-history .dataviews-filters__container {
 		padding: 12px 16px;
 	}
 
-	.ccp-import-history .dataviews-pagination {
+	.safe-publish-import-history .dataviews-pagination {
 		flex-direction: column;
 		gap: 12px;
 		align-items: stretch;
 	}
 
-	.ccp-log-item {
+	.safe-publish-log-item {
 		padding: 12px;
 	}
 
-	.ccp-modal-content .components-modal__header {
+	.safe-publish-modal-content .components-modal__header {
 		padding: 12px 16px !important;
 	}
 
-	.ccp-modal-content .components-modal__header-heading {
+	.safe-publish-modal-content .components-modal__header-heading {
 		font-size: 18px !important;
 	}
 }

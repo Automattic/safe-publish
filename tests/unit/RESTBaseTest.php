@@ -2,15 +2,15 @@
 /**
  * REST Base Test.
  *
- * @package Compliant_Content_Publisher
+ * @package Safe_Publish
  */
 
 declare(strict_types=1);
 
-namespace CCP\Tests;
+namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
-use CCP\API\REST_Base;
+use Safe_Publish\API\REST_Base;
 
 /**
  * REST Base Test.

@@ -4,7 +4,7 @@
  * Provides functions to fetch diff previews and update post content via the
  * WordPress REST API.
  *
- * @file This file defines the diff API functions for the CCP plugin.
+ * @file This file defines the diff API functions for the Safe Publish plugin.
  */
 
 import { __ } from '@wordpress/i18n';
@@ -109,13 +109,13 @@ export interface DiffPreviewResult {
 export async function fetchDiffPreview(
 	payload: DiffPreviewPayload
 ): Promise< DiffPreviewResult > {
-	const res = await fetch( '/wp-json/ccp/v1/diff-preview', {
+	const res = await fetch( '/wp-json/safe-publish/v1/diff-preview', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify( payload ),
 	} );
 	if ( ! res.ok ) {
-		const text = await res.text().catch( () => __( 'Failed to fetch diff', 'ccp' ) );
+		const text = await res.text().catch( () => __( 'Failed to fetch diff', 'safe-publish' ) );
 		return { error: text };
 	}
 
@@ -160,7 +160,7 @@ export async function updatePostContent(
 	featuredMediaId?: number
 ): Promise< UpdatePostResult > {
 	const headers: Record< string, string > = { 'Content-Type': 'application/json' };
-	const wpNonce = nonce || window.ccpAdminData?.restNonce;
+	const wpNonce = nonce || window.safePublishAdminData?.restNonce;
 	if ( wpNonce ) {
 		headers[ 'X-WP-Nonce' ] = wpNonce;
 	}
@@ -175,7 +175,7 @@ export async function updatePostContent(
 		...( typeof featuredMediaId !== 'undefined' ? { featuredMediaId } : {} ),
 	};
 
-	const res = await fetch( '/wp-json/ccp/v1/update-post', {
+	const res = await fetch( '/wp-json/safe-publish/v1/update-post', {
 		method: 'POST',
 		headers,
 		body: JSON.stringify( body ),
@@ -201,5 +201,5 @@ export async function updatePostContent(
 		};
 	}
 
-	return { success: false, error: __( 'Invalid response from server', 'ccp' ) };
+	return { success: false, error: __( 'Invalid response from server', 'safe-publish' ) };
 }

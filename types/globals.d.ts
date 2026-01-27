@@ -7,7 +7,7 @@ declare global {
 	};
 
 	interface Window {
-		ccpAdminData: {
+		safePublishAdminData: {
 			ajaxurl: string;
 			nonce: string;
 			siteUrl: string;
@@ -16,7 +16,7 @@ declare global {
 			postsData: string;
 			strings: Record<string, string>;
 		};
-		ccpRefreshPosts?: ( postType?: string ) => void;
+		safePublishRefreshPosts?: ( postType?: string ) => void;
 	}
 }
 

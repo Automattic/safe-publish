@@ -2,15 +2,15 @@
 /**
  * HTTP Client Test.
  *
- * @package Compliant_Content_Publisher
+ * @package Safe_Publish
  */
 
 declare(strict_types=1);
 
-namespace CCP\Tests;
+namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
-use CCP\API\HTTP_Client;
+use Safe_Publish\API\HTTP_Client;
 
 /**
  * HTTP Client Test.
@@ -47,7 +47,7 @@ class HTTPClientTest extends TestCase {
 		$user_agent = $this->http_client->get_user_agent();
 
 		$this->assertIsString( $user_agent );
-		$this->assertStringContainsString( 'Compliant Content Publisher', $user_agent );
+		$this->assertStringContainsString( 'Safe Publish', $user_agent );
 	}
 
 	/**

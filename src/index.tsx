@@ -4,7 +4,7 @@
  * Main entry point for the external posts DataViews component that provides
  * a table, grid, or list view of posts from external WordPress sites.
  *
- * @file This file defines the main DataViews component for the CCP plugin.
+ * @file This file defines the main DataViews component for the Safe Publish plugin.
  */
 import { createRoot } from 'react-dom/client';
 
@@ -78,13 +78,13 @@ function ExternalPostsDataView( { posts }: ExternalPostsDataViewProps ): JSX.Ele
 	const fields: DataViewsField<Post>[] = [
 		{
 			id: 'title',
-			label: __( 'Title', 'ccp' ),
+			label: __( 'Title', 'safe-publish' ),
 			enableSorting: true,
 			enableGlobalSearch: true,
 		},
 		{
 			id: 'post_type',
-			label: __( 'Type', 'ccp' ),
+			label: __( 'Type', 'safe-publish' ),
 			enableSorting: true,
 			render: ( { item }: { item: Post } ): JSX.Element => {
 				const postType = item.post_type || 'post';
@@ -95,7 +95,7 @@ function ExternalPostsDataView( { posts }: ExternalPostsDataViewProps ): JSX.Ele
 		},
 		{
 			id: 'permalink',
-			label: __( 'Permalink', 'ccp' ),
+			label: __( 'Permalink', 'safe-publish' ),
 			enableSorting: false,
 			render: ( { item }: { item: Post } ): JSX.Element => {
 				const path = extractUrlPath( item.link );
@@ -113,7 +113,7 @@ function ExternalPostsDataView( { posts }: ExternalPostsDataViewProps ): JSX.Ele
 		},
 		{
 			id: 'modified',
-			label: __( 'Last Modified', 'ccp' ),
+			label: __( 'Last Modified', 'safe-publish' ),
 			enableSorting: true,
 		},
 	];
@@ -160,14 +160,14 @@ function ExternalPostsDataView( { posts }: ExternalPostsDataViewProps ): JSX.Ele
 	// If we have no data, show a message.
 	if ( 0 === filteredData.length && 0 === posts.length ) {
 		return (
-			<div className="ccp-no-data">
-				<p>{ __( 'No posts available to display.', 'ccp' ) }</p>
+			<div className="safe-publish-no-data">
+				<p>{ __( 'No posts available to display.', 'safe-publish' ) }</p>
 			</div>
 		);
 	}
 
 	return (
-		<div className="ccp-dataviews-wrapper">
+		<div className="safe-publish-dataviews-wrapper">
 			<DataViews
 				getItemId={ ( item: Post ) => item.id.toString() }
 				data={ filteredData }
@@ -195,27 +195,27 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 	 * @param {string} [postType] Post type to fetch. Default 'posts'.
 	 */
 	function refreshPostsData( postType: string = 'posts' ): void {
-		const dataviewContainer = document.getElementById( 'ccp-dataviews-container' );
-		// Use saved settings from window.ccpAdminData instead of input field values.
-		const siteUrl = window.ccpAdminData?.siteUrl || '';
-		const numberPosts = window.ccpAdminData?.numPosts?.toString() || '10';
+		const dataviewContainer = document.getElementById( 'safe-publish-dataviews-container' );
+		// Use saved settings from window.safePublishAdminData instead of input field values.
+		const siteUrl = window.safePublishAdminData?.siteUrl || '';
+		const numberPosts = window.safePublishAdminData?.numPosts?.toString() || '10';
 
 		if ( ! dataviewContainer || ! siteUrl ) {
 			return;
 		}
 
 		// Show loading.
-		dataviewContainer.innerHTML = `<div class="ccp-loading"><p>${ __( 'Loading posts…', 'ccp' ) }</p></div>`;
+		dataviewContainer.innerHTML = `<div class="safe-publish-loading"><p>${ __( 'Loading posts…', 'safe-publish' ) }</p></div>`;
 
 		// Make request to fetch posts with selected post type.
 		const formData = new FormData();
-		formData.append( 'action', 'ccp_fetch_posts' );
-		formData.append( 'nonce', window.ccpAdminData.nonce );
+		formData.append( 'action', 'safe_publish_fetch_posts' );
+		formData.append( 'nonce', window.safePublishAdminData.nonce );
 		formData.append( 'site_url', siteUrl );
 		formData.append( 'number_of_posts', numberPosts );
 		formData.append( 'post_type', postType );
 
-		fetch( window.ccpAdminData.ajaxurl, {
+		fetch( window.safePublishAdminData.ajaxurl, {
 			method: 'POST',
 			body: formData,
 		} )
@@ -225,43 +225,43 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 					const posts = sanitizePosts( result.data );
 					if ( 0 === posts.length ) {
 						dataviewContainer.innerHTML =
-							`<p class="ccp-no-posts">${ __( 'No posts available for the selected post type.', 'ccp' ) }</p>`;
+							`<p class="safe-publish-no-posts">${ __( 'No posts available for the selected post type.', 'safe-publish' ) }</p>`;
 					} else {
 						dataviewContainer.innerHTML = '';
 						createRoot( dataviewContainer ).render( <ExternalPostsDataView posts={ posts } /> );
 					}
 				} else {
-					const errorMessage = getErrorMessage( result, __( 'Unknown error', 'ccp' ) );
+					const errorMessage = getErrorMessage( result, __( 'Unknown error', 'safe-publish' ) );
 					dataviewContainer.innerHTML =
 						/* translators: %s is the error message */
-						`<p class="ccp-error-message">${ __( 'Failed to load posts: %s', 'ccp' ).replace( '%s', errorMessage ) }</p>`;
+						`<p class="safe-publish-error-message">${ __( 'Failed to load posts: %s', 'safe-publish' ).replace( '%s', errorMessage ) }</p>`;
 				}
 			} )
 			.catch( () => {
 				dataviewContainer.innerHTML =
-					`<p class="ccp-error-message">${ __( 'Network error while loading posts.', 'ccp' ) }</p>`;
+					`<p class="safe-publish-error-message">${ __( 'Network error while loading posts.', 'safe-publish' ) }</p>`;
 			} );
 	}
 
 	// Expose refresh function globally for the AdminTools component.
-	window.ccpRefreshPosts = refreshPostsData;
+	window.safePublishRefreshPosts = refreshPostsData;
 
 	// Initialize the AdminTools React component.
-	const adminToolsContainer = document.getElementById( 'ccp-admin-tools-container' );
+	const adminToolsContainer = document.getElementById( 'safe-publish-admin-tools-container' );
 	if ( adminToolsContainer ) {
 		// Clear the loading placeholder.
 		adminToolsContainer.innerHTML = '';
 
 		createRoot( adminToolsContainer ).render(
 			<AdminTools
-				siteUrl={ window.ccpAdminData?.siteUrl || '' }
-				numberPosts={ window.ccpAdminData?.numPosts || 10 }
+				siteUrl={ window.safePublishAdminData?.siteUrl || '' }
+				numberPosts={ window.safePublishAdminData?.numPosts || 10 }
 			/>
 		);
 	}
 
 	// Initialize the DataViews component.
-	const dataviewContainer = document.getElementById( 'ccp-dataviews-container' );
+	const dataviewContainer = document.getElementById( 'safe-publish-dataviews-container' );
 
 	if ( ! dataviewContainer ) {
 		return;
@@ -270,18 +270,18 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 	// Get posts data from localized script.
 	let posts: Post[] = [];
 	try {
-		if ( window.ccpAdminData && window.ccpAdminData.postsData ) {
-			const rawPosts = window.ccpAdminData.postsData;
+		if ( window.safePublishAdminData && window.safePublishAdminData.postsData ) {
+			const rawPosts = window.safePublishAdminData.postsData;
 			posts = sanitizePosts( rawPosts );
 		}
 	} catch ( error ) {
-		dataviewContainer.innerHTML = `<p class="ccp-error-message">${ __( 'Failed to load posts data.', 'ccp' ) }</p>`;
+		dataviewContainer.innerHTML = `<p class="safe-publish-error-message">${ __( 'Failed to load posts data.', 'safe-publish' ) }</p>`;
 		return;
 	}
 
 	// If no posts, show the message from PHP and exit.
 	if ( 0 === posts.length ) {
-		dataviewContainer.innerHTML = `<p class="ccp-no-posts">${ __( 'No posts available to display.', 'ccp' ) }</p>`;
+		dataviewContainer.innerHTML = `<p class="safe-publish-no-posts">${ __( 'No posts available to display.', 'safe-publish' ) }</p>`;
 		return;
 	}
 

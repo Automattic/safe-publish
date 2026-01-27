@@ -1,9 +1,9 @@
-# Compliant Content Publisher
+# Safe Publish
 
 > [!WARNING]
 > This plugin is currently in Beta. Breaking changes could occur with any update. Please test each release thoroughly before updating.
 
-**Compliant Content Publisher** is a WordPress plugin that allows editors to securely promote content from non-production environments (staging, development) to production. It provides a user-friendly interface for browsing, previewing, and importing posts, pages, and custom post types while preserving all formatting, media, and metadata.
+**Safe Publish** is a WordPress plugin that allows editors to securely promote content from non-production environments (staging, development) to production. It provides a user-friendly interface for browsing, previewing, and importing posts, pages, and custom post types while preserving all formatting, media, and metadata.
 
 ## Features
 
@@ -18,7 +18,7 @@
 
 ## Use Cases
 
-Compliant Content Publisher is ideal for:
+Safe Publish is ideal for:
 
 - **Content Promotion Workflows**: Move approved content from staging to production
 - **Editorial Review**: Create and review content in a safe environment before going live
@@ -37,18 +37,18 @@ Compliant Content Publisher is ideal for:
 
 ### On WordPress VIP
 
-The plugin is available in the VIP environment. Activate it through the WordPress admin panel and configure using the CC Publisher menu.
+The plugin is available in the VIP environment. Activate it through the WordPress admin panel and configure using the Safe Publish menu.
 
 ### On Other WordPress Environments
 
 1. Download the plugin ZIP file from the repository
 2. Upload to your `wp-content/plugins/` directory
 3. Activate through the WordPress admin panel
-4. Navigate to **CC Publisher** in the admin sidebar
+4. Navigate to **Safe Publish** in the admin sidebar
 
 ## Quick Start
 
-1. **Configure the Plugin**: Go to CC Publisher → Settings and enter your non-production site URL
+1. **Configure the Plugin**: Go to Safe Publish → Settings and enter your non-production site URL
 2. **Set Up Authentication**: Install the MU plugin on your non-prod site and configure shared secret
 3. **Test Connection**: Click "Test Connection" to verify everything is working
 4. **Browse & Import**: Browse posts from your non-prod site and import them as drafts
@@ -74,10 +74,10 @@ See the [Quickstart Guide](docs/quickstart.md) for detailed instructions.
 
 The plugin requires authentication to connect to your non-production site. We recommend using the **shared secret** method:
 
-1. Copy `client-mu-plugins/ccp-auth.php` to your non-prod site's `wp-content/mu-plugins/`
+1. Copy `client-mu-plugins/safe-publish-auth.php` to your non-prod site's `wp-content/mu-plugins/`
 2. Add to both sites' `wp-config.php`:
    ```php
-   define( 'CCP_SHARED_SECRET', 'your-secure-random-string-here' );
+   define( 'SAFE_PUBLISH_SHARED_SECRET', 'your-secure-random-string-here' );
    ```
 3. Generate a secure secret using: `openssl rand -base64 32`
 
@@ -99,4 +99,4 @@ If you discover a security vulnerability, please email security@wpvip.com instea
 
 ## License
 
-Compliant Content Publisher is licensed under the [GPLv2 (or later)](LICENSE).
+Safe Publish is licensed under the [GPLv2 (or later)](LICENSE).

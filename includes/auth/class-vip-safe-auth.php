@@ -2,12 +2,12 @@
 /**
  * VIP-Safe Authentication Handler
  *
- * @package CCP
+ * @package Safe_Publish
  */
 
-namespace CCP\Auth;
+namespace Safe_Publish\Auth;
 
-use CCP\Utils\Environment;
+use Safe_Publish\Utils\Environment;
 use WP_Error;
 
 // Prevent direct access.
@@ -107,8 +107,8 @@ final class VIP_Safe_Auth {
 			// If site URL is provided, we can test if the auth headers are correctly generated.
 			if ( ! empty( $site_url ) ) {
 				$auth_params = self::get_shared_secret_auth( $site_url, $auth_config, 'GET' );
-				return ! empty( $auth_params['headers']['X-CCP-Timestamp'] ) &&
-						! empty( $auth_params['headers']['X-CCP-Signature'] );
+				return ! empty( $auth_params['headers']['X-Safe-Publish-Timestamp'] ) &&
+						! empty( $auth_params['headers']['X-Safe-Publish-Signature'] );
 			}
 
 			return true; // Shared secret is present and valid format.
@@ -148,12 +148,12 @@ final class VIP_Safe_Auth {
 	 */
 	public static function test_authorization( $site_url, $auth_config = array() ): bool|WP_Error {
 		if ( empty( $site_url ) ) {
-			return new WP_Error( 'invalid_url', __( 'Site URL is required for authorization testing', 'ccp' ) );
+			return new WP_Error( 'invalid_url', __( 'Site URL is required for authorization testing', 'safe-publish' ) );
 		}
 
 		// First check if we have valid credentials format.
 		if ( ! self::is_authorized( $site_url, $auth_config ) ) {
-			return new WP_Error( 'invalid_credentials', __( 'Invalid or missing authentication credentials', 'ccp' ) );
+			return new WP_Error( 'invalid_credentials', __( 'Invalid or missing authentication credentials', 'safe-publish' ) );
 		}
 
 		// Make a lightweight test request to verify credentials work.
@@ -163,7 +163,7 @@ final class VIP_Safe_Auth {
 		$request_args = array(
 			'timeout'     => 3,
 			'redirection' => 0,
-			'user-agent'  => 'CCP-Auth-Test/1.0',
+			'user-agent'  => 'Safe-Publish-Auth-Test/1.0',
 		);
 
 		// Add authentication headers if available.
@@ -186,7 +186,7 @@ final class VIP_Safe_Auth {
 		}
 
 		if ( is_wp_error( $response ) ) {
-			return new WP_Error( 'request_failed', __( 'Authorization test request failed: ', 'ccp' ) . $response->get_error_message() );
+			return new WP_Error( 'request_failed', __( 'Authorization test request failed: ', 'safe-publish' ) . $response->get_error_message() );
 		}
 
 		$response_code = wp_remote_retrieve_response_code( $response );
@@ -198,7 +198,7 @@ final class VIP_Safe_Auth {
 				'auth_failed',
 				sprintf(
 					/* translators: 1: HTTP response code, 2: response body message */
-					__( 'Authentication failed with HTTP %1$d: %2$s', 'ccp' ),
+					__( 'Authentication failed with HTTP %1$d: %2$s', 'safe-publish' ),
 					$response_code,
 					$response_body
 				)
@@ -216,7 +216,7 @@ final class VIP_Safe_Auth {
 			'unexpected_response',
 			sprintf(
 				/* translators: %d: HTTP response code */
-				__( 'Unexpected response code: %d', 'ccp' ),
+				__( 'Unexpected response code: %d', 'safe-publish' ),
 				$response_code
 			)
 		);
@@ -226,7 +226,7 @@ final class VIP_Safe_Auth {
 	 * Gets shared secret authentication parameters.
 	 *
 	 * Uses HMAC signature in custom headers that VIP allows.
-	 * Compatible with the CCP VIP mu-plugin authentication handler.
+	 * Compatible with the Safe Publish VIP mu-plugin authentication handler.
 	 *
 	 * @param string $site_url    Target site URL.
 	 * @param array  $auth_config Authentication configuration.
@@ -269,8 +269,8 @@ final class VIP_Safe_Auth {
 
 		return array(
 			'headers' => array(
-				'X-CCP-Timestamp' => $timestamp,
-				'X-CCP-Signature' => $signature,
+				'X-Safe-Publish-Timestamp' => $timestamp,
+				'X-Safe-Publish-Signature' => $signature,
 			),
 		);
 	}
@@ -315,11 +315,11 @@ final class VIP_Safe_Auth {
 	 */
 	public static function verify_request(): bool|WP_Error {
 		// Check for shared secret authentication.
-		if ( isset( $_SERVER['HTTP_X_CCP_SIGNATURE'] ) ) {
+		if ( isset( $_SERVER['HTTP_X_SAFE_PUBLISH_SIGNATURE'] ) ) {
 			return self::verify_shared_secret();
 		}
 
-		return new WP_Error( 'no_auth', __( 'No valid authentication found.', 'ccp' ) );
+		return new WP_Error( 'no_auth', __( 'No valid authentication found.', 'safe-publish' ) );
 	}
 
 	/**
@@ -328,25 +328,25 @@ final class VIP_Safe_Auth {
 	 * @return bool|WP_Error True if valid, WP_Error if not.
 	 */
 	private static function verify_shared_secret(): bool|WP_Error {
-		$signature = sanitize_text_field( $_SERVER['HTTP_X_CCP_SIGNATURE'] ?? '' );
-		$site      = sanitize_url( $_SERVER['HTTP_X_CCP_SITE'] ?? '' );
-		$timestamp = sanitize_text_field( $_SERVER['HTTP_X_CCP_TIMESTAMP'] ?? '' );
-		$nonce     = sanitize_text_field( $_SERVER['HTTP_X_CCP_NONCE'] ?? '' );
+		$signature = sanitize_text_field( $_SERVER['HTTP_X_SAFE_PUBLISH_SIGNATURE'] ?? '' );
+		$site      = sanitize_url( $_SERVER['HTTP_X_SAFE_PUBLISH_SITE'] ?? '' );
+		$timestamp = sanitize_text_field( $_SERVER['HTTP_X_SAFE_PUBLISH_TIMESTAMP'] ?? '' );
+		$nonce     = sanitize_text_field( $_SERVER['HTTP_X_SAFE_PUBLISH_NONCE'] ?? '' );
 
 		if ( empty( $signature ) || empty( $site ) || empty( $timestamp ) || empty( $nonce ) ) {
-			return new WP_Error( 'invalid_auth', __( 'Missing authentication parameters.', 'ccp' ) );
+			return new WP_Error( 'invalid_auth', __( 'Missing authentication parameters.', 'safe-publish' ) );
 		}
 
 		// Check timestamp (prevent replay attacks).
 		if ( abs( time() - intval( $timestamp ) ) > 300 ) { // 5 minute window.
-			return new WP_Error( 'expired_auth', __( 'Authentication expired.', 'ccp' ) );
+			return new WP_Error( 'expired_auth', __( 'Authentication expired.', 'safe-publish' ) );
 		}
 
 		// Get shared secret for this site.
-		$shared_secret = get_option( 'ccp_shared_secret_' . md5( $site ), '' );
+		$shared_secret = get_option( 'safe_publish_shared_secret_' . md5( $site ), '' );
 
 		if ( empty( $shared_secret ) ) {
-			return new WP_Error( 'unknown_site', __( 'Unknown source site.', 'ccp' ) );
+			return new WP_Error( 'unknown_site', __( 'Unknown source site.', 'safe-publish' ) );
 		}
 
 		// Recreate payload and verify signature.
@@ -360,13 +360,13 @@ final class VIP_Safe_Auth {
 		$expected_signature = hash_hmac( 'sha256', wp_json_encode( $payload ), $shared_secret );
 
 		if ( ! hash_equals( $expected_signature, $signature ) ) {
-			return new WP_Error( 'invalid_signature', __( 'Invalid authentication signature.', 'ccp' ) );
+			return new WP_Error( 'invalid_signature', __( 'Invalid authentication signature.', 'safe-publish' ) );
 		}
 
 		// Check nonce for replay protection.
-		$nonce_key = 'ccp_nonce_' . md5( $nonce );
+		$nonce_key = 'safe_publish_nonce_' . md5( $nonce );
 		if ( get_transient( $nonce_key ) ) {
-			return new WP_Error( 'replay_attack', __( 'Nonce already used.', 'ccp' ) );
+			return new WP_Error( 'replay_attack', __( 'Nonce already used.', 'safe-publish' ) );
 		}
 
 		// Store nonce to prevent replay.

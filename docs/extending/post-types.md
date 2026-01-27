@@ -1,10 +1,10 @@
 # Custom Post Type Support
 
-Compliant Content Publisher supports importing posts, pages, and custom post types. This guide explains how to enable and configure custom post type support.
+Safe Publish supports importing posts, pages, and custom post types. This guide explains how to enable and configure custom post type support.
 
 ## Default Supported Types
 
-By default, CCP supports:
+By default, Safe Publish supports:
 
 - **Posts** (`post`)
 - **Pages** (`page`)
@@ -28,7 +28,7 @@ register_post_type( 'book', [
 
 After registering with REST API support:
 
-1. Go to **CC Publisher** in WordPress admin
+1. Go to **Safe Publish** in WordPress admin
 2. Click **Fetch Post Types** in the settings
 3. Your custom post type should appear in the dropdown
 
@@ -37,7 +37,7 @@ After registering with REST API support:
 If you need to add support for a post type without modifying its registration:
 
 ```php
-add_filter( 'ccp_supported_post_types', function( $post_types ) {
+add_filter( 'safe_publish_supported_post_types', function( $post_types ) {
     $post_types[] = 'book';
     $post_types[] = 'product';
     return $post_types;
@@ -97,9 +97,9 @@ register_rest_field( 'book', 'author_name', [
 Import custom fields during the import process:
 
 ```php
-add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
+add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
     // Get the source post data
-    $source_post_id = get_post_meta( $post_id, '_ccp_source_post_id', true );
+    $source_post_id = get_post_meta( $post_id, '_safe_publish_source_post_id', true );
 
     // Fetch additional data from source
     $response = wp_remote_get( add_query_arg( [
@@ -141,7 +141,7 @@ register_taxonomy( 'genre', 'book', [
 Map taxonomies from source to destination:
 
 ```php
-add_filter( 'ccp_pre_import_post', function( $post_data ) {
+add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
     // Map source taxonomy to destination taxonomy
     if ( isset( $post_data['tax_input']['source_genre'] ) ) {
         $post_data['tax_input']['genre'] = $post_data['tax_input']['source_genre'];
@@ -179,7 +179,7 @@ register_post_type( 'documentation', [
 Modify how parent relationships are imported:
 
 ```php
-add_filter( 'ccp_pre_import_post', function( $post_data ) {
+add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
     // Skip parent relationship (import as top-level)
     if ( isset( $post_data['post_parent'] ) ) {
         $post_data['post_parent'] = 0;
@@ -191,7 +191,7 @@ add_filter( 'ccp_pre_import_post', function( $post_data ) {
         $source_parent_id = $post_data['post_parent'];
         $mapped_parent = get_posts( [
             'post_type' => 'documentation',
-            'meta_key' => '_ccp_source_post_id',
+            'meta_key' => '_safe_publish_source_post_id',
             'meta_value' => $source_parent_id,
             'posts_per_page' => 1,
         ] );
@@ -212,7 +212,7 @@ add_filter( 'ccp_pre_import_post', function( $post_data ) {
 Apply different import logic based on post type:
 
 ```php
-add_filter( 'ccp_pre_import_post', function( $post_data ) {
+add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
     switch ( $post_data['post_type'] ) {
         case 'book':
             // Books always go to 'pending' status
@@ -242,7 +242,7 @@ add_filter( 'ccp_pre_import_post', function( $post_data ) {
 Add type-specific validation:
 
 ```php
-add_filter( 'ccp_validate_post_data', function( $is_valid, $post_data ) {
+add_filter( 'safe_publish_validate_post_data', function( $is_valid, $post_data ) {
     $post_type = $post_data['post_type'] ?? 'post';
 
     switch ( $post_type ) {
@@ -270,7 +270,7 @@ add_filter( 'ccp_validate_post_data', function( $is_valid, $post_data ) {
 If using ACF with custom post types:
 
 ```php
-add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
+add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
     // Get ACF field data from source
     $response = wp_remote_get( add_query_arg( [
         'acf_format' => 'standard',
@@ -391,7 +391,7 @@ function import_book_fields( $post_id, $source_url ) {
         update_post_meta( $post_id, 'author_name', sanitize_text_field( $data['author_name'] ) );
     }
 }
-add_action( 'ccp_post_imported', 'import_book_fields', 10, 2 );
+add_action( 'safe_publish_post_imported', 'import_book_fields', 10, 2 );
 ```
 
 ## Next Steps

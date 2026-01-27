@@ -1,7 +1,7 @@
 {
-  "name": "compliant-content-publisher",
+  "name": "safe-publish",
   "author": "WPVIP",
-  "description": "Compliant Content Publisher plugin",
+  "description": "Safe Publish plugin",
   "license": "GPL-2.0-or-later",
   "private": true,
   "main": "build/index.js",
@@ -10,7 +10,7 @@
     "inc/",
     "vendor/",
     "functions.php",
-    "compliant-content-publisher.php"
+    "safe-publish.php"
   ],
   "scripts": {
     "build": "wp-scripts build --webpack-src-dir=src --output-path=build",
@@ -36,7 +36,7 @@
     "lint:phpcs:fix": "vendor/bin/phpcbf",
     "lint:psalm": "vendor/bin/psalm.phar",
     "packages-update": "wp-scripts packages-update",
-    "playground": "npx @wp-playground/cli server --mount=.:/wordpress/wp-content/plugins/compliant-content-publisher --php=8.2 --blueprint=blueprint.local.json",
+    "playground": "npx @wp-playground/cli server --mount=.:/wordpress/wp-content/plugins/safe-publish --php=8.2 --blueprint=blueprint.local.json",
     "playground:reset": "npm run playground -- --reset",
     "plugin-zip": "npm run build && composer install --prefer-dist --optimize-autoloader --no-dev && wp-scripts plugin-zip",
     "postinstall": "composer install",
@@ -48,8 +48,8 @@
     "test:e2e:help": "wp-scripts test-playwright --help",
     "test:php": "composer test",
     "test:php:coverage": "composer test-coverage",
-    "test:php:debug": "wp-env run tests-cli --env-cwd=wp-content/plugins/compliant-content-publisher ./vendor/bin/phpunit",
-    "test:integration": "wp-env run tests-cli --env-cwd=wp-content/plugins/compliant-content-publisher ./vendor/bin/phpunit -c ./phpunit-integration.xml",
+    "test:php:debug": "wp-env run tests-cli --env-cwd=wp-content/plugins/safe-publish ./vendor/bin/phpunit",
+    "test:integration": "wp-env run tests-cli --env-cwd=wp-content/plugins/safe-publish ./vendor/bin/phpunit -c ./phpunit-integration.xml",
     "test:js": "vitest --watch=false",
     "test:js:watch": "vitest --watch=true",
     "test:js:coverage": "vitest --coverage --watch=false",

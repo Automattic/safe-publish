@@ -38,7 +38,7 @@ describe( 'fetchDiffPreview', () => {
 		const result = await fetchDiffPreview( payload );
 		expect( result ).toEqual( mockResponse );
 		expect( global.fetch ).toHaveBeenCalledWith(
-			'/wp-json/ccp/v1/diff-preview',
+			'/wp-json/safe-publish/v1/diff-preview',
 			expect.objectContaining( {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -93,7 +93,7 @@ describe( 'fetchDiffPreview', () => {
 
 		await fetchDiffPreview( payload );
 		expect( global.fetch ).toHaveBeenCalledWith(
-			'/wp-json/ccp/v1/diff-preview',
+			'/wp-json/safe-publish/v1/diff-preview',
 			expect.objectContaining( {
 				body: JSON.stringify( payload ),
 			} )
@@ -105,7 +105,7 @@ describe( 'updatePostContent', () => {
 	beforeEach( () => {
 		global.fetch = vi.fn();
 		( global as any ).window = {
-			ccpAdminData: {
+			safePublishAdminData: {
 				restNonce: 'test-nonce',
 			},
 		};
@@ -125,7 +125,7 @@ describe( 'updatePostContent', () => {
 		const result = await updatePostContent( 123, 'New content' );
 		expect( result.success ).toBe( true );
 		expect( global.fetch ).toHaveBeenCalledWith(
-			'/wp-json/ccp/v1/update-post',
+			'/wp-json/safe-publish/v1/update-post',
 			expect.objectContaining( {
 				method: 'POST',
 				headers: expect.objectContaining( {
@@ -227,7 +227,7 @@ describe( 'updatePostContent', () => {
 		expect( result.error ).toBe( 'Custom error' );
 	} );
 
-	it( 'should work without window.ccpAdminData', async () => {
+	it( 'should work without window.safePublishAdminData', async () => {
 		// Save original window.
 		const originalWindow = ( global as any ).window;
 

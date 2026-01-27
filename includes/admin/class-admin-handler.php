@@ -2,14 +2,14 @@
 /**
  * Admin Handler class
  *
- * @package CCP
+ * @package Safe_Publish
  */
 
-namespace CCP\Admin;
+namespace Safe_Publish\Admin;
 
-use CCP\API\External_Posts_API;
-use CCP\Admin\Import_History;
-use CCP\Utils\Environment;
+use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\Admin\Import_History;
+use Safe_Publish\Utils\Environment;
 use Exception;
 
 // Prevent direct access.
@@ -62,12 +62,12 @@ final class Admin_Handler {
 		}
 
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
-		add_action( 'wp_ajax_ccp_fetch_posts', array( $this, 'ajax_fetch_posts' ) );
-		add_action( 'wp_ajax_ccp_fetch_post_types', array( $this, 'ajax_fetch_post_types' ) );
-		add_action( 'wp_ajax_ccp_test_connection', array( $this, 'ajax_test_connection' ) );
-		add_action( 'wp_ajax_ccp_create_draft', array( $this, 'ajax_create_draft' ) );
-		add_action( 'wp_ajax_ccp_bulk_import', array( $this, 'ajax_bulk_import' ) );
-		add_action( 'wp_ajax_ccp_debug_auth', array( $this, 'ajax_debug_auth' ) );
+		add_action( 'wp_ajax_safe_publish_fetch_posts', array( $this, 'ajax_fetch_posts' ) );
+		add_action( 'wp_ajax_safe_publish_fetch_post_types', array( $this, 'ajax_fetch_post_types' ) );
+		add_action( 'wp_ajax_safe_publish_test_connection', array( $this, 'ajax_test_connection' ) );
+		add_action( 'wp_ajax_safe_publish_create_draft', array( $this, 'ajax_create_draft' ) );
+		add_action( 'wp_ajax_safe_publish_bulk_import', array( $this, 'ajax_bulk_import' ) );
+		add_action( 'wp_ajax_safe_publish_debug_auth', array( $this, 'ajax_debug_auth' ) );
 	}
 
 	/**
@@ -76,10 +76,10 @@ final class Admin_Handler {
 	public function add_admin_menu(): void {
 		// Main menu page - Tools.
 		add_menu_page(
-			__( 'Compliant Content Publisher', 'ccp' ),
-			__( 'CC Publisher', 'ccp' ),
+			__( 'Safe Publish', 'safe-publish' ),
+			__( 'Safe Publish', 'safe-publish' ),
 			'manage_options',
-			'compliant-content-publisher',
+			'safe-publish',
 			array( $this, 'render_admin_page' ),
 			'dashicons-external',
 			99
@@ -87,11 +87,11 @@ final class Admin_Handler {
 
 		// Settings submenu page.
 		add_submenu_page(
-			'compliant-content-publisher',
-			__( 'CCP Settings', 'ccp' ),
-			__( 'Settings', 'ccp' ),
+			'safe-publish',
+			__( 'Safe Publish Settings', 'safe-publish' ),
+			__( 'Settings', 'safe-publish' ),
 			'manage_options',
-			'ccp-settings',
+			'safe-publish-settings',
 			array( $this, 'render_settings_page' )
 		);
 	}
@@ -101,8 +101,8 @@ final class Admin_Handler {
 	 */
 	public function admin_init(): void {
 		register_setting(
-			'ccp_settings',
-			'ccp_external_site_url',
+			'safe_publish_settings',
+			'safe_publish_external_site_url',
 			array(
 				'sanitize_callback' => array( $this, 'sanitize_url' ),
 				'default'           => '',
@@ -110,8 +110,8 @@ final class Admin_Handler {
 		);
 
 		register_setting(
-			'ccp_settings',
-			'ccp_number_of_posts',
+			'safe_publish_settings',
+			'safe_publish_number_of_posts',
 			array(
 				'sanitize_callback' => array( $this, 'sanitize_number_of_posts' ),
 				'default'           => 10,
@@ -120,8 +120,8 @@ final class Admin_Handler {
 
 		// VIP-safe authentication settings.
 		register_setting(
-			'ccp_settings',
-			'ccp_shared_secret',
+			'safe_publish_settings',
+			'safe_publish_shared_secret',
 			array(
 				'sanitize_callback' => array( $this, 'sanitize_shared_secret' ),
 				'default'           => '',
@@ -131,8 +131,8 @@ final class Admin_Handler {
 		// Basic authentication settings (development only).
 		if ( Environment::is_development() ) {
 			register_setting(
-				'ccp_settings',
-				'ccp_username',
+				'safe_publish_settings',
+				'safe_publish_username',
 				array(
 					'sanitize_callback' => array( $this, 'sanitize_username' ),
 					'default'           => '',
@@ -140,8 +140,8 @@ final class Admin_Handler {
 			);
 
 			register_setting(
-				'ccp_settings',
-				'ccp_password',
+				'safe_publish_settings',
+				'safe_publish_password',
 				array(
 					'sanitize_callback' => array( $this, 'sanitize_password' ),
 					'default'           => '',
@@ -157,7 +157,7 @@ final class Admin_Handler {
 	 */
 	public function prepare_vip_dependencies( $hook_suffix ): void {
 		// Only on our specific admin page.
-		if ( 'toplevel_page_compliant-content-publisher' !== $hook_suffix ) {
+		if ( 'toplevel_page_safe-publish' !== $hook_suffix ) {
 			return;
 		}
 
@@ -186,7 +186,7 @@ final class Admin_Handler {
 	 */
 	public function render_admin_page(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'ccp' ) );
+			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'safe-publish' ) );
 		}
 
 		$admin_page = new Admin_Page( $this->api );
@@ -198,7 +198,7 @@ final class Admin_Handler {
 	 */
 	public function render_settings_page(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'ccp' ) );
+			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'safe-publish' ) );
 		}
 
 		$settings_page = new Settings_Page();
@@ -212,7 +212,7 @@ final class Admin_Handler {
 	 */
 	public function enqueue_admin_assets( $hook_suffix ): void {
 		// Only enqueue on our main admin page (tools page).
-		if ( 'toplevel_page_compliant-content-publisher' !== $hook_suffix ) {
+		if ( 'toplevel_page_safe-publish' !== $hook_suffix ) {
 			return;
 		}
 
@@ -225,7 +225,7 @@ final class Admin_Handler {
 	 */
 	public function ajax_fetch_posts(): void {
 		// Security check.
-		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( 'Forbidden', 403 );
@@ -236,7 +236,7 @@ final class Admin_Handler {
 		$post_type       = sanitize_text_field( $_POST['post_type'] ?? 'posts' );
 
 		if ( empty( $site_url ) ) {
-			wp_send_json_error( __( 'Site URL is required.', 'ccp' ) );
+			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
 		}
 
 		// Get authentication credentials from settings.
@@ -256,7 +256,7 @@ final class Admin_Handler {
 	 */
 	public function ajax_fetch_post_types(): void {
 		// Security check.
-		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( 'Forbidden', 403 );
@@ -265,7 +265,7 @@ final class Admin_Handler {
 		$site_url = sanitize_text_field( $_POST['site_url'] ?? '' );
 
 		if ( empty( $site_url ) ) {
-			wp_send_json_error( __( 'Site URL is required.', 'ccp' ) );
+			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
 		}
 
 		// Get authentication credentials from settings.
@@ -285,7 +285,7 @@ final class Admin_Handler {
 	 */
 	public function ajax_test_connection(): void {
 		// Security check.
-		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( 'Forbidden', 403 );
@@ -294,7 +294,7 @@ final class Admin_Handler {
 		$site_url = sanitize_text_field( $_POST['site_url'] ?? '' );
 
 		if ( empty( $site_url ) ) {
-			wp_send_json_error( __( 'Site URL is required.', 'ccp' ) );
+			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
 		}
 
 		$results = $this->api->test_connection( $site_url );
@@ -306,15 +306,15 @@ final class Admin_Handler {
 	 * Handles AJAX request for creating draft post.
 	 */
 	public function ajax_create_draft(): void {
-		global $ccp_plugin;
+		global $safe_publish_plugin;
 
 		// Security check.
-		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'edit_posts' ) ) {
 			wp_send_json_error(
 				array(
-					'message' => __( 'You do not have permission to create posts.', 'ccp' ),
+					'message' => __( 'You do not have permission to create posts.', 'safe-publish' ),
 					'debug'   => array(
 						'user_id'      => get_current_user_id(),
 						'capabilities' => array(
@@ -328,10 +328,10 @@ final class Admin_Handler {
 		}
 
 		// Create single import session for tracking.
-		$source_url = get_option( 'ccp_external_site_url', '' );
+		$source_url = get_option( 'safe_publish_external_site_url', '' );
 		$session_id = $this->import_history->create_session( $source_url, 'single' );
 
-		$ccp_api = $ccp_plugin->get_ccp_api();
+		$safe_publish_api = $safe_publish_plugin->get_safe_publish_api();
 
 		$external_post_id = absint( $_POST['external_post_id'] ?? 0 );
 		$title            = sanitize_text_field( $_POST['title'] ?? '' );
@@ -383,17 +383,17 @@ final class Admin_Handler {
 		// Comment out permission checking for now to test.
 
 		if ( empty( $title ) ) {
-			wp_send_json_error( __( 'Post title is required.', 'ccp' ) );
+			wp_send_json_error( __( 'Post title is required.', 'safe-publish' ) );
 		}
 
 		if ( empty( $external_post_id ) ) {
-			wp_send_json_error( __( 'External post ID is required.', 'ccp' ) );
+			wp_send_json_error( __( 'External post ID is required.', 'safe-publish' ) );
 		}
 
 		// Check if a draft already exists for this external post.
 		$existing_posts = get_posts(
 			array(
-				'meta_key'         => 'ccp_external_post_id',
+				'meta_key'         => 'safe_publish_external_post_id',
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'       => $external_post_id,
 				'post_status'      => array( 'draft', 'publish', 'pending', 'private' ),
@@ -420,7 +420,7 @@ final class Admin_Handler {
 					'edit_url'       => admin_url( 'post.php?post=' . $existing_post->ID . '&action=edit' ),
 					'message'        => sprintf(
 						/* translators: %s: title of the existing post */
-						__( 'Post "%s" already exists. Do you want to update it with the latest content from the external site?', 'ccp' ),
+						__( 'Post "%s" already exists. Do you want to update it with the latest content from the external site?', 'safe-publish' ),
 						$existing_post->post_title
 					),
 					'confirm_action' => 'update_existing',
@@ -431,7 +431,7 @@ final class Admin_Handler {
 		// Fetch fresh content from external site if updating existing post.
 		if ( $existing_post && $force_update ) {
 			// Get the configured site URL from settings.
-			$configured_site_url = get_option( 'ccp_site_url', '' );
+			$configured_site_url = get_option( 'safe_publish_site_url', '' );
 
 			if ( ! empty( $configured_site_url ) ) {
 				// Get authentication credentials for fresh content request.
@@ -450,7 +450,7 @@ final class Admin_Handler {
 					}
 				} catch ( Exception $e ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					error_log( 'CCP: Failed to fetch fresh content for update - ' . $e->getMessage() );
+					error_log( 'Safe Publish: Failed to fetch fresh content for update - ' . $e->getMessage() );
 				}
 			}
 		}
@@ -495,8 +495,8 @@ final class Admin_Handler {
 			$meta_keys_to_preserve = array(
 				'_edit_last',
 				'_edit_lock',
-				'ccp_external_link',
-				'ccp_import_date',
+				'safe_publish_external_link',
+				'safe_publish_import_date',
 			);
 
 			foreach ( $meta_keys_to_preserve as $meta_key ) {
@@ -511,7 +511,7 @@ final class Admin_Handler {
 				'ID'           => $existing_post->ID,
 				'post_title'   => $title,
 				'post_excerpt' => $excerpt,
-				'post_content' => ! empty( $processed_content ) ? $processed_content : __( 'Content imported from external source.', 'ccp' ),
+				'post_content' => ! empty( $processed_content ) ? $processed_content : __( 'Content imported from external source.', 'safe-publish' ),
 				'post_status'  => 'draft',
 				'post_type'    => $post_type,
 			);
@@ -523,8 +523,8 @@ final class Admin_Handler {
 			}
 
 			// Update meta data.
-			update_post_meta( $post_id, 'ccp_external_link', $external_link );
-			update_post_meta( $post_id, 'ccp_import_date', current_time( 'mysql' ) );
+			update_post_meta( $post_id, 'safe_publish_external_link', $external_link );
+			update_post_meta( $post_id, 'safe_publish_import_date', current_time( 'mysql' ) );
 
 			// Import featured image if provided.
 			if ( ! empty( $featured_media_id ) && ! empty( $external_link ) ) {
@@ -537,8 +537,8 @@ final class Admin_Handler {
 			}
 
 			// Update meta and terms.
-			$ccp_api->update_meta( $post_id, $meta );
-			$ccp_api->update_terms( $post_id, $terms );
+			$safe_publish_api->update_meta( $post_id, $meta );
+			$safe_publish_api->update_terms( $post_id, $terms );
 
 			$edit_url = admin_url( 'post.php?post=' . $post_id . '&action=edit' );
 
@@ -559,7 +559,7 @@ final class Admin_Handler {
 				array(
 					'post_id'  => $post_id,
 					'edit_url' => $edit_url,
-					'message'  => __( 'Existing draft updated with latest content.', 'ccp' ),
+					'message'  => __( 'Existing draft updated with latest content.', 'safe-publish' ),
 					'existing' => true,
 				)
 			);
@@ -570,15 +570,15 @@ final class Admin_Handler {
 
 		$post_data = array(
 			'post_title'   => $title,
-			'post_content' => ! empty( $processed_content ) ? $processed_content : __( 'Content imported from external source.', 'ccp' ),
+			'post_content' => ! empty( $processed_content ) ? $processed_content : __( 'Content imported from external source.', 'safe-publish' ),
 			'post_status'  => 'draft',
 			'post_type'    => $post_type,
 			'post_excerpt' => $excerpt,
 			'meta_input'   => array(
-				'ccp_external_post_id' => $external_post_id,
-				'ccp_external_link'    => $external_link,
-				'ccp_imported_from'    => 'ccp',
-				'ccp_import_date'      => current_time( 'mysql' ),
+				'safe_publish_external_post_id' => $external_post_id,
+				'safe_publish_external_link'    => $external_link,
+				'safe_publish_imported_from'    => 'safe-publish',
+				'safe_publish_import_date'      => current_time( 'mysql' ),
 			),
 		);
 
@@ -602,8 +602,8 @@ final class Admin_Handler {
 		}
 
 		// Update meta and terms.
-		$ccp_api->update_meta( $post_id, $meta );
-		$ccp_api->update_terms( $post_id, $terms );
+		$safe_publish_api->update_meta( $post_id, $meta );
+		$safe_publish_api->update_terms( $post_id, $terms );
 
 		// Return success with edit URL.
 		$edit_url = admin_url( 'post.php?post=' . $post_id . '&action=edit' );
@@ -625,7 +625,7 @@ final class Admin_Handler {
 			array(
 				'post_id'  => $post_id,
 				'edit_url' => $edit_url,
-				'message'  => __( 'Draft post created successfully.', 'ccp' ),
+				'message'  => __( 'Draft post created successfully.', 'safe-publish' ),
 				'existing' => false,
 			)
 		);
@@ -636,7 +636,7 @@ final class Admin_Handler {
 	 */
 	public function ajax_bulk_import(): void {
 		// Security check.
-		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'edit_posts' ) ) {
 			wp_die( 'Forbidden', 403 );
@@ -647,22 +647,22 @@ final class Admin_Handler {
 		$posts_data_json = isset( $_POST['posts_data'] ) ? wp_unslash( $_POST['posts_data'] ) : '';
 
 		if ( empty( $posts_data_json ) ) {
-			wp_send_json_error( __( 'Posts data is required.', 'ccp' ) );
+			wp_send_json_error( __( 'Posts data is required.', 'safe-publish' ) );
 		}
 
 		$posts_data = json_decode( $posts_data_json, true );
 
 		if ( ! is_array( $posts_data ) || empty( $posts_data ) ) {
-			wp_send_json_error( __( 'Invalid posts data provided.', 'ccp' ) );
+			wp_send_json_error( __( 'Invalid posts data provided.', 'safe-publish' ) );
 		}
 
 		// Limit bulk operations to prevent timeout/memory issues.
 		if ( count( $posts_data ) > 50 ) {
-			wp_send_json_error( __( 'Bulk import limited to 50 posts at a time.', 'ccp' ) );
+			wp_send_json_error( __( 'Bulk import limited to 50 posts at a time.', 'safe-publish' ) );
 		}
 
 		// Create import session.
-		$source_url = get_option( 'ccp_external_site_url', '' );
+		$source_url = get_option( 'safe_publish_external_site_url', '' );
 		$session_id = $this->import_history->create_session( $source_url, 'bulk' );
 
 		$results    = array();
@@ -723,7 +723,7 @@ final class Admin_Handler {
 					'external_id' => $external_post_id,
 					'title'       => $title,
 					'success'     => false,
-					'error'       => __( 'Missing required post data.', 'ccp' ),
+					'error'       => __( 'Missing required post data.', 'safe-publish' ),
 				);
 			}
 
@@ -777,7 +777,7 @@ final class Admin_Handler {
 			// Check if a draft already exists for this external post.
 			$existing_posts = get_posts(
 				array(
-					'meta_key'         => 'ccp_external_post_id',
+					'meta_key'         => 'safe_publish_external_post_id',
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => $external_post_id,
 					'post_status'      => array( 'draft', 'publish', 'pending', 'private' ),
@@ -791,7 +791,7 @@ final class Admin_Handler {
 				$existing_post = $existing_posts[0];
 
 				// Fetch fresh content from external site when updating existing post.
-				$configured_site_url = get_option( 'ccp_site_url', '' );
+				$configured_site_url = get_option( 'safe_publish_site_url', '' );
 
 				if ( ! empty( $configured_site_url ) ) {
 					// Get authentication credentials for fresh content request.
@@ -818,7 +818,7 @@ final class Admin_Handler {
 				$post_data_array = array(
 					'ID'           => $existing_post->ID,
 					'post_title'   => $title,
-					'post_content' => ! empty( $processed_content ) ? $processed_content : __( 'Content imported from external source.', 'ccp' ),
+					'post_content' => ! empty( $processed_content ) ? $processed_content : __( 'Content imported from external source.', 'safe-publish' ),
 					'post_type'    => $post_type,
 				);
 
@@ -837,8 +837,8 @@ final class Admin_Handler {
 				}
 
 				// Update meta data.
-				update_post_meta( $post_id, 'ccp_external_link', $external_link );
-				update_post_meta( $post_id, 'ccp_import_date', current_time( 'mysql' ) );
+				update_post_meta( $post_id, 'safe_publish_external_link', $external_link );
+				update_post_meta( $post_id, 'safe_publish_import_date', current_time( 'mysql' ) );
 
 				$edit_url = admin_url( 'post.php?post=' . $post_id . '&action=edit' );
 
@@ -872,14 +872,14 @@ final class Admin_Handler {
 
 				$post_data_array = array(
 					'post_title'   => $title,
-					'post_content' => ! empty( $processed_content ) ? $processed_content : __( 'Content imported from external source.', 'ccp' ),
+					'post_content' => ! empty( $processed_content ) ? $processed_content : __( 'Content imported from external source.', 'safe-publish' ),
 					'post_status'  => 'draft',
 					'post_type'    => $post_type,
 					'meta_input'   => array(
-						'ccp_external_post_id' => $external_post_id,
-						'ccp_external_link'    => $external_link,
-						'ccp_imported_from'    => 'ccp',
-						'ccp_import_date'      => current_time( 'mysql' ),
+						'safe_publish_external_post_id' => $external_post_id,
+						'safe_publish_external_link'    => $external_link,
+						'safe_publish_imported_from'    => 'safe-publish',
+						'safe_publish_import_date'      => current_time( 'mysql' ),
 					),
 				);
 
@@ -937,7 +937,7 @@ final class Admin_Handler {
 				$this->import_history->log_import_action(
 					$session_id,
 					$post_data['id'] ?? 0,
-					$post_data['title'] ?? __( 'Unknown', 'ccp' ),
+					$post_data['title'] ?? __( 'Unknown', 'safe-publish' ),
 					'error',
 					null,
 					$e->getMessage()
@@ -946,7 +946,7 @@ final class Admin_Handler {
 
 			return array(
 				'external_id' => $post_data['id'] ?? 0,
-				'title'       => $post_data['title'] ?? __( 'Unknown', 'ccp' ),
+				'title'       => $post_data['title'] ?? __( 'Unknown', 'safe-publish' ),
 				'success'     => false,
 				'error'       => $e->getMessage(),
 			);
@@ -967,13 +967,13 @@ final class Admin_Handler {
 		}
 
 		// Use the URL validator.
-		if ( ! \CCP\Validators\URL_Validator::is_valid_external_url( $url ) ) {
+		if ( ! \Safe_Publish\Validators\URL_Validator::is_valid_external_url( $url ) ) {
 			add_settings_error(
-				'ccp_external_site_url',
+				'safe_publish_external_site_url',
 				'invalid_url',
-				__( 'Please enter a valid external site URL.', 'ccp' )
+				__( 'Please enter a valid external site URL.', 'safe-publish' )
 			);
-			return get_option( 'ccp_external_site_url', '' );
+			return get_option( 'safe_publish_external_site_url', '' );
 		}
 
 		return $url;
@@ -990,11 +990,11 @@ final class Admin_Handler {
 
 		if ( $number < 1 || $number > 100 ) {
 			add_settings_error(
-				'ccp_number_of_posts',
+				'safe_publish_number_of_posts',
 				'invalid_number',
-				__( 'Number of posts must be between 1 and 100.', 'ccp' )
+				__( 'Number of posts must be between 1 and 100.', 'safe-publish' )
 			);
-			return get_option( 'ccp_number_of_posts', 10 );
+			return get_option( 'safe_publish_number_of_posts', 10 );
 		}
 
 		return $number;
@@ -1026,11 +1026,11 @@ final class Admin_Handler {
 		// Validate length - shared secrets should be at least 32 characters for security.
 		if ( strlen( $secret ) < 32 ) {
 			add_settings_error(
-				'ccp_shared_secret',
+				'safe_publish_shared_secret',
 				'invalid_secret',
-				__( 'Shared secret must be at least 32 characters long for security.', 'ccp' )
+				__( 'Shared secret must be at least 32 characters long for security.', 'safe-publish' )
 			);
-			return get_option( 'ccp_shared_secret', '' );
+			return get_option( 'safe_publish_shared_secret', '' );
 		}
 
 		return $secret;
@@ -1072,7 +1072,7 @@ final class Admin_Handler {
 	 */
 	private function get_auth_credentials(): array {
 		// Try VIP-safe authentication first.
-		$shared_secret = get_option( 'ccp_shared_secret', '' );
+		$shared_secret = get_option( 'safe_publish_shared_secret', '' );
 
 		if ( ! empty( $shared_secret ) ) {
 			return array(
@@ -1082,8 +1082,8 @@ final class Admin_Handler {
 
 		// Fallback to Basic auth in development environments only.
 		if ( Environment::is_development() ) {
-			$username = get_option( 'ccp_username', '' );
-			$password = get_option( 'ccp_password', '' );
+			$username = get_option( 'safe_publish_username', '' );
+			$password = get_option( 'safe_publish_password', '' );
 
 			if ( ! empty( $username ) && ! empty( $password ) ) {
 				return array(
@@ -1814,7 +1814,7 @@ final class Admin_Handler {
 	 */
 	public function ajax_debug_auth(): void {
 		// Security check.
-		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( 'Forbidden', 403 );
@@ -1823,7 +1823,7 @@ final class Admin_Handler {
 		$site_url = sanitize_text_field( $_POST['site_url'] ?? '' );
 
 		if ( empty( $site_url ) ) {
-			wp_send_json_error( __( 'Site URL is required.', 'ccp' ) );
+			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
 		}
 
 		// Get authentication credentials from settings.
@@ -1833,7 +1833,7 @@ final class Admin_Handler {
 		$api_url = trailingslashit( $site_url ) . 'wp-json/wp/v2/types';
 
 		// Get VIP Safe Auth parameters.
-		$auth_params = \CCP\Auth\VIP_Safe_Auth::get_auth_params( $api_url, $auth_credentials, 'GET' );
+		$auth_params = \Safe_Publish\Auth\VIP_Safe_Auth::get_auth_params( $api_url, $auth_credentials, 'GET' );
 
 		$debug_info = array(
 			'site_url'                   => $site_url,

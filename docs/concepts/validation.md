@@ -1,6 +1,6 @@
 # Content Validation
 
-Before importing content, Compliant Content Publisher performs several validation checks to ensure data integrity and prevent errors.
+Before importing content, Safe Publish performs several validation checks to ensure data integrity and prevent errors.
 
 ## Validation Stages
 
@@ -174,10 +174,10 @@ While not recommended, you can bypass certain validations using filters:
 
 ```php
 // Disable URL validation (dangerous!)
-add_filter( 'ccp_validate_url', '__return_false' );
+add_filter( 'safe_publish_validate_url', '__return_false' );
 
 // Disable content validation
-add_filter( 'ccp_validate_content', '__return_false' );
+add_filter( 'safe_publish_validate_content', '__return_false' );
 ```
 
 **Warning**: Disabling validation can lead to:
@@ -194,7 +194,7 @@ Only disable validation for testing purposes in development environments.
 Developers can add custom validation logic using hooks:
 
 ```php
-add_filter( 'ccp_validate_post_data', function( $is_valid, $post_data ) {
+add_filter( 'safe_publish_validate_post_data', function( $is_valid, $post_data ) {
     // Add custom validation logic
     if ( empty( $post_data['custom_field'] ) ) {
         return new WP_Error( 'missing_custom_field', 'Custom field is required' );

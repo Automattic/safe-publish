@@ -4,7 +4,7 @@
  * Provides a dropdown selector for choosing post types from external WordPress
  * sites, with automatic loading and error handling.
  *
- * @file This file defines the PostTypeSelector component for the CCP plugin.
+ * @file This file defines the PostTypeSelector component for the Safe Publish plugin.
  */
 import { ApiResponse } from './types';
 import { getErrorMessage } from './utils';
@@ -80,8 +80,8 @@ export function PostTypeSelector( {
 	 * @return {string} External site URL.
 	 */
 	const getExternalSiteUrl = useCallback( (): string => {
-		// Use saved settings from window.ccpAdminData.
-		return window.ccpAdminData?.siteUrl || siteUrl || '';
+		// Use saved settings from window.safePublishAdminData.
+		return window.safePublishAdminData?.siteUrl || siteUrl || '';
 	}, [ siteUrl ] );
 
 	/**
@@ -100,13 +100,13 @@ export function PostTypeSelector( {
 	): Promise< unknown > => {
 		const formData = new FormData();
 		formData.append( 'action', action );
-		formData.append( 'nonce', window.ccpAdminData.nonce );
+		formData.append( 'nonce', window.safePublishAdminData.nonce );
 
 		Object.entries( data ).forEach( ( [ key, value ] ) => {
 			formData.append( key, String( value ) );
 		} );
 
-		const response = await fetch( window.ccpAdminData.ajaxurl, {
+		const response = await fetch( window.safePublishAdminData.ajaxurl, {
 			method: 'POST',
 			body: formData,
 		} );
@@ -136,7 +136,7 @@ export function PostTypeSelector( {
 
 		try {
 			const response = await makeRequest(
-				'ccp_fetch_post_types',
+				'safe_publish_fetch_post_types',
 				{ site_url: currentSiteUrl }
 			) as ApiResponse< Record< string, PostTypeOption > >;
 
@@ -149,15 +149,15 @@ export function PostTypeSelector( {
 				setLastSiteUrl( currentSiteUrl );
 			} else {
 				// eslint-disable-next-line no-console
-				console.error( 'CCP PostTypeSelector: API error:', response );
-				setError( getErrorMessage( response, __( 'Failed to load post types', 'ccp' ) ) );
+				console.error( 'Safe Publish PostTypeSelector: API error:', response );
+				setError( getErrorMessage( response, __( 'Failed to load post types', 'safe-publish' ) ) );
 				setPostTypes( [] );
 			}
 		} catch ( err ) {
 			// eslint-disable-next-line no-console
-			console.error( 'CCP PostTypeSelector: Network error:', err );
+			console.error( 'Safe Publish PostTypeSelector: Network error:', err );
 			/* translators: %s is the error message */
-			setError( __( 'Network error while loading post types: %s', 'ccp' ).replace( '%s', String( err ) ) );
+			setError( __( 'Network error while loading post types: %s', 'safe-publish' ).replace( '%s', String( err ) ) );
 			setPostTypes( [] );
 		} finally {
 			setIsLoading( false );
@@ -222,16 +222,16 @@ export function PostTypeSelector( {
 	// Always ensure we have at least the default "posts" option.
 	if ( 0 === selectOptions.length && ! isLoading ) {
 		selectOptions.push( {
-			label: __( 'Posts (default)', 'ccp' ),
+			label: __( 'Posts (default)', 'safe-publish' ),
 			value: 'posts',
 		} );
 	}
 
 	return (
-		<div className="ccp-post-type-selector" style={ { marginBottom: '10px' } }>
+		<div className="safe-publish-post-type-selector" style={ { marginBottom: '10px' } }>
 			<div style={ { display: 'flex', alignItems: 'center', gap: '10px' } }>
 				<SelectControl
-					label={ __( 'Post Type:', 'ccp' ) }
+					label={ __( 'Post Type:', 'safe-publish' ) }
 					value={ currentPostType }
 					options={ selectOptions }
 					onChange={ handlePostTypeChange }
@@ -247,10 +247,10 @@ export function PostTypeSelector( {
 					{ isLoading ? (
 						<>
 							<Spinner />
-							{ __( 'Loading…', 'ccp' ) }
+							{ __( 'Loading…', 'safe-publish' ) }
 						</>
 					) : (
-						__( 'Refresh', 'ccp' )
+						__( 'Refresh', 'safe-publish' )
 					) }
 				</Button>
 			</div>
@@ -264,9 +264,9 @@ export function PostTypeSelector( {
 			{ ! getExternalSiteUrl() && (
 				<Notice status="info">
 					{ createInterpolateElement(
-						__( 'Please enter a site URL in the <link>settings page</link> to load available post types.', 'ccp' ),
+						__( 'Please enter a site URL in the <link>settings page</link> to load available post types.', 'safe-publish' ),
 						{
-							link: <a href={ window.ccpAdminData?.settingsUrl || '/wp-admin/admin.php?page=ccp-settings' }>link</a>,
+							link: <a href={ window.safePublishAdminData?.settingsUrl || '/wp-admin/admin.php?page=safe-publish-settings' }>link</a>,
 						}
 					) }
 				</Notice>

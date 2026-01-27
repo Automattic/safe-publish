@@ -2,13 +2,13 @@
 /**
  * Admin Page class
  *
- * @package CCP
+ * @package Safe_Publish
  */
 
-namespace CCP\Admin;
+namespace Safe_Publish\Admin;
 
-use CCP\API\External_Posts_API;
-use CCP\Utils\Environment;
+use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\Utils\Environment;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -40,31 +40,31 @@ final class Admin_Page {
 	 * Renders the admin page.
 	 */
 	public function render(): void {
-		$site_url = get_option( 'ccp_external_site_url', '' );
+		$site_url = get_option( 'safe_publish_external_site_url', '' );
 
 		?>
-		<div class="wrap" id="ccp-admin-page">
-			<h1><?php esc_html_e( 'Compliant Content Publisher', 'ccp' ); ?></h1>
+		<div class="wrap" id="safe-publish-admin-page">
+			<h1><?php esc_html_e( 'Safe Publish', 'safe-publish' ); ?></h1>
 
-			<div class="ccp-admin-container">
+			<div class="safe-publish-admin-container">
 
-				<div class="ccp-tools-section">
-					<h2><?php esc_html_e( 'Tools', 'ccp' ); ?></h2>
+				<div class="safe-publish-tools-section">
+					<h2><?php esc_html_e( 'Tools', 'safe-publish' ); ?></h2>
 
 					<!-- React Admin Tools component will be mounted here -->
-					<div id="ccp-admin-tools-container">
-						<div class="ccp-loading">
-							<p><?php esc_html_e( 'Loading tools…', 'ccp' ); ?></p>
+					<div id="safe-publish-admin-tools-container">
+						<div class="safe-publish-loading">
+							<p><?php esc_html_e( 'Loading tools…', 'safe-publish' ); ?></p>
 						</div>
 					</div>
 
 					<!-- Legacy results containers for compatibility -->
-					<div id="ccp-test-results" class="ccp-results" style="display: none;"></div>
-					<div id="ccp-preview-results" class="ccp-results" style="display: none;"></div>
+					<div id="safe-publish-test-results" class="safe-publish-results" style="display: none;"></div>
+					<div id="safe-publish-preview-results" class="safe-publish-results" style="display: none;"></div>
 				</div>
 
-				<div class="ccp-dataviews-section">
-					<h2><?php esc_html_e( 'Recent Posts from Non-Prod Site', 'ccp' ); ?></h2>
+				<div class="safe-publish-dataviews-section">
+					<h2><?php esc_html_e( 'Recent Posts from Non-Prod Site', 'safe-publish' ); ?></h2>
 
 					<?php if ( empty( $site_url ) ) : ?>
 						<div class="notice notice-warning">
@@ -72,16 +72,16 @@ final class Admin_Page {
 								<?php
 								printf(
 									/* translators: %s: Settings page URL */
-									esc_html__( 'Please configure the non-prod site URL in the %s to see posts.', 'ccp' ),
-									'<a href="' . esc_url( admin_url( 'admin.php?page=ccp-settings' ) ) . '">' . esc_html__( 'settings page', 'ccp' ) . '</a>'
+									esc_html__( 'Please configure the non-prod site URL in the %s to see posts.', 'safe-publish' ),
+									'<a href="' . esc_url( admin_url( 'admin.php?page=safe-publish-settings' ) ) . '">' . esc_html__( 'settings page', 'safe-publish' ) . '</a>'
 								);
 								?>
 							</p>
 						</div>
 					<?php else : ?>
-						<div id="ccp-dataviews-container">
-							<div class="ccp-loading">
-								<p><?php esc_html_e( 'Loading posts…', 'ccp' ); ?></p>
+						<div id="safe-publish-dataviews-container">
+							<div class="safe-publish-loading">
+								<p><?php esc_html_e( 'Loading posts…', 'safe-publish' ); ?></p>
 							</div>
 						</div>
 					<?php endif; ?>
@@ -121,8 +121,8 @@ final class Admin_Page {
 	 */
 	private function enqueue_standard_assets(): void {
 		// Get posts data for localization.
-		$site_url        = get_option( 'ccp_external_site_url', '' );
-		$number_of_posts = get_option( 'ccp_number_of_posts', 10 );
+		$site_url        = get_option( 'safe_publish_external_site_url', '' );
+		$number_of_posts = get_option( 'safe_publish_number_of_posts', 10 );
 		$posts_data      = array();
 
 		if ( ! empty( $site_url ) ) {
@@ -130,14 +130,14 @@ final class Admin_Page {
 			$auth_credentials = array();
 
 			// VIP-safe authentication methods (prioritized).
-			$shared_secret = get_option( 'ccp_shared_secret', '' );
+			$shared_secret = get_option( 'safe_publish_shared_secret', '' );
 
 			if ( ! empty( $shared_secret ) ) {
 				$auth_credentials['shared_secret'] = $shared_secret;
 			} elseif ( Environment::is_development() ) {
 				// Fallback to Basic auth in development environments only.
-				$username = get_option( 'ccp_username', '' );
-				$password = get_option( 'ccp_password', '' );
+				$username = get_option( 'safe_publish_username', '' );
+				$password = get_option( 'safe_publish_password', '' );
 
 				if ( ! empty( $username ) && ! empty( $password ) ) {
 					$auth_credentials['username'] = $username;
@@ -208,7 +208,7 @@ final class Admin_Page {
 		// In VIP environment, use plugin version instead of filemtime for better caching.
 		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
 			// Get plugin version for VIP environment.
-			$plugin_data    = get_file_data( dirname( dirname( __DIR__ ) ) . '/compliant-content-publisher.php', array( 'Version' => 'Version' ) );
+			$plugin_data    = get_file_data( dirname( dirname( __DIR__ ) ) . '/safe-publish.php', array( 'Version' => 'Version' ) );
 			$script_version = ! empty( $plugin_data['Version'] ) ? $plugin_data['Version'] : '1.1.0';
 		} elseif ( file_exists( $script_path ) && function_exists( 'filemtime' ) ) {
 			// Only use filemtime if available (not always available in VIP).
@@ -228,10 +228,10 @@ final class Admin_Page {
 
 					if ( defined( 'WP_DEBUG' ) && constant( 'WP_DEBUG' ) ) {
 						echo '<div class="notice notice-error"><p>';
-						echo '<strong>' . esc_html__( 'Compliant Content Publisher:', 'ccp' ) . '</strong> ';
-						echo esc_html__( 'Build assets are missing. ', 'ccp' );
+						echo '<strong>' . esc_html__( 'Safe Publish:', 'safe-publish' ) . '</strong> ';
+						echo esc_html__( 'Build assets are missing. ', 'safe-publish' );
 						/* translators: npm run build is a command and should not be translated */
-						echo esc_html__( 'Run <code>npm run build</code> and commit the build files for VIP deployment.', 'ccp' );
+						echo esc_html__( 'Run <code>npm run build</code> and commit the build files for VIP deployment.', 'safe-publish' );
 						echo '</p></div>';
 					}
 				}
@@ -241,7 +241,7 @@ final class Admin_Page {
 		}
 
 		wp_enqueue_script(
-			'ccp-admin-dataviews-script',
+			'safe-publish-admin-dataviews-script',
 			$script_url,
 			$script_deps,
 			$script_version,
@@ -257,7 +257,7 @@ final class Admin_Page {
 			$style_version = $script_version;
 
 			wp_enqueue_style(
-				'ccp-admin-dataviews-style',
+				'safe-publish-admin-dataviews-style',
 				$style_file_url,
 				array( 'wp-components' ),
 				$style_version
@@ -270,7 +270,7 @@ final class Admin_Page {
 
 		if ( file_exists( $admin_css_path ) ) {
 			wp_enqueue_style(
-				'ccp-admin-style',
+				'safe-publish-admin-style',
 				$admin_css_url,
 				array(),
 				$script_version
@@ -283,7 +283,7 @@ final class Admin_Page {
 
 		if ( file_exists( $react_css_path ) ) {
 			wp_enqueue_style(
-				'ccp-react-components-style',
+				'safe-publish-react-components-style',
 				$react_css_url,
 				array( 'wp-components' ),
 				$script_version
@@ -292,24 +292,24 @@ final class Admin_Page {
 
 		// Localize scripts with data including posts.
 		wp_localize_script(
-			'ccp-admin-dataviews-script',
-			'ccpAdminData',
+			'safe-publish-admin-dataviews-script',
+			'safePublishAdminData',
 			array(
 				'ajaxurl'     => admin_url( 'admin-ajax.php' ),
-				'settingsUrl' => admin_url( 'admin.php?page=ccp-settings' ),
-				'nonce'       => wp_create_nonce( 'ccp_ajax_nonce' ),
+				'settingsUrl' => admin_url( 'admin.php?page=safe-publish-settings' ),
+				'nonce'       => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 				'restNonce'   => wp_create_nonce( 'wp_rest' ),
 				'siteUrl'     => $site_url,
 				'numPosts'    => $number_of_posts,
-				'containerId' => 'ccp-dataviews-container',
+				'containerId' => 'safe-publish-dataviews-container',
 				'postsData'   => $posts_data,
 				'strings'     => array(
-					'loading'      => __( 'Loading posts…', 'ccp' ),
-					'error'        => __( 'Error loading posts.', 'ccp' ),
-					'noResults'    => __( 'No posts found.', 'ccp' ),
-					'title'        => __( 'Title', 'ccp' ),
-					'lastModified' => __( 'Last Modified', 'ccp' ),
-					'link'         => __( 'Link', 'ccp' ),
+					'loading'      => __( 'Loading posts…', 'safe-publish' ),
+					'error'        => __( 'Error loading posts.', 'safe-publish' ),
+					'noResults'    => __( 'No posts found.', 'safe-publish' ),
+					'title'        => __( 'Title', 'safe-publish' ),
+					'lastModified' => __( 'Last Modified', 'safe-publish' ),
+					'link'         => __( 'Link', 'safe-publish' ),
 				),
 			)
 		);
@@ -322,10 +322,10 @@ final class Admin_Page {
 	 * Verify that scripts loaded properly (useful for VIP debugging).
 	 */
 	public function verify_script_loaded(): void {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG && wp_script_is( 'ccp-admin-dataviews-script', 'done' ) ) {
-			echo '<!-- CCP: Admin script loaded successfully -->';
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG && wp_script_is( 'safe-publish-admin-dataviews-script', 'done' ) ) {
+			echo '<!-- Safe Publish: Admin script loaded successfully -->';
 		} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			echo '<!-- CCP: Admin script failed to load -->';
+			echo '<!-- Safe Publish: Admin script failed to load -->';
 		}
 	}
 }

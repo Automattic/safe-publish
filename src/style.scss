@@ -1,7 +1,7 @@
 @import "@wordpress/dataviews/build-style/style.css";
 
 // Bulk import styling enhancements
-.ccp-dataviews-wrapper {
+.safe-publish-dataviews-wrapper {
 
 	.dataviews-bulk-actions {
 		background: #f0f6fc;
@@ -35,13 +35,13 @@
 }
 
 // Bulk import modal improvements
-.ccp-bulk-import-progress {
+.safe-publish-bulk-import-progress {
 
 	.components-progress-bar {
 		margin: 8px 0;
 	}
 
-	.ccp-import-results {
+	.safe-publish-import-results {
 		max-height: 200px;
 		overflow-y: auto;
 		background: #f9f9f9;
@@ -49,7 +49,7 @@
 		border-radius: 4px;
 		padding: 10px;
 
-		.ccp-import-result-item {
+		.safe-publish-import-result-item {
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
@@ -60,7 +60,7 @@
 				border-bottom: none;
 			}
 
-			.ccp-result-title {
+			.safe-publish-result-title {
 				flex: 1;
 				font-size: 0.85em;
 
@@ -73,7 +73,7 @@
 				}
 			}
 
-			.ccp-result-status {
+			.safe-publish-result-status {
 				font-size: 0.8em;
 				color: #666;
 				font-weight: 500;
@@ -83,13 +83,13 @@
 }
 
 // Loading and error states
-.ccp-loading {
+.safe-publish-loading {
 	text-align: center;
 	padding: 20px;
 	color: #666;
 }
 
-.ccp-error-message {
+.safe-publish-error-message {
 	color: #d63638;
 	background: #ffeaea;
 	border: 1px solid #f0c2c2;
@@ -98,7 +98,7 @@
 	margin: 16px 0;
 }
 
-.ccp-no-posts {
+.safe-publish-no-posts {
 	text-align: center;
 	padding: 40px 20px;
 	color: #666;
@@ -112,12 +112,12 @@
 	}
 }
 
-.ccp-block-diff-viewer {
+.safe-publish-block-diff-viewer {
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
 
-	.ccp-block-diff {
+	.safe-publish-block-diff {
 		border: 1px solid #e2e8f0;
 		background: #fff;
 		padding: 10px 12px;
@@ -136,7 +136,7 @@
 			display: flex;
 			gap: 10px;
 
-			.ccp-block-diff__col {
+			.safe-publish-block-diff__col {
 				flex: 1;
 				border: 1px solid #eef2f7;
 				padding: 8px;
@@ -164,49 +164,49 @@
 		}
 	}
 
-	.ccp-badge {
+	.safe-publish-badge {
 		text-transform: uppercase;
 		font-size: 10px;
 		padding: 2px 6px;
 		border-radius: 2em;
 		background: #e2e8f0;
 
-		&.ccp-added {
+		&.safe-publish-added {
 			background: #38a169;
 			color: #fff;
 		}
 
-		&.ccp-removed {
+		&.safe-publish-removed {
 			background: #e53e3e;
 			color: #fff;
 		}
 
-		&.ccp-modified {
+		&.safe-publish-modified {
 			background: #3182ce;
 			color: #fff;
 		}
 
-		&.ccp-unchanged {
+		&.safe-publish-unchanged {
 			background: #a0aec0;
 			color: #fff;
 		}
 	}
 
-	.ccp-inline-added {
+	.safe-publish-inline-added {
 		background: #c6f6d5;
 		border-radius: 2px;
 	}
 
-	.ccp-inline-removed {
+	.safe-publish-inline-removed {
 		background: #fed7d7;
 		text-decoration: line-through;
 		border-radius: 2px;
 	}
 
-	.ccp-block-diff__col img,
-	.ccp-block-diff__added img,
-	.ccp-block-diff__removed img,
-	.ccp-block-diff__unchanged img {
+	.safe-publish-block-diff__col img,
+	.safe-publish-block-diff__added img,
+	.safe-publish-block-diff__removed img,
+	.safe-publish-block-diff__unchanged img {
 		max-width: 100%;
 		height: auto;
 		display: block;

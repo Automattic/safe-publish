@@ -1,5 +1,5 @@
 /* Post Type Selector React Component Styles */
-.ccp-post-type-selector {
+.safe-publish-post-type-selector {
 	margin-bottom: 15px;
 	padding: 10px;
 	background: #f9f9f9;
@@ -7,20 +7,20 @@
 	border-radius: 4px;
 }
 
-.ccp-post-type-selector .components-base-control {
+.safe-publish-post-type-selector .components-base-control {
 	margin-bottom: 8px;
 }
 
-.ccp-post-type-selector .components-base-control__field {
+.safe-publish-post-type-selector .components-base-control__field {
 	margin-bottom: 0;
 }
 
-.ccp-post-type-selector .components-select-control__input {
+.safe-publish-post-type-selector .components-select-control__input {
 	min-width: 200px;
 }
 
 /* Admin Tools styling */
-.ccp-admin-tools .ccp-tool {
+.safe-publish-admin-tools .safe-publish-tool {
 	margin-bottom: 30px;
 	padding: 20px;
 	background: #fff;
@@ -29,25 +29,25 @@
 	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
 }
 
-.ccp-admin-tools .ccp-tool h3 {
+.safe-publish-admin-tools .safe-publish-tool h3 {
 	margin-top: 0;
 	margin-bottom: 10px;
 	font-size: 14px;
 	font-weight: 600;
 }
 
-.ccp-admin-tools .ccp-tool p {
+.safe-publish-admin-tools .safe-publish-tool p {
 	margin-bottom: 15px;
 	color: #646970;
 }
 
-.ccp-admin-tools .components-notice {
+.safe-publish-admin-tools .components-notice {
 	margin-top: 15px;
 	margin-bottom: 10px;
 }
 
 /* Preview posts results */
-.ccp-preview-posts {
+.safe-publish-preview-posts {
 	margin-top: 15px;
 	padding: 10px;
 	background: #f7f7f7;
@@ -57,7 +57,7 @@
 	overflow-y: auto;
 }
 
-.ccp-preview-post {
+.safe-publish-preview-post {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
@@ -65,17 +65,17 @@
 	border-bottom: 1px solid #eee;
 }
 
-.ccp-preview-post:last-child {
+.safe-publish-preview-post:last-child {
 	border-bottom: none;
 }
 
-.ccp-preview-post-title {
+.safe-publish-preview-post-title {
 	font-weight: 500;
 	color: #1e1e1e;
 	flex: 1;
 }
 
-.ccp-preview-post-link {
+.safe-publish-preview-post-link {
 	color: #0073aa;
 	text-decoration: none;
 	font-size: 12px;
@@ -85,14 +85,14 @@
 	transition: all 0.2s ease;
 }
 
-.ccp-preview-post-link:hover {
+.safe-publish-preview-post-link:hover {
 	background: #0073aa;
 	color: #fff;
 	text-decoration: none;
 }
 
 /* Loading states */
-.ccp-loading {
+.safe-publish-loading {
 	text-align: center;
 	padding: 20px;
 	color: #646970;
@@ -101,15 +101,15 @@
 /* Responsive design */
 @media (max-width: 782px) {
 
-	.ccp-post-type-selector {
+	.safe-publish-post-type-selector {
 		padding: 8px;
 	}
 
-	.ccp-admin-tools .ccp-tool {
+	.safe-publish-admin-tools .safe-publish-tool {
 		padding: 15px;
 	}
 
-	.ccp-preview-post {
+	.safe-publish-preview-post {
 		flex-direction: column;
 		align-items: flex-start;
 		gap: 8px;

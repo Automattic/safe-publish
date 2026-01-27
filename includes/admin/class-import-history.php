@@ -2,10 +2,10 @@
 /**
  * Import History class for tracking import sessions and rollbacks
  *
- * @package CCP
+ * @package Safe_Publish
  */
 
-namespace CCP\Admin;
+namespace Safe_Publish\Admin;
 
 use WP_Error;
 use WP_Query;
@@ -23,12 +23,12 @@ final class Import_History {
 	/**
 	 * Custom post type for import sessions.
 	 */
-	const SESSION_POST_TYPE = 'ccp_import_session';
+	const SESSION_POST_TYPE = 'safe_publish_import_session';
 
 	/**
 	 * Custom post type for import logs.
 	 */
-	const LOG_POST_TYPE = 'ccp_import_log';
+	const LOG_POST_TYPE = 'safe_publish_import_log';
 
 	/**
 	 * Initializes the import history functionality.
@@ -36,12 +36,12 @@ final class Import_History {
 	public function init(): void {
 		add_action( 'init', array( $this, 'register_post_types' ) );
 		add_action( 'admin_menu', array( $this, 'add_submenu_page' ) );
-		add_action( 'wp_ajax_ccp_get_import_sessions', array( $this, 'ajax_get_import_sessions' ) );
-		add_action( 'wp_ajax_ccp_get_session_details', array( $this, 'ajax_get_session_details' ) );
-		add_action( 'wp_ajax_ccp_rollback_session', array( $this, 'ajax_rollback_session' ) );
-		add_action( 'wp_ajax_ccp_rollback_item', array( $this, 'ajax_rollback_item' ) );
-		add_action( 'wp_ajax_ccp_get_post_diff', array( $this, 'ajax_get_post_diff' ) );
-		add_action( 'wp_ajax_ccp_delete_session', array( $this, 'ajax_delete_session' ) );
+		add_action( 'wp_ajax_safe_publish_get_import_sessions', array( $this, 'ajax_get_import_sessions' ) );
+		add_action( 'wp_ajax_safe_publish_get_session_details', array( $this, 'ajax_get_session_details' ) );
+		add_action( 'wp_ajax_safe_publish_rollback_session', array( $this, 'ajax_rollback_session' ) );
+		add_action( 'wp_ajax_safe_publish_rollback_item', array( $this, 'ajax_rollback_item' ) );
+		add_action( 'wp_ajax_safe_publish_get_post_diff', array( $this, 'ajax_get_post_diff' ) );
+		add_action( 'wp_ajax_safe_publish_delete_session', array( $this, 'ajax_delete_session' ) );
 	}
 
 	/**
@@ -53,8 +53,8 @@ final class Import_History {
 			self::SESSION_POST_TYPE,
 			array(
 				'labels'             => array(
-					'name'          => __( 'Import Sessions', 'ccp' ),
-					'singular_name' => __( 'Import Session', 'ccp' ),
+					'name'          => __( 'Import Sessions', 'safe-publish' ),
+					'singular_name' => __( 'Import Session', 'safe-publish' ),
 				),
 				'public'             => false,
 				'publicly_queryable' => false,
@@ -75,8 +75,8 @@ final class Import_History {
 			self::LOG_POST_TYPE,
 			array(
 				'labels'             => array(
-					'name'          => __( 'Import Logs', 'ccp' ),
-					'singular_name' => __( 'Import Log', 'ccp' ),
+					'name'          => __( 'Import Logs', 'safe-publish' ),
+					'singular_name' => __( 'Import Log', 'safe-publish' ),
 				),
 				'public'             => false,
 				'publicly_queryable' => false,
@@ -98,11 +98,11 @@ final class Import_History {
 	 */
 	public function add_submenu_page(): void {
 		add_submenu_page(
-			'compliant-content-publisher',
-			__( 'Import History', 'ccp' ),
-			__( 'Import History', 'ccp' ),
+			'safe-publish',
+			__( 'Import History', 'safe-publish' ),
+			__( 'Import History', 'safe-publish' ),
 			'manage_options',
-			'ccp-import-history',
+			'safe-publish-import-history',
 			array( $this, 'render_history_page' )
 		);
 	}
@@ -112,7 +112,7 @@ final class Import_History {
 	 */
 	public function render_history_page(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'ccp' ) );
+			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'safe-publish' ) );
 		}
 
 		// Enqueue necessary scripts and styles for React.
@@ -127,7 +127,7 @@ final class Import_History {
 
 		// Enqueue custom CSS.
 		$css_file = plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/import-history.css';
-		wp_enqueue_style( 'ccp-import-history', $css_file, array(), '1.0.0' );
+		wp_enqueue_style( 'safe-publish-import-history', $css_file, array(), '1.0.0' );
 
 		// Enqueue DataViews styles with VIP-safe versioning.
 		$style_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/style-index.css';
@@ -135,7 +135,7 @@ final class Import_History {
 
 		if ( file_exists( $style_file_path ) ) {
 			wp_enqueue_style(
-				'ccp-admin-dataviews-style',
+				'safe-publish-admin-dataviews-style',
 				$style_file_url,
 				array( 'wp-components' ),
 				filemtime( $style_file_path )
@@ -156,7 +156,7 @@ final class Import_History {
 		}
 
 		wp_enqueue_script(
-			'ccp-import-history',
+			'safe-publish-import-history',
 			$js_file,
 			$asset_data['dependencies'],
 			$asset_data['version'],
@@ -165,23 +165,23 @@ final class Import_History {
 
 		// Localize script data for React.
 		wp_localize_script(
-			'ccp-import-history',
-			'ccpAdminData',
+			'safe-publish-import-history',
+			'safePublishAdminData',
 			array(
 				'ajaxurl'   => admin_url( 'admin-ajax.php' ),
-				'nonce'     => wp_create_nonce( 'ccp_ajax_nonce' ),
+				'nonce'     => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 				'restNonce' => wp_create_nonce( 'wp_rest' ),
 			)
 		);
 
 		?>
-		<div class="wrap" id="ccp-import-history">
-			<h1><?php esc_html_e( 'Import History', 'ccp' ); ?></h1>
+		<div class="wrap" id="safe-publish-import-history">
+			<h1><?php esc_html_e( 'Import History', 'safe-publish' ); ?></h1>
 
 			<!-- React component will be rendered here -->
-			<div id="ccp-import-history-container">
-				<div class="ccp-loading">
-					<p><?php esc_html_e( 'Loading import history…', 'ccp' ); ?></p>
+			<div id="safe-publish-import-history-container">
+				<div class="safe-publish-loading">
+					<p><?php esc_html_e( 'Loading import history…', 'safe-publish' ); ?></p>
 				</div>
 			</div>
 		</div>
@@ -201,7 +201,7 @@ final class Import_History {
 				'post_type'   => self::SESSION_POST_TYPE,
 				'post_title'  => sprintf(
 					/* translators: %s: timestamp of the import session */
-					__( 'Import Session - %s', 'ccp' ),
+					__( 'Import Session - %s', 'safe-publish' ),
 					current_time( 'Y-m-d H:i:s' )
 				),
 				'post_status' => 'publish',
@@ -323,17 +323,17 @@ final class Import_History {
 			'diff_date'   => current_time( 'mysql' ),
 		);
 
-		update_post_meta( $post_id, 'ccp_content_history', $diff_data );
+		update_post_meta( $post_id, 'safe_publish_content_history', $diff_data );
 	}
 
 	/**
 	 * Handles AJAX request for getting import sessions.
 	 */
 	public function ajax_get_import_sessions(): void {
-		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Insufficient permissions', 'ccp' ) );
+			wp_send_json_error( __( 'Insufficient permissions', 'safe-publish' ) );
 		}
 
 		$sessions = get_posts(
@@ -359,10 +359,10 @@ final class Import_History {
 			$source_url = get_post_meta( $session->ID, 'source_url', true );
 
 			$status_labels = array(
-				'in_progress' => __( 'In Progress', 'ccp' ),
-				'completed'   => __( 'Completed', 'ccp' ),
-				'failed'      => __( 'Failed', 'ccp' ),
-				'rolled_back' => __( 'Rolled Back', 'ccp' ),
+				'in_progress' => __( 'In Progress', 'safe-publish' ),
+				'completed'   => __( 'Completed', 'safe-publish' ),
+				'failed'      => __( 'Failed', 'safe-publish' ),
+				'rolled_back' => __( 'Rolled Back', 'safe-publish' ),
 			);
 
 			$formatted_sessions[] = array(
@@ -387,22 +387,22 @@ final class Import_History {
 	 * Handles AJAX request for getting session details.
 	 */
 	public function ajax_get_session_details(): void {
-		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Insufficient permissions', 'ccp' ) );
+			wp_send_json_error( __( 'Insufficient permissions', 'safe-publish' ) );
 		}
 
 		$session_id = absint( $_POST['session_id'] ?? 0 );
 
 		if ( ! $session_id ) {
-			wp_send_json_error( __( 'Invalid session ID', 'ccp' ) );
+			wp_send_json_error( __( 'Invalid session ID', 'safe-publish' ) );
 		}
 
 		$session = get_post( $session_id );
 
 		if ( ! $session || self::SESSION_POST_TYPE !== $session->post_type ) {
-			wp_send_json_error( __( 'Session not found', 'ccp' ) );
+			wp_send_json_error( __( 'Session not found', 'safe-publish' ) );
 		}
 
 		// Get session data.
@@ -414,10 +414,10 @@ final class Import_History {
 		$source_url = get_post_meta( $session_id, 'source_url', true );
 
 		$status_labels = array(
-			'in_progress' => __( 'In Progress', 'ccp' ),
-			'completed'   => __( 'Completed', 'ccp' ),
-			'failed'      => __( 'Failed', 'ccp' ),
-			'rolled_back' => __( 'Rolled Back', 'ccp' ),
+			'in_progress' => __( 'In Progress', 'safe-publish' ),
+			'completed'   => __( 'Completed', 'safe-publish' ),
+			'failed'      => __( 'Failed', 'safe-publish' ),
+			'rolled_back' => __( 'Rolled Back', 'safe-publish' ),
 		);
 
 		$session_data = array(
@@ -458,9 +458,9 @@ final class Import_History {
 				$error    = $log_data['error_message'] ?? null;
 
 				$status_labels = array(
-					'success' => __( 'Success', 'ccp' ),
-					'updated' => __( 'Updated', 'ccp' ),
-					'error'   => __( 'Error', 'ccp' ),
+					'success' => __( 'Success', 'safe-publish' ),
+					'updated' => __( 'Updated', 'safe-publish' ),
+					'error'   => __( 'Error', 'safe-publish' ),
 				);
 
 				$changes              = get_post_meta( $log->ID, 'content_changes', true );
@@ -514,22 +514,22 @@ final class Import_History {
 	 * Handles AJAX request for rolling back a session.
 	 */
 	public function ajax_rollback_session(): void {
-		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Insufficient permissions', 'ccp' ) );
+			wp_send_json_error( __( 'Insufficient permissions', 'safe-publish' ) );
 		}
 
 		$session_id = absint( $_POST['session_id'] ?? 0 );
 
 		if ( ! $session_id ) {
-			wp_send_json_error( __( 'Invalid session ID', 'ccp' ) );
+			wp_send_json_error( __( 'Invalid session ID', 'safe-publish' ) );
 		}
 
 		$session = get_post( $session_id );
 
 		if ( ! $session || self::SESSION_POST_TYPE !== $session->post_type ) {
-			wp_send_json_error( __( 'Session not found', 'ccp' ) );
+			wp_send_json_error( __( 'Session not found', 'safe-publish' ) );
 		}
 
 		// Get all successful imports from this session.
@@ -630,7 +630,7 @@ final class Import_History {
 				'restored_count' => $restored_count,
 				'message'        => sprintf(
 					/* translators: 1: number of posts deleted, 2: number of posts restored */
-					__( '%1$d posts deleted and %2$d posts restored successfully.', 'ccp' ),
+					__( '%1$d posts deleted and %2$d posts restored successfully.', 'safe-publish' ),
 					$deleted_count,
 					$restored_count
 				),
@@ -642,22 +642,22 @@ final class Import_History {
 	 * Handles AJAX request for rolling back a single item.
 	 */
 	public function ajax_rollback_item(): void {
-		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Insufficient permissions', 'ccp' ) );
+			wp_send_json_error( __( 'Insufficient permissions', 'safe-publish' ) );
 		}
 
 		$log_id = absint( $_POST['log_id'] ?? 0 );
 
 		if ( ! $log_id ) {
-			wp_send_json_error( __( 'Invalid log ID', 'ccp' ) );
+			wp_send_json_error( __( 'Invalid log ID', 'safe-publish' ) );
 		}
 
 		$log = get_post( $log_id );
 
 		if ( ! $log || self::LOG_POST_TYPE !== $log->post_type ) {
-			wp_send_json_error( __( 'Import log not found', 'ccp' ) );
+			wp_send_json_error( __( 'Import log not found', 'safe-publish' ) );
 		}
 
 		$post_id = get_post_meta( $log_id, 'post_id', true );
@@ -665,13 +665,13 @@ final class Import_History {
 		$changes = get_post_meta( $log_id, 'content_changes', true );
 
 		if ( ! $post_id ) {
-			wp_send_json_error( __( 'No post ID found for this log entry', 'ccp' ) );
+			wp_send_json_error( __( 'No post ID found for this log entry', 'safe-publish' ) );
 		}
 
 		// Check if the post still exists.
 		$post = get_post( $post_id );
 		if ( ! $post ) {
-			wp_send_json_error( __( 'The post no longer exists', 'ccp' ) );
+			wp_send_json_error( __( 'The post no longer exists', 'safe-publish' ) );
 		}
 
 		$result = array(
@@ -684,9 +684,9 @@ final class Import_History {
 			// This was a newly created post - delete it.
 			if ( wp_delete_post( $post_id, true ) ) {
 				$result['action']  = 'deleted';
-				$result['message'] = __( 'Post successfully deleted', 'ccp' );
+				$result['message'] = __( 'Post successfully deleted', 'safe-publish' );
 			} else {
-				wp_send_json_error( __( 'Failed to delete the post', 'ccp' ) );
+				wp_send_json_error( __( 'Failed to delete the post', 'safe-publish' ) );
 			}
 		} elseif ( 'updated' === $status && ! empty( $changes ) && isset( $changes['previous_content'] ) ) {
 			// This was an updated post - restore previous content.
@@ -713,7 +713,7 @@ final class Import_History {
 			$updated = wp_update_post( $restore_data, true );
 
 			if ( is_wp_error( $updated ) ) {
-				wp_send_json_error( __( 'Failed to restore post: ', 'ccp' ) . $updated->get_error_message() );
+				wp_send_json_error( __( 'Failed to restore post: ', 'safe-publish' ) . $updated->get_error_message() );
 			}
 
 			// Restore previous meta data if available.
@@ -733,17 +733,17 @@ final class Import_History {
 			}
 
 			$result['action']  = 'restored';
-			$result['message'] = __( 'Post successfully restored to previous version', 'ccp' );
+			$result['message'] = __( 'Post successfully restored to previous version', 'safe-publish' );
 		} elseif ( 'updated' === $status ) {
 			// Updated post but no previous content stored - delete it.
 			if ( wp_delete_post( $post_id, true ) ) {
 				$result['action']  = 'deleted';
-				$result['message'] = __( 'Post deleted (no previous content available for restoration)', 'ccp' );
+				$result['message'] = __( 'Post deleted (no previous content available for restoration)', 'safe-publish' );
 			} else {
-				wp_send_json_error( __( 'Failed to delete the post', 'ccp' ) );
+				wp_send_json_error( __( 'Failed to delete the post', 'safe-publish' ) );
 			}
 		} else {
-			wp_send_json_error( __( 'Cannot rollback this item: unsupported status', 'ccp' ) );
+			wp_send_json_error( __( 'Cannot rollback this item: unsupported status', 'safe-publish' ) );
 		}
 
 		// Mark this specific log entry as rolled back.
@@ -758,22 +758,22 @@ final class Import_History {
 	 * Handles AJAX request for getting post diff.
 	 */
 	public function ajax_get_post_diff(): void {
-		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Insufficient permissions', 'ccp' ) );
+			wp_send_json_error( __( 'Insufficient permissions', 'safe-publish' ) );
 		}
 
 		$post_id = absint( $_POST['post_id'] ?? 0 );
 
 		if ( ! $post_id ) {
-			wp_send_json_error( __( 'Invalid post ID', 'ccp' ) );
+			wp_send_json_error( __( 'Invalid post ID', 'safe-publish' ) );
 		}
 
 		$post = get_post( $post_id );
 
 		if ( ! $post ) {
-			wp_send_json_error( __( 'Post not found', 'ccp' ) );
+			wp_send_json_error( __( 'Post not found', 'safe-publish' ) );
 		}
 
 		// Find the import log entry for this post to get the previous content.
@@ -791,7 +791,7 @@ final class Import_History {
 		);
 
 		if ( ! $log_query->have_posts() ) {
-			wp_send_json_error( __( 'No import history found for this post', 'ccp' ) );
+			wp_send_json_error( __( 'No import history found for this post', 'safe-publish' ) );
 		}
 
 		$log_post = $log_query->posts[0];
@@ -815,19 +815,19 @@ final class Import_History {
 
 		// If no previous content available, show a message instead of empty diff.
 		if ( empty( $old_content ) && empty( $old_title ) && empty( $old_excerpt ) ) {
-			$diff_html  = '<div class="ccp-no-diff-message" style="padding: 20px; text-align: center; background: #f9f9f9; border-radius: 4px;">';
-			$diff_html .= '<h4>' . __( 'No Previous Content Available', 'ccp' ) . '</h4>';
-			$diff_html .= '<p>' . __( 'This import was processed before content change tracking was enabled. Only the current content is available.', 'ccp' ) . '</p>';
+			$diff_html  = '<div class="safe-publish-no-diff-message" style="padding: 20px; text-align: center; background: #f9f9f9; border-radius: 4px;">';
+			$diff_html .= '<h4>' . __( 'No Previous Content Available', 'safe-publish' ) . '</h4>';
+			$diff_html .= '<p>' . __( 'This import was processed before content change tracking was enabled. Only the current content is available.', 'safe-publish' ) . '</p>';
 			$diff_html .= '<div style="background: #fff; padding: 15px; border-radius: 4px; margin-top: 15px; text-align: left;">';
-			$diff_html .= '<h5>' . __( 'Current Content:', 'ccp' ) . '</h5>';
+			$diff_html .= '<h5>' . __( 'Current Content:', 'safe-publish' ) . '</h5>';
 			if ( $new_title ) {
-				$diff_html .= '<p><strong>' . __( 'Title:', 'ccp' ) . '</strong> ' . esc_html( $new_title ) . '</p>';
+				$diff_html .= '<p><strong>' . __( 'Title:', 'safe-publish' ) . '</strong> ' . esc_html( $new_title ) . '</p>';
 			}
 			if ( $new_excerpt ) {
-				$diff_html .= '<p><strong>' . __( 'Excerpt:', 'ccp' ) . '</strong></p>';
+				$diff_html .= '<p><strong>' . __( 'Excerpt:', 'safe-publish' ) . '</strong></p>';
 				$diff_html .= '<div style="background: #f8f8f8; padding: 10px; border-radius: 3px; margin: 5px 0;"><pre style="white-space: pre-wrap; margin: 0;">' . esc_html( $new_excerpt ) . '</pre></div>';
 			}
-			$diff_html .= '<p><strong>' . __( 'Content:', 'ccp' ) . '</strong></p>';
+			$diff_html .= '<p><strong>' . __( 'Content:', 'safe-publish' ) . '</strong></p>';
 			$diff_html .= '<div style="background: #f8f8f8; padding: 10px; border-radius: 3px; max-height: 300px; overflow-y: auto;"><pre style="white-space: pre-wrap; margin: 0;">' . esc_html( $new_content ) . '</pre></div>';
 			$diff_html .= '</div>';
 			$diff_html .= '</div>';
@@ -862,19 +862,19 @@ final class Import_History {
 	 * @return string HTML diff.
 	 */
 	private function generate_comprehensive_diff_html( $old_title, $new_title, $old_excerpt, $new_excerpt, $old_content, $new_content ): string {
-		$diff_html = '<div class="ccp-diff-container">';
+		$diff_html = '<div class="safe-publish-diff-container">';
 
 		// Title diff.
 		if ( $old_title !== $new_title ) {
-			$diff_html .= '<div class="ccp-diff-section">';
-			$diff_html .= '<h4>' . __( 'Title Changes', 'ccp' ) . '</h4>';
-			$diff_html .= '<div class="ccp-diff-comparison">';
-			$diff_html .= '<div class="ccp-diff-before" style="background: #f8d7da; padding: 10px; margin-bottom: 10px; border-radius: 4px;">';
-			$diff_html .= '<strong>' . __( 'Before:', 'ccp' ) . '</strong><br>';
+			$diff_html .= '<div class="safe-publish-diff-section">';
+			$diff_html .= '<h4>' . __( 'Title Changes', 'safe-publish' ) . '</h4>';
+			$diff_html .= '<div class="safe-publish-diff-comparison">';
+			$diff_html .= '<div class="safe-publish-diff-before" style="background: #f8d7da; padding: 10px; margin-bottom: 10px; border-radius: 4px;">';
+			$diff_html .= '<strong>' . __( 'Before:', 'safe-publish' ) . '</strong><br>';
 			$diff_html .= esc_html( $old_title );
 			$diff_html .= '</div>';
-			$diff_html .= '<div class="ccp-diff-after" style="background: #d4edda; padding: 10px; border-radius: 4px;">';
-			$diff_html .= '<strong>' . __( 'After:', 'ccp' ) . '</strong><br>';
+			$diff_html .= '<div class="safe-publish-diff-after" style="background: #d4edda; padding: 10px; border-radius: 4px;">';
+			$diff_html .= '<strong>' . __( 'After:', 'safe-publish' ) . '</strong><br>';
 			$diff_html .= esc_html( $new_title );
 			$diff_html .= '</div>';
 			$diff_html .= '</div>';
@@ -883,15 +883,15 @@ final class Import_History {
 
 		// Excerpt diff.
 		if ( $old_excerpt !== $new_excerpt ) {
-			$diff_html .= '<div class="ccp-diff-section" style="margin-top: 20px;">';
-			$diff_html .= '<h4>' . __( 'Excerpt Changes', 'ccp' ) . '</h4>';
-			$diff_html .= '<div class="ccp-diff-comparison">';
-			$diff_html .= '<div class="ccp-diff-before" style="background: #f8d7da; padding: 10px; margin-bottom: 10px; border-radius: 4px;">';
-			$diff_html .= '<strong>' . __( 'Before:', 'ccp' ) . '</strong><br>';
+			$diff_html .= '<div class="safe-publish-diff-section" style="margin-top: 20px;">';
+			$diff_html .= '<h4>' . __( 'Excerpt Changes', 'safe-publish' ) . '</h4>';
+			$diff_html .= '<div class="safe-publish-diff-comparison">';
+			$diff_html .= '<div class="safe-publish-diff-before" style="background: #f8d7da; padding: 10px; margin-bottom: 10px; border-radius: 4px;">';
+			$diff_html .= '<strong>' . __( 'Before:', 'safe-publish' ) . '</strong><br>';
 			$diff_html .= '<pre>' . esc_html( $old_excerpt ) . '</pre>';
 			$diff_html .= '</div>';
-			$diff_html .= '<div class="ccp-diff-after" style="background: #d4edda; padding: 10px; border-radius: 4px;">';
-			$diff_html .= '<strong>' . __( 'After:', 'ccp' ) . '</strong><br>';
+			$diff_html .= '<div class="safe-publish-diff-after" style="background: #d4edda; padding: 10px; border-radius: 4px;">';
+			$diff_html .= '<strong>' . __( 'After:', 'safe-publish' ) . '</strong><br>';
 			$diff_html .= '<pre>' . esc_html( $new_excerpt ) . '</pre>';
 			$diff_html .= '</div>';
 			$diff_html .= '</div>';
@@ -899,15 +899,15 @@ final class Import_History {
 		}
 
 		// Content diff.
-		$diff_html .= '<div class="ccp-diff-section" style="margin-top: 20px;">';
-		$diff_html .= '<h4>' . __( 'Content Changes', 'ccp' ) . '</h4>';
-		$diff_html .= '<div class="ccp-diff-comparison">';
-		$diff_html .= '<div class="ccp-diff-before" style="background: #f8d7da; padding: 10px; margin-bottom: 10px; border-radius: 4px;">';
-		$diff_html .= '<strong>' . __( 'Before (Original Content):', 'ccp' ) . '</strong><br>';
+		$diff_html .= '<div class="safe-publish-diff-section" style="margin-top: 20px;">';
+		$diff_html .= '<h4>' . __( 'Content Changes', 'safe-publish' ) . '</h4>';
+		$diff_html .= '<div class="safe-publish-diff-comparison">';
+		$diff_html .= '<div class="safe-publish-diff-before" style="background: #f8d7da; padding: 10px; margin-bottom: 10px; border-radius: 4px;">';
+		$diff_html .= '<strong>' . __( 'Before (Original Content):', 'safe-publish' ) . '</strong><br>';
 		$diff_html .= '<pre style="white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto;">' . esc_html( $old_content ) . '</pre>';
 		$diff_html .= '</div>';
-		$diff_html .= '<div class="ccp-diff-after" style="background: #d4edda; padding: 10px; border-radius: 4px;">';
-		$diff_html .= '<strong>' . __( 'After (Imported Content):', 'ccp' ) . '</strong><br>';
+		$diff_html .= '<div class="safe-publish-diff-after" style="background: #d4edda; padding: 10px; border-radius: 4px;">';
+		$diff_html .= '<strong>' . __( 'After (Imported Content):', 'safe-publish' ) . '</strong><br>';
 		$diff_html .= '<pre style="white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto;">' . esc_html( $new_content ) . '</pre>';
 		$diff_html .= '</div>';
 		$diff_html .= '</div>';
@@ -922,22 +922,22 @@ final class Import_History {
 	 * Handles AJAX request for deleting a session.
 	 */
 	public function ajax_delete_session(): void {
-		check_ajax_referer( 'ccp_ajax_nonce', 'nonce' );
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Insufficient permissions', 'ccp' ) );
+			wp_send_json_error( __( 'Insufficient permissions', 'safe-publish' ) );
 		}
 
 		$session_id = absint( $_POST['session_id'] ?? 0 );
 
 		if ( ! $session_id ) {
-			wp_send_json_error( __( 'Invalid session ID', 'ccp' ) );
+			wp_send_json_error( __( 'Invalid session ID', 'safe-publish' ) );
 		}
 
 		$session = get_post( $session_id );
 
 		if ( ! $session || self::SESSION_POST_TYPE !== $session->post_type ) {
-			wp_send_json_error( __( 'Session not found', 'ccp' ) );
+			wp_send_json_error( __( 'Session not found', 'safe-publish' ) );
 		}
 
 		// Get all logs associated with this session.
@@ -967,14 +967,14 @@ final class Import_History {
 				array(
 					'message'      => sprintf(
 						/* translators: %d: number of associated log entries that were removed */
-						__( 'Session deleted successfully. %d associated log entries were also removed.', 'ccp' ),
+						__( 'Session deleted successfully. %d associated log entries were also removed.', 'safe-publish' ),
 						$deleted_logs_count
 					),
 					'deleted_logs' => $deleted_logs_count,
 				)
 			);
 		} else {
-			wp_send_json_error( __( 'Failed to delete session', 'ccp' ) );
+			wp_send_json_error( __( 'Failed to delete session', 'safe-publish' ) );
 		}
 	}
 }

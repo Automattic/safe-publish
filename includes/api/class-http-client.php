@@ -2,15 +2,15 @@
 /**
  * HTTP Client service for making external requests
  *
- * @package CCP
+ * @package Safe_Publish
  */
 
 declare(strict_types = 1);
 
-namespace CCP\API;
+namespace Safe_Publish\API;
 
-use CCP\Auth\VIP_Safe_Auth;
-use CCP\Utils\Environment;
+use Safe_Publish\Auth\VIP_Safe_Auth;
+use Safe_Publish\Utils\Environment;
 use WP_Error;
 
 // Prevent direct access.
@@ -36,7 +36,7 @@ final class HTTP_Client {
 	 */
 	public function make_request( string $url, array $auth_credentials = array(), array $additional_args = array() ): array|WP_Error {
 		// VIP-optimized timeout (max 10 seconds recommended for VIP environments).
-		$timeout = apply_filters( 'ccp_request_timeout', 10 );
+		$timeout = apply_filters( 'safe_publish_request_timeout', 10 );
 
 		// Determine SSL verification based on environment.
 		$sslverify = $this->should_verify_ssl( $url );
@@ -102,14 +102,14 @@ final class HTTP_Client {
 		 * @param array  $request_args Request arguments.
 		 * @param string $url          Request URL.
 		 */
-		$request_args = apply_filters( 'ccp_request_args', $request_args, $url );
+		$request_args = apply_filters( 'safe_publish_request_args', $request_args, $url );
 
 		$response = $this->safe_remote_get( $url, $request_args );
 
 		if ( is_wp_error( $response ) ) {
 			return new WP_Error(
 				'request_failed',
-				__( 'Failed to fetch data from external site.', 'ccp' ) . ' ' . $response->get_error_message()
+				__( 'Failed to fetch data from external site.', 'safe-publish' ) . ' ' . $response->get_error_message()
 			);
 		}
 
@@ -119,7 +119,7 @@ final class HTTP_Client {
 				'http_error',
 				sprintf(
 					/* translators: %d: HTTP response code */
-					__( 'External site returned HTTP error %d.', 'ccp' ),
+					__( 'External site returned HTTP error %d.', 'safe-publish' ),
 					$response_code
 				)
 			);
@@ -134,11 +134,11 @@ final class HTTP_Client {
 	 * @return string User agent string.
 	 */
 	public function get_user_agent(): string {
-		$plugin_version = defined( 'CCP_VERSION' ) ? CCP_VERSION : '1.1.0';
+		$plugin_version = defined( 'SAFE_PUBLISH_VERSION' ) ? SAFE_PUBLISH_VERSION : '1.1.0';
 		$site_url       = get_bloginfo( 'url' );
 
 		return sprintf(
-			'Compliant Content Publisher/%s; %s',
+			'Safe Publish/%s; %s',
 			$plugin_version,
 			$site_url
 		);
@@ -173,7 +173,7 @@ final class HTTP_Client {
 		}
 
 		// Try VIP-safe authentication first.
-		$shared_secret = get_option( 'ccp_shared_secret', '' );
+		$shared_secret = get_option( 'safe_publish_shared_secret', '' );
 
 		if ( ! empty( $shared_secret ) ) {
 			return array(
@@ -183,8 +183,8 @@ final class HTTP_Client {
 
 		// Fallback to Basic auth in development environments only.
 		if ( $this->is_development_environment() ) {
-			$username = get_option( 'ccp_username', '' );
-			$password = get_option( 'ccp_password', '' );
+			$username = get_option( 'safe_publish_username', '' );
+			$password = get_option( 'safe_publish_password', '' );
 
 			if ( ! empty( $username ) && ! empty( $password ) ) {
 				return array(
@@ -238,7 +238,7 @@ final class HTTP_Client {
 				( function_exists( 'str_ends_with' ) && str_ends_with( $host, $dev_domain ) ) ||
 				( ! function_exists( 'str_ends_with' ) && substr( $host, -strlen( $dev_domain ) ) === $dev_domain ) ) {
 				// Allow filtering for specific development needs.
-				return apply_filters( 'ccp_dev_ssl_verify', false, $url );
+				return apply_filters( 'safe_publish_dev_ssl_verify', false, $url );
 			}
 		}
 

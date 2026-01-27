@@ -106,7 +106,7 @@ export function useDiffPreview( {
 				setRenderedDiffHtml( result.renderedContentDiffHtml ?? null );
 				setBlockDiffs( result.blockDiffs || [] );
 			} else {
-				setError( __( 'No diff available.', 'ccp' ) );
+				setError( __( 'No diff available.', 'safe-publish' ) );
 			}
 
 			if ( mounted ) {

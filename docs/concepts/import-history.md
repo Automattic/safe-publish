@@ -1,6 +1,6 @@
 # Import History
 
-The Import History feature provides complete tracking and auditing of all content imports performed through Compliant Content Publisher.
+The Import History feature provides complete tracking and auditing of all content imports performed through Safe Publish.
 
 ## Overview
 
@@ -13,7 +13,7 @@ Every import action—whether successful or failed—is logged to the database f
 
 ## Accessing Import History
 
-1. Navigate to **CC Publisher** in WordPress admin
+1. Navigate to **Safe Publish** in WordPress admin
 2. Click the **Import History** tab
 3. View the table of all import records
 
@@ -174,7 +174,7 @@ Add this to your `wp-config.php`:
 
 ```php
 // Delete import history older than 90 days
-define( 'CCP_HISTORY_RETENTION_DAYS', 90 );
+define( 'SAFE_PUBLISH_HISTORY_RETENTION_DAYS', 90 );
 ```
 
 ### Manual Cleanup
@@ -189,7 +189,7 @@ Delete old records using date filter:
 
 Import history is stored in a custom database table:
 
-- Table name: `{$wpdb->prefix}ccp_import_history`
+- Table name: `{$wpdb->prefix}safe_publish_import_history`
 - Indexes on: `user_id`, `created_at`, `status`
 - Average size: ~500 bytes per record
 
@@ -243,8 +243,8 @@ Import history complements WordPress' built-in logging:
 
 If using an activity log plugin (e.g., WP Activity Log), imports also appear there with actions like:
 
-- "Draft post created via CCP import"
-- "Images uploaded via CCP import"
+- "Draft post created via Safe Publish import"
+- "Images uploaded via Safe Publish import"
 
 ### Error Logs
 
@@ -257,7 +257,7 @@ Server PHP errors related to imports are logged in:
 
 For comprehensive troubleshooting:
 
-1. Check CCP Import History for high-level status
+1. Check Safe Publish Import History for high-level status
 2. Check Activity Log for detailed WordPress actions
 3. Check PHP error logs for server-level issues
 
@@ -267,7 +267,7 @@ Developers can access import history programmatically:
 
 ```php
 // Get import history records
-$history = new \CCP\Admin\Import_History();
+$history = new \Safe_Publish\Admin\Import_History();
 $records = $history->get_records( [
     'user_id' => get_current_user_id(),
     'status' => 'success',
@@ -309,9 +309,9 @@ Include import history in data export responses:
 
 ```php
 add_filter( 'wp_privacy_personal_data_exporters', function( $exporters ) {
-    $exporters['ccp-import-history'] = [
-        'exporter_friendly_name' => 'CCP Import History',
-        'callback' => 'ccp_export_user_import_history',
+    $exporters['safe-publish-import-history'] = [
+        'exporter_friendly_name' => 'Safe Publish Import History',
+        'callback' => 'safe_publish_export_user_import_history',
     ];
     return $exporters;
 } );

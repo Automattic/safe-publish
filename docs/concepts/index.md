@@ -1,10 +1,10 @@
 # Core Concepts
 
-Compliant Content Publisher (CCP) is a WordPress plugin that allows editors to promote content from non-production environments to production. This guide will help you understand the core concepts of the plugin and how they work.
+Safe Publish is a WordPress plugin that allows editors to promote content from non-production environments to production. This guide will help you understand the core concepts of the plugin and how they work.
 
-## What is Compliant Content Publisher?
+## What is Safe Publish?
 
-**Compliant Content Publisher** is a plugin that enables controlled content migration from non-production WordPress environments (staging, development) to production environments. It provides a secure, user-friendly interface for:
+**Safe Publish** is a plugin that enables controlled content migration from non-production WordPress environments (staging, development) to production environments. It provides a secure, user-friendly interface for:
 
 - Browsing content from external WordPress sites via the WordPress REST API
 - Previewing and comparing content before importing
@@ -17,7 +17,7 @@ The plugin is designed with WordPress VIP best practices in mind, ensuring secur
 
 ### Authentication
 
-CCP supports two authentication methods for secure communication between sites:
+Safe Publish supports two authentication methods for secure communication between sites:
 
 - **[Shared Secret](authentication.md)** (Recommended): Uses a secure token defined in `wp-config.php` on both sites
 - **Basic Authentication** (Development only): Username/password authentication for local development
@@ -26,7 +26,7 @@ See the [Authentication guide](authentication.md) for detailed setup instruction
 
 ### Content Validation
 
-Before importing, CCP validates content to ensure data integrity:
+Before importing, Safe Publish validates content to ensure data integrity:
 
 - **URL validation**: Ensures the external site is a valid, accessible WordPress installation
 - **Content structure validation**: Verifies post data structure and required fields
@@ -61,15 +61,15 @@ View and manage your import history in the [Import History](import-history.md) t
 
 ## Technical concepts
 
-If you want to understand the internals of compliant-content-publisher so that you can write code to extend its functionality, head over to the [extending guide](../extending/index.md).
+If you want to understand the internals of Safe Publish so that you can write code to extend its functionality, head over to the [extending guide](../extending/index.md).
 
 ## Supported use cases
 
-Like WordPress, compliant-content-publisher is flexible. It can be used to enable advanced integrations with external data.
+Like WordPress, Safe Publish is flexible. It can be used to enable advanced integrations with external data.
 
-Below, you'll find specific use cases where compliant-content-publisher shines. We are working to expand these use cases, but before you start, consider if compliant-content-publisher is the right tool for the job.
+Below, you'll find specific use cases where Safe Publish shines. We are working to expand these use cases, but before you start, consider if Safe Publish is the right tool for the job.
 
-### compliant-content-publisher is a good fit if:
+### Safe Publish is a good fit if:
 
 - Your remote data represents entities with a consistent schema.
   - **Example:** Product data representing items of clothing with defined attributes like “Name,” “Price,” “Color,” “Size,” etc.
@@ -82,7 +82,7 @@ Below, you'll find specific use cases where compliant-content-publisher shines. 
 - Your data is denormalized.
   - **Example:** A row from a Google Sheet with no references to external entities.
 
-### compliant-content-publisher may not be a good fit if:
+### Safe Publish may not be a good fit if:
 
 - Your remote data is schema-less, or the schema changes over time.
   - Queries for remote data must define a schema for their return data. Schema changes result in broken blocks.
@@ -91,10 +91,10 @@ Below, you'll find specific use cases where compliant-content-publisher shines. 
 - Your data is normalized (and cannot be denormalized automatically by your API).
   - Some APIs can denormalize data by automatically “inflating” referenced records for you. For example, data representing an item of clothing might reference a color by ID instead of a renderable string like “forest green.” If your API does not denormalize this relationship automatically, you will need to write custom code to perform additional queries and stitch the responses together.
   - This can lead to a large number of API requests that your API may not tolerate. Airtable’s API, for example, imposes a rate limit of five requests per second, making multiple calls impractical.
-- You have multiple remote data sources that require interaction with each other. Or, you want to implement a complex content architecture using compliant-content-publisher instead of leveraging WordPress custom post types and/or taxonomies.
+- You have multiple remote data sources that require interaction with each other. Or, you want to implement a complex content architecture using safe-publish instead of leveraging WordPress custom post types and/or taxonomies.
   - These two challenges are directly related to the issues with normalized data. If you have data sources that relate to one another, you must write custom code to query missing data and stitch them together.
-  - Judging complexity is difficult, but implementing large applications using compliant-content-publisher is not advisable.
+  - Judging complexity is difficult, but implementing large applications using safe-publish is not advisable.
 - Your use case requires complex filtering of remote data or your API uses non-standard pagination.
   - Our UI components for filtering and pagination are still under development.
 
-Over time, compliant-content-publisher will grow and improve and these guidelines will change.
+Over time, Safe Publish will grow and improve and these guidelines will change.

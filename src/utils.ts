@@ -1,10 +1,10 @@
 /**
- * Utility functions for the Compliant Content Publisher plugin.
+ * Utility functions for the Safe Publish plugin.
  *
  * Provides helper functions for date formatting, post validation, searching,
  * sorting, pagination, and URL manipulation.
  *
- * @file This file defines utility functions for the CCP plugin.
+ * @file This file defines utility functions for the Safe Publish plugin.
  */
 
 import { __ } from '@wordpress/i18n';
@@ -24,7 +24,7 @@ import type { Post, JsonValue } from './types';
  */
 export function getErrorMessage(
 	response: { success: false; data?: JsonValue; error?: string },
-	fallback: string = __( 'An unknown error occurred', 'ccp' )
+	fallback: string = __( 'An unknown error occurred', 'safe-publish' )
 ): string {
 	if ( typeof response.error === 'string' && response.error ) {
 		return response.error;
@@ -67,7 +67,7 @@ export function getErrorMessage(
 export function formatDate( dateString: string ): string {
 	const date = new Date( dateString );
 	if ( isNaN( date.getTime() ) ) {
-		return __( 'Invalid Date', 'ccp' );
+		return __( 'Invalid Date', 'safe-publish' );
 	}
 
 	return date.toLocaleDateString();
@@ -83,7 +83,7 @@ export function formatDate( dateString: string ): string {
 export function formatDateTime( dateString: string ): string {
 	const date = new Date( dateString );
 	if ( isNaN( date.getTime() ) ) {
-		return __( 'Invalid Date', 'ccp' );
+		return __( 'Invalid Date', 'safe-publish' );
 	}
 
 	return date.toLocaleString();

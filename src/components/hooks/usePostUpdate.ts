@@ -113,7 +113,7 @@ export function usePostUpdate( {
 			maybeMeta && typeof maybeMeta === 'object'
 				? Object.fromEntries(
 						Object.entries( maybeMeta ).filter(
-							( [ key ] ) => ! key.startsWith( 'ccp_' ) && ! key.startsWith( '_' )
+							( [ key ] ) => ! key.startsWith( 'safe_publish_' ) && ! key.startsWith( '_' )
 						)
 				  )
 				: undefined;
@@ -121,7 +121,7 @@ export function usePostUpdate( {
 		const result = await updatePostContent(
 			localPostId,
 			content,
-			window?.ccpAdminData?.restNonce,
+			window?.safePublishAdminData?.restNonce,
 			metaToSend,
 			maybeTerms,
 			maybeTitle,
@@ -130,9 +130,9 @@ export function usePostUpdate( {
 		);
 
 		if ( result.success ) {
-			setUpdateSuccess( __( 'Post updated successfully.', 'ccp' ) );
+			setUpdateSuccess( __( 'Post updated successfully.', 'safe-publish' ) );
 		} else {
-			setUpdateError( getErrorMessage( result, __( 'Failed to update post.', 'ccp' ) ) );
+			setUpdateError( getErrorMessage( result, __( 'Failed to update post.', 'safe-publish' ) ) );
 		}
 
 		setIsUpdating( false );

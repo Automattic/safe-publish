@@ -1,4 +1,4 @@
-# Compliant Content Publisher Documentation
+# Safe Publish Documentation
 
 ## Table of Contents
 

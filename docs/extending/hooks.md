@@ -1,6 +1,6 @@
 # Hooks and Filters
 
-Compliant Content Publisher provides WordPress hooks (actions and filters) at key points in the import process, allowing you to customize behavior without modifying core plugin code.
+Safe Publish provides WordPress hooks (actions and filters) at key points in the import process, allowing you to customize behavior without modifying core plugin code.
 
 ## Understanding Hooks
 
@@ -14,22 +14,22 @@ Compliant Content Publisher provides WordPress hooks (actions and filters) at ke
 
 Actions trigger at specific points in the import process, allowing you to add custom functionality.
 
-### ccp_init
+### safe_publish_init
 
-Fires when CCP is fully loaded and initialized.
+Fires when Safe Publish is fully loaded and initialized.
 
 **Parameters:** None
 
 **Example:**
 
 ```php
-add_action( 'ccp_init', function() {
+add_action( 'safe_publish_init', function() {
     // Initialize your custom functionality
-    // All CCP classes are now available
+    // All Safe Publish classes are now available
 } );
 ```
 
-### ccp_post_imported
+### safe_publish_post_imported
 
 Fires after a post is successfully imported.
 
@@ -41,7 +41,7 @@ Fires after a post is successfully imported.
 **Example:**
 
 ```php
-add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
+add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
     // Send notification
     wp_mail(
         'editor@example.com',
@@ -54,7 +54,7 @@ add_action( 'ccp_post_imported', function( $post_id, $source_url ) {
 }, 10, 2 );
 ```
 
-### ccp_import_failed
+### safe_publish_import_failed
 
 Fires when an import attempt fails.
 
@@ -67,9 +67,9 @@ Fires when an import attempt fails.
 **Example:**
 
 ```php
-add_action( 'ccp_import_failed', function( $error, $post_data, $source_url ) {
+add_action( 'safe_publish_import_failed', function( $error, $post_data, $source_url ) {
     error_log( sprintf(
-        'CCP Import Failed: %s - Source: %s',
+        'Safe Publish Import Failed: %s - Source: %s',
         $error->get_error_message(),
         $source_url
     ) );
@@ -79,7 +79,7 @@ add_action( 'ccp_import_failed', function( $error, $post_data, $source_url ) {
 }, 10, 3 );
 ```
 
-### ccp_media_imported
+### safe_publish_media_imported
 
 Fires after a media item is successfully imported.
 
@@ -92,14 +92,14 @@ Fires after a media item is successfully imported.
 **Example:**
 
 ```php
-add_action( 'ccp_media_imported', function( $attachment_id, $source_url, $post_id ) {
+add_action( 'safe_publish_media_imported', function( $attachment_id, $source_url, $post_id ) {
     // Add custom metadata
     update_post_meta( $attachment_id, '_source_url', $source_url );
     update_post_meta( $attachment_id, '_imported_for_post', $post_id );
 }, 10, 3 );
 ```
 
-### ccp_bulk_import_start
+### safe_publish_bulk_import_start
 
 Fires at the start of a bulk import operation.
 
@@ -110,13 +110,13 @@ Fires at the start of a bulk import operation.
 **Example:**
 
 ```php
-add_action( 'ccp_bulk_import_start', function( $post_ids ) {
-    update_option( 'ccp_bulk_import_in_progress', true );
-    update_option( 'ccp_bulk_import_count', count( $post_ids ) );
+add_action( 'safe_publish_bulk_import_start', function( $post_ids ) {
+    update_option( 'safe_publish_bulk_import_in_progress', true );
+    update_option( 'safe_publish_bulk_import_count', count( $post_ids ) );
 } );
 ```
 
-### ccp_bulk_import_complete
+### safe_publish_bulk_import_complete
 
 Fires when a bulk import operation completes.
 
@@ -127,8 +127,8 @@ Fires when a bulk import operation completes.
 **Example:**
 
 ```php
-add_action( 'ccp_bulk_import_complete', function( $results ) {
-    update_option( 'ccp_bulk_import_in_progress', false );
+add_action( 'safe_publish_bulk_import_complete', function( $results ) {
+    update_option( 'safe_publish_bulk_import_in_progress', false );
 
     $success_count = count( array_filter( $results, fn($r) => $r['success'] ) );
     $total_count = count( $results );
@@ -146,7 +146,7 @@ add_action( 'ccp_bulk_import_complete', function( $results ) {
 
 Filters allow you to modify data as it flows through the plugin. Always return the modified value.
 
-### ccp_validate_url
+### safe_publish_validate_url
 
 Filter whether to validate the source URL.
 
@@ -160,7 +160,7 @@ Filter whether to validate the source URL.
 **Example:**
 
 ```php
-add_filter( 'ccp_validate_url', function( $should_validate, $url ) {
+add_filter( 'safe_publish_validate_url', function( $should_validate, $url ) {
     // Skip validation for trusted internal URLs
     if ( strpos( $url, 'internal.staging.example.com' ) !== false ) {
         return false;
@@ -169,7 +169,7 @@ add_filter( 'ccp_validate_url', function( $should_validate, $url ) {
 }, 10, 2 );
 ```
 
-### ccp_pre_import_post
+### safe_publish_pre_import_post
 
 Filter post data before importing.
 
@@ -182,7 +182,7 @@ Filter post data before importing.
 **Example:**
 
 ```php
-add_filter( 'ccp_pre_import_post', function( $post_data ) {
+add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
     // Change post status
     $post_data['post_status'] = 'pending';
 
@@ -200,7 +200,7 @@ add_filter( 'ccp_pre_import_post', function( $post_data ) {
 } );
 ```
 
-### ccp_validate_post_data
+### safe_publish_validate_post_data
 
 Filter post data validation results.
 
@@ -214,7 +214,7 @@ Filter post data validation results.
 **Example:**
 
 ```php
-add_filter( 'ccp_validate_post_data', function( $is_valid, $post_data ) {
+add_filter( 'safe_publish_validate_post_data', function( $is_valid, $post_data ) {
     // Custom validation rule
     if ( empty( $post_data['post_excerpt'] ) ) {
         return new WP_Error(
@@ -236,7 +236,7 @@ add_filter( 'ccp_validate_post_data', function( $is_valid, $post_data ) {
 }, 10, 2 );
 ```
 
-### ccp_authentication_headers
+### safe_publish_authentication_headers
 
 Filter authentication headers sent to the external site.
 
@@ -250,7 +250,7 @@ Filter authentication headers sent to the external site.
 **Example:**
 
 ```php
-add_filter( 'ccp_authentication_headers', function( $headers, $site_url ) {
+add_filter( 'safe_publish_authentication_headers', function( $headers, $site_url ) {
     // Add custom authentication token
     if ( strpos( $site_url, 'staging.example.com' ) !== false ) {
         $headers['X-Custom-Auth'] = 'my-custom-token';
@@ -263,7 +263,7 @@ add_filter( 'ccp_authentication_headers', function( $headers, $site_url ) {
 }, 10, 2 );
 ```
 
-### ccp_import_media
+### safe_publish_import_media
 
 Filter whether to import a specific media file.
 
@@ -278,7 +278,7 @@ Filter whether to import a specific media file.
 **Example:**
 
 ```php
-add_filter( 'ccp_import_media', function( $should_import, $image_url, $post_id ) {
+add_filter( 'safe_publish_import_media', function( $should_import, $image_url, $post_id ) {
     // Skip images from CDN (already accessible)
     if ( strpos( $image_url, 'cdn.example.com' ) !== false ) {
         return false;
@@ -294,7 +294,7 @@ add_filter( 'ccp_import_media', function( $should_import, $image_url, $post_id )
 }, 10, 3 );
 ```
 
-### ccp_media_import_timeout
+### safe_publish_media_import_timeout
 
 Filter the timeout for media downloads (in seconds).
 
@@ -308,7 +308,7 @@ Filter the timeout for media downloads (in seconds).
 **Example:**
 
 ```php
-add_filter( 'ccp_media_import_timeout', function( $timeout, $image_url ) {
+add_filter( 'safe_publish_media_import_timeout', function( $timeout, $image_url ) {
     // Increase timeout for large files
     if ( strpos( $image_url, 'highres' ) !== false ) {
         return 60; // 60 seconds for high-res images
@@ -317,7 +317,7 @@ add_filter( 'ccp_media_import_timeout', function( $timeout, $image_url ) {
 }, 10, 2 );
 ```
 
-### ccp_supported_post_types
+### safe_publish_supported_post_types
 
 Filter the list of supported post types.
 
@@ -330,7 +330,7 @@ Filter the list of supported post types.
 **Example:**
 
 ```php
-add_filter( 'ccp_supported_post_types', function( $post_types ) {
+add_filter( 'safe_publish_supported_post_types', function( $post_types ) {
     // Add custom post types
     $post_types[] = 'my_custom_type';
     $post_types[] = 'another_type';
@@ -342,25 +342,25 @@ add_filter( 'ccp_supported_post_types', function( $post_types ) {
 } );
 ```
 
-### ccp_rest_api_namespace
+### safe_publish_rest_api_namespace
 
 Filter the REST API namespace.
 
 **Parameters:**
 
-- `string $namespace` - The namespace (default: 'ccp/v1')
+- `string $namespace` - The namespace (default: 'safe-publish/v1')
 
 **Returns:** `string`
 
 **Example:**
 
 ```php
-add_filter( 'ccp_rest_api_namespace', function( $namespace ) {
+add_filter( 'safe_publish_rest_api_namespace', function( $namespace ) {
     return 'my-custom-namespace/v1';
 } );
 ```
 
-### ccp_import_history_retention_days
+### safe_publish_import_history_retention_days
 
 Filter how many days to retain import history.
 
@@ -373,12 +373,12 @@ Filter how many days to retain import history.
 **Example:**
 
 ```php
-add_filter( 'ccp_import_history_retention_days', function( $days ) {
+add_filter( 'safe_publish_import_history_retention_days', function( $days ) {
     return 90; // Keep 90 days of history
 } );
 ```
 
-### ccp_http_request_args
+### safe_publish_http_request_args
 
 Filter HTTP request arguments before making requests to external site.
 
@@ -392,7 +392,7 @@ Filter HTTP request arguments before making requests to external site.
 **Example:**
 
 ```php
-add_filter( 'ccp_http_request_args', function( $args, $url ) {
+add_filter( 'safe_publish_http_request_args', function( $args, $url ) {
     // Increase timeout for slow sites
     $args['timeout'] = 45;
 
@@ -412,13 +412,13 @@ When using multiple callbacks for the same hook, use priority to control executi
 
 ```php
 // Run first (priority 5)
-add_filter( 'ccp_pre_import_post', 'my_early_filter', 5 );
+add_filter( 'safe_publish_pre_import_post', 'my_early_filter', 5 );
 
 // Run with default priority (10)
-add_filter( 'ccp_pre_import_post', 'my_normal_filter' );
+add_filter( 'safe_publish_pre_import_post', 'my_normal_filter' );
 
 // Run last (priority 20)
-add_filter( 'ccp_pre_import_post', 'my_late_filter', 20 );
+add_filter( 'safe_publish_pre_import_post', 'my_late_filter', 20 );
 ```
 
 Lower numbers run first. Default priority is 10.
@@ -441,8 +441,8 @@ define( 'WP_DEBUG', true );
 define( 'WP_DEBUG_LOG', true );
 
 // Log hook execution
-add_filter( 'ccp_pre_import_post', function( $post_data ) {
-    error_log( 'CCP Filter: ' . print_r( $post_data, true ) );
+add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
+    error_log( 'Safe Publish Filter: ' . print_r( $post_data, true ) );
     return $post_data;
 } );
 ```

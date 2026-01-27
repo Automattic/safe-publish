@@ -1,28 +1,28 @@
 <?php
 /**
- * CCP API Test.
+ * Safe Publish API Test.
  *
- * @package Compliant_Content_Publisher
+ * @package Safe_Publish
  */
 
 declare(strict_types=1);
 
-namespace CCP\Tests;
+namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
-use CCP\API\CCP_API;
+use Safe_Publish\API\Safe_Publish_API;
 
 /**
- * CCP API Test.
+ * Safe Publish API Test.
  *
  * Tests the REST API endpoints and functionality.
  */
-class CCPAPITest extends TestCase {
+class SafePublishAPITest extends TestCase {
 
 	/**
-	 * @var CCP_API CCP API instance for testing.
+	 * @var Safe_Publish_API Safe Publish API instance for testing.
 	 */
-	private CCP_API $api;
+	private Safe_Publish_API $api;
 
 	/**
 	 * Sets up test fixtures.
@@ -30,14 +30,14 @@ class CCPAPITest extends TestCase {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
-		$this->api = new CCP_API();
+		$this->api = new Safe_Publish_API();
 	}
 
 	/**
-	 * Verifies that the CCP API initializes correctly.
+	 * Verifies that the Safe Publish API initializes correctly.
 	 */
 	public function test_api_initializes(): void {
-		$this->assertInstanceOf( CCP_API::class, $this->api );
+		$this->assertInstanceOf( Safe_Publish_API::class, $this->api );
 	}
 
 	/**

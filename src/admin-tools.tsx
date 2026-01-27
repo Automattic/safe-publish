@@ -4,7 +4,7 @@
  * Provides UI for testing the connection to external WordPress sites and
  * previewing available posts before import.
  *
- * @file This file defines the AdminTools component for the CCP plugin.
+ * @file This file defines the AdminTools component for the Safe Publish plugin.
  */
 import { PostTypeSelector } from './post-type-selector';
 import { getErrorMessage } from './utils';
@@ -78,8 +78,8 @@ export function AdminTools( {
 
 	// Get current site URL from saved settings instead of form input.
 	const getExternalSiteUrl = (): string => {
-		// Use saved settings from window.ccpAdminData.
-		return window.ccpAdminData?.siteUrl || initialSiteUrl || '';
+		// Use saved settings from window.safePublishAdminData.
+		return window.safePublishAdminData?.siteUrl || initialSiteUrl || '';
 	};
 
 	/**
@@ -93,8 +93,8 @@ export function AdminTools( {
 	const handlePostTypeChange = ( postType: string ): void => {
 		setSelectedPostType( postType );
 		// Trigger DataViews refresh with new post type.
-		if ( typeof window.ccpRefreshPosts === 'function' ) {
-			window.ccpRefreshPosts( postType );
+		if ( typeof window.safePublishRefreshPosts === 'function' ) {
+			window.safePublishRefreshPosts( postType );
 		}
 	};
 
@@ -114,13 +114,13 @@ export function AdminTools( {
 	): Promise< ApiResponse<T> > => {
 		const formData = new FormData();
 		formData.append( 'action', action );
-		formData.append( 'nonce', window.ccpAdminData.nonce );
+		formData.append( 'nonce', window.safePublishAdminData.nonce );
 
 		Object.entries( data ).forEach( ( [ key, value ] ) => {
 			formData.append( key, String( value ) );
 		} );
 
-		const response = await fetch( window.ccpAdminData.ajaxurl, {
+		const response = await fetch( window.safePublishAdminData.ajaxurl, {
 			method: 'POST',
 			body: formData,
 		} );
@@ -140,11 +140,11 @@ export function AdminTools( {
 		const siteUrl = getExternalSiteUrl();
 
 		if ( ! siteUrl ) {
-			const settingsUrl = window.ccpAdminData?.settingsUrl || '/wp-admin/admin.php?page=ccp-settings';
+			const settingsUrl = window.safePublishAdminData?.settingsUrl || '/wp-admin/admin.php?page=safe-publish-settings';
 			setTestResult( {
 				success: false,
 				message: createInterpolateElement(
-					__( 'Please enter a site URL in the <link>settings page</link> first.', 'ccp' ),
+					__( 'Please enter a site URL in the <link>settings page</link> first.', 'safe-publish' ),
 					{
 						link: <a href={ settingsUrl }>link</a>,
 					}
@@ -157,7 +157,7 @@ export function AdminTools( {
 		setTestResult( null );
 
 		try {
-			const response = await makeRequest<ConnectionTestData>( 'ccp_test_connection', {
+			const response = await makeRequest<ConnectionTestData>( 'safe_publish_test_connection', {
 				site_url: siteUrl,
 			} );
 
@@ -165,7 +165,7 @@ export function AdminTools( {
 				const message = response.data.response_time
 					? sprintf(
 						/* translators: 1: connection message, 2: response time in milliseconds */
-						__( '%1$s (Response time: %2$dms)', 'ccp' ),
+						__( '%1$s (Response time: %2$dms)', 'safe-publish' ),
 						response.data.message,
 						response.data.response_time
 					)
@@ -178,13 +178,13 @@ export function AdminTools( {
 			} else {
 				setTestResult( {
 					success: false,
-					message: getErrorMessage( response, __( 'Connection test failed.', 'ccp' ) ),
+					message: getErrorMessage( response, __( 'Connection test failed.', 'safe-publish' ) ),
 				} );
 			}
 		} catch ( error ) {
 			setTestResult( {
 				success: false,
-				message: __( 'Network error occurred during connection test.', 'ccp' ),
+				message: __( 'Network error occurred during connection test.', 'safe-publish' ),
 			} );
 		} finally {
 			setTestLoading( false );
@@ -203,11 +203,11 @@ export function AdminTools( {
 		const siteUrl = getExternalSiteUrl();
 
 		if ( ! siteUrl ) {
-			const settingsUrl = window.ccpAdminData?.settingsUrl || '/wp-admin/admin.php?page=ccp-settings';
+			const settingsUrl = window.safePublishAdminData?.settingsUrl || '/wp-admin/admin.php?page=safe-publish-settings';
 			setPreviewResult( {
 				type: 'error',
 				message: createInterpolateElement(
-					__( 'Please enter a site URL in the <link>settings page</link> first.', 'ccp' ),
+					__( 'Please enter a site URL in the <link>settings page</link> first.', 'safe-publish' ),
 					{
 						link: <a href={ settingsUrl }>link</a>,
 					}
@@ -220,7 +220,7 @@ export function AdminTools( {
 		setPreviewResult( null );
 
 		try {
-			const response = await makeRequest<Post[]>( 'ccp_fetch_posts', {
+			const response = await makeRequest<Post[]>( 'safe_publish_fetch_posts', {
 				site_url: siteUrl,
 				number_of_posts: numberPosts,
 				post_type: selectedPostType,
@@ -232,7 +232,7 @@ export function AdminTools( {
 						type: 'success',
 						message: sprintf(
 							/* translators: 1: number of posts, 2: post type name */
-							__( 'Found %1$d posts from post type: %2$s', 'ccp' ),
+							__( 'Found %1$d posts from post type: %2$s', 'safe-publish' ),
 							response.data.length,
 							selectedPostType
 						),
@@ -241,19 +241,19 @@ export function AdminTools( {
 				} else {
 					setPreviewResult( {
 						type: 'info',
-						message: __( 'No posts found for the selected post type.', 'ccp' ),
+						message: __( 'No posts found for the selected post type.', 'safe-publish' ),
 					} );
 				}
 			} else {
 				setPreviewResult( {
 					type: 'error',
-					message: __( 'Failed to fetch posts.', 'ccp' ),
+					message: __( 'Failed to fetch posts.', 'safe-publish' ),
 				} );
 			}
 		} catch ( error ) {
 			setPreviewResult( {
 				type: 'error',
-				message: __( 'Network error occurred while fetching posts.', 'ccp' ),
+				message: __( 'Network error occurred while fetching posts.', 'safe-publish' ),
 			} );
 		} finally {
 			setPreviewLoading( false );
@@ -287,26 +287,26 @@ export function AdminTools( {
 	};
 
 	return (
-		<div className="ccp-admin-tools">
+		<div className="safe-publish-admin-tools">
 			{ /* Test Connection */ }
-			<div className="ccp-tool">
-				<h3>{ __( 'Test Connection', 'ccp' ) }</h3>
-				<p>{ __( 'Test the connection to the non-prod site API.', 'ccp' ) }</p>
+			<div className="safe-publish-tool">
+				<h3>{ __( 'Test Connection', 'safe-publish' ) }</h3>
+				<p>{ __( 'Test the connection to the non-prod site API.', 'safe-publish' ) }</p>
 				<Button variant="secondary" onClick={ onTestClick } disabled={ testLoading }>
 					{ testLoading ? (
 						<>
 							<Spinner />
-							{ __( 'Testing…', 'ccp' ) }
+							{ __( 'Testing…', 'safe-publish' ) }
 						</>
 					) : (
-						__( 'Test Connection', 'ccp' )
+						__( 'Test Connection', 'safe-publish' )
 					) }
 				</Button>
 				{ testResult && (
 					<Notice
 						status={ testResult.success ? 'success' : 'error' }
 						onRemove={ () => setTestResult( null ) }
-						className="ccp-test-result"
+						className="safe-publish-test-result"
 					>
 						{ testResult.message }
 					</Notice>
@@ -314,9 +314,9 @@ export function AdminTools( {
 			</div>
 
 			{ /* Preview Posts */ }
-			<div className="ccp-tool">
-				<h3>{ __( 'Preview Posts', 'ccp' ) }</h3>
-				<p>{ __( 'Preview posts that will be fetched with current settings.', 'ccp' ) }</p>
+			<div className="safe-publish-tool">
+				<h3>{ __( 'Preview Posts', 'safe-publish' ) }</h3>
+				<p>{ __( 'Preview posts that will be fetched with current settings.', 'safe-publish' ) }</p>
 
 				<PostTypeSelector
 					siteUrl={ getExternalSiteUrl() }
@@ -328,10 +328,10 @@ export function AdminTools( {
 					{ previewLoading ? (
 						<>
 							<Spinner />
-							{ __( 'Loading…', 'ccp' ) }
+							{ __( 'Loading…', 'safe-publish' ) }
 						</>
 					) : (
-						__( 'Preview Posts', 'ccp' )
+						__( 'Preview Posts', 'safe-publish' )
 					) }
 				</Button>
 				{ previewResult && (
@@ -339,22 +339,22 @@ export function AdminTools( {
 						<Notice
 							status={ previewResult.type as 'success' | 'error' | 'info' | 'warning' }
 							onRemove={ () => setPreviewResult( null ) }
-							className="ccp-preview-result"
+							className="safe-publish-preview-result"
 						>
 							{ previewResult.message }
 						</Notice>
 						{ previewResult.posts && previewResult.posts.length > 0 && (
-							<div className="ccp-preview-posts">
+							<div className="safe-publish-preview-posts">
 								{ previewResult.posts.map( post => (
-									<div key={ post.id } className="ccp-preview-post">
-										<span className="ccp-preview-post-title">{ post.title }</span>
+									<div key={ post.id } className="safe-publish-preview-post">
+										<span className="safe-publish-preview-post-title">{ post.title }</span>
 										<a
 											href={ post.link }
 											target="_blank"
 											rel="noopener noreferrer"
-											className="ccp-preview-post-link"
+											className="safe-publish-preview-post-link"
 										>
-											{ __( 'View', 'ccp' ) }
+											{ __( 'View', 'safe-publish' ) }
 										</a>
 									</div>
 								) ) }

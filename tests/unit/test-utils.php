@@ -2,7 +2,7 @@
 /**
  * Test utility functions.
  *
- * @package Compliant_Content_Publisher
+ * @package Safe_Publish
  */
 
 declare(strict_types = 1);

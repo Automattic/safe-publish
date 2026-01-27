@@ -1,6 +1,6 @@
 # Troubleshooting
 
-This guide helps you resolve common issues with Compliant Content Publisher. If you can't find a solution here, check the [local development guide](local-development.md) for debugging tools.
+This guide helps you resolve common issues with Safe Publish. If you can't find a solution here, check the [local development guide](local-development.md) for debugging tools.
 
 ## Common Issues
 
@@ -28,7 +28,7 @@ This guide helps you resolve common issues with Compliant Content Publisher. If 
    - Test site URL in browser
 
 4. **Verify MU plugin is installed** (shared secret method):
-   - File exists at `wp-content/mu-plugins/ccp-auth.php` on source site
+   - File exists at `wp-content/mu-plugins/safe-publish-auth.php` on source site
    - File has not been modified
    - MU plugins directory exists and is readable
 
@@ -174,7 +174,7 @@ This guide helps you resolve common issues with Compliant Content Publisher. If 
    ```php
    // Check if post was already imported
    $existing = get_posts( [
-       'meta_key' => '_ccp_source_url',
+       'meta_key' => '_safe_publish_source_url',
        'meta_value' => $source_url,
        'post_status' => 'any',
    ] );
@@ -354,17 +354,17 @@ If you need to start fresh:
 
 ```php
 // Using WP-CLI
-wp option delete ccp_external_site_url
-wp option delete ccp_number_of_posts
-wp option delete ccp_auth_username
-wp option delete ccp_auth_password
+wp option delete safe_publish_external_site_url
+wp option delete safe_publish_number_of_posts
+wp option delete safe_publish_auth_username
+wp option delete safe_publish_auth_password
 ```
 
 ### Clear Import History
 
 ```php
 // Using WP-CLI (caution: permanently deletes history)
-wp db query "DELETE FROM {$wpdb->prefix}ccp_import_history"
+wp db query "DELETE FROM {$wpdb->prefix}safe_publish_import_history"
 ```
 
 ### Complete Reset
