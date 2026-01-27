@@ -200,7 +200,7 @@ export interface ExternalPostsDataViewProps {
 }
 
 /**
- * Admin data passed from PHP via wp_localize_script.
+ * Admin data passed from PHP via wp_add_inline_script.
  *
  * @property {string}    ajaxurl     WordPress AJAX URL.
  * @property {string}    nonce       Security nonce for AJAX requests.
@@ -210,7 +210,6 @@ export interface ExternalPostsDataViewProps {
  * @property {number}    numPosts    Number of posts to fetch.
  * @property {string}    containerId Container element ID.
  * @property {JsonArray} postsData   Raw posts data from PHP.
- * @property {Object}    strings     Localized UI strings.
  */
 export interface AdminData {
 	ajaxurl: string;
@@ -221,14 +220,6 @@ export interface AdminData {
 	numPosts: number;
 	containerId: string;
 	postsData: JsonArray;
-	strings: {
-		loading: string;
-		error: string;
-		noResults: string;
-		title: string;
-		lastModified: string;
-		link: string;
-	};
 }
 
 /**

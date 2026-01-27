@@ -290,10 +290,7 @@ final class Admin_Page {
 			);
 		}
 
-		// Localize scripts with data including posts.
-		wp_localize_script(
-			'safe-publish-admin-dataviews-script',
-			'safePublishAdminData',
+		$json_data = wp_json_encode(
 			array(
 				'ajaxurl'     => admin_url( 'admin-ajax.php' ),
 				'settingsUrl' => admin_url( 'admin.php?page=safe-publish-settings' ),
@@ -303,15 +300,17 @@ final class Admin_Page {
 				'numPosts'    => $number_of_posts,
 				'containerId' => 'safe-publish-dataviews-container',
 				'postsData'   => $posts_data,
-				'strings'     => array(
-					'loading'      => __( 'Loading posts…', 'safe-publish' ),
-					'error'        => __( 'Error loading posts.', 'safe-publish' ),
-					'noResults'    => __( 'No posts found.', 'safe-publish' ),
-					'title'        => __( 'Title', 'safe-publish' ),
-					'lastModified' => __( 'Last Modified', 'safe-publish' ),
-					'link'         => __( 'Link', 'safe-publish' ),
-				),
 			)
+		);
+
+		if ( false === $json_data || '' === $json_data ) {
+			$json_data = '{}';
+		}
+
+		wp_add_inline_script(
+			'safe-publish-admin-dataviews-script',
+			sprintf( 'window.safePublishAdminData = %s;', $json_data ),
+			'before'
 		);
 
 		// Add hook to verify script was loaded properly in VIP.
