@@ -163,15 +163,22 @@ final class Import_History {
 			true
 		);
 
-		// Localize script data for React.
-		wp_localize_script(
-			'safe-publish-import-history',
-			'safePublishAdminData',
+		$json_data = wp_json_encode(
 			array(
 				'ajaxurl'   => admin_url( 'admin-ajax.php' ),
 				'nonce'     => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 				'restNonce' => wp_create_nonce( 'wp_rest' ),
 			)
+		);
+
+		if ( false === $json_data || '' === $json_data ) {
+			$json_data = '{}';
+		}
+
+		wp_add_inline_script(
+			'safe-publish-import-history',
+			sprintf( 'window.safePublishAdminData = %s;', $json_data ),
+			'before'
 		);
 
 		?>

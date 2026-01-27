@@ -12,14 +12,6 @@ import { afterEach } from 'vitest';
 		numPosts: 10,
 		containerId: 'safe-publish-admin-posts',
 		postsData: [],
-		strings: {
-			loading: 'Loading...',
-			error: 'Error',
-			noResults: 'No results found',
-			title: 'Title',
-			lastModified: 'Last Modified',
-			link: 'Link',
-		},
 	},
 };
 
