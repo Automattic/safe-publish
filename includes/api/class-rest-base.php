@@ -81,15 +81,6 @@ abstract class REST_Base {
 	}
 
 	/**
-	 * Checks if the current environment is a development environment.
-	 *
-	 * @return bool True if development environment.
-	 */
-	public function is_development_environment(): bool {
-		return $this->http_client->is_development_environment();
-	}
-
-	/**
 	 * Determines whether to verify SSL certificates based on environment and URL.
 	 *
 	 * @param string $url URL being requested.

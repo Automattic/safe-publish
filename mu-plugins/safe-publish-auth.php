@@ -1096,28 +1096,8 @@ function safe_publish_vip_auth_admin_notice(): void {
 	}
 }
 
-// Register test endpoint in debug mode only.
-if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-	add_action( 'rest_api_init', 'safe_publish_vip_register_test_endpoint' );
-}
-
 // Always register monitoring endpoint.
 add_action( 'rest_api_init', 'safe_publish_vip_register_monitoring_endpoints' );
-
-/**
- * Registers test endpoint for Safe Publish authentication (debug mode only).
- */
-function safe_publish_vip_register_test_endpoint(): void {
-	register_rest_route(
-		'safe-publish/v1',
-		'/auth-test',
-		array(
-			'methods'             => 'GET',
-			'callback'            => 'safe_publish_vip_auth_test_callback',
-			'permission_callback' => '__return_true', // Public endpoint for testing.
-		)
-	);
-}
 
 /**
  * Registers monitoring endpoints for authentication status.
@@ -1163,20 +1143,7 @@ function safe_publish_vip_register_monitoring_endpoints(): void {
  * @return bool True if user can view auth status, false otherwise.
  */
 function safe_publish_vip_can_view_auth_status(): bool {
-	// Allow if user can manage options, or if it's a VIP monitoring request.
-	if ( current_user_can( 'manage_options' ) ) {
-		return true;
-	}
-
-	// Allow VIP monitoring systems (check for specific user agents or IPs).
-	// User agent not sanitized; only used for string comparison, not storage or output.
-	// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__HTTP_USER_AGENT__
-	$user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-	if ( strpos( $user_agent, 'WPVIP-Monitor' ) !== false ) {
-		return true;
-	}
-
-	return false;
+	return current_user_can( 'manage_options' );
 }
 
 /**
@@ -1363,45 +1330,6 @@ function safe_publish_vip_get_secret_source(): string {
 }
 
 /**
- * Handles test endpoint callback for Safe Publish authentication.
- *
- * @param WP_REST_Request $request Request object.
- * @return WP_REST_Response Response containing test results.
- */
-function safe_publish_vip_auth_test_callback( $request ): WP_REST_Response {
-	$headers                  = $request->get_headers();
-	$has_safe_publish_headers = isset( $headers['x_safe_publish_timestamp'] ) && isset( $headers['x_safe_publish_signature'] );
-
-	// Force generate test logs to verify VIP logging.
-	safe_publish_vip_log_auth_event(
-		'TEST_ENDPOINT_ACCESSED',
-		array(
-			'headers_present' => $has_safe_publish_headers,
-			'user_agent'      => $request->get_header( 'user_agent' ),
-			'test_type'       => 'manual_endpoint_test',
-		)
-	);
-
-	return new WP_REST_Response(
-		array(
-			'message'                      => 'Safe Publish Authentication Test Endpoint',
-			'timestamp'                    => current_time( 'mysql' ),
-			'safe_publish_headers_present' => $has_safe_publish_headers,
-			'shared_secret_configured'     => ! empty( safe_publish_vip_get_shared_secret() ),
-			'secret_length'                => strlen( safe_publish_vip_get_shared_secret() ),
-			'vip_environment'              => defined( 'WPCOM_IS_VIP_ENV' ) ? WPCOM_IS_VIP_ENV : false,
-			'debug_mode'                   => defined( 'WP_DEBUG' ) ? WP_DEBUG : false,
-			'logging_info'                 => array(
-				'error_log_available' => function_exists( 'error_log' ),
-				'syslog_available'    => function_exists( 'syslog' ),
-				'log_test_generated'  => true,
-			),
-		),
-		200
-	);
-}
-
-/**
  * Adds Safe Publish authentication status to Site Health (WordPress 5.2+).
  */
 add_filter( 'site_status_tests', 'safe_publish_vip_add_site_health_test' );
@@ -1526,10 +1454,6 @@ function safe_publish_vip_dashboard_widget_content(): void {
 		) . '</p>';
 		echo '<p><strong>✅ ' . esc_html__( 'VIP 2FA Compliant:', 'safe-publish' ) . '</strong> ' . esc_html__( 'Uses capability-based authentication (no user creation)', 'safe-publish' ) . '</p>';
 		echo '<p><strong>✅ ' . esc_html__( 'Editing Permissions:', 'safe-publish' ) . '</strong> ' . esc_html__( 'Enabled for Safe Publish authenticated requests', 'safe-publish' ) . '</p>';
-
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			echo '<p><a href="/wp-json/safe-publish/v1/auth-test" target="_blank">' . esc_html__( 'Test Authentication →', 'safe-publish' ) . '</a></p>';
-		}
 	}
 
 	echo '<hr style="margin: 15px 0;">';

@@ -8,7 +8,6 @@
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\External_Posts_API;
-use Safe_Publish\Utils\Environment;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -129,20 +128,11 @@ final class Admin_Page {
 			// Pass authentication credentials if they exist.
 			$auth_credentials = array();
 
-			// VIP-safe authentication methods (prioritized).
+			// VIP-safe authentication methods (shared secret HMAC only).
 			$shared_secret = get_option( 'safe_publish_shared_secret', '' );
 
 			if ( ! empty( $shared_secret ) ) {
 				$auth_credentials['shared_secret'] = $shared_secret;
-			} elseif ( Environment::is_development() ) {
-				// Fallback to Basic auth in development environments only.
-				$username = get_option( 'safe_publish_username', '' );
-				$password = get_option( 'safe_publish_password', '' );
-
-				if ( ! empty( $username ) && ! empty( $password ) ) {
-					$auth_credentials['username'] = $username;
-					$auth_credentials['password'] = $password;
-				}
 			}
 
 			$posts = $this->api->fetch_posts( $site_url, $number_of_posts, $auth_credentials );

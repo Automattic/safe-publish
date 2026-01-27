@@ -10,7 +10,6 @@ declare(strict_types = 1);
 namespace Safe_Publish\API;
 
 use Safe_Publish\Auth\VIP_Safe_Auth;
-use Safe_Publish\Utils\Environment;
 use WP_Error;
 
 // Prevent direct access.
@@ -172,7 +171,6 @@ final class HTTP_Client {
 			return $provided_credentials;
 		}
 
-		// Try VIP-safe authentication first.
 		$shared_secret = get_option( 'safe_publish_shared_secret', '' );
 
 		if ( ! empty( $shared_secret ) ) {
@@ -181,29 +179,7 @@ final class HTTP_Client {
 			);
 		}
 
-		// Fallback to Basic auth in development environments only.
-		if ( $this->is_development_environment() ) {
-			$username = get_option( 'safe_publish_username', '' );
-			$password = get_option( 'safe_publish_password', '' );
-
-			if ( ! empty( $username ) && ! empty( $password ) ) {
-				return array(
-					'username' => $username,
-					'password' => $password,
-				);
-			}
-		}
-
 		return array();
-	}
-
-	/**
-	 * Checks if the current environment is a development environment.
-	 *
-	 * @return bool True if development environment.
-	 */
-	public function is_development_environment(): bool {
-		return Environment::is_development();
 	}
 
 	/**

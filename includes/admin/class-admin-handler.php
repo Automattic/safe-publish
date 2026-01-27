@@ -9,7 +9,6 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\Admin\Import_History;
-use Safe_Publish\Utils\Environment;
 use Exception;
 
 // Prevent direct access.
@@ -127,27 +126,6 @@ final class Admin_Handler {
 				'default'           => '',
 			)
 		);
-
-		// Basic authentication settings (development only).
-		if ( Environment::is_development() ) {
-			register_setting(
-				'safe_publish_settings',
-				'safe_publish_username',
-				array(
-					'sanitize_callback' => array( $this, 'sanitize_username' ),
-					'default'           => '',
-				)
-			);
-
-			register_setting(
-				'safe_publish_settings',
-				'safe_publish_password',
-				array(
-					'sanitize_callback' => array( $this, 'sanitize_password' ),
-					'default'           => '',
-				)
-			);
-		}
 	}
 
 	/**
@@ -1037,60 +1015,17 @@ final class Admin_Handler {
 	}
 
 	/**
-	 * Sanitizes username for Basic authentication (development only).
-	 *
-	 * @param mixed $value Value to sanitize.
-	 * @return string Sanitized username.
-	 */
-	public function sanitize_username( $value ): string {
-		if ( ! Environment::is_development() ) {
-			return '';
-		}
-
-		return sanitize_text_field( $value );
-	}
-
-	/**
-	 * Sanitizes password for Basic authentication (development only).
-	 *
-	 * @param mixed $value Value to sanitize.
-	 * @return string Sanitized password.
-	 */
-	public function sanitize_password( $value ): string {
-		if ( ! Environment::is_development() ) {
-			return '';
-		}
-
-		// Don't sanitize passwords beyond trimming whitespace.
-		return trim( $value );
-	}
-
-	/**
 	 * Gets authentication credentials from settings.
 	 *
 	 * @return array Authentication credentials array with appropriate keys.
 	 */
 	private function get_auth_credentials(): array {
-		// Try VIP-safe authentication first.
 		$shared_secret = get_option( 'safe_publish_shared_secret', '' );
 
 		if ( ! empty( $shared_secret ) ) {
 			return array(
 				'shared_secret' => $shared_secret,
 			);
-		}
-
-		// Fallback to Basic auth in development environments only.
-		if ( Environment::is_development() ) {
-			$username = get_option( 'safe_publish_username', '' );
-			$password = get_option( 'safe_publish_password', '' );
-
-			if ( ! empty( $username ) && ! empty( $password ) ) {
-				return array(
-					'username' => $username,
-					'password' => $password,
-				);
-			}
 		}
 
 		return array();
@@ -1839,7 +1774,7 @@ final class Admin_Handler {
 			'site_url'                   => $site_url,
 			'api_url'                    => $api_url,
 			'auth_credentials_available' => ! empty( $auth_credentials ),
-			'auth_credentials_type'      => ! empty( $auth_credentials['shared_secret'] ) ? 'shared_secret' : ( ! empty( $auth_credentials['username'] ) ? 'basic_auth' : 'none' ),
+			'auth_credentials_type'      => ! empty( $auth_credentials['shared_secret'] ) ? 'shared_secret' : 'none',
 			'auth_params'                => $auth_params,
 		);
 

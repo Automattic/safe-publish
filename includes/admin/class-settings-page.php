@@ -7,8 +7,6 @@
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\Utils\Environment;
-
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -26,10 +24,6 @@ final class Settings_Page {
 		$site_url        = get_option( 'safe_publish_external_site_url', '' );
 		$number_of_posts = get_option( 'safe_publish_number_of_posts', 10 );
 		$shared_secret   = get_option( 'safe_publish_shared_secret', '' );
-
-		// Basic auth credentials (development only).
-		$username = get_option( 'safe_publish_username', '' );
-		$password = get_option( 'safe_publish_password', '' );
 
 		?>
 		<div class="wrap" id="safe-publish-settings-page">
@@ -120,52 +114,6 @@ final class Settings_Page {
 									</p>
 								</td>
 							</tr>
-
-							<?php if ( Environment::is_development() ) : ?>
-							<tr>
-								<th scope="row">
-									<label for="safe_publish_username">
-										<?php esc_html_e( 'Username', 'safe-publish' ); ?>
-									</label>
-								</th>
-								<td>
-									<input
-										type="text"
-										id="safe_publish_username"
-										name="safe_publish_username"
-										value="<?php echo esc_attr( $username ); ?>"
-										class="regular-text"
-										placeholder="<?php echo esc_attr__( 'Username for Basic authentication', 'safe-publish' ); ?>"
-										autocomplete="username"
-									/>
-									<p class="description">
-										<?php esc_html_e( 'Basic authentication username (development only).', 'safe-publish' ); ?>
-									</p>
-								</td>
-							</tr>
-
-							<tr>
-								<th scope="row">
-									<label for="safe_publish_password">
-										<?php esc_html_e( 'Password', 'safe-publish' ); ?>
-									</label>
-								</th>
-								<td>
-									<input
-										type="password"
-										id="safe_publish_password"
-										name="safe_publish_password"
-										value="<?php echo esc_attr( $password ); ?>"
-										class="regular-text"
-										placeholder="<?php echo esc_attr__( 'Password for Basic authentication', 'safe-publish' ); ?>"
-										autocomplete="current-password"
-									/>
-									<p class="description">
-										<?php esc_html_e( 'Basic authentication password (development only).', 'safe-publish' ); ?>
-									</p>
-								</td>
-							</tr>
-							<?php endif; ?>
 						</table>
 
 						<?php submit_button(); ?>

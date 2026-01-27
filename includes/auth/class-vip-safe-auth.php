@@ -7,7 +7,6 @@
 
 namespace Safe_Publish\Auth;
 
-use Safe_Publish\Utils\Environment;
 use WP_Error;
 
 // Prevent direct access.
@@ -30,7 +29,6 @@ final class VIP_Safe_Auth {
 	 */
 	const AUTH_METHODS = array(
 		'shared_secret',
-		'basic_auth', // Development only.
 	);
 
 	/**
@@ -49,9 +47,6 @@ final class VIP_Safe_Auth {
 				$result = self::get_shared_secret_auth( $site_url, $auth_config, $method );
 				return $result;
 
-			case 'basic_auth':
-				return self::get_basic_auth( $site_url, $auth_config );
-
 			default:
 				return array();
 		}
@@ -67,11 +62,6 @@ final class VIP_Safe_Auth {
 		// Check what auth methods are configured.
 		if ( ! empty( $auth_config['shared_secret'] ) ) {
 			return 'shared_secret';
-		}
-
-		// Only allow Basic auth in development environments.
-		if ( ! empty( $auth_config['username'] ) && ! empty( $auth_config['password'] ) && Environment::is_development() ) {
-			return 'basic_auth';
 		}
 
 		return 'none';
@@ -112,26 +102,6 @@ final class VIP_Safe_Auth {
 			}
 
 			return true; // Shared secret is present and valid format.
-		}
-
-		// If we have basic authentication (development only).
-		if ( 'basic_auth' === $auth_method ) {
-			$username = $auth_config['username'] ?? '';
-			$password = $auth_config['password'] ?? '';
-
-			// Check if credentials are correctly configured.
-			if ( empty( $username ) || empty( $password ) ) {
-				return false;
-			}
-
-			// Check if we're in a development environment (basic auth not allowed in production).
-			if ( ! Environment::is_development() ) {
-				return false;
-			}
-
-			// If site URL is provided, we could test the credentials (but this would make an actual request).
-			// For now, we'll just verify the credentials are present and environment is appropriate.
-			return true;
 		}
 
 		return false;
@@ -274,37 +244,6 @@ final class VIP_Safe_Auth {
 			),
 		);
 	}
-
-	/**
-	 * Gets basic authentication parameters (development environments only).
-	 *
-	 * Uses Authorization header with Basic auth.
-	 * WARNING: Will NOT work on VIP production.
-	 *
-	 * @param string $site_url    Target site URL.
-	 * @param array  $auth_config Authentication configuration.
-	 * @return array Request modifications.
-	 */
-	private static function get_basic_auth( $site_url, $auth_config ): array {
-		$username = $auth_config['username'] ?? '';
-		$password = $auth_config['password'] ?? '';
-
-		if ( empty( $username ) || empty( $password ) ) {
-			return array();
-		}
-
-		// Only allow in development environments.
-		if ( ! Environment::is_development() ) {
-			return array();
-		}
-
-		return array(
-			'headers' => array(
-				'Authorization' => 'Basic ' . base64_encode( $username . ':' . $password ),
-			),
-		);
-	}
-
 
 	/**
 	 * Verifies incoming authentication.

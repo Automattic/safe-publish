@@ -245,26 +245,12 @@ final class Safe_Publish_API extends REST_Base {
 	 * @return array Authentication credentials array with appropriate keys.
 	 */
 	private function get_auth_credentials(): array {
-		// Try VIP-safe authentication first.
 		$shared_secret = get_option( 'safe_publish_shared_secret', '' );
 
 		if ( ! empty( $shared_secret ) ) {
 			return array(
 				'shared_secret' => $shared_secret,
 			);
-		}
-
-		// Fallback to Basic auth in development environments only.
-		if ( $this->is_development_environment() ) {
-			$username = get_option( 'safe_publish_username', '' );
-			$password = get_option( 'safe_publish_password', '' );
-
-			if ( ! empty( $username ) && ! empty( $password ) ) {
-				return array(
-					'username' => $username,
-					'password' => $password,
-				);
-			}
 		}
 
 		return array();
