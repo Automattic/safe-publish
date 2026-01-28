@@ -14,7 +14,7 @@ declare global {
 			numPosts: number;
 			containerId: string;
 			postsData: string;
-			strings: Record<string, string>;
+			strings: Record< string, string >;
 		};
 		safePublishRefreshPosts?: ( postType?: string ) => void;
 	}

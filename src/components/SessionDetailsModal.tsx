@@ -91,7 +91,7 @@ export function SessionDetailsModal( {
 				body: formData,
 			} );
 
-			const result = await response.json() as ApiResponse<SessionDetailsData>;
+			const result = await response.json() as ApiResponse< SessionDetailsData >;
 
 			if ( result.success ) {
 				setLogs( result.data.logs || [] );
@@ -158,7 +158,7 @@ export function SessionDetailsModal( {
 				body: formData,
 			} );
 
-			const result = await response.json() as ApiResponse<RollbackItemData>;
+			const result = await response.json() as ApiResponse< RollbackItemData >;
 
 			if ( result.success ) {
 				// Show success message.

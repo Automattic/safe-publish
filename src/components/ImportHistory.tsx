@@ -124,7 +124,7 @@ export function ImportHistory(): JSX.Element {
 				body: formData,
 			} );
 
-			const result = await response.json() as ApiResponse<ImportSession[]>;
+			const result = await response.json() as ApiResponse< ImportSession[] >;
 
 			if ( result.success ) {
 				setSessions( result.data );
@@ -164,7 +164,7 @@ export function ImportHistory(): JSX.Element {
 				body: formData,
 			} );
 
-			const result = await response.json() as ApiResponse<RollbackSessionData>;
+			const result = await response.json() as ApiResponse< RollbackSessionData >;
 
 			if ( result.success ) {
 				const { deleted_count: deletedCount, restored_count: restoredCount } = result.data;
@@ -220,7 +220,7 @@ export function ImportHistory(): JSX.Element {
 				body: formData,
 			} );
 
-			const result = await response.json() as ApiResponse<DeleteSessionData>;
+			const result = await response.json() as ApiResponse< DeleteSessionData >;
 
 			if ( result.success ) {
 				const message = result.data.message || '';
