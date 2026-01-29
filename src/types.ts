@@ -58,7 +58,7 @@ export interface Post {
 	featured_media?: number;
 	post_type?: string;
 	meta?: JsonObject;
-	terms?: Record<string, string[]>;
+	terms?: Record< string, string[] >;
 }
 
 /**
@@ -71,7 +71,7 @@ export interface Post {
  *
  * @template T Type of the data payload on success.
  */
-export type ApiResponse<T = unknown> =
+export type ApiResponse< T = unknown > =
 	| { success: true; data: T }
 	| { success: false; data?: JsonValue; error?: string };
 

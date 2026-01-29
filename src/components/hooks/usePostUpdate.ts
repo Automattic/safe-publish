@@ -95,7 +95,7 @@ export function usePostUpdate( {
 	 *
 	 * @return {Promise<void>} Resolves when update is complete.
 	 */
-	const handleUpdatePost = async (): Promise<void> => {
+	const handleUpdatePost = async (): Promise< void > => {
 		setIsUpdating( true );
 		setUpdateError( null );
 		setUpdateSuccess( null );

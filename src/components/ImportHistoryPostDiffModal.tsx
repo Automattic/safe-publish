@@ -70,7 +70,7 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 				body: formData,
 			} );
 
-			const result = await response.json() as ApiResponse<DiffHtmlData>;
+			const result = await response.json() as ApiResponse< DiffHtmlData >;
 
 			if ( result.success ) {
 				setDiffHtml( result.data.diff_html );

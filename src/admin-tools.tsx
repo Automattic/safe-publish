@@ -111,7 +111,7 @@ export function AdminTools( {
 	const makeRequest = async <T = unknown>(
 		action: string,
 		data: Record< string, string | number > = {}
-	): Promise< ApiResponse<T> > => {
+	): Promise< ApiResponse< T > > => {
 		const formData = new FormData();
 		formData.append( 'action', action );
 		formData.append( 'nonce', window.safePublishAdminData.nonce );
@@ -220,7 +220,7 @@ export function AdminTools( {
 		setPreviewResult( null );
 
 		try {
-			const response = await makeRequest<Post[]>( 'safe_publish_fetch_posts', {
+			const response = await makeRequest< Post[] >( 'safe_publish_fetch_posts', {
 				site_url: siteUrl,
 				number_of_posts: numberPosts,
 				post_type: selectedPostType,

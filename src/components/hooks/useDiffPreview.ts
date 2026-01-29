@@ -81,7 +81,7 @@ export function useDiffPreview( {
 		 *
 		 * @return {Promise<void>} Resolves when fetch is complete.
 		 */
-		const fetchDiff = async (): Promise<void> => {
+		const fetchDiff = async (): Promise< void > => {
 			setIsLoading( true );
 			setError( null );
 			const result = await fetchDiffPreview( {

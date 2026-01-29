@@ -220,7 +220,7 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 			body: formData,
 		} )
 			.then( response => response.json() )
-			.then( ( result: ApiResponse<Post[]> ) => {
+			.then( ( result: ApiResponse< Post[] > ) => {
 				if ( result.success ) {
 					const posts = sanitizePosts( result.data );
 					if ( 0 === posts.length ) {

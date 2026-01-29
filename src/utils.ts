@@ -101,7 +101,7 @@ export function isValidPost( post: unknown ): post is Post {
 		return false;
 	}
 
-	const postRecord = post as Record<string, unknown>;
+	const postRecord = post as Record< string, unknown >;
 	return (
 		typeof postRecord.id === 'number' &&
 		typeof postRecord.link === 'string' &&

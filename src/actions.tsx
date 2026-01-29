@@ -187,7 +187,7 @@ export const actions: Action< Post >[] = [
 						'Accept': 'application/json; charset=utf-8',
 					},
 				} )
-				.then( response => response.json() as Promise<ApiResponse<CreateDraftResponse>> )
+				.then( response => response.json() as Promise< ApiResponse< CreateDraftResponse > > )
 				.then( ( result ) => {
 					setIsLoading( false );
 
