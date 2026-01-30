@@ -19,6 +19,7 @@
             <directory name="build/"/>
             <directory name="node_modules/"/>
             <directory name="vendor/"/>
+            <file name="tests/wp-tests-config.php"/>
         </ignoreFiles>
     </projectFiles>
     <issueHandlers>

@@ -27,7 +27,7 @@
         ".htaccess": "./bin/conf/htaccess",
         "wp-content/mu-plugins": "./mu-plugins"
       },
-      "plugins": []
+      "plugins": ["."]
     }
   }
 }
