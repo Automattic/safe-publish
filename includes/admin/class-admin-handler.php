@@ -10,6 +10,7 @@ namespace Safe_Publish\Admin;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\Admin\Import_History;
 use Safe_Publish\Admin\History_Repository;
+use Safe_Publish\Admin\History_Renderer;
 use Safe_Publish\Utils\Environment;
 use Exception;
 
@@ -44,7 +45,10 @@ final class Admin_Handler {
 	 */
 	public function __construct( External_Posts_API $api ) {
 		$this->api            = $api;
-		$this->import_history = new Import_History( new History_Repository() );
+		$this->import_history = new Import_History(
+			new History_Repository(),
+			new History_Renderer()
+		);
 	}
 
 	/**
