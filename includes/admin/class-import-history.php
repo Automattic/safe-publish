@@ -171,7 +171,10 @@ final class Import_History {
 	 * @param string $session_type Type of import (single, bulk).
 	 * @return int|WP_Error Session ID or error.
 	 */
-	public function create_session( $source_url, $session_type = 'bulk' ): int|WP_Error {
+	public function create_session(
+		string $source_url,
+		string $session_type = 'bulk'
+	): int|WP_Error {
 		return $this->repository->create_session( $source_url, $session_type );
 	}
 
@@ -188,13 +191,13 @@ final class Import_History {
 	 * @return int|WP_Error Log ID or error.
 	 */
 	public function log_import_action(
-		$session_id,
-		$external_id,
-		$title,
-		$status,
-		$post_id = null,
-		$error = null,
-		$changes = array()
+		int $session_id,
+		int $external_id,
+		string $title,
+		string $status,
+		?int $post_id = null,
+		?string $error = null,
+		array $changes = array()
 	): int|WP_Error {
 		return $this->repository->log_import_action(
 			$session_id,
@@ -213,7 +216,7 @@ final class Import_History {
 	 * @param int    $session_id Session ID.
 	 * @param string $status     Status of the import (success, error, updated).
 	 */
-	public function update_session_stats( $session_id, $status ): void {
+	public function update_session_stats( int $session_id, string $status ): void {
 		$this->repository->update_session_stats( $session_id, $status );
 	}
 
@@ -222,7 +225,7 @@ final class Import_History {
 	 *
 	 * @param int $session_id Session ID.
 	 */
-	public function complete_session( $session_id ): void {
+	public function complete_session( int $session_id ): void {
 		$this->repository->complete_session( $session_id );
 	}
 
@@ -233,7 +236,11 @@ final class Import_History {
 	 * @param string $old_content Previous content.
 	 * @param string $new_content New content.
 	 */
-	public function store_content_diff( $post_id, $old_content, $new_content ): void {
+	public function store_content_diff(
+		int $post_id,
+		string $old_content,
+		string $new_content
+	): void {
 		$this->repository->store_content_diff( $post_id, $old_content, $new_content );
 	}
 
