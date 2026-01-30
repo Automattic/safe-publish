@@ -44,10 +44,18 @@ final class Admin_Handler {
 	 * @param External_Posts_API $api External Posts API instance.
 	 */
 	public function __construct( External_Posts_API $api ) {
-		$this->api            = $api;
+		$this->api = $api;
+
+		$repository       = new History_Repository();
+		$renderer         = new History_Renderer();
+		$formatter        = new Session_Formatter();
+		$rollback_service = new Session_Rollback_Service( $repository );
+
 		$this->import_history = new Import_History(
-			new History_Repository(),
-			new History_Renderer()
+			$repository,
+			$renderer,
+			$formatter,
+			$rollback_service
 		);
 	}
 

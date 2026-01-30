@@ -47,17 +47,37 @@ final class Import_History {
 	private History_Renderer $renderer;
 
 	/**
+	 * Session formatter instance.
+	 *
+	 * @var Session_Formatter
+	 */
+	private Session_Formatter $formatter;
+
+	/**
+	 * Rollback service instance.
+	 *
+	 * @var Session_Rollback_Service
+	 */
+	private Session_Rollback_Service $rollback_service;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param History_Repository $repository History repository instance.
-	 * @param History_Renderer   $renderer   History renderer instance.
+	 * @param History_Repository       $repository       History repository instance.
+	 * @param History_Renderer         $renderer         History renderer instance.
+	 * @param Session_Formatter        $formatter        Session formatter instance.
+	 * @param Session_Rollback_Service $rollback_service Rollback service instance.
 	 */
 	public function __construct(
 		History_Repository $repository,
-		History_Renderer $renderer
+		History_Renderer $renderer,
+		Session_Formatter $formatter,
+		Session_Rollback_Service $rollback_service
 	) {
-		$this->repository = $repository;
-		$this->renderer   = $renderer;
+		$this->repository       = $repository;
+		$this->renderer         = $renderer;
+		$this->formatter        = $formatter;
+		$this->rollback_service = $rollback_service;
 	}
 
 	/**
@@ -227,39 +247,8 @@ final class Import_History {
 			wp_send_json_error( __( 'Insufficient permissions', 'safe-publish' ) );
 		}
 
-		$sessions = $this->repository->get_sessions( 50 );
-
-		$formatted_sessions = array();
-
-		foreach ( $sessions as $session ) {
-			$total      = (int) get_post_meta( $session->ID, 'total_items', true );
-			$successful = (int) get_post_meta( $session->ID, 'successful', true );
-			$failed     = (int) get_post_meta( $session->ID, 'failed', true );
-			$updated    = (int) get_post_meta( $session->ID, 'updated', true );
-			$status     = get_post_meta( $session->ID, 'status', true );
-			$source_url = get_post_meta( $session->ID, 'source_url', true );
-
-			$status_labels = array(
-				'in_progress' => __( 'In Progress', 'safe-publish' ),
-				'completed'   => __( 'Completed', 'safe-publish' ),
-				'failed'      => __( 'Failed', 'safe-publish' ),
-				'rolled_back' => __( 'Rolled Back', 'safe-publish' ),
-			);
-
-			$formatted_sessions[] = array(
-				'id'           => $session->ID,
-				'date'         => get_the_date( 'Y-m-d H:i:s', $session ),
-				'user'         => get_the_author_meta( 'display_name', (int) $session->post_author ),
-				'total_items'  => $total,
-				'successful'   => $successful,
-				'failed'       => $failed,
-				'updated'      => $updated,
-				'status'       => $status,
-				'status_label' => $status_labels[ $status ] ?? $status,
-				'source_url'   => $source_url,
-				'can_rollback' => ( 'completed' === $status && $successful > 0 ),
-			);
-		}
+		$sessions           = $this->repository->get_sessions( 50 );
+		$formatted_sessions = $this->formatter->format_sessions( $sessions );
 
 		wp_send_json_success( $formatted_sessions );
 	}
@@ -286,93 +275,10 @@ final class Import_History {
 			wp_send_json_error( __( 'Session not found', 'safe-publish' ) );
 		}
 
-		// Get session data.
-		$total      = (int) get_post_meta( $session_id, 'total_items', true );
-		$successful = (int) get_post_meta( $session_id, 'successful', true );
-		$failed     = (int) get_post_meta( $session_id, 'failed', true );
-		$updated    = (int) get_post_meta( $session_id, 'updated', true );
-		$status     = get_post_meta( $session_id, 'status', true );
-		$source_url = get_post_meta( $session_id, 'source_url', true );
-
-		$status_labels = array(
-			'in_progress' => __( 'In Progress', 'safe-publish' ),
-			'completed'   => __( 'Completed', 'safe-publish' ),
-			'failed'      => __( 'Failed', 'safe-publish' ),
-			'rolled_back' => __( 'Rolled Back', 'safe-publish' ),
-		);
-
-		$session_data = array(
-			'id'           => $session->ID,
-			'date'         => get_the_date( 'Y-m-d H:i:s', $session ),
-			'user'         => get_the_author_meta( 'display_name', (int) $session->post_author ),
-			'total_items'  => $total,
-			'successful'   => $successful,
-			'failed'       => $failed,
-			'updated'      => $updated,
-			'status'       => $status,
-			'status_label' => $status_labels[ $status ] ?? $status,
-			'source_url'   => $source_url,
-			'can_rollback' => 'completed' === $status && $successful > 0,
-		);
-
-		// Get logs - but don't show details for rolled back sessions.
-		$formatted_logs = array();
-
-		if ( 'rolled_back' !== $status ) {
-			$logs = $this->repository->get_session_logs( $session_id );
-
-			foreach ( $logs as $log ) {
-				$log_status  = get_post_meta( $log->ID, 'status', true );
-				$post_id     = get_post_meta( $log->ID, 'post_id', true );
-				$external_id = get_post_meta( $log->ID, 'external_id', true );
-
-				$log_data = json_decode( $log->post_content, true );
-				$error    = $log_data['error_message'] ?? null;
-
-				$status_labels = array(
-					'success' => __( 'Success', 'safe-publish' ),
-					'updated' => __( 'Updated', 'safe-publish' ),
-					'error'   => __( 'Error', 'safe-publish' ),
-				);
-
-				$changes              = get_post_meta( $log->ID, 'content_changes', true );
-				$has_previous_content = is_array( $changes ) && ! empty( $changes['previous_content'] );
-
-				// For debugging: also show button for updated posts even without previous content.
-				$is_updated_post     = ( 'updated' === $log_status );
-				$should_show_changes = $has_previous_content || $is_updated_post;
-
-				// Check if this item has been individually rolled back.
-				$is_rolled_back = get_post_meta( $log->ID, 'rolled_back', true );
-
-				// Determine if this item can be rolled back.
-				$can_rollback_item = false;
-				if ( ! $is_rolled_back && $post_id && get_post( $post_id ) ) {
-					// Can rollback if it's a success (delete) or updated with previous content (restore).
-					$can_rollback_item = ( 'success' === $log_status ) ||
-						( 'updated' === $log_status && $has_previous_content ) ||
-						( 'updated' === $log_status && ! $has_previous_content ); // Legacy case - will delete.
-				}
-
-				$formatted_log = array(
-					'id'              => $log->ID,
-					'title'           => $log->post_title,
-					'status'          => $log_status,
-					'status_label'    => $status_labels[ $log_status ] ?? $log_status,
-					'external_id'     => $external_id,
-					'post_id'         => $post_id,
-					'error'           => $error,
-					'has_changes'     => $should_show_changes,
-					'edit_url'        => $post_id ? admin_url( "post.php?post={$post_id}&action=edit" ) : null,
-					'can_rollback'    => $can_rollback_item,
-					'is_rolled_back'  => $is_rolled_back,
-					'rollback_action' => 'success' === $log_status ? 'delete' :
-						( $has_previous_content ? 'restore' : 'delete' ),
-				);
-
-				$formatted_logs[] = $formatted_log;
-			}
-		}
+		$status         = get_post_meta( $session_id, 'status', true );
+		$session_data   = $this->formatter->format_session( $session );
+		$logs           = $this->repository->get_session_logs( $session_id );
+		$formatted_logs = $this->formatter->format_logs( $logs, $status );
 
 		wp_send_json_success(
 			array(
@@ -398,96 +304,21 @@ final class Import_History {
 			wp_send_json_error( __( 'Invalid session ID', 'safe-publish' ) );
 		}
 
-		$session = $this->repository->get_session( $session_id );
+		$result = $this->rollback_service->rollback_session( $session_id );
 
-		if ( ! $session ) {
-			wp_send_json_error( __( 'Session not found', 'safe-publish' ) );
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( $result->get_error_message() );
 		}
-
-		// Get all successful imports from this session.
-		$logs = $this->repository->get_session_logs_by_status( $session_id, array( 'success', 'updated' ) );
-
-		$deleted_count  = 0;
-		$restored_count = 0;
-
-		foreach ( $logs as $log ) {
-			$post_id = get_post_meta( $log->ID, 'post_id', true );
-			$status  = get_post_meta( $log->ID, 'status', true );
-			$changes = get_post_meta( $log->ID, 'content_changes', true );
-
-			if ( ! $post_id || ! get_post( $post_id ) ) {
-				continue;
-			}
-
-			if ( 'success' === $status ) {
-				// This was a newly created post - delete it.
-				if ( wp_delete_post( $post_id, true ) ) {
-					++$deleted_count;
-				}
-			} elseif ( 'updated' === $status && ! empty( $changes ) && isset( $changes['previous_content'] ) ) {
-				// This was an updated post - restore previous content.
-				$restore_data = array(
-					'ID' => $post_id,
-				);
-
-				// Restore previous content if available.
-				if ( isset( $changes['previous_content'] ) ) {
-					$restore_data['post_content'] = $changes['previous_content'];
-				}
-
-				// Restore previous title if available.
-				if ( isset( $changes['previous_title'] ) ) {
-					$restore_data['post_title'] = $changes['previous_title'];
-				}
-
-				// Restore previous excerpt if available.
-				if ( isset( $changes['previous_excerpt'] ) ) {
-					$restore_data['post_excerpt'] = $changes['previous_excerpt'];
-				}
-
-				// Update the post with previous content.
-				$updated = wp_update_post( $restore_data, true );
-
-				if ( ! is_wp_error( $updated ) ) {
-					// Restore previous meta data if available.
-					if ( isset( $changes['previous_meta'] ) && is_array( $changes['previous_meta'] ) ) {
-						foreach ( $changes['previous_meta'] as $meta_key => $meta_value ) {
-							update_post_meta( $post_id, $meta_key, $meta_value );
-						}
-					}
-
-					// Restore previous featured image if available.
-					if ( isset( $changes['previous_featured_image'] ) ) {
-						if ( $changes['previous_featured_image'] ) {
-							set_post_thumbnail( $post_id, $changes['previous_featured_image'] );
-						} else {
-							delete_post_thumbnail( $post_id );
-						}
-					}
-
-					++$restored_count;
-				}
-			} elseif ( 'updated' === $status ) {
-				// Updated post but no previous content stored - just delete it.
-				// This handles legacy cases where previous content wasn't stored.
-				if ( wp_delete_post( $post_id, true ) ) {
-					++$deleted_count;
-				}
-			}
-		}
-
-		// Mark session as rolled back.
-		$this->repository->mark_session_rolled_back( $session_id );
 
 		wp_send_json_success(
 			array(
-				'deleted_count'  => $deleted_count,
-				'restored_count' => $restored_count,
+				'deleted_count'  => $result['deleted_count'],
+				'restored_count' => $result['restored_count'],
 				'message'        => sprintf(
 					/* translators: 1: number of posts deleted, 2: number of posts restored */
 					__( '%1$d posts deleted and %2$d posts restored successfully.', 'safe-publish' ),
-					$deleted_count,
-					$restored_count
+					$result['deleted_count'],
+					$result['restored_count']
 				),
 			)
 		);
@@ -509,100 +340,18 @@ final class Import_History {
 			wp_send_json_error( __( 'Invalid log ID', 'safe-publish' ) );
 		}
 
-		$log = $this->repository->get_log( $log_id );
+		$result = $this->rollback_service->rollback_item( $log_id );
 
-		if ( ! $log ) {
-			wp_send_json_error( __( 'Import log not found', 'safe-publish' ) );
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( $result->get_error_message() );
 		}
 
-		$post_id = get_post_meta( $log_id, 'post_id', true );
-		$status  = get_post_meta( $log_id, 'status', true );
-		$changes = get_post_meta( $log_id, 'content_changes', true );
-
-		if ( ! $post_id ) {
-			wp_send_json_error( __( 'No post ID found for this log entry', 'safe-publish' ) );
-		}
-
-		// Check if the post still exists.
-		$post = get_post( $post_id );
-		if ( ! $post ) {
-			wp_send_json_error( __( 'The post no longer exists', 'safe-publish' ) );
-		}
-
-		$result = array(
-			'action'     => '',
-			'post_id'    => $post_id,
-			'post_title' => $post->post_title,
+		$messages = array(
+			'deleted'  => __( 'Post successfully deleted', 'safe-publish' ),
+			'restored' => __( 'Post successfully restored to previous version', 'safe-publish' ),
 		);
 
-		if ( 'success' === $status ) {
-			// This was a newly created post - delete it.
-			if ( wp_delete_post( $post_id, true ) ) {
-				$result['action']  = 'deleted';
-				$result['message'] = __( 'Post successfully deleted', 'safe-publish' );
-			} else {
-				wp_send_json_error( __( 'Failed to delete the post', 'safe-publish' ) );
-			}
-		} elseif ( 'updated' === $status && ! empty( $changes ) && isset( $changes['previous_content'] ) ) {
-			// This was an updated post - restore previous content.
-			$restore_data = array(
-				'ID' => $post_id,
-			);
-
-			// Restore previous content if available.
-			if ( isset( $changes['previous_content'] ) ) {
-				$restore_data['post_content'] = $changes['previous_content'];
-			}
-
-			// Restore previous title if available.
-			if ( isset( $changes['previous_title'] ) ) {
-				$restore_data['post_title'] = $changes['previous_title'];
-			}
-
-			// Restore previous excerpt if available.
-			if ( isset( $changes['previous_excerpt'] ) ) {
-				$restore_data['post_excerpt'] = $changes['previous_excerpt'];
-			}
-
-			// Update the post with previous content.
-			$updated = wp_update_post( $restore_data, true );
-
-			if ( is_wp_error( $updated ) ) {
-				wp_send_json_error( __( 'Failed to restore post: ', 'safe-publish' ) . $updated->get_error_message() );
-			}
-
-			// Restore previous meta data if available.
-			if ( isset( $changes['previous_meta'] ) && is_array( $changes['previous_meta'] ) ) {
-				foreach ( $changes['previous_meta'] as $meta_key => $meta_value ) {
-					update_post_meta( $post_id, $meta_key, $meta_value );
-				}
-			}
-
-			// Restore previous featured image if available.
-			if ( isset( $changes['previous_featured_image'] ) ) {
-				if ( $changes['previous_featured_image'] ) {
-					set_post_thumbnail( $post_id, $changes['previous_featured_image'] );
-				} else {
-					delete_post_thumbnail( $post_id );
-				}
-			}
-
-			$result['action']  = 'restored';
-			$result['message'] = __( 'Post successfully restored to previous version', 'safe-publish' );
-		} elseif ( 'updated' === $status ) {
-			// Updated post but no previous content stored - delete it.
-			if ( wp_delete_post( $post_id, true ) ) {
-				$result['action']  = 'deleted';
-				$result['message'] = __( 'Post deleted (no previous content available for restoration)', 'safe-publish' );
-			} else {
-				wp_send_json_error( __( 'Failed to delete the post', 'safe-publish' ) );
-			}
-		} else {
-			wp_send_json_error( __( 'Cannot rollback this item: unsupported status', 'safe-publish' ) );
-		}
-
-		// Mark this specific log entry as rolled back.
-		$this->repository->mark_log_rolled_back( $log_id );
+		$result['message'] = $messages[ $result['action'] ] ?? $result['action'];
 
 		wp_send_json_success( $result );
 	}
