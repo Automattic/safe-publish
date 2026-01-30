@@ -17,6 +17,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Import History Class.
+ *
+ * Coordinates import history functionality and delegates data operations to the repository.
  */
 final class Import_History {
 
@@ -29,6 +31,22 @@ final class Import_History {
 	 * Custom post type for import logs.
 	 */
 	const LOG_POST_TYPE = 'safe_publish_import_log';
+
+	/**
+	 * History repository instance.
+	 *
+	 * @var History_Repository
+	 */
+	private History_Repository $repository;
+
+	/**
+	 * Constructor.
+	 *
+	 * @param History_Repository $repository History repository instance.
+	 */
+	public function __construct( History_Repository $repository ) {
+		$this->repository = $repository;
+	}
 
 	/**
 	 * Initializes the import history functionality.
@@ -203,30 +221,7 @@ final class Import_History {
 	 * @return int|WP_Error Session ID or error.
 	 */
 	public function create_session( $source_url, $session_type = 'bulk' ): int|WP_Error {
-		$session_id = wp_insert_post(
-			array(
-				'post_type'   => self::SESSION_POST_TYPE,
-				'post_title'  => sprintf(
-					/* translators: %s: timestamp of the import session */
-					__( 'Import Session - %s', 'safe-publish' ),
-					current_time( 'Y-m-d H:i:s' )
-				),
-				'post_status' => 'publish',
-				'post_author' => get_current_user_id(),
-				'meta_input'  => array(
-					'source_url'   => $source_url,
-					'session_type' => $session_type,
-					'total_items'  => 0,
-					'successful'   => 0,
-					'failed'       => 0,
-					'updated'      => 0,
-					'status'       => 'in_progress',
-					'start_time'   => current_time( 'mysql' ),
-				),
-			)
-		);
-
-		return $session_id;
+		return $this->repository->create_session( $source_url, $session_type );
 	}
 
 	/**
@@ -241,41 +236,24 @@ final class Import_History {
 	 * @param array  $changes     Changes made during import.
 	 * @return int|WP_Error Log ID or error.
 	 */
-	public function log_import_action( $session_id, $external_id, $title, $status, $post_id = null, $error = null, $changes = array() ): int|WP_Error {
-		$log_data = array(
-			'session_id'    => $session_id,
-			'external_id'   => $external_id,
-			'status'        => $status,
-			'post_id'       => $post_id,
-			'error_message' => $error,
-			'changes'       => $changes,
+	public function log_import_action(
+		$session_id,
+		$external_id,
+		$title,
+		$status,
+		$post_id = null,
+		$error = null,
+		$changes = array()
+	): int|WP_Error {
+		return $this->repository->log_import_action(
+			$session_id,
+			$external_id,
+			$title,
+			$status,
+			$post_id,
+			$error,
+			$changes
 		);
-
-		$log_content = wp_json_encode( $log_data );
-
-		$log_id = wp_insert_post(
-			array(
-				'post_type'    => self::LOG_POST_TYPE,
-				'post_title'   => $title,
-				'post_content' => false !== $log_content ? $log_content : '',
-				'post_status'  => 'publish',
-				'post_parent'  => $session_id,
-				'meta_input'   => array(
-					'session_id'  => $session_id,
-					'external_id' => $external_id,
-					'status'      => $status,
-					'post_id'     => $post_id,
-					'import_date' => current_time( 'mysql' ),
-				),
-			)
-		);
-
-		// Store changes as post meta if they exist.
-		if ( ! empty( $changes ) ) {
-			update_post_meta( $log_id, 'content_changes', $changes );
-		}
-
-		return $log_id;
 	}
 
 	/**
@@ -285,25 +263,7 @@ final class Import_History {
 	 * @param string $status     Status of the import (success, error, updated).
 	 */
 	public function update_session_stats( $session_id, $status ): void {
-		$total      = (int) get_post_meta( $session_id, 'total_items', true );
-		$successful = (int) get_post_meta( $session_id, 'successful', true );
-		$failed     = (int) get_post_meta( $session_id, 'failed', true );
-		$updated    = (int) get_post_meta( $session_id, 'updated', true );
-
-		update_post_meta( $session_id, 'total_items', $total + 1 );
-
-		switch ( $status ) {
-			case 'success':
-				update_post_meta( $session_id, 'successful', $successful + 1 );
-				break;
-			case 'updated':
-				update_post_meta( $session_id, 'successful', $successful + 1 );
-				update_post_meta( $session_id, 'updated', $updated + 1 );
-				break;
-			case 'error':
-				update_post_meta( $session_id, 'failed', $failed + 1 );
-				break;
-		}
+		$this->repository->update_session_stats( $session_id, $status );
 	}
 
 	/**
@@ -312,8 +272,7 @@ final class Import_History {
 	 * @param int $session_id Session ID.
 	 */
 	public function complete_session( $session_id ): void {
-		update_post_meta( $session_id, 'status', 'completed' );
-		update_post_meta( $session_id, 'end_time', current_time( 'mysql' ) );
+		$this->repository->complete_session( $session_id );
 	}
 
 	/**
@@ -324,13 +283,7 @@ final class Import_History {
 	 * @param string $new_content New content.
 	 */
 	public function store_content_diff( $post_id, $old_content, $new_content ): void {
-		$diff_data = array(
-			'old_content' => $old_content,
-			'new_content' => $new_content,
-			'diff_date'   => current_time( 'mysql' ),
-		);
-
-		update_post_meta( $post_id, 'safe_publish_content_history', $diff_data );
+		$this->repository->store_content_diff( $post_id, $old_content, $new_content );
 	}
 
 	/**
@@ -343,17 +296,7 @@ final class Import_History {
 			wp_send_json_error( __( 'Insufficient permissions', 'safe-publish' ) );
 		}
 
-		$sessions = get_posts(
-			array(
-				'post_type'      => self::SESSION_POST_TYPE,
-				'post_status'    => 'publish',
-				'posts_per_page' => 50,
-				'orderby'        => 'date',
-				'order'          => 'DESC',
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'     => array(), // Empty meta_query.
-			)
-		);
+		$sessions = $this->repository->get_sessions( 50 );
 
 		$formatted_sessions = array();
 
@@ -406,9 +349,9 @@ final class Import_History {
 			wp_send_json_error( __( 'Invalid session ID', 'safe-publish' ) );
 		}
 
-		$session = get_post( $session_id );
+		$session = $this->repository->get_session( $session_id );
 
-		if ( ! $session || self::SESSION_POST_TYPE !== $session->post_type ) {
+		if ( ! $session ) {
 			wp_send_json_error( __( 'Session not found', 'safe-publish' ) );
 		}
 
@@ -430,7 +373,7 @@ final class Import_History {
 		$session_data = array(
 			'id'           => $session->ID,
 			'date'         => get_the_date( 'Y-m-d H:i:s', $session ),
-			'user'         => get_the_author_meta( 'display_name', $session->post_author ),
+			'user'         => get_the_author_meta( 'display_name', (int) $session->post_author ),
 			'total_items'  => $total,
 			'successful'   => $successful,
 			'failed'       => $failed,
@@ -445,16 +388,7 @@ final class Import_History {
 		$formatted_logs = array();
 
 		if ( 'rolled_back' !== $status ) {
-			$logs = get_posts(
-				array(
-					'post_type'      => self::LOG_POST_TYPE,
-					'post_status'    => 'publish',
-					'post_parent'    => $session_id,
-					'posts_per_page' => -1,
-					'orderby'        => 'date',
-					'order'          => 'ASC',
-				)
-			);
+			$logs = $this->repository->get_session_logs( $session_id );
 
 			foreach ( $logs as $log ) {
 				$log_status  = get_post_meta( $log->ID, 'status', true );
@@ -533,29 +467,14 @@ final class Import_History {
 			wp_send_json_error( __( 'Invalid session ID', 'safe-publish' ) );
 		}
 
-		$session = get_post( $session_id );
+		$session = $this->repository->get_session( $session_id );
 
-		if ( ! $session || self::SESSION_POST_TYPE !== $session->post_type ) {
+		if ( ! $session ) {
 			wp_send_json_error( __( 'Session not found', 'safe-publish' ) );
 		}
 
 		// Get all successful imports from this session.
-		$logs = get_posts(
-			array(
-				'post_type'      => self::LOG_POST_TYPE,
-				'post_status'    => 'publish',
-				'post_parent'    => $session_id,
-				'posts_per_page' => -1,
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'     => array( // Admin-only operation, scoped by post_parent.
-					array(
-						'key'     => 'status',
-						'value'   => array( 'success', 'updated' ),
-						'compare' => 'IN',
-					),
-				),
-			)
-		);
+		$logs = $this->repository->get_session_logs_by_status( $session_id, array( 'success', 'updated' ) );
 
 		$deleted_count  = 0;
 		$restored_count = 0;
@@ -627,9 +546,7 @@ final class Import_History {
 		}
 
 		// Mark session as rolled back.
-		update_post_meta( $session_id, 'status', 'rolled_back' );
-		update_post_meta( $session_id, 'rollback_date', current_time( 'mysql' ) );
-		update_post_meta( $session_id, 'rollback_user', get_current_user_id() );
+		$this->repository->mark_session_rolled_back( $session_id );
 
 		wp_send_json_success(
 			array(
@@ -661,9 +578,9 @@ final class Import_History {
 			wp_send_json_error( __( 'Invalid log ID', 'safe-publish' ) );
 		}
 
-		$log = get_post( $log_id );
+		$log = $this->repository->get_log( $log_id );
 
-		if ( ! $log || self::LOG_POST_TYPE !== $log->post_type ) {
+		if ( ! $log ) {
 			wp_send_json_error( __( 'Import log not found', 'safe-publish' ) );
 		}
 
@@ -754,9 +671,7 @@ final class Import_History {
 		}
 
 		// Mark this specific log entry as rolled back.
-		update_post_meta( $log_id, 'rolled_back', true );
-		update_post_meta( $log_id, 'rollback_date', current_time( 'mysql' ) );
-		update_post_meta( $log_id, 'rollback_user', get_current_user_id() );
+		$this->repository->mark_log_rolled_back( $log_id );
 
 		wp_send_json_success( $result );
 	}
@@ -941,43 +856,19 @@ final class Import_History {
 			wp_send_json_error( __( 'Invalid session ID', 'safe-publish' ) );
 		}
 
-		$session = get_post( $session_id );
+		$session = $this->repository->get_session( $session_id );
 
-		if ( ! $session || self::SESSION_POST_TYPE !== $session->post_type ) {
+		if ( ! $session ) {
 			wp_send_json_error( __( 'Session not found', 'safe-publish' ) );
 		}
 
-		// Get all logs associated with this session.
-		$logs = get_posts(
-			array(
-				'post_type'      => self::LOG_POST_TYPE,
-				'post_status'    => 'publish',
-				'post_parent'    => $session_id,
-				'posts_per_page' => -1,
-			)
-		);
+		// Delete the session and all its logs.
+		$success = $this->repository->delete_session( $session_id );
 
-		$deleted_logs_count = 0;
-
-		// Delete all associated logs first.
-		foreach ( $logs as $log ) {
-			if ( wp_delete_post( $log->ID, true ) ) {
-				++$deleted_logs_count;
-			}
-		}
-
-		// Delete the session itself.
-		$session_deleted = wp_delete_post( $session_id, true );
-
-		if ( $session_deleted ) {
+		if ( $success ) {
 			wp_send_json_success(
 				array(
-					'message'      => sprintf(
-						/* translators: %d: number of associated log entries that were removed */
-						__( 'Session deleted successfully. %d associated log entries were also removed.', 'safe-publish' ),
-						$deleted_logs_count
-					),
-					'deleted_logs' => $deleted_logs_count,
+					'message' => __( 'Session and all associated log entries deleted successfully.', 'safe-publish' ),
 				)
 			);
 		} else {
