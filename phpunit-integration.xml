@@ -11,7 +11,23 @@
   >
   <testsuites>
     <testsuite name="Safe Publish Integration Tests">
-      <directory>tests/integration/</directory>
+      <directory suffix=".php">tests/integration/</directory>
+      <exclude>tests/integration/bootstrap.php</exclude>
     </testsuite>
   </testsuites>
+
+  <php>
+    <!-- Point wp-phpunit to our test config file -->
+    <env name="WP_PHPUNIT__TESTS_CONFIG" value="tests/wp-tests-config.php" />
+
+    <!-- Point to wp-phpunit installation in vendor -->
+    <env name="WP_PHPUNIT__DIR" value="vendor/wp-phpunit/wp-phpunit" />
+
+    <!-- Database configuration (wp-tests-config.php reads these) -->
+    <env name="WP_DB_NAME" value="tests-wordpress" />
+    <env name="WP_DB_USER" value="root" />
+    <env name="WP_DB_PASSWORD" value="password" />
+    <env name="WP_DB_HOST" value="mysql" />
+  </php>
 </phpunit>
+
