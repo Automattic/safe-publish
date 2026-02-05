@@ -18,19 +18,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Import History Class.
  *
- * Coordinates import history functionality and delegates data operations to the repository.
+ * Coordinates import history functionality and delegates data operations to the
+ * repository.
  */
 final class Import_History {
 
 	/**
 	 * Custom post type for import sessions.
 	 */
-	const SESSION_POST_TYPE = 'safe_publish_import_session';
+	const SESSION_POST_TYPE = 'sp_import_session';
 
 	/**
 	 * Custom post type for import logs.
 	 */
-	const LOG_POST_TYPE = 'safe_publish_import_log';
+	const LOG_POST_TYPE = 'sp_import_log';
 
 	/**
 	 * History repository instance.
