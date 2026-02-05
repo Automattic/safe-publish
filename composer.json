@@ -16,6 +16,7 @@
   },
   "autoload-dev": {
     "psr-4": {
+      "Safe_Publish\\Tests\\Integration\\": "tests/integration/",
       "Safe_Publish\\Tests\\": "tests/unit/"
     },
     "classmap": [
