@@ -41,6 +41,22 @@ tests/
 composer test
 ```
 
+### Integration Tests
+
+Integration tests run in a real WordPress environment and require the wp-env Docker environment to be running.
+
+**Start the development environment first:**
+
+```bash
+npm run dev
+```
+
+**Then run integration tests:**
+
+```bash
+npm run test:integration
+```
+
 ### Unit Tests with Coverage
 
 ```bash
