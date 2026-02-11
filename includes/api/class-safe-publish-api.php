@@ -9,10 +9,7 @@ declare( strict_types=1 );
 
 namespace Safe_Publish\API;
 
-use Exception;
-use stdClass;
 use WP_Error;
-use WP_Query;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -158,8 +155,6 @@ final class Safe_Publish_API extends REST_Base {
 	 * @return WP_REST_Response
 	 */
 	public function update_post_content( WP_REST_Request $req ): WP_REST_Response {
-		global $safe_publish_plugin;
-
 		$post_id           = (int) $req->get_param( 'postId' );
 		$content           = $req->get_param( 'content' );
 		$title             = $req->get_param( 'title' );
@@ -199,30 +194,7 @@ final class Safe_Publish_API extends REST_Base {
 		}
 
 		if ( isset( $content ) ) {
-			// Process content to import media and fix links.
-			$processed_content = $content;
-			if ( ! empty( $content ) ) {
-				// Extract the site URL from the external link.
-				$site_url = get_option( 'safe_publish_external_site_url', '' );
-
-				$admin_handler = $safe_publish_plugin->get_admin_handler();
-				$api           = $safe_publish_plugin->get_api();
-
-				// Check if content contains Gutenberg blocks.
-				if ( $admin_handler->is_gutenberg_content( $content ) ) {
-					$processed_content = $admin_handler->process_gutenberg_blocks( $content, $site_url );
-				} else {
-					// Fallback to traditional content processing.
-					$processed_content = $api->process_and_import_media( $content, $site_url );
-					// Process oEmbeds using WordPress functionality.
-					$processed_content = $admin_handler->process_oembed_content( $processed_content );
-				}
-
-				// Replace external URLs with current site URLs.
-				$processed_content = $admin_handler->replace_external_urls( $processed_content, $site_url );
-			}
-
-			$postarr['post_content'] = $processed_content;
+			$postarr['post_content'] = $this->process_content( $content );
 		}
 
 		$result = wp_update_post( $postarr, true );
@@ -239,14 +211,7 @@ final class Safe_Publish_API extends REST_Base {
 
 		// Import/set featured image if provided.
 		if ( $req->has_param( 'featuredMediaId' ) && $featured_media_id > 0 ) {
-			$api      = $safe_publish_plugin->get_api();
-			$site_url = get_option( 'safe_publish_external_site_url', '' );
-			if ( $api && ! empty( $site_url ) ) {
-				$attachment_id = $api->import_featured_image( $featured_media_id, $site_url );
-				if ( $attachment_id ) {
-					set_post_thumbnail( $post_id, $attachment_id );
-				}
-			}
+			$this->import_and_set_featured_image( $post_id, $featured_media_id );
 		}
 
 		// Update meta only if supplied.
@@ -266,6 +231,60 @@ final class Safe_Publish_API extends REST_Base {
 			),
 			200
 		);
+	}
+
+	/**
+	 * Imports and sets featured image for a post.
+	 *
+	 * @param int $post_id           Post ID to set featured image for.
+	 * @param int $featured_media_id External featured media ID to import.
+	 *
+	 * @return void
+	 */
+	private function import_and_set_featured_image( int $post_id, int $featured_media_id ): void {
+		global $safe_publish_plugin;
+
+		$api      = $safe_publish_plugin->get_api();
+		$site_url = get_option( 'safe_publish_external_site_url', '' );
+
+		if ( $api && ! empty( $site_url ) ) {
+			$attachment_id = $api->import_featured_image( $featured_media_id, $site_url );
+			if ( $attachment_id ) {
+				set_post_thumbnail( $post_id, $attachment_id );
+			}
+		}
+	}
+
+	/**
+	 * Processes post content by importing media and fixing links.
+	 *
+	 * @param string $content Raw post content.
+	 *
+	 * @return string Processed content.
+	 */
+	private function process_content( string $content ): string {
+		global $safe_publish_plugin;
+
+		if ( empty( $content ) ) {
+			return $content;
+		}
+
+		$site_url      = get_option( 'safe_publish_external_site_url', '' );
+		$admin_handler = $safe_publish_plugin->get_admin_handler();
+		$api           = $safe_publish_plugin->get_api();
+
+		// Check if content contains Gutenberg blocks.
+		if ( $admin_handler->is_gutenberg_content( $content ) ) {
+			$processed_content = $admin_handler->process_gutenberg_blocks( $content, $site_url );
+		} else {
+			// Fallback to traditional content processing.
+			$processed_content = $api->process_and_import_media( $content, $site_url );
+			// Process oEmbeds using WordPress functionality.
+			$processed_content = $admin_handler->process_oembed_content( $processed_content );
+		}
+
+		// Replace external URLs with current site URLs.
+		return $admin_handler->replace_external_urls( $processed_content, $site_url );
 	}
 
 	/**
@@ -304,8 +323,7 @@ final class Safe_Publish_API extends REST_Base {
 	 *
 	 * @param WP_REST_Request $req REST request object.
 	 *
-	 * @return array|WP_REST_Response|WP_Error Array on success, WP_Error if post not found.
-	 * @throws Exception If the external post cannot be fetched or processed.
+	 * @return array|WP_REST_Response Array on success, WP_REST_Response with error on failure.
 	 */
 	public function render_diff( WP_REST_Request $req ): array|WP_REST_Response {
 		$result = $this->diff_renderer->render_diff(
