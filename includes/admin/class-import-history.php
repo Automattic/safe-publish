@@ -24,16 +24,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Import_History {
 
 	/**
-	 * Custom post type for import sessions.
-	 */
-	const SESSION_POST_TYPE = 'sp_import_session';
-
-	/**
-	 * Custom post type for import logs.
-	 */
-	const LOG_POST_TYPE = 'sp_import_log';
-
-	/**
 	 * History repository instance.
 	 *
 	 * @var History_Repository
@@ -101,7 +91,7 @@ final class Import_History {
 	public function register_post_types(): void {
 		// Register import session post type.
 		register_post_type(
-			self::SESSION_POST_TYPE,
+			History_Repository::SESSION_POST_TYPE,
 			array(
 				'labels'             => array(
 					'name'          => __( 'Import Sessions', 'safe-publish' ),
@@ -123,7 +113,7 @@ final class Import_History {
 
 		// Register import log post type.
 		register_post_type(
-			self::LOG_POST_TYPE,
+			History_Repository::LOG_POST_TYPE,
 			array(
 				'labels'             => array(
 					'name'          => __( 'Import Logs', 'safe-publish' ),
@@ -389,7 +379,7 @@ final class Import_History {
 		// Find the import log entry for this post to get the previous content.
 		$log_query = new WP_Query(
 			array(
-				'post_type'      => self::LOG_POST_TYPE,
+				'post_type'      => History_Repository::LOG_POST_TYPE,
 				'post_status'    => 'publish',
 				'meta_key'       => 'post_id',
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
