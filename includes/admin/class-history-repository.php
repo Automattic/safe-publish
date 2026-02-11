@@ -24,12 +24,12 @@ final class History_Repository {
 	/**
 	 * Custom post type for import sessions.
 	 */
-	const SESSION_POST_TYPE = 'safe_publish_import_session';
+	const SESSION_POST_TYPE = 'sp_import_session';
 
 	/**
 	 * Custom post type for import logs.
 	 */
-	const LOG_POST_TYPE = 'safe_publish_import_log';
+	const LOG_POST_TYPE = 'sp_import_log';
 
 	/**
 	 * Creates a new import session.
