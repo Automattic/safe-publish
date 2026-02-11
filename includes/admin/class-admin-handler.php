@@ -9,6 +9,8 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\Admin\Import_History;
+use Safe_Publish\Admin\History_Repository;
+use Safe_Publish\Admin\History_Renderer;
 use Safe_Publish\Utils\Environment;
 use Exception;
 
@@ -42,8 +44,19 @@ final class Admin_Handler {
 	 * @param External_Posts_API $api External Posts API instance.
 	 */
 	public function __construct( External_Posts_API $api ) {
-		$this->api            = $api;
-		$this->import_history = new Import_History();
+		$this->api = $api;
+
+		$repository       = new History_Repository();
+		$renderer         = new History_Renderer();
+		$formatter        = new Session_Formatter();
+		$rollback_service = new Session_Rollback_Service( $repository );
+
+		$this->import_history = new Import_History(
+			$repository,
+			$renderer,
+			$formatter,
+			$rollback_service
+		);
 	}
 
 	/**
