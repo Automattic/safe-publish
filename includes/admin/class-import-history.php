@@ -18,7 +18,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Import History Class.
  *
- * Coordinates import history functionality and delegates data operations to the repository.
+ * Coordinates import history functionality and delegates data operations to the
+ * repository.
  */
 final class Import_History {
 
