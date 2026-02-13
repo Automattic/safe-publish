@@ -50,8 +50,8 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
 
 		// Create actual WordPress posts.
-		$post_id_1 = $this->factory->post->create( array( 'post_title' => 'Imported Post 1' ) );
-		$post_id_2 = $this->factory->post->create( array( 'post_title' => 'Imported Post 2' ) );
+		$post_id_1 = $this->factory()->post->create( array( 'post_title' => 'Imported Post 1' ) );
+		$post_id_2 = $this->factory()->post->create( array( 'post_title' => 'Imported Post 2' ) );
 
 		// Log the imports.
 		$this->repository->log_import_action(
@@ -100,8 +100,8 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		// Arrange - Create session with two posts.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
 
-		$post_id_1 = $this->factory->post->create( array( 'post_title' => 'Keep This' ) );
-		$post_id_2 = $this->factory->post->create( array( 'post_title' => 'Delete This' ) );
+		$post_id_1 = $this->factory()->post->create( array( 'post_title' => 'Keep This' ) );
+		$post_id_2 = $this->factory()->post->create( array( 'post_title' => 'Delete This' ) );
 
 		$this->repository->log_import_action(
 			$session_id,
@@ -171,7 +171,7 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		// Arrange - Create session with success and failed imports.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
 
-		$post_id = $this->factory->post->create( array( 'post_title' => 'Success' ) );
+		$post_id = $this->factory()->post->create( array( 'post_title' => 'Success' ) );
 
 		// Success log.
 		$this->repository->log_import_action(
