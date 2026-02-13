@@ -5,7 +5,7 @@
  * @package Safe_Publish
  */
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 // Do not require Redis running for integration tests.
 define( 'WP_REDIS_DISABLED', true );

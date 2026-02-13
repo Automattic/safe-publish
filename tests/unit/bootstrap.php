@@ -5,7 +5,7 @@
  * @package Safe_Publish
  */
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 if ( ! defined( 'ABSPATH' ) ) {
 	define( 'ABSPATH', __DIR__ . '/../../' );
