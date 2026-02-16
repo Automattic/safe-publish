@@ -126,6 +126,6 @@ class VIPSafeAuthTest extends TestCase {
 		// Timestamps will be different, but signature generation process should be consistent.
 		$this->assertIsString( $params1['headers']['X-Safe-Publish-Signature'] );
 		$this->assertIsString( $params2['headers']['X-Safe-Publish-Signature'] );
-		$this->assertEquals( 64, strlen( $params1['headers']['X-Safe-Publish-Signature'] ) ); // SHA256 hex = 64 chars.
+		$this->assertSame( 64, strlen( $params1['headers']['X-Safe-Publish-Signature'] ) ); // SHA256 hex = 64 chars.
 	}
 }
