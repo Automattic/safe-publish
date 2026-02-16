@@ -68,8 +68,9 @@ final class Safe_Publish_API extends REST_Base {
 			self::REST_BASE,
 			'diff-preview',
 			array(
-				'methods'  => 'POST',
-				'args'     => array(
+				'methods'             => 'POST',
+				'permission_callback' => array( $this, 'check_edit_post_permission' ),
+				'args'                => array(
 					'postId'   => array(
 						'required' => true,
 						'type'     => 'integer',
@@ -95,7 +96,7 @@ final class Safe_Publish_API extends REST_Base {
 						'default'  => true,
 					),
 				),
-				'callback' => array( $this, 'render_diff' ),
+				'callback'            => array( $this, 'render_diff' ),
 			)
 		);
 
@@ -104,14 +105,7 @@ final class Safe_Publish_API extends REST_Base {
 			'update-post',
 			array(
 				'methods'             => 'POST',
-				'permission_callback' => function ( WP_REST_Request $request ) {
-					$post_id = (int) $request->get_param( 'postId' );
-					if ( ! $post_id ) {
-						return new WP_Error( 'rest_missing_param', __( 'postId is required', 'safe-publish' ), array( 'status' => 400 ) );
-					}
-
-					return current_user_can( 'edit_post', $post_id );
-				},
+				'permission_callback' => array( $this, 'check_edit_post_permission' ),
 				'args'                => array(
 					'postId'          => array(
 						'required' => true,
@@ -145,6 +139,40 @@ final class Safe_Publish_API extends REST_Base {
 				'callback'            => array( $this, 'update_post_content' ),
 			)
 		);
+	}
+
+	/**
+	 * Checks if the current user can edit the specified post.
+	 *
+	 * @param WP_REST_Request $request REST request object.
+	 *
+	 * @return bool|WP_Error True if user can edit, WP_Error otherwise.
+	 */
+	public function check_edit_post_permission( WP_REST_Request $request ): bool|WP_Error {
+		$post_id = (int) $request->get_param( 'postId' );
+
+		if ( $post_id < 1 ) {
+			return new WP_Error(
+				'rest_invalid_param',
+				__( 'Invalid post ID. Must be a positive integer.', 'safe-publish' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		if ( null === get_post( $post_id ) ) {
+			// Return 404 for users with enough capabilities.
+			if ( current_user_can( 'edit_others_posts' ) ) {
+				return new WP_Error(
+					'rest_post_not_found',
+					__( 'Post not found.', 'safe-publish' ),
+					array( 'status' => 404 )
+				);
+			}
+
+			return false;
+		}
+
+		return current_user_can( 'edit_post', $post_id );
 	}
 
 	/**
