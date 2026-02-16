@@ -146,7 +146,7 @@ final class Safe_Publish_API extends REST_Base {
 	 *
 	 * @param WP_REST_Request $request REST request object.
 	 *
-	 * @return bool|WP_Error True if user can edit, WP_Error otherwise.
+	 * @return bool|WP_Error Whether the current user can edit the post, WP_Error on error.
 	 */
 	public function check_edit_post_permission( WP_REST_Request $request ): bool|WP_Error {
 		$post_id = (int) $request->get_param( 'postId' );
