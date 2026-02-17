@@ -13,7 +13,7 @@ use Safe_Publish\Validators\URL_Validator;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Content\Embed_Processor;
-use DOMDocument;
+use Safe_Publish\Content\Content_Media_Processor;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -47,20 +47,33 @@ class External_Posts_API {
 	private Embed_Processor $embed_processor;
 
 	/**
+	 * Content Media Processor instance.
+	 *
+	 * @var Content_Media_Processor
+	 */
+	private Content_Media_Processor $content_media_processor;
+
+	/**
 	 * Constructs the External_Posts_API instance.
 	 *
-	 * @param HTTP_Client|null     $http_client     Optional. HTTP client for making requests.
-	 * @param Media_Importer|null  $media_importer  Optional. Media importer for handling media files.
-	 * @param Embed_Processor|null $embed_processor Optional. Embed processor for handling embeds.
+	 * @param HTTP_Client|null             $http_client              Optional. HTTP client for making requests.
+	 * @param Media_Importer|null          $media_importer           Optional. Media importer for handling media files.
+	 * @param Embed_Processor|null         $embed_processor          Optional. Embed processor for handling embeds.
+	 * @param Content_Media_Processor|null $content_media_processor  Optional. Content media processor for processing HTML.
 	 */
 	public function __construct(
 		?HTTP_Client $http_client = null,
 		?Media_Importer $media_importer = null,
-		?Embed_Processor $embed_processor = null
+		?Embed_Processor $embed_processor = null,
+		?Content_Media_Processor $content_media_processor = null
 	) {
-		$this->http_client     = $http_client ?? new HTTP_Client();
-		$this->media_importer  = $media_importer ?? new Media_Importer( $this->http_client );
-		$this->embed_processor = $embed_processor ?? new Embed_Processor();
+		$this->http_client             = $http_client ?? new HTTP_Client();
+		$this->media_importer          = $media_importer ?? new Media_Importer( $this->http_client );
+		$this->embed_processor         = $embed_processor ?? new Embed_Processor();
+		$this->content_media_processor = $content_media_processor ?? new Content_Media_Processor(
+			$this->media_importer,
+			$this->embed_processor
+		);
 	}
 
 	/**
@@ -356,103 +369,7 @@ class External_Posts_API {
 	 * @return string Processed content with imported media.
 	 */
 	public function process_and_import_media( string $content, string $source_site_url ): string {
-		if ( empty( $content ) ) {
-			return $content;
-		}
-
-		// Parse HTML content with proper UTF-8 encoding.
-		$dom = new DOMDocument( '1.0', 'UTF-8' );
-
-		// Suppress libxml errors to handle malformed HTML gracefully.
-		$previous_use_errors = libxml_use_internal_errors( true );
-
-		// Prepend meta charset to ensure proper UTF-8 handling.
-		$utf8_content = '<meta http-equiv="Content-Type" content="text/html; charset=utf-8">' . $content;
-
-		$dom->loadHTML(
-			$utf8_content,
-			LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NOERROR | LIBXML_NOWARNING
-		);
-
-		// Restore previous libxml error setting.
-		libxml_use_internal_errors( $previous_use_errors );
-
-		// Process images.
-		$images = $dom->getElementsByTagName( 'img' );
-		foreach ( $images as $img ) {
-			$src = $img->getAttribute( 'src' );
-			if ( ! empty( $src ) ) {
-				$new_src = $this->import_external_media( $src, $source_site_url );
-				if ( $new_src ) {
-					$img->setAttribute( 'src', $new_src );
-				}
-			}
-		}
-
-		// Process links to make them absolute.
-		$links = $dom->getElementsByTagName( 'a' );
-		foreach ( $links as $link ) {
-			$href = $link->getAttribute( 'href' );
-			if ( ! empty( $href ) && ! filter_var( $href, FILTER_VALIDATE_URL ) ) {
-				// Convert relative URLs to absolute.
-				$absolute_href = rtrim( $source_site_url, '/' ) . '/' . ltrim( $href, '/' );
-				$link->setAttribute( 'href', $absolute_href );
-			}
-		}
-
-		// Process iframes for embeds.
-		$iframes = $dom->getElementsByTagName( 'iframe' );
-		foreach ( $iframes as $iframe ) {
-			$this->embed_processor->process_iframe( $iframe, $source_site_url );
-		}
-
-		// Process video elements.
-		$videos = $dom->getElementsByTagName( 'video' );
-		foreach ( $videos as $video ) {
-			$this->process_video_element( $video, $source_site_url );
-		}
-
-		// Process audio elements.
-		$audios = $dom->getElementsByTagName( 'audio' );
-		foreach ( $audios as $audio ) {
-			$this->process_audio_element( $audio, $source_site_url );
-		}
-
-		// Process embeds (WordPress specific).
-		$embeds = $dom->getElementsByTagName( 'embed' );
-		foreach ( $embeds as $embed ) {
-			$this->embed_processor->process_embed( $embed, $source_site_url );
-		}
-
-		// Process figure elements (often contain embeds).
-		$figures = $dom->getElementsByTagName( 'figure' );
-		foreach ( $figures as $figure ) {
-			$this->embed_processor->process_figure_embeds( $figure, $source_site_url );
-		}
-
-		// Process blockquotes (social media embeds).
-		$blockquotes = $dom->getElementsByTagName( 'blockquote' );
-		foreach ( $blockquotes as $blockquote ) {
-			$this->embed_processor->process_blockquote_embeds( $blockquote, $source_site_url );
-		}
-
-		// Return processed content with proper UTF-8 handling.
-		$body              = $dom->getElementsByTagName( 'body' )->item( 0 );
-		$processed_content = '';
-
-		if ( $body ) {
-			// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
-			foreach ( $body->childNodes as $child ) {
-				$processed_content .= $dom->saveHTML( $child );
-			}
-		} else {
-			$processed_content = $dom->saveHTML();
-		}
-
-		// Remove the meta charset tag we added for processing.
-		$processed_content = preg_replace( '/<meta http-equiv="Content-Type" content="text\/html; charset=utf-8"\s*\/?>/i', '', $processed_content );
-
-		return $processed_content;
+		return $this->content_media_processor->process_content( $content, $source_site_url );
 	}
 
 	/**
@@ -488,91 +405,6 @@ class External_Posts_API {
 	 */
 	public function import_featured_image( int $featured_media_id, string $site_url ): int|false {
 		return $this->media_importer->import_featured_image( $featured_media_id, $site_url, array() );
-	}
-
-
-
-	/**
-	 * Processes video elements and imports video files.
-	 *
-	 * @param \DOMElement $video           Video element.
-	 * @param string      $source_site_url Source site URL.
-	 */
-	private function process_video_element( \DOMElement $video, string $source_site_url ): void {
-		// Process video source elements.
-		$sources = $video->getElementsByTagName( 'source' );
-		foreach ( $sources as $source ) {
-			$src = $source->getAttribute( 'src' );
-			if ( ! empty( $src ) ) {
-				$new_src = $this->import_external_media( $src, $source_site_url );
-				if ( $new_src ) {
-					$source->setAttribute( 'src', $new_src );
-				}
-			}
-		}
-
-		// Process direct video src attribute.
-		$video_src = $video->getAttribute( 'src' );
-		if ( ! empty( $video_src ) ) {
-			$new_src = $this->import_external_media( $video_src, $source_site_url );
-			if ( $new_src ) {
-				$video->setAttribute( 'src', $new_src );
-			}
-		}
-
-		// Process poster image.
-		$poster = $video->getAttribute( 'poster' );
-		if ( ! empty( $poster ) ) {
-			$new_poster = $this->import_external_media( $poster, $source_site_url );
-			if ( $new_poster ) {
-				$video->setAttribute( 'poster', $new_poster );
-			}
-		}
-
-		// Add WordPress video classes.
-		$class = $video->getAttribute( 'class' );
-		$video->setAttribute( 'class', trim( $class . ' wp-video-shortcode' ) );
-
-		// Ensure responsive behavior.
-		$video->setAttribute( 'controls', 'controls' );
-		$video->setAttribute( 'preload', 'metadata' );
-	}
-
-	/**
-	 * Processes audio elements and imports audio files.
-	 *
-	 * @param \DOMElement $audio           Audio element.
-	 * @param string      $source_site_url Source site URL.
-	 */
-	private function process_audio_element( \DOMElement $audio, string $source_site_url ): void {
-		// Process audio source elements.
-		$sources = $audio->getElementsByTagName( 'source' );
-		foreach ( $sources as $source ) {
-			$src = $source->getAttribute( 'src' );
-			if ( ! empty( $src ) ) {
-				$new_src = $this->import_external_media( $src, $source_site_url );
-				if ( $new_src ) {
-					$source->setAttribute( 'src', $new_src );
-				}
-			}
-		}
-
-		// Process direct audio src attribute.
-		$audio_src = $audio->getAttribute( 'src' );
-		if ( ! empty( $audio_src ) ) {
-			$new_src = $this->import_external_media( $audio_src, $source_site_url );
-			if ( $new_src ) {
-				$audio->setAttribute( 'src', $new_src );
-			}
-		}
-
-		// Add WordPress audio classes.
-		$class = $audio->getAttribute( 'class' );
-		$audio->setAttribute( 'class', trim( $class . ' wp-audio-shortcode' ) );
-
-		// Ensure controls are visible.
-		$audio->setAttribute( 'controls', 'controls' );
-		$audio->setAttribute( 'preload', 'metadata' );
 	}
 
 	/**
