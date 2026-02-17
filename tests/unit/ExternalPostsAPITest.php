@@ -104,58 +104,6 @@ class ExternalPostsAPITest extends TestCase {
 	}
 
 	/**
-	 * Verifies that add_webp_mime_type adds WebP mime type.
-	 */
-	public function test_add_webp_mime_type_adds_webp(): void {
-		$mime_types = array(
-			'jpg' => 'image/jpeg',
-			'png' => 'image/png',
-		);
-
-		$result = $this->api->add_webp_mime_type( $mime_types );
-
-		$this->assertArrayHasKey( 'webp', $result );
-		$this->assertSame( 'image/webp', $result['webp'] );
-	}
-
-	/**
-	 * Verifies that handle_webp_filetype handles WebP files correctly.
-	 */
-	public function test_handle_webp_filetype_handles_webp(): void {
-		$wp_check_filetype_and_ext = array(
-			'ext'             => false,
-			'type'            => false,
-			'proper_filename' => false,
-		);
-		$file                      = '/tmp/test.webp';
-		$filename                  = 'test.webp';
-
-		$result = $this->api->handle_webp_filetype( $wp_check_filetype_and_ext, $file, $filename );
-
-		$this->assertArrayHasKey( 'ext', $result );
-		$this->assertArrayHasKey( 'type', $result );
-		$this->assertSame( 'webp', $result['ext'] );
-		$this->assertSame( 'image/webp', $result['type'] );
-	}
-
-	/**
-	 * Verifies that handle_webp_filetype leaves non-WebP files unchanged.
-	 */
-	public function test_handle_webp_filetype_leaves_non_webp_unchanged(): void {
-		$wp_check_filetype_and_ext = array(
-			'ext'             => 'jpg',
-			'type'            => 'image/jpeg',
-			'proper_filename' => false,
-		);
-		$file                      = '/tmp/test.jpg';
-		$filename                  = 'test.jpg';
-
-		$result = $this->api->handle_webp_filetype( $wp_check_filetype_and_ext, $file, $filename );
-
-		$this->assertEquals( $wp_check_filetype_and_ext, $result );
-	}
-
-	/**
 	 * Verifies that fetch_fresh_post_content returns false for invalid URLs.
 	 */
 	public function test_fetch_fresh_post_content_with_invalid_url_returns_false(): void {

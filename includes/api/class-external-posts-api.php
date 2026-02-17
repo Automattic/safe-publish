@@ -310,8 +310,6 @@ class External_Posts_API {
 		return $results;
 	}
 
-
-
 	/**
 	 * Processes and imports media from external post content.
 	 *
@@ -344,8 +342,6 @@ class External_Posts_API {
 	public function import_external_media_as_attachment( string $media_url, string $source_site_url ): int|false {
 		return $this->media_importer->import_external_media_as_attachment( $media_url, $source_site_url );
 	}
-
-
 
 	/**
 	 * Imports featured image from external post.
@@ -458,33 +454,5 @@ class External_Posts_API {
 		$post_data['terms'] = $incoming_terms;
 
 		return $post_data;
-	}
-
-	/**
-	 * Adds WebP MIME type to allowed uploads.
-	 *
-	 * @deprecated Delegates to Media_Importer.
-	 * @param array $mime_types Current allowed MIME types.
-	 * @return array Updated MIME types with WebP support.
-	 */
-	public function add_webp_mime_type( array $mime_types ): array {
-		return $this->media_importer->add_webp_mime_type( $mime_types );
-	}
-
-	/**
-	 * Handles WebP file type validation during upload.
-	 *
-	 * @deprecated Delegates to Media_Importer.
-	 * @param array  $wp_check_filetype_and_ext File data with 'ext', 'type', 'proper_filename' keys.
-	 * @param string $_file                     Full path to the file.
-	 * @param string $filename                  File name (may differ from $file if in tmp dir).
-	 * @return array Modified file data.
-	 */
-	public function handle_webp_filetype(
-		array $wp_check_filetype_and_ext,
-		string $_file,
-		string $filename
-	): array {
-		return $this->media_importer->handle_webp_filetype( $wp_check_filetype_and_ext, $_file, $filename );
 	}
 }
