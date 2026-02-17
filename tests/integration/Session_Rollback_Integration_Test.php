@@ -46,7 +46,7 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 	 * Verifies that rolling back a complete session deletes imported posts.
 	 */
 	public function test_rollback_session_deletes_imported_posts(): void {
-		// Arrange - Create session and import posts.
+		// ARRANGE: Create session and import posts.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
 
 		// Create actual WordPress posts.
@@ -76,13 +76,13 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		$this->assertNotNull( get_post( $post_id_1 ) );
 		$this->assertNotNull( get_post( $post_id_2 ) );
 
-		// Act - Rollback the session.
+		// ACT: Rollback the session.
 		$result = $this->rollback_service->rollback_session( $session_id );
 
-		// Assert - Posts were deleted.
+		// ASSERT: Posts were deleted.
 		$this->assertIsArray( $result );
 		$this->assertArrayHasKey( 'deleted_count', $result );
-		$this->assertEquals( 2, $result['deleted_count'] );
+		$this->assertSame( 2, $result['deleted_count'] );
 
 		// Verify posts are deleted.
 		$this->assertNull( get_post( $post_id_1 ) );
@@ -90,14 +90,14 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 
 		// Verify session marked as rolled back.
 		$status = get_post_meta( $session_id, 'status', true );
-		$this->assertEquals( 'rolled_back', $status );
+		$this->assertSame( 'rolled_back', $status );
 	}
 
 	/**
 	 * Verifies that rolling back single item deletes only that post.
 	 */
 	public function test_rollback_item_deletes_single_post(): void {
-		// Arrange - Create session with two posts.
+		// ARRANGE: Create session with two posts.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
 
 		$post_id_1 = $this->factory()->post->create( array( 'post_title' => 'Keep This' ) );
@@ -119,13 +119,13 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 			$post_id_2
 		);
 
-		// Act - Rollback only second item.
+		// ACT: Rollback only second item.
 		$result = $this->rollback_service->rollback_item( $log_id_2 );
 
-		// Assert - Only second post deleted.
+		// ASSERT: Only second post deleted.
 		$this->assertIsArray( $result );
-		$this->assertEquals( 'deleted', $result['action'] );
-		$this->assertEquals( $post_id_2, $result['post_id'] );
+		$this->assertSame( 'deleted', $result['action'] );
+		$this->assertSame( $post_id_2, $result['post_id'] );
 
 		// First post still exists.
 		$this->assertNotNull( get_post( $post_id_1 ) );
@@ -138,37 +138,37 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 	 * Verifies that rollback with nonexistent session returns error.
 	 */
 	public function test_rollback_nonexistent_session_returns_error(): void {
-		// Arrange - Use nonexistent session ID.
+		// ARRANGE: Use nonexistent session ID.
 		$fake_session_id = 999999;
 
-		// Act - Attempt rollback.
+		// ACT: Attempt rollback.
 		$result = $this->rollback_service->rollback_session( $fake_session_id );
 
-		// Assert - Returns WP_Error.
+		// ASSERT: Returns WP_Error.
 		$this->assertInstanceOf( \WP_Error::class, $result );
-		$this->assertEquals( 'session_not_found', $result->get_error_code() );
+		$this->assertSame( 'session_not_found', $result->get_error_code() );
 	}
 
 	/**
 	 * Verifies that rollback with nonexistent log returns error.
 	 */
 	public function test_rollback_nonexistent_log_returns_error(): void {
-		// Arrange - Use nonexistent log ID.
+		// ARRANGE: Use nonexistent log ID.
 		$fake_log_id = 999999;
 
-		// Act - Attempt rollback.
+		// ACT: Attempt rollback.
 		$result = $this->rollback_service->rollback_item( $fake_log_id );
 
-		// Assert - Returns WP_Error.
+		// ASSERT: Returns WP_Error.
 		$this->assertInstanceOf( \WP_Error::class, $result );
-		$this->assertEquals( 'log_not_found', $result->get_error_code() );
+		$this->assertSame( 'log_not_found', $result->get_error_code() );
 	}
 
 	/**
 	 * Verifies that rollback only affects successful/updated imports.
 	 */
 	public function test_rollback_ignores_failed_imports(): void {
-		// Arrange - Create session with success and failed imports.
+		// ARRANGE: Create session with success and failed imports.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
 
 		$post_id = $this->factory()->post->create( array( 'post_title' => 'Success' ) );
@@ -194,12 +194,12 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 
 		$this->repository->complete_session( $session_id );
 
-		// Act - Rollback session.
+		// ACT: Rollback session.
 		$result = $this->rollback_service->rollback_session( $session_id );
 
-		// Assert - Only successful import rolled back.
+		// ASSERT: Only successful import rolled back.
 		$this->assertIsArray( $result );
-		$this->assertEquals( 1, $result['deleted_count'] );
-		$this->assertEquals( 0, $result['restored_count'] );
+		$this->assertSame( 1, $result['deleted_count'] );
+		$this->assertSame( 0, $result['restored_count'] );
 	}
 }

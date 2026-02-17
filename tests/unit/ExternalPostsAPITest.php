@@ -47,7 +47,7 @@ class ExternalPostsAPITest extends TestCase {
 		$result = $this->api->fetch_posts( 'invalid-url', 10 );
 
 		$this->assertInstanceOf( \WP_Error::class, $result );
-		$this->assertEquals( 'invalid_url', $result->get_error_code() );
+		$this->assertSame( 'invalid_url', $result->get_error_code() );
 	}
 
 	/**
@@ -57,7 +57,7 @@ class ExternalPostsAPITest extends TestCase {
 		$result = $this->api->fetch_posts( '', 10 );
 
 		$this->assertInstanceOf( \WP_Error::class, $result );
-		$this->assertEquals( 'invalid_url', $result->get_error_code() );
+		$this->assertSame( 'invalid_url', $result->get_error_code() );
 	}
 
 	/**
@@ -67,7 +67,7 @@ class ExternalPostsAPITest extends TestCase {
 		$result = $this->api->fetch_post_types( 'invalid-url' );
 
 		$this->assertInstanceOf( \WP_Error::class, $result );
-		$this->assertEquals( 'invalid_url', $result->get_error_code() );
+		$this->assertSame( 'invalid_url', $result->get_error_code() );
 	}
 
 	/**
@@ -77,7 +77,7 @@ class ExternalPostsAPITest extends TestCase {
 		$result = $this->api->fetch_post_types( '' );
 
 		$this->assertInstanceOf( \WP_Error::class, $result );
-		$this->assertEquals( 'invalid_url', $result->get_error_code() );
+		$this->assertSame( 'invalid_url', $result->get_error_code() );
 	}
 
 	/**
@@ -115,7 +115,7 @@ class ExternalPostsAPITest extends TestCase {
 		$result = $this->api->add_webp_mime_type( $mime_types );
 
 		$this->assertArrayHasKey( 'webp', $result );
-		$this->assertEquals( 'image/webp', $result['webp'] );
+		$this->assertSame( 'image/webp', $result['webp'] );
 	}
 
 	/**
@@ -134,8 +134,8 @@ class ExternalPostsAPITest extends TestCase {
 
 		$this->assertArrayHasKey( 'ext', $result );
 		$this->assertArrayHasKey( 'type', $result );
-		$this->assertEquals( 'webp', $result['ext'] );
-		$this->assertEquals( 'image/webp', $result['type'] );
+		$this->assertSame( 'webp', $result['ext'] );
+		$this->assertSame( 'image/webp', $result['type'] );
 	}
 
 	/**

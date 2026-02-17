@@ -81,7 +81,7 @@ class URLValidatorTest extends TestCase {
 	public function test_sanitize_external_url_returns_sanitized_url(): void {
 		$url       = 'https://example.com';
 		$sanitized = URL_Validator::sanitize_external_url( $url );
-		$this->assertEquals( $url, $sanitized );
+		$this->assertSame( $url, $sanitized );
 	}
 
 	/**
