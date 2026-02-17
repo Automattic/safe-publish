@@ -54,18 +54,27 @@ class External_Posts_API {
 	private Content_Media_Processor $content_media_processor;
 
 	/**
+	 * Post Type Fetcher instance.
+	 *
+	 * @var Post_Type_Fetcher
+	 */
+	private Post_Type_Fetcher $post_type_fetcher;
+
+	/**
 	 * Constructs the External_Posts_API instance.
 	 *
 	 * @param HTTP_Client|null             $http_client              Optional. HTTP client for making requests.
 	 * @param Media_Importer|null          $media_importer           Optional. Media importer for handling media files.
 	 * @param Embed_Processor|null         $embed_processor          Optional. Embed processor for handling embeds.
 	 * @param Content_Media_Processor|null $content_media_processor  Optional. Content media processor for processing HTML.
+	 * @param Post_Type_Fetcher|null       $post_type_fetcher        Optional. Post type fetcher for retrieving post types.
 	 */
 	public function __construct(
 		?HTTP_Client $http_client = null,
 		?Media_Importer $media_importer = null,
 		?Embed_Processor $embed_processor = null,
-		?Content_Media_Processor $content_media_processor = null
+		?Content_Media_Processor $content_media_processor = null,
+		?Post_Type_Fetcher $post_type_fetcher = null
 	) {
 		$this->http_client             = $http_client ?? new HTTP_Client();
 		$this->media_importer          = $media_importer ?? new Media_Importer( $this->http_client );
@@ -74,6 +83,7 @@ class External_Posts_API {
 			$this->media_importer,
 			$this->embed_processor
 		);
+		$this->post_type_fetcher       = $post_type_fetcher ?? new Post_Type_Fetcher( $this->http_client );
 	}
 
 	/**
@@ -84,66 +94,7 @@ class External_Posts_API {
 	 * @return array|\WP_Error Post types data or error.
 	 */
 	public function fetch_post_types( string $site_url, array $auth_credentials = array() ): array|\WP_Error {
-		// Validate URL first.
-		if ( ! URL_Validator::is_valid_external_url( $site_url ) ) {
-			return new \WP_Error(
-				'invalid_url',
-				__( 'Invalid URL provided.', 'safe-publish' )
-			);
-		}
-
-		// Post types can change and we want to reflect the current state.
-
-		// Build API URL for post types.
-		$api_url = trailingslashit( $site_url ) . 'wp-json/wp/v2/types';
-
-		// Make request.
-		$response = $this->make_request( $api_url, $auth_credentials );
-
-		if ( is_wp_error( $response ) ) {
-			return $response;
-		}
-
-		$response_body   = wp_remote_retrieve_body( $response );
-		$post_types_data = json_decode( $response_body, true );
-
-		// Check for authentication error responses.
-		if ( is_array( $post_types_data ) && isset( $post_types_data['code'] ) ) {
-			return new \WP_Error(
-				'api_error',
-				$post_types_data['message'] ?? __( 'Unknown API error occurred.', 'safe-publish' )
-			);
-		}
-
-		if ( empty( $post_types_data ) || ! is_array( $post_types_data ) ) {
-			$error_msg = sprintf(
-				/* translators: %s: Response body snippet */
-				__( 'No post types found. Response: %s', 'safe-publish' ),
-				substr( $response_body, 0, 200 ) . ( strlen( $response_body ) > 200 ? '…' : '' )
-			);
-			return new \WP_Error(
-				'no_post_types',
-				$error_msg
-			);
-		}
-
-		// Filter to only show post types that support REST API.
-		$filtered_post_types = array();
-		foreach ( $post_types_data as $slug => $post_type ) {
-			// Include if it has a rest_base (which means it's REST API enabled).
-			if ( ! empty( $post_type['rest_base'] ) ) {
-				$filtered_post_types[ $slug ] = array(
-					'slug'        => $slug,
-					'name'        => $post_type['name'] ?? $slug,
-					'label'       => $post_type['name'] ?? $slug, // Use 'name' instead of nested labels.
-					'rest_base'   => $post_type['rest_base'],
-					'description' => $post_type['description'] ?? '',
-				);
-			}
-		}
-
-		// No caching - return fresh data directly.
-		return $filtered_post_types;
+		return $this->post_type_fetcher->fetch_post_types( $site_url, $auth_credentials );
 	}
 
 	/**
