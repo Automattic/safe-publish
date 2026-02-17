@@ -199,7 +199,8 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 	 */
 	public function test_diff_preview_endpoint_returns_403_for_nonexistent_external_id_without_edit_others_posts_capability(): void {
 		// ARRANGE: Create user without edit_others_posts capability.
-		$this->create_user_and_authenticate( 'contributor' );
+		$this->create_user_and_authenticate( 'author' );
+		$this->assertFalse( current_user_can( 'edit_others_posts' ), 'Author should not have edit_others_posts capability' );
 
 		// Create request for non-existent post.
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
@@ -343,7 +344,8 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 	public function test_update_post_endpoint_returns_403_without_edit_others_posts_capability(): void {
 		// ARRANGE: Create user without edit_others_posts capability, attempting
 		// to edit another user's post.
-		$this->create_user_and_authenticate( 'contributor' );
+		$this->create_user_and_authenticate( 'author' );
+		$this->assertFalse( current_user_can( 'edit_others_posts' ), 'Author should not have edit_others_posts capability' );
 
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/update-post' );
 		$request->set_param( 'postId', $this->post_id ); // This post is owned by a different user.
@@ -381,7 +383,8 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 	 */
 	public function test_update_post_endpoint_returns_403_for_nonexistent_post_id_without_edit_others_posts_capability(): void {
 		// ARRANGE: Create user without edit_others_posts capability.
-		$this->create_user_and_authenticate( 'contributor' );
+		$this->create_user_and_authenticate( 'author' );
+		$this->assertFalse( current_user_can( 'edit_others_posts' ), 'Author should not have edit_others_posts capability' );
 
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/update-post' );
 		$request->set_param( 'postId', self::NON_EXISTENT_POST_ID );
@@ -391,7 +394,7 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 		$response = $this->server->dispatch( $request );
 
 		// ASSERT: Users without capability get 403 (not 404).
-		$this->assert_403_response( $response, 'Should return 403 without edit_others_posts capability' );
+		$this->assert_403_response( $response, 'Should return 403 for non-existent post without edit_others_posts capability' );
 	}
 
 	/**
