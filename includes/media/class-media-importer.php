@@ -70,6 +70,9 @@ class Media_Importer {
 		 * }
 		 */
 
+		// Strip query parameters for consistency with import_external_media_as_attachment().
+		$media_url = strtok( $media_url, '?' );
+
 		// Check if we already imported this media.
 		$existing_attachment = $this->get_attachment_by_url( $media_url );
 		if ( $existing_attachment ) {
@@ -365,7 +368,7 @@ class Media_Importer {
 	 * @return int|false Attachment ID on success, false on failure.
 	 */
 	private function get_attachment_by_url( string $original_url ): int|false {
-		// First, check by the exact URL.
+		// Check by the exact URL stored in metadata.
 		$attachments = get_posts(
 			array(
 				'post_type'        => 'attachment',
@@ -377,31 +380,7 @@ class Media_Importer {
 			)
 		);
 
-		if ( ! empty( $attachments ) ) {
-			return $attachments[0]->ID;
-		}
-
-		// If not found by URL, check by filename to prevent duplicates with different URLs.
-		$filename                   = basename( $original_url );
-		$filename_without_extension = pathinfo( $filename, PATHINFO_FILENAME );
-
-		$attachments_by_filename = get_posts(
-			array(
-				'post_type'        => 'attachment',
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'       => array(
-					array(
-						'key'     => '_wp_attached_file',
-						'value'   => $filename_without_extension,
-						'compare' => 'LIKE',
-					),
-				),
-				'posts_per_page'   => 1,
-				'suppress_filters' => false, // Enable caching for VIP compatibility.
-			)
-		);
-
-		return ! empty( $attachments_by_filename ) ? $attachments_by_filename[0]->ID : false;
+		return ! empty( $attachments ) ? $attachments[0]->ID : false;
 	}
 
 	/**
