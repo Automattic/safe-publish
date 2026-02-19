@@ -152,22 +152,22 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 		$this->assertArrayHasKey( 'incomingRenderedHtml', $result, 'Should have incoming rendered HTML' );
 		$this->assertArrayHasKey( 'currentRenderedHtml', $result, 'Should have current rendered HTML' );
 
-		// Verify local post ID matches.
+		// ASSERT: Verify local post ID matches.
 		$this->assertSame( $this->post_id, $result['localPostId'] );
 
-		// Verify diff was generated.
+		// ASSERT: Verify diff was generated.
 		$this->assertIsString( $result['contentDiffHtml'] );
 		$this->assertNotEmpty( $result['contentDiffHtml'], 'Content diff should not be empty' );
 
-		// Verify incoming data extracted correctly from mock response.
+		// ASSERT: Verify incoming data extracted correctly from mock response.
 		$this->assertSame( 'Updated External Title', $result['incoming']['title'] );
 		$this->assertSame( 'Updated external excerpt.', $result['incoming']['excerpt'] );
 
-		// Verify current data extracted from local post.
+		// ASSERT: Verify current data extracted from local post.
 		$this->assertSame( 'Original Title', $result['current']['title'] );
 		$this->assertSame( 'Original excerpt.', $result['current']['excerpt'] );
 
-		// Verify non-content diffs structure exists.
+		// ASSERT: Verify non-content diffs structure exists.
 		$this->assertIsArray( $result['nonContentDiffs'] );
 	}
 
@@ -240,7 +240,7 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 		$this->assertSame( $this->post_id, $data['post_id'] );
 		$this->assertSame( 200, $response->get_status() );
 
-		// Verify post was updated.
+		// ASSERT: Verify post was updated.
 		$updated_post = get_post( $this->post_id );
 		$this->assertInstanceOf( \WP_Post::class, $updated_post, 'Post should exist after update' );
 		$this->assertSame( 'Updated Title', $updated_post->post_title );
@@ -311,7 +311,7 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 		$this->assertTrue( $data['success'] );
 		$this->assertSame( 200, $response->get_status() );
 
-		// Verify term assignment.
+		// ASSERT: Verify term assignment.
 		$post_categories = wp_get_post_categories( $this->post_id );
 		$this->assertContains( $category->term_id, $post_categories, 'Post should have the test category assigned' );
 	}
