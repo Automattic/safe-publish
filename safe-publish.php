@@ -51,6 +51,10 @@ spl_autoload_register(
 			$file_path .= 'api/class-' . str_replace( 'api/', '', $class_path ) . '.php';
 		} elseif ( 0 === strpos( $class_path, 'auth/' ) ) {
 			$file_path .= 'auth/class-' . str_replace( 'auth/', '', $class_path ) . '.php';
+		} elseif ( 0 === strpos( $class_path, 'media/' ) ) {
+			$file_path .= 'media/class-' . str_replace( 'media/', '', $class_path ) . '.php';
+		} elseif ( 0 === strpos( $class_path, 'content/' ) ) {
+			$file_path .= 'content/class-' . str_replace( 'content/', '', $class_path ) . '.php';
 		} elseif ( 0 === strpos( $class_path, 'utils/' ) ) {
 			$file_path .= 'utils/class-' . str_replace( 'utils/', '', $class_path ) . '.php';
 		} elseif ( 0 === strpos( $class_path, 'validators/' ) ) {
