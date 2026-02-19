@@ -40,13 +40,6 @@ class External_Posts_API {
 	private Media_Importer $media_importer;
 
 	/**
-	 * Embed Processor instance.
-	 *
-	 * @var Embed_Processor
-	 */
-	private Embed_Processor $embed_processor;
-
-	/**
 	 * Content Media Processor instance.
 	 *
 	 * @var Content_Media_Processor
@@ -78,10 +71,10 @@ class External_Posts_API {
 	) {
 		$this->http_client             = $http_client ?? new HTTP_Client();
 		$this->media_importer          = $media_importer ?? new Media_Importer( $this->http_client );
-		$this->embed_processor         = $embed_processor ?? new Embed_Processor();
+		$embed_processor_instance      = $embed_processor ?? new Embed_Processor();
 		$this->content_media_processor = $content_media_processor ?? new Content_Media_Processor(
 			$this->media_importer,
-			$this->embed_processor
+			$embed_processor_instance
 		);
 		$this->post_type_fetcher       = $post_type_fetcher ?? new Post_Type_Fetcher( $this->http_client );
 	}
