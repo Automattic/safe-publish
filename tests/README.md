@@ -8,7 +8,7 @@ This directory contains comprehensive unit tests for the Safe Publish WordPress 
 
 ```
 tests/
-├── unit/                          # Unit tests (PHPUnit)
+├── unit/                         # Unit tests (PHPUnit)
 │   ├── bootstrap.php             # Test bootstrap and setup
 │   ├── stubs.php                 # WordPress function stubs
 │   ├── test-utils.php            # Testing utility functions
@@ -20,7 +20,19 @@ tests/
 │   ├── SafePublishAPITest.php    # REST API tests
 │   └── RESTBaseTest.php          # REST base class tests
 ├── integration/                  # Integration tests (WP Test Suite)
-│   └── bootstrap.php             # Integration test bootstrap
+│   ├── bootstrap.php             # Integration test bootstrap
+│   ├── Integration_Test_Case.php # Base class for integration tests
+│   ├── External_Posts_API_Integration_Test.php  # Media import workflow tests
+│   ├── Safe_Publish_API_Integration_Test.php    # REST API integration tests
+│   ├── Import_History_Integration_Test.php      # Import history tests
+│   └── Session_Rollback_Integration_Test.php    # Rollback functionality tests
+├── fixtures/                     # Test fixtures (images, etc.)
+│   └── images/                   # Real image files for testing
+│       ├── README.md             # Fixture documentation
+│       ├── test-1x1.jpg          # JPEG test image
+│       ├── test-1x1.png          # PNG test image
+│       ├── test-1x1.gif          # GIF test image
+│       └── test-1x1.webp         # WebP test image
 ├── e2e/                          # End-to-end tests (Playwright)
 │   └── settings/                 # Settings page tests
 └── src/                          # JavaScript/TypeScript tests (Vitest)
@@ -92,7 +104,41 @@ The test suite provides comprehensive coverage for:
   - Component instantiation
   - API getter methods
 
-### API & Integration
+### Integration Tests
+
+- **External Posts API** (`External_Posts_API_Integration_Test.php`)
+  - Complete media import workflow (27 tests, 112 assertions)
+  - Fixture-based mocking for real image validation
+  - Attachment creation and metadata storage
+  - URL replacement in content
+  - Duplicate media detection
+  - Multiple image formats (JPEG, PNG, GIF, WebP)
+  - Error handling and edge cases
+  - Complex content with mixed media types
+
+- **Safe Publish API** (`Safe_Publish_API_Integration_Test.php`)
+  - REST API endpoints in WordPress environment
+  - Request/response handling
+  - Authentication and permissions
+
+- **Import History** (`Import_History_Integration_Test.php`)
+  - Session tracking
+  - Import logging and retrieval
+  - History filtering
+
+- **Session Rollback** (`Session_Rollback_Integration_Test.php`)
+  - Rollback functionality
+  - Post deletion and cleanup
+  - Session state management
+
+**Media Import Testing**: Integration tests use a two-part mocking strategy to enable complete workflow testing without network calls:
+
+1. HTTP mock returns real fixture file contents
+2. Empty file fix populates temp files before WordPress validation
+
+See `tests/fixtures/images/README.md` for implementation details.
+
+### Unit Tests - API Components
 
 - **External Posts API** (`ExternalPostsAPITest.php`)
   - Post fetching and validation
@@ -116,7 +162,7 @@ The test suite provides comprehensive coverage for:
   - User agent generation
   - Environment detection
 
-### Security & Validation
+### Unit Tests - Security & Validation
 
 - **URL Validator** (`URLValidatorTest.php`)
   - URL format validation
