@@ -213,7 +213,7 @@ describe( 'updatePostContent', () => {
 
 		const result = await updatePostContent( 123, 'Content' );
 		expect( result.success ).toBe( false );
-		expect( result.error ).toBe( 'Invalid response' );
+		expect( result.error ).toBe( 'Invalid response from server' );
 	} );
 
 	it( 'should handle success: false in response', async () => {

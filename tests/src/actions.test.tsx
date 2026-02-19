@@ -35,7 +35,7 @@ describe( 'Actions configuration', () => {
 	} );
 
 	it( 'should have post diff action', () => {
-		const diffAction = actions.find( ( a ) => a.id === 'tertiary' );
+		const diffAction = actions.find( ( a ) => a.id === 'post-diff' );
 		expect( diffAction ).toBeDefined();
 		expect( diffAction?.label ).toBe( 'Post Diff' );
 		expect( diffAction?.supportsBulk ).toBe( false );
@@ -94,13 +94,13 @@ describe( 'Update action', () => {
 
 describe( 'Post diff action', () => {
 	it( 'should have RenderModal component', () => {
-		const diffAction = actions.find( ( a: any ) => a.id === 'tertiary' );
+		const diffAction = actions.find( ( a: any ) => a.id === 'post-diff' );
 		expect( diffAction?.RenderModal ).toBeDefined();
 		expect( typeof diffAction?.RenderModal ).toBe( 'function' );
 	} );
 
 	it( 'should have fill modal size', () => {
-		const diffAction = actions.find( ( a: any ) => a.id === 'tertiary' );
+		const diffAction = actions.find( ( a: any ) => a.id === 'post-diff' );
 		expect( diffAction?.modalSize ).toBe( 'fill' );
 	} );
 } );
