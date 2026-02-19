@@ -1,0 +1,231 @@
+<?php
+/**
+ * Media Importer Test
+ *
+ * @package Safe_Publish
+ */
+
+declare(strict_types=1);
+
+namespace Safe_Publish\Tests;
+
+use PHPUnit\Framework\TestCase;
+use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\API\HTTP_Client;
+
+/**
+ * Media Importer Test.
+ *
+ * Tests complex WebP logic in the Media_Importer class.
+ */
+class MediaImporterTest extends TestCase {
+
+	/**
+	 * Media Importer instance.
+	 *
+	 * @var Media_Importer
+	 */
+	private Media_Importer $importer;
+
+	/**
+	 * Sets up test fixtures.
+	 */
+	#[\Override]
+	protected function setUp(): void {
+		parent::setUp();
+
+		// Create real HTTP_Client instance (WebP methods don't use it).
+		$http_client    = new HTTP_Client();
+		$this->importer = new Media_Importer( $http_client );
+	}
+
+	/**
+	 * Verifies that WebP MIME type is added to allowed uploads.
+	 */
+	public function test_add_webp_mime_type_adds_webp_to_allowed_types(): void {
+		$mime_types = array(
+			'jpg|jpeg|jpe' => 'image/jpeg',
+			'png'          => 'image/png',
+		);
+
+		$result = $this->importer->add_webp_mime_type( $mime_types );
+
+		$this->assertArrayHasKey( 'webp', $result );
+		$this->assertSame( 'image/webp', $result['webp'] );
+
+		// Verify original MIME types are preserved.
+		$this->assertArrayHasKey( 'jpg|jpeg|jpe', $result );
+		$this->assertArrayHasKey( 'png', $result );
+	}
+
+	/**
+	 * Data provider for WebP case variations.
+	 *
+	 * @return array<string, array{filename: string, description: string}>
+	 */
+	public static function webp_case_variations_provider(): array {
+		return array(
+			'lowercase'  => array(
+				'filename'    => 'test-image.webp',
+				'description' => 'lowercase extension',
+			),
+			'uppercase'  => array(
+				'filename'    => 'test-image.WEBP',
+				'description' => 'uppercase extension',
+			),
+			'mixed-case' => array(
+				'filename'    => 'test-image.WebP',
+				'description' => 'mixed-case extension',
+			),
+		);
+	}
+
+	/**
+	 * Verifies that WebP detection is case-insensitive.
+	 *
+	 * @dataProvider webp_case_variations_provider
+	 *
+	 * @param string $filename    Filename to test.
+	 * @param string $description Test case description.
+	 */
+	public function test_handle_webp_filetype_is_case_insensitive(
+		string $filename,
+		string $description
+	): void {
+		$wp_check_filetype_and_ext = array(
+			'ext'             => false,
+			'type'            => false,
+			'proper_filename' => false,
+		);
+
+		$file = '/tmp/' . $filename;
+
+		$result = $this->importer->handle_webp_filetype(
+			$wp_check_filetype_and_ext,
+			$file,
+			$filename
+		);
+
+		$this->assertSame( 'webp', $result['ext'], "Should handle {$description}" );
+		$this->assertSame( 'image/webp', $result['type'], "Should handle {$description}" );
+	}
+
+	/**
+	 * Verifies that non-WebP files are not modified.
+	 */
+	public function test_handle_webp_filetype_preserves_non_webp_files(): void {
+		$wp_check_filetype_and_ext = array(
+			'ext'             => 'jpg',
+			'type'            => 'image/jpeg',
+			'proper_filename' => false,
+		);
+
+		$filename = 'test-image.jpg';
+		$file     = '/tmp/test-image.jpg';
+
+		$result = $this->importer->handle_webp_filetype(
+			$wp_check_filetype_and_ext,
+			$file,
+			$filename
+		);
+
+		// Should not modify already-valid file types.
+		$this->assertSame( 'jpg', $result['ext'] );
+		$this->assertSame( 'image/jpeg', $result['type'] );
+	}
+
+	/**
+	 * Verifies that non-WebP unrecognized files are left unmodified.
+	 */
+	public function test_handle_webp_filetype_only_affects_webp_extension(): void {
+		$wp_check_filetype_and_ext = array(
+			'ext'             => false,
+			'type'            => false,
+			'proper_filename' => false,
+		);
+
+		$filename = 'test-image.png';
+		$file     = '/tmp/test-image.png';
+
+		$result = $this->importer->handle_webp_filetype(
+			$wp_check_filetype_and_ext,
+			$file,
+			$filename
+		);
+
+		// Should not modify non-WebP files.
+		$this->assertFalse( $result['ext'] );
+		$this->assertFalse( $result['type'] );
+	}
+
+	/**
+	 * Verifies that WebP handling does not override existing type.
+	 */
+	public function test_handle_webp_filetype_does_not_override_existing_type(): void {
+		$wp_check_filetype_and_ext = array(
+			'ext'             => false,
+			'type'            => 'image/jpeg', // Type already set.
+			'proper_filename' => false,
+		);
+
+		$filename = 'test.webp';
+		$file     = '/tmp/test.webp';
+
+		$result = $this->importer->handle_webp_filetype(
+			$wp_check_filetype_and_ext,
+			$file,
+			$filename
+		);
+
+		// Should NOT override existing type, even for .webp files.
+		$this->assertFalse( $result['ext'] );
+		$this->assertSame( 'image/jpeg', $result['type'] );
+	}
+
+	/**
+	 * Verifies that WebP handling does not override existing extension.
+	 */
+	public function test_handle_webp_filetype_does_not_override_existing_ext(): void {
+		$wp_check_filetype_and_ext = array(
+			'ext'             => 'jpg', // Extension already set.
+			'type'            => false,
+			'proper_filename' => false,
+		);
+
+		$filename = 'test.webp';
+		$file     = '/tmp/test.webp';
+
+		$result = $this->importer->handle_webp_filetype(
+			$wp_check_filetype_and_ext,
+			$file,
+			$filename
+		);
+
+		// Should NOT override existing extension, even for .webp files.
+		$this->assertSame( 'jpg', $result['ext'] );
+		$this->assertFalse( $result['type'] );
+	}
+
+	/**
+	 * Verifies that proper_filename field is preserved during WebP handling.
+	 */
+	public function test_handle_webp_filetype_preserves_proper_filename(): void {
+		$wp_check_filetype_and_ext = array(
+			'ext'             => false,
+			'type'            => false,
+			'proper_filename' => 'sanitized-name.webp',
+		);
+
+		$filename = 'test.webp';
+		$file     = '/tmp/test.webp';
+
+		$result = $this->importer->handle_webp_filetype(
+			$wp_check_filetype_and_ext,
+			$file,
+			$filename
+		);
+
+		// Should preserve proper_filename without modification.
+		$this->assertSame( 'sanitized-name.webp', $result['proper_filename'] );
+	}
+}
