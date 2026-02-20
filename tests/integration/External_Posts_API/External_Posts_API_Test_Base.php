@@ -124,6 +124,11 @@ abstract class External_Posts_API_Test_Base extends Integration_Test_Case {
 	 * @return array|WP_Error Mock response or error.
 	 */
 	public function mock_http_request( $preempt, array $args, string $url ) {
+		// explicitly unset $args, to resolve Psalm's PossiblyUnusedParam error
+		// during the pre-commit check. A @psalm-suppress annotation doesn't
+		// solve this.
+		unset( $args );
+
 		// Only mock example.com URLs.
 		if ( ! str_contains( $url, 'example.com' ) ) {
 			return $preempt;
