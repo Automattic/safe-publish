@@ -39,12 +39,20 @@ final class Admin_Handler {
 	private $import_history;
 
 	/**
+	 * Admin Menu Manager instance.
+	 *
+	 * @var Admin_Menu_Manager
+	 */
+	private Admin_Menu_Manager $menu_manager;
+
+	/**
 	 * Constructs the Admin_Handler instance.
 	 *
 	 * @param External_Posts_API $api External Posts API instance.
 	 */
 	public function __construct( External_Posts_API $api ) {
-		$this->api = $api;
+		$this->api          = $api;
+		$this->menu_manager = new Admin_Menu_Manager( $api );
 
 		$repository       = new History_Repository();
 		$renderer         = new History_Renderer();
@@ -63,50 +71,19 @@ final class Admin_Handler {
 	 * Initializes admin functionality.
 	 */
 	public function init(): void {
-		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
+		$this->menu_manager->register();
+
 		add_action( 'admin_init', array( $this, 'admin_init' ) );
 
 		// Initialize import history.
 		$this->import_history->init();
 
-		// Early VIP-specific asset preparation.
-		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
-			add_action( 'admin_enqueue_scripts', array( $this, 'prepare_vip_dependencies' ), 5 );
-		}
-
-		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 		add_action( 'wp_ajax_safe_publish_fetch_posts', array( $this, 'ajax_fetch_posts' ) );
 		add_action( 'wp_ajax_safe_publish_fetch_post_types', array( $this, 'ajax_fetch_post_types' ) );
 		add_action( 'wp_ajax_safe_publish_test_connection', array( $this, 'ajax_test_connection' ) );
 		add_action( 'wp_ajax_safe_publish_create_draft', array( $this, 'ajax_create_draft' ) );
 		add_action( 'wp_ajax_safe_publish_bulk_import', array( $this, 'ajax_bulk_import' ) );
 		add_action( 'wp_ajax_safe_publish_debug_auth', array( $this, 'ajax_debug_auth' ) );
-	}
-
-	/**
-	 * Adds admin menu.
-	 */
-	public function add_admin_menu(): void {
-		// Main menu page - Tools.
-		add_menu_page(
-			__( 'Safe Publish', 'safe-publish' ),
-			__( 'Safe Publish', 'safe-publish' ),
-			'manage_options',
-			'safe-publish',
-			array( $this, 'render_admin_page' ),
-			'dashicons-external',
-			99
-		);
-
-		// Settings submenu page.
-		add_submenu_page(
-			'safe-publish',
-			__( 'Safe Publish Settings', 'safe-publish' ),
-			__( 'Settings', 'safe-publish' ),
-			'manage_options',
-			'safe-publish-settings',
-			array( $this, 'render_settings_page' )
-		);
 	}
 
 	/**
@@ -161,76 +138,6 @@ final class Admin_Handler {
 				)
 			);
 		}
-	}
-
-	/**
-	 * Prepares VIP-specific dependencies early.
-	 *
-	 * @param string $hook_suffix Current admin page hook suffix.
-	 */
-	public function prepare_vip_dependencies( $hook_suffix ): void {
-		// Only on our specific admin page.
-		if ( 'toplevel_page_safe-publish' !== $hook_suffix ) {
-			return;
-		}
-
-		// Force registration of required WordPress core scripts in VIP environment.
-		wp_enqueue_script( 'wp-element' );
-		wp_enqueue_script( 'wp-components' );
-
-		// Try to register wp-dataviews if available.
-		if ( ! wp_script_is( 'wp-dataviews', 'registered' ) ) {
-			// Attempt to register wp-dataviews if the file exists.
-			$dataviews_path = ABSPATH . WPINC . '/js/dist/dataviews.min.js';
-			if ( file_exists( $dataviews_path ) ) {
-				wp_register_script(
-					'wp-dataviews',
-					includes_url( 'js/dist/dataviews.min.js' ),
-					array( 'wp-element', 'wp-components' ),
-					get_bloginfo( 'version' ),
-					true
-				);
-			}
-		}
-	}
-
-	/**
-	 * Renders the admin page.
-	 */
-	public function render_admin_page(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'safe-publish' ) );
-		}
-
-		$admin_page = new Admin_Page( $this->api );
-		$admin_page->render();
-	}
-
-	/**
-	 * Renders the settings page.
-	 */
-	public function render_settings_page(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'safe-publish' ) );
-		}
-
-		$settings_page = new Settings_Page();
-		$settings_page->render();
-	}
-
-	/**
-	 * Enqueues admin assets.
-	 *
-	 * @param string $hook_suffix Current admin page hook suffix.
-	 */
-	public function enqueue_admin_assets( $hook_suffix ): void {
-		// Only enqueue on our main admin page (tools page).
-		if ( 'toplevel_page_safe-publish' !== $hook_suffix ) {
-			return;
-		}
-
-		$admin_page = new Admin_Page( $this->api );
-		$admin_page->enqueue_assets();
 	}
 
 	/**
