@@ -237,7 +237,7 @@ Analyze import duration and success rates:
 
 ## Integration with Other Logs
 
-Import history complements WordPress's built-in logging:
+Import history complements WordPress' built-in logging:
 
 ### Activity Log Plugins
 
