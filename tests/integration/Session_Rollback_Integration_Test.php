@@ -72,7 +72,7 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 
 		$this->repository->complete_session( $session_id );
 
-		// Verify posts exist.
+		// ASSERT: Verify posts exist.
 		$this->assertNotNull( get_post( $post_id_1 ) );
 		$this->assertNotNull( get_post( $post_id_2 ) );
 
@@ -84,11 +84,11 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		$this->assertArrayHasKey( 'deleted_count', $result );
 		$this->assertSame( 2, $result['deleted_count'] );
 
-		// Verify posts are deleted.
+		// ASSERT: Verify posts are deleted.
 		$this->assertNull( get_post( $post_id_1 ) );
 		$this->assertNull( get_post( $post_id_2 ) );
 
-		// Verify session marked as rolled back.
+		// ASSERT: Verify session marked as rolled back.
 		$status = get_post_meta( $session_id, 'status', true );
 		$this->assertSame( 'rolled_back', $status );
 	}
@@ -127,10 +127,10 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		$this->assertSame( 'deleted', $result['action'] );
 		$this->assertSame( $post_id_2, $result['post_id'] );
 
-		// First post still exists.
+		// ASSERT: Verify first post still exists.
 		$this->assertNotNull( get_post( $post_id_1 ) );
 
-		// Second post deleted.
+		// ASSERT: Verify second post deleted.
 		$this->assertNull( get_post( $post_id_2 ) );
 	}
 

@@ -68,9 +68,9 @@ abstract class External_Posts_API_Test_Base extends Integration_Test_Case {
 	/**
 	 * Fixes empty temp files by populating them with fixture content.
 	 *
-	 * WordPress's download_url() doesn't write mocked response bodies to temp
-	 * files. This filter intercepts the file before sideload and populates it
-	 * with fixture content.
+	 * Since download_url() doesn't write mocked response bodies to temp files,
+	 * this filter intercepts the file before sideload and populates it with
+	 * fixture content.
 	 *
 	 * @param array $file File array with 'tmp_name' and 'name' keys.
 	 * @return array Modified file array.
@@ -116,8 +116,7 @@ abstract class External_Posts_API_Test_Base extends Integration_Test_Case {
 	 * Mocks HTTP requests for media downloads.
 	 *
 	 * Serves real image files from tests/fixtures/images/ directory, allowing
-	 * WordPress's media_handle_sideload() to validate and process actual image
-	 * data.
+	 * media_handle_sideload() to validate and process actual image data.
 	 *
 	 * @param false|array|WP_Error $preempt A preemptive return value.
 	 * @param array                $args    HTTP request arguments.
@@ -250,7 +249,7 @@ abstract class External_Posts_API_Test_Base extends Integration_Test_Case {
 		$size = strlen( $file_contents );
 
 		// Return successful response with real file data.
-		// Format must match WordPress's wp_remote_get() expectations.
+		// Format must match wp_remote_get() expectations.
 		return array(
 			'headers'       => array(
 				'content-type'   => $mime_type,
