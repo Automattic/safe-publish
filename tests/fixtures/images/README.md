@@ -19,7 +19,7 @@ The integration tests use a two-part mocking strategy:
 1. **HTTP Mock** (`pre_http_request` filter) - Returns real file contents from these fixtures
 2. **Empty File Fix** (`wp_handle_sideload_prefilter` filter) - Populates temp files before WordPress processes them
 
-WordPress' `download_url()` creates empty temp files even when HTTP responses contain data. The `fix_empty_temp_files()` method detects empty files and copies fixture content to them before `media_handle_sideload()` validates the file.
+`download_url()` creates empty temp files even when HTTP responses contain data. The `fix_empty_temp_files()` method detects empty files and copies fixture content to them before `media_handle_sideload()` validates the file.
 
 This approach enables:
 
