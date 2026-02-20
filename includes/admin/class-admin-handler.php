@@ -46,13 +46,21 @@ final class Admin_Handler {
 	private Admin_Menu_Manager $menu_manager;
 
 	/**
+	 * Settings Sanitizer instance.
+	 *
+	 * @var Settings_Sanitizer
+	 */
+	private Settings_Sanitizer $settings_sanitizer;
+
+	/**
 	 * Constructs the Admin_Handler instance.
 	 *
 	 * @param External_Posts_API $api External Posts API instance.
 	 */
 	public function __construct( External_Posts_API $api ) {
-		$this->api          = $api;
-		$this->menu_manager = new Admin_Menu_Manager( $api );
+		$this->api                = $api;
+		$this->menu_manager       = new Admin_Menu_Manager( $api );
+		$this->settings_sanitizer = new Settings_Sanitizer();
 
 		$repository       = new History_Repository();
 		$renderer         = new History_Renderer();
@@ -72,8 +80,7 @@ final class Admin_Handler {
 	 */
 	public function init(): void {
 		$this->menu_manager->register();
-
-		add_action( 'admin_init', array( $this, 'admin_init' ) );
+		$this->settings_sanitizer->register();
 
 		// Initialize import history.
 		$this->import_history->init();
@@ -84,60 +91,6 @@ final class Admin_Handler {
 		add_action( 'wp_ajax_safe_publish_create_draft', array( $this, 'ajax_create_draft' ) );
 		add_action( 'wp_ajax_safe_publish_bulk_import', array( $this, 'ajax_bulk_import' ) );
 		add_action( 'wp_ajax_safe_publish_debug_auth', array( $this, 'ajax_debug_auth' ) );
-	}
-
-	/**
-	 * Handles admin initialization.
-	 */
-	public function admin_init(): void {
-		register_setting(
-			'safe_publish_settings',
-			'safe_publish_external_site_url',
-			array(
-				'sanitize_callback' => array( $this, 'sanitize_url' ),
-				'default'           => '',
-			)
-		);
-
-		register_setting(
-			'safe_publish_settings',
-			'safe_publish_number_of_posts',
-			array(
-				'sanitize_callback' => array( $this, 'sanitize_number_of_posts' ),
-				'default'           => 10,
-			)
-		);
-
-		// VIP-safe authentication settings.
-		register_setting(
-			'safe_publish_settings',
-			'safe_publish_shared_secret',
-			array(
-				'sanitize_callback' => array( $this, 'sanitize_shared_secret' ),
-				'default'           => '',
-			)
-		);
-
-		// Basic authentication settings (development only).
-		if ( Environment::is_development() ) {
-			register_setting(
-				'safe_publish_settings',
-				'safe_publish_username',
-				array(
-					'sanitize_callback' => array( $this, 'sanitize_username' ),
-					'default'           => '',
-				)
-			);
-
-			register_setting(
-				'safe_publish_settings',
-				'safe_publish_password',
-				array(
-					'sanitize_callback' => array( $this, 'sanitize_password' ),
-					'default'           => '',
-				)
-			);
-		}
 	}
 
 	/**
@@ -871,118 +824,6 @@ final class Admin_Handler {
 				'error'       => $e->getMessage(),
 			);
 		}
-	}
-
-	/**
-	 * Sanitizes URL setting.
-	 *
-	 * @param string $url URL to sanitize.
-	 * @return string Sanitized URL.
-	 */
-	public function sanitize_url( $url ): string {
-		$url = esc_url_raw( $url );
-
-		if ( empty( $url ) ) {
-			return '';
-		}
-
-		// Use the URL validator.
-		if ( ! \Safe_Publish\Validators\URL_Validator::is_valid_external_url( $url ) ) {
-			add_settings_error(
-				'safe_publish_external_site_url',
-				'invalid_url',
-				__( 'Please enter a valid external site URL.', 'safe-publish' )
-			);
-			return get_option( 'safe_publish_external_site_url', '' );
-		}
-
-		return $url;
-	}
-
-	/**
-	 * Sanitizes number of posts setting.
-	 *
-	 * @param mixed $value Value to sanitize.
-	 * @return int Sanitized number of posts.
-	 */
-	public function sanitize_number_of_posts( $value ): int {
-		$number = absint( $value );
-
-		if ( $number < 1 || $number > 100 ) {
-			add_settings_error(
-				'safe_publish_number_of_posts',
-				'invalid_number',
-				__( 'Number of posts must be between 1 and 100.', 'safe-publish' )
-			);
-			return get_option( 'safe_publish_number_of_posts', 10 );
-		}
-
-		return $number;
-	}
-
-	/**
-	 * Sanitizes checkbox value.
-	 *
-	 * @param mixed $value Value to sanitize.
-	 * @return bool Sanitized checkbox value.
-	 */
-	public function sanitize_checkbox( $value ): bool {
-		return (bool) $value;
-	}
-
-	/**
-	 * Sanitizes shared secret for VIP-safe authentication.
-	 *
-	 * @param mixed $value Value to sanitize.
-	 * @return string Sanitized shared secret.
-	 */
-	public function sanitize_shared_secret( $value ): string {
-		if ( empty( $value ) ) {
-			return '';
-		}
-
-		$secret = sanitize_text_field( $value );
-
-		// Validate length - shared secrets should be at least 32 characters for security.
-		if ( strlen( $secret ) < 32 ) {
-			add_settings_error(
-				'safe_publish_shared_secret',
-				'invalid_secret',
-				__( 'Shared secret must be at least 32 characters long for security.', 'safe-publish' )
-			);
-			return get_option( 'safe_publish_shared_secret', '' );
-		}
-
-		return $secret;
-	}
-
-	/**
-	 * Sanitizes username for Basic authentication (development only).
-	 *
-	 * @param mixed $value Value to sanitize.
-	 * @return string Sanitized username.
-	 */
-	public function sanitize_username( $value ): string {
-		if ( ! Environment::is_development() ) {
-			return '';
-		}
-
-		return sanitize_text_field( $value );
-	}
-
-	/**
-	 * Sanitizes password for Basic authentication (development only).
-	 *
-	 * @param mixed $value Value to sanitize.
-	 * @return string Sanitized password.
-	 */
-	public function sanitize_password( $value ): string {
-		if ( ! Environment::is_development() ) {
-			return '';
-		}
-
-		// Don't sanitize passwords beyond trimming whitespace.
-		return trim( $value );
 	}
 
 	/**
