@@ -60,6 +60,13 @@ final class Admin_Handler {
 	private Content_Processor $content_processor;
 
 	/**
+	 * Post Import Service instance.
+	 *
+	 * @var Post_Import_Service
+	 */
+	private Post_Import_Service $post_import_service;
+
+	/**
 	 * Constructs the Admin_Handler instance.
 	 *
 	 * @param External_Posts_API $api External Posts API instance.
@@ -80,6 +87,12 @@ final class Admin_Handler {
 			$renderer,
 			$formatter,
 			$rollback_service
+		);
+
+		$this->post_import_service = new Post_Import_Service(
+			$api,
+			$this->content_processor,
+			$this->import_history
 		);
 	}
 
@@ -529,15 +542,16 @@ final class Admin_Handler {
 		}
 
 		// Create import session.
-		$source_url = get_option( 'safe_publish_external_site_url', '' );
-		$session_id = $this->import_history->create_session( $source_url, 'bulk' );
+		$source_url     = get_option( 'safe_publish_external_site_url', '' );
+		$session_result = $this->import_history->create_session( $source_url, 'bulk' );
+		$session_id     = is_wp_error( $session_result ) ? null : $session_result;
 
 		$results    = array();
 		$successful = 0;
 		$failed     = 0;
 
 		foreach ( $posts_data as $post_data ) {
-			$result    = $this->import_single_post( $post_data, $session_id );
+			$result    = $this->post_import_service->import_post( $post_data, $session_id );
 			$results[] = $result;
 
 			if ( $result['success'] ) {
@@ -562,248 +576,6 @@ final class Admin_Handler {
 				'session_id' => $session_id,
 			)
 		);
-	}
-
-	/**
-	 * Imports a single post as part of bulk import.
-	 *
-	 * @param array $post_data  Post data to import.
-	 * @param int   $session_id Optional. Import session ID. Default null.
-	 * @return array Result data for this post.
-	 */
-	private function import_single_post( $post_data, $session_id = null ): array {
-		try {
-			$external_post_id = absint( $post_data['id'] ?? 0 );
-			$title            = sanitize_text_field( $post_data['title'] ?? '' );
-			$content          = wp_unslash( $post_data['content'] ?? '' ); // Preserve original formatting.
-
-			// Ensure content is UTF-8 encoded.
-			if ( ! mb_check_encoding( $content, 'UTF-8' ) ) {
-				$content = mb_convert_encoding( $content, 'UTF-8', 'auto' );
-			}
-			$external_link     = esc_url_raw( $post_data['link'] ?? '' );
-			$featured_media_id = absint( $post_data['featured_media'] ?? 0 );
-			$raw_post_type     = sanitize_text_field( $post_data['post_type'] ?? 'post' );
-
-			if ( empty( $title ) || empty( $external_post_id ) ) {
-				return array(
-					'external_id' => $external_post_id,
-					'title'       => $title,
-					'success'     => false,
-					'error'       => __( 'Missing required post data.', 'safe-publish' ),
-				);
-			}
-
-			// Convert plural post types to singular for WordPress compatibility.
-			$post_type_mapping = array(
-				'posts'          => 'post',
-				'pages'          => 'page',
-				'attachments'    => 'attachment',
-				'revisions'      => 'revision',
-				'nav_menu_items' => 'nav_menu_item',
-			);
-
-			$post_type = isset( $post_type_mapping[ $raw_post_type ] )
-				? $post_type_mapping[ $raw_post_type ]
-				: $raw_post_type;
-
-			// Ensure the post type exists.
-			if ( ! post_type_exists( $post_type ) ) {
-				$post_type = 'post';
-			}
-
-			// Check user permissions for this post type.
-			if ( 'page' === $post_type && ! current_user_can( 'edit_pages' ) ) {
-				$post_type = 'post'; // Fallback to post if can't create pages.
-			} elseif ( 'page' !== $post_type && ! current_user_can( 'edit_posts' ) ) {
-				$post_type = 'post'; // Fallback for other post types.
-			}
-
-			// Process content to import media and fix links (done once for both new and existing posts).
-			$processed_content = $content;
-			if ( ! empty( $content ) && ! empty( $external_link ) ) {
-				// Extract the site URL from the external link.
-				$site_url          = wp_parse_url( $external_link, PHP_URL_SCHEME ) . '://' . wp_parse_url( $external_link, PHP_URL_HOST );
-				$processed_content = $this->content_processor->process_content( $content, $site_url );
-			}
-
-			// Check if a draft already exists for this external post.
-			$existing_posts = get_posts(
-				array(
-					'meta_key'         => 'safe_publish_external_post_id',
-					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-					'meta_value'       => $external_post_id,
-					'post_status'      => array( 'draft', 'publish', 'pending', 'private' ),
-					'posts_per_page'   => 1,
-					'suppress_filters' => false, // Enable caching for VIP compatibility.
-				)
-			);
-
-			$existing_post = null;
-			if ( ! empty( $existing_posts ) ) {
-				$existing_post = $existing_posts[0];
-
-				// Fetch fresh content from external site when updating existing post.
-				$configured_site_url = get_option( 'safe_publish_site_url', '' );
-
-				if ( ! empty( $configured_site_url ) ) {
-					// Get authentication credentials for fresh content request.
-					$auth_credentials = $this->get_auth_credentials();
-
-					// Try to get fresh content from the API.
-					try {
-						$fresh_post_data = $this->api->fetch_fresh_post_content( $external_post_id, $configured_site_url, $auth_credentials );
-						if ( $fresh_post_data ) {
-							$title             = $fresh_post_data['title'] ?? $title;
-							$featured_media_id = $fresh_post_data['featured_media'] ?? $featured_media_id;
-						}
-					// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-					} catch ( Exception $e ) {
-						// Continue with provided content if fresh fetch fails.
-					}
-				}
-			}
-
-			if ( $existing_post ) {
-				// Update existing post with content filtering temporarily disabled.
-				$this->content_processor->disable_content_filters();
-
-				$post_data_array = array(
-					'ID'           => $existing_post->ID,
-					'post_title'   => $title,
-					'post_content' => ! empty( $processed_content ) ? $processed_content : __( 'Content imported from external source.', 'safe-publish' ),
-					'post_type'    => $post_type,
-				);
-
-				$post_id = wp_update_post( $post_data_array );
-
-				// Re-enable content filters.
-				$this->content_processor->restore_content_filters();
-
-				if ( is_wp_error( $post_id ) ) {
-					return array(
-						'external_id' => $external_post_id,
-						'title'       => $title,
-						'success'     => false,
-						'error'       => $post_id->get_error_message(),
-					);
-				}
-
-				// Update meta data.
-				update_post_meta( $post_id, 'safe_publish_external_link', $external_link );
-				update_post_meta( $post_id, 'safe_publish_import_date', current_time( 'mysql' ) );
-
-				$edit_url = admin_url( 'post.php?post=' . $post_id . '&action=edit' );
-
-				// Log the import action.
-				if ( $session_id ) {
-					$this->import_history->log_import_action(
-						$session_id,
-						$external_post_id,
-						$title,
-						'updated',
-						$post_id,
-						null,
-						array(
-							'action'                     => 'updated_existing',
-							'previous_content_preserved' => true,
-						)
-					);
-				}
-
-				return array(
-					'external_id' => $external_post_id,
-					'title'       => $title,
-					'success'     => true,
-					'post_id'     => $post_id,
-					'edit_url'    => $edit_url,
-					'existing'    => true,
-				);
-			} else {
-				// Create new draft post with content filtering temporarily disabled.
-				$this->content_processor->disable_content_filters();
-
-				$post_data_array = array(
-					'post_title'   => $title,
-					'post_content' => ! empty( $processed_content ) ? $processed_content : __( 'Content imported from external source.', 'safe-publish' ),
-					'post_status'  => 'draft',
-					'post_type'    => $post_type,
-					'meta_input'   => array(
-						'safe_publish_external_post_id' => $external_post_id,
-						'safe_publish_external_link'    => $external_link,
-						'safe_publish_imported_from'    => 'safe-publish',
-						'safe_publish_import_date'      => current_time( 'mysql' ),
-					),
-				);
-
-				$post_id = wp_insert_post( $post_data_array );
-
-				// Re-enable content filters.
-				$this->content_processor->restore_content_filters();
-
-				if ( is_wp_error( $post_id ) ) {
-					return array(
-						'external_id' => $external_post_id,
-						'title'       => $title,
-						'success'     => false,
-						'error'       => $post_id->get_error_message(),
-					);
-				}
-
-				// Import featured image if provided.
-				if ( ! empty( $featured_media_id ) && ! empty( $external_link ) ) {
-					$site_url               = wp_parse_url( $external_link, PHP_URL_SCHEME ) . '://' . wp_parse_url( $external_link, PHP_URL_HOST );
-					$featured_attachment_id = $this->api->import_featured_image( $featured_media_id, $site_url );
-
-					if ( $featured_attachment_id ) {
-						set_post_thumbnail( $post_id, $featured_attachment_id );
-					}
-				}
-
-				$edit_url = admin_url( 'post.php?post=' . $post_id . '&action=edit' );
-
-				// Log the import action.
-				if ( $session_id ) {
-					$this->import_history->log_import_action(
-						$session_id,
-						$external_post_id,
-						$title,
-						'success',
-						$post_id,
-						null,
-						array( 'action' => 'created_new_post' )
-					);
-				}
-
-				return array(
-					'external_id' => $external_post_id,
-					'title'       => $title,
-					'success'     => true,
-					'post_id'     => $post_id,
-					'edit_url'    => $edit_url,
-					'existing'    => false,
-				);
-			}
-		} catch ( Exception $e ) {
-			// Log the error.
-			if ( $session_id ) {
-				$this->import_history->log_import_action(
-					$session_id,
-					$post_data['id'] ?? 0,
-					$post_data['title'] ?? __( 'Unknown', 'safe-publish' ),
-					'error',
-					null,
-					$e->getMessage()
-				);
-			}
-
-			return array(
-				'external_id' => $post_data['id'] ?? 0,
-				'title'       => $post_data['title'] ?? __( 'Unknown', 'safe-publish' ),
-				'success'     => false,
-				'error'       => $e->getMessage(),
-			);
-		}
 	}
 
 	/**
