@@ -7,35 +7,18 @@
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\API\External_Posts_API;
-use Safe_Publish\API\Meta_Terms_Manager;
-use Safe_Publish\Admin\Import_History;
-use Safe_Publish\Admin\History_Repository;
-use Safe_Publish\Admin\History_Renderer;
-
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
 /**
- * Admin Handler Class.
+ * Coordinates admin functionality by wiring together focused sub-services.
+ *
+ * Acts as the composition coordinator for admin menu, settings, import history,
+ * AJAX handling, and content processing subsystems.
  */
 final class Admin_Handler {
-
-	/**
-	 * External Posts API instance.
-	 *
-	 * @var External_Posts_API
-	 */
-	private $api;
-
-	/**
-	 * Import History instance.
-	 *
-	 * @var Import_History
-	 */
-	private $import_history;
 
 	/**
 	 * Admin Menu Manager instance.
@@ -52,18 +35,11 @@ final class Admin_Handler {
 	private Settings_Sanitizer $settings_sanitizer;
 
 	/**
-	 * Content Processor instance.
+	 * Import History instance.
 	 *
-	 * @var Content_Processor
+	 * @var Import_History
 	 */
-	private Content_Processor $content_processor;
-
-	/**
-	 * Post Import Service instance.
-	 *
-	 * @var Post_Import_Service
-	 */
-	private Post_Import_Service $post_import_service;
+	private Import_History $import_history;
 
 	/**
 	 * Admin AJAX Controller instance.
@@ -73,53 +49,42 @@ final class Admin_Handler {
 	private Admin_Ajax_Controller $ajax_controller;
 
 	/**
+	 * Content Processor instance.
+	 *
+	 * @var Content_Processor
+	 */
+	private Content_Processor $content_processor;
+
+	/**
 	 * Constructs the Admin_Handler instance.
 	 *
-	 * @param External_Posts_API $api External Posts API instance.
+	 * @param Admin_Menu_Manager    $menu_manager       Admin Menu Manager instance.
+	 * @param Settings_Sanitizer    $settings_sanitizer Settings Sanitizer instance.
+	 * @param Import_History        $import_history     Import History instance.
+	 * @param Admin_Ajax_Controller $ajax_controller    Admin AJAX Controller instance.
+	 * @param Content_Processor     $content_processor  Content Processor instance.
 	 */
-	public function __construct( External_Posts_API $api ) {
-		$this->api                = $api;
-		$this->menu_manager       = new Admin_Menu_Manager( $api );
-		$this->settings_sanitizer = new Settings_Sanitizer();
-		$this->content_processor  = new Content_Processor( $api );
-
-		$repository       = new History_Repository();
-		$renderer         = new History_Renderer();
-		$formatter        = new Session_Formatter();
-		$rollback_service = new Session_Rollback_Service( $repository );
-
-		$this->import_history = new Import_History(
-			$repository,
-			$renderer,
-			$formatter,
-			$rollback_service
-		);
-
-		$this->post_import_service = new Post_Import_Service(
-			$api,
-			$this->content_processor,
-			$this->import_history
-		);
-
-		$this->ajax_controller = new Admin_Ajax_Controller(
-			$api,
-			$this->import_history,
-			$this->content_processor,
-			$this->post_import_service,
-			new Meta_Terms_Manager()
-		);
+	public function __construct(
+		Admin_Menu_Manager $menu_manager,
+		Settings_Sanitizer $settings_sanitizer,
+		Import_History $import_history,
+		Admin_Ajax_Controller $ajax_controller,
+		Content_Processor $content_processor
+	) {
+		$this->menu_manager       = $menu_manager;
+		$this->settings_sanitizer = $settings_sanitizer;
+		$this->import_history     = $import_history;
+		$this->ajax_controller    = $ajax_controller;
+		$this->content_processor  = $content_processor;
 	}
 
 	/**
-	 * Initializes admin functionality.
+	 * Initializes admin functionality by registering all sub-service hooks.
 	 */
 	public function init(): void {
 		$this->menu_manager->register();
 		$this->settings_sanitizer->register();
-
-		// Initialize import history.
 		$this->import_history->init();
-
 		$this->ajax_controller->register_handlers();
 	}
 
