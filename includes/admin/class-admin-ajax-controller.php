@@ -277,7 +277,7 @@ final class Admin_Ajax_Controller {
 		$processed_content = $this->process_draft_content( $content, $external_link );
 
 		if ( $existing_post ) {
-			$this->update_existing_draft(
+			$result = $this->update_existing_draft(
 				$existing_post,
 				$title,
 				$excerpt,
@@ -290,20 +290,26 @@ final class Admin_Ajax_Controller {
 				$session_id,
 				$external_post_id
 			);
+		} else {
+			$result = $this->create_new_draft(
+				$title,
+				$excerpt,
+				$post_type,
+				$processed_content,
+				$external_link,
+				$external_post_id,
+				$featured_media_id,
+				$meta,
+				$terms,
+				$session_id
+			);
 		}
 
-		$this->create_new_draft(
-			$title,
-			$excerpt,
-			$post_type,
-			$processed_content,
-			$external_link,
-			$external_post_id,
-			$featured_media_id,
-			$meta,
-			$terms,
-			$session_id
-		);
+		if ( isset( $result['error'] ) ) {
+			wp_send_json_error( $result['error'] );
+		}
+
+		wp_send_json_success( $result );
 	}
 
 	/**
@@ -437,7 +443,7 @@ final class Admin_Ajax_Controller {
 	 * Updates an existing post with fresh imported content.
 	 *
 	 * Stores rollback data, updates post fields, imports featured image,
-	 * updates meta and terms, logs history, and sends a JSON success response.
+	 * updates meta and terms, and logs history.
 	 *
 	 * @param \WP_Post $existing_post     Existing WordPress post.
 	 * @param string   $title             Post title.
@@ -450,6 +456,7 @@ final class Admin_Ajax_Controller {
 	 * @param mixed    $terms             Terms data (array or object).
 	 * @param int|null $session_id        Import session ID.
 	 * @param int      $external_post_id  External post ID.
+	 * @return array Result data with post_id, edit_url, message, and existing keys, or error key on failure.
 	 */
 	private function update_existing_draft(
 		\WP_Post $existing_post,
@@ -463,7 +470,7 @@ final class Admin_Ajax_Controller {
 		mixed $terms,
 		?int $session_id,
 		int $external_post_id
-	): void {
+	): array {
 		$previous_content = $this->capture_rollback_data( $existing_post );
 
 		$post_id = wp_update_post(
@@ -480,7 +487,7 @@ final class Admin_Ajax_Controller {
 		);
 
 		if ( is_wp_error( $post_id ) ) {
-			wp_send_json_error( $post_id->get_error_message() );
+			return array( 'error' => $post_id->get_error_message() );
 		}
 
 		update_post_meta( $post_id, 'safe_publish_external_link', $external_link );
@@ -503,13 +510,11 @@ final class Admin_Ajax_Controller {
 		$this->import_history->update_session_stats( $session_id, 'updated' );
 		$this->import_history->complete_session( $session_id );
 
-		wp_send_json_success(
-			array(
-				'post_id'  => $post_id,
-				'edit_url' => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
-				'message'  => __( 'Existing draft updated with latest content.', 'safe-publish' ),
-				'existing' => true,
-			)
+		return array(
+			'post_id'  => $post_id,
+			'edit_url' => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
+			'message'  => __( 'Existing draft updated with latest content.', 'safe-publish' ),
+			'existing' => true,
 		);
 	}
 
@@ -517,7 +522,7 @@ final class Admin_Ajax_Controller {
 	 * Creates a new draft post with the imported content.
 	 *
 	 * Inserts the post, imports featured image, updates meta and terms,
-	 * logs history, and sends a JSON success response.
+	 * and logs history.
 	 *
 	 * @param string   $title             Post title.
 	 * @param string   $excerpt           Post excerpt.
@@ -529,6 +534,7 @@ final class Admin_Ajax_Controller {
 	 * @param mixed    $meta              Meta data (array or object).
 	 * @param mixed    $terms             Terms data (array or object).
 	 * @param int|null $session_id        Import session ID.
+	 * @return array Result data with post_id, edit_url, message, and existing keys, or error key on failure.
 	 */
 	private function create_new_draft(
 		string $title,
@@ -541,7 +547,7 @@ final class Admin_Ajax_Controller {
 		mixed $meta,
 		mixed $terms,
 		?int $session_id
-	): void {
+	): array {
 		$this->content_processor->disable_content_filters();
 
 		$post_id = wp_insert_post(
@@ -565,7 +571,7 @@ final class Admin_Ajax_Controller {
 		$this->content_processor->restore_content_filters();
 
 		if ( is_wp_error( $post_id ) ) {
-			wp_send_json_error( $post_id->get_error_message() );
+			return array( 'error' => $post_id->get_error_message() );
 		}
 
 		$this->maybe_import_featured_image( $featured_media_id, $external_link, $post_id );
@@ -585,13 +591,11 @@ final class Admin_Ajax_Controller {
 		$this->import_history->update_session_stats( $session_id, 'success' );
 		$this->import_history->complete_session( $session_id );
 
-		wp_send_json_success(
-			array(
-				'post_id'  => $post_id,
-				'edit_url' => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
-				'message'  => __( 'Draft post created successfully.', 'safe-publish' ),
-				'existing' => false,
-			)
+		return array(
+			'post_id'  => $post_id,
+			'edit_url' => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
+			'message'  => __( 'Draft post created successfully.', 'safe-publish' ),
+			'existing' => false,
 		);
 	}
 
