@@ -298,22 +298,10 @@ final class Safe_Publish_API extends REST_Base {
 			return $content;
 		}
 
-		$site_url      = get_option( 'safe_publish_external_site_url', '' );
-		$admin_handler = $safe_publish_plugin->get_admin_handler();
-		$api           = $safe_publish_plugin->get_api();
+		$site_url          = get_option( 'safe_publish_external_site_url', '' );
+		$content_processor = $safe_publish_plugin->get_admin_handler()->get_content_processor();
 
-		// Check if content contains Gutenberg blocks.
-		if ( $admin_handler->is_gutenberg_content( $content ) ) {
-			$processed_content = $admin_handler->process_gutenberg_blocks( $content, $site_url );
-		} else {
-			// Fallback to traditional content processing.
-			$processed_content = $api->process_and_import_media( $content, $site_url );
-			// Process oEmbeds using WordPress functionality.
-			$processed_content = $admin_handler->process_oembed_content( $processed_content );
-		}
-
-		// Replace external URLs with current site URLs.
-		return $admin_handler->replace_external_urls( $processed_content, $site_url );
+		return $content_processor->process_content( $content, $site_url );
 	}
 
 	/**
