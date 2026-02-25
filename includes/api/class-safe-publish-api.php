@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\API;
 
 use Safe_Publish\Admin\Content_Processor;
+use Safe_Publish\Utils\Options;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -292,7 +293,7 @@ final class Safe_Publish_API extends REST_Base {
 	 * @return void
 	 */
 	private function import_and_set_featured_image( int $post_id, int $featured_media_id ): void {
-		$site_url = get_option( 'safe_publish_external_site_url', '' );
+		$site_url = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
 
 		if ( null === $this->api || empty( $site_url ) ) {
 			return;
@@ -316,7 +317,7 @@ final class Safe_Publish_API extends REST_Base {
 			return $content;
 		}
 
-		$site_url = get_option( 'safe_publish_external_site_url', '' );
+		$site_url = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
 
 		return $this->content_processor->process_content( $content, $site_url );
 	}
@@ -328,7 +329,7 @@ final class Safe_Publish_API extends REST_Base {
 	 */
 	private function get_auth_credentials(): array {
 		// Try VIP-safe authentication first.
-		$shared_secret = get_option( 'safe_publish_shared_secret', '' );
+		$shared_secret = get_option( Options::OPTION_SHARED_SECRET, '' );
 
 		if ( ! empty( $shared_secret ) ) {
 			return array(
@@ -338,8 +339,8 @@ final class Safe_Publish_API extends REST_Base {
 
 		// Fallback to Basic auth in development environments only.
 		if ( $this->is_development_environment() ) {
-			$username = get_option( 'safe_publish_username', '' );
-			$password = get_option( 'safe_publish_password', '' );
+			$username = get_option( Options::OPTION_USERNAME, '' );
+			$password = get_option( Options::OPTION_PASSWORD, '' );
 
 			if ( ! empty( $username ) && ! empty( $password ) ) {
 				return array(

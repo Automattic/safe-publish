@@ -10,6 +10,7 @@ namespace Safe_Publish\Admin;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Utils\Environment;
+use Safe_Publish\Utils\Options;
 use Exception;
 
 // Prevent direct access.
@@ -203,7 +204,7 @@ final class Admin_Ajax_Controller {
 		}
 
 		// Create single import session for tracking.
-		$source_url = get_option( 'safe_publish_external_site_url', '' );
+		$source_url = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
 		$session_id = $this->import_history->create_session( $source_url, 'single' );
 
 		$external_post_id  = absint( $_POST['external_post_id'] ?? 0 );
@@ -342,7 +343,7 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( __( 'Bulk import limited to 50 posts at a time.', 'safe-publish' ) );
 		}
 
-		$source_url     = get_option( 'safe_publish_external_site_url', '' );
+		$source_url     = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
 		$session_result = $this->import_history->create_session( $source_url, 'bulk' );
 		$session_id     = is_wp_error( $session_result ) ? null : $session_result;
 
@@ -490,8 +491,8 @@ final class Admin_Ajax_Controller {
 			return array( 'error' => $post_id->get_error_message() );
 		}
 
-		update_post_meta( $post_id, 'safe_publish_external_link', $external_link );
-		update_post_meta( $post_id, 'safe_publish_import_date', current_time( 'mysql' ) );
+		update_post_meta( $post_id, Options::META_EXTERNAL_LINK, $external_link );
+		update_post_meta( $post_id, Options::META_IMPORT_DATE, current_time( 'mysql' ) );
 
 		$this->maybe_import_featured_image( $featured_media_id, $external_link, $post_id );
 
@@ -560,10 +561,10 @@ final class Admin_Ajax_Controller {
 				'post_type'    => $post_type,
 				'post_excerpt' => $excerpt,
 				'meta_input'   => array(
-					'safe_publish_external_post_id' => $external_post_id,
-					'safe_publish_external_link'    => $external_link,
-					'safe_publish_imported_from'    => 'safe-publish',
-					'safe_publish_import_date'      => current_time( 'mysql' ),
+					Options::META_EXTERNAL_POST_ID => $external_post_id,
+					Options::META_EXTERNAL_LINK    => $external_link,
+					Options::META_IMPORTED_FROM    => Options::META_IMPORTED_FROM_VALUE,
+					Options::META_IMPORT_DATE      => current_time( 'mysql' ),
 				),
 			)
 		);
@@ -671,7 +672,7 @@ final class Admin_Ajax_Controller {
 	private function find_existing_post( int $external_post_id ): ?\WP_Post {
 		$posts = get_posts(
 			array(
-				'meta_key'         => 'safe_publish_external_post_id',
+				'meta_key'         => Options::META_EXTERNAL_POST_ID,
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'       => $external_post_id,
 				'post_status'      => array( 'draft', 'publish', 'pending', 'private' ),
@@ -705,8 +706,8 @@ final class Admin_Ajax_Controller {
 		$meta_keys_to_preserve = array(
 			'_edit_last',
 			'_edit_lock',
-			'safe_publish_external_link',
-			'safe_publish_import_date',
+			Options::META_EXTERNAL_LINK,
+			Options::META_IMPORT_DATE,
 		);
 
 		foreach ( $meta_keys_to_preserve as $meta_key ) {
@@ -728,7 +729,7 @@ final class Admin_Ajax_Controller {
 	 * @return array|null Fresh post data or null if unavailable.
 	 */
 	private function maybe_fetch_fresh_content( int $external_post_id ): ?array {
-		$configured_site_url = get_option( 'safe_publish_site_url', '' );
+		$configured_site_url = get_option( Options::OPTION_SOURCE_SITE_URL, '' );
 
 		if ( empty( $configured_site_url ) ) {
 			return null;
@@ -788,15 +789,15 @@ final class Admin_Ajax_Controller {
 	 * @return array Authentication credentials array with appropriate keys.
 	 */
 	private function get_auth_credentials(): array {
-		$shared_secret = get_option( 'safe_publish_shared_secret', '' );
+		$shared_secret = get_option( Options::OPTION_SHARED_SECRET, '' );
 
 		if ( ! empty( $shared_secret ) ) {
 			return array( 'shared_secret' => $shared_secret );
 		}
 
 		if ( Environment::is_development() ) {
-			$username = get_option( 'safe_publish_username', '' );
-			$password = get_option( 'safe_publish_password', '' );
+			$username = get_option( Options::OPTION_USERNAME, '' );
+			$password = get_option( Options::OPTION_PASSWORD, '' );
 
 			if ( ! empty( $username ) && ! empty( $password ) ) {
 				return array(

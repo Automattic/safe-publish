@@ -8,6 +8,7 @@
 namespace Safe_Publish\Auth;
 
 use Safe_Publish\Utils\Environment;
+use Safe_Publish\Utils\Options;
 use WP_Error;
 
 // Prevent direct access.
@@ -343,7 +344,7 @@ final class VIP_Safe_Auth {
 		}
 
 		// Get shared secret for this site.
-		$shared_secret = get_option( 'safe_publish_shared_secret_' . md5( $site ), '' );
+		$shared_secret = get_option( Options::OPTION_SHARED_SECRET . '_' . md5( $site ), '' );
 
 		if ( empty( $shared_secret ) ) {
 			return new WP_Error( 'unknown_site', __( 'Unknown source site.', 'safe-publish' ) );

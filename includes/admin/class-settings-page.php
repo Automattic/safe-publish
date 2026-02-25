@@ -8,6 +8,7 @@
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\Utils\Environment;
+use Safe_Publish\Utils\Options;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -23,13 +24,13 @@ final class Settings_Page {
 	 * Renders the settings page.
 	 */
 	public function render(): void {
-		$site_url        = get_option( 'safe_publish_external_site_url', '' );
-		$number_of_posts = get_option( 'safe_publish_number_of_posts', 10 );
-		$shared_secret   = get_option( 'safe_publish_shared_secret', '' );
+		$site_url        = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
+		$number_of_posts = get_option( Options::OPTION_NUMBER_OF_POSTS, 10 );
+		$shared_secret   = get_option( Options::OPTION_SHARED_SECRET, '' );
 
 		// Basic auth credentials (development only).
-		$username = get_option( 'safe_publish_username', '' );
-		$password = get_option( 'safe_publish_password', '' );
+		$username = get_option( Options::OPTION_USERNAME, '' );
+		$password = get_option( Options::OPTION_PASSWORD, '' );
 
 		?>
 		<div class="wrap" id="safe-publish-settings-page">
@@ -43,8 +44,8 @@ final class Settings_Page {
 
 					<form method="post" action="options.php">
 						<?php
-						settings_fields( 'safe_publish_settings' );
-						do_settings_sections( 'safe_publish_settings' );
+						settings_fields( Options::SETTINGS_GROUP );
+						do_settings_sections( Options::SETTINGS_GROUP );
 						?>
 
 						<table class="form-table">
