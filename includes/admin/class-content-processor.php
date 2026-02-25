@@ -7,7 +7,8 @@
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\Content\Content_Media_Processor;
+use Safe_Publish\Media\Media_Importer;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -20,11 +21,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Content_Processor {
 
 	/**
-	 * External Posts API instance.
+	 * Media Importer instance.
 	 *
-	 * @var External_Posts_API
+	 * @var Media_Importer
 	 */
-	private External_Posts_API $api;
+	private Media_Importer $media_importer;
+
+	/**
+	 * Content Media Processor instance.
+	 *
+	 * @var Content_Media_Processor
+	 */
+	private Content_Media_Processor $content_media_processor;
 
 	/**
 	 * Stores temporarily disabled WordPress filters.
@@ -36,10 +44,15 @@ class Content_Processor {
 	/**
 	 * Constructs the Content_Processor instance.
 	 *
-	 * @param External_Posts_API $api External Posts API instance.
+	 * @param Media_Importer          $media_importer          Media importer instance.
+	 * @param Content_Media_Processor $content_media_processor Content media processor instance.
 	 */
-	public function __construct( External_Posts_API $api ) {
-		$this->api = $api;
+	public function __construct(
+		Media_Importer $media_importer,
+		Content_Media_Processor $content_media_processor
+	) {
+		$this->media_importer          = $media_importer;
+		$this->content_media_processor = $content_media_processor;
 	}
 
 	/**
@@ -56,7 +69,7 @@ class Content_Processor {
 		if ( $this->is_gutenberg_content( $content ) ) {
 			$processed_content = $this->process_gutenberg_blocks( $content, $site_url );
 		} else {
-			$processed_content = $this->api->process_and_import_media( $content, $site_url );
+			$processed_content = $this->content_media_processor->process_content( $content, $site_url );
 			$processed_content = $this->process_oembed_content( $processed_content ) ?? $processed_content;
 		}
 
@@ -392,7 +405,7 @@ class Content_Processor {
 			default:
 				// Process innerHTML for any blocks that might contain media or links.
 				if ( ! empty( $block['innerHTML'] ) ) {
-					$block['innerHTML'] = $this->api->process_and_import_media(
+					$block['innerHTML'] = $this->content_media_processor->process_content(
 						$block['innerHTML'],
 						$site_url
 					);
@@ -426,18 +439,18 @@ class Content_Processor {
 		}
 
 		// Method 1: Try to import and get attachment ID directly.
-		$attachment_id = $this->api->import_external_media_as_attachment( $original_url, $site_url );
+		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
 
 		if ( $attachment_id && is_numeric( $attachment_id ) ) {
 			// Get the new URL from the attachment ID.
 			$new_url = wp_get_attachment_url( $attachment_id );
 		} else {
 			// Method 2: Fallback - use original method if the first didn't work.
-			$new_url = $this->api->import_external_media( $original_url, $site_url );
+			$new_url = $this->media_importer->import_external_media( $original_url, $site_url );
 
 			if ( $new_url ) {
 				// Try to get attachment ID from the URL.
-				$attachment_id = $this->api->get_attachment_id_from_url( $new_url );
+				$attachment_id = $this->media_importer->get_attachment_id_from_url( $new_url );
 			}
 		}
 
@@ -496,7 +509,7 @@ class Content_Processor {
 				}
 
 				$original_url  = $image['url'];
-				$attachment_id = $this->api->import_external_media_as_attachment( $original_url, $site_url );
+				$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
 
 				if ( ! $attachment_id ) {
 					continue;
@@ -580,7 +593,7 @@ class Content_Processor {
 		}
 
 		$original_url  = $block['attrs']['src'];
-		$attachment_id = $this->api->import_external_media_as_attachment( $original_url, $site_url );
+		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
 
 		if ( ! $attachment_id ) {
 			return $block;
@@ -609,7 +622,7 @@ class Content_Processor {
 		}
 
 		$original_url  = $block['attrs']['src'];
-		$attachment_id = $this->api->import_external_media_as_attachment( $original_url, $site_url );
+		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
 
 		if ( ! $attachment_id ) {
 			return $block;
@@ -636,7 +649,7 @@ class Content_Processor {
 		// Most embed blocks work with URLs that don't need media import,
 		// but we can process the innerHTML for any embedded media.
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = $this->api->process_and_import_media( $block['innerHTML'], $site_url );
+			$block['innerHTML'] = $this->content_media_processor->process_content( $block['innerHTML'], $site_url );
 		}
 
 		return $block;
@@ -651,14 +664,14 @@ class Content_Processor {
 	 */
 	private function process_html_block( array $block, string $site_url ): array {
 		if ( ! empty( $block['attrs']['content'] ) ) {
-			$block['attrs']['content'] = $this->api->process_and_import_media(
+			$block['attrs']['content'] = $this->content_media_processor->process_content(
 				$block['attrs']['content'],
 				$site_url
 			);
 		}
 
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = $this->api->process_and_import_media( $block['innerHTML'], $site_url );
+			$block['innerHTML'] = $this->content_media_processor->process_content( $block['innerHTML'], $site_url );
 		}
 
 		return $block;
@@ -673,7 +686,7 @@ class Content_Processor {
 	 */
 	private function process_text_block( array $block, string $site_url ): array {
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = $this->api->process_and_import_media( $block['innerHTML'], $site_url );
+			$block['innerHTML'] = $this->content_media_processor->process_content( $block['innerHTML'], $site_url );
 		}
 
 		return $block;

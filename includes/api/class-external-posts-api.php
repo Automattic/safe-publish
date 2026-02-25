@@ -11,9 +11,6 @@ namespace Safe_Publish\API;
 
 use Safe_Publish\Validators\URL_Validator;
 use Safe_Publish\Auth\VIP_Safe_Auth;
-use Safe_Publish\Media\Media_Importer;
-use Safe_Publish\Content\Embed_Processor;
-use Safe_Publish\Content\Content_Media_Processor;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -33,61 +30,12 @@ class External_Posts_API {
 	private HTTP_Client $http_client;
 
 	/**
-	 * Media Importer instance.
-	 *
-	 * @var Media_Importer
-	 */
-	private Media_Importer $media_importer;
-
-	/**
-	 * Content Media Processor instance.
-	 *
-	 * @var Content_Media_Processor
-	 */
-	private Content_Media_Processor $content_media_processor;
-
-	/**
-	 * Post Type Fetcher instance.
-	 *
-	 * @var Post_Type_Fetcher
-	 */
-	private Post_Type_Fetcher $post_type_fetcher;
-
-	/**
 	 * Constructs the External_Posts_API instance.
 	 *
-	 * @param HTTP_Client|null             $http_client              Optional. HTTP client for making requests.
-	 * @param Media_Importer|null          $media_importer           Optional. Media importer for handling media files.
-	 * @param Embed_Processor|null         $embed_processor          Optional. Embed processor for handling embeds.
-	 * @param Content_Media_Processor|null $content_media_processor  Optional. Content media processor for processing HTML.
-	 * @param Post_Type_Fetcher|null       $post_type_fetcher        Optional. Post type fetcher for retrieving post types.
+	 * @param HTTP_Client|null $http_client Optional. HTTP client for making requests.
 	 */
-	public function __construct(
-		?HTTP_Client $http_client = null,
-		?Media_Importer $media_importer = null,
-		?Embed_Processor $embed_processor = null,
-		?Content_Media_Processor $content_media_processor = null,
-		?Post_Type_Fetcher $post_type_fetcher = null
-	) {
-		$this->http_client             = $http_client ?? new HTTP_Client();
-		$this->media_importer          = $media_importer ?? new Media_Importer( $this->http_client );
-		$embed_processor_instance      = $embed_processor ?? new Embed_Processor();
-		$this->content_media_processor = $content_media_processor ?? new Content_Media_Processor(
-			$this->media_importer,
-			$embed_processor_instance
-		);
-		$this->post_type_fetcher       = $post_type_fetcher ?? new Post_Type_Fetcher( $this->http_client );
-	}
-
-	/**
-	 * Fetches available post types from external site.
-	 *
-	 * @param string $site_url         External site URL.
-	 * @param array  $auth_credentials Optional. Authentication credentials array. Default empty array.
-	 * @return array|\WP_Error Post types data or error.
-	 */
-	public function fetch_post_types( string $site_url, array $auth_credentials = array() ): array|\WP_Error {
-		return $this->post_type_fetcher->fetch_post_types( $site_url, $auth_credentials );
+	public function __construct( ?HTTP_Client $http_client = null ) {
+		$this->http_client = $http_client ?? new HTTP_Client();
 	}
 
 	/**
@@ -177,7 +125,7 @@ class External_Posts_API {
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
 	 * @return array|\WP_Error Response or error.
 	 */
-	public function make_request( string $url, array $auth_credentials = array() ): array|\WP_Error {
+	private function make_request( string $url, array $auth_credentials = array() ): array|\WP_Error {
 		return $this->http_client->make_request( $url, $auth_credentials );
 	}
 
@@ -301,60 +249,6 @@ class External_Posts_API {
 		}
 
 		return $results;
-	}
-
-	/**
-	 * Processes and imports media from external post content.
-	 *
-	 * @param string $content         Post content with external media URLs.
-	 * @param string $source_site_url External site URL for resolving relative URLs.
-	 * @return string Processed content with imported media.
-	 */
-	public function process_and_import_media( string $content, string $source_site_url ): string {
-		return $this->content_media_processor->process_content( $content, $source_site_url );
-	}
-
-	/**
-	 * Imports external media file to WordPress media library.
-	 *
-	 * @param string $media_url       External media URL.
-	 * @param string $source_site_url Source site URL for resolving relative URLs.
-	 * @return string|false New media URL on success, false on failure.
-	 */
-	public function import_external_media( string $media_url, string $source_site_url ): string|false {
-		return $this->media_importer->import_external_media( $media_url, $source_site_url );
-	}
-
-	/**
-	 * Imports external media file to media library and returns attachment ID.
-	 *
-	 * @param string $media_url       External media URL.
-	 * @param string $source_site_url Source site URL for resolving relative URLs.
-	 * @return int|false Attachment ID on success, false on failure.
-	 */
-	public function import_external_media_as_attachment( string $media_url, string $source_site_url ): int|false {
-		return $this->media_importer->import_external_media_as_attachment( $media_url, $source_site_url );
-	}
-
-	/**
-	 * Imports featured image from external post.
-	 *
-	 * @param int    $featured_media_id External featured media ID.
-	 * @param string $site_url          External site URL.
-	 * @return int|false Attachment ID on success, false on failure.
-	 */
-	public function import_featured_image( int $featured_media_id, string $site_url ): int|false {
-		return $this->media_importer->import_featured_image( $featured_media_id, $site_url, array() );
-	}
-
-	/**
-	 * Gets attachment ID from URL using VIP-optimized function when available.
-	 *
-	 * @param string $url Attachment URL.
-	 * @return int Attachment ID, or 0 if not found.
-	 */
-	public function get_attachment_id_from_url( string $url ): int {
-		return $this->media_importer->get_attachment_id_from_url( $url );
 	}
 
 	/**

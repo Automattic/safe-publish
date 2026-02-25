@@ -9,7 +9,10 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration\External_Posts_API;
 
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\HTTP_Client;
+use Safe_Publish\Content\Content_Media_Processor;
+use Safe_Publish\Content\Embed_Processor;
+use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Integration_Test_Case;
 use WP_Error;
 
@@ -32,11 +35,18 @@ abstract class External_Posts_API_Test_Base extends Integration_Test_Case {
 	protected const META_IMPORTED_FROM = 'safe_publish_imported_from';
 
 	/**
-	 * External Posts API instance.
+	 * Content Media Processor instance.
 	 *
-	 * @var External_Posts_API
+	 * @var Content_Media_Processor
 	 */
-	protected External_Posts_API $api;
+	protected Content_Media_Processor $content_processor;
+
+	/**
+	 * Media Importer instance.
+	 *
+	 * @var Media_Importer
+	 */
+	protected Media_Importer $media_importer;
 
 	/**
 	 * Sets up test environment.
@@ -45,8 +55,9 @@ abstract class External_Posts_API_Test_Base extends Integration_Test_Case {
 	protected function setUp(): void {
 		parent::setUp();
 
-		// Create API instance with real dependencies.
-		$this->api = new External_Posts_API();
+		// Create service instances with real dependencies.
+		$this->media_importer    = new Media_Importer( new HTTP_Client() );
+		$this->content_processor = new Content_Media_Processor( $this->media_importer, new Embed_Processor() );
 
 		// Mock HTTP requests to return test image data.
 		add_filter( 'pre_http_request', array( $this, 'mock_http_request' ), 10, 3 );

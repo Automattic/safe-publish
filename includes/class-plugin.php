@@ -19,8 +19,13 @@ use Safe_Publish\Admin\Session_Formatter;
 use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\Admin\Settings_Sanitizer;
 use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
+use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\API\Safe_Publish_API;
+use Safe_Publish\Content\Content_Media_Processor;
+use Safe_Publish\Content\Embed_Processor;
+use Safe_Publish\Media\Media_Importer;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -64,19 +69,32 @@ final class Plugin {
 	 * Initializes plugin.
 	 */
 	public function init(): void {
-		// Initialize components.
-		$this->api = new External_Posts_API();
+		// Build shared low-level services.
+		$http_client             = new HTTP_Client();
+		$media_importer          = new Media_Importer( $http_client );
+		$embed_processor         = new Embed_Processor();
+		$content_media_processor = new Content_Media_Processor( $media_importer, $embed_processor );
+		$post_type_fetcher       = new Post_Type_Fetcher( $http_client );
 
-		// Build content processor first so it can be shared with Safe_Publish_API.
-		$content_processor = new Content_Processor( $this->api );
+		// Initialize External Posts API with shared HTTP client.
+		$this->api = new External_Posts_API( $http_client );
 
-		$this->safe_publish_api = new Safe_Publish_API( null, null, $content_processor, $this->api );
+		// Build content processor with direct media service dependencies.
+		$content_processor = new Content_Processor( $media_importer, $content_media_processor );
+
+		$this->safe_publish_api = new Safe_Publish_API( null, null, $content_processor, $media_importer );
 
 		// Initialize hooks.
 		$this->init_hooks();
 
 		// Build admin object graph and initialize.
-		$this->admin_handler = $this->build_admin_handler( $this->api, $content_processor );
+		$this->admin_handler = $this->build_admin_handler(
+			$this->api,
+			$content_processor,
+			$media_importer,
+			$post_type_fetcher,
+			$http_client
+		);
 		$this->admin_handler->init();
 	}
 
@@ -93,13 +111,19 @@ final class Plugin {
 	 * Acts as the composition root for the admin subsystem, constructing
 	 * each dependency in the correct order.
 	 *
-	 * @param External_Posts_API $api               External Posts API instance.
-	 * @param Content_Processor  $content_processor Content Processor instance.
+	 * @param External_Posts_API $api                External Posts API instance.
+	 * @param Content_Processor  $content_processor  Content Processor instance.
+	 * @param Media_Importer     $media_importer     Media Importer instance.
+	 * @param Post_Type_Fetcher  $post_type_fetcher  Post Type Fetcher instance.
+	 * @param HTTP_Client        $http_client        HTTP Client instance.
 	 * @return Admin_Handler Fully constructed Admin_Handler coordinator.
 	 */
 	private function build_admin_handler(
 		External_Posts_API $api,
-		Content_Processor $content_processor
+		Content_Processor $content_processor,
+		Media_Importer $media_importer,
+		Post_Type_Fetcher $post_type_fetcher,
+		HTTP_Client $http_client
 	): Admin_Handler {
 		$menu_manager = new Admin_Menu_Manager( $api );
 
@@ -116,6 +140,7 @@ final class Plugin {
 
 		$post_import_service = new Post_Import_Service(
 			$api,
+			$media_importer,
 			$content_processor,
 			$import_history
 		);
@@ -125,7 +150,9 @@ final class Plugin {
 			$import_history,
 			$content_processor,
 			$post_import_service,
-			new Meta_Terms_Manager()
+			new Meta_Terms_Manager(),
+			$post_type_fetcher,
+			$http_client
 		);
 
 		return new Admin_Handler(

@@ -228,4 +228,32 @@ class MediaImporterTest extends TestCase {
 		// Should preserve proper_filename without modification.
 		$this->assertSame( 'sanitized-name.webp', $result['proper_filename'] );
 	}
+
+	/**
+	 * Verifies that get_attachment_id_from_url returns an integer.
+	 */
+	public function test_get_attachment_id_from_url_returns_int(): void {
+		$url    = 'https://example.com/wp-content/uploads/2024/01/image.jpg';
+		$result = $this->importer->get_attachment_id_from_url( $url );
+
+		$this->assertIsInt( $result );
+	}
+
+	/**
+	 * Verifies that import_featured_image returns false for empty media IDs.
+	 */
+	public function test_import_featured_image_with_empty_id_returns_false(): void {
+		$result = $this->importer->import_featured_image( 0, 'https://example.com' );
+
+		$this->assertFalse( $result );
+	}
+
+	/**
+	 * Verifies that import_featured_image returns false for empty site URLs.
+	 */
+	public function test_import_featured_image_with_empty_site_url_returns_false(): void {
+		$result = $this->importer->import_featured_image( 123, '' );
+
+		$this->assertFalse( $result );
+	}
 }

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\API;
 
 use Safe_Publish\Admin\Content_Processor;
+use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use WP_Error;
@@ -48,11 +49,11 @@ final class Safe_Publish_API extends REST_Base {
 	private Meta_Terms_Manager $meta_terms_manager;
 
 	/**
-	 * External Posts API instance.
+	 * Media Importer instance.
 	 *
-	 * @var External_Posts_API|null
+	 * @var Media_Importer|null
 	 */
-	private ?External_Posts_API $api;
+	private ?Media_Importer $media_importer;
 
 	/**
 	 * Content Processor instance.
@@ -64,22 +65,22 @@ final class Safe_Publish_API extends REST_Base {
 	/**
 	 * Constructor.
 	 *
-	 * @param Diff_Renderer|null      $diff_renderer      Optional. Diff renderer instance.
-	 * @param Meta_Terms_Manager|null $meta_terms_manager Optional. Meta terms manager instance.
+	 * @param Diff_Renderer|null      $diff_renderer      Optional. Diff Renderer instance.
+	 * @param Meta_Terms_Manager|null $meta_terms_manager Optional. Meta Terms Manager instance.
 	 * @param Content_Processor|null  $content_processor  Optional. Content Processor instance.
-	 * @param External_Posts_API|null $api                Optional. External Posts API instance.
+	 * @param Media_Importer|null     $media_importer     Optional. Media Importer instance.
 	 */
 	public function __construct(
 		?Diff_Renderer $diff_renderer = null,
 		?Meta_Terms_Manager $meta_terms_manager = null,
 		?Content_Processor $content_processor = null,
-		?External_Posts_API $api = null
+		?Media_Importer $media_importer = null
 	) {
 		parent::__construct();
 		$this->diff_renderer      = $diff_renderer ?? new Diff_Renderer();
 		$this->meta_terms_manager = $meta_terms_manager ?? new Meta_Terms_Manager();
 		$this->content_processor  = $content_processor;
-		$this->api                = $api;
+		$this->media_importer     = $media_importer;
 	}
 
 	/**
@@ -296,11 +297,15 @@ final class Safe_Publish_API extends REST_Base {
 	private function import_and_set_featured_image( int $post_id, int $featured_media_id ): void {
 		$site_url = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
 
-		if ( null === $this->api || empty( $site_url ) ) {
+		if ( null === $this->media_importer || empty( $site_url ) ) {
 			return;
 		}
 
-		$attachment_id = $this->api->import_featured_image( $featured_media_id, $site_url );
+		$attachment_id = $this->media_importer->import_featured_image(
+			$featured_media_id,
+			$site_url
+		);
+
 		if ( $attachment_id ) {
 			set_post_thumbnail( $post_id, $attachment_id );
 		}
