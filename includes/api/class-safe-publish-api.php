@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\API;
 
+use Safe_Publish\Admin\Content_Processor;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -45,18 +46,38 @@ final class Safe_Publish_API extends REST_Base {
 	private Meta_Terms_Manager $meta_terms_manager;
 
 	/**
+	 * External Posts API instance.
+	 *
+	 * @var External_Posts_API|null
+	 */
+	private ?External_Posts_API $api;
+
+	/**
+	 * Content Processor instance.
+	 *
+	 * @var Content_Processor|null
+	 */
+	private ?Content_Processor $content_processor;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Diff_Renderer|null      $diff_renderer      Optional. Diff renderer instance.
 	 * @param Meta_Terms_Manager|null $meta_terms_manager Optional. Meta terms manager instance.
+	 * @param Content_Processor|null  $content_processor  Optional. Content Processor instance.
+	 * @param External_Posts_API|null $api                Optional. External Posts API instance.
 	 */
 	public function __construct(
 		?Diff_Renderer $diff_renderer = null,
-		?Meta_Terms_Manager $meta_terms_manager = null
+		?Meta_Terms_Manager $meta_terms_manager = null,
+		?Content_Processor $content_processor = null,
+		?External_Posts_API $api = null
 	) {
 		parent::__construct();
 		$this->diff_renderer      = $diff_renderer ?? new Diff_Renderer();
 		$this->meta_terms_manager = $meta_terms_manager ?? new Meta_Terms_Manager();
+		$this->content_processor  = $content_processor;
+		$this->api                = $api;
 	}
 
 	/**
@@ -271,16 +292,15 @@ final class Safe_Publish_API extends REST_Base {
 	 * @return void
 	 */
 	private function import_and_set_featured_image( int $post_id, int $featured_media_id ): void {
-		global $safe_publish_plugin;
-
-		$api      = $safe_publish_plugin->get_api();
 		$site_url = get_option( 'safe_publish_external_site_url', '' );
 
-		if ( $api && ! empty( $site_url ) ) {
-			$attachment_id = $api->import_featured_image( $featured_media_id, $site_url );
-			if ( $attachment_id ) {
-				set_post_thumbnail( $post_id, $attachment_id );
-			}
+		if ( null === $this->api || empty( $site_url ) ) {
+			return;
+		}
+
+		$attachment_id = $this->api->import_featured_image( $featured_media_id, $site_url );
+		if ( $attachment_id ) {
+			set_post_thumbnail( $post_id, $attachment_id );
 		}
 	}
 
@@ -292,16 +312,13 @@ final class Safe_Publish_API extends REST_Base {
 	 * @return string Processed content.
 	 */
 	private function process_content( string $content ): string {
-		global $safe_publish_plugin;
-
-		if ( empty( $content ) ) {
+		if ( empty( $content ) || null === $this->content_processor ) {
 			return $content;
 		}
 
-		$site_url          = get_option( 'safe_publish_external_site_url', '' );
-		$content_processor = $safe_publish_plugin->get_admin_handler()->get_content_processor();
+		$site_url = get_option( 'safe_publish_external_site_url', '' );
 
-		return $content_processor->process_content( $content, $site_url );
+		return $this->content_processor->process_content( $content, $site_url );
 	}
 
 	/**

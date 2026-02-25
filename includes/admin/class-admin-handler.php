@@ -87,13 +87,4 @@ final class Admin_Handler {
 		$this->import_history->init();
 		$this->ajax_controller->register_handlers();
 	}
-
-	/**
-	 * Gets the Content_Processor instance.
-	 *
-	 * @return Content_Processor Content processor instance.
-	 */
-	public function get_content_processor(): Content_Processor {
-		return $this->content_processor;
-	}
 }

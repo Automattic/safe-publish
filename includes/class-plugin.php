@@ -65,14 +65,18 @@ final class Plugin {
 	 */
 	public function init(): void {
 		// Initialize components.
-		$this->api              = new External_Posts_API();
-		$this->safe_publish_api = new Safe_Publish_API();
+		$this->api = new External_Posts_API();
+
+		// Build content processor first so it can be shared with Safe_Publish_API.
+		$content_processor = new Content_Processor( $this->api );
+
+		$this->safe_publish_api = new Safe_Publish_API( null, null, $content_processor, $this->api );
 
 		// Initialize hooks.
 		$this->init_hooks();
 
 		// Build admin object graph and initialize.
-		$this->admin_handler = $this->build_admin_handler( $this->api );
+		$this->admin_handler = $this->build_admin_handler( $this->api, $content_processor );
 		$this->admin_handler->init();
 	}
 
@@ -89,12 +93,15 @@ final class Plugin {
 	 * Acts as the composition root for the admin subsystem, constructing
 	 * each dependency in the correct order.
 	 *
-	 * @param External_Posts_API $api External Posts API instance.
+	 * @param External_Posts_API $api               External Posts API instance.
+	 * @param Content_Processor  $content_processor Content Processor instance.
 	 * @return Admin_Handler Fully constructed Admin_Handler coordinator.
 	 */
-	private function build_admin_handler( External_Posts_API $api ): Admin_Handler {
-		$content_processor = new Content_Processor( $api );
-		$menu_manager      = new Admin_Menu_Manager( $api );
+	private function build_admin_handler(
+		External_Posts_API $api,
+		Content_Processor $content_processor
+	): Admin_Handler {
+		$menu_manager = new Admin_Menu_Manager( $api );
 
 		$repository       = new History_Repository();
 		$renderer         = new History_Renderer();
@@ -128,24 +135,6 @@ final class Plugin {
 			$ajax_controller,
 			$content_processor
 		);
-	}
-
-	/**
-	 * Gets API instance.
-	 *
-	 * @return External_Posts_API|null API instance, or null before init.
-	 */
-	public function get_api(): ?External_Posts_API {
-		return $this->api;
-	}
-
-	/**
-	 * Gets admin handler instance.
-	 *
-	 * @return ?Admin_Handler Admin handler instance or null.
-	 */
-	public function get_admin_handler(): ?Admin_Handler {
-		return $this->admin_handler ?? null;
 	}
 
 	/**
