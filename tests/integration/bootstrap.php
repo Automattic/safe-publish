@@ -43,5 +43,9 @@ function _manually_load_plugin(): void {
 
 tests_add_filter( 'muplugins_loaded', '_manually_load_plugin' );
 
+// Suppress cosmetic "Not running X tests" messages.
+$_SERVER['argv'][] = '--group';
+$_SERVER['argv'][] = 'ajax,ms-files,external-http';
+
 // Start up the WP testing environment.
 require $_tests_dir . '/includes/bootstrap.php';
