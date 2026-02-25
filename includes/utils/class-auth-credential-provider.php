@@ -26,18 +26,12 @@ class Auth_Credential_Provider {
 	/**
 	 * Returns authentication credentials from plugin settings.
 	 *
-	 * Prefers the HMAC shared secret (VIP-safe). Falls back to Basic Auth
-	 * username/password only when running in a development environment.
+	 * Returns Basic Auth username/password only when running in a development
+	 * environment.
 	 *
 	 * @return array Authentication credentials array with appropriate keys.
 	 */
 	public static function get_credentials(): array {
-		$shared_secret = get_option( Options::OPTION_SHARED_SECRET, '' );
-
-		if ( ! empty( $shared_secret ) ) {
-			return array( 'shared_secret' => $shared_secret );
-		}
-
 		if ( Environment::is_development() ) {
 			$username = get_option( Options::OPTION_USERNAME, '' );
 			$password = get_option( Options::OPTION_PASSWORD, '' );

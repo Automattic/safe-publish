@@ -130,13 +130,8 @@ final class Admin_Page {
 			// Pass authentication credentials if they exist.
 			$auth_credentials = array();
 
-			// VIP-safe authentication methods (prioritized).
-			$shared_secret = get_option( Options::OPTION_SHARED_SECRET, '' );
-
-			if ( ! empty( $shared_secret ) ) {
-				$auth_credentials['shared_secret'] = $shared_secret;
-			} elseif ( Environment::is_development() ) {
-				// Fallback to Basic auth in development environments only.
+			if ( Environment::is_development() ) {
+				// Basic auth in development environments only.
 				$username = get_option( Options::OPTION_USERNAME, '' );
 				$password = get_option( Options::OPTION_PASSWORD, '' );
 

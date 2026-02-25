@@ -8,7 +8,6 @@
 namespace Safe_Publish\Auth;
 
 use Safe_Publish\Utils\Environment;
-use Safe_Publish\Utils\Options;
 use WP_Error;
 
 // Prevent direct access.
@@ -25,14 +24,6 @@ if ( ! defined( 'ABSPATH' ) ) {
  * 2. Basic Authentication - Development environments only.
  */
 final class VIP_Safe_Auth {
-
-	/**
-	 * Authentication methods priority order.
-	 */
-	const AUTH_METHODS = array(
-		'shared_secret',
-		'basic_auth', // Development only.
-	);
 
 	/**
 	 * Gets authentication parameters for requests.
@@ -304,84 +295,5 @@ final class VIP_Safe_Auth {
 				'Authorization' => 'Basic ' . base64_encode( $username . ':' . $password ),
 			),
 		);
-	}
-
-
-	/**
-	 * Verifies incoming authentication.
-	 *
-	 * Used on the target site to verify requests.
-	 *
-	 * @return bool|WP_Error True if authenticated, WP_Error if not.
-	 */
-	public static function verify_request(): bool|WP_Error {
-		// Check for shared secret authentication.
-		if ( isset( $_SERVER['HTTP_X_SAFE_PUBLISH_SIGNATURE'] ) ) {
-			return self::verify_shared_secret();
-		}
-
-		return new WP_Error( 'no_auth', __( 'No valid authentication found.', 'safe-publish' ) );
-	}
-
-	/**
-	 * Verifies shared secret authentication.
-	 *
-	 * @return bool|WP_Error True if valid, WP_Error if not.
-	 */
-	private static function verify_shared_secret(): bool|WP_Error {
-		$signature = sanitize_text_field( $_SERVER['HTTP_X_SAFE_PUBLISH_SIGNATURE'] ?? '' );
-		$site      = sanitize_url( $_SERVER['HTTP_X_SAFE_PUBLISH_SITE'] ?? '' );
-		$timestamp = sanitize_text_field( $_SERVER['HTTP_X_SAFE_PUBLISH_TIMESTAMP'] ?? '' );
-		$nonce     = sanitize_text_field( $_SERVER['HTTP_X_SAFE_PUBLISH_NONCE'] ?? '' );
-
-		if ( empty( $signature ) || empty( $site ) || empty( $timestamp ) || empty( $nonce ) ) {
-			return new WP_Error( 'invalid_auth', __( 'Missing authentication parameters.', 'safe-publish' ) );
-		}
-
-		// Check timestamp (prevent replay attacks).
-		if ( abs( time() - intval( $timestamp ) ) > 300 ) { // 5 minute window.
-			return new WP_Error( 'expired_auth', __( 'Authentication expired.', 'safe-publish' ) );
-		}
-
-		// Get shared secret for this site.
-		$shared_secret = get_option( Options::OPTION_SHARED_SECRET . '_' . md5( $site ), '' );
-
-		if ( empty( $shared_secret ) ) {
-			return new WP_Error( 'unknown_site', __( 'Unknown source site.', 'safe-publish' ) );
-		}
-
-		// Recreate payload and verify signature.
-		$payload = array(
-			'site'      => $site,
-			'timestamp' => intval( $timestamp ),
-			'nonce'     => $nonce,
-			'target'    => get_bloginfo( 'url' ),
-		);
-
-		$expected_signature = hash_hmac( 'sha256', wp_json_encode( $payload ), $shared_secret );
-
-		if ( ! hash_equals( $expected_signature, $signature ) ) {
-			return new WP_Error( 'invalid_signature', __( 'Invalid authentication signature.', 'safe-publish' ) );
-		}
-
-		// Check nonce for replay protection.
-		$nonce_key = 'safe_publish_nonce_' . md5( $nonce );
-		if ( get_transient( $nonce_key ) ) {
-			return new WP_Error( 'replay_attack', __( 'Nonce already used.', 'safe-publish' ) );
-		}
-
-		// Store nonce to prevent replay.
-		set_transient( $nonce_key, true, 600 ); // 10 minutes.
-
-		return true;
-	}
-
-	/**
-	 * Generates a secure shared secret.
-	 *
-	 * @return string Generated secret.
-	 */
-	public static function generate_shared_secret(): string {
-		return bin2hex( random_bytes( 32 ) ); // 64 character hex string.
 	}
 }

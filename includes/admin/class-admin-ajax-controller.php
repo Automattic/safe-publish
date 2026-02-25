@@ -431,9 +431,7 @@ final class Admin_Ajax_Controller {
 			'site_url'                   => $site_url,
 			'api_url'                    => $api_url,
 			'auth_credentials_available' => ! empty( $auth_credentials ),
-			'auth_credentials_type'      => ! empty( $auth_credentials['shared_secret'] )
-				? 'shared_secret'
-				: ( ! empty( $auth_credentials['username'] ) ? 'basic_auth' : 'none' ),
+			'auth_credentials_type'      => ! empty( $auth_credentials['username'] ) ? 'basic_auth' : 'none',
 			'auth_params'                => $auth_params,
 		);
 

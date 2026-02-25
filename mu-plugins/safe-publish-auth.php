@@ -824,12 +824,6 @@ if ( ! function_exists( 'safe_publish_vip_get_shared_secret' ) ) {
 			}
 		}
 
-		// Method 4: WordPress option (fallback for non-VIP or development).
-		$option_secret = get_option( 'safe_publish_shared_secret', '' );
-		if ( ! empty( $option_secret ) ) {
-			return $option_secret;
-		}
-
 		return '';
 	}
 }
@@ -1356,9 +1350,6 @@ function safe_publish_vip_get_secret_source(): string {
 	if ( ! empty( getenv( 'SAFE_PUBLISH_SHARED_SECRET' ) ) ) {
 		return 'environment';
 	}
-	if ( ! empty( get_option( 'safe_publish_shared_secret' ) ) ) {
-		return 'option';
-	}
 	return 'none';
 }
 
@@ -1634,8 +1625,6 @@ function safe_publish_vip_dashboard_widget_content(): void {
 		echo esc_html__( 'Environment Variable (SAFE_PUBLISH_SHARED_SECRET)', 'safe-publish' );
 	} elseif ( ! empty( getenv( 'SAFE_PUBLISH_SHARED_SECRET' ) ) ) {
 		echo esc_html__( 'Environment Variable (getenv)', 'safe-publish' );
-	} elseif ( ! empty( get_option( 'safe_publish_shared_secret' ) ) ) {
-		echo esc_html__( 'WordPress Option (safe_publish_shared_secret)', 'safe-publish' );
 	} else {
 		echo esc_html__( 'Not configured', 'safe-publish' );
 	}
