@@ -9,7 +9,7 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\Meta_Terms_Manager;
-use Safe_Publish\Utils\Environment;
+use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Exception;
 
@@ -115,7 +115,7 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
 		}
 
-		$auth_credentials = $this->get_auth_credentials();
+		$auth_credentials = Auth_Credential_Provider::get_credentials();
 
 		$posts = $this->api->fetch_posts( $site_url, $number_of_posts, $auth_credentials, $post_type );
 
@@ -143,7 +143,7 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
 		}
 
-		$auth_credentials = $this->get_auth_credentials();
+		$auth_credentials = Auth_Credential_Provider::get_credentials();
 
 		$post_types = $this->api->fetch_post_types( $site_url, $auth_credentials );
 
@@ -395,7 +395,7 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
 		}
 
-		$auth_credentials = $this->get_auth_credentials();
+		$auth_credentials = Auth_Credential_Provider::get_credentials();
 
 		$api_url = trailingslashit( $site_url ) . 'wp-json/wp/v2/types';
 
@@ -676,7 +676,7 @@ final class Admin_Ajax_Controller {
 			return null;
 		}
 
-		$auth_credentials = $this->get_auth_credentials();
+		$auth_credentials = Auth_Credential_Provider::get_credentials();
 
 		try {
 			$fresh_data = $this->api->fetch_fresh_post_content(
@@ -690,36 +690,5 @@ final class Admin_Ajax_Controller {
 			error_log( 'Safe Publish: Failed to fetch fresh content for update - ' . $e->getMessage() );
 			return null;
 		}
-	}
-
-
-	/**
-	 * Gets authentication credentials from plugin settings.
-	 *
-	 * Returns HMAC shared secret credentials when configured, falls back to
-	 * Basic Auth credentials in development environments only.
-	 *
-	 * @return array Authentication credentials array with appropriate keys.
-	 */
-	private function get_auth_credentials(): array {
-		$shared_secret = get_option( Options::OPTION_SHARED_SECRET, '' );
-
-		if ( ! empty( $shared_secret ) ) {
-			return array( 'shared_secret' => $shared_secret );
-		}
-
-		if ( Environment::is_development() ) {
-			$username = get_option( Options::OPTION_USERNAME, '' );
-			$password = get_option( Options::OPTION_PASSWORD, '' );
-
-			if ( ! empty( $username ) && ! empty( $password ) ) {
-				return array(
-					'username' => $username,
-					'password' => $password,
-				);
-			}
-		}
-
-		return array();
 	}
 }

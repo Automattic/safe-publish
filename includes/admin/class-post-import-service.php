@@ -8,7 +8,7 @@
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\External_Posts_API;
-use Safe_Publish\Utils\Environment;
+use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Exception;
 use WP_Post;
@@ -416,7 +416,7 @@ class Post_Import_Service {
 			return null;
 		}
 
-		$auth_credentials = $this->get_auth_credentials();
+		$auth_credentials = Auth_Credential_Provider::get_credentials();
 
 		try {
 			$fresh_data = $this->api->fetch_fresh_post_content(
@@ -535,35 +535,5 @@ class Post_Import_Service {
 			'success'     => false,
 			'error'       => $e->getMessage(),
 		);
-	}
-
-	/**
-	 * Gets authentication credentials from plugin settings.
-	 *
-	 * Returns HMAC shared secret credentials when configured, falls back to
-	 * Basic Auth credentials in development environments only.
-	 *
-	 * @return array Authentication credentials array with appropriate keys.
-	 */
-	private function get_auth_credentials(): array {
-		$shared_secret = get_option( Options::OPTION_SHARED_SECRET, '' );
-
-		if ( ! empty( $shared_secret ) ) {
-			return array( 'shared_secret' => $shared_secret );
-		}
-
-		if ( Environment::is_development() ) {
-			$username = get_option( Options::OPTION_USERNAME, '' );
-			$password = get_option( Options::OPTION_PASSWORD, '' );
-
-			if ( ! empty( $username ) && ! empty( $password ) ) {
-				return array(
-					'username' => $username,
-					'password' => $password,
-				);
-			}
-		}
-
-		return array();
 	}
 }

@@ -88,15 +88,6 @@ class HTTPClientTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that is_development_environment returns a boolean.
-	 */
-	public function test_is_development_environment_returns_bool(): void {
-		$result = $this->http_client->is_development_environment();
-
-		$this->assertIsBool( $result );
-	}
-
-	/**
 	 * Verifies that get_fallback_auth_credentials returns an array.
 	 */
 	public function test_get_fallback_auth_credentials_returns_array(): void {

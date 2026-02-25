@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\API;
 
 use Safe_Publish\Admin\Content_Processor;
+use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use WP_Error;
 use WP_REST_Request;
@@ -323,37 +324,6 @@ final class Safe_Publish_API extends REST_Base {
 	}
 
 	/**
-	 * Gets authentication credentials from settings.
-	 *
-	 * @return array Authentication credentials array with appropriate keys.
-	 */
-	private function get_auth_credentials(): array {
-		// Try VIP-safe authentication first.
-		$shared_secret = get_option( Options::OPTION_SHARED_SECRET, '' );
-
-		if ( ! empty( $shared_secret ) ) {
-			return array(
-				'shared_secret' => $shared_secret,
-			);
-		}
-
-		// Fallback to Basic auth in development environments only.
-		if ( $this->is_development_environment() ) {
-			$username = get_option( Options::OPTION_USERNAME, '' );
-			$password = get_option( Options::OPTION_PASSWORD, '' );
-
-			if ( ! empty( $username ) && ! empty( $password ) ) {
-				return array(
-					'username' => $username,
-					'password' => $password,
-				);
-			}
-		}
-
-		return array();
-	}
-
-	/**
 	 * Renders the diff preview for an external post.
 	 *
 	 * @param WP_REST_Request $req REST request object.
@@ -364,7 +334,7 @@ final class Safe_Publish_API extends REST_Base {
 		$result = $this->diff_renderer->render_diff(
 			$req,
 			array( $this, 'make_request' ),
-			$this->get_auth_credentials()
+			Auth_Credential_Provider::get_credentials()
 		);
 
 		if ( is_wp_error( $result ) ) {
