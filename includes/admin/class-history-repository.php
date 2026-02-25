@@ -7,6 +7,7 @@
 
 namespace Safe_Publish\Admin;
 
+use Safe_Publish\Utils\Options;
 use WP_Error;
 
 // Prevent direct access.
@@ -181,7 +182,7 @@ final class History_Repository {
 			'diff_date'   => current_time( 'mysql' ),
 		);
 
-		update_post_meta( $post_id, 'safe_publish_content_history', $diff_data );
+		update_post_meta( $post_id, Options::META_CONTENT_HISTORY, $diff_data );
 	}
 
 	/**

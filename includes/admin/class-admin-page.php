@@ -9,6 +9,7 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\Utils\Environment;
+use Safe_Publish\Utils\Options;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -40,7 +41,7 @@ final class Admin_Page {
 	 * Renders the admin page.
 	 */
 	public function render(): void {
-		$site_url = get_option( 'safe_publish_external_site_url', '' );
+		$site_url = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
 
 		?>
 		<div class="wrap" id="safe-publish-admin-page">
@@ -121,8 +122,8 @@ final class Admin_Page {
 	 */
 	private function enqueue_standard_assets(): void {
 		// Get posts data for localization.
-		$site_url        = get_option( 'safe_publish_external_site_url', '' );
-		$number_of_posts = get_option( 'safe_publish_number_of_posts', 10 );
+		$site_url        = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
+		$number_of_posts = get_option( Options::OPTION_NUMBER_OF_POSTS, 10 );
 		$posts_data      = array();
 
 		if ( ! empty( $site_url ) ) {
@@ -130,14 +131,14 @@ final class Admin_Page {
 			$auth_credentials = array();
 
 			// VIP-safe authentication methods (prioritized).
-			$shared_secret = get_option( 'safe_publish_shared_secret', '' );
+			$shared_secret = get_option( Options::OPTION_SHARED_SECRET, '' );
 
 			if ( ! empty( $shared_secret ) ) {
 				$auth_credentials['shared_secret'] = $shared_secret;
 			} elseif ( Environment::is_development() ) {
 				// Fallback to Basic auth in development environments only.
-				$username = get_option( 'safe_publish_username', '' );
-				$password = get_option( 'safe_publish_password', '' );
+				$username = get_option( Options::OPTION_USERNAME, '' );
+				$password = get_option( Options::OPTION_PASSWORD, '' );
 
 				if ( ! empty( $username ) && ! empty( $password ) ) {
 					$auth_credentials['username'] = $username;

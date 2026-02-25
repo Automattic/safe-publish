@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\API;
 
 use Exception;
+use Safe_Publish\Utils\Options;
 use stdClass;
 use WP_Error;
 use WP_Query;
@@ -47,7 +48,7 @@ final class Diff_Renderer {
 		$post_type        = (string) $request->get_param( 'postType' );
 		$mode             = (string) $request->get_param( 'mode' );
 		$cleanup          = (bool) $request->get_param( 'cleanup' );
-		$site_url         = get_option( 'safe_publish_external_site_url', '' );
+		$site_url         = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
 
 		// Convert plural post types to singular for WordPress compatibility.
 		$post_type_mapping = array(
@@ -149,7 +150,7 @@ final class Diff_Renderer {
 	private function find_local_post( int $external_post_id, string $post_type ): \WP_Post|WP_Error {
 		$query = new WP_Query(
 			array(
-				'meta_key'       => 'safe_publish_external_post_id',
+				'meta_key'       => Options::META_EXTERNAL_POST_ID,
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'     => $external_post_id,
 				'post_type'      => $post_type,

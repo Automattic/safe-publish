@@ -8,6 +8,7 @@
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\Utils\Environment;
+use Safe_Publish\Utils\Options;
 use Safe_Publish\Validators\URL_Validator;
 
 // Prevent direct access.
@@ -32,8 +33,8 @@ class Settings_Sanitizer {
 	 */
 	public function register_settings(): void {
 		register_setting(
-			'safe_publish_settings',
-			'safe_publish_external_site_url',
+			Options::SETTINGS_GROUP,
+			Options::OPTION_EXTERNAL_SITE_URL,
 			array(
 				'sanitize_callback' => array( $this, 'sanitize_url' ),
 				'default'           => '',
@@ -41,8 +42,8 @@ class Settings_Sanitizer {
 		);
 
 		register_setting(
-			'safe_publish_settings',
-			'safe_publish_number_of_posts',
+			Options::SETTINGS_GROUP,
+			Options::OPTION_NUMBER_OF_POSTS,
 			array(
 				'sanitize_callback' => array( $this, 'sanitize_number_of_posts' ),
 				'default'           => 10,
@@ -51,8 +52,8 @@ class Settings_Sanitizer {
 
 		// VIP-safe authentication settings.
 		register_setting(
-			'safe_publish_settings',
-			'safe_publish_shared_secret',
+			Options::SETTINGS_GROUP,
+			Options::OPTION_SHARED_SECRET,
 			array(
 				'sanitize_callback' => array( $this, 'sanitize_shared_secret' ),
 				'default'           => '',
@@ -62,8 +63,8 @@ class Settings_Sanitizer {
 		// Basic authentication settings (development only).
 		if ( Environment::is_development() ) {
 			register_setting(
-				'safe_publish_settings',
-				'safe_publish_username',
+				Options::SETTINGS_GROUP,
+				Options::OPTION_USERNAME,
 				array(
 					'sanitize_callback' => array( $this, 'sanitize_username' ),
 					'default'           => '',
@@ -71,8 +72,8 @@ class Settings_Sanitizer {
 			);
 
 			register_setting(
-				'safe_publish_settings',
-				'safe_publish_password',
+				Options::SETTINGS_GROUP,
+				Options::OPTION_PASSWORD,
 				array(
 					'sanitize_callback' => array( $this, 'sanitize_password' ),
 					'default'           => '',
@@ -96,11 +97,11 @@ class Settings_Sanitizer {
 
 		if ( ! URL_Validator::is_valid_external_url( $url ) ) {
 			add_settings_error(
-				'safe_publish_external_site_url',
+				Options::OPTION_EXTERNAL_SITE_URL,
 				'invalid_url',
 				__( 'Please enter a valid external site URL.', 'safe-publish' )
 			);
-			return get_option( 'safe_publish_external_site_url', '' );
+			return get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
 		}
 
 		return $url;
@@ -117,11 +118,11 @@ class Settings_Sanitizer {
 
 		if ( $number < 1 || $number > 100 ) {
 			add_settings_error(
-				'safe_publish_number_of_posts',
+				Options::OPTION_NUMBER_OF_POSTS,
 				'invalid_number',
 				__( 'Number of posts must be between 1 and 100.', 'safe-publish' )
 			);
-			return get_option( 'safe_publish_number_of_posts', 10 );
+			return get_option( Options::OPTION_NUMBER_OF_POSTS, 10 );
 		}
 
 		return $number;
@@ -153,11 +154,11 @@ class Settings_Sanitizer {
 		// Validate length - shared secrets should be at least 32 characters for security.
 		if ( strlen( $secret ) < 32 ) {
 			add_settings_error(
-				'safe_publish_shared_secret',
+				Options::OPTION_SHARED_SECRET,
 				'invalid_secret',
 				__( 'Shared secret must be at least 32 characters long for security.', 'safe-publish' )
 			);
-			return get_option( 'safe_publish_shared_secret', '' );
+			return get_option( Options::OPTION_SHARED_SECRET, '' );
 		}
 
 		return $secret;

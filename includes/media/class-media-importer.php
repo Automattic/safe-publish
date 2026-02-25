@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Media;
 
 use Safe_Publish\API\HTTP_Client;
+use Safe_Publish\Utils\Options;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -109,8 +110,8 @@ class Media_Importer {
 		}
 
 		// Store the original URL as meta for tracking.
-		update_post_meta( $attachment_id, 'safe_publish_original_url', $media_url );
-		update_post_meta( $attachment_id, 'safe_publish_imported_from', $source_site_url );
+		update_post_meta( $attachment_id, Options::META_ORIGINAL_URL, $media_url );
+		update_post_meta( $attachment_id, Options::META_IMPORTED_FROM, $source_site_url );
 
 		return wp_get_attachment_url( $attachment_id );
 	}
@@ -240,8 +241,8 @@ class Media_Importer {
 		}
 
 		// Store the original URL as meta for tracking.
-		update_post_meta( $attachment_id, 'safe_publish_original_url', $media_url );
-		update_post_meta( $attachment_id, 'safe_publish_imported_from', $source_site_url );
+		update_post_meta( $attachment_id, Options::META_ORIGINAL_URL, $media_url );
+		update_post_meta( $attachment_id, Options::META_IMPORTED_FROM, $source_site_url );
 
 		return $attachment_id;
 	}
@@ -288,8 +289,8 @@ class Media_Importer {
 
 		if ( $attachment_id ) {
 			// Store additional metadata for featured images.
-			update_post_meta( $attachment_id, 'safe_publish_featured_media_id', $featured_media_id );
-			update_post_meta( $attachment_id, 'safe_publish_media_type', 'featured_image' );
+			update_post_meta( $attachment_id, Options::META_FEATURED_MEDIA_ID, $featured_media_id );
+			update_post_meta( $attachment_id, Options::META_MEDIA_TYPE, 'featured_image' );
 
 			return $attachment_id;
 		}
@@ -372,7 +373,7 @@ class Media_Importer {
 		$attachments = get_posts(
 			array(
 				'post_type'        => 'attachment',
-				'meta_key'         => 'safe_publish_original_url',
+				'meta_key'         => Options::META_ORIGINAL_URL,
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'       => $original_url,
 				'posts_per_page'   => 1,
@@ -401,11 +402,11 @@ class Media_Importer {
 				'meta_query'       => array(
 					'relation' => 'AND',
 					array(
-						'key'   => 'safe_publish_featured_media_id',
+						'key'   => Options::META_FEATURED_MEDIA_ID,
 						'value' => $featured_media_id,
 					),
 					array(
-						'key'   => 'safe_publish_imported_from',
+						'key'   => Options::META_IMPORTED_FROM,
 						'value' => $site_url,
 					),
 				),

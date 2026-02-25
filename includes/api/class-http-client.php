@@ -11,6 +11,7 @@ namespace Safe_Publish\API;
 
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Environment;
+use Safe_Publish\Utils\Options;
 use WP_Error;
 
 // Prevent direct access.
@@ -173,7 +174,7 @@ final class HTTP_Client {
 		}
 
 		// Try VIP-safe authentication first.
-		$shared_secret = get_option( 'safe_publish_shared_secret', '' );
+		$shared_secret = get_option( Options::OPTION_SHARED_SECRET, '' );
 
 		if ( ! empty( $shared_secret ) ) {
 			return array(
@@ -183,8 +184,8 @@ final class HTTP_Client {
 
 		// Fallback to Basic auth in development environments only.
 		if ( $this->is_development_environment() ) {
-			$username = get_option( 'safe_publish_username', '' );
-			$password = get_option( 'safe_publish_password', '' );
+			$username = get_option( Options::OPTION_USERNAME, '' );
+			$password = get_option( Options::OPTION_PASSWORD, '' );
 
 			if ( ! empty( $username ) && ! empty( $password ) ) {
 				return array(
