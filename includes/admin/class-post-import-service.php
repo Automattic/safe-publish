@@ -179,15 +179,21 @@ class Post_Import_Service {
 	 *
 	 * Converts plural REST API post type names to singular, validates that the
 	 * post type exists, and falls back to 'post' based on capability checks.
+	 * Administrators (manage_options) may create any registered post type.
 	 *
 	 * @param string $raw_post_type Raw post type string from external API.
 	 * @return string Resolved post type slug.
 	 */
-	private function resolve_post_type( string $raw_post_type ): string {
+	public function resolve_post_type( string $raw_post_type ): string {
 		$post_type = $this->post_type_map[ $raw_post_type ] ?? $raw_post_type;
 
 		if ( ! post_type_exists( $post_type ) ) {
 			return 'post';
+		}
+
+		// Admins can create any registered post type.
+		if ( current_user_can( 'manage_options' ) ) {
+			return $post_type;
 		}
 
 		if ( 'page' === $post_type && ! current_user_can( 'edit_pages' ) ) {
@@ -228,7 +234,7 @@ class Post_Import_Service {
 	 * @param int $external_post_id External post ID stored in post meta.
 	 * @return WP_Post|null Existing post or null if not found.
 	 */
-	private function find_existing_post( int $external_post_id ): ?WP_Post {
+	public function find_existing_post( int $external_post_id ): ?WP_Post {
 		$existing_posts = get_posts(
 			array(
 				'meta_key'         => Options::META_EXTERNAL_POST_ID,
@@ -436,7 +442,7 @@ class Post_Import_Service {
 	 * @param string $external_link     External post URL used to derive site URL.
 	 * @param int    $post_id           WordPress post ID to attach the thumbnail to.
 	 */
-	private function maybe_import_featured_image(
+	public function maybe_import_featured_image(
 		int $featured_media_id,
 		string $external_link,
 		int $post_id

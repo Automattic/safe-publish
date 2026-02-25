@@ -231,7 +231,7 @@ final class Admin_Ajax_Controller {
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		$terms = isset( $_POST['terms'] ) ? json_decode( wp_unslash( $_POST['terms'] ) ) : array();
 
-		$post_type = $this->resolve_post_type( $raw_post_type );
+		$post_type = $this->post_import_service->resolve_post_type( $raw_post_type );
 
 		if ( empty( $title ) ) {
 			wp_send_json_error( __( 'Post title is required.', 'safe-publish' ) );
@@ -241,7 +241,7 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( __( 'External post ID is required.', 'safe-publish' ) );
 		}
 
-		$existing_post = $this->find_existing_post( $external_post_id );
+		$existing_post = $this->post_import_service->find_existing_post( $external_post_id );
 		$force_update  = isset( $_POST['force_update'] ) && 'true' === $_POST['force_update'];
 
 		// If post exists and no force update, ask for confirmation.
@@ -494,7 +494,7 @@ final class Admin_Ajax_Controller {
 		update_post_meta( $post_id, Options::META_EXTERNAL_LINK, $external_link );
 		update_post_meta( $post_id, Options::META_IMPORT_DATE, current_time( 'mysql' ) );
 
-		$this->maybe_import_featured_image( $featured_media_id, $external_link, $post_id );
+		$this->post_import_service->maybe_import_featured_image( $featured_media_id, $external_link, $post_id );
 
 		$this->meta_terms_manager->update_meta( $post_id, $meta );
 		$this->meta_terms_manager->update_terms( $post_id, $terms );
@@ -575,7 +575,7 @@ final class Admin_Ajax_Controller {
 			return array( 'error' => $post_id->get_error_message() );
 		}
 
-		$this->maybe_import_featured_image( $featured_media_id, $external_link, $post_id );
+		$this->post_import_service->maybe_import_featured_image( $featured_media_id, $external_link, $post_id );
 
 		$this->meta_terms_manager->update_meta( $post_id, $meta );
 		$this->meta_terms_manager->update_terms( $post_id, $terms );
@@ -623,66 +623,7 @@ final class Admin_Ajax_Controller {
 		return \wp_kses_post( $processed );
 	}
 
-	/**
-	 * Resolves a raw post type string to a valid WordPress post type slug.
-	 *
-	 * Converts plural REST API post type names to singular, validates the post
-	 * type exists, and falls back to 'post' based on user capabilities.
-	 *
-	 * @param string $raw_post_type Raw post type string from the AJAX request.
-	 * @return string Resolved post type slug.
-	 */
-	private function resolve_post_type( string $raw_post_type ): string {
-		$post_type_mapping = array(
-			'posts'          => 'post',
-			'pages'          => 'page',
-			'attachments'    => 'attachment',
-			'revisions'      => 'revision',
-			'nav_menu_items' => 'nav_menu_item',
-		);
 
-		$post_type = $post_type_mapping[ $raw_post_type ] ?? $raw_post_type;
-
-		if ( ! post_type_exists( $post_type ) ) {
-			return 'post';
-		}
-
-		// Admins can create any registered post type.
-		if ( current_user_can( 'manage_options' ) ) {
-			return $post_type;
-		}
-
-		if ( 'page' === $post_type && ! current_user_can( 'edit_pages' ) ) {
-			return 'post';
-		}
-
-		if ( 'page' !== $post_type && ! current_user_can( 'edit_posts' ) ) {
-			return 'post';
-		}
-
-		return $post_type;
-	}
-
-	/**
-	 * Finds an existing WordPress post by its external post ID.
-	 *
-	 * @param int $external_post_id External post ID stored in post meta.
-	 * @return \WP_Post|null Existing post or null if not found.
-	 */
-	private function find_existing_post( int $external_post_id ): ?\WP_Post {
-		$posts = get_posts(
-			array(
-				'meta_key'         => Options::META_EXTERNAL_POST_ID,
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-				'meta_value'       => $external_post_id,
-				'post_status'      => array( 'draft', 'publish', 'pending', 'private' ),
-				'posts_per_page'   => 1,
-				'suppress_filters' => false,
-			)
-		);
-
-		return ! empty( $posts ) ? $posts[0] : null;
-	}
 
 	/**
 	 * Captures rollback data from an existing post before updating it.
@@ -751,34 +692,6 @@ final class Admin_Ajax_Controller {
 		}
 	}
 
-	/**
-	 * Imports a featured image and sets it as the post thumbnail if available.
-	 *
-	 * Does nothing if either the media ID or external link is empty.
-	 *
-	 * @param int    $featured_media_id External featured media ID.
-	 * @param string $external_link     External post URL used to derive site URL.
-	 * @param int    $post_id           WordPress post ID to attach the thumbnail to.
-	 */
-	private function maybe_import_featured_image(
-		int $featured_media_id,
-		string $external_link,
-		int $post_id
-	): void {
-		if ( empty( $featured_media_id ) || empty( $external_link ) ) {
-			return;
-		}
-
-		$site_url = wp_parse_url( $external_link, PHP_URL_SCHEME )
-			. '://'
-			. wp_parse_url( $external_link, PHP_URL_HOST );
-
-		$attachment_id = $this->api->import_featured_image( $featured_media_id, $site_url );
-
-		if ( $attachment_id ) {
-			set_post_thumbnail( $post_id, $attachment_id );
-		}
-	}
 
 	/**
 	 * Gets authentication credentials from plugin settings.
