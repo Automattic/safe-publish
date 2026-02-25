@@ -61,26 +61,6 @@ class ExternalPostsAPITest extends TestCase {
 	}
 
 	/**
-	 * Verifies that fetch_post_types returns an error for invalid URLs.
-	 */
-	public function test_fetch_post_types_with_invalid_url_returns_error(): void {
-		$result = $this->api->fetch_post_types( 'invalid-url' );
-
-		$this->assertInstanceOf( \WP_Error::class, $result );
-		$this->assertSame( 'invalid_url', $result->get_error_code() );
-	}
-
-	/**
-	 * Verifies that fetch_post_types returns an error for empty URLs.
-	 */
-	public function test_fetch_post_types_with_empty_url_returns_error(): void {
-		$result = $this->api->fetch_post_types( '' );
-
-		$this->assertInstanceOf( \WP_Error::class, $result );
-		$this->assertSame( 'invalid_url', $result->get_error_code() );
-	}
-
-	/**
 	 * Verifies that test_connection returns an array structure.
 	 */
 	public function test_test_connection_returns_array(): void {
@@ -94,38 +74,10 @@ class ExternalPostsAPITest extends TestCase {
 	}
 
 	/**
-	 * Verifies that get_attachment_id_from_url returns an integer.
-	 */
-	public function test_get_attachment_id_from_url_returns_int(): void {
-		$url    = 'https://example.com/wp-content/uploads/2024/01/image.jpg';
-		$result = $this->api->get_attachment_id_from_url( $url );
-
-		$this->assertIsInt( $result );
-	}
-
-	/**
 	 * Verifies that fetch_fresh_post_content returns false for invalid URLs.
 	 */
 	public function test_fetch_fresh_post_content_with_invalid_url_returns_false(): void {
 		$result = $this->api->fetch_fresh_post_content( 123, 'invalid-url' );
-
-		$this->assertFalse( $result );
-	}
-
-	/**
-	 * Verifies that import_featured_image returns false for empty post IDs.
-	 */
-	public function test_import_featured_image_with_empty_id_returns_false(): void {
-		$result = $this->api->import_featured_image( 0, 'https://example.com' );
-
-		$this->assertFalse( $result );
-	}
-
-	/**
-	 * Verifies that import_featured_image returns false for empty site URLs.
-	 */
-	public function test_import_featured_image_with_empty_site_url_returns_false(): void {
-		$result = $this->api->import_featured_image( 123, '' );
 
 		$this->assertFalse( $result );
 	}

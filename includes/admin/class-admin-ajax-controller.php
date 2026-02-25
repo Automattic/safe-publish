@@ -8,7 +8,9 @@
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
+use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Exception;
@@ -62,6 +64,20 @@ final class Admin_Ajax_Controller {
 	private Meta_Terms_Manager $meta_terms_manager;
 
 	/**
+	 * Post Type Fetcher instance.
+	 *
+	 * @var Post_Type_Fetcher
+	 */
+	private Post_Type_Fetcher $post_type_fetcher;
+
+	/**
+	 * HTTP Client instance.
+	 *
+	 * @var HTTP_Client
+	 */
+	private HTTP_Client $http_client;
+
+	/**
 	 * Constructs the Admin_Ajax_Controller instance.
 	 *
 	 * @param External_Posts_API  $api                 External Posts API instance.
@@ -69,19 +85,25 @@ final class Admin_Ajax_Controller {
 	 * @param Content_Processor   $content_processor   Content Processor instance.
 	 * @param Post_Import_Service $post_import_service Post Import Service instance.
 	 * @param Meta_Terms_Manager  $meta_terms_manager  Meta Terms Manager instance.
+	 * @param Post_Type_Fetcher   $post_type_fetcher   Post Type Fetcher instance.
+	 * @param HTTP_Client         $http_client         HTTP Client instance.
 	 */
 	public function __construct(
 		External_Posts_API $api,
 		Import_History $import_history,
 		Content_Processor $content_processor,
 		Post_Import_Service $post_import_service,
-		Meta_Terms_Manager $meta_terms_manager
+		Meta_Terms_Manager $meta_terms_manager,
+		Post_Type_Fetcher $post_type_fetcher,
+		HTTP_Client $http_client
 	) {
 		$this->api                 = $api;
 		$this->import_history      = $import_history;
 		$this->content_processor   = $content_processor;
 		$this->post_import_service = $post_import_service;
 		$this->meta_terms_manager  = $meta_terms_manager;
+		$this->post_type_fetcher   = $post_type_fetcher;
+		$this->http_client         = $http_client;
 	}
 
 	/**
@@ -145,7 +167,7 @@ final class Admin_Ajax_Controller {
 
 		$auth_credentials = Auth_Credential_Provider::get_credentials();
 
-		$post_types = $this->api->fetch_post_types( $site_url, $auth_credentials );
+		$post_types = $this->post_type_fetcher->fetch_post_types( $site_url, $auth_credentials );
 
 		if ( is_wp_error( $post_types ) ) {
 			wp_send_json_error( $post_types->get_error_message() );
@@ -416,7 +438,7 @@ final class Admin_Ajax_Controller {
 		);
 
 		try {
-			$response = $this->api->make_request( $api_url, $auth_credentials );
+			$response = $this->http_client->make_request( $api_url, $auth_credentials );
 
 			if ( is_wp_error( $response ) ) {
 				$debug_info['request_error'] = $response->get_error_message();

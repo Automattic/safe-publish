@@ -8,6 +8,7 @@
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Exception;
@@ -32,6 +33,13 @@ class Post_Import_Service {
 	 * @var External_Posts_API
 	 */
 	private External_Posts_API $api;
+
+	/**
+	 * Media Importer instance.
+	 *
+	 * @var Media_Importer
+	 */
+	private Media_Importer $media_importer;
 
 	/**
 	 * Content Processor instance.
@@ -64,15 +72,18 @@ class Post_Import_Service {
 	 * Constructs the Post_Import_Service instance.
 	 *
 	 * @param External_Posts_API $api               External Posts API instance.
+	 * @param Media_Importer     $media_importer    Media Importer instance.
 	 * @param Content_Processor  $content_processor Content Processor instance.
 	 * @param Import_History     $import_history    Import History instance.
 	 */
 	public function __construct(
 		External_Posts_API $api,
+		Media_Importer $media_importer,
 		Content_Processor $content_processor,
 		Import_History $import_history
 	) {
 		$this->api               = $api;
+		$this->media_importer    = $media_importer;
 		$this->content_processor = $content_processor;
 		$this->import_history    = $import_history;
 	}
@@ -455,7 +466,7 @@ class Post_Import_Service {
 			. '://'
 			. wp_parse_url( $external_link, PHP_URL_HOST );
 
-		$featured_attachment_id = $this->api->import_featured_image(
+		$featured_attachment_id = $this->media_importer->import_featured_image(
 			$featured_media_id,
 			$site_url
 		);

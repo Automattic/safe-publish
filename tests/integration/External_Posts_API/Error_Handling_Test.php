@@ -31,7 +31,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content with broken media (mock returns 404).
-		$processed_content = $this->api->process_and_import_media( $content, $source_site );
+		$processed_content = $this->content_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify content processed despite failed media.
 		$this->assertNotEmpty( $processed_content );
@@ -64,7 +64,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Try to import media from non-existent URL.
-		$imported_url = $this->api->import_external_media( $featured_image_url, $source_site );
+		$imported_url = $this->media_importer->import_external_media( $featured_image_url, $source_site );
 
 		// ASSERT: Verify import returns false for non-existent URL.
 		$this->assertFalse(
@@ -85,7 +85,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$content     = '<p>Unclosed paragraph<div>Mixed tags</p></div>';
 
 		// ACT: Process malformed content.
-		$processed_content = $this->api->process_and_import_media( $content, $source_site );
+		$processed_content = $this->content_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify content returned without errors.
 		$this->assertNotEmpty( $processed_content );
@@ -102,7 +102,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$content     = '<p>Testing UTF-8: 你好世界 🌍</p>';
 
 		// ACT: Process UTF-8 content.
-		$processed_content = $this->api->process_and_import_media( $content, $source_site );
+		$processed_content = $this->content_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify UTF-8 characters preserved.
 		$this->assertStringContainsString( '你好世界', $processed_content );
@@ -117,15 +117,15 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$source_site = 'https://example.com';
 
 		// ACT & ASSERT: Test empty string.
-		$processed = $this->api->process_and_import_media( '', $source_site );
+		$processed = $this->content_processor->process_content( '', $source_site );
 		$this->assertSame( '', $processed, 'Empty string should return empty string' );
 
 		// ACT & ASSERT: Test whitespace-only content.
-		$processed = $this->api->process_and_import_media( '   ', $source_site );
+		$processed = $this->content_processor->process_content( '   ', $source_site );
 		$this->assertNotNull( $processed, 'Whitespace content should not return null' );
 
 		// ACT & ASSERT: Test newlines only.
-		$processed = $this->api->process_and_import_media( "\n\n", $source_site );
+		$processed = $this->content_processor->process_content( "\n\n", $source_site );
 		$this->assertNotNull( $processed, 'Newline content should not return null' );
 	}
 
@@ -142,7 +142,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content with server error.
-		$processed_content = $this->api->process_and_import_media( $content, $source_site );
+		$processed_content = $this->content_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify content processed despite server error.
 		$this->assertNotEmpty( $processed_content );
@@ -189,7 +189,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 
 		try {
 			// ACT: Process content with network failure.
-			$processed_content = $this->api->process_and_import_media( $content, $source_site );
+			$processed_content = $this->content_processor->process_content( $content, $source_site );
 
 			// ASSERT: Verify content processed despite WP_Error.
 			$this->assertNotEmpty( $processed_content );
@@ -256,7 +256,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 
 		try {
 			// ACT: Process content with file that will fail sideload.
-			$processed_content = $this->api->process_and_import_media( $content, $source_site );
+			$processed_content = $this->content_processor->process_content( $content, $source_site );
 
 			// ASSERT: Verify content processed despite sideload failure.
 			$this->assertNotEmpty( $processed_content );
