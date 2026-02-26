@@ -89,12 +89,23 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 		);
 
-		// ASSERT: Capability check calls wp_die( 'Forbidden', 403 ).
-		$this->expectException( WPAjaxDieStopException::class );
-		$this->expectExceptionMessage( 'Forbidden' );
+		// ACT: wp_send_json_error() terminates via wp_die(), which throws
+		// WPAjaxDieContinueException.
+		try {
+			$this->_handleAjax( 'safe_publish_bulk_import' );
+			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
+		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		}
 
-		// ACT: Trigger the AJAX handler registered by the plugin.
-		$this->_handleAjax( 'safe_publish_bulk_import' );
+		// ASSERT: Response is a JSON failure with a forbidden error message.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertFalse( $response['success'], 'Subscriber should be denied' );
+		$this->assertStringContainsString(
+			'Forbidden',
+			$response['data'],
+			'Error message should indicate the request is forbidden'
+		);
 	}
 
 	/**
@@ -165,9 +176,6 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 	/**
 	 * Verifies that the create draft endpoint rejects users without edit_posts
 	 * capability.
-	 *
-	 * Unlike the bulk import endpoint which calls wp_die(), create draft uses
-	 * wp_send_json_error() so the response is a JSON failure, not a hard stop.
 	 */
 	public function test_ajax_create_draft_rejects_request_without_edit_posts_capability(): void {
 		// ARRANGE: Authenticate as subscriber who cannot edit posts.

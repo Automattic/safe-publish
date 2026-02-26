@@ -126,7 +126,7 @@ final class Admin_Ajax_Controller {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Forbidden', 403 );
+			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
 		}
 
 		$site_url        = sanitize_text_field( $_POST['site_url'] ?? '' );
@@ -156,7 +156,7 @@ final class Admin_Ajax_Controller {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Forbidden', 403 );
+			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
 		}
 
 		$site_url = sanitize_text_field( $_POST['site_url'] ?? '' );
@@ -184,7 +184,7 @@ final class Admin_Ajax_Controller {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Forbidden', 403 );
+			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
 		}
 
 		$site_url = sanitize_text_field( $_POST['site_url'] ?? '' );
@@ -343,7 +343,7 @@ final class Admin_Ajax_Controller {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'edit_posts' ) ) {
-			wp_die( 'Forbidden', 403 );
+			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
 		}
 
 		// JSON string not sanitized to preserve structure; validated after decode.
@@ -408,7 +408,7 @@ final class Admin_Ajax_Controller {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Forbidden', 403 );
+			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
 		}
 
 		$site_url = sanitize_text_field( $_POST['site_url'] ?? '' );
