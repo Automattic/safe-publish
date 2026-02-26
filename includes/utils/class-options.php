@@ -36,13 +36,6 @@ class Options {
 	const OPTION_SOURCE_SITE_URL = 'safe_publish_site_url';
 
 	/**
-	 * Option key for the HMAC shared secret (VIP-safe authentication).
-	 *
-	 * @var string
-	 */
-	const OPTION_SHARED_SECRET = 'safe_publish_shared_secret';
-
-	/**
 	 * Option key for the Basic Auth username (development only).
 	 *
 	 * @var string

@@ -50,16 +50,6 @@ class Settings_Sanitizer {
 			)
 		);
 
-		// VIP-safe authentication settings.
-		register_setting(
-			Options::SETTINGS_GROUP,
-			Options::OPTION_SHARED_SECRET,
-			array(
-				'sanitize_callback' => array( $this, 'sanitize_shared_secret' ),
-				'default'           => '',
-			)
-		);
-
 		// Basic authentication settings (development only).
 		if ( Environment::is_development() ) {
 			register_setting(
@@ -136,32 +126,6 @@ class Settings_Sanitizer {
 	 */
 	public function sanitize_checkbox( $value ): bool {
 		return (bool) $value;
-	}
-
-	/**
-	 * Sanitizes the shared secret for VIP-safe authentication.
-	 *
-	 * @param mixed $value Value to sanitize.
-	 * @return string Sanitized shared secret, or empty string on failure.
-	 */
-	public function sanitize_shared_secret( $value ): string {
-		if ( empty( $value ) ) {
-			return '';
-		}
-
-		$secret = sanitize_text_field( $value );
-
-		// Validate length - shared secrets should be at least 32 characters for security.
-		if ( strlen( $secret ) < 32 ) {
-			add_settings_error(
-				Options::OPTION_SHARED_SECRET,
-				'invalid_secret',
-				__( 'Shared secret must be at least 32 characters long for security.', 'safe-publish' )
-			);
-			return get_option( Options::OPTION_SHARED_SECRET, '' );
-		}
-
-		return $secret;
 	}
 
 	/**

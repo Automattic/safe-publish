@@ -26,7 +26,6 @@ final class Settings_Page {
 	public function render(): void {
 		$site_url        = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
 		$number_of_posts = get_option( Options::OPTION_NUMBER_OF_POSTS, 10 );
-		$shared_secret   = get_option( Options::OPTION_SHARED_SECRET, '' );
 
 		// Basic auth credentials (development only).
 		$username = get_option( Options::OPTION_USERNAME, '' );
@@ -88,36 +87,6 @@ final class Settings_Page {
 									/>
 									<p class="description">
 										<?php esc_html_e( 'Number of posts to display (1-100).', 'safe-publish' ); ?>
-									</p>
-								</td>
-							</tr>
-
-							<tr>
-								<th scope="row" colspan="2">
-									<h3 style="margin-top: 20px; margin-bottom: 10px;">
-										<?php esc_html_e( 'Authentication', 'safe-publish' ); ?>
-									</h3>
-								</th>
-							</tr>
-
-							<tr>
-								<th scope="row">
-									<label for="safe_publish_shared_secret">
-										<?php esc_html_e( 'Shared Secret', 'safe-publish' ); ?>
-									</label>
-								</th>
-								<td>
-									<input
-										type="password"
-										id="safe_publish_shared_secret"
-										name="safe_publish_shared_secret"
-										value="<?php echo esc_attr( $shared_secret ); ?>"
-										class="regular-text"
-										placeholder="<?php echo esc_attr__( 'Enter a secure shared secret (32+ characters)', 'safe-publish' ); ?>"
-										autocomplete="new-password"
-									/>
-									<p class="description">
-										<?php esc_html_e( 'A shared secret key used for HMAC authentication. Must be configured on both sites. Generate a secure random string of at least 32 characters.', 'safe-publish' ); ?>
 									</p>
 								</td>
 							</tr>

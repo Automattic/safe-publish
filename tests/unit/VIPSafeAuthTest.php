@@ -90,26 +90,6 @@ class VIPSafeAuthTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that generated shared secrets meet minimum length requirements.
-	 */
-	public function test_generate_shared_secret_creates_long_secret(): void {
-		$secret = VIP_Safe_Auth::generate_shared_secret();
-
-		$this->assertIsString( $secret );
-		$this->assertGreaterThanOrEqual( 32, strlen( $secret ) );
-	}
-
-	/**
-	 * Verifies that generated shared secrets are unique.
-	 */
-	public function test_generate_shared_secret_creates_unique_secrets(): void {
-		$secret1 = VIP_Safe_Auth::generate_shared_secret();
-		$secret2 = VIP_Safe_Auth::generate_shared_secret();
-
-		$this->assertNotEquals( $secret1, $secret2 );
-	}
-
-	/**
 	 * Verifies that signature generation produces consistent format.
 	 */
 	public function test_signature_generation_is_consistent(): void {
