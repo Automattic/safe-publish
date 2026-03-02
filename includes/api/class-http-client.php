@@ -52,7 +52,8 @@ final class HTTP_Client {
 		);
 
 		// Use VIP-safe authentication instead of Basic Auth.
-		$auth_params = VIP_Safe_Auth::get_auth_params( $url, $auth_credentials, 'GET' );
+		$body        = $request_args['body'] ?? '';
+		$auth_params = VIP_Safe_Auth::get_auth_params( $url, $auth_credentials, 'GET', $body );
 
 		// Add authentication headers if available.
 		if ( ! empty( $auth_params['headers'] ) ) {
@@ -71,7 +72,7 @@ final class HTTP_Client {
 		if ( empty( $auth_params['headers'] ) && empty( $auth_params['query_args'] ) && ! empty( $auth_credentials ) ) {
 			$auth_credentials = $this->get_fallback_auth_credentials( $auth_credentials );
 			// Retry getting auth params with fallback credentials.
-			$auth_params = VIP_Safe_Auth::get_auth_params( $url, $auth_credentials, 'GET' );
+			$auth_params = VIP_Safe_Auth::get_auth_params( $url, $auth_credentials, 'GET', $body );
 
 			// Apply the new auth params.
 			if ( ! empty( $auth_params['headers'] ) ) {
