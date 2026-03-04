@@ -417,34 +417,45 @@ if ( ! function_exists( 'safe_publish_vip_authenticate_shared_secret' ) ) {
 			);
 		}
 
-		// Create signature string, including content hash when present.
-		$string_to_sign = $method . '|' . $uri . '|' . $timestamp;
+		// Verify content hash header is present.
+		if ( ! isset( $headers['x_safe_publish_content_hash'] ) ) {
+			safe_publish_vip_log_auth_event(
+				'CONTENT_HASH_MISSING',
+				array(
+					'route'  => $route,
+					'method' => $method,
+				)
+			);
 
-		// Verify content hash if provided.
-		if ( isset( $headers['x_safe_publish_content_hash'] ) ) {
-			$received_hash = $headers['x_safe_publish_content_hash'][0];
-			$body          = $request->get_body();
-			$expected_hash = hash( 'sha256', $body );
-
-			if ( ! hash_equals( $expected_hash, $received_hash ) ) {
-				safe_publish_vip_log_auth_event(
-					'CONTENT_HASH_MISMATCH',
-					array(
-						'route'  => $route,
-						'method' => $method,
-					)
-				);
-
-				return new WP_Error(
-					'safe_publish_auth_content_hash_invalid',
-					'Content hash verification failed',
-					array( 'status' => 401 )
-				);
-			}
-
-			$string_to_sign .= '|' . $received_hash;
+			return new WP_Error(
+				'safe_publish_auth_content_hash_missing',
+				'Missing content hash header',
+				array( 'status' => 401 )
+			);
 		}
 
+		$received_hash = $headers['x_safe_publish_content_hash'][0];
+		$body          = $request->get_body();
+		$expected_hash = hash( 'sha256', $body );
+
+		if ( ! hash_equals( $expected_hash, $received_hash ) ) {
+			safe_publish_vip_log_auth_event(
+				'CONTENT_HASH_MISMATCH',
+				array(
+					'route'  => $route,
+					'method' => $method,
+				)
+			);
+
+			return new WP_Error(
+				'safe_publish_auth_content_hash_invalid',
+				'Content hash verification failed',
+				array( 'status' => 401 )
+			);
+		}
+
+		// Create signature string: METHOD|URI|TIMESTAMP|CONTENT_HASH.
+		$string_to_sign     = $method . '|' . $uri . '|' . $timestamp . '|' . $received_hash;
 		$expected_signature = hash_hmac( 'sha256', $string_to_sign, $shared_secret );
 
 		// Verify signature using constant-time comparison.

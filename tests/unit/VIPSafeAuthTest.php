@@ -33,6 +33,7 @@ class VIPSafeAuthTest extends TestCase {
 		$this->assertIsArray( $params );
 		$this->assertArrayHasKey( 'headers', $params );
 		$this->assertArrayHasKey( 'X-Safe-Publish-Timestamp', $params['headers'] );
+		$this->assertArrayHasKey( 'X-Safe-Publish-Content-Hash', $params['headers'] );
 		$this->assertArrayHasKey( 'X-Safe-Publish-Signature', $params['headers'] );
 	}
 
@@ -110,9 +111,9 @@ class VIPSafeAuthTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that content hash header is included when body is provided.
+	 * Verifies that content hash header is always included.
 	 */
-	public function test_get_auth_params_includes_content_hash_when_body_provided(): void {
+	public function test_get_auth_params_includes_content_hash(): void {
 		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
 		$auth_config = array(
 			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
@@ -126,9 +127,9 @@ class VIPSafeAuthTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that content hash header is absent when no body is provided.
+	 * Verifies that empty body still produces a content hash.
 	 */
-	public function test_get_auth_params_omits_content_hash_when_no_body(): void {
+	public function test_get_auth_params_includes_content_hash_for_empty_body(): void {
 		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
 		$auth_config = array(
 			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
@@ -136,48 +137,25 @@ class VIPSafeAuthTest extends TestCase {
 
 		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
 
-		$this->assertArrayNotHasKey( 'X-Safe-Publish-Content-Hash', $params['headers'] );
+		$this->assertArrayHasKey( 'X-Safe-Publish-Content-Hash', $params['headers'] );
+		$this->assertSame( hash( 'sha256', '' ), $params['headers']['X-Safe-Publish-Content-Hash'] );
 	}
 
 	/**
-	 * Verifies that the HMAC signature differs when a body is included.
+	 * Verifies that different bodies produce different content hashes.
 	 */
-	public function test_signature_differs_with_and_without_body(): void {
-		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
-		$auth_config = array(
-			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
-		);
-		$body        = '{"content":"Hello world"}';
-
-		$params_without = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'POST' );
-		$params_with    = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'POST', $body );
-
-		// Both should have valid 64-char hex signatures, but they should differ.
-		$this->assertSame( 64, strlen( $params_without['headers']['X-Safe-Publish-Signature'] ) );
-		$this->assertSame( 64, strlen( $params_with['headers']['X-Safe-Publish-Signature'] ) );
-
-		// Signatures will differ because the string-to-sign includes the content hash.
-		// Note: timestamps may also differ, so we verify the structural difference
-		// by checking that content hash is only present with body.
-		$this->assertArrayNotHasKey( 'X-Safe-Publish-Content-Hash', $params_without['headers'] );
-		$this->assertArrayHasKey( 'X-Safe-Publish-Content-Hash', $params_with['headers'] );
-	}
-
-	/**
-	 * Verifies backward compatibility: no-body requests produce the same
-	 * header structure as before.
-	 */
-	public function test_backward_compatible_without_body(): void {
+	public function test_different_bodies_produce_different_hashes(): void {
 		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
 		$auth_config = array(
 			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
 		);
 
-		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET', '' );
+		$params_a = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'POST', 'body A' );
+		$params_b = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'POST', 'body B' );
 
-		// Should have exactly the same headers as before: Timestamp + Signature only.
-		$this->assertCount( 2, $params['headers'] );
-		$this->assertArrayHasKey( 'X-Safe-Publish-Timestamp', $params['headers'] );
-		$this->assertArrayHasKey( 'X-Safe-Publish-Signature', $params['headers'] );
+		$this->assertNotSame(
+			$params_a['headers']['X-Safe-Publish-Content-Hash'],
+			$params_b['headers']['X-Safe-Publish-Content-Hash']
+		);
 	}
 }

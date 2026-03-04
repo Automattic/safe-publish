@@ -257,23 +257,16 @@ final class VIP_Safe_Auth {
 			$path = '/wp/v2/posts';
 		}
 
-		$headers = array(
-			'X-Safe-Publish-Timestamp' => $timestamp,
-		);
-
-		// Create signature string, including content hash when body is present.
-		$string_to_sign = $method . '|' . $path . '|' . $timestamp;
-
-		if ( '' !== $body ) {
-			$content_hash                           = hash( 'sha256', $body );
-			$headers['X-Safe-Publish-Content-Hash'] = $content_hash;
-			$string_to_sign                        .= '|' . $content_hash;
-		}
-
-		$headers['X-Safe-Publish-Signature'] = hash_hmac( 'sha256', $string_to_sign, $shared_secret );
+		// Create signature string: METHOD|URI|TIMESTAMP|CONTENT_HASH.
+		$content_hash   = hash( 'sha256', $body );
+		$string_to_sign = $method . '|' . $path . '|' . $timestamp . '|' . $content_hash;
 
 		return array(
-			'headers' => $headers,
+			'headers' => array(
+				'X-Safe-Publish-Timestamp'    => $timestamp,
+				'X-Safe-Publish-Content-Hash' => $content_hash,
+				'X-Safe-Publish-Signature'    => hash_hmac( 'sha256', $string_to_sign, $shared_secret ),
+			),
 		);
 	}
 
