@@ -31,14 +31,15 @@ final class VIP_Safe_Auth {
 	 * @param string $site_url    Target site URL.
 	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
 	 * @param string $method      Optional. HTTP method for the request. Default 'GET'.
+	 * @param string $body        Optional. Request body for content hash generation. Default ''.
 	 * @return array Request modifications (headers, query params, etc.).
 	 */
-	public static function get_auth_params( $site_url, $auth_config = array(), $method = 'GET' ): array {
+	public static function get_auth_params( $site_url, $auth_config = array(), $method = 'GET', $body = '' ): array {
 		$auth_method = self::determine_auth_method( $auth_config );
 
 		switch ( $auth_method ) {
 			case 'shared_secret':
-				$result = self::get_shared_secret_auth( $site_url, $auth_config, $method );
+				$result = self::get_shared_secret_auth( $site_url, $auth_config, $method, $body );
 				return $result;
 
 			case 'basic_auth':
@@ -223,9 +224,10 @@ final class VIP_Safe_Auth {
 	 * @param string $site_url    Target site URL.
 	 * @param array  $auth_config Authentication configuration.
 	 * @param string $method      Optional. HTTP method for the request. Default 'GET'.
+	 * @param string $body        Optional. Request body for content hash generation. Default ''.
 	 * @return array Request modifications.
 	 */
-	private static function get_shared_secret_auth( $site_url, $auth_config, $method = 'GET' ): array {
+	private static function get_shared_secret_auth( $site_url, $auth_config, $method = 'GET', $body = '' ): array {
 		$shared_secret = $auth_config['shared_secret'] ?? '';
 
 		if ( empty( $shared_secret ) ) {
@@ -255,14 +257,15 @@ final class VIP_Safe_Auth {
 			$path = '/wp/v2/posts';
 		}
 
-		// Create signature string: METHOD|URI|TIMESTAMP (compatible with mu-plugin).
-		$string_to_sign = $method . '|' . $path . '|' . $timestamp;
-		$signature      = hash_hmac( 'sha256', $string_to_sign, $shared_secret );
+		// Create signature string: METHOD|URI|TIMESTAMP|CONTENT_HASH.
+		$content_hash   = hash( 'sha256', $body );
+		$string_to_sign = $method . '|' . $path . '|' . $timestamp . '|' . $content_hash;
 
 		return array(
 			'headers' => array(
-				'X-Safe-Publish-Timestamp' => $timestamp,
-				'X-Safe-Publish-Signature' => $signature,
+				'X-Safe-Publish-Timestamp'    => $timestamp,
+				'X-Safe-Publish-Content-Hash' => $content_hash,
+				'X-Safe-Publish-Signature'    => hash_hmac( 'sha256', $string_to_sign, $shared_secret ),
 			),
 		);
 	}
