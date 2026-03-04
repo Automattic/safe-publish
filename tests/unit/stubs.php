@@ -52,7 +52,19 @@ function wp_json_encode( mixed $data ): string {
 }
 
 function get_option( string $option, mixed $default = false ): mixed {
+	if ( isset( $GLOBALS['_test_options'][ $option ] ) ) {
+		return $GLOBALS['_test_options'][ $option ];
+	}
+
 	return $default;
+}
+
+function set_test_option( string $option, mixed $value ): void {
+	$GLOBALS['_test_options'][ $option ] = $value;
+}
+
+function reset_test_options(): void {
+	$GLOBALS['_test_options'] = array();
 }
 
 function get_bloginfo( string $key ): string {
