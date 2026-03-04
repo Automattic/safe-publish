@@ -36,14 +36,14 @@ class Options {
 	const OPTION_SOURCE_SITE_URL = 'safe_publish_site_url';
 
 	/**
-	 * Option key for the Basic Auth username (development only).
+	 * Option key for the Basic Auth username.
 	 *
 	 * @var string
 	 */
 	const OPTION_USERNAME = 'safe_publish_username';
 
 	/**
-	 * Option key for the Basic Auth password (development only).
+	 * Option key for the Basic Auth password.
 	 *
 	 * @var string
 	 */

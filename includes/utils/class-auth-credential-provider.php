@@ -18,32 +18,36 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Single source of truth for reading authentication credentials from plugin
  * settings.
  *
- * Returns HMAC shared secret credentials when configured, falling back to
- * Basic Auth credentials in development environments only.
+ * Always returns the shared secret when configured (required). Optionally
+ * includes Basic Auth credentials when a username and password are saved.
  */
 class Auth_Credential_Provider {
 
 	/**
 	 * Returns authentication credentials from plugin settings.
 	 *
-	 * Returns Basic Auth username/password only when running in a development
-	 * environment.
+	 * Shared Secret is always included when the SAFE_PUBLISH_SHARED_SECRET
+	 * constant is defined. Basic Auth credentials are included when configured.
 	 *
 	 * @return array Authentication credentials array with appropriate keys.
 	 */
 	public static function get_credentials(): array {
-		if ( Environment::is_development() ) {
-			$username = get_option( Options::OPTION_USERNAME, '' );
-			$password = get_option( Options::OPTION_PASSWORD, '' );
+		$credentials = array();
 
-			if ( ! empty( $username ) && ! empty( $password ) ) {
-				return array(
-					'username' => $username,
-					'password' => $password,
-				);
-			}
+		// Shared secret is required - read from constant defined in wp-config.php.
+		if ( defined( 'SAFE_PUBLISH_SHARED_SECRET' ) && ! empty( constant( 'SAFE_PUBLISH_SHARED_SECRET' ) ) ) {
+			$credentials['shared_secret'] = constant( 'SAFE_PUBLISH_SHARED_SECRET' );
 		}
 
-		return array();
+		// Basic auth is optional and can be layered on top of shared secret auth.
+		$username = get_option( Options::OPTION_USERNAME, '' );
+		$password = get_option( Options::OPTION_PASSWORD, '' );
+
+		if ( ! empty( $username ) && ! empty( $password ) ) {
+			$credentials['username'] = $username;
+			$credentials['password'] = $password;
+		}
+
+		return $credentials;
 	}
 }

@@ -7,7 +7,6 @@
 
 namespace Safe_Publish\Auth;
 
-use Safe_Publish\Utils\Environment;
 use WP_Error;
 
 // Prevent direct access.
@@ -20,8 +19,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Implements authentication methods that work on VIP:
  *
- * 1. Shared Secret (HMAC authentication) - Production ready.
- * 2. Basic Authentication - Development environments only.
+ * 1. Shared Secret (HMAC authentication) - Required for all environments.
+ * 2. Basic Authentication - Optional, can be layered on top of Shared Secret.
  */
 final class VIP_Safe_Auth {
 
@@ -35,99 +34,50 @@ final class VIP_Safe_Auth {
 	 * @return array Request modifications (headers, query params, etc.).
 	 */
 	public static function get_auth_params( $site_url, $auth_config = array(), $method = 'GET', $body = '' ): array {
-		$auth_method = self::determine_auth_method( $auth_config );
-
-		switch ( $auth_method ) {
-			case 'shared_secret':
-				$result = self::get_shared_secret_auth( $site_url, $auth_config, $method, $body );
-				return $result;
-
-			case 'basic_auth':
-				return self::get_basic_auth( $site_url, $auth_config );
-
-			default:
-				return array();
-		}
-	}
-
-	/**
-	 * Determines the best authentication method to use.
-	 *
-	 * @param array $auth_config Authentication configuration.
-	 * @return string Authentication method to use.
-	 */
-	private static function determine_auth_method( $auth_config ): string {
-		// Check what auth methods are configured.
-		if ( ! empty( $auth_config['shared_secret'] ) ) {
-			return 'shared_secret';
+		// Shared secret is required.
+		if ( empty( $auth_config['shared_secret'] ) ) {
+			return array();
 		}
 
-		// Only allow Basic auth in development environments.
-		if ( ! empty( $auth_config['username'] ) && ! empty( $auth_config['password'] ) && Environment::is_development() ) {
-			return 'basic_auth';
+		$params = self::get_shared_secret_auth( $site_url, $auth_config, $method, $body );
+
+		// Basic auth can be layered on top of shared secret auth.
+		if ( ! empty( $auth_config['username'] ) && ! empty( $auth_config['password'] ) ) {
+			$basic_params = self::get_basic_auth( $site_url, $auth_config );
+			if ( ! empty( $basic_params['headers'] ) ) {
+				$params['headers'] = array_merge( $params['headers'] ?? array(), $basic_params['headers'] );
+			}
 		}
 
-		return 'none';
+		return $params;
 	}
 
 	/**
 	 * Checks if the current request/context is correctly authorized.
 	 *
-	 * Validates that the authentication credentials are valid and can
-	 * successfully authenticate with the target site.
+	 * Shared Secret authentication is required. Returns false if not configured
+	 * or if it does not meet minimum requirements.
 	 *
 	 * @param string $site_url    Optional. Target site URL to test authorization against. Default ''.
 	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
 	 * @return bool True if correctly authorized, false otherwise.
 	 */
 	public static function is_authorized( $site_url = '', $auth_config = array() ): bool {
-		$auth_method = self::determine_auth_method( $auth_config );
+		$shared_secret = $auth_config['shared_secret'] ?? '';
 
-		// No authentication method available.
-		if ( 'none' === $auth_method ) {
+		// Shared secret is required and must meet minimum length requirements.
+		if ( empty( $shared_secret ) || strlen( $shared_secret ) < 16 ) {
 			return false;
 		}
 
-		// If we have shared secret authentication.
-		if ( 'shared_secret' === $auth_method ) {
-			$shared_secret = $auth_config['shared_secret'] ?? '';
-
-			// Check if shared secret is configured and meets minimum requirements.
-			if ( empty( $shared_secret ) || strlen( $shared_secret ) < 16 ) {
-				return false;
-			}
-
-			// If site URL is provided, we can test if the auth headers are correctly generated.
-			if ( ! empty( $site_url ) ) {
-				$auth_params = self::get_shared_secret_auth( $site_url, $auth_config, 'GET' );
-				return ! empty( $auth_params['headers']['X-Safe-Publish-Timestamp'] ) &&
-						! empty( $auth_params['headers']['X-Safe-Publish-Signature'] );
-			}
-
-			return true; // Shared secret is present and valid format.
+		// If site URL is provided, verify auth headers are correctly generated.
+		if ( ! empty( $site_url ) ) {
+			$auth_params = self::get_shared_secret_auth( $site_url, $auth_config, 'GET' );
+			return ! empty( $auth_params['headers']['X-Safe-Publish-Timestamp'] ) &&
+					! empty( $auth_params['headers']['X-Safe-Publish-Signature'] );
 		}
 
-		// If we have basic authentication (development only).
-		if ( 'basic_auth' === $auth_method ) {
-			$username = $auth_config['username'] ?? '';
-			$password = $auth_config['password'] ?? '';
-
-			// Check if credentials are correctly configured.
-			if ( empty( $username ) || empty( $password ) ) {
-				return false;
-			}
-
-			// Check if we're in a development environment (basic auth not allowed in production).
-			if ( ! Environment::is_development() ) {
-				return false;
-			}
-
-			// If site URL is provided, we could test the credentials (but this would make an actual request).
-			// For now, we'll just verify the credentials are present and environment is appropriate.
-			return true;
-		}
-
-		return false;
+		return true;
 	}
 
 	/**
@@ -271,10 +221,10 @@ final class VIP_Safe_Auth {
 	}
 
 	/**
-	 * Gets basic authentication parameters (development environments only).
+	 * Gets basic authentication parameters.
 	 *
-	 * Uses Authorization header with Basic auth.
-	 * WARNING: Will NOT work on VIP production.
+	 * Uses Authorization header with Basic auth. Intended as an optional layer
+	 * on top of the required Shared Secret authentication.
 	 *
 	 * @param string $site_url    Target site URL.
 	 * @param array  $auth_config Authentication configuration.
@@ -285,11 +235,6 @@ final class VIP_Safe_Auth {
 		$password = $auth_config['password'] ?? '';
 
 		if ( empty( $username ) || empty( $password ) ) {
-			return array();
-		}
-
-		// Only allow in development environments.
-		if ( ! Environment::is_development() ) {
 			return array();
 		}
 

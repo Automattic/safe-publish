@@ -8,7 +8,7 @@
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\External_Posts_API;
-use Safe_Publish\Utils\Environment;
+use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 
 // Prevent direct access.
@@ -127,21 +127,8 @@ final class Admin_Page {
 		$posts_data      = array();
 
 		if ( ! empty( $site_url ) ) {
-			// Pass authentication credentials if they exist.
-			$auth_credentials = array();
-
-			if ( Environment::is_development() ) {
-				// Basic auth in development environments only.
-				$username = get_option( Options::OPTION_USERNAME, '' );
-				$password = get_option( Options::OPTION_PASSWORD, '' );
-
-				if ( ! empty( $username ) && ! empty( $password ) ) {
-					$auth_credentials['username'] = $username;
-					$auth_credentials['password'] = $password;
-				}
-			}
-
-			$posts = $this->api->fetch_posts( $site_url, $number_of_posts, $auth_credentials );
+			$auth_credentials = Auth_Credential_Provider::get_credentials();
+			$posts            = $this->api->fetch_posts( $site_url, $number_of_posts, $auth_credentials );
 
 			// Handle API errors.
 			if ( ! is_wp_error( $posts ) ) {

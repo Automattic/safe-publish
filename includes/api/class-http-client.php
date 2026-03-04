@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace Safe_Publish\API;
 
 use Safe_Publish\Auth\VIP_Safe_Auth;
-use Safe_Publish\Utils\Auth_Credential_Provider;
 use WP_Error;
 
 // Prevent direct access.
@@ -66,35 +65,6 @@ final class HTTP_Client {
 		// Add query parameters for authentication if needed.
 		if ( ! empty( $auth_params['query_args'] ) ) {
 			$url = add_query_arg( $auth_params['query_args'], $url );
-		}
-
-		// Fallback authentication handling.
-		if ( empty( $auth_params['headers'] ) && empty( $auth_params['query_args'] ) && ! empty( $auth_credentials ) ) {
-			$auth_credentials = $this->get_fallback_auth_credentials( $auth_credentials );
-			// Retry getting auth params with fallback credentials.
-			$auth_params = VIP_Safe_Auth::get_auth_params( $url, $auth_credentials, 'GET', $body );
-
-			// Apply the new auth params.
-			if ( ! empty( $auth_params['headers'] ) ) {
-				$request_args['headers'] = array_merge(
-					$request_args['headers'] ?? array(),
-					$auth_params['headers']
-				);
-			}
-
-			if ( ! empty( $auth_params['query_args'] ) ) {
-				$url = add_query_arg( $auth_params['query_args'], $url );
-			}
-		}
-
-		// Fallback to Basic Auth for backward compatibility (will fail on VIP).
-		if ( empty( $auth_params ) && ! empty( $auth_credentials['username'] ) && ! empty( $auth_credentials['password'] ) ) {
-			$request_args['headers'] = array_merge(
-				$request_args['headers'] ?? array(),
-				array(
-					'Authorization' => 'Basic ' . base64_encode( $auth_credentials['username'] . ':' . $auth_credentials['password'] ),
-				)
-			);
 		}
 
 		/**
@@ -160,20 +130,6 @@ final class HTTP_Client {
 
 		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.wp_remote_get_wp_remote_get -- Fallback for non-VIP environments
 		return wp_remote_get( $url, $args );
-	}
-
-	/**
-	 * Gets authentication credentials from settings or provided array.
-	 *
-	 * @param array $provided_credentials Optional. Provided credentials. Default empty array.
-	 * @return array Authentication credentials array with appropriate keys.
-	 */
-	public function get_fallback_auth_credentials( array $provided_credentials = array() ): array {
-		if ( ! empty( $provided_credentials ) ) {
-			return $provided_credentials;
-		}
-
-		return Auth_Credential_Provider::get_credentials();
 	}
 
 	/**

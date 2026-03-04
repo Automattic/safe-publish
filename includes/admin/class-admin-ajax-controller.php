@@ -137,6 +137,8 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
 		}
 
+		$this->validate_auth_or_fail();
+
 		$auth_credentials = Auth_Credential_Provider::get_credentials();
 
 		$posts = $this->api->fetch_posts( $site_url, $number_of_posts, $auth_credentials, $post_type );
@@ -165,6 +167,8 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
 		}
 
+		$this->validate_auth_or_fail();
+
 		$auth_credentials = Auth_Credential_Provider::get_credentials();
 
 		$post_types = $this->post_type_fetcher->fetch_post_types( $site_url, $auth_credentials );
@@ -192,6 +196,8 @@ final class Admin_Ajax_Controller {
 		if ( empty( $site_url ) ) {
 			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
 		}
+
+		$this->validate_auth_or_fail();
 
 		$results = $this->api->test_connection( $site_url );
 
@@ -430,8 +436,8 @@ final class Admin_Ajax_Controller {
 		$debug_info = array(
 			'site_url'                   => $site_url,
 			'api_url'                    => $api_url,
-			'auth_credentials_available' => ! empty( $auth_credentials ),
-			'auth_credentials_type'      => ! empty( $auth_credentials['username'] ) ? 'basic_auth' : 'none',
+			'auth_credentials_available' => ! empty( $auth_credentials['shared_secret'] ),
+			'auth_credentials_type'      => ! empty( $auth_credentials['shared_secret'] ) ? 'shared_secret' . ( ! empty( $auth_credentials['username'] ) ? '+basic_auth' : '' ) : 'none',
 			'auth_params'                => $auth_params,
 		);
 
@@ -618,6 +624,23 @@ final class Admin_Ajax_Controller {
 			'message'  => __( 'Draft post created successfully.', 'safe-publish' ),
 			'existing' => false,
 		);
+	}
+
+	/**
+	 * Sends a JSON error response when the Shared Secret is not configured.
+	 */
+	private function validate_auth_or_fail(): void {
+		$credentials = Auth_Credential_Provider::get_credentials();
+
+		if ( empty( $credentials['shared_secret'] ) ) {
+			wp_send_json_error(
+				__(
+					'Shared Secret is not configured. Add SAFE_PUBLISH_SHARED_SECRET to wp-config.php on both sites.',
+					'safe-publish'
+				),
+				400
+			);
+		}
 	}
 
 	/**
