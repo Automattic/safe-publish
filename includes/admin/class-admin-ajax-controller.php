@@ -433,11 +433,16 @@ final class Admin_Ajax_Controller {
 			'GET'
 		);
 
+		$auth_type = 'none';
+		if ( ! empty( $auth_credentials['shared_secret'] ) ) {
+			$auth_type = ! empty( $auth_credentials['username'] ) ? 'shared_secret+basic_auth' : 'shared_secret';
+		}
+
 		$debug_info = array(
 			'site_url'                   => $site_url,
 			'api_url'                    => $api_url,
 			'auth_credentials_available' => ! empty( $auth_credentials['shared_secret'] ),
-			'auth_credentials_type'      => ! empty( $auth_credentials['shared_secret'] ) ? 'shared_secret' . ( ! empty( $auth_credentials['username'] ) ? '+basic_auth' : '' ) : 'none',
+			'auth_credentials_type'      => $auth_type,
 			'auth_params'                => $auth_params,
 		);
 
