@@ -7,6 +7,11 @@
 
 namespace Safe_Publish\Auth;
 
+use WP_Error;
+use WP_REST_Request;
+use WP_REST_Response;
+use WP_REST_Server;
+
 /**
  * HMAC-based request authenticator.
  *
@@ -43,17 +48,17 @@ class HMAC_Authenticator implements Authenticator {
 	 * Only processes requests targeting /wp/v2/ routes that carry Safe Publish
 	 * authentication headers. All other requests are returned unchanged.
 	 *
-	 * @param \WP_REST_Response|\WP_Error|null $result  Response to return instead of continuing.
-	 * @param \WP_REST_Server|null             $server  Server instance.
-	 * @param \WP_REST_Request                 $request Request object.
-	 * @return \WP_REST_Response|\WP_Error|null Original result on pass-through, or WP_Error on failure.
+	 * @param WP_REST_Response|WP_Error|null $result  Response to return instead of continuing.
+	 * @param WP_REST_Server|null            $server  Server instance.
+	 * @param WP_REST_Request                $request Request object.
+	 * @return WP_REST_Response|WP_Error|null Original result on pass-through, or WP_Error on failure.
 	 */
 	#[\Override]
 	public function authenticate_request(
-		\WP_REST_Response|\WP_Error|null $result,
-		?\WP_REST_Server $server,
-		\WP_REST_Request $request
-	): \WP_REST_Response|\WP_Error|null {
+		WP_REST_Response|WP_Error|null $result,
+		?WP_REST_Server $server,
+		WP_REST_Request $request
+	): WP_REST_Response|WP_Error|null {
 		$route = $request->get_route();
 
 		if ( ! $route || strpos( $route, '/wp/v2/' ) !== 0 ) {
@@ -87,16 +92,16 @@ class HMAC_Authenticator implements Authenticator {
 	 * authenticated context via global helper (to be extracted to
 	 * Permission_Manager in Task 1.4).
 	 *
-	 * @param \WP_REST_Request                 $request REST request object.
-	 * @param array                            $headers Request headers.
-	 * @param \WP_REST_Response|\WP_Error|null $result  Original result to pass through on success.
-	 * @return \WP_REST_Response|\WP_Error|null Original result on success, or WP_Error on failure.
+	 * @param WP_REST_Request                $request REST request object.
+	 * @param array                          $headers Request headers.
+	 * @param WP_REST_Response|WP_Error|null $result  Original result to pass through on success.
+	 * @return WP_REST_Response|WP_Error|null Original result on success, or WP_Error on failure.
 	 */
 	private function authenticate_shared_secret(
-		\WP_REST_Request $request,
+		WP_REST_Request $request,
 		array $headers,
-		\WP_REST_Response|\WP_Error|null $result
-	): \WP_REST_Response|\WP_Error|null {
+		WP_REST_Response|WP_Error|null $result
+	): WP_REST_Response|WP_Error|null {
 		$route  = $request->get_route();
 		$method = $request->get_method();
 
@@ -111,7 +116,7 @@ class HMAC_Authenticator implements Authenticator {
 				)
 			);
 
-			return new \WP_Error(
+			return new WP_Error(
 				'safe_publish_auth_no_secret',
 				'Safe Publish shared secret not configured in VIP environment',
 				array( 'status' => 500 )
@@ -137,7 +142,7 @@ class HMAC_Authenticator implements Authenticator {
 				)
 			);
 
-			return new \WP_Error(
+			return new WP_Error(
 				'safe_publish_auth_expired',
 				sprintf( 'Request timestamp expired (difference: %d seconds)', $time_diff ),
 				array( 'status' => 401 )
@@ -153,7 +158,7 @@ class HMAC_Authenticator implements Authenticator {
 				)
 			);
 
-			return new \WP_Error(
+			return new WP_Error(
 				'safe_publish_auth_content_hash_missing',
 				'Missing content hash header',
 				array( 'status' => 401 )
@@ -172,7 +177,7 @@ class HMAC_Authenticator implements Authenticator {
 				)
 			);
 
-			return new \WP_Error(
+			return new WP_Error(
 				'safe_publish_auth_content_hash_invalid',
 				'Content hash verification failed',
 				array( 'status' => 401 )
@@ -194,7 +199,7 @@ class HMAC_Authenticator implements Authenticator {
 				)
 			);
 
-			return new \WP_Error(
+			return new WP_Error(
 				'safe_publish_auth_invalid',
 				'Invalid Safe Publish authentication signature',
 				array( 'status' => 401 )
