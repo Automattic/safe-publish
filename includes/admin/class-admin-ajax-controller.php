@@ -643,7 +643,7 @@ final class Admin_Ajax_Controller {
 					'Shared Secret is not configured. Add SAFE_PUBLISH_SHARED_SECRET to wp-config.php on both sites.',
 					'safe-publish'
 				),
-				400
+				401
 			);
 		}
 	}
