@@ -36,6 +36,7 @@ define( 'SAFE_PUBLISH_VIP_AUTH_LOADED', true );
 require_once __DIR__ . '/safe-publish-auth/class-auth-logger.php';
 require_once __DIR__ . '/safe-publish-auth/interface-authenticator.php';
 require_once __DIR__ . '/safe-publish-auth/class-hmac-authenticator.php';
+require_once __DIR__ . '/safe-publish-auth/class-permission-manager.php';
 
 /**
  * Returns the singleton Auth_Logger instance.
@@ -44,9 +45,11 @@ require_once __DIR__ . '/safe-publish-auth/class-hmac-authenticator.php';
  */
 function safe_publish_vip_get_auth_logger(): \Safe_Publish\Auth\Auth_Logger {
 	static $logger = null;
+
 	if ( null === $logger ) {
 		$logger = new \Safe_Publish\Auth\Auth_Logger();
 	}
+
 	return $logger;
 }
 
@@ -57,10 +60,27 @@ function safe_publish_vip_get_auth_logger(): \Safe_Publish\Auth\Auth_Logger {
  */
 function safe_publish_vip_get_hmac_authenticator(): \Safe_Publish\Auth\HMAC_Authenticator {
 	static $authenticator = null;
+
 	if ( null === $authenticator ) {
 		$authenticator = new \Safe_Publish\Auth\HMAC_Authenticator( safe_publish_vip_get_auth_logger() );
 	}
+
 	return $authenticator;
+}
+
+/**
+ * Returns the singleton Permission_Manager instance.
+ *
+ * @return \Safe_Publish\Auth\Permission_Manager Permission manager instance.
+ */
+function safe_publish_vip_get_permission_manager(): \Safe_Publish\Auth\Permission_Manager {
+	static $manager = null;
+
+	if ( null === $manager ) {
+		$manager = new \Safe_Publish\Auth\Permission_Manager( safe_publish_vip_get_auth_logger() );
+	}
+
+	return $manager;
 }
 
 /**
@@ -110,81 +130,14 @@ if ( ! function_exists( 'safe_publish_vip_handle_permission_check' ) ) {
 	/**
 	 * Handles permission checks before REST callbacks are executed.
 	 *
-	 * This intercepts the permission check that causes rest_forbidden_context errors.
-	 *
 	 * @param WP_REST_Response|WP_HTTP_Response|WP_Error|null $response Response to replace.
 	 * @param array                                           $handler  Route handler used for the request.
 	 * @param WP_REST_Request                                 $request  Request used to generate the response.
 	 * @return WP_REST_Response|WP_HTTP_Response|WP_Error|null Modified response.
+	 * @see \Safe_Publish\Auth\Permission_Manager::handle_permission_check()
 	 */
 	function safe_publish_vip_handle_permission_check( $response, $handler, $request ): WP_REST_Response|WP_HTTP_Response|WP_Error|null {
-		// Only apply to Safe Publish authenticated requests.
-		if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
-			return $response;
-		}
-
-		// Check if this is a WordPress REST API route.
-		$route = $request->get_route();
-		if ( ! $route || strpos( $route, '/wp/v2/' ) !== 0 ) {
-			return $response;
-		}
-
-		// For Safe Publish authenticated requests, temporarily override permission checks.
-		add_filter(
-			'user_has_cap',
-			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-			function ( $allcaps, $caps, $args, $user ): array {
-				// Grant comprehensive permissions for Safe Publish operations.
-				$safe_publish_caps = array(
-					'read',
-					'edit_posts',
-					'edit_others_posts',
-					'edit_private_posts',
-					'edit_published_posts',
-					'publish_posts',
-					'delete_posts',
-					'delete_others_posts',
-					'delete_private_posts',
-					'delete_published_posts',
-					'read_private_posts',
-					'edit_pages',
-					'edit_others_pages',
-					'edit_private_pages',
-					'edit_published_pages',
-					'publish_pages',
-					'delete_pages',
-					'delete_others_pages',
-					'delete_private_pages',
-					'delete_published_pages',
-					'read_private_pages',
-					'manage_categories',
-					'manage_options',
-					'upload_files',
-					'edit_files',
-					'unfiltered_html',
-				);
-
-				foreach ( $safe_publish_caps as $cap ) {
-					$allcaps[ $cap ] = true;
-				}
-
-				return $allcaps;
-			},
-			5,
-			4
-		); // High priority to ensure it runs early.
-
-		safe_publish_vip_log_auth_event(
-			'PERMISSION_CHECK_INTERCEPTED',
-			array(
-				'route'            => $route,
-				'method'           => $request->get_method(),
-				'context'          => $request->get_param( 'context' ),
-				'handler_callback' => isset( $handler['callback'] ) ? 'set' : 'not_set',
-			)
-		);
-
-		return $response;
+		return safe_publish_vip_get_permission_manager()->handle_permission_check( $response, $handler, $request );
 	}
 }
 
@@ -194,36 +147,10 @@ if ( ! function_exists( 'safe_publish_vip_override_endpoint_permissions' ) ) {
 	 *
 	 * @param array $endpoints Registered REST endpoints.
 	 * @return array Modified endpoints.
+	 * @see \Safe_Publish\Auth\Permission_Manager::override_endpoint_permissions()
 	 */
 	function safe_publish_vip_override_endpoint_permissions( $endpoints ): array {
-		// Only apply to Safe Publish authenticated requests.
-		if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
-			return $endpoints;
-		}
-
-		// Override permission callbacks for post-related endpoints.
-		$post_routes = array( '/wp/v2/posts', '/wp/v2/pages' );
-
-		foreach ( $post_routes as $route ) {
-			if ( isset( $endpoints[ $route ] ) ) {
-				foreach ( $endpoints[ $route ] as &$handler ) {
-					// Override the permission callback for GET requests.
-					if ( isset( $handler['methods'] ) && ( 'GET' === $handler['methods'] || false !== strpos( $handler['methods'], 'GET' ) ) ) {
-						$handler['permission_callback'] = 'safe_publish_vip_allow_all_permissions';
-
-						safe_publish_vip_log_auth_event(
-							'PERMISSION_CALLBACK_OVERRIDDEN',
-							array(
-								'route'   => $route,
-								'methods' => $handler['methods'],
-							)
-						);
-					}
-				}
-			}
-		}
-
-		return $endpoints;
+		return safe_publish_vip_get_permission_manager()->override_endpoint_permissions( $endpoints );
 	}
 }
 
@@ -233,23 +160,10 @@ if ( ! function_exists( 'safe_publish_vip_allow_all_permissions' ) ) {
 	 *
 	 * @param WP_REST_Request|null $request Optional. REST request object.
 	 * @return bool True for Safe Publish authenticated requests, otherwise result of capability check.
+	 * @see \Safe_Publish\Auth\Permission_Manager::allow_all_permissions()
 	 */
 	function safe_publish_vip_allow_all_permissions( $request = null ): bool {
-		// Only apply to Safe Publish authenticated requests.
-		if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
-			return current_user_can( 'read' ); // Fallback to normal permission check.
-		}
-
-		safe_publish_vip_log_auth_event(
-			'PERMISSION_OVERRIDE_APPLIED',
-			array(
-				'route'   => $request ? $request->get_route() : 'unknown',
-				'method'  => $request ? $request->get_method() : 'unknown',
-				'context' => $request ? $request->get_param( 'context' ) : 'unknown',
-			)
-		);
-
-		return true;
+		return safe_publish_vip_get_permission_manager()->allow_all_permissions( $request );
 	}
 }
 
@@ -260,28 +174,10 @@ if ( ! function_exists( 'safe_publish_vip_override_collection_params' ) ) {
 	 * @param array        $params    Collection parameters.
 	 * @param WP_Post_Type $post_type Post type object.
 	 * @return array Modified collection parameters.
+	 * @see \Safe_Publish\Auth\Permission_Manager::override_collection_params()
 	 */
 	function safe_publish_vip_override_collection_params( $params, $post_type ): array {
-		// Only apply to Safe Publish authenticated requests.
-		if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
-			return $params;
-		}
-
-		// Allow edit context without restrictions for Safe Publish.
-		if ( isset( $params['context'] ) ) {
-			$params['context']['default'] = 'edit';
-			unset( $params['context']['required'] );
-
-			safe_publish_vip_log_auth_event(
-				'COLLECTION_PARAMS_OVERRIDDEN',
-				array(
-					'post_type'       => $post_type->name,
-					'default_context' => 'edit',
-				)
-			);
-		}
-
-		return $params;
+		return safe_publish_vip_get_permission_manager()->override_collection_params( $params, $post_type );
 	}
 }
 
@@ -293,38 +189,10 @@ if ( ! function_exists( 'safe_publish_vip_ensure_edit_context_access' ) ) {
 	 * @param WP_Post          $post     Post object.
 	 * @param WP_REST_Request  $request  Request object.
 	 * @return WP_REST_Response Response object, unchanged.
+	 * @see \Safe_Publish\Auth\Permission_Manager::ensure_edit_context_access()
 	 */
 	function safe_publish_vip_ensure_edit_context_access( $response, $post, $request ): WP_REST_Response {
-		// Only apply to Safe Publish authenticated requests.
-		if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
-			return $response;
-		}
-
-		// Force edit context access by temporarily granting permissions.
-		add_filter(
-			'user_has_cap',
-			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-			function ( $allcaps, $caps, $args, $user ): array {
-				$allcaps['edit_posts']         = true;
-				$allcaps['edit_others_posts']  = true;
-				$allcaps['edit_private_posts'] = true;
-				$allcaps['read_private_posts'] = true;
-				return $allcaps;
-			},
-			999,
-			4
-		);
-
-		safe_publish_vip_log_auth_event(
-			'EDIT_CONTEXT_ACCESS_ENSURED',
-			array(
-				'post_id'   => $post->ID,
-				'post_type' => $post->post_type,
-				'context'   => $request->get_param( 'context' ),
-			)
-		);
-
-		return $response;
+		return safe_publish_vip_get_permission_manager()->ensure_edit_context_access( $response, $post, $request );
 	}
 }
 
@@ -369,44 +237,10 @@ if ( ! function_exists( 'safe_publish_vip_override_meta_capabilities' ) ) {
 	 * @param int    $user_id User ID.
 	 * @param array  $args    Arguments passed to capability check.
 	 * @return array Modified capabilities.
+	 * @see \Safe_Publish\Auth\Permission_Manager::override_meta_capabilities()
 	 */
-	function safe_publish_vip_override_meta_capabilities( $caps, $cap, $user_id, $args ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-		// Only apply to Safe Publish authenticated requests.
-		if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
-			return $caps;
-		}
-
-		// Override capabilities related to post editing and reading.
-		$edit_caps = array(
-			'edit_post',
-			'edit_posts',
-			'edit_others_posts',
-			'edit_private_posts',
-			'edit_published_posts',
-			'read_post',
-			'read_private_posts',
-			'delete_post',
-			'delete_posts',
-			'delete_others_posts',
-			'delete_private_posts',
-			'delete_published_posts',
-		);
-
-		if ( in_array( $cap, $edit_caps, true ) ) {
-			safe_publish_vip_log_auth_event(
-				'META_CAP_OVERRIDE',
-				array(
-					'capability'    => $cap,
-					'user_id'       => $user_id,
-					'original_caps' => $caps,
-				)
-			);
-
-			// Grant the capability by returning 'exist' (always granted).
-			return array( 'exist' );
-		}
-
-		return $caps;
+	function safe_publish_vip_override_meta_capabilities( $caps, $cap, $user_id, $args ): array {
+		return safe_publish_vip_get_permission_manager()->override_meta_capabilities( $caps, $cap, $user_id, $args );
 	}
 }
 
@@ -420,54 +254,10 @@ if ( ! function_exists( 'safe_publish_vip_override_context_permissions' ) ) {
 	 * @param WP_REST_Server            $server  Server instance.
 	 * @param WP_REST_Request           $request Request object.
 	 * @return WP_REST_Response|WP_Error Modified or re-dispatched response.
+	 * @see \Safe_Publish\Auth\Permission_Manager::override_context_permissions()
 	 */
 	function safe_publish_vip_override_context_permissions( $result, $server, $request ): WP_REST_Response|WP_Error {
-		// Only apply to Safe Publish authenticated requests.
-		if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
-			return $result;
-		}
-
-		// If we received a forbidden context error, override it.
-		if ( is_wp_error( $result ) && $result->get_error_code() === 'rest_forbidden_context' ) {
-			safe_publish_vip_log_auth_event(
-				'CONTEXT_ERROR_OVERRIDDEN',
-				array(
-					'original_error' => $result->get_error_message(),
-					'route'          => $request->get_route(),
-					'method'         => $request->get_method(),
-					'context'        => $request->get_param( 'context' ),
-				)
-			);
-
-			// Re-dispatch the request with elevated permissions.
-			$GLOBALS['safe_publish_context_override'] = true;
-
-			// Temporarily grant all capabilities.
-			add_filter(
-				'user_has_cap',
-				function ( $allcaps ): array {
-					$allcaps['edit_posts']         = true;
-					$allcaps['edit_others_posts']  = true;
-					$allcaps['edit_private_posts'] = true;
-					$allcaps['read_private_posts'] = true;
-					$allcaps['edit_pages']         = true;
-					$allcaps['edit_others_pages']  = true;
-					$allcaps['edit_private_pages'] = true;
-					$allcaps['read_private_pages'] = true;
-					return $allcaps;
-				},
-				999
-			);
-
-			// Try to re-process the request.
-			$new_result = $server->dispatch( $request );
-
-			unset( $GLOBALS['safe_publish_context_override'] );
-
-			return $new_result;
-		}
-
-		return $result;
+		return safe_publish_vip_get_permission_manager()->override_context_permissions( $result, $server, $request );
 	}
 }
 
@@ -477,56 +267,11 @@ if ( ! function_exists( 'safe_publish_vip_setup_authenticated_context' ) ) {
 	 *
 	 * Grants necessary permissions for REST API operations.
 	 *
-	 * VIP 2FA COMPLIANCE NOTE:
-	 * This function uses a capability-based authentication approach instead of
-	 * creating actual WordPress users. This is VIP-friendly because:
-	 *
-	 * 1. No real users are created that would require 2FA
-	 * 2. Authentication is handled via shared secret HMAC (already validated)
-	 * 3. Permissions are granted temporarily via capability filters
-	 * 4. More secure than bypassing 2FA requirements
-	 * 5. Complies with VIP platform security policies
-	 *
 	 * @param WP_REST_Request $request Authenticated REST request.
+	 * @see \Safe_Publish\Auth\Permission_Manager::setup_authenticated_context()
 	 */
 	function safe_publish_vip_setup_authenticated_context( $request ): void {
-		// Mark this request as Safe Publish authenticated for later reference.
-		$GLOBALS['safe_publish_authenticated'] = true;
-
-		// Always add the capability filter first as a safety net.
-		add_filter( 'user_has_cap', 'safe_publish_vip_grant_api_capabilities', 10, 4 );
-
-		// VIP-friendly approach: Use capability system without creating actual users.
-		// This avoids 2FA requirements and is more secure.
-		safe_publish_vip_log_auth_event(
-			'CAPABILITY_BASED_AUTH_SETUP',
-			array(
-				'route'    => $request->get_route(),
-				'method'   => $request->get_method(),
-				'approach' => 'capability_only',
-				'reason'   => 'VIP 2FA compliance - no user creation needed',
-			)
-		);
-
-		// Set a virtual user context for logging purposes only.
-		// This doesn't actually log in a user, just provides context.
-		$GLOBALS['safe_publish_virtual_user'] = (object) array(
-			'ID'           => 0,
-			'user_login'   => 'safe-publish-system',
-			'user_email'   => 'safe-publish-system@virtual',
-			'display_name' => 'Safe Publish System (Virtual)',
-		);
-
-		// Add filter to bypass additional permission checks for Safe Publish requests.
-		add_filter( 'rest_pre_dispatch', 'safe_publish_vip_bypass_permission_checks', 11, 3 );
-
-		// Add direct permission callback overrides for post types.
-		add_filter( 'rest_post_collection_params', 'safe_publish_vip_override_collection_params', 10, 2 );
-		add_filter( 'rest_prepare_post', 'safe_publish_vip_ensure_edit_context_access', 10, 3 );
-		add_filter( 'rest_prepare_page', 'safe_publish_vip_ensure_edit_context_access', 10, 3 );
-
-		// Override permission checks at the endpoint level.
-		add_filter( 'rest_endpoints', 'safe_publish_vip_override_endpoint_permissions' );
+		safe_publish_vip_get_permission_manager()->setup_authenticated_context( $request );
 	}
 }
 
@@ -539,39 +284,10 @@ if ( ! function_exists( 'safe_publish_vip_grant_api_capabilities' ) ) {
 	 * @param array   $args    Arguments for capability check.
 	 * @param WP_User $user    User object.
 	 * @return array Modified capabilities.
+	 * @see \Safe_Publish\Auth\Permission_Manager::grant_api_capabilities()
 	 */
-	function safe_publish_vip_grant_api_capabilities( $allcaps, $caps, $args, $user ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-		// Only apply to Safe Publish authenticated requests.
-		if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
-			return $allcaps;
-		}
-
-		// Grant essential REST API capabilities.
-		$api_caps = array(
-			'read',
-			'edit_posts',
-		);
-
-		foreach ( $api_caps as $cap ) {
-			$allcaps[ $cap ] = true;
-		}
-
-		// Log the capability grant for debugging (use virtual user info).
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			$virtual_user = $GLOBALS['safe_publish_virtual_user'] ?? (object) array( 'ID' => 0 );
-			safe_publish_vip_log_auth_event(
-				'CAPABILITIES_GRANTED',
-				array(
-					'user_id'            => $virtual_user->ID,
-					'user_type'          => 'virtual_safe_publish_user',
-					'requested_caps'     => $caps,
-					'granted_caps_count' => count( array_filter( $allcaps ) ),
-					'vip_2fa_bypass'     => 'capability_based_auth',
-				)
-			);
-		}
-
-		return $allcaps;
+	function safe_publish_vip_grant_api_capabilities( $allcaps, $caps, $args, $user ): array {
+		return safe_publish_vip_get_permission_manager()->grant_api_capabilities( $allcaps, $caps, $args, $user );
 	}
 }
 
@@ -582,24 +298,10 @@ if ( ! function_exists( 'safe_publish_vip_grant_api_capabilities' ) ) {
  * @param WP_REST_Server                 $server  Server instance.
  * @param WP_REST_Request                $request Request used to generate the response.
  * @return WP_REST_Response|WP_Error|null Original result, unchanged.
+ * @see \Safe_Publish\Auth\Permission_Manager::bypass_permission_checks()
  */
-function safe_publish_vip_bypass_permission_checks( $result, $server, $request ): WP_REST_Response|WP_Error|null { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-	// Only apply to Safe Publish authenticated requests.
-	if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
-		return $result;
-	}
-
-	// Add filter to allow edit context for Safe Publish authenticated requests.
-	add_filter( 'rest_allow_anonymous_comments', '__return_true' );
-
-	// Add specific permission callback override for posts and other post types.
-	add_filter( 'rest_prepare_post', 'safe_publish_vip_prepare_post_for_edit_context', 10, 3 );
-	add_filter( 'rest_prepare_page', 'safe_publish_vip_prepare_post_for_edit_context', 10, 3 );
-
-	// Override specific permission checks for edit context.
-	add_filter( 'rest_post_dispatch', 'safe_publish_vip_ensure_response_success', 10, 3 );
-
-	return $result;
+function safe_publish_vip_bypass_permission_checks( $result, $server, $request ): WP_REST_Response|WP_Error|null {
+	return safe_publish_vip_get_permission_manager()->bypass_permission_checks( $result, $server, $request );
 }
 
 /**
@@ -609,27 +311,10 @@ function safe_publish_vip_bypass_permission_checks( $result, $server, $request )
  * @param WP_Post          $post     Post object.
  * @param WP_REST_Request  $request  Request object.
  * @return WP_REST_Response Response object, unchanged.
+ * @see \Safe_Publish\Auth\Permission_Manager::prepare_post_for_edit_context()
  */
 function safe_publish_vip_prepare_post_for_edit_context( $response, $post, $request ): WP_REST_Response {
-	// Only apply to Safe Publish authenticated requests.
-	if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
-		return $response;
-	}
-
-	// If this is an edit context request, ensure we return the full data.
-	if ( 'edit' === $request->get_param( 'context' ) ) {
-		// Log that we're allowing edit context for Safe Publish.
-		safe_publish_vip_log_auth_event(
-			'EDIT_CONTEXT_ALLOWED',
-			array(
-				'post_id'   => $post->ID,
-				'post_type' => $post->post_type,
-				'route'     => $request->get_route(),
-			)
-		);
-	}
-
-	return $response;
+	return safe_publish_vip_get_permission_manager()->prepare_post_for_edit_context( $response, $post, $request );
 }
 
 /**
@@ -639,46 +324,10 @@ function safe_publish_vip_prepare_post_for_edit_context( $response, $post, $requ
  * @param WP_REST_Server            $server   Server instance.
  * @param WP_REST_Request           $request  Request used to generate the response.
  * @return WP_REST_Response|WP_Error Response, potentially modified.
+ * @see \Safe_Publish\Auth\Permission_Manager::ensure_response_success()
  */
 function safe_publish_vip_ensure_response_success( $response, $server, $request ): WP_REST_Response|WP_Error {
-	// Only apply to Safe Publish authenticated requests.
-	if ( empty( $GLOBALS['safe_publish_authenticated'] ) ) {
-		return $response;
-	}
-
-	// If we got a permission error for edit context, try to resolve it.
-	if ( is_wp_error( $response ) ) {
-		$error_code = $response->get_error_code();
-
-		// Handle specific REST permission errors.
-		if ( in_array( $error_code, array( 'rest_forbidden', 'rest_cannot_edit', 'rest_forbidden_context' ), true ) ) {
-			safe_publish_vip_log_auth_event(
-				'PERMISSION_ERROR_INTERCEPTED',
-				array(
-					'error_code'    => $error_code,
-					'error_message' => $response->get_error_message(),
-					'route'         => $request->get_route(),
-					'method'        => $request->get_method(),
-					'context'       => $request->get_param( 'context' ),
-				)
-			);
-
-			// If this is a context permission error, we might need to handle it differently.
-			if ( 'rest_forbidden_context' === $error_code ) {
-				// For Safe Publish authenticated requests, we should allow edit context.
-				// This is a fallback - the proper fix should be in the capability system above.
-				safe_publish_vip_log_auth_event(
-					'CONTEXT_PERMISSION_OVERRIDE_NEEDED',
-					array(
-						'route'          => $request->get_route(),
-						'original_error' => $response->get_error_message(),
-					)
-				);
-			}
-		}
-	}
-
-	return $response;
+	return safe_publish_vip_get_permission_manager()->ensure_response_success( $response, $server, $request );
 }
 
 if ( ! function_exists( 'safe_publish_vip_get_shared_secret' ) ) {

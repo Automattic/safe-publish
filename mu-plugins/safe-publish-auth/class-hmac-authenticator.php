@@ -222,12 +222,8 @@ class HMAC_Authenticator implements Authenticator {
 			header( 'X-Safe-Publish-Auth: success' );
 		}
 
-		// Set up user context and permissions.
-		// Permission setup logic will be extracted to Permission_Manager in Task 1.4.
+		// Set up user context and permissions via Permission_Manager.
 		safe_publish_vip_setup_authenticated_context( $request );
-
-		add_filter( 'map_meta_cap', 'safe_publish_vip_override_meta_capabilities', 10, 4 );
-		add_filter( 'rest_post_dispatch', 'safe_publish_vip_override_context_permissions', 5, 3 );
 
 		return $result;
 	}
