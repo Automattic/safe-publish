@@ -34,6 +34,8 @@ if ( defined( 'SAFE_PUBLISH_VIP_AUTH_LOADED' ) ) {
 define( 'SAFE_PUBLISH_VIP_AUTH_LOADED', true );
 
 require_once __DIR__ . '/safe-publish-auth/class-auth-logger.php';
+require_once __DIR__ . '/safe-publish-auth/interface-authenticator.php';
+require_once __DIR__ . '/safe-publish-auth/class-hmac-authenticator.php';
 
 /**
  * Returns the singleton Auth_Logger instance.
@@ -46,6 +48,19 @@ function safe_publish_vip_get_auth_logger(): \Safe_Publish\Auth\Auth_Logger {
 		$logger = new \Safe_Publish\Auth\Auth_Logger();
 	}
 	return $logger;
+}
+
+/**
+ * Returns the singleton HMAC_Authenticator instance.
+ *
+ * @return \Safe_Publish\Auth\HMAC_Authenticator Authenticator instance.
+ */
+function safe_publish_vip_get_hmac_authenticator(): \Safe_Publish\Auth\HMAC_Authenticator {
+	static $authenticator = null;
+	if ( null === $authenticator ) {
+		$authenticator = new \Safe_Publish\Auth\HMAC_Authenticator( safe_publish_vip_get_auth_logger() );
+	}
+	return $authenticator;
 }
 
 /**
@@ -315,34 +330,16 @@ if ( ! function_exists( 'safe_publish_vip_ensure_edit_context_access' ) ) {
 
 if ( ! function_exists( 'safe_publish_vip_authenticate_request' ) ) {
 	/**
-	 * VIP-Compatible Shared Secret Authentication for Safe Publish.
-	 *
-	 * Authenticates Safe Publish requests using HMAC-SHA256 signatures and reads the shared
-	 * secret from VIP environment variables.
+	 * Authenticates Safe Publish REST API requests using HMAC-SHA256 shared secret.
 	 *
 	 * @param WP_REST_Response|WP_Error|null $result  Response to replace.
 	 * @param WP_REST_Server                 $server  Server instance.
 	 * @param WP_REST_Request                $request Request used to generate the response.
 	 * @return WP_REST_Response|WP_Error|null Original result or WP_Error for authentication failures.
+	 * @see \Safe_Publish\Auth\HMAC_Authenticator::authenticate_request()
 	 */
 	function safe_publish_vip_authenticate_request( $result, $server, $request ): WP_REST_Response|WP_Error|null {
-		// Only authenticate WordPress REST API endpoints.
-		$route = $request->get_route();
-
-		if ( ! $route || strpos( $route, '/wp/v2/' ) !== 0 ) {
-			return $result;
-		}
-
-		$headers = $request->get_headers();
-
-		// Check for Safe Publish authentication headers (shared secret only).
-		if ( isset( $headers['x_safe_publish_timestamp'] ) && isset( $headers['x_safe_publish_signature'] ) ) {
-			// Shared Secret Authentication.
-			return safe_publish_vip_authenticate_shared_secret( $request, $headers, $result );
-		}
-
-		// No Safe Publish auth headers present, continue with normal WordPress authentication.
-		return $result;
+		return safe_publish_vip_get_hmac_authenticator()->authenticate_request( $result, $server, $request );
 	}
 }
 
@@ -354,151 +351,10 @@ if ( ! function_exists( 'safe_publish_vip_authenticate_shared_secret' ) ) {
 	 * @param array                          $headers Request headers.
 	 * @param WP_REST_Response|WP_Error|null $result  Optional. Original result to pass through on success.
 	 * @return WP_REST_Response|WP_Error|null Original result on success, or WP_Error on failure.
+	 * @see \Safe_Publish\Auth\HMAC_Authenticator::authenticate_request()
 	 */
 	function safe_publish_vip_authenticate_shared_secret( $request, $headers, $result = null ): WP_REST_Response|WP_Error|null {
-		$route = $request->get_route();
-
-		// Get shared secret from VIP environment.
-		$shared_secret = safe_publish_vip_get_shared_secret();
-
-		if ( empty( $shared_secret ) ) {
-			safe_publish_vip_log_auth_event(
-				'NO_SECRET_CONFIGURED',
-				array(
-					'route'  => $route,
-					'method' => $request->get_method(),
-				)
-			);
-
-			return new WP_Error(
-				'safe_publish_auth_no_secret',
-				'Safe Publish shared secret not configured in VIP environment',
-				array( 'status' => 500 )
-			);
-		}
-
-		$timestamp = $headers['x_safe_publish_timestamp'][0];
-		$signature = $headers['x_safe_publish_signature'][0];
-		$method    = $request->get_method();
-		$uri       = $request->get_route();
-
-		// Validate timestamp to prevent replay attacks.
-		$current_time = time();
-		$request_time = intval( $timestamp );
-		$time_diff    = abs( $current_time - $request_time );
-
-		// Allow 5-minute window for clock differences (configurable).
-		$max_time_diff = apply_filters( 'safe_publish_auth_max_time_diff', 300 );
-
-		if ( $time_diff > $max_time_diff ) {
-			safe_publish_vip_log_auth_event(
-				'TIMESTAMP_EXPIRED',
-				array(
-					'route'        => $route,
-					'method'       => $method,
-					'timestamp'    => $timestamp,
-					'current_time' => $current_time,
-					'time_diff'    => $time_diff,
-					'max_allowed'  => $max_time_diff,
-				)
-			);
-
-			return new WP_Error(
-				'safe_publish_auth_expired',
-				sprintf( 'Request timestamp expired (difference: %d seconds)', $time_diff ),
-				array( 'status' => 401 )
-			);
-		}
-
-		// Verify content hash header is present.
-		if ( ! isset( $headers['x_safe_publish_content_hash'] ) ) {
-			safe_publish_vip_log_auth_event(
-				'CONTENT_HASH_MISSING',
-				array(
-					'route'  => $route,
-					'method' => $method,
-				)
-			);
-
-			return new WP_Error(
-				'safe_publish_auth_content_hash_missing',
-				'Missing content hash header',
-				array( 'status' => 401 )
-			);
-		}
-
-		$received_hash = $headers['x_safe_publish_content_hash'][0];
-		$body          = $request->get_body();
-		$expected_hash = hash( 'sha256', $body );
-
-		if ( ! hash_equals( $expected_hash, $received_hash ) ) {
-			safe_publish_vip_log_auth_event(
-				'CONTENT_HASH_MISMATCH',
-				array(
-					'route'  => $route,
-					'method' => $method,
-				)
-			);
-
-			return new WP_Error(
-				'safe_publish_auth_content_hash_invalid',
-				'Content hash verification failed',
-				array( 'status' => 401 )
-			);
-		}
-
-		// Create signature string: METHOD|URI|TIMESTAMP|CONTENT_HASH.
-		$string_to_sign     = $method . '|' . $uri . '|' . $timestamp . '|' . $received_hash;
-		$expected_signature = hash_hmac( 'sha256', $string_to_sign, $shared_secret );
-
-		// Verify signature using constant-time comparison.
-		if ( ! hash_equals( $expected_signature, $signature ) ) {
-			safe_publish_vip_log_auth_event(
-				'SIGNATURE_INVALID',
-				array(
-					'route'               => $route,
-					'method'              => $method,
-					'timestamp'           => $timestamp,
-					'string_to_sign'      => $string_to_sign,
-					'expected_sig_length' => strlen( $expected_signature ),
-					'received_sig_length' => strlen( $signature ),
-				)
-			);
-
-			return new WP_Error(
-				'safe_publish_auth_invalid',
-				'Invalid Safe Publish authentication signature',
-				array( 'status' => 401 )
-			);
-		}
-
-		// Authentication successful.
-		safe_publish_vip_log_auth_event(
-			'AUTH_SUCCESS',
-			array(
-				'route'      => $route,
-				'method'     => $method,
-				'timestamp'  => $timestamp,
-				'user_agent' => $request->get_header( 'user_agent' ),
-			)
-		);
-
-		// Add custom header to indicate successful Safe Publish authentication (only if headers not sent).
-		if ( ! headers_sent() ) {
-			header( 'X-Safe-Publish-Auth: success' );
-		}
-
-		// Set up user context and permissions for Safe Publish authenticated requests.
-		safe_publish_vip_setup_authenticated_context( $request );
-
-		// Add immediate permission override for this specific request.
-		add_filter( 'map_meta_cap', 'safe_publish_vip_override_meta_capabilities', 10, 4 );
-
-		// Override REST permission checks specifically for context=edit.
-		add_filter( 'rest_post_dispatch', 'safe_publish_vip_override_context_permissions', 5, 3 );
-
-		// Continue with the authenticated request.
-		return $result;
+		return safe_publish_vip_get_hmac_authenticator()->authenticate_request( $result, null, $request );
 	}
 }
 
