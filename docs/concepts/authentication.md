@@ -1,15 +1,15 @@
 # Authentication
 
-Safe Publish supports two authentication methods for secure communication between your production and non-production WordPress sites.
+Safe Publish uses Shared Secret (HMAC) authentication, which is required for all environments. Basic Authentication can optionally be layered on top.
 
-## Shared Secret Authentication (Recommended)
+## Shared Secret Authentication (Required)
 
-The shared secret method is the most secure and recommended for production environments. It uses a token-based authentication system that doesn't expose user credentials.
+The shared secret method uses HMAC signatures to authenticate requests without exposing user credentials.
 
 ### Setup
 
 1. **On the non-production site**, install the included MU plugin:
-   - Copy `/mu-plugins/safe-publish-auth.php` to your non-prod site's `wp-content/mu-plugins/` directory
+   - Copy `/mu-plugins/safe-publish-auth.php` to your non-prod site's `client-mu-plugins` directory. This file is only needed on the non-production site.
    - If the `mu-plugins` directory doesn't exist, create it
 
 2. **On both sites** (production and non-production), add this line to `wp-config.php`:
@@ -31,10 +31,11 @@ The shared secret method is the most secure and recommended for production envir
 
 The shared secret authentication flow:
 
-1. Production site includes the shared secret in the `X-Safe-Publish-Secret` header
-2. Non-production site's MU plugin validates the header against its configured secret
-3. If valid, the request is authenticated and granted access to the REST API
-4. No user credentials are transmitted
+1. Production site generates an HMAC signature using the shared secret and request details
+2. The signature is sent in the `X-Safe-Publish-Signature` header alongside a timestamp and content hash
+3. Non-production site's MU plugin validates the signature against its configured secret
+4. If valid, the request is authenticated and granted access to the REST API
+5. No user credentials are transmitted
 
 ### Security Considerations
 
@@ -43,9 +44,9 @@ The shared secret authentication flow:
 - Rotate secrets periodically (every 90 days recommended)
 - Use HTTPS for all connections (required)
 
-## Basic Authentication (Development Only)
+## Basic Authentication (Optional)
 
-Basic authentication uses WordPress username and password credentials. This method is **only recommended for local development environments**.
+Basic authentication uses WordPress username and password credentials. It is applied on top of the required Shared Secret authentication when credentials are configured.
 
 ### Setup
 
@@ -62,18 +63,8 @@ Basic authentication uses WordPress username and password credentials. This meth
 ### Limitations
 
 - **Security**: Credentials are sent with each request (even over HTTPS)
-- **Not VIP-safe**: Some plugins may not be allowed in production environments
 - **User account dependency**: Changes to user account affect the connection
 - **Audit trail**: All imports appear as actions by the authenticated user
-
-### When to Use
-
-Use basic authentication only when:
-
-- Working in local development environments
-- Shared secret setup is not possible
-- You're testing or debugging the plugin
-- The non-prod site is not accessible from the internet
 
 ## Troubleshooting
 

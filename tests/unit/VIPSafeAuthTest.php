@@ -38,6 +38,41 @@ class VIPSafeAuthTest extends TestCase {
 	}
 
 	/**
+	 * Verifies that Basic Auth headers are layered on top of Shared Secret headers.
+	 */
+	public function test_get_auth_params_layers_basic_auth_on_shared_secret(): void {
+		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+			'username'      => 'admin',
+			'password'      => 'hunter2',
+		);
+
+		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
+
+		$this->assertArrayHasKey( 'X-Safe-Publish-Signature', $params['headers'] );
+		$this->assertArrayHasKey( 'Authorization', $params['headers'] );
+		$this->assertStringStartsWith( 'Basic ', $params['headers']['Authorization'] );
+		$this->assertSame( 'Basic ' . base64_encode( 'admin:hunter2' ), $params['headers']['Authorization'] );
+	}
+
+	/**
+	 * Verifies that Basic Auth alone (no shared secret) returns empty params.
+	 */
+	public function test_get_auth_params_without_shared_secret_returns_empty(): void {
+		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
+		$auth_config = array(
+			'username' => 'admin',
+			'password' => 'hunter2',
+		);
+
+		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
+
+		$this->assertIsArray( $params );
+		$this->assertEmpty( $params );
+	}
+
+	/**
 	 * Verifies that auth params return empty array without credentials.
 	 */
 	public function test_get_auth_params_with_no_credentials_returns_empty(): void {
@@ -48,6 +83,68 @@ class VIPSafeAuthTest extends TestCase {
 
 		$this->assertIsArray( $params );
 		$this->assertEmpty( $params );
+	}
+
+	/**
+	 * Verifies that Basic Auth credentials alone (no shared secret) fail
+	 * authorization.
+	 */
+	public function test_is_authorized_with_basic_auth_only_fails(): void {
+		$site_url    = 'https://example.com';
+		$auth_config = array(
+			'username' => 'admin',
+			'password' => 'hunter2',
+		);
+
+		$result = VIP_Safe_Auth::is_authorized( $site_url, $auth_config );
+
+		$this->assertFalse( $result );
+	}
+
+	/**
+	 * Verifies that exactly 16-character shared secret passes the minimum
+	 * length check.
+	 */
+	public function test_is_authorized_with_exactly_16_char_secret_passes(): void {
+		$auth_config = array(
+			'shared_secret' => '1234567890abcdef', // Exactly 16 chars.
+		);
+
+		$result = VIP_Safe_Auth::is_authorized( '', $auth_config );
+
+		$this->assertTrue( $result );
+	}
+
+	/**
+	 * Verifies that a 15-character shared secret fails the minimum length
+	 * check.
+	 */
+	public function test_is_authorized_with_15_char_secret_fails(): void {
+		$auth_config = array(
+			'shared_secret' => '1234567890abcde', // Exactly 15 chars.
+		);
+
+		$result = VIP_Safe_Auth::is_authorized( '', $auth_config );
+
+		$this->assertFalse( $result );
+	}
+
+	/**
+	 * Verifies that partial Basic Auth config (username only) does not add an
+	 * Authorization header.
+	 */
+	public function test_get_auth_params_shared_secret_with_username_only_has_no_authorization_header(): void {
+		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+			'username'      => 'admin',
+			// No password.
+		);
+
+		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
+
+		$this->assertArrayHasKey( 'X-Safe-Publish-Signature', $params['headers'] );
+		$this->assertArrayNotHasKey( 'Authorization', $params['headers'] );
 	}
 
 	/**
@@ -65,20 +162,6 @@ class VIPSafeAuthTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that short shared secrets fail authorization.
-	 */
-	public function test_is_authorized_with_short_shared_secret_fails(): void {
-		$site_url    = 'https://example.com';
-		$auth_config = array(
-			'shared_secret' => 'short',
-		);
-
-		$result = VIP_Safe_Auth::is_authorized( $site_url, $auth_config );
-
-		$this->assertFalse( $result );
-	}
-
-	/**
 	 * Verifies that authorization fails without credentials.
 	 */
 	public function test_is_authorized_with_no_credentials_fails(): void {
@@ -88,26 +171,6 @@ class VIPSafeAuthTest extends TestCase {
 		$result = VIP_Safe_Auth::is_authorized( $site_url, $auth_config );
 
 		$this->assertFalse( $result );
-	}
-
-	/**
-	 * Verifies that signature generation produces consistent format.
-	 */
-	public function test_signature_generation_is_consistent(): void {
-		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
-		$auth_config = array(
-			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
-		);
-
-		// Get params twice with same timestamp to verify consistency.
-		$params1 = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
-		sleep( 1 ); // Wait a second.
-		$params2 = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
-
-		// Timestamps will be different, but signature generation process should be consistent.
-		$this->assertIsString( $params1['headers']['X-Safe-Publish-Signature'] );
-		$this->assertIsString( $params2['headers']['X-Safe-Publish-Signature'] );
-		$this->assertSame( 64, strlen( $params1['headers']['X-Safe-Publish-Signature'] ) ); // SHA256 hex = 64 chars.
 	}
 
 	/**

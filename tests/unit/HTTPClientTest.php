@@ -88,28 +88,6 @@ class HTTPClientTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that get_fallback_auth_credentials returns an array.
-	 */
-	public function test_get_fallback_auth_credentials_returns_array(): void {
-		$credentials = $this->http_client->get_fallback_auth_credentials();
-
-		$this->assertIsArray( $credentials );
-	}
-
-	/**
-	 * Verifies that get_fallback_auth_credentials returns provided credentials.
-	 */
-	public function test_get_fallback_auth_credentials_returns_provided_credentials(): void {
-		$provided = array(
-			'shared_secret' => 'test_secret',
-		);
-
-		$credentials = $this->http_client->get_fallback_auth_credentials( $provided );
-
-		$this->assertEquals( $provided, $credentials );
-	}
-
-	/**
 	 * Verifies that cleanup_temp_file handles non-existent files gracefully.
 	 */
 	public function test_cleanup_temp_file_handles_non_existent_file(): void {

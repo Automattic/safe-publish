@@ -28,7 +28,7 @@ This guide helps you resolve common issues with Safe Publish. If you can't find 
    - Test site URL in browser
 
 4. **Verify MU plugin is installed** (shared secret method):
-   - File exists at `wp-content/mu-plugins/safe-publish-auth.php` on source site
+   - File exists at `client-mu-plugins/safe-publish-auth.php` on source site
    - File has not been modified
    - MU plugins directory exists and is readable
 

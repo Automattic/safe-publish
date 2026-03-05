@@ -7,7 +7,6 @@
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\Utils\Environment;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Validators\URL_Validator;
 
@@ -50,26 +49,24 @@ class Settings_Sanitizer {
 			)
 		);
 
-		// Basic authentication settings (development only).
-		if ( Environment::is_development() ) {
-			register_setting(
-				Options::SETTINGS_GROUP,
-				Options::OPTION_USERNAME,
-				array(
-					'sanitize_callback' => array( $this, 'sanitize_username' ),
-					'default'           => '',
-				)
-			);
+		// Basic authentication settings (optional, layered on top of shared secret).
+		register_setting(
+			Options::SETTINGS_GROUP,
+			Options::OPTION_USERNAME,
+			array(
+				'sanitize_callback' => array( $this, 'sanitize_username' ),
+				'default'           => '',
+			)
+		);
 
-			register_setting(
-				Options::SETTINGS_GROUP,
-				Options::OPTION_PASSWORD,
-				array(
-					'sanitize_callback' => array( $this, 'sanitize_password' ),
-					'default'           => '',
-				)
-			);
-		}
+		register_setting(
+			Options::SETTINGS_GROUP,
+			Options::OPTION_PASSWORD,
+			array(
+				'sanitize_callback' => array( $this, 'sanitize_password' ),
+				'default'           => '',
+			)
+		);
 	}
 
 	/**
@@ -129,30 +126,22 @@ class Settings_Sanitizer {
 	}
 
 	/**
-	 * Sanitizes the username for Basic authentication (development only).
+	 * Sanitizes the username for Basic authentication.
 	 *
 	 * @param mixed $value Value to sanitize.
-	 * @return string Sanitized username, or empty string outside development.
+	 * @return string Sanitized username.
 	 */
 	public function sanitize_username( $value ): string {
-		if ( ! Environment::is_development() ) {
-			return '';
-		}
-
 		return sanitize_text_field( $value );
 	}
 
 	/**
-	 * Sanitizes the password for Basic authentication (development only).
+	 * Sanitizes the password for Basic authentication.
 	 *
 	 * @param mixed $value Value to sanitize.
-	 * @return string Sanitized password, or empty string outside development.
+	 * @return string Sanitized password.
 	 */
 	public function sanitize_password( $value ): string {
-		if ( ! Environment::is_development() ) {
-			return '';
-		}
-
 		// Don't sanitize passwords beyond trimming whitespace.
 		return trim( $value );
 	}

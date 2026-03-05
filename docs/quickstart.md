@@ -24,23 +24,23 @@ Get started with Safe Publish in minutes. This guide will walk you through setti
 
 ## Step 3: Set Up Authentication
 
-The plugin supports two authentication methods:
+Shared Secret (HMAC) authentication is required for all environments. Basic Authentication can optionally be layered on top.
 
-### Option A: Shared Secret (Recommended for Production)
+### Required: Shared Secret Authentication
 
 1. On your **non-production site**, install the included `safe-publish-auth.php` mu-plugin:
-   - Copy `mu-plugins/safe-publish-auth.php` to your non-prod site's `wp-content/mu-plugins/` directory
+   - Copy `mu-plugins/safe-publish-auth.php` to your non-prod site's `client-mu-plugins` directory. This file is only needed on the non-production site.
 2. Define a shared secret in both sites' `wp-config.php`:
    ```php
    define( 'SAFE_PUBLISH_SHARED_SECRET', 'your-secure-random-string-here' );
    ```
 3. The plugin will automatically use this for secure authentication
 
-### Option B: Basic Authentication (Development Only)
+### Optional: Basic Authentication
 
 1. On your **non-production site**, install a basic auth plugin
 2. In the Safe Publish settings, enter the username and password
-3. **Note**: This method is only recommended for local development environments
+3. Basic authentication is applied on top of Shared Secret authentication when credentials are configured
 
 ## Step 4: Test the Connection
 
