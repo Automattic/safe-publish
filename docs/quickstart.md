@@ -29,7 +29,7 @@ Shared Secret (HMAC) authentication is required for all environments. Basic Auth
 ### Required: Shared Secret Authentication
 
 1. On your **non-production site**, install the included `safe-publish-auth.php` mu-plugin:
-   - Copy `mu-plugins/safe-publish-auth.php` to your non-prod site's `wp-content/mu-plugins/` directory. This file is only needed on the non-production site.
+   - Copy `mu-plugins/safe-publish-auth.php` to your non-prod site's `client-mu-plugins` directory. This file is only needed on the non-production site.
 2. Define a shared secret in both sites' `wp-config.php`:
    ```php
    define( 'SAFE_PUBLISH_SHARED_SECRET', 'your-secure-random-string-here' );

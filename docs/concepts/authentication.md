@@ -9,7 +9,7 @@ The shared secret method uses HMAC signatures to authenticate requests without e
 ### Setup
 
 1. **On the non-production site**, install the included MU plugin:
-   - Copy `/mu-plugins/safe-publish-auth.php` to your non-prod site's `wp-content/mu-plugins/` directory. This file is only needed on the non-production site.
+   - Copy `/mu-plugins/safe-publish-auth.php` to your non-prod site's `client-mu-plugins` directory. This file is only needed on the non-production site.
    - If the `mu-plugins` directory doesn't exist, create it
 
 2. **On both sites** (production and non-production), add this line to `wp-config.php`:

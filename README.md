@@ -74,7 +74,7 @@ See the [Quickstart Guide](docs/quickstart.md) for detailed instructions.
 
 The plugin requires authentication to connect to your non-production site. We recommend using the **shared secret** method:
 
-1. Copy `client-mu-plugins/safe-publish-auth.php` to your non-prod site's `wp-content/mu-plugins/`
+1. Copy `client-mu-plugins/safe-publish-auth.php` to your non-prod site's `client-mu-plugins` directory. This file is only needed on the non-production site.
 2. Add to both sites' `wp-config.php`:
    ```php
    define( 'SAFE_PUBLISH_SHARED_SECRET', 'your-secure-random-string-here' );
