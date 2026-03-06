@@ -49,33 +49,23 @@ final class Admin_Handler {
 	private Admin_Ajax_Controller $ajax_controller;
 
 	/**
-	 * Content Processor instance.
-	 *
-	 * @var Content_Processor
-	 */
-	private Content_Processor $content_processor;
-
-	/**
 	 * Constructs the Admin_Handler instance.
 	 *
 	 * @param Admin_Menu_Manager    $menu_manager       Admin Menu Manager instance.
 	 * @param Settings_Sanitizer    $settings_sanitizer Settings Sanitizer instance.
 	 * @param Import_History        $import_history     Import History instance.
 	 * @param Admin_Ajax_Controller $ajax_controller    Admin AJAX Controller instance.
-	 * @param Content_Processor     $content_processor  Content Processor instance.
 	 */
 	public function __construct(
 		Admin_Menu_Manager $menu_manager,
 		Settings_Sanitizer $settings_sanitizer,
 		Import_History $import_history,
-		Admin_Ajax_Controller $ajax_controller,
-		Content_Processor $content_processor
+		Admin_Ajax_Controller $ajax_controller
 	) {
 		$this->menu_manager       = $menu_manager;
 		$this->settings_sanitizer = $settings_sanitizer;
 		$this->import_history     = $import_history;
 		$this->ajax_controller    = $ajax_controller;
-		$this->content_processor  = $content_processor;
 	}
 
 	/**

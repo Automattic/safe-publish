@@ -159,8 +159,7 @@ final class Plugin {
 			$menu_manager,
 			new Settings_Sanitizer(),
 			$import_history,
-			$ajax_controller,
-			$content_processor
+			$ajax_controller
 		);
 	}
 
