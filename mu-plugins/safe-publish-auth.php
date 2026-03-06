@@ -33,6 +33,36 @@ if ( defined( 'SAFE_PUBLISH_VIP_AUTH_LOADED' ) ) {
 }
 define( 'SAFE_PUBLISH_VIP_AUTH_LOADED', true );
 
+require_once __DIR__ . '/safe-publish-auth/class-auth-logger.php';
+require_once __DIR__ . '/safe-publish-auth/interface-authenticator.php';
+require_once __DIR__ . '/safe-publish-auth/class-hmac-authenticator.php';
+
+/**
+ * Returns the singleton Auth_Logger instance.
+ *
+ * @return \Safe_Publish\Auth\Auth_Logger Logger instance.
+ */
+function safe_publish_vip_get_auth_logger(): \Safe_Publish\Auth\Auth_Logger {
+	static $logger = null;
+	if ( null === $logger ) {
+		$logger = new \Safe_Publish\Auth\Auth_Logger();
+	}
+	return $logger;
+}
+
+/**
+ * Returns the singleton HMAC_Authenticator instance.
+ *
+ * @return \Safe_Publish\Auth\HMAC_Authenticator Authenticator instance.
+ */
+function safe_publish_vip_get_hmac_authenticator(): \Safe_Publish\Auth\HMAC_Authenticator {
+	static $authenticator = null;
+	if ( null === $authenticator ) {
+		$authenticator = new \Safe_Publish\Auth\HMAC_Authenticator( safe_publish_vip_get_auth_logger() );
+	}
+	return $authenticator;
+}
+
 /**
  * Initializes Safe Publish authentication handler.
  */
@@ -56,33 +86,11 @@ add_action( 'init', 'safe_publish_vip_test_logging_on_init' );
 if ( ! function_exists( 'safe_publish_vip_test_logging_on_init' ) ) {
 	/**
 	 * Tests logging on WordPress init to ensure logs appear.
+	 *
+	 * @see Auth_Logger::test_logging_on_init()
 	 */
 	function safe_publish_vip_test_logging_on_init(): void {
-		// Skip if this is a REST API request to avoid header issues.
-		if ( defined( 'REST_REQUEST' ) && constant( 'REST_REQUEST' ) ) {
-			return;
-		}
-
-		// Only run once per day to avoid spam.
-		$last_test = get_option( 'safe_publish_auth_last_log_test', 0 );
-		if ( time() - $last_test < 86400 ) { // 24 hours
-			return;
-		}
-
-		update_option( 'safe_publish_auth_last_log_test', time(), false );
-
-		// Force a test log entry.
-		safe_publish_vip_log_auth_event(
-			'INIT_LOG_TEST',
-			array(
-				'purpose'           => 'Testing VIP logging visibility',
-				'wp_loaded'         => did_action( 'wp_loaded' ),
-				'plugins_loaded'    => did_action( 'plugins_loaded' ),
-				'mu_plugins_loaded' => did_action( 'muplugins_loaded' ),
-				'php_version'       => PHP_VERSION,
-				'wp_version'        => get_bloginfo( 'version' ),
-			)
-		);
+		safe_publish_vip_get_auth_logger()->test_logging_on_init();
 	}
 }
 
@@ -322,34 +330,16 @@ if ( ! function_exists( 'safe_publish_vip_ensure_edit_context_access' ) ) {
 
 if ( ! function_exists( 'safe_publish_vip_authenticate_request' ) ) {
 	/**
-	 * VIP-Compatible Shared Secret Authentication for Safe Publish.
-	 *
-	 * Authenticates Safe Publish requests using HMAC-SHA256 signatures and reads the shared
-	 * secret from VIP environment variables.
+	 * Authenticates Safe Publish REST API requests using HMAC-SHA256 shared secret.
 	 *
 	 * @param WP_REST_Response|WP_Error|null $result  Response to replace.
 	 * @param WP_REST_Server                 $server  Server instance.
 	 * @param WP_REST_Request                $request Request used to generate the response.
 	 * @return WP_REST_Response|WP_Error|null Original result or WP_Error for authentication failures.
+	 * @see \Safe_Publish\Auth\HMAC_Authenticator::authenticate_request()
 	 */
 	function safe_publish_vip_authenticate_request( $result, $server, $request ): WP_REST_Response|WP_Error|null {
-		// Only authenticate WordPress REST API endpoints.
-		$route = $request->get_route();
-
-		if ( ! $route || strpos( $route, '/wp/v2/' ) !== 0 ) {
-			return $result;
-		}
-
-		$headers = $request->get_headers();
-
-		// Check for Safe Publish authentication headers (shared secret only).
-		if ( isset( $headers['x_safe_publish_timestamp'] ) && isset( $headers['x_safe_publish_signature'] ) ) {
-			// Shared Secret Authentication.
-			return safe_publish_vip_authenticate_shared_secret( $request, $headers, $result );
-		}
-
-		// No Safe Publish auth headers present, continue with normal WordPress authentication.
-		return $result;
+		return safe_publish_vip_get_hmac_authenticator()->authenticate_request( $result, $server, $request );
 	}
 }
 
@@ -361,151 +351,10 @@ if ( ! function_exists( 'safe_publish_vip_authenticate_shared_secret' ) ) {
 	 * @param array                          $headers Request headers.
 	 * @param WP_REST_Response|WP_Error|null $result  Optional. Original result to pass through on success.
 	 * @return WP_REST_Response|WP_Error|null Original result on success, or WP_Error on failure.
+	 * @see \Safe_Publish\Auth\HMAC_Authenticator::authenticate_request()
 	 */
 	function safe_publish_vip_authenticate_shared_secret( $request, $headers, $result = null ): WP_REST_Response|WP_Error|null {
-		$route = $request->get_route();
-
-		// Get shared secret from VIP environment.
-		$shared_secret = safe_publish_vip_get_shared_secret();
-
-		if ( empty( $shared_secret ) ) {
-			safe_publish_vip_log_auth_event(
-				'NO_SECRET_CONFIGURED',
-				array(
-					'route'  => $route,
-					'method' => $request->get_method(),
-				)
-			);
-
-			return new WP_Error(
-				'safe_publish_auth_no_secret',
-				'Safe Publish shared secret not configured in VIP environment',
-				array( 'status' => 500 )
-			);
-		}
-
-		$timestamp = $headers['x_safe_publish_timestamp'][0];
-		$signature = $headers['x_safe_publish_signature'][0];
-		$method    = $request->get_method();
-		$uri       = $request->get_route();
-
-		// Validate timestamp to prevent replay attacks.
-		$current_time = time();
-		$request_time = intval( $timestamp );
-		$time_diff    = abs( $current_time - $request_time );
-
-		// Allow 5-minute window for clock differences (configurable).
-		$max_time_diff = apply_filters( 'safe_publish_auth_max_time_diff', 300 );
-
-		if ( $time_diff > $max_time_diff ) {
-			safe_publish_vip_log_auth_event(
-				'TIMESTAMP_EXPIRED',
-				array(
-					'route'        => $route,
-					'method'       => $method,
-					'timestamp'    => $timestamp,
-					'current_time' => $current_time,
-					'time_diff'    => $time_diff,
-					'max_allowed'  => $max_time_diff,
-				)
-			);
-
-			return new WP_Error(
-				'safe_publish_auth_expired',
-				sprintf( 'Request timestamp expired (difference: %d seconds)', $time_diff ),
-				array( 'status' => 401 )
-			);
-		}
-
-		// Verify content hash header is present.
-		if ( ! isset( $headers['x_safe_publish_content_hash'] ) ) {
-			safe_publish_vip_log_auth_event(
-				'CONTENT_HASH_MISSING',
-				array(
-					'route'  => $route,
-					'method' => $method,
-				)
-			);
-
-			return new WP_Error(
-				'safe_publish_auth_content_hash_missing',
-				'Missing content hash header',
-				array( 'status' => 401 )
-			);
-		}
-
-		$received_hash = $headers['x_safe_publish_content_hash'][0];
-		$body          = $request->get_body();
-		$expected_hash = hash( 'sha256', $body );
-
-		if ( ! hash_equals( $expected_hash, $received_hash ) ) {
-			safe_publish_vip_log_auth_event(
-				'CONTENT_HASH_MISMATCH',
-				array(
-					'route'  => $route,
-					'method' => $method,
-				)
-			);
-
-			return new WP_Error(
-				'safe_publish_auth_content_hash_invalid',
-				'Content hash verification failed',
-				array( 'status' => 401 )
-			);
-		}
-
-		// Create signature string: METHOD|URI|TIMESTAMP|CONTENT_HASH.
-		$string_to_sign     = $method . '|' . $uri . '|' . $timestamp . '|' . $received_hash;
-		$expected_signature = hash_hmac( 'sha256', $string_to_sign, $shared_secret );
-
-		// Verify signature using constant-time comparison.
-		if ( ! hash_equals( $expected_signature, $signature ) ) {
-			safe_publish_vip_log_auth_event(
-				'SIGNATURE_INVALID',
-				array(
-					'route'               => $route,
-					'method'              => $method,
-					'timestamp'           => $timestamp,
-					'string_to_sign'      => $string_to_sign,
-					'expected_sig_length' => strlen( $expected_signature ),
-					'received_sig_length' => strlen( $signature ),
-				)
-			);
-
-			return new WP_Error(
-				'safe_publish_auth_invalid',
-				'Invalid Safe Publish authentication signature',
-				array( 'status' => 401 )
-			);
-		}
-
-		// Authentication successful.
-		safe_publish_vip_log_auth_event(
-			'AUTH_SUCCESS',
-			array(
-				'route'      => $route,
-				'method'     => $method,
-				'timestamp'  => $timestamp,
-				'user_agent' => $request->get_header( 'user_agent' ),
-			)
-		);
-
-		// Add custom header to indicate successful Safe Publish authentication (only if headers not sent).
-		if ( ! headers_sent() ) {
-			header( 'X-Safe-Publish-Auth: success' );
-		}
-
-		// Set up user context and permissions for Safe Publish authenticated requests.
-		safe_publish_vip_setup_authenticated_context( $request );
-
-		// Add immediate permission override for this specific request.
-		add_filter( 'map_meta_cap', 'safe_publish_vip_override_meta_capabilities', 10, 4 );
-
-		// Override REST permission checks specifically for context=edit.
-		add_filter( 'rest_post_dispatch', 'safe_publish_vip_override_context_permissions', 5, 3 );
-
-		// Continue with the authenticated request.
-		return $result;
+		return safe_publish_vip_get_hmac_authenticator()->authenticate_request( $result, null, $request );
 	}
 }
 
@@ -869,125 +718,23 @@ if ( ! function_exists( 'safe_publish_vip_log_auth_event' ) ) {
 	/**
 	 * Logs authentication events for monitoring and debugging.
 	 *
-	 * Enhanced for VIP dashboard visibility.
-	 *
 	 * @param string $event Event type (AUTH_SUCCESS, SIGNATURE_INVALID, etc.).
 	 * @param array  $data  Optional. Additional event data. Default empty array.
+	 * @see \SafePublish\Auth\Auth_Logger::log_event()
 	 */
 	function safe_publish_vip_log_auth_event( $event, $data = array() ): void {
-		// Skip logging during REST API requests to prevent header issues.
-		if ( defined( 'REST_REQUEST' ) && constant( 'REST_REQUEST' ) && ! headers_sent() ) {
-			// Queue the log for later processing.
-			if ( ! isset( $GLOBALS['safe_publish_deferred_logs'] ) ) {
-				$GLOBALS['safe_publish_deferred_logs'] = array();
-			}
-			$GLOBALS['safe_publish_deferred_logs'][] = array(
-				'event' => $event,
-				'data'  => $data,
-			);
-
-			// Register shutdown hook to process deferred logs.
-			if ( ! has_action( 'shutdown', 'safe_publish_vip_process_deferred_logs' ) ) {
-				add_action( 'shutdown', 'safe_publish_vip_process_deferred_logs' );
-			}
-			return;
-		}
-
-		// Ensure we can log even when WordPress functions aren't available.
-		// phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_date
-		$timestamp = function_exists( 'current_time' ) ? current_time( 'mysql' ) : date( 'Y-m-d H:i:s' );
-		// Data only used for logging; escaped with esc_html() when output to HTML in dashboard widget.
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-		$site_url = function_exists( 'get_site_url' ) ? get_site_url() : ( $_SERVER['HTTP_HOST'] ?? 'unknown' );
-
-		$log_data = array_merge(
-			array(
-				'event'       => $event,
-				'timestamp'   => $timestamp,
-				'site_url'    => $site_url,
-				// Data only used for logging; escaped with esc_html() when output to HTML in dashboard widget.
-				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.ServerVariables.UserControlledHeaders,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__REMOTE_ADDR__
-				'ip'          => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
-				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__HTTP_USER_AGENT__
-				'user_agent'  => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
-				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-				'request_uri' => $_SERVER['REQUEST_URI'] ?? 'unknown',
-			),
-			$data
-		);
-
-		// Simple, reliable log message format.
-		$log_message = '[Safe-Publish-Auth-VIP] ' . $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES );
-
-		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-		error_log( $log_message );
-
-		// Backup logging methods.
-
-		// 1. Direct file write as backup (VIP-safe location).
-		$log_file = get_temp_dir() . 'safe-publish-auth-vip.log';
-		// phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_date
-		$file_message = date( 'Y-m-d H:i:s' ) . ' ' . $log_message . "\n";
-		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_file_put_contents
-		@file_put_contents( $log_file, $file_message, FILE_APPEND | LOCK_EX );
-
-		// 2. PHP syslog for additional visibility.
-		if ( function_exists( 'syslog' ) ) {
-			openlog( 'Safe-Publish-Auth-VIP', LOG_PID, LOG_USER );
-			syslog( LOG_INFO, $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES ) );
-			closelog();
-		}
-
-		// 3. Store recent events in database for dashboard viewing (only if WordPress is loaded).
-		if ( function_exists( 'get_option' ) ) {
-			safe_publish_vip_store_log_event( $event, $log_data );
-		}
-
-		// 4. New Relic custom events (if available).
-		if ( function_exists( 'newrelic_record_custom_event' ) ) {
-			newrelic_record_custom_event(
-				'Safe_Publish_Auth_Event',
-				array(
-					'event_type' => $event,
-					'site_url'   => $site_url,
-					'ip'         => $log_data['ip'],
-					'success'    => strpos( $event, 'SUCCESS' ) !== false,
-				)
-			);
-		}
-
-		// 5. WordPress debug log (if WP_DEBUG_LOG is enabled).
-		if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG && function_exists( 'wp_debug_log' ) ) {
-			wp_debug_log( $log_message );
-		}
-
-		// 6. Trigger WordPress action for other monitoring plugins (only if WordPress is loaded).
-		if ( function_exists( 'do_action' ) ) {
-			do_action( 'safe_publish_auth_event_logged', $event, $log_data );
-		}
-
-		// 7. Force immediate log write for VIP (bypass buffering).
-		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV && function_exists( 'fastcgi_finish_request' ) ) {
-			fastcgi_finish_request();
-		}
+		safe_publish_vip_get_auth_logger()->log_event( $event, $data );
 	}
 }
 
 if ( ! function_exists( 'safe_publish_vip_process_deferred_logs' ) ) {
 	/**
 	 * Processes deferred logs that were queued during REST API requests.
+	 *
+	 * @see \SafePublish\Auth\Auth_Logger::process_deferred_logs()
 	 */
 	function safe_publish_vip_process_deferred_logs(): void {
-		if ( ! isset( $GLOBALS['safe_publish_deferred_logs'] ) || empty( $GLOBALS['safe_publish_deferred_logs'] ) ) {
-			return;
-		}
-
-		foreach ( $GLOBALS['safe_publish_deferred_logs'] as $log_entry ) {
-			safe_publish_vip_log_auth_event( $log_entry['event'], $log_entry['data'] );
-		}
-
-		// Clear the queue.
-		unset( $GLOBALS['safe_publish_deferred_logs'] );
+		safe_publish_vip_get_auth_logger()->process_deferred_logs();
 	}
 }
 
