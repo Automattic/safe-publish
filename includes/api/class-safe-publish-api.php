@@ -291,8 +291,6 @@ final class Safe_Publish_API extends REST_Base {
 	 *
 	 * @param int $post_id           Post ID to set featured image for.
 	 * @param int $featured_media_id External featured media ID to import.
-	 *
-	 * @return void
 	 */
 	private function import_and_set_featured_image( int $post_id, int $featured_media_id ): void {
 		$site_url = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
