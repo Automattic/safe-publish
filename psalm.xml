@@ -36,11 +36,6 @@
                 <file name="mu-plugins/safe-publish-auth.php" />
             </errorLevel>
         </UnusedParam>
-        <UnusedClosureParam>
-            <errorLevel type="suppress">
-                <file name="mu-plugins/safe-publish-auth.php" />
-            </errorLevel>
-        </UnusedClosureParam>
         <UnusedVariable>
             <errorLevel type="suppress">
                 <file name="tests/unit/stubs.php" />
