@@ -16,11 +16,19 @@ namespace Safe_Publish\Auth;
 class Dashboard_Widget {
 
 	/**
+	 * Shared secret for authentication status display.
+	 *
+	 * @var string
+	 */
+	private string $shared_secret;
+
+	/**
 	 * Constructor.
 	 *
-	 * Registers WordPress hooks for admin UI components.
+	 * @param string $shared_secret Shared secret resolved from the server environment.
 	 */
-	public function __construct() {
+	public function __construct( string $shared_secret ) {
+		$this->shared_secret = $shared_secret;
 		add_action( 'wp_dashboard_setup', array( $this, 'register' ) );
 		add_action( 'admin_notices', array( $this, 'render_admin_notice' ) );
 		add_filter( 'site_status_tests', array( $this, 'register_site_health_test' ) );
@@ -46,13 +54,12 @@ class Dashboard_Widget {
 	 * Renders the dashboard widget content.
 	 */
 	public function render(): void {
-		$shared_secret = safe_publish_vip_get_shared_secret();
-		$secret_length = strlen( $shared_secret );
+		$secret_length = strlen( $this->shared_secret );
 		$stats         = get_option( 'safe_publish_auth_stats', array() );
 		$recent_events = get_option( 'safe_publish_auth_log_events', array() );
 
 		echo '<div class="safe-publish-dashboard-widget">';
-		$this->render_status_section( $shared_secret, $secret_length );
+		$this->render_status_section( $this->shared_secret, $secret_length );
 		echo '<hr style="margin: 15px 0;">';
 		$this->render_statistics_section( $stats );
 		$this->render_recent_events_section( $recent_events );
@@ -79,10 +86,9 @@ class Dashboard_Widget {
 			return;
 		}
 
-		$shared_secret = safe_publish_vip_get_shared_secret();
-		$secret_length = strlen( $shared_secret );
+		$secret_length = strlen( $this->shared_secret );
 
-		if ( empty( $shared_secret ) ) {
+		if ( empty( $this->shared_secret ) ) {
 			wp_admin_notice(
 				__( 'Safe Publish Authentication: Shared secret not configured. Set the <code>SAFE_PUBLISH_SHARED_SECRET</code> environment variable in VIP dashboard to enable Safe Publish authentication.', 'safe-publish' ),
 				array( 'type' => 'warning' )
@@ -132,10 +138,9 @@ class Dashboard_Widget {
 	 * @return array Site Health test result.
 	 */
 	public function site_health_test(): array {
-		$shared_secret = safe_publish_vip_get_shared_secret();
-		$secret_length = strlen( $shared_secret );
+		$secret_length = strlen( $this->shared_secret );
 
-		if ( empty( $shared_secret ) ) {
+		if ( empty( $this->shared_secret ) ) {
 			return array(
 				'label'       => __( 'Safe Publish Authentication not configured', 'safe-publish' ),
 				'status'      => 'recommended',

@@ -58,9 +58,9 @@ class Auth_Manager {
 	 */
 	public function __construct() {
 		$this->logger             = new Auth_Logger();
-		$this->authenticator      = new HMAC_Authenticator( $this->logger );
 		$this->permission_manager = new Permission_Manager( $this->logger );
-		$this->dashboard_widget   = new Dashboard_Widget();
+		$this->authenticator      = new HMAC_Authenticator( $this->logger, $this->permission_manager );
+		$this->dashboard_widget   = new Dashboard_Widget( $this->get_shared_secret() );
 	}
 
 	/**
@@ -87,20 +87,7 @@ class Auth_Manager {
 	}
 
 	/**
-	 * Sets up authenticated context for Safe Publish requests.
-	 *
-	 * Called via the global safe_publish_vip_setup_authenticated_context()
-	 * function, which HMAC_Authenticator invokes on successful authentication.
-	 * Delegates to this instance's Permission_Manager so that the same object
-	 * handling handle_permission_check() also receives the authenticated flag.
-	 *
-	 * @param WP_REST_Request $request Authenticated REST request.
-	 */
-	public function setup_authenticated_context( WP_REST_Request $request ): void {
-		$this->permission_manager->setup_authenticated_context( $request );
-	}
 
-	/**
 	 * Registers monitoring REST endpoints for authentication status.
 	 */
 	public function register_monitoring_endpoints(): void {
@@ -157,7 +144,7 @@ class Auth_Manager {
 	 * @return WP_REST_Response Response containing auth status data.
 	 */
 	public function auth_status_callback( WP_REST_Request $_request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-		$shared_secret = safe_publish_vip_get_shared_secret();
+		$shared_secret = $this->get_shared_secret();
 		$stats         = get_option( 'safe_publish_auth_stats', array() );
 		$recent_events = get_option( 'safe_publish_auth_log_events', array() );
 
@@ -275,7 +262,7 @@ class Auth_Manager {
 		$headers                  = $request->get_headers();
 		$has_safe_publish_headers = isset( $headers['x_safe_publish_timestamp'] )
 			&& isset( $headers['x_safe_publish_signature'] );
-		$shared_secret            = safe_publish_vip_get_shared_secret();
+		$shared_secret            = $this->get_shared_secret();
 
 		$this->logger->log_event(
 			'TEST_ENDPOINT_ACCESSED',
@@ -385,6 +372,35 @@ class Auth_Manager {
 		}
 
 		return array( $status, $health_score, $issues );
+	}
+
+	/**
+	 * Gets the shared secret from a constant or environment variable.
+	 *
+	 * Does NOT read from wp_options — secret must come from the server environment.
+	 *
+	 * @return string Shared secret, or empty string if not configured.
+	 */
+	private function get_shared_secret(): string {
+		if ( defined( 'SAFE_PUBLISH_SHARED_SECRET' ) && ! empty( SAFE_PUBLISH_SHARED_SECRET ) ) {
+			return SAFE_PUBLISH_SHARED_SECRET;
+		}
+
+		$env_secret = getenv( 'SAFE_PUBLISH_SHARED_SECRET' );
+		if ( ! empty( $env_secret ) ) {
+			return $env_secret;
+		}
+
+		if ( isset( $_ENV['SAFE_PUBLISH_SHARED_SECRET'] ) && ! empty( $_ENV['SAFE_PUBLISH_SHARED_SECRET'] ) ) {
+			// Cryptographic secret not sanitized; used directly for HMAC authentication.
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$env_secret = trim( $_ENV['SAFE_PUBLISH_SHARED_SECRET'] );
+			if ( strlen( $env_secret ) >= 16 && preg_match( '/^[a-zA-Z0-9\-_+=\/]+$/', $env_secret ) ) {
+				return $env_secret;
+			}
+		}
+
+		return '';
 	}
 
 	/**

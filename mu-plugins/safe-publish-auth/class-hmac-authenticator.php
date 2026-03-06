@@ -27,6 +27,13 @@ class HMAC_Authenticator implements Authenticator {
 	private Auth_Logger $logger;
 
 	/**
+	 * Permission manager instance.
+	 *
+	 * @var Permission_Manager
+	 */
+	private Permission_Manager $permission_manager;
+
+	/**
 	 * Whether the current request has been authenticated.
 	 *
 	 * @var bool
@@ -36,10 +43,12 @@ class HMAC_Authenticator implements Authenticator {
 	/**
 	 * Constructor.
 	 *
-	 * @param Auth_Logger $logger Logger instance.
+	 * @param Auth_Logger        $logger             Logger instance.
+	 * @param Permission_Manager $permission_manager Permission manager instance.
 	 */
-	public function __construct( Auth_Logger $logger ) {
-		$this->logger = $logger;
+	public function __construct( Auth_Logger $logger, Permission_Manager $permission_manager ) {
+		$this->logger             = $logger;
+		$this->permission_manager = $permission_manager;
 	}
 
 	/**
@@ -89,8 +98,7 @@ class HMAC_Authenticator implements Authenticator {
 	 *
 	 * Validates timestamp, content hash, and HMAC-SHA256 signature in sequence.
 	 * On success, marks the request as authenticated and sets up the
-	 * authenticated context via global helper (to be extracted to
-	 * Permission_Manager in Task 1.4).
+	 * authenticated context via the injected Permission_Manager.
 	 *
 	 * @param WP_REST_Request                $request REST request object.
 	 * @param array                          $headers Request headers.
@@ -223,7 +231,7 @@ class HMAC_Authenticator implements Authenticator {
 		}
 
 		// Set up user context and permissions via Permission_Manager.
-		safe_publish_vip_setup_authenticated_context( $request );
+		$this->permission_manager->setup_authenticated_context( $request );
 
 		return $result;
 	}

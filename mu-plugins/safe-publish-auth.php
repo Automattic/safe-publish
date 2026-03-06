@@ -50,63 +50,12 @@ require_once __DIR__ . '/safe-publish-auth/class-permission-manager.php';
 require_once __DIR__ . '/safe-publish-auth/class-dashboard-widget.php';
 require_once __DIR__ . '/safe-publish-auth/class-auth-manager.php';
 
-/**
- * Gets shared secret from VIP environment (multiple fallback methods).
- *
- * Called by Dashboard_Widget and Auth_Manager REST callbacks.
- *
- * @return string Shared secret, or empty string if not found.
- */
-function safe_publish_vip_get_shared_secret(): string {
-	// Method 1: VIP constant (preferred - set in vip-config.php).
-	if ( defined( 'SAFE_PUBLISH_SHARED_SECRET' ) && ! empty( SAFE_PUBLISH_SHARED_SECRET ) ) {
-		return SAFE_PUBLISH_SHARED_SECRET;
-	}
-
-	// Method 2: Direct environment variable access.
-	$env_secret = getenv( 'SAFE_PUBLISH_SHARED_SECRET' );
-	if ( ! empty( $env_secret ) ) {
-		return $env_secret;
-	}
-
-	// Method 3: $_ENV superglobal (fallback for some hosting environments).
-	if ( isset( $_ENV['SAFE_PUBLISH_SHARED_SECRET'] ) && ! empty( $_ENV['SAFE_PUBLISH_SHARED_SECRET'] ) ) {
-		// Cryptographic secret not sanitized; used directly for HMAC authentication.
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-		$env_secret = trim( $_ENV['SAFE_PUBLISH_SHARED_SECRET'] );
-		// Validate that it contains only safe characters for a secret key.
-		if ( ! empty( $env_secret ) && strlen( $env_secret ) >= 16 && preg_match( '/^[a-zA-Z0-9\-_+=\/]+$/', $env_secret ) ) {
-			return $env_secret;
-		}
-	}
-
-	return '';
-}
-
-/**
- * Sets up authenticated context for Safe Publish requests.
- *
- * Called by HMAC_Authenticator on successful authentication. Delegates to
- * the Auth_Manager instance so that the same Permission_Manager object that
- * received setup_authenticated_context() also handles handle_permission_check().
- *
- * @param WP_REST_Request $request Authenticated REST request.
- */
-function safe_publish_vip_setup_authenticated_context( WP_REST_Request $request ): void {
-	global $safe_publish_auth_manager;
-
-	if ( $safe_publish_auth_manager instanceof \Safe_Publish\Auth\Auth_Manager ) {
-		$safe_publish_auth_manager->setup_authenticated_context( $request );
-	}
-}
-
 // Initialize authentication system at plugins_loaded (priority 1 to run early).
 add_action(
 	'plugins_loaded',
 	function (): void {
-		global $safe_publish_auth_manager;
-		$safe_publish_auth_manager = new \Safe_Publish\Auth\Auth_Manager();
-		$safe_publish_auth_manager->init();
+		$auth_manager = new \Safe_Publish\Auth\Auth_Manager();
+		$auth_manager->init();
 	},
 	1
 );
