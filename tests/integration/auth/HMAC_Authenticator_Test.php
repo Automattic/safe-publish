@@ -1,0 +1,270 @@
+<?php
+/**
+ * Integration tests for the HMAC authenticator.
+ *
+ * @package Safe_Publish
+ */
+
+declare(strict_types=1);
+
+namespace Safe_Publish\Tests\Integration\Auth;
+
+use Safe_Publish\Auth\Auth_Logger;
+use Safe_Publish\Auth\HMAC_Authenticator;
+use Safe_Publish\Auth\Permission_Manager;
+use WP_REST_Request;
+use WP_UnitTestCase;
+
+/**
+ * HMAC Authenticator Test.
+ *
+ * Tests the complete HMAC authentication workflow end-to-end.
+ */
+class HMAC_Authenticator_Test extends WP_UnitTestCase {
+
+	/**
+	 * Fallback shared secret used when no environment constant is defined.
+	 */
+	private const FALLBACK_SECRET = 'integration-test-secret-key-32chars-ok';
+
+	/**
+	 * HMAC authenticator instance.
+	 *
+	 * @var HMAC_Authenticator
+	 */
+	private HMAC_Authenticator $authenticator;
+
+	/**
+	 * Sets up each test.
+	 */
+	#[\Override]
+	protected function setUp(): void {
+		parent::setUp();
+
+		if ( ! defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ) {
+			define( 'SAFE_PUBLISH_SHARED_SECRET', self::FALLBACK_SECRET );
+		}
+
+		$this->authenticator = new HMAC_Authenticator(
+			new Auth_Logger(),
+			new Permission_Manager( new Auth_Logger() )
+		);
+
+		// Clear any stored log events before each test.
+		delete_option( 'safe_publish_auth_log_events' );
+	}
+
+	/**
+	 * Verifies that a request with a valid HMAC signature passes authentication.
+	 */
+	public function test_valid_hmac_request_succeeds(): void {
+		// ARRANGE.
+		$request = $this->build_signed_request( 'POST', '/wp/v2/posts', 'body content' );
+
+		// ACT.
+		$result = $this->authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT.
+		$this->assertNull( $result );
+		$this->assertTrue( $this->authenticator->is_authenticated() );
+	}
+
+	/**
+	 * Verifies that a request with an invalid HMAC signature fails with 401.
+	 */
+	public function test_invalid_signature_fails_with_401(): void {
+		// ARRANGE: Valid timestamp and content hash, but wrong signature.
+		$timestamp    = time();
+		$body         = 'some body content';
+		$content_hash = hash( 'sha256', $body );
+
+		$request = new WP_REST_Request( 'POST', '/wp/v2/posts' );
+		$request->set_body( $body );
+		$request->set_header( 'X-Safe-Publish-Timestamp', (string) $timestamp );
+		$request->set_header( 'X-Safe-Publish-Content-Hash', $content_hash );
+		$request->set_header( 'X-Safe-Publish-Signature', 'totally-invalid-signature' );
+
+		// ACT.
+		$result = $this->authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT.
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'safe_publish_auth_invalid', $result->get_error_code() );
+		$this->assertSame( 401, $result->get_error_data()['status'] );
+	}
+
+	/**
+	 * Verifies that a request with an expired timestamp fails with 401.
+	 */
+	public function test_expired_timestamp_fails(): void {
+		// ARRANGE: Timestamp more than 5 minutes in the past.
+		$expired_timestamp = time() - 400;
+		$request           = $this->build_signed_request(
+			'GET',
+			'/wp/v2/posts',
+			'',
+			$expired_timestamp
+		);
+
+		// ACT.
+		$result = $this->authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT.
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'safe_publish_auth_expired', $result->get_error_code() );
+		$this->assertSame( 401, $result->get_error_data()['status'] );
+	}
+
+	/**
+	 * Verifies that requests without Safe Publish headers pass through to
+	 * WordPress auth.
+	 */
+	public function test_missing_headers_passes_through_to_wp_auth(): void {
+		// ARRANGE: Request with no Safe Publish headers.
+		$request = new WP_REST_Request( 'GET', '/wp/v2/posts' );
+
+		// ACT.
+		$result = $this->authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT: Pass-through (null returned, not a WP_Error).
+		$this->assertNull( $result );
+		$this->assertFalse( $this->authenticator->is_authenticated() );
+	}
+
+	/**
+	 * Verifies that a request missing the Content-Hash header fails with 401.
+	 */
+	public function test_missing_content_hash_header_fails(): void {
+		// ARRANGE: Valid timestamp and signature but no content hash.
+		$timestamp = time();
+		$body      = 'some body';
+
+		$request = new WP_REST_Request( 'POST', '/wp/v2/posts' );
+		$request->set_body( $body );
+		$request->set_header( 'X-Safe-Publish-Timestamp', (string) $timestamp );
+
+		// Build a valid signature (without content hash in the string).
+		$string_to_sign = 'POST|/wp/v2/posts|' . $timestamp . '|' . hash( 'sha256', $body );
+		$signature      = hash_hmac( 'sha256', $string_to_sign, self::FALLBACK_SECRET );
+		$request->set_header( 'X-Safe-Publish-Signature', $signature );
+		// Intentionally omit X-Safe-Publish-Content-Hash.
+
+		// ACT.
+		$result = $this->authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT.
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'safe_publish_auth_content_hash_missing', $result->get_error_code() );
+		$this->assertSame( 401, $result->get_error_data()['status'] );
+	}
+
+	/**
+	 * Verifies that a request with a mismatched Content-Hash header fails with
+	 * 401.
+	 */
+	public function test_mismatched_content_hash_fails(): void {
+		// ARRANGE: Content hash header doesn't match actual body.
+		$timestamp      = time();
+		$body           = 'actual body content';
+		$wrong_hash     = hash( 'sha256', 'different content' );
+		$string_to_sign = 'POST|/wp/v2/posts|' . $timestamp . '|' . $wrong_hash;
+		$signature      = hash_hmac( 'sha256', $string_to_sign, self::FALLBACK_SECRET );
+
+		$request = new WP_REST_Request( 'POST', '/wp/v2/posts' );
+		$request->set_body( $body );
+		$request->set_header( 'X-Safe-Publish-Timestamp', (string) $timestamp );
+		$request->set_header( 'X-Safe-Publish-Content-Hash', $wrong_hash );
+		$request->set_header( 'X-Safe-Publish-Signature', $signature );
+
+		// ACT.
+		$result = $this->authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT.
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'safe_publish_auth_content_hash_invalid', $result->get_error_code() );
+		$this->assertSame( 401, $result->get_error_data()['status'] );
+	}
+
+	/**
+	 * Verifies that requests to non-wp/v2 routes pass through even with Safe
+	 * Publish headers.
+	 */
+	public function test_non_wp_v2_route_passes_through(): void {
+		// ARRANGE: Valid Safe Publish headers but targeting a non-wp/v2 route.
+		$request = $this->build_signed_request( 'GET', '/safe-publish/v1/auth-status', '' );
+
+		// ACT.
+		$result = $this->authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT: Pass-through — route guard returns early.
+		$this->assertNull( $result );
+		$this->assertFalse( $this->authenticator->is_authenticated() );
+	}
+
+	/**
+	 * Verifies that a request with a future timestamp fails with 401.
+	 */
+	public function test_future_timestamp_fails(): void {
+		// ARRANGE: Timestamp more than 5 minutes in the future.
+		$future_timestamp = time() + 400;
+		$request          = $this->build_signed_request( 'GET', '/wp/v2/posts', '', $future_timestamp );
+
+		// ACT.
+		$result = $this->authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT.
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'safe_publish_auth_expired', $result->get_error_code() );
+		$this->assertSame( 401, $result->get_error_data()['status'] );
+	}
+
+	/**
+	 * Verifies that a successful authentication event is stored in the log.
+	 */
+	public function test_authentication_event_logged(): void {
+		// ARRANGE.
+		$request = $this->build_signed_request( 'GET', '/wp/v2/posts', '' );
+
+		// ACT.
+		$this->authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT: AUTH_SUCCESS entry exists in the log.
+		// Note: additional events (e.g. CAPABILITY_BASED_AUTH_SETUP) may follow.
+		$log_events  = get_option( 'safe_publish_auth_log_events', array() );
+		$event_types = array_column( $log_events, 'event' );
+		$this->assertContains( 'AUTH_SUCCESS', $event_types );
+	}
+
+	/**
+	 * Builds a properly signed WP_REST_Request.
+	 *
+	 * @param string $method    HTTP method.
+	 * @param string $route     REST route path.
+	 * @param string $body      Request body.
+	 * @param int    $timestamp Optional. Unix timestamp. Defaults to current time.
+	 * @return WP_REST_Request Signed request.
+	 */
+	private function build_signed_request(
+		string $method,
+		string $route,
+		string $body,
+		int $timestamp = 0
+	): WP_REST_Request {
+		if ( 0 === $timestamp ) {
+			$timestamp = time();
+		}
+
+		$secret         = defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : self::FALLBACK_SECRET;
+		$content_hash   = hash( 'sha256', $body );
+		$string_to_sign = $method . '|' . $route . '|' . $timestamp . '|' . $content_hash;
+		$signature      = hash_hmac( 'sha256', $string_to_sign, $secret );
+
+		$request = new WP_REST_Request( $method, $route );
+		$request->set_body( $body );
+		$request->set_header( 'X-Safe-Publish-Timestamp', (string) $timestamp );
+		$request->set_header( 'X-Safe-Publish-Content-Hash', $content_hash );
+		$request->set_header( 'X-Safe-Publish-Signature', $signature );
+
+		return $request;
+	}
+}

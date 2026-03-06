@@ -20,7 +20,8 @@
       "Safe_Publish\\Tests\\": "tests/unit/"
     },
     "classmap": [
-      "tests/unit/"
+      "tests/unit/",
+      "mu-plugins/safe-publish-auth/"
     ]
   },
   "scripts": {
