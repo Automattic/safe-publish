@@ -302,12 +302,8 @@ class Auth_Manager {
 			return true;
 		}
 
-		// Allow VIP monitoring systems.
-		// User agent not sanitized; only used for string comparison, not storage or output.
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__HTTP_USER_AGENT__
-		$user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-
-		return strpos( $user_agent, 'WPVIP-Monitor' ) !== false;
+		// Allow requests authenticated via HMAC shared secret.
+		return $this->authenticator->is_authenticated();
 	}
 
 	/**
