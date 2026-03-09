@@ -61,6 +61,10 @@ class Auth_Logger {
 			return;
 		}
 
+		if ( defined( 'WP_TESTS_DOMAIN' ) ) {
+			return;
+		}
+
 		$last_test = get_option( 'safe_publish_auth_last_log_test', 0 );
 		if ( time() - $last_test < 86400 ) { // 24 hours.
 			return;
@@ -143,21 +147,25 @@ class Auth_Logger {
 
 		$log_message = '[Safe-Publish-Auth-VIP] ' . $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES );
 
-		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-		error_log( $log_message );
+		$is_test_env = defined( 'WP_TESTS_DOMAIN' );
 
-		// 1. Direct file write as backup (VIP-safe location).
-		$log_file = get_temp_dir() . 'safe-publish-auth-vip.log';
-		// phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_date
-		$file_message = date( 'Y-m-d H:i:s' ) . ' ' . $log_message . "\n";
-		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_file_put_contents
-		@file_put_contents( $log_file, $file_message, FILE_APPEND | LOCK_EX );
+		if ( ! $is_test_env ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( $log_message );
 
-		// 2. PHP syslog for additional visibility.
-		if ( function_exists( 'syslog' ) ) {
-			openlog( 'Safe-Publish-Auth-VIP', LOG_PID, LOG_USER );
-			syslog( LOG_INFO, $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES ) );
-			closelog();
+			// 1. Direct file write as backup (VIP-safe location).
+			$log_file = get_temp_dir() . 'safe-publish-auth-vip.log';
+			// phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_date
+			$file_message = date( 'Y-m-d H:i:s' ) . ' ' . $log_message . "\n";
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_file_put_contents
+			@file_put_contents( $log_file, $file_message, FILE_APPEND | LOCK_EX );
+
+			// 2. PHP syslog for additional visibility.
+			if ( function_exists( 'syslog' ) ) {
+				openlog( 'Safe-Publish-Auth-VIP', LOG_PID, LOG_USER );
+				syslog( LOG_INFO, $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES ) );
+				closelog();
+			}
 		}
 
 		// 3. Store recent events in database for dashboard viewing (only if WordPress is loaded).
