@@ -2,7 +2,7 @@
 /**
  * HMAC Authenticator class.
  *
- * @package Safe_Publish_Auth
+ * @package Safe_Publish
  */
 
 namespace Safe_Publish\Auth;

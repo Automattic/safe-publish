@@ -33,7 +33,6 @@
         <UnusedParam>
             <errorLevel type="suppress">
                 <file name="tests/unit/stubs.php" />
-                <file name="mu-plugins/safe-publish-auth.php" />
             </errorLevel>
         </UnusedParam>
         <UnusedVariable>
