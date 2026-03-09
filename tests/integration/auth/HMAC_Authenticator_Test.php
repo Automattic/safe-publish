@@ -186,12 +186,49 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that requests to non-wp/v2 routes pass through even with Safe
+	 * Verifies that /safe-publish/v1/ monitoring routes require HMAC
+	 * authentication.
+	 */
+	public function test_safe_publish_monitoring_route_authenticates(): void {
+		// ARRANGE: Valid Safe Publish headers targeting a monitoring route.
+		$request = $this->build_signed_request( 'GET', '/safe-publish/v1/auth-status', '' );
+
+		// ACT.
+		$result = $this->authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT: Authenticated — must prove knowledge of the shared secret.
+		$this->assertNull( $result );
+		$this->assertTrue( $this->authenticator->is_authenticated() );
+	}
+
+	/**
+	 * Verifies that the debug test endpoint passes through even with invalid
+	 * HMAC headers, so its diagnostic response is always reachable.
+	 */
+	public function test_auth_test_endpoint_passes_through_with_invalid_headers(): void {
+		// ARRANGE: Malformed Safe Publish headers targeting the diagnostic endpoint.
+		$timestamp = time();
+		$request   = new \WP_REST_Request( 'GET', '/safe-publish/v1/auth-test' );
+		$request->set_header( 'X-Safe-Publish-Timestamp', (string) $timestamp );
+		$request->set_header( 'X-Safe-Publish-Content-Hash', hash( 'sha256', '' ) );
+		$request->set_header( 'X-Safe-Publish-Signature', 'totally-wrong-signature' );
+
+		// ACT.
+		$result = $this->authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT: Pass-through — auth-test is excluded from the route guard so the
+		// diagnostic callback can always run and return useful debug information.
+		$this->assertNull( $result );
+		$this->assertFalse( $this->authenticator->is_authenticated() );
+	}
+
+	/**
+	 * Verifies that requests to unrelated routes pass through even with Safe
 	 * Publish headers.
 	 */
-	public function test_non_wp_v2_route_passes_through(): void {
-		// ARRANGE: Valid Safe Publish headers but targeting a non-wp/v2 route.
-		$request = $this->build_signed_request( 'GET', '/safe-publish/v1/auth-status', '' );
+	public function test_unrelated_route_passes_through(): void {
+		// ARRANGE: Valid Safe Publish headers but targeting an unrelated route.
+		$request = $this->build_signed_request( 'GET', '/woocommerce/v1/orders', '' );
 
 		// ACT.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
