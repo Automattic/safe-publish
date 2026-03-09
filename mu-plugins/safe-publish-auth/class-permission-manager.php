@@ -155,8 +155,7 @@ class Permission_Manager {
 
 		add_filter(
 			'user_has_cap',
-			/** @psalm-suppress UnusedClosureParam */
-			function ( $allcaps, $caps, $args, $user ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			function ( $allcaps, $_caps, $_args, $_user ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 				$safe_publish_caps = array(
 					'read',
 					'edit_posts',
@@ -490,8 +489,7 @@ class Permission_Manager {
 
 		add_filter(
 			'user_has_cap',
-			/** @psalm-suppress UnusedClosureParam */
-			function ( $allcaps, $caps, $args, $user ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			function ( $allcaps, $_caps, $_args, $_user ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 				$allcaps['edit_posts']         = true;
 				$allcaps['edit_others_posts']  = true;
 				$allcaps['edit_private_posts'] = true;
