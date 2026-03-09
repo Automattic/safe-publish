@@ -293,7 +293,7 @@ final class Safe_Publish_API extends REST_Base {
 	 * @param int $featured_media_id External featured media ID to import.
 	 */
 	private function import_and_set_featured_image( int $post_id, int $featured_media_id ): void {
-		$site_url = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
+		$site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
 		if ( null === $this->media_importer || empty( $site_url ) ) {
 			return;
@@ -321,7 +321,7 @@ final class Safe_Publish_API extends REST_Base {
 			return $content;
 		}
 
-		$site_url = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
+		$site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
 		return $this->content_processor->process_content( $content, $site_url );
 	}

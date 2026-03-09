@@ -33,7 +33,7 @@ class Settings_Sanitizer {
 	public function register_settings(): void {
 		register_setting(
 			Options::SETTINGS_GROUP,
-			Options::OPTION_EXTERNAL_SITE_URL,
+			Options::OPTION_CONNECTED_SITE_URL,
 			array(
 				'sanitize_callback' => array( $this, 'sanitize_url' ),
 				'default'           => '',
@@ -46,6 +46,15 @@ class Settings_Sanitizer {
 			array(
 				'sanitize_callback' => array( $this, 'sanitize_number_of_posts' ),
 				'default'           => 10,
+			)
+		);
+
+		register_setting(
+			Options::SETTINGS_GROUP,
+			Options::OPTION_SYNC_DIRECTION,
+			array(
+				'sanitize_callback' => array( $this, 'sanitize_sync_direction' ),
+				'default'           => '',
 			)
 		);
 
@@ -84,11 +93,11 @@ class Settings_Sanitizer {
 
 		if ( ! URL_Validator::is_valid_external_url( $url ) ) {
 			add_settings_error(
-				Options::OPTION_EXTERNAL_SITE_URL,
+				Options::OPTION_CONNECTED_SITE_URL,
 				'invalid_url',
-				__( 'Please enter a valid external site URL.', 'safe-publish' )
+				__( 'Please enter a valid connected site URL.', 'safe-publish' )
 			);
-			return get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
+			return get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 		}
 
 		return $url;
@@ -144,5 +153,35 @@ class Settings_Sanitizer {
 	public function sanitize_password( $value ): string {
 		// Don't sanitize passwords beyond trimming whitespace.
 		return trim( $value );
+	}
+
+	/**
+	 * Sanitizes the sync direction setting.
+	 *
+	 * @param mixed $value Value to sanitize.
+	 * @return string One of 'send', 'receive', 'both', or '' on invalid input.
+	 */
+	public function sanitize_sync_direction( $value ): string {
+		$allowed = array(
+			Options::SYNC_DIRECTION_SEND,
+			Options::SYNC_DIRECTION_RECEIVE,
+			Options::SYNC_DIRECTION_BOTH,
+		);
+
+		if ( '' === $value || null === $value ) {
+			return '';
+		}
+
+		if ( ! in_array( $value, $allowed, true ) ) {
+			add_settings_error(
+				Options::OPTION_SYNC_DIRECTION,
+				'invalid_sync_direction',
+				__( 'Please select a valid Sync Direction.', 'safe-publish' )
+			);
+
+			return get_option( Options::OPTION_SYNC_DIRECTION, '' );
+		}
+
+		return $value;
 	}
 }

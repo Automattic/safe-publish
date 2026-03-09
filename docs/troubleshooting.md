@@ -354,7 +354,8 @@ If you need to start fresh:
 
 ```php
 // Using WP-CLI
-wp option delete safe_publish_external_site_url
+wp option delete safe_publish_connected_site_url
+wp option delete safe_publish_sync_direction
 wp option delete safe_publish_number_of_posts
 wp option delete safe_publish_auth_username
 wp option delete safe_publish_auth_password

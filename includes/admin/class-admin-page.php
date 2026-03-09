@@ -41,7 +41,7 @@ final class Admin_Page {
 	 * Renders the admin page.
 	 */
 	public function render(): void {
-		$site_url = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
+		$site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
 		?>
 		<div class="wrap" id="safe-publish-admin-page">
@@ -122,7 +122,7 @@ final class Admin_Page {
 	 */
 	private function enqueue_standard_assets(): void {
 		// Get posts data for localization.
-		$site_url        = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
+		$site_url        = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 		$number_of_posts = get_option( Options::OPTION_NUMBER_OF_POSTS, 10 );
 		$posts_data      = array();
 

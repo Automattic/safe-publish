@@ -110,12 +110,16 @@ register_activation_hook( __FILE__, 'safe_publish_activation' );
  */
 function safe_publish_activation(): void {
 	// Set default options.
-	if ( false === get_option( 'safe_publish_external_site_url' ) ) {
-		update_option( 'safe_publish_external_site_url', '' );
+	if ( false === get_option( 'safe_publish_connected_site_url' ) ) {
+		update_option( 'safe_publish_connected_site_url', '' );
 	}
 
 	if ( false === get_option( 'safe_publish_number_of_posts' ) ) {
 		update_option( 'safe_publish_number_of_posts', 10 );
+	}
+
+	if ( false === get_option( 'safe_publish_sync_direction' ) ) {
+		update_option( 'safe_publish_sync_direction', '' );
 	}
 
 	// Flush rewrite rules if needed (only in non-VIP environments).

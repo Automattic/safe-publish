@@ -48,7 +48,7 @@ final class Diff_Renderer {
 		$post_type        = (string) $request->get_param( 'postType' );
 		$mode             = (string) $request->get_param( 'mode' );
 		$cleanup          = (bool) $request->get_param( 'cleanup' );
-		$site_url         = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
+		$site_url         = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
 		// Convert plural post types to singular for WordPress compatibility.
 		$post_type_mapping = array(

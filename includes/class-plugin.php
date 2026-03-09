@@ -18,6 +18,7 @@ use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\Admin\Session_Formatter;
 use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\Admin\Settings_Sanitizer;
+use Safe_Publish\Auth\Auth_Manager;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
@@ -26,6 +27,7 @@ use Safe_Publish\API\Safe_Publish_API;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Embed_Processor;
 use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Utils\Options;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -69,6 +71,30 @@ final class Plugin {
 	 * Initializes plugin.
 	 */
 	public function init(): void {
+		$sync_direction = get_option( Options::OPTION_SYNC_DIRECTION, '' );
+		$connected_url  = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+
+		$is_send = in_array(
+			$sync_direction,
+			array( Options::SYNC_DIRECTION_SEND, Options::SYNC_DIRECTION_BOTH ),
+			true
+		);
+
+		$is_receive = in_array(
+			$sync_direction,
+			array( Options::SYNC_DIRECTION_RECEIVE, Options::SYNC_DIRECTION_BOTH ),
+			true
+		);
+
+		if ( $is_send && ! empty( $connected_url ) ) {
+			$auth_manager = new Auth_Manager();
+			$auth_manager->init();
+		}
+
+		if ( ! $is_receive ) {
+			return;
+		}
+
 		// Build shared low-level services.
 		$http_client             = new HTTP_Client();
 		$media_importer          = new Media_Importer( $http_client );

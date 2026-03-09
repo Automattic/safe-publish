@@ -13,7 +13,7 @@
   "core": "WordPress/WordPress#master",
   "plugins": ["."],
   "lifecycleScripts": {
-    "afterStart": "wp-env run cli wp option update blogname 'Safe Publish Target' && wp-env run tests-cli wp option update blogname 'Safe Publish Source' && wp-env run tests-cli wp rewrite structure '/%postname%/' && wp-env run tests-cli wp rewrite flush && wp-env run cli wp option update safe_publish_external_site_url 'http://host.docker.internal:8889'"
+    "afterStart": "bin/setup-env"
   },
   "env": {
     "tests": {

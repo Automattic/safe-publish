@@ -43,6 +43,18 @@ function _manually_load_plugin(): void {
 
 tests_add_filter( 'muplugins_loaded', '_manually_load_plugin' );
 
+/**
+ * Set the sync direction before the plugin initializes so that all receive-side
+ * functionality (REST routes, AJAX handlers) is registered during the test run.
+ */
+tests_add_filter(
+	'plugins_loaded',
+	function (): void {
+		update_option( 'safe_publish_sync_direction', 'receive' );
+	},
+	5
+);
+
 // Suppress cosmetic "Not running X tests" messages.
 $_SERVER['argv'][] = '--group';
 $_SERVER['argv'][] = 'ajax,ms-files,external-http';

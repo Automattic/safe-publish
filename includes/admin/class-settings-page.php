@@ -24,18 +24,33 @@ final class Settings_Page {
 	 * Renders the settings page.
 	 */
 	public function render(): void {
-		$site_url        = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
+		$site_url        = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 		$number_of_posts = get_option( Options::OPTION_NUMBER_OF_POSTS, 10 );
+		$sync_direction  = get_option( Options::OPTION_SYNC_DIRECTION, '' );
 
 		// Basic auth credentials (development only).
 		$username = get_option( Options::OPTION_USERNAME, '' );
 		$password = get_option( Options::OPTION_PASSWORD, '' );
+
+		$show_receive_fields = in_array(
+			$sync_direction,
+			array( Options::SYNC_DIRECTION_RECEIVE, Options::SYNC_DIRECTION_BOTH ),
+			true
+		);
 
 		?>
 		<div class="wrap" id="safe-publish-settings-page">
 			<h1><?php esc_html_e( 'Safe Publish Settings', 'safe-publish' ); ?></h1>
 
 			<?php settings_errors(); ?>
+
+			<?php if ( '' === $sync_direction || '' === $site_url ) : ?>
+			<div class="notice notice-info">
+				<p>
+					<?php esc_html_e( 'Configure a Sync Direction and Connected Site URL to get started.', 'safe-publish' ); ?>
+				</p>
+			</div>
+			<?php endif; ?>
 
 			<div class="safe-publish-admin-container">
 				<div class="safe-publish-settings-section">
@@ -50,24 +65,71 @@ final class Settings_Page {
 						<table class="form-table">
 							<tr>
 								<th scope="row">
-									<label for="safe_publish_external_site_url">
-										<?php esc_html_e( 'Non-Prod Site URL', 'safe-publish' ); ?>
+									<?php esc_html_e( 'Sync Direction', 'safe-publish' ); ?>
+								</th>
+								<td>
+									<fieldset>
+										<legend class="screen-reader-text">
+											<?php esc_html_e( 'Sync Direction', 'safe-publish' ); ?>
+										</legend>
+										<label>
+											<input
+												type="radio"
+												name="safe_publish_sync_direction"
+												value="<?php echo esc_attr( Options::SYNC_DIRECTION_SEND ); ?>"
+												<?php checked( $sync_direction, Options::SYNC_DIRECTION_SEND ); ?>
+											/>
+											<?php esc_html_e( 'Send', 'safe-publish' ); ?>
+										</label>
+										<br />
+										<label>
+											<input
+												type="radio"
+												name="safe_publish_sync_direction"
+												value="<?php echo esc_attr( Options::SYNC_DIRECTION_RECEIVE ); ?>"
+												<?php checked( $sync_direction, Options::SYNC_DIRECTION_RECEIVE ); ?>
+											/>
+											<?php esc_html_e( 'Receive', 'safe-publish' ); ?>
+										</label>
+										<br />
+										<label>
+											<input
+												type="radio"
+												name="safe_publish_sync_direction"
+												value="<?php echo esc_attr( Options::SYNC_DIRECTION_BOTH ); ?>"
+												<?php checked( $sync_direction, Options::SYNC_DIRECTION_BOTH ); ?>
+											/>
+											<?php esc_html_e( 'Send and Receive', 'safe-publish' ); ?>
+										</label>
+									</fieldset>
+									<p class="description">
+										<?php esc_html_e( 'Send: allow the connected site to pull content from this site. Receive: import content from the connected site. Send and Receive: both directions active.', 'safe-publish' ); ?>
+									</p>
+								</td>
+							</tr>
+
+							<tr>
+								<th scope="row">
+									<label for="safe_publish_connected_site_url">
+										<?php esc_html_e( 'Connected Site URL', 'safe-publish' ); ?>
 									</label>
 								</th>
 								<td>
 									<input
 										type="url"
-										id="safe_publish_external_site_url"
-										name="safe_publish_external_site_url"
+										id="safe_publish_connected_site_url"
+										name="safe_publish_connected_site_url"
 										value="<?php echo esc_attr( $site_url ); ?>"
 										class="regular-text"
 										placeholder="<?php echo esc_attr__( 'https://example.com', 'safe-publish' ); ?>"
 									/>
 									<p class="description">
-										<?php esc_html_e( 'Enter the URL of the non-prod WordPress site to fetch posts from.', 'safe-publish' ); ?>
+										<?php esc_html_e( 'URL of the WordPress site to send content to or receive content from.', 'safe-publish' ); ?>
 									</p>
 								</td>
 							</tr>
+
+							<?php if ( $show_receive_fields ) : ?>
 
 							<tr>
 								<th scope="row">
@@ -91,7 +153,7 @@ final class Settings_Page {
 								</td>
 							</tr>
 
-							<?php if ( Environment::is_development() ) : ?>
+								<?php if ( Environment::is_development() ) : ?>
 							<tr>
 								<th scope="row">
 									<label for="safe_publish_username">
@@ -135,7 +197,9 @@ final class Settings_Page {
 									</p>
 								</td>
 							</tr>
-							<?php endif; ?>
+								<?php endif; ?>
+
+							<?php endif; // $show_receive_fields ?>
 						</table>
 
 						<?php submit_button(); ?>

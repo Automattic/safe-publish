@@ -232,7 +232,7 @@ final class Admin_Ajax_Controller {
 		}
 
 		// Create single import session for tracking.
-		$source_url = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
+		$source_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 		$session_id = $this->import_history->create_session( $source_url, 'single' );
 
 		$external_post_id  = absint( $_POST['external_post_id'] ?? 0 );
@@ -371,7 +371,7 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( __( 'Bulk import limited to 50 posts at a time.', 'safe-publish' ) );
 		}
 
-		$source_url     = get_option( Options::OPTION_EXTERNAL_SITE_URL, '' );
+		$source_url     = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 		$session_result = $this->import_history->create_session( $source_url, 'bulk' );
 		$session_id     = is_wp_error( $session_result ) ? null : $session_result;
 

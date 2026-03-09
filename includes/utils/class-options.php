@@ -22,11 +22,11 @@ class Options {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Option key for the external source site URL.
+	 * Option key for the connected site URL.
 	 *
 	 * @var string
 	 */
-	const OPTION_EXTERNAL_SITE_URL = 'safe_publish_external_site_url';
+	const OPTION_CONNECTED_SITE_URL = 'safe_publish_connected_site_url';
 
 	/**
 	 * Option key for the source site URL used when fetching fresh post content.
@@ -55,6 +55,34 @@ class Options {
 	 * @var string
 	 */
 	const OPTION_NUMBER_OF_POSTS = 'safe_publish_number_of_posts';
+
+	/**
+	 * Option key for the sync direction of this site.
+	 *
+	 * @var string
+	 */
+	const OPTION_SYNC_DIRECTION = 'safe_publish_sync_direction';
+
+	/**
+	 * Sync direction value: this site sends content.
+	 *
+	 * @var string
+	 */
+	const SYNC_DIRECTION_SEND = 'send';
+
+	/**
+	 * Sync direction value: this site receives content.
+	 *
+	 * @var string
+	 */
+	const SYNC_DIRECTION_RECEIVE = 'receive';
+
+	/**
+	 * Sync direction value: this site both sends and receives content.
+	 *
+	 * @var string
+	 */
+	const SYNC_DIRECTION_BOTH = 'both';
 
 	// -------------------------------------------------------------------------
 	// Post meta keys (stored via get_post_meta / update_post_meta).

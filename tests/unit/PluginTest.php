@@ -34,6 +34,15 @@ class PluginTest extends TestCase {
 	}
 
 	/**
+	 * Tears down test fixtures.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		reset_test_options();
+		parent::tearDown();
+	}
+
+	/**
 	 * Verifies that the plugin initializes correctly.
 	 */
 	public function test_plugin_initializes(): void {
@@ -44,6 +53,9 @@ class PluginTest extends TestCase {
 	 * Verifies that init creates required instances.
 	 */
 	public function test_init_creates_required_instances(): void {
+		set_test_option( 'safe_publish_sync_direction', 'receive' );
+		set_test_option( 'safe_publish_connected_site_url', 'https://example.com' );
+
 		$this->plugin->init();
 
 		$this->assertNotNull( $this->plugin->get_safe_publish_api() );
@@ -53,6 +65,9 @@ class PluginTest extends TestCase {
 	 * Verifies that get_safe_publish_api returns a Safe_Publish_API instance.
 	 */
 	public function test_get_safe_publish_api_returns_safe_publish_api(): void {
+		set_test_option( 'safe_publish_sync_direction', 'receive' );
+		set_test_option( 'safe_publish_connected_site_url', 'https://example.com' );
+
 		$this->plugin->init();
 
 		$safe_publish_api = $this->plugin->get_safe_publish_api();
