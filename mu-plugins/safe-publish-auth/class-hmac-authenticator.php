@@ -142,10 +142,10 @@ class HMAC_Authenticator implements Authenticator {
 
 		$timestamp = (int) $headers['x_safe_publish_timestamp'][0];
 		$signature = $headers['x_safe_publish_signature'][0];
+		$max_diff  = $this->get_max_time_diff();
 
-		if ( ! $this->validate_timestamp( $timestamp ) ) {
+		if ( ! $this->validate_timestamp( $timestamp, $max_diff ) ) {
 			$time_diff = abs( time() - $timestamp );
-			$max_diff  = (int) apply_filters( 'safe_publish_auth_max_time_diff', 300 );
 
 			$this->logger->log_event(
 				'TIMESTAMP_EXPIRED',
@@ -249,13 +249,27 @@ class HMAC_Authenticator implements Authenticator {
 	}
 
 	/**
+	 * Returns the maximum allowed timestamp difference in seconds.
+	 *
+	 * Reads from the `safe_publish_auth_max_time_diff` filter, clamped to a
+	 * minimum of 30 seconds and a maximum of 900 seconds to preserve
+	 * replay-attack protection regardless of filter values.
+	 *
+	 * @return int Clamped max time difference in seconds.
+	 */
+	private function get_max_time_diff(): int {
+		$max_diff = (int) apply_filters( 'safe_publish_auth_max_time_diff', 300 );
+		return max( 30, min( $max_diff, 900 ) );
+	}
+
+	/**
 	 * Validates the request timestamp is within the allowed window.
 	 *
 	 * @param int $timestamp Unix timestamp from request header.
+	 * @param int $max_diff  Maximum allowed difference in seconds.
 	 * @return bool True if within allowed window.
 	 */
-	private function validate_timestamp( int $timestamp ): bool {
-		$max_diff = apply_filters( 'safe_publish_auth_max_time_diff', 300 );
+	private function validate_timestamp( int $timestamp, int $max_diff ): bool {
 		return abs( time() - $timestamp ) <= $max_diff;
 	}
 
