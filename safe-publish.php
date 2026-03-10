@@ -50,10 +50,7 @@ spl_autoload_register(
 		} elseif ( 0 === strpos( $class_path, 'api/' ) ) {
 			$file_path .= 'api/class-' . str_replace( 'api/', '', $class_path ) . '.php';
 		} elseif ( 0 === strpos( $class_path, 'auth/' ) ) {
-			$auth_name       = str_replace( 'auth/', '', $class_path );
-			$auth_interfaces = array( 'authenticator' => true );
-			$prefix          = isset( $auth_interfaces[ $auth_name ] ) ? 'interface-' : 'class-';
-			$file_path       = SAFE_PUBLISH_PLUGIN_DIR . 'includes/auth/' . $prefix . $auth_name . '.php';
+			$file_path .= 'auth/class-' . str_replace( 'auth/', '', $class_path ) . '.php';
 		} elseif ( 0 === strpos( $class_path, 'media/' ) ) {
 			$file_path .= 'media/class-' . str_replace( 'media/', '', $class_path ) . '.php';
 		} elseif ( 0 === strpos( $class_path, 'content/' ) ) {
