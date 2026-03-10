@@ -25,7 +25,7 @@ class Dashboard_Widget {
 	/**
 	 * Constructor.
 	 *
-	 * @param string $shared_secret Shared secret resolved from the server environment.
+	 * @param string $shared_secret Shared secret for authentication status display.
 	 */
 	public function __construct( string $shared_secret ) {
 		$this->shared_secret = $shared_secret;
