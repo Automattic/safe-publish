@@ -129,7 +129,7 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 		};
 
 		// Set required options.
-		update_option( 'safe_publish_external_site_url', 'https://example.com' );
+		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
 
 		// Create request.
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
