@@ -34,6 +34,13 @@ class HMAC_Authenticator implements Authenticator {
 	private Permission_Manager $permission_manager;
 
 	/**
+	 * Shared secret for HMAC validation.
+	 *
+	 * @var string
+	 */
+	private string $shared_secret;
+
+	/**
 	 * Whether the current request has been authenticated.
 	 *
 	 * @var bool
@@ -45,10 +52,12 @@ class HMAC_Authenticator implements Authenticator {
 	 *
 	 * @param Auth_Logger        $logger             Logger instance.
 	 * @param Permission_Manager $permission_manager Permission manager instance.
+	 * @param string             $shared_secret      Shared secret for HMAC validation.
 	 */
-	public function __construct( Auth_Logger $logger, Permission_Manager $permission_manager ) {
+	public function __construct( Auth_Logger $logger, Permission_Manager $permission_manager, string $shared_secret ) {
 		$this->logger             = $logger;
 		$this->permission_manager = $permission_manager;
+		$this->shared_secret      = $shared_secret;
 	}
 
 	/**
@@ -122,7 +131,7 @@ class HMAC_Authenticator implements Authenticator {
 		$route  = $request->get_route();
 		$method = $request->get_method();
 
-		$shared_secret = $this->get_shared_secret();
+		$shared_secret = $this->shared_secret;
 
 		if ( empty( $shared_secret ) ) {
 			$this->logger->log_event(
@@ -304,36 +313,7 @@ class HMAC_Authenticator implements Authenticator {
 		string $content_hash
 	): bool {
 		$string_to_sign = $method . '|' . $uri . '|' . $timestamp . '|' . $content_hash;
-		$expected       = hash_hmac( 'sha256', $string_to_sign, $this->get_shared_secret() );
+		$expected       = hash_hmac( 'sha256', $string_to_sign, $this->shared_secret );
 		return hash_equals( $expected, $signature );
-	}
-
-	/**
-	 * Gets the shared secret from a constant or environment variable.
-	 *
-	 * Does NOT read from wp_options — secret must come from the server environment.
-	 *
-	 * @return string Shared secret, or empty string if not configured.
-	 */
-	private function get_shared_secret(): string {
-		if ( defined( 'SAFE_PUBLISH_SHARED_SECRET' ) && ! empty( SAFE_PUBLISH_SHARED_SECRET ) ) {
-			return SAFE_PUBLISH_SHARED_SECRET;
-		}
-
-		$env_secret = getenv( 'SAFE_PUBLISH_SHARED_SECRET' );
-		if ( ! empty( $env_secret ) ) {
-			return $env_secret;
-		}
-
-		if ( isset( $_ENV['SAFE_PUBLISH_SHARED_SECRET'] ) && ! empty( $_ENV['SAFE_PUBLISH_SHARED_SECRET'] ) ) {
-			// Cryptographic secret not sanitized; used directly for HMAC authentication.
-			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-			$env_secret = trim( $_ENV['SAFE_PUBLISH_SHARED_SECRET'] );
-			if ( strlen( $env_secret ) >= 16 && preg_match( '/^[a-zA-Z0-9\-_+=\/]+$/', $env_secret ) ) {
-				return $env_secret;
-			}
-		}
-
-		return '';
 	}
 }
