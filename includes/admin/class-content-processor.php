@@ -472,9 +472,11 @@ class Content_Processor {
 			$block['attrs']['src'] = $new_url;
 		}
 
-		// Update innerHTML with new URL and wp-image class if it exists.
+		$url_with_parameters = Media_Importer::reapply_query_parameters( $original_url, $new_url );
+
+		// Update innerHTML with the appropriate URL for correct rendering.
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$updated_html       = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $new_url );
+			$updated_html       = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $url_with_parameters );
 			$updated_html       = $this->update_wp_image_class( $updated_html, $attachment_id );
 			$block['innerHTML'] = $updated_html;
 		}
@@ -483,7 +485,7 @@ class Content_Processor {
 		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
 			foreach ( $block['innerContent'] as $index => $content ) {
 				if ( is_string( $content ) ) {
-					$updated_content                 = $this->update_img_src_in_html( $content, $original_url, $new_url );
+					$updated_content                 = $this->update_img_src_in_html( $content, $original_url, $url_with_parameters );
 					$updated_content                 = $this->update_wp_image_class( $updated_content, $attachment_id );
 					$block['innerContent'][ $index ] = $updated_content;
 				}
@@ -525,9 +527,11 @@ class Content_Processor {
 				$block['attrs']['images'][ $index ]['url'] = $new_url;
 				$block['attrs']['images'][ $index ]['id']  = $attachment_id;
 
-				// Also update innerHTML with new URL if it exists.
+				$url_with_parameters = Media_Importer::reapply_query_parameters( $original_url, $new_url );
+
+				// Update innerHTML with the appropriate URL for correct rendering.
 				if ( ! empty( $block['innerHTML'] ) ) {
-					$updated_html       = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $new_url );
+					$updated_html       = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $url_with_parameters );
 					$updated_html       = $this->update_wp_image_class( $updated_html, $attachment_id );
 					$block['innerHTML'] = $updated_html;
 				}
@@ -536,7 +540,7 @@ class Content_Processor {
 				if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
 					foreach ( $block['innerContent'] as $content_index => $content ) {
 						if ( is_string( $content ) ) {
-							$updated_content                         = $this->update_img_src_in_html( $content, $original_url, $new_url );
+							$updated_content                         = $this->update_img_src_in_html( $content, $original_url, $url_with_parameters );
 							$updated_content                         = $this->update_wp_image_class( $updated_content, $attachment_id );
 							$block['innerContent'][ $content_index ] = $updated_content;
 						}

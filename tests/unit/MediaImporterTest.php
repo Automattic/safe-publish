@@ -256,4 +256,53 @@ class MediaImporterTest extends TestCase {
 
 		$this->assertFalse( $result );
 	}
+
+	/**
+	 * Verifies that reapply_query_parameters returns the clean URL when no
+	 * query parameters are present.
+	 */
+	public function test_reapply_query_parameters_without_parameters_returns_clean_url(): void {
+		$original_url = 'https://source.example.com/uploads/photo.jpg';
+		$clean_url    = 'https://target.example.com/wp-content/uploads/photo.jpg';
+
+		$result = Media_Importer::reapply_query_parameters( $original_url, $clean_url );
+
+		$this->assertSame( $clean_url, $result );
+	}
+
+	/**
+	 * Verifies that reapply_query_parameters reapplies query parameters from
+	 * the original URL onto the clean URL.
+	 */
+	public function test_reapply_query_parameters_with_parameters_reapplies_them_to_clean_url(): void {
+		$original_url = 'https://source.example.com/uploads/photo.jpg?w=1200&h=600&crop=1';
+		$clean_url    = 'https://target.example.com/wp-content/uploads/photo.jpg';
+
+		$result = Media_Importer::reapply_query_parameters( $original_url, $clean_url );
+
+		$this->assertStringContainsString( 'w=1200', $result );
+		$this->assertStringContainsString( 'h=600', $result );
+		$this->assertStringContainsString( 'crop=1', $result );
+		$this->assertStringStartsWith( $clean_url . '?', $result );
+	}
+
+	/**
+	 * Verifies that reapply_query_parameters preserves per-occurrence
+	 * parameters independently.
+	 *
+	 * The same base image may appear at different sizes in the same post.
+	 * Each occurrence should restore its own parameters onto the same clean URL.
+	 */
+	public function test_reapply_query_parameters_different_parameters_same_clean_url(): void {
+		$clean_url      = 'https://target.example.com/wp-content/uploads/photo.jpg';
+		$original_small = 'https://source.example.com/uploads/photo.jpg?w=400&h=300';
+		$original_large = 'https://source.example.com/uploads/photo.jpg?w=1200&h=800';
+
+		$url_small = Media_Importer::reapply_query_parameters( $original_small, $clean_url );
+		$url_large = Media_Importer::reapply_query_parameters( $original_large, $clean_url );
+
+		$this->assertStringContainsString( 'w=400', $url_small );
+		$this->assertStringContainsString( 'w=1200', $url_large );
+		$this->assertNotSame( $url_small, $url_large );
+	}
 }
