@@ -18,7 +18,7 @@ use WP_REST_Server;
  * Validates HMAC-SHA256 signatures on REST API requests using a shared secret.
  * The shared secret is read from a PHP constant or environment variable.
  */
-class HMAC_Authenticator implements Authenticator {
+class HMAC_Authenticator {
 	/**
 	 * Logger instance.
 	 *
@@ -71,7 +71,6 @@ class HMAC_Authenticator implements Authenticator {
 	 * @param WP_REST_Request                $request Request object.
 	 * @return WP_REST_Response|WP_Error|null Original result on pass-through, or WP_Error on failure.
 	 */
-	#[\Override]
 	public function authenticate_request(
 		WP_REST_Response|WP_Error|null $result,
 		?WP_REST_Server $server,
@@ -106,7 +105,6 @@ class HMAC_Authenticator implements Authenticator {
 	 *
 	 * @return bool True if authenticated.
 	 */
-	#[\Override]
 	public function is_authenticated(): bool {
 		return $this->authenticated;
 	}
