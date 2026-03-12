@@ -134,9 +134,6 @@ class Auth_Logger {
 				'event'       => $event,
 				'timestamp'   => $timestamp,
 				'site_url'    => $site_url,
-				// Data only used for logging; escaped with esc_html() when output to HTML in dashboard widget.
-				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.ServerVariables.UserControlledHeaders,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__REMOTE_ADDR__
-				'ip'          => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
 				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__HTTP_USER_AGENT__
 				'user_agent'  => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
 				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
@@ -180,7 +177,6 @@ class Auth_Logger {
 				array(
 					'event_type' => $event,
 					'site_url'   => $site_url,
-					'ip'         => $log_data['ip'],
 					'success'    => strpos( $event, 'SUCCESS' ) !== false,
 				)
 			);
