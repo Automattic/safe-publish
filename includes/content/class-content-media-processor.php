@@ -154,7 +154,10 @@ class Content_Media_Processor {
 					$source_site_url
 				);
 				if ( $new_src ) {
-					$img->setAttribute( 'src', $new_src );
+					$img->setAttribute(
+						'src',
+						Media_Importer::reapply_query_parameters( $src, $new_src )
+					);
 				}
 			}
 
