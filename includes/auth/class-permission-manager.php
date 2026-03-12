@@ -92,9 +92,6 @@ class Permission_Manager {
 	): void {
 		$this->authenticated = true;
 
-		// Also set global flag for backward compatibility with any external checks.
-		$GLOBALS['safe_publish_authenticated'] = true;
-
 		add_filter( 'user_has_cap', array( $this, 'grant_api_capabilities' ), 10, 4 );
 
 		// VIP-friendly approach: use capability system without creating actual users.
@@ -115,9 +112,6 @@ class Permission_Manager {
 			'user_email'   => 'safe-publish-system@virtual',
 			'display_name' => 'Safe Publish System (Virtual)',
 		);
-
-		// Also set global for backward compatibility.
-		$GLOBALS['safe_publish_virtual_user'] = $this->virtual_user;
 
 		add_filter( 'rest_pre_dispatch', array( $this, 'bypass_permission_checks' ), 11, 3 );
 		add_filter( 'rest_post_collection_params', array( $this, 'override_collection_params' ), 10, 2 );
