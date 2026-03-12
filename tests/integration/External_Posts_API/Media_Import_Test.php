@@ -609,4 +609,62 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 			'Reorganized attachment should track new URL'
 		);
 	}
+
+	/**
+	 * Verifies that query parameters are restored on the local URL in the
+	 * processed content.
+	 */
+	public function test_query_parameters_restored_in_processed_content(): void {
+		// ARRANGE: Image with query parameters.
+		$source_site  = 'https://example.com';
+		$external_url = 'https://example.com/photo.jpg?w=800&h=450&crop=1';
+		$content      = sprintf( '<img src="%s" alt="Cropped hero">', $external_url );
+
+		// ACT: Process content (HTTP mock serves fixture, parameters stripped for download).
+		$processed_content = $this->content_processor->process_content( $content, $source_site );
+
+		// ASSERT: External domain replaced with local.
+		$this->assertStringNotContainsString( 'example.com/photo.jpg', $processed_content );
+
+		// ASSERT: Query parameters are present on the local URL.
+		$this->assertStringContainsString( 'w=800', $processed_content, 'Width param should be restored' );
+		$this->assertStringContainsString( 'h=450', $processed_content, 'Height param should be restored' );
+		$this->assertStringContainsString( 'crop=1', $processed_content, 'Crop param should be restored' );
+
+		// ASSERT: Alt text preserved.
+		$this->assertStringContainsString( 'alt="Cropped hero"', $processed_content );
+	}
+
+	/**
+	 * Verifies that different query parameters for the same base image produce
+	 * different local URLs.
+	 *
+	 * The same attachment is reused, but each occurrence in content gets its
+	 * own parameter set applied to the local URL.
+	 */
+	public function test_different_parameters_same_image_produce_different_local_urls(): void {
+		// ARRANGE: Same image used at two different sizes in the same content.
+		$source_site = 'https://example.com';
+		$content     = '
+			<img src="https://example.com/hero.jpg?w=1200&h=630" alt="Large hero">
+			<img src="https://example.com/hero.jpg?w=400&h=225" alt="Thumbnail">
+		';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process content.
+		$processed_content = $this->content_processor->process_content( $content, $source_site );
+
+		// ASSERT: Only one attachment created (base URL is the same after stripping).
+		$attachments_after = $this->get_attachment_count();
+		$this->assertSame( $attachments_before + 1, $attachments_after, 'Should deduplicate to a single attachment' );
+
+		// ASSERT: Large variant retains its dimensions.
+		$this->assertStringContainsString( 'w=1200', $processed_content, 'Large width param should be present' );
+		$this->assertStringContainsString( 'h=630', $processed_content, 'Large height param should be present' );
+
+		// ASSERT: Thumbnail variant retains its dimensions.
+		$this->assertStringContainsString( 'w=400', $processed_content, 'Thumbnail width param should be present' );
+		$this->assertStringContainsString( 'h=225', $processed_content, 'Thumbnail height param should be present' );
+	}
 }

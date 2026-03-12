@@ -10,13 +10,18 @@
   convertDeprecationsToExceptions="true"
   >
   <testsuites>
-    <testsuite name="Safe Publish Integration Tests">
+    <testsuite name="Safe Publish Sync Receive Integration Tests">
       <directory suffix=".php">tests/integration/</directory>
       <exclude>tests/integration/bootstrap.php</exclude>
+      <exclude>tests/integration/sync-send/</exclude>
+      <exclude>tests/integration/sync-both/</exclude>
     </testsuite>
   </testsuites>
 
   <php>
+    <!-- Boot the plugin in "receive" sync direction. -->
+    <env name="WP_TEST_SYNC_DIRECTION" value="receive" />
+
     <!-- Point wp-phpunit to our test config file -->
     <env name="WP_PHPUNIT__TESTS_CONFIG" value="tests/wp-tests-config.php" />
 

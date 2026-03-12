@@ -20,38 +20,38 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 	/**
 	 * Data provider for responsive image structures.
 	 *
-	 * @return array<string, array{content: string, expected_strings: string[], description: string}>
+	 * @return array<string, array{content: string, expected_strings: string[], not_expected_strings: string[], description: string}>
 	 */
 	public static function responsive_image_structures_provider(): array {
-		// TODO: There's probably a bug with replacement of srcset that needs to
-		// be looked into, as well as <picture> - <source> support.
-
 		return array(
 			'srcset_attributes' => array(
-				'content'          => '<img src="https://example.com/image.jpg" srcset="https://example.com/image-300.jpg 300w, https://example.com/image-600.jpg 600w" alt="Responsive">',
-				'expected_strings' => array( 'img', 'srcset', 'Responsive' ),
-				'description'      => 'Image with srcset attribute',
+				'content'              => '<img src="https://example.com/image.jpg" srcset="https://example.com/image-300.jpg 300w, https://example.com/image-600.jpg 600w" alt="Responsive">',
+				'expected_strings'     => array( '<img', 'srcset', 'Responsive', '300w', '600w' ),
+				'not_expected_strings' => array( 'https://example.com/image-300.jpg', 'https://example.com/image-600.jpg' ),
+				'description'          => 'Image with srcset attribute',
 			),
 			'figure_element'    => array(
-				'content'          => '
+				'content'              => '
 					<figure class="wp-block-image">
 						<img src="https://example.com/img.jpg" alt="Figure">
 						<figcaption>Image caption</figcaption>
 					</figure>
 				',
-				'expected_strings' => array( 'figure', 'figcaption', 'Image caption', 'wp-block-image' ),
-				'description'      => 'Figure with figcaption',
+				'expected_strings'     => array( 'figure', 'figcaption', 'Image caption', 'wp-block-image' ),
+				'not_expected_strings' => array(),
+				'description'          => 'Figure with figcaption',
 			),
 			'picture_element'   => array(
-				'content'          => '
+				'content'              => '
 					<picture>
 						<source srcset="https://example.com/img.webp" type="image/webp">
 						<source srcset="https://example.com/img.jpg" type="image/jpeg">
 						<img src="https://example.com/img.jpg" alt="Picture">
 					</picture>
 				',
-				'expected_strings' => array( 'picture', 'source', 'srcset', 'Picture' ),
-				'description'      => 'Picture with source elements',
+				'expected_strings'     => array( 'picture', 'source', 'srcset', 'Picture' ),
+				'not_expected_strings' => array( 'srcset="https://example.com/img.webp"', 'srcset="https://example.com/img.jpg"' ),
+				'description'          => 'Picture with source elements',
 			),
 		);
 	}
@@ -61,13 +61,15 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 	 *
 	 * @dataProvider responsive_image_structures_provider
 	 *
-	 * @param string   $content          Content to process.
-	 * @param string[] $expected_strings Strings expected in output.
-	 * @param string   $description      Test case description.
+	 * @param string   $content              Content to process.
+	 * @param string[] $expected_strings     Strings expected in output.
+	 * @param string[] $not_expected_strings Strings that must not appear in output.
+	 * @param string   $description          Test case description.
 	 */
 	public function test_responsive_image_structures(
 		string $content,
 		array $expected_strings,
+		array $not_expected_strings,
 		string $description
 	): void {
 		// ARRANGE: Prepare content based on data provider.
@@ -82,6 +84,10 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 
 		foreach ( $expected_strings as $expected ) {
 			$this->assertStringContainsString( $expected, $processed_content, "Should contain '{$expected}' for: {$description}" );
+		}
+
+		foreach ( $not_expected_strings as $not_expected ) {
+			$this->assertStringNotContainsString( $not_expected, $processed_content, "Should not contain '{$not_expected}' for: {$description}" );
 		}
 
 		// ASSERT: Verify structure is preserved (HTML elements intact).

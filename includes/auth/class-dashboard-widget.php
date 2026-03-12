@@ -25,7 +25,7 @@ class Dashboard_Widget {
 	/**
 	 * Constructor.
 	 *
-	 * @param string $shared_secret Shared secret resolved from the server environment.
+	 * @param string $shared_secret Shared secret for authentication status display.
 	 */
 	public function __construct( string $shared_secret ) {
 		$this->shared_secret = $shared_secret;
@@ -348,7 +348,6 @@ class Dashboard_Widget {
 	private function render_event_item( array $event ): void {
 		$event_type = $event['event'] ?? 'UNKNOWN';
 		$timestamp  = $event['data']['timestamp'] ?? 'unknown';
-		$ip         = $event['data']['ip'] ?? 'unknown';
 
 		$icon  = '•';
 		$color = '#666';
@@ -366,8 +365,7 @@ class Dashboard_Widget {
 
 		echo '<div style="margin-bottom: 5px; padding: 5px; background: #f9f9f9; border-left: 3px solid ' . esc_attr( $color ) . ';">';
 		echo '<span style="color: ' . esc_attr( $color ) . ';">' . esc_html( $icon ) . '</span> ';
-		echo '<strong>' . esc_html( $event_type ) . '</strong> ';
-		echo '<small style="color: #666;">(' . esc_html( $ip ) . ')</small>';
+		echo '<strong>' . esc_html( $event_type ) . '</strong>';
 		echo '<br><small>' . esc_html( $timestamp ) . '</small>';
 
 		if ( isset( $event['data']['route'] ) ) {

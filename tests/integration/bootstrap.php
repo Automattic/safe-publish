@@ -44,13 +44,28 @@ function _manually_load_plugin(): void {
 tests_add_filter( 'muplugins_loaded', '_manually_load_plugin' );
 
 /**
- * Set the sync direction before the plugin initializes so that all receive-side
- * functionality (REST routes, AJAX handlers) is registered during the test run.
+ * Set the sync direction before the plugin initializes.
+ *
+ * Reads WP_TEST_SYNC_DIRECTION from the PHPUnit XML configuration so that each
+ * suite boots the plugin in the correct sync direction.
+ *
+ * For "send"/"both" sync direction a non-empty connected-site URL is required
+ * so that Plugin::init() actually instantiates Auth_Manager.
  */
 tests_add_filter(
 	'plugins_loaded',
 	function (): void {
-		update_option( 'safe_publish_sync_direction', 'receive' );
+		$sync_direction = getenv( 'WP_TEST_SYNC_DIRECTION' );
+
+		if ( ! $sync_direction ) {
+			throw new \RuntimeException( 'WP_TEST_SYNC_DIRECTION is not set.' );
+		}
+
+		update_option( 'safe_publish_sync_direction', $sync_direction );
+
+		if ( in_array( $sync_direction, array( 'send', 'both' ), true ) ) {
+			update_option( 'safe_publish_connected_site_url', 'https://source.example.com' );
+		}
 	},
 	5
 );

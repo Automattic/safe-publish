@@ -299,6 +299,27 @@ class Media_Importer {
 	}
 
 	/**
+	 * Returns a URL with the query string parameters from another URL reapplied
+	 * onto it.
+	 *
+	 * @param string $original_url The source URL whose query parameters should be reapplied.
+	 * @param string $clean_url    The target URL, which has no query parameters.
+	 * @return string The target URL with the source query parameters appended.
+	 */
+	public static function reapply_query_parameters( string $original_url, string $clean_url ): string {
+		$query = (string) wp_parse_url( $original_url, PHP_URL_QUERY );
+
+		if ( ! $query ) {
+			return $clean_url;
+		}
+
+		$params = array();
+		parse_str( $query, $params );
+
+		return $clean_url . '?' . http_build_query( $params );
+	}
+
+	/**
 	 * Gets attachment ID from URL using VIP-optimized function when available.
 	 *
 	 * @param string $url Attachment URL.

@@ -59,7 +59,11 @@ class Auth_Manager {
 	public function __construct() {
 		$this->logger             = new Auth_Logger();
 		$this->permission_manager = new Permission_Manager( $this->logger );
-		$this->authenticator      = new HMAC_Authenticator( $this->logger, $this->permission_manager );
+		$this->authenticator      = new HMAC_Authenticator(
+			$this->logger,
+			$this->permission_manager,
+			$this->get_shared_secret()
+		);
 		$this->dashboard_widget   = new Dashboard_Widget( $this->get_shared_secret() );
 	}
 
@@ -382,15 +386,6 @@ class Auth_Manager {
 		$env_secret = getenv( 'SAFE_PUBLISH_SHARED_SECRET' );
 		if ( ! empty( $env_secret ) ) {
 			return $env_secret;
-		}
-
-		if ( isset( $_ENV['SAFE_PUBLISH_SHARED_SECRET'] ) && ! empty( $_ENV['SAFE_PUBLISH_SHARED_SECRET'] ) ) {
-			// Cryptographic secret not sanitized; used directly for HMAC authentication.
-			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-			$env_secret = trim( $_ENV['SAFE_PUBLISH_SHARED_SECRET'] );
-			if ( strlen( $env_secret ) >= 16 && preg_match( '/^[a-zA-Z0-9\-_+=\/]+$/', $env_secret ) ) {
-				return $env_secret;
-			}
 		}
 
 		return '';

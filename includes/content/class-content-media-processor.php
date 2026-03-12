@@ -137,11 +137,15 @@ class Content_Media_Processor {
 	/**
 	 * Processes image elements in the DOM.
 	 *
+	 * Also handles srcset attributes on <img> elements and srcset attributes on
+	 * <source> elements inside <picture> tags.
+	 *
 	 * @param DOMDocument $dom             DOM document.
 	 * @param string      $source_site_url Source site URL.
 	 */
 	private function process_images( DOMDocument $dom, string $source_site_url ): void {
 		$images = $dom->getElementsByTagName( 'img' );
+
 		foreach ( $images as $img ) {
 			$src = $img->getAttribute( 'src' );
 			if ( ! empty( $src ) ) {
@@ -150,9 +154,61 @@ class Content_Media_Processor {
 					$source_site_url
 				);
 				if ( $new_src ) {
-					$img->setAttribute( 'src', $new_src );
+					$img->setAttribute(
+						'src',
+						Media_Importer::reapply_query_parameters( $src, $new_src )
+					);
 				}
 			}
+
+			$this->process_srcset( $img, $source_site_url );
+		}
+
+		$pictures = $dom->getElementsByTagName( 'picture' );
+		foreach ( $pictures as $picture ) {
+			$sources = $picture->getElementsByTagName( 'source' );
+			foreach ( $sources as $source ) {
+				$this->process_srcset( $source, $source_site_url );
+			}
+		}
+	}
+
+	/**
+	 * Processes the srcset attribute on a DOM element.
+	 *
+	 * Parses each URL in the srcset descriptor list, imports it via the media
+	 * importer, and writes the updated list back to the element.
+	 *
+	 * @param DOMElement $element         Element with a srcset attribute.
+	 * @param string     $source_site_url Source site URL.
+	 */
+	private function process_srcset( DOMElement $element, string $source_site_url ): void {
+		$srcset = $element->getAttribute( 'srcset' );
+
+		if ( empty( $srcset ) ) {
+			return;
+		}
+
+		$descriptors     = array_map( 'trim', explode( ',', $srcset ) );
+		$new_descriptors = array();
+
+		foreach ( $descriptors as $descriptor ) {
+			$parts = preg_split( '/\s+/', trim( $descriptor ), 2 );
+			$url   = $parts[0] ?? '';
+			$size  = $parts[1] ?? '';
+
+			if ( empty( $url ) ) {
+				continue;
+			}
+
+			$new_url = $this->media_importer->import_external_media( $url, $source_site_url );
+			$new_url = $new_url ? $new_url : $url;
+
+			$new_descriptors[] = empty( $size ) ? $new_url : $new_url . ' ' . $size;
+		}
+
+		if ( ! empty( $new_descriptors ) ) {
+			$element->setAttribute( 'srcset', implode( ', ', $new_descriptors ) );
 		}
 	}
 

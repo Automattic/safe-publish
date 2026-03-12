@@ -59,9 +59,6 @@ final class Admin_Page {
 						</div>
 					</div>
 
-					<!-- Legacy results containers for compatibility -->
-					<div id="safe-publish-test-results" class="safe-publish-results" style="display: none;"></div>
-					<div id="safe-publish-preview-results" class="safe-publish-results" style="display: none;"></div>
 				</div>
 
 				<div class="safe-publish-dataviews-section">
