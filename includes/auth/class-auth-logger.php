@@ -64,9 +64,11 @@ class Auth_Logger {
 			$data
 		);
 
-		$log_message = '[Safe-Publish-Auth] ' . $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES );
+		$is_test_env = defined( 'WP_TESTS_DOMAIN' );
 
-		if ( $use_error_log ) {
+		if ( ! $is_test_env && $use_error_log ) {
+			$log_message = '[Safe-Publish-Auth] ' . $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES );
+
 			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			error_log( $log_message );
 		}
