@@ -62,7 +62,7 @@ final class Admin_Page {
 				</div>
 
 				<div class="safe-publish-dataviews-section">
-					<h2><?php esc_html_e( 'Recent Posts from Non-Prod Site', 'safe-publish' ); ?></h2>
+					<h2><?php esc_html_e( 'Recent Posts from Source Site', 'safe-publish' ); ?></h2>
 
 					<?php if ( empty( $site_url ) ) : ?>
 						<div class="notice notice-warning">
@@ -70,7 +70,7 @@ final class Admin_Page {
 								<?php
 								printf(
 									/* translators: %s: Settings page URL */
-									esc_html__( 'Please configure the non-prod site URL in the %s to see posts.', 'safe-publish' ),
+									esc_html__( 'Please configure the source site URL in the %s to see posts.', 'safe-publish' ),
 									'<a href="' . esc_url( admin_url( 'admin.php?page=safe-publish-settings' ) ) . '">' . esc_html__( 'settings page', 'safe-publish' ) . '</a>'
 								);
 								?>

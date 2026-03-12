@@ -263,7 +263,7 @@ class MediaImporterTest extends TestCase {
 	 */
 	public function test_reapply_query_parameters_without_parameters_returns_clean_url(): void {
 		$original_url = 'https://source.example.com/uploads/photo.jpg';
-		$clean_url    = 'https://target.example.com/wp-content/uploads/photo.jpg';
+		$clean_url    = 'https://destination.example.com/wp-content/uploads/photo.jpg';
 
 		$result = Media_Importer::reapply_query_parameters( $original_url, $clean_url );
 
@@ -276,7 +276,7 @@ class MediaImporterTest extends TestCase {
 	 */
 	public function test_reapply_query_parameters_with_parameters_reapplies_them_to_clean_url(): void {
 		$original_url = 'https://source.example.com/uploads/photo.jpg?w=1200&h=600&crop=1';
-		$clean_url    = 'https://target.example.com/wp-content/uploads/photo.jpg';
+		$clean_url    = 'https://destination.example.com/wp-content/uploads/photo.jpg';
 
 		$result = Media_Importer::reapply_query_parameters( $original_url, $clean_url );
 
@@ -294,7 +294,7 @@ class MediaImporterTest extends TestCase {
 	 * Each occurrence should restore its own parameters onto the same clean URL.
 	 */
 	public function test_reapply_query_parameters_different_parameters_same_clean_url(): void {
-		$clean_url      = 'https://target.example.com/wp-content/uploads/photo.jpg';
+		$clean_url      = 'https://destination.example.com/wp-content/uploads/photo.jpg';
 		$original_small = 'https://source.example.com/uploads/photo.jpg?w=400&h=300';
 		$original_large = 'https://source.example.com/uploads/photo.jpg?w=1200&h=800';
 

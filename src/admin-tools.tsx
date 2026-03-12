@@ -291,7 +291,7 @@ export function AdminTools( {
 			{ /* Test Connection */ }
 			<div className="safe-publish-tool">
 				<h3>{ __( 'Test Connection', 'safe-publish' ) }</h3>
-				<p>{ __( 'Test the connection to the non-prod site API.', 'safe-publish' ) }</p>
+				<p>{ __( 'Test the connection to the source site API.', 'safe-publish' ) }</p>
 				<Button variant="secondary" onClick={ onTestClick } disabled={ testLoading }>
 					{ testLoading ? (
 						<>

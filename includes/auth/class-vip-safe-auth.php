@@ -27,7 +27,7 @@ final class VIP_Safe_Auth {
 	/**
 	 * Gets authentication parameters for requests.
 	 *
-	 * @param string $site_url    Target site URL.
+	 * @param string $site_url    Destination site URL.
 	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
 	 * @param string $method      Optional. HTTP method for the request. Default 'GET'.
 	 * @param string $body        Optional. Request body for content hash generation. Default ''.
@@ -58,7 +58,7 @@ final class VIP_Safe_Auth {
 	 * Shared Secret authentication is required. Returns false if not configured
 	 * or if it does not meet minimum requirements.
 	 *
-	 * @param string $site_url    Optional. Target site URL to test authorization against. Default ''.
+	 * @param string $site_url    Optional. Destination site URL to test authorization against. Default ''.
 	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
 	 * @return bool True if correctly authorized, false otherwise.
 	 */
@@ -83,9 +83,9 @@ final class VIP_Safe_Auth {
 	/**
 	 * Tests authorization against a site by making a lightweight request.
 	 *
-	 * Validates that the credentials work with the target site.
+	 * Validates that the credentials work with the destination site.
 	 *
-	 * @param string $site_url    Target site URL.
+	 * @param string $site_url    Destination site URL.
 	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
 	 * @return bool|WP_Error True if authorized, WP_Error with details if not.
 	 */
@@ -171,7 +171,7 @@ final class VIP_Safe_Auth {
 	 * Uses HMAC signature in custom headers that VIP allows.
 	 * Compatible with the Safe Publish VIP mu-plugin authentication handler.
 	 *
-	 * @param string $site_url    Target site URL.
+	 * @param string $site_url    Destination site URL.
 	 * @param array  $auth_config Authentication configuration.
 	 * @param string $method      Optional. HTTP method for the request. Default 'GET'.
 	 * @param string $body        Optional. Request body for content hash generation. Default ''.
@@ -226,7 +226,7 @@ final class VIP_Safe_Auth {
 	 * Uses Authorization header with Basic auth. Intended as an optional layer
 	 * on top of the required Shared Secret authentication.
 	 *
-	 * @param string $site_url    Target site URL.
+	 * @param string $site_url    Destination site URL.
 	 * @param array  $auth_config Authentication configuration.
 	 * @return array Request modifications.
 	 */
