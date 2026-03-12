@@ -13,6 +13,8 @@ The import process consists of six main stages:
 5. **Create Post** - Generate the draft post
 6. **Track** - Log the import action
 
+For error resolution at any stage, see the [Troubleshooting guide](../troubleshooting.md).
+
 ## Stage 1: Fetch
 
 ### What Happens
@@ -27,13 +29,6 @@ The import process consists of six main stages:
 - `_embed` - Includes embedded data (author, featured media)
 - `context=edit` - Retrieves complete post data including drafts
 
-### What Can Go Wrong
-
-- **Authentication failure** - Credentials invalid or missing
-- **Network timeout** - External site not responding
-- **404 error** - Post not found or ID incorrect
-- **Permission denied** - User lacks access to post
-
 ## Stage 2: Validate
 
 ### What Happens
@@ -44,13 +39,6 @@ The import process consists of six main stages:
 - Image URLs verified for accessibility
 
 See the [Content Validation](validation.md) guide for detailed information.
-
-### What Can Go Wrong
-
-- **Missing required fields** - Incomplete post data
-- **Invalid JSON** - Malformed response data
-- **Broken images** - Image URLs not accessible
-- **Invalid blocks** - Corrupted Gutenberg block syntax
 
 ## Stage 3: Transform
 
@@ -89,13 +77,6 @@ All URLs in content are processed:
 image.jpg?w=800&h=600 → https://source-site.com/image.jpg?w=800&h=600
 ```
 
-### What Can Go Wrong
-
-- **Invalid HTML** - Parsing failures
-- **Nested blocks corruption** - Complex block structures fail
-- **URL parsing errors** - Malformed URLs
-- **Character encoding issues** - Special characters corrupted
-
 ## Stage 4: Import Media
 
 ### What Happens
@@ -120,14 +101,6 @@ For each image found:
 - Downloaded in batch (up to 10 concurrent)
 - Original URLs replaced with new attachment URLs
 - Alt text and titles preserved
-
-### What Can Go Wrong
-
-- **Download failures** - Source images not accessible
-- **File size limits** - Images too large for PHP/WordPress limits
-- **Upload errors** - Disk space or permissions issues
-- **Unsupported formats** - File type not allowed
-- **Timeout** - Too many images or slow downloads
 
 ### Performance Considerations
 
@@ -167,13 +140,6 @@ The post author is set to the user who performed the import, not the original au
 
 Basic custom fields in post meta are imported. However, complex custom fields from plugins like ACF require additional development.
 
-### What Can Go Wrong
-
-- **Database errors** - Insert failures
-- **Permission issues** - User cannot create posts of that type
-- **Duplicate content** - Post might be imported twice
-- **Meta data loss** - Complex meta fields not supported
-
 ## Stage 6: Track
 
 ### What Happens
@@ -189,11 +155,6 @@ Basic custom fields in post meta are imported. However, complex custom fields fr
 - Entry added to Import History table
 
 See [Import History](import-history.md) for more details.
-
-### What Can Go Wrong
-
-- **Logging failures** - Database errors (non-critical)
-- **Missing user data** - User information not available
 
 ## Bulk Import
 

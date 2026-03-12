@@ -114,37 +114,7 @@ Before importing content, Safe Publish performs several validation checks to ens
 - Ensure images are in supported formats (JPEG, PNG, GIF, WebP)
 - Resize oversized images
 
-## Validation Error Messages
-
-### `invalid_url`
-
-**Cause**: The provided URL is not valid or accessible
-**Solution**: Check URL format and accessibility
-
-### `authentication_failed`
-
-**Cause**: Cannot authenticate with the external site
-**Solution**: Verify authentication credentials
-
-### `no_posts_found`
-
-**Cause**: No posts available from the external site
-**Solution**: Check if posts exist and are published
-
-### `invalid_post_data`
-
-**Cause**: Post data structure is invalid
-**Solution**: Check post data in source WordPress
-
-### `media_import_failed`
-
-**Cause**: Unable to import images
-**Solution**: Verify image URLs and accessibility
-
-### `content_validation_failed`
-
-**Cause**: Content structure failed validation
-**Solution**: Check HTML/block structure in source post
+For a list of validation error codes and solutions, see the [Troubleshooting guide](../troubleshooting.md#validation-errors).
 
 ## Best Practices
 

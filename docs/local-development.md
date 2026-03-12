@@ -18,7 +18,7 @@ npm run dev
 
 This will spin up two WordPress environments, build the block editor scripts, set the shared secrets, and watch for changes.
 
-The "destination" WordPress environment will be available at `http://localhost:8888` (admin user: `admin`, password: `password`). The non-prod site URL is automatically configured to `http://host.docker.internal:8889`.
+The "destination" WordPress environment will be available at `http://localhost:8888` (admin user: `admin`, password: `password`). The source site URL is automatically configured to `http://host.docker.internal:8889`.
 
 The "source" WordPress environment will be available at `http://localhost:8889` (admin user: `admin`, password: `password`).
 
