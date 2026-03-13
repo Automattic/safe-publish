@@ -8,16 +8,17 @@
 namespace Safe_Publish;
 
 use Safe_Publish\Admin\Admin_Ajax_Controller;
-use Safe_Publish\Admin\Admin_Handler;
+use Safe_Publish\Admin\Receive_Mode_Admin_Handler;
 use Safe_Publish\Admin\Admin_Menu_Manager;
 use Safe_Publish\Admin\Content_Processor;
+use Safe_Publish\Admin\Send_Mode_Admin_Handler;
 use Safe_Publish\Admin\History_Renderer;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Import_History;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\Admin\Session_Formatter;
 use Safe_Publish\Admin\Session_Rollback_Service;
-use Safe_Publish\Admin\Settings_Sanitizer;
+use Safe_Publish\Admin\Settings_Registrar;
 use Safe_Publish\Auth\Auth_Manager;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\HTTP_Client;
@@ -54,13 +55,6 @@ final class Plugin {
 	private ?Safe_Publish_API $safe_publish_api = null;
 
 	/**
-	 * Admin handler instance.
-	 *
-	 * @var Admin_Handler|null
-	 */
-	private ?Admin_Handler $admin_handler = null;
-
-	/**
 	 * Constructs the Plugin instance.
 	 */
 	public function __construct() {
@@ -74,27 +68,34 @@ final class Plugin {
 		$sync_direction = get_option( Options::OPTION_SYNC_DIRECTION, '' );
 		$connected_url  = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
-		$is_send = in_array(
+		$can_send = in_array(
 			$sync_direction,
 			array( Options::SYNC_DIRECTION_SEND, Options::SYNC_DIRECTION_BOTH ),
 			true
 		);
 
-		$is_receive = in_array(
+		if ( $can_send && ! empty( $connected_url ) ) {
+			$auth_manager = new Auth_Manager();
+			$auth_manager->init();
+		}
+
+		$can_receive = in_array(
 			$sync_direction,
 			array( Options::SYNC_DIRECTION_RECEIVE, Options::SYNC_DIRECTION_BOTH ),
 			true
 		);
 
-		if ( $is_send && ! empty( $connected_url ) ) {
-			$auth_manager = new Auth_Manager();
-			$auth_manager->init();
+		if ( $can_receive ) {
+			$this->init_receive_mode();
+		} else {
+			$this->init_send_mode();
 		}
+	}
 
-		if ( ! $is_receive ) {
-			return;
-		}
-
+	/**
+	 * Initializes receive mode.
+	 */
+	private function init_receive_mode(): void {
 		// Build shared low-level services.
 		$http_client             = new HTTP_Client();
 		$media_importer          = new Media_Importer( $http_client );
@@ -110,54 +111,43 @@ final class Plugin {
 
 		$this->safe_publish_api = new Safe_Publish_API( null, null, $content_processor, $media_importer );
 
-		// Initialize hooks.
-		$this->init_hooks();
-
 		// Build admin object graph and initialize.
-		$this->admin_handler = $this->build_admin_handler(
+		$this->build_receive_mode_admin_handler(
 			$this->api,
 			$content_processor,
 			$media_importer,
 			$post_type_fetcher,
 			$http_client
-		);
-		$this->admin_handler->init();
+		)->init();
 	}
 
 	/**
-	 * Initializes WordPress hooks.
-	 */
-	private function init_hooks(): void {
-		// Plugin hooks are initialized through the admin handler.
-	}
-
-	/**
-	 * Builds and wires the Admin_Handler with all required sub-services.
-	 *
-	 * Acts as the composition root for the admin subsystem, constructing
-	 * each dependency in the correct order.
+	 * Builds and wires the Receive_Mode_Admin_Handler with all required
+	 * sub-services for receive mode.
 	 *
 	 * @param External_Posts_API $api                External Posts API instance.
 	 * @param Content_Processor  $content_processor  Content Processor instance.
 	 * @param Media_Importer     $media_importer     Media Importer instance.
 	 * @param Post_Type_Fetcher  $post_type_fetcher  Post Type Fetcher instance.
 	 * @param HTTP_Client        $http_client        HTTP Client instance.
-	 * @return Admin_Handler Fully constructed Admin_Handler coordinator.
+	 * @return Receive_Mode_Admin_Handler Fully constructed Receive_Mode_Admin_Handler coordinator.
 	 */
-	private function build_admin_handler(
+	private function build_receive_mode_admin_handler(
 		External_Posts_API $api,
 		Content_Processor $content_processor,
 		Media_Importer $media_importer,
 		Post_Type_Fetcher $post_type_fetcher,
 		HTTP_Client $http_client
-	): Admin_Handler {
-		$menu_manager = new Admin_Menu_Manager( $api );
+	): Receive_Mode_Admin_Handler {
+		$menu_manager       = new Admin_Menu_Manager( $api );
+		$settings_registrar = new Settings_Registrar( true );
 
 		$repository       = new History_Repository();
 		$renderer         = new History_Renderer();
 		$formatter        = new Session_Formatter();
 		$rollback_service = new Session_Rollback_Service( $repository );
-		$import_history   = new Import_History(
+
+		$import_history = new Import_History(
 			$repository,
 			$renderer,
 			$formatter,
@@ -181,12 +171,19 @@ final class Plugin {
 			$http_client
 		);
 
-		return new Admin_Handler(
+		return new Receive_Mode_Admin_Handler(
 			$menu_manager,
-			new Settings_Sanitizer(),
+			$settings_registrar,
 			$import_history,
 			$ajax_controller
 		);
+	}
+
+	/**
+	 * Initializes send mode.
+	 */
+	private function init_send_mode(): void {
+		( new Send_Mode_Admin_Handler() )->init();
 	}
 
 	/**
