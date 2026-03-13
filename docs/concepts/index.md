@@ -65,36 +65,18 @@ If you want to understand the internals of Safe Publish so that you can write co
 
 ## Supported use cases
 
-Like WordPress, Safe Publish is flexible. It can be used to enable advanced integrations with external data.
-
-Below, you'll find specific use cases where Safe Publish shines. We are working to expand these use cases, but before you start, consider if Safe Publish is the right tool for the job.
+Safe Publish is designed specifically for controlled content promotion between WordPress environments.
 
 ### Safe Publish is a good fit if:
 
-- Your remote data represents entities with a consistent schema.
-  - **Example:** Product data representing items of clothing with defined attributes like “Name,” “Price,” “Color,” “Size,” etc.
-- You want humans to select specific entities for display within the block editor.
-  - **Example:** Select and display an item of clothing within a marketing post.
-- You want to display arbitrary remote data based on a URL parameter and are willing to write a small amount of code.
-  - **Example:** Create a page and rewrite rule for /products/{product_id}/ and configure a Remote Data Block on that page to display the referenced product.
-- Your presentation of remote data aligns with the capabilities of [block bindings](block-bindings.md).
-  - **Example:** Display an item of clothing using a core paragraph, heading, image, and button blocks.
-- Your data is denormalized.
-  - **Example:** A row from a Google Sheet with no references to external entities.
+- You maintain separate staging and production WordPress sites and need a governed process to promote content between them.
+- You want editors to review and selectively import content rather than syncing everything automatically.
+- You need a complete audit trail of who imported what content and when (compliance or editorial governance requirements).
+- You work with media-rich content and need images automatically imported alongside post content.
+- You want to extend or customize the import workflow with WordPress hooks.
 
 ### Safe Publish may not be a good fit if:
 
-- Your remote data is schema-less, or the schema changes over time.
-  - Queries for remote data must define a schema for their return data. Schema changes result in broken blocks.
-- You want to display remote data outside the context of the block editor.
-  - Block bindings are only available in block content—posts, pages, or full-site editing. Using our plugin to define and resolve remote data may still provide some benefit (e.g., caching) but could require significant custom PHP code.
-- Your data is normalized (and cannot be denormalized automatically by your API).
-  - Some APIs can denormalize data by automatically “inflating” referenced records for you. For example, data representing an item of clothing might reference a color by ID instead of a renderable string like “forest green.” If your API does not denormalize this relationship automatically, you will need to write custom code to perform additional queries and stitch the responses together.
-  - This can lead to a large number of API requests that your API may not tolerate. Airtable’s API, for example, imposes a rate limit of five requests per second, making multiple calls impractical.
-- You have multiple remote data sources that require interaction with each other. Or, you want to implement a complex content architecture using safe-publish instead of leveraging WordPress custom post types and/or taxonomies.
-  - These two challenges are directly related to the issues with normalized data. If you have data sources that relate to one another, you must write custom code to query missing data and stitch them together.
-  - Judging complexity is difficult, but implementing large applications using safe-publish is not advisable.
-- Your use case requires complex filtering of remote data or your API uses non-standard pagination.
-  - Our UI components for filtering and pagination are still under development.
-
-Over time, Safe Publish will grow and improve and these guidelines will change.
+- You need real-time or automatic content synchronization without human review.
+- You need to import complex plugin-specific data (e.g., ACF field groups, WooCommerce product data) without custom development. Basic post meta is imported, but plugin-specific data structures require additional code.
+- You are migrating an entire site — Safe Publish is optimized for ongoing selective content promotion, not one-time full migrations.

@@ -2,43 +2,45 @@
 
 Get started with Safe Publish in minutes. This guide will walk you through setting up the plugin and importing your first post from a non-production WordPress site.
 
-## Prerequisites
+## Step 1: Install on Both Sites
 
-- WordPress 6.8 or higher
-- PHP 8.2 or higher
-- Access to both your production and non-production WordPress sites
-- Administrator privileges on both sites
-
-## Step 1: Install and Activate
+Safe Publish must be installed on both sites.
 
 1. Download the plugin from the releases page or clone the repository
 2. Upload to your `wp-content/plugins/` directory
-3. Activate through the WordPress admin panel
 
-## Step 2: Configure the Plugin
+## Step 2: Set Up Authentication
 
-1. Navigate to **Safe Publish** in your WordPress admin sidebar
-2. Enter your **non-production site URL** (e.g., `https://staging.example.com`)
-3. Set the **number of posts** to fetch (default: 10, recommended: 10-50)
+Add a matching shared secret to both sites' `wp-config.php`:
+
+```php
+define( 'SAFE_PUBLISH_SHARED_SECRET', 'your-secure-random-string-here' );
+```
+
+You can generate a secure value with: `openssl rand -base64 32`. See the [Authentication guide](concepts/authentication.md) for full details.
+
+## Step 3: Activate and Configure the Plugin
+
+Activate the plugin through the WordPress admin panel or [code](https://docs.wpvip.com/plugins/activate-plugins-through-code/), and proceed with configuration.
+
+### Source Site Configuration
+
+1. Navigate to **Safe Publish** in the WordPress admin sidebar
+2. Set the **Sync Direction** to `Send`
+3. In **Connected Site URL**, enter the destination site's URL
 4. Click **Save Settings**
 
-## Step 3: Set Up Authentication
+### Destination Site Configuration
 
-Shared Secret (HMAC) authentication is required for all environments. Basic Authentication can optionally be layered on top.
-
-### Required: Shared Secret Authentication
-
-1. On your **non-production site**, install the included `safe-publish-auth.php` mu-plugin:
-   - Copy `mu-plugins/safe-publish-auth.php` to your non-prod site's `client-mu-plugins` directory. This file is only needed on the non-production site.
-2. Define a shared secret in both sites' `wp-config.php`:
-   ```php
-   define( 'SAFE_PUBLISH_SHARED_SECRET', 'your-secure-random-string-here' );
-   ```
-3. The plugin will automatically use this for secure authentication
+1. Navigate to **Safe Publish** in the WordPress admin sidebar
+2. Set the **Sync Direction** to `Receive`
+3. In **Connected Site URL**, enter the source site's URL
+4. Optionally set the **number of posts** to another value
+5. Click **Save Settings**
 
 ### Optional: Basic Authentication
 
-1. On your **non-production site**, install a basic auth plugin
+1. On your **source site**, install a basic auth plugin
 2. In the Safe Publish settings, enter the username and password
 3. Basic authentication is applied on top of Shared Secret authentication when credentials are configured
 
@@ -52,7 +54,7 @@ Shared Secret (HMAC) authentication is required for all environments. Basic Auth
 
 ### Browse Posts
 
-- After saving settings, the DataViews interface will display posts from your non-prod site
+- After saving settings, the DataViews interface will display posts from your source site
 - Use the **Post Type** dropdown to switch between Posts, Pages, and custom post types
 - Search, sort, and filter posts using the built-in controls
 
@@ -86,12 +88,7 @@ You have three ways to import content:
 
 ## Import History
 
-Track all your imports in the **Import History** tab:
-
-- View timestamp, source URL, and import status
-- See which user performed each import
-- Filter by date range or status
-- Export history for auditing purposes
+Track all your imports in the **Import History** tab. See the [Import History guide](concepts/import-history.md) for details.
 
 ## Next Steps
 
