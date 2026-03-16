@@ -7,7 +7,6 @@
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\Utils\Environment;
 use Safe_Publish\Utils\Options;
 
 // Prevent direct access.
@@ -129,9 +128,7 @@ final class Settings_Page {
 								</td>
 							</tr>
 
-							<?php if ( $show_receive_fields ) : ?>
-
-							<tr>
+							<tr class="safe-publish-receive-field-row<?php echo $show_receive_fields ? '' : ' hidden'; ?>">
 								<th scope="row">
 									<label for="safe_publish_number_of_posts">
 										<?php esc_html_e( 'Number of Posts', 'safe-publish' ); ?>
@@ -153,8 +150,7 @@ final class Settings_Page {
 								</td>
 							</tr>
 
-								<?php if ( Environment::is_development() ) : ?>
-							<tr>
+							<tr class="safe-publish-receive-field-row<?php echo $show_receive_fields ? '' : ' hidden'; ?>">
 								<th scope="row">
 									<label for="safe_publish_username">
 										<?php esc_html_e( 'Username', 'safe-publish' ); ?>
@@ -171,12 +167,12 @@ final class Settings_Page {
 										autocomplete="username"
 									/>
 									<p class="description">
-										<?php esc_html_e( 'Basic authentication username (development only).', 'safe-publish' ); ?>
+										<?php esc_html_e( 'Basic authentication username.', 'safe-publish' ); ?>
 									</p>
 								</td>
 							</tr>
 
-							<tr>
+							<tr class="safe-publish-receive-field-row<?php echo $show_receive_fields ? '' : ' hidden'; ?>">
 								<th scope="row">
 									<label for="safe_publish_password">
 										<?php esc_html_e( 'Password', 'safe-publish' ); ?>
@@ -193,17 +189,33 @@ final class Settings_Page {
 										autocomplete="current-password"
 									/>
 									<p class="description">
-										<?php esc_html_e( 'Basic authentication password (development only).', 'safe-publish' ); ?>
+										<?php esc_html_e( 'Basic authentication password.', 'safe-publish' ); ?>
 									</p>
 								</td>
 							</tr>
-								<?php endif; ?>
-
-							<?php endif; // $show_receive_fields ?>
 						</table>
 
-						<?php submit_button(); ?>
-					</form>
+					<?php submit_button(); ?>
+				</form>
+
+					<script>
+					( function () {
+						const radios = document.querySelectorAll( 'input[name="safe_publish_sync_mode"]' );
+						const receiveModes = [ '<?php echo esc_js( Options::SYNC_MODE_RECEIVE ); ?>', '<?php echo esc_js( Options::SYNC_MODE_BOTH ); ?>' ];
+
+						function toggleReceiveFields() {
+							const selected = document.querySelector( 'input[name="safe_publish_sync_mode"]:checked' );
+							const show = selected && receiveModes.indexOf( selected.value ) !== -1;
+							document.querySelectorAll( '.safe-publish-receive-field-row' ).forEach( function ( row ) {
+								row.classList.toggle( 'hidden', ! show );
+							} );
+						}
+
+						radios.forEach( function ( radio ) {
+							radio.addEventListener( 'change', toggleReceiveFields );
+						} );
+					} )();
+					</script>
 				</div>
 			</div>
 		</div>

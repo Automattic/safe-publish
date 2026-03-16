@@ -52,6 +52,11 @@ class Settings_Sanitizer {
 	 * @return int Sanitized number of posts, between 1 and 100.
 	 */
 	public function sanitize_number_of_posts( $value ): int {
+		// preserve the existing value when sync mode is send-only.
+		if ( null === $value ) {
+			return (int) get_option( Options::OPTION_NUMBER_OF_POSTS, 10 );
+		}
+
 		$number = absint( $value );
 
 		if ( $number < 1 || $number > 100 ) {
@@ -83,6 +88,11 @@ class Settings_Sanitizer {
 	 * @return string Sanitized username.
 	 */
 	public function sanitize_username( $value ): string {
+		// preserve the existing value when sync mode is send-only.
+		if ( null === $value ) {
+			return (string) get_option( Options::OPTION_USERNAME, '' );
+		}
+
 		return sanitize_text_field( $value );
 	}
 
@@ -93,6 +103,11 @@ class Settings_Sanitizer {
 	 * @return string Sanitized password.
 	 */
 	public function sanitize_password( $value ): string {
+		// preserve the existing value when sync mode is send-only.
+		if ( null === $value ) {
+			return (string) get_option( Options::OPTION_PASSWORD, '' );
+		}
+
 		// Don't sanitize passwords beyond trimming whitespace.
 		return trim( $value );
 	}
