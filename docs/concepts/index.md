@@ -19,8 +19,8 @@ The plugin is designed with WordPress VIP best practices in mind, ensuring secur
 
 Safe Publish supports two authentication methods for secure communication between sites:
 
-- **[Shared Secret](authentication.md)** (Recommended): Uses a secure token defined in `wp-config.php` on both sites
-- **Basic Authentication** (Development only): Username/password authentication for local development
+- **[Shared Secret](authentication.md)** (Required): Uses a secure token defined in `wp-config.php` on both sites
+- **Basic Authentication** (optional): Username/password authentication
 
 See the [Authentication guide](authentication.md) for detailed setup instructions.
 
