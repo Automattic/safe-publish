@@ -77,7 +77,7 @@ open_browser() {
     TEST_URL="http://localhost:$TEST_PORT/wp-admin/"
 
     echo ""
-    echo "> Safe Publish Target Site"
+    echo "> Safe Publish Destination Site"
     echo "> 🌐 $WP_ADMIN"
     echo "> 🔑 Username: admin"
     echo "> 🔑 Password: password"

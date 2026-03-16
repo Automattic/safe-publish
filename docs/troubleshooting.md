@@ -1,6 +1,6 @@
 # Troubleshooting
 
-This guide helps you resolve common issues with Safe Publish. If you can't find a solution here, check the [local development guide](local-development.md) for debugging tools.
+This guide helps you resolve common issues with Safe Publish. See the [Debugging Tools](#debugging-tools) section below for further diagnostic steps.
 
 ## Common Issues
 
@@ -12,25 +12,24 @@ This guide helps you resolve common issues with Safe Publish. If you can't find 
 
 **Solutions**:
 
-1. **Verify shared secret matches on both sites**:
+1. **Verify Safe Publish is configured on both sites**:
+   - Safe Publish must be installed and active on both sites
+   - Sync Direction and Connected Site URL must be set with correct values on both sites
+
+2. **Verify shared secret matches on both sites**:
    - Check `wp-config.php` on both sites
    - Secret must be identical (case-sensitive)
    - No extra spaces or quotes
 
-2. **For basic auth**:
+3. **For basic auth**:
    - Verify username and password are correct
    - Ensure user has `edit_posts` capability
    - Check basic auth plugin is installed on source site
 
-3. **Check HTTPS**:
+4. **Check HTTPS**:
    - Both sites must use HTTPS
    - Verify SSL certificates are valid
    - Test site URL in browser
-
-4. **Verify MU plugin is installed** (shared secret method):
-   - File exists at `client-mu-plugins/safe-publish-auth.php` on source site
-   - File has not been modified
-   - MU plugins directory exists and is readable
 
 #### "Connection timeout" error
 
@@ -57,6 +56,16 @@ This guide helps you resolve common issues with Safe Publish. If you can't find 
 4. **Try fewer posts**:
    - Reduce "Number of Posts" setting
    - Import in smaller batches
+
+#### "Unauthorized" or "403 Forbidden" error
+
+**Symptoms**: Authentication request rejected with 401 or 403 response
+
+**Solutions**:
+
+1. Verify Safe Publish is installed on the source site with **Sync Direction** set to `Send`
+2. For basic auth, confirm the user has the `edit_posts` capability
+3. Check server firewall rules aren't blocking incoming requests
 
 #### "REST API not found" error
 
@@ -156,6 +165,16 @@ This guide helps you resolve common issues with Safe Publish. If you can't find 
    - Some third-party blocks may not transfer
    - Try converting to core blocks
 
+#### Post creation failed
+
+**Symptoms**: Import process completes but no draft post appears
+
+**Solutions**:
+
+1. **Check user permissions**: The importing user must have permission to create posts of that post type
+2. **Check for database errors**: Enable `WP_DEBUG_LOG` and review `wp-content/debug.log` for insert failures
+3. **Verify post type is registered** on the destination site — custom post types must exist on both sites
+
 #### Duplicate content imported
 
 **Symptoms**: Same post imported multiple times
@@ -179,6 +198,17 @@ This guide helps you resolve common issues with Safe Publish. If you can't find 
        'post_status' => 'any',
    ] );
    ```
+
+### Validation Errors
+
+| Error code                  | Cause                                      | Solution                                                   |
+| --------------------------- | ------------------------------------------ | ---------------------------------------------------------- |
+| `invalid_url`               | URL not valid or accessible                | Check URL format and ensure the site is reachable          |
+| `authentication_failed`     | Cannot authenticate with the external site | See the [Authentication guide](concepts/authentication.md) |
+| `no_posts_found`            | No published posts available               | Verify posts are published on the source site              |
+| `invalid_post_data`         | Post data structure is invalid             | Re-save the post on the source site                        |
+| `media_import_failed`       | Unable to import images                    | Verify image URLs are publicly accessible                  |
+| `content_validation_failed` | Content structure failed validation        | Fix HTML/block errors in the source post                   |
 
 ### Performance Issues
 

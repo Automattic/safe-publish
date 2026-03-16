@@ -1,5 +1,7 @@
 # Safe Publish Documentation
 
+**Safe Publish** is a WordPress plugin for securely promoting content from non-production WordPress environments (staging, development) to production. It provides a user-friendly interface for browsing, previewing, and importing posts with all formatting, media, and metadata preserved.
+
 ## Table of Contents
 
 - [Quickstart](quickstart.md) - Get started with the plugin in minutes

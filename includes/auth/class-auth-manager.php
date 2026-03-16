@@ -77,9 +77,6 @@ class Auth_Manager {
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			add_action( 'rest_api_init', array( $this, 'register_test_endpoint' ) );
 		}
-
-		// Dev: once-per-day log probe (skips REST requests).
-		add_action( 'init', array( $this->logger, 'test_logging_on_init' ) );
 	}
 
 	/**

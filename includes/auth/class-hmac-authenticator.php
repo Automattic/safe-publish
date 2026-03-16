@@ -132,7 +132,7 @@ class HMAC_Authenticator {
 		$shared_secret = $this->shared_secret;
 
 		if ( empty( $shared_secret ) ) {
-			$this->logger->log_event(
+			$this->logger->log_error(
 				'NO_SECRET_CONFIGURED',
 				array(
 					'route'  => $route,
@@ -154,7 +154,7 @@ class HMAC_Authenticator {
 		if ( ! $this->validate_timestamp( $timestamp, $max_diff ) ) {
 			$time_diff = abs( time() - $timestamp );
 
-			$this->logger->log_event(
+			$this->logger->log_error(
 				'TIMESTAMP_EXPIRED',
 				array(
 					'route'        => $route,
@@ -174,7 +174,7 @@ class HMAC_Authenticator {
 		}
 
 		if ( ! isset( $headers['x_safe_publish_content_hash'] ) ) {
-			$this->logger->log_event(
+			$this->logger->log_error(
 				'CONTENT_HASH_MISSING',
 				array(
 					'route'  => $route,
@@ -193,7 +193,7 @@ class HMAC_Authenticator {
 		$body          = $request->get_body();
 
 		if ( ! $this->validate_content_hash( $body, $received_hash ) ) {
-			$this->logger->log_event(
+			$this->logger->log_error(
 				'CONTENT_HASH_MISMATCH',
 				array(
 					'route'  => $route,
@@ -211,7 +211,7 @@ class HMAC_Authenticator {
 		if ( ! $this->validate_signature( $signature, $method, $route, $timestamp, $received_hash ) ) {
 			$string_to_sign = $method . '|' . $route . '|' . $timestamp . '|' . $received_hash;
 
-			$this->logger->log_event(
+			$this->logger->log_error(
 				'SIGNATURE_INVALID',
 				array(
 					'route'               => $route,
