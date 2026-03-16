@@ -16,67 +16,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Handles registration and sanitization of plugin settings.
+ * Provides stateless sanitization callbacks for plugin settings.
  */
 class Settings_Sanitizer {
-
-	/**
-	 * Registers WordPress hooks for settings registration.
-	 */
-	public function register(): void {
-		add_action( 'admin_init', array( $this, 'register_settings' ) );
-	}
-
-	/**
-	 * Registers all plugin settings with WordPress.
-	 */
-	public function register_settings(): void {
-		register_setting(
-			Options::SETTINGS_GROUP,
-			Options::OPTION_CONNECTED_SITE_URL,
-			array(
-				'sanitize_callback' => array( $this, 'sanitize_url' ),
-				'default'           => '',
-			)
-		);
-
-		register_setting(
-			Options::SETTINGS_GROUP,
-			Options::OPTION_NUMBER_OF_POSTS,
-			array(
-				'sanitize_callback' => array( $this, 'sanitize_number_of_posts' ),
-				'default'           => 10,
-			)
-		);
-
-		register_setting(
-			Options::SETTINGS_GROUP,
-			Options::OPTION_SYNC_DIRECTION,
-			array(
-				'sanitize_callback' => array( $this, 'sanitize_sync_direction' ),
-				'default'           => '',
-			)
-		);
-
-		// Basic authentication settings (optional, layered on top of shared secret).
-		register_setting(
-			Options::SETTINGS_GROUP,
-			Options::OPTION_USERNAME,
-			array(
-				'sanitize_callback' => array( $this, 'sanitize_username' ),
-				'default'           => '',
-			)
-		);
-
-		register_setting(
-			Options::SETTINGS_GROUP,
-			Options::OPTION_PASSWORD,
-			array(
-				'sanitize_callback' => array( $this, 'sanitize_password' ),
-				'default'           => '',
-			)
-		);
-	}
 
 	/**
 	 * Sanitizes the external site URL setting.
@@ -118,7 +60,7 @@ class Settings_Sanitizer {
 				'invalid_number',
 				__( 'Number of posts must be between 1 and 100.', 'safe-publish' )
 			);
-			return get_option( Options::OPTION_NUMBER_OF_POSTS, 10 );
+			return (int) get_option( Options::OPTION_NUMBER_OF_POSTS, 10 );
 		}
 
 		return $number;
