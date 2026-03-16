@@ -100,7 +100,10 @@ class Media_Importer {
 		);
 
 		// Import to media library.
+		// Prevent WordPress from potentially degrading the original image quality.
+		add_filter( 'big_image_size_threshold', '__return_false' );
 		$attachment_id = media_handle_sideload( $file_array, 0 );
+		remove_filter( 'big_image_size_threshold', '__return_false' );
 
 		// Clean up temp file - VIP-compatible cleanup.
 		$this->http_client->cleanup_temp_file( $temp_file );
@@ -205,6 +208,8 @@ class Media_Importer {
 		);
 
 		// Import to media library with error handling.
+		// Prevent WordPress from potentially degrading the original image quality.
+		add_filter( 'big_image_size_threshold', '__return_false' );
 		/** @psalm-suppress InvalidArgument - $_FILES['size'] is int */
 		$attachment_id = media_handle_sideload(
 			$file_array,
@@ -215,6 +220,7 @@ class Media_Importer {
 				'test_type' => true,  // But keep type validation.
 			)
 		);
+		remove_filter( 'big_image_size_threshold', '__return_false' );
 
 		// Clean up temp file.
 		$this->http_client->cleanup_temp_file( $temp_file );
