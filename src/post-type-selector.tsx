@@ -243,6 +243,7 @@ export function PostTypeSelector( {
 					size="small"
 					onClick={ handleRefresh }
 					disabled={ isLoading || ! siteUrl }
+					style={ { marginTop: '15px', padding: '16px', fontSize: 'unset' } }
 				>
 					{ isLoading ? (
 						<>
