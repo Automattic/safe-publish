@@ -8,121 +8,43 @@
 namespace Safe_Publish\Auth;
 
 /**
- * Handles authentication event logging.
+ * Handles Safe Publish event logging.
  *
- * Logs events to multiple backends: error_log, syslog, file, database (wp_options),
- * New Relic, WP debug log, and WordPress action hooks.
+ * Failures are written to error_log. All events are stored in wp_options for
+ * dashboard and REST API display, and fire a WordPress action hook.
  */
 class Auth_Logger {
-	/**
-	 * Deferred logs waiting to be written.
-	 *
-	 * @var array
-	 */
-	private array $deferred_logs = array();
 
 	/**
-	 * Logs an authentication event.
+	 * Logs an informational event.
 	 *
-	 * If called during a REST API request before headers are sent,
-	 * the log is deferred until shutdown.
-	 *
-	 * @param string $event Event type (AUTH_SUCCESS, SIGNATURE_INVALID, etc.).
+	 * @param string $event Event type.
 	 * @param array  $data  Optional. Additional event data. Default empty array.
 	 */
 	public function log_event( string $event, array $data = array() ): void {
-		if ( $this->should_defer_logging() ) {
-			$this->defer_log( $event, $data );
-			return;
-		}
-
-		$this->write_log( $event, $data );
+		$this->write_log( $event, $data, false );
 	}
 
 	/**
-	 * Processes all deferred logs queued during REST API requests.
-	 */
-	public function process_deferred_logs(): void {
-		foreach ( $this->deferred_logs as $log ) {
-			$this->write_log( $log['event'], $log['data'] );
-		}
-
-		$this->deferred_logs = array();
-	}
-
-	/**
-	 * Tests logging on WordPress init to ensure logs appear.
+	 * Logs a failure event.
 	 *
-	 * Runs at most once per day to avoid log spam.
-	 * Skipped during REST API requests to avoid header issues.
-	 */
-	public function test_logging_on_init(): void {
-		if ( defined( 'REST_REQUEST' ) && constant( 'REST_REQUEST' ) ) {
-			return;
-		}
-
-		if ( defined( 'WP_TESTS_DOMAIN' ) ) {
-			return;
-		}
-
-		$last_test = get_option( 'safe_publish_auth_last_log_test', 0 );
-		if ( time() - $last_test < 86400 ) { // 24 hours.
-			return;
-		}
-
-		update_option( 'safe_publish_auth_last_log_test', time(), false );
-
-		$this->log_event(
-			'INIT_LOG_TEST',
-			array(
-				'purpose'           => 'Testing VIP logging visibility',
-				'wp_loaded'         => did_action( 'wp_loaded' ),
-				'plugins_loaded'    => did_action( 'plugins_loaded' ),
-				'mu_plugins_loaded' => did_action( 'muplugins_loaded' ),
-				'php_version'       => PHP_VERSION,
-				'wp_version'        => get_bloginfo( 'version' ),
-			)
-		);
-	}
-
-	/**
-	 * Checks if logging should be deferred due to an active REST request.
-	 *
-	 * @return bool True if logging should be deferred, false otherwise.
-	 */
-	private function should_defer_logging(): bool {
-		return defined( 'REST_REQUEST' ) && REST_REQUEST && ! headers_sent();
-	}
-
-	/**
-	 * Defers a log entry for later processing.
-	 *
-	 * Registers the shutdown callback on first deferral.
-	 *
-	 * @param string $event Event name.
-	 * @param array  $data  Event data.
-	 */
-	private function defer_log( string $event, array $data ): void {
-		$this->deferred_logs[] = array(
-			'event' => $event,
-			'data'  => $data,
-		);
-
-		if ( ! has_action( 'shutdown', array( $this, 'process_deferred_logs' ) ) ) {
-			add_action( 'shutdown', array( $this, 'process_deferred_logs' ) );
-		}
-	}
-
-	/**
-	 * Writes a log entry to all configured backends.
-	 *
-	 * Backends: error_log, file (get_temp_dir), syslog, database (wp_options),
-	 * New Relic, WP_DEBUG_LOG, WordPress action hook, and fastcgi_finish_request.
+	 * Writes to error_log in addition to the standard logging mechanisms.
 	 *
 	 * @param string $event Event type.
-	 * @param array  $data  Event data to merge with standard fields.
+	 * @param array  $data  Optional. Additional event data. Default empty array.
 	 */
-	private function write_log( string $event, array $data ): void {
+	public function log_error( string $event, array $data = array() ): void {
+		$this->write_log( $event, $data, true );
+	}
+
+	/**
+	 * Writes a log entry, optionally to error_log, and stores it in the database.
+	 *
+	 * @param string $event         Event type.
+	 * @param array  $data          Event data to merge with standard fields.
+	 * @param bool   $use_error_log Whether to write to error_log.
+	 */
+	private function write_log( string $event, array $data, bool $use_error_log ): void {
 		// phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_date
 		$timestamp = function_exists( 'current_time' ) ? current_time( 'mysql' ) : date( 'Y-m-d H:i:s' );
 		// Data only used for logging; escaped with esc_html() when output to HTML in dashboard widget.
@@ -142,59 +64,21 @@ class Auth_Logger {
 			$data
 		);
 
-		$log_message = '[Safe-Publish-Auth-VIP] ' . $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES );
-
 		$is_test_env = defined( 'WP_TESTS_DOMAIN' );
 
-		if ( ! $is_test_env ) {
+		if ( ! $is_test_env && $use_error_log ) {
+			$log_message = '[Safe-Publish-Auth] ' . $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES );
+
 			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			error_log( $log_message );
-
-			// 1. Direct file write as backup (VIP-safe location).
-			$log_file = get_temp_dir() . 'safe-publish-auth-vip.log';
-			// phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_date
-			$file_message = date( 'Y-m-d H:i:s' ) . ' ' . $log_message . "\n";
-			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_file_put_contents
-			@file_put_contents( $log_file, $file_message, FILE_APPEND | LOCK_EX );
-
-			// 2. PHP syslog for additional visibility.
-			if ( function_exists( 'syslog' ) ) {
-				openlog( 'Safe-Publish-Auth-VIP', LOG_PID, LOG_USER );
-				syslog( LOG_INFO, $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES ) );
-				closelog();
-			}
 		}
 
-		// 3. Store recent events in database for dashboard viewing (only if WordPress is loaded).
 		if ( function_exists( 'get_option' ) ) {
 			$this->store_log_event( $event, $log_data );
 		}
 
-		// 4. New Relic custom events (if available).
-		if ( function_exists( 'newrelic_record_custom_event' ) ) {
-			newrelic_record_custom_event(
-				'Safe_Publish_Auth_Event',
-				array(
-					'event_type' => $event,
-					'site_url'   => $site_url,
-					'success'    => strpos( $event, 'SUCCESS' ) !== false,
-				)
-			);
-		}
-
-		// 5. WordPress debug log (if WP_DEBUG_LOG is enabled).
-		if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG && function_exists( 'wp_debug_log' ) ) {
-			wp_debug_log( $log_message );
-		}
-
-		// 6. Trigger WordPress action for other monitoring plugins (only if WordPress is loaded).
 		if ( function_exists( 'do_action' ) ) {
 			do_action( 'safe_publish_auth_event_logged', $event, $log_data );
-		}
-
-		// 7. Force immediate log write for VIP (bypass buffering).
-		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV && function_exists( 'fastcgi_finish_request' ) ) {
-			fastcgi_finish_request();
 		}
 	}
 
