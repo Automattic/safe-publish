@@ -28,13 +28,6 @@ final class Receive_Mode_Admin_Handler {
 	private Admin_Menu_Manager $menu_manager;
 
 	/**
-	 * Settings Registrar instance.
-	 *
-	 * @var Settings_Registrar
-	 */
-	private Settings_Registrar $settings_registrar;
-
-	/**
 	 * Import History instance.
 	 *
 	 * @var Import_History
@@ -51,21 +44,18 @@ final class Receive_Mode_Admin_Handler {
 	/**
 	 * Constructs the Receive_Mode_Admin_Handler instance.
 	 *
-	 * @param Admin_Menu_Manager    $menu_manager        Admin Menu Manager instance.
-	 * @param Settings_Registrar    $settings_registrar  Settings Registrar instance.
-	 * @param Import_History        $import_history      Import History instance.
-	 * @param Admin_Ajax_Controller $ajax_controller     Admin AJAX Controller instance.
+	 * @param Admin_Menu_Manager    $menu_manager    Admin Menu Manager instance.
+	 * @param Import_History        $import_history  Import History instance.
+	 * @param Admin_Ajax_Controller $ajax_controller Admin AJAX Controller instance.
 	 */
 	public function __construct(
 		Admin_Menu_Manager $menu_manager,
-		Settings_Registrar $settings_registrar,
 		Import_History $import_history,
 		Admin_Ajax_Controller $ajax_controller
 	) {
-		$this->menu_manager       = $menu_manager;
-		$this->settings_registrar = $settings_registrar;
-		$this->import_history     = $import_history;
-		$this->ajax_controller    = $ajax_controller;
+		$this->menu_manager    = $menu_manager;
+		$this->import_history  = $import_history;
+		$this->ajax_controller = $ajax_controller;
 	}
 
 	/**
@@ -73,7 +63,6 @@ final class Receive_Mode_Admin_Handler {
 	 */
 	public function init(): void {
 		$this->menu_manager->register();
-		$this->settings_registrar->register();
 		$this->import_history->init();
 		$this->ajax_controller->register_handlers();
 	}

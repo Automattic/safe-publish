@@ -11,14 +11,14 @@ use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Admin\Receive_Mode_Admin_Handler;
 use Safe_Publish\Admin\Admin_Menu_Manager;
 use Safe_Publish\Admin\Content_Processor;
-use Safe_Publish\Admin\Send_Mode_Admin_Handler;
 use Safe_Publish\Admin\History_Renderer;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Import_History;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\Admin\Session_Formatter;
 use Safe_Publish\Admin\Session_Rollback_Service;
-use Safe_Publish\Admin\Settings_Registrar;
+use Safe_Publish\Admin\Settings_Page;
+use Safe_Publish\Admin\Settings_Sanitizer;
 use Safe_Publish\Auth\Auth_Manager;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\HTTP_Client;
@@ -85,17 +85,71 @@ final class Plugin {
 			true
 		);
 
+		add_action( 'admin_init', array( $this, 'register_settings' ) );
+
 		if ( $can_receive ) {
-			$this->init_receive_mode();
+			$this->init_full_admin();
 		} else {
-			$this->init_send_mode();
+			$this->init_settings_only_admin();
 		}
 	}
 
 	/**
-	 * Initializes receive mode.
+	 * Registers plugin settings with WordPress.
 	 */
-	private function init_receive_mode(): void {
+	public function register_settings(): void {
+		$sanitizer = new Settings_Sanitizer();
+
+		register_setting(
+			Options::SETTINGS_GROUP,
+			Options::OPTION_CONNECTED_SITE_URL,
+			array(
+				'sanitize_callback' => array( $sanitizer, 'sanitize_url' ),
+				'default'           => '',
+			)
+		);
+
+		register_setting(
+			Options::SETTINGS_GROUP,
+			Options::OPTION_SYNC_MODE,
+			array(
+				'sanitize_callback' => array( $sanitizer, 'sanitize_sync_mode' ),
+				'default'           => '',
+			)
+		);
+
+		register_setting(
+			Options::SETTINGS_GROUP,
+			Options::OPTION_NUMBER_OF_POSTS,
+			array(
+				'sanitize_callback' => array( $sanitizer, 'sanitize_number_of_posts' ),
+				'default'           => 10,
+			)
+		);
+
+		register_setting(
+			Options::SETTINGS_GROUP,
+			Options::OPTION_USERNAME,
+			array(
+				'sanitize_callback' => array( $sanitizer, 'sanitize_username' ),
+				'default'           => '',
+			)
+		);
+
+		register_setting(
+			Options::SETTINGS_GROUP,
+			Options::OPTION_PASSWORD,
+			array(
+				'sanitize_callback' => array( $sanitizer, 'sanitize_password' ),
+				'default'           => '',
+			)
+		);
+	}
+
+	/**
+	 * Initializes the full admin UI for receive and send-and-receive modes.
+	 */
+	private function init_full_admin(): void {
 		// Build shared low-level services.
 		$http_client             = new HTTP_Client();
 		$media_importer          = new Media_Importer( $http_client );
@@ -112,7 +166,7 @@ final class Plugin {
 		$this->safe_publish_api = new Safe_Publish_API( null, null, $content_processor, $media_importer );
 
 		// Build admin object graph and initialize.
-		$this->build_receive_mode_admin_handler(
+		$this->build_full_admin_handler(
 			$this->api,
 			$content_processor,
 			$media_importer,
@@ -132,15 +186,14 @@ final class Plugin {
 	 * @param HTTP_Client        $http_client        HTTP Client instance.
 	 * @return Receive_Mode_Admin_Handler Fully constructed Receive_Mode_Admin_Handler coordinator.
 	 */
-	private function build_receive_mode_admin_handler(
+	private function build_full_admin_handler(
 		External_Posts_API $api,
 		Content_Processor $content_processor,
 		Media_Importer $media_importer,
 		Post_Type_Fetcher $post_type_fetcher,
 		HTTP_Client $http_client
 	): Receive_Mode_Admin_Handler {
-		$menu_manager       = new Admin_Menu_Manager( $api );
-		$settings_registrar = new Settings_Registrar( true );
+		$menu_manager = new Admin_Menu_Manager( $api );
 
 		$repository       = new History_Repository();
 		$renderer         = new History_Renderer();
@@ -173,17 +226,52 @@ final class Plugin {
 
 		return new Receive_Mode_Admin_Handler(
 			$menu_manager,
-			$settings_registrar,
 			$import_history,
 			$ajax_controller
 		);
 	}
 
 	/**
-	 * Initializes send mode.
+	 * Initializes the settings-only admin UI for send-only and unconfigured
+	 * modes.
 	 */
-	private function init_send_mode(): void {
-		( new Send_Mode_Admin_Handler() )->init();
+	private function init_settings_only_admin(): void {
+		add_action( 'admin_menu', array( $this, 'add_settings_only_admin_menu' ) );
+	}
+
+	/**
+	 * Registers the Safe Publish top-level menu pointing to the settings page.
+	 *
+	 * Uses the 'safe-publish-settings' slug to match the slug used by
+	 * Admin_Menu_Manager in receive mode, so that options.php's post-save
+	 * redirect always lands on a registered page regardless of sync mode.
+	 */
+	public function add_settings_only_admin_menu(): void {
+		add_menu_page(
+			__( 'Safe Publish', 'safe-publish' ),
+			__( 'Safe Publish', 'safe-publish' ),
+			'manage_options',
+			'safe-publish-settings',
+			array( $this, 'render_settings_only_page' ),
+			'dashicons-external',
+			99
+		);
+	}
+
+	/**
+	 * Renders the settings page for send-only and unconfigured modes.
+	 */
+	public function render_settings_only_page(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die(
+				esc_html__(
+					'You do not have sufficient permissions to access this page.',
+					'safe-publish'
+				)
+			);
+		}
+
+		( new Settings_Page() )->render();
 	}
 
 	/**
