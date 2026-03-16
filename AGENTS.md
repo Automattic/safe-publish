@@ -6,6 +6,7 @@
 - Never provide answers based on unverified or vague assumptions.
 - Focus on being helpful and accurate. If uncertain about something, ask clarifying questions.
 - Read any provided instruction files in their entirety.
+- Use US English spelling.
 - Finish your responses with a ✨.
 
 ## Code
@@ -14,10 +15,17 @@
 - Adhere to WordPress inline documentation standards.
 - For accessibility, adhere to WCAG 2.2 Level AA standards or higher whenever possible.
 - Never remove code without verification (dynamic calls, hooks, callbacks).
+- When applying changes, carefully analyze if they could be breaking desired functionality.
+- Prefer using `_` instead of `@psalm-suppress PossiblyUnusedParam`.
 
-### Tests
+## Tests
 
+- Begin test docblocks with "Verifies that".
 - Prefer using `assertSame()` over `assertEquals()`.
+
+## PRs
+
+- Output PR descriptions in raw markdown within a code block, without line wrapping.
 
 # Project guidelines
 
