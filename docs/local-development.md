@@ -138,7 +138,7 @@ docker exec -it <container-id> mysql -u root -ppassword wordpress
 
 ```sh
 npm run wp-cli option delete safe_publish_connected_site_url
-npm run wp-cli option delete safe_publish_sync_direction
+npm run wp-cli option delete safe_publish_sync_mode
 npm run wp-cli option delete safe_publish_number_of_posts
 ```
 

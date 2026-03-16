@@ -44,26 +44,26 @@ function _manually_load_plugin(): void {
 tests_add_filter( 'muplugins_loaded', '_manually_load_plugin' );
 
 /**
- * Set the sync direction before the plugin initializes.
+ * Set the sync mode before the plugin initializes.
  *
- * Reads WP_TEST_SYNC_DIRECTION from the PHPUnit XML configuration so that each
- * suite boots the plugin in the correct sync direction.
+ * Reads WP_TEST_SYNC_MODE from the PHPUnit XML configuration so that each suite
+ * boots the plugin in the correct sync mode.
  *
- * For "send"/"both" sync direction a non-empty connected-site URL is required
- * so that Plugin::init() actually instantiates Auth_Manager.
+ * For "send"/"both" sync mode a non-empty connected-site URL is required so
+ * that Plugin::init() actually instantiates Auth_Manager.
  */
 tests_add_filter(
 	'plugins_loaded',
 	function (): void {
-		$sync_direction = getenv( 'WP_TEST_SYNC_DIRECTION' );
+		$sync_mode = getenv( 'WP_TEST_SYNC_MODE' );
 
-		if ( ! $sync_direction ) {
-			throw new \RuntimeException( 'WP_TEST_SYNC_DIRECTION is not set.' );
+		if ( ! $sync_mode ) {
+			throw new \RuntimeException( 'WP_TEST_SYNC_MODE is not set.' );
 		}
 
-		update_option( 'safe_publish_sync_direction', $sync_direction );
+		update_option( 'safe_publish_sync_mode', $sync_mode );
 
-		if ( in_array( $sync_direction, array( 'send', 'both' ), true ) ) {
+		if ( in_array( $sync_mode, array( 'send', 'both' ), true ) ) {
 			update_option( 'safe_publish_connected_site_url', 'https://source.example.com' );
 		}
 	},

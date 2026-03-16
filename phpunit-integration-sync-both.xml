@@ -16,8 +16,8 @@
   </testsuites>
 
   <php>
-    <!-- Boot the plugin in "both" sync direction (send and receive active simultaneously). -->
-    <env name="WP_TEST_SYNC_DIRECTION" value="both" />
+    <!-- Boot the plugin in "both" sync mode (send and receive active simultaneously). -->
+    <env name="WP_TEST_SYNC_MODE" value="both" />
 
     <!-- Point wp-phpunit to our test config file -->
     <env name="WP_PHPUNIT__TESTS_CONFIG" value="tests/wp-tests-config.php" />

@@ -65,9 +65,9 @@ class Settings_Registrar {
 
 		register_setting(
 			Options::SETTINGS_GROUP,
-			Options::OPTION_SYNC_DIRECTION,
+			Options::OPTION_SYNC_MODE,
 			array(
-				'sanitize_callback' => array( $this->sanitizer, 'sanitize_sync_direction' ),
+				'sanitize_callback' => array( $this->sanitizer, 'sanitize_sync_mode' ),
 				'default'           => '',
 			)
 		);

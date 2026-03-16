@@ -19,8 +19,8 @@
   </testsuites>
 
   <php>
-    <!-- Boot the plugin in "receive" sync direction. -->
-    <env name="WP_TEST_SYNC_DIRECTION" value="receive" />
+    <!-- Boot the plugin in "receive" sync mode. -->
+    <env name="WP_TEST_SYNC_MODE" value="receive" />
 
     <!-- Point wp-phpunit to our test config file -->
     <env name="WP_PHPUNIT__TESTS_CONFIG" value="tests/wp-tests-config.php" />

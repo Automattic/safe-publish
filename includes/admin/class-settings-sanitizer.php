@@ -98,16 +98,16 @@ class Settings_Sanitizer {
 	}
 
 	/**
-	 * Sanitizes the sync direction setting.
+	 * Sanitizes the sync mode setting.
 	 *
 	 * @param mixed $value Value to sanitize.
 	 * @return string One of 'send', 'receive', 'both', or '' on invalid input.
 	 */
-	public function sanitize_sync_direction( $value ): string {
+	public function sanitize_sync_mode( $value ): string {
 		$allowed = array(
-			Options::SYNC_DIRECTION_SEND,
-			Options::SYNC_DIRECTION_RECEIVE,
-			Options::SYNC_DIRECTION_BOTH,
+			Options::SYNC_MODE_SEND,
+			Options::SYNC_MODE_RECEIVE,
+			Options::SYNC_MODE_BOTH,
 		);
 
 		if ( '' === $value || null === $value ) {
@@ -116,12 +116,12 @@ class Settings_Sanitizer {
 
 		if ( ! in_array( $value, $allowed, true ) ) {
 			add_settings_error(
-				Options::OPTION_SYNC_DIRECTION,
-				'invalid_sync_direction',
-				__( 'Please select a valid Sync Direction.', 'safe-publish' )
+				Options::OPTION_SYNC_MODE,
+				'invalid_sync_mode',
+				__( 'Please select a valid Sync Mode.', 'safe-publish' )
 			);
 
-			return get_option( Options::OPTION_SYNC_DIRECTION, '' );
+			return get_option( Options::OPTION_SYNC_MODE, '' );
 		}
 
 		return $value;

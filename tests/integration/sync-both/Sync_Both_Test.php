@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for "both" sync direction behavior
+ * Integration tests for "both" sync mode behavior
  *
  * @package Safe_Publish
  */
@@ -14,11 +14,11 @@ use WP_REST_Server;
 use WP_UnitTestCase;
 
 /**
- * Verifies that in "both" sync direction all send and receive functionality is
+ * Verifies that in "both" sync mode all send and receive functionality is
  * active simultaneously.
  *
  * These tests are run exclusively via phpunit-integration-sync-both.xml, which
- * boots the plugin with WP_TEST_SYNC_DIRECTION=both.
+ * boots the plugin with WP_TEST_SYNC_MODE=both.
  */
 class Sync_Both_Integration_Test extends WP_UnitTestCase {
 

@@ -57,32 +57,32 @@ class Options {
 	const OPTION_NUMBER_OF_POSTS = 'safe_publish_number_of_posts';
 
 	/**
-	 * Option key for the sync direction of this site.
+	 * Option key for the sync mode of this site.
 	 *
 	 * @var string
 	 */
-	const OPTION_SYNC_DIRECTION = 'safe_publish_sync_direction';
+	const OPTION_SYNC_MODE = 'safe_publish_sync_mode';
 
 	/**
-	 * Sync direction value: this site sends content.
+	 * Sync mode value: this site sends content.
 	 *
 	 * @var string
 	 */
-	const SYNC_DIRECTION_SEND = 'send';
+	const SYNC_MODE_SEND = 'send';
 
 	/**
-	 * Sync direction value: this site receives content.
+	 * Sync mode value: this site receives content.
 	 *
 	 * @var string
 	 */
-	const SYNC_DIRECTION_RECEIVE = 'receive';
+	const SYNC_MODE_RECEIVE = 'receive';
 
 	/**
-	 * Sync direction value: this site both sends and receives content.
+	 * Sync mode value: this site both sends and receives content.
 	 *
 	 * @var string
 	 */
-	const SYNC_DIRECTION_BOTH = 'both';
+	const SYNC_MODE_BOTH = 'both';
 
 	// -------------------------------------------------------------------------
 	// Post meta keys (stored via get_post_meta / update_post_meta).

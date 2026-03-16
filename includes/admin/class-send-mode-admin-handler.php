@@ -31,7 +31,7 @@ final class Send_Mode_Admin_Handler {
 	 *
 	 * Uses the 'safe-publish-settings' slug to match the slug used by
 	 * Admin_Menu_Manager in receive mode, so that options.php's post-save
-	 * redirect always lands on a registered page regardless of sync direction.
+	 * redirect always lands on a registered page regardless of sync mode.
 	 */
 	public function add_admin_menu(): void {
 		add_menu_page(

@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for "send" sync direction behavior
+ * Integration tests for "send" sync mode behavior
  *
  * @package Safe_Publish
  */
@@ -14,10 +14,10 @@ use WP_REST_Server;
 use WP_UnitTestCase;
 
 /**
- * Verifies that in "send" sync direction only send functionality is active.
+ * Verifies that in "send" sync mode only send functionality is active.
  *
  * These tests are run exclusively via phpunit-integration-sync-send.xml, which
- * boots the plugin with WP_TEST_SYNC_DIRECTION=send.
+ * boots the plugin with WP_TEST_SYNC_MODE=send.
  */
 class Sync_Send_Integration_Test extends WP_UnitTestCase {
 
@@ -81,7 +81,7 @@ class Sync_Send_Integration_Test extends WP_UnitTestCase {
 
 	/**
 	 * Verifies that AJAX handlers for receiving are not registered in "send"
-	 * sync direction.
+	 * sync mode.
 	 */
 	public function test_receive_ajax_handlers_are_not_registered(): void {
 		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_fetch_posts' ) );

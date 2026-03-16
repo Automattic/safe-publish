@@ -115,8 +115,8 @@ function safe_publish_activation(): void {
 		update_option( 'safe_publish_number_of_posts', 10 );
 	}
 
-	if ( false === get_option( 'safe_publish_sync_direction' ) ) {
-		update_option( 'safe_publish_sync_direction', '' );
+	if ( false === get_option( 'safe_publish_sync_mode' ) ) {
+		update_option( 'safe_publish_sync_mode', '' );
 	}
 
 	// Flush rewrite rules if needed (only in non-VIP environments).

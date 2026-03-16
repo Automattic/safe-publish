@@ -65,12 +65,12 @@ final class Plugin {
 	 * Initializes plugin.
 	 */
 	public function init(): void {
-		$sync_direction = get_option( Options::OPTION_SYNC_DIRECTION, '' );
-		$connected_url  = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$sync_mode     = get_option( Options::OPTION_SYNC_MODE, '' );
+		$connected_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
 		$can_send = in_array(
-			$sync_direction,
-			array( Options::SYNC_DIRECTION_SEND, Options::SYNC_DIRECTION_BOTH ),
+			$sync_mode,
+			array( Options::SYNC_MODE_SEND, Options::SYNC_MODE_BOTH ),
 			true
 		);
 
@@ -80,8 +80,8 @@ final class Plugin {
 		}
 
 		$can_receive = in_array(
-			$sync_direction,
-			array( Options::SYNC_DIRECTION_RECEIVE, Options::SYNC_DIRECTION_BOTH ),
+			$sync_mode,
+			array( Options::SYNC_MODE_RECEIVE, Options::SYNC_MODE_BOTH ),
 			true
 		);
 
