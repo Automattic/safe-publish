@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for "receive" sync direction behavior
+ * Integration tests for "receive" sync mode behavior
  *
  * @package Safe_Publish
  */
@@ -14,11 +14,10 @@ use WP_REST_Request;
 use WP_REST_Server;
 
 /**
- * Verifies that in "receive" sync direction only receive functionality is
- * active.
+ * Verifies that in "receive" sync mode only receive functionality is active.
  *
  * These tests are run exclusively via phpunit-integration-sync-receive.xml,
- * which boots the plugin with WP_TEST_SYNC_DIRECTION=receive.
+ * which boots the plugin with WP_TEST_SYNC_MODE=receive.
  */
 class Sync_Receive_Integration_Test extends Integration_Test_Case {
 
@@ -83,8 +82,8 @@ class Sync_Receive_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that AJAX handlers for receiving are registered in "receive"
-	 * sync direction.
+	 * Verifies that AJAX handlers for receiving are registered in "receive"sync
+	 * mode.
 	 */
 	public function test_receive_ajax_handlers_are_registered(): void {
 		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_fetch_posts' ) );
@@ -97,11 +96,11 @@ class Sync_Receive_Integration_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that auth monitoring endpoints are not registered in "receive"
-	 * sync direction.
+	 * sync mode.
 	 *
 	 * These endpoints are registered exclusively by Auth_Manager, which is only
-	 * instantiated in "send"/"both" sync direction. Their absence means that
-	 * HMAC authentication is not active.
+	 * instantiated in "send"/"both" sync mode. Their absence means that HMAC
+	 * authentication is not active.
 	 */
 	public function test_auth_monitoring_endpoints_are_not_registered(): void {
 		$status_response = $this->server->dispatch(

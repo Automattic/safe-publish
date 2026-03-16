@@ -26,15 +26,15 @@ final class Settings_Page {
 	public function render(): void {
 		$site_url        = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 		$number_of_posts = get_option( Options::OPTION_NUMBER_OF_POSTS, 10 );
-		$sync_direction  = get_option( Options::OPTION_SYNC_DIRECTION, '' );
+		$sync_mode       = get_option( Options::OPTION_SYNC_MODE, '' );
 
 		// Basic auth credentials (development only).
 		$username = get_option( Options::OPTION_USERNAME, '' );
 		$password = get_option( Options::OPTION_PASSWORD, '' );
 
 		$show_receive_fields = in_array(
-			$sync_direction,
-			array( Options::SYNC_DIRECTION_RECEIVE, Options::SYNC_DIRECTION_BOTH ),
+			$sync_mode,
+			array( Options::SYNC_MODE_RECEIVE, Options::SYNC_MODE_BOTH ),
 			true
 		);
 
@@ -44,10 +44,10 @@ final class Settings_Page {
 
 			<?php settings_errors(); ?>
 
-			<?php if ( '' === $sync_direction || '' === $site_url ) : ?>
+			<?php if ( '' === $sync_mode || '' === $site_url ) : ?>
 			<div class="notice notice-info">
 				<p>
-					<?php esc_html_e( 'Configure a Sync Direction and Connected Site URL to get started.', 'safe-publish' ); ?>
+						<?php esc_html_e( 'Configure a Sync Mode and Connected Site URL to get started.', 'safe-publish' ); ?>
 				</p>
 			</div>
 			<?php endif; ?>
@@ -65,19 +65,19 @@ final class Settings_Page {
 						<table class="form-table">
 							<tr>
 								<th scope="row">
-									<?php esc_html_e( 'Sync Direction', 'safe-publish' ); ?>
+									<?php esc_html_e( 'Sync Mode', 'safe-publish' ); ?>
 								</th>
 								<td>
 									<fieldset>
 										<legend class="screen-reader-text">
-											<?php esc_html_e( 'Sync Direction', 'safe-publish' ); ?>
+											<?php esc_html_e( 'Sync Mode', 'safe-publish' ); ?>
 										</legend>
 										<label>
 											<input
 												type="radio"
-												name="safe_publish_sync_direction"
-												value="<?php echo esc_attr( Options::SYNC_DIRECTION_SEND ); ?>"
-												<?php checked( $sync_direction, Options::SYNC_DIRECTION_SEND ); ?>
+												name="safe_publish_sync_mode"
+												value="<?php echo esc_attr( Options::SYNC_MODE_SEND ); ?>"
+												<?php checked( $sync_mode, Options::SYNC_MODE_SEND ); ?>
 											/>
 											<?php esc_html_e( 'Send', 'safe-publish' ); ?>
 										</label>
@@ -85,9 +85,9 @@ final class Settings_Page {
 										<label>
 											<input
 												type="radio"
-												name="safe_publish_sync_direction"
-												value="<?php echo esc_attr( Options::SYNC_DIRECTION_RECEIVE ); ?>"
-												<?php checked( $sync_direction, Options::SYNC_DIRECTION_RECEIVE ); ?>
+												name="safe_publish_sync_mode"
+												value="<?php echo esc_attr( Options::SYNC_MODE_RECEIVE ); ?>"
+												<?php checked( $sync_mode, Options::SYNC_MODE_RECEIVE ); ?>
 											/>
 											<?php esc_html_e( 'Receive', 'safe-publish' ); ?>
 										</label>
@@ -95,9 +95,9 @@ final class Settings_Page {
 										<label>
 											<input
 												type="radio"
-												name="safe_publish_sync_direction"
-												value="<?php echo esc_attr( Options::SYNC_DIRECTION_BOTH ); ?>"
-												<?php checked( $sync_direction, Options::SYNC_DIRECTION_BOTH ); ?>
+												name="safe_publish_sync_mode"
+												value="<?php echo esc_attr( Options::SYNC_MODE_BOTH ); ?>"
+												<?php checked( $sync_mode, Options::SYNC_MODE_BOTH ); ?>
 											/>
 											<?php esc_html_e( 'Send and Receive', 'safe-publish' ); ?>
 										</label>

@@ -16,8 +16,8 @@
   </testsuites>
 
   <php>
-    <!-- Boot the plugin in "send" sync direction. -->
-    <env name="WP_TEST_SYNC_DIRECTION" value="send" />
+    <!-- Boot the plugin in "send" sync mode. -->
+    <env name="WP_TEST_SYNC_MODE" value="send" />
 
     <!-- Point wp-phpunit to our test config file -->
     <env name="WP_PHPUNIT__TESTS_CONFIG" value="tests/wp-tests-config.php" />
