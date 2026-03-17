@@ -10,6 +10,8 @@ declare(strict_types=1);
 namespace Safe_Publish\Media;
 
 use Safe_Publish\API\HTTP_Client;
+use Safe_Publish\Media\Media_Logger;
+use Safe_Publish\Utils\Logger;
 use Safe_Publish\Utils\Options;
 
 // Prevent direct access.
@@ -32,12 +34,20 @@ class Media_Importer {
 	private HTTP_Client $http_client;
 
 	/**
+	 * Logger instance.
+	 *
+	 * @var Logger
+	 */
+	private Logger $logger;
+
+	/**
 	 * Constructs the Media_Importer instance.
 	 *
 	 * @param HTTP_Client $http_client HTTP client for downloading files.
 	 */
 	public function __construct( HTTP_Client $http_client ) {
 		$this->http_client = $http_client;
+		$this->logger      = new Media_Logger();
 	}
 
 	/**
@@ -234,15 +244,22 @@ class Media_Importer {
 		remove_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ) );
 
 		if ( is_wp_error( $attachment_id ) ) {
-			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-			error_log( 'Safe Publish: Failed to import media ' . $media_url . ' - Error: ' . $attachment_id->get_error_message() );
+			$this->logger->log_error(
+				'MEDIA_IMPORT_FAILED',
+				array(
+					'url'   => $media_url,
+					'error' => $attachment_id->get_error_message(),
+				)
+			);
 			return false;
 		}
 
 		// Verify the attachment was actually created.
 		if ( ! $attachment_id || ! is_numeric( $attachment_id ) ) {
-			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-			error_log( 'Safe Publish: media_handle_sideload returned invalid attachment ID for ' . $media_url );
+			$this->logger->log_error(
+				'INVALID_ATTACHMENT_ID',
+				array( 'url' => $media_url )
+			);
 			return false;
 		}
 
