@@ -283,20 +283,6 @@ class Permission_Manager {
 			$allcaps[ $cap ] = true;
 		}
 
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			$virtual_user = $this->virtual_user ?? (object) array( 'ID' => 0 );
-			$this->logger->log_event(
-				'CAPABILITIES_GRANTED',
-				array(
-					'user_id'            => $virtual_user->ID,
-					'user_type'          => 'virtual_safe_publish_user',
-					'requested_caps'     => $caps,
-					'granted_caps_count' => count( array_filter( $allcaps ) ),
-					'vip_2fa_bypass'     => 'capability_based_auth',
-				)
-			);
-		}
-
 		return $allcaps;
 	}
 
