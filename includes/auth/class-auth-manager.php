@@ -169,7 +169,6 @@ class Auth_Manager {
 						'total_requests'   => 0,
 						'successful_auths' => 0,
 						'failed_auths'     => 0,
-						'success_rate'     => 0,
 						'last_success'     => null,
 						'last_failure'     => null,
 					),
