@@ -106,6 +106,8 @@ register_activation_hook( __FILE__, 'safe_publish_activation' );
  * Sets default options and flushes rewrite rules.
  */
 function safe_publish_activation(): void {
+	\Safe_Publish\Utils\Event_Table::create_table();
+
 	// Set default options.
 	if ( false === get_option( 'safe_publish_connected_site_url' ) ) {
 		update_option( 'safe_publish_connected_site_url', '' );

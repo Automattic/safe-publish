@@ -28,6 +28,7 @@ use Safe_Publish\API\Safe_Publish_API;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Embed_Processor;
 use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Utils\Event_Table;
 use Safe_Publish\Utils\Options;
 
 // Prevent direct access.
@@ -65,6 +66,8 @@ final class Plugin {
 	 * Initializes plugin.
 	 */
 	public function init(): void {
+		Event_Table::maybe_create_table();
+
 		$sync_mode     = get_option( Options::OPTION_SYNC_MODE, '' );
 		$connected_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 

@@ -7,6 +7,7 @@
 
 namespace Safe_Publish\Auth;
 
+use Safe_Publish\Utils\Event_Table;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -147,7 +148,12 @@ class Auth_Manager {
 	public function auth_status_callback( WP_REST_Request $_request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 		$shared_secret = $this->get_shared_secret();
 		$stats         = get_option( 'safe_publish_auth_stats', array() );
-		$recent_events = get_option( 'safe_publish_auth_log_events', array() );
+		$recent_events = Event_Table::get_events(
+			array(
+				'channel' => 'auth',
+				'limit'   => 10,
+			)
+		);
 
 		[ $status, $health_score, $issues ] = $this->calculate_health( $shared_secret, $stats, $recent_events );
 
@@ -174,7 +180,7 @@ class Auth_Manager {
 					),
 					$stats
 				),
-				'recent_events_count' => count( $recent_events ),
+				'recent_events_count' => Event_Table::count( array( 'channel' => 'auth' ) ),
 			),
 			200
 		);
@@ -187,24 +193,27 @@ class Auth_Manager {
 	 * @return WP_REST_Response Response containing paginated auth log data.
 	 */
 	public function auth_logs_callback( WP_REST_Request $request ): WP_REST_Response {
-		$recent_events = get_option( 'safe_publish_auth_log_events', array() );
-		$limit_value   = (int) $request->get_param( 'limit' );
-		$limit         = min( $limit_value ? $limit_value : 50, 100 );
-		$offset_value  = (int) $request->get_param( 'offset' );
-		$offset        = $offset_value ? $offset_value : 0;
+		$limit_value  = (int) $request->get_param( 'limit' );
+		$limit        = min( $limit_value ? $limit_value : 50, 100 );
+		$offset_value = (int) $request->get_param( 'offset' );
+		$offset       = $offset_value ? $offset_value : 0;
+		$event_type   = $request->get_param( 'event_type' );
 
-		$event_type = $request->get_param( 'event_type' );
+		$query_args = array(
+			'channel' => 'auth',
+			'limit'   => $limit,
+			'offset'  => $offset,
+		);
+
+		$count_args = array( 'channel' => 'auth' );
+
 		if ( $event_type ) {
-			$recent_events = array_filter(
-				$recent_events,
-				function ( $event ) use ( $event_type ): bool {
-					return strpos( $event['event'], $event_type ) !== false;
-				}
-			);
+			$query_args['event_type'] = $event_type;
+			$count_args['event_type'] = $event_type;
 		}
 
-		$total  = count( $recent_events );
-		$events = array_slice( array_reverse( $recent_events ), $offset, $limit );
+		$events = Event_Table::get_events( $query_args );
+		$total  = Event_Table::count( $count_args );
 
 		return new \WP_REST_Response(
 			array(
@@ -228,7 +237,7 @@ class Auth_Manager {
 	 * @return WP_REST_Response Response confirming logs were cleared.
 	 */
 	public function clear_auth_logs_callback( WP_REST_Request $_request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-		delete_option( 'safe_publish_auth_log_events' );
+		Event_Table::clear( 'auth' );
 		delete_option( 'safe_publish_auth_stats' );
 
 		$user_id = get_current_user_id();
