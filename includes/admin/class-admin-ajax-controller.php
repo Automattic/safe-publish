@@ -12,6 +12,7 @@ use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\Utils\Auth_Credential_Provider;
+use Safe_Publish\Utils\Logger;
 use Safe_Publish\Utils\Options;
 use Exception;
 
@@ -78,6 +79,13 @@ final class Admin_Ajax_Controller {
 	private HTTP_Client $http_client;
 
 	/**
+	 * Logger instance.
+	 *
+	 * @var Logger
+	 */
+	private Logger $logger;
+
+	/**
 	 * Constructs the Admin_Ajax_Controller instance.
 	 *
 	 * @param External_Posts_API  $api                 External Posts API instance.
@@ -104,6 +112,7 @@ final class Admin_Ajax_Controller {
 		$this->meta_terms_manager  = $meta_terms_manager;
 		$this->post_type_fetcher   = $post_type_fetcher;
 		$this->http_client         = $http_client;
+		$this->logger              = new Content_Logger();
 	}
 
 	/**
@@ -734,8 +743,7 @@ final class Admin_Ajax_Controller {
 			);
 			return $fresh_data ? $fresh_data : null;
 		} catch ( Exception $e ) {
-			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-			error_log( 'Safe Publish: Failed to fetch fresh content for update - ' . $e->getMessage() );
+			$this->logger->log_error( 'CONTENT_FETCH_FAILED', array( 'error' => $e->getMessage() ) );
 			return null;
 		}
 	}
