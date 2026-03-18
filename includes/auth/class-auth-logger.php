@@ -17,6 +17,28 @@ use Safe_Publish\Utils\Logger;
 class Auth_Logger extends Logger {
 
 	/**
+	 * Events that represent a successful authentication attempt.
+	 *
+	 * @var string[]
+	 */
+	private const SUCCESS_EVENTS = array(
+		'AUTH_SUCCESS',
+	);
+
+	/**
+	 * Events that represent a failed authentication attempt.
+	 *
+	 * @var string[]
+	 */
+	private const FAILURE_EVENTS = array(
+		'NO_SECRET_CONFIGURED',
+		'TIMESTAMP_EXPIRED',
+		'CONTENT_HASH_MISSING',
+		'CONTENT_HASH_MISMATCH',
+		'SIGNATURE_INVALID',
+	);
+
+	/**
 	 * Constructs the Auth_Logger instance.
 	 */
 	public function __construct() {
@@ -73,14 +95,11 @@ class Auth_Logger extends Logger {
 		++$stats['total_requests'];
 		++$stats['daily_stats'][ $today ]['requests'];
 
-		if ( strpos( $event, 'SUCCESS' ) !== false ) {
+		if ( in_array( $event, self::SUCCESS_EVENTS, true ) ) {
 			++$stats['successful_auths'];
 			$stats['last_success'] = current_time( 'mysql' );
 			++$stats['daily_stats'][ $today ]['successes'];
-		} elseif (
-			strpos( $event, 'INVALID' ) !== false ||
-			strpos( $event, 'EXPIRED' ) !== false
-		) {
+		} elseif ( in_array( $event, self::FAILURE_EVENTS, true ) ) {
 			++$stats['failed_auths'];
 			$stats['last_failure'] = current_time( 'mysql' );
 			++$stats['daily_stats'][ $today ]['failures'];
