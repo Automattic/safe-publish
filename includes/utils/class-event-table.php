@@ -133,10 +133,27 @@ class Event_Table {
 		$limit  = min( absint( $args['limit'] ?? 50 ), 100 );
 		$offset = absint( $args['offset'] ?? 0 );
 
-		[ $where_sql, $values ] = self::build_where( $args );
+		$conditions = array();
+		$values     = array();
 
-		$values[] = $limit;
-		$values[] = $offset;
+		if ( ! empty( $args['channel'] ) ) {
+			$conditions[] = 'channel = %s';
+			$values[]     = $args['channel'];
+		}
+
+		if ( ! empty( $args['level'] ) ) {
+			$conditions[] = 'level = %s';
+			$values[]     = $args['level'];
+		}
+
+		if ( ! empty( $args['event_type'] ) ) {
+			$conditions[] = 'event LIKE %s';
+			$values[]     = '%' . $wpdb->esc_like( $args['event_type'] ) . '%';
+		}
+
+		$where_sql = $conditions ? 'WHERE ' . implode( ' AND ', $conditions ) : '';
+		$values[]  = $limit;
+		$values[]  = $offset;
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
@@ -169,7 +186,25 @@ class Event_Table {
 
 		$table = self::table_name();
 
-		[ $where_sql, $values ] = self::build_where( $args );
+		$conditions = array();
+		$values     = array();
+
+		if ( ! empty( $args['channel'] ) ) {
+			$conditions[] = 'channel = %s';
+			$values[]     = $args['channel'];
+		}
+
+		if ( ! empty( $args['level'] ) ) {
+			$conditions[] = 'level = %s';
+			$values[]     = $args['level'];
+		}
+
+		if ( ! empty( $args['event_type'] ) ) {
+			$conditions[] = 'event LIKE %s';
+			$values[]     = '%' . $wpdb->esc_like( $args['event_type'] ) . '%';
+		}
+
+		$where_sql = $conditions ? 'WHERE ' . implode( ' AND ', $conditions ) : '';
 
 		if ( $values ) {
 			// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -196,37 +231,5 @@ class Event_Table {
 			array( 'channel' => $channel ),
 			array( '%s' )
 		);
-	}
-
-	/**
-	 * Builds a WHERE clause and its value bindings from filter arguments.
-	 *
-	 * @param array $args Filter arguments: channel, level, event_type.
-	 * @return array{0: string, 1: array} Tuple of [WHERE SQL fragment, values array].
-	 */
-	private static function build_where( array $args ): array {
-		global $wpdb;
-
-		$conditions = array();
-		$values     = array();
-
-		if ( ! empty( $args['channel'] ) ) {
-			$conditions[] = 'channel = %s';
-			$values[]     = $args['channel'];
-		}
-
-		if ( ! empty( $args['level'] ) ) {
-			$conditions[] = 'level = %s';
-			$values[]     = $args['level'];
-		}
-
-		if ( ! empty( $args['event_type'] ) ) {
-			$conditions[] = 'event LIKE %s';
-			$values[]     = '%' . $wpdb->esc_like( $args['event_type'] ) . '%';
-		}
-
-		$where_sql = $conditions ? 'WHERE ' . implode( ' AND ', $conditions ) : '';
-
-		return array( $where_sql, $values );
 	}
 }
