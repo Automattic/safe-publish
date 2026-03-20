@@ -224,14 +224,18 @@ class External_Posts_API {
 	/**
 	 * Tests API connection.
 	 *
-	 * @param string $site_url Site URL to test.
+	 * @param string $site_url         Site URL to test.
+	 * @param array  $auth_credentials Authentication credentials.
 	 * @return array Test results.
 	 */
-	public function test_connection( string $site_url ): array {
+	public function test_connection(
+		string $site_url,
+		array $auth_credentials
+	): array {
 		$test_url = trailingslashit( $site_url ) . 'wp-json/wp/v2/posts?per_page=1&_fields=id';
 
 		$start_time = microtime( true );
-		$response   = $this->make_request( $test_url, array() );
+		$response   = $this->make_request( $test_url, $auth_credentials );
 		$end_time   = microtime( true );
 
 		$results = array(

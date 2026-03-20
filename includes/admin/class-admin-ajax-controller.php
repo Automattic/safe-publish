@@ -208,7 +208,8 @@ final class Admin_Ajax_Controller {
 
 		$this->validate_auth_or_fail();
 
-		$results = $this->api->test_connection( $site_url );
+		$auth_credentials = Auth_Credential_Provider::get_credentials();
+		$results          = $this->api->test_connection( $site_url, $auth_credentials );
 
 		wp_send_json_success( $results );
 	}
