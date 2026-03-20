@@ -62,7 +62,8 @@ class Auth_Manager {
 		$this->authenticator      = new HMAC_Authenticator(
 			$this->logger,
 			$this->permission_manager,
-			$this->get_shared_secret()
+			$this->get_shared_secret(),
+			get_option( 'safe_publish_connected_site_url', '' )
 		);
 		$this->dashboard_widget   = new Dashboard_Widget( $this->get_shared_secret() );
 	}

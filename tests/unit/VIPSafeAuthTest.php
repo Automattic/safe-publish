@@ -20,6 +20,53 @@ use Safe_Publish\Auth\VIP_Safe_Auth;
 class VIPSafeAuthTest extends TestCase {
 
 	/**
+	 * Verifies that auth params include the source site URL header.
+	 */
+	public function test_get_auth_params_includes_site_url_header(): void {
+		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
+
+		$this->assertArrayHasKey( 'X-Safe-Publish-Site-URL', $params['headers'] );
+		$this->assertNotEmpty( $params['headers']['X-Safe-Publish-Site-URL'] );
+	}
+
+	/**
+	 * Verifies that the source site URL is baked into the HMAC signature.
+	 */
+	public function test_site_url_is_included_in_signature(): void {
+		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		$params_with_url = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
+		$source_url      = $params_with_url['headers']['X-Safe-Publish-Site-URL'];
+		$timestamp       = $params_with_url['headers']['X-Safe-Publish-Timestamp'];
+		$content_hash    = $params_with_url['headers']['X-Safe-Publish-Content-Hash'];
+
+		// Recompute what the signature should be with and without the source URL.
+		$route       = '/wp/v2/posts';
+		$without_url = hash_hmac(
+			'sha256',
+			'GET|' . $route . '|' . $timestamp . '|' . $content_hash,
+			$auth_config['shared_secret']
+		);
+		$with_url    = hash_hmac(
+			'sha256',
+			'GET|' . $route . '|' . $timestamp . '|' . $content_hash . '|' . $source_url,
+			$auth_config['shared_secret']
+		);
+
+		// The signature must match the one that includes the site URL.
+		$this->assertSame( $with_url, $params_with_url['headers']['X-Safe-Publish-Signature'] );
+		$this->assertNotSame( $without_url, $params_with_url['headers']['X-Safe-Publish-Signature'] );
+	}
+
+	/**
 	 * Verifies that auth params include proper headers with shared secret.
 	 */
 	public function test_get_auth_params_with_shared_secret(): void {
