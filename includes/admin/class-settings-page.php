@@ -101,9 +101,6 @@ final class Settings_Page {
 											<?php esc_html_e( 'Send and Receive', 'safe-publish' ); ?>
 										</label>
 									</fieldset>
-									<p class="description">
-										<?php esc_html_e( 'Send: allow the connected site to pull content from this site. Receive: import content from the connected site. Send and Receive: both directions active.', 'safe-publish' ); ?>
-									</p>
 								</td>
 							</tr>
 
@@ -122,9 +119,56 @@ final class Settings_Page {
 										class="regular-text"
 										placeholder="<?php echo esc_attr__( 'https://example.com', 'safe-publish' ); ?>"
 									/>
+								</td>
+							</tr>
+
+							<tr class="safe-publish-receive-field-row<?php echo $show_receive_fields ? '' : ' hidden'; ?>">
+								<th scope="row">
+									<?php esc_html_e( 'Basic Auth Credentials', 'safe-publish' ); ?>
+								</th>
+								<td>
+									<label for="safe_publish_username" class="screen-reader-text">
+										<?php esc_html_e( 'Basic Auth Username', 'safe-publish' ); ?>
+									</label>
+									<input
+										type="text"
+										id="safe_publish_username"
+										name="safe_publish_username"
+										value="<?php echo esc_attr( $username ); ?>"
+										class="regular-text"
+										placeholder="<?php echo esc_attr__( 'Username', 'safe-publish' ); ?>"
+										autocomplete="username"
+									/>
+									<br />
+									<label for="safe_publish_password" class="screen-reader-text">
+										<?php esc_html_e( 'Basic Auth Password', 'safe-publish' ); ?>
+									</label>
+									<input
+										type="password"
+										id="safe_publish_password"
+										name="safe_publish_password"
+										value="<?php echo esc_attr( $password ); ?>"
+										class="regular-text"
+										placeholder="<?php echo esc_attr__( 'Password', 'safe-publish' ); ?>"
+										autocomplete="current-password"
+										style="margin-top: 4px;"
+									/>
 									<p class="description">
-										<?php esc_html_e( 'URL of the WordPress site to send content to or receive content from.', 'safe-publish' ); ?>
+										<?php esc_html_e( 'Optional. Applicable only if Basic Authentication is being used.', 'safe-publish' ); ?>
 									</p>
+								</td>
+							</tr>
+
+							<tr class="safe-publish-receive-field-row<?php echo $show_receive_fields ? '' : ' hidden'; ?>">
+								<th scope="row"></th>
+								<td>
+									<button type="button" id="safe-publish-test-connection" class="button button-secondary">
+										<?php esc_html_e( 'Test Connection', 'safe-publish' ); ?>
+									</button>
+									<p class="description">
+										<?php esc_html_e( 'Test current connection settings. Use the "Save Changes" button to save.', 'safe-publish' ); ?>
+									</p>
+									<div id="safe-publish-test-connection-result" style="margin-top: 8px; max-width: 500px; padding: 10px;"></div>
 								</td>
 							</tr>
 
@@ -149,73 +193,116 @@ final class Settings_Page {
 									</p>
 								</td>
 							</tr>
-
-							<tr class="safe-publish-receive-field-row<?php echo $show_receive_fields ? '' : ' hidden'; ?>">
-								<th scope="row">
-									<label for="safe_publish_username">
-										<?php esc_html_e( 'Username', 'safe-publish' ); ?>
-									</label>
-								</th>
-								<td>
-									<input
-										type="text"
-										id="safe_publish_username"
-										name="safe_publish_username"
-										value="<?php echo esc_attr( $username ); ?>"
-										class="regular-text"
-										placeholder="<?php echo esc_attr__( 'Username for Basic authentication', 'safe-publish' ); ?>"
-										autocomplete="username"
-									/>
-									<p class="description">
-										<?php esc_html_e( 'Basic authentication username.', 'safe-publish' ); ?>
-									</p>
-								</td>
-							</tr>
-
-							<tr class="safe-publish-receive-field-row<?php echo $show_receive_fields ? '' : ' hidden'; ?>">
-								<th scope="row">
-									<label for="safe_publish_password">
-										<?php esc_html_e( 'Password', 'safe-publish' ); ?>
-									</label>
-								</th>
-								<td>
-									<input
-										type="password"
-										id="safe_publish_password"
-										name="safe_publish_password"
-										value="<?php echo esc_attr( $password ); ?>"
-										class="regular-text"
-										placeholder="<?php echo esc_attr__( 'Password for Basic authentication', 'safe-publish' ); ?>"
-										autocomplete="current-password"
-									/>
-									<p class="description">
-										<?php esc_html_e( 'Basic authentication password.', 'safe-publish' ); ?>
-									</p>
-								</td>
-							</tr>
 						</table>
 
 					<?php submit_button(); ?>
 				</form>
 
-					<script>
-					( function () {
-						const radios = document.querySelectorAll( 'input[name="safe_publish_sync_mode"]' );
-						const receiveModes = [ '<?php echo esc_js( Options::SYNC_MODE_RECEIVE ); ?>', '<?php echo esc_js( Options::SYNC_MODE_BOTH ); ?>' ];
+				<script>
+				( function () {
+					const receiveModes = [ '<?php echo esc_js( Options::SYNC_MODE_RECEIVE ); ?>', '<?php echo esc_js( Options::SYNC_MODE_BOTH ); ?>' ];
 
-						function toggleReceiveFields() {
-							const selected = document.querySelector( 'input[name="safe_publish_sync_mode"]:checked' );
-							const show = selected && receiveModes.indexOf( selected.value ) !== -1;
-							document.querySelectorAll( '.safe-publish-receive-field-row' ).forEach( function ( row ) {
-								row.classList.toggle( 'hidden', ! show );
-							} );
-						}
+					/**
+					 * Toggles visibility of form rows that are only relevant in Receive
+					 * or Send and Receive sync mode.
+					 */
+					function toggleReceiveFields() {
+						const selected = document.querySelector( 'input[name="safe_publish_sync_mode"]:checked' );
+						const show = selected && receiveModes.indexOf( selected.value ) !== -1;
+						document.querySelectorAll( '.safe-publish-receive-field-row' ).forEach( function ( row ) {
+							row.classList.toggle( 'hidden', ! show );
+						} );
+					}
 
-						radios.forEach( function ( radio ) {
+					/**
+					 * Wires up the Sync Mode radio buttons to show/hide Receive-only fields.
+					 */
+					function initReceiveFieldToggle() {
+						document.querySelectorAll( 'input[name="safe_publish_sync_mode"]' ).forEach( function ( radio ) {
 							radio.addEventListener( 'change', toggleReceiveFields );
 						} );
-					} )();
-					</script>
+					}
+
+					/**
+					 * POSTs a test connection request using the current live values from
+					 * the Connected Site URL, Username, and Password fields, and shows
+					 * the result inline.
+					 *
+					 * @param {HTMLButtonElement} testBtn  Button element, disabled while testing.
+					 * @param {HTMLElement}       resultEl Element where the result message is rendered.
+					 * @param {string}            ajaxUrl  WordPress AJAX endpoint URL.
+					 * @param {string}            nonce    Nonce for the safe_publish_ajax_nonce action.
+					 */
+					function testConnection( testBtn, resultEl, ajaxUrl, nonce ) {
+						const siteUrl     = document.getElementById( 'safe_publish_connected_site_url' ).value;
+						const usernameEl  = document.getElementById( 'safe_publish_username' );
+						const passwordEl  = document.getElementById( 'safe_publish_password' );
+
+						if ( ! siteUrl ) {
+							resultEl.className   = 'notice notice-error inline';
+							resultEl.textContent = "<?php echo esc_js( __( 'Please enter a Connected Site URL first.', 'safe-publish' ) ); ?>";
+							return;
+						}
+
+						testBtn.disabled     = true;
+						resultEl.textContent = '';
+						resultEl.className   = '';
+
+						const formData = new FormData();
+						formData.append( 'action', 'safe_publish_test_connection' );
+						formData.append( 'nonce', nonce );
+						formData.append( 'site_url', siteUrl );
+						if ( usernameEl ) formData.append( 'username', usernameEl.value );
+						if ( passwordEl ) formData.append( 'password', passwordEl.value );
+
+						fetch( ajaxUrl, { method: 'POST', body: formData } )
+							.then( function ( r ) { return r.json(); } )
+							.then( function ( data ) {
+								if ( data.success && data.data ) {
+									const msg = data.data.response_time
+										? data.data.message + ' (Response time: ' + data.data.response_time + 'ms)'
+										: data.data.message;
+									resultEl.className   = data.data.success ? 'notice notice-success inline' : 'notice notice-error inline';
+									resultEl.textContent = msg;
+								} else {
+									resultEl.className   = 'notice notice-error inline';
+									resultEl.textContent = data.data && data.data.message
+										? data.data.message
+										: "<?php echo esc_js( __( 'Connection test failed.', 'safe-publish' ) ); ?>";
+								}
+							} )
+							.catch( function () {
+								resultEl.className   = 'notice notice-error inline';
+								resultEl.textContent = "<?php echo esc_js( __( 'Network error occurred during connection test.', 'safe-publish' ) ); ?>";
+							} )
+							.finally( function () {
+								testBtn.disabled = false;
+							} );
+					}
+
+					/**
+					 * Wires up the Test Connection button to call testConnection() on click.
+					 */
+					function initTestConnectionButton() {
+						const testBtn  = document.getElementById( 'safe-publish-test-connection' );
+						const resultEl = document.getElementById( 'safe-publish-test-connection-result' );
+
+						if ( ! testBtn || ! resultEl ) {
+							return;
+						}
+
+						const ajaxUrl = "<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>";
+						const nonce   = "<?php echo esc_js( wp_create_nonce( 'safe_publish_ajax_nonce' ) ); ?>";
+
+						testBtn.addEventListener( 'click', function () {
+							testConnection( testBtn, resultEl, ajaxUrl, nonce );
+						} );
+					}
+
+					initReceiveFieldToggle();
+					initTestConnectionButton();
+				} )();
+				</script>
 				</div>
 			</div>
 		</div>

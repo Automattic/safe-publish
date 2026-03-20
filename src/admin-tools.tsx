@@ -1,18 +1,16 @@
 /**
- * Admin Tools React component for handling test connection and preview posts.
+ * Admin Tools React component for previewing posts.
  *
- * Provides UI for testing the connection to external WordPress sites and
- * previewing available posts before import.
+ * Provides UI for previewing available posts before import.
  *
  * @file This file defines the AdminTools component for the Safe Publish plugin.
  */
 import { PostTypeSelector } from './post-type-selector';
-import { getErrorMessage } from './utils';
 import { Button, Notice, Spinner } from '@wordpress/components';
 import { useState, createInterpolateElement } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
-import type { Post, ApiResponse, ConnectionTestData } from './types';
+import type { Post, ApiResponse } from './types';
 import type { ReactNode } from 'react';
 
 /**
@@ -24,19 +22,6 @@ import type { ReactNode } from 'react';
 interface AdminToolsProps {
 	siteUrl: string;
 	numberPosts: number;
-}
-
-/**
- * Result from a connection test request.
- *
- * @property {boolean}          success         Whether the test succeeded.
- * @property {string|ReactNode} message         Result message to display.
- * @property {number}           [response_time] Response time in milliseconds.
- */
-interface TestResult {
-	success: boolean;
-	message: string | ReactNode;
-	response_time?: number;
 }
 
 /**
@@ -68,9 +53,6 @@ export function AdminTools( {
 	siteUrl: initialSiteUrl,
 	numberPosts,
 }: AdminToolsProps ): JSX.Element {
-	const [ testLoading, setTestLoading ] = useState( false );
-	const [ testResult, setTestResult ] = useState< TestResult | null >( null );
-
 	const [ previewLoading, setPreviewLoading ] = useState( false );
 	const [ previewResult, setPreviewResult ] = useState< PreviewResult | null >( null );
 
@@ -126,69 +108,6 @@ export function AdminTools( {
 		} );
 
 		return response.json() as Promise<ApiResponse<T>>;
-	};
-
-	/**
-	 * Tests connection to the external site.
-	 *
-	 * Sends a test request to the external WordPress site and displays the
-	 * connection result.
-	 *
-	 * @return {Promise<void>} Resolves when the test completes.
-	 */
-	const handleTestConnection = async (): Promise< void > => {
-		const siteUrl = getExternalSiteUrl();
-
-		if ( ! siteUrl ) {
-			const settingsUrl = window.safePublishAdminData?.settingsUrl || '/wp-admin/admin.php?page=safe-publish-settings';
-			setTestResult( {
-				success: false,
-				message: createInterpolateElement(
-					__( 'Please enter a site URL in the <link>settings page</link> first.', 'safe-publish' ),
-					{
-						link: <a href={ settingsUrl }>link</a>,
-					}
-				),
-			} );
-			return;
-		}
-
-		setTestLoading( true );
-		setTestResult( null );
-
-		try {
-			const response = await makeRequest<ConnectionTestData>( 'safe_publish_test_connection', {
-				site_url: siteUrl,
-			} );
-
-			if ( response.success ) {
-				const message = response.data.response_time
-					? sprintf(
-						/* translators: 1: connection message, 2: response time in milliseconds */
-						__( '%1$s (Response time: %2$dms)', 'safe-publish' ),
-						response.data.message,
-						response.data.response_time
-					)
-					: response.data.message;
-
-				setTestResult( {
-					success: response.data.success,
-					message,
-				} );
-			} else {
-				setTestResult( {
-					success: false,
-					message: getErrorMessage( response, __( 'Connection test failed.', 'safe-publish' ) ),
-				} );
-			}
-		} catch ( error ) {
-			setTestResult( {
-				success: false,
-				message: __( 'Network error occurred during connection test.', 'safe-publish' ),
-			} );
-		} finally {
-			setTestLoading( false );
-		}
 	};
 
 	/**
@@ -261,19 +180,6 @@ export function AdminTools( {
 	};
 
 	/**
-	 * Click handler for the test connection button.
-	 *
-	 * Wraps the async handleTestConnection function for use as an onClick handler.
-	 */
-	const onTestClick = (): void => {
-		handleTestConnection().catch( ( error ) => {
-			// Only unexpected errors should reach here.
-			// eslint-disable-next-line no-console
-			console.error( 'Unexpected error in handleTestConnection:', error );
-		} );
-	};
-
-	/**
 	 * Click handler for the preview posts button.
 	 *
 	 * Wraps the async handlePreviewPosts function for use as an onClick handler.
@@ -288,31 +194,6 @@ export function AdminTools( {
 
 	return (
 		<div className="safe-publish-admin-tools">
-			{ /* Test Connection */ }
-			<div className="safe-publish-tool">
-				<h3>{ __( 'Test Connection', 'safe-publish' ) }</h3>
-				<p>{ __( 'Test the connection to the source site API.', 'safe-publish' ) }</p>
-				<Button variant="secondary" onClick={ onTestClick } disabled={ testLoading }>
-					{ testLoading ? (
-						<>
-							<Spinner />
-							{ __( 'Testing…', 'safe-publish' ) }
-						</>
-					) : (
-						__( 'Test Connection', 'safe-publish' )
-					) }
-				</Button>
-				{ testResult && (
-					<Notice
-						status={ testResult.success ? 'success' : 'error' }
-						onRemove={ () => setTestResult( null ) }
-						className="safe-publish-test-result"
-					>
-						{ testResult.message }
-					</Notice>
-				) }
-			</div>
-
 			{ /* Preview Posts */ }
 			<div className="safe-publish-tool">
 				<h3>{ __( 'Preview Posts', 'safe-publish' ) }</h3>
