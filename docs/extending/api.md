@@ -2,185 +2,51 @@
 
 Safe Publish provides REST API endpoints for programmatic access. This guide explains how to use and extend the API.
 
-## Base API Endpoints
+## API Endpoints
 
-The plugin registers endpoints under the `safe-publish/v1` namespace:
+The plugin registers endpoints under the `safe-publish/v1` namespace.
 
-- `GET /wp-json/safe-publish/v1/status` - Plugin status and version
-- `POST /wp-json/safe-publish/v1/import` - Import a single post
-- `POST /wp-json/safe-publish/v1/bulk-import` - Bulk import multiple posts
-- `GET /wp-json/safe-publish/v1/history` - Get import history
-- `GET /wp-json/safe-publish/v1/post-types` - Get available post types from external site
+### Content Endpoints
+
+Require a WordPress user with `edit_post` capability for the target post.
+
+| Method | Endpoint                                | Description                      |
+| ------ | --------------------------------------- | -------------------------------- |
+| `POST` | `/wp-json/safe-publish/v1/diff-preview` | Render a diff preview for a post |
+| `POST` | `/wp-json/safe-publish/v1/update-post`  | Apply imported content to a post |
+
+### Monitoring Endpoints
+
+| Method   | Endpoint                               | Auth                     | Description                          |
+| -------- | -------------------------------------- | ------------------------ | ------------------------------------ |
+| `GET`    | `/wp-json/safe-publish/v1/auth-status` | `manage_options` or HMAC | Authentication health and statistics |
+| `GET`    | `/wp-json/safe-publish/v1/auth-logs`   | `manage_options` or HMAC | Paginated authentication event log   |
+| `DELETE` | `/wp-json/safe-publish/v1/auth-logs`   | `manage_options`         | Clear authentication logs            |
+| `GET`    | `/wp-json/safe-publish/v1/auth-test`   | None                     | Authentication diagnostic test       |
 
 ## Authentication
 
-API requests require proper WordPress authentication. Use one of these methods:
+### Content endpoints
 
-### Application Passwords (Recommended)
-
-WordPress 5.6+ supports application passwords:
-
-```bash
-curl -X POST https://your-site.com/wp-json/safe-publish/v1/import \
-  -u "username:xxxx xxxx xxxx xxxx xxxx xxxx" \
-  -H "Content-Type: application/json" \
-  -d '{"source_url": "https://staging.com/post-123", "post_id": 123}'
-```
-
-### Cookie Authentication
-
-When making requests from the same site:
+Content endpoints are called from the WordPress admin UI and use **cookie authentication** with a nonce — no additional setup needed.
 
 ```javascript
-fetch('/wp-json/safe-publish/v1/import', {
+fetch('/wp-json/safe-publish/v1/update-post', {
   method: 'POST',
   credentials: 'include',
   headers: {
     'Content-Type': 'application/json',
     'X-WP-Nonce': wpApiSettings.nonce
   },
-  body: JSON.stringify({
-    source_url: 'https://staging.com/post-123',
-    post_id: 123
-  })
+  body: JSON.stringify({ postId: 123, content: '...' })
 });
 ```
 
-## Using the API
+Application Passwords can also be used for external access to these endpoints, but are incompatible when [VIP Basic Authentication](https://docs.wpvip.com/security-controls/basic-authentication/) is enabled — see [Authentication](../concepts/authentication.md).
 
-### Get Plugin Status
+### Monitoring endpoints
 
-```bash
-curl https://your-site.com/wp-json/safe-publish/v1/status
-```
-
-**Response:**
-
-```json
-{
-  "version": "1.0.0",
-  "configured": true,
-  "external_site": "https://staging.example.com",
-  "authentication": "shared_secret"
-}
-```
-
-### Import a Single Post
-
-```bash
-curl -X POST https://your-site.com/wp-json/safe-publish/v1/import \
-  -u "username:app-password" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "source_url": "https://staging.com/wp-json/wp/v2/posts/123",
-    "post_id": 123,
-    "post_type": "post"
-  }'
-```
-
-**Response (Success):**
-
-```json
-{
-  "success": true,
-  "post_id": 456,
-  "message": "Post imported successfully",
-  "edit_link": "https://your-site.com/wp-admin/post.php?post=456&action=edit"
-}
-```
-
-**Response (Error):**
-
-```json
-{
-  "success": false,
-  "code": "import_failed",
-  "message": "Failed to import post: Authentication failed",
-  "data": {
-    "status": 400
-  }
-}
-```
-
-### Bulk Import
-
-```bash
-curl -X POST https://your-site.com/wp-json/safe-publish/v1/bulk-import \
-  -u "username:app-password" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "posts": [
-      {"post_id": 123, "post_type": "post"},
-      {"post_id": 124, "post_type": "post"},
-      {"post_id": 125, "post_type": "page"}
-    ]
-  }'
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "imported": 2,
-  "failed": 1,
-  "results": [
-    {
-      "source_id": 123,
-      "success": true,
-      "post_id": 456
-    },
-    {
-      "source_id": 124,
-      "success": true,
-      "post_id": 457
-    },
-    {
-      "source_id": 125,
-      "success": false,
-      "error": "Invalid post data"
-    }
-  ]
-}
-```
-
-### Get Import History
-
-```bash
-curl https://your-site.com/wp-json/safe-publish/v1/history \
-  -u "username:app-password"
-```
-
-**Query Parameters:**
-
-- `page` (int) - Page number (default: 1)
-- `per_page` (int) - Results per page (default: 20, max: 100)
-- `status` (string) - Filter by status: 'success' or 'failed'
-- `user_id` (int) - Filter by user ID
-- `after` (string) - After date (ISO 8601 format)
-- `before` (string) - Before date (ISO 8601 format)
-
-**Response:**
-
-```json
-{
-  "total": 145,
-  "pages": 8,
-  "history": [
-    {
-      "id": 1,
-      "timestamp": "2024-10-29T14:23:45",
-      "user_id": 1,
-      "user_name": "admin",
-      "source_url": "https://staging.example.com",
-      "source_post_id": 123,
-      "destination_post_id": 456,
-      "status": "success",
-      "error_message": null
-    }
-  ]
-}
-```
+Monitoring endpoints accept either a WordPress user with `manage_options` capability, or a valid HMAC shared secret signature. The HMAC method has no conflict with VIP Basic Authentication, since it uses the custom `X-Safe-Publish-Signature` header rather than `Authorization: Basic`.
 
 ## Registering Custom Endpoints
 
@@ -262,115 +128,6 @@ add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
         ],
     ] );
 }, 10, 2 );
-```
-
-## JavaScript SDK Example
-
-Create a simple JavaScript client:
-
-```javascript
-class SafePublishClient {
-    constructor(baseUrl, credentials) {
-        this.baseUrl = baseUrl;
-        this.credentials = credentials;
-    }
-
-    async import(postId, postType = 'post') {
-        const response = await fetch(`${this.baseUrl}/wp-json/safe-publish/v1/import`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Basic ${btoa(this.credentials)}`
-            },
-            body: JSON.stringify({ post_id: postId, post_type: postType })
-        });
-
-        return await response.json();
-    }
-
-    async bulkImport(posts) {
-        const response = await fetch(`${this.baseUrl}/wp-json/safe-publish/v1/bulk-import`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Basic ${btoa(this.credentials)}`
-            },
-            body: JSON.stringify({ posts })
-        });
-
-        return await response.json();
-    }
-
-    async getHistory(params = {}) {
-        const queryString = new URLSearchParams(params).toString();
-        const response = await fetch(
-            `${this.baseUrl}/wp-json/safe-publish/v1/history?${queryString}`,
-            {
-                headers: {
-                    'Authorization': `Basic ${btoa(this.credentials)}`
-                }
-            }
-        );
-
-        return await response.json();
-    }
-}
-
-// Usage
-const client = new SafePublishClient(
-    'https://your-site.com',
-    'username:app-password'
-);
-
-// Import a post
-const result = await client.import(123, 'post');
-console.log(result);
-
-// Bulk import
-const bulkResult = await client.bulkImport([
-    { post_id: 123, post_type: 'post' },
-    { post_id: 124, post_type: 'page' }
-]);
-console.log(bulkResult);
-
-// Get history
-const history = await client.getHistory({
-    per_page: 50,
-    status: 'success'
-});
-console.log(history);
-```
-
-## Rate Limiting
-
-Implement custom rate limiting:
-
-```php
-add_filter( 'rest_pre_dispatch', function( $result, $server, $request ) {
-    // Only apply to Safe Publish endpoints
-    if ( strpos( $request->get_route(), '/safe-publish/v1/' ) !== 0 ) {
-        return $result;
-    }
-
-    $user_id = get_current_user_id();
-    $rate_key = 'safe_publish_rate_limit_' . $user_id;
-    $max_requests = 60; // 60 requests
-    $time_window = 60; // per minute
-
-    $requests = get_transient( $rate_key ) ?: 0;
-
-    if ( $requests >= $max_requests ) {
-        return new WP_Error(
-            'rate_limit_exceeded',
-            'Too many requests. Please try again later.',
-            [ 'status' => 429 ]
-        );
-    }
-
-    set_transient( $rate_key, $requests + 1, $time_window );
-
-    return $result;
-}, 10, 3 );
 ```
 
 ## Error Handling
