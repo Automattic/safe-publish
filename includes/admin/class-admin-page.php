@@ -48,19 +48,6 @@ final class Admin_Page {
 			<h1><?php esc_html_e( 'Safe Publish', 'safe-publish' ); ?></h1>
 
 			<div class="safe-publish-admin-container">
-
-				<div class="safe-publish-tools-section">
-					<h2><?php esc_html_e( 'Tools', 'safe-publish' ); ?></h2>
-
-					<!-- React Admin Tools component will be mounted here -->
-					<div id="safe-publish-admin-tools-container">
-						<div class="safe-publish-loading">
-							<p><?php esc_html_e( 'Loading tools…', 'safe-publish' ); ?></p>
-						</div>
-					</div>
-
-				</div>
-
 				<div class="safe-publish-dataviews-section">
 					<h2><?php esc_html_e( 'Recent Posts from Source Site', 'safe-publish' ); ?></h2>
 

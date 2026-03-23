@@ -16,7 +16,6 @@ declare global {
 			postsData: string;
 			strings: Record< string, string >;
 		};
-		safePublishRefreshPosts?: ( postType?: string ) => void;
 	}
 }
 
