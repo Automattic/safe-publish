@@ -75,12 +75,20 @@ function get_site_url(): string {
 	return 'http://localhost';
 }
 
+function home_url( string $path = '' ): string {
+	return 'http://localhost' . $path;
+}
+
 function attachment_url_to_postid( string $url ): int {
 	return 0; // Return 0 for tests (not found).
 }
 
 function trailingslashit( string $path ): string {
 	return rtrim( $path, '/' ) . '/';
+}
+
+function untrailingslashit( string $path ): string {
+	return rtrim( $path, '/\\' );
 }
 
 /**
