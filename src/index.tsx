@@ -9,7 +9,15 @@
 import { createRoot } from 'react-dom/client';
 
 import { actions } from './actions';
-import { LAYOUT_GRID, LAYOUT_LIST, LAYOUT_TABLE } from './constants';
+import {
+	DEFAULT_POSTS_PER_PAGE,
+	LAYOUT_GRID,
+	LAYOUT_LIST,
+	LAYOUT_TABLE,
+	MAX_POSTS_COUNT,
+	MIN_POSTS_COUNT,
+	NUMBER_POSTS_DEBOUNCE_DELAY,
+} from './constants';
 import { PostTypeSelector } from './post-type-selector';
 import {
 	extractUrlPath,
@@ -20,8 +28,9 @@ import {
 	searchPosts,
 	sortPosts,
 } from './utils';
+import { __experimentalNumberControl as NumberControl } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
-import { useState, useEffect } from '@wordpress/element';
+import { useState, useEffect, useRef } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
 import type {
@@ -50,7 +59,7 @@ import './style.scss';
 function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: ExternalPostsDataViewProps ): JSX.Element {
 	const [ view, setView ] = useState< View >( {
 		type: 'table',
-		perPage: 10,
+		perPage: DEFAULT_POSTS_PER_PAGE,
 		page: 1,
 		sort: {
 			field: 'modified',
@@ -74,13 +83,16 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 	const [ selectedPostType, setSelectedPostType ] = useState( 'posts' );
 	const [ isLoadingPosts, setIsLoadingPosts ] = useState( false );
 	const [ fetchError, setFetchError ] = useState< string | null >( null );
+	const [ numberPostsState, setNumberPostsState ] = useState( numberPosts );
+	const [ numberPostsInput, setNumberPostsInput ] = useState( String( numberPosts ) );
+	const numberPostsTimerRef = useRef< ReturnType< typeof setTimeout > | null >( null );
 	const [ filteredData, setFilteredData ] = useState< Post[] >( initialPosts );
 	const [ paginationInfo, setPaginationInfo ] = useState< PaginationInfo >( {
 		totalItems: initialPosts.length,
-		totalPages: Math.ceil( initialPosts.length / 10 ),
+		totalPages: Math.ceil( initialPosts.length / DEFAULT_POSTS_PER_PAGE ),
 	} );
 
-	// Fields configuration for DataViews (simplified for debugging).
+	// Fields configuration for DataViews.
 	const fields: DataViewsField<Post>[] = [
 		{
 			id: 'title',
@@ -167,9 +179,10 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 	 * Fetches posts for the given post type and updates the DataViews.
 	 *
 	 * @param {string} postType Post type slug to fetch.
+	 * @param {number} numPosts Number of posts to fetch.
 	 * @return {Promise<void>} Resolves when fetch completes.
 	 */
-	const fetchPostsByType = async ( postType: string ): Promise< void > => {
+	const fetchPostsByType = async ( postType: string, numPosts: number ): Promise< void > => {
 		if ( ! siteUrl ) {
 			return;
 		}
@@ -181,7 +194,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 		formData.append( 'action', 'safe_publish_fetch_posts' );
 		formData.append( 'nonce', window.safePublishAdminData.nonce );
 		formData.append( 'site_url', siteUrl );
-		formData.append( 'number_of_posts', numberPosts.toString() );
+		formData.append( 'number_of_posts', numPosts.toString() );
 		formData.append( 'post_type', postType );
 
 		try {
@@ -221,7 +234,43 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 	 */
 	const handlePostTypeChange = ( postType: string ): void => {
 		setSelectedPostType( postType );
-		fetchPostsByType( postType ).catch( ( error ) => {
+		fetchPostsByType( postType, numberPostsState ).catch( ( error ) => {
+			// Only unexpected errors reach here.
+			// eslint-disable-next-line no-console
+			console.error( 'Unexpected error in fetchPostsByType:', error );
+		} );
+	};
+
+	/**
+	 * Commits the number of posts input value after debouncing.
+	 *
+	 * @param {string} rawValue Raw input value from the NumberControl.
+	 */
+	const commitNumberPosts = ( rawValue: string ): void => {
+		if ( numberPostsTimerRef.current ) {
+			clearTimeout( numberPostsTimerRef.current );
+		}
+
+		const val = Math.min(
+			MAX_POSTS_COUNT,
+			Math.max( MIN_POSTS_COUNT, parseInt( rawValue, 10 ) || numberPostsState )
+		);
+		setNumberPostsInput( String( val ) );
+		handleNumberOfPostsChange( val );
+	};
+
+	/**
+	 * Handles number of posts changes and triggers a re-fetch.
+	 *
+	 * @param {number} numPosts New number of posts value.
+	 */
+	const handleNumberOfPostsChange = ( numPosts: number ): void => {
+		if ( numPosts === numberPostsState ) {
+			return;
+		}
+
+		setNumberPostsState( numPosts );
+		fetchPostsByType( selectedPostType, numPosts ).catch( ( error ) => {
 			// Only unexpected errors reach here.
 			// eslint-disable-next-line no-console
 			console.error( 'Unexpected error in fetchPostsByType:', error );
@@ -230,11 +279,44 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 
 	return (
 		<div className="safe-publish-dataviews-wrapper">
-			<PostTypeSelector
-				siteUrl={ siteUrl }
-				selectedPostType={ selectedPostType }
-				onPostTypeChange={ handlePostTypeChange }
-			/>
+			<div className="safe-publish-controls-row">
+				<PostTypeSelector
+					siteUrl={ siteUrl }
+					selectedPostType={ selectedPostType }
+					onPostTypeChange={ handlePostTypeChange }
+				/>
+				<NumberControl
+					label={ __( 'Count', 'safe-publish' ) }
+					value={ numberPostsInput }
+					min={ MIN_POSTS_COUNT }
+					max={ MAX_POSTS_COUNT }
+					className="safe-publish-number-of-posts-control"
+					onChange={ ( val ) => {
+						setNumberPostsInput( val ?? '' );
+						if ( numberPostsTimerRef.current ) {
+							clearTimeout( numberPostsTimerRef.current );
+						}
+
+						const parsed = parseInt( val ?? '', 10 );
+						if ( ! isNaN( parsed ) ) {
+							numberPostsTimerRef.current = setTimeout( () => {
+									commitNumberPosts( String( parsed ) );
+							}, NUMBER_POSTS_DEBOUNCE_DELAY );
+						}
+					} }
+					onBlur={ ( event ) => commitNumberPosts(
+						( event.target as HTMLInputElement ).value )
+					}
+					onKeyDown={ ( event ) => {
+						if ( 'Enter' === event.key ) {
+							event.preventDefault();
+							commitNumberPosts(
+								( event.target as HTMLInputElement ).value
+							);
+						}
+					} }
+				/>
+			</div>
 			{ isLoadingPosts && (
 				<div className="safe-publish-loading">
 					<p>{ __( 'Loading posts…', 'safe-publish' ) }</p>
@@ -275,7 +357,7 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 	}
 
 	const siteUrl = window.safePublishAdminData?.siteUrl || '';
-	const numberPosts = window.safePublishAdminData?.numPosts || 10;
+	const numberPosts = window.safePublishAdminData?.numPosts ?? 0;
 
 	// Get posts data from localized script.
 	let initialPosts: Post[] = [];

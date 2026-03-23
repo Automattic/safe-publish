@@ -1,6 +1,11 @@
-/* Post Type Selector React Component Styles */
-.safe-publish-post-type-selector {
-	margin-bottom: 16px;
-	max-width: 260px;
+.safe-publish-controls-row {
+	display: flex;
+	align-items: flex-end;
+	flex-wrap: wrap;
+	gap: 16px;
+	margin: 0 0 0 48px;
 }
 
+.safe-publish-controls-row .safe-publish-post-type-selector {
+	width: 212px;
+}
