@@ -7,7 +7,7 @@
 
 declare(strict_types=1);
 
-namespace Safe_Publish\Tests\Integration\Receive_Mode_Admin_Handler;
+namespace Safe_Publish\Tests\Integration\Import_Mode_Admin_Handler;
 
 use WPAjaxDieContinueException;
 use WPAjaxDieStopException;

@@ -10,14 +10,14 @@
   convertDeprecationsToExceptions="true"
   >
   <testsuites>
-    <testsuite name="Safe Publish Sync Send Integration Tests">
-      <directory suffix=".php">tests/integration/sync-send/</directory>
+    <testsuite name="Safe Publish Sync Bidirectional Integration Tests">
+      <directory suffix=".php">tests/integration/sync-bidirectional/</directory>
     </testsuite>
   </testsuites>
 
   <php>
-    <!-- Boot the plugin in "send" sync mode. -->
-    <env name="WP_TEST_SYNC_MODE" value="send" />
+    <!-- Boot the plugin in "bidirectional" sync mode (send and receive active simultaneously). -->
+    <env name="WP_TEST_SYNC_MODE" value="bidirectional" />
 
     <!-- Point wp-phpunit to our test config file -->
     <env name="WP_PHPUNIT__TESTS_CONFIG" value="tests/wp-tests-config.php" />

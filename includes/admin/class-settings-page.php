@@ -31,9 +31,9 @@ final class Settings_Page {
 		$username = get_option( Options::OPTION_USERNAME, '' );
 		$password = get_option( Options::OPTION_PASSWORD, '' );
 
-		$show_receive_fields = in_array(
+		$show_import_fields = in_array(
 			$sync_mode,
-			array( Options::SYNC_MODE_RECEIVE, Options::SYNC_MODE_BOTH ),
+			array( Options::SYNC_MODE_IMPORT, Options::SYNC_MODE_BIDIRECTIONAL ),
 			true
 		);
 
@@ -75,30 +75,30 @@ final class Settings_Page {
 											<input
 												type="radio"
 												name="safe_publish_sync_mode"
-												value="<?php echo esc_attr( Options::SYNC_MODE_SEND ); ?>"
-												<?php checked( $sync_mode, Options::SYNC_MODE_SEND ); ?>
+												value="<?php echo esc_attr( Options::SYNC_MODE_EXPORT ); ?>"
+												<?php checked( $sync_mode, Options::SYNC_MODE_EXPORT ); ?>
 											/>
-											<?php esc_html_e( 'Send', 'safe-publish' ); ?>
+											<?php esc_html_e( 'Export', 'safe-publish' ); ?>
 										</label>
 										<br />
 										<label>
 											<input
 												type="radio"
 												name="safe_publish_sync_mode"
-												value="<?php echo esc_attr( Options::SYNC_MODE_RECEIVE ); ?>"
-												<?php checked( $sync_mode, Options::SYNC_MODE_RECEIVE ); ?>
+												value="<?php echo esc_attr( Options::SYNC_MODE_IMPORT ); ?>"
+												<?php checked( $sync_mode, Options::SYNC_MODE_IMPORT ); ?>
 											/>
-											<?php esc_html_e( 'Receive', 'safe-publish' ); ?>
+											<?php esc_html_e( 'Import', 'safe-publish' ); ?>
 										</label>
 										<br />
 										<label>
 											<input
 												type="radio"
 												name="safe_publish_sync_mode"
-												value="<?php echo esc_attr( Options::SYNC_MODE_BOTH ); ?>"
-												<?php checked( $sync_mode, Options::SYNC_MODE_BOTH ); ?>
-											/>
-											<?php esc_html_e( 'Send and Receive', 'safe-publish' ); ?>
+									value="<?php echo esc_attr( Options::SYNC_MODE_BIDIRECTIONAL ); ?>"
+											<?php checked( $sync_mode, Options::SYNC_MODE_BIDIRECTIONAL ); ?>
+										/>
+										<?php esc_html_e( 'Bidirectional', 'safe-publish' ); ?>
 										</label>
 									</fieldset>
 								</td>
@@ -122,7 +122,7 @@ final class Settings_Page {
 								</td>
 							</tr>
 
-							<tr class="safe-publish-receive-field-row<?php echo $show_receive_fields ? '' : ' hidden'; ?>">
+							<tr class="safe-publish-import-field-row<?php echo $show_import_fields ? '' : ' hidden'; ?>">
 								<th scope="row">
 									<?php esc_html_e( 'Basic Auth Credentials', 'safe-publish' ); ?>
 								</th>
@@ -159,7 +159,7 @@ final class Settings_Page {
 								</td>
 							</tr>
 
-							<tr class="safe-publish-receive-field-row<?php echo $show_receive_fields ? '' : ' hidden'; ?>">
+							<tr class="safe-publish-import-field-row<?php echo $show_import_fields ? '' : ' hidden'; ?>">
 								<th scope="row"></th>
 								<td>
 									<button type="button" id="safe-publish-test-connection" class="button button-secondary">
@@ -172,7 +172,7 @@ final class Settings_Page {
 								</td>
 							</tr>
 
-							<tr class="safe-publish-receive-field-row<?php echo $show_receive_fields ? '' : ' hidden'; ?>">
+							<tr class="safe-publish-import-field-row<?php echo $show_import_fields ? '' : ' hidden'; ?>">
 								<th scope="row">
 									<label for="safe_publish_number_of_posts">
 										<?php esc_html_e( 'Number of Posts', 'safe-publish' ); ?>
@@ -200,26 +200,26 @@ final class Settings_Page {
 
 				<script>
 				( function () {
-					const receiveModes = [ '<?php echo esc_js( Options::SYNC_MODE_RECEIVE ); ?>', '<?php echo esc_js( Options::SYNC_MODE_BOTH ); ?>' ];
+					const importModes = [ '<?php echo esc_js( Options::SYNC_MODE_IMPORT ); ?>', '<?php echo esc_js( Options::SYNC_MODE_BIDIRECTIONAL ); ?>' ];
 
 					/**
-					 * Toggles visibility of form rows that are only relevant in Receive
-					 * or Send and Receive sync mode.
+					 * Toggles visibility of form rows that are only relevant in Import
+					 * or Bidirectional sync mode.
 					 */
-					function toggleReceiveFields() {
+					function toggleImportFields() {
 						const selected = document.querySelector( 'input[name="safe_publish_sync_mode"]:checked' );
-						const show = selected && receiveModes.indexOf( selected.value ) !== -1;
-						document.querySelectorAll( '.safe-publish-receive-field-row' ).forEach( function ( row ) {
+						const show = selected && importModes.indexOf( selected.value ) !== -1;
+						document.querySelectorAll( '.safe-publish-import-field-row' ).forEach( function ( row ) {
 							row.classList.toggle( 'hidden', ! show );
 						} );
 					}
 
 					/**
-					 * Wires up the Sync Mode radio buttons to show/hide Receive-only fields.
+					 * Wires up the Sync Mode radio buttons to show/hide Import-only fields.
 					 */
-					function initReceiveFieldToggle() {
+					function initImportFieldToggle() {
 						document.querySelectorAll( 'input[name="safe_publish_sync_mode"]' ).forEach( function ( radio ) {
-							radio.addEventListener( 'change', toggleReceiveFields );
+							radio.addEventListener( 'change', toggleImportFields );
 						} );
 					}
 
@@ -299,7 +299,7 @@ final class Settings_Page {
 						} );
 					}
 
-					initReceiveFieldToggle();
+					initImportFieldToggle();
 					initTestConnectionButton();
 				} )();
 				</script>
