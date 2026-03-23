@@ -1,6 +1,6 @@
 <?php
 /**
- * Receive Mode Admin Handler class
+ * Import Mode Admin Handler class
  *
  * @package Safe_Publish
  */
@@ -13,12 +13,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Bootstraps the WordPress admin area for sites configured to receive content.
+ * Bootstraps the WordPress admin area for sites configured to import content.
  *
  * Acts as the composition coordinator for admin menu, settings, import history,
- * and AJAX handling subsystems in receive mode.
+ * and AJAX handling subsystems in import mode.
  */
-final class Receive_Mode_Admin_Handler {
+final class Import_Mode_Admin_Handler {
 
 	/**
 	 * Admin Menu Manager instance.
@@ -42,7 +42,7 @@ final class Receive_Mode_Admin_Handler {
 	private Admin_Ajax_Controller $ajax_controller;
 
 	/**
-	 * Constructs the Receive_Mode_Admin_Handler instance.
+	 * Constructs the Import_Mode_Admin_Handler instance.
 	 *
 	 * @param Admin_Menu_Manager    $menu_manager    Admin Menu Manager instance.
 	 * @param Import_History        $import_history  Import History instance.

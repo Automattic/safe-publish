@@ -52,7 +52,7 @@ class Settings_Sanitizer {
 	 * @return int Sanitized number of posts, between 1 and 100.
 	 */
 	public function sanitize_number_of_posts( $value ): int {
-		// preserve the existing value when sync mode is send-only.
+		// preserve the existing value when sync mode is export-only.
 		if ( null === $value ) {
 			return (int) get_option( Options::OPTION_NUMBER_OF_POSTS, 10 );
 		}
@@ -88,7 +88,7 @@ class Settings_Sanitizer {
 	 * @return string Sanitized username.
 	 */
 	public function sanitize_username( $value ): string {
-		// preserve the existing value when sync mode is send-only.
+		// preserve the existing value when sync mode is export-only.
 		if ( null === $value ) {
 			return (string) get_option( Options::OPTION_USERNAME, '' );
 		}
@@ -103,7 +103,7 @@ class Settings_Sanitizer {
 	 * @return string Sanitized password.
 	 */
 	public function sanitize_password( $value ): string {
-		// preserve the existing value when sync mode is send-only.
+		// preserve the existing value when sync mode is export-only.
 		if ( null === $value ) {
 			return (string) get_option( Options::OPTION_PASSWORD, '' );
 		}
@@ -116,13 +116,13 @@ class Settings_Sanitizer {
 	 * Sanitizes the sync mode setting.
 	 *
 	 * @param mixed $value Value to sanitize.
-	 * @return string One of 'send', 'receive', 'both', or '' on invalid input.
+	 * @return string One of 'export', 'import', 'bidirectional', or '' on invalid input.
 	 */
 	public function sanitize_sync_mode( $value ): string {
 		$allowed = array(
-			Options::SYNC_MODE_SEND,
-			Options::SYNC_MODE_RECEIVE,
-			Options::SYNC_MODE_BOTH,
+			Options::SYNC_MODE_EXPORT,
+			Options::SYNC_MODE_IMPORT,
+			Options::SYNC_MODE_BIDIRECTIONAL,
 		);
 
 		if ( '' === $value || null === $value ) {

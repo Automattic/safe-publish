@@ -64,25 +64,25 @@ class Options {
 	const OPTION_SYNC_MODE = 'safe_publish_sync_mode';
 
 	/**
-	 * Sync mode value: this site sends content.
+	 * Sync mode value: this site exports content.
 	 *
 	 * @var string
 	 */
-	const SYNC_MODE_SEND = 'send';
+	const SYNC_MODE_EXPORT = 'export';
 
 	/**
-	 * Sync mode value: this site receives content.
+	 * Sync mode value: this site imports content.
 	 *
 	 * @var string
 	 */
-	const SYNC_MODE_RECEIVE = 'receive';
+	const SYNC_MODE_IMPORT = 'import';
 
 	/**
-	 * Sync mode value: this site both sends and receives content.
+	 * Sync mode value: this site can export and import content.
 	 *
 	 * @var string
 	 */
-	const SYNC_MODE_BOTH = 'both';
+	const SYNC_MODE_BIDIRECTIONAL = 'bidirectional';
 
 	// -------------------------------------------------------------------------
 	// Post meta keys (stored via get_post_meta / update_post_meta).

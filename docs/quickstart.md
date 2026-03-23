@@ -26,14 +26,14 @@ Activate the plugin through the WordPress admin panel or [code](https://docs.wpv
 ### Source Site Configuration
 
 1. Navigate to **Safe Publish** in the WordPress admin sidebar
-2. Set the **Sync Direction** to `Send`
+2. Set the **Sync Mode** to `Export`
 3. In **Connected Site URL**, enter the destination site's URL
 4. Click **Save Settings**
 
 ### Destination Site Configuration
 
 1. Navigate to **Safe Publish** in the WordPress admin sidebar
-2. Set the **Sync Direction** to `Receive`
+2. Set the **Sync Mode** to `Import`
 3. In **Connected Site URL**, enter the source site's URL
 4. Optionally set the **number of posts** to another value
 5. Click **Save Settings**

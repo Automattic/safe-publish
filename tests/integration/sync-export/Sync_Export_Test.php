@@ -1,26 +1,25 @@
 <?php
 /**
- * Integration tests for "both" sync mode behavior
+ * Integration tests for "export" sync mode behavior
  *
  * @package Safe_Publish
  */
 
 declare(strict_types=1);
 
-namespace Safe_Publish\Tests\Integration\Sync_Both;
+namespace Safe_Publish\Tests\Integration\Sync_Export;
 
 use WP_REST_Request;
 use WP_REST_Server;
 use WP_UnitTestCase;
 
 /**
- * Verifies that in "both" sync mode all send and receive functionality is
- * active simultaneously.
+ * Verifies that in "export" sync mode only export functionality is active.
  *
- * These tests are run exclusively via phpunit-integration-sync-both.xml, which
- * boots the plugin with WP_TEST_SYNC_MODE=both.
+ * These tests are run exclusively via phpunit-integration-sync-export.xml, which
+ * boots the plugin with WP_TEST_SYNC_MODE=export.
  */
-class Sync_Both_Integration_Test extends WP_UnitTestCase {
+class Sync_Export_Integration_Test extends WP_UnitTestCase {
 
 	/**
 	 * REST server instance.
@@ -65,39 +64,37 @@ class Sync_Both_Integration_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that REST routes for receiving are registered in "both" sync
-	 * direction.
-	 *
-	 * A non-404 response confirms the routes exist.
+	 * Verifies that REST routes for importing are not registered in "export"
+	 * sync mode.
 	 */
-	public function test_receive_rest_routes_are_registered(): void {
+	public function test_import_rest_routes_are_not_registered(): void {
 		$diff_response = $this->server->dispatch(
 			new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' )
 		);
-		$this->assertNotSame( 404, $diff_response->get_status() );
+		$this->assertSame( 404, $diff_response->get_status() );
 
 		$update_response = $this->server->dispatch(
 			new WP_REST_Request( 'POST', '/safe-publish/v1/update-post' )
 		);
-		$this->assertNotSame( 404, $update_response->get_status() );
+		$this->assertSame( 404, $update_response->get_status() );
 	}
 
 	/**
-	 * Verifies that AJAX handlers for receiving are registered in "both" sync
-	 * direction.
+	 * Verifies that AJAX handlers for importing are not registered in "export"
+	 * sync mode.
 	 */
-	public function test_receive_ajax_handlers_are_registered(): void {
-		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_fetch_posts' ) );
-		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_fetch_post_types' ) );
-		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_test_connection' ) );
-		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_create_draft' ) );
-		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_bulk_import' ) );
-		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_debug_auth' ) );
+	public function test_import_ajax_handlers_are_not_registered(): void {
+		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_fetch_posts' ) );
+		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_fetch_post_types' ) );
+		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_test_connection' ) );
+		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_create_draft' ) );
+		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_bulk_import' ) );
+		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_debug_auth' ) );
 	}
 
 	/**
-	 * Verifies that auth monitoring endpoints are registered in "both" sync
-	 * direction.
+	 * Verifies that auth monitoring endpoints are registered in "export" sync
+	 * mode.
 	 *
 	 * A non-404 response confirms the routes exist.
 	 */
