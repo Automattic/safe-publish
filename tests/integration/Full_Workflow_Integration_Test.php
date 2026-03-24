@@ -16,6 +16,7 @@ use Safe_Publish\Admin\Import_History;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\Admin\Session_Formatter;
 use Safe_Publish\Admin\Session_Rollback_Service;
+use Safe_Publish\API\Export_Logger;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\Auth\Auth_Logger;
@@ -78,7 +79,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		}
 
 		$logger             = new Auth_Logger();
-		$permission_manager = new Permission_Manager( $logger );
+		$permission_manager = new Permission_Manager( $logger, new Export_Logger() );
 
 		$this->authenticator = new HMAC_Authenticator(
 			$logger,

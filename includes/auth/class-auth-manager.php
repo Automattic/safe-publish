@@ -8,6 +8,7 @@
 namespace Safe_Publish\Auth;
 
 use Safe_Publish\Utils\Event_Table;
+use Safe_Publish\API\Export_Logger;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -59,7 +60,10 @@ class Auth_Manager {
 	 */
 	public function __construct() {
 		$this->logger             = new Auth_Logger();
-		$this->permission_manager = new Permission_Manager( $this->logger );
+		$this->permission_manager = new Permission_Manager(
+			$this->logger,
+			new Export_Logger()
+		);
 		$this->authenticator      = new HMAC_Authenticator(
 			$this->logger,
 			$this->permission_manager,

@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration\Auth;
 
+use Safe_Publish\API\Export_Logger;
 use Safe_Publish\Auth\Auth_Logger;
 use Safe_Publish\Auth\HMAC_Authenticator;
 use Safe_Publish\Auth\Permission_Manager;
@@ -48,7 +49,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 
 		$this->authenticator = new HMAC_Authenticator(
 			new Auth_Logger(),
-			new Permission_Manager( new Auth_Logger() ),
+			new Permission_Manager( new Auth_Logger(), new Export_Logger() ),
 			defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : ''
 		);
 
