@@ -65,7 +65,7 @@ class ExternalPostsAPITest extends TestCase {
 	 */
 	public function test_test_connection_returns_array(): void {
 		// This will fail to connect but should return proper array structure.
-		$result = $this->api->test_connection( 'https://example.com' );
+		$result = $this->api->test_connection( 'https://example.com', array() );
 
 		$this->assertIsArray( $result );
 		$this->assertArrayHasKey( 'success', $result );

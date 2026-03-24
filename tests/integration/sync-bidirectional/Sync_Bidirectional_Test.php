@@ -1,25 +1,26 @@
 <?php
 /**
- * Integration tests for "send" sync mode behavior
+ * Integration tests for "bidirectional" sync mode behavior
  *
  * @package Safe_Publish
  */
 
 declare(strict_types=1);
 
-namespace Safe_Publish\Tests\Integration\Sync_Send;
+namespace Safe_Publish\Tests\Integration\Sync_Bidirectional;
 
 use WP_REST_Request;
 use WP_REST_Server;
 use WP_UnitTestCase;
 
 /**
- * Verifies that in "send" sync mode only send functionality is active.
+ * Verifies that in "bidirectional" sync mode all send and receive functionality
+ * is active simultaneously.
  *
- * These tests are run exclusively via phpunit-integration-sync-send.xml, which
- * boots the plugin with WP_TEST_SYNC_MODE=send.
+ * These tests are run exclusively via phpunit-integration-sync-bidirectional.xml,
+ * which boots the plugin with WP_TEST_SYNC_MODE=bidirectional.
  */
-class Sync_Send_Integration_Test extends WP_UnitTestCase {
+class Sync_Bidirectional_Integration_Test extends WP_UnitTestCase {
 
 	/**
 	 * REST server instance.
@@ -64,37 +65,39 @@ class Sync_Send_Integration_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that REST routes for receiving are not registered in "send" sync
-	 * direction.
+	 * Verifies that REST routes for importing are registered in "bidirectional"
+	 * sync mode.
+	 *
+	 * A non-404 response confirms the routes exist.
 	 */
-	public function test_receive_rest_routes_are_not_registered(): void {
+	public function test_import_rest_routes_are_registered(): void {
 		$diff_response = $this->server->dispatch(
 			new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' )
 		);
-		$this->assertSame( 404, $diff_response->get_status() );
+		$this->assertNotSame( 404, $diff_response->get_status() );
 
 		$update_response = $this->server->dispatch(
 			new WP_REST_Request( 'POST', '/safe-publish/v1/update-post' )
 		);
-		$this->assertSame( 404, $update_response->get_status() );
+		$this->assertNotSame( 404, $update_response->get_status() );
 	}
 
 	/**
-	 * Verifies that AJAX handlers for receiving are not registered in "send"
+	 * Verifies that AJAX handlers for importing are registered in "bidirectional"
 	 * sync mode.
 	 */
-	public function test_receive_ajax_handlers_are_not_registered(): void {
-		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_fetch_posts' ) );
-		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_fetch_post_types' ) );
-		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_test_connection' ) );
-		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_create_draft' ) );
-		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_bulk_import' ) );
-		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_debug_auth' ) );
+	public function test_import_ajax_handlers_are_registered(): void {
+		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_fetch_posts' ) );
+		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_fetch_post_types' ) );
+		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_test_connection' ) );
+		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_create_draft' ) );
+		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_bulk_import' ) );
+		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_debug_auth' ) );
 	}
 
 	/**
-	 * Verifies that auth monitoring endpoints are registered in "send" sync
-	 * direction.
+	 * Verifies that auth monitoring endpoints are registered in "bidirectional"
+	 * sync mode.
 	 *
 	 * A non-404 response confirms the routes exist.
 	 */

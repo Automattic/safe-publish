@@ -2,14 +2,14 @@
 
 # Target site (development env / cli / port 8888)
 wp-env run cli wp option update blogname 'Safe Publish Destination'
-wp-env run cli wp option update safe_publish_sync_mode 'receive'
+wp-env run cli wp option update safe_publish_sync_mode 'import'
 wp-env run cli wp option update safe_publish_connected_site_url 'http://host.docker.internal:8889'
 wp-env run cli wp rewrite structure '/%postname%/'
 wp-env run cli wp rewrite flush
 
 # Source site (tests env / tests-cli / port 8889)
 wp-env run tests-cli wp option update blogname 'Safe Publish Source'
-wp-env run tests-cli wp option update safe_publish_sync_mode 'send'
+wp-env run tests-cli wp option update safe_publish_sync_mode 'export'
 wp-env run tests-cli wp option update safe_publish_connected_site_url 'http://host.docker.internal:8888'
 wp-env run tests-cli wp rewrite structure '/%postname%/'
 wp-env run tests-cli wp rewrite flush

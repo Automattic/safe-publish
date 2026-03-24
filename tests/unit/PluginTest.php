@@ -53,7 +53,7 @@ class PluginTest extends TestCase {
 	 * Verifies that init creates required instances.
 	 */
 	public function test_init_creates_required_instances(): void {
-		set_test_option( 'safe_publish_sync_mode', 'receive' );
+		set_test_option( 'safe_publish_sync_mode', 'import' );
 		set_test_option( 'safe_publish_connected_site_url', 'https://example.com' );
 
 		$this->plugin->init();
@@ -65,7 +65,7 @@ class PluginTest extends TestCase {
 	 * Verifies that get_safe_publish_api returns a Safe_Publish_API instance.
 	 */
 	public function test_get_safe_publish_api_returns_safe_publish_api(): void {
-		set_test_option( 'safe_publish_sync_mode', 'receive' );
+		set_test_option( 'safe_publish_sync_mode', 'import' );
 		set_test_option( 'safe_publish_connected_site_url', 'https://example.com' );
 
 		$this->plugin->init();

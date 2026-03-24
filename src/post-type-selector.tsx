@@ -8,7 +8,7 @@
  */
 import { ApiResponse } from './types';
 import { getErrorMessage } from './utils';
-import { Button, SelectControl, Notice, Spinner } from '@wordpress/components';
+import { Notice, SelectControl } from '@wordpress/components';
 import {
 	createInterpolateElement,
 	useCallback,
@@ -69,7 +69,6 @@ export function PostTypeSelector( {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
 	const [ currentPostType, setCurrentPostType ] = useState( selectedPostType );
-	const [ lastSiteUrl, setLastSiteUrl ] = useState( siteUrl );
 
 	/**
 	 * Gets the current site URL from saved settings.
@@ -146,7 +145,6 @@ export function PostTypeSelector( {
 
 				// Set the post types directly from the API response.
 				setPostTypes( postTypeArray );
-				setLastSiteUrl( currentSiteUrl );
 			} else {
 				// eslint-disable-next-line no-console
 				console.error( 'Safe Publish PostTypeSelector: API error:', response );
@@ -178,40 +176,11 @@ export function PostTypeSelector( {
 		}
 	};
 
-	/**
-	 * Handles refresh button click.
-	 *
-	 * Triggers a reload of available post types from the external site.
-	 */
-	const handleRefresh = (): void => {
-		// eslint-disable-next-line no-console
-		loadPostTypes().catch( console.error );
-	};
-
 	// Load post types when site URL changes.
 	useEffect( () => {
 		// eslint-disable-next-line no-console
 		loadPostTypes().catch( console.error );
 	}, [ siteUrl, loadPostTypes ] );
-
-	// Also check for changes in the form input field periodically.
-	useEffect( () => {
-		const checkSiteUrlChange = () => {
-			const currentSiteUrl = getExternalSiteUrl();
-			if ( currentSiteUrl !== lastSiteUrl && currentSiteUrl ) {
-				// eslint-disable-next-line no-console
-				loadPostTypes().catch( console.error );
-			}
-		};
-
-		// Check every 2 seconds for URL changes.
-		const interval = setInterval( checkSiteUrlChange, 2000 );
-
-		// Also check immediately.
-		checkSiteUrlChange();
-
-		return () => clearInterval( interval );
-	}, [ lastSiteUrl, getExternalSiteUrl, loadPostTypes ] );
 
 	// Generate options for the select control.
 	const selectOptions = postTypes.map( postType => ( {
@@ -228,33 +197,15 @@ export function PostTypeSelector( {
 	}
 
 	return (
-		<div className="safe-publish-post-type-selector" style={ { marginBottom: '10px' } }>
-			<div style={ { display: 'flex', alignItems: 'center', gap: '10px' } }>
-				<SelectControl
-					label={ __( 'Post Type:', 'safe-publish' ) }
-					value={ currentPostType }
-					options={ selectOptions }
-					onChange={ handlePostTypeChange }
-					disabled={ isLoading }
-					style={ { minWidth: '150px' } }
-				/>
-				<Button
-					variant="secondary"
-					size="small"
-					onClick={ handleRefresh }
-					disabled={ isLoading || ! siteUrl }
-					style={ { marginTop: '15px', padding: '16px', fontSize: 'unset' } }
-				>
-					{ isLoading ? (
-						<>
-							<Spinner />
-							{ __( 'Loading…', 'safe-publish' ) }
-						</>
-					) : (
-						__( 'Refresh', 'safe-publish' )
-					) }
-				</Button>
-			</div>
+		<div className="safe-publish-post-type-selector">
+			<SelectControl
+				label={ __( 'Post Type:', 'safe-publish' ) }
+				value={ currentPostType }
+				options={ selectOptions }
+				onChange={ handlePostTypeChange }
+				disabled={ isLoading }
+				__nextHasNoMarginBottom
+			/>
 
 			{ error && (
 				<Notice status="error" onRemove={ () => setError( null ) }>

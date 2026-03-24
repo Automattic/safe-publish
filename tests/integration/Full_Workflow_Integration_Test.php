@@ -84,7 +84,8 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		$this->authenticator = new HMAC_Authenticator(
 			$logger,
 			$permission_manager,
-			defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : self::FALLBACK_SECRET
+			defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : self::FALLBACK_SECRET,
+			home_url()
 		);
 
 		$this->repository     = new History_Repository();
@@ -218,6 +219,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		$request->set_body( 'some body' );
 		$request->set_header( 'X-Safe-Publish-Timestamp', (string) time() );
 		$request->set_header( 'X-Safe-Publish-Content-Hash', hash( 'sha256', 'some body' ) );
+		$request->set_header( 'X-Safe-Publish-Site-URL', home_url() );
 		$request->set_header( 'X-Safe-Publish-Signature', 'tampered-invalid-signature' );
 
 		// ACT: Attempt authentication.
@@ -249,14 +251,16 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		}
 
 		$secret         = defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : self::FALLBACK_SECRET;
+		$site_url       = home_url();
 		$content_hash   = hash( 'sha256', $body );
-		$string_to_sign = $method . '|' . $route . '|' . $timestamp . '|' . $content_hash;
+		$string_to_sign = $method . '|' . $route . '|' . $timestamp . '|' . $content_hash . '|' . $site_url;
 		$signature      = hash_hmac( 'sha256', $string_to_sign, $secret );
 
 		$request = new WP_REST_Request( $method, $route );
 		$request->set_body( $body );
 		$request->set_header( 'X-Safe-Publish-Timestamp', (string) $timestamp );
 		$request->set_header( 'X-Safe-Publish-Content-Hash', $content_hash );
+		$request->set_header( 'X-Safe-Publish-Site-URL', $site_url );
 		$request->set_header( 'X-Safe-Publish-Signature', $signature );
 
 		return $request;
