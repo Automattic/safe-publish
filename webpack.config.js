@@ -5,7 +5,7 @@ module.exports = {
 	...defaultConfig,
 	entry: {
 		index: path.resolve( process.cwd(), 'src', 'index.tsx' ),
-		'import-history': path.resolve( process.cwd(), 'src', 'import-history.tsx' ),
+		'history': path.resolve( process.cwd(), 'src', 'history.tsx' ),
 	},
 	resolve: {
 		...defaultConfig.resolve,

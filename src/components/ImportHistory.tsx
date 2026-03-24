@@ -391,7 +391,7 @@ export function ImportHistory(): JSX.Element {
 	}
 
 	return (
-		<div className="safe-publish-import-history">
+		<div className="safe-publish-history">
 			<VStack spacing={ 4 }>
 				<Text as="h2">
 					{ __( 'Import History', 'safe-publish' ) }

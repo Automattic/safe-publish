@@ -220,6 +220,8 @@ export interface AdminData {
 	numPosts: number;
 	containerId: string;
 	postsData: JsonArray;
+	showImportHistory?: boolean;
+	showExportHistory?: boolean;
 }
 
 /**
@@ -349,6 +351,27 @@ export interface ImportLog {
 	can_rollback: boolean;
 	is_rolled_back: boolean;
 	rollback_action: 'delete' | 'restore';
+}
+
+/**
+ * Represents a single export event from the events table.
+ *
+ * @property {number}         id              Unique event ID.
+ * @property {string}         date            Date the event was recorded.
+ * @property {'info'|'error'} level           Event severity level.
+ * @property {string}         event           Event type (e.g. CONTENT_EXPORTED).
+ * @property {string}         destination_url URL of the destination site.
+ * @property {number[]}       post_ids        IDs of the exported posts.
+ * @property {number}         post_count      Number of exported posts.
+ */
+export interface ExportEvent {
+	id: number;
+	date: string;
+	level: 'info' | 'error';
+	event: string;
+	destination_url: string;
+	post_ids: number[];
+	post_count: number;
 }
 
 declare global {
