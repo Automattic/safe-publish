@@ -88,13 +88,13 @@ final class Import_History {
 	}
 
 	/**
-	 * Initializes history for send-only mode.
+	 * Initializes history for export-only mode.
 	 *
 	 * Registers only the History submenu page (under the settings parent) and
 	 * the export events AJAX handler. Import-specific functionality is omitted
-	 * because send-only sites do not import content.
+	 * because export-only sites do not import content.
 	 */
-	public function init_send_only(): void {
+	public function init_export_only(): void {
 		add_action( 'admin_menu', array( $this, 'add_submenu_page_settings' ) );
 		add_action( 'wp_ajax_safe_publish_get_export_events', array( $this, 'ajax_get_export_events' ) );
 	}
@@ -102,7 +102,7 @@ final class Import_History {
 	/**
 	 * Adds the History submenu page under the settings-only top-level menu.
 	 *
-	 * Used in send-only mode where the top-level slug is 'safe-publish-settings'.
+	 * Used in export-only mode where the top-level slug is 'safe-publish-settings'.
 	 */
 	public function add_submenu_page_settings(): void {
 		add_submenu_page(
