@@ -49,8 +49,8 @@ tests_add_filter( 'muplugins_loaded', '_manually_load_plugin' );
  * Reads WP_TEST_SYNC_MODE from the PHPUnit XML configuration so that each suite
  * boots the plugin in the correct sync mode.
  *
- * For "send"/"both" sync mode a non-empty connected-site URL is required so
- * that Plugin::init() actually instantiates Auth_Manager.
+ * For "export"/"bidirectional" sync mode a non-empty connected-site URL is
+ * required so that Plugin::init() actually instantiates Auth_Manager.
  */
 tests_add_filter(
 	'plugins_loaded',
@@ -63,7 +63,7 @@ tests_add_filter(
 
 		update_option( 'safe_publish_sync_mode', $sync_mode );
 
-		if ( in_array( $sync_mode, array( 'send', 'both' ), true ) ) {
+		if ( in_array( $sync_mode, array( 'export', 'bidirectional' ), true ) ) {
 			update_option( 'safe_publish_connected_site_url', 'https://source.example.com' );
 		}
 	},

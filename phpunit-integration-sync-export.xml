@@ -10,17 +10,14 @@
   convertDeprecationsToExceptions="true"
   >
   <testsuites>
-    <testsuite name="Safe Publish Sync Receive Integration Tests">
-      <directory suffix=".php">tests/integration/</directory>
-      <exclude>tests/integration/bootstrap.php</exclude>
-      <exclude>tests/integration/sync-send/</exclude>
-      <exclude>tests/integration/sync-both/</exclude>
+    <testsuite name="Safe Publish Sync Export Integration Tests">
+      <directory suffix=".php">tests/integration/sync-export/</directory>
     </testsuite>
   </testsuites>
 
   <php>
-    <!-- Boot the plugin in "receive" sync mode. -->
-    <env name="WP_TEST_SYNC_MODE" value="receive" />
+    <!-- Boot the plugin in "export" sync mode. -->
+    <env name="WP_TEST_SYNC_MODE" value="export" />
 
     <!-- Point wp-phpunit to our test config file -->
     <env name="WP_PHPUNIT__TESTS_CONFIG" value="tests/wp-tests-config.php" />
@@ -35,4 +32,3 @@
     <env name="WP_DB_HOST" value="mysql" />
   </php>
 </phpunit>
-

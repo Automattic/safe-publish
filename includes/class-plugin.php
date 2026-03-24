@@ -8,7 +8,7 @@
 namespace Safe_Publish;
 
 use Safe_Publish\Admin\Admin_Ajax_Controller;
-use Safe_Publish\Admin\Receive_Mode_Admin_Handler;
+use Safe_Publish\Admin\Import_Mode_Admin_Handler;
 use Safe_Publish\Admin\Admin_Menu_Manager;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Renderer;
@@ -71,26 +71,26 @@ final class Plugin {
 		$sync_mode     = get_option( Options::OPTION_SYNC_MODE, '' );
 		$connected_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
-		$can_send = in_array(
+		$can_export = in_array(
 			$sync_mode,
-			array( Options::SYNC_MODE_SEND, Options::SYNC_MODE_BOTH ),
+			array( Options::SYNC_MODE_EXPORT, Options::SYNC_MODE_BIDIRECTIONAL ),
 			true
 		);
 
-		if ( $can_send && ! empty( $connected_url ) ) {
+		if ( $can_export && ! empty( $connected_url ) ) {
 			$auth_manager = new Auth_Manager();
 			$auth_manager->init();
 		}
 
-		$can_receive = in_array(
+		$can_import = in_array(
 			$sync_mode,
-			array( Options::SYNC_MODE_RECEIVE, Options::SYNC_MODE_BOTH ),
+			array( Options::SYNC_MODE_IMPORT, Options::SYNC_MODE_BIDIRECTIONAL ),
 			true
 		);
 
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
 
-		if ( $can_receive ) {
+		if ( $can_import ) {
 			$this->init_full_admin();
 		} else {
 			$this->init_settings_only_admin();
@@ -150,7 +150,7 @@ final class Plugin {
 	}
 
 	/**
-	 * Initializes the full admin UI for receive and send-and-receive modes.
+	 * Initializes the full admin UI for import and bidirectional modes.
 	 */
 	private function init_full_admin(): void {
 		// Build shared low-level services.
@@ -179,15 +179,15 @@ final class Plugin {
 	}
 
 	/**
-	 * Builds and wires the Receive_Mode_Admin_Handler with all required
-	 * sub-services for receive mode.
+	 * Builds and wires the Import_Mode_Admin_Handler with all required
+	 * sub-services for import mode.
 	 *
 	 * @param External_Posts_API $api                External Posts API instance.
 	 * @param Content_Processor  $content_processor  Content Processor instance.
 	 * @param Media_Importer     $media_importer     Media Importer instance.
 	 * @param Post_Type_Fetcher  $post_type_fetcher  Post Type Fetcher instance.
 	 * @param HTTP_Client        $http_client        HTTP Client instance.
-	 * @return Receive_Mode_Admin_Handler Fully constructed Receive_Mode_Admin_Handler coordinator.
+	 * @return Import_Mode_Admin_Handler Fully constructed Import_Mode_Admin_Handler coordinator.
 	 */
 	private function build_full_admin_handler(
 		External_Posts_API $api,
@@ -195,7 +195,7 @@ final class Plugin {
 		Media_Importer $media_importer,
 		Post_Type_Fetcher $post_type_fetcher,
 		HTTP_Client $http_client
-	): Receive_Mode_Admin_Handler {
+	): Import_Mode_Admin_Handler {
 		$menu_manager = new Admin_Menu_Manager( $api );
 
 		$repository       = new History_Repository();
@@ -227,7 +227,7 @@ final class Plugin {
 			$http_client
 		);
 
-		return new Receive_Mode_Admin_Handler(
+		return new Import_Mode_Admin_Handler(
 			$menu_manager,
 			$import_history,
 			$ajax_controller
@@ -235,7 +235,7 @@ final class Plugin {
 	}
 
 	/**
-	 * Initializes the settings-only admin UI for send-only and unconfigured
+	 * Initializes the settings-only admin UI for export-only and unconfigured
 	 * modes.
 	 */
 	private function init_settings_only_admin(): void {
@@ -246,7 +246,7 @@ final class Plugin {
 	 * Registers the Safe Publish top-level menu pointing to the settings page.
 	 *
 	 * Uses the 'safe-publish-settings' slug to match the slug used by
-	 * Admin_Menu_Manager in receive mode, so that options.php's post-save
+	 * Admin_Menu_Manager in import mode, so that options.php's post-save
 	 * redirect always lands on a registered page regardless of sync mode.
 	 */
 	public function add_settings_only_admin_menu(): void {
@@ -262,7 +262,7 @@ final class Plugin {
 	}
 
 	/**
-	 * Renders the settings page for send-only and unconfigured modes.
+	 * Renders the settings page for export-only and unconfigured modes.
 	 */
 	public function render_settings_only_page(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {

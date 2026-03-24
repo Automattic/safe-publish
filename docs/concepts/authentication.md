@@ -16,34 +16,21 @@ The shared secret authentication flow:
 4. If valid, the request is authenticated and granted access to the REST API
 5. No user credentials are transmitted
 
-### Security Considerations
-
-- **Never commit** the shared secret to version control
-- Use different secrets for different environment pairs
-- Rotate secrets periodically (every 90 days recommended)
-- Use HTTPS for all connections (required)
-
 ## Basic Authentication (Optional)
 
-Basic authentication uses WordPress username and password credentials. It is applied on top of the required Shared Secret authentication when credentials are configured.
+Optionally, it's possible to use [VIP Basic Authentication](https://docs.wpvip.com/security-controls/basic-authentication/) if the source site needs it.
 
 ### Setup
 
-1. **On the source site**, install a basic auth plugin:
-   - [Application Passwords](https://wordpress.org/plugins/application-passwords/) (WordPress 5.6+)
-   - Or [Basic Auth Plugin](https://github.com/WP-API/Basic-Auth)
-
-2. **In Safe Publish settings**, enter:
-   - Username of a user with sufficient permissions
-   - Password or application password
-
-3. **Test the connection** to verify it works
+1. Create the credentials for your source site
+2. On the destination site, enter the credentials under Safe Publish settings
+3. Test the connection to verify it works
 
 ### Limitations
 
-- **Security**: Credentials are sent with each request (even over HTTPS)
-- **User account dependency**: Changes to user account affect the connection
-- **Audit trail**: All imports appear as actions by the authenticated user
+- **Security**: Credentials are sent with each request
+- **Credential dependency**: Rotating or removing VIP Basic Authentication credentials will break the connection until Safe Publish settings are updated
+- Read about all other [VIP Basic Authentication limitations](https://docs.wpvip.com/security-controls/basic-authentication/#h-limitations)
 
 ## Troubleshooting
 
