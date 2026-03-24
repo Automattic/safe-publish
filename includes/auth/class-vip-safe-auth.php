@@ -207,15 +207,20 @@ final class VIP_Safe_Auth {
 			$path = '/wp/v2/posts';
 		}
 
-		// Create signature string: METHOD|URI|TIMESTAMP|CONTENT_HASH.
+		// Include this site's URL in the signature, so the destination can
+		// verify the request origin against its configured connected site URL.
+		$source_site_url = untrailingslashit( home_url() );
+
+		// Create signature string: METHOD|URI|TIMESTAMP|CONTENT_HASH|SOURCE_SITE_URL.
 		$content_hash   = hash( 'sha256', $body );
-		$string_to_sign = $method . '|' . $path . '|' . $timestamp . '|' . $content_hash;
+		$string_to_sign = $method . '|' . $path . '|' . $timestamp . '|' . $content_hash . '|' . $source_site_url;
 
 		return array(
 			'headers' => array(
 				'X-Safe-Publish-Timestamp'    => $timestamp,
 				'X-Safe-Publish-Content-Hash' => $content_hash,
 				'X-Safe-Publish-Signature'    => hash_hmac( 'sha256', $string_to_sign, $shared_secret ),
+				'X-Safe-Publish-Site-URL'     => $source_site_url,
 			),
 		);
 	}

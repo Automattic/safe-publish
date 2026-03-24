@@ -14,7 +14,7 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 
 1. **Verify Safe Publish is configured on both sites**:
    - Safe Publish must be installed and active on both sites
-   - Sync Direction and Connected Site URL must be set with correct values on both sites
+   - Sync Mode and Connected Site URL must be set with correct values on both sites
 
 2. **Verify shared secret matches on both sites**:
    - Check `wp-config.php` on both sites
@@ -63,7 +63,7 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 
 **Solutions**:
 
-1. Verify Safe Publish is installed on the source site with **Sync Direction** set to `Send`
+1. Verify Safe Publish is installed on the source site with **Sync Mode** set to `Export`
 2. For basic auth, confirm the user has the `edit_posts` capability
 3. Check server firewall rules aren't blocking incoming requests
 

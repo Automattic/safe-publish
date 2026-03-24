@@ -57,7 +57,6 @@ class Dashboard_Widget {
 	 */
 	public function render(): void {
 		$secret_length = strlen( $this->shared_secret );
-		$stats         = get_option( 'safe_publish_auth_stats', array() );
 		$recent_events = Event_Table::get_events(
 			array(
 				'channel' => 'auth',
@@ -67,8 +66,6 @@ class Dashboard_Widget {
 
 		echo '<div class="safe-publish-dashboard-widget">';
 		$this->render_status_section( $this->shared_secret, $secret_length );
-		echo '<hr style="margin: 15px 0;">';
-		$this->render_statistics_section( $stats );
 		$this->render_recent_events_section( $recent_events );
 		echo '<hr style="margin: 15px 0;">';
 		$this->render_debug_section();
@@ -276,52 +273,6 @@ class Dashboard_Widget {
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			echo '<p><a href="/wp-json/safe-publish/v1/auth-test" target="_blank">' . esc_html__( 'Test Authentication →', 'safe-publish' ) . '</a></p>';
-		}
-	}
-
-	/**
-	 * Renders the authentication statistics section of the dashboard widget.
-	 *
-	 * @param array $stats Authentication statistics from options.
-	 */
-	private function render_statistics_section( array $stats ): void {
-		if ( empty( $stats ) ) {
-			return;
-		}
-
-		echo '<h4 style="margin: 10px 0;">' . esc_html__( '📊 Authentication Statistics', 'safe-publish' ) . '</h4>';
-		echo '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">';
-
-		echo '<div>';
-		echo '<strong>' . esc_html__( 'Total Requests:', 'safe-publish' ) . '</strong> ' . esc_html( $stats['total_requests'] ?? 0 );
-		echo '<br><strong>' . esc_html__( 'Successful:', 'safe-publish' ) . '</strong> <span style="color: #00a32a;">' . esc_html( $stats['successful_auths'] ?? 0 ) . '</span>';
-		echo '<br><strong>' . esc_html__( 'Failed:', 'safe-publish' ) . '</strong> <span style="color: #d63638;">' . esc_html( $stats['failed_auths'] ?? 0 ) . '</span>';
-		echo '</div>';
-
-		echo '<div>';
-
-		if ( ! empty( $stats['last_success'] ) ) {
-			echo '<strong>' . esc_html__( 'Last Success:', 'safe-publish' ) . '</strong><br><small>' . esc_html( $stats['last_success'] ) . '</small>';
-		}
-
-		if ( ! empty( $stats['last_failure'] ) ) {
-			echo '<br><strong>' . esc_html__( 'Last Failure:', 'safe-publish' ) . '</strong><br><small style="color: #d63638;">' . esc_html( $stats['last_failure'] ) . '</small>';
-		}
-
-		echo '</div>';
-
-		echo '</div>';
-
-		$total = $stats['total_requests'] ?? 0;
-		if ( $total > 0 ) {
-			$success_rate = round( ( ( $stats['successful_auths'] ?? 0 ) / $total ) * 100, 1 );
-			$color        = $success_rate >= 95 ? '#00a32a' : ( $success_rate >= 80 ? '#dba617' : '#d63638' );
-			printf(
-				'<p><strong>%s</strong> <span style="color: %s">%s%%</span></p>',
-				esc_html__( 'Success Rate:', 'safe-publish' ),
-				esc_attr( $color ),
-				esc_html( number_format_i18n( $success_rate, 1 ) )
-			);
 		}
 	}
 

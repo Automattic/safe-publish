@@ -193,10 +193,14 @@ export interface RollbackItemData {
 /**
  * Props for the ExternalPostsDataView component.
  *
- * @property {Post[]} posts Posts to display in DataViews.
+ * @property {Post[]} initialPosts Posts to display on initial load.
+ * @property {string} siteUrl      External site URL.
+ * @property {number} numberPosts  Number of posts to fetch.
  */
 export interface ExternalPostsDataViewProps {
-	posts: Post[];
+	initialPosts: Post[];
+	siteUrl: string;
+	numberPosts: number;
 }
 
 /**
@@ -377,7 +381,6 @@ export interface ExportEvent {
 declare global {
 	interface Window {
 		safePublishAdminData: AdminData;
-		safePublishRefreshPosts: ( postType?: string ) => void;
 	}
 
 	interface HTMLElement {
