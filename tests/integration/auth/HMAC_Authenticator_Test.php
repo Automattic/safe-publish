@@ -49,7 +49,8 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$this->authenticator = new HMAC_Authenticator(
 			new Auth_Logger(),
 			new Permission_Manager( new Auth_Logger() ),
-			defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : ''
+			defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : '',
+			home_url()
 		);
 
 		// Clear any stored log events before each test.
@@ -75,15 +76,17 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 	 * Verifies that a request with an invalid HMAC signature fails with 401.
 	 */
 	public function test_invalid_signature_fails_with_401(): void {
-		// ARRANGE: Valid timestamp and content hash, but wrong signature.
+		// ARRANGE: Valid timestamp, content hash, and site URL — but wrong signature.
 		$timestamp    = time();
 		$body         = 'some body content';
 		$content_hash = hash( 'sha256', $body );
+		$site_url     = home_url();
 
 		$request = new WP_REST_Request( 'POST', '/wp/v2/posts' );
 		$request->set_body( $body );
 		$request->set_header( 'X-Safe-Publish-Timestamp', (string) $timestamp );
 		$request->set_header( 'X-Safe-Publish-Content-Hash', $content_hash );
+		$request->set_header( 'X-Safe-Publish-Site-URL', $site_url );
 		$request->set_header( 'X-Safe-Publish-Signature', 'totally-invalid-signature' );
 
 		// ACT.
@@ -258,6 +261,99 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that a valid request is rejected when no connected site URL is
+	 * configured on the authenticator.
+	 */
+	public function test_missing_connected_site_url_fails_with_500(): void {
+		// ARRANGE: Authenticator with no connected site URL.
+		$authenticator = new HMAC_Authenticator(
+			new Auth_Logger(),
+			new Permission_Manager( new Auth_Logger() ),
+			self::FALLBACK_SECRET,
+			''
+		);
+		$request       = $this->build_signed_request( 'GET', '/wp/v2/posts', '' );
+
+		// ACT.
+		$result = $authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT.
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'safe_publish_auth_no_connected_url', $result->get_error_code() );
+		$this->assertSame( 500, $result->get_error_data()['status'] );
+	}
+
+	/**
+	 * Verifies that a valid request is rejected when the site URL does not match
+	 * the configured connected site URL.
+	 */
+	public function test_site_url_mismatch_fails_with_403(): void {
+		// ARRANGE: Authenticator configured to only accept requests from a specific URL.
+		$authenticator = new HMAC_Authenticator(
+			new Auth_Logger(),
+			new Permission_Manager( new Auth_Logger() ),
+			self::FALLBACK_SECRET,
+			'https://allowed-receiver.example.com'
+		);
+		$request       = $this->build_signed_request( 'GET', '/wp/v2/posts', '', 0, 'https://other-site.example.com' );
+
+		// ACT.
+		$result = $authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT.
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'safe_publish_auth_site_url_mismatch', $result->get_error_code() );
+		$this->assertSame( 403, $result->get_error_data()['status'] );
+	}
+
+	/**
+	 * Verifies that a valid request is rejected when the site URL header is
+	 * missing.
+	 */
+	public function test_missing_site_url_header_fails(): void {
+		// ARRANGE: Authenticator configured with a connected site URL.
+		$authenticator = new HMAC_Authenticator(
+			new Auth_Logger(),
+			new Permission_Manager( new Auth_Logger() ),
+			self::FALLBACK_SECRET,
+			'https://allowed-receiver.example.com'
+		);
+		// Build a request without the site URL header.
+		$request = $this->build_signed_request( 'GET', '/wp/v2/posts', '', 0, '' );
+
+		// ACT.
+		$result = $authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT.
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'safe_publish_auth_site_url_missing', $result->get_error_code() );
+		$this->assertSame( 401, $result->get_error_data()['status'] );
+	}
+
+	/**
+	 * Verifies that a valid request succeeds when the site URL matches the
+	 * configured connected site URL.
+	 */
+	public function test_matching_site_url_succeeds(): void {
+		// ARRANGE.
+		$allowed_url   = 'https://allowed-receiver.example.com';
+		$authenticator = new HMAC_Authenticator(
+			new Auth_Logger(),
+			new Permission_Manager( new Auth_Logger() ),
+			defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : self::FALLBACK_SECRET,
+			$allowed_url
+		);
+		$request       = $this->build_signed_request( 'GET', '/wp/v2/posts', '', 0, $allowed_url );
+
+		// ACT.
+		$result = $authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT.
+		$this->assertNull( $result );
+		$this->assertTrue( $authenticator->is_authenticated() );
+	}
+
+	/**
 	 * Verifies that a successful authentication event is stored in the log.
 	 */
 	public function test_authentication_event_logged(): void {
@@ -277,32 +373,44 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 	/**
 	 * Builds a properly signed WP_REST_Request.
 	 *
-	 * @param string $method    HTTP method.
-	 * @param string $route     REST route path.
-	 * @param string $body      Request body.
-	 * @param int    $timestamp Optional. Unix timestamp. Defaults to current time.
+	 * @param string      $method    HTTP method.
+	 * @param string      $route     REST route path.
+	 * @param string      $body      Request body.
+	 * @param int         $timestamp Optional. Unix timestamp. Defaults to current time.
+	 * @param string|null $site_url  Optional. Source site URL to include in the request. Null uses home_url(), '' omits the header.
 	 * @return WP_REST_Request Signed request.
 	 */
 	private function build_signed_request(
 		string $method,
 		string $route,
 		string $body,
-		int $timestamp = 0
+		int $timestamp = 0,
+		?string $site_url = null
 	): WP_REST_Request {
 		if ( 0 === $timestamp ) {
 			$timestamp = time();
 		}
 
+		if ( null === $site_url ) {
+			$site_url = home_url();
+		}
+
 		$secret         = defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : self::FALLBACK_SECRET;
 		$content_hash   = hash( 'sha256', $body );
 		$string_to_sign = $method . '|' . $route . '|' . $timestamp . '|' . $content_hash;
-		$signature      = hash_hmac( 'sha256', $string_to_sign, $secret );
+		if ( ! empty( $site_url ) ) {
+			$string_to_sign .= '|' . $site_url;
+		}
+		$signature = hash_hmac( 'sha256', $string_to_sign, $secret );
 
 		$request = new WP_REST_Request( $method, $route );
 		$request->set_body( $body );
 		$request->set_header( 'X-Safe-Publish-Timestamp', (string) $timestamp );
 		$request->set_header( 'X-Safe-Publish-Content-Hash', $content_hash );
 		$request->set_header( 'X-Safe-Publish-Signature', $signature );
+		if ( ! empty( $site_url ) ) {
+			$request->set_header( 'X-Safe-Publish-Site-URL', $site_url );
+		}
 
 		return $request;
 	}

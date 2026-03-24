@@ -22,7 +22,6 @@ export default defineConfig( {
 				'src/**/*.spec.{ts,tsx}',
 				'src/index.tsx',
 				'src/import-history.tsx',
-				'src/admin-tools.tsx',
 			],
 		},
 	},

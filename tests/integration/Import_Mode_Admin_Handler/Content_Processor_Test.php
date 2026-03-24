@@ -7,7 +7,7 @@
 
 declare(strict_types=1);
 
-namespace Safe_Publish\Tests\Integration\Receive_Mode_Admin_Handler;
+namespace Safe_Publish\Tests\Integration\Import_Mode_Admin_Handler;
 
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\API\HTTP_Client;

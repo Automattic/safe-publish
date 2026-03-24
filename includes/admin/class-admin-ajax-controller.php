@@ -208,7 +208,24 @@ final class Admin_Ajax_Controller {
 
 		$this->validate_auth_or_fail();
 
-		$results = $this->api->test_connection( $site_url );
+		$auth_credentials = Auth_Credential_Provider::get_credentials();
+
+		// When the settings form submits live credential fields, always honour
+		// them — including when they are empty — so cleared fields override any
+		// previously saved Basic Auth credentials.
+		if ( array_key_exists( 'username', $_POST ) && array_key_exists( 'password', $_POST ) ) {
+			$username = sanitize_text_field( wp_unslash( $_POST['username'] ) );
+			$password = sanitize_text_field( wp_unslash( $_POST['password'] ) );
+
+			if ( ! empty( $username ) && ! empty( $password ) ) {
+				$auth_credentials['username'] = $username;
+				$auth_credentials['password'] = $password;
+			} else {
+				unset( $auth_credentials['username'], $auth_credentials['password'] );
+			}
+		}
+
+		$results = $this->api->test_connection( $site_url, $auth_credentials );
 
 		wp_send_json_success( $results );
 	}
