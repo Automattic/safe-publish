@@ -50,13 +50,6 @@ class Options {
 	const OPTION_PASSWORD = 'safe_publish_password';
 
 	/**
-	 * Option key for the number of posts to fetch per request.
-	 *
-	 * @var string
-	 */
-	const OPTION_NUMBER_OF_POSTS = 'safe_publish_number_of_posts';
-
-	/**
 	 * Option key for the sync mode of this site.
 	 *
 	 * @var string

@@ -120,15 +120,6 @@ final class Plugin {
 
 		register_setting(
 			Options::SETTINGS_GROUP,
-			Options::OPTION_NUMBER_OF_POSTS,
-			array(
-				'sanitize_callback' => array( $sanitizer, 'sanitize_number_of_posts' ),
-				'default'           => 10,
-			)
-		);
-
-		register_setting(
-			Options::SETTINGS_GROUP,
 			Options::OPTION_USERNAME,
 			array(
 				'sanitize_callback' => array( $sanitizer, 'sanitize_username' ),

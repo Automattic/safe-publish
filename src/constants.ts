@@ -19,6 +19,14 @@ export const LAYOUT_TABLE = 'table';
 export const LAYOUT_GRID = 'grid';
 export const LAYOUT_LIST = 'list';
 
+// Posts control defaults and bounds.
+export const DEFAULT_POSTS_PER_PAGE = 10;
+export const MIN_POSTS_COUNT = 1;
+export const MAX_POSTS_COUNT = 100;
+
+// Debounce delay (ms) for the posts-count input.
+export const NUMBER_POSTS_DEBOUNCE_DELAY = 600;
+
 // Sorting constants (kept for potential future use).
 export const SORTING_DIRECTIONS = [ 'asc', 'desc' ] as const;
 export const sortArrows = { asc: '↑', desc: '↓' };

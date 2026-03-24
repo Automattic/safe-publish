@@ -23,9 +23,8 @@ final class Settings_Page {
 	 * Renders the settings page.
 	 */
 	public function render(): void {
-		$site_url        = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
-		$number_of_posts = get_option( Options::OPTION_NUMBER_OF_POSTS, 10 );
-		$sync_mode       = get_option( Options::OPTION_SYNC_MODE, '' );
+		$site_url  = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$sync_mode = get_option( Options::OPTION_SYNC_MODE, '' );
 
 		// Basic auth credentials (development only).
 		$username = get_option( Options::OPTION_USERNAME, '' );
@@ -172,27 +171,6 @@ final class Settings_Page {
 								</td>
 							</tr>
 
-							<tr class="safe-publish-import-field-row<?php echo $show_import_fields ? '' : ' hidden'; ?>">
-								<th scope="row">
-									<label for="safe_publish_number_of_posts">
-										<?php esc_html_e( 'Number of Posts', 'safe-publish' ); ?>
-									</label>
-								</th>
-								<td>
-									<input
-										type="number"
-										id="safe_publish_number_of_posts"
-										name="safe_publish_number_of_posts"
-										value="<?php echo esc_attr( $number_of_posts ); ?>"
-										min="1"
-										max="100"
-										class="small-text"
-									/>
-									<p class="description">
-										<?php esc_html_e( 'Number of posts to display (1-100).', 'safe-publish' ); ?>
-									</p>
-								</td>
-							</tr>
 						</table>
 
 					<?php submit_button(); ?>

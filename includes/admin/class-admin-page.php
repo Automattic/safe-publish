@@ -22,6 +22,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Admin_Page {
 
 	/**
+	 * Default number of posts to fetch from the external site on initial page
+	 * load.
+	 */
+	const DEFAULT_NUMBER_OF_POSTS = 20;
+
+	/**
 	 * External Posts API instance.
 	 *
 	 * @var External_Posts_API
@@ -105,9 +111,9 @@ final class Admin_Page {
 	 * Enqueues standard assets.
 	 */
 	private function enqueue_standard_assets(): void {
-		// Get posts data for localization.
+		// Fetch posts data from the source site.
 		$site_url        = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
-		$number_of_posts = get_option( Options::OPTION_NUMBER_OF_POSTS, 10 );
+		$number_of_posts = self::DEFAULT_NUMBER_OF_POSTS;
 		$posts_data      = array();
 
 		if ( ! empty( $site_url ) ) {

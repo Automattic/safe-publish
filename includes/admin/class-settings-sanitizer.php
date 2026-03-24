@@ -46,32 +46,6 @@ class Settings_Sanitizer {
 	}
 
 	/**
-	 * Sanitizes the number of posts setting.
-	 *
-	 * @param mixed $value Value to sanitize.
-	 * @return int Sanitized number of posts, between 1 and 100.
-	 */
-	public function sanitize_number_of_posts( $value ): int {
-		// preserve the existing value when sync mode is export-only.
-		if ( null === $value ) {
-			return (int) get_option( Options::OPTION_NUMBER_OF_POSTS, 10 );
-		}
-
-		$number = absint( $value );
-
-		if ( $number < 1 || $number > 100 ) {
-			add_settings_error(
-				Options::OPTION_NUMBER_OF_POSTS,
-				'invalid_number',
-				__( 'Number of posts must be between 1 and 100.', 'safe-publish' )
-			);
-			return (int) get_option( Options::OPTION_NUMBER_OF_POSTS, 10 );
-		}
-
-		return $number;
-	}
-
-	/**
 	 * Sanitizes a checkbox setting value.
 	 *
 	 * @param mixed $value Value to sanitize.
