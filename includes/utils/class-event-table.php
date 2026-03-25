@@ -1,0 +1,235 @@
+<?php
+/**
+ * Event Table class.
+ *
+ * @package Safe_Publish
+ */
+
+namespace Safe_Publish\Utils;
+
+/**
+ * Manages the custom events table for Safe Publish.
+ *
+ * Handles table creation, row insertion, querying, and deletion.
+ */
+class Event_Table {
+
+	/**
+	 * Table schema version.
+	 */
+	private const VERSION = '1.0';
+
+	/**
+	 * Option key used to track the installed table schema version.
+	 */
+	private const VERSION_OPTION = 'safe_publish_event_table_version';
+
+	/**
+	 * Returns the full table name including the WordPress table prefix.
+	 *
+	 * @return string Full table name.
+	 */
+	public static function table_name(): string {
+		global $wpdb;
+		return $wpdb->prefix . 'safe_publish_events';
+	}
+
+	/**
+	 * Creates the log table if it does not exist or is out of date.
+	 */
+	public static function maybe_create_table(): void {
+		global $wpdb;
+
+		if ( ! isset( $wpdb ) ) {
+			return;
+		}
+
+		if ( get_option( self::VERSION_OPTION ) === self::VERSION ) {
+			return;
+		}
+
+		self::create_table();
+	}
+
+	/**
+	 * Creates or upgrades the log table using dbDelta.
+	 *
+	 * @psalm-suppress MissingFile
+	 */
+	public static function create_table(): void {
+		global $wpdb;
+
+		$table   = self::table_name();
+		$charset = $wpdb->get_charset_collate();
+
+		$sql = "CREATE TABLE {$table} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			channel VARCHAR(32) NOT NULL,
+			level VARCHAR(8) NOT NULL,
+			event VARCHAR(64) NOT NULL,
+			created_at DATETIME NOT NULL,
+			data LONGTEXT NOT NULL,
+			PRIMARY KEY (id),
+			KEY channel_created (channel, created_at),
+			KEY level (level),
+			KEY event (event)
+		) {$charset};";
+
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		dbDelta( $sql );
+
+		update_option( self::VERSION_OPTION, self::VERSION, false );
+	}
+
+	/**
+	 * Inserts a log event row.
+	 *
+	 * @param string $channel    Logger channel (e.g. 'auth').
+	 * @param string $level      Event level: 'info' or 'error'.
+	 * @param string $event      Event type string (e.g. 'AUTH_SUCCESS').
+	 * @param string $created_at MySQL-formatted datetime string.
+	 * @param array  $data       Event payload, stored as JSON.
+	 */
+	public static function insert(
+		string $channel,
+		string $level,
+		string $event,
+		string $created_at,
+		array $data
+	): void {
+		global $wpdb;
+
+		$wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			self::table_name(),
+			array(
+				'channel'    => $channel,
+				'level'      => $level,
+				'event'      => $event,
+				'created_at' => $created_at,
+				'data'       => wp_json_encode( $data, JSON_UNESCAPED_SLASHES ),
+			),
+			array( '%s', '%s', '%s', '%s', '%s' )
+		);
+	}
+
+	/**
+	 * Queries log events in reverse-chronological order.
+	 *
+	 * @param array $args {
+	 *     Optional query arguments.
+	 *
+	 *     @type string $channel    Filter by channel.
+	 *     @type string $level      Filter by level ('info' or 'error').
+	 *     @type string $event_type Partial match on the event column.
+	 *     @type int    $limit      Maximum rows to return. Default 50, max 100.
+	 *     @type int    $offset     Row offset for pagination. Default 0.
+	 * }
+	 * @return array Rows with 'data' decoded from JSON to an array.
+	 */
+	public static function get_events( array $args = array() ): array {
+		global $wpdb;
+
+		$table  = self::table_name();
+		$limit  = min( absint( $args['limit'] ?? 50 ), 100 );
+		$offset = absint( $args['offset'] ?? 0 );
+
+		$conditions = array();
+		$values     = array();
+
+		if ( ! empty( $args['channel'] ) ) {
+			$conditions[] = 'channel = %s';
+			$values[]     = $args['channel'];
+		}
+
+		if ( ! empty( $args['level'] ) ) {
+			$conditions[] = 'level = %s';
+			$values[]     = $args['level'];
+		}
+
+		if ( ! empty( $args['event_type'] ) ) {
+			$conditions[] = 'event LIKE %s';
+			$values[]     = '%' . $wpdb->esc_like( $args['event_type'] ) . '%';
+		}
+
+		$where_sql = $conditions ? 'WHERE ' . implode( ' AND ', $conditions ) : '';
+		$values[]  = $limit;
+		$values[]  = $offset;
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rows = $wpdb->get_results(
+			$wpdb->prepare( "SELECT * FROM `{$table}` {$where_sql} ORDER BY created_at DESC LIMIT %d OFFSET %d", ...$values ),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		if ( ! $rows ) {
+			return array();
+		}
+
+		return array_map(
+			static function ( array $row ): array {
+				$row['data'] = json_decode( $row['data'], true ) ?? array();
+				return $row;
+			},
+			$rows
+		);
+	}
+
+	/**
+	 * Counts log events matching the given filters.
+	 *
+	 * @param array $args Accepts the same filter keys as get_events(), without limit/offset.
+	 * @return int Total matching row count.
+	 */
+	public static function count( array $args = array() ): int {
+		global $wpdb;
+
+		$table = self::table_name();
+
+		$conditions = array();
+		$values     = array();
+
+		if ( ! empty( $args['channel'] ) ) {
+			$conditions[] = 'channel = %s';
+			$values[]     = $args['channel'];
+		}
+
+		if ( ! empty( $args['level'] ) ) {
+			$conditions[] = 'level = %s';
+			$values[]     = $args['level'];
+		}
+
+		if ( ! empty( $args['event_type'] ) ) {
+			$conditions[] = 'event LIKE %s';
+			$values[]     = '%' . $wpdb->esc_like( $args['event_type'] ) . '%';
+		}
+
+		$where_sql = $conditions ? 'WHERE ' . implode( ' AND ', $conditions ) : '';
+
+		if ( $values ) {
+			// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			return (int) $wpdb->get_var(
+				$wpdb->prepare( "SELECT COUNT(*) FROM `{$table}` {$where_sql}", ...$values )
+			);
+			// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		}
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		return (int) $wpdb->get_var( "SELECT COUNT(*) FROM `{$table}`" );
+	}
+
+	/**
+	 * Deletes all log events for a given channel.
+	 *
+	 * @param string $channel Channel whose rows should be deleted (e.g. 'auth').
+	 */
+	public static function clear( string $channel ): void {
+		global $wpdb;
+
+		$wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			self::table_name(),
+			array( 'channel' => $channel ),
+			array( '%s' )
+		);
+	}
+}

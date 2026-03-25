@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests\Integration\Auth;
 use Safe_Publish\Auth\Auth_Logger;
 use Safe_Publish\Auth\HMAC_Authenticator;
 use Safe_Publish\Auth\Permission_Manager;
+use Safe_Publish\Utils\Event_Table;
 use WP_REST_Request;
 use WP_UnitTestCase;
 
@@ -53,7 +54,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		);
 
 		// Clear any stored log events before each test.
-		delete_option( 'safe_publish_auth_log_events' );
+		Event_Table::clear( 'auth' );
 	}
 
 	/**
@@ -364,7 +365,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 
 		// ASSERT: AUTH_SUCCESS entry exists in the log.
 		// Note: additional events (e.g. CAPABILITY_BASED_AUTH_SETUP) may follow.
-		$log_events  = get_option( 'safe_publish_auth_log_events', array() );
+		$log_events  = Event_Table::get_events( array( 'channel' => 'auth' ) );
 		$event_types = array_column( $log_events, 'event' );
 		$this->assertContains( 'AUTH_SUCCESS', $event_types );
 	}

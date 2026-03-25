@@ -57,6 +57,7 @@ abstract class Logger {
 	 */
 	private function write( string $event, array $data, bool $use_error_log ): void {
 		$log_data = $this->build_log_data( $event, $data );
+		$level    = $use_error_log ? 'error' : 'info';
 
 		if ( ! defined( 'WP_TESTS_DOMAIN' ) && $use_error_log ) {
 			$prefix = '[Safe-Publish-' . ucfirst( $this->channel ) . '] ';
@@ -64,8 +65,10 @@ abstract class Logger {
 			error_log( $prefix . $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES ) );
 		}
 
-		if ( function_exists( 'get_option' ) ) {
-			$this->store_log_event( $event, $log_data );
+		global $wpdb;
+
+		if ( isset( $wpdb ) ) {
+			$this->store_log_event( $level, $event, $log_data );
 		}
 
 		if ( function_exists( 'do_action' ) ) {
@@ -102,28 +105,22 @@ abstract class Logger {
 	}
 
 	/**
-	 * Stores an event in the database.
+	 * Stores an event in the log table.
 	 *
-	 * Keeps a rolling window of the last 100 events per channel. Subclasses may
-	 * override this method to add side effects while calling parent::store_log_event()
-	 * to preserve the base storage behavior.
+	 * Subclasses may override this method to add side effects while calling
+	 * parent::store_log_event() to preserve the base storage behavior.
 	 *
+	 * @param string $level    Event level: 'info' or 'error'.
 	 * @param string $event    Event type.
-	 * @param array  $log_data Full event data to store.
+	 * @param array  $log_data Full event data.
 	 */
-	protected function store_log_event( string $event, array $log_data ): void {
-		$option_key   = 'safe_publish_' . $this->channel . '_log_events';
-		$log_events   = get_option( $option_key, array() );
-		$log_events[] = array(
-			'event' => $event,
-			'data'  => $log_data,
-			'id'    => uniqid(),
-		);
+	protected function store_log_event( string $level, string $event, array $log_data ): void {
+		$created_at = $log_data['timestamp'];
+		$data       = $log_data;
 
-		if ( count( $log_events ) > 100 ) {
-			$log_events = array_slice( $log_events, -100 );
-		}
+		// These are stored as dedicated columns.
+		unset( $data['event'], $data['timestamp'] );
 
-		update_option( $option_key, $log_events, false );
+		Event_Table::insert( $this->channel, $level, $event, $created_at, $data );
 	}
 }

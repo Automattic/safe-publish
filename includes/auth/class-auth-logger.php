@@ -46,18 +46,20 @@ class Auth_Logger extends Logger {
 	}
 
 	/**
-	 * Stores an auth event in the database and updates rolling auth statistics.
+	 * Stores an auth event in the log table and updates rolling auth statistics.
 	 *
+	 * @param string $level    Event level: 'info' or 'error'.
 	 * @param string $event    Event type.
-	 * @param array  $log_data Full event data to store.
+	 * @param array  $log_data Full event data.
 	 */
 	#[\Override]
-	protected function store_log_event( string $event, array $log_data ): void {
-		parent::store_log_event( $event, $log_data );
-
-		if ( in_array( $event, self::SUCCESS_EVENTS, true ) || in_array( $event, self::FAILURE_EVENTS, true ) ) {
-			$this->update_auth_stats( $event );
-		}
+	protected function store_log_event(
+		string $level,
+		string $event,
+		array $log_data
+	): void {
+		parent::store_log_event( $level, $event, $log_data );
+		$this->update_auth_stats( $event );
 	}
 
 	/**

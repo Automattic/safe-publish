@@ -7,6 +7,8 @@
 
 namespace Safe_Publish\Auth;
 
+use Safe_Publish\Utils\Event_Table;
+
 /**
  * Manages the Safe Publish admin dashboard widget and related admin UI.
  *
@@ -56,7 +58,12 @@ class Dashboard_Widget {
 	public function render(): void {
 		$secret_length = strlen( $this->shared_secret );
 		$stats         = get_option( 'safe_publish_auth_stats', array() );
-		$recent_events = get_option( 'safe_publish_auth_log_events', array() );
+		$recent_events = Event_Table::get_events(
+			array(
+				'channel' => 'auth',
+				'limit'   => 10,
+			)
+		);
 
 		echo '<div class="safe-publish-dashboard-widget">';
 		$this->render_status_section( $this->shared_secret, $secret_length );
@@ -332,8 +339,7 @@ class Dashboard_Widget {
 		echo '<h4 style="margin: 10px 0;">' . esc_html__( '📋 Recent Authentication Events', 'safe-publish' ) . '</h4>';
 		echo '<div style="max-height: 200px; overflow-y: auto; font-size: 12px;">';
 
-		$events = array_reverse( array_slice( $recent_events, -10 ) );
-		foreach ( $events as $event ) {
+		foreach ( $recent_events as $event ) {
 			$this->render_event_item( $event );
 		}
 
@@ -347,7 +353,7 @@ class Dashboard_Widget {
 	 */
 	private function render_event_item( array $event ): void {
 		$event_type = $event['event'] ?? 'UNKNOWN';
-		$timestamp  = $event['data']['timestamp'] ?? 'unknown';
+		$timestamp  = $event['created_at'] ?? 'unknown';
 
 		$icon  = '•';
 		$color = '#666';
@@ -414,7 +420,7 @@ class Dashboard_Widget {
 		echo '<ul style="margin-left: 20px; font-size: 11px;">';
 		echo '<li>' . esc_html__( 'VIP Error Log:', 'safe-publish' ) . ' <code>/tmp/error_log</code></li>';
 		echo '<li>' . esc_html__( 'WordPress Debug Log:', 'safe-publish' ) . ' <code>/wp-content/debug.log</code></li>';
-		echo '<li>' . esc_html__( 'Database Events:', 'safe-publish' ) . ' <code>wp_options.safe_publish_auth_log_events</code></li>';
+		echo '<li>' . esc_html__( 'Database Events:', 'safe-publish' ) . ' <code>' . esc_html( Event_Table::table_name() ) . '</code></li>';
 		echo '<li>' . esc_html__( 'New Relic:', 'safe-publish' ) . ' Custom Events → Safe_Publish_Auth_Event</li>';
 		echo '</ul>';
 	}
