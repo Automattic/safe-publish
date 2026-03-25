@@ -125,8 +125,11 @@ tail -f wp-content/debug.log
 Access the MySQL database:
 
 ```sh
-# Using WP-CLI
-npm run wp-cli db query "SELECT * FROM wp_safe_publish_import_history LIMIT 10"
+# View import sessions (stored as custom post types)
+npm run wp-cli post list --post_type=sp_import_session
+
+# View export events
+npm run wp-cli db query "SELECT * FROM wp_safe_publish_events LIMIT 10"
 
 # Or connect directly
 docker exec -it <container-id> mysql -u root -ppassword wordpress
@@ -144,9 +147,7 @@ npm run wp-cli option delete safe_publish_number_of_posts
 
 **Clear import history:**
 
-```sh
-npm run wp-cli db query "TRUNCATE TABLE wp_safe_publish_import_history"
-```
+Import sessions can be deleted through the **History** page. There is no direct WP-CLI command to truncate history.
 
 **Test authentication:**
 
@@ -171,7 +172,7 @@ Playgrounds do not closely mirror production environments and are missing persis
 1. **Use two browser windows** - one for source site, one for destination
 2. **Test with different post types** - posts, pages, custom types
 3. **Test media import** - posts with multiple images
-4. **Check Import History** - verify logging is working
+4. **Check History** - verify logging is working
 5. **Monitor network requests** - use browser DevTools
 6. **Test error conditions** - invalid URLs, auth failures, etc.
 

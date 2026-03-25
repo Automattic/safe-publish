@@ -128,7 +128,7 @@ For a list of validation error codes and solutions, see the [Troubleshooting gui
 ### During Import
 
 1. **Monitor the process** - watch for validation warnings
-2. **Check Import History** for any errors
+2. **Check History** for any errors
 3. **Review imported drafts** before publishing
 
 ### After Import
@@ -138,46 +138,8 @@ For a list of validation error codes and solutions, see the [Troubleshooting gui
 3. **Test links** within the content
 4. **Review formatting** matches the source
 
-## Disabling Validation (Not Recommended)
-
-While not recommended, you can bypass certain validations using filters:
-
-```php
-// Disable URL validation (dangerous!)
-add_filter( 'safe_publish_validate_url', '__return_false' );
-
-// Disable content validation
-add_filter( 'safe_publish_validate_content', '__return_false' );
-```
-
-**Warning**: Disabling validation can lead to:
-
-- Security vulnerabilities
-- Data corruption
-- Import failures
-- Broken content
-
-Only disable validation for testing purposes in development environments.
-
-## Custom Validation
-
-Developers can add custom validation logic using hooks:
-
-```php
-add_filter( 'safe_publish_validate_post_data', function( $is_valid, $post_data ) {
-    // Add custom validation logic
-    if ( empty( $post_data['custom_field'] ) ) {
-        return new WP_Error( 'missing_custom_field', 'Custom field is required' );
-    }
-
-    return $is_valid;
-}, 10, 2 );
-```
-
-See the [Hooks and Filters](../extending/hooks.md) guide for more information.
-
 ## Next Steps
 
 - [Import Process](import-process.md) - Learn how content is imported
-- [Import History](import-history.md) - Track your imports
+- [History](history.md) - Track your imports
 - [Troubleshooting](../troubleshooting.md) - Solve common issues

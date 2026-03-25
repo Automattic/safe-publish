@@ -17,7 +17,7 @@ Add a matching shared secret to both sites' `wp-config.php`:
 define( 'SAFE_PUBLISH_SHARED_SECRET', 'your-secure-random-string-here' );
 ```
 
-You can generate a secure value with: `openssl rand -base64 32`. See the [Authentication guide](concepts/authentication.md) for full details.
+You can generate a secure value with: `openssl rand -base64 32`. The secret must be at least 32 characters long. See the [Authentication guide](concepts/authentication.md) for full details.
 
 ## Step 3: Activate and Configure the Plugin
 
@@ -86,9 +86,9 @@ You have three ways to import content:
 3. Review the content, make any necessary adjustments
 4. Publish when ready
 
-## Import History
+## History
 
-Track all your imports in the **Import History** tab. See the [Import History guide](concepts/import-history.md) for details.
+Track all your imports and exports in the **History** page. See the [History guide](concepts/history.md) for details.
 
 ## Next Steps
 

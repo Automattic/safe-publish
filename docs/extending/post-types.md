@@ -32,18 +32,6 @@ After registering with REST API support:
 2. Click **Fetch Post Types** in the settings
 3. Your custom post type should appear in the dropdown
 
-### Manual Support
-
-If you need to add support for a post type without modifying its registration:
-
-```php
-add_filter( 'safe_publish_supported_post_types', function( $post_types ) {
-    $post_types[] = 'book';
-    $post_types[] = 'product';
-    return $post_types;
-} );
-```
-
 ## REST API Configuration
 
 ### Basic REST API Setup
@@ -92,35 +80,6 @@ register_rest_field( 'book', 'author_name', [
 ] );
 ```
 
-### Custom Metadata Import
-
-Import custom fields during the import process:
-
-```php
-add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
-    // Get the source post data
-    $source_post_id = get_post_meta( $post_id, '_safe_publish_source_post_id', true );
-
-    // Fetch additional data from source
-    $response = wp_remote_get( add_query_arg( [
-        'fields' => 'isbn,author_name',
-    ], $source_url ) );
-
-    if ( ! is_wp_error( $response ) ) {
-        $data = json_decode( wp_remote_retrieve_body( $response ), true );
-
-        // Import custom fields
-        if ( isset( $data['isbn'] ) ) {
-            update_post_meta( $post_id, 'isbn', sanitize_text_field( $data['isbn'] ) );
-        }
-
-        if ( isset( $data['author_name'] ) ) {
-            update_post_meta( $post_id, 'author_name', sanitize_text_field( $data['author_name'] ) );
-        }
-    }
-}, 10, 2 );
-```
-
 ## Custom Taxonomies
 
 ### Automatic Taxonomy Support
@@ -136,31 +95,6 @@ register_taxonomy( 'genre', 'book', [
 ] );
 ```
 
-### Custom Taxonomy Mapping
-
-Map taxonomies from source to destination:
-
-```php
-add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
-    // Map source taxonomy to destination taxonomy
-    if ( isset( $post_data['tax_input']['source_genre'] ) ) {
-        $post_data['tax_input']['genre'] = $post_data['tax_input']['source_genre'];
-        unset( $post_data['tax_input']['source_genre'] );
-    }
-
-    // Create terms if they don't exist
-    if ( isset( $post_data['tax_input']['genre'] ) ) {
-        foreach ( $post_data['tax_input']['genre'] as $term_name ) {
-            if ( ! term_exists( $term_name, 'genre' ) ) {
-                wp_insert_term( $term_name, 'genre' );
-            }
-        }
-    }
-
-    return $post_data;
-} );
-```
-
 ## Hierarchical Post Types
 
 For hierarchical post types (like pages), parent-child relationships are preserved:
@@ -174,119 +108,9 @@ register_post_type( 'documentation', [
 ] );
 ```
 
-### Custom Parent Handling
-
-Modify how parent relationships are imported:
-
-```php
-add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
-    // Skip parent relationship (import as top-level)
-    if ( isset( $post_data['post_parent'] ) ) {
-        $post_data['post_parent'] = 0;
-    }
-
-    // Or map to a different parent
-    if ( isset( $post_data['post_parent'] ) && $post_data['post_parent'] > 0 ) {
-        // Find corresponding parent in destination site
-        $source_parent_id = $post_data['post_parent'];
-        $mapped_parent = get_posts( [
-            'post_type' => 'documentation',
-            'meta_key' => '_safe_publish_source_post_id',
-            'meta_value' => $source_parent_id,
-            'posts_per_page' => 1,
-        ] );
-
-        if ( ! empty( $mapped_parent ) ) {
-            $post_data['post_parent'] = $mapped_parent[0]->ID;
-        }
-    }
-
-    return $post_data;
-} );
-```
-
-## Post Type-Specific Configuration
-
-### Different Settings Per Type
-
-Apply different import logic based on post type:
-
-```php
-add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
-    switch ( $post_data['post_type'] ) {
-        case 'book':
-            // Books always go to 'pending' status
-            $post_data['post_status'] = 'pending';
-            break;
-
-        case 'product':
-            // Products need review before publish
-            $post_data['post_status'] = 'draft';
-            $post_data['tax_input']['product_status'] = [ 'needs-review' ];
-            break;
-
-        case 'documentation':
-            // Documentation auto-published if from trusted source
-            if ( strpos( $post_data['_source_url'], 'docs.internal.com' ) !== false ) {
-                $post_data['post_status'] = 'publish';
-            }
-            break;
-    }
-
-    return $post_data;
-} );
-```
-
-### Validation Per Type
-
-Add type-specific validation:
-
-```php
-add_filter( 'safe_publish_validate_post_data', function( $is_valid, $post_data ) {
-    $post_type = $post_data['post_type'] ?? 'post';
-
-    switch ( $post_type ) {
-        case 'book':
-            // Books require ISBN
-            if ( empty( $post_data['meta']['isbn'] ) ) {
-                return new WP_Error( 'missing_isbn', 'Books require an ISBN' );
-            }
-            break;
-
-        case 'product':
-            // Products require price
-            if ( empty( $post_data['meta']['price'] ) ) {
-                return new WP_Error( 'missing_price', 'Products require a price' );
-            }
-            break;
-    }
-
-    return $is_valid;
-}, 10, 2 );
-```
-
 ## ACF (Advanced Custom Fields) Support
 
-If using ACF with custom post types:
-
-```php
-add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
-    // Get ACF field data from source
-    $response = wp_remote_get( add_query_arg( [
-        'acf_format' => 'standard',
-    ], $source_url ) );
-
-    if ( ! is_wp_error( $response ) ) {
-        $data = json_decode( wp_remote_retrieve_body( $response ), true );
-
-        if ( isset( $data['acf'] ) ) {
-            foreach ( $data['acf'] as $field_name => $field_value ) {
-                update_field( $field_name, $field_value, $post_id );
-            }
-        }
-    }
-}, 10, 2 );
-```
+ACF fields are not automatically imported. To import ACF fields, expose them via the source site's REST API and handle them during the import process using custom development.
 
 ## Troubleshooting
 
@@ -369,29 +193,6 @@ function expose_book_fields() {
     ] );
 }
 add_action( 'rest_api_init', 'expose_book_fields' );
-
-// Import custom fields
-function import_book_fields( $post_id, $source_url ) {
-    if ( get_post_type( $post_id ) !== 'book' ) {
-        return;
-    }
-
-    $response = wp_remote_get( $source_url );
-    if ( is_wp_error( $response ) ) {
-        return;
-    }
-
-    $data = json_decode( wp_remote_retrieve_body( $response ), true );
-
-    if ( isset( $data['isbn'] ) ) {
-        update_post_meta( $post_id, 'isbn', sanitize_text_field( $data['isbn'] ) );
-    }
-
-    if ( isset( $data['author_name'] ) ) {
-        update_post_meta( $post_id, 'author_name', sanitize_text_field( $data['author_name'] ) );
-    }
-}
-add_action( 'safe_publish_post_imported', 'import_book_fields', 10, 2 );
 ```
 
 ## Next Steps

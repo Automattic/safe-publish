@@ -21,13 +21,13 @@ For error resolution at any stage, see the [Troubleshooting guide](../troublesho
 
 - Safe Publish sends an authenticated request to the external site's REST API
 - The endpoint `/wp-json/wp/v2/{post_type}/{post_id}` is queried
-- Additional data is fetched (featured image, author, meta data)
+- Additional data is embedded in the response (featured image, author)
 - Response is received and decoded
 
 ### Parameters Sent
 
 - `_embed` - Includes embedded data (author, featured media)
-- `context=edit` - Retrieves complete post data including drafts
+- `context=edit` - Retrieves complete post data including drafts (only sent when authentication is configured)
 
 ## Stage 2: Validate
 
@@ -45,22 +45,12 @@ See the [Content Validation](validation.md) guide for detailed information.
 ### What Happens
 
 - HTML content is parsed using DOMDocument
-- Gutenberg blocks are analyzed
-- Image URLs extracted from:
-  - `<img>` tags
-  - `<figure>` elements
-  - Block attributes (e.g., `wp:image` blocks)
-- URLs converted to absolute paths
+- `<img>` `src` and `srcset` attributes are processed
+- `<picture>/<source>` `srcset` attributes are processed
+- Relative and protocol-relative URLs made absolute
+- `<a>` href relative URLs resolved to absolute
+- `<iframe>` and `<video>` sources resolved
 - Content prepared for import
-
-### Block Processing
-
-The plugin handles various block types:
-
-- **Core blocks**: Paragraph, heading, image, gallery, etc.
-- **Reusable blocks**: Maintained as references
-- **Custom blocks**: Preserved with attributes
-- **Nested blocks**: Hierarchies maintained
 
 ### URL Transformation
 
@@ -98,16 +88,14 @@ For each image found:
 ### Inline Images
 
 - Extracted from content during transform stage
-- Downloaded in batch (up to 10 concurrent)
+- Downloaded sequentially
 - Original URLs replaced with new attachment URLs
-- Alt text and titles preserved
 
 ### Performance Considerations
 
 - Images downloaded using `wp_safe_remote_get()`
-- Timeout set to 30 seconds per image
-- Failed images logged but don't stop import
-- Uses WordPress media functions (VIP-safe)
+- Timeout defaults to 10 seconds per request (filterable via `safe_publish_request_timeout`)
+- Failed images do not stop the import; the original URL is preserved
 
 ## Stage 5: Create Post
 
@@ -118,15 +106,12 @@ For each image found:
   - **Title**: From source post title
   - **Content**: Transformed content with updated URLs
   - **Status**: Always `draft`
-  - **Author**: Current user performing import
-  - **Date**: Current date/time
   - **Post type**: Same as source post
-- Metadata copied:
-  - Categories (matched by name, created if missing)
-  - Tags (created if they don't exist)
-  - Excerpt (if present)
-  - Featured image (from media import)
-- Original source URL stored in post meta: `_safe_publish_source_url`
+- Post meta stored:
+  - `safe_publish_external_post_id` — post ID on the source site
+  - `safe_publish_external_link` — URL of the source post
+  - `safe_publish_imported_from` — plugin identifier (`safe-publish`)
+  - `safe_publish_import_date` — timestamp of the import
 
 ### Post Status
 
@@ -138,7 +123,7 @@ The post author is set to the user who performed the import, not the original au
 
 ### Custom Fields
 
-Basic custom fields in post meta are imported. However, complex custom fields from plugins like ACF require additional development.
+Only the plugin's own tracking meta is stored automatically. Additional post meta is not imported; importing extra fields requires custom development.
 
 ## Stage 6: Track
 
@@ -152,9 +137,9 @@ Basic custom fields in post meta are imported. However, complex custom fields fr
   - User who performed import
   - Import status (success/failure)
   - Error message (if failed)
-- Entry added to Import History table
+- Import logged to History (session and per-item log entries)
 
-See [Import History](import-history.md) for more details.
+See [History](history.md) for more details.
 
 ## Bulk Import
 
@@ -183,41 +168,16 @@ The plugin handles errors gracefully:
 
 - **Media failures**: Post still imported without images
 - **Meta failures**: Post imported without custom fields
-- **Network timeouts**: Retries attempted automatically
+- **Network timeouts**: No automatic retry; the import continues and the original URL is preserved
 
 ### Error Reporting
 
 Errors are reported in multiple places:
 
 1. **Admin notice**: Immediate feedback in UI
-2. **Import history**: Logged for later review
+2. **History**: Logged for later review
 3. **JavaScript console**: Detailed debugging info
 4. **PHP error log**: Server-side errors
-
-## Hooks for Developers
-
-Customize the import process with filters:
-
-```php
-// Modify post data before import
-add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
-    // Modify $post_data
-    return $post_data;
-} );
-
-// After successful import
-add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
-    // Custom logic after import
-}, 10, 2 );
-
-// Modify image download behavior
-add_filter( 'safe_publish_import_media', function( $should_import, $image_url ) {
-    // Decide whether to import specific images
-    return $should_import;
-}, 10, 2 );
-```
-
-See the [Hooks and Filters](../extending/hooks.md) guide for complete documentation.
 
 ## Best Practices
 
@@ -232,7 +192,7 @@ See the [Hooks and Filters](../extending/hooks.md) guide for complete documentat
 
 1. **Monitor progress** for errors
 2. **Don't close the browser** during bulk imports
-3. **Check Import History** periodically
+3. **Check History** periodically
 
 ### After Import
 
@@ -244,6 +204,6 @@ See the [Hooks and Filters](../extending/hooks.md) guide for complete documentat
 ## Next Steps
 
 - [Content Validation](validation.md) - Understanding validation
-- [Import History](import-history.md) - Tracking imports
+- [History](history.md) - Tracking imports
 - [Troubleshooting](../troubleshooting.md) - Common issues
 - [Hooks and Filters](../extending/hooks.md) - Customization options

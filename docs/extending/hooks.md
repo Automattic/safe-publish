@@ -1,10 +1,8 @@
 # Hooks and Filters
 
-Safe Publish provides WordPress hooks (actions and filters) at key points in the import process, allowing you to customize behavior without modifying core plugin code.
+Safe Publish provides WordPress actions and filters at key extension points.
 
-## Understanding Hooks
-
-**Actions** allow you to add functionality or trigger events at specific points. Action callbacks don't return values.
+**Actions** allow you to add functionality at specific points. Action callbacks do not return values.
 
 **Filters** allow you to modify data as it passes through the plugin. Filter callbacks must return the modified value.
 
@@ -12,440 +10,167 @@ Safe Publish provides WordPress hooks (actions and filters) at key points in the
 
 ## Actions
 
-Actions trigger at specific points in the import process, allowing you to add custom functionality.
+### `safe_publish_event_logged`
 
-### safe_publish_init
-
-Fires when Safe Publish is fully loaded and initialized.
-
-**Parameters:** None
-
-**Example:**
-
-```php
-add_action( 'safe_publish_init', function() {
-    // Initialize your custom functionality
-    // All Safe Publish classes are now available
-} );
-```
-
-### safe_publish_post_imported
-
-Fires after a post is successfully imported.
+Fires after any event is recorded to the events log (e.g. import, export, auth, or content channels).
 
 **Parameters:**
 
-- `int $post_id` - The ID of the newly created post
-- `string $source_url` - The URL of the source post
+- `string $channel` — event channel (e.g. `'import'`, `'export'`, `'auth'`, `'content'`)
+- `string $event` — event type identifier (e.g. `'CONTENT_EXPORTED'`, `'AUTH_FAILURE'`)
+- `array $data` — event payload
 
 **Example:**
 
 ```php
-add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
-    // Send notification
-    wp_mail(
-        'editor@example.com',
-        'New post imported',
-        sprintf( 'Post #%d imported from %s', $post_id, $source_url )
-    );
-
-    // Log to external system
-    do_action( 'my_import_logger', $post_id, $source_url );
-}, 10, 2 );
-```
-
-### safe_publish_import_failed
-
-Fires when an import attempt fails.
-
-**Parameters:**
-
-- `WP_Error $error` - The error object
-- `array $post_data` - The post data that failed to import
-- `string $source_url` - The URL of the source post
-
-**Example:**
-
-```php
-add_action( 'safe_publish_import_failed', function( $error, $post_data, $source_url ) {
-    error_log( sprintf(
-        'Safe Publish Import Failed: %s - Source: %s',
-        $error->get_error_message(),
-        $source_url
-    ) );
-
-    // Send alert to monitoring system
-    do_action( 'send_alert', 'import_failure', $error );
+add_action( 'safe_publish_event_logged', function( string $channel, string $event, array $data ): void {
+    if ( 'export' === $channel && 'EXPORT_FAILED' === $event ) {
+        error_log( 'Safe Publish export failed: ' . wp_json_encode( $data ) );
+    }
 }, 10, 3 );
-```
-
-### safe_publish_media_imported
-
-Fires after a media item is successfully imported.
-
-**Parameters:**
-
-- `int $attachment_id` - The ID of the imported media attachment
-- `string $source_url` - The URL of the source media file
-- `int $post_id` - The post this media belongs to
-
-**Example:**
-
-```php
-add_action( 'safe_publish_media_imported', function( $attachment_id, $source_url, $post_id ) {
-    // Add custom metadata
-    update_post_meta( $attachment_id, '_source_url', $source_url );
-    update_post_meta( $attachment_id, '_imported_for_post', $post_id );
-}, 10, 3 );
-```
-
-### safe_publish_bulk_import_start
-
-Fires at the start of a bulk import operation.
-
-**Parameters:**
-
-- `array $post_ids` - Array of post IDs to be imported
-
-**Example:**
-
-```php
-add_action( 'safe_publish_bulk_import_start', function( $post_ids ) {
-    update_option( 'safe_publish_bulk_import_in_progress', true );
-    update_option( 'safe_publish_bulk_import_count', count( $post_ids ) );
-} );
-```
-
-### safe_publish_bulk_import_complete
-
-Fires when a bulk import operation completes.
-
-**Parameters:**
-
-- `array $results` - Array of import results (success/failure for each post)
-
-**Example:**
-
-```php
-add_action( 'safe_publish_bulk_import_complete', function( $results ) {
-    update_option( 'safe_publish_bulk_import_in_progress', false );
-
-    $success_count = count( array_filter( $results, fn($r) => $r['success'] ) );
-    $total_count = count( $results );
-
-    // Send summary notification
-    wp_mail(
-        'admin@example.com',
-        'Bulk import complete',
-        sprintf( '%d of %d posts imported successfully', $success_count, $total_count )
-    );
-} );
 ```
 
 ## Filters
 
-Filters allow you to modify data as it flows through the plugin. Always return the modified value.
+### `safe_publish_allowed_domains`
 
-### safe_publish_validate_url
-
-Filter whether to validate the source URL.
+Filter the list of allowed external domains when validating source URLs.
 
 **Parameters:**
 
-- `bool $should_validate` - Whether to validate (default: true)
-- `string $url` - The URL being validated
+- `array $domains` — currently allowed domains
+- `string $host` — the host being validated
 
-**Returns:** `bool`
+**Returns:** `array`
 
 **Example:**
 
 ```php
-add_filter( 'safe_publish_validate_url', function( $should_validate, $url ) {
-    // Skip validation for trusted internal URLs
-    if ( strpos( $url, 'internal.staging.example.com' ) !== false ) {
-        return false;
-    }
-    return $should_validate;
+add_filter( 'safe_publish_allowed_domains', function( array $domains, string $host ): array {
+    $domains[] = 'staging.example.com';
+    return $domains;
 }, 10, 2 );
 ```
 
-### safe_publish_pre_import_post
+### `safe_publish_api_query_args`
 
-Filter post data before importing.
+Filter query arguments sent to the external site's REST API when fetching the list of posts.
 
 **Parameters:**
 
-- `array $post_data` - The post data to be imported
+- `array $args` — query arguments
+- `string $site_url` — external site URL
+- `int $number_of_posts` — number of posts to fetch
 
-**Returns:** `array` - Modified post data
+**Returns:** `array`
 
 **Example:**
 
 ```php
-add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
-    // Change post status
-    $post_data['post_status'] = 'pending';
-
-    // Add custom taxonomy terms
-    $post_data['tax_input']['custom_taxonomy'] = [ 'imported' ];
-
-    // Modify content
-    $post_data['post_content'] = str_replace(
-        '[old-shortcode]',
-        '[new-shortcode]',
-        $post_data['post_content']
-    );
-
-    return $post_data;
-} );
-```
-
-### safe_publish_validate_post_data
-
-Filter post data validation results.
-
-**Parameters:**
-
-- `bool|WP_Error $is_valid` - Validation result
-- `array $post_data` - The post data being validated
-
-**Returns:** `bool|WP_Error`
-
-**Example:**
-
-```php
-add_filter( 'safe_publish_validate_post_data', function( $is_valid, $post_data ) {
-    // Custom validation rule
-    if ( empty( $post_data['post_excerpt'] ) ) {
-        return new WP_Error(
-            'missing_excerpt',
-            'Post excerpt is required for import'
-        );
-    }
-
-    // Check custom field
-    if ( isset( $post_data['meta']['_required_field'] )
-        && empty( $post_data['meta']['_required_field'] ) ) {
-        return new WP_Error(
-            'missing_required_field',
-            'Required custom field is missing'
-        );
-    }
-
-    return $is_valid;
-}, 10, 2 );
-```
-
-### safe_publish_authentication_headers
-
-Filter authentication headers sent to the external site.
-
-**Parameters:**
-
-- `array $headers` - HTTP request headers
-- `string $site_url` - The external site URL
-
-**Returns:** `array` - Modified headers
-
-**Example:**
-
-```php
-add_filter( 'safe_publish_authentication_headers', function( $headers, $site_url ) {
-    // Add custom authentication token
-    if ( strpos( $site_url, 'staging.example.com' ) !== false ) {
-        $headers['X-Custom-Auth'] = 'my-custom-token';
-    }
-
-    // Add API key
-    $headers['X-API-Key'] = get_option( 'my_api_key' );
-
-    return $headers;
-}, 10, 2 );
-```
-
-### safe_publish_import_media
-
-Filter whether to import a specific media file.
-
-**Parameters:**
-
-- `bool $should_import` - Whether to import (default: true)
-- `string $image_url` - The image URL
-- `int $post_id` - The post ID
-
-**Returns:** `bool`
-
-**Example:**
-
-```php
-add_filter( 'safe_publish_import_media', function( $should_import, $image_url, $post_id ) {
-    // Skip images from CDN (already accessible)
-    if ( strpos( $image_url, 'cdn.example.com' ) !== false ) {
-        return false;
-    }
-
-    // Skip large GIF files
-    $file_size = @filesize( $image_url );
-    if ( $file_size && $file_size > 5 * 1024 * 1024 ) { // 5MB
-        return false;
-    }
-
-    return $should_import;
+add_filter( 'safe_publish_api_query_args', function( array $args, string $site_url, int $number_of_posts ): array {
+    $args['orderby'] = 'modified';
+    $args['order']   = 'desc';
+    return $args;
 }, 10, 3 );
 ```
 
-### safe_publish_media_import_timeout
+### `safe_publish_sanitized_post`
 
-Filter the timeout for media downloads (in seconds).
+Filter sanitized post data after it is fetched and sanitized from the external REST API.
 
 **Parameters:**
 
-- `int $timeout` - Timeout in seconds (default: 30)
-- `string $image_url` - The image URL being downloaded
+- `array $sanitized_post` — sanitized post data
+- `array $post` — raw post data from the API
 
-**Returns:** `int`
+**Returns:** `array`
 
 **Example:**
 
 ```php
-add_filter( 'safe_publish_media_import_timeout', function( $timeout, $image_url ) {
-    // Increase timeout for large files
-    if ( strpos( $image_url, 'highres' ) !== false ) {
-        return 60; // 60 seconds for high-res images
-    }
-    return $timeout;
+add_filter( 'safe_publish_sanitized_post', function( array $sanitized_post, array $post ): array {
+    // Override title casing
+    $sanitized_post['title'] = mb_convert_case( $sanitized_post['title'], MB_CASE_TITLE );
+    return $sanitized_post;
 }, 10, 2 );
 ```
 
-### safe_publish_supported_post_types
+### `safe_publish_request_timeout`
 
-Filter the list of supported post types.
-
-**Parameters:**
-
-- `array $post_types` - Array of post type slugs
-
-**Returns:** `array`
-
-**Example:**
-
-```php
-add_filter( 'safe_publish_supported_post_types', function( $post_types ) {
-    // Add custom post types
-    $post_types[] = 'my_custom_type';
-    $post_types[] = 'another_type';
-
-    // Remove a post type
-    $post_types = array_diff( $post_types, [ 'page' ] );
-
-    return $post_types;
-} );
-```
-
-### safe_publish_rest_api_namespace
-
-Filter the REST API namespace.
+Filter the HTTP request timeout in seconds. Default: `10`.
 
 **Parameters:**
 
-- `string $namespace` - The namespace (default: 'safe-publish/v1')
-
-**Returns:** `string`
-
-**Example:**
-
-```php
-add_filter( 'safe_publish_rest_api_namespace', function( $namespace ) {
-    return 'my-custom-namespace/v1';
-} );
-```
-
-### safe_publish_import_history_retention_days
-
-Filter how many days to retain import history.
-
-**Parameters:**
-
-- `int $days` - Number of days (default: 0 = unlimited)
+- `int $timeout`
 
 **Returns:** `int`
 
 **Example:**
 
 ```php
-add_filter( 'safe_publish_import_history_retention_days', function( $days ) {
-    return 90; // Keep 90 days of history
-} );
+add_filter( 'safe_publish_request_timeout', fn( int $timeout ): int => 30 );
 ```
 
-### safe_publish_http_request_args
+### `safe_publish_request_args`
 
-Filter HTTP request arguments before making requests to external site.
+Filter HTTP request arguments before any outgoing request to an external site.
 
 **Parameters:**
 
-- `array $args` - Request arguments
-- `string $url` - The URL being requested
+- `array $args` — `wp_remote_get`/`wp_remote_post` arguments
+- `string $url` — request URL
 
 **Returns:** `array`
 
 **Example:**
 
 ```php
-add_filter( 'safe_publish_http_request_args', function( $args, $url ) {
-    // Increase timeout for slow sites
-    $args['timeout'] = 45;
-
-    // Add custom headers
+add_filter( 'safe_publish_request_args', function( array $args, string $url ): array {
     $args['headers']['X-Custom-Header'] = 'value';
-
-    // Use custom SSL verification
-    $args['sslverify'] = false; // Only for development!
-
     return $args;
 }, 10, 2 );
 ```
 
-## Hook Priority
+### `safe_publish_dev_ssl_verify`
 
-When using multiple callbacks for the same hook, use priority to control execution order:
+Filter SSL certificate verification. Primarily useful in local development environments with self-signed certificates. **Never disable in production.**
+
+**Parameters:**
+
+- `bool $verify` — current verification state
+- `string $url` — request URL
+
+**Returns:** `bool`
+
+**Example:**
 
 ```php
-// Run first (priority 5)
-add_filter( 'safe_publish_pre_import_post', 'my_early_filter', 5 );
-
-// Run with default priority (10)
-add_filter( 'safe_publish_pre_import_post', 'my_normal_filter' );
-
-// Run last (priority 20)
-add_filter( 'safe_publish_pre_import_post', 'my_late_filter', 20 );
+// Force SSL verification even on .local domains.
+add_filter( 'safe_publish_dev_ssl_verify', '__return_true' );
 ```
 
-Lower numbers run first. Default priority is 10.
+### `safe_publish_auth_max_time_diff`
+
+Filter the maximum allowed time difference (in seconds) between a request's timestamp and the server time when validating HMAC signatures. Default: `300`.
+
+**Parameters:**
+
+- `int $max_diff`
+
+**Returns:** `int`
+
+**Example:**
+
+```php
+add_filter( 'safe_publish_auth_max_time_diff', fn( int $diff ): int => 600 );
+```
 
 ## Best Practices
 
-1. **Always return values in filters**: Forgetting to return breaks the filter chain
-2. **Check data before modifying**: Verify array keys exist before accessing
-3. **Handle errors gracefully**: Use try-catch blocks and log errors
-4. **Respect existing data**: Don't overwrite unless necessary
-5. **Test thoroughly**: Especially when modifying core import logic
-
-## Debugging Hooks
-
-Enable WordPress debug mode to see hook execution:
-
-```php
-// In wp-config.php
-define( 'WP_DEBUG', true );
-define( 'WP_DEBUG_LOG', true );
-
-// Log hook execution
-add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
-    error_log( 'Safe Publish Filter: ' . print_r( $post_data, true ) );
-    return $post_data;
-} );
-```
+1. Always return values in filters.
+2. Check that array keys exist before accessing them.
+3. Handle errors gracefully — log but do not re-throw.
+4. Test thoroughly when modifying core plugin logic.
 
 ## Next Steps
 
