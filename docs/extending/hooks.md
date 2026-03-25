@@ -97,7 +97,9 @@ add_filter( 'safe_publish_sanitized_post', function( array $sanitized_post, arra
 
 ### `safe_publish_request_timeout`
 
-Filter the HTTP request timeout in seconds. Default: `10`.
+Filter the HTTP request timeout in seconds for REST API requests. Default: `10`.
+
+Note: this filter applies only to REST API calls (e.g. fetching post data and featured image metadata). Image downloads use WordPress core's `download_url()` directly and are not affected by this filter.
 
 **Parameters:**
 

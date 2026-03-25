@@ -93,8 +93,8 @@ For each image found:
 
 ### Performance Considerations
 
-- Images downloaded using `wp_safe_remote_get()`
-- Timeout defaults to 10 seconds per request (filterable via `safe_publish_request_timeout`)
+- Images downloaded using WordPress core's `download_url()`
+- Image download timeout uses WordPress core's default (300 seconds); the `safe_publish_request_timeout` filter applies only to REST API requests, not image downloads
 - Failed images do not stop the import; the original URL is preserved
 
 ## Stage 5: Create Post
