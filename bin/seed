@@ -1,0 +1,104 @@
+#!/bin/sh
+#
+# Seed the source or destination WordPress site with test content.
+#
+# This is the intended entry point for the seeder. It routes the command to the
+# correct wp-env container and delegates execution to bin/seed-content.php via
+# WP-CLI eval-file.
+#
+# Usage: bin/seed [site=source|destination|both] [preset=full] [count=N] [type=post|page|slug] [editor=gutenberg|classic|mixed] [images=1|2|2-resized|auto] [fresh=1]
+#
+# Arguments:
+#   site=   Which site to seed: source (default), destination, or both.
+#   preset= Run a curated set: full (10 Gutenberg posts, 10 classic posts, 5 pages).
+#           When preset is set, all other arguments except site= and fresh= are ignored.
+#   count=  Number of posts to create (default: 20).
+#   type=   Post type slug to create (default: post).
+#   editor= Content format: gutenberg (default), classic, or mixed.
+#   images= Image mode: 1, 2, 2-resized, or auto (default, cycles through all three).
+#   fresh=  Set to 1 to delete all previously seeded content before seeding.
+#
+# Examples:
+#   bin/seed
+#   bin/seed site=destination count=5 type=page
+#   bin/seed site=both editor=mixed fresh=1
+#   bin/seed preset=full
+#   bin/seed preset=full site=both fresh=1
+
+set -e
+
+SITE="source"
+PRESET=""
+FRESH_ARG=""
+PHP_ARGS=""
+
+for arg in "$@"; do
+	case "$arg" in
+		site=*)
+			SITE="${arg#site=}"
+			;;
+		preset=*)
+			PRESET="${arg#preset=}"
+			;;
+		fresh=*)
+			FRESH_ARG="$arg"
+			PHP_ARGS="$PHP_ARGS $arg"
+			;;
+		*)
+			PHP_ARGS="$PHP_ARGS $arg"
+			;;
+	esac
+done
+
+PHP_ARGS="${PHP_ARGS# }"
+
+# shellcheck disable=SC2086
+run_seeder() {
+	container="$1"
+	label="$2"
+	args="$3"
+	echo "Seeding $label site: $args"
+	wp-env run "$container" --env-cwd=wp-content/plugins/compliant-content-publisher wp eval-file ./bin/seed-content.php $args
+}
+
+run_preset_full() {
+	container="$1"
+	label="$2"
+	echo "Running full preset on $label site..."
+	# Gutenberg posts, all image modes via auto.
+	run_seeder "$container" "$label" "count=10 type=post editor=gutenberg images=auto $FRESH_ARG"
+	# Classic posts, all image modes via auto.
+	run_seeder "$container" "$label" "count=10 type=post editor=classic images=auto"
+	# Pages with varied images.
+	run_seeder "$container" "$label" "count=5 type=page editor=gutenberg images=auto"
+}
+
+execute() {
+	container="$1"
+	label="$2"
+	if [ "$PRESET" = "full" ]; then
+		run_preset_full "$container" "$label"
+	elif [ -n "$PRESET" ]; then
+		echo "Unknown preset '$PRESET'. Available presets: full." >&2
+		exit 1
+	else
+		run_seeder "$container" "$label" "$PHP_ARGS"
+	fi
+}
+
+case "$SITE" in
+	source)
+		execute tests-cli source
+		;;
+	destination)
+		execute cli destination
+		;;
+	both)
+		execute tests-cli source
+		execute cli destination
+		;;
+	*)
+		echo "Unknown site '$SITE'. Use: site=source (default), site=destination, or site=both." >&2
+		exit 1
+		;;
+esac

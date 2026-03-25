@@ -31,6 +31,10 @@ For local development, you'll need two WordPress sites to test import functional
 1. **Source site** (non-production) - Where content comes from
 2. **Destination site** (your dev environment) - Where content is imported to
 
+### Seeding test content
+
+To populate the source or destination site with realistic test content for manual testing or import verification, see [Content Seeding](content-seeding.md).
+
 ### Code Quality
 
 Before committing, validate and fix code quality:
