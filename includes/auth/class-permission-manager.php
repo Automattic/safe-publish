@@ -667,6 +667,7 @@ class Permission_Manager {
 		}
 
 		if ( 1 === preg_match( '#^/wp/v2/([^/]+)$#', $route, $matches ) ) {
+			// Matches routes like /wp/v2/posts, /wp/v2/pages.
 			$data     = $response->get_data();
 			$post_ids = is_array( $data ) ? array_values( array_filter( array_column( $data, 'id' ), 'is_int' ) ) : array();
 
@@ -680,6 +681,7 @@ class Permission_Manager {
 				)
 			);
 		} elseif ( 1 === preg_match( '#^/wp/v2/([^/]+)/(\d+)$#', $route, $matches ) ) {
+			// Matches routes like /wp/v2/posts/123, /wp/v2/pages/123.
 			$data    = $response->get_data();
 			$post_id = is_array( $data ) && isset( $data['id'] ) && is_int( $data['id'] ) ? $data['id'] : (int) $matches[2];
 
