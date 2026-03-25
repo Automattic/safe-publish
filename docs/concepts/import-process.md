@@ -168,7 +168,8 @@ The plugin handles errors gracefully:
 
 - **Media failures**: Post still imported without images
 - **Meta failures**: Post imported without custom fields
-- **Network timeouts**: No automatic retry; the import continues and the original URL is preserved
+- **Network timeouts on image downloads**: No automatic retry; the import continues and the original URL is preserved
+- **Network timeouts on API requests**: On WordPress VIP, `vip_safe_wp_remote_get` automatically retries up to 3 times before failing. On non-VIP environments, there is no retry.
 
 ### Error Reporting
 
