@@ -654,7 +654,7 @@ class Permission_Manager {
 
 		$status = $response->get_status();
 
-		if ( $status < 200 || $status >= 300 ) {
+		if ( 200 !== $status ) {
 			$this->export_logger->log_error(
 				'EXPORT_FAILED',
 				array(
