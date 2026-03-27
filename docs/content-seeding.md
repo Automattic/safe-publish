@@ -48,6 +48,7 @@ These arguments are passed directly to `bin/seed`:
 | `site=`   | `source`    | Which site to seed: `source`, `destination`, or `both`                                    |
 | `preset=` | _(none)_    | `full` — runs all meaningful combinations; ignores other args except `site=` and `fresh=` |
 | `count=`  | `20`        | Number of posts to create                                                                 |
+| `start=`  | `1`         | Starting post number; use to avoid duplicate numbers across batches                       |
 | `type=`   | `post`      | Post type slug (`post`, `page`, or any registered CPT)                                    |
 | `editor=` | `gutenberg` | Content format: `gutenberg`, `classic`, or `mixed` (2/3 block, 1/3 classic)               |
 | `images=` | `auto`      | Image mode (see below)                                                                    |
@@ -81,9 +82,9 @@ All seeded content is tagged with `_seeder_generated=1` meta, which `fresh=1` us
 
 `preset=full` runs three batches in sequence:
 
-1. 10 Gutenberg posts, `images=auto`
-2. 10 classic posts, `images=auto`
-3. 5 pages (`type=page`), `editor=gutenberg`, `images=auto` — exercises the page post type, which skips taxonomy assignment
+1. 10 Gutenberg posts, `images=auto` (posts 1–10)
+2. 10 classic posts, `images=auto` (posts 11–20)
+3. 5 pages (`type=page`), `editor=gutenberg`, `images=auto` (pages 21–25) — exercises the page post type, which skips taxonomy assignment
 
 Only the first batch passes `fresh=1` (when provided), so subsequent batches append rather than reset.
 

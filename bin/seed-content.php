@@ -10,6 +10,7 @@
  *
  * Arguments:
  *   count=   Number of posts to create (default: 20).
+ *   start=   Starting post number (default: 1). Use to avoid duplicate numbers across batches.
  *   type=    Post type slug (default: post).
  *   editor=  Content format: gutenberg (default), classic, or mixed (2/3 Gutenberg, 1/3 classic).
  *   images=  Image mode: 1, 2, 2-resized, or auto (default).
@@ -34,6 +35,7 @@ function safe_publish_seeder_run( array $args ): void {
 	parse_str( implode( '&', $args ), $params );
 
 	$count  = max( 1, (int) ( $params['count'] ?? 20 ) );
+	$start  = max( 1, (int) ( $params['start'] ?? 1 ) );
 	$type   = sanitize_key( $params['type'] ?? 'post' );
 	$editor = $params['editor'] ?? 'gutenberg';
 	$images = $params['images'] ?? 'auto';
@@ -57,7 +59,7 @@ function safe_publish_seeder_run( array $args ): void {
 
 	$inserted = 0;
 
-	for ( $i = 1; $i <= $count; $i++ ) {
+	for ( $i = $start; $i < $start + $count; $i++ ) {
 		$use_gutenberg = safe_publish_seeder_resolve_editor( $editor, $i );
 		$image_mode    = safe_publish_seeder_resolve_image_mode( $images, $i );
 		$image_ids     = safe_publish_seeder_generate_images( $i, $image_mode );

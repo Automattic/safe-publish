@@ -6,13 +6,14 @@
 # correct wp-env container and delegates execution to bin/seed-content.php via
 # WP-CLI eval-file.
 #
-# Usage: bin/seed [site=source|destination|both] [preset=full] [count=N] [type=post|page|slug] [editor=gutenberg|classic|mixed] [images=1|2|2-resized|auto] [fresh=1]
+# Usage: bin/seed [site=source|destination|both] [preset=full] [count=N] [start=N] [type=post|page|slug] [editor=gutenberg|classic|mixed] [images=1|2|2-resized|auto] [fresh=1]
 #
 # Arguments:
 #   site=   Which site to seed: source (default), destination, or both.
 #   preset= Run a curated set: full (10 Gutenberg posts, 10 classic posts, 5 pages).
 #           When preset is set, all other arguments except site= and fresh= are ignored.
 #   count=  Number of posts to create (default: 20).
+#   start=  Starting post number (default: 1). Use to avoid duplicate numbers across batches.
 #   type=   Post type slug to create (default: post).
 #   editor= Content format: gutenberg (default), classic, or mixed.
 #   images= Image mode: 1, 2, 2-resized, or auto (default, cycles through all three).
@@ -68,9 +69,9 @@ run_preset_full() {
 	# Gutenberg posts, all image modes via auto.
 	run_seeder "$container" "$label" "count=10 type=post editor=gutenberg images=auto $FRESH_ARG"
 	# Classic posts, all image modes via auto.
-	run_seeder "$container" "$label" "count=10 type=post editor=classic images=auto"
+	run_seeder "$container" "$label" "count=10 type=post editor=classic images=auto start=11"
 	# Pages with varied images.
-	run_seeder "$container" "$label" "count=5 type=page editor=gutenberg images=auto"
+	run_seeder "$container" "$label" "count=5 type=page editor=gutenberg images=auto start=21"
 }
 
 execute() {
