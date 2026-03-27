@@ -53,7 +53,8 @@ These arguments are passed directly to `bin/seed`:
 | `editor=`      | `gutenberg` | Content format: `gutenberg`, `classic`, or `mixed` (2/3 block, 1/3 classic)                                             |
 | `images=`      | `auto`      | Image mode (see below)                                                                                                  |
 | `date-offset=` | `0`         | Shift all post dates this many extra days into the past; use in multi-batch presets to keep date ranges non-overlapping |
-| `fresh=`       | _(off)_     | Set to `1` to delete all previously seeded content before seeding                                                       |
+| `fresh=`       | _(off)_     | Set to `1` to delete all previously seeded content, then seed normally                                                  |
+| `purge=`       | _(off)_     | Set to `1` to delete all previously seeded content and exit without inserting anything                                  |
 
 ### Image Modes
 
@@ -77,7 +78,7 @@ Every post includes:
 - Custom meta: `seeder_color` and `seeder_priority`
 - Categories and tags (posts only), rotating through a fixed seeder set
 
-All seeded content is tagged with `_seeder_generated=1` meta, which `fresh=1` uses for targeted cleanup.
+All seeded content is tagged with `_seeder_generated=1` meta, which `fresh=1` and `purge=1` use for targeted cleanup.
 
 ## The Full Preset
 
@@ -87,7 +88,7 @@ All seeded content is tagged with `_seeder_generated=1` meta, which `fresh=1` us
 2. 10 classic posts, `images=auto` (posts 11–20)
 3. 5 pages (`type=page`), `editor=gutenberg`, `images=auto` (pages 21–25) — exercises the page post type, which skips taxonomy assignment
 
-Only the first batch passes `fresh=1` (when provided), so subsequent batches append rather than reset.
+When `fresh=1` is passed, a `purge=1` step runs before the batches to wipe previously seeded content. Each batch then appends cleanly without risking wiping content created by an earlier batch.
 
 ## Examples
 

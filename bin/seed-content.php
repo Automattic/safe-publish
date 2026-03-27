@@ -17,6 +17,7 @@
  *            auto rotates through all three modes as posts are created.
  *   date-offset= Shift all post dates this many additional days into the past (default: 0).
  *            Use in multi-batch presets so each batch occupies a distinct date range.
+ *   purge=   Set to 1 to delete all previously seeded content and exit without inserting anything.
  *   fresh=   Set to 1 to delete all previously seeded content before seeding.
  *
  * Seeded content is tagged with _seeder_generated=1 post meta, enabling clean fresh runs.
@@ -42,7 +43,13 @@ function safe_publish_seeder_run( array $args ): void {
 	$editor = $params['editor'] ?? 'gutenberg';
 	$images = $params['images'] ?? 'auto';
 	$fresh  = ! empty( $params['fresh'] );
+	$purge  = ! empty( $params['purge'] );
 	$offset = max( 0, (int) ( $params['date-offset'] ?? 0 ) );
+
+	if ( $purge ) {
+		safe_publish_seeder_delete_content();
+		return;
+	}
 
 	if ( ! in_array( $editor, array( 'gutenberg', 'classic', 'mixed' ), true ) ) {
 		WP_CLI::error( "Invalid editor value '{$editor}'. Use: gutenberg, classic, or mixed." );

@@ -66,8 +66,12 @@ run_preset_full() {
 	container="$1"
 	label="$2"
 	echo "Running full preset on $label site..."
+	# Purge previously seeded content first, if requested.
+	if [ -n "$FRESH_ARG" ]; then
+		run_seeder "$container" "$label" "purge=1"
+	fi
 	# Gutenberg posts, all image modes via auto.
-	run_seeder "$container" "$label" "count=10 type=post editor=gutenberg images=auto date-offset=90 $FRESH_ARG"
+	run_seeder "$container" "$label" "count=10 type=post editor=gutenberg images=auto date-offset=90"
 	# Classic posts, all image modes via auto.
 	run_seeder "$container" "$label" "count=10 type=post editor=classic images=auto start=11"
 	# Pages with varied images.
