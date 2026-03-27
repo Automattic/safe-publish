@@ -75,9 +75,9 @@ function safe_publish_seeder_run( array $args ): void {
 		$use_gutenberg = safe_publish_seeder_resolve_editor( $editor, $i );
 		$image_mode    = safe_publish_seeder_resolve_image_mode( $images, $i );
 		$image_ids     = safe_publish_seeder_generate_images( $i, $image_mode );
-		$editor_label  = $use_gutenberg ? 'BE' : 'CE';
+		$editor_label  = $use_gutenberg ? '' : ' C';
 		$img_label     = safe_publish_seeder_image_label( $image_mode, count( $image_ids ) );
-		$title         = $prefix . ucfirst( $type ) . " {$i} {$editor_label} - {$img_label}";
+		$title         = $prefix . ucfirst( $type ) . " {$i}{$editor_label} - {$img_label}";
 		$slug          = "seeder-{$type}-{$i}";
 		$content       = $use_gutenberg
 			? safe_publish_seeder_gutenberg_content( $i, $image_ids )
