@@ -183,15 +183,15 @@ function safe_publish_seeder_resolve_image_mode( string $mode, int $index ): str
 }
 
 /**
- * Returns a human-readable image label for use in post titles.
+ * Returns a compact image label for use in post titles.
  *
  * @param string $mode      Resolved image mode: '1', '2', or '2-resized'.
  * @param int    $img_count Actual number of generated images.
- * @return string Label such as '1 img', '2 imgs', or '2 imgs resized'.
+ * @return string Label such as '1P', '2P', or '2PR'.
  */
 function safe_publish_seeder_image_label( string $mode, int $img_count ): string {
-	$base = 1 === $img_count ? '1 img' : "{$img_count} imgs";
-	return '2-resized' === $mode ? "{$base} resized" : $base;
+	$base = "{$img_count}P";
+	return '2-resized' === $mode ? "{$base}R" : $base;
 }
 
 /**
