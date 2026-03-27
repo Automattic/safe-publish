@@ -43,16 +43,17 @@ npm run seed -- count=5 type=page fresh=1
 
 These arguments are passed directly to `bin/seed`:
 
-| Argument  | Default     | Description                                                                               |
-| --------- | ----------- | ----------------------------------------------------------------------------------------- |
-| `site=`   | `source`    | Which site to seed: `source`, `destination`, or `both`                                    |
-| `preset=` | _(none)_    | `full` — runs all meaningful combinations; ignores other args except `site=` and `fresh=` |
-| `count=`  | `20`        | Number of posts to create                                                                 |
-| `start=`  | `1`         | Starting post number; use to avoid duplicate numbers across batches                       |
-| `type=`   | `post`      | Post type slug (`post`, `page`, or any registered CPT)                                    |
-| `editor=` | `gutenberg` | Content format: `gutenberg`, `classic`, or `mixed` (2/3 block, 1/3 classic)               |
-| `images=` | `auto`      | Image mode (see below)                                                                    |
-| `fresh=`  | _(off)_     | Set to `1` to delete all previously seeded content before seeding                         |
+| Argument       | Default     | Description                                                                                                             |
+| -------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `site=`        | `source`    | Which site to seed: `source`, `destination`, or `both`                                                                  |
+| `preset=`      | _(none)_    | `full` — runs all meaningful combinations; ignores other args except `site=` and `fresh=`                               |
+| `count=`       | `20`        | Number of posts to create                                                                                               |
+| `start=`       | `1`         | Starting post number; use to avoid duplicate numbers across batches                                                     |
+| `type=`        | `post`      | Post type slug (`post`, `page`, or any registered CPT)                                                                  |
+| `editor=`      | `gutenberg` | Content format: `gutenberg`, `classic`, or `mixed` (2/3 block, 1/3 classic)                                             |
+| `images=`      | `auto`      | Image mode (see below)                                                                                                  |
+| `date-offset=` | `0`         | Shift all post dates this many extra days into the past; use in multi-batch presets to keep date ranges non-overlapping |
+| `fresh=`       | _(off)_     | Set to `1` to delete all previously seeded content before seeding                                                       |
 
 ### Image Modes
 

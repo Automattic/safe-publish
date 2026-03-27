@@ -15,6 +15,8 @@
  *   editor=  Content format: gutenberg (default), classic, or mixed (2/3 Gutenberg, 1/3 classic).
  *   images=  Image mode: 1, 2, 2-resized, or auto (default).
  *            auto rotates through all three modes as posts are created.
+ *   date-offset= Shift all post dates this many additional days into the past (default: 0).
+ *            Use in multi-batch presets so each batch occupies a distinct date range.
  *   fresh=   Set to 1 to delete all previously seeded content before seeding.
  *
  * Seeded content is tagged with _seeder_generated=1 post meta, enabling clean fresh runs.
@@ -40,6 +42,7 @@ function safe_publish_seeder_run( array $args ): void {
 	$editor = $params['editor'] ?? 'gutenberg';
 	$images = $params['images'] ?? 'auto';
 	$fresh  = ! empty( $params['fresh'] );
+	$offset = max( 0, (int) ( $params['date-offset'] ?? 0 ) );
 
 	if ( ! in_array( $editor, array( 'gutenberg', 'classic', 'mixed' ), true ) ) {
 		WP_CLI::error( "Invalid editor value '{$editor}'. Use: gutenberg, classic, or mixed." );
@@ -80,8 +83,8 @@ function safe_publish_seeder_run( array $args ): void {
 			$status = 'draft';
 		}
 
-		// Spread posts over the past 90 days, oldest first.
-		$days_ago  = (int) round( ( $count - $i ) * 90 / max( 1, $count ) );
+		// Spread posts over the past 90 days, oldest first. date-offset shifts the whole batch further back.
+		$days_ago  = (int) round( ( $start + $count - 1 - $i ) * 90 / max( 1, $count ) ) + $offset;
 		$post_date = wp_date( 'Y-m-d H:i:s', time() - $days_ago * DAY_IN_SECONDS );
 
 		$post_id = wp_insert_post(

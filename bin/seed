@@ -67,7 +67,7 @@ run_preset_full() {
 	label="$2"
 	echo "Running full preset on $label site..."
 	# Gutenberg posts, all image modes via auto.
-	run_seeder "$container" "$label" "count=10 type=post editor=gutenberg images=auto $FRESH_ARG"
+	run_seeder "$container" "$label" "count=10 type=post editor=gutenberg images=auto date-offset=90 $FRESH_ARG"
 	# Classic posts, all image modes via auto.
 	run_seeder "$container" "$label" "count=10 type=post editor=classic images=auto start=11"
 	# Pages with varied images.
