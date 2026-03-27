@@ -8,6 +8,7 @@
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\Admin\Post_Import_Service;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -27,12 +28,24 @@ class Admin_Menu_Manager {
 	private External_Posts_API $api;
 
 	/**
+	 * Post Import Service instance.
+	 *
+	 * @var Post_Import_Service
+	 */
+	private Post_Import_Service $post_import_service;
+
+	/**
 	 * Constructs the Admin_Menu_Manager instance.
 	 *
-	 * @param External_Posts_API $api External Posts API instance.
+	 * @param External_Posts_API  $api                 External Posts API instance.
+	 * @param Post_Import_Service $post_import_service Post Import Service instance.
 	 */
-	public function __construct( External_Posts_API $api ) {
-		$this->api = $api;
+	public function __construct(
+		External_Posts_API $api,
+		Post_Import_Service $post_import_service
+	) {
+		$this->api                 = $api;
+		$this->post_import_service = $post_import_service;
 	}
 
 	/**
@@ -92,7 +105,7 @@ class Admin_Menu_Manager {
 			);
 		}
 
-		$admin_page = new Admin_Page( $this->api );
+		$admin_page = new Admin_Page( $this->api, $this->post_import_service );
 		$admin_page->render();
 	}
 
@@ -155,7 +168,7 @@ class Admin_Menu_Manager {
 			return;
 		}
 
-		$admin_page = new Admin_Page( $this->api );
+		$admin_page = new Admin_Page( $this->api, $this->post_import_service );
 		$admin_page->enqueue_assets();
 	}
 }

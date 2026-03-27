@@ -6,7 +6,7 @@
  *
  * @file This file defines DataViews actions for the Safe Publish plugin.
  */
-import { drafts, update, download } from '@wordpress/icons';
+import { drafts, download } from '@wordpress/icons';
 
 import PostDiffModal from './components/PostDiffModal';
 import {
@@ -94,6 +94,136 @@ const bulkImportPosts = async (
 };
 
 /**
+ * Shared modal for both the Import Post and Update Post actions.
+ *
+ * Detects whether the post is already imported via `is_imported` and adjusts
+ * labels and the `force_update` flag accordingly.
+ * @param root0
+ * @param root0.items
+ * @param root0.closeModal
+ */
+const RenderImportModal = ( { items, closeModal }: { items: Post[]; closeModal?: () => void } ) => {
+	const [ isLoading, setIsLoading ] = useState( false );
+	const [ error, setError ] = useState< string | null >( null );
+
+	const isUpdate = Boolean( items[ 0 ]?.is_imported );
+	const submitLabel = isUpdate ? __( 'Update', 'safe-publish' ) : __( 'Import', 'safe-publish' );
+	const loadingLabel = isUpdate ? __( 'Updating…', 'safe-publish' ) : __( 'Importing…', 'safe-publish' );
+
+	/**
+	 * Sends the post to the backend for import or update.
+	 *
+	 * When updating an already-imported post, `force_update` is set so
+	 * the backend skips its own existence-confirmation roundtrip.
+	 */
+	const handleSubmit = () => {
+		setIsLoading( true );
+		setError( null );
+
+		const formData = new FormData();
+		formData.append( 'action', 'safe_publish_create_draft' );
+		formData.append( 'nonce', window.safePublishAdminData.nonce );
+		formData.append( 'external_post_id', items[ 0 ].id.toString() );
+		formData.append( 'title', items[ 0 ].title );
+		formData.append( 'content', items[ 0 ].content || items[ 0 ].excerpt || '' );
+		formData.append( 'external_link', items[ 0 ].link );
+		formData.append( 'post_type', items[ 0 ].post_type || 'post' );
+
+		if ( isUpdate ) {
+			formData.append( 'force_update', 'true' );
+		}
+
+		if ( items[ 0 ].featured_media ) {
+			formData.append( 'featured_media_id', items[ 0 ].featured_media.toString() );
+		}
+
+		if ( items[ 0 ].excerpt ) {
+			formData.append( 'excerpt', items[ 0 ].excerpt );
+		}
+
+		if ( items[ 0 ].meta ) {
+			formData.append( 'meta', JSON.stringify( items[ 0 ].meta ) );
+		}
+
+		if ( items[ 0 ].terms ) {
+			formData.append( 'terms', JSON.stringify( items[ 0 ].terms ) );
+		}
+
+		fetch( window.safePublishAdminData.ajaxurl, {
+			method: 'POST',
+			body: formData,
+			headers: {
+				'Accept': 'application/json; charset=utf-8',
+			},
+		} )
+		.then( response => response.json() as Promise< ApiResponse< CreateDraftResponse > > )
+		.then( ( result ) => {
+			setIsLoading( false );
+
+			if ( ! result.success ) {
+				setError( getErrorMessage( result, __( 'Failed to import', 'safe-publish' ) ) );
+				return;
+			}
+
+			const data = result.data;
+
+			// Validate edit URL before redirecting.
+			if ( ! data.edit_url || typeof data.edit_url !== 'string' ) {
+				setError( __( 'Invalid response: missing edit URL', 'safe-publish' ) );
+				return;
+			}
+
+			// Redirect to edit page.
+			window.location.href = data.edit_url;
+		} )
+		.catch( err => {
+			setError( err instanceof Error ? err.message : __( 'Unknown error occurred', 'safe-publish' ) );
+			setIsLoading( false );
+		} );
+	};
+
+	return (
+		<VStack spacing="5">
+			<Text>{ isUpdate
+				? /* translators: %s is the post title */
+				  __( 'Update "%s" with the latest content from the external site?', 'safe-publish' ).replace( '%s', items[ 0 ].title )
+				: /* translators: %s is the post title */
+				  __( 'Import "%s" as a draft?', 'safe-publish' ).replace( '%s', items[ 0 ].title )
+			}</Text>
+			{ ! isUpdate && (
+				<Text style={ { fontSize: '0.9em', color: '#666' } }>
+					{ __( 'This will import the post content including images, links, and formatting.', 'safe-publish' ) }
+				</Text>
+			) }
+			{ error && <Text role="alert" style={ { color: '#d63638' } }>{ error }</Text> }
+			<HStack justify="right">
+				<Button
+					__next40pxDefaultSize
+					variant="tertiary"
+					onClick={ closeModal }
+					disabled={ isLoading }
+				>
+					{ __( 'Cancel', 'safe-publish' ) }
+				</Button>
+				<Button
+					__next40pxDefaultSize
+					variant="primary"
+					onClick={ handleSubmit }
+					disabled={ isLoading }
+				>
+					{ isLoading ? (
+						<>
+							<Spinner />
+							{ loadingLabel }
+						</>
+					) : submitLabel }
+				</Button>
+			</HStack>
+		</VStack>
+	);
+};
+
+/**
  * DataViews actions for external posts.
  *
  * Defines the available actions that can be performed on posts in the DataViews
@@ -102,230 +232,24 @@ const bulkImportPosts = async (
  */
 export const actions: Action< Post >[] = [
 	/**
-	 * Create Draft action.
+	 * Combined import and update action.
 	 *
-	 * Creates a new draft post from the selected external post, importing all
-	 * content including images, links, and formatting.
-	 */
-	{
-		id: 'draft',
-		label: __( 'Create Draft', 'safe-publish' ),
-		isPrimary: true,
-		icon: drafts,
-		hideModalHeader: true,
-		modalFocusOnMount: 'firstContentElement',
-		supportsBulk: true,
-		RenderModal: ( { items, closeModal } ) => {
-			const [ isLoading, setIsLoading ] = useState( false );
-			const [ error, setError ] = useState< string | null >( null );
-			const [ confirmData, setConfirmData ] = useState< CreateDraftResponse | null >( null );
-
-			// Only process if exactly one item is selected.
-			if ( 1 !== items.length ) {
-				return (
-					<VStack spacing="5">
-					<Text>{ __( 'Please select exactly one post to create a draft.', 'safe-publish' ) }</Text>
-						<HStack justify="right">
-							<Button
-								__next40pxDefaultSize
-								variant="primary"
-								onClick={ closeModal }
-							>
-								{ __( 'OK', 'safe-publish' ) }
-							</Button>
-						</HStack>
-					</VStack>
-				);
-			}
-
-			/**
-			 * Handles creating a draft post.
-			 *
-			 * Sends the post data to WordPress and handles confirmation if the
-			 * post already exists.
-			 *
-			 * @param {boolean} forceUpdate Whether to force update an existing post.
-			 */
-			const handleCreateDraft = ( forceUpdate = false ) => {
-				setIsLoading( true );
-				setError( null );
-				setConfirmData( null );
-
-				const formData = new FormData();
-				formData.append( 'action', 'safe_publish_create_draft' );
-				formData.append( 'nonce', window.safePublishAdminData.nonce );
-				formData.append( 'external_post_id', items[ 0 ].id.toString() );
-				formData.append( 'title', items[ 0 ].title );
-				formData.append( 'content', items[ 0 ].content || items[ 0 ].excerpt || '' );
-				formData.append( 'external_link', items[ 0 ].link );
-				formData.append( 'post_type', items[ 0 ].post_type || 'post' );
-
-				if ( forceUpdate ) {
-					formData.append( 'force_update', 'true' );
-				}
-
-				if ( items[ 0 ].featured_media ) {
-					formData.append( 'featured_media_id', items[ 0 ].featured_media.toString() );
-				}
-
-				if ( items[ 0 ].excerpt ) {
-					formData.append( 'excerpt', items[ 0 ].excerpt );
-				}
-
-				if ( items[ 0 ].meta ) {
-					formData.append( 'meta', JSON.stringify( items[ 0 ].meta ) );
-				}
-
-				if ( items[ 0 ].terms ) {
-					formData.append( 'terms', JSON.stringify( items[ 0 ].terms ) );
-				}
-
-				fetch( window.safePublishAdminData.ajaxurl, {
-					method: 'POST',
-					body: formData,
-					headers: {
-						'Accept': 'application/json; charset=utf-8',
-					},
-				} )
-				.then( response => response.json() as Promise< ApiResponse< CreateDraftResponse > > )
-				.then( ( result ) => {
-					setIsLoading( false );
-
-					if ( ! result.success ) {
-						setError( getErrorMessage( result, __( 'Failed to create draft post', 'safe-publish' ) ) );
-
-						return;
-					}
-
-					const data = result.data;
-
-					// Check if this is a confirmation request.
-					if ( data.existing && 'update_existing' === data.confirm_action ) {
-						setConfirmData( data );
-						return;
-					}
-
-					// Validate edit URL before redirecting.
-					if ( ! data.edit_url || typeof data.edit_url !== 'string' ) {
-						setError( __( 'Invalid response: missing edit URL', 'safe-publish' ) );
-						return;
-					}
-
-					// Redirect to edit page.
-					window.location.href = data.edit_url;
-				} )
-				.catch( err => {
-					setError( err instanceof Error ? err.message : __( 'Unknown error occurred', 'safe-publish' ) );
-					setIsLoading( false );
-				} );
-			};
-
-			/**
-			 * Handles confirming an update to an existing post.
-			 */
-			const handleConfirmUpdate = () => {
-				handleCreateDraft( true );
-			};
-
-			/**
-			 * Handles cancelling the update and redirecting to the existing post.
-			 */
-			const handleCancelUpdate = () => {
-				if ( confirmData?.edit_url && typeof confirmData.edit_url === 'string' ) {
-					// User chose not to update, redirect to existing post.
-					window.location.href = confirmData.edit_url;
-				} else {
-					closeModal?.();
-				}
-			};
-
-			// Show confirmation dialog if post exists.
-			if ( confirmData ) {
-				return (
-					<VStack spacing="5">
-						<Text style={ { fontWeight: 'bold' } }>{ __( 'Post Already Exists', 'safe-publish' ) }</Text>
-						<Text>{ confirmData.message }</Text>
-						<Text style={ { fontSize: '0.9em', color: '#666' } }>
-							{ __( 'Updating will fetch the latest content from the external site and replace the current content.', 'safe-publish' ) }
-						</Text>
-						{ error && <Text style={ { color: '#d63638' } }>{ error }</Text> }
-						<HStack justify="right">
-							<Button
-								__next40pxDefaultSize
-								variant="tertiary"
-								onClick={ handleCancelUpdate }
-								disabled={ isLoading }
-							>
-								{ __( 'Edit Existing', 'safe-publish' ) }
-							</Button>
-							<Button
-								__next40pxDefaultSize
-								variant="primary"
-								onClick={ handleConfirmUpdate }
-								disabled={ isLoading }
-							>
-								{ isLoading ? (
-									<>
-										<Spinner />
-										{ __( 'Updating…', 'safe-publish' ) }
-									</>
-								) : (
-									__( 'Update with Latest', 'safe-publish' )
-								) }
-							</Button>
-						</HStack>
-					</VStack>
-				);
-			}
-
-			return (
-				<VStack spacing="5">
-					<Text>{ /* translators: %s is the post title */
-						__( 'Create a draft for "%s"?', 'safe-publish' ).replace( '%s', items[ 0 ].title ) }
-					</Text>
-					<Text style={ { fontSize: '0.9em', color: '#666' } }>
-						{ __( 'This will import the post content including images, links, and formatting.', 'safe-publish' ) }
-					</Text>
-					{ error && <Text style={ { color: '#d63638' } }>{ error }</Text> }
-					<HStack justify="right">
-						<Button
-							__next40pxDefaultSize
-							variant="tertiary"
-							onClick={ closeModal }
-							disabled={ isLoading }
-						>
-							{ __( 'Cancel', 'safe-publish' ) }
-						</Button>
-						<Button
-							__next40pxDefaultSize
-							variant="primary"
-							onClick={ () => handleCreateDraft( false ) }
-							disabled={ isLoading }
-						>
-							{ isLoading ? (
-								<>
-									<Spinner />
-									{ __( 'Importing…', 'safe-publish' ) }
-								</>
-							) : (
-								__( 'Create Draft', 'safe-publish' )
-							) }
-						</Button>
-					</HStack>
-				</VStack>
-			);
-		},
-	},
-	/**
-	 * Bulk Import action.
-	 *
-	 * Imports multiple selected posts as drafts in a single batch operation,
-	 * with progress tracking and result summary.
+	 * For a single item: shows a simple confirmation modal that imports or
+	 * updates the post depending on its current state. For multiple selected
+	 * items: runs a batch operation with progress tracking.
 	 */
 	{
 		id: 'bulk-import',
-		label: __( 'Bulk Import', 'safe-publish' ),
-		isPrimary: false,
+		label: ( items: Post[] ) => {
+			if ( items.length === 1 ) {
+				return items[ 0 ].is_imported
+					? __( 'Update', 'safe-publish' )
+					: __( 'Import', 'safe-publish' );
+			}
+			return __( 'Import / Update', 'safe-publish' );
+		},
+		isEligible: ( item: Post ) => ! item.is_imported || Boolean( item.has_update ),
+		isPrimary: true,
 		icon: download,
 		hideModalHeader: true,
 		modalFocusOnMount: 'firstContentElement',
@@ -336,22 +260,9 @@ export const actions: Action< Post >[] = [
 			const [ progress, setProgress ] = useState( 0 );
 			const [ importResults, setImportResults ] = useState< BulkImportResponse | null >( null );
 
-			// Only process if multiple items are selected.
-			if ( items.length <= 1 ) {
-				return (
-					<VStack spacing="5">
-						<Text>{ __( 'Please select multiple posts to use bulk import.', 'safe-publish' ) }</Text>
-						<HStack justify="right">
-							<Button
-								__next40pxDefaultSize
-								variant="primary"
-								onClick={ closeModal }
-							>
-								{ __( 'OK', 'safe-publish' ) }
-							</Button>
-						</HStack>
-					</VStack>
-				);
+			// For a single item, delegate to the simpler confirmation modal.
+			if ( items.length === 1 ) {
+				return <RenderImportModal items={ items } closeModal={ closeModal } />;
 			}
 
 			/**
@@ -551,36 +462,6 @@ export const actions: Action< Post >[] = [
 								) }
 							</Button>
 						) }
-					</HStack>
-				</VStack>
-			);
-		},
-	},
-	/**
-	 * Update Post action.
-	 *
-	 * Updates an existing local post with the latest content from the external
-	 * source.
-	 */
-	{
-		id: 'update',
-		label: __( 'Update Post', 'safe-publish' ),
-		icon: update,
-		hideModalHeader: false,
-		supportsBulk: true,
-		RenderModal: ( { items, closeModal } ) => {
-			return (
-				<VStack spacing="5">
-					<Text>{ /* translators: %s is the post title */
-						__( 'Are you sure you want to update "%s"?', 'safe-publish' ).replace( '%s', items[ 0 ].title ) }
-					</Text>
-					<HStack justify="right">
-						<Button __next40pxDefaultSize variant="tertiary" onClick={ closeModal }>
-							{ __( 'Cancel', 'safe-publish' ) }
-						</Button>
-						<Button __next40pxDefaultSize variant="primary" onClick={ closeModal }>
-							{ __( 'Update Post', 'safe-publish' ) }
-						</Button>
 					</HStack>
 				</VStack>
 			);

@@ -12,27 +12,49 @@ describe( 'Actions configuration', () => {
 		expect( Array.isArray( actions ) ).toBe( true );
 	} );
 
-	it( 'should have draft action', () => {
-		const draftAction = actions.find( ( a ) => a.id === 'draft' );
-		expect( draftAction ).toBeDefined();
-		expect( draftAction?.label ).toBe( 'Create Draft' );
-		expect( draftAction?.isPrimary ).toBe( true );
-		expect( draftAction?.supportsBulk ).toBe( true );
-	} );
-
 	it( 'should have bulk-import action', () => {
 		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
 		expect( bulkAction ).toBeDefined();
-		expect( bulkAction?.label ).toBe( 'Bulk Import' );
+		expect( typeof bulkAction?.label ).toBe( 'function' );
+		expect( bulkAction?.isPrimary ).toBe( true );
 		expect( bulkAction?.supportsBulk ).toBe( true );
 	} );
 
-	it( 'should have update action', () => {
-		const updateAction = actions.find( ( a ) => a.id === 'update' );
-		expect( updateAction ).toBeDefined();
-		expect( updateAction?.label ).toBe( 'Update Post' );
-		expect( updateAction?.supportsBulk ).toBe( true );
+	it( 'bulk-import label returns "Import" for a single non-imported item', () => {
+		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
+		const label = typeof bulkAction?.label === 'function'
+			? bulkAction.label( [ { id: 1, link: '', title: 'Test', modified: '', is_imported: false } ] )
+			: bulkAction?.label;
+		expect( label ).toBe( 'Import' );
 	} );
+
+	it( 'bulk-import label returns "Update" for a single imported item with an update', () => {
+		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
+		const label = typeof bulkAction?.label === 'function'
+			? bulkAction.label( [ { id: 1, link: '', title: 'Test', modified: '', is_imported: true, has_update: true } ] )
+			: bulkAction?.label;
+		expect( label ).toBe( 'Update' );
+	} );
+
+	it( 'bulk-import label returns "Import / Update" for multiple items', () => {
+		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
+		const label = typeof bulkAction?.label === 'function'
+			? bulkAction.label( [
+				{ id: 1, link: '', title: 'A', modified: '', is_imported: false },
+				{ id: 2, link: '', title: 'B', modified: '', is_imported: true, has_update: true },
+			] )
+			: bulkAction?.label;
+		expect( label ).toBe( 'Import / Update' );
+	} );
+
+	it( 'bulk-import action isEligible covers posts that can be imported or updated', () => {
+		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
+		expect( bulkAction?.isEligible?.( { id: 1, link: '', title: 'Test', modified: '', is_imported: false } ) ).toBe( true );
+		expect( bulkAction?.isEligible?.( { id: 1, link: '', title: 'Test', modified: '', is_imported: true, has_update: true } ) ).toBe( true );
+		expect( bulkAction?.isEligible?.( { id: 1, link: '', title: 'Test', modified: '', is_imported: true, has_update: false } ) ).toBe( false );
+	} );
+
+
 
 	it( 'should have post diff action', () => {
 		const diffAction = actions.find( ( a ) => a.id === 'post-diff' );
@@ -40,24 +62,6 @@ describe( 'Actions configuration', () => {
 		expect( diffAction?.label ).toBe( 'Post Diff' );
 		expect( diffAction?.supportsBulk ).toBe( false );
 		expect( diffAction?.modalSize ).toBe( 'fill' );
-	} );
-} );
-
-describe( 'Draft action', () => {
-	it( 'should have RenderModal component', () => {
-		const draftAction = actions.find( ( a: any ) => a.id === 'draft' );
-		expect( draftAction?.RenderModal ).toBeDefined();
-		expect( typeof draftAction?.RenderModal ).toBe( 'function' );
-	} );
-
-	it( 'should hide modal header', () => {
-		const draftAction = actions.find( ( a: any ) => a.id === 'draft' );
-		expect( draftAction?.hideModalHeader ).toBe( true );
-	} );
-
-	it( 'should focus on first content element', () => {
-		const draftAction = actions.find( ( a: any ) => a.id === 'draft' );
-		expect( draftAction?.modalFocusOnMount ).toBe( 'firstContentElement' );
 	} );
 } );
 
@@ -76,19 +80,6 @@ describe( 'Bulk import action', () => {
 	it( 'should focus on first content element', () => {
 		const bulkAction = actions.find( ( a: any ) => a.id === 'bulk-import' );
 		expect( bulkAction?.modalFocusOnMount ).toBe( 'firstContentElement' );
-	} );
-} );
-
-describe( 'Update action', () => {
-	it( 'should have RenderModal component', () => {
-		const updateAction = actions.find( ( a: any ) => a.id === 'update' );
-		expect( updateAction?.RenderModal ).toBeDefined();
-		expect( typeof updateAction?.RenderModal ).toBe( 'function' );
-	} );
-
-	it( 'should not hide modal header', () => {
-		const updateAction = actions.find( ( a: any ) => a.id === 'update' );
-		expect( updateAction?.hideModalHeader ).toBe( false );
 	} );
 } );
 

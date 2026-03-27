@@ -67,7 +67,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 		},
 		search: '',
 		filters: [],
-		fields: [ 'permalink', 'modified' ],
+		fields: [ 'permalink', 'modified', 'status' ],
 		titleField: 'title',
 		descriptionField: 'description',
 		mediaField: 'image',
@@ -134,6 +134,35 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 			label: __( 'Last Modified', 'safe-publish' ),
 			enableSorting: true,
 		},
+		{
+			id: 'status',
+			label: __( 'Status', 'safe-publish' ),
+			enableSorting: true,
+			render: ( { item }: { item: Post } ): JSX.Element => {
+				if ( item.is_imported && item.has_update ) {
+					return (
+						<span style={ { display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#996800' } }>
+							<span style={ { width: '8px', height: '8px', borderRadius: '50%', background: 'currentColor', flexShrink: 0 } } aria-hidden="true" />
+							{ __( 'Outdated', 'safe-publish' ) }
+						</span>
+					);
+				}
+				if ( item.is_imported ) {
+					return (
+						<span style={ { display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#1e7e34' } }>
+							<span style={ { width: '8px', height: '8px', borderRadius: '50%', background: 'currentColor', flexShrink: 0 } } aria-hidden="true" />
+							{ __( 'Up to date', 'safe-publish' ) }
+						</span>
+					);
+				}
+				return (
+					<span style={ { display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#007cba' } }>
+						<span style={ { width: '8px', height: '8px', borderRadius: '50%', background: 'currentColor', flexShrink: 0 } } aria-hidden="true" />
+						{ __( 'Available', 'safe-publish' ) }
+					</span>
+				);
+			},
+		},
 	];
 
 	/**
@@ -152,7 +181,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 
 		// Apply sorting.
 		if ( newView.sort?.field ) {
-			filtered = sortPosts( filtered, newView.sort.field as keyof Post, newView.sort.direction );
+			filtered = sortPosts( filtered, newView.sort.field as keyof Post | 'status', newView.sort.direction );
 		}
 
 		// Update pagination info.
@@ -213,7 +242,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 				setView( resetView );
 				let filtered = searchPosts( newPosts, '' );
 				if ( resetView.sort?.field ) {
-					filtered = sortPosts( filtered, resetView.sort.field as keyof Post, resetView.sort.direction );
+					filtered = sortPosts( filtered, resetView.sort.field as keyof Post | 'status', resetView.sort.direction );
 				}
 				setPaginationInfo( getPaginationInfo( filtered.length, resetView.perPage as number ) );
 				setFilteredData( paginatePosts( filtered, 1, resetView.perPage as number ) );
