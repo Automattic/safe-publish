@@ -1,6 +1,6 @@
 .safe-publish-controls-row {
 	display: flex;
-	align-items: flex-end;
+	align-items: flex-start;
 	flex-wrap: wrap;
 	gap: 16px;
 	margin: 0 0 0 48px;
@@ -8,4 +8,10 @@
 
 .safe-publish-controls-row .safe-publish-post-type-selector {
 	width: 212px;
+}
+
+.safe-publish-post-type-error {
+	max-width: 480px;
+	margin-left: 48px;
+	margin-top: 16px;
 }
