@@ -19,6 +19,7 @@
  *            Use in multi-batch presets so each batch occupies a distinct date range.
  *   purge=   Set to 1 to delete all previously seeded content and exit without inserting anything.
  *   fresh=   Set to 1 to delete all previously seeded content before seeding.
+ *   prefix=  Optional string prepended to every post title (e.g. prefix=Run2 → "Run2 Post 1 BE - 1P").
  *
  * Seeded content is tagged with _seeder_generated=1 post meta, enabling clean fresh runs.
  *
@@ -44,6 +45,7 @@ function safe_publish_seeder_run( array $args ): void {
 	$images = $params['images'] ?? 'auto';
 	$fresh  = ! empty( $params['fresh'] );
 	$purge  = ! empty( $params['purge'] );
+	$prefix = isset( $params['prefix'] ) ? sanitize_text_field( $params['prefix'] ) . ' ' : '';
 	$offset = max( 0, (int) ( $params['date-offset'] ?? 0 ) );
 
 	if ( $purge ) {
@@ -75,7 +77,7 @@ function safe_publish_seeder_run( array $args ): void {
 		$image_ids     = safe_publish_seeder_generate_images( $i, $image_mode );
 		$editor_label  = $use_gutenberg ? 'BE' : 'CE';
 		$img_label     = safe_publish_seeder_image_label( $image_mode, count( $image_ids ) );
-		$title         = ucfirst( $type ) . " {$i} {$editor_label} - {$img_label}";
+		$title         = $prefix . ucfirst( $type ) . " {$i} {$editor_label} - {$img_label}";
 		$slug          = "seeder-{$type}-{$i}";
 		$content       = $use_gutenberg
 			? safe_publish_seeder_gutenberg_content( $i, $image_ids )

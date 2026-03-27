@@ -43,7 +43,6 @@ for arg in "$@"; do
 			;;
 		fresh=*)
 			FRESH_ARG="$arg"
-			PHP_ARGS="$PHP_ARGS $arg"
 			;;
 		*)
 			PHP_ARGS="$PHP_ARGS $arg"
@@ -71,11 +70,11 @@ run_preset_full() {
 		run_seeder "$container" "$label" "purge=1"
 	fi
 	# Gutenberg posts, all image modes via auto.
-	run_seeder "$container" "$label" "count=10 type=post editor=gutenberg images=auto date-offset=90"
+	run_seeder "$container" "$label" "count=10 type=post editor=gutenberg images=auto date-offset=90 $PHP_ARGS"
 	# Classic posts, all image modes via auto.
-	run_seeder "$container" "$label" "count=10 type=post editor=classic images=auto start=11"
+	run_seeder "$container" "$label" "count=10 type=post editor=classic images=auto start=11 $PHP_ARGS"
 	# Pages with varied images.
-	run_seeder "$container" "$label" "count=5 type=page editor=gutenberg images=auto start=21"
+	run_seeder "$container" "$label" "count=5 type=page editor=gutenberg images=auto start=21 $PHP_ARGS"
 }
 
 execute() {
@@ -87,7 +86,7 @@ execute() {
 		echo "Unknown preset '$PRESET'. Available presets: full." >&2
 		exit 1
 	else
-		run_seeder "$container" "$label" "$PHP_ARGS"
+		run_seeder "$container" "$label" "$PHP_ARGS $FRESH_ARG"
 	fi
 }
 

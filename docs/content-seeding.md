@@ -37,6 +37,7 @@ All scripts accept additional arguments after `--`:
 
 ```sh
 npm run seed -- count=5 type=page fresh=1
+npm run seed:full -- fresh=1 prefix=R1
 ```
 
 ## Arguments
@@ -55,6 +56,7 @@ These arguments are passed directly to `bin/seed`:
 | `date-offset=` | `0`         | Shift all post dates this many extra days into the past; use in multi-batch presets to keep date ranges non-overlapping |
 | `fresh=`       | _(off)_     | Set to `1` to delete all previously seeded content, then seed normally                                                  |
 | `purge=`       | _(off)_     | Set to `1` to delete all previously seeded content and exit without inserting anything                                  |
+| `prefix=`      | _(none)_    | String prepended to every post title — useful to distinguish multiple runs                                              |
 
 ### Image Modes
 
