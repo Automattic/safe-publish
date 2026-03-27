@@ -58,11 +58,17 @@ function safe_publish_seeder_run( array $args ): void {
 	$inserted = 0;
 
 	for ( $i = 1; $i <= $count; $i++ ) {
-		$image_ids = safe_publish_seeder_generate_images( $i, $images );
-		$title     = ucfirst( $type ) . " {$i}";
-		$slug      = "seeder-{$type}-{$i}";
-		$content   = safe_publish_seeder_build_content( $editor, $i, $image_ids );
-		$excerpt   = "Excerpt for seeded {$type} number {$i}.";
+		$use_gutenberg = safe_publish_seeder_resolve_editor( $editor, $i );
+		$image_mode    = safe_publish_seeder_resolve_image_mode( $images, $i );
+		$image_ids     = safe_publish_seeder_generate_images( $i, $image_mode );
+		$editor_label  = $use_gutenberg ? 'BE' : 'CE';
+		$img_label     = safe_publish_seeder_image_label( $image_mode, count( $image_ids ) );
+		$title         = ucfirst( $type ) . " {$i} {$editor_label} - {$img_label}";
+		$slug          = "seeder-{$type}-{$i}";
+		$content       = $use_gutenberg
+			? safe_publish_seeder_gutenberg_content( $i, $image_ids )
+			: safe_publish_seeder_classic_content( $i, $image_ids );
+		$excerpt       = "Excerpt for seeded {$type} number {$i}.";
 
 		// Rotate statuses: publish (default), draft every 5th, private every 6th.
 		$status = 'publish';
@@ -156,17 +162,41 @@ function safe_publish_seeder_delete_content(): void {
 }
 
 /**
+ * Resolves the concrete image mode for a given post index.
+ *
+ * @param string $mode  Image mode: '1', '2', '2-resized', or 'auto'.
+ * @param int    $index Post index, used to cycle through modes in 'auto'.
+ * @return string Resolved mode: '1', '2', or '2-resized'.
+ */
+function safe_publish_seeder_resolve_image_mode( string $mode, int $index ): string {
+	if ( 'auto' !== $mode ) {
+		return $mode;
+	}
+
+	$modes = array( '1', '2', '2-resized' );
+	return $modes[ ( $index - 1 ) % count( $modes ) ];
+}
+
+/**
+ * Returns a human-readable image label for use in post titles.
+ *
+ * @param string $mode      Resolved image mode: '1', '2', or '2-resized'.
+ * @param int    $img_count Actual number of generated images.
+ * @return string Label such as '1 img', '2 imgs', or '2 imgs resized'.
+ */
+function safe_publish_seeder_image_label( string $mode, int $img_count ): string {
+	$base = 1 === $img_count ? '1 img' : "{$img_count} imgs";
+	return '2-resized' === $mode ? "{$base} resized" : $base;
+}
+
+/**
  * Generates one or more images based on the requested mode.
  *
  * @param int    $index Post index, used to label images.
- * @param string $mode  Image mode: '1', '2', '2-resized', or 'auto'.
+ * @param string $mode  Resolved image mode: '1', '2', or '2-resized'.
  * @return int[] Array of attachment IDs (may be empty if GD is unavailable).
  */
 function safe_publish_seeder_generate_images( int $index, string $mode ): array {
-	if ( 'auto' === $mode ) {
-		$modes = array( '1', '2', '2-resized' );
-		$mode  = $modes[ ( $index - 1 ) % count( $modes ) ];
-	}
 
 	$first_id = safe_publish_seeder_generate_image( "Seeded image {$index}a" );
 
@@ -301,23 +331,18 @@ function safe_publish_seeder_generate_image( string $label ): int {
 }
 
 /**
- * Builds post content for the given editor type.
+ * Resolves whether a given post index should use the block editor.
  *
- * @param string $editor    Editor type: 'gutenberg', 'classic', or 'mixed'.
- * @param int    $index     Post index, used to alternate content types in 'mixed' mode.
- * @param int[]  $image_ids Attachment IDs to embed in content.
- * @return string Post content.
+ * @param string $editor Editor mode: 'gutenberg', 'classic', or 'mixed'.
+ * @param int    $index  Post index.
+ * @return bool True for block editor, false for classic editor.
  */
-function safe_publish_seeder_build_content( string $editor, int $index, array $image_ids ): string {
-	$use_gutenberg = match ( $editor ) {
+function safe_publish_seeder_resolve_editor( string $editor, int $index ): bool {
+	return match ( $editor ) {
 		'gutenberg' => true,
 		'classic'   => false,
 		default     => 0 !== $index % 3, // 2 out of 3 use Gutenberg in mixed mode.
 	};
-
-	return $use_gutenberg
-		? safe_publish_seeder_gutenberg_content( $index, $image_ids )
-		: safe_publish_seeder_classic_content( $index, $image_ids );
 }
 
 /**
