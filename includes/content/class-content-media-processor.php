@@ -42,6 +42,13 @@ class Content_Media_Processor {
 	private Embed_Processor $embed_processor;
 
 	/**
+	 * URLs of images that failed to import.
+	 *
+	 * @var array
+	 */
+	private array $failed_images = array();
+
+	/**
 	 * Constructs the Content_Media_Processor instance.
 	 *
 	 * @param Media_Importer  $media_importer  Media importer for handling media files.
@@ -158,6 +165,10 @@ class Content_Media_Processor {
 						'src',
 						Media_Importer::reapply_query_parameters( $src, $new_src )
 					);
+				} else {
+					$this->failed_images[] = $src;
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'Safe Publish: Failed to import image: ' . $src );
 				}
 			}
 
@@ -404,5 +415,21 @@ class Content_Media_Processor {
 		// Ensure controls are visible.
 		$audio->setAttribute( 'controls', 'controls' );
 		$audio->setAttribute( 'preload', 'metadata' );
+	}
+
+	/**
+	 * Returns the list of image URLs that failed to import.
+	 *
+	 * @return array Failed image URLs.
+	 */
+	public function get_failed_images(): array {
+		return $this->failed_images;
+	}
+
+	/**
+	 * Resets the failed images list.
+	 */
+	public function reset_failed_images(): void {
+		$this->failed_images = array();
 	}
 }

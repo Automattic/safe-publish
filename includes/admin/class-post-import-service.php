@@ -123,7 +123,25 @@ class Post_Import_Service {
 			$fields['content'],
 			$fields['external_link']
 		);
-		$existing_post     = $this->find_existing_post( $fields['external_post_id'] );
+
+		$failed_images = $this->content_processor->get_failed_images();
+		$this->content_processor->reset_failed_images();
+
+		if ( ! empty( $failed_images ) ) {
+			return array(
+				'external_id' => $fields['external_post_id'],
+				'title'       => $fields['title'],
+				'success'     => false,
+				'error'       => sprintf(
+					/* translators: 1: number of failed images, 2: comma-separated list of failed image URLs */
+					__( 'Import failed: %1$d image(s) could not be downloaded: %2$s', 'safe-publish' ),
+					count( $failed_images ),
+					implode( ', ', $failed_images )
+				),
+			);
+		}
+
+		$existing_post = $this->find_existing_post( $fields['external_post_id'] );
 
 		if ( $existing_post ) {
 			return $this->handle_existing_post(

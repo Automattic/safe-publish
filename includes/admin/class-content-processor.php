@@ -42,6 +42,13 @@ class Content_Processor {
 	private array $disabled_filters = array();
 
 	/**
+	 * URLs of images that failed to import.
+	 *
+	 * @var array
+	 */
+	private array $failed_images = array();
+
+	/**
 	 * Constructs the Content_Processor instance.
 	 *
 	 * @param Media_Importer          $media_importer          Media importer instance.
@@ -71,6 +78,13 @@ class Content_Processor {
 		} else {
 			$processed_content = $this->content_media_processor->process_content( $content, $site_url );
 			$processed_content = $this->process_oembed_content( $processed_content ) ?? $processed_content;
+
+			// Merge image failures from the non-Gutenberg path.
+			$this->failed_images = array_merge(
+				$this->failed_images,
+				$this->content_media_processor->get_failed_images()
+			);
+			$this->content_media_processor->reset_failed_images();
 		}
 
 		return $this->replace_external_urls( $processed_content, $site_url );
@@ -288,6 +302,22 @@ class Content_Processor {
 	}
 
 	/**
+	 * Returns the list of image URLs that failed to import.
+	 *
+	 * @return array Failed image URLs.
+	 */
+	public function get_failed_images(): array {
+		return $this->failed_images;
+	}
+
+	/**
+	 * Resets the failed images list.
+	 */
+	public function reset_failed_images(): void {
+		$this->failed_images = array();
+	}
+
+	/**
 	 * Replaces domain in a URL if it matches the external site.
 	 *
 	 * @param string $url               URL to process.
@@ -455,6 +485,9 @@ class Content_Processor {
 		}
 
 		if ( ! $new_url || ! $attachment_id ) {
+			$this->failed_images[] = $original_url;
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( 'Safe Publish: Failed to import image in Gutenberg block: ' . $original_url );
 			return $block;
 		}
 
