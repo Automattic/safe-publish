@@ -280,11 +280,21 @@ class Post_Import_Service {
 		string $processed_content,
 		?int $session_id
 	): array {
-		$fresh_data = $this->fetch_fresh_content( $fields['external_post_id'] );
+		$fresh_data   = $this->fetch_fresh_content( $fields['external_post_id'] );
+		$fresh_failed = false;
 
 		if ( $fresh_data ) {
 			$fields['title']             = $fresh_data['title'] ?? $fields['title'];
 			$fields['featured_media_id'] = $fresh_data['featured_media'] ?? $fields['featured_media_id'];
+
+			if ( ! empty( $fresh_data['content'] ) ) {
+				$processed_content = $this->process_post_content(
+					$fresh_data['content'],
+					$fields['external_link']
+				);
+			}
+		} else {
+			$fresh_failed = true;
 		}
 
 		$this->content_processor->disable_content_filters();
@@ -327,7 +337,7 @@ class Post_Import_Service {
 			)
 		);
 
-		return array(
+		$result = array(
 			'external_id' => $fields['external_post_id'],
 			'title'       => $fields['title'],
 			'success'     => true,
@@ -335,6 +345,14 @@ class Post_Import_Service {
 			'edit_url'    => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
 			'existing'    => true,
 		);
+
+		if ( $fresh_failed ) {
+			$result['warnings'] = array(
+				__( 'Could not fetch fresh content from the source site. The post was updated using previously imported data.', 'safe-publish' ),
+			);
+		}
+
+		return $result;
 	}
 
 	/**
@@ -436,10 +454,15 @@ class Post_Import_Service {
 				$auth_credentials
 			);
 
+			if ( ! $fresh_data ) {
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				error_log( 'Safe Publish: Failed to fetch fresh content for external post ID ' . $external_post_id . ' from ' . $configured_site_url );
+			}
+
 			return $fresh_data ? $fresh_data : null;
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 		} catch ( Exception $e ) {
-			// Continue with provided content if fresh fetch fails.
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( 'Safe Publish: Exception fetching fresh content for external post ID ' . $external_post_id . ': ' . $e->getMessage() );
 			return null;
 		}
 	}

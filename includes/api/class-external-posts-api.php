@@ -292,6 +292,8 @@ class External_Posts_API {
 		$response = $this->make_request( $api_url, $auth_credentials );
 
 		if ( is_wp_error( $response ) ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( 'Safe Publish: WP_Error fetching fresh post content for post ID ' . $external_post_id . ': ' . $response->get_error_message() );
 			return false;
 		}
 
@@ -299,6 +301,8 @@ class External_Posts_API {
 		$data = json_decode( $body, true );
 
 		if ( empty( $data ) || ! is_array( $data ) ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( 'Safe Publish: Empty or invalid response when fetching fresh post content for post ID ' . $external_post_id );
 			return false;
 		}
 
