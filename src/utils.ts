@@ -153,7 +153,7 @@ export function searchPosts( posts: Post[], searchTerm: string ): Post[] {
  */
 export function sortPosts(
 	posts: Post[],
-	field: keyof Post | 'status',
+	field: keyof Post | 'sync_status',
 	direction: 'asc' | 'desc' = 'desc'
 ): Post[] {
 	// Status sort: Available (0) < Outdated (1) < Up to date (2) — alphabetical order.
@@ -170,7 +170,7 @@ export function sortPosts(
 	};
 
 	return [ ...posts ].sort( ( postA, postB ) => {
-		if ( field === 'status' ) {
+		if ( field === 'sync_status' ) {
 			const diff = statusOrder( postA ) - statusOrder( postB );
 			return direction === 'asc' ? diff : -diff;
 		}

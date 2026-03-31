@@ -123,11 +123,11 @@ class Post_Import_Service {
 			$fields['content'],
 			$fields['external_link']
 		);
-		$existing_post     = $this->find_existing_post( $fields['external_post_id'] );
+		$imported_post     = $this->find_imported_post( $fields['external_post_id'] );
 
-		if ( $existing_post ) {
-			return $this->handle_existing_post(
-				$existing_post,
+		if ( $imported_post ) {
+			return $this->handle_imported_post(
+				$imported_post,
 				$fields,
 				$post_type,
 				$processed_content,
@@ -242,25 +242,30 @@ class Post_Import_Service {
 	/**
 	 * Annotates each post in an array with its local import status.
 	 *
-	 * Adds `is_imported` (bool) and `has_update` (bool) keys to every element
-	 * based on whether a matching local post exists and whether the external
-	 * post's modified date is newer.
+	 * Adds `is_imported` (bool), `has_update` (bool), `local_status` (string),
+	 * and `local_edit_url` (string) keys to every element based on whether a
+	 * matching local post exists and whether the external post's modified date
+	 * is newer.
 	 *
 	 * @param array $posts Posts array fetched from the external API, passed by reference.
 	 */
 	public function annotate_posts_with_import_status( array &$posts ): void {
 		foreach ( $posts as &$post ) {
-			$existing            = $this->find_existing_post( absint( $post['id'] ?? 0 ) );
-			$post['is_imported'] = (bool) $existing;
+			$imported            = $this->find_imported_post( absint( $post['id'] ?? 0 ) );
+			$post['is_imported'] = (bool) $imported;
 
-			if ( $existing ) {
-				$external_modified  = strtotime( $post['modified'] );
-				$local_modified     = strtotime( $existing->post_modified );
-				$post['has_update'] = false !== $external_modified
+			if ( $imported ) {
+				$external_modified      = strtotime( $post['modified'] );
+				$local_modified         = strtotime( $imported->post_modified );
+				$post['has_update']     = false !== $external_modified
 					&& false !== $local_modified
 					&& $external_modified > $local_modified;
+				$post['local_status']   = $imported->post_status;
+				$post['local_edit_url'] = get_edit_post_link( $imported->ID, 'raw' );
 			} else {
-				$post['has_update'] = false;
+				$post['has_update']     = false;
+				$post['local_status']   = null;
+				$post['local_edit_url'] = null;
 			}
 		}
 
@@ -268,18 +273,20 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Finds an existing WordPress post by its external post ID.
+	 * Finds a previously imported WordPress post by its external post ID.
 	 *
 	 * @param int $external_post_id External post ID stored in post meta.
-	 * @return WP_Post|null Existing post or null if not found.
+	 * @return WP_Post|null Imported post or null if not found.
 	 */
-	public function find_existing_post( int $external_post_id ): ?WP_Post {
+	public function find_imported_post( int $external_post_id ): ?WP_Post {
 		$existing_posts = get_posts(
 			array(
 				'meta_key'         => Options::META_EXTERNAL_POST_ID,
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'       => $external_post_id,
-				'post_status'      => array( 'draft', 'publish', 'pending', 'private' ),
+				// 'any' excludes 'trash', 'auto-draft', and statuses with
+				// exclude_from_search=true
+				'post_status'      => 'any',
 				'posts_per_page'   => 1,
 				'suppress_filters' => false,
 			)
@@ -294,15 +301,15 @@ class Post_Import_Service {
 	 * Attempts to fetch fresh content from the external site, updates the
 	 * existing post, and logs the action.
 	 *
-	 * @param WP_Post  $existing_post     Existing WordPress post.
+	 * @param WP_Post  $imported_post     Imported WordPress post.
 	 * @param array    $fields            Sanitized post fields.
 	 * @param string   $post_type         Resolved post type slug.
 	 * @param string   $processed_content Processed post content.
 	 * @param int|null $session_id        Import session ID for logging.
 	 * @return array Import result data.
 	 */
-	private function handle_existing_post(
-		WP_Post $existing_post,
+	private function handle_imported_post(
+		WP_Post $imported_post,
 		array $fields,
 		string $post_type,
 		string $processed_content,
@@ -319,7 +326,7 @@ class Post_Import_Service {
 
 		$post_id = wp_update_post(
 			array(
-				'ID'           => $existing_post->ID,
+				'ID'           => $imported_post->ID,
 				'post_title'   => $fields['title'],
 				'post_content' => ! empty( $processed_content )
 					? $processed_content

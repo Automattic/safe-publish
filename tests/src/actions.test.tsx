@@ -3,8 +3,10 @@
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { actions } from '@/actions';
+import { createActions } from '@/actions';
 import type { Post } from '@/types';
+
+const actions = createActions();
 
 describe( 'Actions configuration', () => {
 	it( 'should export actions array', () => {

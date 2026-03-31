@@ -15,6 +15,7 @@ use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Logger;
 use Safe_Publish\Utils\Options;
 use Exception;
+use WP_Post;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -124,6 +125,7 @@ final class Admin_Ajax_Controller {
 		add_action( 'wp_ajax_safe_publish_test_connection', array( $this, 'ajax_test_connection' ) );
 		add_action( 'wp_ajax_safe_publish_create_draft', array( $this, 'ajax_create_draft' ) );
 		add_action( 'wp_ajax_safe_publish_bulk_import', array( $this, 'ajax_bulk_import' ) );
+		add_action( 'wp_ajax_safe_publish_delete_post', array( $this, 'ajax_delete_post' ) );
 		add_action( 'wp_ajax_safe_publish_debug_auth', array( $this, 'ajax_debug_auth' ) );
 	}
 
@@ -297,29 +299,29 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( __( 'External post ID is required.', 'safe-publish' ) );
 		}
 
-		$existing_post = $this->post_import_service->find_existing_post( $external_post_id );
+		$imported_post = $this->post_import_service->find_imported_post( $external_post_id );
 		$force_update  = isset( $_POST['force_update'] ) && 'true' === $_POST['force_update'];
 
-		// If post exists and no force update, ask for confirmation.
-		if ( $existing_post && ! $force_update ) {
+		// If post was previously imported and no force update, ask for confirmation.
+		if ( $imported_post && ! $force_update ) {
 			wp_send_json_success(
 				array(
 					'existing'       => true,
-					'post_id'        => $existing_post->ID,
-					'post_title'     => $existing_post->post_title,
-					'edit_url'       => admin_url( 'post.php?post=' . $existing_post->ID . '&action=edit' ),
+					'post_id'        => $imported_post->ID,
+					'post_title'     => $imported_post->post_title,
+					'edit_url'       => admin_url( 'post.php?post=' . $imported_post->ID . '&action=edit' ),
 					'message'        => sprintf(
 						/* translators: %s: title of the existing post */
 						__( 'Post "%s" already exists. Do you want to update it with the latest content from the external site?', 'safe-publish' ),
-						$existing_post->post_title
+						$imported_post->post_title
 					),
 					'confirm_action' => 'update_existing',
 				)
 			);
 		}
 
-		// Fetch fresh content from external site if updating existing post.
-		if ( $existing_post && $force_update ) {
+		// Fetch fresh content from external site if updating imported post.
+		if ( $imported_post && $force_update ) {
 			$fresh_data = $this->maybe_fetch_fresh_content( $external_post_id );
 			if ( $fresh_data ) {
 				$title             = $fresh_data['title'] ?? $title;
@@ -333,9 +335,9 @@ final class Admin_Ajax_Controller {
 
 		$processed_content = $this->process_draft_content( $content, $external_link );
 
-		if ( $existing_post ) {
-			$result = $this->update_existing_draft(
-				$existing_post,
+		if ( $imported_post ) {
+			$result = $this->update_imported_draft(
+				$imported_post,
 				$title,
 				$excerpt,
 				$post_type,
@@ -500,12 +502,50 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
+	 * Handles AJAX request for deleting a locally imported post.
+	 *
+	 * Moves the post to trash by its external post ID.
+	 */
+	public function ajax_delete_post(): void {
+		// Security check.
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'delete_posts' ) ) {
+			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
+		}
+
+		$external_post_id = absint( $_POST['external_post_id'] ?? 0 );
+
+		if ( ! $external_post_id ) {
+			wp_send_json_error( __( 'External post ID is required.', 'safe-publish' ) );
+		}
+
+		$imported_post = $this->post_import_service->find_imported_post( $external_post_id );
+
+		if ( ! $imported_post ) {
+			wp_send_json_error( __( 'Post not found.', 'safe-publish' ) );
+		}
+
+		if ( ! current_user_can( 'delete_post', $imported_post->ID ) ) {
+			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
+		}
+
+		$result = wp_trash_post( $imported_post->ID );
+
+		if ( ! $result ) {
+			wp_send_json_error( __( 'Failed to delete the post.', 'safe-publish' ) );
+		}
+
+		wp_send_json_success( array( 'message' => __( 'Post moved to trash.', 'safe-publish' ) ) );
+	}
+
+	/**
 	 * Updates an existing post with fresh imported content.
 	 *
 	 * Stores rollback data, updates post fields, imports featured image,
 	 * updates meta and terms, and logs history.
 	 *
-	 * @param \WP_Post $existing_post     Existing WordPress post.
+	 * @param WP_Post  $imported_post     Imported WordPress post.
 	 * @param string   $title             Post title.
 	 * @param string   $excerpt           Post excerpt.
 	 * @param string   $post_type         Resolved post type slug.
@@ -518,8 +558,8 @@ final class Admin_Ajax_Controller {
 	 * @param int      $external_post_id  External post ID.
 	 * @return array Result data with post_id, edit_url, message, and existing keys, or error key on failure.
 	 */
-	private function update_existing_draft(
-		\WP_Post $existing_post,
+	private function update_imported_draft(
+		WP_Post $imported_post,
 		string $title,
 		string $excerpt,
 		string $post_type,
@@ -531,11 +571,11 @@ final class Admin_Ajax_Controller {
 		?int $session_id,
 		int $external_post_id
 	): array {
-		$previous_content = $this->capture_rollback_data( $existing_post );
+		$previous_content = $this->capture_rollback_data( $imported_post );
 
 		$post_id = wp_update_post(
 			array(
-				'ID'           => $existing_post->ID,
+				'ID'           => $imported_post->ID,
 				'post_title'   => $title,
 				'post_excerpt' => $excerpt,
 				'post_content' => ! empty( $processed_content )
@@ -707,10 +747,10 @@ final class Admin_Ajax_Controller {
 	 * Stores the current title, content, excerpt, featured image, and selected
 	 * meta fields so the import can be reverted if needed.
 	 *
-	 * @param \WP_Post $existing_post Existing WordPress post.
+	 * @param WP_Post $existing_post Existing WordPress post.
 	 * @return array Rollback data keyed by field name.
 	 */
-	private function capture_rollback_data( \WP_Post $existing_post ): array {
+	private function capture_rollback_data( WP_Post $existing_post ): array {
 		$previous_content = array(
 			'previous_content'        => $existing_post->post_content,
 			'previous_title'          => $existing_post->post_title,

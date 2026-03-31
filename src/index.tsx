@@ -6,9 +6,10 @@
  *
  * @file This file defines the main DataViews component for the Safe Publish plugin.
  */
+import { update } from '@wordpress/icons';
 import { createRoot } from 'react-dom/client';
 
-import { actions } from './actions';
+import { createActions } from './actions';
 import {
 	DEFAULT_POSTS_PER_PAGE,
 	LAYOUT_GRID,
@@ -28,10 +29,14 @@ import {
 	searchPosts,
 	sortPosts,
 } from './utils';
-import { __experimentalNumberControl as NumberControl } from '@wordpress/components';
+import {
+	Button,
+	__experimentalNumberControl as NumberControl
+} from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
+import { dateI18n, getSettings } from '@wordpress/date';
 import { useState, useEffect, useRef } from '@wordpress/element';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
 import type {
 	ApiResponse,
@@ -67,7 +72,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 		},
 		search: '',
 		filters: [],
-		fields: [ 'permalink', 'modified', 'status' ],
+		fields: [ 'permalink', 'modified', 'sync_status', 'publish_status' ],
 		titleField: 'title',
 		descriptionField: 'description',
 		mediaField: 'image',
@@ -99,6 +104,24 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 			label: __( 'Title', 'safe-publish' ),
 			enableSorting: true,
 			enableGlobalSearch: true,
+			render: ( { item }: { item: Post } ): JSX.Element => {
+				if ( item.local_edit_url ) {
+					return (
+						<a
+							href={ item.local_edit_url }
+							target="_blank"
+							rel="noreferrer"
+							aria-label={
+								/* translators: %s: post title */
+								sprintf( __( '%s (opens in new tab)', 'safe-publish' ), item.title )
+							}
+						>
+							{ item.title }
+						</a>
+					);
+				}
+				return <span>{ item.title }</span>;
+			},
 		},
 		{
 			id: 'post_type',
@@ -133,32 +156,61 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 			id: 'modified',
 			label: __( 'Last Modified', 'safe-publish' ),
 			enableSorting: true,
+			render: ( { item }: { item: Post } ): JSX.Element => {
+				const { formats } = getSettings();
+				return <span>{ dateI18n( `${ formats.date } ${ formats.time }`, item.modified ) }</span>;
+			},
 		},
 		{
-			id: 'status',
-			label: __( 'Status', 'safe-publish' ),
+			id: 'sync_status',
+			label: __( 'Sync Status', 'safe-publish' ),
 			enableSorting: true,
 			render: ( { item }: { item: Post } ): JSX.Element => {
 				if ( item.is_imported && item.has_update ) {
 					return (
-						<span style={ { display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#996800' } }>
-							<span style={ { width: '8px', height: '8px', borderRadius: '50%', background: 'currentColor', flexShrink: 0 } } aria-hidden="true" />
+						<span className="safe-publish-status-badge safe-publish-status-badge--outdated">
+							<span className="safe-publish-status-badge__dot" aria-hidden="true" />
 							{ __( 'Outdated', 'safe-publish' ) }
 						</span>
 					);
 				}
 				if ( item.is_imported ) {
 					return (
-						<span style={ { display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#1e7e34' } }>
-							<span style={ { width: '8px', height: '8px', borderRadius: '50%', background: 'currentColor', flexShrink: 0 } } aria-hidden="true" />
+						<span className="safe-publish-status-badge safe-publish-status-badge--up-to-date">
+							<span className="safe-publish-status-badge__dot" aria-hidden="true" />
 							{ __( 'Up to date', 'safe-publish' ) }
 						</span>
 					);
 				}
 				return (
-					<span style={ { display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#007cba' } }>
-						<span style={ { width: '8px', height: '8px', borderRadius: '50%', background: 'currentColor', flexShrink: 0 } } aria-hidden="true" />
+					<span className="safe-publish-status-badge safe-publish-status-badge--available">
+						<span className="safe-publish-status-badge__dot" aria-hidden="true" />
 						{ __( 'Available', 'safe-publish' ) }
+					</span>
+				);
+			},
+		},
+		{
+			id: 'publish_status',
+			label: __( 'Publish Status', 'safe-publish' ),
+			enableSorting: false,
+			render: ( { item }: { item: Post } ): JSX.Element => {
+				if ( ! item.is_imported || ! item.local_status ) {
+					return <span className="safe-publish-status-badge safe-publish-status-badge--empty">—</span>;
+				}
+				const labels: Record< string, string > = {
+					publish: __( 'Published', 'safe-publish' ),
+					draft:   __( 'Draft', 'safe-publish' ),
+					pending: __( 'Pending Review', 'safe-publish' ),
+					private: __( 'Private', 'safe-publish' ),
+					future:  __( 'Scheduled', 'safe-publish' ),
+				};
+				const label = labels[ item.local_status ] ?? item.local_status;
+				const modifierClass = `safe-publish-status-badge--${ item.local_status }`;
+				return (
+					<span className={ `safe-publish-status-badge ${ modifierClass }` }>
+						<span className="safe-publish-status-badge__dot" aria-hidden="true" />
+						{ label }
 					</span>
 				);
 			},
@@ -181,7 +233,11 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 
 		// Apply sorting.
 		if ( newView.sort?.field ) {
-			filtered = sortPosts( filtered, newView.sort.field as keyof Post | 'status', newView.sort.direction );
+			filtered = sortPosts(
+				filtered,
+				newView.sort.field as keyof Post | 'sync_status',
+				newView.sort.direction
+			);
 		}
 
 		// Update pagination info.
@@ -242,7 +298,11 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 				setView( resetView );
 				let filtered = searchPosts( newPosts, '' );
 				if ( resetView.sort?.field ) {
-					filtered = sortPosts( filtered, resetView.sort.field as keyof Post | 'status', resetView.sort.direction );
+					filtered = sortPosts(
+						filtered,
+						resetView.sort.field as keyof Post | 'sync_status',
+						resetView.sort.direction
+					);
 				}
 				setPaginationInfo( getPaginationInfo( filtered.length, resetView.perPage as number ) );
 				setFilteredData( paginatePosts( filtered, 1, resetView.perPage as number ) );
@@ -345,6 +405,17 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 						}
 					} }
 				/>
+				<Button
+					variant="tertiary"
+					isBusy={ isLoadingPosts }
+					disabled={ isLoadingPosts }
+					icon={ update }
+					label={ __( 'Refresh', 'safe-publish' ) }
+					style={ { height: '32px', width: '32px', minWidth: 0 } }
+					onClick={ () => {
+						fetchPostsByType( selectedPostType, numberPostsState ).catch( () => {} );
+					} }
+				/>
 			</div>
 			{ isLoadingPosts && (
 				<div className="safe-publish-loading">
@@ -368,7 +439,9 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 					onChangeView={ onChangeView }
 					paginationInfo={ paginationInfo }
 					defaultLayouts={ defaultLayouts }
-					actions={ actions }
+					actions={ createActions( () => {
+						fetchPostsByType( selectedPostType, numberPostsState ).catch( () => {} );
+					} ) }
 				/>
 			) }
 		</div>
