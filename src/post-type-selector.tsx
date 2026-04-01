@@ -39,11 +39,13 @@ interface PostTypeOption {
  *
  * @property {string}   siteUrl            External site URL.
  * @property {Function} [onPostTypeChange] Callback when post type changes.
+ * @property {Function} [onError]          Callback when the error state changes.
  * @property {string}   [selectedPostType] Initially selected post type.
  */
 interface PostTypeSelectorProps {
 	siteUrl: string;
 	onPostTypeChange?: ( postType: string ) => void;
+	onError?: ( error: string | null ) => void;
 	selectedPostType?: string;
 }
 
@@ -56,6 +58,7 @@ interface PostTypeSelectorProps {
  * @param {Object}   props                    Component props.
  * @param {string}   props.siteUrl            External site URL.
  * @param {Function} [props.onPostTypeChange] Callback when post type changes.
+ * @param {Function} [props.onError]          Callback when the error state changes.
  * @param {string}   [props.selectedPostType] Initially selected post type.
  *
  * @return {JSX.Element} Rendered PostTypeSelector component.
@@ -63,6 +66,7 @@ interface PostTypeSelectorProps {
 export function PostTypeSelector( {
 	siteUrl,
 	onPostTypeChange,
+	onError,
 	selectedPostType = 'posts',
 }: PostTypeSelectorProps ): JSX.Element {
 	const [ postTypes, setPostTypes ] = useState< PostTypeOption[] >( [] );
@@ -182,6 +186,11 @@ export function PostTypeSelector( {
 		loadPostTypes().catch( console.error );
 	}, [ siteUrl, loadPostTypes ] );
 
+	// Propagate error state to parent.
+	useEffect( () => {
+		onError?.( error );
+	}, [ error, onError ] );
+
 	// Generate options for the select control.
 	const selectOptions = postTypes.map( postType => ( {
 		label: postType.label,
@@ -197,21 +206,17 @@ export function PostTypeSelector( {
 	}
 
 	return (
-		<div className="safe-publish-post-type-selector">
-			<SelectControl
-				label={ __( 'Post Type:', 'safe-publish' ) }
-				value={ currentPostType }
-				options={ selectOptions }
-				onChange={ handlePostTypeChange }
-				disabled={ isLoading }
-				__nextHasNoMarginBottom
-			/>
-
-			{ error && (
-				<Notice status="error" onRemove={ () => setError( null ) }>
-					{ error }
-				</Notice>
-			) }
+		<>
+			<div className="safe-publish-post-type-selector">
+				<SelectControl
+					label={ __( 'Post Type:', 'safe-publish' ) }
+					value={ currentPostType }
+					options={ selectOptions }
+					onChange={ handlePostTypeChange }
+					disabled={ isLoading }
+					__nextHasNoMarginBottom
+				/>
+			</div>
 
 			{ ! getExternalSiteUrl() && (
 				<Notice status="info">
@@ -223,6 +228,6 @@ export function PostTypeSelector( {
 					) }
 				</Notice>
 			) }
-		</div>
+		</>
 	);
 }
