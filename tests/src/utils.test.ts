@@ -159,6 +159,73 @@ describe( 'searchPosts', () => {
 	it( 'should return empty array for no matches', () => {
 		expect( searchPosts( posts, 'nonexistent' ) ).toEqual( [] );
 	} );
+
+	it( 'should filter posts by modified date (ISO partial match)', () => {
+		const result = searchPosts( posts, '2024-03-16' );
+		expect( result ).toHaveLength( 1 );
+		expect( result[ 0 ].id ).toBe( 2 );
+	} );
+
+	it( 'should filter posts by modified year', () => {
+		const result = searchPosts( posts, '2024' );
+		expect( result ).toHaveLength( 3 );
+	} );
+
+	it( 'should filter posts by post type', () => {
+		const typedPosts: Post[] = [
+			{ id: 1, link: 'https://example.com/1', title: 'Post A', modified: '2024-03-15', post_type: 'post' },
+			{ id: 2, link: 'https://example.com/2', title: 'Post B', modified: '2024-03-16', post_type: 'page' },
+			{ id: 3, link: 'https://example.com/3', title: 'Post C', modified: '2024-03-17', post_type: 'post' },
+		];
+
+		const result = searchPosts( typedPosts, 'page' );
+		expect( result ).toHaveLength( 1 );
+		expect( result[ 0 ].id ).toBe( 2 );
+	} );
+
+	it( 'should filter posts by permalink', () => {
+		const result = searchPosts( posts, 'example.com/2' );
+		expect( result ).toHaveLength( 1 );
+		expect( result[ 0 ].id ).toBe( 2 );
+	} );
+
+	it( 'should filter posts by sync status', () => {
+		const statusPosts: Post[] = [
+			{ id: 1, link: 'https://example.com/1', title: 'Post A', modified: '2024-03-15', is_imported: false },
+			{ id: 2, link: 'https://example.com/2', title: 'Post B', modified: '2024-03-16', is_imported: true, has_update: false },
+			{ id: 3, link: 'https://example.com/3', title: 'Post C', modified: '2024-03-17', is_imported: true, has_update: true },
+		];
+
+		expect( searchPosts( statusPosts, 'available' ) ).toHaveLength( 1 );
+		expect( searchPosts( statusPosts, 'available' )[ 0 ].id ).toBe( 1 );
+
+		expect( searchPosts( statusPosts, 'up to date' ) ).toHaveLength( 1 );
+		expect( searchPosts( statusPosts, 'up to date' )[ 0 ].id ).toBe( 2 );
+
+		expect( searchPosts( statusPosts, 'outdated' ) ).toHaveLength( 1 );
+		expect( searchPosts( statusPosts, 'outdated' )[ 0 ].id ).toBe( 3 );
+	} );
+
+	it( 'should filter posts by publish status', () => {
+		const statusPosts: Post[] = [
+			{ id: 1, link: 'https://example.com/1', title: 'Post A', modified: '2024-03-15', is_imported: true, local_status: 'publish' },
+			{ id: 2, link: 'https://example.com/2', title: 'Post B', modified: '2024-03-16', is_imported: true, local_status: 'draft' },
+			{ id: 3, link: 'https://example.com/3', title: 'Post C', modified: '2024-03-17', is_imported: true, local_status: 'pending' },
+			{ id: 4, link: 'https://example.com/4', title: 'Post D', modified: '2024-03-18', is_imported: false },
+		];
+
+		expect( searchPosts( statusPosts, 'published' ) ).toHaveLength( 1 );
+		expect( searchPosts( statusPosts, 'published' )[ 0 ].id ).toBe( 1 );
+
+		expect( searchPosts( statusPosts, 'draft' ) ).toHaveLength( 1 );
+		expect( searchPosts( statusPosts, 'draft' )[ 0 ].id ).toBe( 2 );
+
+		expect( searchPosts( statusPosts, 'pending review' ) ).toHaveLength( 1 );
+		expect( searchPosts( statusPosts, 'pending review' )[ 0 ].id ).toBe( 3 );
+
+		// Non-imported post has no publish status and should not match.
+		expect( searchPosts( statusPosts, 'published' ) ).not.toContainEqual( expect.objectContaining( { id: 4 } ) );
+	} );
 } );
 
 describe( 'sortPosts', () => {

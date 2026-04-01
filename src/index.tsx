@@ -25,9 +25,11 @@ import {
 	getErrorMessage,
 	getPaginationInfo,
 	paginatePosts,
+	PUBLISH_STATUS_LABELS,
 	sanitizePosts,
 	searchPosts,
 	sortPosts,
+	SYNC_STATUS_LABELS,
 } from './utils';
 import {
 	Button,
@@ -127,6 +129,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 			id: 'post_type',
 			label: __( 'Type', 'safe-publish' ),
 			enableSorting: true,
+			enableGlobalSearch: true,
 			render: ( { item }: { item: Post } ): JSX.Element => {
 				const postType = item.post_type || 'post';
 				// Capitalize first letter for display.
@@ -138,6 +141,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 			id: 'permalink',
 			label: __( 'Permalink', 'safe-publish' ),
 			enableSorting: false,
+			enableGlobalSearch: true,
 			render: ( { item }: { item: Post } ): JSX.Element => {
 				const path = extractUrlPath( item.link );
 				return (
@@ -156,6 +160,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 			id: 'modified',
 			label: __( 'Last Modified', 'safe-publish' ),
 			enableSorting: true,
+			enableGlobalSearch: true,
 			render: ( { item }: { item: Post } ): JSX.Element => {
 				const { formats } = getSettings();
 				return <span>{ dateI18n( `${ formats.date } ${ formats.time }`, item.modified ) }</span>;
@@ -165,12 +170,13 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 			id: 'sync_status',
 			label: __( 'Sync Status', 'safe-publish' ),
 			enableSorting: true,
+			enableGlobalSearch: true,
 			render: ( { item }: { item: Post } ): JSX.Element => {
 				if ( item.is_imported && item.has_update ) {
 					return (
 						<span className="safe-publish-status-badge safe-publish-status-badge--outdated">
 							<span className="safe-publish-status-badge__dot" aria-hidden="true" />
-							{ __( 'Outdated', 'safe-publish' ) }
+							{ SYNC_STATUS_LABELS.outdated }
 						</span>
 					);
 				}
@@ -178,14 +184,14 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 					return (
 						<span className="safe-publish-status-badge safe-publish-status-badge--up-to-date">
 							<span className="safe-publish-status-badge__dot" aria-hidden="true" />
-							{ __( 'Up to date', 'safe-publish' ) }
+							{ SYNC_STATUS_LABELS.upToDate }
 						</span>
 					);
 				}
 				return (
 					<span className="safe-publish-status-badge safe-publish-status-badge--available">
 						<span className="safe-publish-status-badge__dot" aria-hidden="true" />
-						{ __( 'Available', 'safe-publish' ) }
+						{ SYNC_STATUS_LABELS.available }
 					</span>
 				);
 			},
@@ -194,18 +200,12 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 			id: 'publish_status',
 			label: __( 'Publish Status', 'safe-publish' ),
 			enableSorting: false,
+			enableGlobalSearch: true,
 			render: ( { item }: { item: Post } ): JSX.Element => {
 				if ( ! item.is_imported || ! item.local_status ) {
 					return <span className="safe-publish-status-badge safe-publish-status-badge--empty">—</span>;
 				}
-				const labels: Record< string, string > = {
-					publish: __( 'Published', 'safe-publish' ),
-					draft:   __( 'Draft', 'safe-publish' ),
-					pending: __( 'Pending Review', 'safe-publish' ),
-					private: __( 'Private', 'safe-publish' ),
-					future:  __( 'Scheduled', 'safe-publish' ),
-				};
-				const label = labels[ item.local_status ] ?? item.local_status;
+				const label = PUBLISH_STATUS_LABELS[ item.local_status ] ?? item.local_status;
 				const modifierClass = `safe-publish-status-badge--${ item.local_status }`;
 				return (
 					<span className={ `safe-publish-status-badge ${ modifierClass }` }>

@@ -126,10 +126,67 @@ export function sanitizePosts( posts: unknown[] ): Post[] {
 }
 
 /**
- * Searches posts by title.
+ * Display labels for sync statuses.
+ *
+ * Used by both rendering and search. Search helpers derive their values by
+ * lowercasing these.
+ */
+export const SYNC_STATUS_LABELS = {
+	outdated: __( 'Outdated', 'safe-publish' ),
+	upToDate: __( 'Up to date', 'safe-publish' ),
+	available: __( 'Available', 'safe-publish' ),
+} as const;
+
+/**
+ * Display labels for publish statuses.
+ *
+ * Used by both rendering and search. Search helpers derive their values by
+ * lowercasing these.
+ */
+export const PUBLISH_STATUS_LABELS: Record< string, string > = {
+	publish: __( 'Published', 'safe-publish' ),
+	draft:   __( 'Draft', 'safe-publish' ),
+	pending: __( 'Pending Review', 'safe-publish' ),
+	private: __( 'Private', 'safe-publish' ),
+	future:  __( 'Scheduled', 'safe-publish' ),
+};
+
+/**
+ * Returns the human-readable sync status text for a post.
+ *
+ * @param {Post} post Post to get sync status text for.
+ *
+ * @return {string} Sync status text.
+ */
+function getSyncStatusText( post: Post ): string {
+	if ( post.is_imported && post.has_update ) {
+		return SYNC_STATUS_LABELS.outdated.toLowerCase();
+	}
+	if ( post.is_imported ) {
+		return SYNC_STATUS_LABELS.upToDate.toLowerCase();
+	}
+	return SYNC_STATUS_LABELS.available.toLowerCase();
+}
+
+/**
+ * Returns the human-readable publish status text for a post.
+ *
+ * @param {Post} post Post to get publish status text for.
+ *
+ * @return {string} Publish status text.
+ */
+function getPublishStatusText( post: Post ): string {
+	if ( ! post.is_imported || ! post.local_status ) {
+		return '';
+	}
+	return ( PUBLISH_STATUS_LABELS[ post.local_status ] ?? post.local_status ).toLowerCase();
+}
+
+/**
+ * Searches posts by title, post type, permalink, sync status, and publish status.
  *
  * @param {Post[]} posts      Posts to search.
- * @param {string} searchTerm Search term to match against post titles.
+ * @param {string} searchTerm Search term to match against post fields.
  *
  * @return {Post[]} Posts matching the search term.
  */
@@ -139,7 +196,15 @@ export function searchPosts( posts: Post[], searchTerm: string ): Post[] {
 	}
 
 	const searchLower = searchTerm.toLowerCase();
-	return posts.filter( post => post.title.toLowerCase().includes( searchLower ) );
+	return posts.filter( post =>
+		post.title.toLowerCase().includes( searchLower ) ||
+		( post.post_type ?? '' ).toLowerCase().includes( searchLower ) ||
+		( post.link ?? '' ).toLowerCase().includes( searchLower ) ||
+		getSyncStatusText( post ).includes( searchLower ) ||
+		getPublishStatusText( post ).includes( searchLower ) ||
+		post.modified.toLowerCase().includes( searchLower ) ||
+		formatDate( post.modified ).toLowerCase().includes( searchLower )
+	);
 }
 
 /**
