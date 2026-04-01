@@ -262,7 +262,7 @@ final class Plugin {
 			'manage_options',
 			'safe-publish-settings',
 			array( $this, 'render_settings_only_page' ),
-			'dashicons-external',
+			'dashicons-migrate',
 			99
 		);
 	}

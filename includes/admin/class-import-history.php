@@ -170,7 +170,7 @@ final class Import_History {
 	public function add_submenu_page(): void {
 		add_submenu_page(
 			'safe-publish',
-			__( 'History', 'safe-publish' ),
+			__( 'Safe Publish History', 'safe-publish' ),
 			__( 'History', 'safe-publish' ),
 			'manage_options',
 			'safe-publish-history',
