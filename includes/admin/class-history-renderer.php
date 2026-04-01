@@ -115,7 +115,7 @@ final class History_Renderer {
 	/**
 	 * Whether to show the import history tab.
 	 *
-	 * True when the site is configured to receive content, or when there are
+	 * True when the site is configured to import content, or when there are
 	 * existing import session records (e.g. the site was previously bidirectional).
 	 *
 	 * @return bool Whether import history should be shown.
@@ -123,7 +123,7 @@ final class History_Renderer {
 	private function should_show_import_history(): bool {
 		$sync_mode = get_option( Options::OPTION_SYNC_MODE, '' );
 
-		if ( in_array( $sync_mode, array( Options::SYNC_MODE_RECEIVE, Options::SYNC_MODE_BOTH ), true ) ) {
+		if ( in_array( $sync_mode, array( Options::SYNC_MODE_IMPORT, Options::SYNC_MODE_BIDIRECTIONAL ), true ) ) {
 			return true;
 		}
 
@@ -134,7 +134,7 @@ final class History_Renderer {
 	/**
 	 * Whether to show the export history tab.
 	 *
-	 * True when the site is configured to send content, or when there are
+	 * True when the site is configured to export content, or when there are
 	 * existing export event records (e.g. the site was previously bidirectional).
 	 *
 	 * @return bool Whether export history should be shown.
@@ -142,7 +142,7 @@ final class History_Renderer {
 	private function should_show_export_history(): bool {
 		$sync_mode = get_option( Options::OPTION_SYNC_MODE, '' );
 
-		if ( in_array( $sync_mode, array( Options::SYNC_MODE_SEND, Options::SYNC_MODE_BOTH ), true ) ) {
+		if ( in_array( $sync_mode, array( Options::SYNC_MODE_EXPORT, Options::SYNC_MODE_BIDIRECTIONAL ), true ) ) {
 			return true;
 		}
 
