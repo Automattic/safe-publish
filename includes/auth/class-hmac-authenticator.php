@@ -82,13 +82,13 @@ class HMAC_Authenticator {
 	 * $excluded_routes. Requests without Safe Publish headers pass through.
 	 *
 	 * @param WP_REST_Response|WP_Error|null $result  Response to return instead of continuing.
-	 * @param WP_REST_Server|null            $server  Server instance.
+	 * @param WP_REST_Server|null            $_server Server instance.
 	 * @param WP_REST_Request                $request Request object.
 	 * @return WP_REST_Response|WP_Error|null Original result on pass-through, or WP_Error on failure.
 	 */
 	public function authenticate_request(
 		WP_REST_Response|WP_Error|null $result,
-		?WP_REST_Server $server,
+		?WP_REST_Server $_server,
 		WP_REST_Request $request
 	): WP_REST_Response|WP_Error|null {
 		$route = $request->get_route();
