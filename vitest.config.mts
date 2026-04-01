@@ -21,7 +21,7 @@ export default defineConfig( {
 				'src/**/*.test.{ts,tsx}',
 				'src/**/*.spec.{ts,tsx}',
 				'src/index.tsx',
-				'src/import-history.tsx',
+				'src/history.tsx',
 			],
 		},
 	},
