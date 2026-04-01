@@ -16,7 +16,7 @@
   </testsuites>
 
   <php>
-    <!-- Boot the plugin in "bidirectional" sync mode (send and receive active simultaneously). -->
+    <!-- Boot the plugin in "bidirectional" sync mode (export and import active simultaneously). -->
     <env name="WP_TEST_SYNC_MODE" value="bidirectional" />
 
     <!-- Point wp-phpunit to our test config file -->

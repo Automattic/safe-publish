@@ -7,6 +7,7 @@
 
 namespace Safe_Publish\Admin;
 
+use Safe_Publish\Utils\Event_Table;
 use WP_Error;
 use WP_Query;
 
@@ -83,6 +84,35 @@ final class Import_History {
 		add_action( 'wp_ajax_safe_publish_rollback_item', array( $this, 'ajax_rollback_item' ) );
 		add_action( 'wp_ajax_safe_publish_get_post_diff', array( $this, 'ajax_get_post_diff' ) );
 		add_action( 'wp_ajax_safe_publish_delete_session', array( $this, 'ajax_delete_session' ) );
+		add_action( 'wp_ajax_safe_publish_get_export_events', array( $this, 'ajax_get_export_events' ) );
+	}
+
+	/**
+	 * Initializes history for export-only mode.
+	 *
+	 * Registers only the History submenu page (under the settings parent) and
+	 * the export events AJAX handler. Import-specific functionality is omitted
+	 * because export-only sites do not import content.
+	 */
+	public function init_export_only(): void {
+		add_action( 'admin_menu', array( $this, 'add_submenu_page_settings' ) );
+		add_action( 'wp_ajax_safe_publish_get_export_events', array( $this, 'ajax_get_export_events' ) );
+	}
+
+	/**
+	 * Adds the History submenu page under the settings-only top-level menu.
+	 *
+	 * Used in export-only mode where the top-level slug is 'safe-publish-settings'.
+	 */
+	public function add_submenu_page_settings(): void {
+		add_submenu_page(
+			'safe-publish-settings',
+			__( 'History', 'safe-publish' ),
+			__( 'History', 'safe-publish' ),
+			'manage_options',
+			'safe-publish-history',
+			array( $this, 'render_history_page' )
+		);
 	}
 
 	/**
@@ -143,7 +173,7 @@ final class Import_History {
 			__( 'Safe Publish History', 'safe-publish' ),
 			__( 'History', 'safe-publish' ),
 			'manage_options',
-			'safe-publish-import-history',
+			'safe-publish-history',
 			array( $this, 'render_history_page' )
 		);
 	}
@@ -473,5 +503,41 @@ final class Import_History {
 		} else {
 			wp_send_json_error( __( 'Failed to delete session', 'safe-publish' ) );
 		}
+	}
+
+	/**
+	 * Handles AJAX request for getting export events.
+	 */
+	public function ajax_get_export_events(): void {
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( __( 'Insufficient permissions', 'safe-publish' ) );
+		}
+
+		$rows = Event_Table::get_events(
+			array(
+				'channel' => 'export',
+				'limit'   => 100,
+			)
+		);
+
+		$events = array_map(
+			static function ( array $row ): array {
+				$data = $row['data'];
+				return array(
+					'id'              => (int) $row['id'],
+					'date'            => $row['created_at'],
+					'level'           => $row['level'],
+					'event'           => $row['event'],
+					'destination_url' => $data['destination_url'] ?? '',
+					'post_ids'        => array_map( 'intval', (array) ( $data['post_ids'] ?? array() ) ),
+					'post_count'      => isset( $data['post_count'] ) ? (int) $data['post_count'] : count( $data['post_ids'] ?? array() ),
+				);
+			},
+			$rows
+		);
+
+		wp_send_json_success( $events );
 	}
 }

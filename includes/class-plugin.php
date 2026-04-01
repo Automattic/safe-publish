@@ -93,7 +93,7 @@ final class Plugin {
 		if ( $can_import ) {
 			$this->init_full_admin();
 		} else {
-			$this->init_settings_only_admin();
+			$this->init_settings_only_admin( $can_export );
 		}
 	}
 
@@ -228,9 +228,24 @@ final class Plugin {
 	/**
 	 * Initializes the settings-only admin UI for export-only and unconfigured
 	 * modes.
+	 *
+	 * @param bool $can_export Whether the site is configured to export content.
 	 */
-	private function init_settings_only_admin(): void {
+	private function init_settings_only_admin( bool $can_export = false ): void {
 		add_action( 'admin_menu', array( $this, 'add_settings_only_admin_menu' ) );
+
+		if ( $can_export ) {
+			$repository       = new History_Repository();
+			$rollback_service = new Session_Rollback_Service( $repository );
+			$import_history   = new Import_History(
+				$repository,
+				new History_Renderer(),
+				new Session_Formatter(),
+				$rollback_service
+			);
+
+			$import_history->init_export_only();
+		}
 	}
 
 	/**

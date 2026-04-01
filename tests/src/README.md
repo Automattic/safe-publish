@@ -222,7 +222,7 @@ Target coverage metrics:
 
 ### Excluded from Coverage
 
-- Entry point files (`index.tsx`, `import-history.tsx`, `admin-tools.tsx`)
+- Entry point files (`index.tsx`, `history.tsx`, `admin-tools.tsx`)
 - Test files
 - Build artifacts
 
