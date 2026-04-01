@@ -7,6 +7,9 @@
 
 namespace Safe_Publish\Admin;
 
+use Safe_Publish\Utils\Event_Table;
+use Safe_Publish\Utils\Options;
+
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -38,8 +41,8 @@ final class History_Renderer {
 		}
 
 		// Enqueue custom CSS.
-		$css_file = plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/import-history.css';
-		wp_enqueue_style( 'safe-publish-import-history', $css_file, array(), '1.0.0' );
+		$css_file = plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/history.css';
+		wp_enqueue_style( 'safe-publish-history', $css_file, array(), '1.0.0' );
 
 		// Enqueue DataViews styles with VIP-safe versioning.
 		$style_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/style-index.css';
@@ -54,9 +57,9 @@ final class History_Renderer {
 			);
 		}
 
-		// Enqueue the compiled import history JavaScript.
-		$js_file       = plugin_dir_url( dirname( __DIR__ ) ) . 'build/import-history.js';
-		$js_asset_file = dirname( __DIR__ ) . '/build/import-history.asset.php';
+		// Enqueue the compiled history JavaScript.
+		$js_file       = plugin_dir_url( dirname( __DIR__ ) ) . 'build/history.js';
+		$js_asset_file = dirname( __DIR__ ) . '/build/history.asset.php';
 
 		$asset_data = array(
 			'dependencies' => array( 'wp-element', 'wp-components', 'wp-i18n' ),
@@ -68,7 +71,7 @@ final class History_Renderer {
 		}
 
 		wp_enqueue_script(
-			'safe-publish-import-history',
+			'safe-publish-history',
 			$js_file,
 			$asset_data['dependencies'],
 			$asset_data['version'],
@@ -77,9 +80,11 @@ final class History_Renderer {
 
 		$json_data = wp_json_encode(
 			array(
-				'ajaxurl'   => admin_url( 'admin-ajax.php' ),
-				'nonce'     => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-				'restNonce' => wp_create_nonce( 'wp_rest' ),
+				'ajaxurl'           => admin_url( 'admin-ajax.php' ),
+				'nonce'             => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+				'restNonce'         => wp_create_nonce( 'wp_rest' ),
+				'showImportHistory' => $this->should_show_import_history(),
+				'showExportHistory' => $this->should_show_export_history(),
 			)
 		);
 
@@ -88,23 +93,60 @@ final class History_Renderer {
 		}
 
 		wp_add_inline_script(
-			'safe-publish-import-history',
+			'safe-publish-history',
 			sprintf( 'window.safePublishAdminData = %s;', $json_data ),
 			'before'
 		);
 
 		?>
-		<div class="wrap" id="safe-publish-import-history">
-			<h1><?php esc_html_e( 'Import History', 'safe-publish' ); ?></h1>
+		<div class="wrap" id="safe-publish-history">
+			<h1><?php esc_html_e( 'History', 'safe-publish' ); ?></h1>
 
 			<!-- React component will be rendered here -->
-			<div id="safe-publish-import-history-container">
+			<div id="safe-publish-history-container">
 				<div class="safe-publish-loading">
-					<p><?php esc_html_e( 'Loading import history…', 'safe-publish' ); ?></p>
+					<p><?php esc_html_e( 'Loading history…', 'safe-publish' ); ?></p>
 				</div>
 			</div>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Whether to show the import history tab.
+	 *
+	 * True when the site is configured to receive content, or when there are
+	 * existing import session records (e.g. the site was previously bidirectional).
+	 *
+	 * @return bool Whether import history should be shown.
+	 */
+	private function should_show_import_history(): bool {
+		$sync_mode = get_option( Options::OPTION_SYNC_MODE, '' );
+
+		if ( in_array( $sync_mode, array( Options::SYNC_MODE_RECEIVE, Options::SYNC_MODE_BOTH ), true ) ) {
+			return true;
+		}
+
+		$counts = wp_count_posts( History_Repository::SESSION_POST_TYPE );
+		return isset( $counts->publish ) && $counts->publish > 0;
+	}
+
+	/**
+	 * Whether to show the export history tab.
+	 *
+	 * True when the site is configured to send content, or when there are
+	 * existing export event records (e.g. the site was previously bidirectional).
+	 *
+	 * @return bool Whether export history should be shown.
+	 */
+	private function should_show_export_history(): bool {
+		$sync_mode = get_option( Options::OPTION_SYNC_MODE, '' );
+
+		if ( in_array( $sync_mode, array( Options::SYNC_MODE_SEND, Options::SYNC_MODE_BOTH ), true ) ) {
+			return true;
+		}
+
+		return Event_Table::count( array( 'channel' => 'export' ) ) > 0;
 	}
 
 	/**
