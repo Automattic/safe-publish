@@ -47,7 +47,7 @@ The import process consists of several stages:
 
 See the [Import Process guide](import-process.md) for a detailed breakdown.
 
-### Import History
+### History
 
 Every import action is tracked and logged:
 
@@ -57,7 +57,7 @@ Every import action is tracked and logged:
 - Import status (success/failure)
 - Error messages (if applicable)
 
-View and manage your import history in the [Import History](import-history.md) tab.
+View and manage your import and export history in the [History](history.md) page.
 
 ## Technical concepts
 

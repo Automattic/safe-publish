@@ -181,7 +181,7 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 
 **Solutions**:
 
-1. **Check Import History before importing**:
+1. **Check History before importing**:
    - See if post was already imported
    - Delete duplicate drafts manually
 
@@ -316,16 +316,7 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 
 ### Enable WordPress Debug Mode
 
-Add to `wp-config.php`:
-
-```php
-define( 'WP_DEBUG', true );
-define( 'WP_DEBUG_LOG', true );
-define( 'WP_DEBUG_DISPLAY', false );
-define( 'SCRIPT_DEBUG', true );
-```
-
-Check `wp-content/debug.log` for error messages.
+Add the [WordPress debug constants](local-development.md#debugging) to `wp-config.php`, then check `wp-content/debug.log` for error messages.
 
 ### Browser Developer Tools
 
@@ -349,7 +340,7 @@ Use the **Debug Auth** button in settings to test authentication independently o
 
 ### Import History
 
-Check Import History tab for:
+Check the **History** page for:
 
 - Detailed error messages
 - Failed import attempts
@@ -360,7 +351,7 @@ Check Import History tab for:
 
 If you still can't resolve the issue:
 
-1. **Check Import History** for detailed error messages
+1. **Check History** for detailed error messages
 2. **Enable debug mode** and collect error logs
 3. **Reproduce the issue** in a clean environment if possible
 4. **Report the issue** via GitHub Issues with:
@@ -393,10 +384,7 @@ wp option delete safe_publish_auth_password
 
 ### Clear Import History
 
-```php
-// Using WP-CLI (caution: permanently deletes history)
-wp db query "DELETE FROM {$wpdb->prefix}safe_publish_import_history"
-```
+Import history is stored as WordPress custom post types and can be managed through the **History** page.
 
 ### Complete Reset
 

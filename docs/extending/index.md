@@ -27,104 +27,17 @@ Extend the plugin's REST API capabilities:
 
 ## Common Customizations
 
-### Modify Import Behavior
+- **Modify fetched post data** — use [`safe_publish_sanitized_post`](hooks.md#safe_publish_sanitized_post) to add taxonomy terms, normalize titles, or transform any post field before it is stored.
+- **Customize API request parameters** — use [`safe_publish_api_query_args`](hooks.md#safe_publish_api_query_args) to change ordering, filtering, or any other query argument sent to the external site.
+- **Add custom request headers** — use [`safe_publish_request_args`](hooks.md#safe_publish_request_args) to inject authentication headers or other HTTP arguments.
 
-Use filters to customize how content is imported:
-
-```php
-// Modify post data before import
-add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
-    // Add custom logic
-    $post_data['post_status'] = 'pending'; // Override to pending instead of draft
-    return $post_data;
-} );
-
-// After successful import
-add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
-    // Notify team, trigger workflows, etc.
-    do_action( 'my_custom_workflow', $post_id );
-}, 10, 2 );
-```
-
-### Custom Validation
-
-Add your own validation rules:
-
-```php
-add_filter( 'safe_publish_validate_post_data', function( $is_valid, $post_data ) {
-    // Custom validation logic
-    if ( empty( $post_data['custom_field'] ) ) {
-        return new WP_Error( 'missing_field', 'Required field missing' );
-    }
-    return $is_valid;
-}, 10, 2 );
-```
-
-### Custom Authentication
-
-Implement custom authentication methods:
-
-```php
-add_filter( 'safe_publish_authentication_headers', function( $headers, $site_url ) {
-    // Add custom authentication headers
-    $headers['X-Custom-Auth'] = 'your-token';
-    return $headers;
-}, 10, 2 );
-```
+See the [Hooks and Filters Reference](hooks.md) for full parameter documentation and examples.
 
 ## Integration Examples
 
-### Slack Notifications
+- **Event notifications** — use [`safe_publish_event_logged`](hooks.md#safe_publish_event_logged) to react to any import, export, or auth event (e.g. send a Slack message on failure).
 
-Notify your team when content is imported:
-
-```php
-add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
-    $post = get_post( $post_id );
-    $message = sprintf(
-        'New post imported: %s from %s',
-        $post->post_title,
-        $source_url
-    );
-
-    // Send to Slack webhook
-    wp_remote_post( 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL', [
-        'body' => json_encode( [ 'text' => $message ] ),
-    ] );
-}, 10, 2 );
-```
-
-### Custom Metadata
-
-Import and map custom fields:
-
-```php
-add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
-    // Get source post data
-    $source_post = get_post_meta( $post_id, '_safe_publish_source_data', true );
-
-    // Map custom fields
-    if ( isset( $source_post['acf'] ) ) {
-        foreach ( $source_post['acf'] as $key => $value ) {
-            update_field( $key, $value, $post_id );
-        }
-    }
-}, 10, 2 );
-```
-
-### Automated Publishing
-
-Auto-publish certain types of content:
-
-```php
-add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
-    // Auto-publish posts from specific category
-    if ( in_array( 'auto-publish', $post_data['categories'] ?? [] ) ) {
-        $post_data['post_status'] = 'publish';
-    }
-    return $post_data;
-} );
-```
+See the [Hooks and Filters Reference](hooks.md) for full parameter documentation and examples.
 
 ## Local Development
 
@@ -145,15 +58,15 @@ Set up a development environment for testing your extensions:
 Always handle errors gracefully:
 
 ```php
-add_filter( 'safe_publish_pre_import_post', function( $post_data ) {
+add_filter( 'safe_publish_sanitized_post', function( array $sanitized_post, array $post ): array {
     try {
         // Your custom logic
-        return $post_data;
+        return $sanitized_post;
     } catch ( Exception $e ) {
         error_log( 'Safe Publish Extension Error: ' . $e->getMessage() );
-        return $post_data; // Return unchanged on error
+        return $sanitized_post; // Return unchanged on error
     }
-} );
+}, 10, 2 );
 ```
 
 ### 3. Performance
