@@ -140,6 +140,11 @@ abstract class External_Posts_API_Test_Base extends Integration_Test_Case {
 		// solve this.
 		unset( $args );
 
+		// Respect responses already set by higher-priority filters.
+		if ( false !== $preempt ) {
+			return $preempt;
+		}
+
 		// Only mock example.com URLs.
 		if ( ! str_contains( $url, 'example.com' ) ) {
 			return $preempt;
