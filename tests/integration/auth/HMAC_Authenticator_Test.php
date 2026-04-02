@@ -50,7 +50,8 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$this->authenticator = new HMAC_Authenticator(
 			new Auth_Logger(),
 			new Permission_Manager( new Auth_Logger(), new Export_Logger() ),
-			defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : ''
+			defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : '',
+			home_url()
 		);
 
 		// Clear any stored log events before each test.
