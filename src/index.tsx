@@ -30,8 +30,9 @@ import {
 	sortPosts,
 } from './utils';
 import {
+	__experimentalNumberControl as NumberControl,
 	Button,
-	__experimentalNumberControl as NumberControl
+	Notice,
 } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
 import { dateI18n, getSettings } from '@wordpress/date';
@@ -87,7 +88,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 	const [ allPosts, setAllPosts ] = useState< Post[] >( initialPosts );
 	const [ selectedPostType, setSelectedPostType ] = useState( 'posts' );
 	const [ isLoadingPosts, setIsLoadingPosts ] = useState( false );
-	const [ fetchError, setFetchError ] = useState< string | null >( null );
+	const [ postTypeError, setPostTypeError ] = useState< string | null >( null );
 	const [ numberPostsState, setNumberPostsState ] = useState( numberPosts );
 	const [ numberPostsInput, setNumberPostsInput ] = useState( String( numberPosts ) );
 	const numberPostsTimerRef = useRef< ReturnType< typeof setTimeout > | null >( null );
@@ -273,7 +274,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 		}
 
 		setIsLoadingPosts( true );
-		setFetchError( null );
+		setPostTypeError( null );
 
 		const formData = new FormData();
 		formData.append( 'action', 'safe_publish_fetch_posts' );
@@ -307,10 +308,10 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 				setPaginationInfo( getPaginationInfo( filtered.length, resetView.perPage as number ) );
 				setFilteredData( paginatePosts( filtered, 1, resetView.perPage as number ) );
 			} else {
-				setFetchError( getErrorMessage( result, __( 'Unknown error', 'safe-publish' ) ) );
+				setPostTypeError( getErrorMessage( result, __( 'Unknown error', 'safe-publish' ) ) );
 			}
 		} catch {
-			setFetchError( __( 'Network error while loading posts.', 'safe-publish' ) );
+			setPostTypeError( __( 'Network error while loading posts.', 'safe-publish' ) );
 		} finally {
 			setIsLoadingPosts( false );
 		}
@@ -373,6 +374,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 					siteUrl={ siteUrl }
 					selectedPostType={ selectedPostType }
 					onPostTypeChange={ handlePostTypeChange }
+					onError={ setPostTypeError }
 				/>
 				<NumberControl
 					label={ __( 'Count', 'safe-publish' ) }
@@ -417,20 +419,26 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 					} }
 				/>
 			</div>
+			{ postTypeError && (
+				<Notice
+					className="safe-publish-post-type-error"
+					status="error"
+					onRemove={ () => setPostTypeError( null ) }
+				>
+					{ postTypeError }
+				</Notice>
+			) }
 			{ isLoadingPosts && (
 				<div className="safe-publish-loading">
 					<p>{ __( 'Loading posts…', 'safe-publish' ) }</p>
 				</div>
 			) }
-			{ ! isLoadingPosts && fetchError && (
-				<p className="safe-publish-error-message">{ fetchError }</p>
-			) }
-			{ ! isLoadingPosts && ! fetchError && 0 === allPosts.length && (
+			{ ! isLoadingPosts && ! postTypeError && 0 === allPosts.length && (
 				<div className="safe-publish-no-data">
 					<p>{ __( 'No posts available for the selected post type.', 'safe-publish' ) }</p>
 				</div>
 			) }
-			{ ! isLoadingPosts && ! fetchError && allPosts.length > 0 && (
+			{ ! isLoadingPosts && ! postTypeError && allPosts.length > 0 && (
 				<DataViews
 					getItemId={ ( item: Post ) => item.id.toString() }
 					data={ filteredData }

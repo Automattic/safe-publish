@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration\Auth;
 
+use Safe_Publish\API\Export_Logger;
 use Safe_Publish\Auth\Auth_Logger;
 use Safe_Publish\Auth\HMAC_Authenticator;
 use Safe_Publish\Auth\Permission_Manager;
@@ -48,9 +49,8 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 
 		$this->authenticator = new HMAC_Authenticator(
 			new Auth_Logger(),
-			new Permission_Manager( new Auth_Logger() ),
-			defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : '',
-			home_url()
+			new Permission_Manager( new Auth_Logger(), new Export_Logger() ),
+			defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : ''
 		);
 
 		// Clear any stored log events before each test.
@@ -268,7 +268,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ARRANGE: Authenticator with no connected site URL.
 		$authenticator = new HMAC_Authenticator(
 			new Auth_Logger(),
-			new Permission_Manager( new Auth_Logger() ),
+			new Permission_Manager( new Auth_Logger(), new Export_Logger() ),
 			self::FALLBACK_SECRET,
 			''
 		);
@@ -291,7 +291,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ARRANGE: Authenticator configured to only accept requests from a specific URL.
 		$authenticator = new HMAC_Authenticator(
 			new Auth_Logger(),
-			new Permission_Manager( new Auth_Logger() ),
+			new Permission_Manager( new Auth_Logger(), new Export_Logger() ),
 			self::FALLBACK_SECRET,
 			'https://allowed-receiver.example.com'
 		);
@@ -314,7 +314,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ARRANGE: Authenticator configured with a connected site URL.
 		$authenticator = new HMAC_Authenticator(
 			new Auth_Logger(),
-			new Permission_Manager( new Auth_Logger() ),
+			new Permission_Manager( new Auth_Logger(), new Export_Logger() ),
 			self::FALLBACK_SECRET,
 			'https://allowed-receiver.example.com'
 		);
@@ -339,7 +339,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$allowed_url   = 'https://allowed-receiver.example.com';
 		$authenticator = new HMAC_Authenticator(
 			new Auth_Logger(),
-			new Permission_Manager( new Auth_Logger() ),
+			new Permission_Manager( new Auth_Logger(), new Export_Logger() ),
 			defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : self::FALLBACK_SECRET,
 			$allowed_url
 		);

@@ -53,6 +53,7 @@ class Admin_Menu_Manager {
 	 */
 	public function register(): void {
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
+		add_action( 'admin_menu', array( $this, 'add_settings_submenu' ), 20 );
 
 		// Early VIP-specific asset preparation.
 		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
@@ -67,21 +68,36 @@ class Admin_Menu_Manager {
 	}
 
 	/**
-	 * Adds admin menu and submenu pages.
+	 * Adds the main admin menu page and Dashboard submenu entry.
 	 */
 	public function add_admin_menu(): void {
-		// Main menu page - Tools.
 		add_menu_page(
-			__( 'Safe Publish', 'safe-publish' ),
+			__( 'Safe Publish Dashboard', 'safe-publish' ),
 			__( 'Safe Publish', 'safe-publish' ),
 			'manage_options',
 			'safe-publish',
 			array( $this, 'render_admin_page' ),
-			'dashicons-external',
+			'dashicons-migrate',
 			99
 		);
 
-		// Settings submenu page.
+		// Explicit first submenu entry to override the auto-generated one.
+		add_submenu_page(
+			'safe-publish',
+			__( 'Safe Publish Dashboard', 'safe-publish' ),
+			__( 'Dashboard', 'safe-publish' ),
+			'manage_options',
+			'safe-publish',
+			array( $this, 'render_admin_page' )
+		);
+	}
+
+	/**
+	 * Adds the Settings submenu page.
+	 *
+	 * Registered at a later priority so it appears after other submenu items.
+	 */
+	public function add_settings_submenu(): void {
 		add_submenu_page(
 			'safe-publish',
 			__( 'Safe Publish Settings', 'safe-publish' ),

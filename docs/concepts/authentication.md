@@ -11,7 +11,7 @@ The shared secret method uses HMAC signatures to authenticate requests without e
 The shared secret authentication flow:
 
 1. The destination site generates an HMAC signature using the shared secret and request details
-2. The signature is sent in the `X-Safe-Publish-Signature` header alongside a timestamp and content hash
+2. The request is sent with four headers: `X-Safe-Publish-Signature`, `X-Safe-Publish-Timestamp`, `X-Safe-Publish-Content-Hash`, and `X-Safe-Publish-Site-URL`
 3. The Safe Publish auth module on the source site validates the signature against its configured secret
 4. If valid, the request is authenticated and granted access to the REST API
 5. No user credentials are transmitted

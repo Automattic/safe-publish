@@ -7,6 +7,7 @@
 
 namespace Safe_Publish\Auth;
 
+use Safe_Publish\API\Export_Logger;
 use WP_Error;
 use WP_HTTP_Response;
 use WP_Post;
@@ -32,18 +33,18 @@ class Permission_Manager {
 	private Auth_Logger $logger;
 
 	/**
+	 * Export logger instance.
+	 *
+	 * @var Export_Logger
+	 */
+	private Export_Logger $export_logger;
+
+	/**
 	 * Whether the current request is authenticated.
 	 *
 	 * @var bool
 	 */
 	private bool $authenticated = false;
-
-	/**
-	 * Virtual user context object used for logging purposes.
-	 *
-	 * @var object|null
-	 */
-	private ?object $virtual_user = null;
 
 	/**
 	 * Whether a context permission override re-dispatch is in progress.
@@ -55,10 +56,12 @@ class Permission_Manager {
 	/**
 	 * Constructor.
 	 *
-	 * @param Auth_Logger $logger Logger instance.
+	 * @param Auth_Logger   $logger        Auth logger instance.
+	 * @param Export_Logger $export_logger Export logger instance.
 	 */
-	public function __construct( Auth_Logger $logger ) {
-		$this->logger = $logger;
+	public function __construct( Auth_Logger $logger, Export_Logger $export_logger ) {
+		$this->logger        = $logger;
+		$this->export_logger = $export_logger;
 	}
 
 	/**
@@ -106,13 +109,6 @@ class Permission_Manager {
 			)
 		);
 
-		$this->virtual_user = (object) array(
-			'ID'           => 0,
-			'user_login'   => 'safe-publish-system',
-			'user_email'   => 'safe-publish-system@virtual',
-			'display_name' => 'Safe Publish System (Virtual)',
-		);
-
 		add_filter( 'rest_pre_dispatch', array( $this, 'bypass_permission_checks' ), 11, 3 );
 		add_filter( 'rest_post_collection_params', array( $this, 'override_collection_params' ), 10, 2 );
 		add_filter( 'rest_prepare_post', array( $this, 'ensure_edit_context_access' ), 10, 3 );
@@ -120,6 +116,7 @@ class Permission_Manager {
 		add_filter( 'rest_endpoints', array( $this, 'override_endpoint_permissions' ) );
 		add_filter( 'map_meta_cap', array( $this, 'override_meta_capabilities' ), 10, 4 );
 		add_filter( 'rest_post_dispatch', array( $this, 'override_context_permissions' ), 5, 3 );
+		add_filter( 'rest_post_dispatch', array( $this, 'log_export_event' ), 20, 3 );
 	}
 
 	/**
@@ -259,14 +256,14 @@ class Permission_Manager {
 	 * Grants API capabilities for Safe Publish authenticated requests.
 	 *
 	 * @param array   $allcaps All capabilities for the user.
-	 * @param array   $caps    Required capabilities.
+	 * @param array   $_caps   Required capabilities.
 	 * @param array   $_args   Arguments for capability check.
 	 * @param WP_User $_user   User object.
 	 * @return array Modified capabilities.
 	 */
 	public function grant_api_capabilities( // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		array $allcaps,
-		array $caps,
+		array $_caps,
 		array $_args,
 		WP_User $_user
 	): array {
@@ -600,5 +597,112 @@ class Permission_Manager {
 		}
 
 		return $response;
+	}
+
+	/**
+	 * Logs a CONTENT_EXPORTED event after a successful authenticated export.
+	 *
+	 * Fires on rest_post_dispatch at priority 20, so it runs after all
+	 * permission overrides and context re-dispatches are complete. Skipped
+	 * during context-override re-dispatch to avoid duplicate entries.
+	 *
+	 * @param WP_REST_Response|WP_Error $response Response object.
+	 * @param WP_REST_Server            $_server  Server instance.
+	 * @param WP_REST_Request           $request  Request used to generate the response.
+	 * @return WP_REST_Response|WP_Error Unmodified response.
+	 */
+	public function log_export_event(
+		WP_REST_Response|WP_Error $response,
+		WP_REST_Server $_server, // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundBeforeLastUsed
+		WP_REST_Request $request
+	): WP_REST_Response|WP_Error {
+		if ( ! $this->authenticated || $this->context_override ) {
+			return $response;
+		}
+
+		$route = $request->get_route();
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__HTTP_USER_AGENT__
+		$raw_user_agent  = $_SERVER['HTTP_USER_AGENT'] ?? '';
+		$destination_url = $this->parse_destination_url( $raw_user_agent );
+
+		if ( is_wp_error( $response ) ) {
+			$this->export_logger->log_error(
+				'EXPORT_FAILED',
+				array(
+					'route'           => $route,
+					'destination_url' => $destination_url,
+					'error_code'      => $response->get_error_code(),
+					'error_message'   => $response->get_error_message(),
+				)
+			);
+			return $response;
+		}
+
+		$status = $response->get_status();
+
+		if ( 200 !== $status ) {
+			$this->export_logger->log_error(
+				'EXPORT_FAILED',
+				array(
+					'route'           => $route,
+					'destination_url' => $destination_url,
+					'status'          => $status,
+				)
+			);
+			return $response;
+		}
+
+		if ( 1 === preg_match( '#^/wp/v2/([^/]+)$#', $route, $matches ) ) {
+			// Matches routes like /wp/v2/posts, /wp/v2/pages.
+			$data     = $response->get_data();
+			$post_ids = is_array( $data ) ? array_values( array_filter( array_column( $data, 'id' ), 'is_int' ) ) : array();
+
+			$this->export_logger->log_event(
+				'CONTENT_EXPORTED',
+				array(
+					'rest_base'       => $matches[1],
+					'destination_url' => $destination_url,
+					'post_ids'        => $post_ids,
+					'post_count'      => count( $post_ids ),
+				)
+			);
+		} elseif ( 1 === preg_match( '#^/wp/v2/([^/]+)/(\d+)$#', $route, $matches ) ) {
+			// Matches routes like /wp/v2/posts/123, /wp/v2/pages/123.
+			$data    = $response->get_data();
+			$post_id = is_array( $data ) && isset( $data['id'] ) && is_int( $data['id'] ) ? $data['id'] : (int) $matches[2];
+
+			$this->export_logger->log_event(
+				'CONTENT_EXPORTED',
+				array(
+					'rest_base'       => $matches[1],
+					'destination_url' => $destination_url,
+					'post_ids'        => array( $post_id ),
+					'post_count'      => 1,
+				)
+			);
+		}
+
+		return $response;
+	}
+
+	/**
+	 * Extracts the destination site URL from a Safe Publish User-Agent string.
+	 *
+	 * The destination sends: "Safe Publish/VERSION; https://dest.example.com".
+	 * Returns the URL portion, or the full string if the expected format is not
+	 * matched.
+	 *
+	 * @param string $user_agent Raw HTTP_USER_AGENT value.
+	 * @return string Destination URL, or empty string if header is absent.
+	 */
+	private function parse_destination_url( string $user_agent ): string {
+		if ( '' === $user_agent ) {
+			return '';
+		}
+
+		// Format: "Safe Publish/x.y.z; https://dest.example.com".
+		$parts = explode( '; ', $user_agent, 2 );
+
+		return isset( $parts[1] ) ? trim( $parts[1] ) : $user_agent;
 	}
 }

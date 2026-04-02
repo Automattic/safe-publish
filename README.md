@@ -44,7 +44,7 @@ See the [Quickstart Guide](docs/quickstart.md) for detailed instructions.
   - [Authentication](docs/concepts/authentication.md) - Setting up secure connections
   - [Content Validation](docs/concepts/validation.md) - Understanding validation checks
   - [Import Process](docs/concepts/import-process.md) - How imports work step-by-step
-  - [Import History](docs/concepts/import-history.md) - Tracking and auditing imports
+  - [History](docs/concepts/history.md) - Tracking and auditing imports and exports
 - **[Extending](docs/extending/index.md)** - Customize the plugin
   - [Hooks and Filters](docs/extending/hooks.md) - Available WordPress hooks
   - [Custom Post Types](docs/extending/post-types.md) - Supporting custom post types

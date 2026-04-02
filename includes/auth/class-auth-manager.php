@@ -8,6 +8,7 @@
 namespace Safe_Publish\Auth;
 
 use Safe_Publish\Utils\Event_Table;
+use Safe_Publish\API\Export_Logger;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -59,7 +60,10 @@ class Auth_Manager {
 	 */
 	public function __construct() {
 		$this->logger             = new Auth_Logger();
-		$this->permission_manager = new Permission_Manager( $this->logger );
+		$this->permission_manager = new Permission_Manager(
+			$this->logger,
+			new Export_Logger()
+		);
 		$this->authenticator      = new HMAC_Authenticator(
 			$this->logger,
 			$this->permission_manager,
@@ -148,15 +152,16 @@ class Auth_Manager {
 	 */
 	public function auth_status_callback( WP_REST_Request $_request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 		$shared_secret = $this->get_shared_secret();
-		$stats         = get_option( 'safe_publish_auth_stats', array() );
 		$recent_events = Event_Table::get_events(
 			array(
 				'channel' => 'auth',
 				'limit'   => 10,
 			)
 		);
+		$last_success  = Event_Table::get_last_timestamp( 'auth', array( 'SUCCESS' ) );
+		$last_failure  = Event_Table::get_last_timestamp( 'auth', array( 'INVALID', 'EXPIRED' ) );
 
-		[ $status, $health_score, $issues ] = $this->calculate_health( $shared_secret, $stats, $recent_events );
+		[ $status, $health_score, $issues ] = $this->calculate_health( $shared_secret, $recent_events );
 
 		return new \WP_REST_Response(
 			array(
@@ -171,15 +176,9 @@ class Auth_Manager {
 					'vip_environment'          => defined( 'WPCOM_IS_VIP_ENV' ) ? WPCOM_IS_VIP_ENV : false,
 					'debug_mode'               => defined( 'WP_DEBUG' ) ? WP_DEBUG : false,
 				),
-				'statistics'          => array_merge(
-					array(
-						'total_requests'   => 0,
-						'successful_auths' => 0,
-						'failed_auths'     => 0,
-						'last_success'     => null,
-						'last_failure'     => null,
-					),
-					$stats
+				'statistics'          => array(
+					'last_success' => $last_success,
+					'last_failure' => $last_failure,
 				),
 				'recent_events_count' => Event_Table::count( array( 'channel' => 'auth' ) ),
 			),
@@ -239,7 +238,6 @@ class Auth_Manager {
 	 */
 	public function clear_auth_logs_callback( WP_REST_Request $_request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 		Event_Table::clear( 'auth' );
-		delete_option( 'safe_publish_auth_stats' );
 
 		$user_id = get_current_user_id();
 
@@ -255,7 +253,7 @@ class Auth_Manager {
 
 		return new \WP_REST_Response(
 			array(
-				'message'   => 'Authentication logs and statistics cleared',
+				'message'   => 'Authentication logs cleared',
 				'timestamp' => current_time( 'mysql' ),
 			),
 			200
@@ -326,14 +324,13 @@ class Auth_Manager {
 	}
 
 	/**
-	 * Calculates health status from current configuration and recent statistics.
+	 * Calculates health status from current configuration and recent events.
 	 *
 	 * @param string $shared_secret  The configured shared secret.
-	 * @param array  $stats          Authentication statistics from wp_options.
 	 * @param array  $recent_events  Recent authentication event log.
 	 * @return array{0: string, 1: int, 2: array} Tuple of [status, health_score, issues].
 	 */
-	private function calculate_health( string $shared_secret, array $stats, array $recent_events ): array {
+	private function calculate_health( string $shared_secret, array $recent_events ): array {
 		$health_score = 100;
 		$issues       = array();
 
@@ -343,15 +340,6 @@ class Auth_Manager {
 		} elseif ( strlen( $shared_secret ) < 32 ) {
 			$health_score -= 20;
 			$issues[]      = 'Shared secret too short (< 32 characters)';
-		}
-
-		$total_requests = $stats['total_requests'] ?? 0;
-		if ( $total_requests > 0 ) {
-			$success_rate = ( ( $stats['successful_auths'] ?? 0 ) / $total_requests ) * 100;
-			if ( $success_rate < 95 ) {
-				$health_score -= 30;
-				$issues[]      = sprintf( 'Low success rate: %.1f%%', $success_rate );
-			}
 		}
 
 		$recent_failures = array_filter(
