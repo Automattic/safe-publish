@@ -47,13 +47,6 @@ class Permission_Manager {
 	private bool $authenticated = false;
 
 	/**
-	 * Virtual user context object used for logging purposes.
-	 *
-	 * @var object|null
-	 */
-	private ?object $virtual_user = null;
-
-	/**
 	 * Whether a context permission override re-dispatch is in progress.
 	 *
 	 * @var bool
@@ -114,13 +107,6 @@ class Permission_Manager {
 				'approach' => 'capability_only',
 				'reason'   => 'VIP 2FA compliance - no user creation needed',
 			)
-		);
-
-		$this->virtual_user = (object) array(
-			'ID'           => 0,
-			'user_login'   => 'safe-publish-system',
-			'user_email'   => 'safe-publish-system@virtual',
-			'display_name' => 'Safe Publish System (Virtual)',
 		);
 
 		add_filter( 'rest_pre_dispatch', array( $this, 'bypass_permission_checks' ), 11, 3 );
@@ -270,14 +256,14 @@ class Permission_Manager {
 	 * Grants API capabilities for Safe Publish authenticated requests.
 	 *
 	 * @param array   $allcaps All capabilities for the user.
-	 * @param array   $caps    Required capabilities.
+	 * @param array   $_caps   Required capabilities.
 	 * @param array   $_args   Arguments for capability check.
 	 * @param WP_User $_user   User object.
 	 * @return array Modified capabilities.
 	 */
 	public function grant_api_capabilities( // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		array $allcaps,
-		array $caps,
+		array $_caps,
 		array $_args,
 		WP_User $_user
 	): array {

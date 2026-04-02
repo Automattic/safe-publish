@@ -20,6 +20,7 @@
             <directory name="node_modules/"/>
             <directory name="vendor/"/>
             <file name="tests/wp-tests-config.php"/>
+            <file name="bin/seed-content.php"/>
         </ignoreFiles>
     </projectFiles>
     <issueHandlers>

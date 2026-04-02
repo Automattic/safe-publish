@@ -17,4 +17,5 @@
   - [REST API Extension](extending/api.md) - Extending the plugin's API
 
 - [Local Development](local-development.md) - Setting up a development environment
+- [Content Seeding](content-seeding.md) - Populating environments with test content
 - [Troubleshooting](troubleshooting.md) - Common issues and solutions
