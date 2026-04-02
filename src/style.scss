@@ -95,6 +95,56 @@
 	font-style: italic;
 }
 
+.safe-publish-status-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+
+	&__dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: currentcolor;
+		flex-shrink: 0;
+	}
+
+	&--empty {
+		color: #999;
+	}
+
+	&--available {
+		color: #007cba;
+	}
+
+	&--up-to-date {
+		color: #1e7e34;
+	}
+
+	&--outdated {
+		color: #996800;
+	}
+
+	&--publish {
+		color: #1e7e34;
+	}
+
+	&--draft {
+		color: #666;
+	}
+
+	&--pending {
+		color: #996800;
+	}
+
+	&--private {
+		color: #007cba;
+	}
+
+	&--future {
+		color: #9b59b6;
+	}
+}
+
 .dataviews-action-modal__tertiary {
 
 	h2 {

@@ -68,7 +68,19 @@ final class Admin_Page {
 
 			<div class="safe-publish-admin-container">
 				<div class="safe-publish-dataviews-section">
-					<h2><?php esc_html_e( 'Recent Posts from Source Site', 'safe-publish' ); ?></h2>
+					<h2>
+					<?php
+					if ( ! empty( $site_url ) ) {
+						printf(
+							/* translators: %s: source site URL */
+							esc_html__( 'Recent Posts from %s', 'safe-publish' ),
+							esc_url( $site_url )
+						);
+					} else {
+						esc_html_e( 'Recent Posts from Source Site', 'safe-publish' );
+					}
+					?>
+				</h2>
 
 					<?php if ( empty( $site_url ) ) : ?>
 						<div class="notice notice-warning">

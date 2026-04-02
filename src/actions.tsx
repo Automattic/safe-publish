@@ -6,13 +6,14 @@
  *
  * @file This file defines DataViews actions for the Safe Publish plugin.
  */
-import { drafts, download } from '@wordpress/icons';
+import { drafts, download, edit, trash } from '@wordpress/icons';
 
+import DeletePostModal from './components/DeletePostModal';
+import ImportModal from './components/ImportModal';
 import PostDiffModal from './components/PostDiffModal';
 import {
 	ApiResponse,
 	BulkImportResponse,
-	CreateDraftResponse,
 	Post,
 } from './types';
 import { getErrorMessage } from './utils';
@@ -94,143 +95,17 @@ const bulkImportPosts = async (
 };
 
 /**
- * Shared modal for both the Import Post and Update Post actions.
- *
- * Detects whether the post is already imported via `is_imported` and adjusts
- * labels and the `force_update` flag accordingly.
- * @param root0
- * @param root0.items
- * @param root0.closeModal
- */
-const RenderImportModal = ( { items, closeModal }: { items: Post[]; closeModal?: () => void } ) => {
-	const [ isLoading, setIsLoading ] = useState( false );
-	const [ error, setError ] = useState< string | null >( null );
-
-	const isUpdate = Boolean( items[ 0 ]?.is_imported );
-	const submitLabel = isUpdate ? __( 'Update', 'safe-publish' ) : __( 'Import', 'safe-publish' );
-	const loadingLabel = isUpdate ? __( 'Updating…', 'safe-publish' ) : __( 'Importing…', 'safe-publish' );
-
-	/**
-	 * Sends the post to the backend for import or update.
-	 *
-	 * When updating an already-imported post, `force_update` is set so
-	 * the backend skips its own existence-confirmation roundtrip.
-	 */
-	const handleSubmit = () => {
-		setIsLoading( true );
-		setError( null );
-
-		const formData = new FormData();
-		formData.append( 'action', 'safe_publish_create_draft' );
-		formData.append( 'nonce', window.safePublishAdminData.nonce );
-		formData.append( 'external_post_id', items[ 0 ].id.toString() );
-		formData.append( 'title', items[ 0 ].title );
-		formData.append( 'content', items[ 0 ].content || items[ 0 ].excerpt || '' );
-		formData.append( 'external_link', items[ 0 ].link );
-		formData.append( 'post_type', items[ 0 ].post_type || 'post' );
-
-		if ( isUpdate ) {
-			formData.append( 'force_update', 'true' );
-		}
-
-		if ( items[ 0 ].featured_media ) {
-			formData.append( 'featured_media_id', items[ 0 ].featured_media.toString() );
-		}
-
-		if ( items[ 0 ].excerpt ) {
-			formData.append( 'excerpt', items[ 0 ].excerpt );
-		}
-
-		if ( items[ 0 ].meta ) {
-			formData.append( 'meta', JSON.stringify( items[ 0 ].meta ) );
-		}
-
-		if ( items[ 0 ].terms ) {
-			formData.append( 'terms', JSON.stringify( items[ 0 ].terms ) );
-		}
-
-		fetch( window.safePublishAdminData.ajaxurl, {
-			method: 'POST',
-			body: formData,
-			headers: {
-				'Accept': 'application/json; charset=utf-8',
-			},
-		} )
-		.then( response => response.json() as Promise< ApiResponse< CreateDraftResponse > > )
-		.then( ( result ) => {
-			setIsLoading( false );
-
-			if ( ! result.success ) {
-				setError( getErrorMessage( result, __( 'Failed to import', 'safe-publish' ) ) );
-				return;
-			}
-
-			const data = result.data;
-
-			// Validate edit URL before redirecting.
-			if ( ! data.edit_url || typeof data.edit_url !== 'string' ) {
-				setError( __( 'Invalid response: missing edit URL', 'safe-publish' ) );
-				return;
-			}
-
-			// Redirect to edit page.
-			window.location.href = data.edit_url;
-		} )
-		.catch( err => {
-			setError( err instanceof Error ? err.message : __( 'Unknown error occurred', 'safe-publish' ) );
-			setIsLoading( false );
-		} );
-	};
-
-	return (
-		<VStack spacing="5">
-			<Text>{ isUpdate
-				? /* translators: %s is the post title */
-				  __( 'Update "%s" with the latest content from the external site?', 'safe-publish' ).replace( '%s', items[ 0 ].title )
-				: /* translators: %s is the post title */
-				  __( 'Import "%s" as a draft?', 'safe-publish' ).replace( '%s', items[ 0 ].title )
-			}</Text>
-			{ ! isUpdate && (
-				<Text style={ { fontSize: '0.9em', color: '#666' } }>
-					{ __( 'This will import the post content including images, links, and formatting.', 'safe-publish' ) }
-				</Text>
-			) }
-			{ error && <Text role="alert" style={ { color: '#d63638' } }>{ error }</Text> }
-			<HStack justify="right">
-				<Button
-					__next40pxDefaultSize
-					variant="tertiary"
-					onClick={ closeModal }
-					disabled={ isLoading }
-				>
-					{ __( 'Cancel', 'safe-publish' ) }
-				</Button>
-				<Button
-					__next40pxDefaultSize
-					variant="primary"
-					onClick={ handleSubmit }
-					disabled={ isLoading }
-				>
-					{ isLoading ? (
-						<>
-							<Spinner />
-							{ loadingLabel }
-						</>
-					) : submitLabel }
-				</Button>
-			</HStack>
-		</VStack>
-	);
-};
-
-/**
- * DataViews actions for external posts.
+ * Creates DataViews actions for external posts.
  *
  * Defines the available actions that can be performed on posts in the DataViews
  * component, including creating drafts, bulk importing, updating, and viewing
  * diffs.
+ *
+ * @param {Function} [onRefresh] Callback to refresh the posts list.
+ *
+ * @return {Action<Post>[]} Array of DataViews actions.
  */
-export const actions: Action< Post >[] = [
+export const createActions = ( onRefresh?: () => void ): Action< Post >[] => [
 	/**
 	 * Combined import and update action.
 	 *
@@ -262,7 +137,7 @@ export const actions: Action< Post >[] = [
 
 			// For a single item, delegate to the simpler confirmation modal.
 			if ( items.length === 1 ) {
-				return <RenderImportModal items={ items } closeModal={ closeModal } />;
+				return <ImportModal items={ items } closeModal={ closeModal } onRefresh={ onRefresh } />;
 			}
 
 			/**
@@ -315,16 +190,13 @@ export const actions: Action< Post >[] = [
 			/**
 			 * Handles closing the modal.
 			 *
-			 * Refreshes the page if imports were successful to show updated
-			 * post list.
+			 * Refreshes the post list if imports were successful.
 			 */
 			const handleCloseModal = () => {
 				if ( importResults && importResults.successful > 0 ) {
-					// Refresh the page to show updated post list.
-					window.location.reload();
-				} else {
-					closeModal?.();
+					onRefresh?.();
 				}
+				closeModal?.();
 			};
 
 			return (
@@ -466,6 +338,45 @@ export const actions: Action< Post >[] = [
 				</VStack>
 			);
 		},
+	},
+	/**
+	 * Edit Post action.
+	 *
+	 * Opens the local WordPress post editor in a new tab. Only available for
+	 * posts that have already been imported.
+	 */
+	{
+		id: 'edit-post',
+		label: __( 'Edit', 'safe-publish' ),
+		icon: edit,
+		isPrimary: true,
+		isEligible: ( item: Post ) => Boolean( item.is_imported && item.local_edit_url ),
+		callback: ( items: Post[] ) => {
+			const url = items[ 0 ]?.local_edit_url;
+
+			if ( url ) {
+				window.open( url, '_blank', 'noreferrer' );
+			}
+		},
+	},
+	/**
+	 * Delete Post action.
+	 *
+	 * Moves the locally imported post to trash after confirmation. Only
+	 * available for posts that have already been imported.
+	 */
+	{
+		id: 'delete-post',
+		label: __( 'Delete', 'safe-publish' ),
+		icon: trash,
+		isDestructive: true,
+		isPrimary: true,
+		isEligible: ( item: Post ) => Boolean( item.is_imported ),
+		hideModalHeader: true,
+		modalFocusOnMount: 'firstContentElement',
+		RenderModal: ( { items, closeModal } ) => (
+			<DeletePostModal items={ items } closeModal={ closeModal } onRefresh={ onRefresh } />
+		),
 	},
 	/**
 	 * Post Diff action.

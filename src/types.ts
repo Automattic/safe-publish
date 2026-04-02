@@ -61,6 +61,8 @@ export interface Post {
 	terms?: Record< string, string[] >;
 	is_imported?: boolean;
 	has_update?: boolean;
+	local_status?: string | null;
+	local_edit_url?: string | null;
 }
 
 /**
