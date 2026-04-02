@@ -240,6 +240,34 @@ class Post_Import_Service {
 	}
 
 	/**
+	 * Annotates each post in an array with its local import status.
+	 *
+	 * Adds `is_imported` (bool) and `has_update` (bool) keys to every element
+	 * based on whether a matching local post exists and whether the external
+	 * post's modified date is newer.
+	 *
+	 * @param array $posts Posts array fetched from the external API, passed by reference.
+	 */
+	public function annotate_posts_with_import_status( array &$posts ): void {
+		foreach ( $posts as &$post ) {
+			$existing            = $this->find_existing_post( absint( $post['id'] ?? 0 ) );
+			$post['is_imported'] = (bool) $existing;
+
+			if ( $existing ) {
+				$external_modified  = strtotime( $post['modified'] );
+				$local_modified     = strtotime( $existing->post_modified );
+				$post['has_update'] = false !== $external_modified
+					&& false !== $local_modified
+					&& $external_modified > $local_modified;
+			} else {
+				$post['has_update'] = false;
+			}
+		}
+
+		unset( $post );
+	}
+
+	/**
 	 * Finds an existing WordPress post by its external post ID.
 	 *
 	 * @param int $external_post_id External post ID stored in post meta.

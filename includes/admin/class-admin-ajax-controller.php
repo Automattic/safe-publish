@@ -156,6 +156,8 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( $posts->get_error_message() );
 		}
 
+		$this->post_import_service->annotate_posts_with_import_status( $posts );
+
 		wp_send_json_success( $posts );
 	}
 

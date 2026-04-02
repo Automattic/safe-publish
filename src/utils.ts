@@ -153,10 +153,28 @@ export function searchPosts( posts: Post[], searchTerm: string ): Post[] {
  */
 export function sortPosts(
 	posts: Post[],
-	field: keyof Post,
+	field: keyof Post | 'status',
 	direction: 'asc' | 'desc' = 'desc'
 ): Post[] {
+	// Status sort: Available (0) < Outdated (1) < Up to date (2) — alphabetical order.
+	const statusOrder = ( item: Post ): number => {
+		if ( item.is_imported && item.has_update ) {
+			return 1;
+		}
+
+		if ( item.is_imported ) {
+			return 2;
+		}
+
+		return 0;
+	};
+
 	return [ ...posts ].sort( ( postA, postB ) => {
+		if ( field === 'status' ) {
+			const diff = statusOrder( postA ) - statusOrder( postB );
+			return direction === 'asc' ? diff : -diff;
+		}
+
 		/* eslint-disable security/detect-object-injection */
 		// TypeScript ensures 'field' is a valid Post key, making this type-safe.
 		const aVal = postA[ field ];

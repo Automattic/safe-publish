@@ -8,6 +8,7 @@
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 
@@ -35,12 +36,24 @@ final class Admin_Page {
 	private $api;
 
 	/**
+	 * Post Import Service instance.
+	 *
+	 * @var Post_Import_Service
+	 */
+	private Post_Import_Service $post_import_service;
+
+	/**
 	 * Constructs the Admin_Page instance.
 	 *
-	 * @param External_Posts_API $api External Posts API instance.
+	 * @param External_Posts_API  $api                 External Posts API instance.
+	 * @param Post_Import_Service $post_import_service Post Import Service instance.
 	 */
-	public function __construct( External_Posts_API $api ) {
-		$this->api = $api;
+	public function __construct(
+		External_Posts_API $api,
+		Post_Import_Service $post_import_service
+	) {
+		$this->api                 = $api;
+		$this->post_import_service = $post_import_service;
 	}
 
 	/**
@@ -122,6 +135,7 @@ final class Admin_Page {
 
 			// Handle API errors.
 			if ( ! is_wp_error( $posts ) ) {
+				$this->post_import_service->annotate_posts_with_import_status( $posts );
 				$posts_data = $posts;
 			}
 		}

@@ -59,6 +59,8 @@ export interface Post {
 	post_type?: string;
 	meta?: JsonObject;
 	terms?: Record< string, string[] >;
+	is_imported?: boolean;
+	has_update?: boolean;
 }
 
 /**

@@ -187,8 +187,6 @@ final class Plugin {
 		Post_Type_Fetcher $post_type_fetcher,
 		HTTP_Client $http_client
 	): Import_Mode_Admin_Handler {
-		$menu_manager = new Admin_Menu_Manager( $api );
-
 		$repository       = new History_Repository();
 		$renderer         = new History_Renderer();
 		$formatter        = new Session_Formatter();
@@ -207,6 +205,8 @@ final class Plugin {
 			$content_processor,
 			$import_history
 		);
+
+		$menu_manager = new Admin_Menu_Manager( $api, $post_import_service );
 
 		$ajax_controller = new Admin_Ajax_Controller(
 			$api,
