@@ -8,6 +8,7 @@
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
@@ -56,6 +57,13 @@ class Post_Import_Service {
 	private Import_History $import_history;
 
 	/**
+	 * Meta Terms Manager instance.
+	 *
+	 * @var Meta_Terms_Manager
+	 */
+	private Meta_Terms_Manager $meta_terms_manager;
+
+	/**
 	 * Maps plural REST API post type names to singular WordPress post type slugs.
 	 *
 	 * @var array<string, string>
@@ -71,21 +79,24 @@ class Post_Import_Service {
 	/**
 	 * Constructs the Post_Import_Service instance.
 	 *
-	 * @param External_Posts_API $api               External Posts API instance.
-	 * @param Media_Importer     $media_importer    Media Importer instance.
-	 * @param Content_Processor  $content_processor Content Processor instance.
-	 * @param Import_History     $import_history    Import History instance.
+	 * @param External_Posts_API $api                External Posts API instance.
+	 * @param Media_Importer     $media_importer     Media Importer instance.
+	 * @param Content_Processor  $content_processor  Content Processor instance.
+	 * @param Import_History     $import_history     Import History instance.
+	 * @param Meta_Terms_Manager $meta_terms_manager Meta Terms Manager instance.
 	 */
 	public function __construct(
 		External_Posts_API $api,
 		Media_Importer $media_importer,
 		Content_Processor $content_processor,
-		Import_History $import_history
+		Import_History $import_history,
+		Meta_Terms_Manager $meta_terms_manager
 	) {
-		$this->api               = $api;
-		$this->media_importer    = $media_importer;
-		$this->content_processor = $content_processor;
-		$this->import_history    = $import_history;
+		$this->api                = $api;
+		$this->media_importer     = $media_importer;
+		$this->content_processor  = $content_processor;
+		$this->import_history     = $import_history;
+		$this->meta_terms_manager = $meta_terms_manager;
 	}
 
 	/**
@@ -163,6 +174,9 @@ class Post_Import_Service {
 			'external_link'     => esc_url_raw( $post_data['link'] ?? '' ),
 			'featured_media_id' => absint( $post_data['featured_media'] ?? 0 ),
 			'raw_post_type'     => sanitize_text_field( $post_data['post_type'] ?? 'post' ),
+			'excerpt'           => sanitize_text_field( $post_data['excerpt'] ?? '' ),
+			'meta'              => is_array( $post_data['meta'] ?? null ) ? $post_data['meta'] : array(),
+			'terms'             => is_array( $post_data['terms'] ?? null ) ? $post_data['terms'] : array(),
 		);
 	}
 
@@ -301,6 +315,13 @@ class Post_Import_Service {
 	 * Attempts to fetch fresh content from the external site, updates the
 	 * existing post, and logs the action.
 	 *
+	 * Intentional differences from the single-import update path
+	 * (@see Admin_Ajax_Controller::update_imported_draft()):
+	 * - Post status is preserved (not reset to 'draft') to avoid silently
+	 *   unpublishing live posts during automated bulk runs.
+	 * - Rollback data is not captured; this is a UI-level safety net only
+	 *   needed for user-triggered single imports.
+	 *
 	 * @param WP_Post  $imported_post     Imported WordPress post.
 	 * @param array    $fields            Sanitized post fields.
 	 * @param string   $post_type         Resolved post type slug.
@@ -320,6 +341,9 @@ class Post_Import_Service {
 		if ( $fresh_data ) {
 			$fields['title']             = $fresh_data['title'] ?? $fields['title'];
 			$fields['featured_media_id'] = $fresh_data['featured_media'] ?? $fields['featured_media_id'];
+			$fields['excerpt']           = $fresh_data['excerpt'] ?? $fields['excerpt'];
+			$fields['meta']              = is_array( $fresh_data['meta'] ?? null ) ? $fresh_data['meta'] : $fields['meta'];
+			$fields['terms']             = is_array( $fresh_data['terms'] ?? null ) ? $fresh_data['terms'] : $fields['terms'];
 		}
 
 		$this->content_processor->disable_content_filters();
@@ -328,6 +352,7 @@ class Post_Import_Service {
 			array(
 				'ID'           => $imported_post->ID,
 				'post_title'   => $fields['title'],
+				'post_excerpt' => $fields['excerpt'],
 				'post_content' => ! empty( $processed_content )
 					? $processed_content
 					: __( 'Content imported from external source.', 'safe-publish' ),
@@ -349,6 +374,8 @@ class Post_Import_Service {
 		update_post_meta( $post_id, Options::META_EXTERNAL_LINK, $fields['external_link'] );
 		update_post_meta( $post_id, Options::META_IMPORT_DATE, current_time( 'mysql' ) );
 
+		$this->apply_media_and_taxonomy( $post_id, $fields );
+
 		$this->log_import_if_session(
 			$session_id,
 			$fields['external_post_id'],
@@ -356,10 +383,7 @@ class Post_Import_Service {
 			'updated',
 			$post_id,
 			null,
-			array(
-				'action'                     => 'updated_existing',
-				'previous_content_preserved' => true,
-			)
+			array( 'action' => 'updated_existing' )
 		);
 
 		return array(
@@ -378,6 +402,8 @@ class Post_Import_Service {
 	 * Creates a new draft post with the imported content and metadata,
 	 * imports the featured image, and logs the action.
 	 *
+	 * @see Admin_Ajax_Controller::create_new_draft() for the single-import equivalent.
+	 *
 	 * @param array    $fields            Sanitized post fields.
 	 * @param string   $post_type         Resolved post type slug.
 	 * @param string   $processed_content Processed post content.
@@ -395,6 +421,7 @@ class Post_Import_Service {
 		$post_id = wp_insert_post(
 			array(
 				'post_title'   => $fields['title'],
+				'post_excerpt' => $fields['excerpt'],
 				'post_content' => ! empty( $processed_content )
 					? $processed_content
 					: __( 'Content imported from external source.', 'safe-publish' ),
@@ -420,11 +447,7 @@ class Post_Import_Service {
 			);
 		}
 
-		$this->maybe_import_featured_image(
-			$fields['featured_media_id'],
-			$fields['external_link'],
-			$post_id
-		);
+		$this->apply_media_and_taxonomy( $post_id, $fields );
 
 		$this->log_import_if_session(
 			$session_id,
@@ -444,6 +467,31 @@ class Post_Import_Service {
 			'edit_url'    => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
 			'existing'    => false,
 		);
+	}
+
+	/**
+	 * Applies the shared post-import side-effects that are identical on both
+	 * the create and update paths: featured image import, custom meta, and
+	 * taxonomy terms.
+	 *
+	 * Centralizing these calls here ensures the create and update paths cannot
+	 * silently diverge. If the single-import counterparts in Admin_Ajax_Controller
+	 * (@see Admin_Ajax_Controller::create_new_draft() and
+	 * Admin_Ajax_Controller::update_imported_draft()) are updated to handle new
+	 * fields in this step, this method must be updated to match.
+	 *
+	 * @param int   $post_id WordPress post ID.
+	 * @param array $fields  Sanitized post fields from extract_post_fields().
+	 */
+	private function apply_media_and_taxonomy( int $post_id, array $fields ): void {
+		$this->maybe_import_featured_image(
+			$fields['featured_media_id'],
+			$fields['external_link'],
+			$post_id
+		);
+
+		$this->meta_terms_manager->update_meta( $post_id, $fields['meta'] );
+		$this->meta_terms_manager->update_terms( $post_id, $fields['terms'] );
 	}
 
 	/**

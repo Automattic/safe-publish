@@ -311,7 +311,10 @@ class Media_Importer {
 		$attachment_id = $this->import_external_media_as_attachment( $media_data['source_url'], $site_url );
 
 		if ( $attachment_id ) {
-			// Store additional metadata for featured images.
+			// Inline content imports don't set META_IMPORTED_FROM; setting it
+			// explicitly here ensures get_attachment_by_featured_media_id()'s
+			// AND-query can find it.
+			update_post_meta( $attachment_id, Options::META_IMPORTED_FROM, $site_url );
 			update_post_meta( $attachment_id, Options::META_FEATURED_MEDIA_ID, $featured_media_id );
 			update_post_meta( $attachment_id, Options::META_MEDIA_TYPE, 'featured_image' );
 
