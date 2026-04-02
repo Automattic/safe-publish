@@ -393,6 +393,37 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that bulk import sanitizes post content with wp_kses_post before
+	 * writing it to the database.
+	 */
+	public function test_bulk_import_sanitizes_post_content(): void {
+		// ARRANGE: Content with a disallowed script tag that wp_kses_post must strip.
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		$post_data = array(
+			'id'             => 8001,
+			'title'          => 'Sanitization Test Post',
+			'content'        => '<p>Safe content.</p><script>alert("xss")</script>',
+			'link'           => 'https://source.example.com/sanitization-test',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '',
+			'meta'           => array(),
+			'terms'          => array(),
+		);
+
+		// ACT: Import via the bulk path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Post was created and unsafe markup was stripped.
+		$this->assertTrue( $result['success'] );
+
+		$post = get_post( $result['post_id'] );
+		$this->assertStringContainsString( '<p>Safe content.</p>', $post->post_content );
+		$this->assertStringNotContainsString( '<script>', $post->post_content );
+	}
+
+	/**
 	 * Verifies that an invalid HMAC signature is rejected and no import runs.
 	 */
 	public function test_invalid_auth_is_rejected_before_import(): void {
