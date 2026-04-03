@@ -174,7 +174,7 @@ class Post_Import_Service {
 			'external_link'     => esc_url_raw( $post_data['link'] ?? '' ),
 			'featured_media_id' => absint( $post_data['featured_media'] ?? 0 ),
 			'raw_post_type'     => sanitize_text_field( $post_data['post_type'] ?? 'post' ),
-			'excerpt'           => sanitize_text_field( $post_data['excerpt'] ?? '' ),
+			'excerpt'           => wp_kses_post( $post_data['excerpt'] ?? '' ),
 			'meta'              => is_array( $post_data['meta'] ?? null ) ? $post_data['meta'] : array(),
 			'terms'             => is_array( $post_data['terms'] ?? null ) ? $post_data['terms'] : array(),
 		);
@@ -342,11 +342,17 @@ class Post_Import_Service {
 		$fresh_data = $this->fetch_fresh_content( $fields['external_post_id'] );
 
 		if ( $fresh_data ) {
-			$fields['title']             = $fresh_data['title'] ?? $fields['title'];
-			$fields['featured_media_id'] = $fresh_data['featured_media'] ?? $fields['featured_media_id'];
-			$fields['excerpt']           = $fresh_data['excerpt'] ?? $fields['excerpt'];
-			$fields['meta']              = is_array( $fresh_data['meta'] ?? null ) ? $fresh_data['meta'] : $fields['meta'];
-			$fields['terms']             = is_array( $fresh_data['terms'] ?? null ) ? $fresh_data['terms'] : $fields['terms'];
+			// An empty string means the API didn't return a title; keep the existing one.
+			if ( '' !== $fresh_data['title'] ) {
+				$fields['title'] = $fresh_data['title'];
+			}
+
+			$fields['featured_media_id'] = $fresh_data['featured_media'];
+			$fields['excerpt']           = $fresh_data['excerpt'];
+
+			// Unsanitized values; sanitized downstream before being stored.
+			$fields['meta']  = is_array( $fresh_data['meta'] ?? null ) ? $fresh_data['meta'] : $fields['meta'];
+			$fields['terms'] = is_array( $fresh_data['terms'] ?? null ) ? $fresh_data['terms'] : $fields['terms'];
 		}
 
 		$this->content_processor->disable_content_filters();

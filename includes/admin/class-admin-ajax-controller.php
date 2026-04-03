@@ -140,9 +140,9 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
 		}
 
-		$site_url        = sanitize_text_field( $_POST['site_url'] ?? '' );
+		$site_url        = sanitize_text_field( wp_unslash( $_POST['site_url'] ?? '' ) );
 		$number_of_posts = absint( $_POST['number_of_posts'] ?? 10 );
-		$post_type       = sanitize_text_field( $_POST['post_type'] ?? 'posts' );
+		$post_type       = sanitize_text_field( wp_unslash( $_POST['post_type'] ?? 'posts' ) );
 
 		if ( empty( $site_url ) ) {
 			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
@@ -174,7 +174,7 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
 		}
 
-		$site_url = sanitize_text_field( $_POST['site_url'] ?? '' );
+		$site_url = sanitize_text_field( wp_unslash( $_POST['site_url'] ?? '' ) );
 
 		if ( empty( $site_url ) ) {
 			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
@@ -204,7 +204,7 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
 		}
 
-		$site_url = sanitize_text_field( $_POST['site_url'] ?? '' );
+		$site_url = sanitize_text_field( wp_unslash( $_POST['site_url'] ?? '' ) );
 
 		if ( empty( $site_url ) ) {
 			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
@@ -266,11 +266,11 @@ final class Admin_Ajax_Controller {
 		$session_id = $this->import_history->create_session( $source_url, 'single' );
 
 		$external_post_id  = absint( $_POST['external_post_id'] ?? 0 );
-		$title             = sanitize_text_field( $_POST['title'] ?? '' );
-		$external_link     = esc_url_raw( $_POST['external_link'] ?? '' );
+		$title             = sanitize_text_field( wp_unslash( $_POST['title'] ?? '' ) );
+		$external_link     = esc_url_raw( wp_unslash( $_POST['external_link'] ?? '' ) );
 		$featured_media_id = absint( $_POST['featured_media_id'] ?? 0 );
-		$excerpt           = sanitize_text_field( $_POST['excerpt'] ?? '' );
-		$raw_post_type     = sanitize_text_field( $_POST['post_type'] ?? 'post' );
+		$excerpt           = wp_kses_post( wp_unslash( $_POST['excerpt'] ?? '' ) );
+		$raw_post_type     = sanitize_text_field( wp_unslash( $_POST['post_type'] ?? 'post' ) );
 
 		// Preserve Gutenberg block structure; sanitized after processing.
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
@@ -323,13 +323,20 @@ final class Admin_Ajax_Controller {
 		// Fetch fresh content from external site if updating imported post.
 		if ( $imported_post && $force_update ) {
 			$fresh_data = $this->maybe_fetch_fresh_content( $external_post_id );
+
 			if ( $fresh_data ) {
-				$title             = $fresh_data['title'] ?? $title;
-				$content           = $fresh_data['content'] ?? $content;
-				$featured_media_id = $fresh_data['featured_media'] ?? $featured_media_id;
-				$excerpt           = $fresh_data['excerpt'] ?? $excerpt;
-				$meta              = $fresh_data['meta'] ?? array();
-				$terms             = $fresh_data['terms'] ?? array();
+				// An empty string means the API didn't return a title; keep the existing one.
+				if ( '' !== $fresh_data['title'] ) {
+					$title = $fresh_data['title'];
+				}
+
+				$featured_media_id = $fresh_data['featured_media'];
+				$excerpt           = $fresh_data['excerpt'];
+
+				// Unsanitized values; sanitized downstream before being stored.
+				$content = $fresh_data['content'] ?? $content;
+				$meta    = $fresh_data['meta'] ?? array();
+				$terms   = $fresh_data['terms'] ?? array();
 			}
 		}
 
@@ -447,7 +454,7 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
 		}
 
-		$site_url = sanitize_text_field( $_POST['site_url'] ?? '' );
+		$site_url = sanitize_text_field( wp_unslash( $_POST['site_url'] ?? '' ) );
 
 		if ( empty( $site_url ) ) {
 			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
