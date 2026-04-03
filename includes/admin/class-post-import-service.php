@@ -350,6 +350,13 @@ class Post_Import_Service {
 			$fields['featured_media_id'] = $fresh_data['featured_media'];
 			$fields['excerpt']           = $fresh_data['excerpt'];
 
+			if ( '' !== $fresh_data['content'] ) {
+				$processed_content = $this->process_post_content(
+					$fresh_data['content'],
+					$fields['external_link']
+				);
+			}
+
 			// Unsanitized values; sanitized downstream before being stored.
 			$fields['meta']  = is_array( $fresh_data['meta'] ?? null ) ? $fresh_data['meta'] : $fields['meta'];
 			$fields['terms'] = is_array( $fresh_data['terms'] ?? null ) ? $fresh_data['terms'] : $fields['terms'];
