@@ -18,6 +18,7 @@ use Safe_Publish\Admin\Session_Formatter;
 use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\HTTP_Client;
+use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Embed_Processor;
 use Safe_Publish\Media\Media_Importer;
@@ -105,7 +106,8 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 			new External_Posts_API( new HTTP_Client() ),
 			$media_importer,
 			$content_processor,
-			$this->import_history
+			$this->import_history,
+			new Meta_Terms_Manager()
 		);
 
 		add_filter( 'pre_http_request', array( $this, 'intercept_http_request' ), 5, 3 );

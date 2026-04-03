@@ -327,7 +327,7 @@ final class Admin_Ajax_Controller {
 				$title             = $fresh_data['title'] ?? $title;
 				$content           = $fresh_data['content'] ?? $content;
 				$featured_media_id = $fresh_data['featured_media'] ?? $featured_media_id;
-				$excerpt           = $fresh_data['excerpt'] ?? '';
+				$excerpt           = $fresh_data['excerpt'] ?? $excerpt;
 				$meta              = $fresh_data['meta'] ?? array();
 				$terms             = $fresh_data['terms'] ?? array();
 			}
@@ -545,6 +545,13 @@ final class Admin_Ajax_Controller {
 	 * Stores rollback data, updates post fields, imports featured image,
 	 * updates meta and terms, and logs history.
 	 *
+	 * @see Post_Import_Service::handle_imported_post() for the bulk-import equivalent.
+	 *      Intentional differences here vs the bulk path:
+	 *      - Resets post_status to 'draft' (keeps the single-import review flow intact).
+	 *      - Captures rollback data before overwriting.
+	 *      - Does not call disable_content_filters() (standard WP filters apply for
+	 *        user-triggered imports).
+	 *
 	 * @param WP_Post  $imported_post     Imported WordPress post.
 	 * @param string   $title             Post title.
 	 * @param string   $excerpt           Post excerpt.
@@ -623,6 +630,8 @@ final class Admin_Ajax_Controller {
 	 *
 	 * Inserts the post, imports featured image, updates meta and terms,
 	 * and logs history.
+	 *
+	 * @see Post_Import_Service::handle_new_post() for the bulk-import equivalent.
 	 *
 	 * @param string   $title             Post title.
 	 * @param string   $excerpt           Post excerpt.

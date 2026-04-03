@@ -19,6 +19,7 @@ use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\API\Export_Logger;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\HTTP_Client;
+use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Auth\Auth_Logger;
 use Safe_Publish\Auth\HMAC_Authenticator;
 use Safe_Publish\Auth\Permission_Manager;
@@ -106,7 +107,8 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			new External_Posts_API( new HTTP_Client() ),
 			$media_importer,
 			$content_processor,
-			$this->import_history
+			$this->import_history,
+			new Meta_Terms_Manager()
 		);
 	}
 
@@ -208,6 +210,186 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		);
 		$this->assertContains( 'success', $statuses, 'First import log should have status "success".' );
 		$this->assertContains( 'updated', $statuses, 'Second import log should have status "updated".' );
+	}
+
+	/**
+	 * Verifies that bulk re-import does not reset post_status on an already-published post.
+	 */
+	public function test_bulk_reimport_preserves_published_post_status(): void {
+		// ARRANGE: Import a post, then publish it to simulate a live post.
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		$post_data = array(
+			'id'             => 7001,
+			'title'          => 'Published Post',
+			'content'        => '<p>Original content.</p>',
+			'link'           => 'https://source.example.com/published-post',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '',
+			'meta'           => array(),
+			'terms'          => array(),
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		wp_update_post(
+			array(
+				'ID'          => $first['post_id'],
+				'post_status' => 'publish',
+			)
+		);
+
+		// ACT: Re-import the same post with updated content.
+		$post_data['title'] = 'Published Post (updated)';
+
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Post status is preserved.
+		$this->assertTrue( $second['success'] );
+		$this->assertTrue( $second['existing'] );
+
+		$updated_post = get_post( $second['post_id'] );
+		$this->assertSame( 'publish', $updated_post->post_status, 'Bulk re-import must not demote a published post to draft.' );
+	}
+
+	/**
+	 * Verifies that bulk import writes excerpt and meta to the created post.
+	 */
+	public function test_bulk_import_writes_excerpt_and_meta(): void {
+		// ARRANGE: Prepare post data with an excerpt and a custom meta field.
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		$post_data = array(
+			'id'             => 6001,
+			'title'          => 'Post With Excerpt And Meta',
+			'content'        => '<p>Content.</p>',
+			'link'           => 'https://source.example.com/excerpt-meta-test',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => 'A short summary.',
+			'meta'           => array( 'custom_key' => 'custom_value' ),
+			'terms'          => array(),
+		);
+
+		// ACT: Import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Excerpt and meta are written to the created post.
+		$this->assertTrue( $result['success'] );
+
+		$post = get_post( $result['post_id'] );
+		$this->assertSame( 'A short summary.', $post->post_excerpt );
+		$this->assertSame( 'custom_value', get_post_meta( $result['post_id'], 'custom_key', true ) );
+	}
+
+	/**
+	 * Verifies that bulk import writes taxonomy terms to the created post.
+	 */
+	public function test_bulk_import_writes_terms(): void {
+		// ARRANGE: Prepare post data with a category term.
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		$term = wp_insert_term( 'Integration Test Category', 'category' );
+		$this->assertIsArray( $term );
+
+		$post_data = array(
+			'id'             => 6002,
+			'title'          => 'Post With Terms',
+			'content'        => '<p>Content.</p>',
+			'link'           => 'https://source.example.com/terms-test',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '',
+			'meta'           => array(),
+			'terms'          => array( 'category' => array( 'Integration Test Category' ) ),
+		);
+
+		// ACT: Import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Term is assigned to the created post.
+		$this->assertTrue( $result['success'] );
+
+		$assigned = wp_get_post_terms( $result['post_id'], 'category', array( 'fields' => 'names' ) );
+		$this->assertContains( 'Integration Test Category', $assigned );
+	}
+
+	/**
+	 * Verifies that bulk re-import updates excerpt and meta on an existing post.
+	 */
+	public function test_bulk_reimport_updates_excerpt_and_meta(): void {
+		// ARRANGE: Import a post with initial excerpt and meta.
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		$post_data = array(
+			'id'             => 6003,
+			'title'          => 'Post To Update',
+			'content'        => '<p>Original.</p>',
+			'link'           => 'https://source.example.com/update-excerpt-meta',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => 'Original excerpt.',
+			'meta'           => array( 'my_key' => 'original_value' ),
+			'terms'          => array(),
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		// ACT: Update excerpt and meta, then re-import.
+		$post_data['excerpt']        = 'Updated excerpt.';
+		$post_data['meta']['my_key'] = 'updated_value';
+
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Updated values are persisted on the existing post.
+		$this->assertTrue( $second['success'] );
+		$this->assertTrue( $second['existing'] );
+
+		$post = get_post( $second['post_id'] );
+		$this->assertSame( 'Updated excerpt.', $post->post_excerpt );
+		$this->assertSame( 'updated_value', get_post_meta( $second['post_id'], 'my_key', true ) );
+	}
+
+	/**
+	 * Verifies that bulk re-import replaces taxonomy terms on an existing post.
+	 */
+	public function test_bulk_reimport_updates_terms(): void {
+		// ARRANGE: Import a post with one term.
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		wp_insert_term( 'Original Term', 'category' );
+		wp_insert_term( 'Replacement Term', 'category' );
+
+		$post_data = array(
+			'id'             => 6004,
+			'title'          => 'Post With Terms To Update',
+			'content'        => '<p>Content.</p>',
+			'link'           => 'https://source.example.com/terms-update-test',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '',
+			'meta'           => array(),
+			'terms'          => array( 'category' => array( 'Original Term' ) ),
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		// ACT: Re-import with a different term.
+		$post_data['terms'] = array( 'category' => array( 'Replacement Term' ) );
+
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Term is replaced, not appended.
+		$this->assertTrue( $second['success'] );
+		$this->assertTrue( $second['existing'] );
+
+		$assigned = wp_get_post_terms( $second['post_id'], 'category', array( 'fields' => 'names' ) );
+		$this->assertContains( 'Replacement Term', $assigned );
+		$this->assertNotContains( 'Original Term', $assigned );
 	}
 
 	/**

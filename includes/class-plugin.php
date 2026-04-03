@@ -203,7 +203,8 @@ final class Plugin {
 			$api,
 			$media_importer,
 			$content_processor,
-			$import_history
+			$import_history,
+			new Meta_Terms_Manager()
 		);
 
 		$menu_manager = new Admin_Menu_Manager( $api, $post_import_service );
