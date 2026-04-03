@@ -239,7 +239,7 @@ class Post_Import_Service {
 	 *
 	 * @param string $content       Raw post content.
 	 * @param string $external_link External post URL used to derive site URL.
-	 * @return string Processed content.
+	 * @return string Processed and sanitized content.
 	 */
 	private function process_post_content( string $content, string $external_link ): string {
 		if ( empty( $content ) || empty( $external_link ) ) {
@@ -250,7 +250,10 @@ class Post_Import_Service {
 			. '://'
 			. wp_parse_url( $external_link, PHP_URL_HOST );
 
-		return $this->content_processor->process_content( $content, $site_url );
+		$processed = $this->content_processor->process_content( $content, $site_url );
+
+		// Apply sanitization after processing to preserve formatting during processing.
+		return wp_kses_post( $processed );
 	}
 
 	/**

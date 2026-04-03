@@ -745,7 +745,7 @@ final class Admin_Ajax_Controller {
 		}
 
 		// Apply sanitization after processing to preserve formatting during processing.
-		return \wp_kses_post( $processed );
+		return wp_kses_post( $processed );
 	}
 
 
