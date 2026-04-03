@@ -424,6 +424,74 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that bulk import strips disallowed HTML from excerpts while
+	 * preserving allowed inline tags.
+	 */
+	public function test_bulk_import_sanitizes_excerpt(): void {
+		// ARRANGE: Excerpt with a disallowed script tag and an allowed inline tag.
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		$post_data = array(
+			'id'             => 8002,
+			'title'          => 'Excerpt Sanitization Test',
+			'content'        => '<p>Content.</p>',
+			'link'           => 'https://source.example.com/excerpt-sanitization-test',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '<em>Safe excerpt.</em><script>alert("xss")</script>',
+			'meta'           => array(),
+			'terms'          => array(),
+		);
+
+		// ACT: Import via the bulk path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Allowed HTML is preserved; disallowed markup is stripped.
+		$this->assertTrue( $result['success'] );
+
+		$post = get_post( $result['post_id'] );
+		$this->assertStringContainsString( '<em>Safe excerpt.</em>', $post->post_excerpt );
+		$this->assertStringNotContainsString( '<script>', $post->post_excerpt );
+	}
+
+	/**
+	 * Verifies that bulk re-import sanitizes post content when updating an
+	 * existing post.
+	 */
+	public function test_bulk_reimport_sanitizes_post_content(): void {
+		// ARRANGE: Import a post, then re-import with unsafe content.
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		$post_data = array(
+			'id'             => 8003,
+			'title'          => 'Content Sanitization On Update Test',
+			'content'        => '<p>Original content.</p>',
+			'link'           => 'https://source.example.com/content-sanitization-update-test',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '',
+			'meta'           => array(),
+			'terms'          => array(),
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		// ACT: Re-import with a script tag injected into the content.
+		$post_data['content'] = '<p>Updated content.</p><script>alert("xss")</script>';
+
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Update succeeded and the script tag was stripped.
+		$this->assertTrue( $second['success'] );
+		$this->assertTrue( $second['existing'] );
+
+		$post = get_post( $second['post_id'] );
+		$this->assertStringContainsString( '<p>Updated content.</p>', $post->post_content );
+		$this->assertStringNotContainsString( '<script>', $post->post_content );
+	}
+
+	/**
 	 * Verifies that an invalid HMAC signature is rejected and no import runs.
 	 */
 	public function test_invalid_auth_is_rejected_before_import(): void {

@@ -163,6 +163,10 @@ class External_Posts_API {
 	/**
 	 * Sanitizes a single post.
 	 *
+	 * `content`, `meta`, and `terms` are returned unsanitized. `content` must
+	 * pass through the block processor first, and `meta`/`terms` require
+	 * type-aware sanitization in Meta_Terms_Manager.
+	 *
 	 * @param array  $post      Raw post data.
 	 * @param string $post_type Optional. Post type being processed. Default 'posts'.
 	 * @return array|false Sanitized post or false if invalid.
@@ -174,27 +178,24 @@ class External_Posts_API {
 
 		$sanitized_post = array(
 			'id'             => isset( $post['id'] ) ? absint( $post['id'] ) : 0,
-			'link'           => isset( $post['link'] ) ? esc_url( $post['link'] ) : '#',
+			'link'           => isset( $post['link'] ) ? esc_url_raw( $post['link'] ) : '#',
 			'title'          => isset( $post['title']['rendered'] ) ? sanitize_text_field( wp_strip_all_tags( $post['title']['rendered'] ) ) : __( 'No Title', 'safe-publish' ),
 			'modified'       => isset( $post['modified'] ) ? sanitize_text_field( $post['modified'] ) : '',
 			'thumbnail'      => isset( $post['featured_media'] ) ? esc_url( get_the_post_thumbnail_url( $post['id'], 'thumbnail' ) ) : '', // Default to empty if no thumbnail.
 			'featured_media' => isset( $post['featured_media'] ) ? absint( $post['featured_media'] ) : 0,
-			// Add any other fields you need to sanitize.
-			'content'        => isset( $post['content']['raw'] ) ? $post['content']['raw'] : // Use raw content without sanitization to preserve formatting.
-				( isset( $post['content']['rendered'] ) ? $post['content']['rendered'] : // Fallback to rendered content without sanitization.
-					'' ),
 			'excerpt'        => isset( $post['excerpt']['rendered'] ) ? wp_kses_post( $post['excerpt']['rendered'] ) : '',
-			'post_type'      => sanitize_text_field( $post_type ), // Add the post type.
+			'post_type'      => sanitize_text_field( $post_type ),
+
+			// Unsanitized values; sanitized downstream before being stored.
+			'content'        => isset( $post['content']['raw'] ) ? $post['content']['raw'] :
+				( isset( $post['content']['rendered'] ) ? $post['content']['rendered'] : '' ),
 			'meta'           => isset( $post['meta'] ) && is_array( $post['meta'] ) ? $post['meta'] : array(),
-			'terms'          => isset( $post['_embedded'] ) && is_array( $post['_embedded'] ) ? $post['_embedded'] : array(), // Use _embedded for terms and related data.
 		);
 
 		// Validate required fields.
 		if ( empty( $sanitized_post['id'] ) || empty( $sanitized_post['title'] ) ) {
 			return false;
 		}
-
-		$sanitized_post['meta'] = isset( $post['meta'] ) && is_array( $post['meta'] ) ? $post['meta'] : array();
 
 		// Extract terms from embedded response if available.
 		$incoming_terms = array();
@@ -258,6 +259,10 @@ class External_Posts_API {
 	/**
 	 * Fetches fresh post content from external site.
 	 *
+	 * `content`, `meta`, and `terms` are returned unsanitized. `content` must
+	 * pass through the block processor first, and `meta`/`terms` require
+	 * type-aware sanitization in Meta_Terms_Manager.
+	 *
 	 * @param int    $external_post_id  External post ID.
 	 * @param string $site_url          Site URL.
 	 * @param array  $auth_credentials  Optional. Authentication credentials. Default empty array.
@@ -305,26 +310,23 @@ class External_Posts_API {
 		// Extract post data.
 		$post_data = array();
 
-		if ( isset( $data['title']['rendered'] ) ) {
-			$post_data['title'] = $data['title']['rendered'];
+		$post_data['title']          = isset( $data['title']['rendered'] )
+			? sanitize_text_field( wp_strip_all_tags( $data['title']['rendered'] ) )
+			: '';
+		$post_data['featured_media'] = isset( $data['featured_media'] ) ? absint( $data['featured_media'] ) : 0;
+		$post_data['excerpt']        = isset( $data['excerpt']['rendered'] ) ? wp_kses_post( $data['excerpt']['rendered'] ) : '';
+
+		if ( isset( $data['link'] ) ) {
+			$post_data['link'] = esc_url_raw( $data['link'] );
 		}
 
+		// Unsanitized values; sanitized downstream before being stored.
 		// Prioritize raw content when available (edit context), fallback to rendered.
 		if ( isset( $data['content']['raw'] ) ) {
 			$post_data['content'] = $data['content']['raw'];
 		} elseif ( isset( $data['content']['rendered'] ) ) {
 			$post_data['content'] = $data['content']['rendered'];
 		}
-
-		if ( isset( $data['featured_media'] ) && $data['featured_media'] > 0 ) {
-			$post_data['featured_media'] = $data['featured_media'];
-		}
-
-		if ( isset( $data['link'] ) ) {
-			$post_data['link'] = $data['link'];
-		}
-
-		$post_data['excerpt'] = isset( $data['excerpt']['rendered'] ) ? $data['excerpt']['rendered'] : '';
 
 		$post_data['meta'] = isset( $data['meta'] ) && is_array( $data['meta'] ) ? $data['meta'] : array();
 
