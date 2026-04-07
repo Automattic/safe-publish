@@ -13,6 +13,7 @@ use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Exception;
+use WP_Error;
 use WP_Post;
 
 // Prevent direct access.
@@ -64,6 +65,13 @@ class Post_Import_Service {
 	private Meta_Terms_Manager $meta_terms_manager;
 
 	/**
+	 * Logger instance.
+	 *
+	 * @var Content_Logger
+	 */
+	private Content_Logger $logger;
+
+	/**
 	 * Maps plural REST API post type names to singular WordPress post type slugs.
 	 *
 	 * @var array<string, string>
@@ -97,6 +105,7 @@ class Post_Import_Service {
 		$this->content_processor  = $content_processor;
 		$this->import_history     = $import_history;
 		$this->meta_terms_manager = $meta_terms_manager;
+		$this->logger             = new Content_Logger();
 	}
 
 	/**
@@ -129,19 +138,14 @@ class Post_Import_Service {
 			return $validation_error;
 		}
 
-		$post_type         = $this->resolve_post_type( $fields['raw_post_type'] );
-		$processed_content = $this->process_post_content(
-			$fields['content'],
-			$fields['external_link']
-		);
-		$imported_post     = $this->find_imported_post( $fields['external_post_id'] );
+		$post_type     = $this->resolve_post_type( $fields['raw_post_type'] );
+		$imported_post = $this->find_imported_post( $fields['external_post_id'] );
 
 		if ( $imported_post ) {
 			return $this->handle_imported_post(
 				$imported_post,
 				$fields,
 				$post_type,
-				$processed_content,
 				$session_id
 			);
 		}
@@ -149,7 +153,6 @@ class Post_Import_Service {
 		return $this->handle_new_post(
 			$fields,
 			$post_type,
-			$processed_content,
 			$session_id
 		);
 	}
@@ -161,16 +164,9 @@ class Post_Import_Service {
 	 * @return array Sanitized post fields keyed by field name.
 	 */
 	private function extract_post_fields( array $post_data ): array {
-		$content = wp_unslash( $post_data['content'] ?? '' );
-
-		if ( ! mb_check_encoding( $content, 'UTF-8' ) ) {
-			$content = mb_convert_encoding( $content, 'UTF-8', 'auto' );
-		}
-
 		return array(
 			'external_post_id'  => absint( $post_data['id'] ?? 0 ),
 			'title'             => sanitize_text_field( $post_data['title'] ?? '' ),
-			'content'           => $content,
 			'external_link'     => esc_url_raw( $post_data['link'] ?? '' ),
 			'featured_media_id' => absint( $post_data['featured_media'] ?? 0 ),
 			'raw_post_type'     => sanitize_text_field( $post_data['post_type'] ?? 'post' ),
@@ -315,8 +311,9 @@ class Post_Import_Service {
 	/**
 	 * Handles import flow when a matching post already exists in WordPress.
 	 *
-	 * Attempts to fetch fresh content from the external site, updates the
-	 * existing post, and logs the action.
+	 * Fetches fresh content from the external site and updates the existing post.
+	 * Aborts with an error result if the fetch fails; the post will not be updated
+	 * with stale snapshot data.
 	 *
 	 * Intentional differences from the single-import update path
 	 * (@see Admin_Ajax_Controller::update_imported_draft()):
@@ -325,42 +322,52 @@ class Post_Import_Service {
 	 * - Rollback data is not captured; this is a UI-level safety net only
 	 *   needed for user-triggered single imports.
 	 *
-	 * @param WP_Post  $imported_post     Imported WordPress post.
-	 * @param array    $fields            Sanitized post fields.
-	 * @param string   $post_type         Resolved post type slug.
-	 * @param string   $processed_content Processed post content.
-	 * @param int|null $session_id        Import session ID for logging.
+	 * @param WP_Post  $imported_post Imported WordPress post.
+	 * @param array    $fields        Sanitized post fields.
+	 * @param string   $post_type     Resolved post type slug.
+	 * @param int|null $session_id    Import session ID for logging.
 	 * @return array Import result data.
 	 */
 	private function handle_imported_post(
 		WP_Post $imported_post,
 		array $fields,
 		string $post_type,
-		string $processed_content,
 		?int $session_id
 	): array {
-		$fresh_data = $this->fetch_fresh_content( $fields['external_post_id'] );
+		$fresh_result = $this->fetch_fresh_content( $fields['external_post_id'] );
 
-		if ( $fresh_data ) {
-			// An empty string means the API didn't return a title; keep the existing one.
-			if ( '' !== $fresh_data['title'] ) {
-				$fields['title'] = $fresh_data['title'];
-			}
+		if ( is_wp_error( $fresh_result ) ) {
+			$error_message = $fresh_result->get_error_message();
 
-			$fields['featured_media_id'] = $fresh_data['featured_media'];
-			$fields['excerpt']           = $fresh_data['excerpt'];
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$error_message,
+				array( 'action' => 'fetch_failed' )
+			);
 
-			if ( '' !== $fresh_data['content'] ) {
-				$processed_content = $this->process_post_content(
-					$fresh_data['content'],
-					$fields['external_link']
-				);
-			}
-
-			// Unsanitized values; sanitized downstream before being stored.
-			$fields['meta']  = is_array( $fresh_data['meta'] ?? null ) ? $fresh_data['meta'] : $fields['meta'];
-			$fields['terms'] = is_array( $fresh_data['terms'] ?? null ) ? $fresh_data['terms'] : $fields['terms'];
+			return array(
+				'external_id' => $fields['external_post_id'],
+				'title'       => $fields['title'],
+				'success'     => false,
+				'error'       => $error_message,
+			);
 		}
+
+		$fields['title']             = $fresh_result['title'];
+		$fields['featured_media_id'] = $fresh_result['featured_media'];
+		$fields['excerpt']           = $fresh_result['excerpt'];
+		$processed_content           = $this->process_post_content(
+			$fresh_result['content'] ?? '',
+			$fields['external_link']
+		);
+
+		// Unsanitized values; sanitized downstream before being stored.
+		$fields['meta']  = is_array( $fresh_result['meta'] ?? null ) ? $fresh_result['meta'] : $fields['meta'];
+		$fields['terms'] = is_array( $fresh_result['terms'] ?? null ) ? $fresh_result['terms'] : $fields['terms'];
 
 		$this->content_processor->disable_content_filters();
 
@@ -415,23 +422,57 @@ class Post_Import_Service {
 	/**
 	 * Handles import flow when no matching post exists yet in WordPress.
 	 *
-	 * Creates a new draft post with the imported content and metadata,
-	 * imports the featured image, and logs the action.
+	 * Fetches fresh content from the external site and creates a new draft post.
+	 * Aborts with an error result if the fetch fails; the post will not be created
+	 * with stale snapshot data.
 	 *
 	 * @see Admin_Ajax_Controller::create_new_draft() for the single-import equivalent.
 	 *
-	 * @param array    $fields            Sanitized post fields.
-	 * @param string   $post_type         Resolved post type slug.
-	 * @param string   $processed_content Processed post content.
-	 * @param int|null $session_id        Import session ID for logging.
+	 * @param array    $fields     Sanitized post fields.
+	 * @param string   $post_type  Resolved post type slug.
+	 * @param int|null $session_id Import session ID for logging.
 	 * @return array Import result data.
 	 */
 	private function handle_new_post(
 		array $fields,
 		string $post_type,
-		string $processed_content,
 		?int $session_id
 	): array {
+		$fresh_result = $this->fetch_fresh_content( $fields['external_post_id'] );
+
+		if ( is_wp_error( $fresh_result ) ) {
+			$error_message = $fresh_result->get_error_message();
+
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$error_message,
+				array( 'action' => 'fetch_failed' )
+			);
+
+			return array(
+				'external_id' => $fields['external_post_id'],
+				'title'       => $fields['title'],
+				'success'     => false,
+				'error'       => $error_message,
+			);
+		}
+
+		$fields['title']             = $fresh_result['title'];
+		$fields['featured_media_id'] = $fresh_result['featured_media'];
+		$fields['excerpt']           = $fresh_result['excerpt'];
+		$processed_content           = $this->process_post_content(
+			$fresh_result['content'] ?? '',
+			$fields['external_link']
+		);
+
+		// Unsanitized values; sanitized downstream before being stored.
+		$fields['meta']  = is_array( $fresh_result['meta'] ?? null ) ? $fresh_result['meta'] : $fields['meta'];
+		$fields['terms'] = is_array( $fresh_result['terms'] ?? null ) ? $fresh_result['terms'] : $fields['terms'];
+
 		$this->content_processor->disable_content_filters();
 
 		$post_id = wp_insert_post(
@@ -513,17 +554,20 @@ class Post_Import_Service {
 	/**
 	 * Fetches fresh post content from the configured external site.
 	 *
-	 * Returns null silently if the site URL is not configured, or if the
-	 * API request fails.
+	 * Returns a WP_Error when the fetch fails for any reason, including when no
+	 * source site URL is configured. Callers should abort the import on error.
 	 *
 	 * @param int $external_post_id External post ID to fetch.
-	 * @return array|null Fresh post data or null if unavailable.
+	 * @return array|WP_Error Fresh post data, or an error on failure.
 	 */
-	private function fetch_fresh_content( int $external_post_id ): ?array {
-		$configured_site_url = get_option( Options::OPTION_SOURCE_SITE_URL, '' );
+	private function fetch_fresh_content( int $external_post_id ): array|WP_Error {
+		$configured_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
 		if ( empty( $configured_site_url ) ) {
-			return null;
+			return new WP_Error(
+				'fresh_content_fetch_no_source_url',
+				__( 'No source site URL is configured.', 'safe-publish' )
+			);
 		}
 
 		$auth_credentials = Auth_Credential_Provider::get_credentials();
@@ -535,11 +579,24 @@ class Post_Import_Service {
 				$auth_credentials
 			);
 
-			return $fresh_data ? $fresh_data : null;
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			if ( ! $fresh_data ) {
+				return new WP_Error(
+					'fresh_content_fetch_failed',
+					__( 'Could not fetch fresh content from the source site. The post was not imported.', 'safe-publish' )
+				);
+			}
+
+			return $fresh_data;
 		} catch ( Exception $e ) {
-			// Continue with provided content if fresh fetch fails.
-			return null;
+			$this->logger->log_error(
+				'CONTENT_FETCH_FAILED',
+				array( 'error' => $e->getMessage() )
+			);
+
+			return new WP_Error(
+				'fresh_content_fetch_exception',
+				$e->getMessage()
+			);
 		}
 	}
 
