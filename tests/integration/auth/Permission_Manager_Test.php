@@ -43,6 +43,10 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 			new Auth_Logger(),
 			new Export_Logger()
 		);
+
+		// Clear any stored export events before each test.
+		Event_Table::create_table();
+		Event_Table::clear( 'export' );
 	}
 
 	/**
@@ -88,7 +92,6 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 	public function test_log_export_event_logs_collection_export(): void {
 		// ARRANGE: Set up an authenticated context with a User-Agent header and
 		// a two-post collection response.
-		Event_Table::create_table();
 		// phpcs:ignore WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__HTTP_USER_AGENT__
 		$_SERVER['HTTP_USER_AGENT'] = 'Safe Publish/1.0.0; https://dest.example.com';
 		$request                    = new WP_REST_Request( 'GET', '/wp/v2/posts' );
@@ -137,7 +140,6 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 	 */
 	public function test_log_export_event_logs_single_post_export(): void {
 		// ARRANGE: Set up an authenticated context with a single-post response.
-		Event_Table::create_table();
 		$request = new WP_REST_Request( 'GET', '/wp/v2/posts/42' );
 		$this->permission_manager->setup_authenticated_context( $request );
 
@@ -173,7 +175,6 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 	 */
 	public function test_log_export_event_skips_unauthenticated_requests(): void {
 		// ARRANGE: Prepare a request and response without calling setup_authenticated_context.
-		Event_Table::create_table();
 		$request  = new WP_REST_Request( 'GET', '/wp/v2/posts' );
 		$response = new WP_REST_Response( array( array( 'id' => 5 ) ), 200 );
 
@@ -191,7 +192,6 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 	 */
 	public function test_log_export_event_logs_failed_http_response(): void {
 		// ARRANGE: Set up an authenticated context with a 403 response.
-		Event_Table::create_table();
 		$request = new WP_REST_Request( 'GET', '/wp/v2/posts' );
 		$this->permission_manager->setup_authenticated_context( $request );
 
@@ -219,7 +219,6 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 	 */
 	public function test_log_export_event_logs_wp_error_response(): void {
 		// ARRANGE: Set up an authenticated context with a WP_Error for an invalid post ID.
-		Event_Table::create_table();
 		$request = new WP_REST_Request( 'GET', '/wp/v2/posts/99' );
 		$this->permission_manager->setup_authenticated_context( $request );
 
