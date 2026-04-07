@@ -11,6 +11,7 @@ namespace Safe_Publish\Media;
 
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\Media\Media_Logger;
+use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Logger;
 use Safe_Publish\Utils\Options;
 
@@ -97,7 +98,7 @@ class Media_Importer {
 
 		if ( is_wp_error( $temp_file ) ) {
 			$this->logger->log_error(
-				'MEDIA_DOWNLOAD_FAILED',
+				Log_Events::MEDIA_DOWNLOAD_FAILED,
 				array(
 					'url'   => $media_url,
 					'error' => $temp_file->get_error_message(),
@@ -127,7 +128,7 @@ class Media_Importer {
 
 		if ( is_wp_error( $attachment_id ) ) {
 			$this->logger->log_error(
-				'MEDIA_SIDELOAD_FAILED',
+				Log_Events::MEDIA_SIDELOAD_FAILED,
 				array(
 					'url'   => $media_url,
 					'error' => $attachment_id->get_error_message(),
@@ -186,7 +187,7 @@ class Media_Importer {
 		if ( is_wp_error( $temp_file ) || ! $temp_file ) {
 			if ( is_wp_error( $temp_file ) ) {
 				$this->logger->log_error(
-					'MEDIA_DOWNLOAD_FAILED',
+					Log_Events::MEDIA_DOWNLOAD_FAILED,
 					array(
 						'url'   => $media_url,
 						'error' => $temp_file->get_error_message(),
@@ -269,7 +270,7 @@ class Media_Importer {
 
 		if ( is_wp_error( $attachment_id ) ) {
 			$this->logger->log_error(
-				'MEDIA_IMPORT_FAILED',
+				Log_Events::MEDIA_IMPORT_FAILED,
 				array(
 					'url'   => $media_url,
 					'error' => $attachment_id->get_error_message(),
@@ -281,7 +282,7 @@ class Media_Importer {
 		// Verify the attachment was actually created.
 		if ( ! $attachment_id || ! is_numeric( $attachment_id ) ) {
 			$this->logger->log_error(
-				'INVALID_ATTACHMENT_ID',
+				Log_Events::INVALID_ATTACHMENT_ID,
 				array( 'url' => $media_url )
 			);
 			return false;

@@ -11,6 +11,7 @@ use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Auth_Credential_Provider;
+use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Options;
 use Exception;
 use WP_Error;
@@ -641,7 +642,7 @@ class Post_Import_Service {
 			return $fresh_data;
 		} catch ( Exception $e ) {
 			$this->logger->log_error(
-				'CONTENT_FETCH_FAILED',
+				Log_Events::CONTENT_FETCH_FAILED,
 				array( 'error' => $e->getMessage() )
 			);
 

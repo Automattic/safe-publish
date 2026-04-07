@@ -7,6 +7,7 @@
 
 namespace Safe_Publish\Auth;
 
+use Safe_Publish\Utils\Log_Events;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -148,7 +149,7 @@ class HMAC_Authenticator {
 
 		if ( empty( $shared_secret ) ) {
 			$this->logger->log_error(
-				'NO_SECRET_CONFIGURED',
+				Log_Events::NO_SECRET_CONFIGURED,
 				array(
 					'route'  => $route,
 					'method' => $method,
@@ -170,7 +171,7 @@ class HMAC_Authenticator {
 			$time_diff = abs( time() - $timestamp );
 
 			$this->logger->log_error(
-				'TIMESTAMP_EXPIRED',
+				Log_Events::TIMESTAMP_EXPIRED,
 				array(
 					'route'        => $route,
 					'method'       => $method,
@@ -190,7 +191,7 @@ class HMAC_Authenticator {
 
 		if ( ! isset( $headers['x_safe_publish_content_hash'] ) ) {
 			$this->logger->log_error(
-				'CONTENT_HASH_MISSING',
+				Log_Events::CONTENT_HASH_MISSING,
 				array(
 					'route'  => $route,
 					'method' => $method,
@@ -209,7 +210,7 @@ class HMAC_Authenticator {
 
 		if ( ! $this->validate_content_hash( $body, $received_hash ) ) {
 			$this->logger->log_error(
-				'CONTENT_HASH_MISMATCH',
+				Log_Events::CONTENT_HASH_MISMATCH,
 				array(
 					'route'  => $route,
 					'method' => $method,
@@ -225,7 +226,7 @@ class HMAC_Authenticator {
 
 		if ( empty( $this->connected_site_url ) ) {
 			$this->logger->log_error(
-				'NO_CONNECTED_URL_CONFIGURED',
+				Log_Events::NO_CONNECTED_URL_CONFIGURED,
 				array(
 					'route'  => $route,
 					'method' => $method,
@@ -245,7 +246,7 @@ class HMAC_Authenticator {
 
 		if ( empty( $request_site_url ) ) {
 			$this->logger->log_error(
-				'SITE_URL_HEADER_MISSING',
+				Log_Events::SITE_URL_HEADER_MISSING,
 				array(
 					'route'  => $route,
 					'method' => $method,
@@ -261,7 +262,7 @@ class HMAC_Authenticator {
 
 		if ( ! $this->validate_site_url( $request_site_url ) ) {
 			$this->logger->log_error(
-				'SITE_URL_MISMATCH',
+				Log_Events::SITE_URL_MISMATCH,
 				array(
 					'route'            => $route,
 					'method'           => $method,
@@ -286,7 +287,7 @@ class HMAC_Authenticator {
 			$this->connected_site_url
 		) ) {
 			$this->logger->log_error(
-				'SIGNATURE_INVALID',
+				Log_Events::SIGNATURE_INVALID,
 				array(
 					'route'               => $route,
 					'method'              => $method,
