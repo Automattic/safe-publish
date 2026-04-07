@@ -111,6 +111,9 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 		);
 
 		add_filter( 'pre_http_request', array( $this, 'intercept_http_request' ), 5, 3 );
+
+		// Configure the connected site URL so fetch_fresh_content() can make requests.
+		update_option( Options::OPTION_CONNECTED_SITE_URL, self::SOURCE_SITE_URL );
 	}
 
 	/**
@@ -121,6 +124,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 		remove_filter( 'pre_http_request', array( $this, 'intercept_http_request' ), 5 );
 		delete_option( Options::OPTION_USERNAME );
 		delete_option( Options::OPTION_PASSWORD );
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
 		parent::tearDown();
 	}
 
@@ -258,7 +262,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 	 * @return array Mock HTTP response.
 	 */
 	public function intercept_http_request( $preempt, array $args, string $url ): array {
-		unset( $preempt, $url );
+		unset( $preempt );
 
 		$this->captured_request_args = $args;
 
@@ -275,6 +279,32 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 			);
 		}
 
+		// Single-post endpoint used by fetch_fresh_content(): return a post object.
+		if ( preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
+			return array(
+				'headers'  => array(),
+				'body'     => (string) wp_json_encode(
+					array(
+						'id'             => 1,
+						'link'           => 'https://source.example.com/test-post',
+						'title'          => array( 'rendered' => 'Test Post' ),
+						'modified'       => '2026-01-01T00:00:00',
+						'featured_media' => 0,
+						'content'        => array( 'rendered' => '<p>Test content.</p>' ),
+						'excerpt'        => array( 'rendered' => '' ),
+						'meta'           => array(),
+					)
+				),
+				'response' => array(
+					'code'    => 200,
+					'message' => 'OK',
+				),
+				'cookies'  => array(),
+				'filename' => null,
+			);
+		}
+
+		// Posts list endpoint: return an array of posts.
 		return array(
 			'headers'  => array(),
 			'body'     => (string) wp_json_encode(

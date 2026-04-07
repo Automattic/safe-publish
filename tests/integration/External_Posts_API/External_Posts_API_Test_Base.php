@@ -14,6 +14,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Embed_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Integration_Test_Case;
+use Safe_Publish\Utils\Options;
 use WP_Error;
 
 /**
@@ -49,6 +50,16 @@ abstract class External_Posts_API_Test_Base extends Integration_Test_Case {
 	protected Media_Importer $media_importer;
 
 	/**
+	 * Per-test overrides for the mocked single-post API response.
+	 *
+	 * Keys: title, featured_media, content, excerpt, meta, terms.
+	 * Terms: array keyed by taxonomy slug with arrays of term names as values.
+	 *
+	 * @var array<string, mixed>
+	 */
+	protected array $mock_single_post_overrides = array();
+
+	/**
 	 * Sets up test environment.
 	 */
 	#[\Override]
@@ -58,6 +69,9 @@ abstract class External_Posts_API_Test_Base extends Integration_Test_Case {
 		// Create service instances with real dependencies.
 		$this->media_importer    = new Media_Importer( new HTTP_Client() );
 		$this->content_processor = new Content_Media_Processor( $this->media_importer, new Embed_Processor() );
+
+		// Configure the connected site URL so fetch_fresh_content() can make requests.
+		update_option( Options::OPTION_CONNECTED_SITE_URL, 'https://source.example.com' );
 
 		// Mock HTTP requests to return test image data.
 		add_filter( 'pre_http_request', array( $this, 'mock_http_request' ), 10, 3 );
@@ -73,6 +87,7 @@ abstract class External_Posts_API_Test_Base extends Integration_Test_Case {
 	protected function tearDown(): void {
 		remove_filter( 'pre_http_request', array( $this, 'mock_http_request' ), 10 );
 		remove_filter( 'wp_handle_sideload_prefilter', array( $this, 'fix_empty_temp_files' ), 10 );
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
 		parent::tearDown();
 	}
 
@@ -148,6 +163,45 @@ abstract class External_Posts_API_Test_Base extends Integration_Test_Case {
 		// Only mock example.com URLs.
 		if ( ! str_contains( $url, 'example.com' ) ) {
 			return $preempt;
+		}
+
+		// Handle single-post REST endpoint used by fetch_fresh_content().
+		if ( preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
+			$body = array(
+				'id'             => 1,
+				'title'          => array( 'rendered' => $this->mock_single_post_overrides['title'] ?? 'Test Post' ),
+				'featured_media' => $this->mock_single_post_overrides['featured_media'] ?? 0,
+				'content'        => array( 'rendered' => $this->mock_single_post_overrides['content'] ?? '<p>Test content.</p>' ),
+				'excerpt'        => array( 'rendered' => $this->mock_single_post_overrides['excerpt'] ?? '' ),
+				'link'           => 'https://source.example.com/test-post',
+				'meta'           => $this->mock_single_post_overrides['meta'] ?? array(),
+			);
+
+			if ( ! empty( $this->mock_single_post_overrides['terms'] ) ) {
+				$term_groups = array();
+				foreach ( $this->mock_single_post_overrides['terms'] as $taxonomy => $term_names ) {
+					$group = array();
+					foreach ( $term_names as $name ) {
+						$group[] = array(
+							'taxonomy' => $taxonomy,
+							'name'     => $name,
+						);
+					}
+					$term_groups[] = $group;
+				}
+				$body['_embedded'] = array( 'wp:term' => $term_groups );
+			}
+
+			return array(
+				'response' => array(
+					'code'    => 200,
+					'message' => 'OK',
+				),
+				'body'     => (string) wp_json_encode( $body ),
+				'headers'  => array(),
+				'cookies'  => array(),
+				'filename' => null,
+			);
 		}
 
 		// Return 404 for URLs explicitly marked as nonexistent.
