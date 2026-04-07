@@ -27,6 +27,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Embed_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Tests\Integration\Mock_Post_API_Trait;
 use WP_REST_Request;
 
 /**
@@ -35,6 +36,8 @@ use WP_REST_Request;
  * Tests the complete auth → import → history workflow end-to-end.
  */
 class Full_Workflow_Integration_Test extends Integration_Test_Case {
+
+	use Mock_Post_API_Trait;
 
 	/**
 	 * Shared secret used when the constant is not already defined.
@@ -68,16 +71,6 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	 * @var History_Repository
 	 */
 	private History_Repository $repository;
-
-	/**
-	 * Per-test overrides for the mocked single-post API response.
-	 *
-	 * Keys: title, featured_media, content, excerpt, meta, terms.
-	 * Terms: array keyed by taxonomy slug with arrays of term names as values.
-	 *
-	 * @var array<string, mixed>
-	 */
-	private array $mock_api_overrides = array();
 
 	/**
 	 * Sets up test dependencies.
@@ -142,7 +135,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	/**
 	 * Intercepts HTTP requests to the single-post REST endpoint.
 	 *
-	 * Returns a post response built from defaults merged with $this->mock_api_overrides.
+	 * Returns a post response built from defaults merged with $this->mock_post_overrides.
 	 *
 	 * @param false|array|\WP_Error $preempt Preemptive return value.
 	 * @param array                 $_args   HTTP request arguments (unused).
@@ -154,41 +147,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			return $preempt;
 		}
 
-		$body = array(
-			'id'             => 1,
-			'title'          => array( 'rendered' => $this->mock_api_overrides['title'] ?? 'Test Post' ),
-			'featured_media' => $this->mock_api_overrides['featured_media'] ?? 0,
-			'content'        => array( 'rendered' => $this->mock_api_overrides['content'] ?? '<p>Test content.</p>' ),
-			'excerpt'        => array( 'rendered' => $this->mock_api_overrides['excerpt'] ?? '' ),
-			'link'           => 'https://source.example.com/test-post',
-			'meta'           => $this->mock_api_overrides['meta'] ?? array(),
-		);
-
-		if ( ! empty( $this->mock_api_overrides['terms'] ) ) {
-			$term_groups = array();
-			foreach ( $this->mock_api_overrides['terms'] as $taxonomy => $term_names ) {
-				$group = array();
-				foreach ( $term_names as $name ) {
-					$group[] = array(
-						'taxonomy' => $taxonomy,
-						'name'     => $name,
-					);
-				}
-				$term_groups[] = $group;
-			}
-			$body['_embedded'] = array( 'wp:term' => $term_groups );
-		}
-
-		return array(
-			'response' => array(
-				'code'    => 200,
-				'message' => 'OK',
-			),
-			'body'     => (string) wp_json_encode( $body ),
-			'headers'  => array(),
-			'cookies'  => array(),
-			'filename' => null,
-		);
+		return $this->build_mock_post_response();
 	}
 
 	/**
@@ -352,7 +311,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			'terms'          => array(),
 		);
 
-		$this->mock_api_overrides = array(
+		$this->mock_post_overrides = array(
 			'excerpt' => 'A short summary.',
 			'meta'    => array( 'custom_key' => 'custom_value' ),
 		);
@@ -390,7 +349,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			'terms'          => array( 'category' => array( 'Integration Test Category' ) ),
 		);
 
-		$this->mock_api_overrides = array(
+		$this->mock_post_overrides = array(
 			'terms' => array( 'category' => array( 'Integration Test Category' ) ),
 		);
 
@@ -423,7 +382,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			'terms'          => array(),
 		);
 
-		$this->mock_api_overrides = array(
+		$this->mock_post_overrides = array(
 			'excerpt' => 'Original excerpt.',
 			'meta'    => array( 'my_key' => 'original_value' ),
 		);
@@ -435,7 +394,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		$post_data['excerpt']        = 'Updated excerpt.';
 		$post_data['meta']['my_key'] = 'updated_value';
 
-		$this->mock_api_overrides = array(
+		$this->mock_post_overrides = array(
 			'excerpt' => 'Updated excerpt.',
 			'meta'    => array( 'my_key' => 'updated_value' ),
 		);
@@ -473,7 +432,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			'terms'          => array( 'category' => array( 'Original Term' ) ),
 		);
 
-		$this->mock_api_overrides = array(
+		$this->mock_post_overrides = array(
 			'terms' => array( 'category' => array( 'Original Term' ) ),
 		);
 
@@ -483,7 +442,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		// ACT: Re-import with a different term.
 		$post_data['terms'] = array( 'category' => array( 'Replacement Term' ) );
 
-		$this->mock_api_overrides = array(
+		$this->mock_post_overrides = array(
 			'terms' => array( 'category' => array( 'Replacement Term' ) ),
 		);
 
@@ -518,7 +477,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			'terms'          => array(),
 		);
 
-		$this->mock_api_overrides = array(
+		$this->mock_post_overrides = array(
 			'content' => '<p>Safe content.</p><script>alert("xss")</script>',
 		);
 
@@ -553,7 +512,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			'terms'          => array(),
 		);
 
-		$this->mock_api_overrides = array(
+		$this->mock_post_overrides = array(
 			'excerpt' => '<em>Safe excerpt.</em><script>alert("xss")</script>',
 		);
 
@@ -594,7 +553,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		// ACT: Re-import with a script tag injected into the content.
 		$post_data['content'] = '<p>Updated content.</p><script>alert("xss")</script>';
 
-		$this->mock_api_overrides = array(
+		$this->mock_post_overrides = array(
 			'content' => '<p>Updated content.</p><script>alert("xss")</script>',
 		);
 
