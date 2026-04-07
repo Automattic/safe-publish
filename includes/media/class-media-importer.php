@@ -96,6 +96,13 @@ class Media_Importer {
 		$temp_file = download_url( $media_url );
 
 		if ( is_wp_error( $temp_file ) ) {
+			$this->logger->log_error(
+				'MEDIA_DOWNLOAD_FAILED',
+				array(
+					'url'   => $media_url,
+					'error' => $temp_file->get_error_message(),
+				)
+			);
 			return false;
 		}
 
@@ -119,6 +126,13 @@ class Media_Importer {
 		$this->http_client->cleanup_temp_file( $temp_file );
 
 		if ( is_wp_error( $attachment_id ) ) {
+			$this->logger->log_error(
+				'MEDIA_SIDELOAD_FAILED',
+				array(
+					'url'   => $media_url,
+					'error' => $attachment_id->get_error_message(),
+				)
+			);
 			return false;
 		}
 
@@ -170,6 +184,16 @@ class Media_Importer {
 		$temp_file = $this->http_client->download_external_file( $media_url );
 
 		if ( is_wp_error( $temp_file ) || ! $temp_file ) {
+			if ( is_wp_error( $temp_file ) ) {
+				$this->logger->log_error(
+					'MEDIA_DOWNLOAD_FAILED',
+					array(
+						'url'   => $media_url,
+						'error' => $temp_file->get_error_message(),
+					)
+				);
+			}
+
 			// Remove the filter if we added it.
 			if ( $webp_filter_added ) {
 				remove_filter( 'upload_mimes', array( $this, 'add_webp_mime_type' ) );

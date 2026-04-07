@@ -340,6 +340,26 @@ final class Admin_Ajax_Controller {
 
 		$processed_content = $this->process_draft_content( $content, $external_link );
 
+		$failed_media = $this->content_processor->get_failed_media();
+
+		if ( ! empty( $failed_media ) ) {
+			$error_message = $this->content_processor->get_failed_media_error_message();
+
+			$this->import_history->log_import_action(
+				$session_id,
+				$external_post_id,
+				$title,
+				'error',
+				null,
+				$error_message,
+				array( 'action' => 'media_download_failed' )
+			);
+			$this->import_history->update_session_stats( $session_id, 'error' );
+			$this->import_history->complete_session( $session_id );
+
+			wp_send_json_error( $error_message );
+		}
+
 		if ( $imported_post ) {
 			$result = $this->update_imported_draft(
 				$imported_post,
