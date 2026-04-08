@@ -232,15 +232,25 @@ class Media_Importer {
 		$file_type = wp_check_filetype( $filename );
 
 		// Add WebP support if not natively supported.
-		if ( ! $file_type['type'] && isset( $file_info['extension'] ) && 'webp' === strtolower( $file_info['extension'] ) ) {
+		if (
+			false === $file_type['type'] &&
+			isset( $file_info['extension'] ) &&
+			'webp' === strtolower( $file_info['extension'] )
+		) {
 			$file_type = array(
 				'ext'  => 'webp',
 				'type' => 'image/webp',
 			);
 		}
 
-		if ( ! $file_type['type'] ) {
+		if ( false === $file_type['type'] ) {
+			$this->logger->log_error(
+				Log_Events::MEDIA_UNSUPPORTED_FILE_TYPE,
+				array( 'url' => $media_url )
+			);
+
 			$this->http_client->cleanup_temp_file( $temp_file );
+
 			return false;
 		}
 
@@ -362,12 +372,30 @@ class Media_Importer {
 		$response      = $this->http_client->make_request( $media_api_url, $auth_credentials );
 
 		if ( is_wp_error( $response ) ) {
+			$this->logger->log_error(
+				Log_Events::FEATURED_IMAGE_FETCH_FAILED,
+				array(
+					'media_id' => $featured_media_id,
+					'site_url' => $site_url,
+					'error'    => $response->get_error_message(),
+				)
+			);
+
 			return false;
 		}
 
 		$response_body = wp_remote_retrieve_body( $response );
 		$media_data    = json_decode( $response_body, true );
-		if ( empty( $media_data['source_url'] ) ) {
+
+		if ( ! isset( $media_data['source_url'] ) || '' === $media_data['source_url'] ) {
+			$this->logger->log_error(
+				Log_Events::FEATURED_IMAGE_MISSING_SOURCE,
+				array(
+					'media_id' => $featured_media_id,
+					'site_url' => $site_url,
+				)
+			);
+
 			return false;
 		}
 

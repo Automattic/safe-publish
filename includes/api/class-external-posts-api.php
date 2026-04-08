@@ -9,8 +9,11 @@ declare(strict_types=1);
 
 namespace Safe_Publish\API;
 
-use Safe_Publish\Validators\URL_Validator;
+use Safe_Publish\Admin\Content_Logger;
 use Safe_Publish\Auth\VIP_Safe_Auth;
+use Safe_Publish\Utils\Log_Events;
+use Safe_Publish\Utils\Logger;
+use Safe_Publish\Validators\URL_Validator;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -30,12 +33,20 @@ class External_Posts_API {
 	private HTTP_Client $http_client;
 
 	/**
+	 * Logger instance.
+	 *
+	 * @var Logger
+	 */
+	private Logger $logger;
+
+	/**
 	 * Constructs the External_Posts_API instance.
 	 *
 	 * @param HTTP_Client|null $http_client Optional. HTTP client for making requests.
 	 */
 	public function __construct( ?HTTP_Client $http_client = null ) {
 		$this->http_client = $http_client ?? new HTTP_Client();
+		$this->logger      = new Content_Logger();
 	}
 
 	/**
@@ -297,13 +308,30 @@ class External_Posts_API {
 		$response = $this->make_request( $api_url, $auth_credentials );
 
 		if ( is_wp_error( $response ) ) {
+			$this->logger->log_error(
+				Log_Events::CONTENT_FETCH_FAILED,
+				array(
+					'post_id'  => $external_post_id,
+					'site_url' => $site_url,
+					'error'    => $response->get_error_message(),
+				)
+			);
+
 			return false;
 		}
 
 		$body = wp_remote_retrieve_body( $response );
 		$data = json_decode( $body, true );
 
-		if ( empty( $data ) || ! is_array( $data ) ) {
+		if ( ! is_array( $data ) || array() === $data ) {
+			$this->logger->log_error(
+				Log_Events::CONTENT_FETCH_INVALID_RESPONSE,
+				array(
+					'post_id'  => $external_post_id,
+					'site_url' => $site_url,
+				)
+			);
+
 			return false;
 		}
 
