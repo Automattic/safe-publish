@@ -716,4 +716,68 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			'Staging URL must not remain in saved post content after a successful audio block import.'
 		);
 	}
+
+	/**
+	 * Verifies that partially-downloaded attachments are cleaned up when an
+	 * import is aborted due to a media failure.
+	 *
+	 * All blocks are processed independently before the failure check runs, so
+	 * any successful downloads that preceded a failure will have created real
+	 * attachments. All of those must be deleted on abort to leave the media
+	 * library in a clean state.
+	 */
+	public function test_orphaned_attachments_are_deleted_when_import_is_aborted(): void {
+		// ARRANGE: Content with two images — first succeeds, second fails (nonexistent).
+		$good_url   = 'https://source.example.com/real-image.jpg';
+		$broken_url = 'https://source.example.com/nonexistent-partial.jpg';
+
+		$this->mock_post_overrides = array(
+			'content' => '<p>'
+				. '<img src="' . $good_url . '" alt="good">'
+				. '<img src="' . $broken_url . '" alt="broken">'
+				. '</p>',
+		);
+
+		$session_id         = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$attachments_before = $this->get_attachment_count();
+
+		$post_data = array(
+			'id'        => 8301,
+			'title'     => 'Post With Partial Media Failure',
+			'content'   => '<p>Stale content.</p>',
+			'link'      => 'https://source.example.com/partial-media-failure',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Attempt to import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import aborted due to the broken image.
+		$this->assertFalse(
+			$result['success'],
+			'Import should fail when one of multiple images cannot be downloaded.'
+		);
+		$this->assertStringContainsString( 'nonexistent-partial.jpg', $result['error'] );
+
+		// ASSERT: No post was created.
+		$this->assertEmpty(
+			get_posts(
+				array(
+					'post_type'        => 'post',
+					'posts_per_page'   => 1,
+					'suppress_filters' => false,
+					'meta_key'         => \Safe_Publish\Utils\Options::META_EXTERNAL_POST_ID,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => '8301',
+				)
+			),
+			'No post should be created when a media import fails.'
+		);
+
+		// ASSERT: The attachment created for the successful image was cleaned up.
+		$this->assert_no_new_attachments(
+			$attachments_before,
+			'Attachments created before the failure must be deleted when the import is aborted.'
+		);
+	}
 }

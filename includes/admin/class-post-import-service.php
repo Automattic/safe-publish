@@ -400,6 +400,7 @@ class Post_Import_Service {
 				$failed_media_error['error'],
 				array( 'action' => 'media_download_failed' )
 			);
+			$this->content_processor->delete_newly_created_media();
 			return $failed_media_error;
 		}
 
@@ -519,6 +520,7 @@ class Post_Import_Service {
 				$failed_media_error['error'],
 				array( 'action' => 'media_download_failed' )
 			);
+			$this->content_processor->delete_newly_created_media();
 			return $failed_media_error;
 		}
 
