@@ -15,6 +15,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Embed_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Integration_Test_Case;
+use Safe_Publish\Tests\Integration\Mock_Media_HTTP_Trait;
 
 /**
  * Content Processor Integration Test Class.
@@ -22,6 +23,8 @@ use Safe_Publish\Tests\Integration\Integration_Test_Case;
  * Tests the admin Content_Processor's HTML transformation pipeline.
  */
 class Content_Processor_Test extends Integration_Test_Case {
+
+	use Mock_Media_HTTP_Trait;
 
 	/**
 	 * Content Processor instance under test.
@@ -45,6 +48,50 @@ class Content_Processor_Test extends Integration_Test_Case {
 		);
 
 		$this->processor = new Content_Processor( $media_importer, $content_media_processor );
+
+		add_filter( 'pre_http_request', array( $this, 'mock_http_request' ), 10, 3 );
+		add_filter( 'wp_handle_sideload_prefilter', array( $this, 'fix_empty_temp_files' ), 10, 1 );
+	}
+
+	/**
+	 * Tears down test environment.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		remove_filter( 'pre_http_request', array( $this, 'mock_http_request' ), 10 );
+		remove_filter( 'wp_handle_sideload_prefilter', array( $this, 'fix_empty_temp_files' ), 10 );
+		parent::tearDown();
+	}
+
+	/**
+	 * Mocks HTTP requests for media downloads, serving real fixture files.
+	 *
+	 * @param false|array|\WP_Error $preempt A preemptive return value.
+	 * @param array                 $args    HTTP request arguments.
+	 * @param string                $url     The request URL.
+	 * @return false|array|\WP_Error
+	 */
+	public function mock_http_request( $preempt, array $args, string $url ) {
+		unset( $args );
+
+		if ( false !== $preempt || ! str_contains( $url, 'source.example.com' ) ) {
+			return $preempt;
+		}
+
+		$extension   = strtolower( pathinfo( (string) wp_parse_url( $url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
+		$fixture_map = array(
+			'jpg'  => array( 'test-1x1.jpg', 'image/jpeg' ),
+			'jpeg' => array( 'test-1x1.jpg', 'image/jpeg' ),
+			'png'  => array( 'test-1x1.png', 'image/png' ),
+			'gif'  => array( 'test-1x1.gif', 'image/gif' ),
+			'webp' => array( 'test-1x1.webp', 'image/webp' ),
+		);
+
+		if ( ! isset( $fixture_map[ $extension ] ) ) {
+			return $preempt;
+		}
+
+		return $this->get_fixture_response( ...$fixture_map[ $extension ] );
 	}
 
 	/**
@@ -219,5 +266,49 @@ class Content_Processor_Test extends Integration_Test_Case {
 			$processed,
 			'No remaining references to the source site should exist after processing'
 		);
+	}
+
+	/**
+	 * Verifies that a Gutenberg core/image block has its external URL imported
+	 * and its attrs updated with the local URL and attachment ID.
+	 *
+	 * This exercises process_image_block() through the full Content_Processor
+	 * pipeline, confirming that import_external_media_as_attachment() is used
+	 * and the block attrs are correctly rewritten.
+	 */
+	public function test_process_gutenberg_image_block_imports_media_and_updates_attrs(): void {
+		// ARRANGE: A core/image block referencing an external image on the source site.
+		$source_site  = 'https://source.example.com';
+		$external_url = 'https://source.example.com/photo.jpg';
+		$content      = '<!-- wp:image {"url":"' . $external_url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $external_url . '" alt="A photo"/></figure>'
+			. '<!-- /wp:image -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block content through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site );
+
+		// ASSERT: Exactly one attachment was created.
+		$this->assertSame( $attachments_before + 1, $this->get_attachment_count(), 'Should create exactly one attachment' );
+
+		// ASSERT: The external URL no longer appears anywhere in the output.
+		$this->assertStringNotContainsString( $external_url, $processed, 'External URL should be replaced' );
+
+		// ASSERT: The local upload URL appears in the output.
+		$this->assertStringContainsString( 'wp-content/uploads', $processed, 'Local upload URL should be present' );
+
+		// ASSERT: No failure was recorded — the import succeeded.
+		$this->assertSame( array(), $this->processor->get_failed_media(), 'No media failures should be recorded' );
+
+		// ASSERT: The block attrs contain a local upload URL (not the external one).
+		$this->assertMatchesRegularExpression(
+			'/"url":"[^"]*wp-content\/uploads[^"]*"/',
+			$processed,
+			'Block attrs url should point to local uploads'
+		);
+
+		// ASSERT: The block attrs contain the attachment ID.
+		$this->assertMatchesRegularExpression( '/"id":\d+/', $processed, 'Block attrs should contain a numeric attachment ID' );
 	}
 }
