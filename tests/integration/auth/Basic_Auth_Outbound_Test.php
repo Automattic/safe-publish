@@ -130,7 +130,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that fetch_posts sends both HMAC and Basic Auth headers when
-	 * credentials are fully configured in plugin options.
+	 * credentials are fully configured in plugin options, and returns one post.
 	 */
 	public function test_fetch_posts_sends_both_hmac_and_basic_auth_headers(): void {
 		// ARRANGE: Configure both username and password in plugin options.
@@ -147,7 +147,11 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 		$headers = $this->captured_request_args['headers'] ?? array();
 
 		$this->assertArrayHasKey( 'X-Safe-Publish-Signature', $headers, 'HMAC signature header should be present.' );
-		$this->assertNotEmpty( $headers['X-Safe-Publish-Signature'], 'HMAC signature should not be empty.' );
+		$this->assertMatchesRegularExpression(
+			'/^[0-9a-f]{64}$/',
+			$headers['X-Safe-Publish-Signature'] ?? '',
+			'HMAC signature should be a 64-character lowercase hex string (SHA-256).'
+		);
 
 		$this->assertSame(
 			'Basic ' . base64_encode( 'testuser:testpass' ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
@@ -161,7 +165,8 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that fetch_posts sends only HMAC headers and no Basic Auth
-	 * header when no credentials are configured in plugin options.
+	 * header when no credentials are configured in plugin options, and still
+	 * returns the expected posts.
 	 */
 	public function test_fetch_posts_sends_only_hmac_headers_without_basic_auth_credentials(): void {
 		// ARRANGE: No credentials configured (options are empty).
@@ -179,11 +184,13 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 		$this->assertArrayNotHasKey( 'Authorization', $headers, 'Authorization header should be absent without credentials.' );
 
 		$this->assertIsArray( $result, 'fetch_posts() should return an array of posts.' );
+		$this->assertCount( 1, $result, 'fetch_posts() should return exactly one post.' );
 	}
 
 	/**
 	 * Verifies that fetch_posts omits the Basic Auth header when only a
-	 * username is configured but no password.
+	 * username is configured but no password, and still returns the expected
+	 * posts.
 	 */
 	public function test_fetch_posts_omits_basic_auth_with_partial_credentials(): void {
 		// ARRANGE: Only a username is configured; no password.
@@ -201,6 +208,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 		$this->assertArrayNotHasKey( 'Authorization', $headers, 'Authorization header should be absent with partial credentials.' );
 
 		$this->assertIsArray( $result, 'fetch_posts() should still return posts when Basic Auth is not sent.' );
+		$this->assertCount( 1, $result, 'fetch_posts() should return exactly one post even without Basic Auth.' );
 	}
 
 	/**

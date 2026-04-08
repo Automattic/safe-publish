@@ -178,7 +178,15 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 
 		$this->assertTrue( $result['success'], 'Post import should succeed.' );
 		$this->assertIsInt( $result['post_id'] );
+		$this->assertGreaterThan( 0, $result['post_id'], 'Import should return a valid post ID.' );
 		$this->assertFalse( $result['existing'], 'Post should be newly created, not an update.' );
+
+		// ASSERT: Verify the created post has the expected field values.
+		$imported_post = get_post( $result['post_id'] );
+		$this->assertSame( 'Test Post', $imported_post->post_title, 'Imported post title should match fresh-content response.' );
+		$this->assertSame( 'draft', $imported_post->post_status, 'Newly imported post should be created as draft.' );
+		$this->assertSame( '4001', get_post_meta( $result['post_id'], Options::META_EXTERNAL_POST_ID, true ), 'Imported post should store the external post ID.' );
+		$this->assertSame( Options::META_IMPORTED_FROM_VALUE, get_post_meta( $result['post_id'], Options::META_IMPORTED_FROM, true ), 'Imported post should be tagged with the plugin identifier.' );
 
 		// STEP 3 — HISTORY: Update stats, complete the session, then assert.
 		$this->import_history->update_session_stats( $session_id, 'success' );
@@ -237,6 +245,10 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			$second_result['post_id'],
 			'Both imports should resolve to the same WordPress post ID.'
 		);
+
+		// ASSERT: Post fields reflect the freshly fetched content.
+		$updated_post = get_post( $second_result['post_id'] );
+		$this->assertSame( 'Test Post', $updated_post->post_title, 'Re-imported post should have the title from the fresh-content response.' );
 
 		// ASSERT: Two separate log entries were written (one per import call).
 		$logs = $this->repository->get_session_logs( $session_id );
@@ -356,10 +368,11 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		// ACT: Import the post.
 		$result = $this->import_service->import_post( $post_data, $session_id );
 
-		// ASSERT: Term is assigned to the created post.
+		// ASSERT: Exactly one term is assigned to the created post.
 		$this->assertTrue( $result['success'] );
 
 		$assigned = wp_get_post_terms( $result['post_id'], 'category', array( 'fields' => 'names' ) );
+		$this->assertCount( 1, $assigned, 'Exactly one category term should be assigned.' );
 		$this->assertContains( 'Integration Test Category', $assigned );
 	}
 
@@ -448,11 +461,12 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 
 		$second = $this->import_service->import_post( $post_data, $session_id );
 
-		// ASSERT: Term is replaced, not appended.
+		// ASSERT: Term is replaced, not appended; exactly one term should remain.
 		$this->assertTrue( $second['success'] );
 		$this->assertTrue( $second['existing'] );
 
 		$assigned = wp_get_post_terms( $second['post_id'], 'category', array( 'fields' => 'names' ) );
+		$this->assertCount( 1, $assigned, 'Exactly one category term should remain after replacement.' );
 		$this->assertContains( 'Replacement Term', $assigned );
 		$this->assertNotContains( 'Original Term', $assigned );
 	}

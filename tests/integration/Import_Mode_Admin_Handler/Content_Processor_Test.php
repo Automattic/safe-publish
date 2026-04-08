@@ -105,10 +105,11 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that iframe embeds are processed with WordPress security
-	 * attributes.
+	 * attributes and have their src preserved exactly.
 	 *
 	 * Iframes (e.g. YouTube embeds) should receive the wp-embedded-content
-	 * class and security attributes such as loading="lazy".
+	 * class and security attributes such as loading="lazy", and the original
+	 * src URL must not be altered.
 	 */
 	public function test_process_content_handles_iframe_embeds_with_security_attributes(): void {
 		// ARRANGE: Classic HTML with a YouTube iframe embed.
@@ -118,11 +119,12 @@ class Content_Processor_Test extends Integration_Test_Case {
 		// ACT: Process content against the source site.
 		$processed = $this->processor->process_content( $content, $source_site );
 
-		// ASSERT: Iframe is preserved and WordPress embed class was applied.
+		// ASSERT: Iframe src is preserved unchanged and WordPress embed class
+		// was applied.
 		$this->assertStringContainsString(
-			'youtube.com',
+			'src="https://www.youtube.com/embed/abc123"',
 			$processed,
-			'YouTube embed URL should be preserved'
+			'YouTube embed src should be preserved exactly'
 		);
 		$this->assertStringContainsString(
 			'wp-embedded-content',
@@ -157,9 +159,14 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		// ASSERT: Block comment delimiters are preserved (Gutenberg path was used).
 		$this->assertStringContainsString(
-			'wp:paragraph',
+			'<!-- wp:paragraph -->',
 			$processed,
-			'Block comment delimiters should be preserved by the Gutenberg processor'
+			'Opening block comment delimiter should be preserved by the Gutenberg processor'
+		);
+		$this->assertStringContainsString(
+			'<!-- /wp:paragraph -->',
+			$processed,
+			'Closing block comment delimiter should be preserved by the Gutenberg processor'
 		);
 
 		// ASSERT: Content text is not lost.
@@ -191,9 +198,14 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		// ASSERT: Block comment delimiters are preserved after serialization.
 		$this->assertStringContainsString(
-			'wp:paragraph',
+			'<!-- wp:paragraph -->',
 			$processed,
-			'Block comment delimiters should survive the full parse-serialize cycle'
+			'Opening block comment delimiter should survive the full parse-serialize cycle'
+		);
+		$this->assertStringContainsString(
+			'<!-- /wp:paragraph -->',
+			$processed,
+			'Closing block comment delimiter should survive the full parse-serialize cycle'
 		);
 
 		// ASSERT: Source-site link was rewritten to the current site.

@@ -96,6 +96,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$processed_content = $this->content_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify content returned without errors.
+		$this->assertIsString( $processed_content );
 		$this->assertNotEmpty( $processed_content );
 		$this->assertStringContainsString( 'Unclosed paragraph', $processed_content );
 		$this->assertStringContainsString( 'Mixed tags', $processed_content );

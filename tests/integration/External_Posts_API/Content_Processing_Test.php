@@ -128,6 +128,7 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 
 		// ASSERT: Verify relative path converted to absolute.
 		$this->assertStringContainsString( 'https://example.com/relative-path', $processed_content );
+		$this->assertStringNotContainsString( 'href="relative-path"', $processed_content );
 
 		// ASSERT: Verify already-absolute URL unchanged.
 		$this->assertStringContainsString( 'https://external.com/page', $processed_content );
@@ -135,6 +136,9 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 
 	/**
 	 * Data provider for media elements tests.
+	 *
+	 * Each extra_attributes entry is a full attribute string (e.g. 'preload="metadata"')
+	 * that must appear in the processed output.
 	 *
 	 * @return array<string, array{element: string, url: string, wp_class: string, extra_attributes: array<string>}>
 	 */
@@ -144,7 +148,7 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 				'element'          => 'video',
 				'url'              => 'https://example.com/video.mp4',
 				'wp_class'         => 'wp-video-shortcode',
-				'extra_attributes' => array( 'preload' ),
+				'extra_attributes' => array( 'preload="metadata"' ),
 			),
 			'audio' => array(
 				'element'          => 'audio',

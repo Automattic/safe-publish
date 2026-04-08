@@ -209,6 +209,18 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 			$imported_posts[0]->post_title,
 			'Imported post title should come from the fresh fetch'
 		);
+		$this->assertSame(
+			'https://source.example.com/test-import-post',
+			get_post_meta( $imported_posts[0]->ID, Options::META_EXTERNAL_LINK, true ),
+			'External link meta should be stored'
+		);
+		$this->assertSame(
+			Options::META_IMPORTED_FROM_VALUE,
+			get_post_meta( $imported_posts[0]->ID, Options::META_IMPORTED_FROM, true ),
+			'Imported-from meta should be stored'
+		);
+		$this->assertTrue( $response['data']['results'][0]['success'], 'Result entry should indicate success' );
+		$this->assertFalse( $response['data']['results'][0]['existing'], 'Result entry should indicate a new post' );
 	}
 
 	/**
@@ -273,9 +285,31 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 		$response = json_decode( $this->_last_response, true );
 		$this->assertIsArray( $response, 'Response should be a JSON object' );
 		$this->assertTrue( $response['success'], 'Create draft should return success' );
-		$this->assertArrayHasKey( 'post_id', $response['data'], 'Response should include post_id' );
-		$this->assertNotEmpty( $response['data']['edit_url'], 'Response should include edit_url' );
+		$post_id = $response['data']['post_id'];
+		$this->assertIsInt( $post_id, 'post_id should be an integer' );
+		$this->assertGreaterThan( 0, $post_id, 'post_id should be a positive integer' );
+		$this->assertSame(
+			admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
+			$response['data']['edit_url'],
+			'edit_url should point to the newly created post'
+		);
 		$this->assertFalse( $response['data']['existing'], 'Should be flagged as a new post, not existing' );
+
+		// ASSERT: Post was created in the database with correct title, status, and meta.
+		$post = get_post( $post_id );
+		$this->assertNotNull( $post, 'The created post should exist in the database' );
+		$this->assertSame( 'Test Post', $post->post_title, 'Title should come from the fresh fetch' );
+		$this->assertSame( 'draft', $post->post_status, 'Post should be saved as a draft' );
+		$this->assertSame(
+			'7001',
+			get_post_meta( $post_id, Options::META_EXTERNAL_POST_ID, true ),
+			'External post ID meta should be stored'
+		);
+		$this->assertSame(
+			'https://source.example.com/single-draft',
+			get_post_meta( $post_id, Options::META_EXTERNAL_LINK, true ),
+			'External link meta should be stored'
+		);
 	}
 
 	/**
@@ -321,6 +355,8 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 			$response['data']['confirm_action'],
 			'Should ask to confirm update of existing post'
 		);
+		$this->assertSame( $existing_post_id, $response['data']['post_id'], 'Should reference the existing post ID' );
+		$this->assertSame( 'Already Imported', $response['data']['post_title'], 'Should include the existing post title' );
 	}
 
 	/**
@@ -397,12 +433,14 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 		}
 
-		// ASSERT: One post succeeded and one failed.
+		// ASSERT: One post succeeded, one failed; results array reports per-item outcome.
 		$response = json_decode( $this->_last_response, true );
 		$this->assertIsArray( $response, 'Response should be a JSON object' );
 		$this->assertTrue( $response['success'], 'Bulk import should always return success response' );
 		$this->assertSame( 2, $response['data']['total'], 'Should have processed 2 posts' );
 		$this->assertSame( 1, $response['data']['successful'], 'Should have 1 successful import' );
 		$this->assertSame( 1, $response['data']['failed'], 'Should have 1 failed import' );
+		$this->assertTrue( $response['data']['results'][0]['success'], 'Valid post (ID 5001) should have succeeded' );
+		$this->assertFalse( $response['data']['results'][1]['success'], 'Post with empty title (ID 5002) should have failed' );
 	}
 }

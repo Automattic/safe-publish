@@ -92,7 +92,8 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that the diff renderer generates diff structure successfully
-	 * with external data.
+	 * with external data, including correct extraction of meta, terms, and
+	 * non-content diff keys.
 	 *
 	 * Uses mocked HTTP callable. Does not call the REST endpoint to limit test
 	 * complexity.
@@ -167,8 +168,17 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 		$this->assertSame( 'Original Title', $result['current']['title'] );
 		$this->assertSame( 'Original excerpt.', $result['current']['excerpt'] );
 
-		// ASSERT: Verify non-content diffs structure exists.
+		// ASSERT: Verify incoming meta and terms extracted from mock response.
+		$this->assertSame( array( 'custom_meta' => 'meta_value' ), $result['incoming']['meta'] );
+		$this->assertSame( array( 'category' => array( 'External Category' ) ), $result['incoming']['terms'] );
+
+		// ASSERT: Verify non-content diff keys exist.
 		$this->assertIsArray( $result['nonContentDiffs'] );
+		$this->assertArrayHasKey( 'title', $result['nonContentDiffs'] );
+		$this->assertArrayHasKey( 'excerpt', $result['nonContentDiffs'] );
+		$this->assertArrayHasKey( 'taxonomies', $result['nonContentDiffs'] );
+		$this->assertArrayHasKey( 'meta', $result['nonContentDiffs'] );
+		$this->assertArrayHasKey( 'featuredMedia', $result['nonContentDiffs'] );
 	}
 
 	/**
@@ -216,7 +226,8 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that the update-post endpoint updates post content successfully.
+	 * Verifies that the update-post endpoint updates post content successfully,
+	 * storing the exact title, content, and excerpt in the database.
 	 */
 	public function test_update_post_endpoint_updates_content_successfully(): void {
 		// ARRANGE: Create request with updated content.
@@ -244,12 +255,13 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 		$updated_post = get_post( $this->post_id );
 		$this->assertInstanceOf( \WP_Post::class, $updated_post, 'Post should exist after update' );
 		$this->assertSame( 'Updated Title', $updated_post->post_title );
-		$this->assertStringContainsString( 'Updated content', $updated_post->post_content );
+		$this->assertSame( '<p>Updated content.</p>', $updated_post->post_content );
 		$this->assertSame( 'Updated excerpt.', $updated_post->post_excerpt );
 	}
 
 	/**
-	 * Verifies that the update-post endpoint updates meta successfully.
+	 * Verifies that the update-post endpoint updates meta successfully and
+	 * returns the correct post ID in the response.
 	 */
 	public function test_update_post_endpoint_updates_meta_successfully(): void {
 		// ARRANGE: Create request with meta.
@@ -272,13 +284,15 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 		// ASSERT: Verify response and meta were updated.
 		$data = $response->get_data();
 		$this->assertTrue( $data['success'] );
+		$this->assertSame( $this->post_id, $data['post_id'] );
 		$this->assertSame( 200, $response->get_status() );
 		$this->assertSame( 'value1', get_post_meta( $this->post_id, 'custom_field_1', true ) );
 		$this->assertSame( 'value2', get_post_meta( $this->post_id, 'custom_field_2', true ) );
 	}
 
 	/**
-	 * Verifies that the update-post endpoint updates terms successfully.
+	 * Verifies that the update-post endpoint updates terms successfully and
+	 * returns the correct post ID in the response.
 	 */
 	public function test_update_post_endpoint_updates_terms_successfully(): void {
 		// ARRANGE: Create test category for this test.
@@ -309,6 +323,7 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 		// ASSERT: Verify response and terms were updated.
 		$data = $response->get_data();
 		$this->assertTrue( $data['success'] );
+		$this->assertSame( $this->post_id, $data['post_id'] );
 		$this->assertSame( 200, $response->get_status() );
 
 		// ASSERT: Verify term assignment.

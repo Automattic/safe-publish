@@ -542,8 +542,9 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		// ASSERT: The update path re-applies the featured image.
 		$this->assertTrue( $second['success'] );
 		$this->assertTrue( $second['existing'] );
-		$this->assertNotEmpty(
-			get_post_thumbnail_id( $second['post_id'] ),
+		$this->assertGreaterThan(
+			0,
+			(int) get_post_thumbnail_id( $second['post_id'] ),
 			'Bulk re-import must re-apply the featured image via the update path.'
 		);
 	}
@@ -603,12 +604,11 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that the production URL is present in saved post content after a
-	 * successful core/video block import.
+	 * Verifies that the production URL is present in both the block comment
+	 * JSON attrs and innerHTML after a successful core/video block import.
 	 *
-	 * Both block attrs and innerHTML must reference the new production URL —
-	 * Content_Processor::process_video_block() must update innerHTML and
-	 * innerContent in addition to attrs['src']/attrs['id'].
+	 * Content_Processor::process_video_block() must update attrs['src']/attrs['id'],
+	 * innerHTML, and innerContent so the staging URL is fully replaced.
 	 */
 	public function test_video_block_innerHTML_is_updated_after_successful_import(): void {
 		// ARRANGE: Use a .jpg URL so the existing HTTP/fixture mocking handles the
@@ -638,8 +638,14 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 
 		$saved_content = get_post_field( 'post_content', $result['post_id'] );
 
-		// ASSERT: Production URL must appear in an HTML src attribute, not just
-		// in the block comment JSON.
+		// ASSERT: Production URL must appear in the block comment JSON attrs.
+		$this->assertStringContainsString(
+			'"src":"' . get_site_url(),
+			$saved_content,
+			'Production URL must appear in the block comment JSON attrs after a successful video block import.'
+		);
+
+		// ASSERT: Production URL must appear in an HTML src attribute.
 		$this->assertStringContainsString(
 			'src="' . get_site_url(),
 			$saved_content,
@@ -655,12 +661,11 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that the production URL is present in saved post content after a
-	 * successful core/audio block import.
+	 * Verifies that the production URL is present in both the block comment
+	 * JSON attrs and innerHTML after a successful core/audio block import.
 	 *
-	 * Both block attrs and innerHTML must reference the new production URL —
-	 * Content_Processor::process_audio_block() must update innerHTML and
-	 * innerContent in addition to attrs['src']/attrs['id'].
+	 * Content_Processor::process_audio_block() must update attrs['src']/attrs['id'],
+	 * innerHTML, and innerContent so the staging URL is fully replaced.
 	 */
 	public function test_audio_block_innerHTML_is_updated_after_successful_import(): void {
 		// ARRANGE: Use a .jpg URL so the existing HTTP/fixture mocking handles the
@@ -690,8 +695,14 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 
 		$saved_content = get_post_field( 'post_content', $result['post_id'] );
 
-		// ASSERT: Production URL must appear in an HTML src attribute, not just
-		// in the block comment JSON.
+		// ASSERT: Production URL must appear in the block comment JSON attrs.
+		$this->assertStringContainsString(
+			'"src":"' . get_site_url(),
+			$saved_content,
+			'Production URL must appear in the block comment JSON attrs after a successful audio block import.'
+		);
+
+		// ASSERT: Production URL must appear in an HTML src attribute.
 		$this->assertStringContainsString(
 			'src="' . get_site_url(),
 			$saved_content,
