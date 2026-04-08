@@ -45,7 +45,7 @@ abstract class External_Posts_API_Test_Base extends Integration_Test_Case {
 	 *
 	 * @var Content_Media_Processor
 	 */
-	protected Content_Media_Processor $content_processor;
+	protected Content_Media_Processor $content_media_processor;
 
 	/**
 	 * Media Importer instance.
@@ -62,8 +62,11 @@ abstract class External_Posts_API_Test_Base extends Integration_Test_Case {
 		parent::setUp();
 
 		// Create service instances with real dependencies.
-		$this->media_importer    = new Media_Importer( new HTTP_Client() );
-		$this->content_processor = new Content_Media_Processor( $this->media_importer, new Embed_Processor() );
+		$this->media_importer          = new Media_Importer( new HTTP_Client() );
+		$this->content_media_processor = new Content_Media_Processor(
+			$this->media_importer,
+			new Embed_Processor()
+		);
 
 		// Configure the connected site URL so fetch_fresh_content() can make requests.
 		update_option( Options::OPTION_CONNECTED_SITE_URL, 'https://source.example.com' );

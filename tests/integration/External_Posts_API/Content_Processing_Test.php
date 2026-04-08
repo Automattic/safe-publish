@@ -77,7 +77,7 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content.
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify expected elements are present.
 		$this->assertNotEmpty( $processed_content, "Content should not be empty for: {$description}" );
@@ -120,7 +120,7 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		';
 
 		// ACT: Process content.
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify root-relative URL converted to absolute.
 		$this->assertStringContainsString( 'https://example.com/root-relative', $processed_content );
@@ -183,7 +183,7 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		$content     = sprintf( '<%s src="%s" controls></%s>', $element, $url, $element );
 
 		// ACT: Process content.
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify WordPress class was added.
 		$this->assertStringContainsString( $wp_class, $processed_content );
@@ -206,7 +206,7 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		$content     = '<iframe src="https://www.youtube.com/embed/abc123"></iframe>';
 
 		// ACT: Process content.
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify iframe processed with security attributes.
 		$this->assertStringContainsString( 'youtube.com', $processed_content );
@@ -242,7 +242,7 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		';
 
 		// ACT: Process complex content.
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify all elements are present and transformed.
 		$this->assertNotEmpty( $processed_content );
@@ -282,7 +282,7 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content with data URL.
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify data URL is preserved (not processed as external media).
 		$this->assertStringContainsString( 'data:image/png;base64', $processed_content );
@@ -344,7 +344,7 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		$source_site = 'https://example.com';
 
 		// ACT: Process content.
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify expected strings present.
 		foreach ( $expected_strings as $expected ) {

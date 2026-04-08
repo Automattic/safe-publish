@@ -32,7 +32,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content with broken media (mock returns 404).
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify content processed despite failed media.
 		$this->assertNotEmpty( $processed_content );
@@ -50,7 +50,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		// ASSERT: The failed URL is tracked so the import service can fail the import.
 		$this->assertSame(
 			array( 'https://example.com/nonexistent-404.jpg' ),
-			$this->content_processor->get_failed_media(),
+			$this->content_media_processor->get_failed_media(),
 			'Failed image URL should be recorded for the import service to act on'
 		);
 
@@ -93,7 +93,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$content     = '<p>Unclosed paragraph<div>Mixed tags</p></div>';
 
 		// ACT: Process malformed content.
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify content returned without errors.
 		$this->assertIsString( $processed_content );
@@ -111,7 +111,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$content     = '<p>Testing UTF-8: 你好世界 🌍</p>';
 
 		// ACT: Process UTF-8 content.
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify UTF-8 characters preserved.
 		$this->assertStringContainsString( '你好世界', $processed_content );
@@ -126,15 +126,15 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$source_site = 'https://example.com';
 
 		// ACT & ASSERT: Test empty string.
-		$processed = $this->content_processor->process_content( '', $source_site );
+		$processed = $this->content_media_processor->process_content( '', $source_site );
 		$this->assertSame( '', $processed, 'Empty string should return empty string' );
 
 		// ACT & ASSERT: Test whitespace-only content.
-		$processed = $this->content_processor->process_content( '   ', $source_site );
+		$processed = $this->content_media_processor->process_content( '   ', $source_site );
 		$this->assertNotNull( $processed, 'Whitespace content should not return null' );
 
 		// ACT & ASSERT: Test newlines only.
-		$processed = $this->content_processor->process_content( "\n\n", $source_site );
+		$processed = $this->content_media_processor->process_content( "\n\n", $source_site );
 		$this->assertNotNull( $processed, 'Newline content should not return null' );
 	}
 
@@ -151,7 +151,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content with server error.
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify content processed despite server error.
 		$this->assertNotEmpty( $processed_content );
@@ -169,7 +169,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		// ASSERT: The failed URL is tracked so the import service can fail the import.
 		$this->assertSame(
 			array( 'https://example.com/server-error.jpg' ),
-			$this->content_processor->get_failed_media(),
+			$this->content_media_processor->get_failed_media(),
 			'Failed image URL should be recorded for the import service to act on'
 		);
 
@@ -205,7 +205,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 
 		try {
 			// ACT: Process content with network failure.
-			$processed_content = $this->content_processor->process_content( $content, $source_site );
+			$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 			// ASSERT: Verify content processed despite WP_Error.
 			$this->assertNotEmpty( $processed_content );
@@ -223,7 +223,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 			// ASSERT: The failed URL is tracked so the import service can fail the import.
 			$this->assertSame(
 				array( 'https://example.com/network-timeout.jpg' ),
-				$this->content_processor->get_failed_media(),
+				$this->content_media_processor->get_failed_media(),
 				'Failed image URL should be recorded for the import service to act on'
 			);
 
@@ -279,7 +279,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 
 		try {
 			// ACT: Process content with file that will fail sideload.
-			$processed_content = $this->content_processor->process_content( $content, $source_site );
+			$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 			// ASSERT: Verify content processed despite sideload failure.
 			$this->assertNotEmpty( $processed_content );
@@ -297,7 +297,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 			// ASSERT: The failed URL is tracked so the import service can fail the import.
 			$this->assertSame(
 				array( 'https://example.com/trigger-sideload-error.jpg' ),
-				$this->content_processor->get_failed_media(),
+				$this->content_media_processor->get_failed_media(),
 				'Failed image URL should be recorded for the import service to act on'
 			);
 
@@ -328,7 +328,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content — base src will succeed, srcset variant will 404.
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Processor output is non-empty and the alt text is intact.
 		$this->assertNotEmpty( $processed_content );
@@ -337,7 +337,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		// ASSERT: The failed srcset URL is tracked so the import service can abort.
 		$this->assertSame(
 			array( 'https://example.com/nonexistent-2x.jpg' ),
-			$this->content_processor->get_failed_media(),
+			$this->content_media_processor->get_failed_media(),
 			'Failed srcset URL must be recorded in failed_media'
 		);
 
@@ -358,12 +358,12 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$content     = '<p><video src="https://example.com/nonexistent-clip.mp4" controls></video></p>';
 
 		// ACT: Process content — the video URL contains 'nonexistent' so the mock returns 404.
-		$this->content_processor->process_content( $content, $source_site );
+		$this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: The failed video URL is tracked so the import service can abort.
 		$this->assertSame(
 			array( 'https://example.com/nonexistent-clip.mp4' ),
-			$this->content_processor->get_failed_media(),
+			$this->content_media_processor->get_failed_media(),
 			'Failed video src URL must be recorded in failed_media'
 		);
 	}
@@ -381,12 +381,12 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$content     = '<p><video src="https://example.com/clip.mp4" poster="https://example.com/nonexistent-poster.jpg" controls></video></p>';
 
 		// ACT: Process content — clip.mp4 succeeds; poster returns 404 (contains 'nonexistent').
-		$this->content_processor->process_content( $content, $source_site );
+		$this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: The failed poster URL is tracked.
 		$this->assertContains(
 			'https://example.com/nonexistent-poster.jpg',
-			$this->content_processor->get_failed_media(),
+			$this->content_media_processor->get_failed_media(),
 			'Failed video poster URL must be recorded in failed_media'
 		);
 	}
@@ -403,12 +403,12 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$content     = '<p><audio src="https://example.com/nonexistent-track.mp3" controls></audio></p>';
 
 		// ACT: Process content — audio URL contains 'nonexistent' so the mock returns 404.
-		$this->content_processor->process_content( $content, $source_site );
+		$this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: The failed audio URL is tracked so the import service can abort.
 		$this->assertSame(
 			array( 'https://example.com/nonexistent-track.mp3' ),
-			$this->content_processor->get_failed_media(),
+			$this->content_media_processor->get_failed_media(),
 			'Failed audio src URL must be recorded in failed_media'
 		);
 	}
