@@ -601,4 +601,108 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			'Second import must succeed and must not inherit the previous post\'s failed media.'
 		);
 	}
+
+	/**
+	 * Verifies that the production URL is present in saved post content after a
+	 * successful core/video block import.
+	 *
+	 * Both block attrs and innerHTML must reference the new production URL —
+	 * Content_Processor::process_video_block() must update innerHTML and
+	 * innerContent in addition to attrs['src']/attrs['id'].
+	 */
+	public function test_video_block_innerHTML_is_updated_after_successful_import(): void {
+		// ARRANGE: Use a .jpg URL so the existing HTTP/fixture mocking handles the
+		// sideload end-to-end. The test is about innerHTML updating, not file type.
+		$source_url                = 'https://source.example.com/uploads/clip.jpg';
+		$this->mock_post_overrides = array(
+			'content' => '<!-- wp:video {"src":"' . $source_url . '"} -->'
+				. "\n<figure class=\"wp-block-video\"><video controls src=\"{$source_url}\"></video></figure>"
+				. "\n<!-- /wp:video -->",
+		);
+
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		$post_data = array(
+			'id'        => 8201,
+			'title'     => 'Post With Gutenberg Video Block',
+			'content'   => '<p>Stale content.</p>',
+			'link'      => 'https://source.example.com/post-with-video-block',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import must succeed.
+		$this->assertTrue( $result['success'], 'Import should succeed for a valid video block.' );
+
+		$saved_content = get_post_field( 'post_content', $result['post_id'] );
+
+		// ASSERT: Production URL must appear in an HTML src attribute, not just
+		// in the block comment JSON.
+		$this->assertStringContainsString(
+			'src="' . get_site_url(),
+			$saved_content,
+			'Production URL must appear in an HTML src attribute in saved post content after a successful video block import.'
+		);
+
+		// ASSERT: The staging URL must not appear anywhere in saved post content.
+		$this->assertStringNotContainsString(
+			'source.example.com',
+			$saved_content,
+			'Staging URL must not remain in saved post content after a successful video block import.'
+		);
+	}
+
+	/**
+	 * Verifies that the production URL is present in saved post content after a
+	 * successful core/audio block import.
+	 *
+	 * Both block attrs and innerHTML must reference the new production URL —
+	 * Content_Processor::process_audio_block() must update innerHTML and
+	 * innerContent in addition to attrs['src']/attrs['id'].
+	 */
+	public function test_audio_block_innerHTML_is_updated_after_successful_import(): void {
+		// ARRANGE: Use a .jpg URL so the existing HTTP/fixture mocking handles the
+		// sideload end-to-end. The test is about innerHTML updating, not file type.
+		$source_url                = 'https://source.example.com/uploads/track.jpg';
+		$this->mock_post_overrides = array(
+			'content' => '<!-- wp:audio {"src":"' . $source_url . '"} -->'
+				. "\n<figure class=\"wp-block-audio\"><audio controls src=\"{$source_url}\"></audio></figure>"
+				. "\n<!-- /wp:audio -->",
+		);
+
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		$post_data = array(
+			'id'        => 8202,
+			'title'     => 'Post With Gutenberg Audio Block',
+			'content'   => '<p>Stale content.</p>',
+			'link'      => 'https://source.example.com/post-with-audio-block',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import must succeed.
+		$this->assertTrue( $result['success'], 'Import should succeed for a valid audio block.' );
+
+		$saved_content = get_post_field( 'post_content', $result['post_id'] );
+
+		// ASSERT: Production URL must appear in an HTML src attribute, not just
+		// in the block comment JSON.
+		$this->assertStringContainsString(
+			'src="' . get_site_url(),
+			$saved_content,
+			'Production URL must appear in an HTML src attribute in saved post content after a successful audio block import.'
+		);
+
+		// ASSERT: The staging URL must not appear anywhere in saved post content.
+		$this->assertStringNotContainsString(
+			'source.example.com',
+			$saved_content,
+			'Staging URL must not remain in saved post content after a successful audio block import.'
+		);
+	}
 }

@@ -661,6 +661,18 @@ class Content_Processor {
 		if ( $new_url ) {
 			$block['attrs']['src'] = $new_url;
 			$block['attrs']['id']  = $attachment_id;
+
+			if ( ! empty( $block['innerHTML'] ) ) {
+				$block['innerHTML'] = str_replace( $original_url, $new_url, $block['innerHTML'] );
+			}
+
+			if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
+				foreach ( $block['innerContent'] as $index => $content ) {
+					if ( is_string( $content ) ) {
+						$block['innerContent'][ $index ] = str_replace( $original_url, $new_url, $content );
+					}
+				}
+			}
 		} else {
 			$this->failed_media[] = $original_url;
 		}
@@ -693,6 +705,18 @@ class Content_Processor {
 		if ( $new_url ) {
 			$block['attrs']['src'] = $new_url;
 			$block['attrs']['id']  = $attachment_id;
+
+			if ( ! empty( $block['innerHTML'] ) ) {
+				$block['innerHTML'] = str_replace( $original_url, $new_url, $block['innerHTML'] );
+			}
+
+			if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
+				foreach ( $block['innerContent'] as $index => $content ) {
+					if ( is_string( $content ) ) {
+						$block['innerContent'][ $index ] = str_replace( $original_url, $new_url, $content );
+					}
+				}
+			}
 		} else {
 			$this->failed_media[] = $original_url;
 		}
