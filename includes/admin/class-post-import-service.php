@@ -467,7 +467,31 @@ class Post_Import_Service {
 		}
 
 		$this->meta_terms_manager->update_meta( $post_id, $fields['meta'] );
-		$this->meta_terms_manager->update_terms( $post_id, $fields['terms'] );
+		$terms_result = $this->meta_terms_manager->update_terms(
+			$post_id,
+			$fields['terms']
+		);
+
+		if ( is_wp_error( $terms_result ) ) {
+			$error_message = $terms_result->get_error_message();
+
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				$post_id,
+				$error_message,
+				array( 'action' => 'terms_update_failed' )
+			);
+
+			return array(
+				'external_id' => $fields['external_post_id'],
+				'title'       => $fields['title'],
+				'success'     => false,
+				'error'       => $error_message,
+			);
+		}
 
 		$this->log_import_if_session(
 			$session_id,
@@ -623,7 +647,33 @@ class Post_Import_Service {
 		}
 
 		$this->meta_terms_manager->update_meta( $post_id, $fields['meta'] );
-		$this->meta_terms_manager->update_terms( $post_id, $fields['terms'] );
+		$terms_result = $this->meta_terms_manager->update_terms(
+			$post_id,
+			$fields['terms']
+		);
+
+		if ( is_wp_error( $terms_result ) ) {
+			wp_delete_post( $post_id, true );
+			$this->content_processor->delete_newly_created_media();
+			$error_message = $terms_result->get_error_message();
+
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$error_message,
+				array( 'action' => 'terms_update_failed' )
+			);
+
+			return array(
+				'external_id' => $fields['external_post_id'],
+				'title'       => $fields['title'],
+				'success'     => false,
+				'error'       => $error_message,
+			);
+		}
 
 		$this->log_import_if_session(
 			$session_id,

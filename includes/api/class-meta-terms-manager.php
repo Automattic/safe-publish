@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Safe_Publish\API;
 
+use WP_Error;
+
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -47,10 +49,14 @@ final class Meta_Terms_Manager {
 	 * Accepts array or object; supports term IDs, slugs, names, or objects
 	 * with id/term_id, slug, name. Creates terms if they do not exist.
 	 *
+	 * Returns true on success, or a WP_Error when a taxonomy does not exist on
+	 * this site, when a term cannot be created, or when assigning terms fails.
+	 *
 	 * @param int          $post_id Post ID to update terms for.
 	 * @param array|object $terms   Terms to set, keyed by taxonomy.
+	 * @return true|\WP_Error True on success, WP_Error on failure.
 	 */
-	public function update_terms( int $post_id, array|object $terms ): void {
+	public function update_terms( int $post_id, array|object $terms ): true|\WP_Error {
 		// Update terms if provided (accept array/object; supports IDs, slugs, names, or objects).
 		if ( ! empty( $terms ) && ( is_array( $terms ) || is_object( $terms ) ) ) {
 			$terms_array = (array) $terms;
@@ -59,7 +65,14 @@ final class Meta_Terms_Manager {
 				$tax = sanitize_key( (string) $raw_tax );
 
 				if ( ! taxonomy_exists( $tax ) ) {
-					continue;
+					return new WP_Error(
+						'unknown_taxonomy',
+						sprintf(
+							/* translators: %s: taxonomy name */
+							__( 'Taxonomy "%s" does not exist on this site.', 'safe-publish' ),
+							$tax
+						)
+					);
 				}
 
 				$items    = is_array( $term_items ) ? $term_items : (array) $term_items;
@@ -100,9 +113,10 @@ final class Meta_Terms_Manager {
 								$tax,
 								$term_slug ? array( 'slug' => $term_slug ) : array()
 							);
-							if ( ! is_wp_error( $inserted ) && ! empty( $inserted['term_id'] ) ) {
-								$term_id = (int) $inserted['term_id'];
+							if ( is_wp_error( $inserted ) ) {
+								return $inserted;
 							}
+							$term_id = (int) $inserted['term_id'];
 						} elseif ( $existing && ! is_wp_error( $existing ) ) {
 							$term_id = (int) $existing->term_id;
 						}
@@ -115,9 +129,15 @@ final class Meta_Terms_Manager {
 
 				if ( ! empty( $term_ids ) ) {
 					// Replace existing terms for this taxonomy.
-					wp_set_post_terms( $post_id, $term_ids, $tax, false );
+					$result = wp_set_post_terms( $post_id, $term_ids, $tax, false );
+
+					if ( is_wp_error( $result ) ) {
+						return $result;
+					}
 				}
 			}
 		}
+
+		return true;
 	}
 }

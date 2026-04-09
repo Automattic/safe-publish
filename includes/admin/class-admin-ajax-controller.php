@@ -662,7 +662,28 @@ final class Admin_Ajax_Controller {
 		}
 
 		$this->meta_terms_manager->update_meta( $post_id, $meta );
-		$this->meta_terms_manager->update_terms( $post_id, $terms );
+		$terms_result = $this->meta_terms_manager->update_terms(
+			$post_id,
+			$terms
+		);
+
+		if ( is_wp_error( $terms_result ) ) {
+			$error_message = $terms_result->get_error_message();
+
+			$this->import_history->log_import_action(
+				$session_id,
+				$external_post_id,
+				$title,
+				'error',
+				$post_id,
+				$error_message,
+				array( 'action' => 'terms_update_failed' )
+			);
+			$this->import_history->update_session_stats( $session_id, 'error' );
+			$this->import_history->complete_session( $session_id );
+
+			return array( 'error' => $error_message );
+		}
 
 		$this->import_history->log_import_action(
 			$session_id,
@@ -772,7 +793,30 @@ final class Admin_Ajax_Controller {
 		}
 
 		$this->meta_terms_manager->update_meta( $post_id, $meta );
-		$this->meta_terms_manager->update_terms( $post_id, $terms );
+		$terms_result = $this->meta_terms_manager->update_terms(
+			$post_id,
+			$terms
+		);
+
+		if ( is_wp_error( $terms_result ) ) {
+			wp_delete_post( $post_id, true );
+			$this->content_processor->delete_newly_created_media();
+			$error_message = $terms_result->get_error_message();
+
+			$this->import_history->log_import_action(
+				$session_id,
+				$external_post_id,
+				$title,
+				'error',
+				null,
+				$error_message,
+				array( 'action' => 'terms_update_failed' )
+			);
+			$this->import_history->update_session_stats( $session_id, 'error' );
+			$this->import_history->complete_session( $session_id );
+
+			return array( 'error' => $error_message );
+		}
 
 		$this->import_history->log_import_action(
 			$session_id,
