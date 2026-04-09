@@ -24,6 +24,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Embed_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\External_Posts_API\External_Posts_API_Test_Base;
+use Safe_Publish\Utils\Options;
 
 /**
  * Integration tests for Post_Import_Service.
@@ -164,7 +165,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => \Safe_Publish\Utils\Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_EXTERNAL_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8001',
 				)
@@ -218,7 +219,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => \Safe_Publish\Utils\Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_EXTERNAL_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8002',
 				)
@@ -272,7 +273,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => \Safe_Publish\Utils\Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_EXTERNAL_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8003',
 				)
@@ -375,7 +376,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => \Safe_Publish\Utils\Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_EXTERNAL_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8005',
 				)
@@ -442,7 +443,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => \Safe_Publish\Utils\Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_EXTERNAL_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8006',
 				)
@@ -459,7 +460,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 */
 	public function test_import_aborts_when_source_site_url_is_not_configured(): void {
 		// ARRANGE: Remove the source URL configured by the base setUp().
-		delete_option( \Safe_Publish\Utils\Options::OPTION_CONNECTED_SITE_URL );
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
 
 		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
 
@@ -492,11 +493,11 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 
 		// ACT: Simulate an existing post by re-configuring the URL, importing
 		// once to create it, then removing the URL and re-importing.
-		update_option( \Safe_Publish\Utils\Options::OPTION_CONNECTED_SITE_URL, 'https://source.example.com' );
+		update_option( Options::OPTION_CONNECTED_SITE_URL, 'https://source.example.com' );
 		$first = $this->import_service->import_post( $post_data, $session_id );
 		$this->assertTrue( $first['success'] );
 
-		delete_option( \Safe_Publish\Utils\Options::OPTION_CONNECTED_SITE_URL );
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
 		$update_result = $this->import_service->import_post( $post_data, $session_id );
 
 		// ASSERT: Update path also aborts correctly.
@@ -767,7 +768,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => \Safe_Publish\Utils\Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_EXTERNAL_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8301',
 				)
@@ -820,7 +821,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => \Safe_Publish\Utils\Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_EXTERNAL_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '9210',
 				)
@@ -880,7 +881,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_status'      => 'any',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => \Safe_Publish\Utils\Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_EXTERNAL_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '9101',
 				)
@@ -963,8 +964,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 
 		$original_title   = get_post_field( 'post_title', $post_id );
 		$original_content = get_post_field( 'post_content', $post_id );
-		$original_link    = get_post_meta( $post_id, \Safe_Publish\Utils\Options::META_EXTERNAL_LINK, true );
-		$original_date    = get_post_meta( $post_id, \Safe_Publish\Utils\Options::META_IMPORT_DATE, true );
+		$original_link    = get_post_meta( $post_id, Options::META_EXTERNAL_LINK, true );
+		$original_date    = get_post_meta( $post_id, Options::META_IMPORT_DATE, true );
 
 		// ARRANGE: Fresh content will return updated title/content and a featured
 		// image. The fail filter makes the media API return 404 to trigger failure.
@@ -990,8 +991,76 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		// aborted before any DB write.
 		$this->assertSame( $original_title, get_post_field( 'post_title', $post_id ), 'Title must be unchanged after failed update.' );
 		$this->assertSame( $original_content, get_post_field( 'post_content', $post_id ), 'Content must be unchanged after failed update.' );
-		$this->assertSame( $original_link, get_post_meta( $post_id, \Safe_Publish\Utils\Options::META_EXTERNAL_LINK, true ), 'External link meta must be unchanged after failed update.' );
-		$this->assertSame( $original_date, get_post_meta( $post_id, \Safe_Publish\Utils\Options::META_IMPORT_DATE, true ), 'Import date meta must be unchanged after failed update.' );
+		$this->assertSame( $original_link, get_post_meta( $post_id, Options::META_EXTERNAL_LINK, true ), 'External link meta must be unchanged after failed update.' );
+		$this->assertSame( $original_date, get_post_meta( $post_id, Options::META_IMPORT_DATE, true ), 'Import date meta must be unchanged after failed update.' );
+	}
+
+	/**
+	 * Verifies that the bulk update path returns a failure when the tracking
+	 * meta write fails.
+	 *
+	 * If update_post_meta fails for META_IMPORT_DATE (e.g., a DB error), the
+	 * import must report failure rather than silently leaving the tracking meta
+	 * stale.
+	 */
+	public function test_bulk_update_fails_when_tracking_meta_write_fails(): void {
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ARRANGE: Import the post once to create it in the DB.
+		$post_data = array(
+			'id'        => 9120,
+			'title'     => 'Post For Tracking Meta Failure Test',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/tracking-meta-failure-test',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
+		$post_id = $first['post_id'];
+
+		// ARRANGE: Block update_post_meta for META_IMPORT_DATE to simulate a DB
+		// failure.
+		$block_meta = function (
+			$check,
+			$object_id,
+			$meta_key,
+			$meta_value,
+			$prev_value
+		) {
+			unset( $object_id, $meta_value, $prev_value );
+			if ( Options::META_IMPORT_DATE === $meta_key ) {
+				return false;
+			}
+			return $check;
+		};
+		add_filter( 'update_post_metadata', $block_meta, 10, 5 );
+
+		// ACT: Re-import the same post (hits the update path).
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'update_post_metadata', $block_meta, 10 );
+
+		// ASSERT: Import must report failure with a descriptive error.
+		$this->assertFalse(
+			$result['success'],
+			'Update import should fail when tracking meta cannot be written.'
+		);
+		$this->assertStringContainsString(
+			'tracking metadata',
+			$result['error']
+		);
+
+		// ASSERT: The import date meta must be absent: the delete succeeded but
+		// the subsequent write was blocked, so no value was committed.
+		$this->assertSame(
+			'',
+			get_post_meta( $post_id, Options::META_IMPORT_DATE, true ),
+			'META_IMPORT_DATE must be absent when the write was blocked after a delete.'
+		);
 	}
 
 	/**
