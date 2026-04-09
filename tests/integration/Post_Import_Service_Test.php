@@ -780,4 +780,134 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			'Attachments created before the failure must be deleted when the import is aborted.'
 		);
 	}
+
+	/**
+	 * Verifies that the import aborts and the orphaned draft is deleted when
+	 * the featured image cannot be imported.
+	 *
+	 * When a new post is inserted successfully but the featured image cannot be
+	 * imported, the import must return success: false and the orphaned draft
+	 * must be force-deleted so it does not pollute the DB.
+	 */
+	public function test_import_aborts_and_deletes_draft_when_featured_image_fails(): void {
+		// ARRANGE: Fresh-content response includes featured_media > 0 so the
+		// import path attempts to fetch the featured image. The fail filter
+		// runs at priority 6 — after mock_media_api_request (priority 5) — so
+		// it can override that response and return a 404, causing
+		// import_featured_image() to return false.
+		$this->mock_post_overrides = array( 'featured_media' => 100 );
+
+		$fail_media_api = function ( $preempt, array $args, string $url ) {
+			unset( $args );
+			if ( str_contains( $url, 'wp-json/wp/v2/media/' ) ) {
+				return array(
+					'response' => array(
+						'code'    => 404,
+						'message' => 'Not Found',
+					),
+					'body'     => 'Not Found',
+					'headers'  => array(),
+				);
+			}
+			return $preempt;
+		};
+		add_filter( 'pre_http_request', $fail_media_api, 6, 3 );
+
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		$post_data = array(
+			'id'        => 9101,
+			'title'     => 'Post With Failed Featured Image',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/failed-featured-image',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Attempt to import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'pre_http_request', $fail_media_api, 6 );
+
+		// ASSERT: Import must fail with a featured image error.
+		$this->assertFalse( $result['success'], 'Import should fail when the featured image cannot be imported.' );
+		$this->assertStringContainsString( 'featured image', $result['error'] );
+
+		// ASSERT: The orphaned draft must have been deleted.
+		$this->assertEmpty(
+			get_posts(
+				array(
+					'post_type'        => 'post',
+					'post_status'      => 'any',
+					'posts_per_page'   => 1,
+					'suppress_filters' => false,
+					'meta_key'         => \Safe_Publish\Utils\Options::META_EXTERNAL_POST_ID,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => '9101',
+				)
+			),
+			'The orphaned draft must be deleted when the featured image import fails.'
+		);
+	}
+
+	/**
+	 * Verifies that the import aborts without deleting the post when the
+	 * featured image cannot be imported on re-import.
+	 *
+	 * When re-importing an existing post, if the featured image cannot be
+	 * imported, the import must return success: false and the post must not be
+	 * deleted — it existed before and must remain in the DB.
+	 */
+	public function test_import_aborts_without_deleting_post_when_featured_image_fails_on_update(): void {
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		// ARRANGE: Import the post once with no featured image so it exists in
+		// the DB.
+		$post_data = array(
+			'id'        => 9102,
+			'title'     => 'Post For Featured Image Update Test',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/featured-image-update-test',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
+		$post_id = $first['post_id'];
+
+		// ARRANGE: Re-import with featured_media > 0, but make the media API fail.
+		// The fail filter runs at priority 6 — after mock_media_api_request
+		// (priority 5) — so it can override that response and return a 404.
+		$this->mock_post_overrides = array( 'featured_media' => 100 );
+
+		$fail_media_api = function ( $preempt, array $args, string $url ) {
+			unset( $args );
+			if ( str_contains( $url, 'wp-json/wp/v2/media/' ) ) {
+				return array(
+					'response' => array(
+						'code'    => 404,
+						'message' => 'Not Found',
+					),
+					'body'     => 'Not Found',
+					'headers'  => array(),
+				);
+			}
+			return $preempt;
+		};
+		add_filter( 'pre_http_request', $fail_media_api, 6, 3 );
+
+		// ACT: Re-import the same post (hits the update path).
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'pre_http_request', $fail_media_api, 6 );
+
+		// ASSERT: Import must fail with a featured image error.
+		$this->assertFalse( $result['success'], 'Re-import should fail when the featured image cannot be imported.' );
+		$this->assertStringContainsString( 'featured image', $result['error'] );
+
+		// ASSERT: The existing post must still be present in the DB.
+		$this->assertNotNull(
+			get_post( $post_id ),
+			'The existing post must not be deleted when featured image import fails on the update path.'
+		);
+	}
 }
