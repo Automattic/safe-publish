@@ -9,9 +9,10 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Closure;
 use Safe_Publish\Admin\Content_Processor;
-use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\History_Renderer;
+use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Import_History;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\Admin\Session_Formatter;
@@ -507,8 +508,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * Verifies that the featured image is imported when bulk re-importing an
 	 * existing post.
 	 *
-	 * This guards the update path in handle_imported_post(): if
-	 * apply_media_and_taxonomy() were accidentally removed there, the thumbnail
+	 * This guards the update path in handle_imported_post(): if the
+	 * set_post_thumbnail() call were accidentally removed there, the thumbnail
 	 * would silently stop being set on re-import and no other test would catch it.
 	 */
 	public function test_featured_image_is_imported_on_bulk_reimport(): void {
@@ -782,12 +783,11 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that the import aborts and the orphaned draft is deleted when
-	 * the featured image cannot be imported.
+	 * Verifies that the import aborts without creating a draft when the
+	 * featured image cannot be imported.
 	 *
-	 * When a new post is inserted successfully but the featured image cannot be
-	 * imported, the import must return success: false and the orphaned draft
-	 * must be force-deleted so it does not pollute the DB.
+	 * The featured image is sideloaded before the post is inserted, so a
+	 * failure here means no post is ever written to the DB.
 	 */
 	public function test_import_aborts_and_deletes_draft_when_featured_image_fails(): void {
 		// ARRANGE: Fresh-content response includes featured_media > 0 so the
@@ -797,20 +797,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		// import_featured_image() to return false.
 		$this->mock_post_overrides = array( 'featured_media' => 100 );
 
-		$fail_media_api = function ( $preempt, array $args, string $url ) {
-			unset( $args );
-			if ( str_contains( $url, 'wp-json/wp/v2/media/' ) ) {
-				return array(
-					'response' => array(
-						'code'    => 404,
-						'message' => 'Not Found',
-					),
-					'body'     => 'Not Found',
-					'headers'  => array(),
-				);
-			}
-			return $preempt;
-		};
+		$fail_media_api = $this->make_featured_image_fail_filter();
 		add_filter( 'pre_http_request', $fail_media_api, 6, 3 );
 
 		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
@@ -845,17 +832,16 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'meta_value'       => '9101',
 				)
 			),
-			'The orphaned draft must be deleted when the featured image import fails.'
+			'The post must not exist when the featured image import fails before insertion.'
 		);
 	}
 
 	/**
-	 * Verifies that the import aborts without deleting the post when the
+	 * Verifies that the import aborts without modifying the post when the
 	 * featured image cannot be imported on re-import.
 	 *
-	 * When re-importing an existing post, if the featured image cannot be
-	 * imported, the import must return success: false and the post must not be
-	 * deleted — it existed before and must remain in the DB.
+	 * The featured image is sideloaded before the post is written, so a failure
+	 * here leaves the existing post untouched.
 	 */
 	public function test_import_aborts_without_deleting_post_when_featured_image_fails_on_update(): void {
 		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
@@ -879,20 +865,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		// (priority 5) — so it can override that response and return a 404.
 		$this->mock_post_overrides = array( 'featured_media' => 100 );
 
-		$fail_media_api = function ( $preempt, array $args, string $url ) {
-			unset( $args );
-			if ( str_contains( $url, 'wp-json/wp/v2/media/' ) ) {
-				return array(
-					'response' => array(
-						'code'    => 404,
-						'message' => 'Not Found',
-					),
-					'body'     => 'Not Found',
-					'headers'  => array(),
-				);
-			}
-			return $preempt;
-		};
+		$fail_media_api = $this->make_featured_image_fail_filter();
 		add_filter( 'pre_http_request', $fail_media_api, 6, 3 );
 
 		// ACT: Re-import the same post (hits the update path).
@@ -909,5 +882,87 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			get_post( $post_id ),
 			'The existing post must not be deleted when featured image import fails on the update path.'
 		);
+	}
+
+	/**
+	 * Verifies that the existing post is not modified when the featured image
+	 * import fails on the bulk update path.
+	 *
+	 * The featured image is sideloaded before the post is written, so a failure
+	 * aborts the import before any DB write. Title, content, and tracking meta
+	 * must all be identical to their values before the import attempt began.
+	 */
+	public function test_import_restores_post_on_featured_image_failure_during_bulk_update(): void {
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		// ARRANGE: Import the post once with clean content so it exists in the DB.
+		$post_data = array(
+			'id'        => 9103,
+			'title'     => 'Original Title',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/restore-on-failure-test',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
+		$post_id = $first['post_id'];
+
+		$original_title   = get_post_field( 'post_title', $post_id );
+		$original_content = get_post_field( 'post_content', $post_id );
+		$original_link    = get_post_meta( $post_id, \Safe_Publish\Utils\Options::META_EXTERNAL_LINK, true );
+		$original_date    = get_post_meta( $post_id, \Safe_Publish\Utils\Options::META_IMPORT_DATE, true );
+
+		// ARRANGE: Fresh content will return updated title/content and a featured
+		// image. The fail filter makes the media API return 404 to trigger failure.
+		$this->mock_post_overrides = array(
+			'title'          => 'Updated Title',
+			'content'        => '<p>Updated content that must not be saved.</p>',
+			'featured_media' => 100,
+		);
+
+		$fail_media_api = $this->make_featured_image_fail_filter();
+		add_filter( 'pre_http_request', $fail_media_api, 6, 3 );
+
+		// ACT: Re-import the same post (hits the update path).
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'pre_http_request', $fail_media_api, 6 );
+
+		// ASSERT: Import must fail.
+		$this->assertFalse( $result['success'], 'Re-import should fail when the featured image cannot be imported.' );
+		$this->assertStringContainsString( 'featured image', $result['error'] );
+
+		// ASSERT: Post fields and tracking meta must be unchanged: the import
+		// aborted before any DB write.
+		$this->assertSame( $original_title, get_post_field( 'post_title', $post_id ), 'Title must be unchanged after failed update.' );
+		$this->assertSame( $original_content, get_post_field( 'post_content', $post_id ), 'Content must be unchanged after failed update.' );
+		$this->assertSame( $original_link, get_post_meta( $post_id, \Safe_Publish\Utils\Options::META_EXTERNAL_LINK, true ), 'External link meta must be unchanged after failed update.' );
+		$this->assertSame( $original_date, get_post_meta( $post_id, \Safe_Publish\Utils\Options::META_IMPORT_DATE, true ), 'Import date meta must be unchanged after failed update.' );
+	}
+
+	/**
+	 * Returns a pre_http_request filter that makes the media JSON API return 404.
+	 *
+	 * Registered at priority 6 so it runs after the mock at priority 5 and
+	 * overrides the normal mock response to simulate a failed API request.
+	 *
+	 * @return Closure
+	 */
+	private function make_featured_image_fail_filter(): Closure {
+		return function ( $preempt, array $args, string $url ) {
+			unset( $args );
+			if ( str_contains( $url, 'wp-json/wp/v2/media/' ) ) {
+				return array(
+					'response' => array(
+						'code'    => 404,
+						'message' => 'Not Found',
+					),
+					'body'     => 'Not Found',
+					'headers'  => array(),
+				);
+			}
+			return $preempt;
+		};
 	}
 }
