@@ -30,17 +30,46 @@ final class Meta_Terms_Manager {
 	 *
 	 * Accepts array or object; keys are meta keys, values are meta values.
 	 *
+	 * Returns true on success, or a WP_Error listing any keys that could not
+	 * be written due to a database error.
+	 *
 	 * @param int          $post_id Post ID to update meta for.
 	 * @param array|object $meta    Meta to set.
+	 * @return true|WP_Error True on success, WP_Error on failure.
 	 */
-	public function update_meta( int $post_id, array|object $meta ): void {
+	public function update_meta( int $post_id, array|object $meta ): true|WP_Error {
 		// Update meta if provided (accept object or array).
-		if ( ! empty( $meta ) && ( is_array( $meta ) || is_object( $meta ) ) ) {
-			$meta_array = (array) $meta;
+		$meta_array = (array) $meta;
+		if ( array() !== $meta_array ) {
+			$failed_keys = array();
+
 			foreach ( $meta_array as $meta_key => $meta_value ) {
-				update_post_meta( $post_id, sanitize_text_field( (string) $meta_key ), $meta_value );
+				$key    = sanitize_text_field( (string) $meta_key );
+				$result = update_post_meta( $post_id, $key, $meta_value );
+
+				if ( false === $result ) {
+					// update_post_meta() also returns false when the stored
+					// value is already identical. Read it back to avoid
+					// reporting a false failure on re-imports.
+					if ( get_post_meta( $post_id, $key, true ) !== $meta_value ) {
+						$failed_keys[] = $key;
+					}
+				}
+			}
+
+			if ( array() !== $failed_keys ) {
+				return new WP_Error(
+					'meta_update_failed',
+					sprintf(
+						/* translators: %s: comma-separated list of meta keys */
+						__( 'Failed to update post meta key(s): %s.', 'safe-publish' ),
+						implode( ', ', $failed_keys )
+					)
+				);
 			}
 		}
+
+		return true;
 	}
 
 	/**
@@ -58,9 +87,8 @@ final class Meta_Terms_Manager {
 	 */
 	public function update_terms( int $post_id, array|object $terms ): true|\WP_Error {
 		// Update terms if provided (accept array/object; supports IDs, slugs, names, or objects).
-		if ( ! empty( $terms ) && ( is_array( $terms ) || is_object( $terms ) ) ) {
-			$terms_array = (array) $terms;
-
+		$terms_array = (array) $terms;
+		if ( array() !== $terms_array ) {
 			foreach ( $terms_array as $raw_tax => $term_items ) {
 				$tax = sanitize_key( (string) $raw_tax );
 

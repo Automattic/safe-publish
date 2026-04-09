@@ -279,13 +279,29 @@ final class Safe_Publish_API extends REST_Base {
 		}
 
 		// Update meta only if supplied.
-		if ( $req->has_param( 'meta' ) && ! empty( $meta ) && ( is_array( $meta ) || is_object( $meta ) ) ) {
-			$this->meta_terms_manager->update_meta( $post_id, $meta );
+		if ( $req->has_param( 'meta' ) && array() !== $meta ) {
+			$meta_result = $this->meta_terms_manager->update_meta(
+				$post_id,
+				$meta
+			);
+
+			if ( is_wp_error( $meta_result ) ) {
+				return new WP_REST_Response(
+					array(
+						'success' => false,
+						'error'   => $meta_result->get_error_message(),
+					),
+					500
+				);
+			}
 		}
 
 		// Update terms only if supplied.
-		if ( $req->has_param( 'terms' ) && ! empty( $terms ) && ( is_array( $terms ) || is_object( $terms ) ) ) {
-			$terms_result = $this->meta_terms_manager->update_terms( $post_id, $terms );
+		if ( $req->has_param( 'terms' ) && array() !== $terms ) {
+			$terms_result = $this->meta_terms_manager->update_terms(
+				$post_id,
+				$terms
+			);
 
 			if ( is_wp_error( $terms_result ) ) {
 				return new WP_REST_Response(
