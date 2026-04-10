@@ -80,6 +80,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		$extension   = strtolower( pathinfo( (string) wp_parse_url( $url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
 		$fixture_map = array(
+			'heic' => array( 'test-1x1.jpg', 'image/jpeg' ),
 			'jpg'  => array( 'test-1x1.jpg', 'image/jpeg' ),
 			'jpeg' => array( 'test-1x1.jpg', 'image/jpeg' ),
 			'png'  => array( 'test-1x1.png', 'image/png' ),
@@ -310,5 +311,58 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		// ASSERT: The block attrs contain the attachment ID.
 		$this->assertMatchesRegularExpression( '/"id":\d+/', $processed, 'Block attrs should contain a numeric attachment ID' );
+	}
+
+	/**
+	 * Verifies that a Gutenberg image block referencing source-site media with
+	 * a non-standard extension (.heic) is sideloaded correctly.
+	 *
+	 * The media pipeline must not be gated on a fixed extension allow-list;
+	 * source-site media with any extension should be imported.
+	 */
+	public function test_process_source_site_image_with_non_standard_extension_imports_media(): void {
+		// ARRANGE: A source-site image URL with .heic extension (absent from the
+		// old extension allow-list and not a substring of any entry in it).
+		$source_site = 'https://source.example.com';
+		$image_url   = 'https://source.example.com/photo.heic';
+
+		$content = '<!-- wp:image {"url":"' . $image_url . '"} -->'
+			. '<figure class="wp-block-image">'
+			. '<img src="' . $image_url . '" alt="HEIC photo"/>'
+			. '</figure>'
+			. '<!-- /wp:image -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site );
+
+		// ASSERT: Exactly one attachment was created.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Source-site media with a non-standard extension should be sideloaded'
+		);
+
+		// ASSERT: The source URL no longer appears in the output.
+		$this->assertStringNotContainsString(
+			$image_url,
+			$processed,
+			'Source URL should be replaced with the local upload URL'
+		);
+
+		// ASSERT: A local upload URL is present.
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Local upload URL should be present in processed content'
+		);
+
+		// ASSERT: No import failures.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
 	}
 }
