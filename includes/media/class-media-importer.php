@@ -67,31 +67,29 @@ class Media_Importer {
 	 *
 	 * @param string $media_url       External media URL.
 	 * @param string $source_site_url Source site URL for resolving relative URLs.
-	 * @return string|false New media URL on success, false on failure.
+	 * @return string|false|null New media URL on success, false on failure,
+	 *                           null when the URL belongs to a third-party
+	 *                           domain and should be left unchanged.
 	 */
 	public function import_external_media(
 		string $media_url,
 		string $source_site_url
-	): string|false {
+	): string|false|null {
 		// Make URL absolute if it's relative.
 		if ( ! filter_var( $media_url, FILTER_VALIDATE_URL ) ) {
 			$media_url = rtrim( $source_site_url, '/' ) . '/' . ltrim( $media_url, '/' );
 		}
 
-		/*
-		 * TODO: Check if we want/need this.
-		 *
-		 * Check if media is from the same domain as source.
-		 * Uncomment to enable same-domain validation:
-		 *
-		 * $source_domain = wp_parse_url( $source_site_url, PHP_URL_HOST );
-		 * $media_domain  = wp_parse_url( $media_url, PHP_URL_HOST );
-		 *
-		 * Only import media from the same domain for security.
-		 * if ( $source_domain !== $media_domain ) {
-		 *     return false;
-		 * }
-		 */
+		// Skip media that originates from a third-party domain — it is an
+		// external resource the source site doesn't own and should not be
+		// sideloaded. Return null so callers can distinguish this from a
+		// genuine download failure (false).
+		$source_domain = wp_parse_url( $source_site_url, PHP_URL_HOST );
+		$media_domain  = wp_parse_url( $media_url, PHP_URL_HOST );
+
+		if ( $source_domain !== $media_domain ) {
+			return null;
+		}
 
 		// Strip query parameters for consistency with import_external_media_as_attachment().
 		$media_url = strtok( $media_url, '?' );
@@ -162,15 +160,28 @@ class Media_Importer {
 	 *
 	 * @param string $media_url       External media URL.
 	 * @param string $source_site_url Source site URL for resolving relative URLs.
-	 * @return int|false Attachment ID on success, false on failure.
+	 * @return int|false|null Attachment ID on success, false on failure,
+	 *                        null when the URL belongs to a third-party
+	 *                        domain and should be left unchanged.
 	 */
 	public function import_external_media_as_attachment(
 		string $media_url,
 		string $source_site_url
-	): int|false {
+	): int|false|null {
 		// Make URL absolute if it's relative.
 		if ( ! filter_var( $media_url, FILTER_VALIDATE_URL ) ) {
 			$media_url = rtrim( $source_site_url, '/' ) . '/' . ltrim( $media_url, '/' );
+		}
+
+		// Skip media that originates from a third-party domain — it is an
+		// external resource the source site doesn't own and should not be
+		// sideloaded. Return null so callers can distinguish this from a
+		// genuine download failure (false).
+		$source_domain = wp_parse_url( $source_site_url, PHP_URL_HOST );
+		$media_domain  = wp_parse_url( $media_url, PHP_URL_HOST );
+
+		if ( $source_domain !== $media_domain ) {
+			return null;
 		}
 
 		$media_url = strtok( $media_url, '?' ); // Remove query parameters.

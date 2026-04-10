@@ -16,6 +16,7 @@ use Safe_Publish\Content\Embed_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Integration_Test_Case;
 use Safe_Publish\Tests\Integration\Mock_Media_HTTP_Trait;
+use WP_Error;
 
 /**
  * Content Processor Integration Test Class.
@@ -359,6 +360,133 @@ class Content_Processor_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: No import failures.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that a third-party image URL in classic HTML content is left
+	 * unchanged and no failure is recorded.
+	 */
+	public function test_process_classic_content_leaves_third_party_image_unchanged(): void {
+		// ARRANGE: HTML with an img from an unrelated CDN (not source.example.com).
+		$source_site   = 'https://source.example.com';
+		$cdn_image_url = 'https://third-party.example.com/photo-123.jpg';
+		$content       = '<p>Hello</p><img src="' . $cdn_image_url . '" alt="stock photo">';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process classic HTML content containing the third-party image.
+		$processed = $this->processor->process_content( $content, $source_site );
+
+		// ASSERT: No attachment was created for the third-party image.
+		$this->assertSame(
+			$attachments_before,
+			$this->get_attachment_count(),
+			'Third-party image must not be sideloaded'
+		);
+
+		// ASSERT: The third-party URL is still present in the output.
+		$this->assertStringContainsString(
+			$cdn_image_url,
+			$processed,
+			'Third-party image URL should remain unchanged'
+		);
+
+		// ASSERT: No failure was recorded for the skipped URL.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'Skipped third-party media must not be recorded as a failure'
+		);
+	}
+
+	/**
+	 * Verifies that a third-party image URL in a Gutenberg core/image block
+	 * is left unchanged and no failure is recorded.
+	 */
+	public function test_process_gutenberg_block_leaves_third_party_image_unchanged(): void {
+		// ARRANGE: core/image block with a stock-photo CDN URL.
+		$source_site   = 'https://source.example.com';
+		$cdn_image_url = 'https://third-party.example.com/photo-456.jpg';
+		$content       = '<!-- wp:image {"url":"' . $cdn_image_url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $cdn_image_url . '" alt="stock"/></figure>'
+			. '<!-- /wp:image -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block content containing the third-party image URL.
+		$processed = $this->processor->process_content( $content, $source_site );
+
+		// ASSERT: No attachment was created for the third-party image.
+		$this->assertSame(
+			$attachments_before,
+			$this->get_attachment_count(),
+			'Third-party image must not be sideloaded'
+		);
+
+		// ASSERT: The third-party URL is still present after processing.
+		$this->assertStringContainsString(
+			$cdn_image_url,
+			$processed,
+			'Third-party image URL should remain unchanged in block output'
+		);
+
+		// ASSERT: No failure was recorded for the skipped URL.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'Skipped third-party media must not be recorded as a failure'
+		);
+	}
+
+	/**
+	 * Verifies that source-domain media is sideloaded while third-party media
+	 * in the same content is left unchanged and not recorded as a failure.
+	 */
+	public function test_process_classic_content_sideloads_source_domain_but_skips_third_party(): void {
+		// ARRANGE: Content with one source-domain image and one third-party image.
+		$source_site      = 'https://source.example.com';
+		$source_image_url = 'https://source.example.com/image.jpg';
+		$cdn_image_url    = 'https://third-party.example.com/photo-789.jpg';
+		$content          = '<img src="' . $source_image_url . '" alt="local">'
+			. '<img src="' . $cdn_image_url . '" alt="stock">';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process mixed content containing both image types.
+		$processed = $this->processor->process_content( $content, $source_site );
+
+		// ASSERT: Exactly one attachment was created (the source-domain image).
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Only the source-domain image should be sideloaded'
+		);
+
+		// ASSERT: The source-domain URL was replaced with a local one.
+		$this->assertStringNotContainsString(
+			$source_image_url,
+			$processed,
+			'Source-domain URL should be replaced with the local upload URL'
+		);
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Local upload URL should be present'
+		);
+
+		// ASSERT: The third-party URL remains untouched.
+		$this->assertStringContainsString(
+			$cdn_image_url,
+			$processed,
+			'Third-party image URL should remain unchanged'
+		);
+
+		// ASSERT: No failures recorded.
 		$this->assertSame(
 			array(),
 			$this->processor->get_failed_media(),
