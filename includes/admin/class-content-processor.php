@@ -455,8 +455,19 @@ class Content_Processor {
 				break;
 
 			default:
-				// Process innerHTML for any blocks that might contain media or links.
-				if ( ! empty( $block['innerHTML'] ) ) {
+				// Process URL values in block attrs for custom/third-party
+				// blocks, then fall through to process innerHTML for media/links.
+				if ( isset( $block['attrs'] ) && array() !== $block['attrs'] ) {
+					$block['attrs'] = $this->replace_urls_in_attrs(
+						$block['attrs'],
+						$site_url,
+						$block
+					);
+				}
+
+				// Process innerHTML for any blocks that might contain media or
+				// links.
+				if ( isset( $block['innerHTML'] ) && '' !== $block['innerHTML'] ) {
 					$block['innerHTML'] = $this->content_media_processor->process_content(
 						$block['innerHTML'],
 						$site_url
@@ -954,6 +965,86 @@ class Content_Processor {
 		}
 
 		return $updated_html ? $updated_html : $html;
+	}
+
+	/**
+	 * Recursively replaces source-domain media URLs in block attrs.
+	 *
+	 * Walks all string values in $attrs. For each value that is a valid URL
+	 * on the source domain, the URL is sideloaded and replaced with the local
+	 * attachment URL. Matching occurrences in $block['innerHTML'] and
+	 * $block['innerContent'] are also updated so they stay consistent.
+	 *
+	 * @param array  $attrs    Attributes array to walk (possibly nested).
+	 * @param string $site_url Source site URL.
+	 * @param array  $block    Block data; updated by reference for innerHTML
+	 *                         and innerContent.
+	 * @return array Updated attributes array.
+	 */
+	private function replace_urls_in_attrs(
+		array $attrs,
+		string $site_url,
+		array &$block
+	): array {
+		foreach ( $attrs as $key => $value ) {
+			if ( is_array( $value ) ) {
+				$attrs[ $key ] = $this->replace_urls_in_attrs(
+					$value,
+					$site_url,
+					$block
+				);
+			} elseif (
+				is_string( $value ) &&
+				filter_var( $value, FILTER_VALIDATE_URL )
+			) {
+				$attachment_id = $this->media_importer
+					->import_external_media_as_attachment( $value, $site_url );
+
+				if ( null === $attachment_id ) {
+					continue; // Third-party or non-source URL — leave unchanged.
+				}
+
+				if ( false === $attachment_id ) {
+					$this->failed_media[] = $value;
+					continue;
+				}
+
+				$new_url = wp_get_attachment_url( $attachment_id );
+
+				if ( false === $new_url ) {
+					$this->failed_media[] = $value;
+					continue;
+				}
+
+				$attrs[ $key ] = $new_url;
+
+				if ( isset( $block['innerHTML'] ) && '' !== $block['innerHTML'] ) {
+					$block['innerHTML'] = str_replace(
+						$value,
+						$new_url,
+						$block['innerHTML']
+					);
+				}
+
+				if (
+					isset( $block['innerContent'] ) &&
+					is_array( $block['innerContent'] ) &&
+					array() !== $block['innerContent']
+				) {
+					foreach ( $block['innerContent'] as $idx => $content ) {
+						if ( is_string( $content ) ) {
+							$block['innerContent'][ $idx ] = str_replace(
+								$value,
+								$new_url,
+								$content
+							);
+						}
+					}
+				}
+			}
+		}
+
+		return $attrs;
 	}
 
 	/**

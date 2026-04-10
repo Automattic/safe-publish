@@ -472,53 +472,95 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that source-domain media is sideloaded while third-party media
-	 * in the same content is left unchanged and not recorded as a failure.
+	 * Verifies that a custom block storing media exclusively in attrs (not in
+	 * innerHTML) has its source-domain URL sideloaded and the attr replaced.
+	 *
+	 * This exercises the generic replace_urls_in_attrs() path in the default
+	 * switch case, covering third-party block types that use arbitrary attr
+	 * keys such as backgroundUrl, poster, src, etc.
 	 */
-	public function test_process_classic_content_sideloads_source_domain_but_skips_third_party(): void {
-		// ARRANGE: Content with one source-domain image and one third-party image.
-		$source_site      = 'https://source.example.com';
-		$source_image_url = 'https://source.example.com/image.jpg';
-		$cdn_image_url    = 'https://third-party.example.com/photo-789.jpg';
-		$content          = '<img src="' . $source_image_url . '" alt="local">'
-			. '<img src="' . $cdn_image_url . '" alt="stock">';
+	public function test_process_custom_block_imports_media_from_attrs(): void {
+		// ARRANGE: A custom block storing media only in attrs, not in innerHTML.
+		$source_site  = 'https://source.example.com';
+		$external_url = 'https://source.example.com/hero-bg.jpg';
+		$content      = '<!-- wp:my-plugin/hero {"backgroundUrl":"' . $external_url . '"} -->'
+			. '<div class="wp-block-my-plugin-hero"></div>'
+			. '<!-- /wp:my-plugin/hero -->';
 
 		$attachments_before = $this->get_attachment_count();
 
-		// ACT: Process mixed content containing both image types.
+		// ACT: Process through the full Gutenberg path.
 		$processed = $this->processor->process_content( $content, $source_site );
 
-		// ASSERT: Exactly one attachment was created (the source-domain image).
+		// ASSERT: Exactly one attachment was created for the attrs media URL.
 		$this->assertSame(
 			$attachments_before + 1,
 			$this->get_attachment_count(),
-			'Only the source-domain image should be sideloaded'
+			'Custom block attrs media should be sideloaded as an attachment'
 		);
 
-		// ASSERT: The source-domain URL was replaced with a local one.
+		// ASSERT: The external URL no longer appears anywhere in the output.
 		$this->assertStringNotContainsString(
-			$source_image_url,
+			$external_url,
 			$processed,
-			'Source-domain URL should be replaced with the local upload URL'
+			'External URL in custom block attrs should be replaced with the local URL'
 		);
+
+		// ASSERT: A local upload URL appears in the serialized block comment.
 		$this->assertStringContainsString(
 			'wp-content/uploads',
 			$processed,
-			'Local upload URL should be present'
-		);
-
-		// ASSERT: The third-party URL remains untouched.
-		$this->assertStringContainsString(
-			$cdn_image_url,
-			$processed,
-			'Third-party image URL should remain unchanged'
+			'Local upload URL should appear in the processed output'
 		);
 
 		// ASSERT: No failures recorded.
 		$this->assertSame(
 			array(),
 			$this->processor->get_failed_media(),
-			'No media failures should be recorded'
+			'No media failures should be recorded for a successful sideload'
+		);
+	}
+
+	/**
+	 * Verifies that a third-party URL stored in a custom block's attrs is left
+	 * unchanged and not recorded as a failure.
+	 *
+	 * The replace_urls_in_attrs() method must skip URLs whose domain does not
+	 * match the source site (import_external_media_as_attachment returns null),
+	 * without treating this as a sideload failure.
+	 */
+	public function test_process_custom_block_skips_third_party_url_in_attrs(): void {
+		// ARRANGE: A custom block with a third-party CDN URL in attrs only.
+		$source_site   = 'https://source.example.com';
+		$cdn_image_url = 'https://third-party.example.com/banner.jpg';
+		$content       = '<!-- wp:my-plugin/hero {"backgroundUrl":"' . $cdn_image_url . '"} -->'
+			. '<div class="wp-block-my-plugin-hero"></div>'
+			. '<!-- /wp:my-plugin/hero -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site );
+
+		// ASSERT: No attachment was created for the third-party URL.
+		$this->assertSame(
+			$attachments_before,
+			$this->get_attachment_count(),
+			'Third-party URL in custom block attrs must not be sideloaded'
+		);
+
+		// ASSERT: The third-party URL is unchanged in the output.
+		$this->assertStringContainsString(
+			$cdn_image_url,
+			$processed,
+			'Third-party URL in custom block attrs should remain unchanged'
+		);
+
+		// ASSERT: No failure was recorded for the skipped URL.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'Skipped third-party URL in attrs must not be recorded as a failure'
 		);
 	}
 }
