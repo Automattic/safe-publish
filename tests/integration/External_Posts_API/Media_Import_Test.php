@@ -340,7 +340,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 	/**
 	 * Verifies that content transformations are preserved during import.
 	 *
-	 * Tests that WordPress-specific classes, relative URLs, and content
+	 * Tests that WordPress-specific classes, relative links, and content
 	 * structure are all preserved correctly during media processing.
 	 */
 	public function test_content_transformations_preserved(): void {
@@ -375,9 +375,9 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$this->assertStringContainsString( 'figcaption', $processed_content );
 		$this->assertStringContainsString( 'wp-video-shortcode', $processed_content );
 
-		// ASSERT: Verify relative URLs converted to absolute.
-		$this->assertStringContainsString( 'https://example.com/related-post', $processed_content );
-		$this->assertStringNotContainsString( 'href="/related-post"', $processed_content );
+		// ASSERT: Verify relative link is preserved as-is.
+		$this->assertStringContainsString( 'href="/related-post"', $processed_content );
+		$this->assertStringNotContainsString( 'href="https://example.com/related-post"', $processed_content );
 	}
 
 	/**

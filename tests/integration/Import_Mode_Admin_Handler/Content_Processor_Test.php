@@ -97,12 +97,12 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that relative URLs in content are converted to absolute URLs.
+	 * Verifies that relative links are preserved exactly as-is after import.
 	 *
-	 * Root-relative paths (e.g. /about) should become fully qualified URLs
-	 * after processing so the imported content has no broken relative links.
+	 * A relative href like /about-us means "within this site" and must not be
+	 * converted to an absolute destination URL during import.
 	 */
-	public function test_process_content_converts_relative_urls_to_absolute(): void {
+	public function test_process_content_preserves_relative_links(): void {
 		// ARRANGE: Classic HTML with a root-relative anchor href.
 		$source_site = 'https://source.example.com';
 		$content     = '<a href="/about-us">About Us</a>';
@@ -110,16 +110,44 @@ class Content_Processor_Test extends Integration_Test_Case {
 		// ACT: Process content against the source site.
 		$processed = $this->processor->process_content( $content, $source_site );
 
-		// ASSERT: Relative href has been replaced with an absolute URL.
-		$this->assertStringNotContainsString(
+		// ASSERT: Relative href is unchanged — not converted to an absolute URL.
+		$this->assertStringContainsString(
 			'href="/about-us"',
 			$processed,
-			'Relative href should be replaced with an absolute URL'
+			'Relative href must be preserved exactly as-is after import'
 		);
-		$this->assertStringContainsString(
+		$this->assertStringNotContainsString(
+			'source.example.com',
+			$processed,
+			'Source domain must not appear in the preserved relative href'
+		);
+		$this->assertStringNotContainsString(
 			'href="' . get_site_url() . '/about-us"',
 			$processed,
-			'Relative href should be rewritten to an absolute URL on the current site'
+			'Relative href must not be converted to an absolute destination URL'
+		);
+	}
+
+	/**
+	 * Verifies that absolute third-party links are left unchanged after import.
+	 *
+	 * Links pointing to external domains unrelated to the source site must
+	 * not have their domain rewritten.
+	 */
+	public function test_process_content_preserves_third_party_links(): void {
+		// ARRANGE: Content with a link to an unrelated third-party domain.
+		$source_site = 'https://source.example.com';
+		$third_party = 'https://third-party.example.org/page';
+		$content     = '<a href="' . $third_party . '">Third party</a>';
+
+		// ACT: Process content against the source site.
+		$processed = $this->processor->process_content( $content, $source_site );
+
+		// ASSERT: Third-party href is unchanged.
+		$this->assertStringContainsString(
+			'href="' . $third_party . '"',
+			$processed,
+			'Third-party href must not be rewritten'
 		);
 	}
 
