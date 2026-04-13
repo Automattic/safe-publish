@@ -122,6 +122,60 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that import_post() returns a failure result when no source site
+	 * URL is configured, without creating or modifying any post.
+	 *
+	 * Covers both the create path (handle_new_post) and the update path
+	 * (handle_imported_post) to confirm both abort correctly.
+	 */
+	public function test_import_aborts_when_source_site_url_is_not_configured(): void {
+		// ARRANGE: Remove the source URL configured by the base setUp().
+		delete_option( \Safe_Publish\Utils\Options::OPTION_CONNECTED_SITE_URL );
+
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		$post_data = array(
+			'id'        => 9901,
+			'title'     => 'Fetch Failure Test Post',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/fetch-failure-test',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Attempt to import a new post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import fails and no post was created.
+		$this->assertFalse( $result['success'], 'Import should fail when no source URL is configured.' );
+		$this->assertNotEmpty( $result['error'], 'A non-empty error message should be returned.' );
+		$this->assertEmpty(
+			get_posts(
+				array(
+					'post_type'      => 'post',
+					'posts_per_page' => 1,
+					'meta_key'       => 'safe_publish_external_post_id',
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'     => '9901',
+				)
+			),
+			'No post should be created when the fetch fails.'
+		);
+
+		// ACT: Simulate an existing post by re-configuring the URL, importing
+		// once to create it, then removing the URL and re-importing.
+		update_option( \Safe_Publish\Utils\Options::OPTION_CONNECTED_SITE_URL, 'https://source.example.com' );
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		delete_option( \Safe_Publish\Utils\Options::OPTION_CONNECTED_SITE_URL );
+		$update_result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Update path also aborts correctly.
+		$this->assertFalse( $update_result['success'], 'Re-import should fail when no source URL is configured.' );
+		$this->assertNotEmpty( $update_result['error'] );
+	}
+
+	/**
 	 * Verifies that the featured image is imported when bulk re-importing an
 	 * existing post.
 	 *
@@ -144,6 +198,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			'meta'           => array(),
 			'terms'          => array(),
 		);
+
+		$this->mock_single_post_overrides = array( 'featured_media' => 100 );
 
 		$first = $this->import_service->import_post( $post_data, $session_id );
 		$this->assertTrue( $first['success'] );

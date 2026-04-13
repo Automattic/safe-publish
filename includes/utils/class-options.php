@@ -29,13 +29,6 @@ class Options {
 	const OPTION_CONNECTED_SITE_URL = 'safe_publish_connected_site_url';
 
 	/**
-	 * Option key for the source site URL used when fetching fresh post content.
-	 *
-	 * @var string
-	 */
-	const OPTION_SOURCE_SITE_URL = 'safe_publish_site_url';
-
-	/**
 	 * Option key for the Basic Auth username.
 	 *
 	 * @var string

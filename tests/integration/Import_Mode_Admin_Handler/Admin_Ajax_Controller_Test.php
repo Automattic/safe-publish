@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration\Import_Mode_Admin_Handler;
 
+use Safe_Publish\Utils\Options;
 use WPAjaxDieContinueException;
 use WPAjaxDieStopException;
 
@@ -35,6 +36,59 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 
 		$this->admin_user_id = $this->factory()->user->create(
 			array( 'role' => 'administrator' )
+		);
+
+		// Configure the connected site URL so fetch_fresh_content() can make requests.
+		update_option( Options::OPTION_CONNECTED_SITE_URL, 'https://source.example.com' );
+
+		// Mock the single-post REST endpoint used by fetch_fresh_content().
+		add_filter( 'pre_http_request', array( $this, 'mock_post_api' ), 1, 3 );
+	}
+
+	/**
+	 * Tears down test fixtures.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		remove_filter( 'pre_http_request', array( $this, 'mock_post_api' ), 1 );
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
+		parent::tearDown();
+	}
+
+	/**
+	 * Intercepts HTTP requests to the single-post REST endpoint.
+	 *
+	 * Returns a minimal valid post response for fetch_fresh_post_content().
+	 *
+	 * @param false|array|\WP_Error $preempt Preemptive return value.
+	 * @param array                 $_args   HTTP request arguments (unused).
+	 * @param string                $url     Request URL.
+	 * @return false|array|\WP_Error Mocked response, or the prior return value.
+	 */
+	public function mock_post_api( $preempt, array $_args, string $url ) {
+		if ( false !== $preempt || ! preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
+			return $preempt;
+		}
+
+		return array(
+			'response' => array(
+				'code'    => 200,
+				'message' => 'OK',
+			),
+			'body'     => (string) wp_json_encode(
+				array(
+					'id'             => 1,
+					'title'          => array( 'rendered' => 'Test Post' ),
+					'featured_media' => 0,
+					'content'        => array( 'rendered' => '<p>Test content.</p>' ),
+					'excerpt'        => array( 'rendered' => '' ),
+					'link'           => 'https://source.example.com/test-post',
+					'meta'           => array(),
+				)
+			),
+			'headers'  => array(),
+			'cookies'  => array(),
+			'filename' => null,
 		);
 	}
 
@@ -167,9 +221,9 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 
 		$this->assertCount( 1, $imported_posts, 'A draft post should exist in the database' );
 		$this->assertSame(
-			'Test Import Post',
+			'Test Post',
 			$imported_posts[0]->post_title,
-			'Imported post should have the correct title'
+			'Imported post title should come from the fresh fetch'
 		);
 	}
 

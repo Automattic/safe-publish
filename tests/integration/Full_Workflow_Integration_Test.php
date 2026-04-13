@@ -26,6 +26,7 @@ use Safe_Publish\Auth\Permission_Manager;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Embed_Processor;
 use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Utils\Options;
 use WP_REST_Request;
 
 /**
@@ -69,6 +70,16 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	private History_Repository $repository;
 
 	/**
+	 * Per-test overrides for the mocked single-post API response.
+	 *
+	 * Keys: title, featured_media, content, excerpt, meta, terms.
+	 * Terms: array keyed by taxonomy slug with arrays of term names as values.
+	 *
+	 * @var array<string, mixed>
+	 */
+	private array $mock_api_overrides = array();
+
+	/**
 	 * Sets up test dependencies.
 	 */
 	#[\Override]
@@ -109,6 +120,74 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			$content_processor,
 			$this->import_history,
 			new Meta_Terms_Manager()
+		);
+
+		// Configure the connected site URL so fetch_fresh_content() can make requests.
+		update_option( Options::OPTION_CONNECTED_SITE_URL, 'https://source.example.com' );
+
+		// Mock the single-post REST endpoint used by fetch_fresh_content().
+		add_filter( 'pre_http_request', array( $this, 'mock_post_api' ), 1, 3 );
+	}
+
+	/**
+	 * Tears down test dependencies.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		remove_filter( 'pre_http_request', array( $this, 'mock_post_api' ), 1 );
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
+		parent::tearDown();
+	}
+
+	/**
+	 * Intercepts HTTP requests to the single-post REST endpoint.
+	 *
+	 * Returns a post response built from defaults merged with $this->mock_api_overrides.
+	 *
+	 * @param false|array|\WP_Error $preempt Preemptive return value.
+	 * @param array                 $_args   HTTP request arguments (unused).
+	 * @param string                $url     Request URL.
+	 * @return false|array|\WP_Error Mocked response, or the prior return value.
+	 */
+	public function mock_post_api( $preempt, array $_args, string $url ) {
+		if ( false !== $preempt || ! preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
+			return $preempt;
+		}
+
+		$body = array(
+			'id'             => 1,
+			'title'          => array( 'rendered' => $this->mock_api_overrides['title'] ?? 'Test Post' ),
+			'featured_media' => $this->mock_api_overrides['featured_media'] ?? 0,
+			'content'        => array( 'rendered' => $this->mock_api_overrides['content'] ?? '<p>Test content.</p>' ),
+			'excerpt'        => array( 'rendered' => $this->mock_api_overrides['excerpt'] ?? '' ),
+			'link'           => 'https://source.example.com/test-post',
+			'meta'           => $this->mock_api_overrides['meta'] ?? array(),
+		);
+
+		if ( ! empty( $this->mock_api_overrides['terms'] ) ) {
+			$term_groups = array();
+			foreach ( $this->mock_api_overrides['terms'] as $taxonomy => $term_names ) {
+				$group = array();
+				foreach ( $term_names as $name ) {
+					$group[] = array(
+						'taxonomy' => $taxonomy,
+						'name'     => $name,
+					);
+				}
+				$term_groups[] = $group;
+			}
+			$body['_embedded'] = array( 'wp:term' => $term_groups );
+		}
+
+		return array(
+			'response' => array(
+				'code'    => 200,
+				'message' => 'OK',
+			),
+			'body'     => (string) wp_json_encode( $body ),
+			'headers'  => array(),
+			'cookies'  => array(),
+			'filename' => null,
 		);
 	}
 
@@ -161,7 +240,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		$logs = $this->repository->get_session_logs( $session_id );
 
 		$this->assertCount( 1, $logs, 'One log entry should have been created for the session.' );
-		$this->assertSame( 'Full Workflow Test Post', $logs[0]->post_title );
+		$this->assertSame( 'Test Post', $logs[0]->post_title );
 		$this->assertSame( 'success', get_post_meta( $logs[0]->ID, 'status', true ) );
 		$this->assertSame( $result['post_id'], (int) get_post_meta( $logs[0]->ID, 'post_id', true ) );
 	}
@@ -273,6 +352,11 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			'terms'          => array(),
 		);
 
+		$this->mock_api_overrides = array(
+			'excerpt' => 'A short summary.',
+			'meta'    => array( 'custom_key' => 'custom_value' ),
+		);
+
 		// ACT: Import the post.
 		$result = $this->import_service->import_post( $post_data, $session_id );
 
@@ -306,6 +390,10 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			'terms'          => array( 'category' => array( 'Integration Test Category' ) ),
 		);
 
+		$this->mock_api_overrides = array(
+			'terms' => array( 'category' => array( 'Integration Test Category' ) ),
+		);
+
 		// ACT: Import the post.
 		$result = $this->import_service->import_post( $post_data, $session_id );
 
@@ -335,12 +423,22 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			'terms'          => array(),
 		);
 
+		$this->mock_api_overrides = array(
+			'excerpt' => 'Original excerpt.',
+			'meta'    => array( 'my_key' => 'original_value' ),
+		);
+
 		$first = $this->import_service->import_post( $post_data, $session_id );
 		$this->assertTrue( $first['success'] );
 
 		// ACT: Update excerpt and meta, then re-import.
 		$post_data['excerpt']        = 'Updated excerpt.';
 		$post_data['meta']['my_key'] = 'updated_value';
+
+		$this->mock_api_overrides = array(
+			'excerpt' => 'Updated excerpt.',
+			'meta'    => array( 'my_key' => 'updated_value' ),
+		);
 
 		$second = $this->import_service->import_post( $post_data, $session_id );
 
@@ -375,11 +473,19 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			'terms'          => array( 'category' => array( 'Original Term' ) ),
 		);
 
+		$this->mock_api_overrides = array(
+			'terms' => array( 'category' => array( 'Original Term' ) ),
+		);
+
 		$first = $this->import_service->import_post( $post_data, $session_id );
 		$this->assertTrue( $first['success'] );
 
 		// ACT: Re-import with a different term.
 		$post_data['terms'] = array( 'category' => array( 'Replacement Term' ) );
+
+		$this->mock_api_overrides = array(
+			'terms' => array( 'category' => array( 'Replacement Term' ) ),
+		);
 
 		$second = $this->import_service->import_post( $post_data, $session_id );
 
@@ -412,6 +518,10 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			'terms'          => array(),
 		);
 
+		$this->mock_api_overrides = array(
+			'content' => '<p>Safe content.</p><script>alert("xss")</script>',
+		);
+
 		// ACT: Import via the bulk path.
 		$result = $this->import_service->import_post( $post_data, $session_id );
 
@@ -441,6 +551,10 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			'excerpt'        => '<em>Safe excerpt.</em><script>alert("xss")</script>',
 			'meta'           => array(),
 			'terms'          => array(),
+		);
+
+		$this->mock_api_overrides = array(
+			'excerpt' => '<em>Safe excerpt.</em><script>alert("xss")</script>',
 		);
 
 		// ACT: Import via the bulk path.
@@ -479,6 +593,10 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 
 		// ACT: Re-import with a script tag injected into the content.
 		$post_data['content'] = '<p>Updated content.</p><script>alert("xss")</script>';
+
+		$this->mock_api_overrides = array(
+			'content' => '<p>Updated content.</p><script>alert("xss")</script>',
+		);
 
 		$second = $this->import_service->import_post( $post_data, $session_id );
 
