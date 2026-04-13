@@ -128,9 +128,6 @@ class Content_Processor {
 		// Process shortcode embeds.
 		$content = $wp_embed->run_shortcode( $content );
 
-		// Handle common embed patterns that might not be caught.
-		$content = $this->process_manual_embeds( $content );
-
 		return $content;
 	}
 
@@ -801,52 +798,6 @@ class Content_Processor {
 		}
 
 		return $block;
-	}
-
-	/**
-	 * Processes manual embed patterns for YouTube, Vimeo, Twitter, and Instagram URLs.
-	 *
-	 * @param string $content Post content.
-	 * @return ?string Processed content with embed shortcodes.
-	 */
-	private function process_manual_embeds( string $content ): ?string {
-		// YouTube embed patterns.
-		$content = preg_replace_callback(
-			'/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/',
-			function ( $matches ) {
-				return "[embed]https://www.youtube.com/watch?v={$matches[1]}[/embed]";
-			},
-			$content
-		);
-
-		// Vimeo embed patterns.
-		$content = preg_replace_callback(
-			'/(?:https?:\/\/)?(?:www\.)?vimeo\.com\/([0-9]+)/',
-			function ( $matches ) {
-				return "[embed]https://vimeo.com/{$matches[1]}[/embed]";
-			},
-			$content
-		);
-
-		// Twitter embed patterns.
-		$content = preg_replace_callback(
-			'/(?:https?:\/\/)?(?:www\.)?twitter\.com\/\w+\/status\/([0-9]+)/',
-			function ( $matches ) {
-				return "[embed]https://twitter.com/user/status/{$matches[1]}[/embed]";
-			},
-			$content
-		);
-
-		// Instagram embed patterns.
-		$content = preg_replace_callback(
-			'/(?:https?:\/\/)?(?:www\.)?instagram\.com\/p\/([a-zA-Z0-9_-]+)/',
-			function ( $matches ) {
-				return "[embed]https://www.instagram.com/p/{$matches[1]}[/embed]";
-			},
-			$content
-		);
-
-		return $content;
 	}
 
 	/**
