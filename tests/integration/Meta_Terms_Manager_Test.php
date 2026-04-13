@@ -13,7 +13,7 @@ use Safe_Publish\API\Meta_Terms_Manager;
 use WP_Error;
 
 /**
- * Integration tests for Meta_Terms_Manager::update_terms().
+ * Integration tests for Meta_Terms_Manager.
  */
 class Meta_Terms_Manager_Test extends Integration_Test_Case {
 
@@ -150,5 +150,80 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		$this->assertSame( 'unknown_taxonomy', $result->get_error_code() );
 		$assigned_names = wp_get_post_terms( $this->post_id, 'category', array( 'fields' => 'names' ) );
 		$this->assertNotContains( 'Brand New Category Term', $assigned_names );
+	}
+
+	/**
+	 * Verifies that update_meta() returns true when no meta is provided.
+	 */
+	public function test_update_meta_returns_true_for_empty_input(): void {
+		// ARRANGE: Empty meta input.
+		$meta = array();
+
+		// ACT: Call with empty meta.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		// ASSERT: Returns true without error.
+		$this->assertTrue( $result );
+	}
+
+	/**
+	 * Verifies that update_meta() returns true and writes all provided keys.
+	 */
+	public function test_update_meta_returns_true_and_writes_keys(): void {
+		// ARRANGE: Two distinct meta key-value pairs.
+		$meta = array(
+			'source_color' => 'blue',
+			'source_count' => '42',
+		);
+
+		// ACT: Write the meta to the post.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		// ASSERT: Returns true and both keys are stored correctly.
+		$this->assertTrue( $result );
+		$this->assertSame( 'blue', get_post_meta( $this->post_id, 'source_color', true ) );
+		$this->assertSame( '42', get_post_meta( $this->post_id, 'source_count', true ) );
+	}
+
+	/**
+	 * Verifies that update_meta() returns a WP_Error when a meta write fails.
+	 */
+	public function test_update_meta_returns_error_when_write_fails(): void {
+		// ARRANGE: Intercept update_post_metadata to simulate a DB write failure.
+		// The filter returns false, causing update_post_meta() to return false
+		// without writing the value, so the read-back check confirms real failure.
+		$filter = static function () {
+			return false;
+		};
+		add_filter( 'update_post_metadata', $filter );
+
+		$meta = array( 'failing_key' => 'some_value' );
+
+		// ACT: Attempt to write meta while the filter blocks all writes.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		remove_filter( 'update_post_metadata', $filter );
+
+		// ASSERT: Returns a WP_Error listing the failing key.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'meta_update_failed', $result->get_error_code() );
+		$this->assertStringContainsString( 'failing_key', $result->get_error_message() );
+	}
+
+	/**
+	 * Verifies that update_meta() returns true when the stored value is
+	 * already identical (no false positive on re-import of unchanged data).
+	 */
+	public function test_update_meta_returns_true_when_value_unchanged(): void {
+		// ARRANGE: Pre-write a meta key, then prepare to write the same value.
+		update_post_meta( $this->post_id, 'stable_key', 'same_value' );
+		$meta = array( 'stable_key' => 'same_value' );
+
+		// ACT: Call update_meta() with the identical value already stored.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		// ASSERT: Returns true — update_post_meta() returning false for an
+		// unchanged value must not be treated as a failure.
+		$this->assertTrue( $result );
 	}
 }
