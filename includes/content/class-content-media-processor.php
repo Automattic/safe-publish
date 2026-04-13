@@ -42,6 +42,13 @@ class Content_Media_Processor {
 	private Embed_Processor $embed_processor;
 
 	/**
+	 * URLs of media files that failed to import.
+	 *
+	 * @var array
+	 */
+	private array $failed_media = array();
+
+	/**
 	 * Constructs the Content_Media_Processor instance.
 	 *
 	 * @param Media_Importer  $media_importer  Media importer for handling media files.
@@ -158,6 +165,8 @@ class Content_Media_Processor {
 						'src',
 						Media_Importer::reapply_query_parameters( $src, $new_src )
 					);
+				} else {
+					$this->failed_media[] = $src;
 				}
 			}
 
@@ -174,10 +183,28 @@ class Content_Media_Processor {
 	}
 
 	/**
+	 * Returns the list of media URLs that failed to import.
+	 *
+	 * @return array Failed media URLs.
+	 */
+	public function get_failed_media(): array {
+		return $this->failed_media;
+	}
+
+	/**
+	 * Resets the failed media list.
+	 */
+	public function reset_failed_media(): void {
+		$this->failed_media = array();
+	}
+
+	/**
 	 * Processes the srcset attribute on a DOM element.
 	 *
 	 * Parses each URL in the srcset descriptor list, imports it via the media
-	 * importer, and writes the updated list back to the element.
+	 * importer, and writes the updated list back to the element. Descriptors
+	 * whose URL cannot be imported are dropped and the URL is recorded in
+	 * $failed_media so the import service can abort.
 	 *
 	 * @param DOMElement $element         Element with a srcset attribute.
 	 * @param string     $source_site_url Source site URL.
@@ -202,13 +229,19 @@ class Content_Media_Processor {
 			}
 
 			$new_url = $this->media_importer->import_external_media( $url, $source_site_url );
-			$new_url = $new_url ? $new_url : $url;
+
+			if ( ! $new_url ) {
+				$this->failed_media[] = $url;
+				continue;
+			}
 
 			$new_descriptors[] = empty( $size ) ? $new_url : $new_url . ' ' . $size;
 		}
 
 		if ( ! empty( $new_descriptors ) ) {
 			$element->setAttribute( 'srcset', implode( ', ', $new_descriptors ) );
+		} else {
+			$element->removeAttribute( 'srcset' );
 		}
 	}
 
@@ -326,6 +359,8 @@ class Content_Media_Processor {
 				);
 				if ( $new_src ) {
 					$source->setAttribute( 'src', $new_src );
+				} else {
+					$this->failed_media[] = $src;
 				}
 			}
 		}
@@ -339,6 +374,8 @@ class Content_Media_Processor {
 			);
 			if ( $new_src ) {
 				$video->setAttribute( 'src', $new_src );
+			} else {
+				$this->failed_media[] = $video_src;
 			}
 		}
 
@@ -351,6 +388,8 @@ class Content_Media_Processor {
 			);
 			if ( $new_poster ) {
 				$video->setAttribute( 'poster', $new_poster );
+			} else {
+				$this->failed_media[] = $poster;
 			}
 		}
 
@@ -381,6 +420,8 @@ class Content_Media_Processor {
 				);
 				if ( $new_src ) {
 					$source->setAttribute( 'src', $new_src );
+				} else {
+					$this->failed_media[] = $src;
 				}
 			}
 		}
@@ -394,6 +435,8 @@ class Content_Media_Processor {
 			);
 			if ( $new_src ) {
 				$audio->setAttribute( 'src', $new_src );
+			} else {
+				$this->failed_media[] = $audio_src;
 			}
 		}
 

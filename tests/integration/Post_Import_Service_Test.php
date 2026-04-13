@@ -122,8 +122,336 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that import_post() returns a failure result when no source site
-	 * URL is configured, without creating or modifying any post.
+	 * Verifies that import_post() fails when an inline image cannot be downloaded.
+	 *
+	 * When processed content contains an image whose download returns a non-2xx
+	 * response, the import must return success: false with a descriptive error and
+	 * must not create a post with the broken staging URL left in the content.
+	 */
+	public function test_import_fails_when_image_cannot_be_downloaded(): void {
+		// ARRANGE: Configure fresh-content response to include a broken image URL.
+		// The base-class HTTP mock returns 404 for any URL containing 'nonexistent'.
+		$this->mock_post_overrides = array(
+			'content' => '<p>See image: <img src="https://source.example.com/nonexistent-broken.jpg" alt="broken"></p>',
+		);
+
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		$post_data = array(
+			'id'        => 8001,
+			'title'     => 'Post With Broken Image',
+			'content'   => '<p>Stale snapshot content.</p>',
+			'link'      => 'https://source.example.com/post-with-broken-image',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Attempt to import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import must fail with a message identifying the broken URL.
+		$this->assertFalse( $result['success'], 'Import should fail when an image cannot be downloaded.' );
+		$this->assertStringContainsString(
+			'nonexistent-broken.jpg',
+			$result['error'],
+			'Error message should include the failing image URL.'
+		);
+
+		// ASSERT: No post should have been created with the broken staging URL in its content.
+		$this->assertEmpty(
+			get_posts(
+				array(
+					'post_type'        => 'post',
+					'posts_per_page'   => 1,
+					'suppress_filters' => false,
+					'meta_key'         => \Safe_Publish\Utils\Options::META_EXTERNAL_POST_ID,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => '8001',
+				)
+			),
+			'No post should be created when an image import fails.'
+		);
+	}
+
+	/**
+	 * Verifies that import fails when a Gutenberg HTML block contains an image
+	 * that cannot be downloaded.
+	 *
+	 * Failures from images processed through content_media_processor inside block
+	 * handlers (html, text, embed, default) must be propagated to the import
+	 * service so the import can be aborted.
+	 */
+	public function test_import_fails_when_gutenberg_html_block_image_cannot_be_downloaded(): void {
+		// ARRANGE: Configure fresh-content response with a Gutenberg custom HTML block
+		// wrapping a broken image. The base-class HTTP mock returns 404 for any URL
+		// containing 'nonexistent', causing content_media_processor to record the failure.
+		$broken_url                = 'https://source.example.com/nonexistent-gutenberg-html.jpg';
+		$this->mock_post_overrides = array(
+			'content' => "<!-- wp:html -->\n<img src=\"{$broken_url}\" alt=\"Broken\" />\n<!-- /wp:html -->",
+		);
+
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		$post_data = array(
+			'id'        => 8002,
+			'title'     => 'Post With Broken Gutenberg HTML Block Image',
+			'content'   => '<p>Stale snapshot content.</p>',
+			'link'      => 'https://source.example.com/post-with-broken-gutenberg-image',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Attempt to import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import must fail with a message identifying the broken URL.
+		$this->assertFalse( $result['success'], 'Import should fail when a Gutenberg HTML block image cannot be downloaded.' );
+		$this->assertStringContainsString(
+			'nonexistent-gutenberg-html.jpg',
+			$result['error'],
+			'Error message should include the failing image URL.'
+		);
+
+		// ASSERT: No post should have been created.
+		$this->assertEmpty(
+			get_posts(
+				array(
+					'post_type'        => 'post',
+					'posts_per_page'   => 1,
+					'suppress_filters' => false,
+					'meta_key'         => \Safe_Publish\Utils\Options::META_EXTERNAL_POST_ID,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => '8002',
+				)
+			),
+			'No post should be created when a Gutenberg HTML block image import fails.'
+		);
+	}
+
+	/**
+	 * Verifies that import fails when a Gutenberg core/video block contains a
+	 * video that cannot be downloaded.
+	 *
+	 * The core/video block is processed by Content_Processor::process_video_block(),
+	 * which calls import_external_media_as_attachment() directly and must track
+	 * failures in Content_Processor::$failed_media so the import service aborts.
+	 */
+	public function test_import_fails_when_gutenberg_video_block_cannot_be_downloaded(): void {
+		// ARRANGE: A Gutenberg core/video block whose src URL will return 404.
+		$broken_url                = 'https://source.example.com/nonexistent-video.mp4';
+		$this->mock_post_overrides = array(
+			'content' => '<!-- wp:video {"src":"' . $broken_url . '"} -->'
+				. "\n<figure class=\"wp-block-video\"><video controls src=\"{$broken_url}\"></video></figure>"
+				. "\n<!-- /wp:video -->",
+		);
+
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		$post_data = array(
+			'id'        => 8003,
+			'title'     => 'Post With Broken Gutenberg Video Block',
+			'content'   => '<p>Stale snapshot content.</p>',
+			'link'      => 'https://source.example.com/post-with-broken-gutenberg-video',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Attempt to import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import must fail with a message identifying the broken URL.
+		$this->assertFalse( $result['success'], 'Import should fail when a Gutenberg video block source cannot be downloaded.' );
+		$this->assertStringContainsString(
+			'nonexistent-video.mp4',
+			$result['error'],
+			'Error message should include the failing video URL.'
+		);
+
+		// ASSERT: No post should have been created.
+		$this->assertEmpty(
+			get_posts(
+				array(
+					'post_type'        => 'post',
+					'posts_per_page'   => 1,
+					'suppress_filters' => false,
+					'meta_key'         => \Safe_Publish\Utils\Options::META_EXTERNAL_POST_ID,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => '8003',
+				)
+			),
+			'No post should be created when a Gutenberg video block import fails.'
+		);
+	}
+
+	/**
+	 * Verifies that import fails when re-importing an existing post whose fresh
+	 * content contains a broken image.
+	 *
+	 * The update path (handle_imported_post) must abort before saving and must
+	 * leave the existing post content unchanged.
+	 */
+	public function test_import_fails_on_update_path_when_image_cannot_be_downloaded(): void {
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		// ARRANGE: Import the post once with clean content so it exists in the DB.
+		$post_data = array(
+			'id'        => 8004,
+			'title'     => 'Post For Update-Path Test',
+			'content'   => '<p>Original clean content.</p>',
+			'link'      => 'https://source.example.com/post-update-path-test',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'], 'First import should succeed.' );
+		$post_id          = $first['post_id'];
+		$original_content = get_post_field( 'post_content', $post_id );
+
+		// ARRANGE: Configure fresh content to include a broken image URL.
+		$broken_url                = 'https://source.example.com/nonexistent-update-path.jpg';
+		$this->mock_post_overrides = array(
+			'content' => '<p>New content: <img src="' . $broken_url . '" alt="broken"></p>',
+		);
+
+		// ACT: Re-import the same post — hits the update path (handle_imported_post).
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import must fail with a message identifying the broken URL.
+		$this->assertFalse( $result['success'], 'Update import should fail when an image cannot be downloaded.' );
+		$this->assertStringContainsString(
+			'nonexistent-update-path.jpg',
+			$result['error'],
+			'Error message should include the failing image URL.'
+		);
+
+		// ASSERT: The existing post must not have been overwritten.
+		$this->assertSame(
+			$original_content,
+			get_post_field( 'post_content', $post_id ),
+			'Existing post content must remain unchanged when update import fails.'
+		);
+	}
+
+	/**
+	 * Verifies that import fails when a Gutenberg core/audio block contains an
+	 * audio file that cannot be downloaded.
+	 *
+	 * The core/audio block is processed by Content_Processor::process_audio_block(),
+	 * which calls import_external_media_as_attachment() directly and must track
+	 * failures in Content_Processor::$failed_media so the import service aborts.
+	 */
+	public function test_import_fails_when_gutenberg_audio_block_cannot_be_downloaded(): void {
+		// ARRANGE: A Gutenberg core/audio block whose src URL will return 404.
+		$broken_url                = 'https://source.example.com/nonexistent-audio.mp3';
+		$this->mock_post_overrides = array(
+			'content' => '<!-- wp:audio {"src":"' . $broken_url . '"} -->'
+				. "\n<figure class=\"wp-block-audio\"><audio controls src=\"{$broken_url}\"></audio></figure>"
+				. "\n<!-- /wp:audio -->",
+		);
+
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		$post_data = array(
+			'id'        => 8005,
+			'title'     => 'Post With Broken Gutenberg Audio Block',
+			'content'   => '<p>Stale snapshot content.</p>',
+			'link'      => 'https://source.example.com/post-with-broken-gutenberg-audio',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Attempt to import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import must fail with a message identifying the broken URL.
+		$this->assertFalse( $result['success'], 'Import should fail when a Gutenberg audio block source cannot be downloaded.' );
+		$this->assertStringContainsString(
+			'nonexistent-audio.mp3',
+			$result['error'],
+			'Error message should include the failing audio URL.'
+		);
+
+		// ASSERT: No post should have been created.
+		$this->assertEmpty(
+			get_posts(
+				array(
+					'post_type'        => 'post',
+					'posts_per_page'   => 1,
+					'suppress_filters' => false,
+					'meta_key'         => \Safe_Publish\Utils\Options::META_EXTERNAL_POST_ID,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => '8005',
+				)
+			),
+			'No post should be created when a Gutenberg audio block import fails.'
+		);
+	}
+
+	/**
+	 * Verifies that import fails when a Gutenberg core/gallery block contains an
+	 * image that cannot be downloaded.
+	 *
+	 * The traditional gallery format stores image URLs in attrs['images'].
+	 * Content_Processor::process_gallery_block() must track the failure in
+	 * $failed_media so the import service aborts.
+	 */
+	public function test_import_fails_when_gutenberg_gallery_block_cannot_be_downloaded(): void {
+		// ARRANGE: A Gutenberg core/gallery block (traditional attrs format) with a broken image URL.
+		$broken_url = 'https://source.example.com/nonexistent-gallery.jpg';
+		$attrs_json = wp_json_encode(
+			array(
+				'images' => array(
+					array(
+						'url' => $broken_url,
+						'id'  => 1,
+					),
+				),
+			)
+		);
+
+		$this->mock_post_overrides = array(
+			'content' => '<!-- wp:gallery ' . $attrs_json . ' -->'
+				. "\n<figure class=\"wp-block-gallery\"><ul class=\"blocks-gallery-grid\">"
+				. "<li class=\"blocks-gallery-item\"><figure><img src=\"{$broken_url}\" alt=\"\" /></figure></li>"
+				. '</ul></figure>'
+				. "\n<!-- /wp:gallery -->",
+		);
+
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		$post_data = array(
+			'id'        => 8006,
+			'title'     => 'Post With Broken Gutenberg Gallery Block',
+			'content'   => '<p>Stale snapshot content.</p>',
+			'link'      => 'https://source.example.com/post-with-broken-gutenberg-gallery',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Attempt to import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import must fail with a message identifying the broken URL.
+		$this->assertFalse( $result['success'], 'Import should fail when a Gutenberg gallery image cannot be downloaded.' );
+		$this->assertStringContainsString(
+			'nonexistent-gallery.jpg',
+			$result['error'],
+			'Error message should include the failing gallery image URL.'
+		);
+
+		// ASSERT: No post should have been created.
+		$this->assertEmpty(
+			get_posts(
+				array(
+					'post_type'        => 'post',
+					'posts_per_page'   => 1,
+					'suppress_filters' => false,
+					'meta_key'         => \Safe_Publish\Utils\Options::META_EXTERNAL_POST_ID,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => '8006',
+				)
+			),
+			'No post should be created when a Gutenberg gallery block image import fails.'
+		);
+	}
+
+	/**
+	 * Verifies that import aborts when no source site URL is configured.
 	 *
 	 * Covers both the create path (handle_new_post) and the update path
 	 * (handle_imported_post) to confirm both abort correctly.
@@ -199,7 +527,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			'terms'          => array(),
 		);
 
-		$this->mock_single_post_overrides = array( 'featured_media' => 100 );
+		$this->mock_post_overrides = array( 'featured_media' => 100 );
 
 		$first = $this->import_service->import_post( $post_data, $session_id );
 		$this->assertTrue( $first['success'] );
@@ -217,6 +545,60 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		$this->assertNotEmpty(
 			get_post_thumbnail_id( $second['post_id'] ),
 			'Bulk re-import must re-apply the featured image via the update path.'
+		);
+	}
+
+	/**
+	 * Verifies that a failed media import from one post does not bleed into the
+	 * next post in a bulk import sequence.
+	 *
+	 * When the import service instance is reused across multiple posts (as in a
+	 * bulk loop), a previous post's failed_media must be reset before the next
+	 * post is processed. Posts with empty content must not inherit failures from
+	 * the preceding import.
+	 */
+	public function test_failed_media_does_not_bleed_into_subsequent_import(): void {
+		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+
+		// ARRANGE: Post 8101 — has a broken image; import must fail.
+		$broken_url                = 'https://source.example.com/nonexistent-bleed-test.jpg';
+		$this->mock_post_overrides = array(
+			'content' => '<p><img src="' . $broken_url . '" alt="broken"></p>',
+		);
+
+		$result_a = $this->import_service->import_post(
+			array(
+				'id'        => 8101,
+				'title'     => 'Post With Broken Image',
+				'content'   => '<p>Stale content.</p>',
+				'link'      => 'https://source.example.com/post-bleed-a',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		$this->assertFalse( $result_a['success'], 'First import should fail due to broken image.' );
+
+		// ARRANGE: Post 8102 — empty content; import must succeed without inheriting
+		// Post 8101's failed_media.
+		$this->mock_post_overrides = array( 'content' => '' );
+
+		// ACT: Import the second post using the same service instance (simulating bulk loop).
+		$result_b = $this->import_service->import_post(
+			array(
+				'id'        => 8102,
+				'title'     => 'Post With Empty Content',
+				'content'   => '<p>Stale content.</p>',
+				'link'      => 'https://source.example.com/post-bleed-b',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		// ASSERT: The second import must succeed — stale failures must not bleed over.
+		$this->assertTrue(
+			$result_b['success'],
+			'Second import must succeed and must not inherit the previous post\'s failed media.'
 		);
 	}
 }

@@ -42,6 +42,13 @@ class Content_Processor {
 	private array $disabled_filters = array();
 
 	/**
+	 * URLs of media files that failed to import.
+	 *
+	 * @var array
+	 */
+	private array $failed_media = array();
+
+	/**
 	 * Constructs the Content_Processor instance.
 	 *
 	 * @param Media_Importer          $media_importer          Media importer instance.
@@ -66,12 +73,26 @@ class Content_Processor {
 	 * @return string Processed content.
 	 */
 	public function process_content( string $content, string $site_url ): string {
+		$this->failed_media = array();
+
 		if ( $this->is_gutenberg_content( $content ) ) {
 			$processed_content = $this->process_gutenberg_blocks( $content, $site_url );
 		} else {
 			$processed_content = $this->content_media_processor->process_content( $content, $site_url );
 			$processed_content = $this->process_oembed_content( $processed_content ) ?? $processed_content;
 		}
+
+		// Merge failures from content_media_processor (used by html, text,
+		// embed, and default blocks in the Gutenberg path, and directly in the
+		// non-Gutenberg path).
+		$this->failed_media = array_unique(
+			array_merge(
+				$this->failed_media,
+				$this->content_media_processor->get_failed_media()
+			)
+		);
+
+		$this->content_media_processor->reset_failed_media();
 
 		return $this->replace_external_urls( $processed_content, $site_url );
 	}
@@ -288,6 +309,34 @@ class Content_Processor {
 	}
 
 	/**
+	 * Returns the list of media URLs that failed to import.
+	 *
+	 * @return array Failed media URLs.
+	 */
+	public function get_failed_media(): array {
+		return $this->failed_media;
+	}
+
+	/**
+	 * Returns a formatted error message if any media files failed to import, or
+	 * null if there were no failures.
+	 *
+	 * @return string|null Error message, or null if no failures.
+	 */
+	public function get_failed_media_error_message(): ?string {
+		if ( empty( $this->failed_media ) ) {
+			return null;
+		}
+
+		return sprintf(
+			/* translators: 1: number of failed media files, 2: comma-separated list of failed media file URLs */
+			__( 'Import failed: %1$d media file(s) could not be downloaded: %2$s', 'safe-publish' ),
+			count( $this->failed_media ),
+			implode( ', ', $this->failed_media )
+		);
+	}
+
+	/**
 	 * Replaces domain in a URL if it matches the external site.
 	 *
 	 * @param string $url               URL to process.
@@ -455,6 +504,7 @@ class Content_Processor {
 		}
 
 		if ( ! $new_url || ! $attachment_id ) {
+			$this->failed_media[] = $original_url;
 			return $block;
 		}
 
@@ -514,12 +564,14 @@ class Content_Processor {
 				$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
 
 				if ( ! $attachment_id ) {
+					$this->failed_media[] = $original_url;
 					continue;
 				}
 
 				$new_url = wp_get_attachment_url( $attachment_id );
 
 				if ( ! $new_url ) {
+					$this->failed_media[] = $original_url;
 					continue;
 				}
 
@@ -600,6 +652,7 @@ class Content_Processor {
 		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
 
 		if ( ! $attachment_id ) {
+			$this->failed_media[] = $original_url;
 			return $block;
 		}
 
@@ -608,6 +661,8 @@ class Content_Processor {
 		if ( $new_url ) {
 			$block['attrs']['src'] = $new_url;
 			$block['attrs']['id']  = $attachment_id;
+		} else {
+			$this->failed_media[] = $original_url;
 		}
 
 		return $block;
@@ -629,6 +684,7 @@ class Content_Processor {
 		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
 
 		if ( ! $attachment_id ) {
+			$this->failed_media[] = $original_url;
 			return $block;
 		}
 
@@ -637,6 +693,8 @@ class Content_Processor {
 		if ( $new_url ) {
 			$block['attrs']['src'] = $new_url;
 			$block['attrs']['id']  = $attachment_id;
+		} else {
+			$this->failed_media[] = $original_url;
 		}
 
 		return $block;

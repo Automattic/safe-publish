@@ -229,16 +229,38 @@ class Post_Import_Service {
 	}
 
 	/**
+	 * Builds an error result if any media files failed to download during
+	 * content processing.
+	 *
+	 * @param array $fields Sanitized post fields from extract_post_fields().
+	 * @return array|null Error result array on failure, null when no failures.
+	 */
+	private function get_failed_media_error( array $fields ): ?array {
+		$error_message = $this->content_processor->get_failed_media_error_message();
+
+		if ( null === $error_message ) {
+			return null;
+		}
+
+		return array(
+			'external_id' => $fields['external_post_id'],
+			'title'       => $fields['title'],
+			'success'     => false,
+			'error'       => $error_message,
+		);
+	}
+
+	/**
 	 * Processes raw post content by importing media and fixing URLs.
 	 *
-	 * Returns the original content unchanged if either argument is empty.
+	 * Returns the original content unchanged if external_link is empty.
 	 *
 	 * @param string $content       Raw post content.
 	 * @param string $external_link External post URL used to derive site URL.
 	 * @return string Processed and sanitized content.
 	 */
 	private function process_post_content( string $content, string $external_link ): string {
-		if ( empty( $content ) || empty( $external_link ) ) {
+		if ( empty( $external_link ) ) {
 			return $content;
 		}
 
@@ -365,6 +387,21 @@ class Post_Import_Service {
 			$fields['external_link']
 		);
 
+		$failed_media_error = $this->get_failed_media_error( $fields );
+
+		if ( null !== $failed_media_error ) {
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$failed_media_error['error'],
+				array( 'action' => 'media_download_failed' )
+			);
+			return $failed_media_error;
+		}
+
 		// Unsanitized values; sanitized downstream before being stored.
 		$fields['meta']  = is_array( $fresh_result['meta'] ?? null ) ? $fresh_result['meta'] : $fields['meta'];
 		$fields['terms'] = is_array( $fresh_result['terms'] ?? null ) ? $fresh_result['terms'] : $fields['terms'];
@@ -468,6 +505,21 @@ class Post_Import_Service {
 			$fresh_result['content'] ?? '',
 			$fields['external_link']
 		);
+
+		$failed_media_error = $this->get_failed_media_error( $fields );
+
+		if ( null !== $failed_media_error ) {
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$failed_media_error['error'],
+				array( 'action' => 'media_download_failed' )
+			);
+			return $failed_media_error;
+		}
 
 		// Unsanitized values; sanitized downstream before being stored.
 		$fields['meta']  = is_array( $fresh_result['meta'] ?? null ) ? $fresh_result['meta'] : $fields['meta'];
@@ -685,16 +737,15 @@ class Post_Import_Service {
 		$external_id = (int) ( $post_data['id'] ?? 0 );
 		$title       = $post_data['title'] ?? __( 'Unknown', 'safe-publish' );
 
-		if ( null !== $session_id ) {
-			$this->import_history->log_import_action(
-				$session_id,
-				$external_id,
-				$title,
-				'error',
-				null,
-				$e->getMessage()
-			);
-		}
+		$this->log_import_if_session(
+			$session_id,
+			$external_id,
+			$title,
+			'error',
+			null,
+			$e->getMessage(),
+			array()
+		);
 
 		return array(
 			'external_id' => $external_id,

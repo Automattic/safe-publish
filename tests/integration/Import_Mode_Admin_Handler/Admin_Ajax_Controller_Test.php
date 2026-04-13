@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration\Import_Mode_Admin_Handler;
 
+use Safe_Publish\Tests\Integration\Mock_Post_API_Trait;
 use Safe_Publish\Utils\Options;
 use WPAjaxDieContinueException;
 use WPAjaxDieStopException;
@@ -19,6 +20,8 @@ use WPAjaxDieStopException;
  * Tests the AJAX endpoints exposed by the admin controller.
  */
 class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
+
+	use Mock_Post_API_Trait;
 
 	/**
 	 * Admin user ID for privileged test requests.
@@ -70,26 +73,7 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 			return $preempt;
 		}
 
-		return array(
-			'response' => array(
-				'code'    => 200,
-				'message' => 'OK',
-			),
-			'body'     => (string) wp_json_encode(
-				array(
-					'id'             => 1,
-					'title'          => array( 'rendered' => 'Test Post' ),
-					'featured_media' => 0,
-					'content'        => array( 'rendered' => '<p>Test content.</p>' ),
-					'excerpt'        => array( 'rendered' => '' ),
-					'link'           => 'https://source.example.com/test-post',
-					'meta'           => array(),
-				)
-			),
-			'headers'  => array(),
-			'cookies'  => array(),
-			'filename' => null,
-		);
+		return $this->build_mock_post_response();
 	}
 
 	/**
