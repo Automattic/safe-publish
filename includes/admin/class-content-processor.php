@@ -372,16 +372,9 @@ class Content_Processor {
 		$external_host = wp_parse_url( $external_site_url, PHP_URL_HOST );
 		$url_host      = wp_parse_url( $url, PHP_URL_HOST );
 
-		// If URL is relative, make it absolute with external site first.
-		if ( empty( $url_host ) ) {
-			if ( strpos( $url, '/' ) === 0 ) {
-				// Absolute path.
-				$url = rtrim( $external_site_url, '/' ) . $url;
-			} else {
-				// Relative path - skip for now as it's complex to resolve.
-				return $url;
-			}
-			$url_host = $external_host;
+		// Skip relative URLs — preserve them as-is.
+		if ( ! is_string( $url_host ) ) {
+			return $url;
 		}
 
 		// Replace domain if it matches the external site.

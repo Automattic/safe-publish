@@ -103,12 +103,13 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that relative URLs are converted to absolute URLs.
+	 * Verifies that relative URLs are preserved as-is during content processing.
 	 *
-	 * Tests various relative URL patterns including root-relative, relative
-	 * paths, and already-absolute URLs.
+	 * Relative links (root-relative and path-relative) must not be converted
+	 * to absolute URLs — their meaning is "within this site" and is preserved
+	 * unchanged on the destination.
 	 */
-	public function test_relative_urls_converted_to_absolute(): void {
+	public function test_relative_urls_preserved_as_is(): void {
 		// ARRANGE: Create content with multiple relative URL patterns.
 		$source_site = 'https://example.com';
 		$content     = '
@@ -122,13 +123,13 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		// ACT: Process content.
 		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
-		// ASSERT: Verify root-relative URL converted to absolute.
-		$this->assertStringContainsString( 'https://example.com/root-relative', $processed_content );
-		$this->assertStringNotContainsString( 'href="/root-relative"', $processed_content );
+		// ASSERT: Verify root-relative URL is preserved as-is.
+		$this->assertStringContainsString( 'href="/root-relative"', $processed_content );
+		$this->assertStringNotContainsString( 'https://example.com/root-relative', $processed_content );
 
-		// ASSERT: Verify relative path converted to absolute.
-		$this->assertStringContainsString( 'https://example.com/relative-path', $processed_content );
-		$this->assertStringNotContainsString( 'href="relative-path"', $processed_content );
+		// ASSERT: Verify relative path is preserved as-is.
+		$this->assertStringContainsString( 'href="relative-path"', $processed_content );
+		$this->assertStringNotContainsString( 'https://example.com/relative-path', $processed_content );
 
 		// ASSERT: Verify already-absolute URL unchanged.
 		$this->assertStringContainsString( 'https://external.com/page', $processed_content );
@@ -250,9 +251,9 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		$this->assertStringContainsString( 'Header', $processed_content );
 		$this->assertStringContainsString( 'Footer', $processed_content );
 
-		// ASSERT: Verify relative link was made absolute.
-		$this->assertStringContainsString( 'https://example.com/internal-link', $processed_content );
-		$this->assertStringNotContainsString( 'href="/internal-link"', $processed_content );
+		// ASSERT: Verify relative link is preserved as-is.
+		$this->assertStringContainsString( 'href="/internal-link"', $processed_content );
+		$this->assertStringNotContainsString( 'href="https://example.com/internal-link"', $processed_content );
 
 		// ASSERT: Verify WordPress classes were added to media elements.
 		$this->assertStringContainsString( 'wp-video-shortcode', $processed_content );
@@ -306,7 +307,7 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 				',
 				'expected_strings' => array(
 					'With Query',
-					'https://example.com/page?id=456',
+					'href="/page?id=456"',
 				),
 				'description'      => 'URLs with query parameters',
 			),
@@ -323,7 +324,7 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 				'content'          => '<img src="https://example.com/image%20with%20spaces.jpg" alt="Special"><a href="/page#section">Fragment</a>',
 				'expected_strings' => array(
 					'Special',
-					'https://example.com/page#section',
+					'href="/page#section"',
 				),
 				'description'      => 'URLs with special characters and fragments',
 			),
