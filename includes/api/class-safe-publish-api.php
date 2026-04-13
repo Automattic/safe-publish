@@ -285,7 +285,17 @@ final class Safe_Publish_API extends REST_Base {
 
 		// Update terms only if supplied.
 		if ( $req->has_param( 'terms' ) && ! empty( $terms ) && ( is_array( $terms ) || is_object( $terms ) ) ) {
-			$this->meta_terms_manager->update_terms( $post_id, $terms );
+			$terms_result = $this->meta_terms_manager->update_terms( $post_id, $terms );
+
+			if ( is_wp_error( $terms_result ) ) {
+				return new WP_REST_Response(
+					array(
+						'success' => false,
+						'error'   => $terms_result->get_error_message(),
+					),
+					500
+				);
+			}
 		}
 
 		return new WP_REST_Response(

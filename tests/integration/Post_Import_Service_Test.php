@@ -783,6 +783,59 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that sideloaded attachments (including featured image) are deleted
+	 * when the import fails at the terms-update step on the create path.
+	 */
+	public function test_sideloaded_attachments_cleaned_up_when_terms_update_fails(): void {
+		// ARRANGE: Fresh content includes a featured image so one attachment is
+		// sideloaded before wp_insert_post runs. An unknown taxonomy in the terms
+		// data triggers the failure after the post is written.
+		$this->mock_post_overrides = array(
+			'featured_media' => 100,
+			'terms'          => array( 'nonexistent_taxonomy_xyz' => array( 'Some Term' ) ),
+		);
+
+		$session_id         = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$attachments_before = $this->get_attachment_count();
+
+		$post_data = array(
+			'id'        => 9210,
+			'title'     => 'Post With Unknown Taxonomy',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/unknown-taxonomy-test',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Attempt to import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import failed due to the unknown taxonomy.
+		$this->assertFalse( $result['success'], 'Import should fail when a term taxonomy does not exist.' );
+		$this->assertStringContainsString( 'nonexistent_taxonomy_xyz', $result['error'] );
+
+		// ASSERT: No post was created.
+		$this->assertEmpty(
+			get_posts(
+				array(
+					'post_type'        => 'post',
+					'posts_per_page'   => 1,
+					'suppress_filters' => false,
+					'meta_key'         => \Safe_Publish\Utils\Options::META_EXTERNAL_POST_ID,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => '9210',
+				)
+			),
+			'No post should remain after a failed import.'
+		);
+
+		// ASSERT: The sideloaded featured image attachment was cleaned up.
+		$this->assert_no_new_attachments(
+			$attachments_before,
+			'Sideloaded attachments must be deleted when the terms update fails.'
+		);
+	}
+
+	/**
 	 * Verifies that the import aborts without creating a draft when the
 	 * featured image cannot be imported.
 	 *
