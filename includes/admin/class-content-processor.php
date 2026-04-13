@@ -575,7 +575,7 @@ class Content_Processor {
 
 				$new_url = wp_get_attachment_url( $attachment_id );
 
-				if ( ! $new_url ) {
+				if ( false === $new_url ) {
 					$this->failed_media[] = $original_url;
 					continue;
 				}
@@ -663,23 +663,24 @@ class Content_Processor {
 
 		$new_url = wp_get_attachment_url( $attachment_id );
 
-		if ( $new_url ) {
-			$block['attrs']['src'] = $new_url;
-			$block['attrs']['id']  = $attachment_id;
+		if ( false === $new_url ) {
+			$this->failed_media[] = $original_url;
+			return $block;
+		}
 
-			if ( ! empty( $block['innerHTML'] ) ) {
-				$block['innerHTML'] = str_replace( $original_url, $new_url, $block['innerHTML'] );
-			}
+		$block['attrs']['src'] = $new_url;
+		$block['attrs']['id']  = $attachment_id;
 
-			if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
-				foreach ( $block['innerContent'] as $index => $content ) {
-					if ( is_string( $content ) ) {
-						$block['innerContent'][ $index ] = str_replace( $original_url, $new_url, $content );
-					}
+		if ( ! empty( $block['innerHTML'] ) ) {
+			$block['innerHTML'] = str_replace( $original_url, $new_url, $block['innerHTML'] );
+		}
+
+		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
+			foreach ( $block['innerContent'] as $index => $content ) {
+				if ( is_string( $content ) ) {
+					$block['innerContent'][ $index ] = str_replace( $original_url, $new_url, $content );
 				}
 			}
-		} else {
-			$this->failed_media[] = $original_url;
 		}
 
 		return $block;
@@ -707,23 +708,24 @@ class Content_Processor {
 
 		$new_url = wp_get_attachment_url( $attachment_id );
 
-		if ( $new_url ) {
-			$block['attrs']['src'] = $new_url;
-			$block['attrs']['id']  = $attachment_id;
+		if ( false === $new_url ) {
+			$this->failed_media[] = $original_url;
+			return $block;
+		}
 
-			if ( ! empty( $block['innerHTML'] ) ) {
-				$block['innerHTML'] = str_replace( $original_url, $new_url, $block['innerHTML'] );
-			}
+		$block['attrs']['src'] = $new_url;
+		$block['attrs']['id']  = $attachment_id;
 
-			if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
-				foreach ( $block['innerContent'] as $index => $content ) {
-					if ( is_string( $content ) ) {
-						$block['innerContent'][ $index ] = str_replace( $original_url, $new_url, $content );
-					}
+		if ( ! empty( $block['innerHTML'] ) ) {
+			$block['innerHTML'] = str_replace( $original_url, $new_url, $block['innerHTML'] );
+		}
+
+		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
+			foreach ( $block['innerContent'] as $index => $content ) {
+				if ( is_string( $content ) ) {
+					$block['innerContent'][ $index ] = str_replace( $original_url, $new_url, $content );
 				}
 			}
-		} else {
-			$this->failed_media[] = $original_url;
 		}
 
 		return $block;
