@@ -12,6 +12,7 @@ use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\Utils\Auth_Credential_Provider;
+use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Logger;
 use Safe_Publish\Utils\Options;
 use Exception;
@@ -851,7 +852,10 @@ final class Admin_Ajax_Controller {
 
 			return $fresh_data;
 		} catch ( Exception $e ) {
-			$this->logger->log_error( 'CONTENT_FETCH_FAILED', array( 'error' => $e->getMessage() ) );
+			$this->logger->log_error(
+				Log_Events::CONTENT_FETCH_FAILED,
+				array( 'error' => $e->getMessage() )
+			);
 
 			return new WP_Error(
 				'fresh_content_fetch_exception',

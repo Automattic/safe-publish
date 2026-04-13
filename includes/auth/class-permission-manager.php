@@ -8,6 +8,7 @@
 namespace Safe_Publish\Auth;
 
 use Safe_Publish\API\Export_Logger;
+use Safe_Publish\Utils\Log_Events;
 use WP_Error;
 use WP_HTTP_Response;
 use WP_Post;
@@ -627,7 +628,7 @@ class Permission_Manager {
 
 		if ( is_wp_error( $response ) ) {
 			$this->export_logger->log_error(
-				'EXPORT_FAILED',
+				Log_Events::EXPORT_FAILED,
 				array(
 					'route'           => $route,
 					'destination_url' => $destination_url,
@@ -642,7 +643,7 @@ class Permission_Manager {
 
 		if ( 200 !== $status ) {
 			$this->export_logger->log_error(
-				'EXPORT_FAILED',
+				Log_Events::EXPORT_FAILED,
 				array(
 					'route'           => $route,
 					'destination_url' => $destination_url,
