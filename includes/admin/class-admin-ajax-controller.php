@@ -357,6 +357,7 @@ final class Admin_Ajax_Controller {
 			);
 			$this->import_history->update_session_stats( $session_id, 'error' );
 			$this->import_history->complete_session( $session_id );
+			$this->content_processor->delete_newly_created_media();
 
 			wp_send_json_error( $error_message );
 		}

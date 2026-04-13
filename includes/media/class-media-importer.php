@@ -42,6 +42,17 @@ class Media_Importer {
 	private Logger $logger;
 
 	/**
+	 * Attachment IDs created during the current import run.
+	 *
+	 * Only IDs of newly sideloaded attachments are recorded here. Attachments
+	 * returned from the deduplication cache are excluded so that a failed
+	 * import never deletes media that belongs to a previous successful import.
+	 *
+	 * @var int[]
+	 */
+	private array $newly_created_attachment_ids = array();
+
+	/**
 	 * Constructs the Media_Importer instance.
 	 *
 	 * @param HTTP_Client $http_client HTTP client for downloading files.
@@ -140,6 +151,8 @@ class Media_Importer {
 		// Store the original URL as meta for tracking.
 		update_post_meta( $attachment_id, Options::META_ORIGINAL_URL, $media_url );
 		update_post_meta( $attachment_id, Options::META_IMPORTED_FROM, $source_site_url );
+
+		$this->newly_created_attachment_ids[] = $attachment_id;
 
 		return wp_get_attachment_url( $attachment_id );
 	}
@@ -292,7 +305,33 @@ class Media_Importer {
 		update_post_meta( $attachment_id, Options::META_ORIGINAL_URL, $media_url );
 		update_post_meta( $attachment_id, Options::META_IMPORTED_FROM, $source_site_url );
 
+		$this->newly_created_attachment_ids[] = $attachment_id;
+
 		return $attachment_id;
+	}
+
+	/**
+	 * Resets the list of newly created attachment IDs.
+	 *
+	 * Should be called at the start of each content-processing run so the list
+	 * is scoped to a single import attempt.
+	 */
+	public function reset_newly_created_attachment_ids(): void {
+		$this->newly_created_attachment_ids = array();
+	}
+
+	/**
+	 * Deletes all attachments created during the current run and resets the list.
+	 *
+	 * Called when an import is aborted after partial media downloads, to avoid
+	 * leaving orphaned attachments in the media library.
+	 */
+	public function delete_newly_created_attachments(): void {
+		foreach ( $this->newly_created_attachment_ids as $attachment_id ) {
+			wp_delete_attachment( $attachment_id, true );
+		}
+
+		$this->newly_created_attachment_ids = array();
 	}
 
 	/**

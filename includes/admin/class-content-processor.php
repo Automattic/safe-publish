@@ -74,6 +74,7 @@ class Content_Processor {
 	 */
 	public function process_content( string $content, string $site_url ): string {
 		$this->failed_media = array();
+		$this->media_importer->reset_newly_created_attachment_ids();
 
 		if ( $this->is_gutenberg_content( $content ) ) {
 			$processed_content = $this->process_gutenberg_blocks( $content, $site_url );
@@ -306,6 +307,17 @@ class Content_Processor {
 		add_filter( 'the_content', 'wptexturize' );
 		add_filter( 'content_save_pre', 'wp_filter_post_kses' );
 		add_filter( 'content_filtered_save_pre', 'wp_filter_post_kses' );
+	}
+
+	/**
+	 * Deletes all attachments created during the current processing run.
+	 *
+	 * Called when an import is aborted due to media failures, to clean up
+	 * partially-downloaded attachments that would otherwise be orphaned in
+	 * the media library.
+	 */
+	public function delete_newly_created_media(): void {
+		$this->media_importer->delete_newly_created_attachments();
 	}
 
 	/**
