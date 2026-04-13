@@ -80,7 +80,6 @@ class Content_Processor {
 			$processed_content = $this->process_gutenberg_blocks( $content, $site_url );
 		} else {
 			$processed_content = $this->content_media_processor->process_content( $content, $site_url );
-			$processed_content = $this->process_oembed_content( $processed_content ) ?? $processed_content;
 		}
 
 		// Merge failures from content_media_processor (used by html, text,
@@ -106,29 +105,6 @@ class Content_Processor {
 	 */
 	public function is_gutenberg_content( string $content ): bool {
 		return false !== strpos( $content, '<!-- wp:' );
-	}
-
-	/**
-	 * Processes content to handle oEmbed URLs.
-	 *
-	 * @param string $content Post content.
-	 * @return ?string Processed content with oEmbeds resolved.
-	 */
-	public function process_oembed_content( string $content ): ?string {
-		if ( empty( $content ) ) {
-			return $content;
-		}
-
-		// Get WordPress oEmbed handler.
-		global $wp_embed;
-
-		// Process auto-embeds (URLs on their own line).
-		$content = $wp_embed->autoembed( $content );
-
-		// Process shortcode embeds.
-		$content = $wp_embed->run_shortcode( $content );
-
-		return $content;
 	}
 
 	/**
