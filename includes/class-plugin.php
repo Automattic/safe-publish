@@ -26,7 +26,6 @@ use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\API\Safe_Publish_API;
 use Safe_Publish\Content\Content_Media_Processor;
-use Safe_Publish\Content\Embed_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Event_Table;
 use Safe_Publish\Utils\Options;
@@ -147,8 +146,7 @@ final class Plugin {
 		// Build shared low-level services.
 		$http_client             = new HTTP_Client();
 		$media_importer          = new Media_Importer( $http_client );
-		$embed_processor         = new Embed_Processor();
-		$content_media_processor = new Content_Media_Processor( $media_importer, $embed_processor );
+		$content_media_processor = new Content_Media_Processor( $media_importer );
 		$post_type_fetcher       = new Post_Type_Fetcher( $http_client );
 
 		// Initialize External Posts API with shared HTTP client.

@@ -24,7 +24,6 @@ use Safe_Publish\Auth\Auth_Logger;
 use Safe_Publish\Auth\HMAC_Authenticator;
 use Safe_Publish\Auth\Permission_Manager;
 use Safe_Publish\Content\Content_Media_Processor;
-use Safe_Publish\Content\Embed_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Tests\Integration\Mock_Post_API_Trait;
@@ -104,7 +103,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		$media_importer    = new Media_Importer( new HTTP_Client() );
 		$content_processor = new Content_Processor(
 			$media_importer,
-			new Content_Media_Processor( $media_importer, new Embed_Processor() )
+			new Content_Media_Processor( $media_importer )
 		);
 
 		$this->import_service = new Post_Import_Service(

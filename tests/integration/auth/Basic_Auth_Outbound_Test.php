@@ -20,7 +20,6 @@ use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Content\Content_Media_Processor;
-use Safe_Publish\Content\Embed_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Integration_Test_Case;
 use Safe_Publish\Utils\Auth_Credential_Provider;
@@ -99,7 +98,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 		$media_importer    = new Media_Importer( new HTTP_Client() );
 		$content_processor = new Content_Processor(
 			$media_importer,
-			new Content_Media_Processor( $media_importer, new Embed_Processor() )
+			new Content_Media_Processor( $media_importer )
 		);
 
 		$this->import_service = new Post_Import_Service(

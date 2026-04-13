@@ -370,10 +370,10 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$this->assertStringContainsString( 'Caption for image', $processed_content );
 		$this->assertStringContainsString( 'Conclusion', $processed_content );
 
-		// ASSERT: Verify WordPress transformations applied.
+		// ASSERT: Verify source structure preserved.
 		$this->assertStringContainsString( 'wp-block-image', $processed_content );
 		$this->assertStringContainsString( 'figcaption', $processed_content );
-		$this->assertStringContainsString( 'wp-video-shortcode', $processed_content );
+		$this->assertStringNotContainsString( 'wp-video-shortcode', $processed_content );
 
 		// ASSERT: Verify relative link is preserved as-is.
 		$this->assertStringContainsString( 'href="/related-post"', $processed_content );

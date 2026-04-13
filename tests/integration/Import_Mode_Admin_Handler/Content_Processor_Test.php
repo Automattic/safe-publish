@@ -12,7 +12,6 @@ namespace Safe_Publish\Tests\Integration\Import_Mode_Admin_Handler;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\Content\Content_Media_Processor;
-use Safe_Publish\Content\Embed_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Integration_Test_Case;
 use Safe_Publish\Tests\Integration\Mock_Media_HTTP_Trait;
@@ -43,10 +42,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		$http_client             = new HTTP_Client();
 		$media_importer          = new Media_Importer( $http_client );
-		$content_media_processor = new Content_Media_Processor(
-			$media_importer,
-			new Embed_Processor()
-		);
+		$content_media_processor = new Content_Media_Processor( $media_importer );
 
 		$this->processor = new Content_Processor( $media_importer, $content_media_processor );
 
@@ -181,14 +177,10 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that iframe embeds are processed with WordPress security
-	 * attributes and have their src preserved exactly.
-	 *
-	 * Iframes (e.g. YouTube embeds) should receive the wp-embedded-content
-	 * class and security attributes such as loading="lazy", and the original
-	 * src URL must not be altered.
+	 * Verifies that iframe embeds have their src preserved exactly without
+	 * adding extra attributes or classes.
 	 */
-	public function test_process_content_handles_iframe_embeds_with_security_attributes(): void {
+	public function test_process_content_preserves_iframe_embeds_without_extra_attributes(): void {
 		// ARRANGE: Classic HTML with a YouTube iframe embed.
 		$source_site = 'https://source.example.com';
 		$content     = '<iframe src="https://www.youtube.com/embed/abc123"></iframe>';
@@ -196,24 +188,23 @@ class Content_Processor_Test extends Integration_Test_Case {
 		// ACT: Process content against the source site.
 		$processed = $this->processor->process_content( $content, $source_site );
 
-		// ASSERT: Iframe src is preserved unchanged and WordPress embed class
-		// was applied.
+		// ASSERT: Iframe src is preserved unchanged.
 		$this->assertStringContainsString(
 			'src="https://www.youtube.com/embed/abc123"',
 			$processed,
 			'YouTube embed src should be preserved exactly'
 		);
-		$this->assertStringContainsString(
+
+		// ASSERT: No extra attributes or classes were injected.
+		$this->assertStringNotContainsString(
 			'wp-embedded-content',
 			$processed,
-			'WordPress embed class should be added to the iframe'
+			'No extra classes should be added to the iframe'
 		);
-
-		// ASSERT: Security attributes were added by the embed processor.
-		$this->assertStringContainsString(
+		$this->assertStringNotContainsString(
 			'loading="lazy"',
 			$processed,
-			'Lazy loading attribute should be present'
+			'No extra attributes should be added to the iframe'
 		);
 	}
 
