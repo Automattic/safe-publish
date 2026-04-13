@@ -574,13 +574,13 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Updates an existing post with fresh imported content.
 	 *
-	 * Stores rollback data, updates post fields, imports featured image,
-	 * updates meta and terms, and logs history.
+	 * Sideloads featured image, updates post fields, updates meta and terms,
+	 * and logs history.
 	 *
 	 * @see Post_Import_Service::handle_imported_post() for the bulk-import equivalent.
 	 *      Intentional differences here vs the bulk path:
 	 *      - Resets post_status to 'draft' (keeps the single-import review flow intact).
-	 *      - Captures rollback data before overwriting.
+	 *      - Captures previous content for the session rollback history log.
 	 *      - Does not call disable_content_filters() (standard WP filters apply for
 	 *        user-triggered imports).
 	 *
@@ -610,7 +610,32 @@ final class Admin_Ajax_Controller {
 		int $session_id,
 		int $external_post_id
 	): array {
-		$previous_content = $this->capture_rollback_data( $imported_post );
+		$previous_content = $this->capture_previous_content( $imported_post );
+
+		// Sideload the featured image before writing the post so that a failure
+		// here does not leave the post in a partially-updated state.
+		$featured_attachment_id = $this->post_import_service->import_featured_image_attachment(
+			$featured_media_id,
+			$external_link
+		);
+
+		if ( false === $featured_attachment_id ) {
+			$error_message = __( 'Failed to import featured image.', 'safe-publish' );
+
+			$this->import_history->log_import_action(
+				$session_id,
+				$external_post_id,
+				$title,
+				'error',
+				$imported_post->ID,
+				$error_message,
+				array( 'action' => 'featured_image_import_failed' )
+			);
+			$this->import_history->update_session_stats( $session_id, 'error' );
+			$this->import_history->complete_session( $session_id );
+
+			return array( 'error' => $error_message );
+		}
 
 		$post_id = wp_update_post(
 			array(
@@ -632,26 +657,8 @@ final class Admin_Ajax_Controller {
 		update_post_meta( $post_id, Options::META_EXTERNAL_LINK, $external_link );
 		update_post_meta( $post_id, Options::META_IMPORT_DATE, current_time( 'mysql' ) );
 
-		if ( false === $this->post_import_service->maybe_import_featured_image(
-			$featured_media_id,
-			$external_link,
-			$post_id
-		) ) {
-			$error_message = __( 'Failed to import featured image.', 'safe-publish' );
-
-			$this->import_history->log_import_action(
-				$session_id,
-				$external_post_id,
-				$title,
-				'error',
-				$post_id,
-				$error_message,
-				array( 'action' => 'featured_image_import_failed' )
-			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
-
-			return array( 'error' => $error_message );
+		if ( $featured_attachment_id > 0 ) {
+			set_post_thumbnail( $post_id, $featured_attachment_id );
 		}
 
 		$this->meta_terms_manager->update_meta( $post_id, $meta );
@@ -709,6 +716,31 @@ final class Admin_Ajax_Controller {
 		mixed $terms,
 		int $session_id
 	): array {
+		// Sideload the featured image before creating the post so that a failure
+		// here does not leave an orphaned draft in the DB.
+		$featured_attachment_id = $this->post_import_service->import_featured_image_attachment(
+			$featured_media_id,
+			$external_link
+		);
+
+		if ( false === $featured_attachment_id ) {
+			$error_message = __( 'Failed to import featured image.', 'safe-publish' );
+
+			$this->import_history->log_import_action(
+				$session_id,
+				$external_post_id,
+				$title,
+				'error',
+				null,
+				$error_message,
+				array( 'action' => 'featured_image_import_failed' )
+			);
+			$this->import_history->update_session_stats( $session_id, 'error' );
+			$this->import_history->complete_session( $session_id );
+
+			return array( 'error' => $error_message );
+		}
+
 		$this->content_processor->disable_content_filters();
 
 		$post_id = wp_insert_post(
@@ -735,28 +767,8 @@ final class Admin_Ajax_Controller {
 			return array( 'error' => $post_id->get_error_message() );
 		}
 
-		if ( false === $this->post_import_service->maybe_import_featured_image(
-			$featured_media_id,
-			$external_link,
-			$post_id
-		) ) {
-			$error_message = __( 'Failed to import featured image.', 'safe-publish' );
-
-			wp_delete_post( $post_id, true );
-
-			$this->import_history->log_import_action(
-				$session_id,
-				$external_post_id,
-				$title,
-				'error',
-				null,
-				$error_message,
-				array( 'action' => 'featured_image_import_failed' )
-			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
-
-			return array( 'error' => $error_message );
+		if ( $featured_attachment_id > 0 ) {
+			set_post_thumbnail( $post_id, $featured_attachment_id );
 		}
 
 		$this->meta_terms_manager->update_meta( $post_id, $meta );
@@ -823,15 +835,15 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Captures rollback data from an existing post before updating it.
+	 * Captures previous post content for the session rollback history log.
 	 *
 	 * Stores the current title, content, excerpt, featured image, and selected
-	 * meta fields so the import can be reverted if needed.
+	 * meta fields so the import can be reverted via the session rollback feature.
 	 *
 	 * @param WP_Post $existing_post Existing WordPress post.
-	 * @return array Rollback data keyed by field name.
+	 * @return array Previous content keyed by field name.
 	 */
-	private function capture_rollback_data( WP_Post $existing_post ): array {
+	private function capture_previous_content( WP_Post $existing_post ): array {
 		$previous_content = array(
 			'previous_content'        => $existing_post->post_content,
 			'previous_title'          => $existing_post->post_title,

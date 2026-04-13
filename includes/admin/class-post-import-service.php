@@ -342,8 +342,6 @@ class Post_Import_Service {
 	 * (@see Admin_Ajax_Controller::update_imported_draft()):
 	 * - Post status is preserved (not reset to 'draft') to avoid silently
 	 *   unpublishing live posts during automated bulk runs.
-	 * - Rollback data is not captured; this is a UI-level safety net only
-	 *   needed for user-triggered single imports.
 	 *
 	 * @param WP_Post  $imported_post Imported WordPress post.
 	 * @param array    $fields        Sanitized post fields.
@@ -408,6 +406,34 @@ class Post_Import_Service {
 		$fields['meta']  = is_array( $fresh_result['meta'] ?? null ) ? $fresh_result['meta'] : $fields['meta'];
 		$fields['terms'] = is_array( $fresh_result['terms'] ?? null ) ? $fresh_result['terms'] : $fields['terms'];
 
+		// Sideload the featured image before writing the post so that a failure
+		// here does not leave the post in a partially-updated state.
+		$featured_attachment_id = $this->import_featured_image_attachment(
+			$fields['featured_media_id'],
+			$fields['external_link']
+		);
+
+		if ( false === $featured_attachment_id ) {
+			$error_message = __( 'Failed to import featured image.', 'safe-publish' );
+
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$error_message,
+				array( 'action' => 'featured_image_import_failed' )
+			);
+
+			return array(
+				'external_id' => $fields['external_post_id'],
+				'title'       => $fields['title'],
+				'success'     => false,
+				'error'       => $error_message,
+			);
+		}
+
 		$this->content_processor->disable_content_filters();
 
 		$post_id = wp_update_post(
@@ -436,26 +462,12 @@ class Post_Import_Service {
 		update_post_meta( $post_id, Options::META_EXTERNAL_LINK, $fields['external_link'] );
 		update_post_meta( $post_id, Options::META_IMPORT_DATE, current_time( 'mysql' ) );
 
-		if ( false === $this->apply_media_and_taxonomy( $post_id, $fields ) ) {
-			$error_message = __( 'Failed to import featured image.', 'safe-publish' );
-
-			$this->log_import_if_session(
-				$session_id,
-				$fields['external_post_id'],
-				$fields['title'],
-				'error',
-				$post_id,
-				$error_message,
-				array( 'action' => 'featured_image_import_failed' )
-			);
-
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $error_message,
-			);
+		if ( $featured_attachment_id > 0 ) {
+			set_post_thumbnail( $post_id, $featured_attachment_id );
 		}
+
+		$this->meta_terms_manager->update_meta( $post_id, $fields['meta'] );
+		$this->meta_terms_manager->update_terms( $post_id, $fields['terms'] );
 
 		$this->log_import_if_session(
 			$session_id,
@@ -547,6 +559,34 @@ class Post_Import_Service {
 		$fields['meta']  = is_array( $fresh_result['meta'] ?? null ) ? $fresh_result['meta'] : $fields['meta'];
 		$fields['terms'] = is_array( $fresh_result['terms'] ?? null ) ? $fresh_result['terms'] : $fields['terms'];
 
+		// Sideload the featured image before creating the post so that a failure
+		// here does not leave an orphaned draft in the DB.
+		$featured_attachment_id = $this->import_featured_image_attachment(
+			$fields['featured_media_id'],
+			$fields['external_link']
+		);
+
+		if ( false === $featured_attachment_id ) {
+			$error_message = __( 'Failed to import featured image.', 'safe-publish' );
+
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$error_message,
+				array( 'action' => 'featured_image_import_failed' )
+			);
+
+			return array(
+				'external_id' => $fields['external_post_id'],
+				'title'       => $fields['title'],
+				'success'     => false,
+				'error'       => $error_message,
+			);
+		}
+
 		$this->content_processor->disable_content_filters();
 
 		$post_id = wp_insert_post(
@@ -578,28 +618,12 @@ class Post_Import_Service {
 			);
 		}
 
-		if ( false === $this->apply_media_and_taxonomy( $post_id, $fields ) ) {
-			$error_message = __( 'Failed to import featured image.', 'safe-publish' );
-
-			wp_delete_post( $post_id, true );
-
-			$this->log_import_if_session(
-				$session_id,
-				$fields['external_post_id'],
-				$fields['title'],
-				'error',
-				null,
-				$error_message,
-				array( 'action' => 'featured_image_import_failed' )
-			);
-
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $error_message,
-			);
+		if ( $featured_attachment_id > 0 ) {
+			set_post_thumbnail( $post_id, $featured_attachment_id );
 		}
+
+		$this->meta_terms_manager->update_meta( $post_id, $fields['meta'] );
+		$this->meta_terms_manager->update_terms( $post_id, $fields['terms'] );
 
 		$this->log_import_if_session(
 			$session_id,
@@ -619,36 +643,6 @@ class Post_Import_Service {
 			'edit_url'    => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
 			'existing'    => false,
 		);
-	}
-
-	/**
-	 * Applies the shared post-import side-effects that are identical on both
-	 * the create and update paths: featured image import, custom meta, and
-	 * taxonomy terms.
-	 *
-	 * Centralizing these calls here ensures the create and update paths cannot
-	 * silently diverge. If the single-import counterparts in Admin_Ajax_Controller
-	 * (@see Admin_Ajax_Controller::create_new_draft() and
-	 * Admin_Ajax_Controller::update_imported_draft()) are updated to handle new
-	 * fields in this step, this method must be updated to match.
-	 *
-	 * @param int   $post_id WordPress post ID.
-	 * @param array $fields  Sanitized post fields from extract_post_fields().
-	 * @return bool True on success, false when featured image import fails.
-	 */
-	private function apply_media_and_taxonomy( int $post_id, array $fields ): bool {
-		if ( false === $this->maybe_import_featured_image(
-			$fields['featured_media_id'],
-			$fields['external_link'],
-			$post_id
-		) ) {
-			return false;
-		}
-
-		$this->meta_terms_manager->update_meta( $post_id, $fields['meta'] );
-		$this->meta_terms_manager->update_terms( $post_id, $fields['terms'] );
-
-		return true;
 	}
 
 	/**
@@ -701,42 +695,39 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Imports a featured image and sets it as the post thumbnail if available.
+	 * Sideloads a featured image from an external post without setting it as a
+	 * post thumbnail.
 	 *
-	 * Returns true when there is no featured image to import, or when the import
-	 * succeeds. Returns false only when a featured media ID is set but the import
-	 * fails.
+	 * Separating the sideload from thumbnail assignment allows callers to fetch
+	 * the image before the post exists in the DB, so a download failure does not
+	 * leave the post in a partially-written state.
+	 *
+	 * Returns 0 when no featured image is configured (no-op). Returns the
+	 * attachment ID (> 0) on a successful import. Returns false when a featured
+	 * media ID is set but the import fails.
 	 *
 	 * @param int    $featured_media_id External featured media ID.
 	 * @param string $external_link     External post URL used to derive site URL.
-	 * @param int    $post_id           WordPress post ID to attach the thumbnail to.
-	 * @return bool True on success or when no featured image is configured, false on import failure.
+	 * @return int|false Attachment ID on success, 0 when not configured, false on failure.
 	 */
-	public function maybe_import_featured_image(
+	public function import_featured_image_attachment(
 		int $featured_media_id,
-		string $external_link,
-		int $post_id
-	): bool {
+		string $external_link
+	): int|false {
 		if ( empty( $featured_media_id ) || empty( $external_link ) ) {
-			return true;
+			return 0;
 		}
 
 		$site_url = wp_parse_url( $external_link, PHP_URL_SCHEME )
 			. '://'
 			. wp_parse_url( $external_link, PHP_URL_HOST );
 
-		$featured_attachment_id = $this->media_importer->import_featured_image(
+		$attachment_id = $this->media_importer->import_featured_image(
 			$featured_media_id,
 			$site_url
 		);
 
-		if ( false === $featured_attachment_id ) {
-			return false;
-		}
-
-		set_post_thumbnail( $post_id, $featured_attachment_id );
-
-		return true;
+		return $attachment_id;
 	}
 
 	/**
