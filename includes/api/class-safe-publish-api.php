@@ -264,7 +264,18 @@ final class Safe_Publish_API extends REST_Base {
 
 		// Import/set featured image if provided.
 		if ( $req->has_param( 'featuredMediaId' ) && $featured_media_id > 0 ) {
-			$this->import_and_set_featured_image( $post_id, $featured_media_id );
+			if ( false === $this->import_and_set_featured_image(
+				$post_id,
+				$featured_media_id
+			) ) {
+				return new WP_REST_Response(
+					array(
+						'success' => false,
+						'error'   => __( 'Failed to import featured image.', 'safe-publish' ),
+					),
+					500
+				);
+			}
 		}
 
 		// Update meta only if supplied.
@@ -289,14 +300,21 @@ final class Safe_Publish_API extends REST_Base {
 	/**
 	 * Imports and sets featured image for a post.
 	 *
+	 * Returns true when the import succeeds. Returns false when the import
+	 * fails or when configuration required to import is missing.
+	 *
 	 * @param int $post_id           Post ID to set featured image for.
 	 * @param int $featured_media_id External featured media ID to import.
+	 * @return bool True on success, false on failure or missing configuration.
 	 */
-	private function import_and_set_featured_image( int $post_id, int $featured_media_id ): void {
+	private function import_and_set_featured_image(
+		int $post_id,
+		int $featured_media_id
+	): bool {
 		$site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
 		if ( null === $this->media_importer || empty( $site_url ) ) {
-			return;
+			return false;
 		}
 
 		$attachment_id = $this->media_importer->import_featured_image(
@@ -304,9 +322,13 @@ final class Safe_Publish_API extends REST_Base {
 			$site_url
 		);
 
-		if ( $attachment_id ) {
-			set_post_thumbnail( $post_id, $attachment_id );
+		if ( false === $attachment_id ) {
+			return false;
 		}
+
+		set_post_thumbnail( $post_id, $attachment_id );
+
+		return true;
 	}
 
 	/**

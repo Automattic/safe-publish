@@ -436,7 +436,26 @@ class Post_Import_Service {
 		update_post_meta( $post_id, Options::META_EXTERNAL_LINK, $fields['external_link'] );
 		update_post_meta( $post_id, Options::META_IMPORT_DATE, current_time( 'mysql' ) );
 
-		$this->apply_media_and_taxonomy( $post_id, $fields );
+		if ( false === $this->apply_media_and_taxonomy( $post_id, $fields ) ) {
+			$error_message = __( 'Failed to import featured image.', 'safe-publish' );
+
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				$post_id,
+				$error_message,
+				array( 'action' => 'featured_image_import_failed' )
+			);
+
+			return array(
+				'external_id' => $fields['external_post_id'],
+				'title'       => $fields['title'],
+				'success'     => false,
+				'error'       => $error_message,
+			);
+		}
 
 		$this->log_import_if_session(
 			$session_id,
@@ -559,7 +578,28 @@ class Post_Import_Service {
 			);
 		}
 
-		$this->apply_media_and_taxonomy( $post_id, $fields );
+		if ( false === $this->apply_media_and_taxonomy( $post_id, $fields ) ) {
+			$error_message = __( 'Failed to import featured image.', 'safe-publish' );
+
+			wp_delete_post( $post_id, true );
+
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$error_message,
+				array( 'action' => 'featured_image_import_failed' )
+			);
+
+			return array(
+				'external_id' => $fields['external_post_id'],
+				'title'       => $fields['title'],
+				'success'     => false,
+				'error'       => $error_message,
+			);
+		}
 
 		$this->log_import_if_session(
 			$session_id,
@@ -594,16 +634,21 @@ class Post_Import_Service {
 	 *
 	 * @param int   $post_id WordPress post ID.
 	 * @param array $fields  Sanitized post fields from extract_post_fields().
+	 * @return bool True on success, false when featured image import fails.
 	 */
-	private function apply_media_and_taxonomy( int $post_id, array $fields ): void {
-		$this->maybe_import_featured_image(
+	private function apply_media_and_taxonomy( int $post_id, array $fields ): bool {
+		if ( false === $this->maybe_import_featured_image(
 			$fields['featured_media_id'],
 			$fields['external_link'],
 			$post_id
-		);
+		) ) {
+			return false;
+		}
 
 		$this->meta_terms_manager->update_meta( $post_id, $fields['meta'] );
 		$this->meta_terms_manager->update_terms( $post_id, $fields['terms'] );
+
+		return true;
 	}
 
 	/**
@@ -658,19 +703,22 @@ class Post_Import_Service {
 	/**
 	 * Imports a featured image and sets it as the post thumbnail if available.
 	 *
-	 * Does nothing if either the media ID or external link is empty.
+	 * Returns true when there is no featured image to import, or when the import
+	 * succeeds. Returns false only when a featured media ID is set but the import
+	 * fails.
 	 *
 	 * @param int    $featured_media_id External featured media ID.
 	 * @param string $external_link     External post URL used to derive site URL.
 	 * @param int    $post_id           WordPress post ID to attach the thumbnail to.
+	 * @return bool True on success or when no featured image is configured, false on import failure.
 	 */
 	public function maybe_import_featured_image(
 		int $featured_media_id,
 		string $external_link,
 		int $post_id
-	): void {
+	): bool {
 		if ( empty( $featured_media_id ) || empty( $external_link ) ) {
-			return;
+			return true;
 		}
 
 		$site_url = wp_parse_url( $external_link, PHP_URL_SCHEME )
@@ -682,9 +730,13 @@ class Post_Import_Service {
 			$site_url
 		);
 
-		if ( $featured_attachment_id ) {
-			set_post_thumbnail( $post_id, $featured_attachment_id );
+		if ( false === $featured_attachment_id ) {
+			return false;
 		}
+
+		set_post_thumbnail( $post_id, $featured_attachment_id );
+
+		return true;
 	}
 
 	/**

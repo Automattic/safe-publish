@@ -632,7 +632,27 @@ final class Admin_Ajax_Controller {
 		update_post_meta( $post_id, Options::META_EXTERNAL_LINK, $external_link );
 		update_post_meta( $post_id, Options::META_IMPORT_DATE, current_time( 'mysql' ) );
 
-		$this->post_import_service->maybe_import_featured_image( $featured_media_id, $external_link, $post_id );
+		if ( false === $this->post_import_service->maybe_import_featured_image(
+			$featured_media_id,
+			$external_link,
+			$post_id
+		) ) {
+			$error_message = __( 'Failed to import featured image.', 'safe-publish' );
+
+			$this->import_history->log_import_action(
+				$session_id,
+				$external_post_id,
+				$title,
+				'error',
+				$post_id,
+				$error_message,
+				array( 'action' => 'featured_image_import_failed' )
+			);
+			$this->import_history->update_session_stats( $session_id, 'error' );
+			$this->import_history->complete_session( $session_id );
+
+			return array( 'error' => $error_message );
+		}
 
 		$this->meta_terms_manager->update_meta( $post_id, $meta );
 		$this->meta_terms_manager->update_terms( $post_id, $terms );
@@ -715,7 +735,29 @@ final class Admin_Ajax_Controller {
 			return array( 'error' => $post_id->get_error_message() );
 		}
 
-		$this->post_import_service->maybe_import_featured_image( $featured_media_id, $external_link, $post_id );
+		if ( false === $this->post_import_service->maybe_import_featured_image(
+			$featured_media_id,
+			$external_link,
+			$post_id
+		) ) {
+			$error_message = __( 'Failed to import featured image.', 'safe-publish' );
+
+			wp_delete_post( $post_id, true );
+
+			$this->import_history->log_import_action(
+				$session_id,
+				$external_post_id,
+				$title,
+				'error',
+				null,
+				$error_message,
+				array( 'action' => 'featured_image_import_failed' )
+			);
+			$this->import_history->update_session_stats( $session_id, 'error' );
+			$this->import_history->complete_session( $session_id );
+
+			return array( 'error' => $error_message );
+		}
 
 		$this->meta_terms_manager->update_meta( $post_id, $meta );
 		$this->meta_terms_manager->update_terms( $post_id, $terms );
