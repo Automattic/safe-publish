@@ -522,6 +522,83 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that classic content with an [embed] shortcode preserves it
+	 * as-is instead of pre-rendering it into HTML.
+	 *
+	 * WordPress handles [embed] shortcodes at display time via the_content
+	 * filters. Pre-rendering them during import would alter the stored
+	 * content compared to the source database.
+	 */
+	public function test_process_classic_content_preserves_embed_shortcodes(): void {
+		// ARRANGE: Classic content with an [embed] shortcode.
+		$source_site = 'https://source.example.com';
+		$embed_url   = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+		$content     = '<p>Watch this:</p>' . "\n"
+			. '[embed]' . $embed_url . '[/embed]';
+
+		// ACT: Process content against the source site.
+		$processed = $this->processor->process_content(
+			$content,
+			$source_site
+		);
+
+		// ASSERT: The [embed] shortcode is preserved in the output.
+		$this->assertStringContainsString(
+			'[embed]' . $embed_url . '[/embed]',
+			$processed,
+			'[embed] shortcode must be preserved, not pre-rendered'
+		);
+
+		// ASSERT: No iframe was generated (shortcode was not executed).
+		$this->assertStringNotContainsString(
+			'<iframe',
+			$processed,
+			'[embed] shortcode must not be converted to an iframe'
+		);
+	}
+
+	/**
+	 * Verifies that classic content with a bare oEmbed provider URL on its
+	 * own line preserves it as-is instead of converting it to embed HTML.
+	 *
+	 * WordPress's autoembed runs at display time via the_content filters.
+	 * Converting bare URLs during import would alter the stored content
+	 * compared to the source database.
+	 */
+	public function test_process_classic_content_preserves_bare_oembed_urls(): void {
+		// ARRANGE: Classic content with a bare YouTube URL on its own line.
+		$source_site = 'https://source.example.com';
+		$video_url   = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+		$content     = '<p>Check out this video:</p>' . "\n"
+			. $video_url;
+
+		// ACT: Process content against the source site.
+		$processed = $this->processor->process_content(
+			$content,
+			$source_site
+		);
+
+		// ASSERT: The bare URL is preserved in the output.
+		$this->assertStringContainsString(
+			$video_url,
+			$processed,
+			'Bare oEmbed URL must be preserved, not pre-rendered'
+		);
+
+		// ASSERT: No iframe or [embed] wrapper was generated.
+		$this->assertStringNotContainsString(
+			'<iframe',
+			$processed,
+			'Bare URL must not be converted to an iframe'
+		);
+		$this->assertStringNotContainsString(
+			'[embed]',
+			$processed,
+			'Bare URL must not be wrapped in [embed] shortcode'
+		);
+	}
+
+	/**
 	 * Verifies that a third-party URL stored in a custom block's attrs is left
 	 * unchanged and not recorded as a failure.
 	 *
