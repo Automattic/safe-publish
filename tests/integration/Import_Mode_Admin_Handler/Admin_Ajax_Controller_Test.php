@@ -494,6 +494,90 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the single-import update path returns an error when the
+	 * tracking meta write fails.
+	 *
+	 * If update_post_meta fails for META_IMPORT_DATE (e.g., a DB error), the
+	 * import must report failure rather than silently leaving the tracking meta
+	 * stale.
+	 */
+	public function test_ajax_update_draft_fails_when_tracking_meta_write_fails(): void {
+		// ARRANGE: Pre-create a post with a known external ID so the update
+		// path is taken.
+		$existing_post_id = wp_insert_post(
+			array(
+				'post_title'  => 'Existing Post',
+				'post_status' => 'draft',
+				'post_type'   => 'post',
+			)
+		);
+		update_post_meta(
+			$existing_post_id,
+			Options::META_EXTERNAL_POST_ID,
+			'8050'
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'            => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'external_post_id' => '8050',
+			'title'            => 'Existing Post',
+			'content'          => '<p>Updated content.</p>',
+			'external_link'    => 'https://source.example.com/existing-post',
+			'post_type'        => 'post',
+			'force_update'     => 'true',
+		);
+
+		// ARRANGE: Block update_post_meta for META_IMPORT_DATE to simulate a DB
+		// failure.
+		$block_meta = function (
+			$check,
+			$object_id,
+			$meta_key,
+			$meta_value,
+			$prev_value
+		) {
+			unset( $object_id, $meta_value, $prev_value );
+			if ( Options::META_IMPORT_DATE === $meta_key ) {
+				return false;
+			}
+
+			return $check;
+		};
+		add_filter( 'update_post_metadata', $block_meta, 10, 5 );
+
+		// ACT: Trigger the create draft handler; with force_update it takes the
+		// update path.
+		try {
+			$this->_handleAjax( 'safe_publish_create_draft' );
+			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
+		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		}
+
+		remove_filter( 'update_post_metadata', $block_meta, 10 );
+
+		// ASSERT: Response is a JSON failure with a descriptive error.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertFalse(
+			$response['success'],
+			'Update should fail when tracking meta cannot be written.'
+		);
+		$this->assertStringContainsString(
+			'tracking metadata',
+			$response['data']
+		);
+
+		// ASSERT: The import date meta must be absent: the delete succeeded but
+		// the subsequent write was blocked, so no value was committed.
+		$this->assertSame(
+			'',
+			get_post_meta( $existing_post_id, Options::META_IMPORT_DATE, true ),
+			'META_IMPORT_DATE must be absent when the write was blocked after a delete.'
+		);
+	}
+
+	/**
 	 * Returns the number of import sessions currently in the 'in_progress' state.
 	 *
 	 * @return int

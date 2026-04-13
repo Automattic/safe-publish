@@ -655,7 +655,32 @@ final class Admin_Ajax_Controller {
 		}
 
 		update_post_meta( $post_id, Options::META_EXTERNAL_LINK, $external_link );
-		update_post_meta( $post_id, Options::META_IMPORT_DATE, current_time( 'mysql' ) );
+
+		delete_post_meta( $post_id, Options::META_IMPORT_DATE );
+		if ( false === update_post_meta(
+			$post_id,
+			Options::META_IMPORT_DATE,
+			current_time( 'mysql' )
+		) ) {
+			$error_message = __(
+				'Failed to update post tracking metadata.',
+				'safe-publish'
+			);
+
+			$this->import_history->log_import_action(
+				$session_id,
+				$external_post_id,
+				$title,
+				'error',
+				$post_id,
+				$error_message,
+				array( 'action' => 'meta_update_failed' )
+			);
+			$this->import_history->update_session_stats( $session_id, 'error' );
+			$this->import_history->complete_session( $session_id );
+
+			return array( 'error' => $error_message );
+		}
 
 		if ( $featured_attachment_id > 0 ) {
 			set_post_thumbnail( $post_id, $featured_attachment_id );

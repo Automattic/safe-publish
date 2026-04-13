@@ -460,7 +460,35 @@ class Post_Import_Service {
 		}
 
 		update_post_meta( $post_id, Options::META_EXTERNAL_LINK, $fields['external_link'] );
-		update_post_meta( $post_id, Options::META_IMPORT_DATE, current_time( 'mysql' ) );
+
+		delete_post_meta( $post_id, Options::META_IMPORT_DATE );
+		if ( false === update_post_meta(
+			$post_id,
+			Options::META_IMPORT_DATE,
+			current_time( 'mysql' )
+		) ) {
+			$error_message = __(
+				'Failed to update post tracking metadata.',
+				'safe-publish'
+			);
+
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				$post_id,
+				$error_message,
+				array( 'action' => 'meta_update_failed' )
+			);
+
+			return array(
+				'external_id' => $fields['external_post_id'],
+				'title'       => $fields['title'],
+				'success'     => false,
+				'error'       => $error_message,
+			);
+		}
 
 		if ( $featured_attachment_id > 0 ) {
 			set_post_thumbnail( $post_id, $featured_attachment_id );
