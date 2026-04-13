@@ -29,7 +29,7 @@
     <env name="WP_PHPUNIT__DIR" value="vendor/wp-phpunit/wp-phpunit" />
 
     <!-- Database configuration (wp-tests-config.php reads these) -->
-    <env name="WP_DB_NAME" value="tests-wordpress" />
+    <env name="WP_DB_NAME" value="safe_publish_integration_tests" />
     <env name="WP_DB_USER" value="root" />
     <env name="WP_DB_PASSWORD" value="password" />
     <env name="WP_DB_HOST" value="mysql" />
