@@ -49,7 +49,8 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 	 * Verifies that imported media stores correct metadata.
 	 *
 	 * Tests that original URL and source site metadata are saved to attachment
-	 * posts for tracking and duplicate detection.
+	 * posts for tracking and duplicate detection. Also confirms the returned
+	 * local URL is a non-empty string.
 	 */
 	public function test_imported_media_stores_metadata(): void {
 		// ARRANGE: Prepare media import.
@@ -59,9 +60,9 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		// ACT: Import media directly (HTTP mock serves real fixture file).
 		$local_url = $this->media_importer->import_external_media( $external_url, $source_site );
 
-		// ASSERT: Verify import succeeded.
+		// ASSERT: Verify import succeeded and returned a non-empty URL string.
 		$this->assertIsString( $local_url, 'Import should return local URL string' );
-		$this->assertNotFalse( $local_url, 'Import should not fail' );
+		$this->assertNotEmpty( $local_url, 'Import should return a non-empty URL' );
 
 		// Find the attachment by the local URL.
 		$attachment_id = attachment_url_to_postid( $local_url );
@@ -134,13 +135,13 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 	/**
 	 * Verifies that different image formats are imported correctly.
 	 *
-	 * Tests JPEG, PNG, GIF, and WebP formats to ensure proper handling and
-	 * attachment creation for each type.
+	 * Tests JPEG, PNG, GIF, and WebP formats to ensure proper handling,
+	 * attachment creation, and the exact MIME type for each format.
 	 *
 	 * @dataProvider image_formats_provider
 	 *
 	 * @param string $url    Image URL.
-	 * @param string $format Expected image format.
+	 * @param string $format Expected image format identifier.
 	 */
 	public function test_different_image_formats_imported( string $url, string $format ): void {
 		// ARRANGE: Prepare image import.
@@ -151,17 +152,23 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$local_url = $this->media_importer->import_external_media( $url, $source_site );
 
 		// ASSERT: Verify import succeeded.
-		$this->assertNotFalse( $local_url, "Should successfully import {$format}" );
-		$this->assertIsString( $local_url, 'Should return string URL' );
+		$this->assertIsString( $local_url, "Should successfully import {$format}" );
+		$this->assertNotEmpty( $local_url, 'Should return a non-empty URL' );
 
 		// ASSERT: Verify attachment created.
 		$attachments_after = $this->get_attachment_count();
 		$this->assertSame( $attachments_before + 1, $attachments_after, "Should create attachment for {$format}" );
 
-		// ASSERT: Verify attachment has correct mime type.
-		$attachment_id = attachment_url_to_postid( $local_url );
-		$mime_type     = get_post_mime_type( $attachment_id );
-		$this->assertStringContainsString( 'image/', $mime_type, 'Should have image mime type' );
+		// ASSERT: Verify attachment has the exact expected MIME type for the format.
+		$expected_mime_types = array(
+			'jpeg' => 'image/jpeg',
+			'png'  => 'image/png',
+			'gif'  => 'image/gif',
+			'webp' => 'image/webp',
+		);
+		$attachment_id       = attachment_url_to_postid( $local_url );
+		$mime_type           = get_post_mime_type( $attachment_id );
+		$this->assertSame( $expected_mime_types[ $format ], $mime_type, "Should have correct MIME type for {$format}" );
 	}
 
 	/**
@@ -233,9 +240,9 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$this->assertStringContainsString( 'loading="lazy"', $processed_content );
 		$this->assertStringContainsString( 'decoding="async"', $processed_content );
 
-		// ASSERT: Verify image was imported successfully.
+		// ASSERT: Verify exactly one attachment was imported.
 		$attachments_after = $this->get_attachment_count();
-		$this->assertGreaterThan( $attachments_before, $attachments_after, 'Should create attachment for image' );
+		$this->assertSame( $attachments_before + 1, $attachments_after, 'Should create exactly one attachment for image' );
 
 		// ASSERT: Verify external URL was replaced with local one.
 		$this->assertStringNotContainsString( 'example.com/img.jpg', $processed_content, 'External URL should be replaced' );

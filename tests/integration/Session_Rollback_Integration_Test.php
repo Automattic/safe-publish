@@ -197,9 +197,16 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		// ACT: Rollback session.
 		$result = $this->rollback_service->rollback_session( $session_id );
 
-		// ASSERT: Only successful import rolled back.
+		// ASSERT: Only the successful import was rolled back; the failed one
+		// was ignored.
 		$this->assertIsArray( $result );
 		$this->assertSame( 1, $result['deleted_count'] );
 		$this->assertSame( 0, $result['restored_count'] );
+
+		// ASSERT: The successfully imported post was deleted.
+		$this->assertNull( get_post( $post_id ) );
+
+		// ASSERT: Session is marked as rolled back.
+		$this->assertSame( 'rolled_back', get_post_meta( $session_id, 'status', true ) );
 	}
 }

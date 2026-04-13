@@ -90,13 +90,14 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$request->set_header( 'X-Safe-Publish-Site-URL', $site_url );
 		$request->set_header( 'X-Safe-Publish-Signature', 'totally-invalid-signature' );
 
-		// ACT.
+		// ACT: Attempt authentication with the tampered signature.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT.
+		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'safe_publish_auth_invalid', $result->get_error_code() );
 		$this->assertSame( 401, $result->get_error_data()['status'] );
+		$this->assertFalse( $this->authenticator->is_authenticated() );
 	}
 
 	/**
@@ -112,13 +113,14 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 			$expired_timestamp
 		);
 
-		// ACT.
+		// ACT: Attempt authentication with the expired timestamp.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT.
+		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'safe_publish_auth_expired', $result->get_error_code() );
 		$this->assertSame( 401, $result->get_error_data()['status'] );
+		$this->assertFalse( $this->authenticator->is_authenticated() );
 	}
 
 	/**
@@ -155,13 +157,14 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$request->set_header( 'X-Safe-Publish-Signature', $signature );
 		// Intentionally omit X-Safe-Publish-Content-Hash.
 
-		// ACT.
+		// ACT: Attempt authentication without the content hash header.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT.
+		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'safe_publish_auth_content_hash_missing', $result->get_error_code() );
 		$this->assertSame( 401, $result->get_error_data()['status'] );
+		$this->assertFalse( $this->authenticator->is_authenticated() );
 	}
 
 	/**
@@ -182,13 +185,14 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$request->set_header( 'X-Safe-Publish-Content-Hash', $wrong_hash );
 		$request->set_header( 'X-Safe-Publish-Signature', $signature );
 
-		// ACT.
+		// ACT: Attempt authentication with the mismatched content hash.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT.
+		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'safe_publish_auth_content_hash_invalid', $result->get_error_code() );
 		$this->assertSame( 401, $result->get_error_data()['status'] );
+		$this->assertFalse( $this->authenticator->is_authenticated() );
 	}
 
 	/**
@@ -252,13 +256,14 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$future_timestamp = time() + 400;
 		$request          = $this->build_signed_request( 'GET', '/wp/v2/posts', '', $future_timestamp );
 
-		// ACT.
+		// ACT: Attempt authentication with the future timestamp.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT.
+		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'safe_publish_auth_expired', $result->get_error_code() );
 		$this->assertSame( 401, $result->get_error_data()['status'] );
+		$this->assertFalse( $this->authenticator->is_authenticated() );
 	}
 
 	/**
@@ -275,13 +280,14 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		);
 		$request       = $this->build_signed_request( 'GET', '/wp/v2/posts', '' );
 
-		// ACT.
+		// ACT: Attempt authentication with no connected site URL configured.
 		$result = $authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT.
+		// ASSERT: Returns 500 WP_Error; authentication state is unchanged.
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'safe_publish_auth_no_connected_url', $result->get_error_code() );
 		$this->assertSame( 500, $result->get_error_data()['status'] );
+		$this->assertFalse( $authenticator->is_authenticated() );
 	}
 
 	/**
@@ -298,13 +304,14 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		);
 		$request       = $this->build_signed_request( 'GET', '/wp/v2/posts', '', 0, 'https://other-site.example.com' );
 
-		// ACT.
+		// ACT: Attempt authentication from a different site URL.
 		$result = $authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT.
+		// ASSERT: Returns 403 WP_Error; authentication state is unchanged.
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'safe_publish_auth_site_url_mismatch', $result->get_error_code() );
 		$this->assertSame( 403, $result->get_error_data()['status'] );
+		$this->assertFalse( $authenticator->is_authenticated() );
 	}
 
 	/**
@@ -322,13 +329,14 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// Build a request without the site URL header.
 		$request = $this->build_signed_request( 'GET', '/wp/v2/posts', '', 0, '' );
 
-		// ACT.
+		// ACT: Attempt authentication without the site URL header.
 		$result = $authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT.
+		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 'safe_publish_auth_site_url_missing', $result->get_error_code() );
 		$this->assertSame( 401, $result->get_error_data()['status'] );
+		$this->assertFalse( $authenticator->is_authenticated() );
 	}
 
 	/**
@@ -358,17 +366,26 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 	 * Verifies that a successful authentication event is stored in the log.
 	 */
 	public function test_authentication_event_logged(): void {
-		// ARRANGE.
+		// ARRANGE: Valid GET request to /wp/v2/posts.
 		$request = $this->build_signed_request( 'GET', '/wp/v2/posts', '' );
 
-		// ACT.
+		// ACT: Authenticate the request.
 		$this->authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT: AUTH_SUCCESS entry exists in the log.
+		// ASSERT: AUTH_SUCCESS entry exists with correct route and method.
 		// Note: additional events (e.g. CAPABILITY_BASED_AUTH_SETUP) may follow.
 		$log_events  = Event_Table::get_events( array( 'channel' => 'auth' ) );
 		$event_types = array_column( $log_events, 'event' );
 		$this->assertContains( 'AUTH_SUCCESS', $event_types );
+		$success_events = array_values(
+			array_filter(
+				$log_events,
+				fn( array $e ) => 'AUTH_SUCCESS' === $e['event']
+			)
+		);
+		$this->assertCount( 1, $success_events );
+		$this->assertSame( 'GET', $success_events[0]['data']['method'] );
+		$this->assertSame( '/wp/v2/posts', $success_events[0]['data']['route'] );
 	}
 
 	/**

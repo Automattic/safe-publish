@@ -59,6 +59,11 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 		$session = $this->repository->get_session( $session_id );
 		$this->assertNotNull( $session );
 		$this->assertSame( 'sp_import_session', $session->post_type );
+
+		// ASSERT: Session meta was stored correctly.
+		$this->assertSame( 'https://example.com', get_post_meta( $session->ID, 'source_url', true ) );
+		$this->assertSame( 'bulk', get_post_meta( $session->ID, 'session_type', true ) );
+		$this->assertSame( 'in_progress', get_post_meta( $session->ID, 'status', true ) );
 	}
 
 	/**
@@ -87,6 +92,11 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 		$this->assertNotNull( $log );
 		$this->assertSame( 'sp_import_log', $log->post_type );
 		$this->assertSame( 'Test Post', $log->post_title );
+
+		// ASSERT: Log meta was stored correctly.
+		$this->assertSame( 'success', get_post_meta( $log->ID, 'status', true ) );
+		$this->assertSame( 123, (int) get_post_meta( $log->ID, 'external_id', true ) );
+		$this->assertSame( $session_id, (int) get_post_meta( $log->ID, 'session_id', true ) );
 	}
 
 	/**
@@ -173,11 +183,14 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 		// ACT: Retrieve logs.
 		$logs = $this->repository->get_session_logs( $session_id );
 
-		// ASSERT: All logs retrieved.
+		// ASSERT: All logs retrieved with correct titles and statuses.
 		$this->assertCount( 3, $logs );
 		$this->assertSame( 'Post 1', $logs[0]->post_title );
 		$this->assertSame( 'Post 2', $logs[1]->post_title );
 		$this->assertSame( 'Post 3', $logs[2]->post_title );
+		$this->assertSame( 'success', get_post_meta( $logs[0]->ID, 'status', true ) );
+		$this->assertSame( 'success', get_post_meta( $logs[1]->ID, 'status', true ) );
+		$this->assertSame( 'error', get_post_meta( $logs[2]->ID, 'status', true ) );
 	}
 
 	/**
