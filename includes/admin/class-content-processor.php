@@ -156,11 +156,9 @@ class Content_Processor {
 			return $content;
 		}
 
-		// Check if any processing is actually needed to avoid unnecessary serialization.
-		$needs_processing = $this->content_needs_media_processing( $content, $site_url );
+		$needs_processing = $this->content_needs_processing( $content );
 
 		if ( ! $needs_processing ) {
-			// If no external media/links found, return original content to preserve formatting.
 			return $original_content;
 		}
 
@@ -950,32 +948,16 @@ class Content_Processor {
 	}
 
 	/**
-	 * Checks if content needs media processing to avoid unnecessary serialization.
+	 * Checks if content needs processing to avoid unnecessary serialization.
 	 *
-	 * @param string $content  Content to check.
-	 * @param string $site_url Source site URL.
+	 * Skips parse_blocks() + serialize_blocks() for content that contains no
+	 * HTTP URLs. Both media and links are rewritten in the pipeline, so any
+	 * narrower check risks silently skipping blocks that need processing.
+	 *
+	 * @param string $content Content to check.
 	 * @return bool True if content needs processing.
 	 */
-	private function content_needs_media_processing( string $content, string $site_url ): bool {
-		if ( empty( $content ) || empty( $site_url ) ) {
-			return false;
-		}
-
-		$external_domain = wp_parse_url( $site_url, PHP_URL_HOST );
-
-		// Check for external media URLs.
-		if ( strpos( $content, $external_domain ) !== false ) {
-			return true;
-		}
-
-		// Check for common media file extensions.
-		$media_extensions = array( '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.mp4', '.mov', '.avi', '.mp3', '.wav' );
-		foreach ( $media_extensions as $ext ) {
-			if ( strpos( $content, $ext ) !== false ) {
-				return true;
-			}
-		}
-
-		return false;
+	private function content_needs_processing( string $content ): bool {
+		return false !== strpos( $content, 'http' );
 	}
 }

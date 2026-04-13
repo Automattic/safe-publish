@@ -39,6 +39,7 @@ trait Mock_Media_HTTP_Trait {
 		// Determine format from filename.
 		$extension   = strtolower( pathinfo( $file['name'], PATHINFO_EXTENSION ) );
 		$fixture_map = array(
+			'heic' => 'test-1x1.jpg',
 			'jpg'  => 'test-1x1.jpg',
 			'jpeg' => 'test-1x1.jpg',
 			'png'  => 'test-1x1.png',
