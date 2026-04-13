@@ -499,6 +499,10 @@ class Content_Processor {
 
 		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
 
+		if ( null === $attachment_id ) {
+			return $block; // Third-party media — leave unchanged.
+		}
+
 		if ( false === $attachment_id ) {
 			$this->failed_media[] = $original_url;
 			return $block;
@@ -566,7 +570,11 @@ class Content_Processor {
 				$original_url  = $image['url'];
 				$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
 
-				if ( ! $attachment_id ) {
+				if ( null === $attachment_id ) {
+					continue; // Third-party media — leave unchanged.
+				}
+
+				if ( false === $attachment_id ) {
 					$this->failed_media[] = $original_url;
 					continue;
 				}
@@ -654,7 +662,11 @@ class Content_Processor {
 		$original_url  = $block['attrs']['src'];
 		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
 
-		if ( ! $attachment_id ) {
+		if ( null === $attachment_id ) {
+			return $block; // Third-party media — leave unchanged.
+		}
+
+		if ( false === $attachment_id ) {
 			$this->failed_media[] = $original_url;
 			return $block;
 		}
@@ -699,7 +711,11 @@ class Content_Processor {
 		$original_url  = $block['attrs']['src'];
 		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
 
-		if ( ! $attachment_id ) {
+		if ( null === $attachment_id ) {
+			return $block; // Third-party media — leave unchanged.
+		}
+
+		if ( false === $attachment_id ) {
 			$this->failed_media[] = $original_url;
 			return $block;
 		}

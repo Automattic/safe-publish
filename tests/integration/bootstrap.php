@@ -70,6 +70,25 @@ tests_add_filter(
 	5
 );
 
+// Block any outbound HTTP requests not explicitly handled by a test's own
+// pre_http_request mock. Runs last (priority 999) so individual test mocks
+// at lower priorities have the opportunity to intercept first.
+tests_add_filter(
+	'pre_http_request',
+	function ( $preempt, $args, $url ) {
+		unset( $args );
+		if ( false !== $preempt ) {
+			return $preempt;
+		}
+		return new \WP_Error(
+			'http_request_not_mocked',
+			'Unexpected outbound HTTP request in tests: ' . $url
+		);
+	},
+	999,
+	3
+);
+
 // Suppress cosmetic "Not running X tests" messages.
 $_SERVER['argv'][] = '--group';
 $_SERVER['argv'][] = 'ajax,ms-files,external-http';
