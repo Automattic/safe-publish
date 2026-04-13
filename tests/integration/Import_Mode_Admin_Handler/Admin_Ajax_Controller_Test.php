@@ -357,6 +357,55 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 		);
 		$this->assertSame( $existing_post_id, $response['data']['post_id'], 'Should reference the existing post ID' );
 		$this->assertSame( 'Already Imported', $response['data']['post_title'], 'Should include the existing post title' );
+
+		// ASSERT: No import session was opened — the request was deferred, not
+		// completed, so no tracking row should exist.
+		$this->assertSame(
+			0,
+			$this->count_open_sessions(),
+			'No open session should remain after the confirmation prompt'
+		);
+	}
+
+	/**
+	 * Verifies that the create draft endpoint returns an error when the title is
+	 * missing, and does not leave an open import session in the database.
+	 */
+	public function test_ajax_create_draft_rejects_empty_title_without_leaking_session(): void {
+		// ARRANGE: Authenticate as admin but omit the title.
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'            => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'external_post_id' => '9999',
+			'title'            => '',
+			'external_link'    => 'https://source.example.com/no-title',
+			'post_type'        => 'post',
+		);
+
+		// ACT: Trigger the create draft AJAX handler.
+		try {
+			$this->_handleAjax( 'safe_publish_create_draft' );
+			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
+		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		}
+
+		// ASSERT: Response is a JSON failure.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertFalse( $response['success'], 'Should return an error for a missing title' );
+		$this->assertStringContainsString(
+			'title',
+			strtolower( $response['data'] ),
+			'Error message should mention the title field'
+		);
+
+		// ASSERT: No import session was opened — validation failed before any
+		// tracking row should have been created.
+		$this->assertSame(
+			0,
+			$this->count_open_sessions(),
+			'No open session should remain after a validation failure'
+		);
 	}
 
 	/**
@@ -442,5 +491,28 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 		$this->assertSame( 1, $response['data']['failed'], 'Should have 1 failed import' );
 		$this->assertTrue( $response['data']['results'][0]['success'], 'Valid post (ID 5001) should have succeeded' );
 		$this->assertFalse( $response['data']['results'][1]['success'], 'Post with empty title (ID 5002) should have failed' );
+	}
+
+	/**
+	 * Returns the number of import sessions currently in the 'in_progress' state.
+	 *
+	 * @return int
+	 */
+	private function count_open_sessions(): int {
+		$sessions = get_posts(
+			array(
+				'post_type'      => 'sp_import_session',
+				'post_status'    => 'publish',
+				'posts_per_page' => -1,
+				'meta_query'     => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+					array(
+						'key'   => 'status',
+						'value' => 'in_progress',
+					),
+				),
+			)
+		);
+
+		return count( $sessions );
 	}
 }

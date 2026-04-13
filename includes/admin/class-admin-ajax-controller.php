@@ -263,16 +263,6 @@ final class Admin_Ajax_Controller {
 			);
 		}
 
-		// Create single import session for tracking.
-		$source_url     = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
-		$session_result = $this->import_history->create_session( $source_url, 'single' );
-
-		if ( is_wp_error( $session_result ) ) {
-			wp_send_json_error( $session_result->get_error_message() );
-		}
-
-		$session_id = $session_result;
-
 		$external_post_id = absint( $_POST['external_post_id'] ?? 0 );
 		$title            = sanitize_text_field( wp_unslash( $_POST['title'] ?? '' ) );
 		$external_link    = esc_url_raw( wp_unslash( $_POST['external_link'] ?? '' ) );
@@ -308,6 +298,16 @@ final class Admin_Ajax_Controller {
 				)
 			);
 		}
+
+		// Create single import session for tracking.
+		$source_url     = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$session_result = $this->import_history->create_session( $source_url, 'single' );
+
+		if ( is_wp_error( $session_result ) ) {
+			wp_send_json_error( $session_result->get_error_message() );
+		}
+
+		$session_id = $session_result;
 
 		// Fetch fresh content from the external site.
 		$fresh_result = $this->maybe_fetch_fresh_content( $external_post_id );
