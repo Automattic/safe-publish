@@ -487,23 +487,16 @@ class Content_Processor {
 			return $block;
 		}
 
-		// Method 1: Try to import and get attachment ID directly.
 		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
 
-		if ( $attachment_id && is_numeric( $attachment_id ) ) {
-			// Get the new URL from the attachment ID.
-			$new_url = wp_get_attachment_url( $attachment_id );
-		} else {
-			// Method 2: Fallback - use original method if the first didn't work.
-			$new_url = $this->media_importer->import_external_media( $original_url, $site_url );
-
-			if ( $new_url ) {
-				// Try to get attachment ID from the URL.
-				$attachment_id = $this->media_importer->get_attachment_id_from_url( $new_url );
-			}
+		if ( false === $attachment_id ) {
+			$this->failed_media[] = $original_url;
+			return $block;
 		}
 
-		if ( ! $new_url || ! $attachment_id ) {
+		$new_url = wp_get_attachment_url( $attachment_id );
+
+		if ( false === $new_url ) {
 			$this->failed_media[] = $original_url;
 			return $block;
 		}
