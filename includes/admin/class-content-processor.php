@@ -829,33 +829,18 @@ class Content_Processor {
 			return $html;
 		}
 
-		// Use a more targeted regex approach to avoid XML declaration issues.
-		// This is safer for block innerHTML since we're only replacing the src attribute.
+		// Use a targeted regex to replace only the src attribute value.
 		$pattern     = '/(<img[^>]+src=["\'])' . preg_quote( $old_url, '/' ) . '(["\'][^>]*>)/i';
 		$replacement = '${1}' . $new_url . '${2}';
 
 		$updated_html = preg_replace( $pattern, $replacement, $html );
 
-		// If regex replacement worked, apply minimal normalization.
 		if ( null !== $updated_html && $updated_html !== $html ) {
-			// Only normalize Gutenberg-specific spacing - preserve other whitespace.
-			// Gutenberg requires NO space before /> for self-closing tags.
-			$updated_html = preg_replace( '/\s+\/>/', '/>', $updated_html );
-
-			// Only compress excessive consecutive spaces within attributes, but preserve line breaks.
-			$updated_html = preg_replace( '/( [a-zA-Z-]+=")(\s{2,})/', '${1} ', $updated_html );
-
 			return $updated_html;
 		}
 
-		// Fallback to simple string replacement with minimal normalization.
-		$fallback_html = str_replace( $old_url, $new_url, $html );
-
-		// Apply the same minimal normalization to the fallback.
-		$fallback_html = preg_replace( '/\s+\/>/', '/>', $fallback_html );
-		$fallback_html = preg_replace( '/( [a-zA-Z-]+=")(\s{2,})/', '${1} ', $fallback_html );
-
-		return $fallback_html;
+		// Fallback to simple string replacement.
+		return str_replace( $old_url, $new_url, $html );
 	}
 
 	/**
