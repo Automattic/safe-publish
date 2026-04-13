@@ -33,7 +33,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content with media (HTTP mock serves real fixture file).
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify attachment was created.
 		$attachments_after = $this->get_attachment_count();
@@ -192,7 +192,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content (HTTP mock serves real fixtures for each format).
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify all three images imported.
 		$attachments_after  = $this->get_attachment_count();
@@ -230,7 +230,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content.
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify all attributes preserved.
 		$this->assertStringContainsString( 'alt="Test"', $processed_content );
@@ -314,7 +314,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process post content with inline media.
-		$processed_content = $this->content_processor->process_content( $post_content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $post_content, $source_site );
 
 		// ASSERT: Verify all inline images imported (2 images in content).
 		$attachments_after = $this->get_attachment_count();
@@ -363,7 +363,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		';
 
 		// ACT: Process content with transformations.
-		$processed_content = $this->content_processor->process_content( $post_content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $post_content, $source_site );
 
 		// ASSERT: Verify content structure preserved.
 		$this->assertStringContainsString( 'Introduction paragraph', $processed_content );
@@ -628,7 +628,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$content      = sprintf( '<img src="%s" alt="Cropped hero">', $external_url );
 
 		// ACT: Process content (HTTP mock serves fixture, parameters stripped for download).
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: External domain replaced with local.
 		$this->assertStringNotContainsString( 'example.com/photo.jpg', $processed_content );
@@ -660,7 +660,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content.
-		$processed_content = $this->content_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Only one attachment created (base URL is the same after stripping).
 		$attachments_after = $this->get_attachment_count();
