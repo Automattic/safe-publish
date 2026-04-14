@@ -257,6 +257,44 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the update-post endpoint preserves HTML in excerpts.
+	 *
+	 * Excerpts can contain inline HTML (em, strong, links, etc.). The endpoint
+	 * must use wp_kses_post (not sanitize_text_field) so that allowed HTML is
+	 * retained.
+	 */
+	public function test_update_post_endpoint_preserves_excerpt_html(): void {
+		// ARRANGE: Create request with HTML excerpt.
+		$request = new WP_REST_Request(
+			'POST',
+			'/safe-publish/v1/update-post'
+		);
+		$request->set_param( 'postId', $this->post_id );
+		$request->set_param( 'content', '<p>Content.</p>' );
+		$request->set_param(
+			'excerpt',
+			'Excerpt with <em>emphasis</em> and <strong>bold</strong>.'
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+
+		// ACT: Dispatch the request.
+		$response = $this->server->dispatch( $request );
+
+		// ASSERT: Request succeeds.
+		$data = $response->get_data();
+		$this->assertTrue( $data['success'] );
+
+		// ASSERT: HTML tags are preserved in the stored excerpt.
+		$updated_post = get_post( $this->post_id );
+		$this->assertSame(
+			'Excerpt with <em>emphasis</em> and <strong>bold</strong>.',
+			$updated_post->post_excerpt,
+			'Allowed HTML must be preserved in excerpts.'
+		);
+	}
+
+	/**
 	 * Verifies that the update-post endpoint updates meta successfully and
 	 * returns the correct post ID in the response.
 	 */

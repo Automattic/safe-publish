@@ -441,9 +441,7 @@ class Post_Import_Service {
 				'ID'           => $imported_post->ID,
 				'post_title'   => $fields['title'],
 				'post_excerpt' => $fields['excerpt'],
-				'post_content' => ! empty( $processed_content )
-					? $processed_content
-					: __( 'Content imported from external source.', 'safe-publish' ),
+				'post_content' => $processed_content,
 				'post_type'    => $post_type,
 			)
 		);
@@ -670,9 +668,7 @@ class Post_Import_Service {
 			array(
 				'post_title'   => $fields['title'],
 				'post_excerpt' => $fields['excerpt'],
-				'post_content' => ! empty( $processed_content )
-					? $processed_content
-					: __( 'Content imported from external source.', 'safe-publish' ),
+				'post_content' => $processed_content,
 				'post_status'  => 'draft',
 				'post_type'    => $post_type,
 				'meta_input'   => array(

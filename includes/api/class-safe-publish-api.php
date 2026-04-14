@@ -243,7 +243,7 @@ final class Safe_Publish_API extends REST_Base {
 		}
 
 		if ( $req->has_param( 'excerpt' ) && isset( $excerpt ) ) {
-			$postarr['post_excerpt'] = sanitize_text_field( $excerpt );
+			$postarr['post_excerpt'] = wp_kses_post( $excerpt );
 		}
 
 		if ( isset( $content ) ) {
