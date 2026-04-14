@@ -23,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Handles processing of media elements within HTML content, including
  * images, videos, audio, and links. Delegates to Media_Importer for
- * actual media importing and to Embed_Processor for embed handling.
+ * actual media importing.
  */
 class Content_Media_Processor {
 
@@ -35,13 +35,6 @@ class Content_Media_Processor {
 	private Media_Importer $media_importer;
 
 	/**
-	 * Embed Processor instance.
-	 *
-	 * @var Embed_Processor
-	 */
-	private Embed_Processor $embed_processor;
-
-	/**
 	 * URLs of media files that failed to import.
 	 *
 	 * @var array
@@ -51,15 +44,11 @@ class Content_Media_Processor {
 	/**
 	 * Constructs the Content_Media_Processor instance.
 	 *
-	 * @param Media_Importer  $media_importer  Media importer for handling media files.
-	 * @param Embed_Processor $embed_processor Embed processor for handling embeds.
+	 * @param Media_Importer $media_importer Media importer for handling
+	 *                                       media files.
 	 */
-	public function __construct(
-		Media_Importer $media_importer,
-		Embed_Processor $embed_processor
-	) {
-		$this->media_importer  = $media_importer;
-		$this->embed_processor = $embed_processor;
+	public function __construct( Media_Importer $media_importer ) {
+		$this->media_importer = $media_importer;
 	}
 
 	/**
@@ -77,12 +66,8 @@ class Content_Media_Processor {
 		$dom = $this->create_dom_document( $content );
 
 		$this->process_images( $dom, $source_site_url );
-		$this->process_iframes( $dom, $source_site_url );
 		$this->process_videos( $dom, $source_site_url );
 		$this->process_audios( $dom, $source_site_url );
-		$this->process_embeds( $dom, $source_site_url );
-		$this->process_figures( $dom, $source_site_url );
-		$this->process_blockquotes( $dom, $source_site_url );
 
 		return $this->extract_content_from_dom( $dom );
 	}
@@ -249,19 +234,6 @@ class Content_Media_Processor {
 	}
 
 	/**
-	 * Processes iframe elements in the DOM.
-	 *
-	 * @param DOMDocument $dom             DOM document.
-	 * @param string      $source_site_url Source site URL.
-	 */
-	private function process_iframes( DOMDocument $dom, string $source_site_url ): void {
-		$iframes = $dom->getElementsByTagName( 'iframe' );
-		foreach ( $iframes as $iframe ) {
-			$this->embed_processor->process_iframe( $iframe, $source_site_url );
-		}
-	}
-
-	/**
 	 * Processes video elements in the DOM.
 	 *
 	 * @param DOMDocument $dom             DOM document.
@@ -284,45 +256,6 @@ class Content_Media_Processor {
 		$audios = $dom->getElementsByTagName( 'audio' );
 		foreach ( $audios as $audio ) {
 			$this->process_audio_element( $audio, $source_site_url );
-		}
-	}
-
-	/**
-	 * Processes embed elements in the DOM.
-	 *
-	 * @param DOMDocument $dom             DOM document.
-	 * @param string      $source_site_url Source site URL.
-	 */
-	private function process_embeds( DOMDocument $dom, string $source_site_url ): void {
-		$embeds = $dom->getElementsByTagName( 'embed' );
-		foreach ( $embeds as $embed ) {
-			$this->embed_processor->process_embed( $embed, $source_site_url );
-		}
-	}
-
-	/**
-	 * Processes figure elements in the DOM.
-	 *
-	 * @param DOMDocument $dom             DOM document.
-	 * @param string      $source_site_url Source site URL.
-	 */
-	private function process_figures( DOMDocument $dom, string $source_site_url ): void {
-		$figures = $dom->getElementsByTagName( 'figure' );
-		foreach ( $figures as $figure ) {
-			$this->embed_processor->process_figure_embeds( $figure, $source_site_url );
-		}
-	}
-
-	/**
-	 * Processes blockquote elements in the DOM.
-	 *
-	 * @param DOMDocument $dom             DOM document.
-	 * @param string      $source_site_url Source site URL.
-	 */
-	private function process_blockquotes( DOMDocument $dom, string $source_site_url ): void {
-		$blockquotes = $dom->getElementsByTagName( 'blockquote' );
-		foreach ( $blockquotes as $blockquote ) {
-			$this->embed_processor->process_blockquote_embeds( $blockquote, $source_site_url );
 		}
 	}
 
@@ -380,14 +313,6 @@ class Content_Media_Processor {
 				$this->failed_media[] = $poster;
 			}
 		}
-
-		// Add WordPress video classes.
-		$class = $video->getAttribute( 'class' );
-		$video->setAttribute( 'class', trim( $class . ' wp-video-shortcode' ) );
-
-		// Ensure responsive behavior.
-		$video->setAttribute( 'controls', 'controls' );
-		$video->setAttribute( 'preload', 'metadata' );
 	}
 
 	/**
@@ -429,13 +354,5 @@ class Content_Media_Processor {
 				$this->failed_media[] = $audio_src;
 			}
 		}
-
-		// Add WordPress audio classes.
-		$class = $audio->getAttribute( 'class' );
-		$audio->setAttribute( 'class', trim( $class . ' wp-audio-shortcode' ) );
-
-		// Ensure controls are visible.
-		$audio->setAttribute( 'controls', 'controls' );
-		$audio->setAttribute( 'preload', 'metadata' );
 	}
 }

@@ -138,70 +138,76 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 	/**
 	 * Data provider for media elements tests.
 	 *
-	 * Each extra_attributes entry is a full attribute string (e.g. 'preload="metadata"')
-	 * that must appear in the processed output.
-	 *
-	 * @return array<string, array{element: string, url: string, wp_class: string, extra_attributes: array<string>}>
+	 * @return array<string, array{element: string, url: string}>
 	 */
 	public static function media_elements_provider(): array {
 		return array(
 			'video' => array(
-				'element'          => 'video',
-				'url'              => 'https://example.com/video.mp4',
-				'wp_class'         => 'wp-video-shortcode',
-				'extra_attributes' => array( 'preload="metadata"' ),
+				'element' => 'video',
+				'url'     => 'https://example.com/video.mp4',
 			),
 			'audio' => array(
-				'element'          => 'audio',
-				'url'              => 'https://example.com/audio.mp3',
-				'wp_class'         => 'wp-audio-shortcode',
-				'extra_attributes' => array(),
+				'element' => 'audio',
+				'url'     => 'https://example.com/audio.mp3',
 			),
 		);
 	}
 
 	/**
-	 * Verifies that media elements are processed with WordPress classes.
-	 *
-	 * Tests video and audio elements to ensure WordPress classes and attributes
-	 * are added correctly.
+	 * Verifies that media elements are preserved without adding extra
+	 * attributes or classes.
 	 *
 	 * @dataProvider media_elements_provider
 	 *
-	 * @param string   $element          Media element type (video or audio).
-	 * @param string   $url              Media URL.
-	 * @param string   $wp_class         Expected WordPress class.
-	 * @param string[] $extra_attributes Additional attributes to verify.
+	 * @param string $element Media element type (video or audio).
+	 * @param string $url     Media URL.
 	 */
-	public function test_media_elements_processed_correctly(
+	public function test_media_elements_preserved_without_extra_attributes(
 		string $element,
-		string $url,
-		string $wp_class,
-		array $extra_attributes
+		string $url
 	): void {
 		// ARRANGE: Create media element from data provider.
 		$source_site = 'https://example.com';
-		$content     = sprintf( '<%s src="%s" controls></%s>', $element, $url, $element );
+		$content     = sprintf(
+			'<%s src="%s" controls></%s>',
+			$element,
+			$url,
+			$element
+		);
 
 		// ACT: Process content.
-		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content(
+			$content,
+			$source_site
+		);
 
-		// ASSERT: Verify WordPress class was added.
-		$this->assertStringContainsString( $wp_class, $processed_content );
+		// ASSERT: Verify source controls attribute is preserved.
+		$this->assertStringContainsString(
+			'controls',
+			$processed_content
+		);
 
-		// ASSERT: Verify controls attribute was added.
-		$this->assertStringContainsString( 'controls', $processed_content );
+		// ASSERT: Verify no extra classes were injected.
+		$this->assertStringNotContainsString(
+			'wp-video-shortcode',
+			$processed_content
+		);
+		$this->assertStringNotContainsString(
+			'wp-audio-shortcode',
+			$processed_content
+		);
 
-		// ASSERT: Verify any extra attributes.
-		foreach ( $extra_attributes as $attribute ) {
-			$this->assertStringContainsString( $attribute, $processed_content );
-		}
+		// ASSERT: Verify no extra attributes were injected.
+		$this->assertStringNotContainsString(
+			'preload="metadata"',
+			$processed_content
+		);
 	}
 
 	/**
-	 * Verifies that iframes for embeds are processed correctly.
+	 * Verifies that iframes are preserved without adding extra attributes.
 	 */
-	public function test_iframe_embeds_processed_correctly(): void {
+	public function test_iframe_embeds_preserved_without_extra_attributes(): void {
 		// ARRANGE: Create content with YouTube iframe embed.
 		$source_site = 'https://example.com';
 		$content     = '<iframe src="https://www.youtube.com/embed/abc123"></iframe>';
@@ -209,15 +215,13 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		// ACT: Process content.
 		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
-		// ASSERT: Verify iframe processed with security attributes.
+		// ASSERT: Verify iframe src is preserved.
 		$this->assertStringContainsString( 'youtube.com', $processed_content );
 
-		// ASSERT: Verify WordPress embed class was added.
-		$this->assertStringContainsString( 'wp-embedded-content', $processed_content );
-
-		// ASSERT: Verify security attributes were added.
-		$this->assertStringContainsString( 'loading="lazy"', $processed_content );
-		$this->assertStringContainsString( 'referrerpolicy="no-referrer-when-downgrade"', $processed_content );
+		// ASSERT: Verify no extra attributes or classes were injected.
+		$this->assertStringNotContainsString( 'wp-embedded-content', $processed_content );
+		$this->assertStringNotContainsString( 'loading="lazy"', $processed_content );
+		$this->assertStringNotContainsString( 'referrerpolicy=', $processed_content );
 	}
 
 	/**
@@ -255,10 +259,9 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		$this->assertStringContainsString( 'href="/internal-link"', $processed_content );
 		$this->assertStringNotContainsString( 'href="https://example.com/internal-link"', $processed_content );
 
-		// ASSERT: Verify WordPress classes were added to media elements.
-		$this->assertStringContainsString( 'wp-video-shortcode', $processed_content );
-		$this->assertStringContainsString( 'wp-audio-shortcode', $processed_content );
-		$this->assertStringContainsString( 'wp-embedded-content', $processed_content );
+		// ASSERT: Verify no extra classes were injected on media elements.
+		$this->assertStringNotContainsString( 'wp-video-shortcode', $processed_content );
+		$this->assertStringNotContainsString( 'wp-audio-shortcode', $processed_content );
 
 		// ASSERT: Verify images were actually imported (2 images: header + footer).
 		$attachments_after = $this->get_attachment_count();

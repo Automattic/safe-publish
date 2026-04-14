@@ -11,7 +11,6 @@ namespace Safe_Publish\Tests\Integration\External_Posts_API;
 
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\Content\Content_Media_Processor;
-use Safe_Publish\Content\Embed_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Integration_Test_Case;
 use Safe_Publish\Tests\Integration\Mock_Media_HTTP_Trait;
@@ -64,8 +63,7 @@ abstract class External_Posts_API_Test_Base extends Integration_Test_Case {
 		// Create service instances with real dependencies.
 		$this->media_importer          = new Media_Importer( new HTTP_Client() );
 		$this->content_media_processor = new Content_Media_Processor(
-			$this->media_importer,
-			new Embed_Processor()
+			$this->media_importer
 		);
 
 		// Configure the connected site URL so fetch_fresh_content() can make requests.

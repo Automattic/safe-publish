@@ -21,7 +21,6 @@ use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Content\Content_Media_Processor;
-use Safe_Publish\Content\Embed_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\External_Posts_API\External_Posts_API_Test_Base;
 use Safe_Publish\Utils\Options;
@@ -71,7 +70,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		$media_importer    = new Media_Importer( new HTTP_Client() );
 		$content_processor = new Content_Processor(
 			$media_importer,
-			new Content_Media_Processor( $media_importer, new Embed_Processor() )
+			new Content_Media_Processor( $media_importer )
 		);
 
 		$this->import_service = new Post_Import_Service(
