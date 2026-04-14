@@ -217,7 +217,9 @@ class External_Posts_API {
 					if ( ! isset( $incoming_terms[ $tax ] ) ) {
 						$incoming_terms[ $tax ] = array();
 					}
-					$incoming_terms[ $tax ][] = isset( $term['name'] ) ? $term['name'] : '';
+					if ( isset( $term['name'] ) && '' !== $term['name'] ) {
+						$incoming_terms[ $tax ][] = $term['name'];
+					}
 				}
 			}
 		}
@@ -367,7 +369,9 @@ class External_Posts_API {
 					if ( ! isset( $incoming_terms[ $tax ] ) ) {
 						$incoming_terms[ $tax ] = array();
 					}
-					$incoming_terms[ $tax ][] = isset( $term['name'] ) ? $term['name'] : '';
+					if ( isset( $term['name'] ) && '' !== $term['name'] ) {
+						$incoming_terms[ $tax ][] = $term['name'];
+					}
 				}
 			}
 		}
