@@ -79,10 +79,10 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		// ACT: Rollback the session.
 		$result = $this->rollback_service->rollback_session( $session_id );
 
-		// ASSERT: Posts were deleted.
+		// ASSERT: Posts were deleted with no failures.
 		$this->assertIsArray( $result );
-		$this->assertArrayHasKey( 'deleted_count', $result );
 		$this->assertSame( 2, $result['deleted_count'] );
+		$this->assertSame( 0, $result['failed_count'] );
 
 		// ASSERT: Verify posts are deleted.
 		$this->assertNull( get_post( $post_id_1 ) );
@@ -202,11 +202,66 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		$this->assertIsArray( $result );
 		$this->assertSame( 1, $result['deleted_count'] );
 		$this->assertSame( 0, $result['restored_count'] );
+		$this->assertSame( 0, $result['failed_count'] );
 
 		// ASSERT: The successfully imported post was deleted.
 		$this->assertNull( get_post( $post_id ) );
 
 		// ASSERT: Session is marked as rolled back.
 		$this->assertSame( 'rolled_back', get_post_meta( $session_id, 'status', true ) );
+	}
+
+	/**
+	 * Verifies that partial rollback tracks failed count and
+	 * does not mark session as rolled back.
+	 */
+	public function test_partial_rollback_tracks_failures(): void {
+		// ARRANGE: Create session with two posts, then delete one
+		// before rollback to simulate a failure.
+		$session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+
+		$post_id_1 = $this->factory()->post->create(
+			array( 'post_title' => 'Survives' )
+		);
+		$post_id_2 = $this->factory()->post->create(
+			array( 'post_title' => 'Already Gone' )
+		);
+
+		$this->repository->log_import_action(
+			$session_id,
+			1,
+			'Survives',
+			'success',
+			$post_id_1
+		);
+
+		$this->repository->log_import_action(
+			$session_id,
+			2,
+			'Already Gone',
+			'success',
+			$post_id_2
+		);
+
+		$this->repository->complete_session( $session_id );
+
+		// ACT: Delete one post before rollback to cause a failure.
+		wp_delete_post( $post_id_2, true );
+		$result = $this->rollback_service->rollback_session(
+			$session_id
+		);
+
+		// ASSERT: One succeeded, one failed.
+		$this->assertIsArray( $result );
+		$this->assertSame( 1, $result['deleted_count'] );
+		$this->assertSame( 0, $result['restored_count'] );
+		$this->assertSame( 1, $result['failed_count'] );
+
+		// ASSERT: Session is NOT marked as rolled back.
+		$status = get_post_meta( $session_id, 'status', true );
+		$this->assertSame( 'completed', $status );
 	}
 }

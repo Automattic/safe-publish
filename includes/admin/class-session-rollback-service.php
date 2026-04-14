@@ -41,7 +41,7 @@ final class Session_Rollback_Service {
 	 * Rolls back an entire import session.
 	 *
 	 * @param int $session_id Session ID to roll back.
-	 * @return array{deleted_count: int, restored_count: int}|WP_Error Rollback results or error.
+	 * @return array{deleted_count: int, restored_count: int, failed_count: int}|WP_Error Rollback results or error.
 	 */
 	public function rollback_session( int $session_id ): array|WP_Error {
 		$session = $this->repository->get_session( $session_id );
@@ -60,11 +60,13 @@ final class Session_Rollback_Service {
 
 		$deleted_count  = 0;
 		$restored_count = 0;
+		$failed_count   = 0;
 
 		foreach ( $logs as $log ) {
 			$result = $this->rollback_log_entry( $log->ID );
 
 			if ( is_wp_error( $result ) ) {
+				++$failed_count;
 				continue;
 			}
 
@@ -75,11 +77,14 @@ final class Session_Rollback_Service {
 			}
 		}
 
-		$this->repository->mark_session_rolled_back( $session_id );
+		if ( 0 === $failed_count ) {
+			$this->repository->mark_session_rolled_back( $session_id );
+		}
 
 		return array(
 			'deleted_count'  => $deleted_count,
 			'restored_count' => $restored_count,
+			'failed_count'   => $failed_count,
 		);
 	}
 
