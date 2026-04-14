@@ -13,6 +13,7 @@ use Safe_Publish\Admin\Content_Logger;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Logger;
+use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Validators\URL_Validator;
 
 // Prevent direct access.
@@ -97,8 +98,7 @@ class External_Posts_API {
 	 * @return string Built API URL.
 	 */
 	private function build_api_url( string $site_url, int $number_of_posts, array $auth_credentials = array(), string $post_type = 'posts' ): string {
-		// Use 'posts' as default endpoint for 'post' post type, otherwise use the post type slug.
-		$endpoint     = ( 'post' === $post_type ) ? 'posts' : $post_type;
+		$endpoint     = Post_Type_Map::to_rest_endpoint( $post_type );
 		$api_endpoint = trailingslashit( $site_url ) . 'wp-json/wp/v2/' . $endpoint;
 
 		$query_args = array(
@@ -276,16 +276,23 @@ class External_Posts_API {
 	 * @param int    $external_post_id  External post ID.
 	 * @param string $site_url          Site URL.
 	 * @param array  $auth_credentials  Optional. Authentication credentials. Default empty array.
+	 * @param string $post_type         Optional. Post type slug or REST endpoint. Default 'posts'.
 	 * @return array|false Post data array on success, false on failure.
 	 */
-	public function fetch_fresh_post_content( int $external_post_id, string $site_url, array $auth_credentials = array() ): array|false {
+	public function fetch_fresh_post_content(
+		int $external_post_id,
+		string $site_url,
+		array $auth_credentials = array(),
+		string $post_type = 'posts'
+	): array|false {
 		// Validate URL first.
 		if ( ! URL_Validator::is_valid_external_url( $site_url ) ) {
 			return false;
 		}
 
 		// Build API URL for single post.
-		$api_endpoint = trailingslashit( $site_url ) . 'wp-json/wp/v2/posts/' . $external_post_id;
+		$endpoint     = Post_Type_Map::to_rest_endpoint( $post_type );
+		$api_endpoint = trailingslashit( $site_url ) . 'wp-json/wp/v2/' . $endpoint . '/' . $external_post_id;
 
 		$query_args = array(
 			'_embed' => '1',
