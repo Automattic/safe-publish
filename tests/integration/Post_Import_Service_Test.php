@@ -1063,6 +1063,101 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that import fails when the API response lacks raw field values
+	 * (view context instead of edit context).
+	 *
+	 * Without raw values, the rendered variants would silently bake in
+	 * display-filter artifacts (smart quotes, wpautop, etc.), breaking
+	 * data parity.
+	 */
+	public function test_import_fails_when_raw_fields_unavailable(): void {
+		// ARRANGE: Override the post API response to only include
+		// rendered fields (no raw), simulating a view-context response.
+		$rendered_only = function ( $preempt, $args, $url ) {
+			unset( $args );
+
+			if ( ! str_contains( $url, 'wp-json/wp/v2/posts/' ) ) {
+				return $preempt;
+			}
+
+			return array(
+				'response' => array(
+					'code'    => 200,
+					'message' => 'OK',
+				),
+				'body'     => (string) wp_json_encode(
+					array(
+						'id'      => 1,
+						'title'   => array(
+							'rendered' => 'Rendered Title',
+						),
+						'content' => array(
+							'rendered' => '<p>Rendered content.</p>',
+						),
+						'excerpt' => array(
+							'rendered' => '<p>Rendered excerpt.</p>',
+						),
+						'link'    => 'https://source.example.com/test',
+						'meta'    => array(),
+					)
+				),
+				'headers'  => array(),
+			);
+		};
+
+		add_filter( 'pre_http_request', $rendered_only, 4, 3 );
+
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9200,
+			'title'     => 'Should Not Import',
+			'content'   => '<p>Stale snapshot.</p>',
+			'link'      => 'https://source.example.com/rendered-only',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Attempt to import.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		remove_filter( 'pre_http_request', $rendered_only, 4 );
+
+		// ASSERT: Import must fail.
+		$this->assertFalse(
+			$result['success'],
+			'Import should fail when raw fields are unavailable.'
+		);
+
+		// ASSERT: Error message identifies the fetch as the failure point.
+		$this->assertStringContainsString(
+			'Could not fetch fresh content',
+			$result['error'],
+			'Error should indicate fresh content fetch failed.'
+		);
+
+		// ASSERT: No post should have been created.
+		$this->assertEmpty(
+			get_posts(
+				array(
+					'post_type'        => 'post',
+					'posts_per_page'   => 1,
+					'suppress_filters' => false,
+					'meta_key'         => Options::META_EXTERNAL_POST_ID,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => '9200',
+				)
+			),
+			'No post should be created when raw fields are missing.'
+		);
+	}
+
+	/**
 	 * Returns a pre_http_request filter that makes the media JSON API return 404.
 	 *
 	 * Registered at priority 6 so it runs after the mock at priority 5 and

@@ -81,6 +81,10 @@ final class Diff_Renderer {
 		// Extract incoming data from external response.
 		$incoming = $this->extract_incoming_data( $external_data );
 
+		if ( is_wp_error( $incoming ) ) {
+			return $incoming;
+		}
+
 		// Extract current local data.
 		$current = $this->extract_current_data( $local_post );
 
@@ -236,15 +240,29 @@ final class Diff_Renderer {
 	 *
 	 * @param array $data External post data.
 	 *
-	 * @return array Structured incoming data.
+	 * @return array|WP_Error Structured incoming data, or error when
+	 *                        raw fields are unavailable.
 	 */
-	private function extract_incoming_data( array $data ): array {
+	private function extract_incoming_data( array $data ): array|WP_Error {
+		if (
+			! isset( $data['title']['raw'] ) ||
+			! isset( $data['content']['raw'] ) ||
+			! isset( $data['excerpt']['raw'] )
+		) {
+			return new WP_Error(
+				'raw_data_unavailable',
+				__(
+					'Could not fetch raw post data. Verify that authentication is configured correctly.',
+					'safe-publish'
+				),
+				array( 'status' => 403 )
+			);
+		}
+
 		$incoming = array(
-			'title'   => isset( $data['title']['rendered'] ) ? $data['title']['rendered'] : '',
-			'content' => isset( $data['content']['raw'] )
-				? $data['content']['raw']
-				: ( isset( $data['content']['rendered'] ) ? $data['content']['rendered'] : '' ),
-			'excerpt' => isset( $data['excerpt']['rendered'] ) ? $data['excerpt']['rendered'] : '',
+			'title'   => $data['title']['raw'],
+			'content' => $data['content']['raw'],
+			'excerpt' => $data['excerpt']['raw'],
 			'meta'    => isset( $data['meta'] ) && is_array( $data['meta'] ) ? $data['meta'] : array(),
 			'terms'   => array(),
 		);
