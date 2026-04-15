@@ -25,6 +25,7 @@
 
 ## PRs
 
+- Before creating a PR, ensure all tests pass by running `npm run test` and `npm run test:integration`.
 - Output PR descriptions in raw markdown within a code block, without line wrapping.
 
 # Project guidelines
