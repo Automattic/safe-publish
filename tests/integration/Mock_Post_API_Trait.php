@@ -20,7 +20,8 @@ trait Mock_Post_API_Trait {
 	/**
 	 * Per-test overrides for the mocked single-post API response.
 	 *
-	 * Keys: title, featured_media, content, excerpt, meta, terms.
+	 * Keys: title, featured_media, content, excerpt, meta, terms, slug,
+	 *       comment_status, ping_status, menu_order.
 	 * Terms: array keyed by taxonomy slug with arrays of term names as values.
 	 *
 	 * @var array<string, mixed>
@@ -42,6 +43,10 @@ trait Mock_Post_API_Trait {
 			'content'        => array( 'raw' => $this->mock_post_overrides['content'] ?? '<p>Test content.</p>' ),
 			'excerpt'        => array( 'raw' => $this->mock_post_overrides['excerpt'] ?? '' ),
 			'link'           => 'https://source.example.com/test-post',
+			'slug'           => $this->mock_post_overrides['slug'] ?? '',
+			'comment_status' => $this->mock_post_overrides['comment_status'] ?? '',
+			'ping_status'    => $this->mock_post_overrides['ping_status'] ?? '',
+			'menu_order'     => $this->mock_post_overrides['menu_order'] ?? 0,
 			'meta'           => $this->mock_post_overrides['meta'] ?? array(),
 		);
 
