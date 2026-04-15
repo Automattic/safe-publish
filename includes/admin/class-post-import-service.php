@@ -223,8 +223,8 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Builds an error result if any media files failed to download during
-	 * content processing.
+	 * Builds an error result if any media files failed to download
+	 * during content processing.
 	 *
 	 * @param array $fields Sanitized post fields from extract_post_fields().
 	 * @return array|null Error result array on failure, null when no failures.
@@ -248,12 +248,13 @@ class Post_Import_Service {
 	 * Processes raw post content by importing media and fixing URLs.
 	 *
 	 * Returns the original content unchanged if external_link is empty.
+	 * Returns a WP_Error if content processing fails.
 	 *
 	 * @param string $content       Raw post content.
 	 * @param string $external_link External post URL used to derive site URL.
-	 * @return string Processed and sanitized content.
+	 * @return string|WP_Error Processed and sanitized content, or WP_Error on failure.
 	 */
-	private function process_post_content( string $content, string $external_link ): string {
+	private function process_post_content( string $content, string $external_link ): string|WP_Error {
 		if ( empty( $external_link ) ) {
 			return $content;
 		}
@@ -263,6 +264,10 @@ class Post_Import_Service {
 			. wp_parse_url( $external_link, PHP_URL_HOST );
 
 		$processed = $this->content_processor->process_content( $content, $site_url );
+
+		if ( is_wp_error( $processed ) ) {
+			return $processed;
+		}
 
 		// Apply sanitization after processing to preserve formatting during processing.
 		return wp_kses_post( $processed );
@@ -386,6 +391,28 @@ class Post_Import_Service {
 			$fields['external_link']
 		);
 
+		if ( is_wp_error( $processed_content ) ) {
+			$error_message = $processed_content->get_error_message();
+
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$error_message,
+				array( 'action' => 'content_processing_failed' )
+			);
+			$this->content_processor->delete_newly_created_media();
+
+			return array(
+				'external_id' => $fields['external_post_id'],
+				'title'       => $fields['title'],
+				'success'     => false,
+				'error'       => $error_message,
+			);
+		}
+
 		$failed_media_error = $this->get_failed_media_error( $fields );
 
 		if ( null !== $failed_media_error ) {
@@ -399,6 +426,7 @@ class Post_Import_Service {
 				array( 'action' => 'media_download_failed' )
 			);
 			$this->content_processor->delete_newly_created_media();
+
 			return $failed_media_error;
 		}
 
@@ -625,6 +653,28 @@ class Post_Import_Service {
 			$fields['external_link']
 		);
 
+		if ( is_wp_error( $processed_content ) ) {
+			$error_message = $processed_content->get_error_message();
+
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$error_message,
+				array( 'action' => 'content_processing_failed' )
+			);
+			$this->content_processor->delete_newly_created_media();
+
+			return array(
+				'external_id' => $fields['external_post_id'],
+				'title'       => $fields['title'],
+				'success'     => false,
+				'error'       => $error_message,
+			);
+		}
+
 		$failed_media_error = $this->get_failed_media_error( $fields );
 
 		if ( null !== $failed_media_error ) {
@@ -638,6 +688,7 @@ class Post_Import_Service {
 				array( 'action' => 'media_download_failed' )
 			);
 			$this->content_processor->delete_newly_created_media();
+
 			return $failed_media_error;
 		}
 

@@ -247,7 +247,19 @@ final class Safe_Publish_API extends REST_Base {
 		}
 
 		if ( isset( $content ) ) {
-			$postarr['post_content'] = $this->process_content( $content );
+			$processed_content = $this->process_content( $content );
+
+			if ( is_wp_error( $processed_content ) ) {
+				return new WP_REST_Response(
+					array(
+						'success' => false,
+						'error'   => $processed_content->get_error_message(),
+					),
+					500
+				);
+			}
+
+			$postarr['post_content'] = $processed_content;
 		}
 
 		$result = wp_update_post( $postarr, true );
@@ -361,10 +373,9 @@ final class Safe_Publish_API extends REST_Base {
 	 * Processes post content by importing media and fixing links.
 	 *
 	 * @param string $content Raw post content.
-	 *
-	 * @return string Processed content.
+	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
-	private function process_content( string $content ): string {
+	private function process_content( string $content ): string|WP_Error {
 		if ( empty( $content ) || null === $this->content_processor ) {
 			return $content;
 		}
