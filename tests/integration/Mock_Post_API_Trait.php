@@ -37,10 +37,10 @@ trait Mock_Post_API_Trait {
 	protected function build_mock_post_response(): array {
 		$body = array(
 			'id'             => 1,
-			'title'          => array( 'rendered' => $this->mock_post_overrides['title'] ?? 'Test Post' ),
+			'title'          => array( 'raw' => $this->mock_post_overrides['title'] ?? 'Test Post' ),
 			'featured_media' => $this->mock_post_overrides['featured_media'] ?? 0,
-			'content'        => array( 'rendered' => $this->mock_post_overrides['content'] ?? '<p>Test content.</p>' ),
-			'excerpt'        => array( 'rendered' => $this->mock_post_overrides['excerpt'] ?? '' ),
+			'content'        => array( 'raw' => $this->mock_post_overrides['content'] ?? '<p>Test content.</p>' ),
+			'excerpt'        => array( 'raw' => $this->mock_post_overrides['excerpt'] ?? '' ),
 			'link'           => 'https://source.example.com/test-post',
 			'meta'           => $this->mock_post_overrides['meta'] ?? array(),
 		);

@@ -106,12 +106,9 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 				'response' => array( 'code' => 200 ),
 				'body'     => wp_json_encode(
 					array(
-						'title'     => array( 'rendered' => 'Updated External Title' ),
-						'content'   => array(
-							'raw'      => '<p>Updated external content.</p>',
-							'rendered' => '<p>Updated external content.</p>',
-						),
-						'excerpt'   => array( 'rendered' => 'Updated external excerpt.' ),
+						'title'     => array( 'raw' => 'Updated External Title' ),
+						'content'   => array( 'raw' => '<p>Updated external content.</p>' ),
+						'excerpt'   => array( 'raw' => 'Updated external excerpt.' ),
 						'meta'      => array( 'custom_meta' => 'meta_value' ),
 						'_embedded' => array(
 							'wp:term' => array(

@@ -294,11 +294,11 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 					array(
 						'id'             => 1,
 						'link'           => 'https://source.example.com/test-post',
-						'title'          => array( 'rendered' => 'Test Post' ),
+						'title'          => array( 'raw' => 'Test Post' ),
 						'modified'       => '2026-01-01T00:00:00',
 						'featured_media' => 0,
-						'content'        => array( 'rendered' => '<p>Test content.</p>' ),
-						'excerpt'        => array( 'rendered' => '' ),
+						'content'        => array( 'raw' => '<p>Test content.</p>' ),
+						'excerpt'        => array( 'raw' => '' ),
 						'meta'           => array(),
 					)
 				),
@@ -319,11 +319,11 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 					array(
 						'id'             => 1,
 						'link'           => 'https://source.example.com/test-post',
-						'title'          => array( 'rendered' => 'Test Post' ),
+						'title'          => array( 'raw' => 'Test Post' ),
 						'modified'       => '2026-01-01T00:00:00',
 						'featured_media' => 0,
-						'content'        => array( 'rendered' => '<p>Test content.</p>' ),
-						'excerpt'        => array( 'rendered' => '' ),
+						'content'        => array( 'raw' => '<p>Test content.</p>' ),
+						'excerpt'        => array( 'raw' => '' ),
 					),
 				)
 			),

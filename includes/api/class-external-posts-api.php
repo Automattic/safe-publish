@@ -109,10 +109,10 @@ class External_Posts_API {
 			'_embed'   => '1',
 		);
 
-		// Add edit context if we have authentication credentials.
-		// This allows us to get raw content data including Gutenberg blocks.
+		// Edit context provides raw field values (title, content, excerpt)
+		// needed to preserve data parity during import.
 		if ( VIP_Safe_Auth::is_authorized( $site_url, $auth_credentials ) ) {
-			$query_args['context'] = 'edit'; // Get raw edit data for Gutenberg blocks.
+			$query_args['context'] = 'edit';
 		}
 
 		/**
@@ -159,10 +159,10 @@ class External_Posts_API {
 			);
 		}
 
-		// Sanitize and filter posts.
+		// Prepare posts for the listing UI.
 		$filtered_posts = array();
 		foreach ( $posts as $post ) {
-			$filtered_post = $this->sanitize_post( $post, $post_type );
+			$filtered_post = $this->prepare_post_for_listing( $post, $post_type );
 			if ( $filtered_post ) {
 				$filtered_posts[] = $filtered_post;
 			}
@@ -172,39 +172,36 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Sanitizes a single post.
+	 * Prepares a single post for display in the admin listing UI.
 	 *
-	 * `content`, `meta`, and `terms` are returned unsanitized. `content` must
-	 * pass through the block processor first, and `meta`/`terms` require
-	 * type-aware sanitization in Meta_Terms_Manager.
+	 * Uses `rendered` field values since this data is display-only and never
+	 * stored. The actual import always re-fetches via fetch_fresh_post_content()
+	 * which requires raw values.
 	 *
-	 * @param array  $post      Raw post data.
-	 * @param string $post_type Optional. Post type being processed. Default 'posts'.
-	 * @return array|false Sanitized post or false if invalid.
+	 * @param array  $post      Raw post data from the REST API.
+	 * @param string $post_type Post type being listed. Default 'posts'.
+	 * @return array|false Prepared post or false if invalid.
 	 */
-	private function sanitize_post( array $post, string $post_type = 'posts' ): array|false {
+	private function prepare_post_for_listing( array $post, string $post_type = 'posts' ): array|false {
 		if ( ! is_array( $post ) ) {
 			return false;
 		}
 
-		$sanitized_post = array(
+		$prepared_post = array(
 			'id'             => isset( $post['id'] ) ? absint( $post['id'] ) : 0,
 			'link'           => isset( $post['link'] ) ? esc_url_raw( $post['link'] ) : '#',
 			'title'          => isset( $post['title']['rendered'] ) ? sanitize_text_field( wp_strip_all_tags( $post['title']['rendered'] ) ) : __( 'No Title', 'safe-publish' ),
 			'modified'       => isset( $post['modified'] ) ? sanitize_text_field( $post['modified'] ) : '',
-			'thumbnail'      => isset( $post['featured_media'] ) ? esc_url( get_the_post_thumbnail_url( $post['id'], 'thumbnail' ) ) : '', // Default to empty if no thumbnail.
+			'thumbnail'      => isset( $post['featured_media'] ) ? esc_url( get_the_post_thumbnail_url( $post['id'], 'thumbnail' ) ) : '',
 			'featured_media' => isset( $post['featured_media'] ) ? absint( $post['featured_media'] ) : 0,
 			'excerpt'        => isset( $post['excerpt']['rendered'] ) ? wp_kses_post( $post['excerpt']['rendered'] ) : '',
 			'post_type'      => sanitize_text_field( $post_type ),
-
-			// Unsanitized values; sanitized downstream before being stored.
-			'content'        => isset( $post['content']['raw'] ) ? $post['content']['raw'] :
-				( isset( $post['content']['rendered'] ) ? $post['content']['rendered'] : '' ),
+			'content'        => isset( $post['content']['rendered'] ) ? $post['content']['rendered'] : '',
 			'meta'           => isset( $post['meta'] ) && is_array( $post['meta'] ) ? $post['meta'] : array(),
 		);
 
 		// Validate required fields.
-		if ( empty( $sanitized_post['id'] ) || empty( $sanitized_post['title'] ) ) {
+		if ( 0 === $prepared_post['id'] || '' === $prepared_post['title'] ) {
 			return false;
 		}
 
@@ -224,15 +221,15 @@ class External_Posts_API {
 			}
 		}
 
-		$sanitized_post['terms'] = $incoming_terms;
+		$prepared_post['terms'] = $incoming_terms;
 
 		/**
-		 * Filters sanitized post data.
+		 * Filters post data prepared for the listing UI.
 		 *
-		 * @param array $sanitized_post Sanitized post data.
-		 * @param array $post           Original post data.
+		 * @param array $prepared_post Prepared post data.
+		 * @param array $post          Original post data.
 		 */
-		return apply_filters( 'safe_publish_sanitized_post', $sanitized_post, $post );
+		return apply_filters( 'safe_publish_sanitized_post', $prepared_post, $post );
 	}
 
 	/**
@@ -299,9 +296,10 @@ class External_Posts_API {
 			 */
 		);
 
-		// If user and password are provided add edit context.
-		if ( ! empty( $auth_credentials['username'] ) && ! empty( $auth_credentials['password'] ) ) {
-			$query_args['context'] = 'edit'; // Get raw edit data for Gutenberg blocks.
+		// Edit context provides raw field values (title, content, excerpt)
+		// needed to preserve data parity during import.
+		if ( VIP_Safe_Auth::is_authorized( $site_url, $auth_credentials ) ) {
+			$query_args['context'] = 'edit';
 		}
 
 		$api_url = add_query_arg( $query_args, $api_endpoint );
@@ -337,26 +335,37 @@ class External_Posts_API {
 			return false;
 		}
 
+		// Require raw field values (edit context) to preserve data parity.
+		if (
+			! isset( $data['title']['raw'] ) ||
+			! isset( $data['content']['raw'] ) ||
+			! isset( $data['excerpt']['raw'] )
+		) {
+			$this->logger->log_error(
+				Log_Events::CONTENT_FETCH_RAW_UNAVAILABLE,
+				array(
+					'post_id'  => $external_post_id,
+					'site_url' => $site_url,
+				)
+			);
+
+			return false;
+		}
+
 		// Extract post data.
 		$post_data = array();
 
-		$post_data['title']          = isset( $data['title']['rendered'] )
-			? sanitize_text_field( wp_strip_all_tags( $data['title']['rendered'] ) )
-			: '';
-		$post_data['featured_media'] = isset( $data['featured_media'] ) ? absint( $data['featured_media'] ) : 0;
-		$post_data['excerpt']        = isset( $data['excerpt']['rendered'] ) ? wp_kses_post( $data['excerpt']['rendered'] ) : '';
+		$post_data['title']          = sanitize_text_field( $data['title']['raw'] );
+		$post_data['featured_media'] = isset( $data['featured_media'] )
+			? absint( $data['featured_media'] ) : 0;
+		$post_data['excerpt']        = wp_kses_post( $data['excerpt']['raw'] );
 
 		if ( isset( $data['link'] ) ) {
 			$post_data['link'] = esc_url_raw( $data['link'] );
 		}
 
 		// Unsanitized values; sanitized downstream before being stored.
-		// Prioritize raw content when available (edit context), fallback to rendered.
-		if ( isset( $data['content']['raw'] ) ) {
-			$post_data['content'] = $data['content']['raw'];
-		} elseif ( isset( $data['content']['rendered'] ) ) {
-			$post_data['content'] = $data['content']['rendered'];
-		}
+		$post_data['content'] = $data['content']['raw'];
 
 		$post_data['meta'] = isset( $data['meta'] ) && is_array( $data['meta'] ) ? $data['meta'] : array();
 
