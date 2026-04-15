@@ -299,6 +299,10 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 						'featured_media' => 0,
 						'content'        => array( 'raw' => '<p>Test content.</p>' ),
 						'excerpt'        => array( 'raw' => '' ),
+						'slug'           => 'test-post',
+						'comment_status' => 'open',
+						'ping_status'    => 'open',
+						'menu_order'     => 0,
 						'meta'           => array(),
 					)
 				),

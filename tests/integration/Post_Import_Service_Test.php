@@ -1200,6 +1200,137 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that slug, comment_status, ping_status, and menu_order are
+	 * preserved when importing a new post via the bulk path.
+	 */
+	public function test_import_preserves_slug_and_post_fields(): void {
+		// ARRANGE: Source post with specific field values.
+		$this->mock_post_overrides = array(
+			'slug'           => 'custom-slug',
+			'comment_status' => 'closed',
+			'ping_status'    => 'closed',
+			'menu_order'     => 5,
+		);
+
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9400,
+			'title'     => 'Post With Custom Fields',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/custom-slug',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Import the post.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: Import must succeed.
+		$this->assertTrue(
+			$result['success'],
+			'Import should succeed.'
+		);
+
+		$post = get_post( $result['post_id'] );
+
+		// ASSERT: Fields must match the source values.
+		$this->assertSame(
+			'custom-slug',
+			$post->post_name,
+			'Slug must be preserved from the source post.'
+		);
+		$this->assertSame(
+			'closed',
+			$post->comment_status,
+			'Comment status must be preserved from the source post.'
+		);
+		$this->assertSame(
+			'closed',
+			$post->ping_status,
+			'Ping status must be preserved from the source post.'
+		);
+		$this->assertSame(
+			5,
+			$post->menu_order,
+			'Menu order must be preserved from the source post.'
+		);
+	}
+
+	/**
+	 * Verifies that slug, comment_status, ping_status, and menu_order are
+	 * updated when re-importing an existing post via the bulk path.
+	 */
+	public function test_reimport_updates_slug_and_post_fields(): void {
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ARRANGE: Import once with default field values.
+		$post_data = array(
+			'id'        => 9401,
+			'title'     => 'Post For Field Update Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/field-update-test',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
+
+		// ARRANGE: Re-import with updated field values.
+		$this->mock_post_overrides = array(
+			'slug'           => 'updated-slug',
+			'comment_status' => 'closed',
+			'ping_status'    => 'closed',
+			'menu_order'     => 3,
+		);
+
+		// ACT: Re-import the same post.
+		$second = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: Re-import must succeed.
+		$this->assertTrue( $second['success'], 'Re-import should succeed.' );
+		$this->assertTrue( $second['existing'], 'Should be flagged as existing.' );
+
+		$post = get_post( $second['post_id'] );
+
+		// ASSERT: Fields must reflect the updated source values.
+		$this->assertSame(
+			'updated-slug',
+			$post->post_name,
+			'Slug must be updated on re-import.'
+		);
+		$this->assertSame(
+			'closed',
+			$post->comment_status,
+			'Comment status must be updated on re-import.'
+		);
+		$this->assertSame(
+			'closed',
+			$post->ping_status,
+			'Ping status must be updated on re-import.'
+		);
+		$this->assertSame(
+			3,
+			$post->menu_order,
+			'Menu order must be updated on re-import.'
+		);
+	}
+
+	/**
 	 * Returns a pre_http_request filter that makes the media JSON API return 404.
 	 *
 	 * Registered at priority 6 so it runs after the mock at priority 5 and

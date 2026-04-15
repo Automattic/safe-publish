@@ -105,7 +105,7 @@ class External_Posts_API {
 			'orderby'  => 'modified',
 			'order'    => 'desc',
 			'per_page' => min( $number_of_posts, 100 ), // Max 100 per request.
-			// '_fields' => 'id,link,title,modified,featured_media,content,excerpt', // Fetch all needed fields.
+			// '_fields' => 'id,link,title,modified,featured_media,content,excerpt,slug,comment_status,ping_status,menu_order', // Fetch all needed fields.
 			'_embed'   => '1',
 		);
 
@@ -299,7 +299,7 @@ class External_Posts_API {
 			/**
 			 * TODO: Check if we want/need this.
 			 *
-			 * '_fields' => 'id,link,title,modified,featured_media,content,excerpt,tags,categories,meta', // Fetch all needed fields
+			 * '_fields' => 'id,link,title,modified,featured_media,content,excerpt,tags,categories,meta,slug,comment_status,ping_status,menu_order', // Fetch all needed fields
 			 */
 		);
 
@@ -363,9 +363,12 @@ class External_Posts_API {
 		$post_data = array();
 
 		$post_data['title']          = sanitize_text_field( $data['title']['raw'] );
-		$post_data['featured_media'] = isset( $data['featured_media'] )
-			? absint( $data['featured_media'] ) : 0;
+		$post_data['featured_media'] = absint( $data['featured_media'] ?? 0 );
 		$post_data['excerpt']        = wp_kses_post( $data['excerpt']['raw'] );
+		$post_data['slug']           = sanitize_text_field( $data['slug'] ?? '' );
+		$post_data['comment_status'] = sanitize_text_field( $data['comment_status'] ?? '' );
+		$post_data['ping_status']    = sanitize_text_field( $data['ping_status'] ?? '' );
+		$post_data['menu_order']     = absint( $data['menu_order'] ?? 0 );
 
 		if ( isset( $data['link'] ) ) {
 			$post_data['link'] = esc_url_raw( $data['link'] );

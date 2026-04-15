@@ -209,6 +209,22 @@ final class Session_Rollback_Service {
 			$restore_data['post_excerpt'] = $changes['previous_excerpt'];
 		}
 
+		if ( isset( $changes['previous_slug'] ) ) {
+			$restore_data['post_name'] = $changes['previous_slug'];
+		}
+
+		if ( isset( $changes['previous_comment_status'] ) ) {
+			$restore_data['comment_status'] = $changes['previous_comment_status'];
+		}
+
+		if ( isset( $changes['previous_ping_status'] ) ) {
+			$restore_data['ping_status'] = $changes['previous_ping_status'];
+		}
+
+		if ( isset( $changes['previous_menu_order'] ) ) {
+			$restore_data['menu_order'] = $changes['previous_menu_order'];
+		}
+
 		$updated = wp_update_post( $restore_data, true );
 
 		if ( is_wp_error( $updated ) ) {

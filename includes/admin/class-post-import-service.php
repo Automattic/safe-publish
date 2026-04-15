@@ -161,6 +161,10 @@ class Post_Import_Service {
 			'featured_media_id' => absint( $post_data['featured_media'] ?? 0 ),
 			'raw_post_type'     => sanitize_text_field( $post_data['post_type'] ?? 'post' ),
 			'excerpt'           => wp_kses_post( $post_data['excerpt'] ?? '' ),
+			'slug'              => sanitize_text_field( $post_data['slug'] ?? '' ),
+			'comment_status'    => sanitize_text_field( $post_data['comment_status'] ?? '' ),
+			'ping_status'       => sanitize_text_field( $post_data['ping_status'] ?? '' ),
+			'menu_order'        => absint( $post_data['menu_order'] ?? 0 ),
 			'meta'              => is_array( $post_data['meta'] ?? null ) ? $post_data['meta'] : array(),
 			'terms'             => is_array( $post_data['terms'] ?? null ) ? $post_data['terms'] : array(),
 		);
@@ -373,6 +377,10 @@ class Post_Import_Service {
 		$fields['title']             = $fresh_result['title'];
 		$fields['featured_media_id'] = $fresh_result['featured_media'];
 		$fields['excerpt']           = $fresh_result['excerpt'];
+		$fields['slug']              = $fresh_result['slug'];
+		$fields['comment_status']    = $fresh_result['comment_status'];
+		$fields['ping_status']       = $fresh_result['ping_status'];
+		$fields['menu_order']        = $fresh_result['menu_order'];
 		$processed_content           = $this->process_post_content(
 			$fresh_result['content'] ?? '',
 			$fields['external_link']
@@ -430,11 +438,15 @@ class Post_Import_Service {
 
 		$post_id = wp_update_post(
 			array(
-				'ID'           => $imported_post->ID,
-				'post_title'   => $fields['title'],
-				'post_excerpt' => $fields['excerpt'],
-				'post_content' => $processed_content,
-				'post_type'    => $post_type,
+				'ID'             => $imported_post->ID,
+				'post_title'     => $fields['title'],
+				'post_excerpt'   => $fields['excerpt'],
+				'post_content'   => $processed_content,
+				'post_type'      => $post_type,
+				'post_name'      => $fields['slug'],
+				'comment_status' => $fields['comment_status'],
+				'ping_status'    => $fields['ping_status'],
+				'menu_order'     => $fields['menu_order'],
 			)
 		);
 
@@ -604,6 +616,10 @@ class Post_Import_Service {
 		$fields['title']             = $fresh_result['title'];
 		$fields['featured_media_id'] = $fresh_result['featured_media'];
 		$fields['excerpt']           = $fresh_result['excerpt'];
+		$fields['slug']              = $fresh_result['slug'];
+		$fields['comment_status']    = $fresh_result['comment_status'];
+		$fields['ping_status']       = $fresh_result['ping_status'];
+		$fields['menu_order']        = $fresh_result['menu_order'];
 		$processed_content           = $this->process_post_content(
 			$fresh_result['content'] ?? '',
 			$fields['external_link']
@@ -661,12 +677,16 @@ class Post_Import_Service {
 
 		$post_id = wp_insert_post(
 			array(
-				'post_title'   => $fields['title'],
-				'post_excerpt' => $fields['excerpt'],
-				'post_content' => $processed_content,
-				'post_status'  => 'draft',
-				'post_type'    => $post_type,
-				'meta_input'   => array(
+				'post_title'     => $fields['title'],
+				'post_excerpt'   => $fields['excerpt'],
+				'post_content'   => $processed_content,
+				'post_status'    => 'draft',
+				'post_type'      => $post_type,
+				'post_name'      => $fields['slug'],
+				'comment_status' => $fields['comment_status'],
+				'ping_status'    => $fields['ping_status'],
+				'menu_order'     => $fields['menu_order'],
+				'meta_input'     => array(
 					Options::META_EXTERNAL_POST_ID => $fields['external_post_id'],
 					Options::META_EXTERNAL_LINK    => $fields['external_link'],
 					Options::META_IMPORTED_FROM    => Options::META_IMPORTED_FROM_VALUE,

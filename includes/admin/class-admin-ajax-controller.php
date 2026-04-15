@@ -336,6 +336,10 @@ final class Admin_Ajax_Controller {
 		$title             = $fresh_result['title'];
 		$featured_media_id = $fresh_result['featured_media'];
 		$excerpt           = $fresh_result['excerpt'];
+		$slug              = $fresh_result['slug'];
+		$comment_status    = $fresh_result['comment_status'];
+		$ping_status       = $fresh_result['ping_status'];
+		$menu_order        = $fresh_result['menu_order'];
 
 		// Unsanitized values; sanitized downstream before being stored.
 		$content = $fresh_result['content'] ?? '';
@@ -377,7 +381,11 @@ final class Admin_Ajax_Controller {
 				$meta,
 				$terms,
 				$session_id,
-				$external_post_id
+				$external_post_id,
+				$slug,
+				$comment_status,
+				$ping_status,
+				$menu_order
 			);
 		} else {
 			$result = $this->create_new_draft(
@@ -390,7 +398,11 @@ final class Admin_Ajax_Controller {
 				$featured_media_id,
 				$meta,
 				$terms,
-				$session_id
+				$session_id,
+				$slug,
+				$comment_status,
+				$ping_status,
+				$menu_order
 			);
 		}
 
@@ -598,6 +610,10 @@ final class Admin_Ajax_Controller {
 	 * @param mixed   $terms             Terms data (array or object).
 	 * @param int     $session_id        Import session ID.
 	 * @param int     $external_post_id  External post ID.
+	 * @param string  $slug              Post slug.
+	 * @param string  $comment_status    Comment status ('open' or 'closed').
+	 * @param string  $ping_status       Ping status ('open' or 'closed').
+	 * @param int     $menu_order        Menu order.
 	 * @return array Result data with post_id, edit_url, message, and existing keys, or error key on failure.
 	 */
 	private function update_imported_draft(
@@ -611,7 +627,11 @@ final class Admin_Ajax_Controller {
 		mixed $meta,
 		mixed $terms,
 		int $session_id,
-		int $external_post_id
+		int $external_post_id,
+		string $slug,
+		string $comment_status,
+		string $ping_status,
+		int $menu_order
 	): array {
 		$previous_content = $this->capture_previous_content( $imported_post );
 
@@ -642,12 +662,16 @@ final class Admin_Ajax_Controller {
 
 		$post_id = wp_update_post(
 			array(
-				'ID'           => $imported_post->ID,
-				'post_title'   => $title,
-				'post_excerpt' => $excerpt,
-				'post_content' => $processed_content,
-				'post_status'  => 'draft',
-				'post_type'    => $post_type,
+				'ID'             => $imported_post->ID,
+				'post_title'     => $title,
+				'post_excerpt'   => $excerpt,
+				'post_content'   => $processed_content,
+				'post_status'    => 'draft',
+				'post_type'      => $post_type,
+				'post_name'      => $slug,
+				'comment_status' => $comment_status,
+				'ping_status'    => $ping_status,
+				'menu_order'     => $menu_order,
 			)
 		);
 
@@ -768,6 +792,10 @@ final class Admin_Ajax_Controller {
 	 * @param mixed  $meta              Meta data (array or object).
 	 * @param mixed  $terms             Terms data (array or object).
 	 * @param int    $session_id        Import session ID.
+	 * @param string $slug              Post slug.
+	 * @param string $comment_status    Comment status ('open' or 'closed').
+	 * @param string $ping_status       Ping status ('open' or 'closed').
+	 * @param int    $menu_order        Menu order.
 	 * @return array Result data with post_id, edit_url, message, and existing keys, or error key on failure.
 	 */
 	private function create_new_draft(
@@ -780,7 +808,11 @@ final class Admin_Ajax_Controller {
 		int $featured_media_id,
 		mixed $meta,
 		mixed $terms,
-		int $session_id
+		int $session_id,
+		string $slug,
+		string $comment_status,
+		string $ping_status,
+		int $menu_order
 	): array {
 		// Sideload the featured image before creating the post so that a failure
 		// here does not leave an orphaned draft in the DB.
@@ -811,12 +843,16 @@ final class Admin_Ajax_Controller {
 
 		$post_id = wp_insert_post(
 			array(
-				'post_title'   => $title,
-				'post_content' => $processed_content,
-				'post_status'  => 'draft',
-				'post_type'    => $post_type,
-				'post_excerpt' => $excerpt,
-				'meta_input'   => array(
+				'post_title'     => $title,
+				'post_content'   => $processed_content,
+				'post_status'    => 'draft',
+				'post_type'      => $post_type,
+				'post_excerpt'   => $excerpt,
+				'post_name'      => $slug,
+				'comment_status' => $comment_status,
+				'ping_status'    => $ping_status,
+				'menu_order'     => $menu_order,
+				'meta_input'     => array(
 					Options::META_EXTERNAL_POST_ID => $external_post_id,
 					Options::META_EXTERNAL_LINK    => $external_link,
 					Options::META_IMPORTED_FROM    => Options::META_IMPORTED_FROM_VALUE,
@@ -956,6 +992,10 @@ final class Admin_Ajax_Controller {
 			'previous_content'        => $existing_post->post_content,
 			'previous_title'          => $existing_post->post_title,
 			'previous_excerpt'        => $existing_post->post_excerpt,
+			'previous_slug'           => $existing_post->post_name,
+			'previous_comment_status' => $existing_post->comment_status,
+			'previous_ping_status'    => $existing_post->ping_status,
+			'previous_menu_order'     => $existing_post->menu_order,
 			'previous_featured_image' => get_post_thumbnail_id( $existing_post->ID ),
 			'previous_meta'           => array(),
 			'action'                  => 'updated_existing',

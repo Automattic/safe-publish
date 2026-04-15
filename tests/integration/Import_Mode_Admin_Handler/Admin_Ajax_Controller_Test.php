@@ -578,6 +578,149 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that slug, comment_status, ping_status, and menu_order are
+	 * preserved when creating a draft via the single-import path.
+	 */
+	public function test_ajax_create_draft_preserves_slug_and_post_fields(): void {
+		// ARRANGE: Mock API returns specific field values.
+		$this->mock_post_overrides = array(
+			'slug'           => 'source-slug',
+			'comment_status' => 'closed',
+			'ping_status'    => 'closed',
+			'menu_order'     => 7,
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'            => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'external_post_id' => '7100',
+			'title'            => 'Post With Source Fields',
+			'content'          => '<p>Content.</p>',
+			'external_link'    => 'https://source.example.com/source-slug',
+			'post_type'        => 'post',
+		);
+
+		// ACT: Trigger the create draft handler.
+		try {
+			$this->_handleAjax( 'safe_publish_create_draft' );
+			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
+		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		}
+
+		// ASSERT: Response is a success.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertTrue(
+			$response['success'],
+			'Create draft should return success'
+		);
+
+		$post = get_post( $response['data']['post_id'] );
+
+		// ASSERT: Fields must match the source values.
+		$this->assertSame(
+			'source-slug',
+			$post->post_name,
+			'Slug must be preserved from the source post.'
+		);
+		$this->assertSame(
+			'closed',
+			$post->comment_status,
+			'Comment status must be preserved from the source post.'
+		);
+		$this->assertSame(
+			'closed',
+			$post->ping_status,
+			'Ping status must be preserved from the source post.'
+		);
+		$this->assertSame(
+			7,
+			$post->menu_order,
+			'Menu order must be preserved from the source post.'
+		);
+	}
+
+	/**
+	 * Verifies that slug, comment_status, ping_status, and menu_order are
+	 * updated when force-updating an existing draft via the single-import path.
+	 */
+	public function test_ajax_update_draft_updates_slug_and_post_fields(): void {
+		// ARRANGE: Pre-create a post with default field values.
+		$existing_post_id = wp_insert_post(
+			array(
+				'post_title'     => 'Existing Post',
+				'post_status'    => 'draft',
+				'post_type'      => 'post',
+				'post_name'      => 'old-slug',
+				'comment_status' => 'open',
+				'ping_status'    => 'open',
+				'menu_order'     => 0,
+			)
+		);
+		update_post_meta(
+			$existing_post_id,
+			Options::META_EXTERNAL_POST_ID,
+			'7101'
+		);
+
+		// ARRANGE: Mock API returns updated field values.
+		$this->mock_post_overrides = array(
+			'slug'           => 'new-slug',
+			'comment_status' => 'closed',
+			'ping_status'    => 'closed',
+			'menu_order'     => 4,
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'            => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'external_post_id' => '7101',
+			'title'            => 'Existing Post',
+			'content'          => '<p>Updated content.</p>',
+			'external_link'    => 'https://source.example.com/new-slug',
+			'post_type'        => 'post',
+			'force_update'     => 'true',
+		);
+
+		// ACT: Trigger the create draft handler with force_update.
+		try {
+			$this->_handleAjax( 'safe_publish_create_draft' );
+			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
+		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		}
+
+		// ASSERT: Response is a success.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertTrue(
+			$response['success'],
+			'Force update should return success'
+		);
+
+		$post = get_post( $existing_post_id );
+
+		// ASSERT: Fields must reflect the updated source values.
+		$this->assertSame(
+			'new-slug',
+			$post->post_name,
+			'Slug must be updated on force update.'
+		);
+		$this->assertSame(
+			'closed',
+			$post->comment_status,
+			'Comment status must be updated on force update.'
+		);
+		$this->assertSame(
+			'closed',
+			$post->ping_status,
+			'Ping status must be updated on force update.'
+		);
+		$this->assertSame(
+			4,
+			$post->menu_order,
+			'Menu order must be updated on force update.'
+		);
+	}
+
+	/**
 	 * Returns the number of import sessions currently in the 'in_progress' state.
 	 *
 	 * @return int
