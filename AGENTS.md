@@ -41,6 +41,7 @@
 
 - Keep PR and branch titles short and as identical as possible.
 - Keep PR descriptions short, focusing on decisions instead of small technical details; don't add any line wrapping.
+- Before creating a PR, ensure all tests pass by running `npm run test` and `npm run test:integration`.
 
 # Project guidelines
 
