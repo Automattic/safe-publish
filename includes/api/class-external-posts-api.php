@@ -298,7 +298,7 @@ class External_Posts_API {
 
 		// Edit context provides raw field values (title, content, excerpt)
 		// needed to preserve data parity during import.
-		if ( ! empty( $auth_credentials['username'] ) && ! empty( $auth_credentials['password'] ) ) {
+		if ( VIP_Safe_Auth::is_authorized( $site_url, $auth_credentials ) ) {
 			$query_args['context'] = 'edit';
 		}
 
