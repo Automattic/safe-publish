@@ -173,7 +173,7 @@ export function ImportHistory(): JSX.Element {
 					failed_count: failedCount,
 				} = result.data;
 
-				if ( typeof deletedCount !== 'number' || typeof restoredCount !== 'number' ) {
+				if ( typeof deletedCount !== 'number' || typeof restoredCount !== 'number' || typeof failedCount !== 'number' ) {
 					setNoticeMessage( { type: 'error', message: __( 'Invalid rollback response from server.', 'safe-publish' ) } );
 					return;
 				}
