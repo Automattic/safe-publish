@@ -310,7 +310,10 @@ final class Admin_Ajax_Controller {
 		$session_id = $session_result;
 
 		// Fetch fresh content from the external site.
-		$fresh_result = $this->maybe_fetch_fresh_content( $external_post_id );
+		$fresh_result = $this->fetch_fresh_content(
+			$external_post_id,
+			$raw_post_type
+		);
 
 		if ( is_wp_error( $fresh_result ) ) {
 			$error_message = $fresh_result->get_error_message();
@@ -981,13 +984,17 @@ final class Admin_Ajax_Controller {
 	 * Returns a WP_Error when the fetch fails for any reason, including when no
 	 * source site URL is configured. Callers should abort the import on error.
 	 *
-	 * @param int $external_post_id External post ID to fetch.
+	 * @param int    $external_post_id External post ID to fetch.
+	 * @param string $post_type        Post type slug or REST endpoint.
 	 * @return array|WP_Error Fresh post data, or an error on failure.
 	 */
-	private function maybe_fetch_fresh_content( int $external_post_id ): array|WP_Error {
+	private function fetch_fresh_content(
+		int $external_post_id,
+		string $post_type
+	): array|WP_Error {
 		$configured_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
-		if ( empty( $configured_site_url ) ) {
+		if ( '' === $configured_site_url ) {
 			return new WP_Error(
 				'fresh_content_fetch_no_source_url',
 				__( 'No source site URL is configured.', 'safe-publish' )
@@ -1000,7 +1007,8 @@ final class Admin_Ajax_Controller {
 			$fresh_data = $this->api->fetch_fresh_post_content(
 				$external_post_id,
 				$configured_site_url,
-				$auth_credentials
+				$auth_credentials,
+				$post_type
 			);
 
 			if ( ! $fresh_data ) {

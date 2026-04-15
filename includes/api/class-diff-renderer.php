@@ -11,6 +11,7 @@ namespace Safe_Publish\API;
 
 use Exception;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Post_Type_Map;
 use stdClass;
 use WP_Error;
 use WP_Query;
@@ -50,15 +51,7 @@ final class Diff_Renderer {
 		$cleanup          = (bool) $request->get_param( 'cleanup' );
 		$site_url         = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
-		// Convert plural post types to singular for WordPress compatibility.
-		$post_type_mapping = array(
-			'posts'      => 'post',
-			'pages'      => 'page',
-			'media'      => 'media',
-			'navigation' => 'navigation',
-		);
-
-		$mapped_post_type = isset( $post_type_mapping[ $post_type ] ) ? $post_type_mapping[ $post_type ] : $post_type;
+		$mapped_post_type = Post_Type_Map::to_wp_slug( $post_type );
 
 		// Find local post by external post ID.
 		$local_post = $this->find_local_post( $external_post_id, $mapped_post_type );
@@ -203,7 +196,7 @@ final class Diff_Renderer {
 		callable $make_request,
 		array $credentials
 	): array|WP_Error {
-		$endpoint         = $post_type;
+		$endpoint         = Post_Type_Map::to_rest_endpoint( $post_type );
 		$api_base         = trailingslashit( $site_url ) . 'wp-json/wp/v2/' . $endpoint . '/' . $post_id;
 		$query_args       = array(
 			'context' => 'edit',

@@ -13,6 +13,7 @@ use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Post_Type_Map;
 use Exception;
 use WP_Error;
 use WP_Post;
@@ -72,18 +73,6 @@ class Post_Import_Service {
 	 */
 	private Content_Logger $logger;
 
-	/**
-	 * Maps plural REST API post type names to singular WordPress post type slugs.
-	 *
-	 * @var array<string, string>
-	 */
-	private array $post_type_map = array(
-		'posts'          => 'post',
-		'pages'          => 'page',
-		'attachments'    => 'attachment',
-		'revisions'      => 'revision',
-		'nav_menu_items' => 'nav_menu_item',
-	);
 
 	/**
 	 * Constructs the Post_Import_Service instance.
@@ -207,7 +196,7 @@ class Post_Import_Service {
 	 * @return string Resolved post type slug.
 	 */
 	public function resolve_post_type( string $raw_post_type ): string {
-		$post_type = $this->post_type_map[ $raw_post_type ] ?? $raw_post_type;
+		$post_type = Post_Type_Map::to_wp_slug( $raw_post_type );
 
 		if ( ! post_type_exists( $post_type ) ) {
 			return 'post';
@@ -355,7 +344,10 @@ class Post_Import_Service {
 		string $post_type,
 		?int $session_id
 	): array {
-		$fresh_result = $this->fetch_fresh_content( $fields['external_post_id'] );
+		$fresh_result = $this->fetch_fresh_content(
+			$fields['external_post_id'],
+			$fields['raw_post_type']
+		);
 
 		if ( is_wp_error( $fresh_result ) ) {
 			$error_message = $fresh_result->get_error_message();
@@ -583,7 +575,10 @@ class Post_Import_Service {
 		string $post_type,
 		?int $session_id
 	): array {
-		$fresh_result = $this->fetch_fresh_content( $fields['external_post_id'] );
+		$fresh_result = $this->fetch_fresh_content(
+			$fields['external_post_id'],
+			$fields['raw_post_type']
+		);
 
 		if ( is_wp_error( $fresh_result ) ) {
 			$error_message = $fresh_result->get_error_message();
@@ -777,13 +772,17 @@ class Post_Import_Service {
 	 * Returns a WP_Error when the fetch fails for any reason, including when no
 	 * source site URL is configured. Callers should abort the import on error.
 	 *
-	 * @param int $external_post_id External post ID to fetch.
+	 * @param int    $external_post_id External post ID to fetch.
+	 * @param string $post_type        Post type slug or REST endpoint.
 	 * @return array|WP_Error Fresh post data, or an error on failure.
 	 */
-	private function fetch_fresh_content( int $external_post_id ): array|WP_Error {
+	private function fetch_fresh_content(
+		int $external_post_id,
+		string $post_type
+	): array|WP_Error {
 		$configured_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
-		if ( empty( $configured_site_url ) ) {
+		if ( '' === $configured_site_url ) {
 			return new WP_Error(
 				'fresh_content_fetch_no_source_url',
 				__( 'No source site URL is configured.', 'safe-publish' )
@@ -796,7 +795,8 @@ class Post_Import_Service {
 			$fresh_data = $this->api->fetch_fresh_post_content(
 				$external_post_id,
 				$configured_site_url,
-				$auth_credentials
+				$auth_credentials,
+				$post_type
 			);
 
 			if ( ! $fresh_data ) {
