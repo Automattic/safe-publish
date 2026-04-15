@@ -342,12 +342,7 @@ final class Import_History {
 			array(
 				'deleted_count'  => $result['deleted_count'],
 				'restored_count' => $result['restored_count'],
-				'message'        => sprintf(
-					/* translators: 1: number of posts deleted, 2: number of posts restored */
-					__( '%1$d posts deleted and %2$d posts restored successfully.', 'safe-publish' ),
-					$result['deleted_count'],
-					$result['restored_count']
-				),
+				'failed_count'   => $result['failed_count'],
 			)
 		);
 	}

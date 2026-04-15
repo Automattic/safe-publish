@@ -161,10 +161,12 @@ export interface DiffHtmlData {
  *
  * @property {number} deleted_count  Number of posts deleted.
  * @property {number} restored_count Number of posts restored.
+ * @property {number} failed_count   Number of items that failed.
  */
 export interface RollbackSessionData {
 	deleted_count: number;
 	restored_count: number;
+	failed_count: number;
 }
 
 /**

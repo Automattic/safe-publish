@@ -167,18 +167,37 @@ export function ImportHistory(): JSX.Element {
 			const result = await response.json() as ApiResponse< RollbackSessionData >;
 
 			if ( result.success ) {
-				const { deleted_count: deletedCount, restored_count: restoredCount } = result.data;
+				const {
+					deleted_count: deletedCount,
+					restored_count: restoredCount,
+					failed_count: failedCount,
+				} = result.data;
 
-				if ( typeof deletedCount !== 'number' || typeof restoredCount !== 'number' ) {
+				if ( typeof deletedCount !== 'number' || typeof restoredCount !== 'number' || typeof failedCount !== 'number' ) {
 					setNoticeMessage( { type: 'error', message: __( 'Invalid rollback response from server.', 'safe-publish' ) } );
 					return;
 				}
 
-				/* translators: %1$d is the number of deleted posts, %2$d is the number of restored posts */
-				const message = __( 'Session rolled back successfully. %1$d posts were deleted and %2$d posts were restored to their previous version.', 'safe-publish' )
-					.replace( '%1$d', deletedCount.toString() )
-					.replace( '%2$d', restoredCount.toString() );
-				setNoticeMessage( { type: 'success', message } );
+				let message: string;
+				let noticeType: 'success' | 'error';
+
+				if ( failedCount > 0 ) {
+					message = sprintf(
+						/* translators: %1$d: deleted count, %2$d: restored count, %3$d: failed count */
+						__( 'Partial rollback: %1$d posts deleted, %2$d restored. %3$d items failed to roll back.', 'safe-publish' ),
+						deletedCount, restoredCount, failedCount
+					);
+					noticeType = 'error';
+				} else {
+					message = sprintf(
+						/* translators: %1$d is the number of deleted posts, %2$d is the number of restored posts */
+						__( 'Session rolled back successfully. %1$d posts were deleted and %2$d posts were restored to their previous version.', 'safe-publish' ),
+						deletedCount, restoredCount
+					);
+					noticeType = 'success';
+				}
+
+				setNoticeMessage( { type: noticeType, message } );
 				// Reload sessions and close modal.
 				await loadImportSessions();
 				setIsSessionModalOpen( false );
