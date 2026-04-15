@@ -1063,6 +1063,48 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that a post with empty content is imported with empty content.
+	 */
+	public function test_import_preserves_empty_content(): void {
+		// ARRANGE: Source post with empty content.
+		$this->mock_post_overrides = array(
+			'content' => '',
+		);
+
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9300,
+			'title'     => 'Empty Content Post',
+			'content'   => '',
+			'link'      => 'https://source.example.com/empty-content',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Import the post.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: Import must succeed.
+		$this->assertTrue(
+			$result['success'],
+			'Import should succeed for a post with empty content.'
+		);
+
+		// ASSERT: Stored content must be empty, not a placeholder.
+		$this->assertSame(
+			'',
+			get_post_field( 'post_content', $result['post_id'] ),
+			'Empty source content must remain empty on the destination.'
+		);
+	}
+
+	/**
 	 * Verifies that import fails when the API response lacks raw field values
 	 * (view context instead of edit context).
 	 *

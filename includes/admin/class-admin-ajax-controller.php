@@ -642,9 +642,7 @@ final class Admin_Ajax_Controller {
 				'ID'           => $imported_post->ID,
 				'post_title'   => $title,
 				'post_excerpt' => $excerpt,
-				'post_content' => ! empty( $processed_content )
-					? $processed_content
-					: __( 'Content imported from external source.', 'safe-publish' ),
+				'post_content' => $processed_content,
 				'post_status'  => 'draft',
 				'post_type'    => $post_type,
 			)
@@ -811,9 +809,7 @@ final class Admin_Ajax_Controller {
 		$post_id = wp_insert_post(
 			array(
 				'post_title'   => $title,
-				'post_content' => ! empty( $processed_content )
-					? $processed_content
-					: __( 'Content imported from external source.', 'safe-publish' ),
+				'post_content' => $processed_content,
 				'post_status'  => 'draft',
 				'post_type'    => $post_type,
 				'post_excerpt' => $excerpt,
