@@ -363,13 +363,12 @@ class External_Posts_API {
 		$post_data = array();
 
 		$post_data['title']          = sanitize_text_field( $data['title']['raw'] );
-		$post_data['featured_media'] = isset( $data['featured_media'] )
-			? absint( $data['featured_media'] ) : 0;
+		$post_data['featured_media'] = absint( $data['featured_media'] ?? 0 );
 		$post_data['excerpt']        = wp_kses_post( $data['excerpt']['raw'] );
-		$post_data['slug']           = sanitize_text_field( $data['slug'] );
-		$post_data['comment_status'] = sanitize_text_field( $data['comment_status'] );
-		$post_data['ping_status']    = sanitize_text_field( $data['ping_status'] );
-		$post_data['menu_order']     = absint( $data['menu_order'] );
+		$post_data['slug']           = sanitize_text_field( $data['slug'] ?? '' );
+		$post_data['comment_status'] = sanitize_text_field( $data['comment_status'] ?? '' );
+		$post_data['ping_status']    = sanitize_text_field( $data['ping_status'] ?? '' );
+		$post_data['menu_order']     = absint( $data['menu_order'] ?? 0 );
 
 		if ( isset( $data['link'] ) ) {
 			$post_data['link'] = esc_url_raw( $data['link'] );
