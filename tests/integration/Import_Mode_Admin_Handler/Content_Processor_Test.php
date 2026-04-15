@@ -209,6 +209,109 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that URL replacement does not alter surrounding markup.
+	 *
+	 * Self-closing tags, whitespace, entities, and SVG attributes must survive
+	 * the replacement pass unchanged.
+	 */
+	public function test_replace_external_urls_preserves_markup(): void {
+		// ARRANGE: Content with markup that DOMDocument would alter,
+		// plus a source-site link to trigger replacement.
+		$source_site = 'https://source.example.com';
+		$current_url = get_site_url();
+		$content     = '<p>Hello &amp; world</p>'
+			. '<img src="/local.jpg" alt="test"/>'
+			. '<br/>'
+			. '<a href="https://source.example.com/page">Link</a>';
+
+		// ACT: Call replace_external_urls() directly.
+		$processed = $this->processor->replace_external_urls(
+			$content,
+			$source_site
+		);
+
+		// ASSERT: Link was replaced.
+		$this->assertStringContainsString(
+			'href="' . $current_url . '/page"',
+			$processed,
+			'Source URL should be replaced'
+		);
+
+		// ASSERT: Self-closing tags are preserved.
+		$this->assertStringContainsString(
+			'alt="test"/>',
+			$processed,
+			'Self-closing img tag must not be altered'
+		);
+		$this->assertStringContainsString(
+			'<br/>',
+			$processed,
+			'Self-closing br tag must not be altered'
+		);
+
+		// ASSERT: Entity encoding is preserved.
+		$this->assertStringContainsString(
+			'&amp;',
+			$processed,
+			'HTML entities must not be decoded'
+		);
+	}
+
+	/**
+	 * Verifies that legacy http:// URLs are replaced when the source site
+	 * uses https://.
+	 */
+	public function test_replace_external_urls_replaces_http_variant(): void {
+		// ARRANGE: Source site is HTTPS, but content has a legacy HTTP link.
+		$source_site = 'https://source.example.com';
+		$current_url = get_site_url();
+		$content     = '<a href="http://source.example.com/old-page">Old link</a>';
+
+		// ACT: Call replace_external_urls() directly.
+		$processed = $this->processor->replace_external_urls(
+			$content,
+			$source_site
+		);
+
+		// ASSERT: The HTTP URL was replaced with the current site URL.
+		$this->assertStringContainsString(
+			'href="' . $current_url . '/old-page"',
+			$processed,
+			'Legacy http:// URL must be replaced with the current site URL'
+		);
+		$this->assertStringNotContainsString(
+			'source.example.com',
+			$processed,
+			'Source domain must not remain in the output'
+		);
+	}
+
+	/**
+	 * Verifies that a domain that starts with the source domain but continues
+	 * with more characters is not replaced.
+	 */
+	public function test_replace_external_urls_does_not_replace_longer_domain(): void {
+		// ARRANGE: Content with a URL to a longer domain that starts with the
+		// source domain string.
+		$source_site = 'https://source.example.com';
+		$longer_url  = 'https://source.example.company.com/page';
+		$content     = '<a href="' . $longer_url . '">Link</a>';
+
+		// ACT: Call replace_external_urls() directly.
+		$processed = $this->processor->replace_external_urls(
+			$content,
+			$source_site
+		);
+
+		// ASSERT: The longer domain URL is unchanged.
+		$this->assertStringContainsString(
+			'href="' . $longer_url . '"',
+			$processed,
+			'URL with a longer domain must not be rewritten'
+		);
+	}
+
+	/**
 	 * Verifies that Gutenberg block content is processed via the block path,
 	 * preserving block comment delimiters rather than stripping them.
 	 *

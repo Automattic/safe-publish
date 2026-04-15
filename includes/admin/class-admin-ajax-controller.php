@@ -348,10 +348,8 @@ final class Admin_Ajax_Controller {
 
 		$processed_content = $this->process_draft_content( $content, $external_link );
 
-		$failed_media = $this->content_processor->get_failed_media();
-
-		if ( ! empty( $failed_media ) ) {
-			$error_message = $this->content_processor->get_failed_media_error_message();
+		if ( is_wp_error( $processed_content ) ) {
+			$error_message = $processed_content->get_error_message();
 
 			$this->import_history->log_import_action(
 				$session_id,
@@ -360,13 +358,32 @@ final class Admin_Ajax_Controller {
 				'error',
 				null,
 				$error_message,
-				array( 'action' => 'media_download_failed' )
+				array( 'action' => 'content_processing_failed' )
 			);
 			$this->import_history->update_session_stats( $session_id, 'error' );
 			$this->import_history->complete_session( $session_id );
 			$this->content_processor->delete_newly_created_media();
 
 			wp_send_json_error( $error_message );
+		}
+
+		$media_error_message = $this->content_processor->get_failed_media_error_message();
+
+		if ( null !== $media_error_message ) {
+			$this->import_history->log_import_action(
+				$session_id,
+				$external_post_id,
+				$title,
+				'error',
+				null,
+				$media_error_message,
+				array( 'action' => 'media_download_failed' )
+			);
+			$this->import_history->update_session_stats( $session_id, 'error' );
+			$this->import_history->complete_session( $session_id );
+			$this->content_processor->delete_newly_created_media();
+
+			wp_send_json_error( $media_error_message );
 		}
 
 		if ( $imported_post ) {
@@ -959,12 +976,13 @@ final class Admin_Ajax_Controller {
 	 * Processes draft post content by importing media and fixing links.
 	 *
 	 * Returns the sanitized content unchanged if either argument is empty.
+	 * Returns a WP_Error if content processing fails.
 	 *
 	 * @param string $content       Raw post content.
 	 * @param string $external_link External post URL used to derive site URL.
-	 * @return string Processed and sanitized content.
+	 * @return string|WP_Error Processed and sanitized content, or WP_Error on failure.
 	 */
-	private function process_draft_content( string $content, string $external_link ): string {
+	private function process_draft_content( string $content, string $external_link ): string|WP_Error {
 		$processed = $content;
 
 		if ( ! empty( $content ) && ! empty( $external_link ) ) {
@@ -972,6 +990,10 @@ final class Admin_Ajax_Controller {
 				. '://'
 				. wp_parse_url( $external_link, PHP_URL_HOST );
 			$processed = $this->content_processor->process_content( $content, $site_url );
+
+			if ( is_wp_error( $processed ) ) {
+				return $processed;
+			}
 		}
 
 		// Apply sanitization after processing to preserve formatting during processing.

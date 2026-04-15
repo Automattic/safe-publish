@@ -9,6 +9,7 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Media\Media_Importer;
+use WP_Error;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -70,9 +71,9 @@ class Content_Processor {
 	 *
 	 * @param string $content  Post content to process.
 	 * @param string $site_url Source site URL.
-	 * @return string Processed content.
+	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
-	public function process_content( string $content, string $site_url ): string {
+	public function process_content( string $content, string $site_url ): string|WP_Error {
 		$this->failed_media = array();
 		$this->media_importer->reset_newly_created_attachment_ids();
 
@@ -119,20 +120,14 @@ class Content_Processor {
 			return $content;
 		}
 
-		// Store original content for whitespace preservation.
-		$original_content = $content;
-
-		// Parse blocks using WordPress parse_blocks function.
 		$blocks = parse_blocks( $content );
 
 		if ( empty( $blocks ) ) {
 			return $content;
 		}
 
-		$needs_processing = $this->content_needs_processing( $content );
-
-		if ( ! $needs_processing ) {
-			return $original_content;
+		if ( ! $this->content_needs_processing( $content ) ) {
+			return $content;
 		}
 
 		// Process each block.
@@ -152,11 +147,14 @@ class Content_Processor {
 	/**
 	 * Replaces external site URLs with current site URLs in content.
 	 *
+	 * Uses string replacement instead of DOM parsing to avoid altering
+	 * markup (entity encoding, self-closing tags, whitespace, etc.).
+	 *
 	 * @param string $content           Content to process.
-	 * @param string $external_site_url External site URL to replace.
-	 * @return string Content with URLs replaced.
+	 * @param string $external_site_url External site URL (scheme://host).
+	 * @return string|WP_Error Content with URLs replaced, or WP_Error on failure.
 	 */
-	public function replace_external_urls( string $content, string $external_site_url ): string {
+	public function replace_external_urls( string $content, string $external_site_url ): string|WP_Error {
 		if ( empty( $content ) || empty( $external_site_url ) ) {
 			return $content;
 		}
@@ -170,65 +168,31 @@ class Content_Processor {
 			return $content;
 		}
 
-		// Skip DOM processing if the external domain doesn't appear in the content.
+		// Skip if the external host doesn't appear in the content.
 		if ( false === strpos( $content, $external_host ) ) {
 			return $content;
 		}
 
-		// Parse HTML content.
-		$dom = new \DOMDocument();
-		$dom->loadHTML(
-			$content,
-			\LIBXML_HTML_NOIMPLIED | \LIBXML_HTML_NODEFDTD | \LIBXML_NOERROR | \LIBXML_NOWARNING
-		);
+		// Match both http and https variants of the external URL so that legacy
+		// http:// references are also replaced. The lookahead prevents partial
+		// domain matches (e.g., "source.example.com" must not match inside
+		// "source.example.company.com").
+		$pattern = '/https?:\/\/' . preg_quote( $external_host, '/' )
+			. '(?=[^a-zA-Z0-9.]|$)/';
 
-		// Process anchor tags (links).
-		$links = $dom->getElementsByTagName( 'a' );
-		foreach ( $links as $link ) {
-			$href = $link->getAttribute( 'href' );
-			if ( ! empty( $href ) ) {
-				$updated_href = $this->replace_url_domain( $href, $external_site_url, $current_site_url );
-				if ( $updated_href !== $href ) {
-					$link->setAttribute( 'href', $updated_href );
-				}
-			}
+		$result = preg_replace( $pattern, $current_site_url, $content );
+
+		if ( null === $result ) {
+			return new WP_Error(
+				'url_replacement_failed',
+				__(
+					'Failed to replace external URLs in content.',
+					'safe-publish'
+				)
+			);
 		}
 
-		// Process other elements that might have URLs (like images, forms, etc.).
-		$elements_with_urls = array(
-			'img'    => 'src',
-			'form'   => 'action',
-			'iframe' => 'src',
-			'embed'  => 'src',
-			'object' => 'data',
-		);
-
-		foreach ( $elements_with_urls as $tag => $attribute ) {
-			$elements = $dom->getElementsByTagName( $tag );
-			foreach ( $elements as $element ) {
-				$url = $element->getAttribute( $attribute );
-				if ( ! empty( $url ) ) {
-					$updated_url = $this->replace_url_domain( $url, $external_site_url, $current_site_url );
-					if ( $updated_url !== $url ) {
-						$element->setAttribute( $attribute, $updated_url );
-					}
-				}
-			}
-		}
-
-		// Return processed content.
-		$processed_content = '';
-		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
-		foreach ( $dom->childNodes as $child ) {
-			if ( \XML_DOCUMENT_TYPE_NODE === $child->nodeType ) {
-				continue;
-			}
-
-			$processed_content .= $dom->saveHTML( $child );
-		}
-		// phpcs:enable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
-
-		return $processed_content ? $processed_content : $content;
+		return $result;
 	}
 
 	/**
@@ -283,9 +247,8 @@ class Content_Processor {
 	/**
 	 * Deletes all attachments created during the current processing run.
 	 *
-	 * Called when an import is aborted due to media failures, to clean up
-	 * partially-downloaded attachments that would otherwise be orphaned in
-	 * the media library.
+	 * Called when an import is aborted to clean up partially-downloaded
+	 * attachments that would otherwise be orphaned in the media library.
 	 */
 	public function delete_newly_created_media(): void {
 		$this->media_importer->delete_newly_created_attachments();
@@ -317,66 +280,6 @@ class Content_Processor {
 			count( $this->failed_media ),
 			implode( ', ', $this->failed_media )
 		);
-	}
-
-	/**
-	 * Replaces domain in a URL if it matches the external site.
-	 *
-	 * @param string $url               URL to process.
-	 * @param string $external_site_url External site URL.
-	 * @param string $current_site_url  Current site URL.
-	 * @return string Processed URL.
-	 */
-	private function replace_url_domain(
-		string $url,
-		string $external_site_url,
-		string $current_site_url
-	): string {
-		// Skip empty URLs, anchors, or non-HTTP URLs.
-		if (
-			empty( $url ) ||
-			strpos( $url, '#' ) === 0 ||
-			strpos( $url, 'mailto:' ) === 0 ||
-			strpos( $url, 'tel:' ) === 0
-		) {
-			return $url;
-		}
-
-		$external_host = wp_parse_url( $external_site_url, PHP_URL_HOST );
-		$url_host      = wp_parse_url( $url, PHP_URL_HOST );
-
-		// Skip relative URLs — preserve them as-is.
-		if ( ! is_string( $url_host ) ) {
-			return $url;
-		}
-
-		// Replace domain if it matches the external site.
-		if ( $url_host === $external_host ) {
-			$url_parts     = wp_parse_url( $url );
-			$current_parts = wp_parse_url( $current_site_url );
-
-			$new_url = $current_parts['scheme'] . '://' . $current_parts['host'];
-
-			if ( isset( $current_parts['port'] ) ) {
-				$new_url .= ':' . $current_parts['port'];
-			}
-
-			if ( isset( $url_parts['path'] ) ) {
-				$new_url .= $url_parts['path'];
-			}
-
-			if ( isset( $url_parts['query'] ) ) {
-				$new_url .= '?' . $url_parts['query'];
-			}
-
-			if ( isset( $url_parts['fragment'] ) ) {
-				$new_url .= '#' . $url_parts['fragment'];
-			}
-
-			return $new_url;
-		}
-
-		return $url;
 	}
 
 	/**
@@ -963,8 +866,8 @@ class Content_Processor {
 	 * Checks if content needs processing to avoid unnecessary serialization.
 	 *
 	 * Skips parse_blocks() + serialize_blocks() for content that contains no
-	 * HTTP URLs. Both media and links are rewritten in the pipeline, so any
-	 * narrower check risks silently skipping blocks that need processing.
+	 * HTTP URLs, since media imports are the only transformation applied
+	 * during block processing.
 	 *
 	 * @param string $content Content to check.
 	 * @return bool True if content needs processing.
