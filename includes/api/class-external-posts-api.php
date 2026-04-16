@@ -364,7 +364,6 @@ class External_Posts_API {
 
 		$post_data['title']          = sanitize_text_field( $data['title']['raw'] );
 		$post_data['featured_media'] = absint( $data['featured_media'] ?? 0 );
-		$post_data['excerpt']        = wp_kses_post( $data['excerpt']['raw'] );
 		$post_data['slug']           = sanitize_text_field( $data['slug'] ?? '' );
 		$post_data['comment_status'] = sanitize_text_field( $data['comment_status'] ?? '' );
 		$post_data['ping_status']    = sanitize_text_field( $data['ping_status'] ?? '' );
@@ -374,8 +373,10 @@ class External_Posts_API {
 			$post_data['link'] = esc_url_raw( $data['link'] );
 		}
 
-		// Unsanitized values; sanitized downstream before being stored.
+		// HTML fields: sanitized at the import point with modification
+		// detection to prevent silent data loss during migration.
 		$post_data['content'] = $data['content']['raw'];
+		$post_data['excerpt'] = $data['excerpt']['raw'];
 
 		$post_data['meta'] = isset( $data['meta'] ) && is_array( $data['meta'] ) ? $data['meta'] : array();
 

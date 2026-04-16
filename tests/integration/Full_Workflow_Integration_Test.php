@@ -471,17 +471,21 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that bulk import sanitizes post content with wp_kses_post before
-	 * writing it to the database.
+	 * Verifies that bulk import fails when sanitization would modify
+	 * post content.
 	 */
-	public function test_bulk_import_sanitizes_post_content(): void {
-		// ARRANGE: Content with a disallowed script tag that wp_kses_post must strip.
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+	public function test_bulk_import_fails_when_content_is_modified_by_sanitization(): void {
+		// ARRANGE: Content with a script tag that wp_kses_post would strip.
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
 
 		$post_data = array(
 			'id'             => 8001,
 			'title'          => 'Sanitization Test Post',
-			'content'        => '<p>Safe content.</p><script>alert("xss")</script>',
+			'content'        => '<p>Safe content.</p>'
+				. '<script>alert("xss")</script>',
 			'link'           => 'https://source.example.com/sanitization-test',
 			'featured_media' => 0,
 			'post_type'      => 'posts',
@@ -491,68 +495,138 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		);
 
 		$this->mock_post_overrides = array(
-			'content' => '<p>Safe content.</p><script>alert("xss")</script>',
+			'content' => '<p>Safe content.</p>'
+				. '<script>alert("xss")</script>',
 		);
 
 		// ACT: Import via the bulk path.
-		$result = $this->import_service->import_post( $post_data, $session_id );
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
 
-		// ASSERT: Post was created and unsafe markup was stripped.
-		$this->assertTrue( $result['success'] );
-
-		$post = get_post( $result['post_id'] );
-		$this->assertStringContainsString( '<p>Safe content.</p>', $post->post_content );
-		$this->assertStringNotContainsString( '<script>', $post->post_content );
+		// ASSERT: Import failed with a descriptive sanitization error.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString(
+			'modified by sanitization',
+			$result['error']
+		);
+		$this->assertStringContainsString(
+			'Stripped:',
+			$result['error']
+		);
+		$this->assertStringContainsString(
+			'<script>',
+			$result['error']
+		);
 	}
 
 	/**
-	 * Verifies that bulk import strips disallowed HTML from excerpts while
-	 * preserving allowed inline tags.
+	 * Verifies that bulk import fails when sanitization would modify
+	 * the excerpt.
 	 */
-	public function test_bulk_import_sanitizes_excerpt(): void {
-		// ARRANGE: Excerpt with a disallowed script tag and an allowed inline tag.
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+	public function test_bulk_import_fails_when_excerpt_is_modified_by_sanitization(): void {
+		// ARRANGE: Excerpt with a script tag that wp_kses_post would strip.
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
 
 		$post_data = array(
 			'id'             => 8002,
 			'title'          => 'Excerpt Sanitization Test',
-			'content'        => '<p>Content.</p>',
-			'link'           => 'https://source.example.com/excerpt-sanitization-test',
+			'content'        => '<p>Clean content.</p>',
+			'link'           => 'https://source.example.com/excerpt-test',
 			'featured_media' => 0,
 			'post_type'      => 'posts',
-			'excerpt'        => '<em>Safe excerpt.</em><script>alert("xss")</script>',
+			'excerpt'        => '<em>Summary.</em><script>xss</script>',
 			'meta'           => array(),
 			'terms'          => array(),
 		);
 
 		$this->mock_post_overrides = array(
-			'excerpt' => '<em>Safe excerpt.</em><script>alert("xss")</script>',
+			'content' => '<p>Clean content.</p>',
+			'excerpt' => '<em>Summary.</em><script>xss</script>',
 		);
 
 		// ACT: Import via the bulk path.
-		$result = $this->import_service->import_post( $post_data, $session_id );
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
 
-		// ASSERT: Allowed HTML is preserved; disallowed markup is stripped.
-		$this->assertTrue( $result['success'] );
-
-		$post = get_post( $result['post_id'] );
-		$this->assertStringContainsString( '<em>Safe excerpt.</em>', $post->post_excerpt );
-		$this->assertStringNotContainsString( '<script>', $post->post_excerpt );
+		// ASSERT: Import failed due to excerpt sanitization.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString(
+			'excerpt',
+			$result['error']
+		);
+		$this->assertStringContainsString(
+			'<script>',
+			$result['error']
+		);
 	}
 
 	/**
-	 * Verifies that bulk re-import sanitizes post content when updating an
-	 * existing post.
+	 * Provides stripping scenarios with content and expected error
+	 * substrings.
+	 *
+	 * @return array[] Test cases keyed by label.
 	 */
-	public function test_bulk_reimport_sanitizes_post_content(): void {
-		// ARRANGE: Import a post, then re-import with unsafe content.
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+	public function provide_stripping_scenarios(): array {
+		return array(
+			'stripped tag'               => array(
+				'<p>Text.</p><script>alert("xss")</script>',
+				array( '<script>' ),
+			),
+			'stripped tag with attrs'    => array(
+				'<!-- wp:html -->'
+					. '<iframe src="https://youtube.com/embed/abc"'
+					. ' width="560" height="315"></iframe>'
+					. '<!-- /wp:html -->',
+				array( '<iframe', 'src=' ),
+			),
+			'stripped attr on kept tag'  => array(
+				'<p><img src="http://localhost/img.jpg"'
+					. ' alt="Photo" decoding="async"/></p>',
+				array( '<img', 'decoding=' ),
+			),
+			'multiple stripped elements' => array(
+				'<!-- wp:html -->'
+					. '<svg viewBox="0 0 100 100">'
+					. '<circle cx="50" cy="50" r="40"/>'
+					. '</svg>'
+					. '<!-- /wp:html -->',
+				array( '<svg', '<circle' ),
+			),
+		);
+	}
+
+	/**
+	 * Verifies that the sanitization error message describes the
+	 * specific HTML that was stripped for different stripping types.
+	 *
+	 * @dataProvider provide_stripping_scenarios
+	 *
+	 * @param string   $content           Content with strippable HTML.
+	 * @param string[] $expected_in_error Substrings that must appear
+	 *                                    in the error message.
+	 */
+	public function test_sanitization_error_describes_stripped_html(
+		string $content,
+		array $expected_in_error
+	): void {
+		// ARRANGE: Import with content that wp_kses_post would modify.
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
 
 		$post_data = array(
-			'id'             => 8003,
-			'title'          => 'Content Sanitization On Update Test',
-			'content'        => '<p>Original content.</p>',
-			'link'           => 'https://source.example.com/content-sanitization-update-test',
+			'id'             => 8020,
+			'title'          => 'Stripping Scenario Test',
+			'content'        => $content,
+			'link'           => 'https://source.example.com/strip-test',
 			'featured_media' => 0,
 			'post_type'      => 'posts',
 			'excerpt'        => '',
@@ -560,25 +634,76 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			'terms'          => array(),
 		);
 
-		$first = $this->import_service->import_post( $post_data, $session_id );
-		$this->assertTrue( $first['success'] );
-
-		// ACT: Re-import with a script tag injected into the content.
-		$post_data['content'] = '<p>Updated content.</p><script>alert("xss")</script>';
-
 		$this->mock_post_overrides = array(
-			'content' => '<p>Updated content.</p><script>alert("xss")</script>',
+			'content' => $content,
 		);
 
-		$second = $this->import_service->import_post( $post_data, $session_id );
+		// ACT: Import via the bulk path.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
 
-		// ASSERT: Update succeeded and the script tag was stripped.
-		$this->assertTrue( $second['success'] );
-		$this->assertTrue( $second['existing'] );
+		// ASSERT: Import failed with a descriptive error.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString(
+			'modified by sanitization',
+			$result['error']
+		);
 
-		$post = get_post( $second['post_id'] );
-		$this->assertStringContainsString( '<p>Updated content.</p>', $post->post_content );
-		$this->assertStringNotContainsString( '<script>', $post->post_content );
+		foreach ( $expected_in_error as $expected ) {
+			$this->assertStringContainsString(
+				$expected,
+				$result['error'],
+				"Error should mention: $expected"
+			);
+		}
+	}
+
+	/**
+	 * Verifies that bulk import succeeds when sanitization only makes
+	 * cosmetic whitespace changes (no false positives).
+	 */
+	public function test_bulk_import_succeeds_with_cosmetic_whitespace_changes(): void {
+		// ARRANGE: Content with inline styles that wp_kses_post normalizes
+		// (e.g. removes space after semicolons) but does not meaningfully
+		// modify.
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$content = '<!-- wp:button -->'
+			. '<div class="wp-block-button">'
+			. '<a class="wp-block-button__link"'
+			. ' style="background-color: #ff0000; color: #ffffff">'
+			. 'Click Me</a></div>'
+			. '<!-- /wp:button -->';
+
+		$post_data = array(
+			'id'             => 8010,
+			'title'          => 'Cosmetic Whitespace Test',
+			'content'        => $content,
+			'link'           => 'https://source.example.com/style-test',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '',
+			'meta'           => array(),
+			'terms'          => array(),
+		);
+
+		$this->mock_post_overrides = array(
+			'content' => $content,
+		);
+
+		// ACT: Import via the bulk path.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: Import succeeded despite cosmetic changes.
+		$this->assertTrue( $result['success'] );
 	}
 
 	/**

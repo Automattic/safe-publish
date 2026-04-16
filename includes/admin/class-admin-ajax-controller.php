@@ -32,6 +32,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 final class Admin_Ajax_Controller {
 
+	use Sanitizes_Content;
+
 	/**
 	 * External Posts API instance.
 	 *
@@ -335,11 +337,33 @@ final class Admin_Ajax_Controller {
 
 		$title             = $fresh_result['title'];
 		$featured_media_id = $fresh_result['featured_media'];
-		$excerpt           = $fresh_result['excerpt'];
 		$slug              = $fresh_result['slug'];
 		$comment_status    = $fresh_result['comment_status'];
 		$ping_status       = $fresh_result['ping_status'];
 		$menu_order        = $fresh_result['menu_order'];
+
+		$excerpt = $this->sanitize_field(
+			$fresh_result['excerpt'],
+			self::FIELD_EXCERPT
+		);
+
+		if ( is_wp_error( $excerpt ) ) {
+			$error_message = $excerpt->get_error_message();
+
+			$this->import_history->log_import_action(
+				$session_id,
+				$external_post_id,
+				$title,
+				'error',
+				null,
+				$error_message,
+				array( 'action' => 'excerpt_sanitization_failed' )
+			);
+			$this->import_history->update_session_stats( $session_id, 'error' );
+			$this->import_history->complete_session( $session_id );
+
+			wp_send_json_error( $error_message );
+		}
 
 		// Unsanitized values; sanitized downstream before being stored.
 		$content = $fresh_result['content'] ?? '';
@@ -975,8 +999,8 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Processes draft post content by importing media and fixing links.
 	 *
-	 * Returns the sanitized content unchanged if either argument is empty.
-	 * Returns a WP_Error if content processing fails.
+	 * Returns a WP_Error if content processing fails or if sanitization would
+	 * modify the content.
 	 *
 	 * @param string $content       Raw post content.
 	 * @param string $external_link External post URL used to derive site URL.
@@ -996,8 +1020,7 @@ final class Admin_Ajax_Controller {
 			}
 		}
 
-		// Apply sanitization after processing to preserve formatting during processing.
-		return wp_kses_post( $processed );
+		return $this->sanitize_field( $processed, self::FIELD_CONTENT );
 	}
 
 	/**
