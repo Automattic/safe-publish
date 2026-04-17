@@ -63,8 +63,9 @@ class External_Posts_API {
 		$terms = array();
 
 		if (
-			empty( $response_data['_embedded']['wp:term'] ) ||
-			! is_array( $response_data['_embedded']['wp:term'] )
+			! isset( $response_data['_embedded']['wp:term'] ) ||
+			! is_array( $response_data['_embedded']['wp:term'] ) ||
+			count( $response_data['_embedded']['wp:term'] ) === 0
 		) {
 			return $terms;
 		}
