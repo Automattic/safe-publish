@@ -166,6 +166,7 @@ class Post_Import_Service {
 			'comment_status'    => sanitize_text_field( $post_data['comment_status'] ?? '' ),
 			'ping_status'       => sanitize_text_field( $post_data['ping_status'] ?? '' ),
 			'menu_order'        => absint( $post_data['menu_order'] ?? 0 ),
+			'password'          => sanitize_text_field( $post_data['password'] ?? '' ),
 			'meta'              => is_array( $post_data['meta'] ?? null ) ? $post_data['meta'] : array(),
 			'terms'             => is_array( $post_data['terms'] ?? null ) ? $post_data['terms'] : array(),
 		);
@@ -449,6 +450,7 @@ class Post_Import_Service {
 				'comment_status' => $fields['comment_status'],
 				'ping_status'    => $fields['ping_status'],
 				'menu_order'     => $fields['menu_order'],
+				'post_password'  => $fields['password'],
 			),
 			$featured_attachment_id,
 			$fields['external_link'],
@@ -569,6 +571,7 @@ class Post_Import_Service {
 				'comment_status' => $fields['comment_status'],
 				'ping_status'    => $fields['ping_status'],
 				'menu_order'     => $fields['menu_order'],
+				'post_password'  => $fields['password'],
 				'meta_input'     => array(
 					Options::META_EXTERNAL_POST_ID => $fields['external_post_id'],
 					Options::META_EXTERNAL_LINK    => $fields['external_link'],
@@ -645,6 +648,7 @@ class Post_Import_Service {
 		$fields['comment_status']    = $fresh_result['comment_status'];
 		$fields['ping_status']       = $fresh_result['ping_status'];
 		$fields['menu_order']        = $fresh_result['menu_order'];
+		$fields['password']          = $fresh_result['password'];
 
 		$sanitized_excerpt = $this->sanitize_field(
 			$fresh_result['excerpt'],

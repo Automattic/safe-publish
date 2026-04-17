@@ -1440,6 +1440,116 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that post_password is preserved when importing a new
+	 * password-protected post via the bulk path.
+	 */
+	public function test_import_preserves_post_password(): void {
+		// ARRANGE: Source post with a password.
+		$this->mock_post_overrides = array(
+			'password' => 's3cret',
+		);
+
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9601,
+			'title'     => 'Password Protected Post',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/password-post',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Import the post.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: Import must succeed.
+		$this->assertTrue(
+			$result['success'],
+			'Import should succeed.'
+		);
+
+		$post = get_post( $result['post_id'] );
+
+		// ASSERT: Password must match the source value.
+		$this->assertSame(
+			's3cret',
+			$post->post_password,
+			'Post password must be preserved from the source post.'
+		);
+	}
+
+	/**
+	 * Verifies that post_password is updated when re-importing an existing post
+	 * via the bulk path.
+	 */
+	public function test_reimport_updates_post_password(): void {
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ARRANGE: Import once with a password.
+		$this->mock_post_overrides = array(
+			'password' => 'original',
+		);
+
+		$post_data = array(
+			'id'        => 9602,
+			'title'     => 'Post For Password Update Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/password-update',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+		$this->assertTrue(
+			$first['success'],
+			'Initial import should succeed.'
+		);
+		$this->assertSame(
+			'original',
+			get_post( $first['post_id'] )->post_password
+		);
+
+		// ARRANGE: Re-import with an updated password.
+		$this->mock_post_overrides = array(
+			'password' => 'changed',
+		);
+
+		// ACT: Re-import the same post.
+		$second = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: Re-import must succeed.
+		$this->assertTrue(
+			$second['success'],
+			'Re-import should succeed.'
+		);
+		$this->assertTrue(
+			$second['existing'],
+			'Should be flagged as existing.'
+		);
+
+		// ASSERT: Password must reflect the updated source value.
+		$this->assertSame(
+			'changed',
+			get_post( $second['post_id'] )->post_password,
+			'Post password must be updated on re-import.'
+		);
+	}
+
+	/**
 	 * Returns a pre_http_request filter that makes the media JSON API return 404.
 	 *
 	 * Registered at priority 6 so it runs after the mock at priority 5 and
