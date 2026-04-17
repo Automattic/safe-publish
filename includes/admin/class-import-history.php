@@ -24,6 +24,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 final class Import_History {
 
+	use Verifies_Ajax_Request;
+
 	/**
 	 * History repository instance.
 	 *
@@ -270,10 +272,7 @@ final class Import_History {
 	 */
 	public function ajax_get_import_sessions(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
-
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Insufficient permissions', 'safe-publish' ) );
-		}
+		$this->verify_ajax_capability();
 
 		$sessions           = $this->repository->get_sessions( 50 );
 		$formatted_sessions = $this->formatter->format_sessions( $sessions );
@@ -286,10 +285,7 @@ final class Import_History {
 	 */
 	public function ajax_get_session_details(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
-
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Insufficient permissions', 'safe-publish' ) );
-		}
+		$this->verify_ajax_capability();
 
 		$session_id = absint( $_POST['session_id'] ?? 0 );
 
@@ -321,10 +317,7 @@ final class Import_History {
 	 */
 	public function ajax_rollback_session(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
-
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Insufficient permissions', 'safe-publish' ) );
-		}
+		$this->verify_ajax_capability();
 
 		$session_id = absint( $_POST['session_id'] ?? 0 );
 
@@ -352,10 +345,7 @@ final class Import_History {
 	 */
 	public function ajax_rollback_item(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
-
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Insufficient permissions', 'safe-publish' ) );
-		}
+		$this->verify_ajax_capability();
 
 		$log_id = absint( $_POST['log_id'] ?? 0 );
 
@@ -384,10 +374,7 @@ final class Import_History {
 	 */
 	public function ajax_get_post_diff(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
-
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Insufficient permissions', 'safe-publish' ) );
-		}
+		$this->verify_ajax_capability();
 
 		$post_id = absint( $_POST['post_id'] ?? 0 );
 
@@ -469,10 +456,7 @@ final class Import_History {
 	 */
 	public function ajax_delete_session(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
-
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Insufficient permissions', 'safe-publish' ) );
-		}
+		$this->verify_ajax_capability();
 
 		$session_id = absint( $_POST['session_id'] ?? 0 );
 
@@ -505,10 +489,7 @@ final class Import_History {
 	 */
 	public function ajax_get_export_events(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
-
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Insufficient permissions', 'safe-publish' ) );
-		}
+		$this->verify_ajax_capability();
 
 		$rows = Event_Table::get_events(
 			array(

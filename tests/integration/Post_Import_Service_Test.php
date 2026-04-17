@@ -1331,6 +1331,115 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that import error results use the fresh title from the source
+	 * site, not the stale snapshot title from the listing page.
+	 *
+	 * When the fresh content fetch succeeds but a later step (content
+	 * sanitization) fails, the returned error must carry the freshly fetched
+	 * title so that log entries and UI messages reference the correct,
+	 * up-to-date post name.
+	 */
+	public function test_import_error_uses_fresh_title_not_snapshot_title(): void {
+		// ARRANGE: The listing snapshot uses a stale title, but the fresh
+		// content endpoint returns an updated title together with content
+		// that wp_kses_post will strip (triggering a sanitization error
+		// after the title has been refreshed).
+		$this->mock_post_overrides = array(
+			'title'   => 'Fresh Title From Source',
+			'content' => '<p>OK</p><form action="x"><input></form>',
+		);
+
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9501,
+			'title'     => 'Stale Snapshot Title',
+			'content'   => '<p>Stale content.</p>',
+			'link'      => 'https://source.example.com/fresh-title-test',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Import the post — sanitization will reject the <form>.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: Import must fail due to sanitization.
+		$this->assertFalse(
+			$result['success'],
+			'Import should fail when content is stripped by sanitization.'
+		);
+
+		// ASSERT: The error result must carry the fresh title, not the stale
+		// snapshot title passed in $post_data.
+		$this->assertSame(
+			'Fresh Title From Source',
+			$result['title'],
+			'Error result must use the freshly fetched title, '
+				. 'not the stale snapshot title.'
+		);
+	}
+
+	/**
+	 * Verifies that the bulk update path preserves the existing post status
+	 * instead of resetting it to 'draft'.
+	 *
+	 * This is the key behavioral difference from the single-import path: bulk
+	 * re-imports must not silently unpublish live posts.
+	 */
+	public function test_bulk_reimport_preserves_post_status(): void {
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ARRANGE: Import a post, then manually publish it.
+		$post_data = array(
+			'id'        => 9502,
+			'title'     => 'Publishable Post',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/preserve-status',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+		$this->assertTrue( $first['success'] );
+
+		wp_update_post(
+			array(
+				'ID'          => $first['post_id'],
+				'post_status' => 'publish',
+			)
+		);
+		$this->assertSame(
+			'publish',
+			get_post_status( $first['post_id'] )
+		);
+
+		// ACT: Bulk re-import the same post.
+		$second = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: Re-import succeeds and post stays published.
+		$this->assertTrue( $second['success'] );
+		$this->assertTrue( $second['existing'] );
+		$this->assertSame(
+			'publish',
+			get_post_status( $second['post_id'] ),
+			'Bulk re-import must not change post status.'
+		);
+	}
+
+	/**
 	 * Returns a pre_http_request filter that makes the media JSON API return 404.
 	 *
 	 * Registered at priority 6 so it runs after the mock at priority 5 and

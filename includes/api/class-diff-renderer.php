@@ -260,18 +260,7 @@ final class Diff_Renderer {
 			'terms'   => array(),
 		);
 
-		// Extract terms from embedded response if available.
-		if ( ! empty( $data['_embedded']['wp:term'] ) && is_array( $data['_embedded']['wp:term'] ) ) {
-			foreach ( $data['_embedded']['wp:term'] as $term_group ) {
-				foreach ( $term_group as $term ) {
-					$taxonomy = isset( $term['taxonomy'] ) ? $term['taxonomy'] : 'term';
-					if ( ! isset( $incoming['terms'][ $taxonomy ] ) ) {
-						$incoming['terms'][ $taxonomy ] = array();
-					}
-					$incoming['terms'][ $taxonomy ][] = isset( $term['name'] ) ? $term['name'] : '';
-				}
-			}
-		}
+		$incoming['terms'] = External_Posts_API::extract_embedded_terms( $data );
 
 		return $incoming;
 	}

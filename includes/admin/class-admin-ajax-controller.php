@@ -9,7 +9,6 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\HTTP_Client;
-use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Log_Events;
@@ -33,6 +32,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Admin_Ajax_Controller {
 
 	use Sanitizes_Content;
+	use Verifies_Ajax_Request;
 
 	/**
 	 * External Posts API instance.
@@ -63,13 +63,6 @@ final class Admin_Ajax_Controller {
 	private Post_Import_Service $post_import_service;
 
 	/**
-	 * Meta Terms Manager instance.
-	 *
-	 * @var Meta_Terms_Manager
-	 */
-	private Meta_Terms_Manager $meta_terms_manager;
-
-	/**
 	 * Post Type Fetcher instance.
 	 *
 	 * @var Post_Type_Fetcher
@@ -97,7 +90,6 @@ final class Admin_Ajax_Controller {
 	 * @param Import_History      $import_history      Import History instance.
 	 * @param Content_Processor   $content_processor   Content Processor instance.
 	 * @param Post_Import_Service $post_import_service Post Import Service instance.
-	 * @param Meta_Terms_Manager  $meta_terms_manager  Meta Terms Manager instance.
 	 * @param Post_Type_Fetcher   $post_type_fetcher   Post Type Fetcher instance.
 	 * @param HTTP_Client         $http_client         HTTP Client instance.
 	 */
@@ -106,7 +98,6 @@ final class Admin_Ajax_Controller {
 		Import_History $import_history,
 		Content_Processor $content_processor,
 		Post_Import_Service $post_import_service,
-		Meta_Terms_Manager $meta_terms_manager,
 		Post_Type_Fetcher $post_type_fetcher,
 		HTTP_Client $http_client
 	) {
@@ -114,7 +105,6 @@ final class Admin_Ajax_Controller {
 		$this->import_history      = $import_history;
 		$this->content_processor   = $content_processor;
 		$this->post_import_service = $post_import_service;
-		$this->meta_terms_manager  = $meta_terms_manager;
 		$this->post_type_fetcher   = $post_type_fetcher;
 		$this->http_client         = $http_client;
 		$this->logger              = new Content_Logger();
@@ -137,12 +127,8 @@ final class Admin_Ajax_Controller {
 	 * Handles AJAX request for fetching posts.
 	 */
 	public function ajax_fetch_posts(): void {
-		// Security check.
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
-
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
-		}
+		$this->verify_ajax_capability();
 
 		$site_url        = sanitize_text_field( wp_unslash( $_POST['site_url'] ?? '' ) );
 		$number_of_posts = absint( $_POST['number_of_posts'] ?? 10 );
@@ -171,12 +157,8 @@ final class Admin_Ajax_Controller {
 	 * Handles AJAX request for fetching post types.
 	 */
 	public function ajax_fetch_post_types(): void {
-		// Security check.
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
-
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
-		}
+		$this->verify_ajax_capability();
 
 		$site_url = sanitize_text_field( wp_unslash( $_POST['site_url'] ?? '' ) );
 
@@ -201,12 +183,8 @@ final class Admin_Ajax_Controller {
 	 * Handles AJAX request for testing connection.
 	 */
 	public function ajax_test_connection(): void {
-		// Security check.
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
-
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
-		}
+		$this->verify_ajax_capability();
 
 		$site_url = sanitize_text_field( wp_unslash( $_POST['site_url'] ?? '' ) );
 
@@ -246,7 +224,6 @@ final class Admin_Ajax_Controller {
 	 * processes content, creates or updates the post, and logs history.
 	 */
 	public function ajax_create_draft(): void {
-		// Security check.
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'edit_posts' ) ) {
@@ -458,12 +435,8 @@ final class Admin_Ajax_Controller {
 	 * Handles AJAX request for bulk importing posts.
 	 */
 	public function ajax_bulk_import(): void {
-		// Security check.
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
-
-		if ( ! current_user_can( 'edit_posts' ) ) {
-			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
-		}
+		$this->verify_ajax_capability( 'edit_posts' );
 
 		// JSON string not sanitized to preserve structure; validated after decode.
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
@@ -528,12 +501,8 @@ final class Admin_Ajax_Controller {
 	 * Handles debug authentication AJAX request.
 	 */
 	public function ajax_debug_auth(): void {
-		// Security check.
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
-
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
-		}
+		$this->verify_ajax_capability();
 
 		$site_url = sanitize_text_field( wp_unslash( $_POST['site_url'] ?? '' ) );
 
@@ -595,12 +564,8 @@ final class Admin_Ajax_Controller {
 	 * Moves the post to trash by its external post ID.
 	 */
 	public function ajax_delete_post(): void {
-		// Security check.
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
-
-		if ( ! current_user_can( 'delete_posts' ) ) {
-			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
-		}
+		$this->verify_ajax_capability( 'delete_posts' );
 
 		$external_post_id = absint( $_POST['external_post_id'] ?? 0 );
 
@@ -630,15 +595,13 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Updates an existing post with fresh imported content.
 	 *
-	 * Sideloads featured image, updates post fields, updates meta and terms,
-	 * and logs history.
-	 *
-	 * @see Post_Import_Service::handle_imported_post() for the bulk-import equivalent.
-	 *      Intentional differences here vs the bulk path:
-	 *      - Resets post_status to 'draft' (keeps the single-import review flow intact).
-	 *      - Captures previous content for the session rollback history log.
-	 *      - Does not call disable_content_filters() (standard WP filters apply for
-	 *        user-triggered imports).
+	 * Delegates the write to Post_Import_Service::persist_updated_post().
+	 * Intentional differences from the bulk-import update path:
+	 * - Resets post_status to 'draft' (keeps the single-import review flow
+	 *   intact).
+	 * - Captures previous content for the session rollback history log.
+	 * - Does not disable content filters (standard WP filters apply
+	 *   for user-triggered imports).
 	 *
 	 * @param WP_Post $imported_post     Imported WordPress post.
 	 * @param string  $title             Post title.
@@ -676,32 +639,26 @@ final class Admin_Ajax_Controller {
 	): array {
 		$previous_content = $this->capture_previous_content( $imported_post );
 
-		// Sideload the featured image before writing the post so that a failure
-		// here does not leave the post in a partially-updated state.
+		// Sideload the featured image before writing the post so that a
+		// failure here does not leave the post in a partially-updated state.
 		$featured_attachment_id = $this->post_import_service->import_featured_image_attachment(
 			$featured_media_id,
 			$external_link
 		);
 
 		if ( false === $featured_attachment_id ) {
-			$error_message = __( 'Failed to import featured image.', 'safe-publish' );
-
-			$this->import_history->log_import_action(
+			return $this->log_single_error_and_return(
 				$session_id,
 				$external_post_id,
 				$title,
-				'error',
 				$imported_post->ID,
-				$error_message,
-				array( 'action' => 'featured_image_import_failed' )
+				__( 'Failed to import featured image.', 'safe-publish' ),
+				'featured_image_import_failed'
 			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
-
-			return array( 'error' => $error_message );
 		}
 
-		$post_id = wp_update_post(
+		// Single-import: force draft status, no content filter suppression.
+		$post_id = $this->post_import_service->persist_updated_post(
 			array(
 				'ID'             => $imported_post->ID,
 				'post_title'     => $title,
@@ -713,86 +670,28 @@ final class Admin_Ajax_Controller {
 				'comment_status' => $comment_status,
 				'ping_status'    => $ping_status,
 				'menu_order'     => $menu_order,
-			)
+			),
+			$featured_attachment_id,
+			$external_link,
+			$meta,
+			$terms,
+			false
 		);
 
 		if ( is_wp_error( $post_id ) ) {
-			return array( 'error' => $post_id->get_error_message() );
-		}
+			$error_data = $post_id->get_error_data();
+			$action     = is_array( $error_data ) && isset( $error_data['action'] )
+				? $error_data['action']
+				: 'post_update_failed';
 
-		update_post_meta( $post_id, Options::META_EXTERNAL_LINK, $external_link );
-
-		delete_post_meta( $post_id, Options::META_IMPORT_DATE );
-		if ( false === update_post_meta(
-			$post_id,
-			Options::META_IMPORT_DATE,
-			current_time( 'mysql' )
-		) ) {
-			$error_message = __(
-				'Failed to update post tracking metadata.',
-				'safe-publish'
-			);
-
-			$this->import_history->log_import_action(
+			return $this->log_single_error_and_return(
 				$session_id,
 				$external_post_id,
 				$title,
-				'error',
-				$post_id,
-				$error_message,
-				array( 'action' => 'meta_update_failed' )
+				$imported_post->ID,
+				$post_id->get_error_message(),
+				$action
 			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
-
-			return array( 'error' => $error_message );
-		}
-
-		if ( $featured_attachment_id > 0 ) {
-			set_post_thumbnail( $post_id, $featured_attachment_id );
-		}
-
-		$meta_result = $this->meta_terms_manager->update_meta( $post_id, $meta );
-
-		if ( is_wp_error( $meta_result ) ) {
-			$error_message = $meta_result->get_error_message();
-
-			$this->import_history->log_import_action(
-				$session_id,
-				$external_post_id,
-				$title,
-				'error',
-				$post_id,
-				$error_message,
-				array( 'action' => 'meta_update_failed' )
-			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
-
-			return array( 'error' => $error_message );
-		}
-
-		$terms_result = $this->meta_terms_manager->update_terms(
-			$post_id,
-			$terms
-		);
-
-		if ( is_wp_error( $terms_result ) ) {
-			$error_message = $terms_result->get_error_message();
-
-			$this->import_history->log_import_action(
-				$session_id,
-				$external_post_id,
-				$title,
-				'error',
-				$post_id,
-				$error_message,
-				array( 'action' => 'terms_update_failed' )
-			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
-
-			return array( 'error' => $error_message );
 		}
 
 		$this->import_history->log_import_action(
@@ -818,10 +717,7 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Creates a new draft post with the imported content.
 	 *
-	 * Inserts the post, imports featured image, updates meta and terms,
-	 * and logs history.
-	 *
-	 * @see Post_Import_Service::handle_new_post() for the bulk-import equivalent.
+	 * Delegates the write to Post_Import_Service::persist_new_post().
 	 *
 	 * @param string $title             Post title.
 	 * @param string $excerpt           Post excerpt.
@@ -855,34 +751,25 @@ final class Admin_Ajax_Controller {
 		string $ping_status,
 		int $menu_order
 	): array {
-		// Sideload the featured image before creating the post so that a failure
-		// here does not leave an orphaned draft in the DB.
+		// Sideload the featured image before creating the post so that a
+		// failure here does not leave an orphaned draft in the DB.
 		$featured_attachment_id = $this->post_import_service->import_featured_image_attachment(
 			$featured_media_id,
 			$external_link
 		);
 
 		if ( false === $featured_attachment_id ) {
-			$error_message = __( 'Failed to import featured image.', 'safe-publish' );
-
-			$this->import_history->log_import_action(
+			return $this->log_single_error_and_return(
 				$session_id,
 				$external_post_id,
 				$title,
-				'error',
 				null,
-				$error_message,
-				array( 'action' => 'featured_image_import_failed' )
+				__( 'Failed to import featured image.', 'safe-publish' ),
+				'featured_image_import_failed'
 			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
-
-			return array( 'error' => $error_message );
 		}
 
-		$this->content_processor->disable_content_filters();
-
-		$post_id = wp_insert_post(
+		$post_id = $this->post_import_service->persist_new_post(
 			array(
 				'post_title'     => $title,
 				'post_content'   => $processed_content,
@@ -899,64 +786,26 @@ final class Admin_Ajax_Controller {
 					Options::META_IMPORTED_FROM    => Options::META_IMPORTED_FROM_VALUE,
 					Options::META_IMPORT_DATE      => current_time( 'mysql' ),
 				),
-			)
-		);
-
-		$this->content_processor->restore_content_filters();
-
-		if ( is_wp_error( $post_id ) ) {
-			return array( 'error' => $post_id->get_error_message() );
-		}
-
-		if ( $featured_attachment_id > 0 ) {
-			set_post_thumbnail( $post_id, $featured_attachment_id );
-		}
-
-		$meta_result = $this->meta_terms_manager->update_meta( $post_id, $meta );
-
-		if ( is_wp_error( $meta_result ) ) {
-			wp_delete_post( $post_id, true );
-			$this->content_processor->delete_newly_created_media();
-			$error_message = $meta_result->get_error_message();
-
-			$this->import_history->log_import_action(
-				$session_id,
-				$external_post_id,
-				$title,
-				'error',
-				null,
-				$error_message,
-				array( 'action' => 'meta_update_failed' )
-			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
-
-			return array( 'error' => $error_message );
-		}
-
-		$terms_result = $this->meta_terms_manager->update_terms(
-			$post_id,
+			),
+			$featured_attachment_id,
+			$meta,
 			$terms
 		);
 
-		if ( is_wp_error( $terms_result ) ) {
-			wp_delete_post( $post_id, true );
-			$this->content_processor->delete_newly_created_media();
-			$error_message = $terms_result->get_error_message();
+		if ( is_wp_error( $post_id ) ) {
+			$error_data = $post_id->get_error_data();
+			$action     = is_array( $error_data ) && isset( $error_data['action'] )
+				? $error_data['action']
+				: 'post_create_failed';
 
-			$this->import_history->log_import_action(
+			return $this->log_single_error_and_return(
 				$session_id,
 				$external_post_id,
 				$title,
-				'error',
 				null,
-				$error_message,
-				array( 'action' => 'terms_update_failed' )
+				$post_id->get_error_message(),
+				$action
 			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
-
-			return array( 'error' => $error_message );
 		}
 
 		$this->import_history->log_import_action(
@@ -977,6 +826,41 @@ final class Admin_Ajax_Controller {
 			'message'  => __( 'Draft post created successfully.', 'safe-publish' ),
 			'existing' => false,
 		);
+	}
+
+	/**
+	 * Logs a single-import error to history, finalizes the session, and returns
+	 * the standard error array.
+	 *
+	 * @param int      $session_id       Import session ID.
+	 * @param int      $external_post_id External post ID.
+	 * @param string   $title            Post title.
+	 * @param int|null $post_id          WordPress post ID or null.
+	 * @param string   $error_message    Error description.
+	 * @param string   $action           Log action identifier.
+	 * @return array Error result with 'error' key.
+	 */
+	private function log_single_error_and_return(
+		int $session_id,
+		int $external_post_id,
+		string $title,
+		?int $post_id,
+		string $error_message,
+		string $action
+	): array {
+		$this->import_history->log_import_action(
+			$session_id,
+			$external_post_id,
+			$title,
+			'error',
+			$post_id,
+			$error_message,
+			array( 'action' => $action )
+		);
+		$this->import_history->update_session_stats( $session_id, 'error' );
+		$this->import_history->complete_session( $session_id );
+
+		return array( 'error' => $error_message );
 	}
 
 	/**
@@ -1011,8 +895,7 @@ final class Admin_Ajax_Controller {
 
 		if ( ! empty( $content ) && ! empty( $external_link ) ) {
 			$site_url  = wp_parse_url( $external_link, PHP_URL_SCHEME )
-				. '://'
-				. wp_parse_url( $external_link, PHP_URL_HOST );
+				. '://' . wp_parse_url( $external_link, PHP_URL_HOST );
 			$processed = $this->content_processor->process_content( $content, $site_url );
 
 			if ( is_wp_error( $processed ) ) {
