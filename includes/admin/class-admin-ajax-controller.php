@@ -918,8 +918,8 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Captures previous post content for the session rollback history log.
 	 *
-	 * Stores the current title, content, excerpt, featured image, and selected
-	 * meta fields so the import can be reverted via the session rollback feature.
+	 * Stores the current post fields, featured image, and selected meta so the
+	 * import can be reverted via session rollback.
 	 *
 	 * @param WP_Post $existing_post Existing WordPress post.
 	 * @return array Previous content keyed by field name.
@@ -933,6 +933,7 @@ final class Admin_Ajax_Controller {
 			'previous_comment_status' => $existing_post->comment_status,
 			'previous_ping_status'    => $existing_post->ping_status,
 			'previous_menu_order'     => $existing_post->menu_order,
+			'previous_password'       => $existing_post->post_password,
 			'previous_featured_image' => get_post_thumbnail_id( $existing_post->ID ),
 			'previous_meta'           => array(),
 			'action'                  => 'updated_existing',
