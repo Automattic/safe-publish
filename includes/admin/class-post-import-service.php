@@ -31,6 +31,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class Post_Import_Service {
 
+	use Sanitizes_Content;
+
 	/**
 	 * External Posts API instance.
 	 *
@@ -160,7 +162,6 @@ class Post_Import_Service {
 			'external_link'     => esc_url_raw( $post_data['link'] ?? '' ),
 			'featured_media_id' => absint( $post_data['featured_media'] ?? 0 ),
 			'raw_post_type'     => sanitize_text_field( $post_data['post_type'] ?? 'post' ),
-			'excerpt'           => wp_kses_post( $post_data['excerpt'] ?? '' ),
 			'slug'              => sanitize_text_field( $post_data['slug'] ?? '' ),
 			'comment_status'    => sanitize_text_field( $post_data['comment_status'] ?? '' ),
 			'ping_status'       => sanitize_text_field( $post_data['ping_status'] ?? '' ),
@@ -247,8 +248,8 @@ class Post_Import_Service {
 	/**
 	 * Processes raw post content by importing media and fixing URLs.
 	 *
-	 * Returns the original content unchanged if external_link is empty.
-	 * Returns a WP_Error if content processing fails.
+	 * Returns a WP_Error if content processing fails or if sanitization would
+	 * modify the content.
 	 *
 	 * @param string $content       Raw post content.
 	 * @param string $external_link External post URL used to derive site URL.
@@ -256,7 +257,7 @@ class Post_Import_Service {
 	 */
 	private function process_post_content( string $content, string $external_link ): string|WP_Error {
 		if ( empty( $external_link ) ) {
-			return $content;
+			return $this->sanitize_field( $content, self::FIELD_CONTENT );
 		}
 
 		$site_url = wp_parse_url( $external_link, PHP_URL_SCHEME )
@@ -269,8 +270,7 @@ class Post_Import_Service {
 			return $processed;
 		}
 
-		// Apply sanitization after processing to preserve formatting during processing.
-		return wp_kses_post( $processed );
+		return $this->sanitize_field( $processed, self::FIELD_CONTENT );
 	}
 
 	/**
@@ -381,12 +381,40 @@ class Post_Import_Service {
 
 		$fields['title']             = $fresh_result['title'];
 		$fields['featured_media_id'] = $fresh_result['featured_media'];
-		$fields['excerpt']           = $fresh_result['excerpt'];
 		$fields['slug']              = $fresh_result['slug'];
 		$fields['comment_status']    = $fresh_result['comment_status'];
 		$fields['ping_status']       = $fresh_result['ping_status'];
 		$fields['menu_order']        = $fresh_result['menu_order'];
-		$processed_content           = $this->process_post_content(
+
+		$sanitized_excerpt = $this->sanitize_field(
+			$fresh_result['excerpt'],
+			self::FIELD_EXCERPT
+		);
+
+		if ( is_wp_error( $sanitized_excerpt ) ) {
+			$error_message = $sanitized_excerpt->get_error_message();
+
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$error_message,
+				array( 'action' => 'excerpt_sanitization_failed' )
+			);
+
+			return array(
+				'external_id' => $fields['external_post_id'],
+				'title'       => $fields['title'],
+				'success'     => false,
+				'error'       => $error_message,
+			);
+		}
+
+		$fields['excerpt'] = $sanitized_excerpt;
+
+		$processed_content = $this->process_post_content(
 			$fresh_result['content'] ?? '',
 			$fields['external_link']
 		);
@@ -643,12 +671,40 @@ class Post_Import_Service {
 
 		$fields['title']             = $fresh_result['title'];
 		$fields['featured_media_id'] = $fresh_result['featured_media'];
-		$fields['excerpt']           = $fresh_result['excerpt'];
 		$fields['slug']              = $fresh_result['slug'];
 		$fields['comment_status']    = $fresh_result['comment_status'];
 		$fields['ping_status']       = $fresh_result['ping_status'];
 		$fields['menu_order']        = $fresh_result['menu_order'];
-		$processed_content           = $this->process_post_content(
+
+		$sanitized_excerpt = $this->sanitize_field(
+			$fresh_result['excerpt'],
+			self::FIELD_EXCERPT
+		);
+
+		if ( is_wp_error( $sanitized_excerpt ) ) {
+			$error_message = $sanitized_excerpt->get_error_message();
+
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$error_message,
+				array( 'action' => 'excerpt_sanitization_failed' )
+			);
+
+			return array(
+				'external_id' => $fields['external_post_id'],
+				'title'       => $fields['title'],
+				'success'     => false,
+				'error'       => $error_message,
+			);
+		}
+
+		$fields['excerpt'] = $sanitized_excerpt;
+
+		$processed_content = $this->process_post_content(
 			$fresh_result['content'] ?? '',
 			$fields['external_link']
 		);

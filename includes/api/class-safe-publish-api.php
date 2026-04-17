@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\API;
 
 use Safe_Publish\Admin\Content_Processor;
+use Safe_Publish\Admin\Sanitizes_Content;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
@@ -26,6 +27,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Safe_Publish API Class.
  */
 final class Safe_Publish_API extends REST_Base {
+
+	use Sanitizes_Content;
 
 	/**
 	 * REST API base route.
@@ -243,7 +246,22 @@ final class Safe_Publish_API extends REST_Base {
 		}
 
 		if ( $req->has_param( 'excerpt' ) && isset( $excerpt ) ) {
-			$postarr['post_excerpt'] = wp_kses_post( $excerpt );
+			$sanitized_excerpt = $this->sanitize_field(
+				$excerpt,
+				self::FIELD_EXCERPT
+			);
+
+			if ( is_wp_error( $sanitized_excerpt ) ) {
+				return new WP_REST_Response(
+					array(
+						'success' => false,
+						'error'   => $sanitized_excerpt->get_error_message(),
+					),
+					500
+				);
+			}
+
+			$postarr['post_excerpt'] = $sanitized_excerpt;
 		}
 
 		if ( isset( $content ) ) {
@@ -259,7 +277,22 @@ final class Safe_Publish_API extends REST_Base {
 				);
 			}
 
-			$postarr['post_content'] = $processed_content;
+			$sanitized_content = $this->sanitize_field(
+				$processed_content,
+				self::FIELD_CONTENT
+			);
+
+			if ( is_wp_error( $sanitized_content ) ) {
+				return new WP_REST_Response(
+					array(
+						'success' => false,
+						'error'   => $sanitized_content->get_error_message(),
+					),
+					500
+				);
+			}
+
+			$postarr['post_content'] = $sanitized_content;
 		}
 
 		$result = wp_update_post( $postarr, true );
