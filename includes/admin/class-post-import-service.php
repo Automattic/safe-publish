@@ -172,6 +172,41 @@ class Post_Import_Service {
 	}
 
 	/**
+	 * Builds a standardized error result array for an import operation.
+	 *
+	 * @param array  $fields        Sanitized post fields.
+	 * @param string $error_message Error description.
+	 * @return array Error result with external_id, title, success, and error keys.
+	 */
+	private function build_error_result( array $fields, string $error_message ): array {
+		return array(
+			'external_id' => $fields['external_post_id'],
+			'title'       => $fields['title'],
+			'success'     => false,
+			'error'       => $error_message,
+		);
+	}
+
+	/**
+	 * Builds a standardized success result array for an import operation.
+	 *
+	 * @param array $fields   Sanitized post fields.
+	 * @param int   $post_id  Created or updated WordPress post ID.
+	 * @param bool  $existing Whether the post was updated (true) or newly created (false).
+	 * @return array Success result with external_id, title, success, post_id, edit_url, and existing keys.
+	 */
+	private function build_success_result( array $fields, int $post_id, bool $existing ): array {
+		return array(
+			'external_id' => $fields['external_post_id'],
+			'title'       => $fields['title'],
+			'success'     => true,
+			'post_id'     => $post_id,
+			'edit_url'    => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
+			'existing'    => $existing,
+		);
+	}
+
+	/**
 	 * Validates that required fields are present for import.
 	 *
 	 * @param array $fields Extracted post fields.
@@ -179,11 +214,9 @@ class Post_Import_Service {
 	 */
 	private function validate_required_fields( array $fields ): ?array {
 		if ( empty( $fields['title'] ) || empty( $fields['external_post_id'] ) ) {
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => __( 'Missing required post data.', 'safe-publish' ),
+			return $this->build_error_result(
+				$fields,
+				__( 'Missing required post data.', 'safe-publish' )
 			);
 		}
 
@@ -237,12 +270,19 @@ class Post_Import_Service {
 			return null;
 		}
 
-		return array(
-			'external_id' => $fields['external_post_id'],
-			'title'       => $fields['title'],
-			'success'     => false,
-			'error'       => $error_message,
-		);
+		return $this->build_error_result( $fields, $error_message );
+	}
+
+	/**
+	 * Extracts the site base URL (scheme + host) from a full URL.
+	 *
+	 * @param string $url Full URL to extract the base from.
+	 * @return string Site base URL (e.g. "https://example.com").
+	 */
+	private function extract_site_url( string $url ): string {
+		return wp_parse_url( $url, PHP_URL_SCHEME )
+			. '://'
+			. wp_parse_url( $url, PHP_URL_HOST );
 	}
 
 	/**
@@ -260,10 +300,7 @@ class Post_Import_Service {
 			return $this->sanitize_field( $content, self::FIELD_CONTENT );
 		}
 
-		$site_url = wp_parse_url( $external_link, PHP_URL_SCHEME )
-			. '://'
-			. wp_parse_url( $external_link, PHP_URL_HOST );
-
+		$site_url  = $this->extract_site_url( $external_link );
 		$processed = $this->content_processor->process_content( $content, $site_url );
 
 		if ( is_wp_error( $processed ) ) {
@@ -332,14 +369,12 @@ class Post_Import_Service {
 	/**
 	 * Handles import flow when a matching post already exists in WordPress.
 	 *
-	 * Fetches fresh content from the external site and updates the existing post.
-	 * Aborts with an error result if the fetch fails; the post will not be updated
-	 * with stale snapshot data.
+	 * Fetches fresh content from the external site and updates the existing
+	 * post. Aborts with an error result if the fetch fails; the post will
+	 * not be updated with stale snapshot data.
 	 *
-	 * Intentional differences from the single-import update path
-	 * (@see Admin_Ajax_Controller::update_imported_draft()):
-	 * - Post status is preserved (not reset to 'draft') to avoid silently
-	 *   unpublishing live posts during automated bulk runs.
+	 * Post status is preserved (not reset to 'draft') to avoid silently
+	 * unpublishing live posts during automated bulk runs.
 	 *
 	 * @param WP_Post  $imported_post Imported WordPress post.
 	 * @param array    $fields        Sanitized post fields.
@@ -353,117 +388,35 @@ class Post_Import_Service {
 		string $post_type,
 		?int $session_id
 	): array {
-		$fresh_result = $this->fetch_fresh_content(
-			$fields['external_post_id'],
-			$fields['raw_post_type']
-		);
+		$prepared = $this->prepare_fresh_content( $fields );
 
-		if ( is_wp_error( $fresh_result ) ) {
-			$error_message = $fresh_result->get_error_message();
-
-			$this->log_import_if_session(
-				$session_id,
-				$fields['external_post_id'],
-				$fields['title'],
-				'error',
-				null,
-				$error_message,
-				array( 'action' => 'fetch_failed' )
-			);
-
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $error_message,
-			);
-		}
-
-		$fields['title']             = $fresh_result['title'];
-		$fields['featured_media_id'] = $fresh_result['featured_media'];
-		$fields['slug']              = $fresh_result['slug'];
-		$fields['comment_status']    = $fresh_result['comment_status'];
-		$fields['ping_status']       = $fresh_result['ping_status'];
-		$fields['menu_order']        = $fresh_result['menu_order'];
-
-		$sanitized_excerpt = $this->sanitize_field(
-			$fresh_result['excerpt'],
-			self::FIELD_EXCERPT
-		);
-
-		if ( is_wp_error( $sanitized_excerpt ) ) {
-			$error_message = $sanitized_excerpt->get_error_message();
+		if ( is_wp_error( $prepared ) ) {
+			$error_data   = $prepared->get_error_data();
+			$error_fields = is_array( $error_data ) && isset( $error_data['fields'] )
+				? $error_data['fields']
+				: $fields;
 
 			$this->log_import_if_session(
 				$session_id,
-				$fields['external_post_id'],
-				$fields['title'],
+				$error_fields['external_post_id'],
+				$error_fields['title'],
 				'error',
 				null,
-				$error_message,
-				array( 'action' => 'excerpt_sanitization_failed' )
+				$prepared->get_error_message(),
+				array( 'action' => $prepared->get_error_code() )
 			);
 
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $error_message,
+			return $this->build_error_result(
+				$error_fields,
+				$prepared->get_error_message()
 			);
 		}
 
-		$fields['excerpt'] = $sanitized_excerpt;
+		$fields            = $prepared['fields'];
+		$processed_content = $prepared['processed_content'];
 
-		$processed_content = $this->process_post_content(
-			$fresh_result['content'] ?? '',
-			$fields['external_link']
-		);
-
-		if ( is_wp_error( $processed_content ) ) {
-			$error_message = $processed_content->get_error_message();
-
-			$this->log_import_if_session(
-				$session_id,
-				$fields['external_post_id'],
-				$fields['title'],
-				'error',
-				null,
-				$error_message,
-				array( 'action' => 'content_processing_failed' )
-			);
-			$this->content_processor->delete_newly_created_media();
-
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $error_message,
-			);
-		}
-
-		$failed_media_error = $this->get_failed_media_error( $fields );
-
-		if ( null !== $failed_media_error ) {
-			$this->log_import_if_session(
-				$session_id,
-				$fields['external_post_id'],
-				$fields['title'],
-				'error',
-				null,
-				$failed_media_error['error'],
-				array( 'action' => 'media_download_failed' )
-			);
-			$this->content_processor->delete_newly_created_media();
-
-			return $failed_media_error;
-		}
-
-		// Unsanitized values; sanitized downstream before being stored.
-		$fields['meta']  = is_array( $fresh_result['meta'] ?? null ) ? $fresh_result['meta'] : $fields['meta'];
-		$fields['terms'] = is_array( $fresh_result['terms'] ?? null ) ? $fresh_result['terms'] : $fields['terms'];
-
-		// Sideload the featured image before writing the post so that a failure
-		// here does not leave the post in a partially-updated state.
+		// Sideload the featured image before writing the post so that a
+		// failure here does not leave the post in a partially-updated state.
 		$featured_attachment_id = $this->import_featured_image_attachment(
 			$fields['featured_media_id'],
 			$fields['external_link']
@@ -482,17 +435,10 @@ class Post_Import_Service {
 				array( 'action' => 'featured_image_import_failed' )
 			);
 
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $error_message,
-			);
+			return $this->build_error_result( $fields, $error_message );
 		}
 
-		$this->content_processor->disable_content_filters();
-
-		$post_id = wp_update_post(
+		$post_id = $this->persist_updated_post(
 			array(
 				'ID'             => $imported_post->ID,
 				'post_title'     => $fields['title'],
@@ -503,104 +449,32 @@ class Post_Import_Service {
 				'comment_status' => $fields['comment_status'],
 				'ping_status'    => $fields['ping_status'],
 				'menu_order'     => $fields['menu_order'],
-			)
-		);
-
-		$this->content_processor->restore_content_filters();
-
-		if ( is_wp_error( $post_id ) ) {
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $post_id->get_error_message(),
-			);
-		}
-
-		update_post_meta( $post_id, Options::META_EXTERNAL_LINK, $fields['external_link'] );
-
-		delete_post_meta( $post_id, Options::META_IMPORT_DATE );
-		if ( false === update_post_meta(
-			$post_id,
-			Options::META_IMPORT_DATE,
-			current_time( 'mysql' )
-		) ) {
-			$error_message = __(
-				'Failed to update post tracking metadata.',
-				'safe-publish'
-			);
-
-			$this->log_import_if_session(
-				$session_id,
-				$fields['external_post_id'],
-				$fields['title'],
-				'error',
-				$post_id,
-				$error_message,
-				array( 'action' => 'meta_update_failed' )
-			);
-
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $error_message,
-			);
-		}
-
-		if ( $featured_attachment_id > 0 ) {
-			set_post_thumbnail( $post_id, $featured_attachment_id );
-		}
-
-		$meta_result = $this->meta_terms_manager->update_meta(
-			$post_id,
-			$fields['meta']
-		);
-
-		if ( is_wp_error( $meta_result ) ) {
-			$error_message = $meta_result->get_error_message();
-
-			$this->log_import_if_session(
-				$session_id,
-				$fields['external_post_id'],
-				$fields['title'],
-				'error',
-				$post_id,
-				$error_message,
-				array( 'action' => 'meta_update_failed' )
-			);
-
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $error_message,
-			);
-		}
-
-		$terms_result = $this->meta_terms_manager->update_terms(
-			$post_id,
+			),
+			$featured_attachment_id,
+			$fields['external_link'],
+			$fields['meta'],
 			$fields['terms']
 		);
 
-		if ( is_wp_error( $terms_result ) ) {
-			$error_message = $terms_result->get_error_message();
+		if ( is_wp_error( $post_id ) ) {
+			$error_data = $post_id->get_error_data();
+			$action     = is_array( $error_data ) && isset( $error_data['action'] )
+				? $error_data['action']
+				: 'post_update_failed';
 
 			$this->log_import_if_session(
 				$session_id,
 				$fields['external_post_id'],
 				$fields['title'],
 				'error',
-				$post_id,
-				$error_message,
-				array( 'action' => 'terms_update_failed' )
+				$imported_post->ID,
+				$post_id->get_error_message(),
+				array( 'action' => $action )
 			);
 
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $error_message,
+			return $this->build_error_result(
+				$fields,
+				$post_id->get_error_message()
 			);
 		}
 
@@ -614,24 +488,15 @@ class Post_Import_Service {
 			array( 'action' => 'updated_existing' )
 		);
 
-		return array(
-			'external_id' => $fields['external_post_id'],
-			'title'       => $fields['title'],
-			'success'     => true,
-			'post_id'     => $post_id,
-			'edit_url'    => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
-			'existing'    => true,
-		);
+		return $this->build_success_result( $fields, $post_id, true );
 	}
 
 	/**
 	 * Handles import flow when no matching post exists yet in WordPress.
 	 *
-	 * Fetches fresh content from the external site and creates a new draft post.
-	 * Aborts with an error result if the fetch fails; the post will not be created
-	 * with stale snapshot data.
-	 *
-	 * @see Admin_Ajax_Controller::create_new_draft() for the single-import equivalent.
+	 * Fetches fresh content from the external site and creates a new draft
+	 * post. Aborts with an error result if the fetch fails; the post will
+	 * not be created with stale snapshot data.
 	 *
 	 * @param array    $fields     Sanitized post fields.
 	 * @param string   $post_type  Resolved post type slug.
@@ -643,117 +508,35 @@ class Post_Import_Service {
 		string $post_type,
 		?int $session_id
 	): array {
-		$fresh_result = $this->fetch_fresh_content(
-			$fields['external_post_id'],
-			$fields['raw_post_type']
-		);
+		$prepared = $this->prepare_fresh_content( $fields );
 
-		if ( is_wp_error( $fresh_result ) ) {
-			$error_message = $fresh_result->get_error_message();
-
-			$this->log_import_if_session(
-				$session_id,
-				$fields['external_post_id'],
-				$fields['title'],
-				'error',
-				null,
-				$error_message,
-				array( 'action' => 'fetch_failed' )
-			);
-
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $error_message,
-			);
-		}
-
-		$fields['title']             = $fresh_result['title'];
-		$fields['featured_media_id'] = $fresh_result['featured_media'];
-		$fields['slug']              = $fresh_result['slug'];
-		$fields['comment_status']    = $fresh_result['comment_status'];
-		$fields['ping_status']       = $fresh_result['ping_status'];
-		$fields['menu_order']        = $fresh_result['menu_order'];
-
-		$sanitized_excerpt = $this->sanitize_field(
-			$fresh_result['excerpt'],
-			self::FIELD_EXCERPT
-		);
-
-		if ( is_wp_error( $sanitized_excerpt ) ) {
-			$error_message = $sanitized_excerpt->get_error_message();
+		if ( is_wp_error( $prepared ) ) {
+			$error_data   = $prepared->get_error_data();
+			$error_fields = is_array( $error_data ) && isset( $error_data['fields'] )
+				? $error_data['fields']
+				: $fields;
 
 			$this->log_import_if_session(
 				$session_id,
-				$fields['external_post_id'],
-				$fields['title'],
+				$error_fields['external_post_id'],
+				$error_fields['title'],
 				'error',
 				null,
-				$error_message,
-				array( 'action' => 'excerpt_sanitization_failed' )
+				$prepared->get_error_message(),
+				array( 'action' => $prepared->get_error_code() )
 			);
 
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $error_message,
+			return $this->build_error_result(
+				$error_fields,
+				$prepared->get_error_message()
 			);
 		}
 
-		$fields['excerpt'] = $sanitized_excerpt;
+		$fields            = $prepared['fields'];
+		$processed_content = $prepared['processed_content'];
 
-		$processed_content = $this->process_post_content(
-			$fresh_result['content'] ?? '',
-			$fields['external_link']
-		);
-
-		if ( is_wp_error( $processed_content ) ) {
-			$error_message = $processed_content->get_error_message();
-
-			$this->log_import_if_session(
-				$session_id,
-				$fields['external_post_id'],
-				$fields['title'],
-				'error',
-				null,
-				$error_message,
-				array( 'action' => 'content_processing_failed' )
-			);
-			$this->content_processor->delete_newly_created_media();
-
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $error_message,
-			);
-		}
-
-		$failed_media_error = $this->get_failed_media_error( $fields );
-
-		if ( null !== $failed_media_error ) {
-			$this->log_import_if_session(
-				$session_id,
-				$fields['external_post_id'],
-				$fields['title'],
-				'error',
-				null,
-				$failed_media_error['error'],
-				array( 'action' => 'media_download_failed' )
-			);
-			$this->content_processor->delete_newly_created_media();
-
-			return $failed_media_error;
-		}
-
-		// Unsanitized values; sanitized downstream before being stored.
-		$fields['meta']  = is_array( $fresh_result['meta'] ?? null ) ? $fresh_result['meta'] : $fields['meta'];
-		$fields['terms'] = is_array( $fresh_result['terms'] ?? null ) ? $fresh_result['terms'] : $fields['terms'];
-
-		// Sideload the featured image before creating the post so that a failure
-		// here does not leave an orphaned draft in the DB.
+		// Sideload the featured image before creating the post so that a
+		// failure here does not leave an orphaned draft in the DB.
 		$featured_attachment_id = $this->import_featured_image_attachment(
 			$fields['featured_media_id'],
 			$fields['external_link']
@@ -772,17 +555,10 @@ class Post_Import_Service {
 				array( 'action' => 'featured_image_import_failed' )
 			);
 
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $error_message,
-			);
+			return $this->build_error_result( $fields, $error_message );
 		}
 
-		$this->content_processor->disable_content_filters();
-
-		$post_id = wp_insert_post(
+		$post_id = $this->persist_new_post(
 			array(
 				'post_title'     => $fields['title'],
 				'post_excerpt'   => $fields['excerpt'],
@@ -799,61 +575,17 @@ class Post_Import_Service {
 					Options::META_IMPORTED_FROM    => Options::META_IMPORTED_FROM_VALUE,
 					Options::META_IMPORT_DATE      => current_time( 'mysql' ),
 				),
-			)
-		);
-
-		$this->content_processor->restore_content_filters();
-
-		if ( is_wp_error( $post_id ) ) {
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $post_id->get_error_message(),
-			);
-		}
-
-		if ( $featured_attachment_id > 0 ) {
-			set_post_thumbnail( $post_id, $featured_attachment_id );
-		}
-
-		$meta_result = $this->meta_terms_manager->update_meta(
-			$post_id,
-			$fields['meta']
-		);
-
-		if ( is_wp_error( $meta_result ) ) {
-			wp_delete_post( $post_id, true );
-			$this->content_processor->delete_newly_created_media();
-			$error_message = $meta_result->get_error_message();
-
-			$this->log_import_if_session(
-				$session_id,
-				$fields['external_post_id'],
-				$fields['title'],
-				'error',
-				null,
-				$error_message,
-				array( 'action' => 'meta_update_failed' )
-			);
-
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $error_message,
-			);
-		}
-
-		$terms_result = $this->meta_terms_manager->update_terms(
-			$post_id,
+			),
+			$featured_attachment_id,
+			$fields['meta'],
 			$fields['terms']
 		);
 
-		if ( is_wp_error( $terms_result ) ) {
-			wp_delete_post( $post_id, true );
-			$this->content_processor->delete_newly_created_media();
-			$error_message = $terms_result->get_error_message();
+		if ( is_wp_error( $post_id ) ) {
+			$error_data = $post_id->get_error_data();
+			$action     = is_array( $error_data ) && isset( $error_data['action'] )
+				? $error_data['action']
+				: 'post_create_failed';
 
 			$this->log_import_if_session(
 				$session_id,
@@ -861,15 +593,13 @@ class Post_Import_Service {
 				$fields['title'],
 				'error',
 				null,
-				$error_message,
-				array( 'action' => 'terms_update_failed' )
+				$post_id->get_error_message(),
+				array( 'action' => $action )
 			);
 
-			return array(
-				'external_id' => $fields['external_post_id'],
-				'title'       => $fields['title'],
-				'success'     => false,
-				'error'       => $error_message,
+			return $this->build_error_result(
+				$fields,
+				$post_id->get_error_message()
 			);
 		}
 
@@ -883,14 +613,258 @@ class Post_Import_Service {
 			array( 'action' => 'created_new_post' )
 		);
 
-		return array(
-			'external_id' => $fields['external_post_id'],
-			'title'       => $fields['title'],
-			'success'     => true,
-			'post_id'     => $post_id,
-			'edit_url'    => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
-			'existing'    => false,
+		return $this->build_success_result( $fields, $post_id, false );
+	}
+
+	/**
+	 * Fetches fresh content and prepares all fields for import.
+	 *
+	 * Handles the fetch, field updates, excerpt sanitization, content
+	 * processing, and media error checks that are common to both the new and
+	 * existing post import flows.
+	 *
+	 * @param array $fields Sanitized post fields from extract_post_fields().
+	 * @return array{fields: array, processed_content: string}|WP_Error Prepared data or error.
+	 */
+	private function prepare_fresh_content( array $fields ): array|WP_Error {
+		$fresh_result = $this->fetch_fresh_content(
+			$fields['external_post_id'],
+			$fields['raw_post_type']
 		);
+
+		if ( is_wp_error( $fresh_result ) ) {
+			return new WP_Error(
+				'fetch_failed',
+				$fresh_result->get_error_message()
+			);
+		}
+
+		$fields['title']             = $fresh_result['title'];
+		$fields['featured_media_id'] = $fresh_result['featured_media'];
+		$fields['slug']              = $fresh_result['slug'];
+		$fields['comment_status']    = $fresh_result['comment_status'];
+		$fields['ping_status']       = $fresh_result['ping_status'];
+		$fields['menu_order']        = $fresh_result['menu_order'];
+
+		$sanitized_excerpt = $this->sanitize_field(
+			$fresh_result['excerpt'],
+			self::FIELD_EXCERPT
+		);
+
+		if ( is_wp_error( $sanitized_excerpt ) ) {
+			return new WP_Error(
+				'excerpt_sanitization_failed',
+				$sanitized_excerpt->get_error_message(),
+				array( 'fields' => $fields )
+			);
+		}
+
+		$fields['excerpt'] = $sanitized_excerpt;
+
+		$processed_content = $this->process_post_content(
+			$fresh_result['content'] ?? '',
+			$fields['external_link']
+		);
+
+		if ( is_wp_error( $processed_content ) ) {
+			$this->content_processor->delete_newly_created_media();
+
+			return new WP_Error(
+				'content_processing_failed',
+				$processed_content->get_error_message(),
+				array( 'fields' => $fields )
+			);
+		}
+
+		$failed_media_error = $this->get_failed_media_error( $fields );
+
+		if ( null !== $failed_media_error ) {
+			$this->content_processor->delete_newly_created_media();
+
+			return new WP_Error(
+				'media_download_failed',
+				$failed_media_error['error'],
+				array( 'fields' => $fields )
+			);
+		}
+
+		// Unsanitized values; sanitized downstream before being stored.
+		$fields['meta']  = is_array( $fresh_result['meta'] ?? null )
+			? $fresh_result['meta']
+			: $fields['meta'];
+		$fields['terms'] = is_array( $fresh_result['terms'] ?? null )
+			? $fresh_result['terms']
+			: $fields['terms'];
+
+		return array(
+			'fields'            => $fields,
+			'processed_content' => $processed_content,
+		);
+	}
+
+	/**
+	 * Persists an existing post update with all associated data.
+	 *
+	 * Handles wp_update_post, external link meta, import date, thumbnail,
+	 * custom meta, and terms. Used by both single and bulk import paths.
+	 *
+	 * @param array  $post_args              Arguments for wp_update_post().
+	 * @param int    $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
+	 * @param string $external_link           External post URL for meta tracking.
+	 * @param mixed  $meta                    Meta data (array or object).
+	 * @param mixed  $terms                   Terms data (array or object).
+	 * @param bool   $disable_filters         Whether to disable content filters around the update.
+	 * @return int|WP_Error Post ID on success, WP_Error on failure.
+	 */
+	public function persist_updated_post(
+		array $post_args,
+		int $featured_attachment_id,
+		string $external_link,
+		mixed $meta,
+		mixed $terms,
+		bool $disable_filters = true
+	): int|WP_Error {
+		if ( $disable_filters ) {
+			$this->content_processor->disable_content_filters();
+		}
+
+		$post_id = wp_update_post( $post_args );
+
+		if ( $disable_filters ) {
+			$this->content_processor->restore_content_filters();
+		}
+
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
+		}
+
+		update_post_meta(
+			$post_id,
+			Options::META_EXTERNAL_LINK,
+			$external_link
+		);
+
+		delete_post_meta( $post_id, Options::META_IMPORT_DATE );
+		if ( false === update_post_meta(
+			$post_id,
+			Options::META_IMPORT_DATE,
+			current_time( 'mysql' )
+		) ) {
+			return new WP_Error(
+				'import_date_update_failed',
+				__(
+					'Failed to update post tracking metadata.',
+					'safe-publish'
+				),
+				array( 'action' => 'meta_update_failed' )
+			);
+		}
+
+		if ( $featured_attachment_id > 0 ) {
+			set_post_thumbnail( $post_id, $featured_attachment_id );
+		}
+
+		$meta_result = $this->meta_terms_manager->update_meta(
+			$post_id,
+			$meta
+		);
+
+		if ( is_wp_error( $meta_result ) ) {
+			return new WP_Error(
+				'meta_update_failed',
+				$meta_result->get_error_message(),
+				array( 'action' => 'meta_update_failed' )
+			);
+		}
+
+		$terms_result = $this->meta_terms_manager->update_terms(
+			$post_id,
+			$terms
+		);
+
+		if ( is_wp_error( $terms_result ) ) {
+			return new WP_Error(
+				'terms_update_failed',
+				$terms_result->get_error_message(),
+				array( 'action' => 'terms_update_failed' )
+			);
+		}
+
+		return $post_id;
+	}
+
+	/**
+	 * Persists a new post with all associated data.
+	 *
+	 * Handles wp_insert_post, thumbnail, custom meta, and terms. On meta or
+	 * terms failure the post and any sideloaded media are cleaned up. Used by
+	 * both single and bulk import paths.
+	 *
+	 * @param array $post_args              Arguments for wp_insert_post() (including meta_input).
+	 * @param int   $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
+	 * @param mixed $meta                    Meta data (array or object).
+	 * @param mixed $terms                   Terms data (array or object).
+	 * @param bool  $disable_filters         Whether to disable content filters around the insert.
+	 * @return int|WP_Error Post ID on success, WP_Error on failure.
+	 */
+	public function persist_new_post(
+		array $post_args,
+		int $featured_attachment_id,
+		mixed $meta,
+		mixed $terms,
+		bool $disable_filters = true
+	): int|WP_Error {
+		if ( $disable_filters ) {
+			$this->content_processor->disable_content_filters();
+		}
+
+		$post_id = wp_insert_post( $post_args );
+
+		if ( $disable_filters ) {
+			$this->content_processor->restore_content_filters();
+		}
+
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
+		}
+
+		if ( $featured_attachment_id > 0 ) {
+			set_post_thumbnail( $post_id, $featured_attachment_id );
+		}
+
+		$meta_result = $this->meta_terms_manager->update_meta(
+			$post_id,
+			$meta
+		);
+
+		if ( is_wp_error( $meta_result ) ) {
+			wp_delete_post( $post_id, true );
+			$this->content_processor->delete_newly_created_media();
+
+			return new WP_Error(
+				'meta_update_failed',
+				$meta_result->get_error_message(),
+				array( 'action' => 'meta_update_failed' )
+			);
+		}
+
+		$terms_result = $this->meta_terms_manager->update_terms(
+			$post_id,
+			$terms
+		);
+
+		if ( is_wp_error( $terms_result ) ) {
+			wp_delete_post( $post_id, true );
+			$this->content_processor->delete_newly_created_media();
+
+			return new WP_Error(
+				'terms_update_failed',
+				$terms_result->get_error_message(),
+				array( 'action' => 'terms_update_failed' )
+			);
+		}
+
+		return $post_id;
 	}
 
 	/**
@@ -971,9 +945,7 @@ class Post_Import_Service {
 			return 0;
 		}
 
-		$site_url = wp_parse_url( $external_link, PHP_URL_SCHEME )
-			. '://'
-			. wp_parse_url( $external_link, PHP_URL_HOST );
+		$site_url = $this->extract_site_url( $external_link );
 
 		$attachment_id = $this->media_importer->import_featured_image(
 			$featured_media_id,
@@ -1036,6 +1008,11 @@ class Post_Import_Service {
 		$external_id = (int) ( $post_data['id'] ?? 0 );
 		$title       = $post_data['title'] ?? __( 'Unknown', 'safe-publish' );
 
+		$fields = array(
+			'external_post_id' => $external_id,
+			'title'            => $title,
+		);
+
 		$this->log_import_if_session(
 			$session_id,
 			$external_id,
@@ -1046,11 +1023,6 @@ class Post_Import_Service {
 			array()
 		);
 
-		return array(
-			'external_id' => $external_id,
-			'title'       => $title,
-			'success'     => false,
-			'error'       => $e->getMessage(),
-		);
+		return $this->build_error_result( $fields, $e->getMessage() );
 	}
 }

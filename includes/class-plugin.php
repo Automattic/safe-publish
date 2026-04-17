@@ -212,7 +212,6 @@ final class Plugin {
 			$import_history,
 			$content_processor,
 			$post_import_service,
-			new Meta_Terms_Manager(),
 			$post_type_fetcher,
 			$http_client
 		);

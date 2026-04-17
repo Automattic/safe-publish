@@ -51,6 +51,40 @@ class External_Posts_API {
 	}
 
 	/**
+	 * Extracts taxonomy terms from an embedded REST API response.
+	 *
+	 * Parses the `wp:term` embedded data and groups term names by taxonomy.
+	 * Terms with empty names are skipped.
+	 *
+	 * @param array $response_data Decoded REST API response for a single post.
+	 * @return array<string, list<string>> Term names grouped by taxonomy slug.
+	 */
+	public static function extract_embedded_terms( array $response_data ): array {
+		$terms = array();
+
+		if (
+			empty( $response_data['_embedded']['wp:term'] ) ||
+			! is_array( $response_data['_embedded']['wp:term'] )
+		) {
+			return $terms;
+		}
+
+		foreach ( $response_data['_embedded']['wp:term'] as $term_group ) {
+			foreach ( $term_group as $term ) {
+				$tax = isset( $term['taxonomy'] ) ? $term['taxonomy'] : 'term';
+				if ( ! isset( $terms[ $tax ] ) ) {
+					$terms[ $tax ] = array();
+				}
+				if ( isset( $term['name'] ) && '' !== $term['name'] ) {
+					$terms[ $tax ][] = $term['name'];
+				}
+			}
+		}
+
+		return $terms;
+	}
+
+	/**
 	 * Fetches posts from external site.
 	 *
 	 * @param string $site_url         External site URL.
@@ -205,23 +239,7 @@ class External_Posts_API {
 			return false;
 		}
 
-		// Extract terms from embedded response if available.
-		$incoming_terms = array();
-		if ( ! empty( $post['_embedded']['wp:term'] ) && is_array( $post['_embedded']['wp:term'] ) ) {
-			foreach ( $post['_embedded']['wp:term'] as $term_group ) {
-				foreach ( $term_group as $term ) {
-					$tax = isset( $term['taxonomy'] ) ? $term['taxonomy'] : 'term';
-					if ( ! isset( $incoming_terms[ $tax ] ) ) {
-						$incoming_terms[ $tax ] = array();
-					}
-					if ( isset( $term['name'] ) && '' !== $term['name'] ) {
-						$incoming_terms[ $tax ][] = $term['name'];
-					}
-				}
-			}
-		}
-
-		$prepared_post['terms'] = $incoming_terms;
+		$prepared_post['terms'] = self::extract_embedded_terms( $post );
 
 		/**
 		 * Filters post data prepared for the listing UI.
@@ -380,23 +398,7 @@ class External_Posts_API {
 
 		$post_data['meta'] = isset( $data['meta'] ) && is_array( $data['meta'] ) ? $data['meta'] : array();
 
-		// Extract terms from embedded response if available.
-		$incoming_terms = array();
-		if ( ! empty( $data['_embedded']['wp:term'] ) && is_array( $data['_embedded']['wp:term'] ) ) {
-			foreach ( $data['_embedded']['wp:term'] as $term_group ) {
-				foreach ( $term_group as $term ) {
-					$tax = isset( $term['taxonomy'] ) ? $term['taxonomy'] : 'term';
-					if ( ! isset( $incoming_terms[ $tax ] ) ) {
-						$incoming_terms[ $tax ] = array();
-					}
-					if ( isset( $term['name'] ) && '' !== $term['name'] ) {
-						$incoming_terms[ $tax ][] = $term['name'];
-					}
-				}
-			}
-		}
-
-		$post_data['terms'] = $incoming_terms;
+		$post_data['terms'] = self::extract_embedded_terms( $data );
 
 		return $post_data;
 	}
