@@ -68,10 +68,16 @@ spl_autoload_register(
 		$real_plugin_dir = realpath( SAFE_PUBLISH_PLUGIN_DIR );
 		$real_file_path  = realpath( $file_path );
 
+		// Try trait prefix if class prefix doesn't resolve.
+		if ( ! $real_file_path ) {
+			$file_path      = str_replace( '/class-', '/trait-', $file_path );
+			$real_file_path = realpath( $file_path );
+		}
+
 		// Validate that the file exists and is within the plugin directory.
-		if ( $real_file_path &&
-		file_exists( $file_path ) &&
-		0 === strpos( $real_file_path, $real_plugin_dir ) ) {
+		if ( $real_file_path
+			&& 0 === strpos( $real_file_path, $real_plugin_dir )
+		) {
 			// phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable -- Safe file inclusion within plugin directory with validation
 			require_once $file_path;
 		}
