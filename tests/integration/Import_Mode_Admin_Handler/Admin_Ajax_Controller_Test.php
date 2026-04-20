@@ -825,6 +825,47 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the post password is never included in the AJAX response
+	 * payload returned to the client.
+	 */
+	public function test_ajax_create_draft_response_excludes_password(): void {
+		// ARRANGE: Mock API returns a password-protected post.
+		$this->mock_post_overrides = array(
+			'password' => 's3cret',
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'            => wp_create_nonce(
+				'safe_publish_ajax_nonce'
+			),
+			'external_post_id' => '7300',
+			'title'            => 'Password Leak Check',
+			'content'          => '<p>Content.</p>',
+			'external_link'    => 'https://source.example.com/pw-leak',
+			'post_type'        => 'post',
+		);
+
+		// ACT: Trigger the create draft handler.
+		try {
+			$this->_handleAjax( 'safe_publish_create_draft' );
+			$this->fail(
+				'Expected WPAjaxDieContinueException'
+			);
+		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		}
+
+		// ASSERT: Response must not contain password.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertTrue( $response['success'] );
+		$this->assertArrayNotHasKey(
+			'password',
+			$response['data'],
+			'Password must never be sent in the AJAX response.'
+		);
+	}
+
+	/**
 	 * Returns the number of import sessions currently in the 'in_progress' state.
 	 *
 	 * @return int
