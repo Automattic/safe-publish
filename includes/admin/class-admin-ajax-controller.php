@@ -892,12 +892,12 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Processes draft post content by importing media and fixing links.
 	 *
-	 * Returns a WP_Error if content processing fails or if sanitization would
-	 * modify the content.
+	 * Returns a WP_Error if content processing fails or if kses is enabled and
+	 * sanitization would modify the content.
 	 *
 	 * @param string $content       Raw post content.
 	 * @param string $external_link External post URL used to derive site URL.
-	 * @return string|WP_Error Processed and sanitized content, or WP_Error on failure.
+	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
 	private function process_draft_content( string $content, string $external_link ): string|WP_Error {
 		$processed = $content;

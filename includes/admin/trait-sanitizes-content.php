@@ -15,10 +15,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Provides content sanitization with modification detection.
+ * Provides optional kses sanitization with modification detection.
  *
- * Used by import paths to ensure wp_kses_post does not silently alter content
- * during migration.
+ * Used by import paths. By default kses is disabled to preserve content
+ * fidelity; when enabled via the safe_publish_import_kses filter, detects
+ * and rejects modifications made by kses.
  */
 trait Sanitizes_Content {
 
@@ -28,9 +29,10 @@ trait Sanitizes_Content {
 	/**
 	 * Sanitizes a field value and fails if sanitization modifies it.
 	 *
-	 * Runs wp_kses_post on the value and compares the result to the original.
-	 * Returns a WP_Error when sanitization strips or alters HTML, including
-	 * which tags/attributes were removed.
+	 * By default, kses is disabled during import to preserve content fidelity,
+	 * matching WordPress core importer behavior. When kses is enabled via the
+	 * safe_publish_import_kses filter, runs the value through wp_kses and
+	 * returns a WP_Error if sanitization strips or alters HTML.
 	 *
 	 * @param string $value The HTML value to sanitize.
 	 * @param string $field FIELD_CONTENT or FIELD_EXCERPT constant.
@@ -52,7 +54,37 @@ trait Sanitizes_Content {
 			);
 		}
 
-		$sanitized = wp_kses_post( $value );
+		/**
+		 * Filters whether to apply kses sanitization during import.
+		 *
+		 * By default, kses is disabled to preserve content fidelity, matching
+		 * WordPress core importer behavior. Return true to enable kses
+		 * sanitization.
+		 *
+		 * @param bool   $enabled Whether to apply kses. Default false.
+		 * @param string $field   Field being sanitized: 'content' or 'excerpt'.
+		 */
+		$enabled = apply_filters( 'safe_publish_import_kses', false, $field );
+
+		if ( ! $enabled ) {
+			return $value;
+		}
+
+		/**
+		 * Filters the allowed HTML tags and attributes for import sanitization.
+		 *
+		 * Only applied when safe_publish_import_kses returns true.
+		 *
+		 * @param array  $allowed Allowed HTML elements and attributes.
+		 * @param string $field   Field being sanitized: 'content' or 'excerpt'.
+		 */
+		$allowed = apply_filters(
+			'safe_publish_kses_allowed_html',
+			wp_kses_allowed_html( 'post' ),
+			$field
+		);
+
+		$sanitized = wp_kses( $value, $allowed );
 
 		if ( ! $this->is_content_modified( $value, $sanitized ) ) {
 			return $sanitized;

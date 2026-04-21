@@ -133,6 +133,56 @@ add_filter( 'safe_publish_request_args', function( array $args, string $url ): a
 }, 10, 2 );
 ```
 
+### `safe_publish_import_kses`
+
+Filter whether to apply kses sanitization to imported content and excerpts. By default, kses is disabled during import to preserve content fidelity, matching WordPress core importer behavior. Return `true` to enable kses sanitization.
+
+**Parameters:**
+
+- `bool $enabled` — whether to apply kses (default `false`)
+- `string $field` — field being sanitized: `'content'` or `'excerpt'`
+
+**Returns:** `bool`
+
+**Examples:**
+
+```php
+// Enable kses sanitization during import.
+add_filter( 'safe_publish_import_kses', '__return_true' );
+```
+
+```php
+// Enable kses only for content, leaving excerpts unfiltered.
+add_filter( 'safe_publish_import_kses', function( bool $enabled, string $field ): bool {
+    return 'content' === $field;
+}, 10, 2 );
+```
+
+### `safe_publish_kses_allowed_html`
+
+Filter the allowed HTML tags and attributes when kses is enabled during import. Only applied when `safe_publish_import_kses` returns `true`.
+
+**Parameters:**
+
+- `array $allowed` — allowed HTML elements and attributes (default: `wp_kses_allowed_html( 'post' )`)
+- `string $field` — field being sanitized: `'content'` or `'excerpt'`
+
+**Returns:** `array`
+
+**Example:**
+
+```php
+// Allow iframes when kses is enabled.
+add_filter( 'safe_publish_kses_allowed_html', function( array $allowed ): array {
+    $allowed['iframe'] = array(
+        'src'    => true,
+        'width'  => true,
+        'height' => true,
+    );
+    return $allowed;
+} );
+```
+
 ### `safe_publish_dev_ssl_verify`
 
 Filter SSL certificate verification. Primarily useful in local development environments with self-signed certificates. **Never disable in production.**
