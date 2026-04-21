@@ -27,7 +27,7 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
    - Check basic auth plugin is installed on source site
 
 4. **Check HTTPS**:
-   - Both sites must use HTTPS
+   - Production domains must use HTTPS (HTTP is allowed for local development domains like `.test`, `.local`, `.dev`)
    - Verify SSL certificates are valid
    - Test site URL in browser
 
@@ -98,7 +98,7 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 **Solutions**:
 
 1. **Check post status**:
-   - Only published posts are fetched
+   - By default, the REST API returns only published posts (authenticated requests with `context=edit` may include other statuses)
    - Verify posts exist and are published on source site
 
 2. **Verify post type is exposed in REST API**:
@@ -181,34 +181,22 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 
 **Solutions**:
 
-1. **Check History before importing**:
-   - See if post was already imported
-   - Delete duplicate drafts manually
+Safe Publish tracks imported posts using the `safe_publish_external_post_id` meta key and automatically detects already-imported content. Posts that already exist locally are shown with an **Update** action instead of **Import**.
 
-2. **Feature request**:
-   - Automatic duplicate detection is planned
-   - Currently requires manual checking
+If duplicates still occur:
 
-3. **Use unique post meta** (developers):
-   ```php
-   // Check if post was already imported
-   $existing = get_posts( [
-       'meta_key' => '_safe_publish_source_url',
-       'meta_value' => $source_url,
-       'post_status' => 'any',
-   ] );
-   ```
+1. **Check History** to see if the post was imported from different sessions
+2. Delete duplicate drafts manually
 
 ### Validation Errors
 
-| Error code                  | Cause                                      | Solution                                                   |
-| --------------------------- | ------------------------------------------ | ---------------------------------------------------------- |
-| `invalid_url`               | URL not valid or accessible                | Check URL format and ensure the site is reachable          |
-| `authentication_failed`     | Cannot authenticate with the external site | See the [Authentication guide](concepts/authentication.md) |
-| `no_posts_found`            | No published posts available               | Verify posts are published on the source site              |
-| `invalid_post_data`         | Post data structure is invalid             | Re-save the post on the source site                        |
-| `media_import_failed`       | Unable to import images                    | Verify image URLs are publicly accessible                  |
-| `content_validation_failed` | Content structure failed validation        | Fix HTML/block errors in the source post                   |
+| Error code            | Cause                                                  | Solution                                                   |
+| --------------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
+| `invalid_url`         | URL not valid or accessible                            | Check URL format and ensure the site is reachable          |
+| `invalid_credentials` | Missing or invalid authentication credentials          | See the [Authentication guide](concepts/authentication.md) |
+| `request_failed`      | HTTP request to the external site failed               | Check network connectivity and site availability           |
+| `meta_update_failed`  | One or more post meta keys failed to save              | Check destination site database permissions                |
+| `unknown_taxonomy`    | A taxonomy from the source post does not exist locally | Register the taxonomy on the destination site              |
 
 ### Performance Issues
 
@@ -336,7 +324,7 @@ Install [Query Monitor](https://wordpress.org/plugins/query-monitor/) for advanc
 
 ### Test Authentication Separately
 
-Use the **Debug Auth** button in settings to test authentication independently of imports.
+Use the **Test Connection** button in settings to test authentication independently of imports.
 
 ### Import History
 
@@ -378,8 +366,8 @@ If you need to start fresh:
 wp option delete safe_publish_connected_site_url
 wp option delete safe_publish_sync_mode
 wp option delete safe_publish_number_of_posts
-wp option delete safe_publish_auth_username
-wp option delete safe_publish_auth_password
+wp option delete safe_publish_username
+wp option delete safe_publish_password
 ```
 
 ### Clear Import History
@@ -388,7 +376,7 @@ Import history is stored as WordPress custom post types and can be managed throu
 
 ### Complete Reset
 
-Deactivate and reactivate the plugin to reset all settings.
+Delete the options listed above using WP-CLI, then deactivate and reactivate the plugin. Reactivation restores default option values.
 
 ## Next Steps
 

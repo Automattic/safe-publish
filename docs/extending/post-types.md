@@ -29,8 +29,7 @@ register_post_type( 'book', [
 After registering with REST API support:
 
 1. Go to **Safe Publish** in WordPress admin
-2. Click **Fetch Post Types** in the settings
-3. Your custom post type should appear in the dropdown
+2. Your custom post type should appear in the **Post Type** dropdown automatically
 
 ## REST API Configuration
 
@@ -97,12 +96,12 @@ register_taxonomy( 'genre', 'book', [
 
 ## Hierarchical Post Types
 
-For hierarchical post types (like pages), parent-child relationships are preserved:
+Hierarchical post types (like pages) can be imported, but parent-child relationships are not mapped across sites. Imported posts will not retain their parent assignment from the source.
 
 ```php
 register_post_type( 'documentation', [
     'public' => true,
-    'hierarchical' => true, // Enables parent-child relationships
+    'hierarchical' => true,
     'show_in_rest' => true,
     'supports' => [ 'title', 'editor', 'page-attributes' ],
 ] );
@@ -110,7 +109,7 @@ register_post_type( 'documentation', [
 
 ## ACF (Advanced Custom Fields) Support
 
-ACF fields are not automatically imported. To import ACF fields, expose them via the source site's REST API and handle them during the import process using custom development.
+ACF fields are not exposed via the REST API by default. Once exposed (e.g. via ACF's built-in REST API setting or `register_rest_field()`), they are imported automatically like any other post meta.
 
 ## Troubleshooting
 

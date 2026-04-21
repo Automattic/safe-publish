@@ -81,7 +81,7 @@ When extending Safe Publish on WordPress VIP:
 
 - Follow [VIP coding standards](https://docs.wpvip.com/technical-references/vip-codebase/)
 - Avoid filesystem writes
-- Use `wpcom_vip_file_get_contents()` for external requests
+- Use `vip_safe_wp_remote_get()` for external requests
 - Test thoroughly in VIP environments
 
 ## Documentation

@@ -47,7 +47,7 @@ Activate the plugin through the WordPress admin panel or [code](https://docs.wpv
 ## Step 4: Test the Connection
 
 1. Click the **Test Connection** button in the settings panel
-2. If successful, you'll see a green checkmark and available post types
+2. If successful, you'll see a success message with the response time
 3. If there's an error, see our [troubleshooting guide](troubleshooting.md)
 
 ## Step 5: Browse and Import Content
@@ -64,13 +64,13 @@ You have three ways to import content:
 
 **1. Single Post Import**
 
-- Click the **Create Draft** action on any post
+- Click the **Import** action on any post
 - The post will be imported as a draft with all content, metadata, and images
 
 **2. Bulk Import**
 
 - Select multiple posts using checkboxes
-- Click **Bulk Import** in the bulk actions menu
+- Click **Import / Update** in the bulk actions menu
 - All selected posts will be imported as drafts
 
 **3. Preview Before Import**
