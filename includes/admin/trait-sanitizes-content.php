@@ -79,7 +79,7 @@ trait Sanitizes_Content {
 		 * @param string $field   Field being sanitized: 'content' or 'excerpt'.
 		 */
 		$allowed = apply_filters(
-			'safe_publish_kses_allowed_html',
+			'safe_publish_import_kses_allowed_html',
 			wp_kses_allowed_html( 'post' ),
 			$field
 		);

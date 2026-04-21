@@ -823,8 +823,8 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that the safe_publish_kses_allowed_html filter lets developers
-	 * customize which tags are allowed when kses is enabled.
+	 * Verifies that the safe_publish_import_kses_allowed_html filter lets
+	 * developers customize which tags are allowed when kses is enabled.
 	 */
 	public function test_bulk_import_uses_custom_allowed_tags(): void {
 		// ARRANGE: Enable kses and add <iframe> to allowed tags.
@@ -839,7 +839,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			return $allowed;
 		};
 		add_filter(
-			'safe_publish_kses_allowed_html',
+			'safe_publish_import_kses_allowed_html',
 			$allow_iframes
 		);
 
@@ -876,7 +876,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 
 		remove_filter( 'safe_publish_import_kses', '__return_true' );
 		remove_filter(
-			'safe_publish_kses_allowed_html',
+			'safe_publish_import_kses_allowed_html',
 			$allow_iframes
 		);
 

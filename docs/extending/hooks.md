@@ -158,7 +158,7 @@ add_filter( 'safe_publish_import_kses', function( bool $enabled, string $field )
 }, 10, 2 );
 ```
 
-### `safe_publish_kses_allowed_html`
+### `safe_publish_import_kses_allowed_html`
 
 Filter the allowed HTML tags and attributes when kses is enabled during import. Only applied when `safe_publish_import_kses` returns `true`.
 
@@ -173,7 +173,7 @@ Filter the allowed HTML tags and attributes when kses is enabled during import. 
 
 ```php
 // Allow iframes when kses is enabled.
-add_filter( 'safe_publish_kses_allowed_html', function( array $allowed ): array {
+add_filter( 'safe_publish_import_kses_allowed_html', function( array $allowed ): array {
     $allowed['iframe'] = array(
         'src'    => true,
         'width'  => true,
