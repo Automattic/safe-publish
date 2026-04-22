@@ -674,4 +674,115 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$this->assertStringContainsString( 'w=400', $processed_content, 'Thumbnail width param should be present' );
 		$this->assertStringContainsString( 'h=225', $processed_content, 'Thumbnail height param should be present' );
 	}
+
+	/**
+	 * Verifies that query parameters are restored on the local URL for video
+	 * elements in processed content.
+	 *
+	 * Uses a .jpg extension because the test mock infrastructure only serves
+	 * image fixtures; the element type, not file format, is what this test
+	 * exercises.
+	 */
+	public function test_query_parameters_restored_for_video_in_processed_content(): void {
+		// ARRANGE: Video src with query parameters.
+		$source_site  = 'https://example.com';
+		$external_url = 'https://example.com/clip.jpg?t=30&quality=hd';
+		$content      = sprintf(
+			'<video src="%s"></video>',
+			$external_url
+		);
+
+		// ACT: Process content.
+		$processed = $this->content_media_processor
+			->process_content( $content, $source_site );
+
+		// ASSERT: External domain replaced with local.
+		$this->assertStringNotContainsString(
+			'example.com/clip.jpg',
+			$processed
+		);
+
+		// ASSERT: Query parameters are present on the local URL.
+		$this->assertStringContainsString(
+			't=30',
+			$processed,
+			'Start-time param should be restored'
+		);
+		$this->assertStringContainsString(
+			'quality=hd',
+			$processed,
+			'Quality param should be restored'
+		);
+	}
+
+	/**
+	 * Verifies that query parameters are restored on the local URL for audio
+	 * elements in processed content.
+	 *
+	 * Uses a .jpg extension because the test mock infrastructure only serves
+	 * image fixtures; the element type, not file format, is what this test
+	 * exercises.
+	 */
+	public function test_query_parameters_restored_for_audio_in_processed_content(): void {
+		// ARRANGE: Audio src with query parameters.
+		$source_site  = 'https://example.com';
+		$external_url = 'https://example.com/podcast.jpg?start=120';
+		$content      = sprintf(
+			'<audio src="%s"></audio>',
+			$external_url
+		);
+
+		// ACT: Process content.
+		$processed = $this->content_media_processor
+			->process_content( $content, $source_site );
+
+		// ASSERT: External domain replaced with local.
+		$this->assertStringNotContainsString(
+			'example.com/podcast.jpg',
+			$processed
+		);
+
+		// ASSERT: Query parameter is present on the local URL.
+		$this->assertStringContainsString(
+			'start=120',
+			$processed,
+			'Start param should be restored'
+		);
+	}
+
+	/**
+	 * Verifies that query parameters are restored on video poster URLs in
+	 * processed content.
+	 */
+	public function test_query_parameters_restored_for_video_poster_in_processed_content(): void {
+		// ARRANGE: Video with a poster that has query parameters.
+		$source_site = 'https://example.com';
+		$poster_url  = 'https://example.com/thumb.jpg?w=800&h=450';
+		$content     = sprintf(
+			'<video poster="%s"></video>',
+			$poster_url
+		);
+
+		// ACT: Process content.
+		$processed = $this->content_media_processor
+			->process_content( $content, $source_site );
+
+		// ASSERT: External domain replaced with local.
+		$this->assertStringNotContainsString(
+			'example.com/thumb.jpg',
+			$processed
+		);
+
+		// ASSERT: Query parameters are present on the local URL.
+		$this->assertStringContainsString(
+			'w=800',
+			$processed,
+			'Width param should be restored'
+		);
+		$this->assertStringContainsString(
+			'h=450',
+			$processed,
+			'Height param should be restored'
+		);
+	}
 }

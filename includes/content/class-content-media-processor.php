@@ -91,8 +91,7 @@ class Content_Media_Processor {
 					$this->import_and_replace_attr(
 						$processor,
 						'src',
-						$source_site_url,
-						true
+						$source_site_url
 					);
 					$this->process_srcset_attr( $processor, $source_site_url );
 					break;
@@ -172,17 +171,14 @@ class Content_Media_Processor {
 	 * Imports an external URL from a single attribute and replaces it with the
 	 * local equivalent.
 	 *
-	 * @param WP_HTML_Tag_Processor $processor            HTML processor positioned on the current tag.
-	 * @param string                $attr_name            Attribute name (e.g. src, poster).
-	 * @param string                $source_site_url      Source site URL.
-	 * @param bool                  $reapply_query_params Whether to reapply query parameters from
-	 *                                                    the original URL.
+	 * @param WP_HTML_Tag_Processor $processor       HTML processor positioned on the current tag.
+	 * @param string                $attr_name       Attribute name (e.g. src, poster).
+	 * @param string                $source_site_url Source site URL.
 	 */
 	private function import_and_replace_attr(
 		WP_HTML_Tag_Processor $processor,
 		string $attr_name,
-		string $source_site_url,
-		bool $reapply_query_params = false
+		string $source_site_url
 	): void {
 		$url = $processor->get_attribute( $attr_name );
 
@@ -194,12 +190,10 @@ class Content_Media_Processor {
 			->import_external_media( $url, $source_site_url );
 
 		if ( is_string( $new_url ) ) {
-			if ( $reapply_query_params ) {
-				$new_url = Media_Importer::reapply_query_parameters(
-					$url,
-					$new_url
-				);
-			}
+			$new_url = Media_Importer::reapply_query_parameters(
+				$url,
+				$new_url
+			);
 
 			$processor->set_attribute( $attr_name, $new_url );
 		} elseif ( false === $new_url ) {
@@ -276,6 +270,11 @@ class Content_Media_Processor {
 				$this->failed_media[] = $url;
 				continue;
 			}
+
+			$new_url = Media_Importer::reapply_query_parameters(
+				$url,
+				$new_url
+			);
 
 			$new_descriptors[] = '' === $size
 				? $new_url
