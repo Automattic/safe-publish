@@ -50,6 +50,14 @@ class Content_Processor {
 	private array $failed_media = array();
 
 	/**
+	 * URLs found in media element attributes that could not be processed,
+	 * typically due to malformed HTML.
+	 *
+	 * @var array
+	 */
+	private array $unprocessable_media = array();
+
+	/**
 	 * Constructs the Content_Processor instance.
 	 *
 	 * @param Media_Importer          $media_importer          Media importer instance.
@@ -74,7 +82,8 @@ class Content_Processor {
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
 	public function process_content( string $content, string $site_url ): string|WP_Error {
-		$this->failed_media = array();
+		$this->failed_media        = array();
+		$this->unprocessable_media = array();
 		$this->media_importer->reset_newly_created_attachment_ids();
 
 		if ( $this->is_gutenberg_content( $content ) ) {
@@ -93,7 +102,15 @@ class Content_Processor {
 			)
 		);
 
+		$this->unprocessable_media = array_unique(
+			array_merge(
+				$this->unprocessable_media,
+				$this->content_media_processor->get_unprocessable_media()
+			)
+		);
+
 		$this->content_media_processor->reset_failed_media();
+		$this->content_media_processor->reset_unprocessable_media();
 
 		return $this->replace_external_urls( $processed_content, $site_url );
 	}
@@ -273,7 +290,7 @@ class Content_Processor {
 	 * @return string|null Error message, or null if no failures.
 	 */
 	public function get_failed_media_error_message(): ?string {
-		if ( empty( $this->failed_media ) ) {
+		if ( array() === $this->failed_media ) {
 			return null;
 		}
 
@@ -282,6 +299,35 @@ class Content_Processor {
 			__( 'Import failed: %1$d media file(s) could not be downloaded: %2$s', 'safe-publish' ),
 			count( $this->failed_media ),
 			implode( ', ', $this->failed_media )
+		);
+	}
+
+	/**
+	 * Returns media URLs that could not be processed due to malformed HTML in
+	 * the source content.
+	 *
+	 * @return array Unprocessable media URLs.
+	 */
+	public function get_unprocessable_media(): array {
+		return $this->unprocessable_media;
+	}
+
+	/**
+	 * Returns a formatted error message if any media URLs could not be
+	 * processed due to malformed HTML, or null if there were none.
+	 *
+	 * @return string|null Error message, or null.
+	 */
+	public function get_unprocessable_media_error_message(): ?string {
+		if ( array() === $this->unprocessable_media ) {
+			return null;
+		}
+
+		return sprintf(
+			/* translators: 1: number of unprocessable media URLs, 2: comma-separated list of URLs */
+			__( 'Import failed: %1$d media URL(s) could not be processed because the surrounding HTML markup is malformed (e.g. unclosed quotes). Fix the markup on the source site and retry: %2$s', 'safe-publish' ),
+			count( $this->unprocessable_media ),
+			implode( ', ', $this->unprocessable_media )
 		);
 	}
 

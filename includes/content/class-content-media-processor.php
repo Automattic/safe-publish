@@ -10,8 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Content;
 
 use Safe_Publish\Media\Media_Importer;
-use DOMDocument;
-use DOMElement;
+use WP_HTML_Tag_Processor;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -21,9 +20,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Content Media Processor Class.
  *
- * Handles processing of media elements within HTML content, including
- * images, videos, audio, and links. Delegates to Media_Importer for
- * actual media importing.
+ * Handles processing of media elements within HTML content, including images,
+ * videos, audio, and links. Delegates to Media_Importer for actual media
+ * importing.
+ *
+ * Uses WordPress' HTML API (WP_HTML_Tag_Processor) to locate and modify
+ * media element attributes. The HTML API conforms to the HTML5 spec, natively
+ * handles comments, script/style content, and malformed attributes, and
+ * preserves all unmodified markup byte-for-byte.
  */
 class Content_Media_Processor {
 
@@ -42,6 +46,14 @@ class Content_Media_Processor {
 	private array $failed_media = array();
 
 	/**
+	 * URLs found in media element attributes that could not be processed,
+	 * typically due to malformed HTML.
+	 *
+	 * @var array
+	 */
+	private array $unprocessable_media = array();
+
+	/**
 	 * Constructs the Content_Media_Processor instance.
 	 *
 	 * @param Media_Importer $media_importer Media importer for handling
@@ -54,116 +66,74 @@ class Content_Media_Processor {
 	/**
 	 * Processes and imports media from external post content.
 	 *
+	 * Iterates over media elements (img, video, audio, source) in a single
+	 * pass, importing external URLs and replacing them with local equivalents.
+	 * Comments, script, style, and textarea content are natively skipped by the
+	 * HTML API.
+	 *
 	 * @param string $content         Post content with external media URLs.
 	 * @param string $source_site_url External site URL.
 	 * @return string Processed content with imported media.
 	 */
-	public function process_content( string $content, string $source_site_url ): string {
-		if ( empty( $content ) ) {
+	public function process_content(
+		string $content,
+		string $source_site_url
+	): string {
+		if ( '' === $content ) {
 			return $content;
 		}
 
-		$dom = $this->create_dom_document( $content );
+		$processor = new WP_HTML_Tag_Processor( $content );
 
-		$this->process_images( $dom, $source_site_url );
-		$this->process_videos( $dom, $source_site_url );
-		$this->process_audios( $dom, $source_site_url );
-
-		return $this->extract_content_from_dom( $dom );
-	}
-
-	/**
-	 * Creates a DOMDocument from HTML content with proper UTF-8 encoding.
-	 *
-	 * @param string $content HTML content.
-	 * @return DOMDocument DOM document.
-	 */
-	private function create_dom_document( string $content ): DOMDocument {
-		$dom = new DOMDocument( '1.0', 'UTF-8' );
-
-		// Suppress libxml errors to handle malformed HTML gracefully.
-		$previous_use_errors = libxml_use_internal_errors( true );
-
-		// Prepend meta charset to ensure proper UTF-8 handling.
-		$utf8_content = '<meta http-equiv="Content-Type" content="text/html; charset=utf-8">' . $content;
-
-		// Load HTML - don't use LIBXML_HTML_NOIMPLIED as we need the body wrapper.
-		$dom->loadHTML( $utf8_content, LIBXML_HTML_NODEFDTD | LIBXML_NOERROR | LIBXML_NOWARNING );
-
-		// Restore previous libxml error setting.
-		libxml_use_internal_errors( $previous_use_errors );
-
-		return $dom;
-	}
-
-	/**
-	 * Extracts processed content from DOM document.
-	 *
-	 * @param DOMDocument $dom DOM document.
-	 * @return string Processed HTML content.
-	 */
-	private function extract_content_from_dom( DOMDocument $dom ): string {
-		$body              = $dom->getElementsByTagName( 'body' )->item( 0 );
-		$processed_content = '';
-
-		if ( $body ) {
-			// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
-			foreach ( $body->childNodes as $child ) {
-				$processed_content .= $dom->saveHTML( $child );
-			}
-		} else {
-			$processed_content = $dom->saveHTML();
-		}
-
-		// Remove the meta charset tag we added for processing.
-		$processed_content = preg_replace(
-			'/<meta http-equiv="Content-Type" content="text\/html; charset=utf-8"\s*\/?>/i',
-			'',
-			$processed_content
-		);
-
-		return $processed_content;
-	}
-
-	/**
-	 * Processes image elements in the DOM.
-	 *
-	 * Also handles srcset attributes on <img> elements and srcset attributes on
-	 * <source> elements inside <picture> tags.
-	 *
-	 * @param DOMDocument $dom             DOM document.
-	 * @param string      $source_site_url Source site URL.
-	 */
-	private function process_images( DOMDocument $dom, string $source_site_url ): void {
-		$images = $dom->getElementsByTagName( 'img' );
-
-		foreach ( $images as $img ) {
-			$src = $img->getAttribute( 'src' );
-			if ( ! empty( $src ) ) {
-				$new_src = $this->media_importer->import_external_media(
-					$src,
-					$source_site_url
-				);
-				if ( is_string( $new_src ) ) {
-					$img->setAttribute(
+		while ( $processor->next_tag() ) {
+			switch ( $processor->get_tag() ) {
+				case 'IMG':
+					$this->import_and_replace_attr(
+						$processor,
 						'src',
-						Media_Importer::reapply_query_parameters( $src, $new_src )
+						$source_site_url,
+						true
 					);
-				} elseif ( false === $new_src ) {
-					$this->failed_media[] = $src;
-				}
-			}
+					$this->process_srcset_attr( $processor, $source_site_url );
+					break;
 
-			$this->process_srcset( $img, $source_site_url );
+				case 'VIDEO':
+					$this->import_and_replace_attr(
+						$processor,
+						'src',
+						$source_site_url
+					);
+					$this->import_and_replace_attr(
+						$processor,
+						'poster',
+						$source_site_url
+					);
+					break;
+
+				case 'AUDIO':
+					$this->import_and_replace_attr(
+						$processor,
+						'src',
+						$source_site_url
+					);
+					break;
+
+				case 'SOURCE':
+					$this->import_and_replace_attr(
+						$processor,
+						'src',
+						$source_site_url
+					);
+					$this->process_srcset_attr( $processor, $source_site_url );
+					break;
+			}
 		}
 
-		$pictures = $dom->getElementsByTagName( 'picture' );
-		foreach ( $pictures as $picture ) {
-			$sources = $picture->getElementsByTagName( 'source' );
-			foreach ( $sources as $source ) {
-				$this->process_srcset( $source, $source_site_url );
-			}
-		}
+		$content = $processor->get_updated_html();
+
+		$this->detect_missed_media_urls( $content, $source_site_url );
+
+		return $content;
 	}
 
 	/**
@@ -183,23 +153,104 @@ class Content_Media_Processor {
 	}
 
 	/**
-	 * Processes the srcset attribute on a DOM element.
+	 * Returns media URLs that could not be processed due to malformed HTML.
 	 *
-	 * Source-domain URLs are sideloaded and replaced. Third-party URLs (null
-	 * return from the importer) are kept as-is. Descriptors that fail to
-	 * download (false return) are dropped and recorded in $failed_media.
-	 *
-	 * @param DOMElement $element         Element with a srcset attribute.
-	 * @param string     $source_site_url Source site URL.
+	 * @return array Unprocessable media URLs.
 	 */
-	private function process_srcset( DOMElement $element, string $source_site_url ): void {
-		$srcset = $element->getAttribute( 'srcset' );
+	public function get_unprocessable_media(): array {
+		return $this->unprocessable_media;
+	}
 
-		if ( empty( $srcset ) ) {
+	/**
+	 * Resets the unprocessable media list.
+	 */
+	public function reset_unprocessable_media(): void {
+		$this->unprocessable_media = array();
+	}
+
+	/**
+	 * Imports an external URL from a single attribute and replaces it with the
+	 * local equivalent.
+	 *
+	 * @param WP_HTML_Tag_Processor $processor            HTML processor positioned on the current tag.
+	 * @param string                $attr_name            Attribute name (e.g. src, poster).
+	 * @param string                $source_site_url      Source site URL.
+	 * @param bool                  $reapply_query_params Whether to reapply query parameters from
+	 *                                                    the original URL.
+	 */
+	private function import_and_replace_attr(
+		WP_HTML_Tag_Processor $processor,
+		string $attr_name,
+		string $source_site_url,
+		bool $reapply_query_params = false
+	): void {
+		$url = $processor->get_attribute( $attr_name );
+
+		if ( ! is_string( $url ) || '' === $url ) {
 			return;
 		}
 
-		$descriptors     = array_map( 'trim', explode( ',', $srcset ) );
+		$new_url = $this->media_importer
+			->import_external_media( $url, $source_site_url );
+
+		if ( is_string( $new_url ) ) {
+			if ( $reapply_query_params ) {
+				$new_url = Media_Importer::reapply_query_parameters(
+					$url,
+					$new_url
+				);
+			}
+
+			$processor->set_attribute( $attr_name, $new_url );
+		} elseif ( false === $new_url ) {
+			$this->failed_media[] = $url;
+		}
+	}
+
+	/**
+	 * Processes the srcset attribute on the current element. Each descriptor
+	 * URL is imported individually. Failed descriptors are dropped from the
+	 * value. If no descriptors remain, the srcset attribute is removed entirely.
+	 *
+	 * @param WP_HTML_Tag_Processor $processor      HTML processor positioned on the current tag.
+	 * @param string                $source_site_url Source site URL.
+	 */
+	private function process_srcset_attr(
+		WP_HTML_Tag_Processor $processor,
+		string $source_site_url
+	): void {
+		$srcset = $processor->get_attribute( 'srcset' );
+
+		if ( ! is_string( $srcset ) || '' === $srcset ) {
+			return;
+		}
+
+		$new_srcset = $this->process_srcset_value( $srcset, $source_site_url );
+
+		if ( '' === $new_srcset ) {
+			$processor->remove_attribute( 'srcset' );
+		} else {
+			$processor->set_attribute( 'srcset', $new_srcset );
+		}
+	}
+
+	/**
+	 * Processes a srcset attribute value, importing each URL.
+	 *
+	 * Source-domain URLs are sideloaded and replaced. Third-party URLs
+	 * (null return from the importer) are kept as-is. Descriptors that fail
+	 * to download (false return) are dropped and recorded in $failed_media.
+	 *
+	 * @param string $srcset_value    Raw srcset attribute value.
+	 * @param string $source_site_url Source site URL.
+	 * @return string Processed srcset value, or empty string if all descriptors
+	 *                failed.
+	 */
+	private function process_srcset_value(
+		string $srcset_value,
+		string $source_site_url
+	): string {
+		$descriptors     = array_map( 'trim', explode( ',', $srcset_value ) );
 		$new_descriptors = array();
 
 		foreach ( $descriptors as $descriptor ) {
@@ -207,11 +258,14 @@ class Content_Media_Processor {
 			$url   = $parts[0] ?? '';
 			$size  = $parts[1] ?? '';
 
-			if ( empty( $url ) ) {
+			if ( '' === $url ) {
 				continue;
 			}
 
-			$new_url = $this->media_importer->import_external_media( $url, $source_site_url );
+			$new_url = $this->media_importer->import_external_media(
+				$url,
+				$source_site_url
+			);
 
 			if ( null === $new_url ) {
 				$new_descriptors[] = $descriptor;
@@ -223,135 +277,62 @@ class Content_Media_Processor {
 				continue;
 			}
 
-			$new_descriptors[] = empty( $size ) ? $new_url : $new_url . ' ' . $size;
+			$new_descriptors[] = '' === $size
+				? $new_url
+				: $new_url . ' ' . $size;
 		}
 
-		if ( ! empty( $new_descriptors ) ) {
-			$element->setAttribute( 'srcset', implode( ', ', $new_descriptors ) );
-		} else {
-			$element->removeAttribute( 'srcset' );
-		}
+		return implode( ', ', $new_descriptors );
 	}
 
 	/**
-	 * Processes video elements in the DOM.
+	 * Detects source-domain URLs in media element attributes that the processor
+	 * could not match, typically due to malformed HTML (e.g. unclosed quotes).
 	 *
-	 * @param DOMDocument $dom             DOM document.
-	 * @param string      $source_site_url Source site URL.
-	 */
-	private function process_videos( DOMDocument $dom, string $source_site_url ): void {
-		$videos = $dom->getElementsByTagName( 'video' );
-		foreach ( $videos as $video ) {
-			$this->process_video_element( $video, $source_site_url );
-		}
-	}
-
-	/**
-	 * Processes audio elements in the DOM.
+	 * Uses a loose regex anchored to media tag names and attribute names. This
+	 * catches URLs the HTML API skipped (because the tag was unparseable) while
+	 * ignoring URLs in non-media contexts (links, CSS, text).
 	 *
-	 * @param DOMDocument $dom             DOM document.
-	 * @param string      $source_site_url Source site URL.
+	 * @param string $content         Processed content.
+	 * @param string $source_site_url Source site URL.
 	 */
-	private function process_audios( DOMDocument $dom, string $source_site_url ): void {
-		$audios = $dom->getElementsByTagName( 'audio' );
-		foreach ( $audios as $audio ) {
-			$this->process_audio_element( $audio, $source_site_url );
-		}
-	}
+	private function detect_missed_media_urls(
+		string $content,
+		string $source_site_url
+	): void {
+		$source_host = wp_parse_url( $source_site_url, PHP_URL_HOST );
 
-	/**
-	 * Processes video elements and imports video files.
-	 *
-	 * @param DOMElement $video           Video element.
-	 * @param string     $source_site_url Source site URL.
-	 */
-	private function process_video_element( DOMElement $video, string $source_site_url ): void {
-		// Process video source elements.
-		$sources = $video->getElementsByTagName( 'source' );
-		foreach ( $sources as $source ) {
-			$src = $source->getAttribute( 'src' );
-			if ( ! empty( $src ) ) {
-				$new_src = $this->media_importer->import_external_media(
-					$src,
-					$source_site_url
-				);
-
-				if ( is_string( $new_src ) ) {
-					$source->setAttribute( 'src', $new_src );
-				} elseif ( false === $new_src ) {
-					$this->failed_media[] = $src;
-				}
-			}
+		if ( ! is_string( $source_host ) ) {
+			return;
 		}
 
-		// Process direct video src attribute.
-		$video_src = $video->getAttribute( 'src' );
-		if ( ! empty( $video_src ) ) {
-			$new_src = $this->media_importer->import_external_media(
-				$video_src,
-				$source_site_url
-			);
+		// Strip comments and script/style blocks so URLs inside them don't
+		// trigger false positives. The HTML API natively skips these during
+		// processing, but this detection pass uses a plain regex.
+		$check_content = preg_replace(
+			'~<!--.*?-->|<(script|style)\b[^>]*>.*?</\1\s*>~si',
+			'',
+			$content
+		) ?? $content;
 
-			if ( is_string( $new_src ) ) {
-				$video->setAttribute( 'src', $new_src );
-			} elseif ( false === $new_src ) {
-				$this->failed_media[] = $video_src;
-			}
+		// Loose regex: anchored to a media tag, then looks for
+		// src/poster/srcset within the same tag. Uses [^<>]*? (stops at tag
+		// boundaries) so it can match inside malformed tags.
+		$pattern = '~<(?:img|video|audio|source)\b'
+			. '[^<>]*?\s(?:src|poster|srcset)\s*=\s*'
+			. '["\']?\s*(https?://'
+			. preg_quote( $source_host, '~' )
+			. '/[^\s"\'<>]*)~i';
+
+		if ( ! preg_match_all( $pattern, $check_content, $matches ) ) {
+			return;
 		}
 
-		// Process poster image.
-		$poster = $video->getAttribute( 'poster' );
-		if ( ! empty( $poster ) ) {
-			$new_poster = $this->media_importer->import_external_media(
-				$poster,
-				$source_site_url
-			);
+		$remaining = array_unique( $matches[1] );
 
-			if ( is_string( $new_poster ) ) {
-				$video->setAttribute( 'poster', $new_poster );
-			} elseif ( false === $new_poster ) {
-				$this->failed_media[] = $poster;
-			}
-		}
-	}
-
-	/**
-	 * Processes audio elements and imports audio files.
-	 *
-	 * @param DOMElement $audio           Audio element.
-	 * @param string     $source_site_url Source site URL.
-	 */
-	private function process_audio_element( DOMElement $audio, string $source_site_url ): void {
-		// Process audio source elements.
-		$sources = $audio->getElementsByTagName( 'source' );
-		foreach ( $sources as $source ) {
-			$src = $source->getAttribute( 'src' );
-			if ( ! empty( $src ) ) {
-				$new_src = $this->media_importer->import_external_media(
-					$src,
-					$source_site_url
-				);
-
-				if ( is_string( $new_src ) ) {
-					$source->setAttribute( 'src', $new_src );
-				} elseif ( false === $new_src ) {
-					$this->failed_media[] = $src;
-				}
-			}
-		}
-
-		// Process direct audio src attribute.
-		$audio_src = $audio->getAttribute( 'src' );
-		if ( ! empty( $audio_src ) ) {
-			$new_src = $this->media_importer->import_external_media(
-				$audio_src,
-				$source_site_url
-			);
-
-			if ( is_string( $new_src ) ) {
-				$audio->setAttribute( 'src', $new_src );
-			} elseif ( false === $new_src ) {
-				$this->failed_media[] = $audio_src;
+		foreach ( $remaining as $url ) {
+			if ( ! in_array( $url, $this->unprocessable_media, true ) ) {
+				$this->unprocessable_media[] = $url;
 			}
 		}
 	}
