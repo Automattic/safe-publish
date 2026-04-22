@@ -77,9 +77,11 @@ final class Settings_Page {
 												value="<?php echo esc_attr( Options::SYNC_MODE_EXPORT ); ?>"
 												<?php checked( $sync_mode, Options::SYNC_MODE_EXPORT ); ?>
 											/>
-											<?php esc_html_e( 'Export', 'safe-publish' ); ?>
+											<?php esc_html_e( 'Source', 'safe-publish' ); ?>
 										</label>
-										<br />
+										<p class="description">
+											<?php esc_html_e( 'Content will come from this site.', 'safe-publish' ); ?>
+										</p>
 										<label>
 											<input
 												type="radio"
@@ -87,18 +89,23 @@ final class Settings_Page {
 												value="<?php echo esc_attr( Options::SYNC_MODE_IMPORT ); ?>"
 												<?php checked( $sync_mode, Options::SYNC_MODE_IMPORT ); ?>
 											/>
-											<?php esc_html_e( 'Import', 'safe-publish' ); ?>
+											<?php esc_html_e( 'Destination', 'safe-publish' ); ?>
 										</label>
-										<br />
+										<p class="description">
+											<?php esc_html_e( 'Content will be published to this site.', 'safe-publish' ); ?>
+										</p>
 										<label>
 											<input
 												type="radio"
 												name="safe_publish_sync_mode"
-									value="<?php echo esc_attr( Options::SYNC_MODE_BIDIRECTIONAL ); ?>"
-											<?php checked( $sync_mode, Options::SYNC_MODE_BIDIRECTIONAL ); ?>
-										/>
-										<?php esc_html_e( 'Bidirectional', 'safe-publish' ); ?>
+												value="<?php echo esc_attr( Options::SYNC_MODE_BIDIRECTIONAL ); ?>"
+												<?php checked( $sync_mode, Options::SYNC_MODE_BIDIRECTIONAL ); ?>
+											/>
+											<?php esc_html_e( 'Bidirectional', 'safe-publish' ); ?>
 										</label>
+										<p class="description">
+											<?php esc_html_e( 'Content syncs in both directions between this site and the connected site.', 'safe-publish' ); ?>
+										</p>
 									</fieldset>
 								</td>
 							</tr>
@@ -153,7 +160,7 @@ final class Settings_Page {
 										style="margin-top: 4px;"
 									/>
 									<p class="description">
-										<?php esc_html_e( 'Optional. Applicable only if Basic Authentication is being used.', 'safe-publish' ); ?>
+										<?php esc_html_e( 'Only needed if the connected site is protected by HTTP Basic Authentication. Leave blank otherwise.', 'safe-publish' ); ?>
 									</p>
 								</td>
 							</tr>
