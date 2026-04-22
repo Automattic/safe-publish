@@ -225,7 +225,7 @@ class External_Posts_API {
 		$prepared_post = array(
 			'id'             => isset( $post['id'] ) ? absint( $post['id'] ) : 0,
 			'link'           => isset( $post['link'] ) ? esc_url_raw( $post['link'] ) : '#',
-			'title'          => isset( $post['title']['rendered'] ) ? sanitize_text_field( wp_strip_all_tags( $post['title']['rendered'] ) ) : __( 'No Title', 'safe-publish' ),
+			'title'          => isset( $post['title']['rendered'] ) ? sanitize_text_field( wp_strip_all_tags( html_entity_decode( $post['title']['rendered'], ENT_QUOTES | ENT_HTML5, 'UTF-8' ) ) ) : __( 'No Title', 'safe-publish' ),
 			'modified'       => isset( $post['modified'] ) ? sanitize_text_field( $post['modified'] ) : '',
 			'thumbnail'      => isset( $post['featured_media'] ) ? esc_url( get_the_post_thumbnail_url( $post['id'], 'thumbnail' ) ) : '',
 			'featured_media' => isset( $post['featured_media'] ) ? absint( $post['featured_media'] ) : 0,

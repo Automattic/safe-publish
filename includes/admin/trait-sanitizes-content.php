@@ -115,6 +115,7 @@ trait Sanitizes_Content {
 	): bool {
 		$normalize = static function ( string $s ): string {
 			$s = preg_replace( '/\s+/', ' ', trim( $s ) );
+			$s = preg_replace( '/\s*\/>/', '/>', $s );
 			return str_replace( '; ', ';', $s );
 		};
 

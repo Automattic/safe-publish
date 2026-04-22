@@ -707,6 +707,47 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that import succeeds when self-closing void elements differ
+	 * only in whitespace before the closing slash (e.g. `<br/>` vs
+	 * `<br />`), which `wp_kses_post()` normalizes cosmetically.
+	 */
+	public function test_bulk_import_succeeds_with_void_element_whitespace(): void {
+		// ARRANGE: Content with a self-closing void element emitted without
+		// a space before `/>`, which wp_kses_post rewrites to include one.
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$content = '<p>Line one<br/>Line two</p>';
+
+		$post_data = array(
+			'id'             => 8011,
+			'title'          => 'Void Element Whitespace Test',
+			'content'        => $content,
+			'link'           => 'https://source.example.com/void-test',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '',
+			'meta'           => array(),
+			'terms'          => array(),
+		);
+
+		$this->mock_post_overrides = array(
+			'content' => $content,
+		);
+
+		// ACT: Import via the bulk path.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: Import succeeded despite cosmetic `/>` whitespace.
+		$this->assertTrue( $result['success'] );
+	}
+
+	/**
 	 * Verifies that an invalid HMAC signature is rejected and no import runs.
 	 */
 	public function test_invalid_auth_is_rejected_before_import(): void {
