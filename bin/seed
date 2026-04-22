@@ -52,13 +52,18 @@ done
 
 PHP_ARGS="${PHP_ARGS# }"
 
+# wp-env maps the plugin into the container using the current directory's
+# basename, which may differ from the plugin slug (e.g., inside a Conductor
+# worktree). Derive it dynamically so the path resolves correctly.
+PLUGIN_DIR="$(basename "$(pwd)")"
+
 # shellcheck disable=SC2086
 run_seeder() {
 	container="$1"
 	label="$2"
 	args="$3"
 	echo "Seeding $label site: $args"
-	wp-env run "$container" --env-cwd=wp-content/plugins/compliant-content-publisher wp eval-file ./bin/seed-content.php $args
+	wp-env run "$container" --env-cwd="wp-content/plugins/$PLUGIN_DIR" wp eval-file ./bin/seed-content.php $args
 }
 
 run_preset_full() {
