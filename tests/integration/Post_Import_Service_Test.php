@@ -995,12 +995,14 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that the bulk update path returns a failure when the tracking
-	 * meta write fails.
+	 * Verifies that the bulk update path returns a failure and rolls back the
+	 * post when the tracking meta write fails.
 	 *
 	 * If update_post_meta fails for META_IMPORT_DATE (e.g., a DB error), the
-	 * import must report failure rather than silently leaving the tracking meta
-	 * stale.
+	 * import must report failure and restore the post to its pre-update state.
+	 * The filter blocks all writes for this key, so the rollback's own restore
+	 * of META_IMPORT_DATE is also blocked; only the post fields and external
+	 * link meta are verified here.
 	 */
 	public function test_bulk_update_fails_when_tracking_meta_write_fails(): void {
 		$session_id = $this->import_history->create_session(
@@ -1020,6 +1022,22 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		$first = $this->import_service->import_post( $post_data, $session_id );
 		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
 		$post_id = $first['post_id'];
+
+		// ARRANGE: Capture pre-update values for rollback assertions.
+		$original_title   = get_post_field( 'post_title', $post_id );
+		$original_content = get_post_field( 'post_content', $post_id );
+		$original_link    = get_post_meta(
+			$post_id,
+			Options::META_EXTERNAL_LINK,
+			true
+		);
+
+		// ARRANGE: Fresh content returns updated fields so the update path
+		// writes new values before the meta failure triggers.
+		$this->mock_post_overrides = array(
+			'title'   => 'Updated Tracking Meta Title',
+			'content' => '<p>Updated content.</p>',
+		);
 
 		// ARRANGE: Block update_post_meta for META_IMPORT_DATE to simulate a DB
 		// failure.
@@ -1043,7 +1061,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 
 		remove_filter( 'update_post_metadata', $block_meta, 10 );
 
-		// ASSERT: Import must report failure with a descriptive error.
+		// ASSERT: Import must report failure.
 		$this->assertFalse(
 			$result['success'],
 			'Update import should fail when tracking meta cannot be written.'
@@ -1053,12 +1071,291 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			$result['error']
 		);
 
-		// ASSERT: The import date meta must be absent: the delete succeeded but
-		// the subsequent write was blocked, so no value was committed.
+		// ASSERT: Post fields must be rolled back.
 		$this->assertSame(
-			'',
-			get_post_meta( $post_id, Options::META_IMPORT_DATE, true ),
-			'META_IMPORT_DATE must be absent when the write was blocked after a delete.'
+			$original_title,
+			get_post_field( 'post_title', $post_id ),
+			'Title must be restored after tracking meta failure.'
+		);
+		$this->assertSame(
+			$original_content,
+			get_post_field( 'post_content', $post_id ),
+			'Content must be restored after tracking meta failure.'
+		);
+		$this->assertSame(
+			$original_link,
+			get_post_meta(
+				$post_id,
+				Options::META_EXTERNAL_LINK,
+				true
+			),
+			'External link meta must be restored after tracking meta failure.'
+		);
+	}
+
+	/**
+	 * Verifies that the post is fully rolled back when custom meta update fails
+	 * on the bulk update path.
+	 *
+	 * The filter blocks writes for a specific custom meta key, causing
+	 * Meta_Terms_Manager::update_meta() to return a WP_Error. Post fields,
+	 * tracking meta, and featured image must all be restored to their
+	 * pre-update values.
+	 */
+	public function test_bulk_update_rolls_back_post_on_custom_meta_failure(): void {
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ARRANGE: Import the post with initial meta.
+		$post_data = array(
+			'id'        => 9130,
+			'title'     => 'Post For Meta Rollback Test',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/meta-rollback-test',
+			'post_type' => 'posts',
+			'meta'      => array( 'custom_field' => 'original_value' ),
+		);
+
+		$this->mock_post_overrides = array(
+			'meta' => array( 'custom_field' => 'original_value' ),
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue(
+			$first['success'],
+			'Initial import should succeed.'
+		);
+		$post_id = $first['post_id'];
+
+		// ARRANGE: Capture pre-update values for rollback assertions.
+		$original_title   = get_post_field( 'post_title', $post_id );
+		$original_content = get_post_field( 'post_content', $post_id );
+		$original_link    = get_post_meta(
+			$post_id,
+			Options::META_EXTERNAL_LINK,
+			true
+		);
+		$original_date    = get_post_meta(
+			$post_id,
+			Options::META_IMPORT_DATE,
+			true
+		);
+		$original_meta    = get_post_meta(
+			$post_id,
+			'custom_field',
+			true
+		);
+
+		// ARRANGE: Fresh content returns updated fields and meta.
+		$this->mock_post_overrides = array(
+			'title'   => 'Updated Meta Rollback Title',
+			'content' => '<p>Updated content.</p>',
+			'meta'    => array( 'custom_field' => 'updated_value' ),
+		);
+
+		// ARRANGE: Block update_post_meta for 'custom_field' to simulate a DB
+		// failure during Meta_Terms_Manager::update_meta.
+		$block_meta = function (
+			$check,
+			$object_id,
+			$meta_key,
+			$meta_value,
+			$prev_value
+		) {
+			unset( $object_id, $meta_value, $prev_value );
+			if ( 'custom_field' === $meta_key ) {
+				return false;
+			}
+			return $check;
+		};
+		add_filter( 'update_post_metadata', $block_meta, 10, 5 );
+
+		// ACT: Re-import the same post (hits the update path).
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'update_post_metadata', $block_meta, 10 );
+
+		// ASSERT: Import must fail with a meta error.
+		$this->assertFalse(
+			$result['success'],
+			'Update import should fail when custom meta cannot be written.'
+		);
+		$this->assertStringContainsString(
+			'custom_field',
+			$result['error']
+		);
+
+		// ASSERT: Post fields must be rolled back.
+		$this->assertSame(
+			$original_title,
+			get_post_field( 'post_title', $post_id ),
+			'Title must be restored after custom meta failure.'
+		);
+		$this->assertSame(
+			$original_content,
+			get_post_field( 'post_content', $post_id ),
+			'Content must be restored after custom meta failure.'
+		);
+
+		// ASSERT: Tracking meta must be rolled back.
+		$this->assertSame(
+			$original_link,
+			get_post_meta(
+				$post_id,
+				Options::META_EXTERNAL_LINK,
+				true
+			),
+			'External link meta must be restored after custom meta failure.'
+		);
+		$this->assertSame(
+			$original_date,
+			get_post_meta(
+				$post_id,
+				Options::META_IMPORT_DATE,
+				true
+			),
+			'Import date meta must be restored after custom meta failure.'
+		);
+
+		// ASSERT: Custom meta must be unchanged. The filter blocked both the
+		// import write and the rollback write for this key, but since the value
+		// was already 'original_value' in the DB before the import, it remains
+		// correct.
+		$this->assertSame(
+			$original_meta,
+			get_post_meta( $post_id, 'custom_field', true ),
+			'Custom meta must remain at its original value.'
+		);
+	}
+
+	/**
+	 * Verifies that the post is fully rolled back when term assignment fails on
+	 * the bulk update path.
+	 *
+	 * An unknown taxonomy in the terms data causes
+	 * Meta_Terms_Manager::update_terms() to return a WP_Error. Post fields,
+	 * tracking meta, and custom meta must all be restored to their pre-update
+	 * values.
+	 */
+	public function test_bulk_update_rolls_back_post_on_term_failure(): void {
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ARRANGE: Import the post with initial meta and a category.
+		$post_data = array(
+			'id'        => 9140,
+			'title'     => 'Post For Term Rollback Test',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/term-rollback-test',
+			'post_type' => 'posts',
+			'meta'      => array( 'my_field' => 'original' ),
+			'terms'     => array(
+				'category' => array( 'Rollback Test Category' ),
+			),
+		);
+
+		$this->mock_post_overrides = array(
+			'meta'  => array( 'my_field' => 'original' ),
+			'terms' => array(
+				'category' => array( 'Rollback Test Category' ),
+			),
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue(
+			$first['success'],
+			'Initial import should succeed.'
+		);
+		$post_id = $first['post_id'];
+
+		// ARRANGE: Capture pre-update values for rollback assertions.
+		$original_title   = get_post_field( 'post_title', $post_id );
+		$original_content = get_post_field( 'post_content', $post_id );
+		$original_date    = get_post_meta(
+			$post_id,
+			Options::META_IMPORT_DATE,
+			true
+		);
+		$original_meta    = get_post_meta( $post_id, 'my_field', true );
+		$original_terms   = wp_get_object_terms(
+			$post_id,
+			'category',
+			array( 'fields' => 'ids' )
+		);
+
+		// ARRANGE: Fresh content returns updated fields, meta, and an unknown
+		// taxonomy to trigger term failure.
+		$this->mock_post_overrides = array(
+			'title'   => 'Updated Term Rollback Title',
+			'content' => '<p>Updated content.</p>',
+			'meta'    => array( 'my_field' => 'updated' ),
+			'terms'   => array(
+				'category'                  => array(
+					'Rollback Test Category',
+				),
+				'nonexistent_taxonomy_term' => array(
+					'Some Term',
+				),
+			),
+		);
+
+		// ACT: Re-import the same post (hits the update path).
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import must fail with a taxonomy error.
+		$this->assertFalse(
+			$result['success'],
+			'Update import should fail for unknown taxonomy.'
+		);
+		$this->assertStringContainsString(
+			'nonexistent_taxonomy_term',
+			$result['error']
+		);
+
+		// ASSERT: Post fields must be rolled back.
+		$this->assertSame(
+			$original_title,
+			get_post_field( 'post_title', $post_id ),
+			'Title must be restored after term failure.'
+		);
+		$this->assertSame(
+			$original_content,
+			get_post_field( 'post_content', $post_id ),
+			'Content must be restored after term failure.'
+		);
+
+		// ASSERT: Tracking meta must be rolled back.
+		$this->assertSame(
+			$original_date,
+			get_post_meta(
+				$post_id,
+				Options::META_IMPORT_DATE,
+				true
+			),
+			'Import date meta must be restored after term failure.'
+		);
+
+		// ASSERT: Custom meta must be rolled back.
+		$this->assertSame(
+			$original_meta,
+			get_post_meta( $post_id, 'my_field', true ),
+			'Custom meta must be restored after term failure.'
+		);
+
+		// ASSERT: Term assignments must be rolled back.
+		$restored_terms = wp_get_object_terms(
+			$post_id,
+			'category',
+			array( 'fields' => 'ids' )
+		);
+		$this->assertSame(
+			$original_terms,
+			$restored_terms,
+			'Category terms must be restored after term failure.'
 		);
 	}
 

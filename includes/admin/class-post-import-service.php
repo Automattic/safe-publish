@@ -741,7 +741,9 @@ class Post_Import_Service {
 	 * Persists an existing post update with all associated data.
 	 *
 	 * Handles wp_update_post, external link meta, import date, thumbnail,
-	 * custom meta, and terms. Used by both single and bulk import paths.
+	 * custom meta, and terms. If any step after wp_update_post() fails,
+	 * the post is rolled back to its pre-update state. Used by both
+	 * single and bulk import paths.
 	 *
 	 * @param array  $post_args              Arguments for wp_update_post().
 	 * @param int    $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
@@ -759,18 +761,25 @@ class Post_Import_Service {
 		mixed $terms,
 		bool $disable_filters = true
 	): int|WP_Error {
+		$post_id  = $post_args['ID'];
+		$snapshot = $this->capture_pre_update_state(
+			$post_id,
+			$meta,
+			$terms
+		);
+
 		if ( $disable_filters ) {
 			$this->content_processor->disable_content_filters();
 		}
 
-		$post_id = wp_update_post( $post_args );
+		$result = wp_update_post( $post_args );
 
 		if ( $disable_filters ) {
 			$this->content_processor->restore_content_filters();
 		}
 
-		if ( is_wp_error( $post_id ) ) {
-			return $post_id;
+		if ( is_wp_error( $result ) ) {
+			return $result;
 		}
 
 		update_post_meta(
@@ -785,6 +794,8 @@ class Post_Import_Service {
 			Options::META_IMPORT_DATE,
 			current_time( 'mysql' )
 		) ) {
+			$this->restore_pre_update_state( $post_id, $snapshot );
+
 			return new WP_Error(
 				'import_date_update_failed',
 				__(
@@ -805,6 +816,8 @@ class Post_Import_Service {
 		);
 
 		if ( is_wp_error( $meta_result ) ) {
+			$this->restore_pre_update_state( $post_id, $snapshot );
+
 			return new WP_Error(
 				'meta_update_failed',
 				$meta_result->get_error_message(),
@@ -818,6 +831,8 @@ class Post_Import_Service {
 		);
 
 		if ( is_wp_error( $terms_result ) ) {
+			$this->restore_pre_update_state( $post_id, $snapshot );
+
 			return new WP_Error(
 				'terms_update_failed',
 				$terms_result->get_error_message(),
@@ -826,6 +841,108 @@ class Post_Import_Service {
 		}
 
 		return $post_id;
+	}
+
+	/**
+	 * Captures the pre-update state of a post for rollback.
+	 *
+	 * Snapshots post fields, tracking meta, featured image, custom meta keys
+	 * about to be overwritten, and term assignments for taxonomies about to be
+	 * updated.
+	 *
+	 * @param int          $post_id Post ID.
+	 * @param array|object $meta    Meta about to be written.
+	 * @param array|object $terms   Terms about to be written.
+	 * @return array Snapshot data.
+	 */
+	private function capture_pre_update_state(
+		int $post_id,
+		array|object $meta,
+		array|object $terms
+	): array {
+		$post = get_post( $post_id, ARRAY_A );
+
+		$snapshot = array(
+			'post_fields'    => $post,
+			'tracking_meta'  => array(
+				Options::META_EXTERNAL_LINK => get_post_meta(
+					$post_id,
+					Options::META_EXTERNAL_LINK,
+					true
+				),
+				Options::META_IMPORT_DATE   => get_post_meta(
+					$post_id,
+					Options::META_IMPORT_DATE,
+					true
+				),
+			),
+			'featured_image' => get_post_thumbnail_id( $post_id ),
+			'custom_meta'    => array(),
+			'terms'          => array(),
+		);
+
+		foreach ( (array) $meta as $key => $_ ) {
+			$key                             = sanitize_text_field( (string) $key );
+			$snapshot['custom_meta'][ $key ] = get_post_meta(
+				$post_id,
+				$key,
+				true
+			);
+		}
+
+		foreach ( (array) $terms as $taxonomy => $_ ) {
+			$taxonomy = sanitize_key( (string) $taxonomy );
+			$existing = wp_get_object_terms(
+				$post_id,
+				$taxonomy,
+				array( 'fields' => 'ids' )
+			);
+
+			if ( ! is_wp_error( $existing ) ) {
+				$snapshot['terms'][ $taxonomy ] = $existing;
+			}
+		}
+
+		return $snapshot;
+	}
+
+	/**
+	 * Restores a post to its pre-update state from a snapshot.
+	 *
+	 * @param int   $post_id  Post ID.
+	 * @param array $snapshot Snapshot from capture_pre_update_state().
+	 */
+	private function restore_pre_update_state(
+		int $post_id,
+		array $snapshot
+	): void {
+		wp_update_post( $snapshot['post_fields'] );
+
+		foreach ( $snapshot['tracking_meta'] as $key => $value ) {
+			if ( '' === $value ) {
+				delete_post_meta( $post_id, $key );
+			} else {
+				update_post_meta( $post_id, $key, $value );
+			}
+		}
+
+		if ( $snapshot['featured_image'] ) {
+			set_post_thumbnail( $post_id, $snapshot['featured_image'] );
+		} else {
+			delete_post_thumbnail( $post_id );
+		}
+
+		foreach ( $snapshot['custom_meta'] as $key => $value ) {
+			if ( '' === $value ) {
+				delete_post_meta( $post_id, $key );
+			} else {
+				update_post_meta( $post_id, $key, $value );
+			}
+		}
+
+		foreach ( $snapshot['terms'] as $taxonomy => $term_ids ) {
+			wp_set_object_terms( $post_id, $term_ids, $taxonomy );
+		}
 	}
 
 	/**
