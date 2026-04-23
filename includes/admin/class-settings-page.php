@@ -77,11 +77,8 @@ final class Settings_Page {
 												value="<?php echo esc_attr( Options::SYNC_MODE_EXPORT ); ?>"
 												<?php checked( $sync_mode, Options::SYNC_MODE_EXPORT ); ?>
 											/>
-											<?php esc_html_e( 'Source', 'safe-publish' ); ?>
-										</label>
-										<p class="description">
-											<?php esc_html_e( 'Content will come from this site.', 'safe-publish' ); ?>
-										</p>
+											<?php esc_html_e( 'Source - Content will come from this site.', 'safe-publish' ); ?>
+										</label><br />
 										<label>
 											<input
 												type="radio"
@@ -89,11 +86,8 @@ final class Settings_Page {
 												value="<?php echo esc_attr( Options::SYNC_MODE_IMPORT ); ?>"
 												<?php checked( $sync_mode, Options::SYNC_MODE_IMPORT ); ?>
 											/>
-											<?php esc_html_e( 'Destination', 'safe-publish' ); ?>
-										</label>
-										<p class="description">
-											<?php esc_html_e( 'Content will be published to this site.', 'safe-publish' ); ?>
-										</p>
+											<?php esc_html_e( 'Destination - Content will be published to this site', 'safe-publish' ); ?>
+										</label><br />
 										<label>
 											<input
 												type="radio"
@@ -101,11 +95,8 @@ final class Settings_Page {
 												value="<?php echo esc_attr( Options::SYNC_MODE_BIDIRECTIONAL ); ?>"
 												<?php checked( $sync_mode, Options::SYNC_MODE_BIDIRECTIONAL ); ?>
 											/>
-											<?php esc_html_e( 'Bidirectional', 'safe-publish' ); ?>
+											<?php esc_html_e( 'Bidirectional - Content syncs in both directions.', 'safe-publish' ); ?>
 										</label>
-										<p class="description">
-											<?php esc_html_e( 'Content syncs in both directions between this site and the connected site.', 'safe-publish' ); ?>
-										</p>
 									</fieldset>
 								</td>
 							</tr>
@@ -133,6 +124,9 @@ final class Settings_Page {
 									<?php esc_html_e( 'Basic Auth Credentials', 'safe-publish' ); ?>
 								</th>
 								<td>
+									<p class="description">
+										<?php esc_html_e( 'Only needed if the connected site is protected by HTTP Basic Authentication. Leave blank otherwise.', 'safe-publish' ); ?>
+									</p><br />
 									<label for="safe_publish_username" class="screen-reader-text">
 										<?php esc_html_e( 'Basic Auth Username', 'safe-publish' ); ?>
 									</label>
@@ -159,21 +153,16 @@ final class Settings_Page {
 										autocomplete="current-password"
 										style="margin-top: 4px;"
 									/>
-									<p class="description">
-										<?php esc_html_e( 'Only needed if the connected site is protected by HTTP Basic Authentication. Leave blank otherwise.', 'safe-publish' ); ?>
-									</p>
+									
 								</td>
 							</tr>
 
 							<tr class="safe-publish-import-field-row<?php echo $show_import_fields ? '' : ' hidden'; ?>">
-								<th scope="row"></th>
+								<th scope="row"><?php esc_html_e( 'Test current connection settings', 'safe-publish' ); ?></th>
 								<td>
 									<button type="button" id="safe-publish-test-connection" class="button button-secondary">
 										<?php esc_html_e( 'Test Connection', 'safe-publish' ); ?>
 									</button>
-									<p class="description">
-										<?php esc_html_e( 'Test current connection settings. Use the "Save Changes" button to save.', 'safe-publish' ); ?>
-									</p>
 									<div id="safe-publish-test-connection-result" style="margin-top: 8px; max-width: 500px; padding: 10px;"></div>
 								</td>
 							</tr>
