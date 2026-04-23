@@ -249,6 +249,10 @@ final class Admin_Ajax_Controller {
 
 		$post_type = $this->post_import_service->resolve_post_type( $raw_post_type );
 
+		if ( is_wp_error( $post_type ) ) {
+			wp_send_json_error( $post_type->get_error_message() );
+		}
+
 		if ( empty( $title ) ) {
 			wp_send_json_error( __( 'Post title is required.', 'safe-publish' ) );
 		}

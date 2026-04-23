@@ -1576,4 +1576,72 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			return $preempt;
 		};
 	}
+
+	/**
+	 * Verifies that import fails when the source post type is not registered on
+	 * the destination site.
+	 */
+	public function test_import_fails_for_unregistered_post_type(): void {
+		// ARRANGE: Use a post type that is not registered.
+		$post_data = array(
+			'id'        => 9801,
+			'title'     => 'Unregistered CPT Post',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/unregistered',
+			'post_type' => 'gadgets',
+		);
+
+		// ACT: Attempt import.
+		$result = $this->import_service->import_post(
+			$post_data
+		);
+
+		// ASSERT: Import fails with a descriptive error.
+		$this->assertFalse(
+			$result['success'],
+			'Import should fail for an unregistered post type.'
+		);
+		$this->assertStringContainsString(
+			'gadgets',
+			$result['error'],
+			'Error should name the unregistered post type.'
+		);
+	}
+
+	/**
+	 * Verifies that import fails when the current user lacks the capability
+	 * required for the target post type.
+	 */
+	public function test_import_fails_when_user_lacks_capability(): void {
+		// ARRANGE: Switch to a user without edit_posts.
+		wp_set_current_user(
+			self::factory()->user->create(
+				array( 'role' => 'subscriber' )
+			)
+		);
+
+		$post_data = array(
+			'id'        => 9802,
+			'title'     => 'Subscriber Import Attempt',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/subscriber',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Attempt import.
+		$result = $this->import_service->import_post(
+			$post_data
+		);
+
+		// ASSERT: Import fails with a permission error.
+		$this->assertFalse(
+			$result['success'],
+			'Import should fail for a user without edit_posts.'
+		);
+		$this->assertStringContainsString(
+			'permission',
+			$result['error'],
+			'Error should mention insufficient permission.'
+		);
+	}
 }

@@ -130,7 +130,15 @@ class Post_Import_Service {
 			return $validation_error;
 		}
 
-		$post_type     = $this->resolve_post_type( $fields['raw_post_type'] );
+		$post_type = $this->resolve_post_type( $fields['raw_post_type'] );
+
+		if ( is_wp_error( $post_type ) ) {
+			return $this->build_error_result(
+				$fields,
+				$post_type->get_error_message()
+			);
+		}
+
 		$imported_post = $this->find_imported_post( $fields['external_post_id'] );
 
 		if ( $imported_post ) {
@@ -227,18 +235,25 @@ class Post_Import_Service {
 	/**
 	 * Resolves a raw post type string to a valid WordPress post type.
 	 *
-	 * Converts plural REST API post type names to singular, validates that the
-	 * post type exists, and falls back to 'post' based on capability checks.
-	 * Administrators (manage_options) may create any registered post type.
+	 * Converts plural REST API post type names to singular and validates
+	 * that the post type is registered on the destination site. Returns
+	 * a WP_Error when the post type does not exist or the current user
+	 * lacks the required capability.
 	 *
 	 * @param string $raw_post_type Raw post type string from external API.
-	 * @return string Resolved post type slug.
+	 * @return string|WP_Error Resolved post type slug, or WP_Error on failure.
 	 */
-	public function resolve_post_type( string $raw_post_type ): string {
+	public function resolve_post_type( string $raw_post_type ): string|WP_Error {
 		$post_type = Post_Type_Map::to_wp_slug( $raw_post_type );
 
 		if ( ! post_type_exists( $post_type ) ) {
-			return 'post';
+			$message = sprintf(
+				/* translators: %s: post type slug */
+				__( 'Post type "%s" is not registered on this site.', 'safe-publish' ),
+				$post_type
+			);
+
+			return new WP_Error( 'post_type_not_registered', $message );
 		}
 
 		// Admins can create any registered post type.
@@ -246,12 +261,16 @@ class Post_Import_Service {
 			return $post_type;
 		}
 
-		if ( 'page' === $post_type && ! current_user_can( 'edit_pages' ) ) {
-			return 'post';
-		}
+		$capability = 'page' === $post_type ? 'edit_pages' : 'edit_posts';
 
-		if ( 'page' !== $post_type && ! current_user_can( 'edit_posts' ) ) {
-			return 'post';
+		if ( ! current_user_can( $capability ) ) {
+			$message = sprintf(
+				/* translators: %s: post type slug */
+				__( 'You do not have permission to create "%s" posts.', 'safe-publish' ),
+				$post_type
+			);
+
+			return new WP_Error( 'post_type_capability_denied', $message );
 		}
 
 		return $post_type;
