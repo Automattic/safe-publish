@@ -750,7 +750,6 @@ class Post_Import_Service {
 	 * @param string $external_link           External post URL for meta tracking.
 	 * @param mixed  $meta                    Meta data (array or object).
 	 * @param mixed  $terms                   Terms data (array or object).
-	 * @param bool   $disable_filters         Whether to disable content filters around the update.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
 	 */
 	public function persist_updated_post(
@@ -758,8 +757,7 @@ class Post_Import_Service {
 		int $featured_attachment_id,
 		string $external_link,
 		mixed $meta,
-		mixed $terms,
-		bool $disable_filters = true
+		mixed $terms
 	): int|WP_Error {
 		$post_id  = $post_args['ID'];
 		$snapshot = $this->capture_pre_update_state(
@@ -768,15 +766,9 @@ class Post_Import_Service {
 			$terms
 		);
 
-		if ( $disable_filters ) {
-			$this->content_processor->disable_content_filters();
-		}
-
+		$this->content_processor->disable_content_filters();
 		$result = wp_update_post( $post_args );
-
-		if ( $disable_filters ) {
-			$this->content_processor->restore_content_filters();
-		}
+		$this->content_processor->restore_content_filters();
 
 		if ( is_wp_error( $result ) ) {
 			return $result;
@@ -956,25 +948,17 @@ class Post_Import_Service {
 	 * @param int   $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
 	 * @param mixed $meta                    Meta data (array or object).
 	 * @param mixed $terms                   Terms data (array or object).
-	 * @param bool  $disable_filters         Whether to disable content filters around the insert.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
 	 */
 	public function persist_new_post(
 		array $post_args,
 		int $featured_attachment_id,
 		mixed $meta,
-		mixed $terms,
-		bool $disable_filters = true
+		mixed $terms
 	): int|WP_Error {
-		if ( $disable_filters ) {
-			$this->content_processor->disable_content_filters();
-		}
-
+		$this->content_processor->disable_content_filters();
 		$post_id = wp_insert_post( $post_args );
-
-		if ( $disable_filters ) {
-			$this->content_processor->restore_content_filters();
-		}
+		$this->content_processor->restore_content_filters();
 
 		if ( is_wp_error( $post_id ) ) {
 			return $post_id;
