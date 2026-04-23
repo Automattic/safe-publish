@@ -27,14 +27,6 @@ define( 'WP_PHP_BINARY', 'php' );
 // Filesystem method so wp_filesystem-dependent code paths work in tests.
 define( 'FS_METHOD', 'direct' );
 
-// Disable wp-cron in tests. A fresh wptests_-prefixed DB has no cached
-// update-check state, so otherwise wp_version_check() fires mid-test and
-// hits the bootstrap's outbound-HTTP block. Guarded because wp-env's
-// bundled site config may define this already.
-if ( ! defined( 'DISABLE_WP_CRON' ) ) {
-	define( 'DISABLE_WP_CRON', true );
-}
-
 // Disable core/plugin/theme auto-updates in tests so admin flows do not
 // trigger wp.org reachability checks.
 if ( ! defined( 'AUTOMATIC_UPDATER_DISABLED' ) ) {
