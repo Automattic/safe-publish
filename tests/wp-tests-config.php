@@ -21,6 +21,26 @@ define( 'WP_TESTS_DOMAIN', 'example.org' );
 define( 'WP_TESTS_EMAIL', 'admin@example.org' );
 define( 'WP_TESTS_TITLE', 'Test Site' );
 
+// Required by wp-phpunit's install step to spawn PHP for fixture setup.
+define( 'WP_PHP_BINARY', 'php' );
+
+// Filesystem method so wp_filesystem-dependent code paths work in tests.
+define( 'FS_METHOD', 'direct' );
+
+// Disable wp-cron in tests. A fresh wptests_-prefixed DB has no cached
+// update-check state, so otherwise wp_version_check() fires mid-test and
+// hits the bootstrap's outbound-HTTP block. Guarded because wp-env's
+// bundled site config may define this already.
+if ( ! defined( 'DISABLE_WP_CRON' ) ) {
+	define( 'DISABLE_WP_CRON', true );
+}
+
+// Disable core/plugin/theme auto-updates in tests so admin flows do not
+// trigger wp.org reachability checks.
+if ( ! defined( 'AUTOMATIC_UPDATER_DISABLED' ) ) {
+	define( 'AUTOMATIC_UPDATER_DISABLED', true );
+}
+
 // Use a unique table prefix for tests to avoid conflicts.
 $table_prefix = getenv( 'WP_TESTS_TABLE_PREFIX' ) ? getenv( 'WP_TESTS_TABLE_PREFIX' ) : 'wptests_';
 
@@ -39,7 +59,9 @@ define( 'SECURE_AUTH_SALT', 'put your unique phrase here' );
 define( 'LOGGED_IN_SALT', 'put your unique phrase here' );
 define( 'NONCE_SALT', 'put your unique phrase here' );
 
-// Absolute path to WordPress directory.
+// Absolute path to WordPress directory. Inside the wp-env tests-cli container
+// WordPress lives at /var/www/html/; WP_CORE_DIR lets other environments
+// (e.g. bin/install-wp-tests.sh based setups) override.
 if ( ! defined( 'ABSPATH' ) ) {
-	define( 'ABSPATH', getenv( 'WP_CORE_DIR' ) ? getenv( 'WP_CORE_DIR' ) : '/tmp/wordpress/' );
+	define( 'ABSPATH', getenv( 'WP_CORE_DIR' ) ? getenv( 'WP_CORE_DIR' ) : '/var/www/html/' );
 }
