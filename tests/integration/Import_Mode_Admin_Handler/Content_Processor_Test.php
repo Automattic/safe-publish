@@ -437,6 +437,63 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a Gutenberg image block with "Link to Media File" sideloads
+	 * both the thumbnail in <img src> and the full-size file in <a href> when
+	 * the two URLs differ.
+	 */
+	public function test_process_image_block_with_link_to_media_sideloads_anchor_href(): void {
+		// ARRANGE: A core/image block where <img src> is a thumbnail and
+		// <a href> is the full-size image (linkDestination: media).
+		$source_site   = 'https://source.example.com';
+		$thumbnail_url = 'https://source.example.com/photo-300x200.jpg';
+		$fullsize_url  = 'https://source.example.com/photo.jpg';
+		$content       = '<!-- wp:image {"url":"' . $thumbnail_url . '","linkDestination":"media"} -->'
+			. '<figure class="wp-block-image">'
+			. '<a href="' . $fullsize_url . '">'
+			. '<img src="' . $thumbnail_url . '" alt="A photo"/>'
+			. '</a></figure>'
+			. '<!-- /wp:image -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block content through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site );
+
+		// ASSERT: Two attachments were created (thumbnail + full-size).
+		$this->assertSame(
+			$attachments_before + 2,
+			$this->get_attachment_count(),
+			'Should create two attachments'
+		);
+
+		// ASSERT: Neither external URL appears in the output.
+		$this->assertStringNotContainsString(
+			$thumbnail_url,
+			$processed,
+			'Thumbnail URL should be replaced'
+		);
+		$this->assertStringNotContainsString(
+			$fullsize_url,
+			$processed,
+			'Full-size URL should be replaced'
+		);
+
+		// ASSERT: The source domain no longer appears anywhere.
+		$this->assertStringNotContainsString(
+			'source.example.com',
+			$processed,
+			'Source domain should not remain'
+		);
+
+		// ASSERT: No failure was recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
 	 * Verifies that a Gutenberg image block referencing source-site media with
 	 * a non-standard extension (.heic) is sideloaded correctly.
 	 *

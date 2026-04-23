@@ -475,7 +475,7 @@ class Content_Processor {
 			}
 		}
 
-		return $block;
+		return $this->process_block_inner_html( $block, $site_url );
 	}
 
 	/**
@@ -536,6 +536,8 @@ class Content_Processor {
 					}
 				}
 			}
+
+			$block = $this->process_block_inner_html( $block, $site_url );
 		}
 
 		// Handle block-based gallery format with innerBlocks containing image blocks.
@@ -632,7 +634,7 @@ class Content_Processor {
 			}
 		}
 
-		return $block;
+		return $this->process_block_inner_html( $block, $site_url );
 	}
 
 	/**
@@ -684,6 +686,37 @@ class Content_Processor {
 	private function process_text_block( array $block, string $site_url ): array {
 		if ( ! empty( $block['innerHTML'] ) ) {
 			$block['innerHTML'] = $this->content_media_processor->process_content( $block['innerHTML'], $site_url );
+		}
+
+		return $block;
+	}
+
+	/**
+	 * Processes block innerHTML and innerContent for remaining media URLs (e.g.
+	 * <a href> wrapping a media element) that block-specific handling did not
+	 * cover.
+	 *
+	 * @param array  $block    Block data.
+	 * @param string $site_url Source site URL.
+	 * @return array Block with processed HTML.
+	 */
+	private function process_block_inner_html( array $block, string $site_url ): array {
+		if ( ! empty( $block['innerHTML'] ) ) {
+			$block['innerHTML'] = $this->content_media_processor->process_content(
+				$block['innerHTML'],
+				$site_url
+			);
+		}
+
+		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
+			foreach ( $block['innerContent'] as $index => $content ) {
+				if ( is_string( $content ) ) {
+					$block['innerContent'][ $index ] = $this->content_media_processor->process_content(
+						$content,
+						$site_url
+					);
+				}
+			}
 		}
 
 		return $block;
