@@ -12,9 +12,10 @@ namespace Safe_Publish\Tests\Integration\External_Posts_API;
 /**
  * Tests element matching behavior of Content_Media_Processor.
  *
- * Verifies that the processor correctly identifies URLs in recognized media
- * element attributes (img, video, audio, source) and leaves URLs in all other
- * contexts untouched.
+ * Verifies that the processor correctly identifies URLs in recognized element
+ * attributes (img, video, audio, source, a, embed, object) and leaves URLs in
+ * all other contexts untouched. Links are only processed when the href points
+ * to a file with an uploadable extension.
  */
 class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 
@@ -212,6 +213,23 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 					. '<img src="/fallback.jpg"></picture>',
 				'source srcset inside picture',
 			),
+
+			// -- file download links --
+			'a_href_file_url'         => array(
+				'<a href="' . $url . '">link</a>',
+				'href on anchor to file URL',
+			),
+
+			// -- embed/object --
+			'embed_src'               => array(
+				'<embed src="' . $url . '">',
+				'src on embed element',
+			),
+			'object_data'             => array(
+				'<object data="' . $url
+					. '"></object>',
+				'data on object element',
+			),
 		);
 	}
 
@@ -228,8 +246,9 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 		string $content,
 		string $description
 	): void {
-		// ARRANGE: Record attachment count.
-		$source_site        = 'https://example.com';
+		// ARRANGE: Reset tracking and record attachment count.
+		$source_site = 'https://example.com';
+		$this->content_media_processor->reset_failed_media();
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content.
@@ -249,6 +268,13 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 		$this->assert_no_new_attachments(
 			$attachments_before,
 			"No attachment for: {$description}"
+		);
+
+		// ASSERT: No download was attempted.
+		$this->assertSame(
+			array(),
+			$this->content_media_processor->get_failed_media(),
+			"No failed media for: {$description}"
 		);
 	}
 
@@ -306,10 +332,6 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 				'<input type="image" src="' . $url . '">',
 				'src on input[type=image]',
 			),
-			'embed_src'          => array(
-				'<embed src="' . $url . '">',
-				'src on embed element',
-			),
 			'custom_element_src' => array(
 				'<my-player src="' . $url
 					. '"></my-player>',
@@ -346,13 +368,28 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 				'<p>Visit ' . $url . ' for info</p>',
 				'URL in paragraph text',
 			),
-			'url_in_href'        => array(
-				'<a href="' . $url . '">link</a>',
-				'URL in href (not src)',
-			),
 			'url_in_data_attr'   => array(
 				'<div data-bg="' . $url . '">text</div>',
 				'URL in generic data attribute',
+			),
+
+			// -- hrefs to pages (no file extension) --
+			'a_href_page_slug'   => array(
+				'<a href="https://example.com/about/">'
+					. 'About</a>',
+				'href to page slug (no extension)',
+			),
+			'a_href_page_query'  => array(
+				'<a href="https://example.com/?p=123">'
+					. 'Post</a>',
+				'href to page query string',
+			),
+
+			// -- data-* look-alike on object --
+			'object_data_attr'   => array(
+				'<object data-src="' . $url
+					. '"></object>',
+				'data-src must not match as data',
 			),
 		);
 	}

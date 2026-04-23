@@ -20,9 +20,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Content Media Processor Class.
  *
- * Handles processing of media elements within HTML content, including images,
- * videos, audio, and links. Delegates to Media_Importer for actual media
- * importing.
+ * Handles processing of media elements and file references within HTML content,
+ * including images, videos, audio, file download links, and embedded documents.
+ * Delegates to Media_Importer for actual media importing.
  *
  * Uses WordPress' HTML API (WP_HTML_Tag_Processor) to locate and modify
  * media element attributes. The HTML API conforms to the HTML5 spec, natively
@@ -66,10 +66,12 @@ class Content_Media_Processor {
 	/**
 	 * Processes and imports media from external post content.
 	 *
-	 * Iterates over media elements (img, video, audio, source) in a single
-	 * pass, importing external URLs and replacing them with local equivalents.
-	 * Comments, script, style, and textarea content are natively skipped by the
-	 * HTML API.
+	 * Iterates over media elements (img, video, audio, source), file download
+	 * links (a), and embedded documents (embed, object) in a single pass,
+	 * importing external URLs and replacing them with local equivalents. For
+	 * links, only URLs whose path ends in a file extension allowed by WordPress
+	 * are processed; page links are left untouched. Comments, script, style,
+	 * and textarea content are natively skipped by the HTML API.
 	 *
 	 * @param string $content         Post content with external media URLs.
 	 * @param string $source_site_url External site URL.
@@ -124,6 +126,36 @@ class Content_Media_Processor {
 						$source_site_url
 					);
 					$this->process_srcset_attr( $processor, $source_site_url );
+					break;
+
+				case 'A':
+					$href = $processor->get_attribute( 'href' );
+					if (
+						is_string( $href )
+						&& $this->has_uploadable_file_extension( $href )
+					) {
+						$this->import_and_replace_attr(
+							$processor,
+							'href',
+							$source_site_url
+						);
+					}
+					break;
+
+				case 'EMBED':
+					$this->import_and_replace_attr(
+						$processor,
+						'src',
+						$source_site_url
+					);
+					break;
+
+				case 'OBJECT':
+					$this->import_and_replace_attr(
+						$processor,
+						'data',
+						$source_site_url
+					);
 					break;
 			}
 		}
@@ -285,12 +317,14 @@ class Content_Media_Processor {
 	}
 
 	/**
-	 * Detects source-domain URLs in media element attributes that the processor
-	 * could not match, typically due to malformed HTML (e.g. unclosed quotes).
+	 * Detects source-domain URLs in media and embed element attributes that the
+	 * processor could not match, typically due to malformed HTML (e.g. unclosed
+	 * quotes).
 	 *
-	 * Uses a loose regex anchored to media tag names and attribute names. This
-	 * catches URLs the HTML API skipped (because the tag was unparseable) while
-	 * ignoring URLs in non-media contexts (links, CSS, text).
+	 * Uses a loose regex anchored to media and embed tag names and attribute
+	 * names. This catches URLs the HTML API skipped (because the tag was
+	 * unparseable) while ignoring URLs in non-media contexts (links, CSS,
+	 * text).
 	 *
 	 * @param string $content         Processed content.
 	 * @param string $source_site_url Source site URL.
@@ -314,11 +348,13 @@ class Content_Media_Processor {
 			$content
 		) ?? $content;
 
-		// Loose regex: anchored to a media tag, then looks for
-		// src/poster/srcset within the same tag. Uses [^<>]*? (stops at tag
-		// boundaries) so it can match inside malformed tags.
-		$pattern = '~<(?:img|video|audio|source)\b'
-			. '[^<>]*?\s(?:src|poster|srcset)\s*=\s*'
+		// Loose regex: anchored to a media/embed tag, then looks for
+		// src/poster/srcset/data within the same tag. Uses [^<>]*? (stops at
+		// tag boundaries) so it can match inside malformed tags. Link
+		// elements are excluded: applying the file-extension filter in a
+		// regex context is impractical and would false-positive on page links.
+		$pattern = '~<(?:img|video|audio|source|embed|object)\b'
+			. '[^<>]*?\s(?:src|poster|srcset|data)\s*=\s*'
 			. '["\']?\s*(https?://'
 			. preg_quote( $source_host, '~' )
 			. '/[^\s"\'<>]*)~i';
@@ -334,5 +370,37 @@ class Content_Media_Processor {
 				$this->unprocessable_media[] = $url;
 			}
 		}
+	}
+
+	/**
+	 * Checks whether a URL path ends in a file extension that WordPress allows
+	 * as an upload.
+	 *
+	 * Used to distinguish downloadable file URLs from page links in link
+	 * elements: WordPress page URLs use extensionless pretty permalinks or
+	 * query strings, while media library files always have an extension.
+	 *
+	 * @param string $url URL to inspect.
+	 * @return bool True if the extension maps to an allowed type.
+	 */
+	private function has_uploadable_file_extension( string $url ): bool {
+		$path = wp_parse_url( $url, PHP_URL_PATH );
+
+		if ( ! is_string( $path ) ) {
+			return false;
+		}
+
+		$file_info = pathinfo( $path );
+
+		if (
+			! isset( $file_info['extension'] )
+			|| '' === $file_info['extension']
+		) {
+			return false;
+		}
+
+		$filetype = wp_check_filetype( $file_info['basename'] );
+
+		return false !== $filetype['type'];
 	}
 }
