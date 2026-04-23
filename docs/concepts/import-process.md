@@ -20,19 +20,22 @@ For error resolution at any stage, see the [Troubleshooting guide](../troublesho
 
 - Safe Publish sends a request to the source site's REST API
 - The endpoint `/wp-json/wp/v2/{post_type}/{post_id}` is queried
-- Response is received and decoded
+- Response is received
 
 ### Parameters Sent
 
 - `_embed` - Embeds related data; the plugin extracts term data (categories, tags, custom taxonomies) from the response
-- `context=edit` - Retrieves complete post data including drafts (only sent when authentication is configured)
+- `context=edit` - Retrieves complete post data, including drafts (only sent when authentication is configured)
 
 ## Stage 2: Validate
 
 ### What Happens
 
-- Post data structure is validated
-- Required fields checked (`id`, `title`)
+- **URL** confirms the source site URL is properly formatted
+- **Authentication*** verifies that credentials are provided and are correct
+- **Post data** ensures the response is valid JSON, includes required fields, uses a supported post type, and has non-empty content
+- **Content sanitization** to strip dangerous HTML and scripts
+- **Media** to check supported file types and downloadability
 
 See the [Content Validation](validation.md) guide for detailed information.
 
