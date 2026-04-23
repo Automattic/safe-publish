@@ -1,16 +1,16 @@
 # Import Process
 
-This guide explains how Safe Publish imports content from external WordPress sites. Understanding this process helps you troubleshoot issues and optimize your workflow.
+This guide explains how Safe Publish moves content from one WordPress site (source) to another (destination). Understanding this process helps you troubleshoot issues and optimize your workflow.
 
 ## Overview
 
-The import process consists of the following stages:
+The process consists of the following stages:
 
-1. **Fetch** - Retrieve post data from external site
+1. **Fetch** - Retrieve post data from source site
 2. **Validate** - Check content integrity and structure
 3. **Transform and Import Media** - Process content, download media, replace URLs
-4. **Create Post** - Generate the draft post
-5. **Track** - Log the import action
+4. **Create Post** - Generate the draft post on the destination
+5. **Track** - Log the import action on the destination
 
 For error resolution at any stage, see the [Troubleshooting guide](../troubleshooting.md).
 
@@ -18,7 +18,7 @@ For error resolution at any stage, see the [Troubleshooting guide](../troublesho
 
 ### What Happens
 
-- Safe Publish sends a request to the external site's REST API
+- Safe Publish sends a request to the source site's REST API
 - The endpoint `/wp-json/wp/v2/{post_type}/{post_id}` is queried
 - Response is received and decoded
 
@@ -40,9 +40,12 @@ See the [Content Validation](validation.md) guide for detailed information.
 
 ### Content Parsing
 
-For Gutenberg content, blocks are parsed individually. Core blocks (image, gallery, video, audio, embed, HTML, paragraph, heading, list, quote) each have dedicated processing. Custom and third-party blocks have their attributes walked recursively for media URLs, and their innerHTML is processed for media elements.
+There are different parsing operations for different types of content.
 
-For non-Gutenberg (classic) content, HTML is processed in a single pass using WordPress' HTML API (`WP_HTML_Tag_Processor`).
+- Core blocks (image, gallery, video, audio, embed, HTML, paragraph, heading, list, quote) each have dedicated processing.
+- Custom and third-party blocks have their attributes walked recursively.
+- Media URLs, and their innerHTML is processed for media elements.
+- For classic blocks or non-block content, HTML is processed using WordPress' HTML API (`WP_HTML_Tag_Processor`).
 
 ### Media Elements Processed
 
@@ -58,7 +61,7 @@ The following element/attribute combinations are processed:
 | `<embed>`  | `src`               |
 | `<object>` | `data`              |
 
-For `<a>` elements, only URLs whose path ends in a file extension allowed by WordPress are processed. Page links are left untouched.
+If an `<a>` tag ends in a file extension allowed by WordPress, it is processed in this step. Regular links are processed later.
 
 ### What Is Not Processed
 
@@ -67,20 +70,15 @@ For `<a>` elements, only URLs whose path ends in a file extension allowed by Wor
 - Content inside HTML comments
 - Content inside `<textarea>` elements
 
-### URL Handling
-
-- Relative URLs are resolved against the source site URL before download
-- Query parameters are stripped for download and deduplication, then reapplied to the replacement URL
-- Third-party URLs (different domain than the source site) are left unchanged
-
 ### For Each Media URL Found
 
-1. **Resolve**: Relative URLs resolved to absolute internally for download
-2. **Filter**: Third-party domain URLs are left unchanged
-3. **Deduplicate**: If the URL was already imported, the existing attachment URL is used and download is skipped
-4. **Download**: File fetched using WordPress core's `download_url()`
-5. **Import**: File validated and added to the media library via `media_handle_sideload()`
-6. **Replace**: Source URL replaced with the new attachment URL in content
+1. **Resolve**: The source site's URL is added to Relative URLs
+2. **Normalize**: Query parameters are stripped, but stored
+3. **Filter**: Third-party domain URLs are left unchanged
+4. **Deduplicate**: If the URL was already imported, the existing attachment URL is used, and download is skipped
+5. **Download**: File fetched using WordPress core's `download_url()`
+6. **Import**: File validated and added to the media library via `media_handle_sideload()`
+7. **Replace**: Source URL replaced with the new attachment URL in content, previously stripped query paramaters are reapplied
 
 ### Featured Image
 
@@ -90,7 +88,7 @@ For `<a>` elements, only URLs whose path ends in a file extension allowed by Wor
 
 ### URL Replacement
 
-After media processing, all remaining source-domain URLs in the content are replaced with the destination site URL. This catches URLs outside media elements, such as page links, block comment attributes, and text references.
+After media processing, all remaining source-domain URLs in the content are replaced with the destination site URL. This catches URLs outside media elements, such as normal links, block comment attributes, and text references.
 
 ### Performance
 
@@ -108,7 +106,9 @@ After media processing, all remaining source-domain URLs in the content are repl
   - **Slug**: From source post slug (WordPress appends `-2`, `-3`, etc. if the slug already exists)
   - **Status**: Always `draft`
   - **Post type**: Same as source post
-- Post meta stored:
+  - **Post Meta**: meta available via REST is transferred, see below for more details
+  - **Terms**: tags and categories are transferred and created if they don't exist, custom taxonomies have availbe by REST are transfered if they exist, see below for more details
+- Additional Post meta stored:
   - `safe_publish_external_post_id` — post ID on the source site
   - `safe_publish_external_link` — URL of the source post
   - `safe_publish_imported_from` — plugin identifier (`safe-publish`)
@@ -128,11 +128,11 @@ Some source post fields are not migrated:
 
 ### Custom Post Types
 
-The source CPT must be registered with `'show_in_rest' => true` to be available for import. The CPT must also exist on the destination site, and the importing user must have the capability to create posts of that type.
+The source Custom Post Type (CPT) must be registered with `'show_in_rest' => true` to be available for import. The CPT must also exist on the destination site, and the importing user must have the capability to create posts of that type.
 
-### Custom Fields
+### Post Meta
 
-Source post meta exposed via the REST API is imported automatically alongside the plugin's own tracking meta. Custom fields must be registered with `'show_in_rest' => true` (or exposed via `register_rest_field()`) on the source site to be included in the API response.
+Source post meta exposed via the REST API is imported automatically. Custom fields must be registered with `'show_in_rest' => true` (or exposed via `register_rest_field()`) on the source site to be included in the API response.
 
 ACF fields are not exposed by default; they require ACF's REST API setting to be enabled. No field registration is needed on the destination — any meta key can be stored.
 
@@ -140,7 +140,7 @@ ACF fields are not exposed by default; they require ACF's REST API setting to be
 
 Source terms (categories, tags, and custom taxonomies) are synced. Terms that don't exist on the destination are created automatically.
 
-Custom taxonomies must be registered with `'show_in_rest' => true` on the source site and must exist on the destination site — a missing taxonomy causes the import to fail.
+Custom taxonomies must be registered with `'show_in_rest' => true` on the source site and must exist on the destination site — a missing custom taxonomy causes the import to fail.
 
 ## Stage 5: Track
 
