@@ -25,7 +25,7 @@ For error resolution at any stage, see the [Troubleshooting guide](../troublesho
 ### Parameters Sent
 
 - `_embed` - Embeds related data; the plugin extracts term data (categories, tags, custom taxonomies) from the response
-- `context=edit` - Retrieves complete post data, including drafts (only sent when authentication is configured)
+- `context=edit` - Retrieves complete post data, including drafts
 
 ## Stage 2: Validate
 
@@ -41,14 +41,13 @@ See the [Content Validation](validation.md) guide for detailed information.
 
 ## Stage 3: Transform and Import Media
 
-### Content Parsing
+### Media Discovery
 
-There are different parsing operations for different types of content.
+Safe Publish scans post content to find media files that must be copied from the source to the destination. Different content types are scanned differently.
 
-- Core blocks (image, gallery, video, audio, embed, HTML, paragraph, heading, list, quote) each have dedicated processing.
-- Custom and third-party blocks have their attributes walked recursively.
-- Media URLs, and their innerHTML is processed for media elements.
-- For classic blocks or non-block content, HTML is processed using WordPress' HTML API (`WP_HTML_Tag_Processor`).
+- Core blocks (image, gallery, video, audio, embed, HTML, paragraph, heading, list, quote) each have a dedicated parser that knows where media lives in that block's structure.
+- Custom and third-party blocks have their attributes scanned for media URLs, and their inner HTML is scanned for media elements (see the table below).
+- Classic blocks and non-block content are scanned using WordPress' HTML API (`WP_HTML_Tag_Processor`).
 
 ### Media Elements Processed
 
@@ -75,13 +74,13 @@ If an `<a>` tag ends in a file extension allowed by WordPress, it is processed i
 
 ### For Each Media URL Found
 
-1. **Resolve**: The source site's URL is added to Relative URLs
+1. **Resolve**: Relative URLs (URLs without a domain) are converted into absolute URLs (with a domain) by appending the source site's domain.
 2. **Normalize**: Query parameters are stripped, but stored
 3. **Filter**: Third-party domain URLs are left unchanged
 4. **Deduplicate**: If the URL was already imported, the existing attachment URL is used, and download is skipped
 5. **Download**: File fetched using WordPress core's `download_url()`
 6. **Import**: File validated and added to the media library via `media_handle_sideload()`
-7. **Replace**: Source URL replaced with the new attachment URL in content, previously stripped query paramaters are reapplied
+7. **Replace**: Source URL replaced with the new attachment URL in content; previously stripped query parameters are reapplied
 
 ### Featured Image
 
@@ -110,7 +109,7 @@ After media processing, all remaining source-domain URLs in the content are repl
   - **Status**: Always `draft`
   - **Post type**: Same as source post
   - **Post Meta**: meta available via REST is transferred, see below for more details
-  - **Terms**: tags and categories are transferred and created if they don't exist, custom taxonomies have availbe by REST are transfered if they exist, see below for more details
+  - **Terms**: tags and categories are transferred. If they don't exist, they are created. Custom taxonomies that appear in a REST request are transferred if they exist. See below for more details.
 - Additional Post meta stored:
   - `safe_publish_external_post_id` — post ID on the source site
   - `safe_publish_external_link` — URL of the source post
