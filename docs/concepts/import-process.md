@@ -32,7 +32,7 @@ For error resolution at any stage, see the [Troubleshooting guide](../troublesho
 ### What Happens
 
 - **URL** confirms the source site URL is properly formatted
-- **Authentication*** verifies that credentials are provided and are correct
+- **Authentication** verifies that credentials are provided and are correct
 - **Post data** ensures the response is valid JSON, includes required fields, uses a supported post type, and has non-empty content
 - **Content sanitization** to strip dangerous HTML and scripts
 - **Media** to check supported file types and downloadability
