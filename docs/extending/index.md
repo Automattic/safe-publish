@@ -21,7 +21,7 @@ Learn how to enable import support for custom post types:
 
 ### REST API Extension
 
-Extend the plugin's REST API capabilities:
+Extend the plugin's REST API capabilities. The REST API surface is intentionally small; most extension points are WordPress hooks and filters.
 
 - [REST API Extension](api.md) - Custom endpoints and authentication
 

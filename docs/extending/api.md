@@ -84,50 +84,32 @@ function safe_publish_custom_action_handler( WP_REST_Request $request ) {
 }
 ```
 
-### Extend Existing Endpoints
-
-Modify response data for existing endpoints:
-
-```php
-add_filter( 'rest_prepare_safe_publish_history', function( $response, $item, $request ) {
-    $data = $response->get_data();
-
-    // Add custom fields
-    $data['custom_field'] = get_post_meta( $item->destination_post_id, 'custom_field', true );
-
-    $response->set_data( $data );
-    return $response;
-}, 10, 3 );
-```
-
 ## Webhook Integration
 
-Create webhooks to notify external systems:
+Use the `safe_publish_event_logged` action to notify external systems when plugin events occur. See [Hooks and Filters](hooks.md) for the full list of channels and event identifiers.
 
 ```php
-// Trigger webhook after successful import
-add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
-    $webhook_url = get_option( 'safe_publish_webhook_url' );
+add_action( 'safe_publish_event_logged', function( string $channel, string $event, array $data ): void {
+    if ( 'import' !== $channel ) {
+        return;
+    }
+
+    $webhook_url = get_option( 'my_plugin_webhook_url' );
 
     if ( ! $webhook_url ) {
         return;
     }
 
-    $post = get_post( $post_id );
-
     wp_remote_post( $webhook_url, [
-        'body' => json_encode( [
-            'event' => 'post_imported',
-            'post_id' => $post_id,
-            'post_title' => $post->post_title,
-            'source_url' => $source_url,
+        'body'    => wp_json_encode( [
+            'channel'   => $channel,
+            'event'     => $event,
+            'data'      => $data,
             'timestamp' => current_time( 'mysql' ),
         ] ),
-        'headers' => [
-            'Content-Type' => 'application/json',
-        ],
+        'headers' => [ 'Content-Type' => 'application/json' ],
     ] );
-}, 10, 2 );
+}, 10, 3 );
 ```
 
 ## Error Handling
