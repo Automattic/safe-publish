@@ -22,7 +22,7 @@ Require a WordPress user with `edit_post` capability for the target post.
 | `GET`    | `/wp-json/safe-publish/v1/auth-status` | `manage_options` or HMAC | Authentication health and statistics |
 | `GET`    | `/wp-json/safe-publish/v1/auth-logs`   | `manage_options` or HMAC | Paginated authentication event log   |
 | `DELETE` | `/wp-json/safe-publish/v1/auth-logs`   | `manage_options`         | Clear authentication logs            |
-| `GET`    | `/wp-json/safe-publish/v1/auth-test`   | None                     | Authentication diagnostic test       |
+| `GET`    | `/wp-json/safe-publish/v1/auth-test`   | None (`WP_DEBUG` only)   | Authentication diagnostic test       |
 
 ## Authentication
 
