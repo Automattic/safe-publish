@@ -201,6 +201,10 @@ History records may contain:
 - **URLs**: Of source/destination content (may be internal/private)
 - **Post titles**: May contain sensitive information
 
+### User Deletion
+
+Import history records are not tied to WordPress user accounts. When a user is deleted, history records are preserved and continue to display the original user's name as it was at the time of the import.
+
 ## Best Practices
 
 1. **Regular review**: Check history weekly for both imports and exports

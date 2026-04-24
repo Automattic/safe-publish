@@ -43,6 +43,9 @@ final class History_Repository {
 		string $source_url,
 		string $session_type = 'bulk'
 	): int|WP_Error {
+		$user_id = get_current_user_id();
+		$user    = get_userdata( $user_id );
+
 		$session_id = wp_insert_post(
 			array(
 				'post_type'   => self::SESSION_POST_TYPE,
@@ -52,16 +55,20 @@ final class History_Repository {
 					current_time( 'Y-m-d H:i:s' )
 				),
 				'post_status' => 'publish',
-				'post_author' => get_current_user_id(),
+				'post_author' => 0,
 				'meta_input'  => array(
-					'source_url'   => $source_url,
-					'session_type' => $session_type,
-					'total_items'  => 0,
-					'successful'   => 0,
-					'failed'       => 0,
-					'updated'      => 0,
-					'status'       => 'in_progress',
-					'start_time'   => current_time( 'mysql' ),
+					'source_url'        => $source_url,
+					'session_type'      => $session_type,
+					'total_items'       => 0,
+					'successful'        => 0,
+					'failed'            => 0,
+					'updated'           => 0,
+					'status'            => 'in_progress',
+					'start_time'        => current_time( 'mysql' ),
+					'user_id'           => $user_id,
+					'user_display_name' => $user
+						? $user->display_name
+						: __( 'Unknown user', 'safe-publish' ),
 				),
 			)
 		);
@@ -107,6 +114,7 @@ final class History_Repository {
 				'post_title'   => $title,
 				'post_content' => false !== $log_content ? $log_content : '',
 				'post_status'  => 'publish',
+				'post_author'  => 0,
 				'post_parent'  => $session_id,
 				'meta_input'   => array(
 					'session_id'  => $session_id,
@@ -297,9 +305,19 @@ final class History_Repository {
 	 * @param int $session_id Session ID.
 	 */
 	public function mark_session_rolled_back( int $session_id ): void {
+		$user_id = get_current_user_id();
+		$user    = get_userdata( $user_id );
+
 		update_post_meta( $session_id, 'status', 'rolled_back' );
 		update_post_meta( $session_id, 'rollback_date', current_time( 'mysql' ) );
-		update_post_meta( $session_id, 'rollback_user', get_current_user_id() );
+		update_post_meta( $session_id, 'rollback_user', $user_id );
+		update_post_meta(
+			$session_id,
+			'rollback_user_display_name',
+			$user
+				? $user->display_name
+				: __( 'Unknown user', 'safe-publish' )
+		);
 	}
 
 	/**
@@ -308,9 +326,19 @@ final class History_Repository {
 	 * @param int $log_id Log ID.
 	 */
 	public function mark_log_rolled_back( int $log_id ): void {
+		$user_id = get_current_user_id();
+		$user    = get_userdata( $user_id );
+
 		update_post_meta( $log_id, 'rolled_back', true );
 		update_post_meta( $log_id, 'rollback_date', current_time( 'mysql' ) );
-		update_post_meta( $log_id, 'rollback_user', get_current_user_id() );
+		update_post_meta( $log_id, 'rollback_user', $user_id );
+		update_post_meta(
+			$log_id,
+			'rollback_user_display_name',
+			$user
+				? $user->display_name
+				: __( 'Unknown user', 'safe-publish' )
+		);
 	}
 
 	/**
