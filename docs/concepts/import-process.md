@@ -4,14 +4,13 @@ This guide explains how Safe Publish imports content from external WordPress sit
 
 ## Overview
 
-The import process consists of six main stages:
+The import process consists of the following stages:
 
 1. **Fetch** - Retrieve post data from external site
 2. **Validate** - Check content integrity and structure
-3. **Transform** - Process content and extract media references
-4. **Import Media** - Download and attach images
-5. **Create Post** - Generate the draft post
-6. **Track** - Log the import action
+3. **Transform and Import Media** - Process content, download media, replace URLs
+4. **Create Post** - Generate the draft post
+5. **Track** - Log the import action
 
 For error resolution at any stage, see the [Troubleshooting guide](../troubleshooting.md).
 
@@ -19,14 +18,13 @@ For error resolution at any stage, see the [Troubleshooting guide](../troublesho
 
 ### What Happens
 
-- Safe Publish sends an authenticated request to the external site's REST API
+- Safe Publish sends a request to the external site's REST API
 - The endpoint `/wp-json/wp/v2/{post_type}/{post_id}` is queried
-- Additional data is embedded in the response (featured image, author)
 - Response is received and decoded
 
 ### Parameters Sent
 
-- `_embed` - Includes embedded data (author, featured media)
+- `_embed` - Embeds related data; the plugin extracts term data (categories, tags, custom taxonomies) from the response
 - `context=edit` - Retrieves complete post data including drafts (only sent when authentication is configured)
 
 ## Stage 2: Validate
@@ -35,48 +33,54 @@ For error resolution at any stage, see the [Troubleshooting guide](../troublesho
 
 - Post data structure is validated
 - Required fields checked (`id`, `title`)
-- Content format validated (HTML/blocks)
-- Image URLs verified for accessibility
 
 See the [Content Validation](validation.md) guide for detailed information.
 
-## Stage 3: Transform
+## Stage 3: Transform and Import Media
 
-### What Happens
+### Content Parsing
 
-- HTML content is parsed using DOMDocument
-- `<img>` `src` and `srcset` attributes are processed
-- `<picture>/<source>` `srcset` attributes are processed
-- Relative and protocol-relative URLs made absolute
-- `<video>` and `<audio>` sources resolved (including `<source>` children and `poster` attributes)
-- Content prepared for import
+For Gutenberg content, blocks are parsed individually. Core blocks (image, gallery, video, audio, embed, HTML, paragraph, heading, list, quote) each have dedicated processing. Custom and third-party blocks have their attributes walked recursively for media URLs, and their innerHTML is processed for media elements.
 
-### URL Transformation
+For non-Gutenberg (classic) content, HTML is processed in a single pass using WordPress' HTML API (`WP_HTML_Tag_Processor`).
 
-All URLs in content are processed:
+### Media Elements Processed
 
-```php
-// Relative URLs converted to absolute
-./image.jpg → https://source-site.com/image.jpg
+The following element/attribute combinations are processed:
 
-// Protocol-relative URLs made absolute
-//cdn.example.com/img.jpg → https://cdn.example.com/img.jpg
+| Element    | Attributes          |
+| ---------- | ------------------- |
+| `<img>`    | `src`, `srcset`     |
+| `<video>`  | `src`, `poster`     |
+| `<audio>`  | `src`               |
+| `<source>` | `src`, `srcset`     |
+| `<a>`      | `href` (files only) |
+| `<embed>`  | `src`               |
+| `<object>` | `data`              |
 
-// Query parameters preserved
-image.jpg?w=800&h=600 → https://source-site.com/image.jpg?w=800&h=600
-```
+For `<a>` elements, only URLs whose path ends in a file extension allowed by WordPress are processed. Page links are left untouched.
 
-## Stage 4: Import Media
+### What Is Not Processed
 
-### What Happens
+- URLs inside `<style>` blocks or inline `style` attributes (e.g., CSS `background-image`)
+- URLs inside `<script>` blocks
+- Content inside HTML comments
+- Content inside `<textarea>` elements
 
-For each image found:
+### URL Handling
 
-1. **Download**: Image fetched from source URL
-2. **Validate**: File type and size checked
-3. **Upload**: Image added to media library
-4. **Attach**: Image attached to the post
-5. **Replace**: Content URLs updated to new location
+- Relative URLs are resolved against the source site URL before download
+- Query parameters are stripped for download and deduplication, then reapplied to the replacement URL
+- Third-party URLs (different domain than the source site) are left unchanged
+
+### For Each Media URL Found
+
+1. **Resolve**: Relative URLs resolved to absolute internally for download
+2. **Filter**: Third-party domain URLs are left unchanged
+3. **Deduplicate**: If the URL was already imported, the existing attachment URL is used and download is skipped
+4. **Download**: File fetched using WordPress core's `download_url()`
+5. **Import**: File validated and added to the media library via `media_handle_sideload()`
+6. **Replace**: Source URL replaced with the new attachment URL in content
 
 ### Featured Image
 
@@ -84,19 +88,16 @@ For each image found:
 - Uploaded to media library
 - Set as post thumbnail via `set_post_thumbnail()`
 
-### Inline Images
+### URL Replacement
 
-- Extracted from content during transform stage
-- Downloaded sequentially
-- Original URLs replaced with new attachment URLs
+After media processing, all remaining source-domain URLs in the content are replaced with the destination site URL. This catches URLs outside media elements, such as page links, block comment attributes, and text references.
 
-### Performance Considerations
+### Performance
 
-- Images downloaded using WordPress core's `download_url()`
-- Image downloads are not affected by the [`safe_publish_request_timeout`](../extending/hooks.md#safe_publish_request_timeout) filter and use WordPress core's default timeout
-- Failed images do not stop the import; the original URL is preserved
+- Media files downloaded using WordPress core's `download_url()`
+- Media downloads are not affected by the [`safe_publish_request_timeout`](../extending/hooks.md#safe_publish_request_timeout) filter and use WordPress core's default timeout
 
-## Stage 5: Create Post
+## Stage 4: Create Post
 
 ### What Happens
 
@@ -125,11 +126,23 @@ Some source post fields are not migrated:
 - **Date**: Not preserved; the destination site uses its own publish date.
 - **Parent**: Parent/child relationships (mainly pages) are not mapped across sites.
 
+### Custom Post Types
+
+The source CPT must be registered with `'show_in_rest' => true` to be available for import. The CPT must also exist on the destination site, and the importing user must have the capability to create posts of that type.
+
 ### Custom Fields
 
-Source post meta exposed via the REST API is imported automatically alongside the plugin's own tracking meta. Custom fields must be registered with `'show_in_rest' => true` (or exposed via `register_rest_field()`) on the source site to be included in the API response. Source terms (categories, tags) are also synced.
+Source post meta exposed via the REST API is imported automatically alongside the plugin's own tracking meta. Custom fields must be registered with `'show_in_rest' => true` (or exposed via `register_rest_field()`) on the source site to be included in the API response.
 
-## Stage 6: Track
+ACF fields are not exposed by default; they require ACF's REST API setting to be enabled. No field registration is needed on the destination — any meta key can be stored.
+
+### Terms
+
+Source terms (categories, tags, and custom taxonomies) are synced. Terms that don't exist on the destination are created automatically.
+
+Custom taxonomies must be registered with `'show_in_rest' => true` on the source site and must exist on the destination site — a missing taxonomy causes the import to fail.
+
+## Stage 5: Track
 
 ### What Happens
 
@@ -149,7 +162,7 @@ See [History](history.md) for more details.
 
 Bulk imports process multiple posts sequentially:
 
-1. Each post goes through all six stages individually
+1. Each post goes through all stages individually
 2. Failures in one post don't stop others
 3. Results aggregated and reported
 4. Import history updated for each post
@@ -158,21 +171,14 @@ Bulk imports process multiple posts sequentially:
 
 - Processes one post at a time (no parallel processing)
 - Bulk imports are capped at 50 posts per request
-- Each import takes 5-30 seconds depending on:
-  - Post content size
-  - Number of images
-  - Network speed
-  - External site response time
 
 ## Error Handling
 
-### Graceful Degradation
+### Failure Behavior
 
-The plugin handles errors gracefully:
-
-- **Media failures**: Post still imported without images
-- **Meta failures**: Post imported without custom fields
-- **Network timeouts on image downloads**: No automatic retry; the import continues and the original URL is preserved
+- **Inline media download failures**: Import is aborted; any attachments already created during the run are deleted
+- **Featured image failures**: Import is aborted
+- **Meta/term failures**: Import is aborted; for new posts, the post and its attachments are deleted. For updates, the post is rolled back to its pre-update state
 - **Network timeouts on API requests**: No automatic retry; on WordPress VIP, consecutive failures will temporarily block further requests for up to 20 seconds to protect performance
 
 ### Error Reporting
