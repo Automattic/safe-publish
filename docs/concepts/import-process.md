@@ -34,7 +34,7 @@ For error resolution at any stage, see the [Troubleshooting guide](../troublesho
 ### What Happens
 
 - Post data structure is validated
-- Required fields checked (`id`, `title`, `content`, `link`)
+- Required fields checked (`id`, `title`)
 - Content format validated (HTML/blocks)
 - Image URLs verified for accessibility
 
@@ -48,8 +48,7 @@ See the [Content Validation](validation.md) guide for detailed information.
 - `<img>` `src` and `srcset` attributes are processed
 - `<picture>/<source>` `srcset` attributes are processed
 - Relative and protocol-relative URLs made absolute
-- `<a>` href relative URLs resolved to absolute
-- `<iframe>` and `<video>` sources resolved
+- `<video>` and `<audio>` sources resolved (including `<source>` children and `poster` attributes)
 - Content prepared for import
 
 ### URL Transformation
@@ -81,7 +80,7 @@ For each image found:
 
 ### Featured Image
 
-- Fetched separately using `_embedded['wp:featuredmedia']`
+- Fetched separately via the `/wp-json/wp/v2/media/{id}` endpoint using the `featured_media` ID from the post response
 - Uploaded to media library
 - Set as post thumbnail via `set_post_thumbnail()`
 
@@ -94,7 +93,7 @@ For each image found:
 ### Performance Considerations
 
 - Images downloaded using WordPress core's `download_url()`
-- Image download timeout uses WordPress core's default (300 seconds); the `safe_publish_request_timeout` filter applies only to REST API requests, not image downloads
+- Image downloads are not affected by the [`safe_publish_request_timeout`](../extending/hooks.md#safe_publish_request_timeout) filter and use WordPress core's default timeout
 - Failed images do not stop the import; the original URL is preserved
 
 ## Stage 5: Create Post
@@ -105,6 +104,7 @@ For each image found:
 - Post data set:
   - **Title**: From source post title
   - **Content**: Transformed content with updated URLs
+  - **Slug**: From source post slug (WordPress appends `-2`, `-3`, etc. if the slug already exists)
   - **Status**: Always `draft`
   - **Post type**: Same as source post
 - Post meta stored:
@@ -117,13 +117,17 @@ For each image found:
 
 All imported posts are created as **drafts** to allow review before publishing. This is intentional and cannot be changed (for safety).
 
-### Author Attribution
+### Excluded Fields
 
-The post author is set to the user who performed the import, not the original author. This ensures proper attribution in the destination site.
+Some source post fields are not migrated:
+
+- **Author**: Set to the importing user.
+- **Date**: Not preserved; the destination site uses its own publish date.
+- **Parent**: Parent/child relationships (mainly pages) are not mapped across sites.
 
 ### Custom Fields
 
-Only the plugin's own tracking meta is stored automatically. Additional post meta is not imported; importing extra fields requires custom development.
+Source post meta exposed via the REST API is imported automatically alongside the plugin's own tracking meta. Custom fields must be registered with `'show_in_rest' => true` (or exposed via `register_rest_field()`) on the source site to be included in the API response. Source terms (categories, tags) are also synced.
 
 ## Stage 6: Track
 
@@ -153,7 +157,7 @@ Bulk imports process multiple posts sequentially:
 ### Performance
 
 - Processes one post at a time (no parallel processing)
-- Time limit extended to avoid PHP timeouts
+- Bulk imports are capped at 50 posts per request
 - Each import takes 5-30 seconds depending on:
   - Post content size
   - Number of images

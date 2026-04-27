@@ -201,14 +201,6 @@ History records may contain:
 - **URLs**: Of source/destination content (may be internal/private)
 - **Post titles**: May contain sensitive information
 
-### GDPR Compliance
-
-When a user is deleted:
-
-- Import history records are preserved
-- User ID references are maintained
-- Username display shows "Deleted User"
-
 ## Best Practices
 
 1. **Regular review**: Check history weekly for both imports and exports
