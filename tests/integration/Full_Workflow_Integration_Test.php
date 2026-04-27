@@ -471,21 +471,23 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that bulk import fails when sanitization would modify
-	 * post content.
+	 * Verifies that bulk import preserves content with script tags when kses is
+	 * disabled (default).
 	 */
-	public function test_bulk_import_fails_when_content_is_modified_by_sanitization(): void {
-		// ARRANGE: Content with a script tag that wp_kses_post would strip.
+	public function test_bulk_import_preserves_content_by_default(): void {
+		// ARRANGE: Content with a script tag that kses would strip.
 		$session_id = $this->import_history->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
 
+		$content = '<p>Safe content.</p>'
+			. '<script>alert("xss")</script>';
+
 		$post_data = array(
 			'id'             => 8001,
 			'title'          => 'Sanitization Test Post',
-			'content'        => '<p>Safe content.</p>'
-				. '<script>alert("xss")</script>',
+			'content'        => $content,
 			'link'           => 'https://source.example.com/sanitization-test',
 			'featured_media' => 0,
 			'post_type'      => 'posts',
@@ -495,8 +497,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		);
 
 		$this->mock_post_overrides = array(
-			'content' => '<p>Safe content.</p>'
-				. '<script>alert("xss")</script>',
+			'content' => $content,
 		);
 
 		// ACT: Import via the bulk path.
@@ -505,32 +506,28 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			$session_id
 		);
 
-		// ASSERT: Import failed with a descriptive sanitization error.
-		$this->assertFalse( $result['success'] );
-		$this->assertStringContainsString(
-			'modified by sanitization',
-			$result['error']
-		);
-		$this->assertStringContainsString(
-			'Stripped:',
-			$result['error']
-		);
+		// ASSERT: Import succeeded with content preserved.
+		$this->assertTrue( $result['success'] );
+
+		$post = get_post( $result['post_id'] );
 		$this->assertStringContainsString(
 			'<script>',
-			$result['error']
+			$post->post_content
 		);
 	}
 
 	/**
-	 * Verifies that bulk import fails when sanitization would modify
-	 * the excerpt.
+	 * Verifies that bulk import preserves excerpts with script tags when kses
+	 * is disabled (default).
 	 */
-	public function test_bulk_import_fails_when_excerpt_is_modified_by_sanitization(): void {
-		// ARRANGE: Excerpt with a script tag that wp_kses_post would strip.
+	public function test_bulk_import_preserves_excerpt_by_default(): void {
+		// ARRANGE: Excerpt with a script tag that kses would strip.
 		$session_id = $this->import_history->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
+
+		$excerpt = '<em>Summary.</em><script>xss</script>';
 
 		$post_data = array(
 			'id'             => 8002,
@@ -539,14 +536,14 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			'link'           => 'https://source.example.com/excerpt-test',
 			'featured_media' => 0,
 			'post_type'      => 'posts',
-			'excerpt'        => '<em>Summary.</em><script>xss</script>',
+			'excerpt'        => $excerpt,
 			'meta'           => array(),
 			'terms'          => array(),
 		);
 
 		$this->mock_post_overrides = array(
 			'content' => '<p>Clean content.</p>',
-			'excerpt' => '<em>Summary.</em><script>xss</script>',
+			'excerpt' => $excerpt,
 		);
 
 		// ACT: Import via the bulk path.
@@ -555,15 +552,13 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			$session_id
 		);
 
-		// ASSERT: Import failed due to excerpt sanitization.
-		$this->assertFalse( $result['success'] );
-		$this->assertStringContainsString(
-			'excerpt',
-			$result['error']
-		);
+		// ASSERT: Import succeeded with excerpt preserved.
+		$this->assertTrue( $result['success'] );
+
+		$post = get_post( $result['post_id'] );
 		$this->assertStringContainsString(
 			'<script>',
-			$result['error']
+			$post->post_excerpt
 		);
 	}
 
@@ -603,8 +598,9 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that the sanitization error message describes the
-	 * specific HTML that was stripped for different stripping types.
+	 * Verifies that the sanitization error message describes the specific HTML
+	 * that was stripped for different stripping types when kses is enabled via
+	 * filter.
 	 *
 	 * @dataProvider provide_stripping_scenarios
 	 *
@@ -616,7 +612,10 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		string $content,
 		array $expected_in_error
 	): void {
-		// ARRANGE: Import with content that wp_kses_post would modify.
+		// ARRANGE: Enable kses via filter, then import content that kses would
+		// modify.
+		add_filter( 'safe_publish_import_kses', '__return_true' );
+
 		$session_id = $this->import_history->create_session(
 			'https://source.example.com',
 			'bulk'
@@ -644,6 +643,8 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			$session_id
 		);
 
+		remove_filter( 'safe_publish_import_kses', '__return_true' );
+
 		// ASSERT: Import failed with a descriptive error.
 		$this->assertFalse( $result['success'] );
 		$this->assertStringContainsString(
@@ -661,13 +662,15 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that bulk import succeeds when sanitization only makes
-	 * cosmetic whitespace changes (no false positives).
+	 * Verifies that bulk import succeeds when kses-enabled sanitization only
+	 * makes cosmetic whitespace changes (no false positives).
 	 */
 	public function test_bulk_import_succeeds_with_cosmetic_whitespace_changes(): void {
-		// ARRANGE: Content with inline styles that wp_kses_post normalizes
-		// (e.g. removes space after semicolons) but does not meaningfully
-		// modify.
+		// ARRANGE: Enable kses, then import content with inline styles that
+		// kses normalizes (e.g. removes space after semicolons) but does not
+		// meaningfully modify.
+		add_filter( 'safe_publish_import_kses', '__return_true' );
+
 		$session_id = $this->import_history->create_session(
 			'https://source.example.com',
 			'bulk'
@@ -702,8 +705,189 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			$session_id
 		);
 
+		remove_filter( 'safe_publish_import_kses', '__return_true' );
+
 		// ASSERT: Import succeeded despite cosmetic changes.
 		$this->assertTrue( $result['success'] );
+	}
+
+	/**
+	 * Verifies that bulk import strips script tags from excerpts when kses is
+	 * enabled via the safe_publish_import_kses filter.
+	 */
+	public function test_bulk_import_sanitizes_excerpt(): void {
+		// ARRANGE: Enable kses, then import an excerpt with a script tag.
+		add_filter( 'safe_publish_import_kses', '__return_true' );
+
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$excerpt = '<em>Summary.</em><script>xss</script>';
+
+		$post_data = array(
+			'id'             => 8031,
+			'title'          => 'Kses Filter Excerpt Test',
+			'content'        => '<p>Clean content.</p>',
+			'link'           => 'https://source.example.com/kses-excerpt',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => $excerpt,
+			'meta'           => array(),
+			'terms'          => array(),
+		);
+
+		$this->mock_post_overrides = array(
+			'content' => '<p>Clean content.</p>',
+			'excerpt' => $excerpt,
+		);
+
+		// ACT: Import via the bulk path.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		remove_filter( 'safe_publish_import_kses', '__return_true' );
+
+		// ASSERT: Import failed due to excerpt sanitization.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString(
+			'excerpt',
+			$result['error']
+		);
+		$this->assertStringContainsString(
+			'<script>',
+			$result['error']
+		);
+	}
+
+	/**
+	 * Verifies that reimporting a post with kses enabled fails when the updated
+	 * content contains tags that kses would strip.
+	 */
+	public function test_bulk_reimport_sanitizes_post_content(): void {
+		// ARRANGE: First import clean content, then reimport with a script tag
+		// while kses is enabled.
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'             => 8032,
+			'title'          => 'Reimport Sanitization Test',
+			'content'        => '<p>Clean content.</p>',
+			'link'           => 'https://source.example.com/reimport-kses',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '',
+			'meta'           => array(),
+			'terms'          => array(),
+		);
+
+		$this->mock_post_overrides = array(
+			'content' => '<p>Clean content.</p>',
+		);
+
+		$first_result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+		$this->assertTrue( $first_result['success'] );
+
+		// ACT: Reimport with kses enabled and a script tag.
+		add_filter( 'safe_publish_import_kses', '__return_true' );
+
+		$dirty_content = '<p>Updated.</p>'
+			. '<script>alert("xss")</script>';
+
+		$this->mock_post_overrides = array(
+			'content' => $dirty_content,
+		);
+
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		remove_filter( 'safe_publish_import_kses', '__return_true' );
+
+		// ASSERT: Reimport failed due to sanitization.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString(
+			'modified by sanitization',
+			$result['error']
+		);
+	}
+
+	/**
+	 * Verifies that the safe_publish_import_kses_allowed_html filter lets
+	 * developers customize which tags are allowed when kses is enabled.
+	 */
+	public function test_bulk_import_uses_custom_allowed_tags(): void {
+		// ARRANGE: Enable kses and add <iframe> to allowed tags.
+		add_filter( 'safe_publish_import_kses', '__return_true' );
+
+		$allow_iframes = static function ( array $allowed ): array {
+			$allowed['iframe'] = array(
+				'src'    => true,
+				'width'  => true,
+				'height' => true,
+			);
+			return $allowed;
+		};
+		add_filter(
+			'safe_publish_import_kses_allowed_html',
+			$allow_iframes
+		);
+
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$content = '<p>Watch this:</p>'
+			. '<iframe src="https://youtube.com/embed/abc"'
+			. ' width="560" height="315"></iframe>';
+
+		$post_data = array(
+			'id'             => 8033,
+			'title'          => 'Custom Allowed Tags Test',
+			'content'        => $content,
+			'link'           => 'https://source.example.com/custom-tags',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '',
+			'meta'           => array(),
+			'terms'          => array(),
+		);
+
+		$this->mock_post_overrides = array(
+			'content' => $content,
+		);
+
+		// ACT: Import via the bulk path.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		remove_filter( 'safe_publish_import_kses', '__return_true' );
+		remove_filter(
+			'safe_publish_import_kses_allowed_html',
+			$allow_iframes
+		);
+
+		// ASSERT: Import succeeded — iframe is in the custom allowlist.
+		$this->assertTrue( $result['success'] );
+
+		$post = get_post( $result['post_id'] );
+		$this->assertStringContainsString(
+			'<iframe',
+			$post->post_content
+		);
 	}
 
 	/**

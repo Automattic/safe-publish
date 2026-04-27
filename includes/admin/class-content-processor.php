@@ -205,6 +205,7 @@ class Content_Processor {
 		$filters_to_disable = array(
 			'the_content',
 			'content_save_pre',
+			'excerpt_save_pre',
 			'wp_insert_post_data',
 		);
 
@@ -220,6 +221,7 @@ class Content_Processor {
 		remove_filter( 'the_content', 'wptexturize' );
 		remove_filter( 'content_save_pre', 'wp_filter_post_kses' );
 		remove_filter( 'content_filtered_save_pre', 'wp_filter_post_kses' );
+		remove_filter( 'excerpt_save_pre', 'wp_filter_post_kses' );
 	}
 
 	/**
@@ -242,6 +244,7 @@ class Content_Processor {
 		add_filter( 'the_content', 'wptexturize' );
 		add_filter( 'content_save_pre', 'wp_filter_post_kses' );
 		add_filter( 'content_filtered_save_pre', 'wp_filter_post_kses' );
+		add_filter( 'excerpt_save_pre', 'wp_filter_post_kses' );
 	}
 
 	/**

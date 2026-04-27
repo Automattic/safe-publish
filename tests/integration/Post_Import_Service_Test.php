@@ -1340,10 +1340,11 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * up-to-date post name.
 	 */
 	public function test_import_error_uses_fresh_title_not_snapshot_title(): void {
-		// ARRANGE: The listing snapshot uses a stale title, but the fresh
-		// content endpoint returns an updated title together with content
-		// that wp_kses_post will strip (triggering a sanitization error
-		// after the title has been refreshed).
+		// ARRANGE: Enable kses so that the <form> content triggers a
+		// sanitization error. The listing snapshot uses a stale title,
+		// but the fresh content endpoint returns an updated title.
+		add_filter( 'safe_publish_import_kses', '__return_true' );
+
 		$this->mock_post_overrides = array(
 			'title'   => 'Fresh Title From Source',
 			'content' => '<p>OK</p><form action="x"><input></form>',
@@ -1367,6 +1368,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			$post_data,
 			$session_id
 		);
+
+		remove_filter( 'safe_publish_import_kses', '__return_true' );
 
 		// ASSERT: Import must fail due to sanitization.
 		$this->assertFalse(
