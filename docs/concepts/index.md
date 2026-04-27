@@ -30,7 +30,7 @@ Before importing, Safe Publish validates content to ensure data integrity:
 
 - **URL validation**: Ensures the external site is a valid, accessible WordPress installation
 - **Post data validation**: Verifies required fields are present
-- **Content sanitization**: Strips disallowed HTML via WordPress core at import time
+- **Content sanitization**: Optionally checks content against allowed HTML via the [`safe_publish_import_kses`](../extending/hooks.md#safe_publish_import_kses) filter (disabled by default for content fidelity)
 - **Media validation**: Checks image file types and downloadability at import time
 
 Learn more about [Content Validation](validation.md).

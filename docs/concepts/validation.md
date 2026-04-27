@@ -73,20 +73,20 @@ Before importing content, Safe Publish performs several validation checks to ens
 
 **What happens:**
 
-Content is sanitized at import time using WordPress core's `wp_kses_post()`. This is not a discrete pre-import validation step — it happens during the import itself.
+By default, content is not sanitized during import — WordPress core save-time filters (including kses) are suppressed to preserve content fidelity. This matches WordPress core importer behavior and is appropriate because the source site is already authenticated via HMAC.
 
-- Dangerous HTML and scripts are stripped
-- If sanitization modifies the content, the import reports a sanitization warning
+Kses sanitization can be opted into via the [`safe_publish_import_kses`](../extending/hooks.md#safe_publish_import_kses) filter. When enabled, content is checked against the allowed HTML tags before persisting. If sanitization would modify the content, the import fails with a descriptive error.
 
-**Common failures:**
+**Common failures (when kses is enabled):**
 
-- Content contains disallowed HTML tags or attributes
+- Content contains HTML tags or attributes outside the allowlist
 - Inline scripts or event handlers present
 
 **How to fix:**
 
 - Edit the post in the block editor and remove disallowed elements
 - Remove any custom HTML that contains scripts or event handlers
+- Customize the allowlist via the [`safe_publish_import_kses_allowed_html`](../extending/hooks.md#safe_publish_import_kses_allowed_html) filter
 
 ### 5. Media Validation
 
