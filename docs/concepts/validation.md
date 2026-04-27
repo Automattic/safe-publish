@@ -9,14 +9,14 @@ Before importing content, Safe Publish performs several validation checks to ens
 **What it checks:**
 
 - External site URL is properly formatted
-- URL uses HTTPS (required for security)
+- URL uses HTTPS (required for production domains; HTTP is allowed for local development domains like `.test`, `.local`, `.dev`)
 - Domain is accessible and responds to requests
 - Site is a WordPress installation with REST API enabled
 
 **Common failures:**
 
 - Invalid URL format (missing protocol, malformed)
-- HTTP instead of HTTPS
+- HTTP instead of HTTPS (on production domains)
 - Site not accessible (DNS issues, firewall, down)
 - Non-WordPress site or REST API disabled
 
@@ -52,7 +52,7 @@ Before importing content, Safe Publish performs several validation checks to ens
 **What it checks:**
 
 - Post data structure is valid JSON
-- Required fields are present (`id`, `title`, `content`, `link`)
+- Required fields are present (`id`, `title`)
 - Post type is supported
 - Content is not empty
 
@@ -69,74 +69,47 @@ Before importing content, Safe Publish performs several validation checks to ens
 - Verify the post type is enabled in REST API
 - Try re-saving the post on the source site
 
-### 4. Content Structure Validation
+### 4. Content Sanitization
 
-**What it checks:**
+**What happens:**
 
-- HTML structure is well-formed
-- Gutenberg blocks are properly formatted
-- No dangerous HTML or scripts
-- Block syntax is valid
+By default, content is not sanitized during import — WordPress core save-time filters (including kses) are suppressed to preserve content fidelity. This matches WordPress core importer behavior and is appropriate because the source site is already authenticated via HMAC.
 
-**Common failures:**
+Kses sanitization can be opted into via the [`safe_publish_import_kses`](../extending/hooks.md#safe_publish_import_kses) filter. When enabled, content is checked against the allowed HTML tags before persisting. If sanitization would modify the content, the import fails with a descriptive error.
 
-- Malformed HTML
-- Invalid block syntax
-- Unclosed HTML tags
-- Corrupted block comments
+**Common failures (when kses is enabled):**
+
+- Content contains HTML tags or attributes outside the allowlist
+- Inline scripts or event handlers present
 
 **How to fix:**
 
-- Edit the post in the block editor and fix validation errors
-- Remove any custom HTML that might be malformed
-- Try switching to code editor view and fixing syntax
+- Edit the post in the block editor and remove disallowed elements
+- Remove any custom HTML that contains scripts or event handlers
+- Customize the allowlist via the [`safe_publish_import_kses_allowed_html`](../extending/hooks.md#safe_publish_import_kses_allowed_html) filter
 
 ### 5. Media Validation
 
-**What it checks:**
+Media is validated during the import process itself, not as a separate pre-import step. Failed media does not block the import — the post is still created and the original external URL is preserved.
 
-- Featured image URL is accessible
-- Inline image URLs are valid and accessible
-- Image file types are supported
-- Images are not too large
+**What it checks (at import time):**
+
+- Image file types are supported (validated via `wp_check_filetype()`)
+- Images can be downloaded from the source URL
 
 **Common failures:**
 
 - Broken image URLs (404 errors)
 - Images on non-accessible domains
 - Unsupported file types
-- Images too large to import
 
 **How to fix:**
 
 - Verify images exist on the source site
 - Check image URLs are publicly accessible
 - Ensure images are in supported formats (JPEG, PNG, GIF, WebP)
-- Resize oversized images
 
 For a list of validation error codes and solutions, see the [Troubleshooting guide](../troubleshooting.md#validation-errors).
-
-## Best Practices
-
-### Before Importing
-
-1. **Test the connection** first using the "Test Connection" button
-2. **Preview content** using the "Post Diff" feature
-3. **Check images** are displaying in the preview
-4. **Verify post types** are correctly configured
-
-### During Import
-
-1. **Monitor the process** - watch for validation warnings
-2. **Check History** for any errors
-3. **Review imported drafts** before publishing
-
-### After Import
-
-1. **Verify content** appears correctly in the editor
-2. **Check images** are imported and displaying
-3. **Test links** within the content
-4. **Review formatting** matches the source
 
 ## Next Steps
 

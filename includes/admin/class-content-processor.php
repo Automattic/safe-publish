@@ -50,6 +50,14 @@ class Content_Processor {
 	private array $failed_media = array();
 
 	/**
+	 * URLs found in media element attributes that could not be processed,
+	 * typically due to malformed HTML.
+	 *
+	 * @var array
+	 */
+	private array $unprocessable_media = array();
+
+	/**
 	 * Constructs the Content_Processor instance.
 	 *
 	 * @param Media_Importer          $media_importer          Media importer instance.
@@ -74,7 +82,8 @@ class Content_Processor {
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
 	public function process_content( string $content, string $site_url ): string|WP_Error {
-		$this->failed_media = array();
+		$this->failed_media        = array();
+		$this->unprocessable_media = array();
 		$this->media_importer->reset_newly_created_attachment_ids();
 
 		if ( $this->is_gutenberg_content( $content ) ) {
@@ -93,7 +102,15 @@ class Content_Processor {
 			)
 		);
 
+		$this->unprocessable_media = array_unique(
+			array_merge(
+				$this->unprocessable_media,
+				$this->content_media_processor->get_unprocessable_media()
+			)
+		);
+
 		$this->content_media_processor->reset_failed_media();
+		$this->content_media_processor->reset_unprocessable_media();
 
 		return $this->replace_external_urls( $processed_content, $site_url );
 	}
@@ -205,6 +222,7 @@ class Content_Processor {
 		$filters_to_disable = array(
 			'the_content',
 			'content_save_pre',
+			'excerpt_save_pre',
 			'wp_insert_post_data',
 		);
 
@@ -220,6 +238,7 @@ class Content_Processor {
 		remove_filter( 'the_content', 'wptexturize' );
 		remove_filter( 'content_save_pre', 'wp_filter_post_kses' );
 		remove_filter( 'content_filtered_save_pre', 'wp_filter_post_kses' );
+		remove_filter( 'excerpt_save_pre', 'wp_filter_post_kses' );
 	}
 
 	/**
@@ -242,6 +261,7 @@ class Content_Processor {
 		add_filter( 'the_content', 'wptexturize' );
 		add_filter( 'content_save_pre', 'wp_filter_post_kses' );
 		add_filter( 'content_filtered_save_pre', 'wp_filter_post_kses' );
+		add_filter( 'excerpt_save_pre', 'wp_filter_post_kses' );
 	}
 
 	/**
@@ -270,7 +290,7 @@ class Content_Processor {
 	 * @return string|null Error message, or null if no failures.
 	 */
 	public function get_failed_media_error_message(): ?string {
-		if ( empty( $this->failed_media ) ) {
+		if ( array() === $this->failed_media ) {
 			return null;
 		}
 
@@ -279,6 +299,35 @@ class Content_Processor {
 			__( 'Import failed: %1$d media file(s) could not be downloaded: %2$s', 'safe-publish' ),
 			count( $this->failed_media ),
 			implode( ', ', $this->failed_media )
+		);
+	}
+
+	/**
+	 * Returns media URLs that could not be processed due to malformed HTML in
+	 * the source content.
+	 *
+	 * @return array Unprocessable media URLs.
+	 */
+	public function get_unprocessable_media(): array {
+		return $this->unprocessable_media;
+	}
+
+	/**
+	 * Returns a formatted error message if any media URLs could not be
+	 * processed due to malformed HTML, or null if there were none.
+	 *
+	 * @return string|null Error message, or null.
+	 */
+	public function get_unprocessable_media_error_message(): ?string {
+		if ( array() === $this->unprocessable_media ) {
+			return null;
+		}
+
+		return sprintf(
+			/* translators: 1: number of unprocessable media URLs, 2: comma-separated list of URLs */
+			__( 'Import failed: %1$d media URL(s) could not be processed because the surrounding HTML markup is malformed (e.g. unclosed quotes). Fix the markup on the source site and retry: %2$s', 'safe-publish' ),
+			count( $this->unprocessable_media ),
+			implode( ', ', $this->unprocessable_media )
 		);
 	}
 
@@ -304,11 +353,8 @@ class Content_Processor {
 				break;
 
 			case 'core/video':
-				$block = $this->process_video_block( $block, $site_url );
-				break;
-
 			case 'core/audio':
-				$block = $this->process_audio_block( $block, $site_url );
+				$block = $this->process_media_block( $block, $site_url );
 				break;
 
 			case 'core/embed':
@@ -429,7 +475,7 @@ class Content_Processor {
 			}
 		}
 
-		return $block;
+		return $this->process_block_inner_html( $block, $site_url );
 	}
 
 	/**
@@ -490,6 +536,8 @@ class Content_Processor {
 					}
 				}
 			}
+
+			$block = $this->process_block_inner_html( $block, $site_url );
 		}
 
 		// Handle block-based gallery format with innerBlocks containing image blocks.
@@ -528,13 +576,13 @@ class Content_Processor {
 	}
 
 	/**
-	 * Processes video block to import media.
+	 * Processes a media block (video or audio) to import its source.
 	 *
-	 * @param array  $block    Video block data.
+	 * @param array  $block    Block data.
 	 * @param string $site_url Source site URL.
 	 * @return array Processed block.
 	 */
-	private function process_video_block( array $block, string $site_url ): array {
+	private function process_media_block( array $block, string $site_url ): array {
 		if ( empty( $block['attrs']['src'] ) ) {
 			return $block;
 		}
@@ -561,68 +609,32 @@ class Content_Processor {
 		$block['attrs']['src'] = $new_url;
 		$block['attrs']['id']  = $attachment_id;
 
+		$url_with_parameters = Media_Importer::reapply_query_parameters(
+			$original_url,
+			$new_url
+		);
+
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = str_replace( $original_url, $new_url, $block['innerHTML'] );
+			$block['innerHTML'] = str_replace(
+				$original_url,
+				$url_with_parameters,
+				$block['innerHTML']
+			);
 		}
 
 		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
 			foreach ( $block['innerContent'] as $index => $content ) {
 				if ( is_string( $content ) ) {
-					$block['innerContent'][ $index ] = str_replace( $original_url, $new_url, $content );
+					$block['innerContent'][ $index ] = str_replace(
+						$original_url,
+						$url_with_parameters,
+						$content
+					);
 				}
 			}
 		}
 
-		return $block;
-	}
-
-	/**
-	 * Processes audio block to import media.
-	 *
-	 * @param array  $block    Audio block data.
-	 * @param string $site_url Source site URL.
-	 * @return array Processed block.
-	 */
-	private function process_audio_block( array $block, string $site_url ): array {
-		if ( empty( $block['attrs']['src'] ) ) {
-			return $block;
-		}
-
-		$original_url  = $block['attrs']['src'];
-		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
-
-		if ( null === $attachment_id ) {
-			return $block; // Third-party media — leave unchanged.
-		}
-
-		if ( false === $attachment_id ) {
-			$this->failed_media[] = $original_url;
-			return $block;
-		}
-
-		$new_url = wp_get_attachment_url( $attachment_id );
-
-		if ( false === $new_url ) {
-			$this->failed_media[] = $original_url;
-			return $block;
-		}
-
-		$block['attrs']['src'] = $new_url;
-		$block['attrs']['id']  = $attachment_id;
-
-		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = str_replace( $original_url, $new_url, $block['innerHTML'] );
-		}
-
-		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
-			foreach ( $block['innerContent'] as $index => $content ) {
-				if ( is_string( $content ) ) {
-					$block['innerContent'][ $index ] = str_replace( $original_url, $new_url, $content );
-				}
-			}
-		}
-
-		return $block;
+		return $this->process_block_inner_html( $block, $site_url );
 	}
 
 	/**
@@ -674,6 +686,37 @@ class Content_Processor {
 	private function process_text_block( array $block, string $site_url ): array {
 		if ( ! empty( $block['innerHTML'] ) ) {
 			$block['innerHTML'] = $this->content_media_processor->process_content( $block['innerHTML'], $site_url );
+		}
+
+		return $block;
+	}
+
+	/**
+	 * Processes block innerHTML and innerContent for remaining media URLs (e.g.
+	 * <a href> wrapping a media element) that block-specific handling did not
+	 * cover.
+	 *
+	 * @param array  $block    Block data.
+	 * @param string $site_url Source site URL.
+	 * @return array Block with processed HTML.
+	 */
+	private function process_block_inner_html( array $block, string $site_url ): array {
+		if ( ! empty( $block['innerHTML'] ) ) {
+			$block['innerHTML'] = $this->content_media_processor->process_content(
+				$block['innerHTML'],
+				$site_url
+			);
+		}
+
+		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
+			foreach ( $block['innerContent'] as $index => $content ) {
+				if ( is_string( $content ) ) {
+					$block['innerContent'][ $index ] = $this->content_media_processor->process_content(
+						$content,
+						$site_url
+					);
+				}
+			}
 		}
 
 		return $block;

@@ -86,7 +86,7 @@ function safe_publish_custom_action_handler( WP_REST_Request $request ) {
 
 ## Webhook Integration
 
-Use the `safe_publish_event_logged` action to notify external systems when plugin events occur. See [`safe_publish_event_logged`](hooks.md#safe_publish_event_logged) in the Hooks and Filters reference for parameter definitions and channel/event examples.
+Use the [`safe_publish_event_logged`](hooks.md#safe_publish_event_logged) action to notify external systems when plugin events occur:
 
 ```php
 add_action( 'safe_publish_event_logged', function( string $channel, string $event, array $data ): void {
@@ -94,7 +94,7 @@ add_action( 'safe_publish_event_logged', function( string $channel, string $even
         return;
     }
 
-    $webhook_url = get_option( 'my_plugin_webhook_url' );
+    $webhook_url = get_option( 'safe_publish_webhook_url' );
 
     if ( ! $webhook_url ) {
         return;
@@ -106,6 +106,10 @@ add_action( 'safe_publish_event_logged', function( string $channel, string $even
             'event'     => $event,
             'data'      => $data,
             'timestamp' => current_time( 'mysql' ),
+        ] ),
+        'headers' => [ 'Content-Type' => 'application/json' ],
+    ] );
+}, 10, 3 );
         ] ),
         'headers' => [ 'Content-Type' => 'application/json' ],
     ] );
@@ -128,11 +132,9 @@ Standard error responses:
 
 **Common error codes:**
 
-- `rest_forbidden` - Permission denied
-- `invalid_param` - Invalid parameter
-- `import_failed` - Import operation failed
-- `authentication_failed` - Cannot authenticate with external site
-- `invalid_post_data` - Post data validation failed
+- `rest_forbidden` - Permission denied (WordPress core)
+- `rest_invalid_param` - Invalid parameter (e.g. non-positive post ID)
+- `rest_post_not_found` - Post does not exist
 
 ## Security Considerations
 

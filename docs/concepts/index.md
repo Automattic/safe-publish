@@ -29,8 +29,9 @@ See the [Authentication guide](authentication.md) for detailed setup instruction
 Before importing, Safe Publish validates content to ensure data integrity:
 
 - **URL validation**: Ensures the external site is a valid, accessible WordPress installation
-- **Content structure validation**: Verifies post data structure and required fields
-- **Media validation**: Checks image URLs and accessibility
+- **Post data validation**: Verifies required fields are present
+- **Content sanitization**: Optionally checks content against allowed HTML via the [`safe_publish_import_kses`](../extending/hooks.md#safe_publish_import_kses) filter (disabled by default for content fidelity)
+- **Media validation**: Checks image file types and downloadability at import time
 
 Learn more about [Content Validation](validation.md).
 
@@ -42,7 +43,7 @@ The import process consists of several stages:
 2. **Validate**: Check content structure and accessibility
 3. **Transform**: Process Gutenberg blocks and extract media references
 4. **Import Media**: Download and import featured images and inline images
-5. **Create Post**: Create draft post with all content and metadata
+5. **Create Post**: Create draft post with all content, metadata, and terms
 6. **Track History**: Log the import for auditing
 
 See the [Import Process guide](import-process.md) for a detailed breakdown.
@@ -78,5 +79,5 @@ Safe Publish is designed specifically for controlled content promotion between W
 ### Safe Publish may not be a good fit if:
 
 - You need real-time or automatic content synchronization without human review.
-- You need to import complex plugin-specific data (e.g., ACF field groups, WooCommerce product data) without custom development. Basic post meta is imported, but plugin-specific data structures require additional code.
+- You need to import complex plugin-specific data (e.g., ACF field groups, WooCommerce product data) without custom development. Post meta exposed via the REST API is imported, but plugin-specific data structures may require additional code.
 - You are migrating an entire site — Safe Publish is optimized for ongoing selective content promotion, not one-time full migrations.

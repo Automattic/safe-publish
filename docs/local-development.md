@@ -141,23 +141,16 @@ docker exec -it <container-id> mysql -u root -ppassword wordpress
 
 ### Common Development Tasks
 
-**Reset plugin settings:**
+**Reset plugin settings or clear import history:**
 
-```sh
-npm run wp-cli option delete safe_publish_connected_site_url
-npm run wp-cli option delete safe_publish_sync_mode
-npm run wp-cli option delete safe_publish_number_of_posts
-```
-
-**Clear import history:**
-
-Import sessions can be deleted through the **History** page. There is no direct WP-CLI command to truncate history.
+See the [Troubleshooting guide](troubleshooting.md#resetting-configuration).
 
 **Test authentication:**
 
-```sh
-# Test connection to external site
-curl -H "X-Safe-Publish-Secret: your-secret" https://staging.example.com/wp-json/wp/v2/posts
+Use the **Test Connection** button on the settings page, or the auth-test REST endpoint on the source site:
+
+```
+/wp-json/safe-publish/v1/auth-test
 ```
 
 ## Local playground

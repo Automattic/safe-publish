@@ -28,6 +28,7 @@ Extend the plugin's REST API capabilities. The REST API surface is intentionally
 ## Common Customizations
 
 - **Modify fetched post data** — use [`safe_publish_sanitized_post`](hooks.md#safe_publish_sanitized_post) to add taxonomy terms, normalize titles, or transform any post field before it is stored.
+- **Control import sanitization** — use [`safe_publish_import_kses`](hooks.md#safe_publish_import_kses) to enable kses sanitization, and [`safe_publish_import_kses_allowed_html`](hooks.md#safe_publish_import_kses_allowed_html) to customize allowed tags.
 - **Customize API request parameters** — use [`safe_publish_api_query_args`](hooks.md#safe_publish_api_query_args) to change ordering, filtering, or any other query argument sent to the external site.
 - **Add custom request headers** — use [`safe_publish_request_args`](hooks.md#safe_publish_request_args) to inject authentication headers or other HTTP arguments.
 
@@ -81,7 +82,7 @@ When extending Safe Publish on WordPress VIP:
 
 - Follow [VIP coding standards](https://docs.wpvip.com/technical-references/vip-codebase/)
 - Avoid filesystem writes
-- Use `wpcom_vip_file_get_contents()` for external requests
+- Use `vip_safe_wp_remote_get()` for external requests
 - Test thoroughly in VIP environments
 
 ## Documentation

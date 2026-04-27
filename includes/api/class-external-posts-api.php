@@ -318,7 +318,7 @@ class External_Posts_API {
 			/**
 			 * TODO: Check if we want/need this.
 			 *
-			 * '_fields' => 'id,link,title,modified,featured_media,content,excerpt,tags,categories,meta,slug,comment_status,ping_status,menu_order', // Fetch all needed fields
+			 * '_fields' => 'id,link,title,modified,featured_media,content,excerpt,tags,categories,meta,slug,comment_status,ping_status,menu_order,password', // Fetch all needed fields
 			 */
 		);
 
@@ -387,6 +387,7 @@ class External_Posts_API {
 		$post_data['comment_status'] = sanitize_text_field( $data['comment_status'] ?? '' );
 		$post_data['ping_status']    = sanitize_text_field( $data['ping_status'] ?? '' );
 		$post_data['menu_order']     = absint( $data['menu_order'] ?? 0 );
+		$post_data['password']       = sanitize_text_field( $data['password'] ?? '' );
 
 		if ( isset( $data['link'] ) ) {
 			$post_data['link'] = esc_url_raw( $data['link'] );

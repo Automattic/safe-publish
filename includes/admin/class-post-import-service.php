@@ -130,7 +130,25 @@ class Post_Import_Service {
 			return $validation_error;
 		}
 
-		$post_type     = $this->resolve_post_type( $fields['raw_post_type'] );
+		$post_type = $this->resolve_post_type( $fields['raw_post_type'] );
+
+		if ( is_wp_error( $post_type ) ) {
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$post_type->get_error_message(),
+				array( 'action' => $post_type->get_error_code() )
+			);
+
+			return $this->build_error_result(
+				$fields,
+				$post_type->get_error_message()
+			);
+		}
+
 		$imported_post = $this->find_imported_post( $fields['external_post_id'] );
 
 		if ( $imported_post ) {
@@ -166,6 +184,7 @@ class Post_Import_Service {
 			'comment_status'    => sanitize_text_field( $post_data['comment_status'] ?? '' ),
 			'ping_status'       => sanitize_text_field( $post_data['ping_status'] ?? '' ),
 			'menu_order'        => absint( $post_data['menu_order'] ?? 0 ),
+			'password'          => sanitize_text_field( $post_data['password'] ?? '' ),
 			'meta'              => is_array( $post_data['meta'] ?? null ) ? $post_data['meta'] : array(),
 			'terms'             => is_array( $post_data['terms'] ?? null ) ? $post_data['terms'] : array(),
 		);
@@ -226,18 +245,25 @@ class Post_Import_Service {
 	/**
 	 * Resolves a raw post type string to a valid WordPress post type.
 	 *
-	 * Converts plural REST API post type names to singular, validates that the
-	 * post type exists, and falls back to 'post' based on capability checks.
-	 * Administrators (manage_options) may create any registered post type.
+	 * Converts plural REST API post type names to singular and validates
+	 * that the post type is registered on the destination site. Returns
+	 * a WP_Error when the post type does not exist or the current user
+	 * lacks the required capability.
 	 *
 	 * @param string $raw_post_type Raw post type string from external API.
-	 * @return string Resolved post type slug.
+	 * @return string|WP_Error Resolved post type slug, or WP_Error on failure.
 	 */
-	public function resolve_post_type( string $raw_post_type ): string {
+	public function resolve_post_type( string $raw_post_type ): string|WP_Error {
 		$post_type = Post_Type_Map::to_wp_slug( $raw_post_type );
 
 		if ( ! post_type_exists( $post_type ) ) {
-			return 'post';
+			$message = sprintf(
+				/* translators: %s: post type slug */
+				__( 'Post type "%s" is not registered on this site.', 'safe-publish' ),
+				$post_type
+			);
+
+			return new WP_Error( 'post_type_not_registered', $message );
 		}
 
 		// Admins can create any registered post type.
@@ -245,32 +271,52 @@ class Post_Import_Service {
 			return $post_type;
 		}
 
-		if ( 'page' === $post_type && ! current_user_can( 'edit_pages' ) ) {
-			return 'post';
-		}
+		$capability = 'page' === $post_type ? 'edit_pages' : 'edit_posts';
 
-		if ( 'page' !== $post_type && ! current_user_can( 'edit_posts' ) ) {
-			return 'post';
+		if ( ! current_user_can( $capability ) ) {
+			$message = sprintf(
+				/* translators: %s: post type slug */
+				__( 'You do not have permission to create "%s" posts.', 'safe-publish' ),
+				$post_type
+			);
+
+			return new WP_Error( 'post_type_capability_denied', $message );
 		}
 
 		return $post_type;
 	}
 
 	/**
-	 * Builds an error result if any media files failed to download
-	 * during content processing.
+	 * Returns a WP_Error if media processing encountered any failures (download
+	 * errors, malformed HTML, or both).
 	 *
-	 * @param array $fields Sanitized post fields from extract_post_fields().
-	 * @return array|null Error result array on failure, null when no failures.
+	 * Combines both error types into a single message when both are present so
+	 * the user sees all issues at once.
+	 *
+	 * @param array $fields Sanitized post fields.
+	 * @return WP_Error|null WP_Error on failure, null when no failures.
 	 */
-	private function get_failed_media_error( array $fields ): ?array {
-		$error_message = $this->content_processor->get_failed_media_error_message();
+	private function get_media_processing_error( array $fields ): ?WP_Error {
+		$download_msg = $this->content_processor
+			->get_failed_media_error_message();
+		$markup_msg   = $this->content_processor
+			->get_unprocessable_media_error_message();
 
-		if ( null === $error_message ) {
+		if ( null === $download_msg && null === $markup_msg ) {
 			return null;
 		}
 
-		return $this->build_error_result( $fields, $error_message );
+		$messages = array_filter( array( $download_msg, $markup_msg ) );
+
+		$error_code = null !== $download_msg
+			? 'media_download_failed'
+			: 'malformed_media_markup';
+
+		return new WP_Error(
+			$error_code,
+			implode( ' ', $messages ),
+			array( 'fields' => $fields )
+		);
 	}
 
 	/**
@@ -288,12 +334,12 @@ class Post_Import_Service {
 	/**
 	 * Processes raw post content by importing media and fixing URLs.
 	 *
-	 * Returns a WP_Error if content processing fails or if sanitization would
-	 * modify the content.
+	 * Returns a WP_Error if content processing fails or if kses is enabled and
+	 * sanitization would modify the content.
 	 *
 	 * @param string $content       Raw post content.
 	 * @param string $external_link External post URL used to derive site URL.
-	 * @return string|WP_Error Processed and sanitized content, or WP_Error on failure.
+	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
 	private function process_post_content( string $content, string $external_link ): string|WP_Error {
 		if ( empty( $external_link ) ) {
@@ -449,6 +495,7 @@ class Post_Import_Service {
 				'comment_status' => $fields['comment_status'],
 				'ping_status'    => $fields['ping_status'],
 				'menu_order'     => $fields['menu_order'],
+				'post_password'  => $fields['password'],
 			),
 			$featured_attachment_id,
 			$fields['external_link'],
@@ -569,6 +616,7 @@ class Post_Import_Service {
 				'comment_status' => $fields['comment_status'],
 				'ping_status'    => $fields['ping_status'],
 				'menu_order'     => $fields['menu_order'],
+				'post_password'  => $fields['password'],
 				'meta_input'     => array(
 					Options::META_EXTERNAL_POST_ID => $fields['external_post_id'],
 					Options::META_EXTERNAL_LINK    => $fields['external_link'],
@@ -645,6 +693,7 @@ class Post_Import_Service {
 		$fields['comment_status']    = $fresh_result['comment_status'];
 		$fields['ping_status']       = $fresh_result['ping_status'];
 		$fields['menu_order']        = $fresh_result['menu_order'];
+		$fields['password']          = $fresh_result['password'];
 
 		$sanitized_excerpt = $this->sanitize_field(
 			$fresh_result['excerpt'],
@@ -676,16 +725,12 @@ class Post_Import_Service {
 			);
 		}
 
-		$failed_media_error = $this->get_failed_media_error( $fields );
+		$media_error = $this->get_media_processing_error( $fields );
 
-		if ( null !== $failed_media_error ) {
+		if ( null !== $media_error ) {
 			$this->content_processor->delete_newly_created_media();
 
-			return new WP_Error(
-				'media_download_failed',
-				$failed_media_error['error'],
-				array( 'fields' => $fields )
-			);
+			return $media_error;
 		}
 
 		// Unsanitized values; sanitized downstream before being stored.
@@ -706,36 +751,45 @@ class Post_Import_Service {
 	 * Persists an existing post update with all associated data.
 	 *
 	 * Handles wp_update_post, external link meta, import date, thumbnail,
-	 * custom meta, and terms. Used by both single and bulk import paths.
+	 * custom meta, and terms. If any step after wp_update_post() fails,
+	 * the post is rolled back to its pre-update state. Used by both
+	 * single and bulk import paths.
 	 *
-	 * @param array  $post_args              Arguments for wp_update_post().
-	 * @param int    $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
-	 * @param string $external_link           External post URL for meta tracking.
-	 * @param mixed  $meta                    Meta data (array or object).
-	 * @param mixed  $terms                   Terms data (array or object).
-	 * @param bool   $disable_filters         Whether to disable content filters around the update.
+	 * @param array        $post_args              Arguments for wp_update_post().
+	 * @param int          $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
+	 * @param string       $external_link           External post URL for meta tracking.
+	 * @param array|object $meta                    Meta data.
+	 * @param array|object $terms                   Terms data.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
 	 */
 	public function persist_updated_post(
 		array $post_args,
 		int $featured_attachment_id,
 		string $external_link,
-		mixed $meta,
-		mixed $terms,
-		bool $disable_filters = true
+		array|object $meta,
+		array|object $terms
 	): int|WP_Error {
-		if ( $disable_filters ) {
-			$this->content_processor->disable_content_filters();
+		$post_id  = $post_args['ID'];
+		$snapshot = $this->capture_pre_update_state(
+			$post_id,
+			$meta,
+			$terms
+		);
+
+		$this->content_processor->disable_content_filters();
+		$result = wp_update_post( $post_args );
+		$this->content_processor->restore_content_filters();
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
 		}
 
-		$post_id = wp_update_post( $post_args );
-
-		if ( $disable_filters ) {
-			$this->content_processor->restore_content_filters();
-		}
-
-		if ( is_wp_error( $post_id ) ) {
-			return $post_id;
+		if ( 0 === $result ) {
+			return new WP_Error(
+				'post_update_failed',
+				__( 'Failed to update post.', 'safe-publish' ),
+				array( 'action' => 'post_update_failed' )
+			);
 		}
 
 		update_post_meta(
@@ -750,6 +804,8 @@ class Post_Import_Service {
 			Options::META_IMPORT_DATE,
 			current_time( 'mysql' )
 		) ) {
+			$this->restore_pre_update_state( $post_id, $snapshot );
+
 			return new WP_Error(
 				'import_date_update_failed',
 				__(
@@ -770,6 +826,8 @@ class Post_Import_Service {
 		);
 
 		if ( is_wp_error( $meta_result ) ) {
+			$this->restore_pre_update_state( $post_id, $snapshot );
+
 			return new WP_Error(
 				'meta_update_failed',
 				$meta_result->get_error_message(),
@@ -783,6 +841,8 @@ class Post_Import_Service {
 		);
 
 		if ( is_wp_error( $terms_result ) ) {
+			$this->restore_pre_update_state( $post_id, $snapshot );
+
 			return new WP_Error(
 				'terms_update_failed',
 				$terms_result->get_error_message(),
@@ -794,35 +854,129 @@ class Post_Import_Service {
 	}
 
 	/**
+	 * Captures the pre-update state of a post for rollback.
+	 *
+	 * Snapshots post fields, tracking meta, featured image, custom meta keys
+	 * about to be overwritten, and term assignments for taxonomies about to be
+	 * updated.
+	 *
+	 * @param int          $post_id Post ID.
+	 * @param array|object $meta    Meta about to be written.
+	 * @param array|object $terms   Terms about to be written.
+	 * @return array Snapshot data.
+	 */
+	private function capture_pre_update_state(
+		int $post_id,
+		array|object $meta,
+		array|object $terms
+	): array {
+		$post = get_post( $post_id, ARRAY_A );
+
+		$snapshot = array(
+			'post_fields'    => $post,
+			'tracking_meta'  => array(
+				Options::META_EXTERNAL_LINK => get_post_meta(
+					$post_id,
+					Options::META_EXTERNAL_LINK,
+					true
+				),
+				Options::META_IMPORT_DATE   => get_post_meta(
+					$post_id,
+					Options::META_IMPORT_DATE,
+					true
+				),
+			),
+			'featured_image' => get_post_thumbnail_id( $post_id ),
+			'custom_meta'    => array(),
+			'terms'          => array(),
+		);
+
+		foreach ( (array) $meta as $key => $_ ) {
+			$key                             = sanitize_text_field( (string) $key );
+			$snapshot['custom_meta'][ $key ] = get_post_meta(
+				$post_id,
+				$key,
+				true
+			);
+		}
+
+		foreach ( (array) $terms as $taxonomy => $_ ) {
+			$taxonomy = sanitize_key( (string) $taxonomy );
+			$existing = wp_get_object_terms(
+				$post_id,
+				$taxonomy,
+				array( 'fields' => 'ids' )
+			);
+
+			if ( ! is_wp_error( $existing ) ) {
+				$snapshot['terms'][ $taxonomy ] = $existing;
+			}
+		}
+
+		return $snapshot;
+	}
+
+	/**
+	 * Restores a post to its pre-update state from a snapshot.
+	 *
+	 * @param int   $post_id  Post ID.
+	 * @param array $snapshot Snapshot from capture_pre_update_state().
+	 */
+	private function restore_pre_update_state(
+		int $post_id,
+		array $snapshot
+	): void {
+		wp_update_post( $snapshot['post_fields'] );
+
+		foreach ( $snapshot['tracking_meta'] as $key => $value ) {
+			if ( '' === $value ) {
+				delete_post_meta( $post_id, $key );
+			} else {
+				update_post_meta( $post_id, $key, $value );
+			}
+		}
+
+		if ( $snapshot['featured_image'] ) {
+			set_post_thumbnail( $post_id, $snapshot['featured_image'] );
+		} else {
+			delete_post_thumbnail( $post_id );
+		}
+
+		foreach ( $snapshot['custom_meta'] as $key => $value ) {
+			if ( '' === $value ) {
+				delete_post_meta( $post_id, $key );
+			} else {
+				update_post_meta( $post_id, $key, $value );
+			}
+		}
+
+		foreach ( $snapshot['terms'] as $taxonomy => $term_ids ) {
+			wp_set_object_terms( $post_id, $term_ids, $taxonomy );
+		}
+	}
+
+	/**
 	 * Persists a new post with all associated data.
 	 *
 	 * Handles wp_insert_post, thumbnail, custom meta, and terms. On meta or
 	 * terms failure the post and any sideloaded media are cleaned up. Used by
 	 * both single and bulk import paths.
 	 *
-	 * @param array $post_args              Arguments for wp_insert_post() (including meta_input).
-	 * @param int   $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
-	 * @param mixed $meta                    Meta data (array or object).
-	 * @param mixed $terms                   Terms data (array or object).
-	 * @param bool  $disable_filters         Whether to disable content filters around the insert.
+	 * @param array        $post_args              Arguments for wp_insert_post() (including meta_input).
+	 * @param int          $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
+	 * @param array|object $meta                    Meta data.
+	 * @param array|object $terms                   Terms data.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
 	 */
 	public function persist_new_post(
 		array $post_args,
 		int $featured_attachment_id,
-		mixed $meta,
-		mixed $terms,
-		bool $disable_filters = true
+		array|object $meta,
+		array|object $terms
 	): int|WP_Error {
-		if ( $disable_filters ) {
-			$this->content_processor->disable_content_filters();
-		}
-
+		$this->content_processor->disable_content_filters();
 		$post_id = wp_insert_post( $post_args );
-
-		if ( $disable_filters ) {
-			$this->content_processor->restore_content_filters();
-		}
+		$this->content_processor->restore_content_filters();
 
 		if ( is_wp_error( $post_id ) ) {
 			return $post_id;
