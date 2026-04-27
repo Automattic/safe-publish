@@ -318,6 +318,7 @@ final class Admin_Ajax_Controller {
 		$comment_status    = $fresh_result['comment_status'];
 		$ping_status       = $fresh_result['ping_status'];
 		$menu_order        = $fresh_result['menu_order'];
+		$password          = $fresh_result['password'];
 
 		$excerpt = $this->sanitize_field(
 			$fresh_result['excerpt'],
@@ -403,7 +404,8 @@ final class Admin_Ajax_Controller {
 				$slug,
 				$comment_status,
 				$ping_status,
-				$menu_order
+				$menu_order,
+				$password
 			);
 		} else {
 			$result = $this->create_new_draft(
@@ -420,7 +422,8 @@ final class Admin_Ajax_Controller {
 				$slug,
 				$comment_status,
 				$ping_status,
-				$menu_order
+				$menu_order,
+				$password
 			);
 		}
 
@@ -618,6 +621,7 @@ final class Admin_Ajax_Controller {
 	 * @param string  $comment_status    Comment status ('open' or 'closed').
 	 * @param string  $ping_status       Ping status ('open' or 'closed').
 	 * @param int     $menu_order        Menu order.
+	 * @param string  $password          Post password.
 	 * @return array Result data with post_id, edit_url, message, and existing keys, or error key on failure.
 	 */
 	private function update_imported_draft(
@@ -635,7 +639,8 @@ final class Admin_Ajax_Controller {
 		string $slug,
 		string $comment_status,
 		string $ping_status,
-		int $menu_order
+		int $menu_order,
+		string $password
 	): array {
 		$previous_content = $this->capture_previous_content( $imported_post );
 
@@ -670,6 +675,7 @@ final class Admin_Ajax_Controller {
 				'comment_status' => $comment_status,
 				'ping_status'    => $ping_status,
 				'menu_order'     => $menu_order,
+				'post_password'  => $password,
 			),
 			$featured_attachment_id,
 			$external_link,
@@ -733,6 +739,7 @@ final class Admin_Ajax_Controller {
 	 * @param string $comment_status    Comment status ('open' or 'closed').
 	 * @param string $ping_status       Ping status ('open' or 'closed').
 	 * @param int    $menu_order        Menu order.
+	 * @param string $password          Post password.
 	 * @return array Result data with post_id, edit_url, message, and existing keys, or error key on failure.
 	 */
 	private function create_new_draft(
@@ -749,7 +756,8 @@ final class Admin_Ajax_Controller {
 		string $slug,
 		string $comment_status,
 		string $ping_status,
-		int $menu_order
+		int $menu_order,
+		string $password
 	): array {
 		// Sideload the featured image before creating the post so that a
 		// failure here does not leave an orphaned draft in the DB.
@@ -780,6 +788,7 @@ final class Admin_Ajax_Controller {
 				'comment_status' => $comment_status,
 				'ping_status'    => $ping_status,
 				'menu_order'     => $menu_order,
+				'post_password'  => $password,
 				'meta_input'     => array(
 					Options::META_EXTERNAL_POST_ID => $external_post_id,
 					Options::META_EXTERNAL_LINK    => $external_link,
@@ -909,8 +918,8 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Captures previous post content for the session rollback history log.
 	 *
-	 * Stores the current title, content, excerpt, featured image, and selected
-	 * meta fields so the import can be reverted via the session rollback feature.
+	 * Stores the current post fields, featured image, and selected meta so the
+	 * import can be reverted via session rollback.
 	 *
 	 * @param WP_Post $existing_post Existing WordPress post.
 	 * @return array Previous content keyed by field name.
@@ -924,6 +933,7 @@ final class Admin_Ajax_Controller {
 			'previous_comment_status' => $existing_post->comment_status,
 			'previous_ping_status'    => $existing_post->ping_status,
 			'previous_menu_order'     => $existing_post->menu_order,
+			'previous_password'       => $existing_post->post_password,
 			'previous_featured_image' => get_post_thumbnail_id( $existing_post->ID ),
 			'previous_meta'           => array(),
 			'action'                  => 'updated_existing',

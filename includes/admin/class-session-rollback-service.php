@@ -225,6 +225,10 @@ final class Session_Rollback_Service {
 			$restore_data['menu_order'] = $changes['previous_menu_order'];
 		}
 
+		if ( isset( $changes['previous_password'] ) ) {
+			$restore_data['post_password'] = $changes['previous_password'];
+		}
+
 		$updated = wp_update_post( $restore_data, true );
 
 		if ( is_wp_error( $updated ) ) {
