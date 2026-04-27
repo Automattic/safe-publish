@@ -20,9 +20,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Content Media Processor Class.
  *
- * Handles processing of media elements and file references within HTML content,
- * including images, videos, audio, file download links, and embedded documents.
- * Delegates to Media_Importer for actual media importing.
+ * Handles processing of media elements within HTML content, including images,
+ * videos, and audio. Delegates to Media_Importer for actual media importing.
  *
  * Uses WordPress' HTML API (WP_HTML_Tag_Processor) to locate and modify
  * media element attributes. The HTML API conforms to the HTML5 spec, natively
@@ -366,7 +365,8 @@ class Content_Media_Processor {
 		$remaining = array_unique( $matches[1] );
 
 		foreach ( $remaining as $url ) {
-			if ( ! in_array( $url, $this->unprocessable_media, true ) ) {
+			if ( ! in_array( $url, $this->unprocessable_media, true )
+				&& ! in_array( $url, $this->failed_media, true ) ) {
 				$this->unprocessable_media[] = $url;
 			}
 		}
