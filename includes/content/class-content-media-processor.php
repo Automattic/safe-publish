@@ -21,8 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Content Media Processor Class.
  *
  * Handles processing of media elements within HTML content, including images,
- * videos, audio, and links. Delegates to Media_Importer for actual media
- * importing.
+ * videos, and audio. Delegates to Media_Importer for actual media importing.
  *
  * Uses WordPress' HTML API (WP_HTML_Tag_Processor) to locate and modify
  * media element attributes. The HTML API conforms to the HTML5 spec, natively
