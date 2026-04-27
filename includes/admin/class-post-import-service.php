@@ -133,6 +133,16 @@ class Post_Import_Service {
 		$post_type = $this->resolve_post_type( $fields['raw_post_type'] );
 
 		if ( is_wp_error( $post_type ) ) {
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$post_type->get_error_message(),
+				array( 'action' => $post_type->get_error_code() )
+			);
+
 			return $this->build_error_result(
 				$fields,
 				$post_type->get_error_message()
