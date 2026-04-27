@@ -669,8 +669,8 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 
 		return array(
 			'url_in_link_href' => array(
-				'<a href="' . $url . '">download</a>',
-				'media URL in link href',
+				'<a href="https://example.com/about/">about</a>',
+				'page URL in link href',
 			),
 			'url_in_css_bg'    => array(
 				'<div style="background-image:'

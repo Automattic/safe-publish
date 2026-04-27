@@ -607,8 +607,6 @@ final class Admin_Ajax_Controller {
 	 * - Resets post_status to 'draft' (keeps the single-import review flow
 	 *   intact).
 	 * - Captures previous content for the session rollback history log.
-	 * - Does not disable content filters (standard WP filters apply
-	 *   for user-triggered imports).
 	 *
 	 * @param WP_Post $imported_post     Imported WordPress post.
 	 * @param string  $title             Post title.
@@ -666,7 +664,7 @@ final class Admin_Ajax_Controller {
 			);
 		}
 
-		// Single-import: force draft status, no content filter suppression.
+		// Single-import: force draft status for the review flow.
 		$post_id = $this->post_import_service->persist_updated_post(
 			array(
 				'ID'             => $imported_post->ID,
@@ -684,8 +682,7 @@ final class Admin_Ajax_Controller {
 			$featured_attachment_id,
 			$external_link,
 			$meta,
-			$terms,
-			false
+			$terms
 		);
 
 		if ( is_wp_error( $post_id ) ) {
