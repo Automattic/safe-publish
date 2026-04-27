@@ -369,23 +369,23 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( $error_message );
 		}
 
-		$media_error_message = $this->content_processor->get_failed_media_error_message();
+		$media_error = $this->get_media_processing_error();
 
-		if ( null !== $media_error_message ) {
+		if ( null !== $media_error ) {
 			$this->import_history->log_import_action(
 				$session_id,
 				$external_post_id,
 				$title,
 				'error',
 				null,
-				$media_error_message,
-				array( 'action' => 'media_download_failed' )
+				$media_error['message'],
+				array( 'action' => $media_error['action'] )
 			);
 			$this->import_history->update_session_stats( $session_id, 'error' );
 			$this->import_history->complete_session( $session_id );
 			$this->content_processor->delete_newly_created_media();
 
-			wp_send_json_error( $media_error_message );
+			wp_send_json_error( $media_error['message'] );
 		}
 
 		if ( $imported_post ) {
@@ -890,10 +890,35 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Processes draft post content by importing media and fixing links.
+	 * Returns combined media processing error info, or null when no failures
+	 * occurred.
 	 *
-	 * Returns a WP_Error if content processing fails or if kses is enabled and
-	 * sanitization would modify the content.
+	 * @return array{message: string, action: string}|null
+	 */
+	private function get_media_processing_error(): ?array {
+		$download_msg = $this->content_processor
+			->get_failed_media_error_message();
+		$markup_msg   = $this->content_processor
+			->get_unprocessable_media_error_message();
+
+		if ( null === $download_msg && null === $markup_msg ) {
+			return null;
+		}
+
+		$messages = array_filter( array( $download_msg, $markup_msg ) );
+
+		$action = null !== $download_msg
+			? 'media_download_failed'
+			: 'malformed_media_markup';
+
+		return array(
+			'message' => implode( ' ', $messages ),
+			'action'  => $action,
+		);
+	}
+
+	/**
+	 * Processes draft post content by importing media and fixing links.
 	 *
 	 * @param string $content       Raw post content.
 	 * @param string $external_link External post URL used to derive site URL.

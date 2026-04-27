@@ -258,20 +258,36 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Builds an error result if any media files failed to download
-	 * during content processing.
+	 * Returns a WP_Error if media processing encountered any failures (download
+	 * errors, malformed HTML, or both).
 	 *
-	 * @param array $fields Sanitized post fields from extract_post_fields().
-	 * @return array|null Error result array on failure, null when no failures.
+	 * Combines both error types into a single message when both are present so
+	 * the user sees all issues at once.
+	 *
+	 * @param array $fields Sanitized post fields.
+	 * @return WP_Error|null WP_Error on failure, null when no failures.
 	 */
-	private function get_failed_media_error( array $fields ): ?array {
-		$error_message = $this->content_processor->get_failed_media_error_message();
+	private function get_media_processing_error( array $fields ): ?WP_Error {
+		$download_msg = $this->content_processor
+			->get_failed_media_error_message();
+		$markup_msg   = $this->content_processor
+			->get_unprocessable_media_error_message();
 
-		if ( null === $error_message ) {
+		if ( null === $download_msg && null === $markup_msg ) {
 			return null;
 		}
 
-		return $this->build_error_result( $fields, $error_message );
+		$messages = array_filter( array( $download_msg, $markup_msg ) );
+
+		$error_code = null !== $download_msg
+			? 'media_download_failed'
+			: 'malformed_media_markup';
+
+		return new WP_Error(
+			$error_code,
+			implode( ' ', $messages ),
+			array( 'fields' => $fields )
+		);
 	}
 
 	/**
@@ -680,16 +696,12 @@ class Post_Import_Service {
 			);
 		}
 
-		$failed_media_error = $this->get_failed_media_error( $fields );
+		$media_error = $this->get_media_processing_error( $fields );
 
-		if ( null !== $failed_media_error ) {
+		if ( null !== $media_error ) {
 			$this->content_processor->delete_newly_created_media();
 
-			return new WP_Error(
-				'media_download_failed',
-				$failed_media_error['error'],
-				array( 'fields' => $fields )
-			);
+			return $media_error;
 		}
 
 		// Unsanitized values; sanitized downstream before being stored.

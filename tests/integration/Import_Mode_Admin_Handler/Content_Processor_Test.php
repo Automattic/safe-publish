@@ -655,7 +655,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * Verifies that classic content with a bare oEmbed provider URL on its
 	 * own line preserves it as-is instead of converting it to embed HTML.
 	 *
-	 * WordPress's autoembed runs at display time via the_content filters.
+	 * WordPress' autoembed runs at display time via the_content filters.
 	 * Converting bare URLs during import would alter the stored content
 	 * compared to the source database.
 	 */
