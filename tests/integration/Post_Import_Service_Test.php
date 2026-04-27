@@ -1576,4 +1576,130 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			return $preempt;
 		};
 	}
+
+	/**
+	 * Verifies that import fails when the source post type is not registered on
+	 * the destination site.
+	 */
+	public function test_import_fails_for_unregistered_post_type(): void {
+		// ARRANGE: Use a post type that is not registered.
+		$post_data = array(
+			'id'        => 9801,
+			'title'     => 'Unregistered CPT Post',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/unregistered',
+			'post_type' => 'gadgets',
+		);
+
+		// ACT: Attempt import.
+		$result = $this->import_service->import_post(
+			$post_data
+		);
+
+		// ASSERT: Import fails with a descriptive error.
+		$this->assertFalse(
+			$result['success'],
+			'Import should fail for an unregistered post type.'
+		);
+		$this->assertStringContainsString(
+			'gadgets',
+			$result['error'],
+			'Error should name the unregistered post type.'
+		);
+	}
+
+	/**
+	 * Verifies that the bulk import path writes a row to the import log when
+	 * post-type resolution returns a WP_Error.
+	 */
+	public function test_bulk_import_logs_failure_when_post_type_unregistered(): void {
+		// ARRANGE: Bulk session targeting an unregistered post type.
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9803,
+			'title'     => 'Bulk Import With Unregistered CPT',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/bulk-unregistered',
+			'post_type' => 'gadgets',
+		);
+
+		// ACT: Run the import through the bulk path (real session_id).
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: Import fails for the unregistered post type.
+		$this->assertFalse(
+			$result['success'],
+			'Import should fail for an unregistered post type.'
+		);
+
+		// ASSERT: A log row was written for the session.
+		$logs = get_posts(
+			array(
+				'post_type'      => History_Repository::LOG_POST_TYPE,
+				'post_status'    => 'publish',
+				'post_parent'    => $session_id,
+				'posts_per_page' => -1,
+			)
+		);
+
+		$this->assertCount(
+			1,
+			$logs,
+			'Bulk import must log a row when post-type resolution fails.'
+		);
+		$this->assertSame(
+			'error',
+			get_post_meta( $logs[0]->ID, 'status', true ),
+			'Logged row must record the import as an error.'
+		);
+		$this->assertSame(
+			9803,
+			(int) get_post_meta( $logs[0]->ID, 'external_id', true ),
+			'Logged row must reference the failing external post ID.'
+		);
+	}
+
+	/**
+	 * Verifies that import fails when the current user lacks the capability
+	 * required for the target post type.
+	 */
+	public function test_import_fails_when_user_lacks_capability(): void {
+		// ARRANGE: Switch to a user without edit_posts.
+		wp_set_current_user(
+			self::factory()->user->create(
+				array( 'role' => 'subscriber' )
+			)
+		);
+
+		$post_data = array(
+			'id'        => 9802,
+			'title'     => 'Subscriber Import Attempt',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/subscriber',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Attempt import.
+		$result = $this->import_service->import_post(
+			$post_data
+		);
+
+		// ASSERT: Import fails with a permission error.
+		$this->assertFalse(
+			$result['success'],
+			'Import should fail for a user without edit_posts.'
+		);
+		$this->assertStringContainsString(
+			'permission',
+			$result['error'],
+			'Error should mention insufficient permission.'
+		);
+	}
 }
