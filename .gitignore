@@ -37,6 +37,3 @@ coverage
 .vscode/*
 !.vscode/*.example
 .zed
-
-# Local planning directory
-planning

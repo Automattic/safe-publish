@@ -86,7 +86,7 @@ function safe_publish_custom_action_handler( WP_REST_Request $request ) {
 
 ## Webhook Integration
 
-Use the `safe_publish_event_logged` action to notify external systems when plugin events occur. See [Hooks and Filters](hooks.md) for the full list of channels and event identifiers.
+Use the `safe_publish_event_logged` action to notify external systems when plugin events occur. See [`safe_publish_event_logged`](hooks.md#safe_publish_event_logged) in the Hooks and Filters reference for parameter definitions and channel/event examples.
 
 ```php
 add_action( 'safe_publish_event_logged', function( string $channel, string $event, array $data ): void {

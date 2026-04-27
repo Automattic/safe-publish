@@ -99,3 +99,9 @@ Every concept and every hook, filter, or endpoint must have at least one example
 - Internal implementation details that may change next sprint.
 - Code that is unreachable, deprecated, or not yet merged.
 - Features with a `// TODO` or similar marker in the source — wait until they ship.
+
+## Related
+
+- [Hooks and Filters](extending/hooks.md) — Reference for all actions and filters
+- [REST API Extension](extending/api.md) — Endpoint reference and extension patterns
+- [Extending Guide](extending/index.md) — Overview of all extension points
