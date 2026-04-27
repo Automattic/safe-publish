@@ -1094,6 +1094,90 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that the update path returns an error when wp_update_post()
+	 * fails silently by returning 0.
+	 *
+	 * The wp_insert_post_empty_content filter forces wp_update_post() to return
+	 * 0 before any DB write occurs. The function must surface a WP_Error and
+	 * leave the post unchanged instead of proceeding to write meta against a
+	 * stale post.
+	 */
+	public function test_bulk_update_fails_on_silent_post_update_failure(): void {
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ARRANGE: Import the post once to create it in the DB.
+		$post_data = array(
+			'id'        => 9150,
+			'title'     => 'Post For Silent Update Failure Test',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/silent-update-failure',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue(
+			$first['success'],
+			'Initial import should succeed.'
+		);
+		$post_id = $first['post_id'];
+
+		// ARRANGE: Capture pre-update values.
+		$original_title   = get_post_field( 'post_title', $post_id );
+		$original_content = get_post_field( 'post_content', $post_id );
+		$original_date    = get_post_meta(
+			$post_id,
+			Options::META_IMPORT_DATE,
+			true
+		);
+
+		// ARRANGE: Fresh content returns updated fields.
+		$this->mock_post_overrides = array(
+			'title'   => 'Updated Silent Failure Title',
+			'content' => '<p>Updated content.</p>',
+		);
+
+		// ARRANGE: Force wp_update_post() to return 0 by short-circuiting the
+		// empty-content check inside wp_insert_post().
+		add_filter( 'wp_insert_post_empty_content', '__return_true' );
+
+		// ACT: Re-import the same post (hits the update path).
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'wp_insert_post_empty_content', '__return_true' );
+
+		// ASSERT: Import must report failure.
+		$this->assertFalse(
+			$result['success'],
+			'Update import should fail when wp_update_post returns 0.'
+		);
+
+		// ASSERT: Post fields and tracking meta must remain at their
+		// pre-update values; no writes should have hit the stale post.
+		$this->assertSame(
+			$original_title,
+			get_post_field( 'post_title', $post_id ),
+			'Title must remain unchanged when wp_update_post fails silently.'
+		);
+		$this->assertSame(
+			$original_content,
+			get_post_field( 'post_content', $post_id ),
+			'Content must remain unchanged when wp_update_post fails silently.'
+		);
+		$this->assertSame(
+			$original_date,
+			get_post_meta(
+				$post_id,
+				Options::META_IMPORT_DATE,
+				true
+			),
+			'Import date must remain unchanged when wp_update_post fails silently.'
+		);
+	}
+
+	/**
 	 * Verifies that the post is fully rolled back when custom meta update fails
 	 * on the bulk update path.
 	 *
@@ -1108,18 +1192,20 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			'bulk'
 		);
 
-		// ARRANGE: Import the post with initial meta.
+		// ARRANGE: Import the post with initial meta and a featured image.
 		$post_data = array(
-			'id'        => 9130,
-			'title'     => 'Post For Meta Rollback Test',
-			'content'   => '<p>Original content.</p>',
-			'link'      => 'https://source.example.com/meta-rollback-test',
-			'post_type' => 'posts',
-			'meta'      => array( 'custom_field' => 'original_value' ),
+			'id'             => 9130,
+			'title'          => 'Post For Meta Rollback Test',
+			'content'        => '<p>Original content.</p>',
+			'link'           => 'https://source.example.com/meta-rollback-test',
+			'post_type'      => 'posts',
+			'featured_media' => 100,
+			'meta'           => array( 'custom_field' => 'original_value' ),
 		);
 
 		$this->mock_post_overrides = array(
-			'meta' => array( 'custom_field' => 'original_value' ),
+			'featured_media' => 100,
+			'meta'           => array( 'custom_field' => 'original_value' ),
 		);
 
 		$first = $this->import_service->import_post( $post_data, $session_id );
@@ -1130,29 +1216,38 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		$post_id = $first['post_id'];
 
 		// ARRANGE: Capture pre-update values for rollback assertions.
-		$original_title   = get_post_field( 'post_title', $post_id );
-		$original_content = get_post_field( 'post_content', $post_id );
-		$original_link    = get_post_meta(
+		$original_title        = get_post_field( 'post_title', $post_id );
+		$original_content      = get_post_field( 'post_content', $post_id );
+		$original_thumbnail_id = (int) get_post_thumbnail_id( $post_id );
+		$original_link         = get_post_meta(
 			$post_id,
 			Options::META_EXTERNAL_LINK,
 			true
 		);
-		$original_date    = get_post_meta(
+		$original_date         = get_post_meta(
 			$post_id,
 			Options::META_IMPORT_DATE,
 			true
 		);
-		$original_meta    = get_post_meta(
+		$original_meta         = get_post_meta(
 			$post_id,
 			'custom_field',
 			true
 		);
 
-		// ARRANGE: Fresh content returns updated fields and meta.
+		$this->assertGreaterThan(
+			0,
+			$original_thumbnail_id,
+			'Initial import should set a featured image.'
+		);
+
+		// ARRANGE: Fresh content returns updated fields, meta, and a new
+		// featured image so the rollback has a thumbnail change to restore.
 		$this->mock_post_overrides = array(
-			'title'   => 'Updated Meta Rollback Title',
-			'content' => '<p>Updated content.</p>',
-			'meta'    => array( 'custom_field' => 'updated_value' ),
+			'title'          => 'Updated Meta Rollback Title',
+			'content'        => '<p>Updated content.</p>',
+			'featured_media' => 200,
+			'meta'           => array( 'custom_field' => 'updated_value' ),
 		);
 
 		// ARRANGE: Block update_post_meta for 'custom_field' to simulate a DB
@@ -1197,6 +1292,13 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			$original_content,
 			get_post_field( 'post_content', $post_id ),
 			'Content must be restored after custom meta failure.'
+		);
+
+		// ASSERT: Featured image must be rolled back to the original.
+		$this->assertSame(
+			$original_thumbnail_id,
+			(int) get_post_thumbnail_id( $post_id ),
+			'Featured image must be restored after custom meta failure.'
 		);
 
 		// ASSERT: Tracking meta must be rolled back.
@@ -1902,6 +2004,64 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			'gadgets',
 			$result['error'],
 			'Error should name the unregistered post type.'
+		);
+	}
+
+	/**
+	 * Verifies that the bulk import path writes a row to the import log when
+	 * post-type resolution returns a WP_Error.
+	 */
+	public function test_bulk_import_logs_failure_when_post_type_unregistered(): void {
+		// ARRANGE: Bulk session targeting an unregistered post type.
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9803,
+			'title'     => 'Bulk Import With Unregistered CPT',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/bulk-unregistered',
+			'post_type' => 'gadgets',
+		);
+
+		// ACT: Run the import through the bulk path (real session_id).
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: Import fails for the unregistered post type.
+		$this->assertFalse(
+			$result['success'],
+			'Import should fail for an unregistered post type.'
+		);
+
+		// ASSERT: A log row was written for the session.
+		$logs = get_posts(
+			array(
+				'post_type'      => History_Repository::LOG_POST_TYPE,
+				'post_status'    => 'publish',
+				'post_parent'    => $session_id,
+				'posts_per_page' => -1,
+			)
+		);
+
+		$this->assertCount(
+			1,
+			$logs,
+			'Bulk import must log a row when post-type resolution fails.'
+		);
+		$this->assertSame(
+			'error',
+			get_post_meta( $logs[0]->ID, 'status', true ),
+			'Logged row must record the import as an error.'
+		);
+		$this->assertSame(
+			9803,
+			(int) get_post_meta( $logs[0]->ID, 'external_id', true ),
+			'Logged row must reference the failing external post ID.'
 		);
 	}
 

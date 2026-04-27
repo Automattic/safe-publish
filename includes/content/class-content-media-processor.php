@@ -366,7 +366,8 @@ class Content_Media_Processor {
 		$remaining = array_unique( $matches[1] );
 
 		foreach ( $remaining as $url ) {
-			if ( ! in_array( $url, $this->unprocessable_media, true ) ) {
+			if ( ! in_array( $url, $this->unprocessable_media, true )
+				&& ! in_array( $url, $this->failed_media, true ) ) {
 				$this->unprocessable_media[] = $url;
 			}
 		}
