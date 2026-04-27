@@ -353,11 +353,8 @@ class Content_Processor {
 				break;
 
 			case 'core/video':
-				$block = $this->process_video_block( $block, $site_url );
-				break;
-
 			case 'core/audio':
-				$block = $this->process_audio_block( $block, $site_url );
+				$block = $this->process_media_block( $block, $site_url );
 				break;
 
 			case 'core/embed':
@@ -577,13 +574,13 @@ class Content_Processor {
 	}
 
 	/**
-	 * Processes video block to import media.
+	 * Processes a media block (video or audio) to import its source.
 	 *
-	 * @param array  $block    Video block data.
+	 * @param array  $block    Block data.
 	 * @param string $site_url Source site URL.
 	 * @return array Processed block.
 	 */
-	private function process_video_block( array $block, string $site_url ): array {
+	private function process_media_block( array $block, string $site_url ): array {
 		if ( empty( $block['attrs']['src'] ) ) {
 			return $block;
 		}
@@ -610,63 +607,27 @@ class Content_Processor {
 		$block['attrs']['src'] = $new_url;
 		$block['attrs']['id']  = $attachment_id;
 
+		$url_with_parameters = Media_Importer::reapply_query_parameters(
+			$original_url,
+			$new_url
+		);
+
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = str_replace( $original_url, $new_url, $block['innerHTML'] );
+			$block['innerHTML'] = str_replace(
+				$original_url,
+				$url_with_parameters,
+				$block['innerHTML']
+			);
 		}
 
 		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
 			foreach ( $block['innerContent'] as $index => $content ) {
 				if ( is_string( $content ) ) {
-					$block['innerContent'][ $index ] = str_replace( $original_url, $new_url, $content );
-				}
-			}
-		}
-
-		return $block;
-	}
-
-	/**
-	 * Processes audio block to import media.
-	 *
-	 * @param array  $block    Audio block data.
-	 * @param string $site_url Source site URL.
-	 * @return array Processed block.
-	 */
-	private function process_audio_block( array $block, string $site_url ): array {
-		if ( empty( $block['attrs']['src'] ) ) {
-			return $block;
-		}
-
-		$original_url  = $block['attrs']['src'];
-		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
-
-		if ( null === $attachment_id ) {
-			return $block; // Third-party media — leave unchanged.
-		}
-
-		if ( false === $attachment_id ) {
-			$this->failed_media[] = $original_url;
-			return $block;
-		}
-
-		$new_url = wp_get_attachment_url( $attachment_id );
-
-		if ( false === $new_url ) {
-			$this->failed_media[] = $original_url;
-			return $block;
-		}
-
-		$block['attrs']['src'] = $new_url;
-		$block['attrs']['id']  = $attachment_id;
-
-		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = str_replace( $original_url, $new_url, $block['innerHTML'] );
-		}
-
-		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
-			foreach ( $block['innerContent'] as $index => $content ) {
-				if ( is_string( $content ) ) {
-					$block['innerContent'][ $index ] = str_replace( $original_url, $new_url, $content );
+					$block['innerContent'][ $index ] = str_replace(
+						$original_url,
+						$url_with_parameters,
+						$content
+					);
 				}
 			}
 		}

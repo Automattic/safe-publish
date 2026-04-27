@@ -231,7 +231,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * Verifies that import fails when a Gutenberg core/video block contains a
 	 * video that cannot be downloaded.
 	 *
-	 * The core/video block is processed by Content_Processor::process_video_block(),
+	 * The core/video block is processed by Content_Processor::process_media_block(),
 	 * which calls import_external_media_as_attachment() directly and must track
 	 * failures in Content_Processor::$failed_media so the import service aborts.
 	 */
@@ -334,7 +334,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * Verifies that import fails when a Gutenberg core/audio block contains an
 	 * audio file that cannot be downloaded.
 	 *
-	 * The core/audio block is processed by Content_Processor::process_audio_block(),
+	 * The core/audio block is processed by Content_Processor::process_media_block(),
 	 * which calls import_external_media_as_attachment() directly and must track
 	 * failures in Content_Processor::$failed_media so the import service aborts.
 	 */
@@ -608,7 +608,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * Verifies that the production URL is present in both the block comment
 	 * JSON attrs and innerHTML after a successful core/video block import.
 	 *
-	 * Content_Processor::process_video_block() must update attrs['src']/attrs['id'],
+	 * Content_Processor::process_media_block() must update attrs['src']/attrs['id'],
 	 * innerHTML, and innerContent so the staging URL is fully replaced.
 	 */
 	public function test_video_block_innerHTML_is_updated_after_successful_import(): void {
@@ -665,7 +665,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * Verifies that the production URL is present in both the block comment
 	 * JSON attrs and innerHTML after a successful core/audio block import.
 	 *
-	 * Content_Processor::process_audio_block() must update attrs['src']/attrs['id'],
+	 * Content_Processor::process_media_block() must update attrs['src']/attrs['id'],
 	 * innerHTML, and innerContent so the staging URL is fully replaced.
 	 */
 	public function test_audio_block_innerHTML_is_updated_after_successful_import(): void {
