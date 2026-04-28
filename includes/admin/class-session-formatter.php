@@ -53,10 +53,16 @@ final class Session_Formatter {
 
 		$status_labels = $this->get_status_labels();
 
+		$user = get_post_meta( $session->ID, 'user_display_name', true );
+
+		if ( ! is_string( $user ) || '' === $user ) {
+			$user = __( 'Unknown user', 'safe-publish' );
+		}
+
 		return array(
 			'id'           => $session->ID,
 			'date'         => get_the_date( 'Y-m-d H:i:s', $session ),
-			'user'         => get_the_author_meta( 'display_name', (int) $session->post_author ),
+			'user'         => $user,
 			'total_items'  => $total,
 			'successful'   => $successful,
 			'failed'       => $failed,
