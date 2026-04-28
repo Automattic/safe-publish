@@ -19,21 +19,13 @@
     <!-- Boot the plugin in "bidirectional" sync mode (export and import active simultaneously). -->
     <env name="WP_TEST_SYNC_MODE" value="bidirectional" />
 
-    <!-- Point wp-phpunit to our test config file -->
-    <env name="WP_PHPUNIT__TESTS_CONFIG" value="tests/wp-tests-config.php" />
-
     <!-- Point to wp-phpunit installation in vendor -->
     <env name="WP_PHPUNIT__DIR" value="vendor/wp-phpunit/wp-phpunit" />
 
-    <!-- Database configuration (wp-tests-config.php reads these).
-         Tests run inside the wp-env tests-cli container, so the reachable
-         MySQL service is tests-mysql / tests-wordpress. Isolation from the
-         source site's tables is provided by the wptests_ table prefix
-         (see tests/wp-tests-config.php). -->
-    <env name="WP_DB_NAME" value="tests-wordpress" />
+    <!-- Database configuration (wp-tests-config.php reads these) -->
+    <env name="WP_DB_NAME" value="safe_publish_integration_tests" />
     <env name="WP_DB_USER" value="root" />
     <env name="WP_DB_PASSWORD" value="password" />
-    <env name="WP_DB_HOST" value="tests-mysql" />
-    <env name="WP_TESTS_TABLE_PREFIX" value="wptests_" />
+    <env name="WP_DB_HOST" value="mysql" />
   </php>
 </phpunit>
