@@ -12,29 +12,12 @@ import { __ } from '@wordpress/i18n';
 import type { DiffPreviewResult } from '../../api/diff';
 
 /**
- * Options for which post fields to update.
- *
- * @property {boolean} title         Update post title.
- * @property {boolean} excerpt       Update post excerpt.
- * @property {boolean} meta          Update post meta fields.
- * @property {boolean} terms         Update post taxonomies/terms.
- * @property {boolean} featuredMedia Update featured image.
- */
-interface UpdateOptions {
-	title: boolean;
-	excerpt: boolean;
-	meta: boolean;
-	terms: boolean;
-	featuredMedia: boolean;
-}
-
-/**
  * Parameters for the usePostUpdate hook.
  *
- * @property {number}                        localPostId     Local post ID to update.
+ * @property {number}                        localPostId     Local post ID.
  * @property {string}                        content         Post content.
- * @property {number}                        featuredMediaId Featured media attachment ID.
- * @property {DiffPreviewResult['incoming']} incoming        Incoming post data from external source.
+ * @property {number}                        featuredMediaId Featured media ID.
+ * @property {DiffPreviewResult['incoming']} incoming        Incoming data.
  */
 interface UsePostUpdateParams {
 	localPostId: number;
@@ -46,16 +29,12 @@ interface UsePostUpdateParams {
 /**
  * Return value from the usePostUpdate hook.
  *
- * @property {UpdateOptions}       updateOpts       Current update options.
- * @property {Function}            setUpdateOpts    Setter for update options.
  * @property {boolean}             isUpdating       Whether update is in progress.
  * @property {string | null}       updateError      Error message if update failed.
  * @property {string | null}       updateSuccess    Success message if update succeeded.
  * @property {() => Promise<void>} handleUpdatePost Function to trigger post update.
  */
 interface UsePostUpdateResult {
-	updateOpts: UpdateOptions;
-	setUpdateOpts: React.Dispatch< React.SetStateAction< UpdateOptions > >;
 	isUpdating: boolean;
 	updateError: string | null;
 	updateSuccess: string | null;
@@ -75,14 +54,6 @@ export function usePostUpdate( {
 	featuredMediaId,
 	incoming,
 }: UsePostUpdateParams ): UsePostUpdateResult {
-	const [ updateOpts, setUpdateOpts ] = useState< UpdateOptions >( {
-		title: true,
-		excerpt: true,
-		meta: true,
-		terms: true,
-		featuredMedia: true,
-	} );
-
 	const [ isUpdating, setIsUpdating ] = useState( false );
 	const [ updateError, setUpdateError ] = useState< string | null >( null );
 	const [ updateSuccess, setUpdateSuccess ] = useState< string | null >( null );
@@ -90,8 +61,8 @@ export function usePostUpdate( {
 	/**
 	 * Handles the post update operation.
 	 *
-	 * Conditionally builds the update payload based on user selections,
-	 * filters internal meta keys, and sends the update request.
+	 * Builds the update payload from all incoming fields, filters
+	 * internal meta keys, and sends the update request.
 	 *
 	 * @return {Promise<void>} Resolves when update is complete.
 	 */
@@ -100,20 +71,14 @@ export function usePostUpdate( {
 		setUpdateError( null );
 		setUpdateSuccess( null );
 
-		const maybeMeta = updateOpts.meta ? ( incoming?.meta ?? undefined ) : undefined;
-		const maybeTerms = updateOpts.terms ? ( incoming?.terms ?? undefined ) : undefined;
-		const maybeTitle = updateOpts.title ? ( incoming?.title ?? undefined ) : undefined;
-		const maybeExcerpt = updateOpts.excerpt ? ( incoming?.excerpt ?? undefined ) : undefined;
-		const maybeFeaturedId =
-			updateOpts.featuredMedia && typeof featuredMediaId === 'number'
-				? featuredMediaId
-				: undefined;
-
+		const meta = incoming?.meta;
 		const metaToSend =
-			maybeMeta && typeof maybeMeta === 'object'
+			meta && typeof meta === 'object'
 				? Object.fromEntries(
-						Object.entries( maybeMeta ).filter(
-							( [ key ] ) => ! key.startsWith( 'safe_publish_' ) && ! key.startsWith( '_' )
+						Object.entries( meta ).filter(
+							( [ key ] ) =>
+								! key.startsWith( 'safe_publish_' ) &&
+								! key.startsWith( '_' )
 						)
 				  )
 				: undefined;
@@ -123,24 +88,31 @@ export function usePostUpdate( {
 			content,
 			window?.safePublishAdminData?.restNonce,
 			metaToSend,
-			maybeTerms,
-			maybeTitle,
-			maybeExcerpt,
-			maybeFeaturedId
+			incoming?.terms,
+			incoming?.title,
+			incoming?.excerpt,
+			typeof featuredMediaId === 'number'
+				? featuredMediaId
+				: undefined
 		);
 
 		if ( result.success ) {
-			setUpdateSuccess( __( 'Post updated successfully.', 'safe-publish' ) );
+			setUpdateSuccess(
+				__( 'Post updated successfully.', 'safe-publish' )
+			);
 		} else {
-			setUpdateError( getErrorMessage( result, __( 'Failed to update post.', 'safe-publish' ) ) );
+			setUpdateError(
+				getErrorMessage(
+					result,
+					__( 'Failed to update post.', 'safe-publish' )
+				)
+			);
 		}
 
 		setIsUpdating( false );
 	};
 
 	return {
-		updateOpts,
-		setUpdateOpts,
 		isUpdating,
 		updateError,
 		updateSuccess,

@@ -249,6 +249,10 @@ final class Admin_Ajax_Controller {
 
 		$post_type = $this->post_import_service->resolve_post_type( $raw_post_type );
 
+		if ( is_wp_error( $post_type ) ) {
+			wp_send_json_error( $post_type->get_error_message() );
+		}
+
 		if ( empty( $title ) ) {
 			wp_send_json_error( __( 'Post title is required.', 'safe-publish' ) );
 		}
@@ -318,6 +322,7 @@ final class Admin_Ajax_Controller {
 		$comment_status    = $fresh_result['comment_status'];
 		$ping_status       = $fresh_result['ping_status'];
 		$menu_order        = $fresh_result['menu_order'];
+		$password          = $fresh_result['password'];
 
 		$excerpt = $this->sanitize_field(
 			$fresh_result['excerpt'],
@@ -368,23 +373,23 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( $error_message );
 		}
 
-		$media_error_message = $this->content_processor->get_failed_media_error_message();
+		$media_error = $this->get_media_processing_error();
 
-		if ( null !== $media_error_message ) {
+		if ( null !== $media_error ) {
 			$this->import_history->log_import_action(
 				$session_id,
 				$external_post_id,
 				$title,
 				'error',
 				null,
-				$media_error_message,
-				array( 'action' => 'media_download_failed' )
+				$media_error['message'],
+				array( 'action' => $media_error['action'] )
 			);
 			$this->import_history->update_session_stats( $session_id, 'error' );
 			$this->import_history->complete_session( $session_id );
 			$this->content_processor->delete_newly_created_media();
 
-			wp_send_json_error( $media_error_message );
+			wp_send_json_error( $media_error['message'] );
 		}
 
 		if ( $imported_post ) {
@@ -403,7 +408,8 @@ final class Admin_Ajax_Controller {
 				$slug,
 				$comment_status,
 				$ping_status,
-				$menu_order
+				$menu_order,
+				$password
 			);
 		} else {
 			$result = $this->create_new_draft(
@@ -420,7 +426,8 @@ final class Admin_Ajax_Controller {
 				$slug,
 				$comment_status,
 				$ping_status,
-				$menu_order
+				$menu_order,
+				$password
 			);
 		}
 
@@ -600,8 +607,6 @@ final class Admin_Ajax_Controller {
 	 * - Resets post_status to 'draft' (keeps the single-import review flow
 	 *   intact).
 	 * - Captures previous content for the session rollback history log.
-	 * - Does not disable content filters (standard WP filters apply
-	 *   for user-triggered imports).
 	 *
 	 * @param WP_Post $imported_post     Imported WordPress post.
 	 * @param string  $title             Post title.
@@ -618,6 +623,7 @@ final class Admin_Ajax_Controller {
 	 * @param string  $comment_status    Comment status ('open' or 'closed').
 	 * @param string  $ping_status       Ping status ('open' or 'closed').
 	 * @param int     $menu_order        Menu order.
+	 * @param string  $password          Post password.
 	 * @return array Result data with post_id, edit_url, message, and existing keys, or error key on failure.
 	 */
 	private function update_imported_draft(
@@ -635,7 +641,8 @@ final class Admin_Ajax_Controller {
 		string $slug,
 		string $comment_status,
 		string $ping_status,
-		int $menu_order
+		int $menu_order,
+		string $password
 	): array {
 		$previous_content = $this->capture_previous_content( $imported_post );
 
@@ -657,7 +664,7 @@ final class Admin_Ajax_Controller {
 			);
 		}
 
-		// Single-import: force draft status, no content filter suppression.
+		// Single-import: force draft status for the review flow.
 		$post_id = $this->post_import_service->persist_updated_post(
 			array(
 				'ID'             => $imported_post->ID,
@@ -670,12 +677,12 @@ final class Admin_Ajax_Controller {
 				'comment_status' => $comment_status,
 				'ping_status'    => $ping_status,
 				'menu_order'     => $menu_order,
+				'post_password'  => $password,
 			),
 			$featured_attachment_id,
 			$external_link,
 			$meta,
-			$terms,
-			false
+			$terms
 		);
 
 		if ( is_wp_error( $post_id ) ) {
@@ -733,6 +740,7 @@ final class Admin_Ajax_Controller {
 	 * @param string $comment_status    Comment status ('open' or 'closed').
 	 * @param string $ping_status       Ping status ('open' or 'closed').
 	 * @param int    $menu_order        Menu order.
+	 * @param string $password          Post password.
 	 * @return array Result data with post_id, edit_url, message, and existing keys, or error key on failure.
 	 */
 	private function create_new_draft(
@@ -749,7 +757,8 @@ final class Admin_Ajax_Controller {
 		string $slug,
 		string $comment_status,
 		string $ping_status,
-		int $menu_order
+		int $menu_order,
+		string $password
 	): array {
 		// Sideload the featured image before creating the post so that a
 		// failure here does not leave an orphaned draft in the DB.
@@ -780,6 +789,7 @@ final class Admin_Ajax_Controller {
 				'comment_status' => $comment_status,
 				'ping_status'    => $ping_status,
 				'menu_order'     => $menu_order,
+				'post_password'  => $password,
 				'meta_input'     => array(
 					Options::META_EXTERNAL_POST_ID => $external_post_id,
 					Options::META_EXTERNAL_LINK    => $external_link,
@@ -881,14 +891,39 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Processes draft post content by importing media and fixing links.
+	 * Returns combined media processing error info, or null when no failures
+	 * occurred.
 	 *
-	 * Returns a WP_Error if content processing fails or if sanitization would
-	 * modify the content.
+	 * @return array{message: string, action: string}|null
+	 */
+	private function get_media_processing_error(): ?array {
+		$download_msg = $this->content_processor
+			->get_failed_media_error_message();
+		$markup_msg   = $this->content_processor
+			->get_unprocessable_media_error_message();
+
+		if ( null === $download_msg && null === $markup_msg ) {
+			return null;
+		}
+
+		$messages = array_filter( array( $download_msg, $markup_msg ) );
+
+		$action = null !== $download_msg
+			? 'media_download_failed'
+			: 'malformed_media_markup';
+
+		return array(
+			'message' => implode( ' ', $messages ),
+			'action'  => $action,
+		);
+	}
+
+	/**
+	 * Processes draft post content by importing media and fixing links.
 	 *
 	 * @param string $content       Raw post content.
 	 * @param string $external_link External post URL used to derive site URL.
-	 * @return string|WP_Error Processed and sanitized content, or WP_Error on failure.
+	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
 	private function process_draft_content( string $content, string $external_link ): string|WP_Error {
 		$processed = $content;
@@ -909,8 +944,8 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Captures previous post content for the session rollback history log.
 	 *
-	 * Stores the current title, content, excerpt, featured image, and selected
-	 * meta fields so the import can be reverted via the session rollback feature.
+	 * Stores the current post fields, featured image, and selected meta so the
+	 * import can be reverted via session rollback.
 	 *
 	 * @param WP_Post $existing_post Existing WordPress post.
 	 * @return array Previous content keyed by field name.
@@ -924,6 +959,7 @@ final class Admin_Ajax_Controller {
 			'previous_comment_status' => $existing_post->comment_status,
 			'previous_ping_status'    => $existing_post->ping_status,
 			'previous_menu_order'     => $existing_post->menu_order,
+			'previous_password'       => $existing_post->post_password,
 			'previous_featured_image' => get_post_thumbnail_id( $existing_post->ID ),
 			'previous_meta'           => array(),
 			'action'                  => 'updated_existing',

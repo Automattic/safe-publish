@@ -201,13 +201,9 @@ History records may contain:
 - **URLs**: Of source/destination content (may be internal/private)
 - **Post titles**: May contain sensitive information
 
-### GDPR Compliance
+### User Deletion
 
-When a user is deleted:
-
-- Import history records are preserved
-- User ID references are maintained
-- Username display shows "Deleted User"
+Import history records are not tied to WordPress user accounts. When a user is deleted, history records are preserved and continue to display the original user's name as it was at the time of the import.
 
 ## Best Practices
 

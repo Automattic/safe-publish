@@ -9,7 +9,6 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
-use Closure;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Renderer;
 use Safe_Publish\Admin\History_Repository;
@@ -231,7 +230,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * Verifies that import fails when a Gutenberg core/video block contains a
 	 * video that cannot be downloaded.
 	 *
-	 * The core/video block is processed by Content_Processor::process_video_block(),
+	 * The core/video block is processed by Content_Processor::process_media_block(),
 	 * which calls import_external_media_as_attachment() directly and must track
 	 * failures in Content_Processor::$failed_media so the import service aborts.
 	 */
@@ -334,7 +333,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * Verifies that import fails when a Gutenberg core/audio block contains an
 	 * audio file that cannot be downloaded.
 	 *
-	 * The core/audio block is processed by Content_Processor::process_audio_block(),
+	 * The core/audio block is processed by Content_Processor::process_media_block(),
 	 * which calls import_external_media_as_attachment() directly and must track
 	 * failures in Content_Processor::$failed_media so the import service aborts.
 	 */
@@ -608,7 +607,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * Verifies that the production URL is present in both the block comment
 	 * JSON attrs and innerHTML after a successful core/video block import.
 	 *
-	 * Content_Processor::process_video_block() must update attrs['src']/attrs['id'],
+	 * Content_Processor::process_media_block() must update attrs['src']/attrs['id'],
 	 * innerHTML, and innerContent so the staging URL is fully replaced.
 	 */
 	public function test_video_block_innerHTML_is_updated_after_successful_import(): void {
@@ -665,7 +664,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * Verifies that the production URL is present in both the block comment
 	 * JSON attrs and innerHTML after a successful core/audio block import.
 	 *
-	 * Content_Processor::process_audio_block() must update attrs['src']/attrs['id'],
+	 * Content_Processor::process_media_block() must update attrs['src']/attrs['id'],
 	 * innerHTML, and innerContent so the staging URL is fully replaced.
 	 */
 	public function test_audio_block_innerHTML_is_updated_after_successful_import(): void {
@@ -715,350 +714,6 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			'source.example.com',
 			$saved_content,
 			'Staging URL must not remain in saved post content after a successful audio block import.'
-		);
-	}
-
-	/**
-	 * Verifies that partially-downloaded attachments are cleaned up when an
-	 * import is aborted due to a media failure.
-	 *
-	 * All blocks are processed independently before the failure check runs, so
-	 * any successful downloads that preceded a failure will have created real
-	 * attachments. All of those must be deleted on abort to leave the media
-	 * library in a clean state.
-	 */
-	public function test_orphaned_attachments_are_deleted_when_import_is_aborted(): void {
-		// ARRANGE: Content with two images — first succeeds, second fails (nonexistent).
-		$good_url   = 'https://source.example.com/real-image.jpg';
-		$broken_url = 'https://source.example.com/nonexistent-partial.jpg';
-
-		$this->mock_post_overrides = array(
-			'content' => '<p>'
-				. '<img src="' . $good_url . '" alt="good">'
-				. '<img src="' . $broken_url . '" alt="broken">'
-				. '</p>',
-		);
-
-		$session_id         = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
-		$attachments_before = $this->get_attachment_count();
-
-		$post_data = array(
-			'id'        => 8301,
-			'title'     => 'Post With Partial Media Failure',
-			'content'   => '<p>Stale content.</p>',
-			'link'      => 'https://source.example.com/partial-media-failure',
-			'post_type' => 'posts',
-		);
-
-		// ACT: Attempt to import the post.
-		$result = $this->import_service->import_post( $post_data, $session_id );
-
-		// ASSERT: Import aborted due to the broken image.
-		$this->assertFalse(
-			$result['success'],
-			'Import should fail when one of multiple images cannot be downloaded.'
-		);
-		$this->assertStringContainsString( 'nonexistent-partial.jpg', $result['error'] );
-
-		// ASSERT: No post was created.
-		$this->assertEmpty(
-			get_posts(
-				array(
-					'post_type'        => 'post',
-					'posts_per_page'   => 1,
-					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
-					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-					'meta_value'       => '8301',
-				)
-			),
-			'No post should be created when a media import fails.'
-		);
-
-		// ASSERT: The attachment created for the successful image was cleaned up.
-		$this->assert_no_new_attachments(
-			$attachments_before,
-			'Attachments created before the failure must be deleted when the import is aborted.'
-		);
-	}
-
-	/**
-	 * Verifies that sideloaded attachments (including featured image) are deleted
-	 * when the import fails at the terms-update step on the create path.
-	 */
-	public function test_sideloaded_attachments_cleaned_up_when_terms_update_fails(): void {
-		// ARRANGE: Fresh content includes a featured image so one attachment is
-		// sideloaded before wp_insert_post runs. An unknown taxonomy in the terms
-		// data triggers the failure after the post is written.
-		$this->mock_post_overrides = array(
-			'featured_media' => 100,
-			'terms'          => array( 'nonexistent_taxonomy_xyz' => array( 'Some Term' ) ),
-		);
-
-		$session_id         = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
-		$attachments_before = $this->get_attachment_count();
-
-		$post_data = array(
-			'id'        => 9210,
-			'title'     => 'Post With Unknown Taxonomy',
-			'content'   => '<p>Content.</p>',
-			'link'      => 'https://source.example.com/unknown-taxonomy-test',
-			'post_type' => 'posts',
-		);
-
-		// ACT: Attempt to import the post.
-		$result = $this->import_service->import_post( $post_data, $session_id );
-
-		// ASSERT: Import failed due to the unknown taxonomy.
-		$this->assertFalse( $result['success'], 'Import should fail when a term taxonomy does not exist.' );
-		$this->assertStringContainsString( 'nonexistent_taxonomy_xyz', $result['error'] );
-
-		// ASSERT: No post was created.
-		$this->assertEmpty(
-			get_posts(
-				array(
-					'post_type'        => 'post',
-					'posts_per_page'   => 1,
-					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
-					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-					'meta_value'       => '9210',
-				)
-			),
-			'No post should remain after a failed import.'
-		);
-
-		// ASSERT: The sideloaded featured image attachment was cleaned up.
-		$this->assert_no_new_attachments(
-			$attachments_before,
-			'Sideloaded attachments must be deleted when the terms update fails.'
-		);
-	}
-
-	/**
-	 * Verifies that the import aborts without creating a draft when the
-	 * featured image cannot be imported.
-	 *
-	 * The featured image is sideloaded before the post is inserted, so a
-	 * failure here means no post is ever written to the DB.
-	 */
-	public function test_import_aborts_and_deletes_draft_when_featured_image_fails(): void {
-		// ARRANGE: Fresh-content response includes featured_media > 0 so the
-		// import path attempts to fetch the featured image. The fail filter
-		// runs at priority 6 — after mock_media_api_request (priority 5) — so
-		// it can override that response and return a 404, causing
-		// import_featured_image() to return false.
-		$this->mock_post_overrides = array( 'featured_media' => 100 );
-
-		$fail_media_api = $this->make_featured_image_fail_filter();
-		add_filter( 'pre_http_request', $fail_media_api, 6, 3 );
-
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
-
-		$post_data = array(
-			'id'        => 9101,
-			'title'     => 'Post With Failed Featured Image',
-			'content'   => '<p>Content.</p>',
-			'link'      => 'https://source.example.com/failed-featured-image',
-			'post_type' => 'posts',
-		);
-
-		// ACT: Attempt to import the post.
-		$result = $this->import_service->import_post( $post_data, $session_id );
-
-		remove_filter( 'pre_http_request', $fail_media_api, 6 );
-
-		// ASSERT: Import must fail with a featured image error.
-		$this->assertFalse( $result['success'], 'Import should fail when the featured image cannot be imported.' );
-		$this->assertStringContainsString( 'featured image', $result['error'] );
-
-		// ASSERT: The orphaned draft must have been deleted.
-		$this->assertEmpty(
-			get_posts(
-				array(
-					'post_type'        => 'post',
-					'post_status'      => 'any',
-					'posts_per_page'   => 1,
-					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
-					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-					'meta_value'       => '9101',
-				)
-			),
-			'The post must not exist when the featured image import fails before insertion.'
-		);
-	}
-
-	/**
-	 * Verifies that the import aborts without modifying the post when the
-	 * featured image cannot be imported on re-import.
-	 *
-	 * The featured image is sideloaded before the post is written, so a failure
-	 * here leaves the existing post untouched.
-	 */
-	public function test_import_aborts_without_deleting_post_when_featured_image_fails_on_update(): void {
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
-
-		// ARRANGE: Import the post once with no featured image so it exists in
-		// the DB.
-		$post_data = array(
-			'id'        => 9102,
-			'title'     => 'Post For Featured Image Update Test',
-			'content'   => '<p>Original content.</p>',
-			'link'      => 'https://source.example.com/featured-image-update-test',
-			'post_type' => 'posts',
-		);
-
-		$first = $this->import_service->import_post( $post_data, $session_id );
-		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
-		$post_id = $first['post_id'];
-
-		// ARRANGE: Re-import with featured_media > 0, but make the media API fail.
-		// The fail filter runs at priority 6 — after mock_media_api_request
-		// (priority 5) — so it can override that response and return a 404.
-		$this->mock_post_overrides = array( 'featured_media' => 100 );
-
-		$fail_media_api = $this->make_featured_image_fail_filter();
-		add_filter( 'pre_http_request', $fail_media_api, 6, 3 );
-
-		// ACT: Re-import the same post (hits the update path).
-		$result = $this->import_service->import_post( $post_data, $session_id );
-
-		remove_filter( 'pre_http_request', $fail_media_api, 6 );
-
-		// ASSERT: Import must fail with a featured image error.
-		$this->assertFalse( $result['success'], 'Re-import should fail when the featured image cannot be imported.' );
-		$this->assertStringContainsString( 'featured image', $result['error'] );
-
-		// ASSERT: The existing post must still be present in the DB.
-		$this->assertNotNull(
-			get_post( $post_id ),
-			'The existing post must not be deleted when featured image import fails on the update path.'
-		);
-	}
-
-	/**
-	 * Verifies that the existing post is not modified when the featured image
-	 * import fails on the bulk update path.
-	 *
-	 * The featured image is sideloaded before the post is written, so a failure
-	 * aborts the import before any DB write. Title, content, and tracking meta
-	 * must all be identical to their values before the import attempt began.
-	 */
-	public function test_import_restores_post_on_featured_image_failure_during_bulk_update(): void {
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
-
-		// ARRANGE: Import the post once with clean content so it exists in the DB.
-		$post_data = array(
-			'id'        => 9103,
-			'title'     => 'Original Title',
-			'content'   => '<p>Original content.</p>',
-			'link'      => 'https://source.example.com/restore-on-failure-test',
-			'post_type' => 'posts',
-		);
-
-		$first = $this->import_service->import_post( $post_data, $session_id );
-		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
-		$post_id = $first['post_id'];
-
-		$original_title   = get_post_field( 'post_title', $post_id );
-		$original_content = get_post_field( 'post_content', $post_id );
-		$original_link    = get_post_meta( $post_id, Options::META_EXTERNAL_LINK, true );
-		$original_date    = get_post_meta( $post_id, Options::META_IMPORT_DATE, true );
-
-		// ARRANGE: Fresh content will return updated title/content and a featured
-		// image. The fail filter makes the media API return 404 to trigger failure.
-		$this->mock_post_overrides = array(
-			'title'          => 'Updated Title',
-			'content'        => '<p>Updated content that must not be saved.</p>',
-			'featured_media' => 100,
-		);
-
-		$fail_media_api = $this->make_featured_image_fail_filter();
-		add_filter( 'pre_http_request', $fail_media_api, 6, 3 );
-
-		// ACT: Re-import the same post (hits the update path).
-		$result = $this->import_service->import_post( $post_data, $session_id );
-
-		remove_filter( 'pre_http_request', $fail_media_api, 6 );
-
-		// ASSERT: Import must fail.
-		$this->assertFalse( $result['success'], 'Re-import should fail when the featured image cannot be imported.' );
-		$this->assertStringContainsString( 'featured image', $result['error'] );
-
-		// ASSERT: Post fields and tracking meta must be unchanged: the import
-		// aborted before any DB write.
-		$this->assertSame( $original_title, get_post_field( 'post_title', $post_id ), 'Title must be unchanged after failed update.' );
-		$this->assertSame( $original_content, get_post_field( 'post_content', $post_id ), 'Content must be unchanged after failed update.' );
-		$this->assertSame( $original_link, get_post_meta( $post_id, Options::META_EXTERNAL_LINK, true ), 'External link meta must be unchanged after failed update.' );
-		$this->assertSame( $original_date, get_post_meta( $post_id, Options::META_IMPORT_DATE, true ), 'Import date meta must be unchanged after failed update.' );
-	}
-
-	/**
-	 * Verifies that the bulk update path returns a failure when the tracking
-	 * meta write fails.
-	 *
-	 * If update_post_meta fails for META_IMPORT_DATE (e.g., a DB error), the
-	 * import must report failure rather than silently leaving the tracking meta
-	 * stale.
-	 */
-	public function test_bulk_update_fails_when_tracking_meta_write_fails(): void {
-		$session_id = $this->import_history->create_session(
-			'https://source.example.com',
-			'bulk'
-		);
-
-		// ARRANGE: Import the post once to create it in the DB.
-		$post_data = array(
-			'id'        => 9120,
-			'title'     => 'Post For Tracking Meta Failure Test',
-			'content'   => '<p>Original content.</p>',
-			'link'      => 'https://source.example.com/tracking-meta-failure-test',
-			'post_type' => 'posts',
-		);
-
-		$first = $this->import_service->import_post( $post_data, $session_id );
-		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
-		$post_id = $first['post_id'];
-
-		// ARRANGE: Block update_post_meta for META_IMPORT_DATE to simulate a DB
-		// failure.
-		$block_meta = function (
-			$check,
-			$object_id,
-			$meta_key,
-			$meta_value,
-			$prev_value
-		) {
-			unset( $object_id, $meta_value, $prev_value );
-			if ( Options::META_IMPORT_DATE === $meta_key ) {
-				return false;
-			}
-			return $check;
-		};
-		add_filter( 'update_post_metadata', $block_meta, 10, 5 );
-
-		// ACT: Re-import the same post (hits the update path).
-		$result = $this->import_service->import_post( $post_data, $session_id );
-
-		remove_filter( 'update_post_metadata', $block_meta, 10 );
-
-		// ASSERT: Import must report failure with a descriptive error.
-		$this->assertFalse(
-			$result['success'],
-			'Update import should fail when tracking meta cannot be written.'
-		);
-		$this->assertStringContainsString(
-			'tracking metadata',
-			$result['error']
-		);
-
-		// ASSERT: The import date meta must be absent: the delete succeeded but
-		// the subsequent write was blocked, so no value was committed.
-		$this->assertSame(
-			'',
-			get_post_meta( $post_id, Options::META_IMPORT_DATE, true ),
-			'META_IMPORT_DATE must be absent when the write was blocked after a delete.'
 		);
 	}
 
@@ -1340,10 +995,11 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * up-to-date post name.
 	 */
 	public function test_import_error_uses_fresh_title_not_snapshot_title(): void {
-		// ARRANGE: The listing snapshot uses a stale title, but the fresh
-		// content endpoint returns an updated title together with content
-		// that wp_kses_post will strip (triggering a sanitization error
-		// after the title has been refreshed).
+		// ARRANGE: Enable kses so that the <form> content triggers a
+		// sanitization error. The listing snapshot uses a stale title,
+		// but the fresh content endpoint returns an updated title.
+		add_filter( 'safe_publish_import_kses', '__return_true' );
+
 		$this->mock_post_overrides = array(
 			'title'   => 'Fresh Title From Source',
 			'content' => '<p>OK</p><form action="x"><input></form>',
@@ -1367,6 +1023,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			$post_data,
 			$session_id
 		);
+
+		remove_filter( 'safe_publish_import_kses', '__return_true' );
 
 		// ASSERT: Import must fail due to sanitization.
 		$this->assertFalse(
@@ -1440,27 +1098,238 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Returns a pre_http_request filter that makes the media JSON API return 404.
-	 *
-	 * Registered at priority 6 so it runs after the mock at priority 5 and
-	 * overrides the normal mock response to simulate a failed API request.
-	 *
-	 * @return Closure
+	 * Verifies that post_password is preserved when importing a new
+	 * password-protected post via the bulk path.
 	 */
-	private function make_featured_image_fail_filter(): Closure {
-		return function ( $preempt, array $args, string $url ) {
-			unset( $args );
-			if ( str_contains( $url, 'wp-json/wp/v2/media/' ) ) {
-				return array(
-					'response' => array(
-						'code'    => 404,
-						'message' => 'Not Found',
-					),
-					'body'     => 'Not Found',
-					'headers'  => array(),
-				);
-			}
-			return $preempt;
-		};
+	public function test_import_preserves_post_password(): void {
+		// ARRANGE: Source post with a password.
+		$this->mock_post_overrides = array(
+			'password' => 's3cret',
+		);
+
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9601,
+			'title'     => 'Password Protected Post',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/password-post',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Import the post.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: Import must succeed.
+		$this->assertTrue(
+			$result['success'],
+			'Import should succeed.'
+		);
+
+		$post = get_post( $result['post_id'] );
+
+		// ASSERT: Password must match the source value.
+		$this->assertSame(
+			's3cret',
+			$post->post_password,
+			'Post password must be preserved from the source post.'
+		);
+	}
+
+	/**
+	 * Verifies that post_password is updated when re-importing an existing post
+	 * via the bulk path.
+	 */
+	public function test_reimport_updates_post_password(): void {
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ARRANGE: Import once with a password.
+		$this->mock_post_overrides = array(
+			'password' => 'original',
+		);
+
+		$post_data = array(
+			'id'        => 9602,
+			'title'     => 'Post For Password Update Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/password-update',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+		$this->assertTrue(
+			$first['success'],
+			'Initial import should succeed.'
+		);
+		$this->assertSame(
+			'original',
+			get_post( $first['post_id'] )->post_password
+		);
+
+		// ARRANGE: Re-import with an updated password.
+		$this->mock_post_overrides = array(
+			'password' => 'changed',
+		);
+
+		// ACT: Re-import the same post.
+		$second = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: Re-import must succeed.
+		$this->assertTrue(
+			$second['success'],
+			'Re-import should succeed.'
+		);
+		$this->assertTrue(
+			$second['existing'],
+			'Should be flagged as existing.'
+		);
+
+		// ASSERT: Password must reflect the updated source value.
+		$this->assertSame(
+			'changed',
+			get_post( $second['post_id'] )->post_password,
+			'Post password must be updated on re-import.'
+		);
+	}
+
+	/**
+	 * Verifies that import fails when the source post type is not registered on
+	 * the destination site.
+	 */
+	public function test_import_fails_for_unregistered_post_type(): void {
+		// ARRANGE: Use a post type that is not registered.
+		$post_data = array(
+			'id'        => 9801,
+			'title'     => 'Unregistered CPT Post',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/unregistered',
+			'post_type' => 'gadgets',
+		);
+
+		// ACT: Attempt import.
+		$result = $this->import_service->import_post(
+			$post_data
+		);
+
+		// ASSERT: Import fails with a descriptive error.
+		$this->assertFalse(
+			$result['success'],
+			'Import should fail for an unregistered post type.'
+		);
+		$this->assertStringContainsString(
+			'gadgets',
+			$result['error'],
+			'Error should name the unregistered post type.'
+		);
+	}
+
+	/**
+	 * Verifies that the bulk import path writes a row to the import log when
+	 * post-type resolution returns a WP_Error.
+	 */
+	public function test_bulk_import_logs_failure_when_post_type_unregistered(): void {
+		// ARRANGE: Bulk session targeting an unregistered post type.
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9803,
+			'title'     => 'Bulk Import With Unregistered CPT',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/bulk-unregistered',
+			'post_type' => 'gadgets',
+		);
+
+		// ACT: Run the import through the bulk path (real session_id).
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: Import fails for the unregistered post type.
+		$this->assertFalse(
+			$result['success'],
+			'Import should fail for an unregistered post type.'
+		);
+
+		// ASSERT: A log row was written for the session.
+		$logs = get_posts(
+			array(
+				'post_type'      => History_Repository::LOG_POST_TYPE,
+				'post_status'    => 'publish',
+				'post_parent'    => $session_id,
+				'posts_per_page' => -1,
+			)
+		);
+
+		$this->assertCount(
+			1,
+			$logs,
+			'Bulk import must log a row when post-type resolution fails.'
+		);
+		$this->assertSame(
+			'error',
+			get_post_meta( $logs[0]->ID, 'status', true ),
+			'Logged row must record the import as an error.'
+		);
+		$this->assertSame(
+			9803,
+			(int) get_post_meta( $logs[0]->ID, 'external_id', true ),
+			'Logged row must reference the failing external post ID.'
+		);
+	}
+
+	/**
+	 * Verifies that import fails when the current user lacks the capability
+	 * required for the target post type.
+	 */
+	public function test_import_fails_when_user_lacks_capability(): void {
+		// ARRANGE: Switch to a user without edit_posts.
+		wp_set_current_user(
+			self::factory()->user->create(
+				array( 'role' => 'subscriber' )
+			)
+		);
+
+		$post_data = array(
+			'id'        => 9802,
+			'title'     => 'Subscriber Import Attempt',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/subscriber',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Attempt import.
+		$result = $this->import_service->import_post(
+			$post_data
+		);
+
+		// ASSERT: Import fails with a permission error.
+		$this->assertFalse(
+			$result['success'],
+			'Import should fail for a user without edit_posts.'
+		);
+		$this->assertStringContainsString(
+			'permission',
+			$result['error'],
+			'Error should mention insufficient permission.'
+		);
 	}
 }

@@ -54,6 +54,15 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 			'Failed image URL should be recorded for the import service to act on'
 		);
 
+		// ASSERT: A failed download must not also be reported as unprocessable
+		// markup, otherwise the user sees the same URL twice with conflicting
+		// reasons.
+		$this->assertSame(
+			array(),
+			$this->content_media_processor->get_unprocessable_media(),
+			'Failed download URL must not also be recorded as unprocessable'
+		);
+
 		// ASSERT: Verify no attachment was created for 404 response.
 		$this->assert_no_new_attachments( $attachments_before, 'Should not create attachment when download returns 404' );
 	}

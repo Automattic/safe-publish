@@ -22,7 +22,7 @@ Require a WordPress user with `edit_post` capability for the target post.
 | `GET`    | `/wp-json/safe-publish/v1/auth-status` | `manage_options` or HMAC | Authentication health and statistics |
 | `GET`    | `/wp-json/safe-publish/v1/auth-logs`   | `manage_options` or HMAC | Paginated authentication event log   |
 | `DELETE` | `/wp-json/safe-publish/v1/auth-logs`   | `manage_options`         | Clear authentication logs            |
-| `GET`    | `/wp-json/safe-publish/v1/auth-test`   | None                     | Authentication diagnostic test       |
+| `GET`    | `/wp-json/safe-publish/v1/auth-test`   | None (WP_DEBUG only)     | Authentication diagnostic test       |
 
 ## Authentication
 
@@ -84,50 +84,29 @@ function safe_publish_custom_action_handler( WP_REST_Request $request ) {
 }
 ```
 
-### Extend Existing Endpoints
-
-Modify response data for existing endpoints:
-
-```php
-add_filter( 'rest_prepare_safe_publish_history', function( $response, $item, $request ) {
-    $data = $response->get_data();
-
-    // Add custom fields
-    $data['custom_field'] = get_post_meta( $item->destination_post_id, 'custom_field', true );
-
-    $response->set_data( $data );
-    return $response;
-}, 10, 3 );
-```
-
 ## Webhook Integration
 
-Create webhooks to notify external systems:
+Use the [`safe_publish_event_logged`](hooks.md#safe_publish_event_logged) action to notify external systems when events occur:
 
 ```php
-// Trigger webhook after successful import
-add_action( 'safe_publish_post_imported', function( $post_id, $source_url ) {
+add_action( 'safe_publish_event_logged', function( string $channel, string $event, array $data ): void {
     $webhook_url = get_option( 'safe_publish_webhook_url' );
 
     if ( ! $webhook_url ) {
         return;
     }
 
-    $post = get_post( $post_id );
-
     wp_remote_post( $webhook_url, [
-        'body' => json_encode( [
-            'event' => 'post_imported',
-            'post_id' => $post_id,
-            'post_title' => $post->post_title,
-            'source_url' => $source_url,
-            'timestamp' => current_time( 'mysql' ),
+        'body' => wp_json_encode( [
+            'channel' => $channel,
+            'event'   => $event,
+            'data'    => $data,
         ] ),
         'headers' => [
             'Content-Type' => 'application/json',
         ],
     ] );
-}, 10, 2 );
+}, 10, 3 );
 ```
 
 ## Error Handling
@@ -146,11 +125,9 @@ Standard error responses:
 
 **Common error codes:**
 
-- `rest_forbidden` - Permission denied
-- `invalid_param` - Invalid parameter
-- `import_failed` - Import operation failed
-- `authentication_failed` - Cannot authenticate with external site
-- `invalid_post_data` - Post data validation failed
+- `rest_forbidden` - Permission denied (WordPress core)
+- `rest_invalid_param` - Invalid parameter (e.g. non-positive post ID)
+- `rest_post_not_found` - Post does not exist
 
 ## Security Considerations
 

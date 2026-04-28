@@ -23,6 +23,12 @@ abstract class Integration_Test_Case extends WP_UnitTestCase {
 	protected function setUp(): void {
 		parent::setUp();
 
+		wp_set_current_user(
+			self::factory()->user->create(
+				array( 'role' => 'administrator' )
+			)
+		);
+
 		// Register custom post types required for the tests.
 		$this->register_post_types();
 	}
