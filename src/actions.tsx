@@ -101,11 +101,15 @@ const bulkImportPosts = async (
  * component, including creating drafts, bulk importing, updating, and viewing
  * diffs.
  *
- * @param {Function} [onRefresh] Callback to refresh the posts list.
+ * @param {Function} [onRefresh]    Callback to refresh the posts list.
+ * @param {boolean}  [isAuthorized] Whether the source site authorizes import requests.
  *
  * @return {Action<Post>[]} Array of DataViews actions.
  */
-export const createActions = ( onRefresh?: () => void ): Action< Post >[] => [
+export const createActions = (
+	onRefresh?: () => void,
+	isAuthorized: boolean = true
+): Action< Post >[] => [
 	/**
 	 * Combined import and update action.
 	 *
@@ -123,7 +127,8 @@ export const createActions = ( onRefresh?: () => void ): Action< Post >[] => [
 			}
 			return __( 'Import / Update', 'safe-publish' );
 		},
-		isEligible: ( item: Post ) => ! item.is_imported || Boolean( item.has_update ),
+		isEligible: ( item: Post ) =>
+			isAuthorized && ( ! item.is_imported || Boolean( item.has_update ) ),
 		isPrimary: true,
 		icon: download,
 		hideModalHeader: true,
