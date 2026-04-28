@@ -20,6 +20,17 @@ if ( ! $_tests_dir ) {
 	$_tests_dir = rtrim( sys_get_temp_dir(), '/\\' ) . '/wordpress-tests-lib';
 }
 
+// Force the wp-phpunit bootstrap to load our config file (tests/wp-tests-config.php)
+// rather than a bundled wp-tests-config.php that may ship alongside $_tests_dir
+// inside wp-env containers. Without this, the bundled config's $table_prefix = 'wp_'
+// against the source site's DB causes wp-phpunit's install step to drop the source
+// site's tables every test run, resetting the source site. See wp-phpunit's
+// includes/bootstrap.php, which honors this constant before falling back to the
+// sibling wp-tests-config.php.
+if ( ! defined( 'WP_TESTS_CONFIG_FILE_PATH' ) ) {
+	define( 'WP_TESTS_CONFIG_FILE_PATH', realpath( __DIR__ . '/../wp-tests-config.php' ) );
+}
+
 // Forward custom PHPUnit Polyfills configuration to PHPUnit bootstrap file.
 $_phpunit_polyfills_path = getenv( 'WP_TESTS_PHPUNIT_POLYFILLS_PATH' );
 if ( false !== $_phpunit_polyfills_path ) {
@@ -87,6 +98,22 @@ tests_add_filter(
 	},
 	999,
 	3
+);
+
+// Suppress WordPress core update checks. On a fresh wptests_-prefixed DB
+// the update_core/update_plugins/update_themes transients are empty, so
+// _maybe_update_core() (and siblings) fire wp_version_check() on admin_init.
+// That hits the outbound HTTP block above and surfaces as a test error.
+tests_add_filter(
+	'muplugins_loaded',
+	function (): void {
+		remove_action( 'admin_init', '_maybe_update_core' );
+		remove_action( 'admin_init', '_maybe_update_plugins' );
+		remove_action( 'admin_init', '_maybe_update_themes' );
+		remove_action( 'wp_version_check', 'wp_version_check' );
+		remove_action( 'wp_update_plugins', 'wp_update_plugins' );
+		remove_action( 'wp_update_themes', 'wp_update_themes' );
+	}
 );
 
 // Suppress cosmetic "Not running X tests" messages.

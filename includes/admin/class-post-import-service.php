@@ -133,6 +133,16 @@ class Post_Import_Service {
 		$post_type = $this->resolve_post_type( $fields['raw_post_type'] );
 
 		if ( is_wp_error( $post_type ) ) {
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$post_type->get_error_message(),
+				array( 'action' => $post_type->get_error_code() )
+			);
+
 			return $this->build_error_result(
 				$fields,
 				$post_type->get_error_message()
@@ -745,19 +755,19 @@ class Post_Import_Service {
 	 * the post is rolled back to its pre-update state. Used by both
 	 * single and bulk import paths.
 	 *
-	 * @param array  $post_args              Arguments for wp_update_post().
-	 * @param int    $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
-	 * @param string $external_link           External post URL for meta tracking.
-	 * @param mixed  $meta                    Meta data (array or object).
-	 * @param mixed  $terms                   Terms data (array or object).
+	 * @param array        $post_args              Arguments for wp_update_post().
+	 * @param int          $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
+	 * @param string       $external_link           External post URL for meta tracking.
+	 * @param array|object $meta                    Meta data.
+	 * @param array|object $terms                   Terms data.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
 	 */
 	public function persist_updated_post(
 		array $post_args,
 		int $featured_attachment_id,
 		string $external_link,
-		mixed $meta,
-		mixed $terms
+		array|object $meta,
+		array|object $terms
 	): int|WP_Error {
 		$post_id  = $post_args['ID'];
 		$snapshot = $this->capture_pre_update_state(
@@ -772,6 +782,14 @@ class Post_Import_Service {
 
 		if ( is_wp_error( $result ) ) {
 			return $result;
+		}
+
+		if ( 0 === $result ) {
+			return new WP_Error(
+				'post_update_failed',
+				__( 'Failed to update post.', 'safe-publish' ),
+				array( 'action' => 'post_update_failed' )
+			);
 		}
 
 		update_post_meta(
@@ -944,17 +962,17 @@ class Post_Import_Service {
 	 * terms failure the post and any sideloaded media are cleaned up. Used by
 	 * both single and bulk import paths.
 	 *
-	 * @param array $post_args              Arguments for wp_insert_post() (including meta_input).
-	 * @param int   $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
-	 * @param mixed $meta                    Meta data (array or object).
-	 * @param mixed $terms                   Terms data (array or object).
+	 * @param array        $post_args              Arguments for wp_insert_post() (including meta_input).
+	 * @param int          $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
+	 * @param array|object $meta                    Meta data.
+	 * @param array|object $terms                   Terms data.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
 	 */
 	public function persist_new_post(
 		array $post_args,
 		int $featured_attachment_id,
-		mixed $meta,
-		mixed $terms
+		array|object $meta,
+		array|object $terms
 	): int|WP_Error {
 		$this->content_processor->disable_content_filters();
 		$post_id = wp_insert_post( $post_args );
