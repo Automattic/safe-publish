@@ -268,4 +268,176 @@ class VIPSafeAuthTest extends TestCase {
 			$params_b['headers']['X-Safe-Publish-Content-Hash']
 		);
 	}
+
+	/**
+	 * Resets the HTTP response stub between probe tests.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		reset_test_http_response();
+		parent::tearDown();
+	}
+
+	/**
+	 * Verifies that an empty source URL maps to the url_unset status.
+	 */
+	public function test_test_authorization_returns_url_unset_when_site_url_empty(): void {
+		// ARRANGE: No site URL configured.
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		// ACT: Probe with an empty URL.
+		$result = VIP_Safe_Auth::test_authorization( '', $auth_config );
+
+		// ASSERT: Probe short-circuits to url_unset before any HTTP call.
+		$this->assertSame( VIP_Safe_Auth::STATUS_URL_UNSET, $result['status'] );
+	}
+
+	/**
+	 * Verifies that a missing shared secret yields the unauthorized status
+	 * without issuing a network request.
+	 */
+	public function test_test_authorization_returns_unauthorized_without_shared_secret(): void {
+		// ARRANGE: Configure URL but no shared secret.
+		$site_url = 'https://example.com';
+
+		// ACT: Probe without credentials.
+		$result = VIP_Safe_Auth::test_authorization( $site_url, array() );
+
+		// ASSERT: Probe short-circuits to unauthorized before any HTTP call.
+		$this->assertSame( VIP_Safe_Auth::STATUS_UNAUTHORIZED, $result['status'] );
+	}
+
+	/**
+	 * Verifies that a short shared secret yields the unauthorized status.
+	 */
+	public function test_test_authorization_returns_unauthorized_for_short_secret(): void {
+		// ARRANGE: Shared secret is below the 16-char minimum.
+		$site_url    = 'https://example.com';
+		$auth_config = array( 'shared_secret' => 'too-short' );
+
+		// ACT: Probe with a short secret.
+		$result = VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
+
+		// ASSERT: is_authorized() rejects the secret, probe returns unauthorized.
+		$this->assertSame( VIP_Safe_Auth::STATUS_UNAUTHORIZED, $result['status'] );
+	}
+
+	/**
+	 * Verifies that a 200 response from the source maps to authorized.
+	 */
+	public function test_test_authorization_returns_authorized_on_200(): void {
+		// ARRANGE: Stub a successful HTTP response.
+		set_test_http_response( array( 'response' => array( 'code' => 200 ) ) );
+		$site_url    = 'https://example.com';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		// ACT: Probe the source.
+		$result = VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
+
+		// ASSERT: 200 maps to authorized with the response code preserved.
+		$this->assertSame( VIP_Safe_Auth::STATUS_AUTHORIZED, $result['status'] );
+		$this->assertSame( 200, $result['code'] );
+	}
+
+	/**
+	 * Verifies that a 401 response from the source maps to unauthorized.
+	 */
+	public function test_test_authorization_returns_unauthorized_on_401(): void {
+		// ARRANGE: Stub a 401 HTTP response.
+		set_test_http_response( array( 'response' => array( 'code' => 401 ) ) );
+		$site_url    = 'https://example.com';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		// ACT: Probe the source.
+		$result = VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
+
+		// ASSERT: 401 maps to unauthorized with the response code preserved.
+		$this->assertSame( VIP_Safe_Auth::STATUS_UNAUTHORIZED, $result['status'] );
+		$this->assertSame( 401, $result['code'] );
+	}
+
+	/**
+	 * Verifies that a 403 response from the source maps to unauthorized.
+	 */
+	public function test_test_authorization_returns_unauthorized_on_403(): void {
+		// ARRANGE: Stub a 403 HTTP response.
+		set_test_http_response( array( 'response' => array( 'code' => 403 ) ) );
+		$site_url    = 'https://example.com';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		// ACT: Probe the source.
+		$result = VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
+
+		// ASSERT: 403 maps to unauthorized with the response code preserved.
+		$this->assertSame( VIP_Safe_Auth::STATUS_UNAUTHORIZED, $result['status'] );
+		$this->assertSame( 403, $result['code'] );
+	}
+
+	/**
+	 * Verifies that a WP_Error from the HTTP transport maps to unreachable.
+	 */
+	public function test_test_authorization_returns_unreachable_on_wp_error(): void {
+		// ARRANGE: Stub the transport to return a WP_Error.
+		set_test_http_response( new \WP_Error( 'http_request_failed', 'Connection refused' ) );
+		$site_url    = 'https://example.com';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		// ACT: Probe the source.
+		$result = VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
+
+		// ASSERT: Network failures map to unreachable with the error message.
+		$this->assertSame( VIP_Safe_Auth::STATUS_UNREACHABLE, $result['status'] );
+		$this->assertSame( 'Connection refused', $result['message'] );
+	}
+
+	/**
+	 * Verifies that an unexpected response code (e.g. 500) maps to unreachable.
+	 */
+	public function test_test_authorization_returns_unreachable_on_unexpected_code(): void {
+		// ARRANGE: Stub a 500 HTTP response.
+		set_test_http_response( array( 'response' => array( 'code' => 500 ) ) );
+		$site_url    = 'https://example.com';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		// ACT: Probe the source.
+		$result = VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
+
+		// ASSERT: Codes other than 200/401/403 are surfaced as unreachable.
+		$this->assertSame( VIP_Safe_Auth::STATUS_UNREACHABLE, $result['status'] );
+		$this->assertSame( 500, $result['code'] );
+	}
+
+	/**
+	 * Verifies that the probe targets the wp/v2/posts edit-context endpoint
+	 * and forwards signed headers.
+	 */
+	public function test_test_authorization_targets_posts_edit_endpoint_with_auth_headers(): void {
+		// ARRANGE: Stub a successful response so the probe completes.
+		set_test_http_response( array( 'response' => array( 'code' => 200 ) ) );
+		$site_url    = 'https://example.com';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		// ACT: Probe and capture the URL/args sent to the HTTP transport.
+		VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
+
+		// ASSERT: URL points at the edit-context posts endpoint with signed headers.
+		$this->assertStringContainsString( '/wp-json/wp/v2/posts', $GLOBALS['_test_http_last_url'] );
+		$this->assertStringContainsString( 'context=edit', $GLOBALS['_test_http_last_url'] );
+		$this->assertStringContainsString( 'per_page=1', $GLOBALS['_test_http_last_url'] );
+		$this->assertArrayHasKey( 'X-Safe-Publish-Signature', $GLOBALS['_test_http_last_args']['headers'] );
+	}
 }

@@ -91,15 +91,37 @@ function untrailingslashit( string $path ): string {
 	return rtrim( $path, '/\\' );
 }
 
-/**
- * @psalm-suppress InvalidReturnStatement
- */
-function wp_remote_get( string $url, array $args = array() ): array {
-	return array();
+function wp_remote_get( string $url, array $args = array() ): array|WP_Error {
+	$GLOBALS['_test_http_last_url']  = $url;
+	$GLOBALS['_test_http_last_args'] = $args;
+
+	$response = $GLOBALS['_test_http_response'] ?? array( 'response' => array( 'code' => 200 ) );
+	return $response;
 }
 
-function wp_remote_retrieve_response_code( array $response ): int {
-	return 200;
+function wp_remote_retrieve_response_code( array|WP_Error $response ): int {
+	if ( $response instanceof WP_Error ) {
+		return 0;
+	}
+
+	return (int) ( $response['response']['code'] ?? 0 );
+}
+
+function set_test_http_response( array|WP_Error $response ): void {
+	$GLOBALS['_test_http_response'] = $response;
+}
+
+function reset_test_http_response(): void {
+	unset(
+		$GLOBALS['_test_http_response'],
+		$GLOBALS['_test_http_last_url'],
+		$GLOBALS['_test_http_last_args']
+	);
+}
+
+function add_query_arg( array $args, string $url ): string {
+	$separator = ( strpos( $url, '?' ) === false ) ? '?' : '&';
+	return $url . $separator . http_build_query( $args );
 }
 
 function esc_url_raw( string $url ): string {

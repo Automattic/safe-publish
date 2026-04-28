@@ -254,35 +254,63 @@ class External_Posts_API {
 	/**
 	 * Tests API connection.
 	 *
+	 * Delegates to the shared-secret probe so the result reflects whether the
+	 * source site actually grants edit context, not just whether a public
+	 * endpoint responds.
+	 *
 	 * @param string $site_url         Site URL to test.
 	 * @param array  $auth_credentials Authentication credentials.
-	 * @return array Test results.
+	 * @return array Test results with success, status, response_time, and message keys.
 	 */
 	public function test_connection(
 		string $site_url,
 		array $auth_credentials
 	): array {
-		$test_url = trailingslashit( $site_url ) . 'wp-json/wp/v2/posts?per_page=1&_fields=id';
-
 		$start_time = microtime( true );
-		$response   = $this->make_request( $test_url, $auth_credentials );
+		$probe      = VIP_Safe_Auth::test_authorization( $site_url, $auth_credentials );
 		$end_time   = microtime( true );
 
-		$results = array(
-			'success'       => false,
+		$status = $probe['status'] ?? VIP_Safe_Auth::STATUS_UNREACHABLE;
+
+		return array(
+			'success'       => VIP_Safe_Auth::STATUS_AUTHORIZED === $status,
+			'status'        => $status,
 			'response_time' => round( ( $end_time - $start_time ) * 1000, 2 ),
-			'message'       => '',
+			'message'       => self::describe_auth_status( $status ),
 		);
+	}
 
-
-		if ( is_wp_error( $response ) ) {
-			$results['message'] = $response->get_error_message();
-		} else {
-			$results['success'] = true;
-			$results['message'] = __( 'Connection successful.', 'safe-publish' );
+	/**
+	 * Returns a human-readable message for an auth probe status.
+	 *
+	 * @param string $status Probe status from VIP_Safe_Auth::test_authorization().
+	 * @return string Translated description for display.
+	 */
+	public static function describe_auth_status( string $status ): string {
+		switch ( $status ) {
+			case VIP_Safe_Auth::STATUS_AUTHORIZED:
+				return __(
+					'Source site accepts the shared secret and grants edit context.',
+					'safe-publish'
+				);
+			case VIP_Safe_Auth::STATUS_UNAUTHORIZED:
+				return __(
+					'Source site rejected the shared secret. Verify SAFE_PUBLISH_SHARED_SECRET matches on both sites in wp-config.php.',
+					'safe-publish'
+				);
+			case VIP_Safe_Auth::STATUS_UNREACHABLE:
+				return __(
+					'Source site could not be reached. Verify the URL and that the site is online.',
+					'safe-publish'
+				);
+			case VIP_Safe_Auth::STATUS_URL_UNSET:
+				return __(
+					'Source site URL is not configured.',
+					'safe-publish'
+				);
+			default:
+				return __( 'Unknown authentication status.', 'safe-publish' );
 		}
-
-		return $results;
 	}
 
 	/**

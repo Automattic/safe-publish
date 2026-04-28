@@ -25,6 +25,36 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class VIP_Safe_Auth {
 
 	/**
+	 * Probe status: source site accepted the credentials and granted edit
+	 * context.
+	 *
+	 * @var string
+	 */
+	const STATUS_AUTHORIZED = 'authorized';
+
+	/**
+	 * Probe status: source site rejected the credentials (HTTP 401/403).
+	 *
+	 * @var string
+	 */
+	const STATUS_UNAUTHORIZED = 'unauthorized';
+
+	/**
+	 * Probe status: source site could not be reached (network failure or
+	 * unexpected response code).
+	 *
+	 * @var string
+	 */
+	const STATUS_UNREACHABLE = 'unreachable';
+
+	/**
+	 * Probe status: source site URL is not configured.
+	 *
+	 * @var string
+	 */
+	const STATUS_URL_UNSET = 'url_unset';
+
+	/**
 	 * Gets authentication parameters for requests.
 	 *
 	 * @param string $site_url    Destination site URL.
@@ -81,26 +111,35 @@ final class VIP_Safe_Auth {
 	}
 
 	/**
-	 * Tests authorization against a site by making a lightweight request.
+	 * Probes the source site to verify the shared secret is accepted.
 	 *
-	 * Validates that the credentials work with the destination site.
+	 * Hits `wp/v2/posts?context=edit&per_page=1` and inspects the response
+	 * code. A 200 means the source accepts the HMAC signature and grants edit
+	 * context; 401/403 means the credentials are rejected; anything else is
+	 * treated as unreachable.
 	 *
-	 * @param string $site_url    Destination site URL.
+	 * @param string $site_url    Source site URL.
 	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
-	 * @return bool|WP_Error True if authorized, WP_Error with details if not.
+	 * @return array Probe result with a `status` key plus optional `code` and `message`.
 	 */
-	public static function test_authorization( $site_url, $auth_config = array() ): bool|WP_Error {
+	public static function test_authorization( $site_url, $auth_config = array() ): array {
 		if ( empty( $site_url ) ) {
-			return new WP_Error( 'invalid_url', __( 'Site URL is required for authorization testing', 'safe-publish' ) );
+			return array( 'status' => self::STATUS_URL_UNSET );
 		}
 
-		// First check if we have valid credentials format.
+		// Without a usable shared secret we cannot sign the request, so the
+		// source would reject it as unauthorized.
 		if ( ! self::is_authorized( $site_url, $auth_config ) ) {
-			return new WP_Error( 'invalid_credentials', __( 'Invalid or missing authentication credentials', 'safe-publish' ) );
+			return array( 'status' => self::STATUS_UNAUTHORIZED );
 		}
 
-		// Make a lightweight test request to verify credentials work.
-		$test_url    = trailingslashit( $site_url ) . 'wp-json/wp/v2/';
+		$test_url    = add_query_arg(
+			array(
+				'context'  => 'edit',
+				'per_page' => 1,
+			),
+			trailingslashit( $site_url ) . 'wp-json/wp/v2/posts'
+		);
 		$auth_params = self::get_auth_params( $test_url, $auth_config, 'GET' );
 
 		$request_args = array(
@@ -109,59 +148,47 @@ final class VIP_Safe_Auth {
 			'user-agent'  => 'Safe-Publish-Auth-Test/1.0',
 		);
 
-		// Add authentication headers if available.
 		if ( ! empty( $auth_params['headers'] ) ) {
 			$request_args['headers'] = $auth_params['headers'];
 		}
 
-		// Add query parameters for authentication if needed.
 		if ( ! empty( $auth_params['query_args'] ) ) {
 			$test_url = add_query_arg( $auth_params['query_args'], $test_url );
 		}
 
-		// Use VIP-optimized function when available, fallback to core function.
 		if ( function_exists( 'vip_safe_wp_remote_get' ) ) {
 			$response = vip_safe_wp_remote_get( $test_url, '', 3, 5, 20, $request_args );
 		} else {
-			// On non-VIP environments, use standard wp_remote_get.
 			// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.wp_remote_get_wp_remote_get -- Fallback for non-VIP environments
 			$response = wp_remote_get( $test_url, $request_args );
 		}
 
 		if ( is_wp_error( $response ) ) {
-			return new WP_Error( 'request_failed', __( 'Authorization test request failed: ', 'safe-publish' ) . $response->get_error_message() );
-		}
-
-		$response_code = wp_remote_retrieve_response_code( $response );
-
-		// Check for authentication-related errors.
-		if ( in_array( $response_code, array( 401, 403 ), true ) ) {
-			$response_body = wp_remote_retrieve_body( $response );
-			return new WP_Error(
-				'auth_failed',
-				sprintf(
-					/* translators: 1: HTTP response code, 2: response body message */
-					__( 'Authentication failed with HTTP %1$d: %2$s', 'safe-publish' ),
-					$response_code,
-					$response_body
-				)
+			return array(
+				'status'  => self::STATUS_UNREACHABLE,
+				'message' => $response->get_error_message(),
 			);
 		}
 
-		// If we get a successful response (200) or even a 404 (endpoint exists but not found),
-		// it means authentication passed.
-		if ( in_array( $response_code, array( 200, 404 ), true ) ) {
-			return true;
+		$code = (int) wp_remote_retrieve_response_code( $response );
+
+		if ( 200 === $code ) {
+			return array(
+				'status' => self::STATUS_AUTHORIZED,
+				'code'   => $code,
+			);
 		}
 
-		// Other error codes might indicate server issues rather than auth issues.
-		return new WP_Error(
-			'unexpected_response',
-			sprintf(
-				/* translators: %d: HTTP response code */
-				__( 'Unexpected response code: %d', 'safe-publish' ),
-				$response_code
-			)
+		if ( 401 === $code || 403 === $code ) {
+			return array(
+				'status' => self::STATUS_UNAUTHORIZED,
+				'code'   => $code,
+			);
+		}
+
+		return array(
+			'status' => self::STATUS_UNREACHABLE,
+			'code'   => $code,
 		);
 	}
 
