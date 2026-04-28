@@ -19,9 +19,6 @@
     <!-- Boot the plugin in "bidirectional" sync mode (export and import active simultaneously). -->
     <env name="WP_TEST_SYNC_MODE" value="bidirectional" />
 
-    <!-- Point wp-phpunit to our test config file -->
-    <env name="WP_PHPUNIT__TESTS_CONFIG" value="tests/wp-tests-config.php" />
-
     <!-- Point to wp-phpunit installation in vendor -->
     <env name="WP_PHPUNIT__DIR" value="vendor/wp-phpunit/wp-phpunit" />
 

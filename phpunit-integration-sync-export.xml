@@ -19,9 +19,6 @@
     <!-- Boot the plugin in "export" sync mode. -->
     <env name="WP_TEST_SYNC_MODE" value="export" />
 
-    <!-- Point wp-phpunit to our test config file -->
-    <env name="WP_PHPUNIT__TESTS_CONFIG" value="tests/wp-tests-config.php" />
-
     <!-- Point to wp-phpunit installation in vendor -->
     <env name="WP_PHPUNIT__DIR" value="vendor/wp-phpunit/wp-phpunit" />
 
