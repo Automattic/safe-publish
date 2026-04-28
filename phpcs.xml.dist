@@ -139,4 +139,16 @@
 		<exclude-pattern>tests/unit/test-utils.php</exclude-pattern>
 	</rule>
 
+	<!-- The integration test bootstrap creates the test DB before WordPress
+		 boots, so $wpdb is not yet available; mysqli is the only option. -->
+	<rule ref="WordPress.DB.RestrictedClasses.mysql__mysqli">
+		<exclude-pattern>tests/**/bootstrap.php</exclude-pattern>
+	</rule>
+
+	<!-- The integration test bootstrap runs in CLI before WordPress loads,
+		 so esc_html() and friends aren't available; echo is the only option. -->
+	<rule ref="WordPress.Security.EscapeOutput.OutputNotEscaped">
+		<exclude-pattern>tests/**/bootstrap.php</exclude-pattern>
+	</rule>
+
 </ruleset>
