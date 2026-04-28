@@ -20,16 +20,38 @@ if ( ! $_tests_dir ) {
 	$_tests_dir = rtrim( sys_get_temp_dir(), '/\\' ) . '/wordpress-tests-lib';
 }
 
-// Force the wp-phpunit bootstrap to load our config file (tests/wp-tests-config.php)
-// rather than a bundled wp-tests-config.php that may ship alongside $_tests_dir
-// inside wp-env containers. Without this, the bundled config's $table_prefix = 'wp_'
-// against the source site's DB causes wp-phpunit's install step to drop the source
-// site's tables every test run, resetting the source site. See wp-phpunit's
-// includes/bootstrap.php, which honors this constant before falling back to the
-// sibling wp-tests-config.php.
+// Pin wp-phpunit to our config. Otherwise it falls back to a sibling
+// wp-tests-config.php (e.g. the one wp-env mounts into its containers)
+// and drops the source site's tables during install.
 if ( ! defined( 'WP_TESTS_CONFIG_FILE_PATH' ) ) {
 	define( 'WP_TESTS_CONFIG_FILE_PATH', realpath( __DIR__ . '/../wp-tests-config.php' ) );
 }
+
+// Create the integration tests database if it doesn't exist.
+$_db_host = (string) getenv( 'WP_DB_HOST' );
+$_db_user = (string) getenv( 'WP_DB_USER' );
+$_db_pass = (string) getenv( 'WP_DB_PASSWORD' );
+$_db_name = (string) getenv( 'WP_DB_NAME' );
+
+if ( ! preg_match( '/^[A-Za-z0-9_]+$/', $_db_name ) ) {
+	echo "Invalid WP_DB_NAME: '{$_db_name}'." . PHP_EOL;
+	exit( 1 );
+}
+
+$_mysqli = new mysqli( $_db_host, $_db_user, $_db_pass );
+if ( $_mysqli->connect_errno ) {
+	echo "Cannot connect to {$_db_host}: {$_mysqli->connect_error}" . PHP_EOL;
+	exit( 1 );
+}
+
+if ( ! $_mysqli->query( "CREATE DATABASE IF NOT EXISTS `{$_db_name}`" ) ) {
+	echo "Failed to create DB `{$_db_name}`: {$_mysqli->error}" . PHP_EOL;
+	$_mysqli->close();
+	exit( 1 );
+}
+
+$_mysqli->close();
+unset( $_db_host, $_db_user, $_db_pass, $_db_name, $_mysqli );
 
 // Forward custom PHPUnit Polyfills configuration to PHPUnit bootstrap file.
 $_phpunit_polyfills_path = getenv( 'WP_TESTS_PHPUNIT_POLYFILLS_PATH' );
@@ -38,7 +60,7 @@ if ( false !== $_phpunit_polyfills_path ) {
 }
 
 if ( ! file_exists( "{$_tests_dir}/includes/functions.php" ) ) {
-	echo "Could not find {$_tests_dir}/includes/functions.php, have you run bin/install-wp-tests.sh ?" . PHP_EOL; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	echo "Could not find {$_tests_dir}/includes/functions.php, have you run bin/install-wp-tests.sh ?" . PHP_EOL;
 	exit( 1 );
 }
 
@@ -100,7 +122,7 @@ tests_add_filter(
 	3
 );
 
-// Suppress WordPress core update checks. On a fresh wptests_-prefixed DB
+// Suppress WordPress core update checks. On a freshly-installed test DB
 // the update_core/update_plugins/update_themes transients are empty, so
 // _maybe_update_core() (and siblings) fire wp_version_check() on admin_init.
 // That hits the outbound HTTP block above and surfaces as a test error.
