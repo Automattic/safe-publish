@@ -133,17 +133,16 @@ class VIPSafeAuthTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that Basic Auth credentials alone (no shared secret) fail
-	 * authorization.
+	 * Verifies that Basic Auth credentials alone (no shared secret) fail the
+	 * credential format check.
 	 */
-	public function test_is_authorized_with_basic_auth_only_fails(): void {
-		$site_url    = 'https://example.com';
+	public function test_has_valid_credential_format_with_basic_auth_only_fails(): void {
 		$auth_config = array(
 			'username' => 'admin',
 			'password' => 'hunter2',
 		);
 
-		$result = VIP_Safe_Auth::is_authorized( $site_url, $auth_config );
+		$result = VIP_Safe_Auth::has_valid_credential_format( $auth_config );
 
 		$this->assertFalse( $result );
 	}
@@ -152,12 +151,12 @@ class VIPSafeAuthTest extends TestCase {
 	 * Verifies that exactly 16-character shared secret passes the minimum
 	 * length check.
 	 */
-	public function test_is_authorized_with_exactly_16_char_secret_passes(): void {
+	public function test_has_valid_credential_format_with_exactly_16_char_secret_passes(): void {
 		$auth_config = array(
 			'shared_secret' => '1234567890abcdef', // Exactly 16 chars.
 		);
 
-		$result = VIP_Safe_Auth::is_authorized( '', $auth_config );
+		$result = VIP_Safe_Auth::has_valid_credential_format( $auth_config );
 
 		$this->assertTrue( $result );
 	}
@@ -166,12 +165,12 @@ class VIPSafeAuthTest extends TestCase {
 	 * Verifies that a 15-character shared secret fails the minimum length
 	 * check.
 	 */
-	public function test_is_authorized_with_15_char_secret_fails(): void {
+	public function test_has_valid_credential_format_with_15_char_secret_fails(): void {
 		$auth_config = array(
 			'shared_secret' => '1234567890abcde', // Exactly 15 chars.
 		);
 
-		$result = VIP_Safe_Auth::is_authorized( '', $auth_config );
+		$result = VIP_Safe_Auth::has_valid_credential_format( $auth_config );
 
 		$this->assertFalse( $result );
 	}
@@ -192,32 +191,6 @@ class VIPSafeAuthTest extends TestCase {
 
 		$this->assertArrayHasKey( 'X-Safe-Publish-Signature', $params['headers'] );
 		$this->assertArrayNotHasKey( 'Authorization', $params['headers'] );
-	}
-
-	/**
-	 * Verifies that valid shared secrets pass authorization.
-	 */
-	public function test_is_authorized_with_valid_shared_secret(): void {
-		$site_url    = 'https://example.com';
-		$auth_config = array(
-			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
-		);
-
-		$result = VIP_Safe_Auth::is_authorized( $site_url, $auth_config );
-
-		$this->assertTrue( $result );
-	}
-
-	/**
-	 * Verifies that authorization fails without credentials.
-	 */
-	public function test_is_authorized_with_no_credentials_fails(): void {
-		$site_url    = 'https://example.com';
-		$auth_config = array();
-
-		$result = VIP_Safe_Auth::is_authorized( $site_url, $auth_config );
-
-		$this->assertFalse( $result );
 	}
 
 	/**
@@ -290,29 +263,18 @@ class VIPSafeAuthTest extends TestCase {
 		// ACT: Probe with an empty URL.
 		$result = VIP_Safe_Auth::test_authorization( '', $auth_config );
 
-		// ASSERT: Probe short-circuits to url_unset before any HTTP call.
-		$this->assertSame( VIP_Safe_Auth::STATUS_URL_UNSET, $result['status'] );
+		// ASSERT: Probe short-circuits with status only, before any HTTP call.
+		$this->assertSame(
+			array( 'status' => VIP_Safe_Auth::STATUS_URL_UNSET ),
+			$result
+		);
 	}
 
 	/**
-	 * Verifies that a missing shared secret yields the unauthorized status
-	 * without issuing a network request.
+	 * Verifies that an invalid credential format short-circuits the probe to
+	 * unauthorized before issuing any HTTP request.
 	 */
-	public function test_test_authorization_returns_unauthorized_without_shared_secret(): void {
-		// ARRANGE: Configure URL but no shared secret.
-		$site_url = 'https://example.com';
-
-		// ACT: Probe without credentials.
-		$result = VIP_Safe_Auth::test_authorization( $site_url, array() );
-
-		// ASSERT: Probe short-circuits to unauthorized before any HTTP call.
-		$this->assertSame( VIP_Safe_Auth::STATUS_UNAUTHORIZED, $result['status'] );
-	}
-
-	/**
-	 * Verifies that a short shared secret yields the unauthorized status.
-	 */
-	public function test_test_authorization_returns_unauthorized_for_short_secret(): void {
+	public function test_test_authorization_returns_unauthorized_for_invalid_credentials(): void {
 		// ARRANGE: Shared secret is below the 16-char minimum.
 		$site_url    = 'https://example.com';
 		$auth_config = array( 'shared_secret' => 'too-short' );
@@ -320,8 +282,11 @@ class VIPSafeAuthTest extends TestCase {
 		// ACT: Probe with a short secret.
 		$result = VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
 
-		// ASSERT: is_authorized() rejects the secret, probe returns unauthorized.
-		$this->assertSame( VIP_Safe_Auth::STATUS_UNAUTHORIZED, $result['status'] );
+		// ASSERT: Probe short-circuits with status only, before any HTTP call.
+		$this->assertSame(
+			array( 'status' => VIP_Safe_Auth::STATUS_UNAUTHORIZED ),
+			$result
+		);
 	}
 
 	/**

@@ -83,7 +83,7 @@ class ExternalPostsAPITest extends TestCase {
 	 * unauthorized and exposes the unauthorized status.
 	 */
 	public function test_test_connection_reports_unauthorized_when_no_credentials(): void {
-		// ARRANGE: No credentials means is_authorized() rejects the probe.
+		// ARRANGE: No credentials, so the format check rejects the probe.
 		// ACT: Run the connection test against a configured URL.
 		$result = $this->api->test_connection( 'https://example.com', array() );
 
