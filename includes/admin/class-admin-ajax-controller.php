@@ -10,6 +10,7 @@ namespace Safe_Publish\Admin;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Post_Type_Fetcher;
+use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Logger;
@@ -33,6 +34,20 @@ final class Admin_Ajax_Controller {
 
 	use Sanitizes_Content;
 	use Verifies_Ajax_Request;
+
+	/**
+	 * Site transient key for the cached auth probe result.
+	 *
+	 * @var string
+	 */
+	const AUTH_STATUS_TRANSIENT = 'safe_publish_auth_status';
+
+	/**
+	 * TTL for the auth-status site transient.
+	 *
+	 * @var int
+	 */
+	const AUTH_STATUS_TTL = 5 * MINUTE_IN_SECONDS;
 
 	/**
 	 * External Posts API instance.
@@ -117,10 +132,38 @@ final class Admin_Ajax_Controller {
 		add_action( 'wp_ajax_safe_publish_fetch_posts', array( $this, 'ajax_fetch_posts' ) );
 		add_action( 'wp_ajax_safe_publish_fetch_post_types', array( $this, 'ajax_fetch_post_types' ) );
 		add_action( 'wp_ajax_safe_publish_test_connection', array( $this, 'ajax_test_connection' ) );
+		add_action( 'wp_ajax_safe_publish_auth_status', array( $this, 'ajax_auth_status' ) );
 		add_action( 'wp_ajax_safe_publish_create_draft', array( $this, 'ajax_create_draft' ) );
 		add_action( 'wp_ajax_safe_publish_bulk_import', array( $this, 'ajax_bulk_import' ) );
 		add_action( 'wp_ajax_safe_publish_delete_post', array( $this, 'ajax_delete_post' ) );
 		add_action( 'wp_ajax_safe_publish_debug_auth', array( $this, 'ajax_debug_auth' ) );
+
+		$this->register_auth_status_invalidation();
+	}
+
+	/**
+	 * Registers option-update hooks that bust the auth-status transient when
+	 * any authentication-related setting changes.
+	 */
+	private function register_auth_status_invalidation(): void {
+		$options  = array(
+			Options::OPTION_CONNECTED_SITE_URL,
+			Options::OPTION_USERNAME,
+			Options::OPTION_PASSWORD,
+		);
+		$callback = array( __CLASS__, 'bust_auth_status_cache' );
+
+		foreach ( $options as $option ) {
+			add_action( 'add_option_' . $option, $callback );
+			add_action( 'update_option_' . $option, $callback );
+		}
+	}
+
+	/**
+	 * Deletes the cached auth-status site transient.
+	 */
+	public static function bust_auth_status_cache(): void {
+		delete_site_transient( self::AUTH_STATUS_TRANSIENT );
 	}
 
 	/**
@@ -217,6 +260,45 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
+	 * Handles AJAX request for the cached auth-status probe.
+	 *
+	 * Returns the cached probe result so the import and settings UIs can
+	 * surface live auth state on page load without each one issuing its own
+	 * network request.
+	 */
+	public function ajax_auth_status(): void {
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		$this->verify_ajax_capability();
+
+		wp_send_json_success( $this->get_cached_auth_status() );
+	}
+
+	/**
+	 * Returns the cached auth-status probe result, refreshing it if absent.
+	 *
+	 * @return array Probe result from VIP_Safe_Auth::test_authorization().
+	 */
+	private function get_cached_auth_status(): array {
+		$cached = get_site_transient( self::AUTH_STATUS_TRANSIENT );
+		if ( is_array( $cached ) && isset( $cached['status'] ) ) {
+			return $cached;
+		}
+
+		$result = VIP_Safe_Auth::test_authorization(
+			get_option( Options::OPTION_CONNECTED_SITE_URL, '' ),
+			Auth_Credential_Provider::get_credentials()
+		);
+
+		set_site_transient(
+			self::AUTH_STATUS_TRANSIENT,
+			$result,
+			self::AUTH_STATUS_TTL
+		);
+
+		return $result;
+	}
+
+	/**
 	 * Handles AJAX request for creating a draft post.
 	 *
 	 * Validates input, checks for an existing post with the same external ID,
@@ -241,6 +323,8 @@ final class Admin_Ajax_Controller {
 				)
 			);
 		}
+
+		$this->validate_auth_or_fail();
 
 		$external_post_id = absint( $_POST['external_post_id'] ?? 0 );
 		$title            = sanitize_text_field( wp_unslash( $_POST['title'] ?? '' ) );
@@ -444,6 +528,8 @@ final class Admin_Ajax_Controller {
 	public function ajax_bulk_import(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability( 'edit_posts' );
+
+		$this->validate_auth_or_fail();
 
 		// JSON string not sanitized to preserve structure; validated after decode.
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
@@ -874,15 +960,29 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Sends a JSON error response when the Shared Secret is not configured.
+	 * Sends a JSON error response when the Shared Secret does not satisfy
+	 * VIP_Safe_Auth::has_valid_credential_format(). Splits the failure into
+	 * "missing" and "too short" so the operator gets an actionable message.
 	 */
 	private function validate_auth_or_fail(): void {
 		$credentials = Auth_Credential_Provider::get_credentials();
 
-		if ( empty( $credentials['shared_secret'] ) ) {
+		if ( VIP_Safe_Auth::has_valid_credential_format( $credentials ) ) {
+			return;
+		}
+
+		if ( '' === ( $credentials['shared_secret'] ?? '' ) ) {
 			wp_send_json_error(
 				__(
 					'Shared Secret is not configured. Add SAFE_PUBLISH_SHARED_SECRET to wp-config.php on both sites.',
+					'safe-publish'
+				),
+				401
+			);
+		} else {
+			wp_send_json_error(
+				__(
+					'Shared Secret is too short. SAFE_PUBLISH_SHARED_SECRET must be at least 16 characters.',
 					'safe-publish'
 				),
 				401

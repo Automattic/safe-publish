@@ -16,6 +16,12 @@ The shared secret authentication flow:
 4. If valid, the request is authenticated and granted access to the REST API
 5. No user credentials are transmitted
 
+### Rotating the Secret
+
+When you rotate `SAFE_PUBLISH_SHARED_SECRET` on either site, the authentication status indicator in the admin UI may continue to show the previous state for up to 5 minutes. The indicator reads from a short-lived cache that is refreshed on its next probe, so no action is required — it will catch up on its own.
+
+To verify a rotation immediately, use the **Test Connection** button on the settings screen.
+
 ## Basic Authentication (Optional)
 
 Optionally, it's possible to use [VIP Basic Authentication](https://docs.wpvip.com/security-controls/basic-authentication/) if the source site needs it.

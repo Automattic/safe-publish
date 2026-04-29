@@ -10,6 +10,7 @@ import { update } from '@wordpress/icons';
 import { createRoot } from 'react-dom/client';
 
 import { createActions } from './actions';
+import AuthStatusNotice from './components/AuthStatusNotice';
 import {
 	DEFAULT_POSTS_PER_PAGE,
 	LAYOUT_GRID,
@@ -43,6 +44,8 @@ import { __, sprintf } from '@wordpress/i18n';
 
 import type {
 	ApiResponse,
+	AuthStatus,
+	AuthStatusData,
 	DataViewsField,
 	ExternalPostsDataViewProps,
 	PaginationInfo,
@@ -91,6 +94,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 	const [ selectedPostType, setSelectedPostType ] = useState( 'posts' );
 	const [ isLoadingPosts, setIsLoadingPosts ] = useState( false );
 	const [ postTypeError, setPostTypeError ] = useState< string | null >( null );
+	const [ authStatus, setAuthStatus ] = useState< AuthStatus | null >( null );
 	const [ numberPostsState, setNumberPostsState ] = useState( numberPosts );
 	const [ numberPostsInput, setNumberPostsInput ] = useState( String( numberPosts ) );
 	const numberPostsTimerRef = useRef< ReturnType< typeof setTimeout > | null >( null );
@@ -99,6 +103,8 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 		totalItems: initialPosts.length,
 		totalPages: Math.ceil( initialPosts.length / DEFAULT_POSTS_PER_PAGE ),
 	} );
+
+	const isAuthorized = 'authorized' === authStatus;
 
 	// Fields configuration for DataViews.
 	const fields: DataViewsField<Post>[] = [
@@ -261,6 +267,33 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [] ); // Only run on mount.
 
+	// Probe live auth state so the banner and import buttons reflect whether
+	// the source site will accept signed requests before any user action.
+	useEffect( () => {
+		const formData = new FormData();
+		formData.append( 'action', 'safe_publish_auth_status' );
+		formData.append( 'nonce', window.safePublishAdminData.nonce );
+
+		fetch( window.safePublishAdminData.ajaxurl, {
+			method: 'POST',
+			body: formData,
+		} )
+			.then(
+				( response ) =>
+					response.json() as Promise< ApiResponse< AuthStatusData > >
+			)
+			.then( ( result ) => {
+				if ( result.success ) {
+					setAuthStatus( result.data.status );
+				} else {
+					setAuthStatus( 'unreachable' );
+				}
+			} )
+			.catch( () => {
+				setAuthStatus( 'unreachable' );
+			} );
+	}, [] );
+
 	/**
 	 * Fetches posts for the given post type and updates the DataViews.
 	 *
@@ -369,6 +402,10 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 
 	return (
 		<div className="safe-publish-dataviews-wrapper">
+			<AuthStatusNotice
+				status={ authStatus }
+				settingsUrl={ window.safePublishAdminData?.settingsUrl }
+			/>
 			<div className="safe-publish-controls-row">
 				<PostTypeSelector
 					siteUrl={ siteUrl }
@@ -410,7 +447,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 				<Button
 					variant="tertiary"
 					isBusy={ isLoadingPosts }
-					disabled={ isLoadingPosts }
+					disabled={ isLoadingPosts || ! isAuthorized }
 					icon={ update }
 					label={ __( 'Refresh', 'safe-publish' ) }
 					style={ { height: '32px', width: '32px', minWidth: 0 } }
@@ -449,7 +486,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 					defaultLayouts={ defaultLayouts }
 					actions={ createActions( () => {
 						fetchPostsByType( selectedPostType, numberPostsState ).catch( () => {} );
-					} ) }
+					}, isAuthorized ) }
 				/>
 			) }
 		</div>

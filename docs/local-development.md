@@ -133,7 +133,7 @@ Access the MySQL database:
 npm run wp-cli post list --post_type=sp_import_session
 
 # View export events
-npm run wp-cli db query "SELECT * FROM wp_safe_publish_events LIMIT 10"
+npm run wp-cli db query "SELECT * FROM wp_safe_publish_audit_log LIMIT 10"
 
 # Or connect directly
 docker exec -it <container-id> mysql -u root -ppassword wordpress
