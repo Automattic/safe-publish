@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Handles content transformation, media import, oEmbed processing, and URL replacement.
+ * Handles content transformation, media import, and URL replacement.
  */
 class Content_Processor {
 
@@ -72,7 +72,7 @@ class Content_Processor {
 	}
 
 	/**
-	 * Processes post content by importing media, handling oEmbeds, and replacing URLs.
+	 * Processes post content by importing media and replacing URLs.
 	 *
 	 * Detects whether content uses Gutenberg blocks and applies the appropriate
 	 * processing strategy. Replaces external URLs in the content after processing.
@@ -92,9 +92,8 @@ class Content_Processor {
 			$processed_content = $this->content_media_processor->process_content( $content, $site_url );
 		}
 
-		// Merge failures from content_media_processor (used by html, text,
-		// embed, and default blocks in the Gutenberg path, and directly in the
-		// non-Gutenberg path).
+		// Merge failures from content_media_processor (used in both the
+		// Gutenberg and non-Gutenberg paths).
 		$this->failed_media = array_unique(
 			array_merge(
 				$this->failed_media,
