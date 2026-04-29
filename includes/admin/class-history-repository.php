@@ -7,7 +7,6 @@
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\Utils\Options;
 use WP_Error;
 
 // Prevent direct access.
@@ -170,27 +169,6 @@ final class History_Repository {
 	public function complete_session( int $session_id ): void {
 		update_post_meta( $session_id, 'status', 'completed' );
 		update_post_meta( $session_id, 'end_time', current_time( 'mysql' ) );
-	}
-
-	/**
-	 * Stores content diff for rollback purposes.
-	 *
-	 * @param int    $post_id     WordPress post ID.
-	 * @param string $old_content Previous content.
-	 * @param string $new_content New content.
-	 */
-	public function store_content_diff(
-		int $post_id,
-		string $old_content,
-		string $new_content
-	): void {
-		$diff_data = array(
-			'old_content' => $old_content,
-			'new_content' => $new_content,
-			'diff_date'   => current_time( 'mysql' ),
-		);
-
-		update_post_meta( $post_id, Options::META_CONTENT_HISTORY, $diff_data );
 	}
 
 	/**
