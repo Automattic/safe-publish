@@ -26,8 +26,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Uses WordPress' HTML API (WP_HTML_Tag_Processor) to locate and modify
  * media element attributes. The HTML API conforms to the HTML5 spec, natively
- * handles comments, script/style content, and malformed attributes, and
- * preserves all unmodified markup byte-for-byte.
+ * handles comments, script/style/textarea content, and malformed attributes,
+ * and preserves all unmodified markup byte-for-byte.
  */
 class Content_Media_Processor {
 
