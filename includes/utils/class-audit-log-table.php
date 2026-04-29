@@ -1,6 +1,6 @@
 <?php
 /**
- * Event Table class.
+ * Audit Log Table class.
  *
  * @package Safe_Publish
  */
@@ -8,11 +8,11 @@
 namespace Safe_Publish\Utils;
 
 /**
- * Manages the custom events table for Safe Publish.
+ * Manages the custom audit log table for Safe Publish.
  *
  * Handles table creation, row insertion, querying, and deletion.
  */
-class Event_Table {
+class Audit_Log_Table {
 
 	/**
 	 * Table schema version.
@@ -22,7 +22,7 @@ class Event_Table {
 	/**
 	 * Option key used to track the installed table schema version.
 	 */
-	private const VERSION_OPTION = 'safe_publish_event_table_version';
+	private const VERSION_OPTION = 'safe_publish_audit_log_version';
 
 	/**
 	 * Returns the full table name including the WordPress table prefix.
@@ -31,11 +31,11 @@ class Event_Table {
 	 */
 	public static function table_name(): string {
 		global $wpdb;
-		return $wpdb->prefix . 'safe_publish_events';
+		return $wpdb->prefix . 'safe_publish_audit_log';
 	}
 
 	/**
-	 * Creates the log table if it does not exist or is out of date.
+	 * Creates the audit log table if it does not exist or is out of date.
 	 */
 	public static function maybe_create_table(): void {
 		global $wpdb;
@@ -52,7 +52,7 @@ class Event_Table {
 	}
 
 	/**
-	 * Creates or upgrades the log table using dbDelta.
+	 * Creates or upgrades the audit log table using dbDelta.
 	 *
 	 * @psalm-suppress MissingFile
 	 */

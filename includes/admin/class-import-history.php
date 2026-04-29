@@ -7,7 +7,7 @@
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\Utils\Event_Table;
+use Safe_Publish\Utils\Audit_Log_Table;
 use WP_Error;
 use WP_Query;
 
@@ -253,21 +253,6 @@ final class Import_History {
 	}
 
 	/**
-	 * Stores content diff for rollback purposes.
-	 *
-	 * @param int    $post_id     WordPress post ID.
-	 * @param string $old_content Previous content.
-	 * @param string $new_content New content.
-	 */
-	public function store_content_diff(
-		int $post_id,
-		string $old_content,
-		string $new_content
-	): void {
-		$this->repository->store_content_diff( $post_id, $old_content, $new_content );
-	}
-
-	/**
 	 * Handles AJAX request for getting import sessions.
 	 */
 	public function ajax_get_import_sessions(): void {
@@ -491,7 +476,7 @@ final class Import_History {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability();
 
-		$rows = Event_Table::get_events(
+		$rows = Audit_Log_Table::get_events(
 			array(
 				'channel' => 'export',
 				'limit'   => 100,

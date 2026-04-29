@@ -12,7 +12,7 @@ namespace Safe_Publish\Tests\Integration\Auth;
 use Safe_Publish\Auth\Auth_Logger;
 use Safe_Publish\Auth\Permission_Manager;
 use Safe_Publish\API\Export_Logger;
-use Safe_Publish\Utils\Event_Table;
+use Safe_Publish\Utils\Audit_Log_Table;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -45,8 +45,8 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 		);
 
 		// Clear any stored export events before each test.
-		Event_Table::create_table();
-		Event_Table::clear( 'export' );
+		Audit_Log_Table::create_table();
+		Audit_Log_Table::clear( 'export' );
 	}
 
 	/**
@@ -116,7 +116,7 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 
 		// ASSERT: One CONTENT_EXPORTED event is stored with the correct rest_base,
 		// destination URL, post IDs, and count.
-		$events = Event_Table::get_events(
+		$events = Audit_Log_Table::get_events(
 			array(
 				'channel'    => 'export',
 				'event_type' => 'CONTENT_EXPORTED',
@@ -156,7 +156,7 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 
 		// ASSERT: One CONTENT_EXPORTED event is stored with the correct rest_base,
 		// post ID, and count.
-		$events = Event_Table::get_events(
+		$events = Audit_Log_Table::get_events(
 			array(
 				'channel'    => 'export',
 				'event_type' => 'CONTENT_EXPORTED',
@@ -182,7 +182,7 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 		$this->permission_manager->log_export_event( $response, rest_get_server(), $request );
 
 		// ASSERT: No export events are stored.
-		$events = Event_Table::get_events( array( 'channel' => 'export' ) );
+		$events = Audit_Log_Table::get_events( array( 'channel' => 'export' ) );
 		$this->assertCount( 0, $events );
 	}
 
@@ -201,7 +201,7 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 		$this->permission_manager->log_export_event( $response, rest_get_server(), $request );
 
 		// ASSERT: One EXPORT_FAILED error event is stored with the HTTP status and route.
-		$events = Event_Table::get_events(
+		$events = Audit_Log_Table::get_events(
 			array(
 				'channel'    => 'export',
 				'event_type' => 'EXPORT_FAILED',
@@ -228,7 +228,7 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 		$this->permission_manager->log_export_event( $error, rest_get_server(), $request );
 
 		// ASSERT: One EXPORT_FAILED error event is stored with the error code and message.
-		$events = Event_Table::get_events(
+		$events = Audit_Log_Table::get_events(
 			array(
 				'channel'    => 'export',
 				'event_type' => 'EXPORT_FAILED',

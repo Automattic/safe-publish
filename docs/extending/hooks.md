@@ -12,7 +12,7 @@ Safe Publish provides WordPress actions and filters at key extension points.
 
 ### `safe_publish_event_logged`
 
-Fires after any event is recorded to the events log (e.g. import, export, auth, or content channels).
+Fires after any event is recorded to the audit log (e.g. import, export, auth, or content channels).
 
 **Parameters:**
 

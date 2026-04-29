@@ -7,7 +7,7 @@
 
 namespace Safe_Publish\Auth;
 
-use Safe_Publish\Utils\Event_Table;
+use Safe_Publish\Utils\Audit_Log_Table;
 
 /**
  * Manages the Safe Publish admin dashboard widget and related admin UI.
@@ -57,7 +57,7 @@ class Dashboard_Widget {
 	 */
 	public function render(): void {
 		$secret_length = strlen( $this->shared_secret );
-		$recent_events = Event_Table::get_events(
+		$recent_events = Audit_Log_Table::get_events(
 			array(
 				'channel' => 'auth',
 				'limit'   => 10,
@@ -371,7 +371,7 @@ class Dashboard_Widget {
 		echo '<ul style="margin-left: 20px; font-size: 11px;">';
 		echo '<li>' . esc_html__( 'VIP Error Log:', 'safe-publish' ) . ' <code>/tmp/error_log</code></li>';
 		echo '<li>' . esc_html__( 'WordPress Debug Log:', 'safe-publish' ) . ' <code>/wp-content/debug.log</code></li>';
-		echo '<li>' . esc_html__( 'Database Events:', 'safe-publish' ) . ' <code>' . esc_html( Event_Table::table_name() ) . '</code></li>';
+		echo '<li>' . esc_html__( 'Database Audit Log:', 'safe-publish' ) . ' <code>' . esc_html( Audit_Log_Table::table_name() ) . '</code></li>';
 		echo '<li>' . esc_html__( 'New Relic:', 'safe-publish' ) . ' Custom Events → Safe_Publish_Auth_Event</li>';
 		echo '</ul>';
 	}
