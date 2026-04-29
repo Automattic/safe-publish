@@ -881,6 +881,311 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that the new featured-image attachment is deleted when the bulk
+	 * update path rolls back due to a custom meta failure, while the original
+	 * thumbnail is preserved.
+	 *
+	 * On re-import, the source returns a different featured_media id whose
+	 * source_url is distinct from the previously imported one, so a brand-new
+	 * attachment is sideloaded rather than the existing one being reused.
+	 */
+	public function test_bulk_update_cleans_up_new_featured_image_on_meta_failure(): void {
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ARRANGE: Initial import with featured_media => 100.
+		$post_data = array(
+			'id'             => 9170,
+			'title'          => 'Post For Featured Image Cleanup Test',
+			'content'        => '<p>Original content.</p>',
+			'link'           => 'https://source.example.com/featured-image-cleanup-test',
+			'post_type'      => 'posts',
+			'featured_media' => 100,
+			'meta'           => array( 'custom_field' => 'original_value' ),
+		);
+
+		$this->mock_post_overrides = array(
+			'featured_media' => 100,
+			'meta'           => array( 'custom_field' => 'original_value' ),
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
+		$post_id               = $first['post_id'];
+		$original_thumbnail_id = (int) get_post_thumbnail_id( $post_id );
+
+		$this->assertGreaterThan(
+			0,
+			$original_thumbnail_id,
+			'Initial import should set a featured image.'
+		);
+
+		$attachments_before_update = $this->get_attachment_count();
+
+		// ARRANGE: Re-import with a different featured_media id and a distinct
+		// source URL so a new attachment is sideloaded rather than the existing
+		// one being reused via get_attachment_by_url(). Registered at priority
+		// 6 so it overrides the base mock_media_api_request at priority 5 for
+		// the targeted media ID.
+		$distinct_media_filter = $this->make_distinct_media_url_filter(
+			200,
+			'featured-200.jpg'
+		);
+		add_filter( 'pre_http_request', $distinct_media_filter, 6, 3 );
+
+		$this->mock_post_overrides = array(
+			'featured_media' => 200,
+			'meta'           => array( 'custom_field' => 'updated_value' ),
+		);
+
+		// ARRANGE: Block the custom_field write so update_meta() fails after the
+		// new featured image is sideloaded and assigned as the thumbnail.
+		$block_meta = function (
+			$check,
+			$object_id,
+			$meta_key,
+			$meta_value,
+			$prev_value
+		) {
+			unset( $object_id, $meta_value, $prev_value );
+			if ( 'custom_field' === $meta_key ) {
+				return false;
+			}
+			return $check;
+		};
+		add_filter( 'update_post_metadata', $block_meta, 10, 5 );
+
+		// ACT: Re-import the same post (hits the update path).
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'update_post_metadata', $block_meta, 10 );
+		remove_filter( 'pre_http_request', $distinct_media_filter, 6 );
+
+		// ASSERT: Import must fail with a meta error.
+		$this->assertFalse(
+			$result['success'],
+			'Update import should fail when custom meta cannot be written.'
+		);
+
+		// ASSERT: Original thumbnail must still be the post's featured image.
+		$this->assertSame(
+			$original_thumbnail_id,
+			(int) get_post_thumbnail_id( $post_id ),
+			'Original thumbnail must be restored after rollback.'
+		);
+		$this->assertNotNull(
+			get_post( $original_thumbnail_id ),
+			'Original featured-image attachment must remain in the media library.'
+		);
+
+		// ASSERT: No new attachments remain — the sideloaded one for media 200
+		// must have been deleted.
+		$this->assert_no_new_attachments(
+			$attachments_before_update,
+			'New featured-image attachment must be deleted after rollback.'
+		);
+	}
+
+	/**
+	 * Verifies that inline media sideloaded for the new content is deleted when
+	 * the bulk update path rolls back due to a term failure.
+	 *
+	 * The first import creates a post with no inline media. The re-import's
+	 * fresh content references a new image URL, so process_content() sideloads
+	 * a new attachment before persist_updated_post() is called. An unknown
+	 * taxonomy then triggers the rollback path.
+	 */
+	public function test_bulk_update_cleans_up_new_inline_media_on_term_failure(): void {
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ARRANGE: Initial import with no inline media.
+		$post_data = array(
+			'id'        => 9180,
+			'title'     => 'Post For Inline Media Cleanup Test',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/inline-media-cleanup-test',
+			'post_type' => 'posts',
+			'terms'     => array(
+				'category' => array( 'Inline Media Cleanup Category' ),
+			),
+		);
+
+		$this->mock_post_overrides = array(
+			'terms' => array(
+				'category' => array( 'Inline Media Cleanup Category' ),
+			),
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
+
+		$attachments_before_update = $this->get_attachment_count();
+
+		// ARRANGE: Fresh content references a new inline image whose URL has
+		// never been imported before, so process_content() sideloads a new
+		// attachment. An unknown taxonomy then triggers a rollback.
+		$new_inline_url            = 'https://source.example.com/new-inline-image.jpg';
+		$this->mock_post_overrides = array(
+			'content' => '<p>Updated content '
+				. '<img src="' . $new_inline_url . '" alt="new">'
+				. '</p>',
+			'terms'   => array(
+				'category'                  => array(
+					'Inline Media Cleanup Category',
+				),
+				'nonexistent_taxonomy_term' => array( 'Some Term' ),
+			),
+		);
+
+		// ACT: Re-import the same post (hits the update path).
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import must fail with a taxonomy error.
+		$this->assertFalse(
+			$result['success'],
+			'Update import should fail for unknown taxonomy.'
+		);
+		$this->assertStringContainsString(
+			'nonexistent_taxonomy_term',
+			$result['error']
+		);
+
+		// ASSERT: The newly sideloaded inline media attachment was cleaned up.
+		$this->assert_no_new_attachments(
+			$attachments_before_update,
+			'New inline media must be deleted after rollback.'
+		);
+	}
+
+	/**
+	 * Verifies that media sideloaded for the new content (both featured image
+	 * and inline) is deleted when the bulk update path rolls back due to a
+	 * tracking-meta (META_IMPORT_DATE) write failure.
+	 *
+	 * This branch fires before set_post_thumbnail() runs, so the new featured
+	 * image is sideloaded but never assigned. Cleanup must still happen
+	 * because the attachment is in the media library.
+	 */
+	public function test_bulk_update_cleans_up_new_media_on_tracking_meta_failure(): void {
+		$session_id = $this->import_history->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ARRANGE: Initial import with no media so the re-import is the only
+		// source of new attachments.
+		$post_data = array(
+			'id'        => 9190,
+			'title'     => 'Post For Tracking Meta Cleanup Test',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/tracking-meta-cleanup-test',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
+
+		$attachments_before_update = $this->get_attachment_count();
+
+		// ARRANGE: Re-import with a new featured image (distinct source URL so
+		// a fresh attachment is sideloaded) and new inline media.
+		$distinct_media_filter = $this->make_distinct_media_url_filter(
+			200,
+			'tracking-featured-200.jpg'
+		);
+		add_filter( 'pre_http_request', $distinct_media_filter, 6, 3 );
+
+		$new_inline_url            = 'https://source.example.com/tracking-inline-new.jpg';
+		$this->mock_post_overrides = array(
+			'featured_media' => 200,
+			'content'        => '<p>Updated content '
+				. '<img src="' . $new_inline_url . '" alt="new">'
+				. '</p>',
+		);
+
+		// ARRANGE: Block META_IMPORT_DATE writes to trigger the
+		// import_date_update_failed branch.
+		$block_meta = function (
+			$check,
+			$object_id,
+			$meta_key,
+			$meta_value,
+			$prev_value
+		) {
+			unset( $object_id, $meta_value, $prev_value );
+			if ( Options::META_IMPORT_DATE === $meta_key ) {
+				return false;
+			}
+			return $check;
+		};
+		add_filter( 'update_post_metadata', $block_meta, 10, 5 );
+
+		// ACT: Re-import the same post (hits the update path).
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'update_post_metadata', $block_meta, 10 );
+		remove_filter( 'pre_http_request', $distinct_media_filter, 6 );
+
+		// ASSERT: Import must fail with a tracking-metadata error.
+		$this->assertFalse(
+			$result['success'],
+			'Update import should fail when tracking meta cannot be written.'
+		);
+		$this->assertStringContainsString(
+			'tracking metadata',
+			$result['error']
+		);
+
+		// ASSERT: Both newly sideloaded attachments (featured + inline) were
+		// cleaned up.
+		$this->assert_no_new_attachments(
+			$attachments_before_update,
+			'New media must be deleted after tracking-meta rollback.'
+		);
+	}
+
+	/**
+	 * Returns a pre_http_request filter that intercepts the wp/v2/media JSON
+	 * endpoint for a specific media ID and returns a distinct source_url.
+	 *
+	 * Register at priority 6 so it runs after mock_media_api_request (priority
+	 * 5) and overrides its response for the targeted media ID; other media
+	 * IDs fall through to the default mock.
+	 *
+	 * @param int    $media_id Media ID to override.
+	 * @param string $filename Source file name (must match a fixture extension).
+	 * @return Closure
+	 */
+	private function make_distinct_media_url_filter(
+		int $media_id,
+		string $filename
+	): Closure {
+		return function ( $preempt, array $args, string $url ) use ( $media_id, $filename ) {
+			unset( $args );
+			if ( str_contains( $url, 'wp-json/wp/v2/media/' . $media_id ) ) {
+				return array(
+					'response' => array(
+						'code'    => 200,
+						'message' => 'OK',
+					),
+					'body'     => wp_json_encode(
+						array(
+							'source_url' => 'https://source.example.com/' . $filename,
+						)
+					),
+					'headers'  => array( 'content-type' => 'application/json' ),
+				);
+			}
+			return $preempt;
+		};
+	}
+
+	/**
 	 * Returns a pre_http_request filter that makes the media JSON API return
 	 * 404.
 	 *
