@@ -7,7 +7,7 @@
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\Utils\Event_Table;
+use Safe_Publish\Utils\Audit_Log_Table;
 use WP_Error;
 use WP_Query;
 
@@ -476,7 +476,7 @@ final class Import_History {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability();
 
-		$rows = Event_Table::get_events(
+		$rows = Audit_Log_Table::get_events(
 			array(
 				'channel' => 'export',
 				'limit'   => 100,

@@ -15,7 +15,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Central registry of log event codes used with Logger::log_error().
+ * Central registry of log event codes used with Logger::log_event() and
+ * Logger::log_error().
  */
 class Log_Events {
 	// Media import events.
@@ -44,4 +45,9 @@ class Log_Events {
 
 	// Export events.
 	const EXPORT_FAILED = 'EXPORT_FAILED';
+
+	// Rollback events.
+	const SESSION_ROLLED_BACK = 'SESSION_ROLLED_BACK';
+	const ITEM_ROLLED_BACK    = 'ITEM_ROLLED_BACK';
+	const ROLLBACK_FAILED     = 'ROLLBACK_FAILED';
 }
