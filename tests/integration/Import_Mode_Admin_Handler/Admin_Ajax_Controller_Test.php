@@ -24,6 +24,11 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 	use Mock_Post_API_Trait;
 
 	/**
+	 * Fallback shared secret used when no environment constant is defined.
+	 */
+	private const FALLBACK_SECRET = 'integration-test-secret-key-32chars-ok';
+
+	/**
 	 * Admin user ID for privileged test requests.
 	 *
 	 * @var int
@@ -36,6 +41,11 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
+
+		// Required by validate_auth_or_fail() in the gated AJAX endpoints.
+		if ( ! defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ) {
+			define( 'SAFE_PUBLISH_SHARED_SECRET', self::FALLBACK_SECRET );
+		}
 
 		$this->admin_user_id = $this->factory()->user->create(
 			array( 'role' => 'administrator' )

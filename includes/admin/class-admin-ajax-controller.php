@@ -242,6 +242,8 @@ final class Admin_Ajax_Controller {
 			);
 		}
 
+		$this->validate_auth_or_fail();
+
 		$external_post_id = absint( $_POST['external_post_id'] ?? 0 );
 		$title            = sanitize_text_field( wp_unslash( $_POST['title'] ?? '' ) );
 		$external_link    = esc_url_raw( wp_unslash( $_POST['external_link'] ?? '' ) );
@@ -444,6 +446,8 @@ final class Admin_Ajax_Controller {
 	public function ajax_bulk_import(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability( 'edit_posts' );
+
+		$this->validate_auth_or_fail();
 
 		// JSON string not sanitized to preserve structure; validated after decode.
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
@@ -874,15 +878,27 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Sends a JSON error response when the Shared Secret is not configured.
+	 * Sends a JSON error response when the Shared Secret is missing or too
+	 * short to satisfy VIP_Safe_Auth::is_authorized().
 	 */
 	private function validate_auth_or_fail(): void {
-		$credentials = Auth_Credential_Provider::get_credentials();
+		$credentials   = Auth_Credential_Provider::get_credentials();
+		$shared_secret = $credentials['shared_secret'] ?? '';
 
-		if ( empty( $credentials['shared_secret'] ) ) {
+		if ( '' === $shared_secret ) {
 			wp_send_json_error(
 				__(
 					'Shared Secret is not configured. Add SAFE_PUBLISH_SHARED_SECRET to wp-config.php on both sites.',
+					'safe-publish'
+				),
+				401
+			);
+		}
+
+		if ( strlen( $shared_secret ) < 16 ) {
+			wp_send_json_error(
+				__(
+					'Shared Secret is too short. SAFE_PUBLISH_SHARED_SECRET must be at least 16 characters.',
 					'safe-publish'
 				),
 				401
