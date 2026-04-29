@@ -364,7 +364,7 @@ export interface ImportLog {
 }
 
 /**
- * Represents a single export event from the events table.
+ * Represents a single export event from the audit log table.
  *
  * @property {number}         id              Unique event ID.
  * @property {string}         date            Date the event was recorded.

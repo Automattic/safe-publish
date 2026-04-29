@@ -53,7 +53,7 @@ Imports are tracked in a session-based model. Each import operation creates one 
 
 ### Export History
 
-Export events are logged automatically when posts are served to a destination site. Each event is stored in the `{$wpdb->prefix}safe_publish_events` database table.
+Export events are logged automatically when posts are served to a destination site. Each event is stored in the `{$wpdb->prefix}safe_publish_audit_log` database table.
 
 | Field           | Description                                       |
 | --------------- | ------------------------------------------------- |
@@ -152,7 +152,7 @@ Import history uses WordPress custom post types:
 
 Export events are stored in a custom database table:
 
-- Table name: `{$wpdb->prefix}safe_publish_events`
+- Table name: `{$wpdb->prefix}safe_publish_audit_log`
 - Indexed on: `channel` + `created_at`, `level`, `event`
 
 ## Using Import History

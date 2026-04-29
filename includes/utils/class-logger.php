@@ -105,7 +105,7 @@ abstract class Logger {
 	}
 
 	/**
-	 * Stores an event in the log table.
+	 * Stores an event in the audit log table.
 	 *
 	 * Subclasses may override this method to add side effects while calling
 	 * parent::store_log_event() to preserve the base storage behavior.
@@ -121,6 +121,6 @@ abstract class Logger {
 		// These are stored as dedicated columns.
 		unset( $data['event'], $data['timestamp'] );
 
-		Event_Table::insert( $this->channel, $level, $event, $created_at, $data );
+		Audit_Log_Table::insert( $this->channel, $level, $event, $created_at, $data );
 	}
 }
