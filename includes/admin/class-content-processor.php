@@ -420,25 +420,27 @@ class Content_Processor {
 		}
 
 		if ( empty( $original_url ) ) {
-			return $block;
+			return $this->process_block_inner_html( $block, $site_url );
 		}
 
 		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
 
 		if ( null === $attachment_id ) {
-			return $block; // Third-party media — leave unchanged.
+			// Third-party src — leave attrs unchanged but still process
+			// innerHTML so any source-domain anchor hrefs get sideloaded.
+			return $this->process_block_inner_html( $block, $site_url );
 		}
 
 		if ( false === $attachment_id ) {
 			$this->failed_media[] = $original_url;
-			return $block;
+			return $this->process_block_inner_html( $block, $site_url );
 		}
 
 		$new_url = wp_get_attachment_url( $attachment_id );
 
 		if ( false === $new_url ) {
 			$this->failed_media[] = $original_url;
-			return $block;
+			return $this->process_block_inner_html( $block, $site_url );
 		}
 
 		// Initialize attrs if it doesn't exist.
@@ -497,7 +499,7 @@ class Content_Processor {
 				$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
 
 				if ( null === $attachment_id ) {
-					continue; // Third-party media — leave unchanged.
+					continue; // Third-party src — skip this image's attrs.
 				}
 
 				if ( false === $attachment_id ) {
@@ -536,8 +538,6 @@ class Content_Processor {
 					}
 				}
 			}
-
-			$block = $this->process_block_inner_html( $block, $site_url );
 		}
 
 		// Handle block-based gallery format with innerBlocks containing image blocks.
@@ -572,7 +572,7 @@ class Content_Processor {
 			}
 		}
 
-		return $block;
+		return $this->process_block_inner_html( $block, $site_url );
 	}
 
 	/**
@@ -584,26 +584,28 @@ class Content_Processor {
 	 */
 	private function process_media_block( array $block, string $site_url ): array {
 		if ( empty( $block['attrs']['src'] ) ) {
-			return $block;
+			return $this->process_block_inner_html( $block, $site_url );
 		}
 
 		$original_url  = $block['attrs']['src'];
 		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
 
 		if ( null === $attachment_id ) {
-			return $block; // Third-party media — leave unchanged.
+			// Third-party src — leave attrs unchanged but still process
+			// innerHTML so any source-domain anchor hrefs get sideloaded.
+			return $this->process_block_inner_html( $block, $site_url );
 		}
 
 		if ( false === $attachment_id ) {
 			$this->failed_media[] = $original_url;
-			return $block;
+			return $this->process_block_inner_html( $block, $site_url );
 		}
 
 		$new_url = wp_get_attachment_url( $attachment_id );
 
 		if ( false === $new_url ) {
 			$this->failed_media[] = $original_url;
-			return $block;
+			return $this->process_block_inner_html( $block, $site_url );
 		}
 
 		$block['attrs']['src'] = $new_url;
