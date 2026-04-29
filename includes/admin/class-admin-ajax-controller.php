@@ -960,14 +960,18 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Sends a JSON error response when the Shared Secret is missing or too
-	 * short to satisfy VIP_Safe_Auth::is_authorized().
+	 * Sends a JSON error response when the Shared Secret does not satisfy
+	 * VIP_Safe_Auth::has_valid_credential_format(). Splits the failure into
+	 * "missing" and "too short" so the operator gets an actionable message.
 	 */
 	private function validate_auth_or_fail(): void {
-		$credentials   = Auth_Credential_Provider::get_credentials();
-		$shared_secret = $credentials['shared_secret'] ?? '';
+		$credentials = Auth_Credential_Provider::get_credentials();
 
-		if ( '' === $shared_secret ) {
+		if ( VIP_Safe_Auth::has_valid_credential_format( $credentials ) ) {
+			return;
+		}
+
+		if ( '' === ( $credentials['shared_secret'] ?? '' ) ) {
 			wp_send_json_error(
 				__(
 					'Shared Secret is not configured. Add SAFE_PUBLISH_SHARED_SECRET to wp-config.php on both sites.',
@@ -975,9 +979,7 @@ final class Admin_Ajax_Controller {
 				),
 				401
 			);
-		}
-
-		if ( strlen( $shared_secret ) < 16 ) {
+		} else {
 			wp_send_json_error(
 				__(
 					'Shared Secret is too short. SAFE_PUBLISH_SHARED_SECRET must be at least 16 characters.',

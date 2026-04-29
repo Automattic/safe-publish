@@ -146,7 +146,7 @@ class External_Posts_API {
 
 		// Edit context provides raw field values (title, content, excerpt)
 		// needed to preserve data parity during import.
-		if ( VIP_Safe_Auth::is_authorized( $site_url, $auth_credentials ) ) {
+		if ( VIP_Safe_Auth::has_valid_credential_format( $auth_credentials ) ) {
 			$query_args['context'] = 'edit';
 		}
 
@@ -355,7 +355,7 @@ class External_Posts_API {
 
 		// Edit context provides raw field values (title, content, excerpt)
 		// needed to preserve data parity during import.
-		if ( VIP_Safe_Auth::is_authorized( $site_url, $auth_credentials ) ) {
+		if ( VIP_Safe_Auth::has_valid_credential_format( $auth_credentials ) ) {
 			$query_args['context'] = 'edit';
 		}
 

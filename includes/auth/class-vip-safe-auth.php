@@ -83,38 +83,26 @@ final class VIP_Safe_Auth {
 	}
 
 	/**
-	 * Checks if the current request/context is correctly authorized.
+	 * Checks whether the configured credentials are well-formed.
 	 *
-	 * Shared Secret authentication is required. Returns false if not configured
-	 * or if it does not meet minimum requirements.
+	 * Validates the shared secret's presence and minimum length. Does not
+	 * verify that the source site accepts the credentials — use
+	 * test_authorization() for that.
 	 *
-	 * @param string $site_url    Optional. Destination site URL to test authorization against. Default ''.
-	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
-	 * @return bool True if correctly authorized, false otherwise.
+	 * @param array $auth_config Optional. Authentication configuration array. Default empty array.
+	 * @return bool True if the credentials are well-formed, false otherwise.
 	 */
-	public static function is_authorized( $site_url = '', $auth_config = array() ): bool {
-		$shared_secret = $auth_config['shared_secret'] ?? '';
-
-		// Shared secret is required and must meet minimum length requirements.
-		if ( empty( $shared_secret ) || strlen( $shared_secret ) < 16 ) {
-			return false;
-		}
-
-		// If site URL is provided, verify auth headers are correctly generated.
-		if ( ! empty( $site_url ) ) {
-			$auth_params = self::get_shared_secret_auth( $site_url, $auth_config, 'GET' );
-			return ! empty( $auth_params['headers']['X-Safe-Publish-Timestamp'] ) &&
-					! empty( $auth_params['headers']['X-Safe-Publish-Signature'] );
-		}
-
-		return true;
+	public static function has_valid_credential_format( $auth_config = array() ): bool {
+		return strlen( $auth_config['shared_secret'] ?? '' ) >= 16;
 	}
 
 	/**
 	 * Probes the source site to verify the shared secret is accepted.
 	 *
-	 * Hits `wp/v2/posts?context=edit&per_page=1` and inspects the response
-	 * code. A 200 means the source accepts the HMAC signature and grants edit
+	 * Returns `url_unset` for an empty URL or `unauthorized` if the format
+	 * check rejects the credentials. Otherwise, hits
+	 * `wp/v2/posts?context=edit&per_page=1` and inspects the response code:
+	 * 200 means the source accepts the HMAC signature and grants edit
 	 * context; 401/403 means the credentials are rejected; anything else is
 	 * treated as unreachable.
 	 *
@@ -122,14 +110,14 @@ final class VIP_Safe_Auth {
 	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
 	 * @return array Probe result with `status`, optional `code`/`message`.
 	 */
-	public static function test_authorization( $site_url, $auth_config = array() ): array {
-		if ( empty( $site_url ) ) {
+	public static function test_authorization( string $site_url, array $auth_config = array() ): array {
+		if ( '' === $site_url ) {
 			return array( 'status' => self::STATUS_URL_UNSET );
 		}
 
-		// Without a usable shared secret we cannot sign the request, so the
+		// Without well-formed credentials we cannot sign the request, so the
 		// source would reject it as unauthorized.
-		if ( ! self::is_authorized( $site_url, $auth_config ) ) {
+		if ( ! self::has_valid_credential_format( $auth_config ) ) {
 			return array( 'status' => self::STATUS_UNAUTHORIZED );
 		}
 
@@ -148,12 +136,8 @@ final class VIP_Safe_Auth {
 			'user-agent'  => 'Safe-Publish-Auth-Test/1.0',
 		);
 
-		if ( ! empty( $auth_params['headers'] ) ) {
+		if ( isset( $auth_params['headers'] ) ) {
 			$request_args['headers'] = $auth_params['headers'];
-		}
-
-		if ( ! empty( $auth_params['query_args'] ) ) {
-			$test_url = add_query_arg( $auth_params['query_args'], $test_url );
 		}
 
 		if ( function_exists( 'vip_safe_wp_remote_get' ) ) {
