@@ -253,21 +253,6 @@ final class Import_History {
 	}
 
 	/**
-	 * Stores content diff for rollback purposes.
-	 *
-	 * @param int    $post_id     WordPress post ID.
-	 * @param string $old_content Previous content.
-	 * @param string $new_content New content.
-	 */
-	public function store_content_diff(
-		int $post_id,
-		string $old_content,
-		string $new_content
-	): void {
-		$this->repository->store_content_diff( $post_id, $old_content, $new_content );
-	}
-
-	/**
 	 * Handles AJAX request for getting import sessions.
 	 */
 	public function ajax_get_import_sessions(): void {

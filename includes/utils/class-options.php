@@ -124,13 +124,6 @@ class Options {
 	const META_MEDIA_TYPE = 'safe_publish_media_type';
 
 	/**
-	 * Meta key storing the serialized content-diff history for an imported post.
-	 *
-	 * @var string
-	 */
-	const META_CONTENT_HISTORY = 'safe_publish_content_history';
-
-	/**
 	 * WordPress settings-API group slug shared by all plugin options.
 	 *
 	 * @var string
