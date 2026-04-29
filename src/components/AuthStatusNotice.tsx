@@ -5,7 +5,7 @@
  * source site so admins know whether the import flow can proceed before
  * clicking anything. Hides itself when the source authorizes the request.
  *
- * @file This file defines the AuthStatusNotice component for the Safe Publish plugin.
+ * @file This file defines the AuthStatusNotice component.
  */
 
 import { AuthStatus } from '../types';
@@ -28,7 +28,7 @@ interface AuthStatusNoticeProps {
  * Renders an inline notice describing the current auth probe status.
  *
  * @param {AuthStatusNoticeProps} props Component props.
- * @return {JSX.Element|null} Rendered notice, or null when authorized or still loading.
+ * @return {JSX.Element|null} Rendered notice, or null when no banner is needed.
  */
 function AuthStatusNotice( {
 	status,

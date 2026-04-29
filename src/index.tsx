@@ -268,7 +268,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 	}, [] ); // Only run on mount.
 
 	// Probe live auth state so the banner and import buttons reflect whether
-	// the source site will accept signed requests before the user clicks anything.
+	// the source site will accept signed requests before any user action.
 	useEffect( () => {
 		const formData = new FormData();
 		formData.append( 'action', 'safe_publish_auth_status' );

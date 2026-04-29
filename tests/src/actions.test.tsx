@@ -56,11 +56,18 @@ describe( 'Actions configuration', () => {
 		expect( bulkAction?.isEligible?.( { id: 1, link: '', title: 'Test', modified: '', is_imported: true, has_update: false } ) ).toBe( false );
 	} );
 
-	it( 'bulk-import action isEligible returns false when isAuthorized is false', () => {
-		const unauthorizedActions = createActions( undefined, false );
-		const bulkAction = unauthorizedActions.find( ( a ) => a.id === 'bulk-import' );
-		expect( bulkAction?.isEligible?.( { id: 1, link: '', title: 'Test', modified: '', is_imported: false } ) ).toBe( false );
-		expect( bulkAction?.isEligible?.( { id: 1, link: '', title: 'Test', modified: '', is_imported: true, has_update: true } ) ).toBe( false );
+	it( 'bulk-import isEligible returns false when not authorized', () => {
+		const unauthorized = createActions( undefined, false );
+		const bulkAction = unauthorized.find( ( a ) => a.id === 'bulk-import' );
+		const importable = {
+			id: 1, link: '', title: 'Test', modified: '', is_imported: false,
+		};
+		const updatable = {
+			id: 1, link: '', title: 'Test', modified: '',
+			is_imported: true, has_update: true,
+		};
+		expect( bulkAction?.isEligible?.( importable ) ).toBe( false );
+		expect( bulkAction?.isEligible?.( updatable ) ).toBe( false );
 	} );
 
 

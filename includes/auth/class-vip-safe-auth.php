@@ -120,7 +120,7 @@ final class VIP_Safe_Auth {
 	 *
 	 * @param string $site_url    Source site URL.
 	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
-	 * @return array Probe result with a `status` key plus optional `code` and `message`.
+	 * @return array Probe result with `status`, optional `code`/`message`.
 	 */
 	public static function test_authorization( $site_url, $auth_config = array() ): array {
 		if ( empty( $site_url ) ) {

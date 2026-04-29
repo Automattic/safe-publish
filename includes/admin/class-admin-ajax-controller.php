@@ -146,15 +146,16 @@ final class Admin_Ajax_Controller {
 	 * any authentication-related setting changes.
 	 */
 	private function register_auth_status_invalidation(): void {
-		$options = array(
+		$options  = array(
 			Options::OPTION_CONNECTED_SITE_URL,
 			Options::OPTION_USERNAME,
 			Options::OPTION_PASSWORD,
 		);
+		$callback = array( __CLASS__, 'bust_auth_status_cache' );
 
 		foreach ( $options as $option ) {
-			add_action( 'add_option_' . $option, array( __CLASS__, 'bust_auth_status_cache' ) );
-			add_action( 'update_option_' . $option, array( __CLASS__, 'bust_auth_status_cache' ) );
+			add_action( 'add_option_' . $option, $callback );
+			add_action( 'update_option_' . $option, $callback );
 		}
 	}
 

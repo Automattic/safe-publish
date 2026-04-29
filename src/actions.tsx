@@ -102,7 +102,7 @@ const bulkImportPosts = async (
  * diffs.
  *
  * @param {Function} [onRefresh]    Callback to refresh the posts list.
- * @param {boolean}  [isAuthorized] Whether the source site authorizes import requests.
+ * @param {boolean}  [isAuthorized] Whether the source site authorizes imports.
  *
  * @return {Action<Post>[]} Array of DataViews actions.
  */

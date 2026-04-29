@@ -95,8 +95,8 @@ function wp_remote_get( string $url, array $args = array() ): array|WP_Error {
 	$GLOBALS['_test_http_last_url']  = $url;
 	$GLOBALS['_test_http_last_args'] = $args;
 
-	$response = $GLOBALS['_test_http_response'] ?? array( 'response' => array( 'code' => 200 ) );
-	return $response;
+	$default = array( 'response' => array( 'code' => 200 ) );
+	return $GLOBALS['_test_http_response'] ?? $default;
 }
 
 function wp_remote_retrieve_response_code( array|WP_Error $response ): int {

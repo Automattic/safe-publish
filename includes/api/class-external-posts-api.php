@@ -260,14 +260,17 @@ class External_Posts_API {
 	 *
 	 * @param string $site_url         Site URL to test.
 	 * @param array  $auth_credentials Authentication credentials.
-	 * @return array Test results with success, status, response_time, and message keys.
+	 * @return array Test results: success, status, response_time, message.
 	 */
 	public function test_connection(
 		string $site_url,
 		array $auth_credentials
 	): array {
 		$start_time = microtime( true );
-		$probe      = VIP_Safe_Auth::test_authorization( $site_url, $auth_credentials );
+		$probe      = VIP_Safe_Auth::test_authorization(
+			$site_url,
+			$auth_credentials
+		);
 		$end_time   = microtime( true );
 
 		$status = $probe['status'] ?? VIP_Safe_Auth::STATUS_UNREACHABLE;
@@ -283,7 +286,7 @@ class External_Posts_API {
 	/**
 	 * Returns a human-readable message for an auth probe status.
 	 *
-	 * @param string $status Probe status from VIP_Safe_Auth::test_authorization().
+	 * @param string $status Status from VIP_Safe_Auth::test_authorization().
 	 * @return string Translated description for display.
 	 */
 	public static function describe_auth_status( string $status ): string {
