@@ -137,14 +137,38 @@ export interface BulkImportResponse {
 /**
  * Connection test result data.
  *
- * @property {boolean} success         Whether connection succeeded.
- * @property {string}  message         Test result message.
- * @property {number}  [response_time] Response time in milliseconds.
+ * @property {boolean}    success         Whether connection succeeded.
+ * @property {string}     message         Test result message.
+ * @property {AuthStatus} [status]        Probe status returned by the backend.
+ * @property {number}     [response_time] Response time in milliseconds.
  */
 export interface ConnectionTestData {
 	success: boolean;
 	message: string;
+	status?: AuthStatus;
 	response_time?: number;
+}
+
+/**
+ * Auth probe status values returned by safe_publish_auth_status.
+ */
+export type AuthStatus =
+	| 'authorized'
+	| 'unauthorized'
+	| 'unreachable'
+	| 'url_unset';
+
+/**
+ * Auth probe result returned by safe_publish_auth_status.
+ *
+ * @property {AuthStatus} status    Probe status.
+ * @property {number}     [code]    HTTP response code from the probe request.
+ * @property {string}     [message] Underlying error message when applicable.
+ */
+export interface AuthStatusData {
+	status: AuthStatus;
+	code?: number;
+	message?: string;
 }
 
 /**

@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration\Import_Mode_Admin_Handler;
 
+use Safe_Publish\Admin\Admin_Ajax_Controller;
+use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Tests\Integration\Mock_Post_API_Trait;
 use Safe_Publish\Utils\Options;
 use WPAjaxDieContinueException;
@@ -65,6 +67,7 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 	protected function tearDown(): void {
 		remove_filter( 'pre_http_request', array( $this, 'mock_post_api' ), 1 );
 		delete_option( Options::OPTION_CONNECTED_SITE_URL );
+		delete_site_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
 		parent::tearDown();
 	}
 
@@ -873,6 +876,235 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 			$response['data'],
 			'Password must never be sent in the AJAX response.'
 		);
+	}
+
+	/**
+	 * Verifies that the auth-status endpoint rejects requests with an invalid
+	 * nonce.
+	 */
+	public function test_ajax_auth_status_rejects_invalid_nonce(): void {
+		// ARRANGE: Authenticate as admin with a bad nonce.
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array( 'nonce' => 'not-a-valid-nonce' );
+
+		// ASSERT: Nonce failure calls wp_die( -1 ).
+		$this->expectException( WPAjaxDieStopException::class );
+		$this->expectExceptionMessage( '-1' );
+
+		// ACT: Trigger the AJAX handler.
+		$this->_handleAjax( 'safe_publish_auth_status' );
+	}
+
+	/**
+	 * Verifies that the auth-status endpoint rejects users without the
+	 * edit_posts capability.
+	 */
+	public function test_ajax_auth_status_rejects_request_without_edit_posts_capability(): void {
+		// ARRANGE: Authenticate as a subscriber with a valid nonce.
+		$subscriber_id = $this->factory()->user->create(
+			array( 'role' => 'subscriber' )
+		);
+		wp_set_current_user( $subscriber_id );
+		$_POST = array(
+			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+		);
+
+		// ACT: Trigger the AJAX handler.
+		try {
+			$this->_handleAjax( 'safe_publish_auth_status' );
+			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
+		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		}
+
+		// ASSERT: Subscriber receives a forbidden response.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response );
+		$this->assertFalse( $response['success'] );
+	}
+
+	/**
+	 * Verifies that the auth-status endpoint returns the cached probe result
+	 * without hitting the network.
+	 */
+	public function test_ajax_auth_status_returns_cached_probe_result(): void {
+		// ARRANGE: Pre-populate the transient with an authorized probe result.
+		set_site_transient(
+			Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT,
+			array(
+				'status' => VIP_Safe_Auth::STATUS_AUTHORIZED,
+				'code'   => 200,
+			),
+			Admin_Ajax_Controller::AUTH_STATUS_TTL
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+		);
+
+		// ACT: Trigger the AJAX handler.
+		try {
+			$this->_handleAjax( 'safe_publish_auth_status' );
+			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
+		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		}
+
+		// ASSERT: Response carries the cached status payload.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response );
+		$this->assertTrue( $response['success'] );
+		$this->assertSame(
+			VIP_Safe_Auth::STATUS_AUTHORIZED,
+			$response['data']['status']
+		);
+		$this->assertSame( 200, $response['data']['code'] );
+	}
+
+	/**
+	 * Verifies that the auth-status endpoint runs the probe and caches the
+	 * result when the transient is empty.
+	 */
+	public function test_ajax_auth_status_runs_probe_and_caches_result(): void {
+		// ARRANGE: Stub the probe HTTP request to return a 401 so we exercise
+		// the unauthorized branch end-to-end without seeding the cache.
+		$probe_filter = static function ( $preempt, array $_args, string $url ) {
+			if ( false !== $preempt ) {
+				return $preempt;
+			}
+			if ( 1 === preg_match( '#/wp-json/wp/v2/posts\?#', $url ) ) {
+				return array(
+					'response' => array( 'code' => 401 ),
+					'body'     => '',
+					'headers'  => array(),
+				);
+			}
+			return $preempt;
+		};
+		add_filter( 'pre_http_request', $probe_filter, 1, 3 );
+
+		delete_site_transient(
+			Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+		);
+
+		// ACT: Trigger the AJAX handler.
+		try {
+			$this->_handleAjax( 'safe_publish_auth_status' );
+			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
+		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		}
+
+		remove_filter( 'pre_http_request', $probe_filter, 1 );
+
+		// ASSERT: Response reflects the probe verdict and the transient was
+		// populated with the same payload.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response );
+		$this->assertTrue( $response['success'] );
+		$this->assertSame(
+			VIP_Safe_Auth::STATUS_UNAUTHORIZED,
+			$response['data']['status']
+		);
+
+		$cached = get_site_transient(
+			Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT
+		);
+		$this->assertIsArray( $cached );
+		$this->assertSame(
+			VIP_Safe_Auth::STATUS_UNAUTHORIZED,
+			$cached['status']
+		);
+	}
+
+	/**
+	 * Provides option/hook combinations that should bust the auth-status cache.
+	 *
+	 * Covers each auth-related option for both `add_option_*` (first save) and
+	 * `update_option_*` (subsequent saves) so a regression in either hook or any
+	 * option entry surfaces.
+	 *
+	 * @return array<string, array{string, string, mixed}>
+	 */
+	public function auth_option_provider(): array {
+		return array(
+			'add connected site URL'     => array(
+				'add',
+				Options::OPTION_CONNECTED_SITE_URL,
+				'https://example.com',
+			),
+			'update connected site URL'  => array(
+				'update',
+				Options::OPTION_CONNECTED_SITE_URL,
+				'https://different.example.com',
+			),
+			'add basic auth username'    => array(
+				'add',
+				Options::OPTION_USERNAME,
+				'new-user',
+			),
+			'update basic auth username' => array(
+				'update',
+				Options::OPTION_USERNAME,
+				'updated-user',
+			),
+			'add basic auth password'    => array(
+				'add',
+				Options::OPTION_PASSWORD,
+				'new-password',
+			),
+			'update basic auth password' => array(
+				'update',
+				Options::OPTION_PASSWORD,
+				'updated-password',
+			),
+		);
+	}
+
+	/**
+	 * Verifies that adding or updating any auth-related option busts the
+	 * cached auth-status transient.
+	 *
+	 * @dataProvider auth_option_provider
+	 *
+	 * @param string $hook   Either 'add' or 'update'.
+	 * @param string $option Option key being changed.
+	 * @param mixed  $value  Value to write.
+	 */
+	public function test_changing_auth_option_busts_auth_status_cache(
+		string $hook,
+		string $option,
+		$value
+	): void {
+		// ARRANGE: For 'add', ensure the option does not exist so add_option
+		// fires; for 'update', seed an initial value so update_option fires.
+		if ( 'add' === $hook ) {
+			delete_option( $option );
+		} else {
+			update_option( $option, 'initial-value' );
+		}
+
+		// ARRANGE: Seed the transient with a stale probe result.
+		set_site_transient(
+			Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT,
+			array( 'status' => VIP_Safe_Auth::STATUS_AUTHORIZED ),
+			Admin_Ajax_Controller::AUTH_STATUS_TTL
+		);
+
+		// ACT: Write the option, which should fire the matching hook.
+		update_option( $option, $value );
+
+		// ASSERT: Transient was deleted by the invalidation hook.
+		$this->assertFalse(
+			get_site_transient(
+				Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT
+			)
+		);
+
+		delete_option( $option );
 	}
 
 	/**
