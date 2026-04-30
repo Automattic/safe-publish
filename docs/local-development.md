@@ -129,10 +129,13 @@ tail -f wp-content/debug.log
 Access the MySQL database:
 
 ```sh
-# View import sessions (stored as custom post types)
-npm run wp-cli post list --post_type=sp_import_session
+# View import sessions
+npm run wp-cli db query "SELECT * FROM wp_safe_publish_imports LIMIT 10"
 
-# View export events
+# View import items
+npm run wp-cli db query "SELECT * FROM wp_safe_publish_import_items LIMIT 10"
+
+# View audit log events
 npm run wp-cli db query "SELECT * FROM wp_safe_publish_audit_log LIMIT 10"
 
 # Or connect directly
