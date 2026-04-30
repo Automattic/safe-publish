@@ -373,8 +373,12 @@ final class History_Repository {
 			return;
 		}
 
+		$event = 0 === $updated
+			? Log_Events::SESSION_ROLLBACK_NOOP
+			: Log_Events::SESSION_ROLLED_BACK;
+
 		$this->logger->log_event(
-			Log_Events::SESSION_ROLLED_BACK,
+			$event,
 			array( 'session_id' => $session_id )
 		);
 	}
@@ -406,8 +410,12 @@ final class History_Repository {
 			return;
 		}
 
+		$event = 0 === $updated
+			? Log_Events::ITEM_ROLLBACK_NOOP
+			: Log_Events::ITEM_ROLLED_BACK;
+
 		$this->logger->log_event(
-			Log_Events::ITEM_ROLLED_BACK,
+			$event,
 			array( 'item_id' => $item_id )
 		);
 	}

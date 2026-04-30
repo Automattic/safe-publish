@@ -312,6 +312,46 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that marking an already-rolled-back session emits a
+	 * SESSION_ROLLBACK_NOOP event instead of SESSION_ROLLED_BACK.
+	 */
+	public function test_mark_session_rolled_back_emits_noop_when_no_row_changed(): void {
+		// ARRANGE: Session that is already in the rolled_back state.
+		$session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$this->repository->mark_session_rolled_back( $session_id );
+		Audit_Log_Table::clear( 'import' );
+
+		// ACT: Mark the session as rolled back again.
+		$this->repository->mark_session_rolled_back( $session_id );
+
+		// ASSERT: A SESSION_ROLLBACK_NOOP event was emitted, not a
+		// SESSION_ROLLED_BACK event.
+		$noop_events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'SESSION_ROLLBACK_NOOP',
+			)
+		);
+		$this->assertCount( 1, $noop_events );
+		$this->assertSame( 'info', $noop_events[0]['level'] );
+		$this->assertSame(
+			$session_id,
+			$noop_events[0]['data']['session_id']
+		);
+
+		$success_events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'SESSION_ROLLED_BACK',
+			)
+		);
+		$this->assertCount( 0, $success_events );
+	}
+
+	/**
 	 * Verifies that a successful single-item rollback emits an ITEM_ROLLED_BACK
 	 * audit event with the item ID.
 	 */
@@ -348,5 +388,52 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		$this->assertCount( 1, $events );
 		$this->assertSame( 'info', $events[0]['level'] );
 		$this->assertSame( $item_id, $events[0]['data']['item_id'] );
+	}
+
+	/**
+	 * Verifies that marking an already-rolled-back item emits an
+	 * ITEM_ROLLBACK_NOOP event instead of ITEM_ROLLED_BACK.
+	 */
+	public function test_mark_item_rolled_back_emits_noop_when_no_row_changed(): void {
+		// ARRANGE: Item that is already flagged as rolled_back.
+		$session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$post_id    = $this->factory()->post->create(
+			array( 'post_title' => 'Imported Post' )
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Imported Post',
+			'success',
+			$post_id
+		);
+		$this->repository->mark_item_rolled_back( $item_id );
+		Audit_Log_Table::clear( 'import' );
+
+		// ACT: Mark the same item as rolled back again.
+		$this->repository->mark_item_rolled_back( $item_id );
+
+		// ASSERT: An ITEM_ROLLBACK_NOOP event was emitted, not an
+		// ITEM_ROLLED_BACK event.
+		$noop_events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'ITEM_ROLLBACK_NOOP',
+			)
+		);
+		$this->assertCount( 1, $noop_events );
+		$this->assertSame( 'info', $noop_events[0]['level'] );
+		$this->assertSame( $item_id, $noop_events[0]['data']['item_id'] );
+
+		$success_events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'ITEM_ROLLED_BACK',
+			)
+		);
+		$this->assertCount( 0, $success_events );
 	}
 }
