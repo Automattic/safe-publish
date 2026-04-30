@@ -7,7 +7,7 @@
 
 namespace Safe_Publish\Auth;
 
-use Safe_Publish\Utils\Event_Table;
+use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\API\Export_Logger;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -152,14 +152,14 @@ class Auth_Manager {
 	 */
 	public function auth_status_callback( WP_REST_Request $_request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 		$shared_secret = $this->get_shared_secret();
-		$recent_events = Event_Table::get_events(
+		$recent_events = Audit_Log_Table::get_events(
 			array(
 				'channel' => 'auth',
 				'limit'   => 10,
 			)
 		);
-		$last_success  = Event_Table::get_last_timestamp( 'auth', array( 'SUCCESS' ) );
-		$last_failure  = Event_Table::get_last_timestamp( 'auth', array( 'INVALID', 'EXPIRED' ) );
+		$last_success  = Audit_Log_Table::get_last_timestamp( 'auth', array( 'SUCCESS' ) );
+		$last_failure  = Audit_Log_Table::get_last_timestamp( 'auth', array( 'INVALID', 'EXPIRED' ) );
 
 		[ $status, $health_score, $issues ] = $this->calculate_health( $shared_secret, $recent_events );
 
@@ -180,7 +180,7 @@ class Auth_Manager {
 					'last_success' => $last_success,
 					'last_failure' => $last_failure,
 				),
-				'recent_events_count' => Event_Table::count( array( 'channel' => 'auth' ) ),
+				'recent_events_count' => Audit_Log_Table::count( array( 'channel' => 'auth' ) ),
 			),
 			200
 		);
@@ -212,8 +212,8 @@ class Auth_Manager {
 			$count_args['event_type'] = $event_type;
 		}
 
-		$events = Event_Table::get_events( $query_args );
-		$total  = Event_Table::count( $count_args );
+		$events = Audit_Log_Table::get_events( $query_args );
+		$total  = Audit_Log_Table::count( $count_args );
 
 		return new \WP_REST_Response(
 			array(
@@ -237,7 +237,7 @@ class Auth_Manager {
 	 * @return WP_REST_Response Response confirming logs were cleared.
 	 */
 	public function clear_auth_logs_callback( WP_REST_Request $_request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-		Event_Table::clear( 'auth' );
+		Audit_Log_Table::clear( 'auth' );
 
 		$user_id = get_current_user_id();
 

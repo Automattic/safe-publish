@@ -7,7 +7,7 @@
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\Utils\Event_Table;
+use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Options;
 
 // Prevent direct access.
@@ -146,7 +146,7 @@ final class History_Renderer {
 			return true;
 		}
 
-		return Event_Table::count( array( 'channel' => 'export' ) ) > 0;
+		return Audit_Log_Table::count( array( 'channel' => 'export' ) ) > 0;
 	}
 
 	/**

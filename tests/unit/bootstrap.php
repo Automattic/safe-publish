@@ -35,6 +35,10 @@ if ( ! defined( 'SAFE_PUBLISH_PLUGIN_URL' ) ) {
 	define( 'SAFE_PUBLISH_PLUGIN_URL', 'http://localhost/' );
 }
 
+if ( ! defined( 'MINUTE_IN_SECONDS' ) ) {
+	define( 'MINUTE_IN_SECONDS', 60 );
+}
+
 // Load Composer autoloader.
 require_once __DIR__ . '/../../vendor/autoload.php';
 
