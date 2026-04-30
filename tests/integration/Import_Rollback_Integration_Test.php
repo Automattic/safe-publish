@@ -1108,8 +1108,10 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 				. '</p>',
 		);
 
-		// ARRANGE: Block META_IMPORT_DATE writes to trigger the
-		// import_date_update_failed branch.
+		// ARRANGE: Block the first META_IMPORT_DATE write to trigger the
+		// import_date_update_failed branch. Subsequent writes (e.g. the
+		// rollback's restore call) pass through so the test environment
+		// matches production behavior.
 		$block_meta = function (
 			$check,
 			$object_id,
@@ -1117,8 +1119,10 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 			$meta_value,
 			$prev_value
 		) {
+			static $has_blocked = false;
 			unset( $object_id, $meta_value, $prev_value );
-			if ( Options::META_IMPORT_DATE === $meta_key ) {
+			if ( Options::META_IMPORT_DATE === $meta_key && ! $has_blocked ) {
+				$has_blocked = true;
 				return false;
 			}
 			return $check;
