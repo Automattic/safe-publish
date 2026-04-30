@@ -324,7 +324,8 @@ export function SessionDetailsModal( {
 									{ item.status_label }
 								</span>
 								<Text>{ /* translators: %s is the external ID of the imported item */
-								__( 'External ID: %s', 'safe-publish' ).replace( '%s', item.external_id ) }</Text>
+								__( 'External ID: %s', 'safe-publish' )
+									.replace( '%s', String( item.external_id ) ) }</Text>
 								{ item.error && (
 									<>
 										<Text>|</Text>

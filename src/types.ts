@@ -363,7 +363,7 @@ export interface ImportSession {
  * @property {string}  title           Title of the imported post.
  * @property {string}  status          Import status.
  * @property {string}  status_label    Human-readable status label.
- * @property {string}  external_id     ID from the external source.
+ * @property {number}  external_id     ID from the external source.
  * @property {number}  [post_id]       Local WordPress post ID.
  * @property {string}  [error]         Error message if failed.
  * @property {boolean} has_changes     Whether changes were detected.
@@ -377,7 +377,7 @@ export interface ImportItem {
 	title: string;
 	status: 'success' | 'updated' | 'error';
 	status_label: string;
-	external_id: string;
+	external_id: number;
 	post_id?: number;
 	error?: string;
 	has_changes: boolean;
