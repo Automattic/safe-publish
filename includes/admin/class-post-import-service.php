@@ -751,9 +751,10 @@ class Post_Import_Service {
 	 * Persists an existing post update with all associated data.
 	 *
 	 * Handles wp_update_post, external link meta, import date, thumbnail,
-	 * custom meta, and terms. If any step after wp_update_post() fails,
-	 * the post is rolled back to its pre-update state. Used by both
-	 * single and bulk import paths.
+	 * custom meta, and terms. If any step after wp_update_post() fails, the
+	 * post is rolled back to its pre-update state and any media sideloaded
+	 * during this attempt is deleted. Used by both single and bulk import
+	 * paths.
 	 *
 	 * @param array        $post_args              Arguments for wp_update_post().
 	 * @param int          $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
@@ -804,7 +805,7 @@ class Post_Import_Service {
 			Options::META_IMPORT_DATE,
 			current_time( 'mysql' )
 		) ) {
-			$this->restore_pre_update_state( $post_id, $snapshot );
+			$this->rollback_failed_update( $post_id, $snapshot );
 
 			return new WP_Error(
 				'import_date_update_failed',
@@ -826,7 +827,7 @@ class Post_Import_Service {
 		);
 
 		if ( is_wp_error( $meta_result ) ) {
-			$this->restore_pre_update_state( $post_id, $snapshot );
+			$this->rollback_failed_update( $post_id, $snapshot );
 
 			return new WP_Error(
 				'meta_update_failed',
@@ -841,7 +842,7 @@ class Post_Import_Service {
 		);
 
 		if ( is_wp_error( $terms_result ) ) {
-			$this->restore_pre_update_state( $post_id, $snapshot );
+			$this->rollback_failed_update( $post_id, $snapshot );
 
 			return new WP_Error(
 				'terms_update_failed',
@@ -953,6 +954,21 @@ class Post_Import_Service {
 		foreach ( $snapshot['terms'] as $taxonomy => $term_ids ) {
 			wp_set_object_terms( $post_id, $term_ids, $taxonomy );
 		}
+	}
+
+	/**
+	 * Rolls back a failed update: restores the post to its pre-update state and
+	 * deletes any media sideloaded during the failed attempt.
+	 *
+	 * @param int   $post_id  Post ID.
+	 * @param array $snapshot Snapshot from capture_pre_update_state().
+	 */
+	private function rollback_failed_update(
+		int $post_id,
+		array $snapshot
+	): void {
+		$this->restore_pre_update_state( $post_id, $snapshot );
+		$this->content_processor->delete_newly_created_media();
 	}
 
 	/**
