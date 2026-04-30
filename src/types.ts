@@ -205,10 +205,10 @@ export interface DeleteSessionData {
 /**
  * Session details response data.
  *
- * @property {ImportLog[]} logs Array of import log entries.
+ * @property {ImportItem[]} items Array of import items.
  */
 export interface SessionDetailsData {
-	logs: ImportLog[];
+	items: ImportItem[];
 }
 
 /**
@@ -357,9 +357,9 @@ export interface ImportSession {
 }
 
 /**
- * Represents an individual import log entry.
+ * Represents an individual import item.
  *
- * @property {number}  id              Unique log entry ID.
+ * @property {number}  id              Unique item ID.
  * @property {string}  title           Title of the imported post.
  * @property {string}  status          Import status.
  * @property {string}  status_label    Human-readable status label.
@@ -372,7 +372,7 @@ export interface ImportSession {
  * @property {boolean} is_rolled_back  Whether the item has been rolled back.
  * @property {string}  rollback_action Type of rollback action.
  */
-export interface ImportLog {
+export interface ImportItem {
 	id: number;
 	title: string;
 	status: 'success' | 'updated' | 'error';

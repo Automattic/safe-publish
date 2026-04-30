@@ -2,7 +2,7 @@
  * Session Details Modal Component.
  *
  * Displays detailed information about an import session including individual
- * log entries with rollback and diff viewing capabilities.
+ * items with rollback and diff viewing capabilities.
  *
  * @file This file defines the SessionDetailsModal component.
  */
@@ -20,7 +20,7 @@ import { __ } from '@wordpress/i18n';
 
 import type {
 	ApiResponse,
-	ImportLog,
+	ImportItem,
 	ImportSession,
 	RollbackItemData,
 	SessionDetailsData,
@@ -44,7 +44,7 @@ interface SessionDetailsModalProps {
 /**
  * Session Details Modal component.
  *
- * Displays session statistics, individual import logs, and provides actions for
+ * Displays session statistics, individual import items, and provides actions for
  * rolling back individual items or viewing content diffs.
  *
  * @param {Object}        props            Component props.
@@ -61,7 +61,7 @@ export function SessionDetailsModal( {
 	onViewDiff,
 	onClose
 }: SessionDetailsModalProps ): JSX.Element {
-	const [ logs, setLogs ] = useState< ImportLog[] >( [] );
+	const [ items, setItems ] = useState< ImportItem[] >( [] );
 	const [ isLoading, setIsLoading ] = useState< boolean >( true );
 	const [ error, setError ] = useState< string | null >( null );
 	const [ isRollingBack, setIsRollingBack ] = useState< boolean >( false );
@@ -69,9 +69,9 @@ export function SessionDetailsModal( {
 	const [ noticeMessage, setNoticeMessage ] = useState< { type: 'success' | 'error'; message: string } | null >( null );
 
 	/**
-	 * Loads session details and logs.
+	 * Loads session details and items.
 	 *
-	 * Fetches the detailed log entries for the current session from the
+	 * Fetches the detailed items for the current session from the
 	 * WordPress AJAX endpoint.
 	 *
 	 * @return {Promise<void>} Resolves when details are loaded.
@@ -94,7 +94,7 @@ export function SessionDetailsModal( {
 			const result = await response.json() as ApiResponse< SessionDetailsData >;
 
 			if ( result.success ) {
-				setLogs( result.data.logs || [] );
+				setItems( result.data.items || [] );
 			} else {
 				setError( getErrorMessage( result, __( 'Failed to load session details.', 'safe-publish' ) ) );
 			}
@@ -132,11 +132,11 @@ export function SessionDetailsModal( {
 	 * Prompts for confirmation then sends a request to rollback a single
 	 * imported post.
 	 *
-	 * @param {number} logId Log ID of the item to rollback.
-	 * @param {string} title Title of the post for the confirmation dialog.
+	 * @param {number} itemId Item ID to rollback.
+	 * @param {string} title  Title of the post for the confirmation dialog.
 	 * @return {Promise<void>} Resolves when rollback is complete.
 	 */
-	const handleItemRollback = async ( logId: number, title: string ): Promise< void > => {
+	const handleItemRollback = async ( itemId: number, title: string ): Promise< void > => {
 		// eslint-disable-next-line no-alert
 		if ( ! window.confirm(
 			/* translators: %s is the post title */
@@ -145,13 +145,13 @@ export function SessionDetailsModal( {
 			return;
 		}
 
-		setRollingBackItemId( logId );
+		setRollingBackItemId( itemId );
 
 		try {
 			const formData = new FormData();
 			formData.append( 'action', 'safe_publish_rollback_item' );
 			formData.append( 'nonce', window.safePublishAdminData.nonce );
-			formData.append( 'log_id', logId.toString() );
+			formData.append( 'item_id', itemId.toString() );
 
 			const response = await fetch( window.safePublishAdminData.ajaxurl, {
 				method: 'POST',
@@ -231,33 +231,33 @@ export function SessionDetailsModal( {
 	);
 
 	/**
-	 * Renders import logs.
+	 * Renders import items.
 	 *
-	 * Displays the list of individual import log entries with actions for
+	 * Displays the list of individual import items with actions for
 	 * viewing diffs and rolling back items.
 	 *
-	 * @return {JSX.Element} Rendered import logs list.
+	 * @return {JSX.Element} Rendered import items list.
 	 */
-	const renderImportLogs = (): JSX.Element => {
+	const renderImportItems = (): JSX.Element => {
 		if ( 'rolled_back' === session.status ) {
 			return (
-				<div className="safe-publish-log-item">
+				<div className="safe-publish-item-row">
 					<Text><strong>{ __( 'This session has been rolled back.', 'safe-publish' ) }</strong></Text>
 					<Text>{ __( 'All imported posts from this session have been deleted and are no longer available.', 'safe-publish' ) }</Text>
 				</div>
 			);
 		}
 
-		if ( 0 === logs.length ) {
+		if ( 0 === items.length ) {
 			return (
-				<Text>{ __( 'No detailed logs available for this session.', 'safe-publish' ) }</Text>
+				<Text>{ __( 'No detailed items available for this session.', 'safe-publish' ) }</Text>
 			);
 		}
 
 		return (
 			<VStack spacing={ 2 }>
-				{ logs.map( ( log ) => (
-					<div key={ log.id } className="safe-publish-log-item" style={ {
+				{ items.map( ( item ) => (
+					<div key={ item.id } className="safe-publish-item-row" style={ {
 						background: '#fff',
 						border: '1px solid #ddd',
 						borderRadius: '4px',
@@ -265,37 +265,37 @@ export function SessionDetailsModal( {
 					} }>
 						<VStack spacing={ 2 }>
 							<HStack justify="space-between">
-								<Text><strong>{ log.title }</strong></Text>
+								<Text><strong>{ item.title }</strong></Text>
 								<HStack spacing={ 2 }>
-									{ log.post_id && log.edit_url && ! log.is_rolled_back && (
+									{ item.post_id && item.edit_url && ! item.is_rolled_back && (
 										<Button
 											variant="secondary"
 											size="compact"
-											href={ log.edit_url }
+											href={ item.edit_url }
 											target="_blank"
 										>
 											{ __( 'Edit Post', 'safe-publish' ) }
 										</Button>
 									) }
-									{ log.has_changes && log.post_id && ! log.is_rolled_back && (
+									{ item.has_changes && item.post_id && ! item.is_rolled_back && (
 										<Button
 											variant="tertiary"
 											size="compact"
-											onClick={ () => log.post_id && onViewDiff( log.post_id ) }
+											onClick={ () => item.post_id && onViewDiff( item.post_id ) }
 										>
 											{ __( 'View Changes', 'safe-publish' ) }
 										</Button>
 									) }
-									{ log.can_rollback && ! log.is_rolled_back && (
+									{ item.can_rollback && ! item.is_rolled_back && (
 										<Button
 											variant="primary"
 											isDestructive
 											size="compact"
-											onClick={ () => void handleItemRollback( log.id, log.title ) }
-											disabled={ rollingBackItemId === log.id }
+											onClick={ () => void handleItemRollback( item.id, item.title ) }
+											disabled={ rollingBackItemId === item.id }
 										>
 										{ ( () => {
-											if ( rollingBackItemId === log.id ) {
+											if ( rollingBackItemId === item.id ) {
 												return (
 													<>
 														<Spinner />
@@ -304,7 +304,7 @@ export function SessionDetailsModal( {
 												);
 											}
 
-											if ( log.rollback_action === 'restore' ) {
+											if ( item.rollback_action === 'restore' ) {
 												return __( 'Restore', 'safe-publish' );
 											}
 
@@ -312,7 +312,7 @@ export function SessionDetailsModal( {
 										} )() }
 										</Button>
 									) }
-									{ log.is_rolled_back && (
+									{ item.is_rolled_back && (
 										<Text style={ { color: '#d63638', fontWeight: 'bold' } }>
 											{ __( 'Rolled Back', 'safe-publish' ) }
 										</Text>
@@ -320,17 +320,17 @@ export function SessionDetailsModal( {
 								</HStack>
 							</HStack>
 							<HStack spacing={ 2 }>
-								<span className={ `safe-publish-status-${ log.status }` }>
-									{ log.status_label }
+								<span className={ `safe-publish-status-${ item.status }` }>
+									{ item.status_label }
 								</span>
 								<Text>{ /* translators: %s is the external ID of the imported item */
-								__( 'External ID: %s', 'safe-publish' ).replace( '%s', log.external_id ) }</Text>
-								{ log.error && (
+								__( 'External ID: %s', 'safe-publish' ).replace( '%s', item.external_id ) }</Text>
+								{ item.error && (
 									<>
 										<Text>|</Text>
 										<Text style={ { color: '#d63638' } }>
 											{ /* translators: %s is the error message */
-											__( 'Error: %s', 'safe-publish' ).replace( '%s', log.error ) }
+											__( 'Error: %s', 'safe-publish' ).replace( '%s', item.error ) }
 										</Text>
 									</>
 								) }
@@ -398,7 +398,7 @@ export function SessionDetailsModal( {
 						);
 					}
 
-					return renderImportLogs();
+					return renderImportItems();
 				} )() }
 			</VStack>
 

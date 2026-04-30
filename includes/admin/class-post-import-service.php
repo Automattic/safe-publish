@@ -1118,7 +1118,7 @@ class Post_Import_Service {
 	 * @param string      $status      Import status (success, updated, error).
 	 * @param int|null    $post_id     WordPress post ID or null on failure.
 	 * @param string|null $error       Error message or null on success.
-	 * @param array       $changes     Contextual changes data for the log entry.
+	 * @param array       $changes     Contextual changes data for the item.
 	 */
 	private function log_import_if_session(
 		?int $session_id,

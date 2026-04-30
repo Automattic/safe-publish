@@ -53,7 +53,7 @@ final class Session_Rollback_Service {
 			);
 		}
 
-		$logs = $this->repository->get_session_logs_by_status(
+		$items = $this->repository->get_session_items_by_status(
 			$session_id,
 			array( 'success', 'updated' )
 		);
@@ -62,8 +62,8 @@ final class Session_Rollback_Service {
 		$restored_count = 0;
 		$failed_count   = 0;
 
-		foreach ( $logs as $log ) {
-			$result = $this->rollback_log_entry( $log->ID );
+		foreach ( $items as $item ) {
+			$result = $this->rollback_item_row( $item );
 
 			if ( is_wp_error( $result ) ) {
 				++$failed_count;
@@ -89,47 +89,47 @@ final class Session_Rollback_Service {
 	}
 
 	/**
-	 * Rolls back a single import log entry.
+	 * Rolls back a single import item.
 	 *
-	 * @param int $log_id Log entry ID to roll back.
+	 * @param int $item_id Item ID to roll back.
 	 * @return array{action: string, post_id: int, post_title: string}|WP_Error Rollback result or error.
 	 */
-	public function rollback_item( int $log_id ): array|WP_Error {
-		$log = $this->repository->get_log( $log_id );
+	public function rollback_item( int $item_id ): array|WP_Error {
+		$item = $this->repository->get_item( $item_id );
 
-		if ( ! $log ) {
+		if ( ! $item ) {
 			return new WP_Error(
-				'log_not_found',
-				__( 'Import log not found', 'safe-publish' )
+				'item_not_found',
+				__( 'Import item not found', 'safe-publish' )
 			);
 		}
 
-		$result = $this->rollback_log_entry( $log_id );
+		$result = $this->rollback_item_row( $item );
 
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
 
-		$this->repository->mark_log_rolled_back( $log_id );
+		$this->repository->mark_item_rolled_back( $item_id );
 
 		return $result;
 	}
 
 	/**
-	 * Rolls back a single log entry (internal helper).
+	 * Rolls back a single item row (internal helper).
 	 *
-	 * @param int $log_id Log entry ID.
+	 * @param array $item Item row.
 	 * @return array{action: string, post_id: int, post_title: string}|WP_Error Rollback result or error.
 	 */
-	private function rollback_log_entry( int $log_id ): array|WP_Error {
-		$post_id = get_post_meta( $log_id, 'post_id', true );
-		$status  = get_post_meta( $log_id, 'status', true );
-		$changes = get_post_meta( $log_id, 'content_changes', true );
+	private function rollback_item_row( array $item ): array|WP_Error {
+		$post_id = isset( $item['post_id'] ) ? (int) $item['post_id'] : 0;
+		$status  = (string) ( $item['status'] ?? '' );
+		$changes = History_Repository::decode_item_changes( $item['content_changes'] ?? null );
 
-		if ( ! $post_id ) {
+		if ( $post_id <= 0 ) {
 			return new WP_Error(
 				'no_post_id',
-				__( 'No post ID found for this log entry', 'safe-publish' )
+				__( 'No post ID found for this item', 'safe-publish' )
 			);
 		}
 
@@ -145,12 +145,12 @@ final class Session_Rollback_Service {
 			return $this->delete_new_post( $post_id, $post->post_title );
 		}
 
-		if ( 'updated' === $status && ! empty( $changes ) && isset( $changes['previous_content'] ) ) {
+		if ( 'updated' === $status && is_array( $changes ) && isset( $changes['previous_content'] ) ) {
 			return $this->restore_previous_version( $post_id, $post->post_title, $changes );
 		}
 
 		if ( 'updated' === $status ) {
-			// Legacy case: no previous content stored, just delete.
+			// No previous content stored: just delete the post.
 			return $this->delete_new_post( $post_id, $post->post_title );
 		}
 
