@@ -494,6 +494,385 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a source-domain anchor href is sideloaded even when the
+	 * primary <img src> belongs to a third-party domain and is therefore
+	 * skipped by the importer.
+	 */
+	public function test_process_image_block_with_third_party_src_sideloads_anchor_href(): void {
+		// ARRANGE: An image block whose <img src> is a third-party CDN URL,
+		// wrapped in an <a href> pointing at a source-hosted file.
+		$source_site = 'https://source.example.com';
+		$cdn_url     = 'https://cdn.example.com/photo-300x200.jpg';
+		$href_url    = 'https://source.example.com/photo.jpg';
+		$content     = '<!-- wp:image {"url":"' . $cdn_url . '","linkDestination":"media"} -->'
+			. '<figure class="wp-block-image">'
+			. '<a href="' . $href_url . '">'
+			. '<img src="' . $cdn_url . '" alt="A photo"/>'
+			. '</a></figure>'
+			. '<!-- /wp:image -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block content through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site );
+
+		// ASSERT: One attachment was created (from the anchor href only).
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Anchor href should be sideloaded even when <img src> is third-party'
+		);
+
+		// ASSERT: The third-party CDN URL is left intact.
+		$this->assertStringContainsString(
+			$cdn_url,
+			$processed,
+			'Third-party <img src> should be left unchanged'
+		);
+
+		// ASSERT: The source-domain href no longer appears.
+		$this->assertStringNotContainsString(
+			$href_url,
+			$processed,
+			'Source-domain anchor href should be replaced'
+		);
+
+		// ASSERT: No failure was recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that an anchor href is still sideloaded when the primary
+	 * <img src> import fails — failure on the src must not skip the
+	 * innerHTML anchor pass.
+	 */
+	public function test_process_image_block_with_failed_src_still_sideloads_anchor_href(): void {
+		// ARRANGE: A source-domain <img src> forced to fail, plus a separate
+		// source-domain <a href> that should still be sideloaded.
+		$source_site = 'https://source.example.com';
+		$broken_url  = 'https://source.example.com/broken-photo.jpg';
+		$href_url    = 'https://source.example.com/photo.jpg';
+		$content     = '<!-- wp:image {"url":"' . $broken_url . '","linkDestination":"media"} -->'
+			. '<figure class="wp-block-image">'
+			. '<a href="' . $href_url . '">'
+			. '<img src="' . $broken_url . '" alt="A photo"/>'
+			. '</a></figure>'
+			. '<!-- /wp:image -->';
+
+		$force_failure = static function (
+			$preempt,
+			array $args,
+			string $url
+		) use ( $broken_url ) {
+			unset( $args );
+			if ( $url === $broken_url ) {
+				return new WP_Error(
+					'http_request_failed',
+					'forced failure for test'
+				);
+			}
+			return $preempt;
+		};
+		add_filter( 'pre_http_request', $force_failure, 5, 3 );
+
+		$attachments_before = $this->get_attachment_count();
+
+		try {
+			// ACT: Process the block content.
+			$processed = $this->processor->process_content( $content, $source_site );
+		} finally {
+			remove_filter( 'pre_http_request', $force_failure, 5 );
+		}
+
+		// ASSERT: One attachment was created (from the anchor href only).
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Anchor href should be sideloaded even when <img src> import fails'
+		);
+
+		// ASSERT: Neither source URL appears verbatim in the output.
+		$this->assertStringNotContainsString(
+			$href_url,
+			$processed,
+			'Source-domain anchor href should be replaced'
+		);
+		$this->assertStringNotContainsString(
+			$broken_url,
+			$processed,
+			'Failing src URL host should still be rewritten by replace_external_urls'
+		);
+
+		// ASSERT: The failing src URL is recorded as a failure.
+		$this->assertSame(
+			array( $broken_url ),
+			$this->processor->get_failed_media(),
+			'Failing <img src> should be recorded in failed_media'
+		);
+	}
+
+	/**
+	 * Verifies that a source-domain anchor href is sideloaded even when a
+	 * core/video block's primary src belongs to a third-party domain and is
+	 * therefore skipped by the importer.
+	 */
+	public function test_process_video_block_with_third_party_src_sideloads_anchor_href(): void {
+		// ARRANGE: A video block whose src is a third-party CDN URL, with a
+		// source-domain <a href> in innerHTML pointing at a related file.
+		$source_site = 'https://source.example.com';
+		$cdn_url     = 'https://cdn.example.com/video.mp4';
+		$href_url    = 'https://source.example.com/poster.jpg';
+		$content     = '<!-- wp:video {"src":"' . $cdn_url . '"} -->'
+			. '<figure class="wp-block-video">'
+			. '<a href="' . $href_url . '">Poster</a>'
+			. '<video controls src="' . $cdn_url . '"></video>'
+			. '</figure>'
+			. '<!-- /wp:video -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block content through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site );
+
+		// ASSERT: One attachment was created (from the anchor href only).
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Anchor href should be sideloaded even when video src is third-party'
+		);
+
+		// ASSERT: The third-party CDN URL is left intact.
+		$this->assertStringContainsString(
+			$cdn_url,
+			$processed,
+			'Third-party video src should be left unchanged'
+		);
+
+		// ASSERT: The source-domain href no longer appears.
+		$this->assertStringNotContainsString(
+			$href_url,
+			$processed,
+			'Source-domain anchor href should be replaced'
+		);
+
+		// ASSERT: No failure was recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that a source-domain anchor href in an image block's innerHTML
+	 * is sideloaded even when the block carries no primary image URL at all
+	 * (no attrs.url and no <img src>).
+	 */
+	public function test_process_image_block_with_empty_url_still_sideloads_anchor_href(): void {
+		// ARRANGE: An image block with no <img> and no attrs.url, only a
+		// source-domain <a href> in innerHTML.
+		$source_site = 'https://source.example.com';
+		$href_url    = 'https://source.example.com/file.jpg';
+		$content     = '<!-- wp:image -->'
+			. '<figure class="wp-block-image">'
+			. '<a href="' . $href_url . '">Download</a>'
+			. '</figure>'
+			. '<!-- /wp:image -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block content.
+		$processed = $this->processor->process_content( $content, $source_site );
+
+		// ASSERT: One attachment was created (from the anchor href).
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Anchor href should be sideloaded even when the block has no primary URL'
+		);
+
+		// ASSERT: The source-domain href no longer appears.
+		$this->assertStringNotContainsString(
+			$href_url,
+			$processed,
+			'Source-domain anchor href should be replaced'
+		);
+
+		// ASSERT: No failure was recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that a source-domain anchor href in a core/video block's
+	 * innerHTML is sideloaded even when the block carries no attrs.src.
+	 */
+	public function test_process_video_block_with_empty_src_still_sideloads_anchor_href(): void {
+		// ARRANGE: A video block with no attrs.src, only a source-domain
+		// <a href> in innerHTML.
+		$source_site = 'https://source.example.com';
+		$href_url    = 'https://source.example.com/file.jpg';
+		$content     = '<!-- wp:video -->'
+			. '<figure class="wp-block-video">'
+			. '<a href="' . $href_url . '">Download</a>'
+			. '</figure>'
+			. '<!-- /wp:video -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block content.
+		$processed = $this->processor->process_content( $content, $source_site );
+
+		// ASSERT: One attachment was created (from the anchor href).
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Anchor href should be sideloaded even when video block has no src'
+		);
+
+		// ASSERT: The source-domain href no longer appears.
+		$this->assertStringNotContainsString(
+			$href_url,
+			$processed,
+			'Source-domain anchor href should be replaced'
+		);
+
+		// ASSERT: No failure was recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that an anchor href is still sideloaded when a video block's
+	 * primary src download fails — failure on the src must not skip the
+	 * innerHTML anchor pass.
+	 */
+	public function test_process_video_block_with_failed_src_still_sideloads_anchor_href(): void {
+		// ARRANGE: A source-domain video src forced to fail, plus a separate
+		// source-domain <a href> that should still be sideloaded.
+		$source_site = 'https://source.example.com';
+		$broken_url  = 'https://source.example.com/broken-video.mp4';
+		$href_url    = 'https://source.example.com/poster.jpg';
+		$content     = '<!-- wp:video {"src":"' . $broken_url . '"} -->'
+			. '<figure class="wp-block-video">'
+			. '<a href="' . $href_url . '">Poster</a>'
+			. '<video controls src="' . $broken_url . '"></video>'
+			. '</figure>'
+			. '<!-- /wp:video -->';
+
+		$force_failure = static function (
+			$preempt,
+			array $args,
+			string $url
+		) use ( $broken_url ) {
+			unset( $args );
+			if ( $url === $broken_url ) {
+				return new WP_Error(
+					'http_request_failed',
+					'forced failure for test'
+				);
+			}
+			return $preempt;
+		};
+		add_filter( 'pre_http_request', $force_failure, 5, 3 );
+
+		$attachments_before = $this->get_attachment_count();
+
+		try {
+			// ACT: Process the block content.
+			$processed = $this->processor->process_content( $content, $source_site );
+		} finally {
+			remove_filter( 'pre_http_request', $force_failure, 5 );
+		}
+
+		// ASSERT: One attachment was created (from the anchor href only).
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Anchor href should be sideloaded even when video src import fails'
+		);
+
+		// ASSERT: The href URL no longer appears in the output.
+		$this->assertStringNotContainsString(
+			$href_url,
+			$processed,
+			'Source-domain anchor href should be replaced'
+		);
+
+		// ASSERT: The failing src URL is recorded as a failure.
+		$this->assertSame(
+			array( $broken_url ),
+			$this->processor->get_failed_media(),
+			'Failing video src should be recorded in failed_media'
+		);
+	}
+
+	/**
+	 * Verifies that an anchor href in the outer wrapper of a block-based
+	 * gallery (innerBlocks only, no attrs.images) is sideloaded via the
+	 * tail-call helper at the gallery level.
+	 */
+	public function test_process_gallery_block_with_inner_blocks_sideloads_outer_anchor_href(): void {
+		// ARRANGE: A block-based gallery whose outer innerHTML contains a
+		// standalone source-domain <a href>, alongside a child image block.
+		$source_site = 'https://source.example.com';
+		$image_url   = 'https://source.example.com/photo.jpg';
+		$href_url    = 'https://source.example.com/download.jpg';
+		$content     = '<!-- wp:gallery {"linkTo":"none"} -->'
+			. '<figure class="wp-block-gallery has-nested-images">'
+			. '<a href="' . $href_url . '">Download all</a>'
+			. '<!-- wp:image {"id":1} -->'
+			. '<figure class="wp-block-image">'
+			. '<img src="' . $image_url . '" alt=""/>'
+			. '</figure>'
+			. '<!-- /wp:image -->'
+			. '</figure>'
+			. '<!-- /wp:gallery -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block content.
+		$processed = $this->processor->process_content( $content, $source_site );
+
+		// ASSERT: Two attachments were created — the inner image and the
+		// gallery wrapper href.
+		$this->assertSame(
+			$attachments_before + 2,
+			$this->get_attachment_count(),
+			'Inner image and outer anchor href should both be sideloaded'
+		);
+
+		// ASSERT: Neither source URL appears in the output.
+		$this->assertStringNotContainsString(
+			$image_url,
+			$processed,
+			'Inner image URL should be replaced'
+		);
+		$this->assertStringNotContainsString(
+			$href_url,
+			$processed,
+			'Outer anchor href should be replaced'
+		);
+
+		// ASSERT: No failure was recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
 	 * Verifies that a Gutenberg image block referencing source-site media with
 	 * a non-standard extension (.heic) is sideloaded correctly.
 	 *
