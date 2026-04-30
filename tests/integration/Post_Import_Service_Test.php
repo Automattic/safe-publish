@@ -1239,7 +1239,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that the bulk import path writes a row to the import log when
+	 * Verifies that the bulk import path writes an item row when
 	 * post-type resolution returns a WP_Error.
 	 */
 	public function test_bulk_import_logs_failure_when_post_type_unregistered(): void {
@@ -1269,30 +1269,23 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			'Import should fail for an unregistered post type.'
 		);
 
-		// ASSERT: A log row was written for the session.
-		$logs = get_posts(
-			array(
-				'post_type'      => History_Repository::LOG_POST_TYPE,
-				'post_status'    => 'publish',
-				'post_parent'    => $session_id,
-				'posts_per_page' => -1,
-			)
-		);
+		// ASSERT: An item row was written for the session.
+		$items = ( new History_Repository() )->get_session_items( $session_id );
 
 		$this->assertCount(
 			1,
-			$logs,
-			'Bulk import must log a row when post-type resolution fails.'
+			$items,
+			'Bulk import must write an item row when post-type resolution fails.'
 		);
 		$this->assertSame(
 			'error',
-			get_post_meta( $logs[0]->ID, 'status', true ),
-			'Logged row must record the import as an error.'
+			$items[0]['status'],
+			'Item row must record the import as an error.'
 		);
 		$this->assertSame(
 			9803,
-			(int) get_post_meta( $logs[0]->ID, 'external_id', true ),
-			'Logged row must reference the failing external post ID.'
+			(int) $items[0]['external_id'],
+			'Item row must reference the failing external post ID.'
 		);
 	}
 

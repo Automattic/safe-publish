@@ -12,6 +12,8 @@ namespace Safe_Publish\Tests\Integration\Import_Mode_Admin_Handler;
 use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Tests\Integration\Mock_Post_API_Trait;
+use Safe_Publish\Utils\Import_Items_Table;
+use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
 use WPAjaxDieContinueException;
 use WPAjaxDieStopException;
@@ -48,6 +50,9 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 		if ( ! defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ) {
 			define( 'SAFE_PUBLISH_SHARED_SECRET', self::FALLBACK_SECRET );
 		}
+
+		Imports_Table::create_table();
+		Import_Items_Table::create_table();
 
 		$this->admin_user_id = $this->factory()->user->create(
 			array( 'role' => 'administrator' )
@@ -1113,20 +1118,17 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 	 * @return int
 	 */
 	private function count_open_sessions(): int {
-		$sessions = get_posts(
-			array(
-				'post_type'      => 'sp_import_session',
-				'post_status'    => 'publish',
-				'posts_per_page' => -1,
-				'meta_query'     => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-					array(
-						'key'   => 'status',
-						'value' => 'in_progress',
-					),
-				),
+		global $wpdb;
+
+		$table = Imports_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		return (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM `{$table}` WHERE status = %s",
+				'in_progress'
 			)
 		);
-
-		return count( $sessions );
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 	}
 }

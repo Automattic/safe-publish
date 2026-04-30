@@ -2,7 +2,7 @@
  * Tests for TypeScript type definitions and interfaces
  */
 import { describe, expect, it } from 'vitest';
-import type { Post, ImportSession, ImportLog, PaginationInfo } from '@/types';
+import type { Post, ImportSession, ImportItem, PaginationInfo } from '@/types';
 
 describe( 'Type validation', () => {
 	describe( 'Post type', () => {
@@ -96,9 +96,9 @@ describe( 'Type validation', () => {
 		} );
 	} );
 
-	describe( 'ImportLog type', () => {
-		it( 'should accept valid import log object', () => {
-			const log: ImportLog = {
+	describe( 'ImportItem type', () => {
+		it( 'should accept valid import item object', () => {
+			const item: ImportItem = {
 				id: 1,
 				title: 'Test Post',
 				status: 'success',
@@ -112,16 +112,16 @@ describe( 'Type validation', () => {
 				rollback_action: 'delete',
 			};
 
-			expect( log.id ).toBe( 1 );
-			expect( log.status ).toBe( 'success' );
-			expect( log.post_id ).toBe( 456 );
+			expect( item.id ).toBe( 1 );
+			expect( item.status ).toBe( 'success' );
+			expect( item.post_id ).toBe( 456 );
 		} );
 
 		it( 'should accept all valid status values', () => {
-			const statuses: Array< ImportLog[ 'status' ] > = [ 'success', 'updated', 'error' ];
+			const statuses: Array< ImportItem[ 'status' ] > = [ 'success', 'updated', 'error' ];
 
 			statuses.forEach( ( status ) => {
-				const log: ImportLog = {
+				const item: ImportItem = {
 					id: 1,
 					title: 'Test',
 					status,
@@ -132,15 +132,15 @@ describe( 'Type validation', () => {
 					is_rolled_back: false,
 					rollback_action: 'delete',
 				};
-				expect( log.status ).toBe( status );
+				expect( item.status ).toBe( status );
 			} );
 		} );
 
 		it( 'should accept both rollback action types', () => {
-			const actions: Array< ImportLog[ 'rollback_action' ] > = [ 'delete', 'restore' ];
+			const actions: Array< ImportItem[ 'rollback_action' ] > = [ 'delete', 'restore' ];
 
 			actions.forEach( ( action ) => {
-				const log: ImportLog = {
+				const item: ImportItem = {
 					id: 1,
 					title: 'Test',
 					status: 'success',
@@ -151,7 +151,7 @@ describe( 'Type validation', () => {
 					is_rolled_back: false,
 					rollback_action: action,
 				};
-				expect( log.rollback_action ).toBe( action );
+				expect( item.rollback_action ).toBe( action );
 			} );
 		} );
 	} );

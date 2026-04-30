@@ -9,6 +9,7 @@ namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Session_Formatter;
+use Safe_Publish\Utils\Imports_Table;
 
 /**
  * Import History Integration Test Class.
@@ -57,24 +58,23 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 		$this->assertGreaterThan( 0, $session_id );
 
 		$session = $this->repository->get_session( $session_id );
-		$this->assertNotNull( $session );
-		$this->assertSame( 'sp_import_session', $session->post_type );
+		$this->assertIsArray( $session );
 
-		// ASSERT: Session meta was stored correctly.
-		$this->assertSame( 'https://example.com', get_post_meta( $session->ID, 'source_url', true ) );
-		$this->assertSame( 'bulk', get_post_meta( $session->ID, 'session_type', true ) );
-		$this->assertSame( 'in_progress', get_post_meta( $session->ID, 'status', true ) );
+		// ASSERT: Session row was stored correctly.
+		$this->assertSame( 'https://example.com', $session['source_url'] );
+		$this->assertSame( 'bulk', $session['session_type'] );
+		$this->assertSame( 'in_progress', $session['status'] );
 	}
 
 	/**
-	 * Verifies that logging import actions creates log entries.
+	 * Verifies that logging import actions creates item rows.
 	 */
-	public function test_logging_import_actions_creates_log_entries(): void {
+	public function test_logging_import_actions_creates_item_rows(): void {
 		// ARRANGE: Create session.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
 
 		// ACT: Log successful import.
-		$log_id = $this->repository->log_import_action(
+		$item_id = $this->repository->log_import_action(
 			$session_id,
 			123,
 			'Test Post',
@@ -84,19 +84,18 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 			array()
 		);
 
-		// ASSERT: Log created.
-		$this->assertIsInt( $log_id );
-		$this->assertGreaterThan( 0, $log_id );
+		// ASSERT: Item created.
+		$this->assertIsInt( $item_id );
+		$this->assertGreaterThan( 0, $item_id );
 
-		$log = $this->repository->get_log( $log_id );
-		$this->assertNotNull( $log );
-		$this->assertSame( 'sp_import_log', $log->post_type );
-		$this->assertSame( 'Test Post', $log->post_title );
+		$item = $this->repository->get_item( $item_id );
+		$this->assertIsArray( $item );
+		$this->assertSame( 'Test Post', $item['title'] );
 
-		// ASSERT: Log meta was stored correctly.
-		$this->assertSame( 'success', get_post_meta( $log->ID, 'status', true ) );
-		$this->assertSame( 123, (int) get_post_meta( $log->ID, 'external_id', true ) );
-		$this->assertSame( $session_id, (int) get_post_meta( $log->ID, 'session_id', true ) );
+		// ASSERT: Item columns were stored correctly.
+		$this->assertSame( 'success', $item['status'] );
+		$this->assertSame( 123, (int) $item['external_id'] );
+		$this->assertSame( $session_id, (int) $item['session_id'] );
 	}
 
 	/**
@@ -138,16 +137,11 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 		$this->repository->update_session_stats( $session_id, 'error' );
 
 		// ASSERT: Stats updated correctly.
-		$session    = $this->repository->get_session( $session_id );
-		$successful = (int) get_post_meta( $session->ID, 'successful', true );
-		$updated    = (int) get_post_meta( $session->ID, 'updated', true );
-		$failed     = (int) get_post_meta( $session->ID, 'failed', true );
-		$total      = (int) get_post_meta( $session->ID, 'total_items', true );
-
-		$this->assertSame( 2, $successful ); // Both 'success' and 'updated' count as successful.
-		$this->assertSame( 1, $updated );
-		$this->assertSame( 1, $failed );
-		$this->assertSame( 3, $total );
+		$session = $this->repository->get_session( $session_id );
+		$this->assertSame( 2, (int) $session['successful'] ); // success + updated.
+		$this->assertSame( 1, (int) $session['updated'] );
+		$this->assertSame( 1, (int) $session['failed'] );
+		$this->assertSame( 3, (int) $session['total_items'] );
 	}
 
 	/**
@@ -160,58 +154,54 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 		// ACT: Complete the session.
 		$this->repository->complete_session( $session_id );
 
-		// ASSERT: Status is completed.
-		$status = get_post_meta( $session_id, 'status', true );
-		$this->assertSame( 'completed', $status );
-
-		$end_time = get_post_meta( $session_id, 'end_time', true );
-		$this->assertNotEmpty( $end_time );
+		// ASSERT: Status is completed and end_time is set.
+		$session = $this->repository->get_session( $session_id );
+		$this->assertSame( 'completed', $session['status'] );
+		$this->assertNotEmpty( $session['end_time'] );
 	}
 
 	/**
-	 * Verifies that retrieving session logs returns correct logs.
+	 * Verifies that retrieving session items returns correct items.
 	 */
-	public function test_retrieve_session_logs_returns_correct_logs(): void {
-		// ARRANGE: Create session and logs.
+	public function test_retrieve_session_items_returns_correct_items(): void {
+		// ARRANGE: Create session and items.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
 
-		// Create multiple logs.
 		$this->repository->log_import_action( $session_id, 1, 'Post 1', 'success', 101 );
 		$this->repository->log_import_action( $session_id, 2, 'Post 2', 'success', 102 );
 		$this->repository->log_import_action( $session_id, 3, 'Post 3', 'error', null, 'Failed' );
 
-		// ACT: Retrieve logs.
-		$logs = $this->repository->get_session_logs( $session_id );
+		// ACT: Retrieve items.
+		$items = $this->repository->get_session_items( $session_id );
 
-		// ASSERT: All logs retrieved with correct titles and statuses.
-		$this->assertCount( 3, $logs );
-		$this->assertSame( 'Post 1', $logs[0]->post_title );
-		$this->assertSame( 'Post 2', $logs[1]->post_title );
-		$this->assertSame( 'Post 3', $logs[2]->post_title );
-		$this->assertSame( 'success', get_post_meta( $logs[0]->ID, 'status', true ) );
-		$this->assertSame( 'success', get_post_meta( $logs[1]->ID, 'status', true ) );
-		$this->assertSame( 'error', get_post_meta( $logs[2]->ID, 'status', true ) );
+		// ASSERT: All items retrieved with correct titles and statuses.
+		$this->assertCount( 3, $items );
+		$this->assertSame( 'Post 1', $items[0]['title'] );
+		$this->assertSame( 'Post 2', $items[1]['title'] );
+		$this->assertSame( 'Post 3', $items[2]['title'] );
+		$this->assertSame( 'success', $items[0]['status'] );
+		$this->assertSame( 'success', $items[1]['status'] );
+		$this->assertSame( 'error', $items[2]['status'] );
 	}
 
 	/**
-	 * Verifies that retrieving logs by status filters correctly.
+	 * Verifies that retrieving items by status filters correctly.
 	 */
-	public function test_retrieve_logs_by_status_filters_correctly(): void {
-		// ARRANGE: Create logs with different statuses.
+	public function test_retrieve_items_by_status_filters_correctly(): void {
+		// ARRANGE: Create items with different statuses.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
 
 		$this->repository->log_import_action( $session_id, 1, 'Success 1', 'success', 101 );
 		$this->repository->log_import_action( $session_id, 2, 'Success 2', 'success', 102 );
 		$this->repository->log_import_action( $session_id, 3, 'Error 1', 'error', null, 'Failed' );
 
-		// ACT: Retrieve only successful logs.
-		$success_logs = $this->repository->get_session_logs_by_status( $session_id, array( 'success' ) );
+		// ACT: Retrieve only successful items.
+		$success_items = $this->repository->get_session_items_by_status( $session_id, array( 'success' ) );
 
-		// ASSERT: Only success logs returned.
-		$this->assertCount( 2, $success_logs );
-		foreach ( $success_logs as $log ) {
-			$status = get_post_meta( $log->ID, 'status', true );
-			$this->assertSame( 'success', $status );
+		// ASSERT: Only success items returned.
+		$this->assertCount( 2, $success_items );
+		foreach ( $success_items as $item ) {
+			$this->assertSame( 'success', $item['status'] );
 		}
 	}
 
@@ -239,5 +229,21 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 		$this->assertSame( 'completed', $formatted_session['status'] );
 		$this->assertSame( 1, $formatted_session['total_items'] );
 		$this->assertSame( 1, $formatted_session['successful'] );
+	}
+
+	/**
+	 * Verifies that Imports_Table::count() reflects the number of session rows.
+	 */
+	public function test_imports_table_count_reflects_session_rows(): void {
+		// ARRANGE: Empty table.
+		$this->assertSame( 0, Imports_Table::count() );
+
+		// ACT: Create three sessions.
+		$this->repository->create_session( 'https://a.example.com', 'bulk' );
+		$this->repository->create_session( 'https://b.example.com', 'single' );
+		$this->repository->create_session( 'https://c.example.com', 'bulk' );
+
+		// ASSERT: Count matches the number of inserted rows.
+		$this->assertSame( 3, Imports_Table::count() );
 	}
 }
