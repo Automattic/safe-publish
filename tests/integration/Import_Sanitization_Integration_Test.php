@@ -14,12 +14,8 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\Admin\Content_Processor;
-use Safe_Publish\Admin\History_Renderer;
 use Safe_Publish\Admin\History_Repository;
-use Safe_Publish\Admin\Import_History;
 use Safe_Publish\Admin\Post_Import_Service;
-use Safe_Publish\Admin\Session_Formatter;
-use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
@@ -46,11 +42,11 @@ class Import_Sanitization_Integration_Test extends Integration_Test_Case {
 	private Post_Import_Service $import_service;
 
 	/**
-	 * Import history coordinator instance.
+	 * History repository instance.
 	 *
-	 * @var Import_History
+	 * @var History_Repository
 	 */
-	private Import_History $import_history;
+	private History_Repository $repository;
 
 	/**
 	 * Sets up test dependencies.
@@ -59,13 +55,7 @@ class Import_Sanitization_Integration_Test extends Integration_Test_Case {
 	protected function setUp(): void {
 		parent::setUp();
 
-		$repository           = new History_Repository();
-		$this->import_history = new Import_History(
-			$repository,
-			new History_Renderer(),
-			new Session_Formatter(),
-			new Session_Rollback_Service( $repository )
-		);
+		$this->repository = new History_Repository();
 
 		$http_client       = new HTTP_Client();
 		$media_importer    = new Media_Importer( $http_client );
@@ -78,7 +68,7 @@ class Import_Sanitization_Integration_Test extends Integration_Test_Case {
 			new External_Posts_API( $http_client ),
 			$media_importer,
 			$content_processor,
-			$this->import_history,
+			$this->repository,
 			new Meta_Terms_Manager()
 		);
 
@@ -122,7 +112,7 @@ class Import_Sanitization_Integration_Test extends Integration_Test_Case {
 	 */
 	public function test_bulk_import_preserves_content_by_default(): void {
 		// ARRANGE: Content with a script tag that kses would strip.
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -168,7 +158,7 @@ class Import_Sanitization_Integration_Test extends Integration_Test_Case {
 	 */
 	public function test_bulk_import_preserves_excerpt_by_default(): void {
 		// ARRANGE: Excerpt with a script tag that kses would strip.
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -261,7 +251,7 @@ class Import_Sanitization_Integration_Test extends Integration_Test_Case {
 		// modify.
 		add_filter( 'safe_publish_import_kses', '__return_true' );
 
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -316,7 +306,7 @@ class Import_Sanitization_Integration_Test extends Integration_Test_Case {
 		// meaningfully modify.
 		add_filter( 'safe_publish_import_kses', '__return_true' );
 
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -364,7 +354,7 @@ class Import_Sanitization_Integration_Test extends Integration_Test_Case {
 		// ARRANGE: Enable kses, then import an excerpt with a script tag.
 		add_filter( 'safe_publish_import_kses', '__return_true' );
 
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -415,7 +405,7 @@ class Import_Sanitization_Integration_Test extends Integration_Test_Case {
 	public function test_bulk_reimport_sanitizes_post_content(): void {
 		// ARRANGE: First import clean content, then reimport with a script tag
 		// while kses is enabled.
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -488,7 +478,7 @@ class Import_Sanitization_Integration_Test extends Integration_Test_Case {
 			$allow_iframes
 		);
 
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);

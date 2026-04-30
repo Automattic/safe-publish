@@ -15,12 +15,8 @@ namespace Safe_Publish\Tests\Integration;
 
 use Closure;
 use Safe_Publish\Admin\Content_Processor;
-use Safe_Publish\Admin\History_Renderer;
 use Safe_Publish\Admin\History_Repository;
-use Safe_Publish\Admin\Import_History;
 use Safe_Publish\Admin\Post_Import_Service;
-use Safe_Publish\Admin\Session_Formatter;
-use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
@@ -46,11 +42,11 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 	private Post_Import_Service $import_service;
 
 	/**
-	 * Import history coordinator instance.
+	 * History repository instance.
 	 *
-	 * @var Import_History
+	 * @var History_Repository
 	 */
-	private Import_History $import_history;
+	private History_Repository $repository;
 
 	/**
 	 * Sets up test dependencies.
@@ -69,13 +65,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 			3
 		);
 
-		$history_repository   = new History_Repository();
-		$this->import_history = new Import_History(
-			$history_repository,
-			new History_Renderer(),
-			new Session_Formatter(),
-			new Session_Rollback_Service( $history_repository )
-		);
+		$this->repository = new History_Repository();
 
 		$media_importer    = new Media_Importer( new HTTP_Client() );
 		$content_processor = new Content_Processor(
@@ -87,7 +77,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 			new External_Posts_API( new HTTP_Client() ),
 			$media_importer,
 			$content_processor,
-			$this->import_history,
+			$this->repository,
 			new Meta_Terms_Manager()
 		);
 	}
@@ -157,7 +147,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 				. '</p>',
 		);
 
-		$session_id         = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id         = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 		$attachments_before = $this->get_attachment_count();
 
 		$post_data = array(
@@ -214,7 +204,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 			'terms'          => array( 'nonexistent_taxonomy_xyz' => array( 'Some Term' ) ),
 		);
 
-		$session_id         = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id         = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 		$attachments_before = $this->get_attachment_count();
 
 		$post_data = array(
@@ -272,7 +262,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		$fail_media_api = $this->make_featured_image_fail_filter();
 		add_filter( 'pre_http_request', $fail_media_api, 6, 3 );
 
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		$post_data = array(
 			'id'        => 9101,
@@ -316,7 +306,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 	 * here leaves the existing post untouched.
 	 */
 	public function test_import_aborts_without_deleting_post_when_featured_image_fails_on_update(): void {
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		// ARRANGE: Import the post once with no featured image so it exists in
 		// the DB.
@@ -365,7 +355,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 	 * must all be identical to their values before the import attempt began.
 	 */
 	public function test_import_restores_post_on_featured_image_failure_during_bulk_update(): void {
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		// ARRANGE: Import the post once with clean content so it exists in the DB.
 		$post_data = array(
@@ -424,7 +414,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 	 * link meta are verified here.
 	 */
 	public function test_bulk_update_fails_when_tracking_meta_write_fails(): void {
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -522,7 +512,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 	 * stale post.
 	 */
 	public function test_bulk_update_fails_on_silent_post_update_failure(): void {
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -606,7 +596,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 	 * pre-update values.
 	 */
 	public function test_bulk_update_rolls_back_post_on_custom_meta_failure(): void {
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -761,7 +751,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 	 * values.
 	 */
 	public function test_bulk_update_rolls_back_post_on_term_failure(): void {
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -890,7 +880,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 	 * attachment is sideloaded rather than the existing one being reused.
 	 */
 	public function test_bulk_update_cleans_up_new_featured_image_on_meta_failure(): void {
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -998,7 +988,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 	 * taxonomy then triggers the rollback path.
 	 */
 	public function test_bulk_update_cleans_up_new_inline_media_on_term_failure(): void {
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -1072,7 +1062,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 	 * because the attachment is in the media library.
 	 */
 	public function test_bulk_update_cleans_up_new_media_on_tracking_meta_failure(): void {
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);

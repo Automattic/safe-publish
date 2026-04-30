@@ -55,11 +55,11 @@ class Post_Import_Service {
 	private Content_Processor $content_processor;
 
 	/**
-	 * Import History instance.
+	 * History repository instance.
 	 *
-	 * @var Import_History
+	 * @var History_Repository
 	 */
-	private Import_History $import_history;
+	private History_Repository $repository;
 
 	/**
 	 * Meta Terms Manager instance.
@@ -82,20 +82,20 @@ class Post_Import_Service {
 	 * @param External_Posts_API $api                External Posts API instance.
 	 * @param Media_Importer     $media_importer     Media Importer instance.
 	 * @param Content_Processor  $content_processor  Content Processor instance.
-	 * @param Import_History     $import_history     Import History instance.
+	 * @param History_Repository $repository         History repository instance.
 	 * @param Meta_Terms_Manager $meta_terms_manager Meta Terms Manager instance.
 	 */
 	public function __construct(
 		External_Posts_API $api,
 		Media_Importer $media_importer,
 		Content_Processor $content_processor,
-		Import_History $import_history,
+		History_Repository $repository,
 		Meta_Terms_Manager $meta_terms_manager
 	) {
 		$this->api                = $api;
 		$this->media_importer     = $media_importer;
 		$this->content_processor  = $content_processor;
-		$this->import_history     = $import_history;
+		$this->repository         = $repository;
 		$this->meta_terms_manager = $meta_terms_manager;
 		$this->logger             = new Content_Logger();
 	}
@@ -1149,7 +1149,7 @@ class Post_Import_Service {
 			return;
 		}
 
-		$this->import_history->log_import_action(
+		$this->repository->log_import_action(
 			$session_id,
 			$external_id,
 			$title,

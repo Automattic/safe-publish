@@ -11,11 +11,7 @@ namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
-use Safe_Publish\Admin\History_Renderer;
-use Safe_Publish\Admin\Import_History;
 use Safe_Publish\Admin\Post_Import_Service;
-use Safe_Publish\Admin\Session_Formatter;
-use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\API\Export_Logger;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\HTTP_Client;
@@ -58,14 +54,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	private Post_Import_Service $import_service;
 
 	/**
-	 * Import history coordinator instance.
-	 *
-	 * @var Import_History
-	 */
-	private Import_History $import_history;
-
-	/**
-	 * History repository instance for direct assertions.
+	 * History repository instance.
 	 *
 	 * @var History_Repository
 	 */
@@ -92,13 +81,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			home_url()
 		);
 
-		$this->repository     = new History_Repository();
-		$this->import_history = new Import_History(
-			$this->repository,
-			new History_Renderer(),
-			new Session_Formatter(),
-			new Session_Rollback_Service( $this->repository )
-		);
+		$this->repository = new History_Repository();
 
 		$media_importer    = new Media_Importer( new HTTP_Client() );
 		$content_processor = new Content_Processor(
@@ -110,7 +93,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 			new External_Posts_API( new HTTP_Client() ),
 			$media_importer,
 			$content_processor,
-			$this->import_history,
+			$this->repository,
 			new Meta_Terms_Manager()
 		);
 
@@ -161,7 +144,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		$this->assertTrue( $this->authenticator->is_authenticated() );
 
 		// STEP 2 — IMPORT: Open a session and import a post.
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 		$this->assertIsInt( $session_id );
 
 		$post_data = array(
@@ -188,8 +171,8 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		$this->assertSame( Options::META_IMPORTED_FROM_VALUE, get_post_meta( $result['post_id'], Options::META_IMPORTED_FROM, true ), 'Imported post should be tagged with the plugin identifier.' );
 
 		// STEP 3 — HISTORY: Update stats, complete the session, then assert.
-		$this->import_history->update_session_stats( $session_id, 'success' );
-		$this->import_history->complete_session( $session_id );
+		$this->repository->update_session_stats( $session_id, 'success' );
+		$this->repository->complete_session( $session_id );
 
 		$session = $this->repository->get_session( $session_id );
 
@@ -213,7 +196,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	 */
 	public function test_reimporting_same_post_updates_existing_post(): void {
 		// ARRANGE: Import a post for the first time.
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 		$this->assertIsInt( $session_id );
 
 		$post_data = array(
@@ -262,7 +245,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	 */
 	public function test_bulk_reimport_preserves_published_post_status(): void {
 		// ARRANGE: Import a post, then publish it to simulate a live post.
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		$post_data = array(
 			'id'             => 7001,
@@ -304,7 +287,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	 */
 	public function test_bulk_import_writes_excerpt_and_meta(): void {
 		// ARRANGE: Prepare post data with an excerpt and a custom meta field.
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		$post_data = array(
 			'id'             => 6001,
@@ -339,7 +322,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	 */
 	public function test_bulk_import_writes_terms(): void {
 		// ARRANGE: Prepare post data with a category term.
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		$term = wp_insert_term( 'Integration Test Category', 'category' );
 		$this->assertIsArray( $term );
@@ -376,7 +359,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	 */
 	public function test_bulk_reimport_updates_excerpt_and_meta(): void {
 		// ARRANGE: Import a post with initial excerpt and meta.
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		$post_data = array(
 			'id'             => 6003,
@@ -423,7 +406,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	 */
 	public function test_bulk_reimport_updates_terms(): void {
 		// ARRANGE: Import a post with one term.
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		wp_insert_term( 'Original Term', 'category' );
 		wp_insert_term( 'Replacement Term', 'category' );
