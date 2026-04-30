@@ -277,18 +277,21 @@ final class History_Repository {
 	): array {
 		global $wpdb;
 
-		if ( empty( $statuses ) ) {
+		if ( 0 === count( $statuses ) ) {
 			return array();
 		}
 
 		$table        = Import_Items_Table::table_name();
-		$placeholders = implode( ', ', array_fill( 0, count( $statuses ), '%s' ) );
-		$values       = array_merge( array( $session_id ), array_values( $statuses ) );
+		$count        = count( $statuses );
+		$placeholders = implode( ', ', array_fill( 0, $count, '%s' ) );
+		$values       = array_values( $statuses );
+		array_unshift( $values, $session_id );
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT * FROM `{$table}` WHERE session_id = %d AND status IN ({$placeholders}) ORDER BY id ASC",
+				"SELECT * FROM `{$table}` WHERE session_id = %d"
+					. " AND status IN ({$placeholders}) ORDER BY id ASC",
 				...$values
 			),
 			ARRAY_A

@@ -100,19 +100,20 @@ final class Session_Formatter {
 	 */
 	public function format_item( array $item ): array {
 		$item_status = (string) ( $item['status'] ?? '' );
-		$post_id     = isset( $item['post_id'] ) ? (int) $item['post_id'] : 0;
-		$external_id = isset( $item['external_id'] ) ? (int) $item['external_id'] : 0;
-		$error       = isset( $item['error_message'] ) && '' !== (string) $item['error_message']
-			? (string) $item['error_message']
-			: null;
+		$post_id     = (int) ( $item['post_id'] ?? 0 );
+		$external_id = (int) ( $item['external_id'] ?? 0 );
+		$error_msg   = (string) ( $item['error_message'] ?? '' );
+		$error       = '' !== $error_msg ? $error_msg : null;
 
-		$changes              = History_Repository::decode_item_changes( $item['content_changes'] ?? null );
+		$changes              = History_Repository::decode_item_changes(
+			$item['content_changes'] ?? null
+		);
 		$has_previous_content = is_array( $changes ) && ! empty( $changes['previous_content'] );
 
 		$is_updated_post     = ( 'updated' === $item_status );
 		$should_show_changes = $has_previous_content || $is_updated_post;
 
-		$is_rolled_back = ! empty( $item['rolled_back'] );
+		$is_rolled_back = 0 !== (int) ( $item['rolled_back'] ?? 0 );
 
 		$can_rollback_item = $this->can_rollback_item(
 			$is_rolled_back,
@@ -125,6 +126,10 @@ final class Session_Formatter {
 			$has_previous_content
 		);
 
+		$edit_url = $post_id > 0
+			? admin_url( "post.php?post={$post_id}&action=edit" )
+			: null;
+
 		$status_labels = $this->get_item_status_labels();
 
 		return array(
@@ -136,7 +141,7 @@ final class Session_Formatter {
 			'post_id'         => $post_id > 0 ? $post_id : null,
 			'error'           => $error,
 			'has_changes'     => $should_show_changes,
-			'edit_url'        => $post_id > 0 ? admin_url( "post.php?post={$post_id}&action=edit" ) : null,
+			'edit_url'        => $edit_url,
 			'can_rollback'    => $can_rollback_item,
 			'is_rolled_back'  => $is_rolled_back,
 			'rollback_action' => $rollback_action,
