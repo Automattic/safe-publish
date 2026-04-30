@@ -1,6 +1,6 @@
 <?php
 /**
- * Import History class for tracking import sessions and rollbacks
+ * Import History class for admin UI coordination and rollback
  *
  * @package Safe_Publish
  */
