@@ -16,8 +16,11 @@ For error resolution at any stage, see the [Troubleshooting guide](../troublesho
 
 ## Stage 1: Fetch
 
+**Prerequisite:** Imports require an authenticated connection to the source. The plugin disables import actions and shows a status banner when credentials are missing or don't work. See [Authentication](authentication.md) for setup.
+
 ### What Happens
 
+- The source site URL is validated to ensure it is properly formatted
 - Safe Publish sends a request to the source site's REST API
 - The endpoint `/wp-json/wp/v2/{post_type}/{post_id}` is queried
 - Response is received
@@ -31,11 +34,8 @@ For error resolution at any stage, see the [Troubleshooting guide](../troublesho
 
 ### What Happens
 
-- **URL** confirms the source site URL is properly formatted
 - **Authentication** verifies that credentials are provided and are correct
-- **Post data** ensures the response is valid JSON, includes required fields, uses a supported post type, and has non-empty content
-- **Content sanitization** to strip dangerous HTML and scripts
-- **Media** to check supported file types and downloadability
+- **Post data** ensures the response is valid JSON, includes required fields, and uses a supported post type
 
 See the [Content Validation](validation.md) guide for detailed information.
 
@@ -78,8 +78,8 @@ If an `<a>` tag ends in a file extension allowed by WordPress, it is processed i
 2. **Normalize**: Query parameters are stripped, but stored
 3. **Filter**: Third-party domain URLs are left unchanged
 4. **Deduplicate**: If the URL was already imported, the existing attachment URL is used, and download is skipped
-5. **Download**: File fetched using WordPress core's `download_url()`
-6. **Import**: File validated and added to the media library via `media_handle_sideload()`
+5. **Download**: File fetched using WordPress core's `download_url()`; downloadability is verified at this point
+6. **Import**: File type is validated and added to the media library via `media_handle_sideload()`
 7. **Replace**: Source URL replaced with the new attachment URL in content; previously stripped query parameters are reapplied
 
 ### Featured Image
@@ -91,6 +91,10 @@ If an `<a>` tag ends in a file extension allowed by WordPress, it is processed i
 ### URL Replacement
 
 After media processing, all remaining source-domain URLs in the content are replaced with the destination site URL. This catches URLs outside media elements, such as normal links, block comment attributes, and text references.
+
+### Content Sanitization
+
+After URL replacement, post content is sanitized to strip dangerous HTML and scripts.
 
 ### Performance
 
