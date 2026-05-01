@@ -394,7 +394,6 @@ final class Admin_Ajax_Controller {
 				$error_message,
 				array( 'action' => 'fetch_failed' )
 			);
-			$this->repository->update_session_stats( $session_id, 'error' );
 			$this->repository->complete_session( $session_id );
 
 			wp_send_json_error( $error_message );
@@ -425,7 +424,6 @@ final class Admin_Ajax_Controller {
 				$error_message,
 				array( 'action' => 'excerpt_sanitization_failed' )
 			);
-			$this->repository->update_session_stats( $session_id, 'error' );
 			$this->repository->complete_session( $session_id );
 
 			wp_send_json_error( $error_message );
@@ -450,7 +448,6 @@ final class Admin_Ajax_Controller {
 				$error_message,
 				array( 'action' => 'content_processing_failed' )
 			);
-			$this->repository->update_session_stats( $session_id, 'error' );
 			$this->repository->complete_session( $session_id );
 			$this->content_processor->delete_newly_created_media();
 
@@ -469,7 +466,6 @@ final class Admin_Ajax_Controller {
 				$media_error['message'],
 				array( 'action' => $media_error['action'] )
 			);
-			$this->repository->update_session_stats( $session_id, 'error' );
 			$this->repository->complete_session( $session_id );
 			$this->content_processor->delete_newly_created_media();
 
@@ -569,11 +565,8 @@ final class Admin_Ajax_Controller {
 
 			if ( $result['success'] ) {
 				++$successful;
-				$status = $result['existing'] ? 'updated' : 'success';
-				$this->repository->update_session_stats( $session_id, $status );
 			} else {
 				++$failed;
-				$this->repository->update_session_stats( $session_id, 'error' );
 			}
 		}
 
@@ -796,7 +789,6 @@ final class Admin_Ajax_Controller {
 			null,
 			$previous_content
 		);
-		$this->repository->update_session_stats( $session_id, 'updated' );
 		$this->repository->complete_session( $session_id );
 
 		return array(
@@ -913,7 +905,6 @@ final class Admin_Ajax_Controller {
 			null,
 			array( 'action' => 'created_new_post' )
 		);
-		$this->repository->update_session_stats( $session_id, 'success' );
 		$this->repository->complete_session( $session_id );
 
 		return array(
@@ -953,7 +944,6 @@ final class Admin_Ajax_Controller {
 			$error_message,
 			array( 'action' => $action )
 		);
-		$this->repository->update_session_stats( $session_id, 'error' );
 		$this->repository->complete_session( $session_id );
 
 		return array( 'error' => $error_message );
