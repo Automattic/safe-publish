@@ -1,6 +1,6 @@
 <?php
 /**
- * Import History class for tracking import sessions and rollbacks
+ * Import History class for admin UI coordination and rollback
  *
  * @package Safe_Publish
  */
@@ -8,7 +8,6 @@
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\Utils\Audit_Log_Table;
-use WP_Error;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -18,8 +17,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Import History Class.
  *
- * Coordinates import history functionality and delegates data operations to the
- * repository.
+ * Coordinates the import history admin UI: menu pages, AJAX endpoints,
+ * rendering, and session rollback.
  */
 final class Import_History {
 
@@ -134,71 +133,6 @@ final class Import_History {
 	 */
 	public function render_history_page(): void {
 		$this->renderer->render_history_page();
-	}
-
-	/**
-	 * Creates a new import session.
-	 *
-	 * @param string $source_url   Source site URL.
-	 * @param string $session_type Type of import (single, bulk).
-	 * @return int|WP_Error Session ID or error.
-	 */
-	public function create_session(
-		string $source_url,
-		string $session_type = 'bulk'
-	): int|WP_Error {
-		return $this->repository->create_session( $source_url, $session_type );
-	}
-
-	/**
-	 * Logs an import action.
-	 *
-	 * @param int         $session_id  Session ID.
-	 * @param int         $external_id External post ID.
-	 * @param string      $title       Post title.
-	 * @param string      $status      Import status (success, error, updated).
-	 * @param int|null    $post_id     WordPress post ID; null for error status.
-	 * @param string|null $error       Error message; null for success/updated.
-	 * @param array       $changes     Changes made during import.
-	 * @return int|WP_Error Item ID or error.
-	 */
-	public function log_import_action(
-		int $session_id,
-		int $external_id,
-		string $title,
-		string $status,
-		?int $post_id = null,
-		?string $error = null,
-		array $changes = array()
-	): int|WP_Error {
-		return $this->repository->log_import_action(
-			$session_id,
-			$external_id,
-			$title,
-			$status,
-			$post_id,
-			$error,
-			$changes
-		);
-	}
-
-	/**
-	 * Updates session stats.
-	 *
-	 * @param int    $session_id Session ID.
-	 * @param string $status     Status of the import (success, error, updated).
-	 */
-	public function update_session_stats( int $session_id, string $status ): void {
-		$this->repository->update_session_stats( $session_id, $status );
-	}
-
-	/**
-	 * Completes a session.
-	 *
-	 * @param int $session_id Session ID.
-	 */
-	public function complete_session( int $session_id ): void {
-		$this->repository->complete_session( $session_id );
 	}
 
 	/**

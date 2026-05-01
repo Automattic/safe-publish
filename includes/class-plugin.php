@@ -205,7 +205,7 @@ final class Plugin {
 			$api,
 			$media_importer,
 			$content_processor,
-			$import_history,
+			$repository,
 			new Meta_Terms_Manager()
 		);
 
@@ -213,7 +213,7 @@ final class Plugin {
 
 		$ajax_controller = new Admin_Ajax_Controller(
 			$api,
-			$import_history,
+			$repository,
 			$content_processor,
 			$post_import_service,
 			$post_type_fetcher,

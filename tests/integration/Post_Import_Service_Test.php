@@ -10,12 +10,8 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\Admin\Content_Processor;
-use Safe_Publish\Admin\History_Renderer;
 use Safe_Publish\Admin\History_Repository;
-use Safe_Publish\Admin\Import_History;
 use Safe_Publish\Admin\Post_Import_Service;
-use Safe_Publish\Admin\Session_Formatter;
-use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
@@ -40,11 +36,11 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	private Post_Import_Service $import_service;
 
 	/**
-	 * Import history coordinator instance.
+	 * History repository instance.
 	 *
-	 * @var Import_History
+	 * @var History_Repository
 	 */
-	private Import_History $import_history;
+	private History_Repository $repository;
 
 	/**
 	 * Sets up test dependencies.
@@ -58,13 +54,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		// valid JSON before the image URL itself is fetched.
 		add_filter( 'pre_http_request', array( $this, 'mock_media_api_request' ), 5, 3 );
 
-		$history_repository   = new History_Repository();
-		$this->import_history = new Import_History(
-			$history_repository,
-			new History_Renderer(),
-			new Session_Formatter(),
-			new Session_Rollback_Service( $history_repository )
-		);
+		$this->repository = new History_Repository();
 
 		$media_importer    = new Media_Importer( new HTTP_Client() );
 		$content_processor = new Content_Processor(
@@ -76,7 +66,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			new External_Posts_API( new HTTP_Client() ),
 			$media_importer,
 			$content_processor,
-			$this->import_history,
+			$this->repository,
 			new Meta_Terms_Manager()
 		);
 	}
@@ -135,7 +125,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			'content' => '<p>See image: <img src="https://source.example.com/nonexistent-broken.jpg" alt="broken"></p>',
 		);
 
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		$post_data = array(
 			'id'        => 8001,
@@ -189,7 +179,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			'content' => "<!-- wp:html -->\n<img src=\"{$broken_url}\" alt=\"Broken\" />\n<!-- /wp:html -->",
 		);
 
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		$post_data = array(
 			'id'        => 8002,
@@ -243,7 +233,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 				. "\n<!-- /wp:video -->",
 		);
 
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		$post_data = array(
 			'id'        => 8003,
@@ -288,7 +278,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * leave the existing post content unchanged.
 	 */
 	public function test_import_fails_on_update_path_when_image_cannot_be_downloaded(): void {
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		// ARRANGE: Import the post once with clean content so it exists in the DB.
 		$post_data = array(
@@ -346,7 +336,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 				. "\n<!-- /wp:audio -->",
 		);
 
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		$post_data = array(
 			'id'        => 8005,
@@ -413,7 +403,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 				. "\n<!-- /wp:gallery -->",
 		);
 
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		$post_data = array(
 			'id'        => 8006,
@@ -460,7 +450,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		// ARRANGE: Remove the source URL configured by the base setUp().
 		delete_option( Options::OPTION_CONNECTED_SITE_URL );
 
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		$post_data = array(
 			'id'        => 9901,
@@ -513,7 +503,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 */
 	public function test_featured_image_is_imported_on_bulk_reimport(): void {
 		// ARRANGE: Import a post with a featured image for the first time.
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		$post_data = array(
 			'id'             => 9001,
@@ -559,7 +549,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * the preceding import.
 	 */
 	public function test_failed_media_does_not_bleed_into_subsequent_import(): void {
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		// ARRANGE: Post 8101 — has a broken image; import must fail.
 		$broken_url                = 'https://source.example.com/nonexistent-bleed-test.jpg';
@@ -620,7 +610,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 				. "\n<!-- /wp:video -->",
 		);
 
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		$post_data = array(
 			'id'        => 8201,
@@ -677,7 +667,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 				. "\n<!-- /wp:audio -->",
 		);
 
-		$session_id = $this->import_history->create_session( 'https://source.example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 
 		$post_data = array(
 			'id'        => 8202,
@@ -726,7 +716,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			'content' => '',
 		);
 
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -804,7 +794,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 
 		add_filter( 'pre_http_request', $rendered_only, 4, 3 );
 
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -867,7 +857,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			'menu_order'     => 5,
 		);
 
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -922,7 +912,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * updated when re-importing an existing post via the bulk path.
 	 */
 	public function test_reimport_updates_slug_and_post_fields(): void {
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -1005,7 +995,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			'content' => '<p>OK</p><form action="x"><input></form>',
 		);
 
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -1050,7 +1040,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * re-imports must not silently unpublish live posts.
 	 */
 	public function test_bulk_reimport_preserves_post_status(): void {
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -1107,7 +1097,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			'password' => 's3cret',
 		);
 
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -1147,7 +1137,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * via the bulk path.
 	 */
 	public function test_reimport_updates_post_password(): void {
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
@@ -1244,7 +1234,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 */
 	public function test_bulk_import_logs_failure_when_post_type_unregistered(): void {
 		// ARRANGE: Bulk session targeting an unregistered post type.
-		$session_id = $this->import_history->create_session(
+		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);

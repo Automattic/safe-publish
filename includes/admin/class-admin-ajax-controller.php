@@ -57,11 +57,11 @@ final class Admin_Ajax_Controller {
 	private External_Posts_API $api;
 
 	/**
-	 * Import History instance.
+	 * History repository instance.
 	 *
-	 * @var Import_History
+	 * @var History_Repository
 	 */
-	private Import_History $import_history;
+	private History_Repository $repository;
 
 	/**
 	 * Content Processor instance.
@@ -102,7 +102,7 @@ final class Admin_Ajax_Controller {
 	 * Constructs the Admin_Ajax_Controller instance.
 	 *
 	 * @param External_Posts_API  $api                 External Posts API instance.
-	 * @param Import_History      $import_history      Import History instance.
+	 * @param History_Repository  $repository          History repository instance.
 	 * @param Content_Processor   $content_processor   Content Processor instance.
 	 * @param Post_Import_Service $post_import_service Post Import Service instance.
 	 * @param Post_Type_Fetcher   $post_type_fetcher   Post Type Fetcher instance.
@@ -110,14 +110,14 @@ final class Admin_Ajax_Controller {
 	 */
 	public function __construct(
 		External_Posts_API $api,
-		Import_History $import_history,
+		History_Repository $repository,
 		Content_Processor $content_processor,
 		Post_Import_Service $post_import_service,
 		Post_Type_Fetcher $post_type_fetcher,
 		HTTP_Client $http_client
 	) {
 		$this->api                 = $api;
-		$this->import_history      = $import_history;
+		$this->repository          = $repository;
 		$this->content_processor   = $content_processor;
 		$this->post_import_service = $post_import_service;
 		$this->post_type_fetcher   = $post_type_fetcher;
@@ -368,7 +368,7 @@ final class Admin_Ajax_Controller {
 
 		// Create single import session for tracking.
 		$source_url     = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
-		$session_result = $this->import_history->create_session( $source_url, 'single' );
+		$session_result = $this->repository->create_session( $source_url, 'single' );
 
 		if ( is_wp_error( $session_result ) ) {
 			wp_send_json_error( $session_result->get_error_message() );
@@ -385,7 +385,7 @@ final class Admin_Ajax_Controller {
 		if ( is_wp_error( $fresh_result ) ) {
 			$error_message = $fresh_result->get_error_message();
 
-			$this->import_history->log_import_action(
+			$this->repository->log_import_action(
 				$session_id,
 				$external_post_id,
 				$title,
@@ -394,8 +394,8 @@ final class Admin_Ajax_Controller {
 				$error_message,
 				array( 'action' => 'fetch_failed' )
 			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
+			$this->repository->update_session_stats( $session_id, 'error' );
+			$this->repository->complete_session( $session_id );
 
 			wp_send_json_error( $error_message );
 		}
@@ -416,7 +416,7 @@ final class Admin_Ajax_Controller {
 		if ( is_wp_error( $excerpt ) ) {
 			$error_message = $excerpt->get_error_message();
 
-			$this->import_history->log_import_action(
+			$this->repository->log_import_action(
 				$session_id,
 				$external_post_id,
 				$title,
@@ -425,8 +425,8 @@ final class Admin_Ajax_Controller {
 				$error_message,
 				array( 'action' => 'excerpt_sanitization_failed' )
 			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
+			$this->repository->update_session_stats( $session_id, 'error' );
+			$this->repository->complete_session( $session_id );
 
 			wp_send_json_error( $error_message );
 		}
@@ -441,7 +441,7 @@ final class Admin_Ajax_Controller {
 		if ( is_wp_error( $processed_content ) ) {
 			$error_message = $processed_content->get_error_message();
 
-			$this->import_history->log_import_action(
+			$this->repository->log_import_action(
 				$session_id,
 				$external_post_id,
 				$title,
@@ -450,8 +450,8 @@ final class Admin_Ajax_Controller {
 				$error_message,
 				array( 'action' => 'content_processing_failed' )
 			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
+			$this->repository->update_session_stats( $session_id, 'error' );
+			$this->repository->complete_session( $session_id );
 			$this->content_processor->delete_newly_created_media();
 
 			wp_send_json_error( $error_message );
@@ -460,7 +460,7 @@ final class Admin_Ajax_Controller {
 		$media_error = $this->get_media_processing_error();
 
 		if ( null !== $media_error ) {
-			$this->import_history->log_import_action(
+			$this->repository->log_import_action(
 				$session_id,
 				$external_post_id,
 				$title,
@@ -469,8 +469,8 @@ final class Admin_Ajax_Controller {
 				$media_error['message'],
 				array( 'action' => $media_error['action'] )
 			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
+			$this->repository->update_session_stats( $session_id, 'error' );
+			$this->repository->complete_session( $session_id );
 			$this->content_processor->delete_newly_created_media();
 
 			wp_send_json_error( $media_error['message'] );
@@ -551,7 +551,7 @@ final class Admin_Ajax_Controller {
 		}
 
 		$source_url     = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
-		$session_result = $this->import_history->create_session( $source_url, 'bulk' );
+		$session_result = $this->repository->create_session( $source_url, 'bulk' );
 
 		if ( is_wp_error( $session_result ) ) {
 			wp_send_json_error( $session_result->get_error_message() );
@@ -570,14 +570,14 @@ final class Admin_Ajax_Controller {
 			if ( $result['success'] ) {
 				++$successful;
 				$status = $result['existing'] ? 'updated' : 'success';
-				$this->import_history->update_session_stats( $session_id, $status );
+				$this->repository->update_session_stats( $session_id, $status );
 			} else {
 				++$failed;
-				$this->import_history->update_session_stats( $session_id, 'error' );
+				$this->repository->update_session_stats( $session_id, 'error' );
 			}
 		}
 
-		$this->import_history->complete_session( $session_id );
+		$this->repository->complete_session( $session_id );
 
 		wp_send_json_success(
 			array(
@@ -787,7 +787,7 @@ final class Admin_Ajax_Controller {
 			);
 		}
 
-		$this->import_history->log_import_action(
+		$this->repository->log_import_action(
 			$session_id,
 			$external_post_id,
 			$title,
@@ -796,8 +796,8 @@ final class Admin_Ajax_Controller {
 			null,
 			$previous_content
 		);
-		$this->import_history->update_session_stats( $session_id, 'updated' );
-		$this->import_history->complete_session( $session_id );
+		$this->repository->update_session_stats( $session_id, 'updated' );
+		$this->repository->complete_session( $session_id );
 
 		return array(
 			'post_id'  => $post_id,
@@ -904,7 +904,7 @@ final class Admin_Ajax_Controller {
 			);
 		}
 
-		$this->import_history->log_import_action(
+		$this->repository->log_import_action(
 			$session_id,
 			$external_post_id,
 			$title,
@@ -913,8 +913,8 @@ final class Admin_Ajax_Controller {
 			null,
 			array( 'action' => 'created_new_post' )
 		);
-		$this->import_history->update_session_stats( $session_id, 'success' );
-		$this->import_history->complete_session( $session_id );
+		$this->repository->update_session_stats( $session_id, 'success' );
+		$this->repository->complete_session( $session_id );
 
 		return array(
 			'post_id'  => $post_id,
@@ -944,7 +944,7 @@ final class Admin_Ajax_Controller {
 		string $error_message,
 		string $action
 	): array {
-		$this->import_history->log_import_action(
+		$this->repository->log_import_action(
 			$session_id,
 			$external_post_id,
 			$title,
@@ -953,8 +953,8 @@ final class Admin_Ajax_Controller {
 			$error_message,
 			array( 'action' => $action )
 		);
-		$this->import_history->update_session_stats( $session_id, 'error' );
-		$this->import_history->complete_session( $session_id );
+		$this->repository->update_session_stats( $session_id, 'error' );
+		$this->repository->complete_session( $session_id );
 
 		return array( 'error' => $error_message );
 	}
