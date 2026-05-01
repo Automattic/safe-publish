@@ -8,6 +8,7 @@
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\Utils\Audit_Log_Table;
+use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
 
 // Prevent direct access.
@@ -127,8 +128,7 @@ final class History_Renderer {
 			return true;
 		}
 
-		$counts = wp_count_posts( History_Repository::SESSION_POST_TYPE );
-		return isset( $counts->publish ) && $counts->publish > 0;
+		return Imports_Table::count() > 0;
 	}
 
 	/**

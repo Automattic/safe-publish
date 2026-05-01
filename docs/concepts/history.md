@@ -141,12 +141,12 @@ Rollback reverts imported content to its state before the import. Only successfu
 
 ### Import History
 
-Import history uses WordPress custom post types:
+Import history is stored in two custom database tables:
 
-| CPT Slug            | Purpose                                           |
-| ------------------- | ------------------------------------------------- |
-| `sp_import_session` | One post per import session                       |
-| `sp_import_log`     | One post per imported item (child of the session) |
+| Table                          | Purpose                                             |
+| ------------------------------ | --------------------------------------------------- |
+| `wp_safe_publish_imports`      | One row per import session                          |
+| `wp_safe_publish_import_items` | One row per imported item (linked via `session_id`) |
 
 ### Export History
 

@@ -59,11 +59,12 @@ class Import_Sanitization_Integration_Test extends Integration_Test_Case {
 	protected function setUp(): void {
 		parent::setUp();
 
+		$repository           = new History_Repository();
 		$this->import_history = new Import_History(
-			new History_Repository(),
+			$repository,
 			new History_Renderer(),
 			new Session_Formatter(),
-			new Session_Rollback_Service( new History_Repository() )
+			new Session_Rollback_Service( $repository )
 		);
 
 		$http_client       = new HTTP_Client();

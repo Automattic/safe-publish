@@ -191,24 +191,20 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		$this->import_history->update_session_stats( $session_id, 'success' );
 		$this->import_history->complete_session( $session_id );
 
-		$session    = $this->repository->get_session( $session_id );
-		$total      = (int) get_post_meta( $session->ID, 'total_items', true );
-		$successful = (int) get_post_meta( $session->ID, 'successful', true );
-		$failed     = (int) get_post_meta( $session->ID, 'failed', true );
-		$status     = get_post_meta( $session->ID, 'status', true );
+		$session = $this->repository->get_session( $session_id );
 
-		$this->assertSame( 1, $total, 'Session should record 1 total item.' );
-		$this->assertSame( 1, $successful, 'Session should record 1 successful import.' );
-		$this->assertSame( 0, $failed, 'Session should record 0 failed imports.' );
-		$this->assertSame( 'completed', $status, 'Session should be marked completed.' );
+		$this->assertSame( 1, (int) $session['total_items'], 'Session should record 1 total item.' );
+		$this->assertSame( 1, (int) $session['successful'], 'Session should record 1 successful import.' );
+		$this->assertSame( 0, (int) $session['failed'], 'Session should record 0 failed imports.' );
+		$this->assertSame( 'completed', $session['status'], 'Session should be marked completed.' );
 
-		// STEP 4 — LOG ENTRY: Verify the import service wrote a log entry for this session.
-		$logs = $this->repository->get_session_logs( $session_id );
+		// STEP 4 — ITEM ROW: Verify the import service wrote an item row for this session.
+		$items = $this->repository->get_session_items( $session_id );
 
-		$this->assertCount( 1, $logs, 'One log entry should have been created for the session.' );
-		$this->assertSame( 'Test Post', $logs[0]->post_title );
-		$this->assertSame( 'success', get_post_meta( $logs[0]->ID, 'status', true ) );
-		$this->assertSame( $result['post_id'], (int) get_post_meta( $logs[0]->ID, 'post_id', true ) );
+		$this->assertCount( 1, $items, 'One item row should have been created for the session.' );
+		$this->assertSame( 'Test Post', $items[0]['title'] );
+		$this->assertSame( 'success', $items[0]['status'] );
+		$this->assertSame( $result['post_id'], (int) $items[0]['post_id'] );
 	}
 
 	/**
@@ -249,16 +245,16 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		$updated_post = get_post( $second_result['post_id'] );
 		$this->assertSame( 'Test Post', $updated_post->post_title, 'Re-imported post should have the title from the fresh-content response.' );
 
-		// ASSERT: Two separate log entries were written (one per import call).
-		$logs = $this->repository->get_session_logs( $session_id );
-		$this->assertCount( 2, $logs, 'Each import call should produce its own log entry.' );
+		// ASSERT: Two separate item rows were written (one per import call).
+		$items = $this->repository->get_session_items( $session_id );
+		$this->assertCount( 2, $items, 'Each import call should produce its own item row.' );
 
 		$statuses = array_map(
-			fn( $log ) => get_post_meta( $log->ID, 'status', true ),
-			$logs
+			fn( $item ) => $item['status'],
+			$items
 		);
-		$this->assertContains( 'success', $statuses, 'First import log should have status "success".' );
-		$this->assertContains( 'updated', $statuses, 'Second import log should have status "updated".' );
+		$this->assertContains( 'success', $statuses, 'First import item should have status "success".' );
+		$this->assertContains( 'updated', $statuses, 'Second import item should have status "updated".' );
 	}
 
 	/**

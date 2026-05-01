@@ -7,12 +7,15 @@
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Utils\Import_Items_Table;
+use Safe_Publish\Utils\Imports_Table;
 use WP_UnitTestCase;
 
 /**
  * Integration Test Case Class.
  *
- * Provides common setup for integration tests that use custom post types.
+ * Provides common setup for integration tests that use the import history
+ * tables.
  */
 abstract class Integration_Test_Case extends WP_UnitTestCase {
 
@@ -29,32 +32,33 @@ abstract class Integration_Test_Case extends WP_UnitTestCase {
 			)
 		);
 
-		// Register custom post types required for the tests.
-		$this->register_post_types();
+		Imports_Table::create_table();
+		Import_Items_Table::create_table();
+
+		$this->truncate_history_tables();
 	}
 
 	/**
-	 * Registers custom post types for import tracking.
+	 * Resets the history tables between tests.
 	 */
-	private function register_post_types(): void {
-		// Register import session post type.
-		register_post_type(
-			'sp_import_session',
-			array(
-				'public'          => false,
-				'capability_type' => 'post',
-				'supports'        => array( 'title', 'custom-fields' ),
-			)
-		);
+	#[\Override]
+	protected function tearDown(): void {
+		$this->truncate_history_tables();
+		parent::tearDown();
+	}
 
-		// Register import log post type.
-		register_post_type(
-			'sp_import_log',
-			array(
-				'public'          => false,
-				'capability_type' => 'post',
-				'supports'        => array( 'title', 'content', 'custom-fields' ),
-			)
-		);
+	/**
+	 * Removes all rows from both history tables.
+	 */
+	private function truncate_history_tables(): void {
+		global $wpdb;
+
+		$items    = Import_Items_Table::table_name();
+		$sessions = Imports_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
+		$wpdb->query( "DELETE FROM `{$items}`" );
+		$wpdb->query( "DELETE FROM `{$sessions}`" );
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
 	}
 }

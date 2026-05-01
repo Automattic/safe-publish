@@ -7,8 +7,6 @@
 
 namespace Safe_Publish\Admin;
 
-use WP_Post;
-
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -17,14 +15,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Session Formatter Class.
  *
- * Formats import session and log data for AJAX responses.
+ * Formats import session and item rows for AJAX responses.
  */
 final class Session_Formatter {
 
 	/**
 	 * Formats a collection of sessions for display.
 	 *
-	 * @param WP_Post[] $sessions Array of session posts.
+	 * @param array[] $sessions Array of session rows.
 	 * @return array[] Formatted session data.
 	 */
 	public function format_sessions( array $sessions ): array {
@@ -40,28 +38,27 @@ final class Session_Formatter {
 	/**
 	 * Formats a single session for display.
 	 *
-	 * @param WP_Post $session Session post object.
+	 * @param array $session Session row.
 	 * @return array Formatted session data.
 	 */
-	public function format_session( WP_Post $session ): array {
-		$total      = (int) get_post_meta( $session->ID, 'total_items', true );
-		$successful = (int) get_post_meta( $session->ID, 'successful', true );
-		$failed     = (int) get_post_meta( $session->ID, 'failed', true );
-		$updated    = (int) get_post_meta( $session->ID, 'updated', true );
-		$status     = get_post_meta( $session->ID, 'status', true );
-		$source_url = get_post_meta( $session->ID, 'source_url', true );
+	public function format_session( array $session ): array {
+		$total      = (int) ( $session['total_items'] ?? 0 );
+		$successful = (int) ( $session['successful'] ?? 0 );
+		$failed     = (int) ( $session['failed'] ?? 0 );
+		$updated    = (int) ( $session['updated'] ?? 0 );
+		$status     = (string) ( $session['status'] ?? '' );
+		$source_url = (string) ( $session['source_url'] ?? '' );
 
-		$status_labels = $this->get_status_labels();
-
-		$user = get_post_meta( $session->ID, 'user_display_name', true );
-
-		if ( ! is_string( $user ) || '' === $user ) {
+		$user = (string) ( $session['user_display_name'] ?? '' );
+		if ( '' === $user ) {
 			$user = __( 'Unknown user', 'safe-publish' );
 		}
 
+		$status_labels = $this->get_status_labels();
+
 		return array(
-			'id'           => $session->ID,
-			'date'         => get_the_date( 'Y-m-d H:i:s', $session ),
+			'id'           => (int) $session['id'],
+			'date'         => (string) ( $session['created_at'] ?? '' ),
 			'user'         => $user,
 			'total_items'  => $total,
 			'successful'   => $successful,
@@ -75,71 +72,73 @@ final class Session_Formatter {
 	}
 
 	/**
-	 * Formats session logs for display.
+	 * Formats session items for display.
 	 *
-	 * @param WP_Post[] $logs   Array of log posts.
-	 * @param string    $status Session status.
-	 * @return array[] Formatted log data.
+	 * @param array[] $items  Array of item rows.
+	 * @param string  $status Session status.
+	 * @return array[] Formatted item data.
 	 */
-	public function format_logs( array $logs, string $status ): array {
+	public function format_items( array $items, string $status ): array {
 		if ( 'rolled_back' === $status ) {
 			return array();
 		}
 
 		$formatted = array();
 
-		foreach ( $logs as $log ) {
-			$formatted[] = $this->format_log( $log );
+		foreach ( $items as $item ) {
+			$formatted[] = $this->format_item( $item );
 		}
 
 		return $formatted;
 	}
 
 	/**
-	 * Formats a single log entry for display.
+	 * Formats a single item row for display.
 	 *
-	 * @param WP_Post $log Log post object.
-	 * @return array Formatted log data.
+	 * @param array $item Item row.
+	 * @return array Formatted item data.
 	 */
-	public function format_log( WP_Post $log ): array {
-		$log_status  = get_post_meta( $log->ID, 'status', true );
-		$post_id     = get_post_meta( $log->ID, 'post_id', true );
-		$external_id = get_post_meta( $log->ID, 'external_id', true );
+	public function format_item( array $item ): array {
+		$item_status = (string) ( $item['status'] ?? '' );
+		$post_id     = (int) ( $item['post_id'] ?? 0 );
+		$external_id = (int) ( $item['external_id'] ?? 0 );
+		$error_msg   = (string) ( $item['error_message'] ?? '' );
+		$error       = '' !== $error_msg ? $error_msg : null;
 
-		$log_data = json_decode( $log->post_content, true );
-		$error    = $log_data['error_message'] ?? null;
+		$has_previous_content = 1 === (int) ( $item['has_previous_content'] ?? 0 );
 
-		$changes              = get_post_meta( $log->ID, 'content_changes', true );
-		$has_previous_content = is_array( $changes ) && ! empty( $changes['previous_content'] );
-
-		$is_updated_post     = ( 'updated' === $log_status );
+		$is_updated_post     = ( 'updated' === $item_status );
 		$should_show_changes = $has_previous_content || $is_updated_post;
 
-		$is_rolled_back = (bool) get_post_meta( $log->ID, 'rolled_back', true );
+		$is_rolled_back = 0 !== (int) ( $item['rolled_back'] ?? 0 );
 
-		$can_rollback_item = $this->can_rollback_log(
+		$can_rollback_item = $this->can_rollback_item(
 			$is_rolled_back,
 			$post_id,
-			$log_status
+			$item_status
 		);
 
 		$rollback_action = $this->determine_rollback_action(
-			$log_status,
+			$item_status,
 			$has_previous_content
 		);
 
-		$status_labels = $this->get_log_status_labels();
+		$edit_url = $post_id > 0
+			? admin_url( "post.php?post={$post_id}&action=edit" )
+			: null;
+
+		$status_labels = $this->get_item_status_labels();
 
 		return array(
-			'id'              => $log->ID,
-			'title'           => $log->post_title,
-			'status'          => $log_status,
-			'status_label'    => $status_labels[ $log_status ] ?? $log_status,
+			'id'              => (int) $item['id'],
+			'title'           => (string) ( $item['title'] ?? '' ),
+			'status'          => $item_status,
+			'status_label'    => $status_labels[ $item_status ] ?? $item_status,
 			'external_id'     => $external_id,
-			'post_id'         => $post_id,
+			'post_id'         => $post_id > 0 ? $post_id : null,
 			'error'           => $error,
 			'has_changes'     => $should_show_changes,
-			'edit_url'        => $post_id ? admin_url( "post.php?post={$post_id}&action=edit" ) : null,
+			'edit_url'        => $edit_url,
 			'can_rollback'    => $can_rollback_item,
 			'is_rolled_back'  => $is_rolled_back,
 			'rollback_action' => $rollback_action,
@@ -147,41 +146,41 @@ final class Session_Formatter {
 	}
 
 	/**
-	 * Determines if a log entry can be rolled back.
+	 * Determines if an item can be rolled back.
 	 *
 	 * @param bool   $is_rolled_back Whether already rolled back.
-	 * @param mixed  $post_id        WordPress post ID.
-	 * @param string $log_status     Log status.
+	 * @param int    $post_id        WordPress post ID.
+	 * @param string $item_status    Item status.
 	 * @return bool Whether rollback is possible.
 	 */
-	private function can_rollback_log(
+	private function can_rollback_item(
 		bool $is_rolled_back,
-		$post_id,
-		string $log_status
+		int $post_id,
+		string $item_status
 	): bool {
 		if ( $is_rolled_back ) {
 			return false;
 		}
 
-		if ( ! $post_id || ! get_post( $post_id ) ) {
+		if ( $post_id <= 0 || ! get_post( $post_id ) ) {
 			return false;
 		}
 
-		return in_array( $log_status, array( 'success', 'updated' ), true );
+		return in_array( $item_status, array( 'success', 'updated' ), true );
 	}
 
 	/**
-	 * Determines the rollback action for a log entry.
+	 * Determines the rollback action for an item.
 	 *
-	 * @param string $log_status         Log status.
+	 * @param string $item_status          Item status.
 	 * @param bool   $has_previous_content Whether previous content exists.
 	 * @return string Rollback action ('delete' or 'restore').
 	 */
 	private function determine_rollback_action(
-		string $log_status,
+		string $item_status,
 		bool $has_previous_content
 	): string {
-		if ( 'success' === $log_status ) {
+		if ( 'success' === $item_status ) {
 			return 'delete';
 		}
 
@@ -203,11 +202,11 @@ final class Session_Formatter {
 	}
 
 	/**
-	 * Gets log status labels.
+	 * Gets item status labels.
 	 *
 	 * @return array<string, string> Status labels.
 	 */
-	private function get_log_status_labels(): array {
+	private function get_item_status_labels(): array {
 		return array(
 			'success' => __( 'Success', 'safe-publish' ),
 			'updated' => __( 'Updated', 'safe-publish' ),
