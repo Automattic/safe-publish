@@ -99,9 +99,9 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that session stats are updated correctly.
+	 * Verifies that session counts are projected from logged items.
 	 */
-	public function test_session_stats_update_correctly(): void {
+	public function test_session_counts_project_from_items(): void {
 		// ARRANGE: Create session and log multiple actions.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
 
@@ -131,17 +131,93 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 			'Import failed'
 		);
 
-		// Update stats.
-		$this->repository->update_session_stats( $session_id, 'success' );
-		$this->repository->update_session_stats( $session_id, 'updated' );
-		$this->repository->update_session_stats( $session_id, 'error' );
-
-		// ASSERT: Stats updated correctly.
+		// ASSERT: Counts are projected from the items table at read time.
 		$session = $this->repository->get_session( $session_id );
 		$this->assertSame( 2, (int) $session['successful'] ); // success + updated.
 		$this->assertSame( 1, (int) $session['updated'] );
 		$this->assertSame( 1, (int) $session['failed'] );
 		$this->assertSame( 3, (int) $session['total_items'] );
+	}
+
+	/**
+	 * Verifies that an empty session reports zero counts.
+	 */
+	public function test_empty_session_reports_zero_counts(): void {
+		// ARRANGE: Create a session with no items.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+
+		// ACT: Read the session row.
+		$session = $this->repository->get_session( $session_id );
+
+		// ASSERT: All four counters are zero.
+		$this->assertSame( 0, (int) $session['total_items'] );
+		$this->assertSame( 0, (int) $session['successful'] );
+		$this->assertSame( 0, (int) $session['updated'] );
+		$this->assertSame( 0, (int) $session['failed'] );
+	}
+
+	/**
+	 * Verifies that an in-progress session reflects partial item counts.
+	 */
+	public function test_in_progress_session_reflects_partial_counts(): void {
+		// ARRANGE: Create a session and log two items without completing it.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+
+		$this->repository->log_import_action( $session_id, 1, 'P1', 'success', 101 );
+		$this->repository->log_import_action( $session_id, 2, 'P2', 'error', null, 'fail' );
+
+		// ACT: Read the session row while still in progress.
+		$session = $this->repository->get_session( $session_id );
+
+		// ASSERT: Status is unfinished but counters reflect logged items.
+		$this->assertSame( 'in_progress', $session['status'] );
+		$this->assertSame( 2, (int) $session['total_items'] );
+		$this->assertSame( 1, (int) $session['successful'] );
+		$this->assertSame( 1, (int) $session['failed'] );
+	}
+
+	/**
+	 * Verifies that rolled-back items remain in the per-status counters.
+	 *
+	 * The session-level rollback flow flips the `rolled_back` flag on the items
+	 * but leaves their `status` column untouched, so the historical counts must
+	 * continue to include them.
+	 */
+	public function test_rolled_back_items_still_counted_by_status(): void {
+		// ARRANGE: Log two successful items and roll one back.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+
+		$kept_id        = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Kept',
+			'success',
+			101
+		);
+		$rolled_back_id = $this->repository->log_import_action(
+			$session_id,
+			2,
+			'Rolled back',
+			'success',
+			102
+		);
+		$this->assertIsInt( $kept_id );
+		$this->assertIsInt( $rolled_back_id );
+
+		$this->repository->mark_item_rolled_back( $rolled_back_id );
+
+		// ACT: Read the session row.
+		$session = $this->repository->get_session( $session_id );
+
+		// ASSERT: Both items still count toward `successful`.
+		$this->assertSame( 2, (int) $session['total_items'] );
+		$this->assertSame( 2, (int) $session['successful'] );
+
+		// ASSERT: The flag landed on the right item.
+		$rolled_back_item = $this->repository->get_item( $rolled_back_id );
+		$kept_item        = $this->repository->get_item( $kept_id );
+		$this->assertSame( 1, (int) $rolled_back_item['rolled_back'] );
+		$this->assertSame( 0, (int) $kept_item['rolled_back'] );
 	}
 
 	/**
@@ -213,7 +289,6 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
 
 		$this->repository->log_import_action( $session_id, 1, 'Post 1', 'success', 101 );
-		$this->repository->update_session_stats( $session_id, 'success' );
 		$this->repository->complete_session( $session_id );
 
 		// ACT: Format session.
@@ -229,6 +304,60 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 		$this->assertSame( 'completed', $formatted_session['status'] );
 		$this->assertSame( 1, $formatted_session['total_items'] );
 		$this->assertSame( 1, $formatted_session['successful'] );
+	}
+
+	/**
+	 * Verifies that get_sessions() projects counts independently per session,
+	 * including for sessions that have no items.
+	 */
+	public function test_get_sessions_projects_counts_per_session(): void {
+		// ARRANGE: Create three sessions with different item populations.
+		$session_a = $this->repository->create_session(
+			'https://a.example.com',
+			'bulk'
+		);
+		$session_b = $this->repository->create_session(
+			'https://b.example.com',
+			'bulk'
+		);
+		$this->repository->create_session( 'https://c.example.com', 'bulk' );
+
+		$this->repository->log_import_action( $session_a, 1, 'A1', 'success', 101 );
+		$this->repository->log_import_action( $session_a, 2, 'A2', 'updated', 102 );
+		$this->repository->log_import_action(
+			$session_b,
+			3,
+			'B1',
+			'error',
+			null,
+			'fail'
+		);
+
+		// ACT: Fetch all sessions.
+		$sessions = $this->repository->get_sessions( 50 );
+
+		// ASSERT: All three sessions returned with independent per-row counts.
+		$this->assertCount( 3, $sessions );
+
+		$by_url = array();
+		foreach ( $sessions as $row ) {
+			$by_url[ (string) $row['source_url'] ] = $row;
+		}
+
+		$this->assertSame( 2, (int) $by_url['https://a.example.com']['total_items'] );
+		$this->assertSame( 2, (int) $by_url['https://a.example.com']['successful'] );
+		$this->assertSame( 1, (int) $by_url['https://a.example.com']['updated'] );
+		$this->assertSame( 0, (int) $by_url['https://a.example.com']['failed'] );
+
+		$this->assertSame( 1, (int) $by_url['https://b.example.com']['total_items'] );
+		$this->assertSame( 0, (int) $by_url['https://b.example.com']['successful'] );
+		$this->assertSame( 0, (int) $by_url['https://b.example.com']['updated'] );
+		$this->assertSame( 1, (int) $by_url['https://b.example.com']['failed'] );
+
+		$this->assertSame( 0, (int) $by_url['https://c.example.com']['total_items'] );
+		$this->assertSame( 0, (int) $by_url['https://c.example.com']['successful'] );
+		$this->assertSame( 0, (int) $by_url['https://c.example.com']['updated'] );
+		$this->assertSame( 0, (int) $by_url['https://c.example.com']['failed'] );
 	}
 
 	/**

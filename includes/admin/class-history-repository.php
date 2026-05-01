@@ -66,14 +66,10 @@ final class History_Repository {
 				'source_url'        => $source_url,
 				'session_type'      => $session_type,
 				'status'            => 'in_progress',
-				'total_items'       => 0,
-				'successful'        => 0,
-				'failed'            => 0,
-				'updated'           => 0,
 				'end_time'          => null,
 				'created_at'        => current_time( 'mysql' ),
 			),
-			array( '%d', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%d', '%s', '%s' )
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
 
 		if ( false === $inserted ) {
@@ -152,37 +148,6 @@ final class History_Repository {
 	}
 
 	/**
-	 * Updates session stats with a single atomic UPDATE.
-	 *
-	 * @param int    $session_id Session ID.
-	 * @param string $status     Status of the import (success, error, updated).
-	 */
-	public function update_session_stats( int $session_id, string $status ): void {
-		global $wpdb;
-
-		$table = Imports_Table::table_name();
-
-		$sql = "UPDATE `{$table}` SET total_items = total_items + 1";
-
-		switch ( $status ) {
-			case 'success':
-				$sql .= ', successful = successful + 1';
-				break;
-			case 'updated':
-				$sql .= ', successful = successful + 1, updated = updated + 1';
-				break;
-			case 'error':
-				$sql .= ', failed = failed + 1';
-				break;
-		}
-
-		$sql .= ' WHERE id = %d';
-
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$wpdb->query( $wpdb->prepare( $sql, $session_id ) );
-	}
-
-	/**
 	 * Completes a session.
 	 *
 	 * @param int $session_id Session ID.
@@ -203,48 +168,77 @@ final class History_Repository {
 	}
 
 	/**
-	 * Retrieves import sessions in reverse-chronological order.
+	 * Retrieves import sessions in reverse-chronological order with item
+	 * counts projected from the items table.
 	 *
 	 * @param int $limit Maximum number of sessions to retrieve.
-	 * @return array[] Array of session rows.
+	 * @return array[] Array of session rows including total_items, successful,
+	 *                 updated, and failed counts.
 	 */
 	public function get_sessions( int $limit = 50 ): array {
 		global $wpdb;
 
-		$table = Imports_Table::table_name();
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT * FROM `{$table}` ORDER BY created_at DESC LIMIT %d",
+				$this->build_session_select_sql(
+					'GROUP BY i.id ORDER BY i.created_at DESC, i.id DESC LIMIT %d'
+				),
 				$limit
 			),
 			ARRAY_A
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
 		return $rows ? $rows : array();
 	}
 
 	/**
-	 * Retrieves a single session by ID.
+	 * Retrieves a single session by ID with item counts projected from the
+	 * items table.
 	 *
 	 * @param int $session_id Session ID.
-	 * @return array|null Session row or null if not found.
+	 * @return array|null Session row including total_items, successful,
+	 *                   updated, and failed counts, or null if not found.
 	 */
 	public function get_session( int $session_id ): ?array {
 		global $wpdb;
 
-		$table = Imports_Table::table_name();
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$row = $wpdb->get_row(
-			$wpdb->prepare( "SELECT * FROM `{$table}` WHERE id = %d", $session_id ),
+			$wpdb->prepare(
+				$this->build_session_select_sql(
+					'WHERE i.id = %d GROUP BY i.id'
+				),
+				$session_id
+			),
 			ARRAY_A
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
 		return $row ? $row : null;
+	}
+
+	/**
+	 * Builds a session SELECT statement that projects per-session item counts
+	 * by joining the items table.
+	 *
+	 * @param string $tail_clause WHERE/GROUP BY/ORDER BY/LIMIT tail.
+	 * @return string Composed SQL statement.
+	 */
+	private function build_session_select_sql( string $tail_clause ): string {
+		$imports = Imports_Table::table_name();
+		$items   = Import_Items_Table::table_name();
+
+		$counts = 'COUNT(it.id) AS total_items,'
+			. " COALESCE(SUM(it.status IN ('success', 'updated')), 0)"
+			. ' AS successful,'
+			. " COALESCE(SUM(it.status = 'updated'), 0) AS updated,"
+			. " COALESCE(SUM(it.status = 'error'), 0) AS failed";
+
+		return "SELECT i.*, {$counts} FROM `{$imports}` i"
+			. " LEFT JOIN `{$items}` it ON it.session_id = i.id"
+			. " {$tail_clause}";
 	}
 
 	/**
