@@ -219,6 +219,22 @@ Errors are reported in multiple places:
 3. **Check formatting** matches source
 4. **Test internal links** if present
 
+## Known Limitations
+
+### Embedded posts may render as plain links
+
+If an imported post embeds another imported post via a core Embed block, the embed can display as a fallback link instead of the rendered preview. This happens when WordPress caches the embed lookup while the embedded post is still a draft on the destination site. WordPress' Block Editor does not refresh this cache on subsequent saves, so the failure persists until the meta is cleared.
+
+**To avoid**: publish embedded posts before the posts that reference them.
+
+**To recover**: clear the affected post's `_oembed_*` post meta and re-visit the post on the front end:
+
+```bash
+wp post meta list <post-id> --fields=meta_key --format=csv \
+  | grep '^_oembed' \
+  | xargs -I{} wp post meta delete <post-id> {}
+```
+
 ## Next Steps
 
 - [Content Validation](validation.md) - Understanding validation
