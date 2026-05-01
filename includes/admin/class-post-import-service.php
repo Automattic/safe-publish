@@ -127,6 +127,16 @@ class Post_Import_Service {
 
 		$validation_error = $this->validate_required_fields( $fields );
 		if ( null !== $validation_error ) {
+			$this->log_import_if_session(
+				$session_id,
+				$fields['external_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$validation_error['error'],
+				array( 'action' => 'validation_failed' )
+			);
+
 			return $validation_error;
 		}
 
