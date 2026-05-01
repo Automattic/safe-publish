@@ -24,6 +24,7 @@ For error resolution at any stage, see the [Troubleshooting guide](../troublesho
 - Safe Publish sends a request to the source site's REST API
 - The endpoint `/wp-json/wp/v2/{post_type}/{post_id}` is queried
 - Response is received
+- Non-HTML fields (title, slug, statuses, etc.) are sanitized using WordPress' standard helpers (`sanitize_text_field`, `esc_url_raw`, `absint`); content and excerpt are kept raw for Stage 3
 
 ### Parameters Sent
 
@@ -74,8 +75,8 @@ If an `<a>` tag ends in a file extension allowed by WordPress, it is processed i
 
 ### For Each Media URL Found
 
-1. **Resolve**: Relative URLs (URLs without a domain) are converted into absolute URLs (with a domain) by appending the source site's domain.
-2. **Normalize**: Query parameters are stripped, but stored
+1. **Resolve**: Relative URLs (URLs without a domain) are converted into absolute URLs by prepending the source site's base URL (scheme and host).
+2. **Normalize**: Query parameters are removed from the working URL; they are reapplied from the original URL in step 7
 3. **Filter**: Third-party domain URLs are left unchanged
 4. **Deduplicate**: If the URL was already imported, the existing attachment URL is used, and download is skipped
 5. **Download**: File fetched using WordPress core's `download_url()`; downloadability is verified at this point
@@ -92,9 +93,9 @@ If an `<a>` tag ends in a file extension allowed by WordPress, it is processed i
 
 After media processing, all remaining source-domain URLs in the content are replaced with the destination site URL. This catches URLs outside media elements, such as normal links, block comment attributes, and text references.
 
-### Content Sanitization
+### Content and Excerpt Sanitization
 
-After URL replacement, post content is sanitized to strip dangerous HTML and scripts.
+By default, no sanitization is applied to the post content or excerpt; both fields are preserved verbatim, matching WordPress core importer behavior. The optional `safe_publish_import_kses` filter enables a safety check that aborts the import if `wp_kses` would modify either field, rather than silently stripping HTML.
 
 ### Performance
 
@@ -122,7 +123,7 @@ After URL replacement, post content is sanitized to strip dangerous HTML and scr
 
 ### Post Status
 
-All imported posts are created as **drafts** to allow review before publishing. This is intentional and cannot be changed (for safety).
+New posts are always created as **drafts** to allow review before publishing. This is intentional. When updating an existing post via bulk import, the current status is preserved to avoid silently unpublishing live content.
 
 ### Excluded Fields
 
@@ -158,7 +159,7 @@ Custom taxonomies must be registered with `'show_in_rest' => true` on the source
   - Source URL and post ID
   - Destination post ID
   - User who performed import
-  - Import status (success/failure)
+  - Import status (success, updated, or error)
   - Error message (if failed)
 - Import logged to History (session and per-item log entries)
 
