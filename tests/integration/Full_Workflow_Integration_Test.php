@@ -170,8 +170,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		$this->assertSame( '4001', get_post_meta( $result['post_id'], Options::META_EXTERNAL_POST_ID, true ), 'Imported post should store the external post ID.' );
 		$this->assertSame( Options::META_IMPORTED_FROM_VALUE, get_post_meta( $result['post_id'], Options::META_IMPORTED_FROM, true ), 'Imported post should be tagged with the plugin identifier.' );
 
-		// STEP 3 — HISTORY: Update stats, complete the session, then assert.
-		$this->repository->update_session_stats( $session_id, 'success' );
+		// STEP 3 — HISTORY: Complete the session, then assert.
 		$this->repository->complete_session( $session_id );
 
 		$session = $this->repository->get_session( $session_id );
