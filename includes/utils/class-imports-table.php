@@ -90,10 +90,8 @@ final class Imports_Table {
 			updated INT UNSIGNED NOT NULL DEFAULT 0,
 			end_time DATETIME NULL DEFAULT NULL,
 			created_at DATETIME NOT NULL,
-			PRIMARY KEY (id),
-			KEY status (status),
-			KEY created_at (created_at),
-			KEY user_id (user_id)
+			PRIMARY KEY  (id),
+			KEY created_at (created_at)
 		) {$charset};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';

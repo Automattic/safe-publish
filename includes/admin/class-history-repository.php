@@ -109,29 +109,36 @@ final class History_Repository {
 	): int|WP_Error {
 		global $wpdb;
 
-		$encoded_changes = null;
+		$encoded_changes      = null;
+		$has_previous_content = 0;
+
 		if ( count( $changes ) > 0 ) {
 			$json = wp_json_encode( $changes );
 
 			if ( false !== $json ) {
 				$encoded_changes = $json;
 			}
+
+			if ( '' !== ( $changes['previous_content'] ?? '' ) ) {
+				$has_previous_content = 1;
+			}
 		}
 
 		$inserted = $wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 			Import_Items_Table::table_name(),
 			array(
-				'session_id'      => $session_id,
-				'title'           => $title,
-				'external_id'     => $external_id,
-				'status'          => $status,
-				'post_id'         => $post_id,
-				'error_message'   => $error,
-				'content_changes' => $encoded_changes,
-				'rolled_back'     => 0,
-				'import_date'     => current_time( 'mysql' ),
+				'session_id'           => $session_id,
+				'title'                => $title,
+				'external_id'          => $external_id,
+				'status'               => $status,
+				'post_id'              => $post_id,
+				'error_message'        => $error,
+				'content_changes'      => $encoded_changes,
+				'has_previous_content' => $has_previous_content,
+				'rolled_back'          => 0,
+				'import_date'          => current_time( 'mysql' ),
 			),
-			array( '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%d', '%s' )
+			array( '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%d', '%d', '%s' )
 		);
 
 		if ( false === $inserted ) {
@@ -241,7 +248,11 @@ final class History_Repository {
 	}
 
 	/**
-	 * Retrieves all items for a session.
+	 * Retrieves all items for a session, excluding the content_changes LONGTEXT
+	 * column.
+	 *
+	 * The has_previous_content flag is read directly so callers can decide
+	 * whether to lazily fetch the full payload.
 	 *
 	 * @param int $session_id Session ID.
 	 * @return array[] Array of item rows.
@@ -254,7 +265,10 @@ final class History_Repository {
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT * FROM `{$table}` WHERE session_id = %d ORDER BY id ASC",
+				'SELECT id, session_id, title, external_id, status, post_id,'
+					. ' error_message, has_previous_content, rolled_back,'
+					. " import_date FROM `{$table}` WHERE session_id = %d"
+					. ' ORDER BY id ASC',
 				$session_id
 			),
 			ARRAY_A

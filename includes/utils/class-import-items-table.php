@@ -73,12 +73,12 @@ final class Import_Items_Table {
 			post_id BIGINT UNSIGNED NULL DEFAULT NULL,
 			error_message TEXT NULL DEFAULT NULL,
 			content_changes LONGTEXT NULL DEFAULT NULL,
+			has_previous_content TINYINT(1) NOT NULL DEFAULT 0,
 			rolled_back TINYINT(1) NOT NULL DEFAULT 0,
 			import_date DATETIME NOT NULL,
-			PRIMARY KEY (id),
-			KEY session_id (session_id),
-			KEY post_id (post_id),
-			KEY status (status)
+			PRIMARY KEY  (id),
+			KEY session_id_status (session_id, status),
+			KEY post_id (post_id)
 		) {$charset};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';

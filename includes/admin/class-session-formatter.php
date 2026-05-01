@@ -105,10 +105,7 @@ final class Session_Formatter {
 		$error_msg   = (string) ( $item['error_message'] ?? '' );
 		$error       = '' !== $error_msg ? $error_msg : null;
 
-		$changes              = History_Repository::decode_item_changes(
-			$item['content_changes'] ?? null
-		);
-		$has_previous_content = is_array( $changes ) && ! empty( $changes['previous_content'] );
+		$has_previous_content = 1 === (int) ( $item['has_previous_content'] ?? 0 );
 
 		$is_updated_post     = ( 'updated' === $item_status );
 		$should_show_changes = $has_previous_content || $is_updated_post;
