@@ -188,6 +188,10 @@ If duplicates still occur:
 1. **Check History** to see if the post was imported from different sessions
 2. Delete duplicate drafts manually
 
+#### Embedded posts display as plain links
+
+This is a known limitation of WordPress' embed cache when imported posts reference each other while still in draft. See [Embedded posts may render as plain links](concepts/import-process.md#embedded-posts-may-render-as-plain-links) for the cause and recovery steps.
+
 ### Validation Errors
 
 | Error code            | Cause                                                  | Solution                                                   |

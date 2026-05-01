@@ -53,7 +53,7 @@ Imports are tracked in a session-based model. Each import operation creates one 
 
 ### Export History
 
-Export events are logged automatically when posts are served to a destination site. Each event is stored in the `{$wpdb->prefix}safe_publish_events` database table.
+Export events are logged automatically when posts are served to a destination site. Each event is stored in the `{$wpdb->prefix}safe_publish_audit_log` database table.
 
 | Field           | Description                                       |
 | --------------- | ------------------------------------------------- |
@@ -141,18 +141,18 @@ Rollback reverts imported content to its state before the import. Only successfu
 
 ### Import History
 
-Import history uses WordPress custom post types:
+Import history is stored in two custom database tables:
 
-| CPT Slug            | Purpose                                           |
-| ------------------- | ------------------------------------------------- |
-| `sp_import_session` | One post per import session                       |
-| `sp_import_log`     | One post per imported item (child of the session) |
+| Table                          | Purpose                                             |
+| ------------------------------ | --------------------------------------------------- |
+| `wp_safe_publish_imports`      | One row per import session                          |
+| `wp_safe_publish_import_items` | One row per imported item (linked via `session_id`) |
 
 ### Export History
 
 Export events are stored in a custom database table:
 
-- Table name: `{$wpdb->prefix}safe_publish_events`
+- Table name: `{$wpdb->prefix}safe_publish_audit_log`
 - Indexed on: `channel` + `created_at`, `level`, `event`
 
 ## Using Import History
@@ -200,6 +200,10 @@ History records may contain:
 - **Usernames**: Of users who performed imports
 - **URLs**: Of source/destination content (may be internal/private)
 - **Post titles**: May contain sensitive information
+
+### User Deletion
+
+Import history records are not tied to WordPress user accounts. When a user is deleted, history records are preserved and continue to display the original user's name as it was at the time of the import.
 
 ## Best Practices
 

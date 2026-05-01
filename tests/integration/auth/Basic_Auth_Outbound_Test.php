@@ -11,11 +11,7 @@ namespace Safe_Publish\Tests\Integration\Auth;
 
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
-use Safe_Publish\Admin\History_Renderer;
-use Safe_Publish\Admin\Import_History;
 use Safe_Publish\Admin\Post_Import_Service;
-use Safe_Publish\Admin\Session_Formatter;
-use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
@@ -67,11 +63,11 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 	private Post_Import_Service $import_service;
 
 	/**
-	 * Import history instance.
+	 * History repository instance.
 	 *
-	 * @var Import_History
+	 * @var History_Repository
 	 */
-	private Import_History $import_history;
+	private History_Repository $repository;
 
 	/**
 	 * Sets up each test.
@@ -87,13 +83,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 		$this->captured_request_args = null;
 		$this->mock_status_code      = 200;
 
-		$repository           = new History_Repository();
-		$this->import_history = new Import_History(
-			$repository,
-			new History_Renderer(),
-			new Session_Formatter(),
-			new Session_Rollback_Service( $repository )
-		);
+		$this->repository = new History_Repository();
 
 		$media_importer    = new Media_Importer( new HTTP_Client() );
 		$content_processor = new Content_Processor(
@@ -105,7 +95,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 			new External_Posts_API( new HTTP_Client() ),
 			$media_importer,
 			$content_processor,
-			$this->import_history,
+			$this->repository,
 			new Meta_Terms_Manager()
 		);
 
@@ -227,7 +217,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 		$this->assertCount( 1, $posts, 'fetch_posts() should return exactly one post.' );
 
 		// ACT: Import the fetched post.
-		$session_id = $this->import_history->create_session( self::SOURCE_SITE_URL, 'bulk' );
+		$session_id = $this->repository->create_session( self::SOURCE_SITE_URL, 'bulk' );
 		$result     = $this->import_service->import_post( $posts[0], $session_id );
 
 		// ASSERT: Import succeeded and a WP post was created in the database.

@@ -7,7 +7,9 @@
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Import_Items_Table;
+use Safe_Publish\Utils\Imports_Table;
+use Safe_Publish\Utils\Log_Events;
 use WP_Error;
 
 // Prevent direct access.
@@ -18,19 +20,25 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * History Repository Class.
  *
- * Handles all data storage and retrieval operations for import sessions and logs.
+ * Handles all data storage and retrieval operations for import sessions and
+ * items, backed by the {$wpdb->prefix}safe_publish_imports and
+ * {$wpdb->prefix}safe_publish_import_items tables.
  */
 final class History_Repository {
 
 	/**
-	 * Custom post type for import sessions.
+	 * Import logger instance.
+	 *
+	 * @var Import_Logger
 	 */
-	const SESSION_POST_TYPE = 'sp_import_session';
+	private Import_Logger $logger;
 
 	/**
-	 * Custom post type for import logs.
+	 * Constructs the History_Repository instance.
 	 */
-	const LOG_POST_TYPE = 'sp_import_log';
+	public function __construct() {
+		$this->logger = new Import_Logger();
+	}
 
 	/**
 	 * Creates a new import session.
@@ -43,43 +51,48 @@ final class History_Repository {
 		string $source_url,
 		string $session_type = 'bulk'
 	): int|WP_Error {
-		$session_id = wp_insert_post(
+		global $wpdb;
+
+		$user_id = get_current_user_id();
+		$user    = get_userdata( $user_id );
+
+		$inserted = $wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			Imports_Table::table_name(),
 			array(
-				'post_type'   => self::SESSION_POST_TYPE,
-				'post_title'  => sprintf(
-					/* translators: %s: timestamp of the import session */
-					__( 'Import Session - %s', 'safe-publish' ),
-					current_time( 'Y-m-d H:i:s' )
-				),
-				'post_status' => 'publish',
-				'post_author' => get_current_user_id(),
-				'meta_input'  => array(
-					'source_url'   => $source_url,
-					'session_type' => $session_type,
-					'total_items'  => 0,
-					'successful'   => 0,
-					'failed'       => 0,
-					'updated'      => 0,
-					'status'       => 'in_progress',
-					'start_time'   => current_time( 'mysql' ),
-				),
-			)
+				'user_id'           => $user_id,
+				'user_display_name' => $user
+					? $user->display_name
+					: __( 'Unknown user', 'safe-publish' ),
+				'source_url'        => $source_url,
+				'session_type'      => $session_type,
+				'status'            => 'in_progress',
+				'end_time'          => null,
+				'created_at'        => current_time( 'mysql' ),
+			),
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
 
-		return $session_id;
+		if ( false === $inserted ) {
+			return new WP_Error(
+				'session_insert_failed',
+				__( 'Failed to create import session.', 'safe-publish' )
+			);
+		}
+
+		return (int) $wpdb->insert_id;
 	}
 
 	/**
 	 * Logs an import action.
 	 *
-	 * @param int    $session_id  Session ID.
-	 * @param int    $external_id External post ID.
-	 * @param string $title       Post title.
-	 * @param string $status      Import status (success, error, updated).
-	 * @param int    $post_id     WordPress post ID (if successful).
-	 * @param string $error       Error message (if failed).
-	 * @param array  $changes     Changes made during import.
-	 * @return int|WP_Error Log ID or error.
+	 * @param int         $session_id  Session ID.
+	 * @param int         $external_id External post ID.
+	 * @param string      $title       Post title.
+	 * @param string      $status      Import status (success, error, updated).
+	 * @param int|null    $post_id     WordPress post ID; null for error status.
+	 * @param string|null $error       Error message; null for success/updated.
+	 * @param array       $changes     Changes made during import.
+	 * @return int|WP_Error Item ID or error.
 	 */
 	public function log_import_action(
 		int $session_id,
@@ -90,68 +103,48 @@ final class History_Repository {
 		?string $error = null,
 		array $changes = array()
 	): int|WP_Error {
-		$log_data = array(
-			'session_id'    => $session_id,
-			'external_id'   => $external_id,
-			'status'        => $status,
-			'post_id'       => $post_id,
-			'error_message' => $error,
-			'changes'       => $changes,
-		);
+		global $wpdb;
 
-		$log_content = wp_json_encode( $log_data );
+		$encoded_changes      = null;
+		$has_previous_content = 0;
 
-		$log_id = wp_insert_post(
+		if ( count( $changes ) > 0 ) {
+			$json = wp_json_encode( $changes );
+
+			if ( false !== $json ) {
+				$encoded_changes = $json;
+			}
+
+			if ( '' !== ( $changes['previous_content'] ?? '' ) ) {
+				$has_previous_content = 1;
+			}
+		}
+
+		$inserted = $wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			Import_Items_Table::table_name(),
 			array(
-				'post_type'    => self::LOG_POST_TYPE,
-				'post_title'   => $title,
-				'post_content' => false !== $log_content ? $log_content : '',
-				'post_status'  => 'publish',
-				'post_parent'  => $session_id,
-				'meta_input'   => array(
-					'session_id'  => $session_id,
-					'external_id' => $external_id,
-					'status'      => $status,
-					'post_id'     => $post_id,
-					'import_date' => current_time( 'mysql' ),
-				),
-			)
+				'session_id'           => $session_id,
+				'title'                => $title,
+				'external_id'          => $external_id,
+				'status'               => $status,
+				'post_id'              => $post_id,
+				'error_message'        => $error,
+				'content_changes'      => $encoded_changes,
+				'has_previous_content' => $has_previous_content,
+				'rolled_back'          => 0,
+				'import_date'          => current_time( 'mysql' ),
+			),
+			array( '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%d', '%d', '%s' )
 		);
 
-		// Store changes as post meta if they exist.
-		if ( ! empty( $changes ) ) {
-			update_post_meta( $log_id, 'content_changes', $changes );
+		if ( false === $inserted ) {
+			return new WP_Error(
+				'item_insert_failed',
+				__( 'Failed to create import item.', 'safe-publish' )
+			);
 		}
 
-		return $log_id;
-	}
-
-	/**
-	 * Updates session stats.
-	 *
-	 * @param int    $session_id Session ID.
-	 * @param string $status     Status of the import (success, error, updated).
-	 */
-	public function update_session_stats( int $session_id, string $status ): void {
-		$total      = (int) get_post_meta( $session_id, 'total_items', true );
-		$successful = (int) get_post_meta( $session_id, 'successful', true );
-		$failed     = (int) get_post_meta( $session_id, 'failed', true );
-		$updated    = (int) get_post_meta( $session_id, 'updated', true );
-
-		update_post_meta( $session_id, 'total_items', $total + 1 );
-
-		switch ( $status ) {
-			case 'success':
-				update_post_meta( $session_id, 'successful', $successful + 1 );
-				break;
-			case 'updated':
-				update_post_meta( $session_id, 'successful', $successful + 1 );
-				update_post_meta( $session_id, 'updated', $updated + 1 );
-				break;
-			case 'error':
-				update_post_meta( $session_id, 'failed', $failed + 1 );
-				break;
-		}
+		return (int) $wpdb->insert_id;
 	}
 
 	/**
@@ -160,177 +153,317 @@ final class History_Repository {
 	 * @param int $session_id Session ID.
 	 */
 	public function complete_session( int $session_id ): void {
-		update_post_meta( $session_id, 'status', 'completed' );
-		update_post_meta( $session_id, 'end_time', current_time( 'mysql' ) );
-	}
+		global $wpdb;
 
-	/**
-	 * Stores content diff for rollback purposes.
-	 *
-	 * @param int    $post_id     WordPress post ID.
-	 * @param string $old_content Previous content.
-	 * @param string $new_content New content.
-	 */
-	public function store_content_diff(
-		int $post_id,
-		string $old_content,
-		string $new_content
-	): void {
-		$diff_data = array(
-			'old_content' => $old_content,
-			'new_content' => $new_content,
-			'diff_date'   => current_time( 'mysql' ),
+		$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			Imports_Table::table_name(),
+			array(
+				'status'   => 'completed',
+				'end_time' => current_time( 'mysql' ),
+			),
+			array( 'id' => $session_id ),
+			array( '%s', '%s' ),
+			array( '%d' )
 		);
-
-		update_post_meta( $post_id, Options::META_CONTENT_HISTORY, $diff_data );
 	}
 
 	/**
-	 * Retrieves all import sessions.
+	 * Retrieves import sessions in reverse-chronological order with item
+	 * counts projected from the items table.
 	 *
 	 * @param int $limit Maximum number of sessions to retrieve.
-	 * @return array Array of session posts.
+	 * @return array[] Array of session rows including total_items, successful,
+	 *                 updated, and failed counts.
 	 */
 	public function get_sessions( int $limit = 50 ): array {
-		$sessions = get_posts(
-			array(
-				'post_type'      => self::SESSION_POST_TYPE,
-				'post_status'    => 'publish',
-				'posts_per_page' => $limit,
-				'orderby'        => 'date',
-				'order'          => 'DESC',
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'     => array(), // Empty meta_query.
-			)
-		);
+		global $wpdb;
 
-		return $sessions;
+		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				$this->build_session_select_sql(
+					'GROUP BY i.id ORDER BY i.created_at DESC, i.id DESC LIMIT %d'
+				),
+				$limit
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return $rows ? $rows : array();
 	}
 
 	/**
-	 * Retrieves a single session by ID.
+	 * Retrieves a single session by ID with item counts projected from the
+	 * items table.
 	 *
 	 * @param int $session_id Session ID.
-	 * @return \WP_Post|null Session post or null if not found.
+	 * @return array|null Session row including total_items, successful,
+	 *                   updated, and failed counts, or null if not found.
 	 */
-	public function get_session( int $session_id ): ?\WP_Post {
-		$session = get_post( $session_id );
+	public function get_session( int $session_id ): ?array {
+		global $wpdb;
 
-		if ( ! $session || self::SESSION_POST_TYPE !== $session->post_type ) {
-			return null;
-		}
+		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				$this->build_session_select_sql(
+					'WHERE i.id = %d GROUP BY i.id'
+				),
+				$session_id
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
-		return $session;
+		return $row ? $row : null;
 	}
 
 	/**
-	 * Retrieves all logs for a session.
+	 * Builds a session SELECT statement that projects per-session item counts
+	 * by joining the items table.
+	 *
+	 * @param string $tail_clause WHERE/GROUP BY/ORDER BY/LIMIT tail.
+	 * @return string Composed SQL statement.
+	 */
+	private function build_session_select_sql( string $tail_clause ): string {
+		$imports = Imports_Table::table_name();
+		$items   = Import_Items_Table::table_name();
+
+		$counts = 'COUNT(it.id) AS total_items,'
+			. " COALESCE(SUM(it.status IN ('success', 'updated')), 0)"
+			. ' AS successful,'
+			. " COALESCE(SUM(it.status = 'updated'), 0) AS updated,"
+			. " COALESCE(SUM(it.status = 'error'), 0) AS failed";
+
+		return "SELECT i.*, {$counts} FROM `{$imports}` i"
+			. " LEFT JOIN `{$items}` it ON it.session_id = i.id"
+			. " {$tail_clause}";
+	}
+
+	/**
+	 * Retrieves all items for a session, excluding the content_changes LONGTEXT
+	 * column.
+	 *
+	 * The has_previous_content flag is read directly so callers can decide
+	 * whether to lazily fetch the full payload.
 	 *
 	 * @param int $session_id Session ID.
-	 * @return array Array of log posts.
+	 * @return array[] Array of item rows.
 	 */
-	public function get_session_logs( int $session_id ): array {
-		$logs = get_posts(
-			array(
-				'post_type'      => self::LOG_POST_TYPE,
-				'post_status'    => 'publish',
-				'post_parent'    => $session_id,
-				'posts_per_page' => -1,
-				'orderby'        => 'date',
-				'order'          => 'ASC',
-			)
-		);
+	public function get_session_items( int $session_id ): array {
+		global $wpdb;
 
-		return $logs;
+		$table = Import_Items_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT id, session_id, title, external_id, status, post_id,'
+					. ' error_message, has_previous_content, rolled_back,'
+					. " import_date FROM `{$table}` WHERE session_id = %d"
+					. ' ORDER BY id ASC',
+				$session_id
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return $rows ? $rows : array();
 	}
 
 	/**
-	 * Retrieves logs with specific status for a session.
+	 * Retrieves items with specific statuses for a session.
 	 *
 	 * @param int   $session_id Session ID.
 	 * @param array $statuses   Array of statuses to filter by.
-	 * @return array Array of log posts.
+	 * @return array[] Array of item rows.
 	 */
-	public function get_session_logs_by_status(
+	public function get_session_items_by_status(
 		int $session_id,
 		array $statuses
 	): array {
-		$logs = get_posts(
-			array(
-				'post_type'      => self::LOG_POST_TYPE,
-				'post_status'    => 'publish',
-				'post_parent'    => $session_id,
-				'posts_per_page' => -1,
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'     => array( // Admin-only operation, scoped by post_parent.
-					array(
-						'key'     => 'status',
-						'value'   => $statuses,
-						'compare' => 'IN',
-					),
-				),
-			)
-		);
+		global $wpdb;
 
-		return $logs;
-	}
-
-	/**
-	 * Retrieves a single log by ID.
-	 *
-	 * @param int $log_id Log ID.
-	 * @return \WP_Post|null Log post or null if not found.
-	 */
-	public function get_log( int $log_id ): ?\WP_Post {
-		$log = get_post( $log_id );
-
-		if ( ! $log || self::LOG_POST_TYPE !== $log->post_type ) {
-			return null;
+		if ( 0 === count( $statuses ) ) {
+			return array();
 		}
 
-		return $log;
+		$table        = Import_Items_Table::table_name();
+		$count        = count( $statuses );
+		$placeholders = implode( ', ', array_fill( 0, $count, '%s' ) );
+		$values       = array_values( $statuses );
+		array_unshift( $values, $session_id );
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM `{$table}` WHERE session_id = %d"
+					. " AND status IN ({$placeholders}) ORDER BY id ASC",
+				...$values
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return $rows ? $rows : array();
 	}
 
 	/**
-	 * Marks a session as rolled back.
+	 * Retrieves a single item by ID.
+	 *
+	 * @param int $item_id Item ID.
+	 * @return array|null Item row or null if not found.
+	 */
+	public function get_item( int $item_id ): ?array {
+		global $wpdb;
+
+		$table = Import_Items_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$row = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM `{$table}` WHERE id = %d", $item_id ),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return $row ? $row : null;
+	}
+
+	/**
+	 * Looks up the most recent item row for a given imported post.
+	 *
+	 * @param int $post_id WordPress post ID.
+	 * @return array|null Item row or null if no matching item exists.
+	 */
+	public function get_item_for_post( int $post_id ): ?array {
+		global $wpdb;
+
+		$table = Import_Items_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM `{$table}` WHERE post_id = %d ORDER BY id DESC LIMIT 1",
+				$post_id
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return $row ? $row : null;
+	}
+
+	/**
+	 * Marks a session as rolled back and emits an audit log event.
 	 *
 	 * @param int $session_id Session ID.
 	 */
 	public function mark_session_rolled_back( int $session_id ): void {
-		update_post_meta( $session_id, 'status', 'rolled_back' );
-		update_post_meta( $session_id, 'rollback_date', current_time( 'mysql' ) );
-		update_post_meta( $session_id, 'rollback_user', get_current_user_id() );
-	}
+		global $wpdb;
 
-	/**
-	 * Marks a log entry as rolled back.
-	 *
-	 * @param int $log_id Log ID.
-	 */
-	public function mark_log_rolled_back( int $log_id ): void {
-		update_post_meta( $log_id, 'rolled_back', true );
-		update_post_meta( $log_id, 'rollback_date', current_time( 'mysql' ) );
-		update_post_meta( $log_id, 'rollback_user', get_current_user_id() );
-	}
+		$updated = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			Imports_Table::table_name(),
+			array( 'status' => 'rolled_back' ),
+			array( 'id' => $session_id ),
+			array( '%s' ),
+			array( '%d' )
+		);
 
-	/**
-	 * Deletes a session and all its associated logs.
-	 *
-	 * @param int $session_id Session ID.
-	 * @return bool True if successful, false otherwise.
-	 */
-	public function delete_session( int $session_id ): bool {
-		// Get all logs associated with this session.
-		$logs = $this->get_session_logs( $session_id );
-
-		// Delete all associated logs first.
-		foreach ( $logs as $log ) {
-			wp_delete_post( $log->ID, true );
+		if ( false === $updated ) {
+			$this->logger->log_error(
+				Log_Events::ROLLBACK_FAILED,
+				array(
+					'scope'      => 'session',
+					'session_id' => $session_id,
+				)
+			);
+			return;
 		}
 
-		// Delete the session itself.
-		$result = wp_delete_post( $session_id, true );
+		$event = 0 === $updated
+			? Log_Events::SESSION_ROLLBACK_NOOP
+			: Log_Events::SESSION_ROLLED_BACK;
 
-		return false !== $result;
+		$this->logger->log_event(
+			$event,
+			array( 'session_id' => $session_id )
+		);
+	}
+
+	/**
+	 * Marks a single item as rolled back and emits an audit log event.
+	 *
+	 * @param int $item_id Item ID.
+	 */
+	public function mark_item_rolled_back( int $item_id ): void {
+		global $wpdb;
+
+		$updated = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			Import_Items_Table::table_name(),
+			array( 'rolled_back' => 1 ),
+			array( 'id' => $item_id ),
+			array( '%d' ),
+			array( '%d' )
+		);
+
+		if ( false === $updated ) {
+			$this->logger->log_error(
+				Log_Events::ROLLBACK_FAILED,
+				array(
+					'scope'   => 'item',
+					'item_id' => $item_id,
+				)
+			);
+			return;
+		}
+
+		$event = 0 === $updated
+			? Log_Events::ITEM_ROLLBACK_NOOP
+			: Log_Events::ITEM_ROLLED_BACK;
+
+		$this->logger->log_event(
+			$event,
+			array( 'item_id' => $item_id )
+		);
+	}
+
+	/**
+	 * Decodes the JSON value stored in the content_changes column.
+	 *
+	 * @param mixed $raw Raw column value.
+	 * @return array|null Decoded array, or null when no changes are stored.
+	 */
+	public static function decode_item_changes( $raw ): ?array {
+		if ( ! is_string( $raw ) || '' === $raw ) {
+			return null;
+		}
+
+		$decoded = json_decode( $raw, true );
+		return is_array( $decoded ) ? $decoded : null;
+	}
+
+	/**
+	 * Deletes a session and all of its associated items.
+	 *
+	 * @param int $session_id Session ID.
+	 * @return bool True if the session row was removed.
+	 */
+	public function delete_session( int $session_id ): bool {
+		global $wpdb;
+
+		$wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			Import_Items_Table::table_name(),
+			array( 'session_id' => $session_id ),
+			array( '%d' )
+		);
+
+		$result = $wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			Imports_Table::table_name(),
+			array( 'id' => $session_id ),
+			array( '%d' )
+		);
+
+		return false !== $result && $result > 0;
 	}
 }

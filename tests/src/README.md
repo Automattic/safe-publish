@@ -90,7 +90,7 @@ The test suite covers:
 
 - `Post` interface validation
 - `ImportSession` interface validation
-- `ImportLog` interface validation
+- `ImportItem` interface validation
 - `PaginationInfo` interface validation
 - Type safety checks
 

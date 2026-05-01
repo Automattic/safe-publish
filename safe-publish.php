@@ -109,10 +109,12 @@ register_activation_hook( __FILE__, 'safe_publish_activation' );
 /**
  * Plugin activation callback.
  *
- * Sets default options and flushes rewrite rules.
+ * Creates database tables, sets default options, and flushes rewrite rules.
  */
 function safe_publish_activation(): void {
-	\Safe_Publish\Utils\Event_Table::create_table();
+	\Safe_Publish\Utils\Audit_Log_Table::create_table();
+	\Safe_Publish\Utils\Imports_Table::create_table();
+	\Safe_Publish\Utils\Import_Items_Table::create_table();
 
 	// Set default options.
 	if ( false === get_option( 'safe_publish_connected_site_url' ) ) {

@@ -50,6 +50,14 @@ final class Settings_Page {
 			</div>
 			<?php endif; ?>
 
+			<?php if ( $show_import_fields ) : ?>
+			<div
+				id="safe-publish-auth-status-banner"
+				class="safe-publish-auth-status-banner safe-publish-import-field-row"
+				hidden
+			></div>
+			<?php endif; ?>
+
 			<div class="safe-publish-admin-container">
 				<div class="safe-publish-settings-section">
 					<h2><?php esc_html_e( 'Configuration', 'safe-publish' ); ?></h2>
@@ -273,8 +281,72 @@ final class Settings_Page {
 						} );
 					}
 
+					/**
+					 * Renders the cached auth probe status into the banner element.
+					 *
+					 * @param {HTMLElement} banner Banner container element.
+					 * @param {string}      status Probe status string from the AJAX response.
+					 */
+					function renderAuthStatusBanner( banner, status ) {
+						if ( 'authorized' === status ) {
+							banner.hidden    = true;
+							banner.className = 'safe-publish-auth-status-banner safe-publish-import-field-row';
+							banner.innerHTML = '';
+							return;
+						}
+
+						let level   = 'warning';
+						let message = '';
+
+						if ( 'unauthorized' === status ) {
+							level   = 'error';
+							message = "<?php echo esc_js( __( 'Source site rejected the shared secret. Set SAFE_PUBLISH_SHARED_SECRET in wp-config.php on both sites to the same value (at least 16 characters).', 'safe-publish' ) ); ?>";
+						} else if ( 'unreachable' === status ) {
+							message = "<?php echo esc_js( __( 'Source site could not be reached. Verify the connected site URL and that the source site is online.', 'safe-publish' ) ); ?>";
+						} else {
+							message = "<?php echo esc_js( __( 'Source site URL is not configured.', 'safe-publish' ) ); ?>";
+						}
+
+						banner.hidden    = false;
+						banner.className = 'safe-publish-auth-status-banner safe-publish-import-field-row notice notice-' + level + ' inline';
+						banner.innerHTML = '<p></p>';
+						banner.querySelector( 'p' ).textContent = message;
+					}
+
+					/**
+					 * Fetches the cached auth probe status and renders the banner.
+					 */
+					function initAuthStatusBanner() {
+						const banner = document.getElementById( 'safe-publish-auth-status-banner' );
+
+						if ( ! banner ) {
+							return;
+						}
+
+						const ajaxUrl = "<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>";
+						const nonce   = "<?php echo esc_js( wp_create_nonce( 'safe_publish_ajax_nonce' ) ); ?>";
+
+						const formData = new FormData();
+						formData.append( 'action', 'safe_publish_auth_status' );
+						formData.append( 'nonce', nonce );
+
+						fetch( ajaxUrl, { method: 'POST', body: formData } )
+							.then( function ( r ) { return r.json(); } )
+							.then( function ( data ) {
+								if ( data && data.success && data.data && data.data.status ) {
+									renderAuthStatusBanner( banner, data.data.status );
+								} else {
+									renderAuthStatusBanner( banner, 'unreachable' );
+								}
+							} )
+							.catch( function () {
+								renderAuthStatusBanner( banner, 'unreachable' );
+							} );
+					}
+
 					initImportFieldToggle();
 					initTestConnectionButton();
+					initAuthStatusBanner();
 				} )();
 				</script>
 				</div>

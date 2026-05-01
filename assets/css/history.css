@@ -169,8 +169,8 @@
 	margin-bottom: 4px;
 }
 
-/* Log Items */
-.safe-publish-log-item {
+/* Item rows */
+.safe-publish-item-row {
 	background: #fff;
 	border: 1px solid #c3c4c7;
 	border-radius: 4px;
@@ -179,40 +179,8 @@
 	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
 }
 
-.safe-publish-log-item:hover {
+.safe-publish-item-row:hover {
 	border-color: #8c8f94;
-}
-
-.safe-publish-log-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: flex-start;
-	margin-bottom: 12px;
-	gap: 16px;
-}
-
-.safe-publish-log-title {
-	font-weight: 600;
-	font-size: 14px;
-	color: #1d2327;
-	margin: 0;
-	flex: 1;
-}
-
-.safe-publish-log-actions {
-	display: flex;
-	gap: 8px;
-	align-items: center;
-	flex-shrink: 0;
-}
-
-.safe-publish-log-meta {
-	display: flex;
-	gap: 8px;
-	align-items: center;
-	font-size: 13px;
-	color: #646970;
-	flex-wrap: wrap;
 }
 
 /* Status indicators */
@@ -372,23 +340,6 @@
 		text-align: left;
 	}
 
-	.safe-publish-log-header {
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 12px;
-	}
-
-	.safe-publish-log-actions {
-		width: 100%;
-		justify-content: flex-start;
-	}
-
-	.safe-publish-log-meta {
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 4px;
-	}
-
 	.safe-publish-modal-content {
 		width: 95% !important;
 		max-width: none !important;
@@ -412,7 +363,7 @@
 		align-items: stretch;
 	}
 
-	.safe-publish-log-item {
+	.safe-publish-item-row {
 		padding: 12px;
 	}
 

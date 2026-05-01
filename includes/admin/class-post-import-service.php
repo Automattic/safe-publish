@@ -55,11 +55,11 @@ class Post_Import_Service {
 	private Content_Processor $content_processor;
 
 	/**
-	 * Import History instance.
+	 * History repository instance.
 	 *
-	 * @var Import_History
+	 * @var History_Repository
 	 */
-	private Import_History $import_history;
+	private History_Repository $repository;
 
 	/**
 	 * Meta Terms Manager instance.
@@ -82,20 +82,20 @@ class Post_Import_Service {
 	 * @param External_Posts_API $api                External Posts API instance.
 	 * @param Media_Importer     $media_importer     Media Importer instance.
 	 * @param Content_Processor  $content_processor  Content Processor instance.
-	 * @param Import_History     $import_history     Import History instance.
+	 * @param History_Repository $repository         History repository instance.
 	 * @param Meta_Terms_Manager $meta_terms_manager Meta Terms Manager instance.
 	 */
 	public function __construct(
 		External_Posts_API $api,
 		Media_Importer $media_importer,
 		Content_Processor $content_processor,
-		Import_History $import_history,
+		History_Repository $repository,
 		Meta_Terms_Manager $meta_terms_manager
 	) {
 		$this->api                = $api;
 		$this->media_importer     = $media_importer;
 		$this->content_processor  = $content_processor;
-		$this->import_history     = $import_history;
+		$this->repository         = $repository;
 		$this->meta_terms_manager = $meta_terms_manager;
 		$this->logger             = new Content_Logger();
 	}
@@ -751,9 +751,10 @@ class Post_Import_Service {
 	 * Persists an existing post update with all associated data.
 	 *
 	 * Handles wp_update_post, external link meta, import date, thumbnail,
-	 * custom meta, and terms. If any step after wp_update_post() fails,
-	 * the post is rolled back to its pre-update state. Used by both
-	 * single and bulk import paths.
+	 * custom meta, and terms. If any step after wp_update_post() fails, the
+	 * post is rolled back to its pre-update state and any media sideloaded
+	 * during this attempt is deleted. Used by both single and bulk import
+	 * paths.
 	 *
 	 * @param array        $post_args              Arguments for wp_update_post().
 	 * @param int          $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
@@ -804,7 +805,7 @@ class Post_Import_Service {
 			Options::META_IMPORT_DATE,
 			current_time( 'mysql' )
 		) ) {
-			$this->restore_pre_update_state( $post_id, $snapshot );
+			$this->rollback_failed_update( $post_id, $snapshot );
 
 			return new WP_Error(
 				'import_date_update_failed',
@@ -826,7 +827,7 @@ class Post_Import_Service {
 		);
 
 		if ( is_wp_error( $meta_result ) ) {
-			$this->restore_pre_update_state( $post_id, $snapshot );
+			$this->rollback_failed_update( $post_id, $snapshot );
 
 			return new WP_Error(
 				'meta_update_failed',
@@ -841,7 +842,7 @@ class Post_Import_Service {
 		);
 
 		if ( is_wp_error( $terms_result ) ) {
-			$this->restore_pre_update_state( $post_id, $snapshot );
+			$this->rollback_failed_update( $post_id, $snapshot );
 
 			return new WP_Error(
 				'terms_update_failed',
@@ -953,6 +954,21 @@ class Post_Import_Service {
 		foreach ( $snapshot['terms'] as $taxonomy => $term_ids ) {
 			wp_set_object_terms( $post_id, $term_ids, $taxonomy );
 		}
+	}
+
+	/**
+	 * Rolls back a failed update: restores the post to its pre-update state and
+	 * deletes any media sideloaded during the failed attempt.
+	 *
+	 * @param int   $post_id  Post ID.
+	 * @param array $snapshot Snapshot from capture_pre_update_state().
+	 */
+	private function rollback_failed_update(
+		int $post_id,
+		array $snapshot
+	): void {
+		$this->restore_pre_update_state( $post_id, $snapshot );
+		$this->content_processor->delete_newly_created_media();
 	}
 
 	/**
@@ -1118,7 +1134,7 @@ class Post_Import_Service {
 	 * @param string      $status      Import status (success, updated, error).
 	 * @param int|null    $post_id     WordPress post ID or null on failure.
 	 * @param string|null $error       Error message or null on success.
-	 * @param array       $changes     Contextual changes data for the log entry.
+	 * @param array       $changes     Contextual changes data for the item.
 	 */
 	private function log_import_if_session(
 		?int $session_id,
@@ -1133,7 +1149,7 @@ class Post_Import_Service {
 			return;
 		}
 
-		$this->import_history->log_import_action(
+		$this->repository->log_import_action(
 			$session_id,
 			$external_id,
 			$title,

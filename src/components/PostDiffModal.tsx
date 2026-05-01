@@ -2,7 +2,7 @@
  * Post Diff Modal component.
  *
  * Displays a modal with a visual comparison between the current post content
- * and incoming external content, with options to update.
+ * and incoming external content.
  *
  * @file This file defines the PostDiffModal component.
  */
@@ -10,7 +10,6 @@
 import BlockDiffViewer from './BlockDiffViewer';
 import DiffViewSelector from './DiffViewSelector';
 import NonContentDiffSections from './NonContentDiffSections';
-import UpdateOptionsPanel from './UpdateOptionsPanel';
 import { useDiffPreview } from './hooks/useDiffPreview';
 import { usePostUpdate } from './hooks/usePostUpdate';
 import { Post } from '../types';
@@ -66,8 +65,6 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 	} );
 
 	const {
-		updateOpts,
-		setUpdateOpts,
 		isUpdating,
 		updateError,
 		updateSuccess,
@@ -152,8 +149,6 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 			) }
 
 			<NonContentDiffSections nonContentDiffs={ nonContentDiffs } />
-
-			<UpdateOptionsPanel updateOpts={ updateOpts } onChange={ setUpdateOpts } />
 
 			<HStack justify="right">
 				{ updateError && <Text style={ { color: '#d63638' } }>{ updateError }</Text> }

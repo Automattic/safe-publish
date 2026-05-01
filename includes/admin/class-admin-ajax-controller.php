@@ -10,6 +10,7 @@ namespace Safe_Publish\Admin;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Post_Type_Fetcher;
+use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Logger;
@@ -35,6 +36,20 @@ final class Admin_Ajax_Controller {
 	use Verifies_Ajax_Request;
 
 	/**
+	 * Site transient key for the cached auth probe result.
+	 *
+	 * @var string
+	 */
+	const AUTH_STATUS_TRANSIENT = 'safe_publish_auth_status';
+
+	/**
+	 * TTL for the auth-status site transient.
+	 *
+	 * @var int
+	 */
+	const AUTH_STATUS_TTL = 5 * MINUTE_IN_SECONDS;
+
+	/**
 	 * External Posts API instance.
 	 *
 	 * @var External_Posts_API
@@ -42,11 +57,11 @@ final class Admin_Ajax_Controller {
 	private External_Posts_API $api;
 
 	/**
-	 * Import History instance.
+	 * History repository instance.
 	 *
-	 * @var Import_History
+	 * @var History_Repository
 	 */
-	private Import_History $import_history;
+	private History_Repository $repository;
 
 	/**
 	 * Content Processor instance.
@@ -87,7 +102,7 @@ final class Admin_Ajax_Controller {
 	 * Constructs the Admin_Ajax_Controller instance.
 	 *
 	 * @param External_Posts_API  $api                 External Posts API instance.
-	 * @param Import_History      $import_history      Import History instance.
+	 * @param History_Repository  $repository          History repository instance.
 	 * @param Content_Processor   $content_processor   Content Processor instance.
 	 * @param Post_Import_Service $post_import_service Post Import Service instance.
 	 * @param Post_Type_Fetcher   $post_type_fetcher   Post Type Fetcher instance.
@@ -95,14 +110,14 @@ final class Admin_Ajax_Controller {
 	 */
 	public function __construct(
 		External_Posts_API $api,
-		Import_History $import_history,
+		History_Repository $repository,
 		Content_Processor $content_processor,
 		Post_Import_Service $post_import_service,
 		Post_Type_Fetcher $post_type_fetcher,
 		HTTP_Client $http_client
 	) {
 		$this->api                 = $api;
-		$this->import_history      = $import_history;
+		$this->repository          = $repository;
 		$this->content_processor   = $content_processor;
 		$this->post_import_service = $post_import_service;
 		$this->post_type_fetcher   = $post_type_fetcher;
@@ -117,10 +132,38 @@ final class Admin_Ajax_Controller {
 		add_action( 'wp_ajax_safe_publish_fetch_posts', array( $this, 'ajax_fetch_posts' ) );
 		add_action( 'wp_ajax_safe_publish_fetch_post_types', array( $this, 'ajax_fetch_post_types' ) );
 		add_action( 'wp_ajax_safe_publish_test_connection', array( $this, 'ajax_test_connection' ) );
+		add_action( 'wp_ajax_safe_publish_auth_status', array( $this, 'ajax_auth_status' ) );
 		add_action( 'wp_ajax_safe_publish_create_draft', array( $this, 'ajax_create_draft' ) );
 		add_action( 'wp_ajax_safe_publish_bulk_import', array( $this, 'ajax_bulk_import' ) );
 		add_action( 'wp_ajax_safe_publish_delete_post', array( $this, 'ajax_delete_post' ) );
 		add_action( 'wp_ajax_safe_publish_debug_auth', array( $this, 'ajax_debug_auth' ) );
+
+		$this->register_auth_status_invalidation();
+	}
+
+	/**
+	 * Registers option-update hooks that bust the auth-status transient when
+	 * any authentication-related setting changes.
+	 */
+	private function register_auth_status_invalidation(): void {
+		$options  = array(
+			Options::OPTION_CONNECTED_SITE_URL,
+			Options::OPTION_USERNAME,
+			Options::OPTION_PASSWORD,
+		);
+		$callback = array( __CLASS__, 'bust_auth_status_cache' );
+
+		foreach ( $options as $option ) {
+			add_action( 'add_option_' . $option, $callback );
+			add_action( 'update_option_' . $option, $callback );
+		}
+	}
+
+	/**
+	 * Deletes the cached auth-status site transient.
+	 */
+	public static function bust_auth_status_cache(): void {
+		delete_site_transient( self::AUTH_STATUS_TRANSIENT );
 	}
 
 	/**
@@ -217,6 +260,45 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
+	 * Handles AJAX request for the cached auth-status probe.
+	 *
+	 * Returns the cached probe result so the import and settings UIs can
+	 * surface live auth state on page load without each one issuing its own
+	 * network request.
+	 */
+	public function ajax_auth_status(): void {
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		$this->verify_ajax_capability();
+
+		wp_send_json_success( $this->get_cached_auth_status() );
+	}
+
+	/**
+	 * Returns the cached auth-status probe result, refreshing it if absent.
+	 *
+	 * @return array Probe result from VIP_Safe_Auth::test_authorization().
+	 */
+	private function get_cached_auth_status(): array {
+		$cached = get_site_transient( self::AUTH_STATUS_TRANSIENT );
+		if ( is_array( $cached ) && isset( $cached['status'] ) ) {
+			return $cached;
+		}
+
+		$result = VIP_Safe_Auth::test_authorization(
+			get_option( Options::OPTION_CONNECTED_SITE_URL, '' ),
+			Auth_Credential_Provider::get_credentials()
+		);
+
+		set_site_transient(
+			self::AUTH_STATUS_TRANSIENT,
+			$result,
+			self::AUTH_STATUS_TTL
+		);
+
+		return $result;
+	}
+
+	/**
 	 * Handles AJAX request for creating a draft post.
 	 *
 	 * Validates input, checks for an existing post with the same external ID,
@@ -241,6 +323,8 @@ final class Admin_Ajax_Controller {
 				)
 			);
 		}
+
+		$this->validate_auth_or_fail();
 
 		$external_post_id = absint( $_POST['external_post_id'] ?? 0 );
 		$title            = sanitize_text_field( wp_unslash( $_POST['title'] ?? '' ) );
@@ -284,7 +368,7 @@ final class Admin_Ajax_Controller {
 
 		// Create single import session for tracking.
 		$source_url     = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
-		$session_result = $this->import_history->create_session( $source_url, 'single' );
+		$session_result = $this->repository->create_session( $source_url, 'single' );
 
 		if ( is_wp_error( $session_result ) ) {
 			wp_send_json_error( $session_result->get_error_message() );
@@ -301,7 +385,7 @@ final class Admin_Ajax_Controller {
 		if ( is_wp_error( $fresh_result ) ) {
 			$error_message = $fresh_result->get_error_message();
 
-			$this->import_history->log_import_action(
+			$this->repository->log_import_action(
 				$session_id,
 				$external_post_id,
 				$title,
@@ -310,8 +394,7 @@ final class Admin_Ajax_Controller {
 				$error_message,
 				array( 'action' => 'fetch_failed' )
 			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
+			$this->repository->complete_session( $session_id );
 
 			wp_send_json_error( $error_message );
 		}
@@ -332,7 +415,7 @@ final class Admin_Ajax_Controller {
 		if ( is_wp_error( $excerpt ) ) {
 			$error_message = $excerpt->get_error_message();
 
-			$this->import_history->log_import_action(
+			$this->repository->log_import_action(
 				$session_id,
 				$external_post_id,
 				$title,
@@ -341,8 +424,7 @@ final class Admin_Ajax_Controller {
 				$error_message,
 				array( 'action' => 'excerpt_sanitization_failed' )
 			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
+			$this->repository->complete_session( $session_id );
 
 			wp_send_json_error( $error_message );
 		}
@@ -357,7 +439,7 @@ final class Admin_Ajax_Controller {
 		if ( is_wp_error( $processed_content ) ) {
 			$error_message = $processed_content->get_error_message();
 
-			$this->import_history->log_import_action(
+			$this->repository->log_import_action(
 				$session_id,
 				$external_post_id,
 				$title,
@@ -366,8 +448,7 @@ final class Admin_Ajax_Controller {
 				$error_message,
 				array( 'action' => 'content_processing_failed' )
 			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
+			$this->repository->complete_session( $session_id );
 			$this->content_processor->delete_newly_created_media();
 
 			wp_send_json_error( $error_message );
@@ -376,7 +457,7 @@ final class Admin_Ajax_Controller {
 		$media_error = $this->get_media_processing_error();
 
 		if ( null !== $media_error ) {
-			$this->import_history->log_import_action(
+			$this->repository->log_import_action(
 				$session_id,
 				$external_post_id,
 				$title,
@@ -385,8 +466,7 @@ final class Admin_Ajax_Controller {
 				$media_error['message'],
 				array( 'action' => $media_error['action'] )
 			);
-			$this->import_history->update_session_stats( $session_id, 'error' );
-			$this->import_history->complete_session( $session_id );
+			$this->repository->complete_session( $session_id );
 			$this->content_processor->delete_newly_created_media();
 
 			wp_send_json_error( $media_error['message'] );
@@ -445,6 +525,8 @@ final class Admin_Ajax_Controller {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability( 'edit_posts' );
 
+		$this->validate_auth_or_fail();
+
 		// JSON string not sanitized to preserve structure; validated after decode.
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		$posts_data_json = isset( $_POST['posts_data'] ) ? wp_unslash( $_POST['posts_data'] ) : '';
@@ -465,7 +547,7 @@ final class Admin_Ajax_Controller {
 		}
 
 		$source_url     = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
-		$session_result = $this->import_history->create_session( $source_url, 'bulk' );
+		$session_result = $this->repository->create_session( $source_url, 'bulk' );
 
 		if ( is_wp_error( $session_result ) ) {
 			wp_send_json_error( $session_result->get_error_message() );
@@ -483,15 +565,12 @@ final class Admin_Ajax_Controller {
 
 			if ( $result['success'] ) {
 				++$successful;
-				$status = $result['existing'] ? 'updated' : 'success';
-				$this->import_history->update_session_stats( $session_id, $status );
 			} else {
 				++$failed;
-				$this->import_history->update_session_stats( $session_id, 'error' );
 			}
 		}
 
-		$this->import_history->complete_session( $session_id );
+		$this->repository->complete_session( $session_id );
 
 		wp_send_json_success(
 			array(
@@ -701,7 +780,7 @@ final class Admin_Ajax_Controller {
 			);
 		}
 
-		$this->import_history->log_import_action(
+		$this->repository->log_import_action(
 			$session_id,
 			$external_post_id,
 			$title,
@@ -710,8 +789,7 @@ final class Admin_Ajax_Controller {
 			null,
 			$previous_content
 		);
-		$this->import_history->update_session_stats( $session_id, 'updated' );
-		$this->import_history->complete_session( $session_id );
+		$this->repository->complete_session( $session_id );
 
 		return array(
 			'post_id'  => $post_id,
@@ -818,7 +896,7 @@ final class Admin_Ajax_Controller {
 			);
 		}
 
-		$this->import_history->log_import_action(
+		$this->repository->log_import_action(
 			$session_id,
 			$external_post_id,
 			$title,
@@ -827,8 +905,7 @@ final class Admin_Ajax_Controller {
 			null,
 			array( 'action' => 'created_new_post' )
 		);
-		$this->import_history->update_session_stats( $session_id, 'success' );
-		$this->import_history->complete_session( $session_id );
+		$this->repository->complete_session( $session_id );
 
 		return array(
 			'post_id'  => $post_id,
@@ -858,7 +935,7 @@ final class Admin_Ajax_Controller {
 		string $error_message,
 		string $action
 	): array {
-		$this->import_history->log_import_action(
+		$this->repository->log_import_action(
 			$session_id,
 			$external_post_id,
 			$title,
@@ -867,22 +944,35 @@ final class Admin_Ajax_Controller {
 			$error_message,
 			array( 'action' => $action )
 		);
-		$this->import_history->update_session_stats( $session_id, 'error' );
-		$this->import_history->complete_session( $session_id );
+		$this->repository->complete_session( $session_id );
 
 		return array( 'error' => $error_message );
 	}
 
 	/**
-	 * Sends a JSON error response when the Shared Secret is not configured.
+	 * Sends a JSON error response when the Shared Secret does not satisfy
+	 * VIP_Safe_Auth::has_valid_credential_format(). Splits the failure into
+	 * "missing" and "too short" so the operator gets an actionable message.
 	 */
 	private function validate_auth_or_fail(): void {
 		$credentials = Auth_Credential_Provider::get_credentials();
 
-		if ( empty( $credentials['shared_secret'] ) ) {
+		if ( VIP_Safe_Auth::has_valid_credential_format( $credentials ) ) {
+			return;
+		}
+
+		if ( '' === ( $credentials['shared_secret'] ?? '' ) ) {
 			wp_send_json_error(
 				__(
 					'Shared Secret is not configured. Add SAFE_PUBLISH_SHARED_SECRET to wp-config.php on both sites.',
+					'safe-publish'
+				),
+				401
+			);
+		} else {
+			wp_send_json_error(
+				__(
+					'Shared Secret is too short. SAFE_PUBLISH_SHARED_SECRET must be at least 16 characters.',
 					'safe-publish'
 				),
 				401

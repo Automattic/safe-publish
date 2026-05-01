@@ -1,15 +1,13 @@
 <?php
 /**
- * Import History class for tracking import sessions and rollbacks
+ * Import History class for admin UI coordination and rollback
  *
  * @package Safe_Publish
  */
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\Utils\Event_Table;
-use WP_Error;
-use WP_Query;
+use Safe_Publish\Utils\Audit_Log_Table;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -19,8 +17,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Import History Class.
  *
- * Coordinates import history functionality and delegates data operations to the
- * repository.
+ * Coordinates the import history admin UI: menu pages, AJAX endpoints,
+ * rendering, and session rollback.
  */
 final class Import_History {
 
@@ -78,7 +76,6 @@ final class Import_History {
 	 * Initializes the import history functionality.
 	 */
 	public function init(): void {
-		add_action( 'init', array( $this, 'register_post_types' ) );
 		add_action( 'admin_menu', array( $this, 'add_submenu_page' ) );
 		add_action( 'wp_ajax_safe_publish_get_import_sessions', array( $this, 'ajax_get_import_sessions' ) );
 		add_action( 'wp_ajax_safe_publish_get_session_details', array( $this, 'ajax_get_session_details' ) );
@@ -118,55 +115,6 @@ final class Import_History {
 	}
 
 	/**
-	 * Registers custom post types for import tracking.
-	 */
-	public function register_post_types(): void {
-		// Register import session post type.
-		register_post_type(
-			History_Repository::SESSION_POST_TYPE,
-			array(
-				'labels'             => array(
-					'name'          => __( 'Import Sessions', 'safe-publish' ),
-					'singular_name' => __( 'Import Session', 'safe-publish' ),
-				),
-				'public'             => false,
-				'publicly_queryable' => false,
-				'show_ui'            => false,
-				'show_in_menu'       => false,
-				'query_var'          => false,
-				'rewrite'            => false,
-				'capability_type'    => 'post',
-				'has_archive'        => false,
-				'hierarchical'       => false,
-				'supports'           => array( 'title', 'custom-fields' ),
-				'show_in_rest'       => false,
-			)
-		);
-
-		// Register import log post type.
-		register_post_type(
-			History_Repository::LOG_POST_TYPE,
-			array(
-				'labels'             => array(
-					'name'          => __( 'Import Logs', 'safe-publish' ),
-					'singular_name' => __( 'Import Log', 'safe-publish' ),
-				),
-				'public'             => false,
-				'publicly_queryable' => false,
-				'show_ui'            => false,
-				'show_in_menu'       => false,
-				'query_var'          => false,
-				'rewrite'            => false,
-				'capability_type'    => 'post',
-				'has_archive'        => false,
-				'hierarchical'       => false,
-				'supports'           => array( 'title', 'content', 'custom-fields' ),
-				'show_in_rest'       => false,
-			)
-		);
-	}
-
-	/**
 	 * Adds submenu page for import history.
 	 */
 	public function add_submenu_page(): void {
@@ -185,86 +133,6 @@ final class Import_History {
 	 */
 	public function render_history_page(): void {
 		$this->renderer->render_history_page();
-	}
-
-	/**
-	 * Creates a new import session.
-	 *
-	 * @param string $source_url   Source site URL.
-	 * @param string $session_type Type of import (single, bulk).
-	 * @return int|WP_Error Session ID or error.
-	 */
-	public function create_session(
-		string $source_url,
-		string $session_type = 'bulk'
-	): int|WP_Error {
-		return $this->repository->create_session( $source_url, $session_type );
-	}
-
-	/**
-	 * Logs an import action.
-	 *
-	 * @param int    $session_id  Session ID.
-	 * @param int    $external_id External post ID.
-	 * @param string $title       Post title.
-	 * @param string $status      Import status (success, error, updated).
-	 * @param int    $post_id     WordPress post ID (if successful).
-	 * @param string $error       Error message (if failed).
-	 * @param array  $changes     Changes made during import.
-	 * @return int|WP_Error Log ID or error.
-	 */
-	public function log_import_action(
-		int $session_id,
-		int $external_id,
-		string $title,
-		string $status,
-		?int $post_id = null,
-		?string $error = null,
-		array $changes = array()
-	): int|WP_Error {
-		return $this->repository->log_import_action(
-			$session_id,
-			$external_id,
-			$title,
-			$status,
-			$post_id,
-			$error,
-			$changes
-		);
-	}
-
-	/**
-	 * Updates session stats.
-	 *
-	 * @param int    $session_id Session ID.
-	 * @param string $status     Status of the import (success, error, updated).
-	 */
-	public function update_session_stats( int $session_id, string $status ): void {
-		$this->repository->update_session_stats( $session_id, $status );
-	}
-
-	/**
-	 * Completes a session.
-	 *
-	 * @param int $session_id Session ID.
-	 */
-	public function complete_session( int $session_id ): void {
-		$this->repository->complete_session( $session_id );
-	}
-
-	/**
-	 * Stores content diff for rollback purposes.
-	 *
-	 * @param int    $post_id     WordPress post ID.
-	 * @param string $old_content Previous content.
-	 * @param string $new_content New content.
-	 */
-	public function store_content_diff(
-		int $post_id,
-		string $old_content,
-		string $new_content
-	): void {
-		$this->repository->store_content_diff( $post_id, $old_content, $new_content );
 	}
 
 	/**
@@ -299,15 +167,15 @@ final class Import_History {
 			wp_send_json_error( __( 'Session not found', 'safe-publish' ) );
 		}
 
-		$status         = get_post_meta( $session_id, 'status', true );
-		$session_data   = $this->formatter->format_session( $session );
-		$logs           = $this->repository->get_session_logs( $session_id );
-		$formatted_logs = $this->formatter->format_logs( $logs, $status );
+		$status          = (string) ( $session['status'] ?? '' );
+		$session_data    = $this->formatter->format_session( $session );
+		$items           = $this->repository->get_session_items( $session_id );
+		$formatted_items = $this->formatter->format_items( $items, $status );
 
 		wp_send_json_success(
 			array(
 				'session' => $session_data,
-				'logs'    => $formatted_logs,
+				'items'   => $formatted_items,
 			)
 		);
 	}
@@ -347,13 +215,13 @@ final class Import_History {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability();
 
-		$log_id = absint( $_POST['log_id'] ?? 0 );
+		$item_id = absint( $_POST['item_id'] ?? 0 );
 
-		if ( ! $log_id ) {
-			wp_send_json_error( __( 'Invalid log ID', 'safe-publish' ) );
+		if ( ! $item_id ) {
+			wp_send_json_error( __( 'Invalid item ID', 'safe-publish' ) );
 		}
 
-		$result = $this->rollback_service->rollback_item( $log_id );
+		$result = $this->rollback_service->rollback_item( $item_id );
 
 		if ( is_wp_error( $result ) ) {
 			wp_send_json_error( $result->get_error_message() );
@@ -388,37 +256,17 @@ final class Import_History {
 			wp_send_json_error( __( 'Post not found', 'safe-publish' ) );
 		}
 
-		// Find the import log entry for this post to get the previous content.
-		$log_query = new WP_Query(
-			array(
-				'post_type'      => History_Repository::LOG_POST_TYPE,
-				'post_status'    => 'publish',
-				'meta_key'       => 'post_id',
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-				'meta_value'     => $post_id,
-				'posts_per_page' => 1,
-				'orderby'        => 'date',
-				'order'          => 'DESC',
-			)
-		);
+		$item = $this->repository->get_item_for_post( $post_id );
 
-		if ( ! $log_query->have_posts() ) {
+		if ( null === $item ) {
 			wp_send_json_error( __( 'No import history found for this post', 'safe-publish' ) );
 		}
 
-		$log_post = $log_query->posts[0];
-		$changes  = get_post_meta( $log_post->ID, 'changes', true );
+		$changes = History_Repository::decode_item_changes( $item['content_changes'] ?? null ) ?? array();
 
-		// For backward compatibility, handle cases where changes might not have complete data.
-		if ( empty( $changes ) || ! is_array( $changes ) ) {
-			// Fallback: show current content vs empty for legacy logs.
-			$changes = array();
-		}
-
-		// Get previous content from changes array (fallback to empty if not available).
-		$old_content = $changes['previous_content'] ?? '';
-		$old_title   = $changes['previous_title'] ?? '';
-		$old_excerpt = $changes['previous_excerpt'] ?? '';
+		$old_content = (string) ( $changes['previous_content'] ?? '' );
+		$old_title   = (string) ( $changes['previous_title'] ?? '' );
+		$old_excerpt = (string) ( $changes['previous_excerpt'] ?? '' );
 
 		// Current content.
 		$new_content = $post->post_content;
@@ -470,13 +318,13 @@ final class Import_History {
 			wp_send_json_error( __( 'Session not found', 'safe-publish' ) );
 		}
 
-		// Delete the session and all its logs.
+		// Delete the session and all its items.
 		$success = $this->repository->delete_session( $session_id );
 
 		if ( $success ) {
 			wp_send_json_success(
 				array(
-					'message' => __( 'Session and all associated log entries deleted successfully.', 'safe-publish' ),
+					'message' => __( 'Session and all associated items deleted successfully.', 'safe-publish' ),
 				)
 			);
 		} else {
@@ -491,7 +339,7 @@ final class Import_History {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability();
 
-		$rows = Event_Table::get_events(
+		$rows = Audit_Log_Table::get_events(
 			array(
 				'channel' => 'export',
 				'limit'   => 100,

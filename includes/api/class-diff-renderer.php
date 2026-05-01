@@ -9,7 +9,6 @@ declare(strict_types=1);
 
 namespace Safe_Publish\API;
 
-use Exception;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use stdClass;
@@ -38,7 +37,6 @@ final class Diff_Renderer {
 	 * @param array           $credentials  Authentication credentials.
 	 *
 	 * @return array|WP_Error Array on success, WP_Error if post not found.
-	 * @throws Exception If the external post cannot be fetched or processed.
 	 */
 	public function render_diff(
 		WP_REST_Request $request,
