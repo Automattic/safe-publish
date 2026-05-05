@@ -7,6 +7,7 @@
  * @file This file defines utility functions for the Safe Publish plugin.
  */
 
+import { dateI18n, getSettings } from '@wordpress/date';
 import { __ } from '@wordpress/i18n';
 
 import type { Post, JsonValue } from './types';
@@ -60,7 +61,10 @@ export function getErrorMessage(
 /**
  * Formats a date string for display.
  *
- * @param {string} dateString ISO date string to format.
+ * Renders in the site's configured timezone using the WordPress `date_format`
+ * option, matching how WP admin displays dates elsewhere.
+ *
+ * @param {string} dateString ISO 8601 date string (with or without `Z`).
  *
  * @return {string} Formatted date string, or 'Invalid Date' if parsing fails.
  */
@@ -70,13 +74,16 @@ export function formatDate( dateString: string ): string {
 		return __( 'Invalid Date', 'safe-publish' );
 	}
 
-	return date.toLocaleDateString();
+	return dateI18n( getSettings().formats.date, dateString );
 }
 
 /**
  * Formats a date string with time for display.
  *
- * @param {string} dateString ISO date string to format.
+ * Renders in the site's configured timezone using the WordPress `date_format`
+ * and `time_format` options, matching how WP admin displays dates elsewhere.
+ *
+ * @param {string} dateString ISO 8601 date string (with or without `Z`).
  *
  * @return {string} Formatted date/time string, or 'Invalid Date' on failure.
  */
@@ -86,7 +93,8 @@ export function formatDateTime( dateString: string ): string {
 		return __( 'Invalid Date', 'safe-publish' );
 	}
 
-	return date.toLocaleString();
+	const { formats } = getSettings();
+	return dateI18n( `${ formats.date } ${ formats.time }`, dateString );
 }
 
 /**
