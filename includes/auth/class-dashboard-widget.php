@@ -303,8 +303,12 @@ class Dashboard_Widget {
 	 * @param array $event Authentication event data.
 	 */
 	private function render_event_item( array $event ): void {
-		$event_type = $event['event'];
-		$timestamp  = $event['created_at'];
+		$event_type    = $event['event'];
+		$timestamp_gmt = (string) $event['created_at_gmt'];
+		$timestamp     = wp_date(
+			get_option( 'date_format' ) . ' ' . get_option( 'time_format' ),
+			strtotime( $timestamp_gmt . ' UTC' )
+		);
 
 		$icon  = '•';
 		$color = '#666';

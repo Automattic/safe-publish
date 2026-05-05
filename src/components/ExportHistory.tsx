@@ -6,7 +6,7 @@
  *
  * @file This file defines the ExportHistory component.
  */
-import { getErrorMessage } from '../utils';
+import { formatDateTime, getErrorMessage } from '../utils';
 import {
 	Button,
 	__experimentalVStack as VStack,
@@ -101,7 +101,7 @@ export function ExportHistory(): JSX.Element {
 			label: __( 'Date', 'safe-publish' ),
 			enableSorting: true,
 			render: ( { item }: { item: ExportEvent } ): JSX.Element => (
-				<span>{ item.date }</span>
+				<span>{ formatDateTime( item.date ) }</span>
 			),
 		},
 		{
