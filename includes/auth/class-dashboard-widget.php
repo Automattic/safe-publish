@@ -303,8 +303,8 @@ class Dashboard_Widget {
 	 * @param array $event Authentication event data.
 	 */
 	private function render_event_item( array $event ): void {
-		$event_type = $event['event'] ?? 'UNKNOWN';
-		$timestamp  = $event['created_at'] ?? 'unknown';
+		$event_type = $event['event'];
+		$timestamp  = $event['created_at'];
 
 		$icon  = '•';
 		$color = '#666';

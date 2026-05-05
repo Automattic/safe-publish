@@ -123,7 +123,7 @@ final class Session_Rollback_Service {
 	 */
 	private function rollback_item_row( array $item ): array|WP_Error {
 		$post_id = isset( $item['post_id'] ) ? (int) $item['post_id'] : 0;
-		$status  = (string) ( $item['status'] ?? '' );
+		$status  = (string) $item['status'];
 		$changes = History_Repository::decode_item_changes( $item['content_changes'] ?? null );
 
 		if ( $post_id <= 0 ) {
