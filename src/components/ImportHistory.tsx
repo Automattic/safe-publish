@@ -10,7 +10,7 @@ import { close } from '@wordpress/icons';
 
 import { PostDiffModal } from './ImportHistoryPostDiffModal';
 import { SessionDetailsModal } from './SessionDetailsModal';
-import { getErrorMessage } from '../utils';
+import { formatDateTime, getErrorMessage } from '../utils';
 import {
 	Button,
 	__experimentalVStack as VStack,
@@ -295,7 +295,7 @@ export function ImportHistory(): JSX.Element {
 					onClick={ () => openSessionDetails( item ) }
 					style={ { padding: 0, height: 'auto', textDecoration: 'underline' } }
 				>
-					{ item.date }
+					{ formatDateTime( item.date ) }
 				</Button>
 			),
 		},
