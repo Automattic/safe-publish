@@ -89,11 +89,11 @@ class Options {
 	const META_EXTERNAL_LINK = 'safe_publish_external_link';
 
 	/**
-	 * Meta key storing the timestamp of the most recent import.
+	 * Meta key storing the GMT timestamp of the most recent import.
 	 *
 	 * @var string
 	 */
-	const META_IMPORT_DATE = 'safe_publish_import_date';
+	const META_IMPORT_DATE_GMT = 'safe_publish_import_date_gmt';
 
 	/**
 	 * Meta key identifying the source of an imported post or attachment.

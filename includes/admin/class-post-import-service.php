@@ -634,7 +634,7 @@ class Post_Import_Service {
 					Options::META_EXTERNAL_POST_ID => $fields['external_post_id'],
 					Options::META_EXTERNAL_LINK    => $fields['external_link'],
 					Options::META_IMPORTED_FROM    => Options::META_IMPORTED_FROM_VALUE,
-					Options::META_IMPORT_DATE      => current_time( 'mysql' ),
+					Options::META_IMPORT_DATE_GMT  => current_time( 'mysql', true ),
 				),
 			),
 			$featured_attachment_id,
@@ -812,11 +812,11 @@ class Post_Import_Service {
 			$external_link
 		);
 
-		delete_post_meta( $post_id, Options::META_IMPORT_DATE );
+		delete_post_meta( $post_id, Options::META_IMPORT_DATE_GMT );
 		if ( false === update_post_meta(
 			$post_id,
-			Options::META_IMPORT_DATE,
-			current_time( 'mysql' )
+			Options::META_IMPORT_DATE_GMT,
+			current_time( 'mysql', true )
 		) ) {
 			$this->rollback_failed_update( $post_id, $snapshot );
 
@@ -889,14 +889,14 @@ class Post_Import_Service {
 		$snapshot = array(
 			'post_fields'    => $post,
 			'tracking_meta'  => array(
-				Options::META_EXTERNAL_LINK => get_post_meta(
+				Options::META_EXTERNAL_LINK   => get_post_meta(
 					$post_id,
 					Options::META_EXTERNAL_LINK,
 					true
 				),
-				Options::META_IMPORT_DATE   => get_post_meta(
+				Options::META_IMPORT_DATE_GMT => get_post_meta(
 					$post_id,
-					Options::META_IMPORT_DATE,
+					Options::META_IMPORT_DATE_GMT,
 					true
 				),
 			),

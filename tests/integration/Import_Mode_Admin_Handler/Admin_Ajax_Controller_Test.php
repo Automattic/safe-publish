@@ -515,7 +515,7 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 	 * Verifies that the single-import update path returns an error when the
 	 * tracking meta write fails.
 	 *
-	 * If update_post_meta fails for META_IMPORT_DATE (e.g., a DB error), the
+	 * If update_post_meta fails for META_IMPORT_DATE_GMT (e.g., a DB error), the
 	 * import must report failure rather than silently leaving the tracking meta
 	 * stale.
 	 */
@@ -546,7 +546,7 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 			'force_update'     => 'true',
 		);
 
-		// ARRANGE: Block update_post_meta for META_IMPORT_DATE to simulate a DB
+		// ARRANGE: Block update_post_meta for META_IMPORT_DATE_GMT to simulate a DB
 		// failure.
 		$block_meta = function (
 			$check,
@@ -556,7 +556,7 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 			$prev_value
 		) {
 			unset( $object_id, $meta_value, $prev_value );
-			if ( Options::META_IMPORT_DATE === $meta_key ) {
+			if ( Options::META_IMPORT_DATE_GMT === $meta_key ) {
 				return false;
 			}
 
@@ -590,8 +590,8 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 		// the subsequent write was blocked, so no value was committed.
 		$this->assertSame(
 			'',
-			get_post_meta( $existing_post_id, Options::META_IMPORT_DATE, true ),
-			'META_IMPORT_DATE must be absent when the write was blocked after a delete.'
+			get_post_meta( $existing_post_id, Options::META_IMPORT_DATE_GMT, true ),
+			'META_IMPORT_DATE_GMT must be absent when the write was blocked after a delete.'
 		);
 	}
 
