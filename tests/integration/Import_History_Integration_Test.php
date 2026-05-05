@@ -264,10 +264,41 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 		// ACT: Complete the session.
 		$this->repository->complete_session( $session_id );
 
-		// ASSERT: Status is completed and end_time is set.
+		// ASSERT: Status is completed and end_time_gmt is set.
 		$session = $this->repository->get_session( $session_id );
 		$this->assertSame( 'completed', $session['status'] );
-		$this->assertNotEmpty( $session['end_time'] );
+		$this->assertNotEmpty( $session['end_time_gmt'] );
+	}
+
+	/**
+	 * Verifies that timestamps are written as GMT regardless of the site's
+	 * configured timezone, so the API contract stays browser-friendly.
+	 */
+	public function test_timestamps_are_stored_in_gmt(): void {
+		// ARRANGE: Configure the site to a non-UTC timezone.
+		update_option( 'timezone_string', 'America/New_York' );
+		$now = time();
+
+		// ACT: Create a session, an item, and complete the session.
+		$sid = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$this->repository->log_import_action( $sid, 1, 'P', 'success', 1 );
+		$this->repository->complete_session( $sid );
+
+		// ASSERT: All three timestamps parse as GMT (within a small tolerance)
+		// — i.e. they are NOT shifted by the site's UTC offset.
+		$session = $this->repository->get_session( $sid );
+		$items   = $this->repository->get_session_items( $sid );
+
+		$created = strtotime( $session['created_at_gmt'] . ' UTC' );
+		$ended   = strtotime( $session['end_time_gmt'] . ' UTC' );
+		$dated   = strtotime( $items[0]['import_date_gmt'] . ' UTC' );
+
+		$this->assertEqualsWithDelta( $now, $created, 5 );
+		$this->assertEqualsWithDelta( $now, $ended, 5 );
+		$this->assertEqualsWithDelta( $now, $dated, 5 );
+
+		// CLEANUP.
+		delete_option( 'timezone_string' );
 	}
 
 	/**
@@ -338,6 +369,13 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 		$this->assertSame( 'completed', $formatted_session['status'] );
 		$this->assertSame( 1, $formatted_session['total_items'] );
 		$this->assertSame( 1, $formatted_session['successful'] );
+
+		// ASSERT: Date is ISO 8601 with explicit UTC marker so JS parses it
+		// in browser-local time, not as site-local.
+		$this->assertMatchesRegularExpression(
+			'/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/',
+			$formatted_session['date']
+		);
 	}
 
 	/**

@@ -84,10 +84,10 @@ final class Imports_Table {
 			source_url VARCHAR(255) NOT NULL,
 			session_type VARCHAR(20) NOT NULL,
 			status VARCHAR(20) NOT NULL,
-			end_time DATETIME NULL DEFAULT NULL,
-			created_at DATETIME NOT NULL,
+			end_time_gmt DATETIME NULL DEFAULT NULL,
+			created_at_gmt DATETIME NOT NULL,
 			PRIMARY KEY  (id),
-			KEY created_at (created_at)
+			KEY created_at_gmt (created_at_gmt)
 		) {$charset};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';

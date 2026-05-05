@@ -66,8 +66,8 @@ final class History_Repository {
 				'source_url'        => $source_url,
 				'session_type'      => $session_type,
 				'status'            => 'in_progress',
-				'end_time'          => null,
-				'created_at'        => current_time( 'mysql' ),
+				'end_time_gmt'      => null,
+				'created_at_gmt'    => current_time( 'mysql', true ),
 			),
 			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
@@ -132,7 +132,7 @@ final class History_Repository {
 				'content_changes'      => $encoded_changes,
 				'has_previous_content' => $has_previous_content,
 				'rolled_back'          => 0,
-				'import_date'          => current_time( 'mysql' ),
+				'import_date_gmt'      => current_time( 'mysql', true ),
 			),
 			array( '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%d', '%d', '%s' )
 		);
@@ -158,8 +158,8 @@ final class History_Repository {
 		$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 			Imports_Table::table_name(),
 			array(
-				'status'   => 'completed',
-				'end_time' => current_time( 'mysql' ),
+				'status'       => 'completed',
+				'end_time_gmt' => current_time( 'mysql', true ),
 			),
 			array( 'id' => $session_id ),
 			array( '%s', '%s' ),
@@ -182,7 +182,7 @@ final class History_Repository {
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
 				$this->build_session_select_sql(
-					'GROUP BY i.id ORDER BY i.created_at DESC, i.id DESC LIMIT %d'
+					'GROUP BY i.id ORDER BY i.created_at_gmt DESC, i.id DESC LIMIT %d'
 				),
 				$limit
 			),
@@ -261,7 +261,7 @@ final class History_Repository {
 			$wpdb->prepare(
 				'SELECT id, session_id, title, external_id, status, post_id,'
 					. ' error_message, has_previous_content, rolled_back,'
-					. " import_date FROM `{$table}` WHERE session_id = %d"
+					. " import_date_gmt FROM `{$table}` WHERE session_id = %d"
 					. ' ORDER BY id ASC',
 				$session_id
 			),
