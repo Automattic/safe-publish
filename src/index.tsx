@@ -23,6 +23,7 @@ import {
 import { PostTypeSelector } from './post-type-selector';
 import {
 	extractUrlPath,
+	formatDateTime,
 	getErrorMessage,
 	getPaginationInfo,
 	paginatePosts,
@@ -38,7 +39,6 @@ import {
 	Notice,
 } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
-import { dateI18n, getSettings } from '@wordpress/date';
 import { useState, useEffect, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
@@ -169,8 +169,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 			enableSorting: true,
 			enableGlobalSearch: true,
 			render: ( { item }: { item: Post } ): JSX.Element => {
-				const { formats } = getSettings();
-				return <span>{ dateI18n( `${ formats.date } ${ formats.time }`, item.modified ) }</span>;
+				return <span>{ formatDateTime( item.modified ) }</span>;
 			},
 		},
 		{
