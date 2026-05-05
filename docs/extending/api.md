@@ -24,7 +24,7 @@ Require a WordPress user with `edit_post` capability for the target post.
 | `DELETE` | `/wp-json/safe-publish/v1/auth-logs`   | `manage_options`         | Clear authentication logs            |
 | `GET`    | `/wp-json/safe-publish/v1/auth-test`   | None (WP_DEBUG only)     | Authentication diagnostic test       |
 
-The `timestamp` field returned by every monitoring endpoint is an ISO 8601 UTC string (e.g. `2026-05-05T14:30:00Z`).
+All datetime fields returned by monitoring endpoints (e.g. `timestamp`, `last_success`, `last_failure`, `created_at_gmt`) are ISO 8601 UTC strings (e.g. `2026-05-05T14:30:00Z`).
 
 ## Authentication
 

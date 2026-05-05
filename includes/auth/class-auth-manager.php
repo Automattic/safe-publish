@@ -168,7 +168,7 @@ class Auth_Manager {
 				'status'              => $status,
 				'health_score'        => $health_score,
 				'issues'              => $issues,
-				'timestamp'           => self::now_iso_8601_utc(),
+				'timestamp'           => self::iso_now(),
 				'configuration'       => array(
 					'shared_secret_configured' => ! empty( $shared_secret ),
 					'secret_length'            => strlen( $shared_secret ),
@@ -177,8 +177,8 @@ class Auth_Manager {
 					'debug_mode'               => defined( 'WP_DEBUG' ) ? WP_DEBUG : false,
 				),
 				'statistics'          => array(
-					'last_success' => $last_success,
-					'last_failure' => $last_failure,
+					'last_success' => self::iso_from_gmt( $last_success ),
+					'last_failure' => self::iso_from_gmt( $last_failure ),
 				),
 				'recent_events_count' => Audit_Log_Table::count( array( 'channel' => 'auth' ) ),
 			),
@@ -212,7 +212,16 @@ class Auth_Manager {
 			$count_args['event_type'] = $event_type;
 		}
 
-		$events = Audit_Log_Table::get_events( $query_args );
+		$events = array_map(
+			static function ( array $row ): array {
+				$row['created_at_gmt'] = self::iso_from_gmt(
+					(string) $row['created_at_gmt']
+				);
+
+				return $row;
+			},
+			Audit_Log_Table::get_events( $query_args )
+		);
 		$total  = Audit_Log_Table::count( $count_args );
 
 		return new \WP_REST_Response(
@@ -224,7 +233,7 @@ class Auth_Manager {
 					'offset'   => $offset,
 					'has_more' => ( $offset + $limit ) < $total,
 				),
-				'timestamp'  => self::now_iso_8601_utc(),
+				'timestamp'  => self::iso_now(),
 			),
 			200
 		);
@@ -254,7 +263,7 @@ class Auth_Manager {
 		return new \WP_REST_Response(
 			array(
 				'message'   => 'Authentication logs cleared',
-				'timestamp' => self::now_iso_8601_utc(),
+				'timestamp' => self::iso_now(),
 			),
 			200
 		);
@@ -284,7 +293,7 @@ class Auth_Manager {
 		return new \WP_REST_Response(
 			array(
 				'message'                      => 'Safe Publish Authentication Test Endpoint',
-				'timestamp'                    => self::now_iso_8601_utc(),
+				'timestamp'                    => self::iso_now(),
 				'safe_publish_headers_present' => $has_safe_publish_headers,
 				'shared_secret_configured'     => ! empty( $shared_secret ),
 				'secret_length'                => strlen( $shared_secret ),
@@ -373,8 +382,22 @@ class Auth_Manager {
 	 *
 	 * @return string Current time (e.g. 2026-05-05T14:30:00Z).
 	 */
-	private static function now_iso_8601_utc(): string {
+	private static function iso_now(): string {
 		return gmdate( 'Y-m-d\TH:i:s\Z' );
+	}
+
+	/**
+	 * Converts a MySQL-formatted GMT datetime string to ISO 8601 UTC.
+	 *
+	 * @param string|null $gmt_datetime MySQL-formatted GMT datetime string.
+	 * @return string|null ISO 8601 UTC string, or null when input is null.
+	 */
+	private static function iso_from_gmt( ?string $gmt_datetime ): ?string {
+		if ( null === $gmt_datetime ) {
+			return null;
+		}
+
+		return str_replace( ' ', 'T', $gmt_datetime ) . 'Z';
 	}
 
 	/**
