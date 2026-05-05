@@ -348,10 +348,12 @@ final class Import_History {
 
 		$events = array_map(
 			static function ( array $row ): array {
-				$data = $row['data'];
+				$data    = $row['data'];
+				$created = (string) $row['created_at_gmt'];
+
 				return array(
 					'id'              => (int) $row['id'],
-					'date'            => $row['created_at'],
+					'date'            => str_replace( ' ', 'T', $created ) . 'Z',
 					'level'           => $row['level'],
 					'event'           => $row['event'],
 					'destination_url' => $data['destination_url'] ?? '',

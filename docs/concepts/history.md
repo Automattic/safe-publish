@@ -153,7 +153,7 @@ Import history is stored in two custom database tables:
 Export events are stored in a custom database table:
 
 - Table name: `{$wpdb->prefix}safe_publish_audit_log`
-- Indexed on: `channel` + `created_at`, `level`, `event`
+- Indexed on: `channel` + `created_at_gmt`, `level`, `event`
 
 ## Using Import History
 
