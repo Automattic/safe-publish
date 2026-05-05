@@ -1280,6 +1280,76 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that the bulk import path writes an item row and that session
+	 * counts reflect the failure when required fields are missing.
+	 *
+	 * Without this, a malformed payload entry would silently disappear from
+	 * the session's projected counts because they are aggregated from the
+	 * items table at read time.
+	 */
+	public function test_bulk_import_logs_failure_for_missing_required_fields(): void {
+		// ARRANGE: Bulk session and two malformed payloads — one missing
+		// the title, one missing the external ID.
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$missing_title = array(
+			'id'        => 9810,
+			'title'     => '',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/no-title',
+			'post_type' => 'posts',
+		);
+
+		$missing_id = array(
+			'id'        => 0,
+			'title'     => 'Has Title But No ID',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/no-id',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Import both malformed payloads.
+		$result_missing_title = $this->import_service->import_post(
+			$missing_title,
+			$session_id
+		);
+		$result_missing_id    = $this->import_service->import_post(
+			$missing_id,
+			$session_id
+		);
+
+		// ASSERT: Both imports fail.
+		$this->assertFalse(
+			$result_missing_title['success'],
+			'Import should fail when title is empty.'
+		);
+		$this->assertFalse(
+			$result_missing_id['success'],
+			'Import should fail when external ID is zero.'
+		);
+
+		// ASSERT: Two item rows were written, both with status 'error'.
+		$items = $this->repository->get_session_items( $session_id );
+
+		$this->assertCount(
+			2,
+			$items,
+			'Bulk import must write one item row per validation failure.'
+		);
+		$this->assertSame( 'error', $items[0]['status'] );
+		$this->assertSame( 'error', $items[1]['status'] );
+
+		// ASSERT: Session counts project the failures from the items table.
+		$session = $this->repository->get_session( $session_id );
+		$this->assertSame( 2, (int) $session['total_items'] );
+		$this->assertSame( 2, (int) $session['failed'] );
+		$this->assertSame( 0, (int) $session['successful'] );
+	}
+
+	/**
 	 * Verifies that import fails when the current user lacks the capability
 	 * required for the target post type.
 	 */
