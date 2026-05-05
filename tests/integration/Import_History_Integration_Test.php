@@ -99,6 +99,40 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a null external_id round-trips through storage and the
+	 * formatter. Source data sometimes lacks a usable id (malformed payload
+	 * or unexpected exception); the schema and API surface must preserve
+	 * that null instead of forcing a 0 sentinel.
+	 */
+	public function test_null_external_id_round_trips_through_formatter(): void {
+		// ARRANGE: Create session.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+
+		// ACT: Log an error item with null external_id (e.g. from
+		// build_exception_result when the source payload had no id).
+		$item_id = $this->repository->log_import_action(
+			$session_id,
+			null,
+			'Malformed Source',
+			'error',
+			null,
+			'Source data missing id',
+			array()
+		);
+
+		// ASSERT: Item was created and external_id stored as null.
+		$this->assertIsInt( $item_id );
+
+		$item = $this->repository->get_item( $item_id );
+		$this->assertIsArray( $item );
+		$this->assertNull( $item['external_id'] );
+
+		// ASSERT: Formatter exposes external_id as null at the API boundary.
+		$formatted = $this->formatter->format_item( $item );
+		$this->assertNull( $formatted['external_id'] );
+	}
+
+	/**
 	 * Verifies that session counts are projected from logged items.
 	 */
 	public function test_session_counts_project_from_items(): void {

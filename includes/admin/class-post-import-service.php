@@ -181,11 +181,14 @@ class Post_Import_Service {
 	 * Extracts and sanitizes post fields from raw post data.
 	 *
 	 * @param array $post_data Raw post data array.
-	 * @return array Sanitized post fields keyed by field name.
+	 * @return array Sanitized post fields. The external_post_id key
+	 *               is null if not provided.
 	 */
 	private function extract_post_fields( array $post_data ): array {
+		$external_post_id = absint( $post_data['id'] ?? 0 );
+
 		return array(
-			'external_post_id'  => absint( $post_data['id'] ?? 0 ),
+			'external_post_id'  => $external_post_id > 0 ? $external_post_id : null,
 			'title'             => sanitize_text_field( $post_data['title'] ?? '' ),
 			'external_link'     => esc_url_raw( $post_data['link'] ?? '' ),
 			'featured_media_id' => absint( $post_data['featured_media'] ?? 0 ),
@@ -242,7 +245,7 @@ class Post_Import_Service {
 	 * @return array|null Error result array on failure, null on success.
 	 */
 	private function validate_required_fields( array $fields ): ?array {
-		if ( empty( $fields['title'] ) || empty( $fields['external_post_id'] ) ) {
+		if ( '' === $fields['title'] || null === $fields['external_post_id'] ) {
 			return $this->build_error_result(
 				$fields,
 				__( 'Missing required post data.', 'safe-publish' )
@@ -1139,7 +1142,7 @@ class Post_Import_Service {
 	 * Logs an import action to history, only when a session ID is provided.
 	 *
 	 * @param int|null    $session_id  Import session ID.
-	 * @param int         $external_id External post ID.
+	 * @param int|null    $external_id External post ID, or null if not provided.
 	 * @param string      $title       Post title.
 	 * @param string      $status      Import status (success, updated, error).
 	 * @param int|null    $post_id     WordPress post ID or null on failure.
@@ -1148,7 +1151,7 @@ class Post_Import_Service {
 	 */
 	private function log_import_if_session(
 		?int $session_id,
-		int $external_id,
+		?int $external_id,
 		string $title,
 		string $status,
 		?int $post_id,
@@ -1185,18 +1188,16 @@ class Post_Import_Service {
 		?int $session_id,
 		Exception $e
 	): array {
-		$external_id = (int) ( $post_data['id'] ?? 0 );
-		$title       = $post_data['title'] ?? __( 'Unknown', 'safe-publish' );
+		$fields = $this->extract_post_fields( $post_data );
 
-		$fields = array(
-			'external_post_id' => $external_id,
-			'title'            => $title,
-		);
+		if ( '' === $fields['title'] ) {
+			$fields['title'] = __( 'Unknown', 'safe-publish' );
+		}
 
 		$this->log_import_if_session(
 			$session_id,
-			$external_id,
-			$title,
+			$fields['external_post_id'],
+			$fields['title'],
 			'error',
 			null,
 			$e->getMessage(),
