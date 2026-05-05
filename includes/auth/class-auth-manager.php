@@ -168,7 +168,7 @@ class Auth_Manager {
 				'status'              => $status,
 				'health_score'        => $health_score,
 				'issues'              => $issues,
-				'timestamp'           => current_time( 'mysql' ),
+				'timestamp'           => self::now_iso_8601_utc(),
 				'configuration'       => array(
 					'shared_secret_configured' => ! empty( $shared_secret ),
 					'secret_length'            => strlen( $shared_secret ),
@@ -224,7 +224,7 @@ class Auth_Manager {
 					'offset'   => $offset,
 					'has_more' => ( $offset + $limit ) < $total,
 				),
-				'timestamp'  => current_time( 'mysql' ),
+				'timestamp'  => self::now_iso_8601_utc(),
 			),
 			200
 		);
@@ -254,7 +254,7 @@ class Auth_Manager {
 		return new \WP_REST_Response(
 			array(
 				'message'   => 'Authentication logs cleared',
-				'timestamp' => current_time( 'mysql' ),
+				'timestamp' => self::now_iso_8601_utc(),
 			),
 			200
 		);
@@ -284,7 +284,7 @@ class Auth_Manager {
 		return new \WP_REST_Response(
 			array(
 				'message'                      => 'Safe Publish Authentication Test Endpoint',
-				'timestamp'                    => current_time( 'mysql' ),
+				'timestamp'                    => self::now_iso_8601_utc(),
 				'safe_publish_headers_present' => $has_safe_publish_headers,
 				'shared_secret_configured'     => ! empty( $shared_secret ),
 				'secret_length'                => strlen( $shared_secret ),
@@ -366,6 +366,15 @@ class Auth_Manager {
 		}
 
 		return array( $status, $health_score, $issues );
+	}
+
+	/**
+	 * Returns the current time as an ISO 8601 UTC string.
+	 *
+	 * @return string Current time (e.g. 2026-05-05T14:30:00Z).
+	 */
+	private static function now_iso_8601_utc(): string {
+		return gmdate( 'Y-m-d\TH:i:s\Z' );
 	}
 
 	/**
