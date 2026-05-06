@@ -386,9 +386,9 @@ class Media_Importer {
 			$this->logger->log_error(
 				Log_Events::FEATURED_IMAGE_FETCH_FAILED,
 				array(
-					'media_id' => $featured_media_id,
-					'site_url' => $site_url,
-					'error'    => $response->get_error_message(),
+					'media_id'        => $featured_media_id,
+					'source_site_url' => $site_url,
+					'error'           => $response->get_error_message(),
 				)
 			);
 
@@ -402,8 +402,8 @@ class Media_Importer {
 			$this->logger->log_error(
 				Log_Events::FEATURED_IMAGE_MISSING_SOURCE,
 				array(
-					'media_id' => $featured_media_id,
-					'site_url' => $site_url,
+					'media_id'        => $featured_media_id,
+					'source_site_url' => $site_url,
 				)
 			);
 

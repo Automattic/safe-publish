@@ -173,12 +173,12 @@ class HMAC_Authenticator {
 			$this->logger->log_error(
 				Log_Events::TIMESTAMP_EXPIRED,
 				array(
-					'route'        => $route,
-					'method'       => $method,
-					'timestamp'    => $timestamp,
-					'current_time' => time(),
-					'time_diff'    => $time_diff,
-					'max_allowed'  => $max_diff,
+					'route'             => $route,
+					'method'            => $method,
+					'request_timestamp' => $timestamp,
+					'current_time'      => time(),
+					'time_diff'         => $time_diff,
+					'max_allowed'       => $max_diff,
 				)
 			);
 
@@ -291,7 +291,7 @@ class HMAC_Authenticator {
 				array(
 					'route'               => $route,
 					'method'              => $method,
-					'timestamp'           => $timestamp,
+					'request_timestamp'   => $timestamp,
 					'request_site_url'    => $request_site_url,
 					'received_sig_length' => strlen( $signature ),
 				)
@@ -309,10 +309,9 @@ class HMAC_Authenticator {
 		$this->logger->log_event(
 			'AUTH_SUCCESS',
 			array(
-				'route'      => $route,
-				'method'     => $method,
-				'timestamp'  => $timestamp,
-				'user_agent' => $request->get_header( 'user_agent' ),
+				'route'             => $route,
+				'method'            => $method,
+				'request_timestamp' => $timestamp,
 			)
 		);
 
