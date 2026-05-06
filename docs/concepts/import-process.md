@@ -119,7 +119,7 @@ By default, no sanitization is applied to the post content or excerpt; both fiel
   - `safe_publish_external_post_id` — post ID on the source site
   - `safe_publish_external_link` — URL of the source post
   - `safe_publish_imported_from` — plugin identifier (`safe-publish`)
-  - `safe_publish_import_date` — timestamp of the import
+  - `safe_publish_import_date_gmt` — GMT timestamp of the import (`Y-m-d H:i:s`)
 
 ### Post Status
 

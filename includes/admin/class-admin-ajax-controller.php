@@ -872,7 +872,7 @@ final class Admin_Ajax_Controller {
 					Options::META_EXTERNAL_POST_ID => $external_post_id,
 					Options::META_EXTERNAL_LINK    => $external_link,
 					Options::META_IMPORTED_FROM    => Options::META_IMPORTED_FROM_VALUE,
-					Options::META_IMPORT_DATE      => current_time( 'mysql' ),
+					Options::META_IMPORT_DATE_GMT  => current_time( 'mysql', true ),
 				),
 			),
 			$featured_attachment_id,
@@ -1059,7 +1059,7 @@ final class Admin_Ajax_Controller {
 			'_edit_last',
 			'_edit_lock',
 			Options::META_EXTERNAL_LINK,
-			Options::META_IMPORT_DATE,
+			Options::META_IMPORT_DATE_GMT,
 		);
 
 		foreach ( $meta_keys_to_preserve as $meta_key ) {
