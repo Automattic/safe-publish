@@ -68,7 +68,11 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * @param string                $url     The request URL.
 	 * @return false|array|\WP_Error
 	 */
-	public function mock_http_request( $preempt, array $args, string $url ) {
+	public function mock_http_request(
+		false|array|WP_Error $preempt,
+		array $args,
+		string $url
+	): false|array|WP_Error {
 		unset( $args );
 
 		if ( false !== $preempt || ! str_contains( $url, 'source.example.com' ) ) {

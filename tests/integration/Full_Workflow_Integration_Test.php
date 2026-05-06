@@ -23,6 +23,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Tests\Integration\Mock_Post_API_Trait;
+use WP_Error;
 use WP_REST_Request;
 
 /**
@@ -124,7 +125,11 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	 * @param string                $url     Request URL.
 	 * @return false|array|\WP_Error Mocked response, or the prior return value.
 	 */
-	public function mock_post_api( $preempt, array $_args, string $url ) {
+	public function mock_post_api(
+		false|array|WP_Error $preempt,
+		array $_args,
+		string $url
+	): false|array|WP_Error {
 		if ( false !== $preempt || ! preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
 			return $preempt;
 		}
