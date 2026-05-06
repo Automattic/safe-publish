@@ -85,7 +85,9 @@ abstract class Logger {
 	 */
 	private function build_log_data( string $event, array $data ): array {
 		// phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_date
-		$timestamp = function_exists( 'current_time' ) ? current_time( 'mysql' ) : date( 'Y-m-d H:i:s' );
+		$timestamp = function_exists( 'current_time' )
+			? current_time( 'mysql', true )
+			: gmdate( 'Y-m-d H:i:s' );
 		// Data only used for logging; escaped with esc_html() when output to HTML.
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		$site_url = function_exists( 'get_site_url' ) ? get_site_url() : ( $_SERVER['HTTP_HOST'] ?? 'unknown' );
@@ -115,12 +117,18 @@ abstract class Logger {
 	 * @param array  $log_data Full event data.
 	 */
 	protected function store_log_event( string $level, string $event, array $log_data ): void {
-		$created_at = $log_data['timestamp'];
-		$data       = $log_data;
+		$created_at_gmt = $log_data['timestamp'];
+		$data           = $log_data;
 
 		// These are stored as dedicated columns.
 		unset( $data['event'], $data['timestamp'] );
 
-		Audit_Log_Table::insert( $this->channel, $level, $event, $created_at, $data );
+		Audit_Log_Table::insert(
+			$this->channel,
+			$level,
+			$event,
+			$created_at_gmt,
+			$data
+		);
 	}
 }

@@ -67,10 +67,10 @@ class Audit_Log_Table {
 			channel VARCHAR(32) NOT NULL,
 			level VARCHAR(8) NOT NULL,
 			event VARCHAR(64) NOT NULL,
-			created_at DATETIME NOT NULL,
+			created_at_gmt DATETIME NOT NULL,
 			data LONGTEXT NOT NULL,
 			PRIMARY KEY (id),
-			KEY channel_created (channel, created_at),
+			KEY channel_created_gmt (channel, created_at_gmt),
 			KEY level (level),
 			KEY event (event)
 		) {$charset};";
@@ -84,17 +84,17 @@ class Audit_Log_Table {
 	/**
 	 * Inserts a log event row.
 	 *
-	 * @param string $channel    Logger channel (e.g. 'auth').
-	 * @param string $level      Event level: 'info' or 'error'.
-	 * @param string $event      Event type string (e.g. 'AUTH_SUCCESS').
-	 * @param string $created_at MySQL-formatted datetime string.
-	 * @param array  $data       Event payload, stored as JSON.
+	 * @param string $channel        Logger channel (e.g. 'auth').
+	 * @param string $level          Event level: 'info' or 'error'.
+	 * @param string $event          Event type string (e.g. 'AUTH_SUCCESS').
+	 * @param string $created_at_gmt MySQL-formatted GMT datetime string.
+	 * @param array  $data           Event payload, stored as JSON.
 	 */
 	public static function insert(
 		string $channel,
 		string $level,
 		string $event,
-		string $created_at,
+		string $created_at_gmt,
 		array $data
 	): void {
 		global $wpdb;
@@ -102,11 +102,11 @@ class Audit_Log_Table {
 		$wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 			self::table_name(),
 			array(
-				'channel'    => $channel,
-				'level'      => $level,
-				'event'      => $event,
-				'created_at' => $created_at,
-				'data'       => wp_json_encode( $data, JSON_UNESCAPED_SLASHES ),
+				'channel'        => $channel,
+				'level'          => $level,
+				'event'          => $event,
+				'created_at_gmt' => $created_at_gmt,
+				'data'           => wp_json_encode( $data, JSON_UNESCAPED_SLASHES ),
 			),
 			array( '%s', '%s', '%s', '%s', '%s' )
 		);
@@ -157,7 +157,7 @@ class Audit_Log_Table {
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
-			$wpdb->prepare( "SELECT * FROM `{$table}` {$where_sql} ORDER BY created_at DESC LIMIT %d OFFSET %d", ...$values ),
+			$wpdb->prepare( "SELECT * FROM `{$table}` {$where_sql} ORDER BY created_at_gmt DESC LIMIT %d OFFSET %d", ...$values ),
 			ARRAY_A
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -219,12 +219,12 @@ class Audit_Log_Table {
 	}
 
 	/**
-	 * Returns the most recent created_at timestamp for events matching any of
-	 * the given patterns.
+	 * Returns the most recent created_at_gmt timestamp for events matching any
+	 * of the given patterns.
 	 *
 	 * @param string   $channel         Channel to filter by (e.g. 'auth').
 	 * @param string[] $event_patterns  Substrings to match against the event column (OR logic).
-	 * @return string|null MySQL datetime string, or null if no matching row exists.
+	 * @return string|null GMT MySQL datetime string, or null if none match.
 	 */
 	public static function get_last_timestamp(
 		string $channel,
@@ -246,7 +246,7 @@ class Audit_Log_Table {
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$result = $wpdb->get_var(
 			$wpdb->prepare(
-				"SELECT MAX(created_at) FROM `{$table}` WHERE channel = %s AND ({$event_where})",
+				"SELECT MAX(created_at_gmt) FROM `{$table}` WHERE channel = %s AND ({$event_where})",
 				...$values
 			)
 		);
