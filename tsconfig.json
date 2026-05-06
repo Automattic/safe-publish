@@ -13,9 +13,10 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@wordpress/*": ["./node_modules/@wordpress/*"]
+      "@wordpress/*": ["./node_modules/@wordpress/*"],
+      "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*", "types/**/*"],
+  "include": ["src/**/*", "types/**/*", "tests/src/**/*"],
   "exclude": ["node_modules", "build"]
 }
