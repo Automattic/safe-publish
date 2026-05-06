@@ -48,6 +48,7 @@ final class Session_Formatter {
 		$updated    = (int) $session['updated'];
 		$status     = (string) $session['status'];
 		$source_url = (string) $session['source_url'];
+		$created    = (string) $session['created_at_gmt'];
 
 		$user = (string) $session['user_display_name'];
 		if ( '' === $user ) {
@@ -58,7 +59,7 @@ final class Session_Formatter {
 
 		return array(
 			'id'           => (int) $session['id'],
-			'date'         => (string) $session['created_at'],
+			'date'         => str_replace( ' ', 'T', $created ) . 'Z',
 			'user'         => $user,
 			'total_items'  => $total,
 			'successful'   => $successful,

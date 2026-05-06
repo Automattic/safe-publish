@@ -75,7 +75,7 @@ final class Import_Items_Table {
 			content_changes LONGTEXT NULL DEFAULT NULL,
 			has_previous_content TINYINT(1) NOT NULL DEFAULT 0,
 			rolled_back TINYINT(1) NOT NULL DEFAULT 0,
-			import_date DATETIME NOT NULL,
+			import_date_gmt DATETIME NOT NULL,
 			PRIMARY KEY  (id),
 			KEY session_id_status (session_id, status),
 			KEY post_id (post_id)

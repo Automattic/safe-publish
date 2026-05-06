@@ -6,7 +6,7 @@
  *
  * @file This file defines the SessionDetailsModal component.
  */
-import { getErrorMessage } from '../utils';
+import { formatDateTime, getErrorMessage } from '../utils';
 import {
 	Button,
 	__experimentalHStack as HStack,
@@ -218,7 +218,7 @@ export function SessionDetailsModal( {
 	 */
 	const renderSessionInfo = (): JSX.Element => (
 		<VStack spacing={ 2 } style={ { marginBottom: '24px' } }>
-			<Text><strong>{ __( 'Date:', 'safe-publish' ) }</strong> { session.date }</Text>
+			<Text><strong>{ __( 'Date:', 'safe-publish' ) }</strong> { formatDateTime( session.date ) }</Text>
 			<Text><strong>{ __( 'User:', 'safe-publish' ) }</strong> { session.user }</Text>
 			<Text><strong>{ __( 'Source:', 'safe-publish' ) }</strong> { session.source_url }</Text>
 			<Text>
