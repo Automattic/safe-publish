@@ -208,14 +208,14 @@ class Post_Import_Service {
 	 *
 	 * @param array  $fields        Sanitized post fields.
 	 * @param string $error_message Error description.
-	 * @return array Error result with external_id, title, success, and error keys.
+	 * @return array Error result with external_post_id, title, success, and error keys.
 	 */
 	private function build_error_result( array $fields, string $error_message ): array {
 		return array(
-			'external_id' => $fields['external_post_id'],
-			'title'       => $fields['title'],
-			'success'     => false,
-			'error'       => $error_message,
+			'external_post_id' => $fields['external_post_id'],
+			'title'            => $fields['title'],
+			'success'          => false,
+			'error'            => $error_message,
 		);
 	}
 
@@ -225,16 +225,16 @@ class Post_Import_Service {
 	 * @param array $fields   Sanitized post fields.
 	 * @param int   $post_id  Created or updated WordPress post ID.
 	 * @param bool  $existing Whether the post was updated (true) or newly created (false).
-	 * @return array Success result with external_id, title, success, post_id, edit_url, and existing keys.
+	 * @return array Success result with external_post_id, title, success, post_id, edit_url, and existing keys.
 	 */
 	private function build_success_result( array $fields, int $post_id, bool $existing ): array {
 		return array(
-			'external_id' => $fields['external_post_id'],
-			'title'       => $fields['title'],
-			'success'     => true,
-			'post_id'     => $post_id,
-			'edit_url'    => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
-			'existing'    => $existing,
+			'external_post_id' => $fields['external_post_id'],
+			'title'            => $fields['title'],
+			'success'          => true,
+			'post_id'          => $post_id,
+			'edit_url'         => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
+			'existing'         => $existing,
 		);
 	}
 
@@ -1142,17 +1142,17 @@ class Post_Import_Service {
 	/**
 	 * Logs an import action to history, only when a session ID is provided.
 	 *
-	 * @param int|null    $session_id  Import session ID.
-	 * @param int|null    $external_id External post ID, or null if not provided.
-	 * @param string      $title       Post title.
-	 * @param string      $status      Import status (success, updated, error).
-	 * @param int|null    $post_id     WordPress post ID or null on failure.
-	 * @param string|null $error       Error message or null on success.
-	 * @param array       $changes     Contextual changes data for the item.
+	 * @param int|null    $session_id       Import session ID.
+	 * @param int|null    $external_post_id External post ID, or null if not provided.
+	 * @param string      $title            Post title.
+	 * @param string      $status           Import status (success, updated, error).
+	 * @param int|null    $post_id          WordPress post ID or null on failure.
+	 * @param string|null $error            Error message or null on success.
+	 * @param array       $changes          Contextual changes data for the item.
 	 */
 	private function log_import_if_session(
 		?int $session_id,
-		?int $external_id,
+		?int $external_post_id,
 		string $title,
 		string $status,
 		?int $post_id,
@@ -1165,7 +1165,7 @@ class Post_Import_Service {
 
 		$this->repository->log_import_action(
 			$session_id,
-			$external_id,
+			$external_post_id,
 			$title,
 			$status,
 			$post_id,

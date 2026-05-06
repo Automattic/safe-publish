@@ -84,7 +84,7 @@ final class Imports_Table {
 			source_url VARCHAR(255) NOT NULL,
 			session_type VARCHAR(20) NOT NULL,
 			status VARCHAR(20) NOT NULL,
-			end_time_gmt DATETIME NULL DEFAULT NULL,
+			ended_at_gmt DATETIME NULL DEFAULT NULL,
 			created_at_gmt DATETIME NOT NULL,
 			PRIMARY KEY  (id),
 			KEY created_at_gmt (created_at_gmt)

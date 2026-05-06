@@ -68,7 +68,7 @@ final class Import_Items_Table {
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			session_id BIGINT UNSIGNED NOT NULL,
 			title TEXT NOT NULL,
-			external_id BIGINT UNSIGNED NULL DEFAULT NULL,
+			external_post_id BIGINT UNSIGNED NULL DEFAULT NULL,
 			status VARCHAR(20) NOT NULL,
 			post_id BIGINT UNSIGNED NULL DEFAULT NULL,
 			error_message TEXT NULL DEFAULT NULL,

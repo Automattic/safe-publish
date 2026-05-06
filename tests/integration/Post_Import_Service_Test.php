@@ -1290,7 +1290,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 		$this->assertSame(
 			9803,
-			(int) $items[0]['external_id'],
+			(int) $items[0]['external_post_id'],
 			'Item row must reference the failing external post ID.'
 		);
 	}
@@ -1358,10 +1358,10 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		$this->assertSame( 'error', $items[0]['status'] );
 		$this->assertSame( 'error', $items[1]['status'] );
 
-		// ASSERT: external_id is preserved when present (missing_title) and
-		// stored as null when the source payload lacks an id (missing_id).
-		$this->assertSame( 9810, (int) $items[0]['external_id'] );
-		$this->assertNull( $items[1]['external_id'] );
+		// ASSERT: external_post_id is preserved when present (missing_title)
+		// and stored as null when the source payload lacks an id (missing_id).
+		$this->assertSame( 9810, (int) $items[0]['external_post_id'] );
+		$this->assertNull( $items[1]['external_post_id'] );
 
 		// ASSERT: Session counts project the failures from the items table.
 		$session = $this->repository->get_session( $session_id );
