@@ -86,7 +86,7 @@ final class History_Repository {
 	 * Logs an import action.
 	 *
 	 * @param int         $session_id  Session ID.
-	 * @param int         $external_id External post ID.
+	 * @param int|null    $external_id External post ID, or null if not provided.
 	 * @param string      $title       Post title.
 	 * @param string      $status      Import status (success, error, updated).
 	 * @param int|null    $post_id     WordPress post ID; null for error status.
@@ -96,7 +96,7 @@ final class History_Repository {
 	 */
 	public function log_import_action(
 		int $session_id,
-		int $external_id,
+		?int $external_id,
 		string $title,
 		string $status,
 		?int $post_id = null,

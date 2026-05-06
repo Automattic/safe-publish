@@ -154,6 +154,23 @@ describe( 'Type validation', () => {
 				expect( item.rollback_action ).toBe( action );
 			} );
 		} );
+
+		it( 'should accept null external_id when source data lacks an id', () => {
+			const item: ImportItem = {
+				id: 1,
+				title: 'Malformed Source',
+				status: 'error',
+				status_label: 'Error',
+				external_id: null,
+				error: 'Source data missing id',
+				has_changes: false,
+				can_rollback: false,
+				is_rolled_back: false,
+				rollback_action: 'delete',
+			};
+
+			expect( item.external_id ).toBeNull();
+		} );
 	} );
 
 	describe( 'PaginationInfo type', () => {
