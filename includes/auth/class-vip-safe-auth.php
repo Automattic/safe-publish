@@ -5,6 +5,8 @@
  * @package Safe_Publish
  */
 
+declare(strict_types=1);
+
 namespace Safe_Publish\Auth;
 
 use WP_Error;
@@ -63,7 +65,12 @@ final class VIP_Safe_Auth {
 	 * @param string $body        Optional. Request body for content hash generation. Default ''.
 	 * @return array Request modifications (headers, query params, etc.).
 	 */
-	public static function get_auth_params( $site_url, $auth_config = array(), $method = 'GET', $body = '' ): array {
+	public static function get_auth_params(
+		string $site_url,
+		array $auth_config = array(),
+		string $method = 'GET',
+		string $body = ''
+	): array {
 		// Shared secret is required.
 		if ( empty( $auth_config['shared_secret'] ) ) {
 			return array();
@@ -92,7 +99,9 @@ final class VIP_Safe_Auth {
 	 * @param array $auth_config Optional. Authentication configuration array. Default empty array.
 	 * @return bool True if the credentials are well-formed, false otherwise.
 	 */
-	public static function has_valid_credential_format( $auth_config = array() ): bool {
+	public static function has_valid_credential_format(
+		array $auth_config = array()
+	): bool {
 		return strlen( $auth_config['shared_secret'] ?? '' ) >= 16;
 	}
 
@@ -188,7 +197,12 @@ final class VIP_Safe_Auth {
 	 * @param string $body        Optional. Request body for content hash generation. Default ''.
 	 * @return array Request modifications.
 	 */
-	private static function get_shared_secret_auth( $site_url, $auth_config, $method = 'GET', $body = '' ): array {
+	private static function get_shared_secret_auth(
+		string $site_url,
+		array $auth_config,
+		string $method = 'GET',
+		string $body = ''
+	): array {
 		$shared_secret = $auth_config['shared_secret'] ?? '';
 
 		if ( empty( $shared_secret ) ) {
@@ -246,7 +260,10 @@ final class VIP_Safe_Auth {
 	 * @param array  $auth_config Authentication configuration.
 	 * @return array Request modifications.
 	 */
-	private static function get_basic_auth( $site_url, $auth_config ): array {
+	private static function get_basic_auth(
+		string $site_url,
+		array $auth_config
+	): array {
 		$username = $auth_config['username'] ?? '';
 		$password = $auth_config['password'] ?? '';
 

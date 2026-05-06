@@ -5,6 +5,8 @@
  * @package Safe_Publish
  */
 
+declare(strict_types=1);
+
 namespace Safe_Publish\Validators;
 
 // Prevent direct access.
@@ -23,7 +25,7 @@ class URL_Validator {
 	 * @param string $url URL to validate.
 	 * @return bool True if valid, false otherwise.
 	 */
-	public static function is_valid_external_url( $url ): bool {
+	public static function is_valid_external_url( string $url ): bool {
 		// Check if URL is valid.
 		if ( ! filter_var( $url, FILTER_VALIDATE_URL ) ) {
 			return false;
@@ -65,7 +67,7 @@ class URL_Validator {
 	 * @param string $url Raw URL input.
 	 * @return string|false Sanitized URL or false if invalid.
 	 */
-	public static function sanitize_external_url( $url ): string|false {
+	public static function sanitize_external_url( string $url ): string|false {
 		$sanitized_url = esc_url_raw( $url );
 
 		if ( self::is_valid_external_url( $sanitized_url ) ) {
@@ -81,7 +83,7 @@ class URL_Validator {
 	 * @param string $url Optional. URL to check for development domains. Default ''.
 	 * @return array Allowed schemes.
 	 */
-	public static function get_allowed_schemes( $url = '' ): array {
+	public static function get_allowed_schemes( string $url = '' ): array {
 		// Always require HTTPS in VIP production environments.
 		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
 			return array( 'https' );
@@ -112,7 +114,7 @@ class URL_Validator {
 	 * @param string $url URL to check.
 	 * @return bool Whether the domain is whitelisted.
 	 */
-	public static function is_domain_whitelisted( $url ): bool {
+	public static function is_domain_whitelisted( string $url ): bool {
 		$host = wp_parse_url( $url, PHP_URL_HOST );
 
 		/**

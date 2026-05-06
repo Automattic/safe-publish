@@ -5,6 +5,8 @@
  * @package Safe_Publish
  */
 
+declare(strict_types=1);
+
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\Utils\Options;
@@ -26,7 +28,7 @@ class Settings_Sanitizer {
 	 * @param string $url URL to sanitize.
 	 * @return string Sanitized URL or empty string on failure.
 	 */
-	public function sanitize_url( $url ): string {
+	public function sanitize_url( string $url ): string {
 		$url = esc_url_raw( $url );
 
 		if ( empty( $url ) ) {
@@ -51,7 +53,7 @@ class Settings_Sanitizer {
 	 * @param mixed $value Value to sanitize.
 	 * @return bool Sanitized checkbox value.
 	 */
-	public function sanitize_checkbox( $value ): bool {
+	public function sanitize_checkbox( mixed $value ): bool {
 		return (bool) $value;
 	}
 
@@ -61,7 +63,7 @@ class Settings_Sanitizer {
 	 * @param mixed $value Value to sanitize.
 	 * @return string Sanitized username.
 	 */
-	public function sanitize_username( $value ): string {
+	public function sanitize_username( mixed $value ): string {
 		// preserve the existing value when sync mode is export-only.
 		if ( null === $value ) {
 			return (string) get_option( Options::OPTION_USERNAME, '' );
@@ -76,7 +78,7 @@ class Settings_Sanitizer {
 	 * @param mixed $value Value to sanitize.
 	 * @return string Sanitized password.
 	 */
-	public function sanitize_password( $value ): string {
+	public function sanitize_password( mixed $value ): string {
 		// preserve the existing value when sync mode is export-only.
 		if ( null === $value ) {
 			return (string) get_option( Options::OPTION_PASSWORD, '' );
@@ -92,7 +94,7 @@ class Settings_Sanitizer {
 	 * @param mixed $value Value to sanitize.
 	 * @return string One of 'export', 'import', 'bidirectional', or '' on invalid input.
 	 */
-	public function sanitize_sync_mode( $value ): string {
+	public function sanitize_sync_mode( mixed $value ): string {
 		$allowed = array(
 			Options::SYNC_MODE_EXPORT,
 			Options::SYNC_MODE_IMPORT,

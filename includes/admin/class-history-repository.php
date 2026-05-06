@@ -5,6 +5,8 @@
  * @package Safe_Publish
  */
 
+declare(strict_types=1);
+
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\Utils\Import_Items_Table;
@@ -434,7 +436,7 @@ final class History_Repository {
 	 * @param mixed $raw Raw column value.
 	 * @return array|null Decoded array, or null when no changes are stored.
 	 */
-	public static function decode_item_changes( $raw ): ?array {
+	public static function decode_item_changes( mixed $raw ): ?array {
 		if ( ! is_string( $raw ) || '' === $raw ) {
 			return null;
 		}
