@@ -267,7 +267,8 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 		// ASSERT: Status is completed and end_time_gmt is set.
 		$session = $this->repository->get_session( $session_id );
 		$this->assertSame( 'completed', $session['status'] );
-		$this->assertNotEmpty( $session['end_time_gmt'] );
+		$this->assertIsString( $session['end_time_gmt'] );
+		$this->assertNotSame( '', $session['end_time_gmt'] );
 	}
 
 	/**

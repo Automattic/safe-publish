@@ -169,7 +169,8 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		$this->assertStringContainsString( 'nonexistent-partial.jpg', $result['error'] );
 
 		// ASSERT: No post was created.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',
@@ -223,7 +224,8 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		$this->assertStringContainsString( 'nonexistent_taxonomy_xyz', $result['error'] );
 
 		// ASSERT: No post was created.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',
@@ -282,7 +284,8 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		$this->assertStringContainsString( 'featured image', $result['error'] );
 
 		// ASSERT: The orphaned draft must have been deleted.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',

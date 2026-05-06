@@ -31,7 +31,10 @@ class VIPSafeAuthTest extends TestCase {
 		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
 
 		$this->assertArrayHasKey( 'X-Safe-Publish-Site-URL', $params['headers'] );
-		$this->assertNotEmpty( $params['headers']['X-Safe-Publish-Site-URL'] );
+		$this->assertSame(
+			untrailingslashit( home_url() ),
+			$params['headers']['X-Safe-Publish-Site-URL']
+		);
 	}
 
 	/**
@@ -115,8 +118,7 @@ class VIPSafeAuthTest extends TestCase {
 
 		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
 
-		$this->assertIsArray( $params );
-		$this->assertEmpty( $params );
+		$this->assertSame( array(), $params );
 	}
 
 	/**
@@ -128,8 +130,7 @@ class VIPSafeAuthTest extends TestCase {
 
 		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
 
-		$this->assertIsArray( $params );
-		$this->assertEmpty( $params );
+		$this->assertSame( array(), $params );
 	}
 
 	/**
