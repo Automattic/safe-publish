@@ -12,13 +12,13 @@ Safe Publish provides WordPress actions and filters at key extension points.
 
 ### `safe_publish_event_logged`
 
-Fires after any event is recorded to the audit log (e.g. import, export, auth, or content channels).
+Fires after any event is recorded to the audit log (e.g. import, export, auth, content, or media channels).
 
 **Parameters:**
 
-- `string $channel` — event channel (e.g. `'import'`, `'export'`, `'auth'`, `'content'`)
+- `string $channel` — event channel (e.g. `'import'`, `'export'`, `'auth'`, `'content'`, `'media'`)
 - `string $event` — event type identifier (e.g. `'CONTENT_EXPORTED'`, `'AUTH_FAILURE'`)
-- `array $data` — event payload
+- `array $data` — event payload. Always includes `timestamp` (GMT mysql), `site_url`, `user_agent`, `request_uri`, `actor_user_id` (int), `actor_display_name` (string snapshot), and `actor_source` (one of `cli`, `cron`, `hmac`, `xmlrpc`, `ajax`, `rest`, `admin`, `front`, `unknown`). Unauthenticated contexts (e.g. webhook callbacks) record `actor_user_id` of `0` and an empty display name; `actor_source` then disambiguates the origin. Channel-specific fields are merged on top.
 
 **Example:**
 

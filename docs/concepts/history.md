@@ -155,6 +155,8 @@ Export events are stored in a custom database table:
 - Table name: `{$wpdb->prefix}safe_publish_audit_log`
 - Indexed on: `channel` + `created_at_gmt`, `level`, `event`
 
+Every event in this table records `actor_user_id`, `actor_display_name`, and `actor_source` in its data payload to identify which WordPress user triggered the event and how. The display name is snapshotted at log time so it survives user deletion. Unauthenticated contexts (e.g. webhook callbacks) record `actor_user_id` of `0` and an empty display name; `actor_source` (one of `cli`, `cron`, `hmac`, `xmlrpc`, `ajax`, `rest`, `admin`, `front`, `unknown`) then disambiguates the origin.
+
 ## Using Import History
 
 ### Troubleshooting Failed Imports
