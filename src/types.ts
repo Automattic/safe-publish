@@ -36,7 +36,7 @@ export type JsonValue = JsonPrimitive | JsonArray | JsonObject;
  * @property {number}                   id               Unique post ID.
  * @property {string}                   link             Permalink URL of the post.
  * @property {string}                   title            Post title.
- * @property {string}                   modified         Last modified date in ISO format.
+ * @property {string}                   modified_gmt     Last modified date in ISO 8601 UTC.
  * @property {string}                   [content]        Full post content.
  * @property {string}                   [excerpt]        Post excerpt.
  * @property {string}                   [author]         Post author name.
@@ -50,7 +50,7 @@ export interface Post {
 	id: number;
 	link: string;
 	title: string;
-	modified: string;
+	modified_gmt: string;
 	content?: string;
 	excerpt?: string;
 	author?: string;

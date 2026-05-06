@@ -11,13 +11,13 @@ describe( 'Type validation', () => {
 				id: 1,
 				link: 'https://example.com/post',
 				title: 'Test Post',
-				modified: '2024-03-15T10:30:00',
+				modified_gmt: '2024-03-15T10:30:00Z',
 			};
 
 			expect( post.id ).toBe( 1 );
 			expect( post.link ).toBe( 'https://example.com/post' );
 			expect( post.title ).toBe( 'Test Post' );
-			expect( post.modified ).toBe( '2024-03-15T10:30:00' );
+			expect( post.modified_gmt ).toBe( '2024-03-15T10:30:00Z' );
 		} );
 
 		it( 'should accept post with optional fields', () => {
@@ -25,7 +25,7 @@ describe( 'Type validation', () => {
 				id: 1,
 				link: 'https://example.com/post',
 				title: 'Test Post',
-				modified: '2024-03-15T10:30:00',
+				modified_gmt: '2024-03-15T10:30:00Z',
 				content: 'Post content',
 				excerpt: 'Post excerpt',
 				author: 'John Doe',

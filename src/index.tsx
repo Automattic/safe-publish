@@ -73,12 +73,12 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 		perPage: DEFAULT_POSTS_PER_PAGE,
 		page: 1,
 		sort: {
-			field: 'modified',
+			field: 'modified_gmt',
 			direction: 'desc',
 		},
 		search: '',
 		filters: [],
-		fields: [ 'permalink', 'modified', 'sync_status', 'publish_status' ],
+		fields: [ 'permalink', 'modified_gmt', 'sync_status', 'publish_status' ],
 		titleField: 'title',
 		descriptionField: 'description',
 		mediaField: 'image',
@@ -164,12 +164,12 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 			},
 		},
 		{
-			id: 'modified',
+			id: 'modified_gmt',
 			label: __( 'Last Modified', 'safe-publish' ),
 			enableSorting: true,
 			enableGlobalSearch: true,
 			render: ( { item }: { item: Post } ): JSX.Element => {
-				return <span>{ formatDateTime( item.modified ) }</span>;
+				return <span>{ formatDateTime( item.modified_gmt ) }</span>;
 			},
 		},
 		{
