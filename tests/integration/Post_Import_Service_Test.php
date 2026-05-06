@@ -147,7 +147,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 
 		// ASSERT: No post should have been created with the broken staging URL in its content.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',
@@ -201,7 +202,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 
 		// ASSERT: No post should have been created.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',
@@ -255,7 +257,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 
 		// ASSERT: No post should have been created.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',
@@ -358,7 +361,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 
 		// ASSERT: No post should have been created.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',
@@ -425,7 +429,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 
 		// ASSERT: No post should have been created.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',
@@ -465,8 +470,17 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 
 		// ASSERT: Import fails and no post was created.
 		$this->assertFalse( $result['success'], 'Import should fail when no source URL is configured.' );
-		$this->assertNotEmpty( $result['error'], 'A non-empty error message should be returned.' );
-		$this->assertEmpty(
+		$this->assertIsString(
+			$result['error'],
+			'An error message should be returned.'
+		);
+		$this->assertNotSame(
+			'',
+			$result['error'],
+			'A non-empty error message should be returned.'
+		);
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'      => 'post',
@@ -490,7 +504,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 
 		// ASSERT: Update path also aborts correctly.
 		$this->assertFalse( $update_result['success'], 'Re-import should fail when no source URL is configured.' );
-		$this->assertNotEmpty( $update_result['error'] );
+		$this->assertIsString( $update_result['error'] );
+		$this->assertNotSame( '', $update_result['error'] );
 	}
 
 	/**
@@ -829,7 +844,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 
 		// ASSERT: No post should have been created.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',

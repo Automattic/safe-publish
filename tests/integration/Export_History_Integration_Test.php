@@ -58,7 +58,7 @@ class Export_History_Integration_Test extends WP_Ajax_UnitTestCase {
 				'limit'   => 1,
 			)
 		);
-		$this->assertNotEmpty( $events );
+		$this->assertCount( 1, $events );
 
 		$stored = strtotime( $events[0]['created_at_gmt'] . ' UTC' );
 		$this->assertEqualsWithDelta( $now, $stored, 5 );
@@ -92,7 +92,7 @@ class Export_History_Integration_Test extends WP_Ajax_UnitTestCase {
 		$response = json_decode( $this->_last_response, true );
 		$this->assertIsArray( $response );
 		$this->assertTrue( $response['success'] );
-		$this->assertNotEmpty( $response['data'] );
+		$this->assertCount( 1, $response['data'] );
 		$this->assertMatchesRegularExpression(
 			'/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/',
 			$response['data'][0]['date']

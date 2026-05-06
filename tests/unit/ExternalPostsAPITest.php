@@ -140,7 +140,9 @@ class ExternalPostsAPITest extends TestCase {
 
 		// ACT + ASSERT: Each status maps to a non-empty description.
 		foreach ( $statuses as $status ) {
-			$this->assertNotEmpty( External_Posts_API::describe_auth_status( $status ) );
+			$description = External_Posts_API::describe_auth_status( $status );
+			$this->assertIsString( $description );
+			$this->assertNotSame( '', $description );
 		}
 	}
 
