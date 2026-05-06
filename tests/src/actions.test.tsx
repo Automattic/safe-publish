@@ -1,12 +1,23 @@
 /**
  * Tests for action modal components and bulk operations
  */
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
 import { createActions } from '@/actions';
 import type { Post } from '@/types';
+import type { Action, ActionModal } from '@wordpress/dataviews/build-types';
 
 const actions = createActions();
+
+/**
+ * Returns the modal action with the given id, throwing if absent or not modal.
+ */
+function getModalAction( id: string ): ActionModal< Post > {
+	const action = actions.find( ( a: Action< Post > ) => a.id === id );
+	if ( ! action || ! ( 'RenderModal' in action ) ) {
+		throw new Error( `Expected modal action with id "${ id }"` );
+	}
+	return action;
+}
 
 describe( 'Actions configuration', () => {
 	it( 'should export actions array', () => {
@@ -73,41 +84,38 @@ describe( 'Actions configuration', () => {
 
 
 	it( 'should have post diff action', () => {
-		const diffAction = actions.find( ( a ) => a.id === 'post-diff' );
-		expect( diffAction ).toBeDefined();
-		expect( diffAction?.label ).toBe( 'Post Diff' );
-		expect( diffAction?.supportsBulk ).toBe( false );
-		expect( diffAction?.modalSize ).toBe( 'fill' );
+		const diffAction = getModalAction( 'post-diff' );
+		expect( diffAction.label ).toBe( 'Post Diff' );
+		expect( diffAction.supportsBulk ).toBe( false );
+		expect( diffAction.modalSize ).toBe( 'fill' );
 	} );
 } );
 
 describe( 'Bulk import action', () => {
 	it( 'should have RenderModal component', () => {
-		const bulkAction = actions.find( ( a: any ) => a.id === 'bulk-import' );
-		expect( bulkAction?.RenderModal ).toBeDefined();
-		expect( typeof bulkAction?.RenderModal ).toBe( 'function' );
+		const bulkAction = getModalAction( 'bulk-import' );
+		expect( typeof bulkAction.RenderModal ).toBe( 'function' );
 	} );
 
 	it( 'should hide modal header', () => {
-		const bulkAction = actions.find( ( a: any ) => a.id === 'bulk-import' );
-		expect( bulkAction?.hideModalHeader ).toBe( true );
+		const bulkAction = getModalAction( 'bulk-import' );
+		expect( bulkAction.hideModalHeader ).toBe( true );
 	} );
 
 	it( 'should focus on first content element', () => {
-		const bulkAction = actions.find( ( a: any ) => a.id === 'bulk-import' );
-		expect( bulkAction?.modalFocusOnMount ).toBe( 'firstContentElement' );
+		const bulkAction = getModalAction( 'bulk-import' );
+		expect( bulkAction.modalFocusOnMount ).toBe( 'firstContentElement' );
 	} );
 } );
 
 describe( 'Post diff action', () => {
 	it( 'should have RenderModal component', () => {
-		const diffAction = actions.find( ( a: any ) => a.id === 'post-diff' );
-		expect( diffAction?.RenderModal ).toBeDefined();
-		expect( typeof diffAction?.RenderModal ).toBe( 'function' );
+		const diffAction = getModalAction( 'post-diff' );
+		expect( typeof diffAction.RenderModal ).toBe( 'function' );
 	} );
 
 	it( 'should have fill modal size', () => {
-		const diffAction = actions.find( ( a: any ) => a.id === 'post-diff' );
-		expect( diffAction?.modalSize ).toBe( 'fill' );
+		const diffAction = getModalAction( 'post-diff' );
+		expect( diffAction.modalSize ).toBe( 'fill' );
 	} );
 } );

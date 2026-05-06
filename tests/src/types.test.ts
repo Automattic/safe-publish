@@ -32,8 +32,8 @@ describe( 'Type validation', () => {
 				status: 'publish',
 				featured_media: 123,
 				post_type: 'post',
-				meta: [ { key: 'value' } ],
-				terms: [ { taxonomy: 'category', name: 'News' } ],
+				meta: { key: 'value' },
+				terms: { category: [ 'News' ] },
 			};
 
 			expect( post.content ).toBe( 'Post content' );
