@@ -385,8 +385,9 @@ class Post_Import_Service {
 			$post['is_imported'] = (bool) $imported;
 
 			if ( $imported ) {
-				$external_modified      = strtotime( $post['modified'] );
-				$local_modified         = strtotime( $imported->post_modified );
+				$external_modified = strtotime( $post['modified'] );
+				$local_modified    = strtotime( $imported->post_modified_gmt );
+
 				$post['has_update']     = false !== $external_modified
 					&& false !== $local_modified
 					&& $external_modified > $local_modified;
