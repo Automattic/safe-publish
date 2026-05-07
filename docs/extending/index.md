@@ -21,7 +21,7 @@ Learn how to enable import support for custom post types:
 
 ### REST API Extension
 
-Extend the plugin's REST API capabilities:
+Extend the plugin's REST API capabilities. The REST API surface is intentionally small; most extension points are WordPress hooks and filters.
 
 - [REST API Extension](api.md) - Custom endpoints and authentication
 
@@ -36,7 +36,7 @@ See the [Hooks and Filters Reference](hooks.md) for full parameter documentation
 
 ## Integration Examples
 
-- **Event notifications** — use [`safe_publish_event_logged`](hooks.md#safe_publish_event_logged) to react to any import, export, or auth event (e.g. send a Slack message on failure).
+- **Event notifications** — use [`safe_publish_event_logged`](hooks.md#safe_publish_event_logged) to react to any plugin event (e.g. send a Slack message on failure).
 
 See the [Hooks and Filters Reference](hooks.md) for full parameter documentation and examples.
 
@@ -50,9 +50,9 @@ Set up a development environment for testing your extensions:
 
 ### 1. Use Appropriate Hooks
 
-- Use **actions** for side effects (notifications, logging)
-- Use **filters** for modifying data (validation, transformation)
-- Check hook priority if order matters
+- Use **actions** for side effects (notifications, logging).
+- Use **filters** for modifying data (validation, transformation).
+- Check hook priority if order matters.
 
 ### 2. Error Handling
 
@@ -72,18 +72,18 @@ add_filter( 'safe_publish_sanitized_post', function( array $sanitized_post, arra
 
 ### 3. Performance
 
-- Avoid expensive operations in filters that run frequently
-- Use caching where appropriate
-- Be mindful of external API calls
+- Avoid expensive operations in filters that run frequently.
+- Use caching where appropriate.
+- Be mindful of external API calls.
 
 ### 4. VIP Compatibility
 
 When extending Safe Publish on WordPress VIP:
 
-- Follow [VIP coding standards](https://docs.wpvip.com/technical-references/vip-codebase/)
-- Avoid filesystem writes
-- Use `vip_safe_wp_remote_get()` for external requests
-- Test thoroughly in VIP environments
+- Follow [VIP coding standards](https://docs.wpvip.com/technical-references/vip-codebase/).
+- Avoid filesystem writes.
+- Use `vip_safe_wp_remote_get()` for external requests.
+- Test thoroughly in VIP environments.
 
 ## Documentation
 
@@ -94,6 +94,6 @@ When extending Safe Publish on WordPress VIP:
 
 ## Need Help?
 
-- Check the [hooks documentation](hooks.md) for available extension points
-- Review example code in this guide
-- Report issues or request features via GitHub Issues
+- Check the [hooks documentation](hooks.md) for available extension points.
+- Review example code in this guide.
+- Report issues or request features via GitHub Issues.

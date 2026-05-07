@@ -13,23 +13,23 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 **Solutions**:
 
 1. **Verify Safe Publish is configured on both sites**:
-   - Safe Publish must be installed and active on both sites
-   - Sync Mode and Connected Site URL must be set with correct values on both sites
+   - Safe Publish must be installed and active on both sites.
+   - Sync Mode and Connected Site URL must be set with correct values on both sites.
 
 2. **Verify shared secret matches on both sites**:
-   - Check `wp-config.php` on both sites
-   - Secret must be identical (case-sensitive)
+   - Check `wp-config.php` on both sites.
+   - Secret must be identical (case-sensitive).
    - No extra spaces or quotes
 
 3. **For basic auth**:
-   - Verify username and password are correct
-   - Ensure user has `edit_posts` capability
-   - Check basic auth plugin is installed on source site
+   - Verify username and password are correct.
+   - Ensure user has `edit_posts` capability.
+   - Check basic auth plugin is installed on source site.
 
 4. **Check HTTPS**:
-   - Production domains must use HTTPS (HTTP is allowed for local development domains like `.test`, `.local`, `.dev`)
-   - Verify SSL certificates are valid
-   - Test site URL in browser
+   - Production domains must use HTTPS (HTTP is allowed for local development domains like `.test`, `.local`, `.dev`).
+   - Verify SSL certificates are valid.
+   - Test site URL in browser.
 
 #### "Connection timeout" error
 
@@ -39,8 +39,8 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 
 1. **Check network connectivity**:
    - Can you access the source site in a browser?
-   - Ping the source site domain
-   - Check for firewall rules blocking the connection
+   - Ping the source site domain.
+   - Check for firewall rules blocking the connection.
 
 2. **Increase PHP timeout limits**:
 
@@ -50,12 +50,12 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
    ```
 
 3. **Check server resources**:
-   - High CPU/memory usage can cause timeouts
-   - Monitor server during import
+   - High CPU/memory usage can cause timeouts.
+   - Monitor server during import.
 
 4. **Try fewer posts**:
-   - Reduce "Number of Posts" setting
-   - Import in smaller batches
+   - Reduce "Number of Posts" setting.
+   - Import in smaller batches.
 
 #### "Unauthorized" or "403 Forbidden" error
 
@@ -63,9 +63,9 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 
 **Solutions**:
 
-1. Verify Safe Publish is installed on the source site with **Sync Mode** set to `Export`
-2. For basic auth, confirm the user has the `edit_posts` capability
-3. Check server firewall rules aren't blocking incoming requests
+1. Verify Safe Publish is installed on the source site with **Sync Mode** set to `Export`.
+2. For basic auth, confirm the user has the `edit_posts` capability.
+3. Check server firewall rules aren't blocking incoming requests.
 
 #### "REST API not found" error
 
@@ -74,20 +74,20 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 **Solutions**:
 
 1. **Verify REST API is enabled**:
-   - Visit `https://your-site.com/wp-json/` in browser
-   - Should return JSON, not 404
+   - Visit `https://your-site.com/wp-json/` in browser.
+   - Should return JSON, not 404.
 
 2. **Check permalink structure**:
-   - Source site must have permalinks enabled
-   - Go to Settings → Permalinks and save
+   - Source site must have permalinks enabled.
+   - Go to Settings → Permalinks and save.
 
 3. **Disable conflicting plugins**:
-   - Some security plugins block REST API
-   - Temporarily disable and test
+   - Some security plugins block REST API.
+   - Temporarily disable and test.
 
 4. **Check .htaccess**:
-   - Corrupted .htaccess can block REST API
-   - Try resaving permalinks
+   - Corrupted .htaccess can block REST API.
+   - Try resaving permalinks.
 
 ### Import Issues
 
@@ -98,20 +98,20 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 **Solutions**:
 
 1. **Check post status**:
-   - By default, the REST API returns only published posts (authenticated requests with `context=edit` may include other statuses)
-   - Verify posts exist and are published on source site
+   - By default, the REST API returns only published posts (authenticated requests with `context=edit` may include other statuses).
+   - Verify posts exist and are published on source site.
 
 2. **Verify post type is exposed in REST API**:
-   - Custom post types must support `'show_in_rest' => true`
-   - Check post type registration
+   - Custom post types must support `'show_in_rest' => true`.
+   - Check post type registration.
 
 3. **Check post permissions**:
-   - Authenticated user must have read access to posts
-   - Review user roles and capabilities
+   - Authenticated user must have read access to posts.
+   - Review user roles and capabilities.
 
 4. **Increase "Number of Posts" setting**:
-   - Default is 10, try increasing to 50
-   - Maybe your posts are pagination past first page
+   - Default is 10, try increasing to 50.
+   - Maybe your posts are pagination past first page.
 
 #### "Media import failed" error
 
@@ -120,25 +120,25 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 **Solutions**:
 
 1. **Check image URLs are accessible**:
-   - Copy image URL and open in browser
-   - Must return 200 OK, not 404 or 403
+   - Copy image URL and open in browser.
+   - Must return 200 OK, not 404 or 403.
 
 2. **Verify image URLs are absolute**:
-   - Relative URLs may not work
-   - Images must be publicly accessible
+   - Relative URLs may not work.
+   - Images must be publicly accessible.
 
 3. **Check file size limits**:
    - PHP `upload_max_filesize` and `post_max_size`
    - WordPress `WP_MEMORY_LIMIT`
-   - Reduce image sizes if needed
+   - Reduce image sizes if needed.
 
 4. **Check disk space**:
-   - Ensure destination site has sufficient disk space
-   - Check server quotas
+   - Ensure destination site has sufficient disk space.
+   - Check server quotas.
 
 5. **Review upload directory permissions**:
-   - `wp-content/uploads/` must be writable
-   - Check file permissions (755 for directories, 644 for files)
+   - `wp-content/uploads/` must be writable.
+   - Check file permissions (755 for directories, 644 for files).
 
 #### "Invalid content structure" error
 
@@ -147,23 +147,23 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 **Solutions**:
 
 1. **Check for broken HTML**:
-   - Edit source post in WordPress
-   - Look for validation errors in block editor
-   - Fix any invalid HTML or blocks
+   - Edit source post in WordPress.
+   - Look for validation errors in block editor.
+   - Fix any invalid HTML or blocks.
 
 2. **Verify Gutenberg blocks are valid**:
-   - Switch to code editor view
-   - Check block comments are closed
-   - Look for corrupted block syntax
+   - Switch to code editor view.
+   - Check block comments are closed.
+   - Look for corrupted block syntax.
 
 3. **Test with simple content**:
-   - Create a test post with simple content
-   - If it imports, issue is with complex content
-   - Simplify problematic content
+   - Create a test post with simple content.
+   - If it imports, issue is with complex content.
+   - Simplify problematic content.
 
 4. **Check for unsupported blocks**:
-   - Some third-party blocks may not transfer
-   - Try converting to core blocks
+   - Some third-party blocks may not transfer.
+   - Try converting to core blocks.
 
 #### Post creation failed
 
@@ -171,9 +171,9 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 
 **Solutions**:
 
-1. **Check user permissions**: The importing user must have permission to create posts of that post type
-2. **Check for database errors**: Enable `WP_DEBUG_LOG` and review `wp-content/debug.log` for insert failures
-3. **Verify post type is registered** on the destination site — custom post types must exist on both sites
+1. **Check user permissions**: The importing user must have permission to create posts of that post type.
+2. **Check for database errors**: Enable `WP_DEBUG_LOG` and review `wp-content/debug.log` for insert failures.
+3. **Verify post type is registered** on the destination site — custom post types must exist on both sites.
 
 #### Duplicate content imported
 
@@ -185,8 +185,8 @@ Safe Publish tracks imported posts using the `safe_publish_external_post_id` met
 
 If duplicates still occur:
 
-1. **Check History** to see if the post was imported from different sessions
-2. Delete duplicate drafts manually
+1. **Check History** to see if the post was imported from different sessions.
+2. Delete duplicate drafts manually.
 
 #### Embedded posts display as plain links
 
@@ -194,13 +194,12 @@ This is a known limitation of WordPress' embed cache when imported posts referen
 
 ### Validation Errors
 
-| Error code            | Cause                                                  | Solution                                                   |
-| --------------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
-| `invalid_url`         | URL not valid or accessible                            | Check URL format and ensure the site is reachable          |
-| `invalid_credentials` | Missing or invalid authentication credentials          | See the [Authentication guide](concepts/authentication.md) |
-| `request_failed`      | HTTP request to the external site failed               | Check network connectivity and site availability           |
-| `meta_update_failed`  | One or more post meta keys failed to save              | Check destination site database permissions                |
-| `unknown_taxonomy`    | A taxonomy from the source post does not exist locally | Register the taxonomy on the destination site              |
+| Error code           | Cause                                                  | Solution                                          |
+| -------------------- | ------------------------------------------------------ | ------------------------------------------------- |
+| `invalid_url`        | URL not valid or accessible                            | Check URL format and ensure the site is reachable |
+| `request_failed`     | HTTP request to the external site failed               | Check network connectivity and site availability  |
+| `meta_update_failed` | One or more post meta keys failed to save              | Check destination site database permissions       |
+| `unknown_taxonomy`   | A taxonomy from the source post does not exist locally | Register the taxonomy on the destination site     |
 
 ### Performance Issues
 
@@ -213,7 +212,7 @@ This is a known limitation of WordPress' embed cache when imported posts referen
 1. **Reduce content size**:
    - Fewer images = faster imports
    - Smaller images = faster downloads
-   - Optimize images before importing
+   - Optimize images before importing.
 
 2. **Increase PHP limits**:
 
@@ -224,16 +223,16 @@ This is a known limitation of WordPress' embed cache when imported posts referen
    ```
 
 3. **Check network speed**:
-   - Slow network connection affects image downloads
-   - Consider importing during off-peak hours
+   - Slow network connection affects image downloads.
+   - Consider importing during off-peak hours.
 
 4. **Import in smaller batches**:
-   - Don't bulk import too many posts at once
-   - Try 5-10 posts at a time
+   - Don't bulk import too many posts at once.
+   - Try 5-10 posts at a time.
 
 5. **Enable object cache**:
-   - Install Redis or Memcached
-   - Significantly improves performance
+   - Install Redis or Memcached.
+   - Significantly improves performance.
 
 #### Browser becomes unresponsive
 
@@ -242,20 +241,20 @@ This is a known limitation of WordPress' embed cache when imported posts referen
 **Solutions**:
 
 1. **Don't bulk import too many posts**:
-   - Limit to 5-10 posts at a time
-   - Browser needs to process responses
+   - Limit to 5-10 posts at a time.
+   - Browser needs to process responses.
 
 2. **Close unnecessary browser tabs**:
-   - Frees up memory
-   - Improves responsiveness
+   - Frees up memory.
+   - Improves responsiveness.
 
 3. **Use modern browser**:
    - Chrome or Firefox recommended
-   - Keep browser updated
+   - Keep browser updated.
 
 4. **Increase browser memory** (advanced):
-   - Some browsers allow memory limit increases
-   - Or use different browser
+   - Some browsers allow memory limit increases.
+   - Or use different browser.
 
 ### Admin UI Issues
 
@@ -266,21 +265,21 @@ This is a known limitation of WordPress' embed cache when imported posts referen
 **Solutions**:
 
 1. **Check JavaScript console**:
-   - Open browser DevTools (F12)
-   - Look for JavaScript errors
-   - Report errors with details
+   - Open browser DevTools (F12).
+   - Look for JavaScript errors.
+   - Report errors with details.
 
 2. **Clear browser cache**:
-   - Hard refresh (Ctrl+Shift+R / Cmd+Shift+R)
-   - Clear cache and cookies
+   - Hard refresh (Ctrl+Shift+R / Cmd+Shift+R).
+   - Clear cache and cookies.
 
 3. **Check for JavaScript conflicts**:
-   - Disable other plugins temporarily
-   - Test if issue persists
+   - Disable other plugins temporarily.
+   - Test if issue persists.
 
 4. **Verify assets are loading**:
-   - Check Network tab in DevTools
-   - Look for 404 errors on JS/CSS files
+   - Check Network tab in DevTools.
+   - Look for 404 errors on JS/CSS files.
 
 #### Settings not saving
 
@@ -289,20 +288,20 @@ This is a known limitation of WordPress' embed cache when imported posts referen
 **Solutions**:
 
 1. **Check for PHP errors**:
-   - Enable WP_DEBUG in wp-config.php
-   - Check debug.log for errors
+   - Enable WP_DEBUG in wp-config.php.
+   - Check debug.log for errors.
 
 2. **Verify user permissions**:
-   - User must have `manage_options` capability
-   - Check user role
+   - User must have `manage_options` capability.
+   - Check user role.
 
 3. **Check for plugin conflicts**:
-   - Disable other plugins
-   - Test if settings save
+   - Disable other plugins.
+   - Test if settings save.
 
 4. **Database issues**:
-   - Check wp_options table is writable
-   - Review database errors in logs
+   - Check wp_options table is writable.
+   - Review database errors in logs.
 
 ## Debugging Tools
 
@@ -312,10 +311,10 @@ Add the [WordPress debug constants](local-development.md#debugging) to `wp-confi
 
 ### Browser Developer Tools
 
-1. Open DevTools (F12)
-2. Check Console tab for JavaScript errors
-3. Check Network tab for failed requests
-4. Review request/response details
+1. Open DevTools (F12).
+2. Check Console tab for JavaScript errors.
+3. Check Network tab for failed requests.
+4. Review request/response details.
 
 ### Query Monitor Plugin
 
@@ -343,9 +342,9 @@ Check the **History** page for:
 
 If you still can't resolve the issue:
 
-1. **Check History** for detailed error messages
-2. **Enable debug mode** and collect error logs
-3. **Reproduce the issue** in a clean environment if possible
+1. **Check History** for detailed error messages.
+2. **Enable debug mode** and collect error logs.
+3. **Reproduce the issue** in a clean environment if possible.
 4. **Report the issue** via GitHub Issues with:
    - WordPress and PHP versions
    - Steps to reproduce
@@ -376,7 +375,7 @@ wp option delete safe_publish_password
 
 ### Clear Import History
 
-Import history is stored as WordPress custom post types and can be managed through the **History** page.
+Import history is stored in custom database tables and can be managed through the **History** page.
 
 ### Complete Reset
 

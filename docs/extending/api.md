@@ -22,7 +22,7 @@ Require a WordPress user with `edit_post` capability for the target post.
 | `GET`    | `/wp-json/safe-publish/v1/auth-status` | `manage_options` or HMAC | Authentication health and statistics |
 | `GET`    | `/wp-json/safe-publish/v1/auth-logs`   | `manage_options` or HMAC | Paginated authentication event log   |
 | `DELETE` | `/wp-json/safe-publish/v1/auth-logs`   | `manage_options`         | Clear authentication logs            |
-| `GET`    | `/wp-json/safe-publish/v1/auth-test`   | None (WP_DEBUG only)     | Authentication diagnostic test       |
+| `GET`    | `/wp-json/safe-publish/v1/auth-test`   | None (`WP_DEBUG` only)   | Authentication diagnostic test       |
 
 All datetime fields returned by monitoring endpoints (e.g. `timestamp`, `last_success`, `last_failure`, `created_at_gmt`) are ISO 8601 UTC strings (e.g. `2026-05-05T14:30:00Z`).
 
@@ -88,10 +88,14 @@ function safe_publish_custom_action_handler( WP_REST_Request $request ) {
 
 ## Webhook Integration
 
-Use the [`safe_publish_event_logged`](hooks.md#safe_publish_event_logged) action to notify external systems when events occur:
+Use the [`safe_publish_event_logged`](hooks.md#safe_publish_event_logged) action to notify external systems when plugin events occur:
 
 ```php
 add_action( 'safe_publish_event_logged', function( string $channel, string $event, array $data ): void {
+    if ( 'import' !== $channel ) {
+        return;
+    }
+
     $webhook_url = get_option( 'safe_publish_webhook_url' );
 
     if ( ! $webhook_url ) {
@@ -99,14 +103,12 @@ add_action( 'safe_publish_event_logged', function( string $channel, string $even
     }
 
     wp_remote_post( $webhook_url, [
-        'body' => wp_json_encode( [
+        'body'    => wp_json_encode( [
             'channel' => $channel,
             'event'   => $event,
             'data'    => $data,
         ] ),
-        'headers' => [
-            'Content-Type' => 'application/json',
-        ],
+        'headers' => [ 'Content-Type' => 'application/json' ],
     ] );
 }, 10, 3 );
 ```
@@ -160,7 +162,7 @@ Standard error responses:
 'X-WP-Nonce': wpApiSettings.nonce
 ```
 
-4. **Rate limit external API calls**
+4. **Rate limit external API calls**.
 
 ## Next Steps
 

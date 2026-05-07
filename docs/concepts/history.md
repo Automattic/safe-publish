@@ -6,16 +6,16 @@ The History feature provides complete tracking and auditing of all content impor
 
 Every import and export action—whether successful or failed—is logged for future reference. This provides:
 
-- **Audit trail**: Know who imported or exported what and when
-- **Troubleshooting**: Identify failed operations and their error messages
-- **Compliance**: Meet regulatory requirements for content tracking
-- **Reporting**: Review activity across both import and export directions
+- **Audit trail**: Know who imported or exported what and when.
+- **Troubleshooting**: Identify failed operations and their error messages.
+- **Compliance**: Meet regulatory requirements for content tracking.
+- **Reporting**: Review activity across both import and export directions.
 
 ## Accessing History
 
-1. Navigate to **Safe Publish** in WordPress admin
-2. Click **History** in the submenu
-3. Use the **Import History** and **Export History** tabs (visible tabs depend on the site's sync mode)
+1. Navigate to **Safe Publish** in WordPress admin.
+2. Click **History** in the submenu.
+3. Use the **Import History** and **Export History** tabs (visible tabs depend on the site's sync mode).
 
 ## Data Tracked
 
@@ -121,9 +121,9 @@ Each log entry within the session shows the post title, its status (`success`, `
 
 A completed session or individual log entry can be rolled back if the **Rollback** action is available:
 
-1. Find the session in the table
-2. Click **Rollback** in the session actions, or open the session details to roll back individual items
-3. Confirm the rollback
+1. Find the session in the table.
+2. Click **Rollback** in the session actions, or open the session details to roll back individual items.
+3. Confirm the rollback.
 
 Rollback reverts imported content to its state before the import. Only successfully imported items that have not yet been rolled back are eligible.
 
@@ -131,9 +131,9 @@ Rollback reverts imported content to its state before the import. Only successfu
 
 ### Deleting Sessions
 
-1. Click **Delete** next to a session
-2. Confirm the deletion
-3. Session and all its log entries are removed
+1. Click **Delete** next to a session.
+2. Confirm the deletion.
+3. Session and all its log entries are removed.
 
 **Note**: Deleting a history record does NOT delete the imported posts.
 
@@ -143,10 +143,10 @@ Rollback reverts imported content to its state before the import. Only successfu
 
 Import history is stored in two custom database tables:
 
-| Table                          | Purpose                                             |
-| ------------------------------ | --------------------------------------------------- |
-| `wp_safe_publish_imports`      | One row per import session                          |
-| `wp_safe_publish_import_items` | One row per imported item (linked via `session_id`) |
+| Table                                      | Purpose                                             |
+| ------------------------------------------ | --------------------------------------------------- |
+| `{$wpdb->prefix}safe_publish_imports`      | One row per import session                          |
+| `{$wpdb->prefix}safe_publish_import_items` | One row per imported item (linked via `session_id`) |
 
 ### Export History
 
@@ -161,39 +161,39 @@ Every event in this table records `actor_user_id`, `actor_display_name`, and `ac
 
 ### Troubleshooting Failed Imports
 
-1. Find sessions with a `failed` status
-2. Open the session details to review individual log entries
-3. Review error messages and identify common patterns
-4. Address underlying issues
+1. Find sessions with a `failed` status.
+2. Open the session details to review individual log entries.
+3. Review error messages and identify common patterns.
+4. Address underlying issues.
 
 Common failure patterns:
 
-- **Authentication errors**: Check shared secret
-- **Media errors**: Verify image URLs are accessible
-- **Timeout errors**: Reduce the number of posts per import
+- **Authentication errors**: Check shared secret.
+- **Media errors**: Verify image URLs are accessible.
+- **Timeout errors**: Reduce the number of posts per import.
 
 ### Auditing Content Changes
 
 Track what content was imported and when:
 
-1. Review sessions filtered by source URL
-2. Open session details to inspect individual items
-3. Use rollback to revert unwanted imports if needed
+1. Review sessions filtered by source URL.
+2. Open session details to inspect individual items.
+3. Use rollback to revert unwanted imports if needed.
 
 ### User Activity Monitoring
 
 See who is importing content:
 
-1. Review sessions sorted by user
-2. Identify training needs or unexpected activity
+1. Review sessions sorted by user.
+2. Identify training needs or unexpected activity.
 
 ### Reviewing Export Activity
 
 Track what content has been exported to destination sites:
 
-1. Switch to the **Export History** tab
-2. Review export events by destination URL and date
-3. Investigate any events with a Failed status
+1. Switch to the **Export History** tab.
+2. Review export events by destination URL and date.
+3. Investigate any events with a Failed status.
 
 ## Privacy Considerations
 
@@ -209,10 +209,10 @@ Import history records are not tied to WordPress user accounts. When a user is d
 
 ## Best Practices
 
-1. **Regular review**: Check history weekly for both imports and exports
-2. **Monitor failures**: Investigate failed sessions promptly
-3. **Use rollback**: Revert unwanted imports rather than manually reverting changes
-4. **Train users**: Show team members how to read session details and use rollback
+1. **Regular review**: Check history weekly for both imports and exports.
+2. **Monitor failures**: Investigate failed sessions promptly.
+3. **Use rollback**: Revert unwanted imports rather than manually reverting changes.
+4. **Train users**: Show team members how to read session details and use rollback.
 
 ## Next Steps
 
