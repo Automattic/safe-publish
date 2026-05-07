@@ -71,7 +71,7 @@ class Audit_Log_Table {
 			event VARCHAR(64) NOT NULL,
 			created_at_gmt DATETIME NOT NULL,
 			data LONGTEXT NOT NULL,
-			PRIMARY KEY (id),
+			PRIMARY KEY  (id),
 			KEY channel_created_gmt (channel, created_at_gmt),
 			KEY level (level),
 			KEY event (event)
