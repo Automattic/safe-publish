@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration\External_Posts_API;
 
+use WP_Error;
+
 /**
  * Tests error scenarios and edge cases in the content processor layer.
  *
@@ -204,7 +206,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		// Mock network failure that returns WP_Error.
 		$filter_callback = static function ( $preempt, $args, $url ) {
 			if ( str_contains( $url, 'network-timeout.jpg' ) ) {
-				return new \WP_Error(
+				return new WP_Error(
 					'http_request_failed',
 					'Operation timed out after 30000 milliseconds'
 				);

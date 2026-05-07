@@ -15,6 +15,7 @@ use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Logger;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Validators\URL_Validator;
+use WP_Error;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -92,12 +93,12 @@ class External_Posts_API {
 	 * @param int    $number_of_posts  Optional. Number of posts to fetch. Default 10.
 	 * @param array  $auth_credentials Optional. Authentication credentials array. Default empty array.
 	 * @param string $post_type        Optional. Post type to fetch. Default 'posts'.
-	 * @return array|\WP_Error Posts data or error.
+	 * @return array|WP_Error Posts data or error.
 	 */
-	public function fetch_posts( string $site_url, int $number_of_posts = 10, array $auth_credentials = array(), string $post_type = 'posts' ): array|\WP_Error {
+	public function fetch_posts( string $site_url, int $number_of_posts = 10, array $auth_credentials = array(), string $post_type = 'posts' ): array|WP_Error {
 		// Validate URL first.
 		if ( ! URL_Validator::is_valid_external_url( $site_url ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'invalid_url',
 				__( 'Invalid URL provided.', 'safe-publish' )
 			);
@@ -169,9 +170,9 @@ class External_Posts_API {
 	 *
 	 * @param string $url              Request URL.
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
-	 * @return array|\WP_Error Response or error.
+	 * @return array|WP_Error Response or error.
 	 */
-	private function make_request( string $url, array $auth_credentials = array() ): array|\WP_Error {
+	private function make_request( string $url, array $auth_credentials = array() ): array|WP_Error {
 		return $this->http_client->make_request( $url, $auth_credentials );
 	}
 
@@ -180,14 +181,14 @@ class External_Posts_API {
 	 *
 	 * @param array  $response  HTTP response.
 	 * @param string $post_type Optional. Post type being fetched. Default 'posts'.
-	 * @return array|\WP_Error Processed posts or error.
+	 * @return array|WP_Error Processed posts or error.
 	 */
-	private function process_response( array $response, string $post_type = 'posts' ): array|\WP_Error {
+	private function process_response( array $response, string $post_type = 'posts' ): array|WP_Error {
 		$body  = wp_remote_retrieve_body( $response );
 		$posts = json_decode( $body, true );
 
 		if ( ! is_array( $posts ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'invalid_response',
 				__( 'Invalid response from external API.', 'safe-publish' ),
 				array( 'response_body' => $body )

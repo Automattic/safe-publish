@@ -11,6 +11,7 @@ namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
 use Safe_Publish\API\REST_Base;
+use WP_Error;
 
 /**
  * REST Base Test.
@@ -44,9 +45,9 @@ class RESTBaseTest extends TestCase {
 			 *
 			 * @param string $url URL to make request to.
 			 * @param array  $auth_credentials Authentication credentials.
-			 * @return array|\WP_Error Response array or WP_Error on failure.
+			 * @return array|WP_Error Response array or WP_Error on failure.
 			 */
-			public function test_make_request( string $url, array $auth_credentials = array() ): array|\WP_Error {
+			public function test_make_request( string $url, array $auth_credentials = array() ): array|WP_Error {
 				return $this->make_request( $url, $auth_credentials );
 			}
 		};

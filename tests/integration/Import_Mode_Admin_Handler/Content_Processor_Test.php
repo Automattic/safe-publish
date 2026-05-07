@@ -63,10 +63,10 @@ class Content_Processor_Test extends Integration_Test_Case {
 	/**
 	 * Mocks HTTP requests for media downloads, serving real fixture files.
 	 *
-	 * @param false|array|\WP_Error $preempt A preemptive return value.
-	 * @param array                 $args    HTTP request arguments.
-	 * @param string                $url     The request URL.
-	 * @return false|array|\WP_Error
+	 * @param false|array|WP_Error $preempt A preemptive return value.
+	 * @param array                $args    HTTP request arguments.
+	 * @param string               $url     The request URL.
+	 * @return false|array|WP_Error
 	 */
 	public function mock_http_request(
 		false|array|WP_Error $preempt,

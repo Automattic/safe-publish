@@ -15,6 +15,7 @@ use Safe_Publish\Tests\Integration\Mock_Post_API_Trait;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
+use WP_Ajax_UnitTestCase;
 use WP_Error;
 use WPAjaxDieContinueException;
 use WPAjaxDieStopException;
@@ -24,7 +25,7 @@ use WPAjaxDieStopException;
  *
  * Tests the AJAX endpoints exposed by the admin controller.
  */
-class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
+class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 	use Mock_Post_API_Trait;
 
@@ -82,10 +83,10 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 	 *
 	 * Returns a minimal valid post response for fetch_fresh_post_content().
 	 *
-	 * @param false|array|\WP_Error $preempt Preemptive return value.
-	 * @param array                 $_args   HTTP request arguments (unused).
-	 * @param string                $url     Request URL.
-	 * @return false|array|\WP_Error Mocked response, or the prior return value.
+	 * @param false|array|WP_Error $preempt Preemptive return value.
+	 * @param array                $_args   HTTP request arguments (unused).
+	 * @param string               $url     Request URL.
+	 * @return false|array|WP_Error Mocked response, or the prior return value.
 	 */
 	public function mock_post_api(
 		false|array|WP_Error $preempt,
