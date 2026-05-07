@@ -194,13 +194,12 @@ This is a known limitation of WordPress' embed cache when imported posts referen
 
 ### Validation Errors
 
-| Error code            | Cause                                                  | Solution                                                   |
-| --------------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
-| `invalid_url`         | URL not valid or accessible                            | Check URL format and ensure the site is reachable          |
-| `invalid_credentials` | Missing or invalid authentication credentials          | See the [Authentication guide](concepts/authentication.md) |
-| `request_failed`      | HTTP request to the external site failed               | Check network connectivity and site availability           |
-| `meta_update_failed`  | One or more post meta keys failed to save              | Check destination site database permissions                |
-| `unknown_taxonomy`    | A taxonomy from the source post does not exist locally | Register the taxonomy on the destination site              |
+| Error code           | Cause                                                  | Solution                                          |
+| -------------------- | ------------------------------------------------------ | ------------------------------------------------- |
+| `invalid_url`        | URL not valid or accessible                            | Check URL format and ensure the site is reachable |
+| `request_failed`     | HTTP request to the external site failed               | Check network connectivity and site availability  |
+| `meta_update_failed` | One or more post meta keys failed to save              | Check destination site database permissions       |
+| `unknown_taxonomy`   | A taxonomy from the source post does not exist locally | Register the taxonomy on the destination site     |
 
 ### Performance Issues
 
