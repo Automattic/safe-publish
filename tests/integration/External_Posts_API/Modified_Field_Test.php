@@ -21,9 +21,9 @@ use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 
 /**
- * Verifies that External_Posts_API emits modified as a Z-marked GMT timestamp
- * and that Post_Import_Service::annotate_posts_with_import_status() compares
- * both sides as GMT — so has_update is correct when the source and
+ * Verifies that External_Posts_API emits modified_gmt as a Z-marked GMT
+ * timestamp and that Post_Import_Service::annotate_posts_with_import_status()
+ * compares both sides as GMT — so has_update is correct when the source and
  * destination sites live in different timezones.
  */
 class Modified_Field_Test extends External_Posts_API_Test_Base {
@@ -67,11 +67,11 @@ class Modified_Field_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that the prepared listing payload emits modified as a
+	 * Verifies that the prepared listing payload emits modified_gmt as a
 	 * Z-marked GMT timestamp derived from the source's modified_gmt field,
 	 * not from the source's site-local modified field.
 	 */
-	public function test_prepared_modified_is_zmarked_gmt(): void {
+	public function test_prepared_modified_gmt_is_zmarked(): void {
 		// ARRANGE: Mock the listing endpoint with a post whose two modified
 		// fields differ — modified is in NY local time, modified_gmt is UTC.
 		$body = (string) wp_json_encode(
@@ -113,14 +113,14 @@ class Modified_Field_Test extends External_Posts_API_Test_Base {
 				1
 			);
 
-			// ASSERT: modified is the Z-marked GMT timestamp, not the
-			// source-local one.
+			// ASSERT: modified_gmt is the Z-marked GMT timestamp, derived
+			// from the source's modified_gmt field.
 			$this->assertIsArray( $result );
 			$this->assertCount( 1, $result );
 			$this->assertSame(
 				'2024-07-15T15:00:00Z',
-				$result[0]['modified'],
-				'Prepared modified must be modified_gmt with a Z marker.'
+				$result[0]['modified_gmt'],
+				'Prepared modified_gmt must carry a Z marker.'
 			);
 		} finally {
 			remove_filter( 'pre_http_request', $callback, 5 );
@@ -170,14 +170,14 @@ class Modified_Field_Test extends External_Posts_API_Test_Base {
 			clean_post_cache( $local_post_id );
 
 			// ARRANGE: Source post payload as emitted by
-			// prepare_post_for_listing — modified is Z-marked GMT.
+			// prepare_post_for_listing — modified_gmt is Z-marked GMT.
 			// 15:00 UTC > 14:00 UTC, so the source is genuinely newer.
 			$posts = array(
 				array(
-					'id'       => 999,
-					'link'     => 'https://source.example.com/local-post',
-					'title'    => 'Local Post',
-					'modified' => '2024-07-15T15:00:00Z',
+					'id'           => 999,
+					'link'         => 'https://source.example.com/local-post',
+					'title'        => 'Local Post',
+					'modified_gmt' => '2024-07-15T15:00:00Z',
 				),
 			);
 
@@ -240,10 +240,10 @@ class Modified_Field_Test extends External_Posts_API_Test_Base {
 			// 15:00 UTC < 16:00 UTC, so the local copy is genuinely newer.
 			$posts = array(
 				array(
-					'id'       => 1001,
-					'link'     => 'https://source.example.com/local-post',
-					'title'    => 'Local Post',
-					'modified' => '2024-07-15T15:00:00Z',
+					'id'           => 1001,
+					'link'         => 'https://source.example.com/local-post',
+					'title'        => 'Local Post',
+					'modified_gmt' => '2024-07-15T15:00:00Z',
 				),
 			);
 

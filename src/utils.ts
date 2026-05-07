@@ -114,7 +114,7 @@ export function isValidPost( post: unknown ): post is Post {
 		typeof postRecord.id === 'number' &&
 		typeof postRecord.link === 'string' &&
 		typeof postRecord.title === 'string' &&
-		typeof postRecord.modified === 'string'
+		typeof postRecord.modified_gmt === 'string'
 	);
 }
 
@@ -210,8 +210,8 @@ export function searchPosts( posts: Post[], searchTerm: string ): Post[] {
 		( post.link ?? '' ).toLowerCase().includes( searchLower ) ||
 		getSyncStatusText( post ).includes( searchLower ) ||
 		getPublishStatusText( post ).includes( searchLower ) ||
-		post.modified.toLowerCase().includes( searchLower ) ||
-		formatDate( post.modified ).toLowerCase().includes( searchLower )
+		post.modified_gmt.toLowerCase().includes( searchLower ) ||
+		formatDate( post.modified_gmt ).toLowerCase().includes( searchLower )
 	);
 }
 
@@ -255,7 +255,7 @@ export function sortPosts(
 		/* eslint-enable security/detect-object-injection */
 
 		// Special handling for dates.
-		if ( field === 'modified' ) {
+		if ( field === 'modified_gmt' ) {
 			const dateA = new Date( aVal as string );
 			const dateB = new Date( bVal as string );
 			return direction === 'asc'

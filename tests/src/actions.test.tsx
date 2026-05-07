@@ -36,7 +36,7 @@ describe( 'Actions configuration', () => {
 	it( 'bulk-import label returns "Import" for a single non-imported item', () => {
 		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
 		const label = typeof bulkAction?.label === 'function'
-			? bulkAction.label( [ { id: 1, link: '', title: 'Test', modified: '', is_imported: false } ] )
+			? bulkAction.label( [ { id: 1, link: '', title: 'Test', modified_gmt: '', is_imported: false } ] )
 			: bulkAction?.label;
 		expect( label ).toBe( 'Import' );
 	} );
@@ -44,7 +44,7 @@ describe( 'Actions configuration', () => {
 	it( 'bulk-import label returns "Update" for a single imported item with an update', () => {
 		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
 		const label = typeof bulkAction?.label === 'function'
-			? bulkAction.label( [ { id: 1, link: '', title: 'Test', modified: '', is_imported: true, has_update: true } ] )
+			? bulkAction.label( [ { id: 1, link: '', title: 'Test', modified_gmt: '', is_imported: true, has_update: true } ] )
 			: bulkAction?.label;
 		expect( label ).toBe( 'Update' );
 	} );
@@ -53,8 +53,8 @@ describe( 'Actions configuration', () => {
 		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
 		const label = typeof bulkAction?.label === 'function'
 			? bulkAction.label( [
-				{ id: 1, link: '', title: 'A', modified: '', is_imported: false },
-				{ id: 2, link: '', title: 'B', modified: '', is_imported: true, has_update: true },
+				{ id: 1, link: '', title: 'A', modified_gmt: '', is_imported: false },
+				{ id: 2, link: '', title: 'B', modified_gmt: '', is_imported: true, has_update: true },
 			] )
 			: bulkAction?.label;
 		expect( label ).toBe( 'Import / Update' );
@@ -62,19 +62,19 @@ describe( 'Actions configuration', () => {
 
 	it( 'bulk-import action isEligible covers posts that can be imported or updated', () => {
 		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
-		expect( bulkAction?.isEligible?.( { id: 1, link: '', title: 'Test', modified: '', is_imported: false } ) ).toBe( true );
-		expect( bulkAction?.isEligible?.( { id: 1, link: '', title: 'Test', modified: '', is_imported: true, has_update: true } ) ).toBe( true );
-		expect( bulkAction?.isEligible?.( { id: 1, link: '', title: 'Test', modified: '', is_imported: true, has_update: false } ) ).toBe( false );
+		expect( bulkAction?.isEligible?.( { id: 1, link: '', title: 'Test', modified_gmt: '', is_imported: false } ) ).toBe( true );
+		expect( bulkAction?.isEligible?.( { id: 1, link: '', title: 'Test', modified_gmt: '', is_imported: true, has_update: true } ) ).toBe( true );
+		expect( bulkAction?.isEligible?.( { id: 1, link: '', title: 'Test', modified_gmt: '', is_imported: true, has_update: false } ) ).toBe( false );
 	} );
 
 	it( 'bulk-import isEligible returns false when not authorized', () => {
 		const unauthorized = createActions( undefined, false );
 		const bulkAction = unauthorized.find( ( a ) => a.id === 'bulk-import' );
 		const importable = {
-			id: 1, link: '', title: 'Test', modified: '', is_imported: false,
+			id: 1, link: '', title: 'Test', modified_gmt: '', is_imported: false,
 		};
 		const updatable = {
-			id: 1, link: '', title: 'Test', modified: '',
+			id: 1, link: '', title: 'Test', modified_gmt: '',
 			is_imported: true, has_update: true,
 		};
 		expect( bulkAction?.isEligible?.( importable ) ).toBe( false );
