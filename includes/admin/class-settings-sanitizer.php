@@ -25,10 +25,15 @@ class Settings_Sanitizer {
 	/**
 	 * Sanitizes the external site URL setting.
 	 *
-	 * @param string $url URL to sanitize.
+	 * @param mixed $url URL to sanitize.
 	 * @return string Sanitized URL or empty string on failure.
 	 */
-	public function sanitize_url( string $url ): string {
+	public function sanitize_url( mixed $url ): string {
+		// preserve the existing value when the URL is omitted from POST.
+		if ( null === $url ) {
+			return get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		}
+
 		$url = esc_url_raw( $url );
 
 		if ( empty( $url ) ) {
