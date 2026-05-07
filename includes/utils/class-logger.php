@@ -79,6 +79,17 @@ abstract class Logger {
 	/**
 	 * Builds the standard log data payload for an event.
 	 *
+	 * Captures the acting user (id and display name snapshot) and the
+	 * invocation context so every audit entry records who triggered it and
+	 * how. Unauthenticated contexts (e.g. webhook callbacks) record
+	 * actor_user_id of 0 and an empty display name; actor_source then
+	 * disambiguates between cli, cron, hmac, and other origins.
+	 *
+	 * Reserved keys (event, timestamp, site_url, user_agent, request_uri,
+	 * actor_user_id, actor_display_name, actor_source) are auto-captured
+	 * and cannot be overridden by caller-supplied $data — this guarantees
+	 * forensic fields stay truthful regardless of channel-specific keys.
+	 *
 	 * @param string $event Event type.
 	 * @param array  $data  Caller-supplied event data to merge.
 	 * @return array Complete log data array.
@@ -91,19 +102,94 @@ abstract class Logger {
 		// Data only used for logging; escaped with esc_html() when output to HTML.
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		$site_url = function_exists( 'get_site_url' ) ? get_site_url() : ( $_SERVER['HTTP_HOST'] ?? 'unknown' );
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__HTTP_USER_AGENT__
+		$user_agent = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$request_uri = $_SERVER['REQUEST_URI'] ?? 'unknown';
 
-		return array_merge(
-			array(
-				'event'       => $event,
-				'timestamp'   => $timestamp,
-				'site_url'    => $site_url,
-				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__HTTP_USER_AGENT__
-				'user_agent'  => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
-				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-				'request_uri' => $_SERVER['REQUEST_URI'] ?? 'unknown',
-			),
-			$data
+		$actor_user_id      = function_exists( 'get_current_user_id' )
+			? get_current_user_id()
+			: 0;
+		$actor_display_name = '';
+		if ( $actor_user_id > 0 && function_exists( 'get_userdata' ) ) {
+			$user = get_userdata( $actor_user_id );
+			if ( $user ) {
+				$actor_display_name = $user->display_name;
+			}
+		}
+
+		$actor_source = $this->detect_actor_source();
+
+		$base = array(
+			'event'              => $event,
+			'timestamp'          => $timestamp,
+			'site_url'           => $site_url,
+			'user_agent'         => $user_agent,
+			'request_uri'        => $request_uri,
+			'actor_user_id'      => $actor_user_id,
+			'actor_display_name' => $actor_display_name,
+			'actor_source'       => $actor_source,
 		);
+
+		return $base + $data;
+	}
+
+	/**
+	 * Detects the invocation context that triggered the event.
+	 *
+	 * Resolves to a single label so forensic queries can distinguish, for
+	 * example, an HMAC service request from a wp-cli command from an
+	 * admin browser action — all of which can record actor_user_id of 0
+	 * for different reasons.
+	 *
+	 * Precedence (most specific first): cli, cron, hmac, xmlrpc, ajax,
+	 * rest, admin, front, unknown.
+	 *
+	 * HMAC is detected by the presence of the signature header rather
+	 * than validation state, so failed-auth events are still tagged as
+	 * hmac (the request was attempting HMAC).
+	 *
+	 * @return string Actor source identifier.
+	 */
+	private function detect_actor_source(): string {
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$signature = $_SERVER['HTTP_X_SAFE_PUBLISH_SIGNATURE'] ?? '';
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$method       = $_SERVER['REQUEST_METHOD'] ?? '';
+		$has_hmac_sig = '' !== $signature;
+		$has_http_req = '' !== $method;
+
+		if ( self::constant_is_truthy( 'WP_CLI' ) ) {
+			$source = 'cli';
+		} elseif ( self::constant_is_truthy( 'DOING_CRON' ) ) {
+			$source = 'cron';
+		} elseif ( $has_hmac_sig ) {
+			$source = 'hmac';
+		} elseif ( self::constant_is_truthy( 'XMLRPC_REQUEST' ) ) {
+			$source = 'xmlrpc';
+		} elseif ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) {
+			$source = 'ajax';
+		} elseif ( self::constant_is_truthy( 'REST_REQUEST' ) ) {
+			$source = 'rest';
+		} elseif ( function_exists( 'is_admin' ) && is_admin() ) {
+			$source = 'admin';
+		} elseif ( $has_http_req ) {
+			$source = 'front';
+		} else {
+			$source = 'unknown';
+		}
+
+		return $source;
+	}
+
+	/**
+	 * Returns true when the named constant is defined and resolves truthy.
+	 *
+	 * @param string $name Constant name.
+	 * @return bool
+	 */
+	private static function constant_is_truthy( string $name ): bool {
+		return defined( $name ) && (bool) constant( $name );
 	}
 
 	/**

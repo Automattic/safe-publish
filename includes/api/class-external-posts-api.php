@@ -370,9 +370,9 @@ class External_Posts_API {
 			$this->logger->log_error(
 				Log_Events::CONTENT_FETCH_FAILED,
 				array(
-					'post_id'  => $external_post_id,
-					'site_url' => $site_url,
-					'error'    => $response->get_error_message(),
+					'post_id'         => $external_post_id,
+					'source_site_url' => $site_url,
+					'error'           => $response->get_error_message(),
 				)
 			);
 
@@ -386,8 +386,8 @@ class External_Posts_API {
 			$this->logger->log_error(
 				Log_Events::CONTENT_FETCH_INVALID_RESPONSE,
 				array(
-					'post_id'  => $external_post_id,
-					'site_url' => $site_url,
+					'post_id'         => $external_post_id,
+					'source_site_url' => $site_url,
 				)
 			);
 
@@ -403,8 +403,8 @@ class External_Posts_API {
 			$this->logger->log_error(
 				Log_Events::CONTENT_FETCH_RAW_UNAVAILABLE,
 				array(
-					'post_id'  => $external_post_id,
-					'site_url' => $site_url,
+					'post_id'         => $external_post_id,
+					'source_site_url' => $site_url,
 				)
 			);
 

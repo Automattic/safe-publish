@@ -248,17 +248,7 @@ class Auth_Manager {
 	public function clear_auth_logs_callback( WP_REST_Request $_request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 		Audit_Log_Table::clear( 'auth' );
 
-		$user_id = get_current_user_id();
-
-		$this->logger->log_event(
-			'LOGS_CLEARED',
-			array(
-				'cleared_by' => $user_id ? $user_id : 'unknown',
-				// Data only used for logging; not output to HTML.
-				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__HTTP_USER_AGENT__
-				'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
-			)
-		);
+		$this->logger->log_event( 'LOGS_CLEARED' );
 
 		return new \WP_REST_Response(
 			array(
@@ -285,7 +275,6 @@ class Auth_Manager {
 			'TEST_ENDPOINT_ACCESSED',
 			array(
 				'headers_present' => $has_safe_publish_headers,
-				'user_agent'      => $request->get_header( 'user_agent' ),
 				'test_type'       => 'manual_endpoint_test',
 			)
 		);
