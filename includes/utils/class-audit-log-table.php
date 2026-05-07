@@ -14,7 +14,7 @@ namespace Safe_Publish\Utils;
  *
  * Handles table creation, row insertion, querying, and deletion.
  */
-class Audit_Log_Table {
+final class Audit_Log_Table {
 
 	/**
 	 * Table schema version.
