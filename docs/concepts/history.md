@@ -143,10 +143,10 @@ Rollback reverts imported content to its state before the import. Only successfu
 
 Import history is stored in two custom database tables:
 
-| Table                          | Purpose                                             |
-| ------------------------------ | --------------------------------------------------- |
-| `wp_safe_publish_imports`      | One row per import session                          |
-| `wp_safe_publish_import_items` | One row per imported item (linked via `session_id`) |
+| Table                                      | Purpose                                             |
+| ------------------------------------------ | --------------------------------------------------- |
+| `{$wpdb->prefix}safe_publish_imports`      | One row per import session                          |
+| `{$wpdb->prefix}safe_publish_import_items` | One row per imported item (linked via `session_id`) |
 
 ### Export History
 
