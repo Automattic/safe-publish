@@ -104,14 +104,9 @@ add_action( 'safe_publish_event_logged', function( string $channel, string $even
 
     wp_remote_post( $webhook_url, [
         'body'    => wp_json_encode( [
-            'channel'   => $channel,
-            'event'     => $event,
-            'data'      => $data,
-            'timestamp' => current_time( 'mysql' ),
-        ] ),
-        'headers' => [ 'Content-Type' => 'application/json' ],
-    ] );
-}, 10, 3 );
+            'channel' => $channel,
+            'event'   => $event,
+            'data'    => $data,
         ] ),
         'headers' => [ 'Content-Type' => 'application/json' ],
     ] );
