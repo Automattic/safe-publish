@@ -22,6 +22,7 @@ use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
+use WP_Error;
 
 /**
  * Import Sanitization Integration Test Class.
@@ -98,7 +99,11 @@ class Import_Sanitization_Integration_Test extends Integration_Test_Case {
 	 * @param string                $url     Request URL.
 	 * @return false|array|\WP_Error Mocked response or prior value.
 	 */
-	public function mock_post_api( $preempt, array $_args, string $url ) {
+	public function mock_post_api(
+		false|array|WP_Error $preempt,
+		array $_args,
+		string $url
+	): false|array|WP_Error {
 		if ( false !== $preempt || ! preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
 			return $preempt;
 		}

@@ -20,6 +20,7 @@ use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Integration_Test_Case;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
+use WP_Error;
 
 /**
  * Basic Auth Outbound Test.
@@ -258,7 +259,11 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 	 * @param string                $url     Request URL.
 	 * @return array Mock HTTP response.
 	 */
-	public function intercept_http_request( $preempt, array $args, string $url ): array {
+	public function intercept_http_request(
+		false|array|WP_Error $preempt,
+		array $args,
+		string $url
+	): array {
 		unset( $preempt );
 
 		$this->captured_request_args = $args;

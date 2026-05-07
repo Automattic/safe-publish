@@ -19,6 +19,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\External_Posts_API\External_Posts_API_Test_Base;
 use Safe_Publish\Utils\Options;
+use WP_Error;
 
 /**
  * Integration tests for Post_Import_Service.
@@ -92,7 +93,11 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * @param string                $url     Request URL.
 	 * @return false|array|\WP_Error Preemptive response or false to let later filters run.
 	 */
-	public function mock_media_api_request( $preempt, array $args, string $url ) {
+	public function mock_media_api_request(
+		false|array|WP_Error $preempt,
+		array $args,
+		string $url
+	): false|array|WP_Error {
 		unset( $args );
 
 		if ( ! str_contains( $url, 'wp-json/wp/v2/media/' ) ) {

@@ -5,6 +5,8 @@
  * @package Safe_Publish
  */
 
+declare(strict_types=1);
+
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\External_Posts_API;
