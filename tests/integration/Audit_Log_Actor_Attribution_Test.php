@@ -204,6 +204,7 @@ class Audit_Log_Actor_Attribution_Test extends Integration_Test_Case {
 				'site_url'           => 'https://evil.example/',
 				'user_agent'         => 'Mallory',
 				'request_uri'        => '/spoofed',
+				'timestamp'          => '1970-01-01 00:00:00',
 				'route'              => '/safe-test/',
 			)
 		);
@@ -227,6 +228,10 @@ class Audit_Log_Actor_Attribution_Test extends Integration_Test_Case {
 		);
 		$this->assertNotSame( 'Mallory', $data['user_agent'] );
 		$this->assertNotSame( '/spoofed', $data['request_uri'] );
+		$this->assertNotSame(
+			'1970-01-01 00:00:00',
+			$events[0]['created_at_gmt']
+		);
 
 		// ASSERT: Channel-specific keys still pass through.
 		$this->assertSame( '/safe-test/', $data['route'] );

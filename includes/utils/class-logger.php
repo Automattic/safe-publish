@@ -153,9 +153,11 @@ abstract class Logger {
 	 */
 	private function detect_actor_source(): string {
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-		$has_hmac_sig = ! empty( $_SERVER['HTTP_X_SAFE_PUBLISH_SIGNATURE'] );
+		$signature = $_SERVER['HTTP_X_SAFE_PUBLISH_SIGNATURE'] ?? '';
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-		$has_http_req = ! empty( $_SERVER['REQUEST_METHOD'] );
+		$method       = $_SERVER['REQUEST_METHOD'] ?? '';
+		$has_hmac_sig = '' !== $signature;
+		$has_http_req = '' !== $method;
 
 		if ( self::constant_is_truthy( 'WP_CLI' ) ) {
 			$source = 'cli';
