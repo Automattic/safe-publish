@@ -66,7 +66,7 @@ final class History_Repository {
 				'source_url'        => $source_url,
 				'session_type'      => $session_type,
 				'status'            => 'in_progress',
-				'end_time_gmt'      => null,
+				'ended_at_gmt'      => null,
 				'created_at_gmt'    => current_time( 'mysql', true ),
 			),
 			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s' )
@@ -85,18 +85,18 @@ final class History_Repository {
 	/**
 	 * Logs an import action.
 	 *
-	 * @param int         $session_id  Session ID.
-	 * @param int|null    $external_id External post ID, or null if not provided.
-	 * @param string      $title       Post title.
-	 * @param string      $status      Import status (success, error, updated).
-	 * @param int|null    $post_id     WordPress post ID; null for error status.
-	 * @param string|null $error       Error message; null for success/updated.
-	 * @param array       $changes     Changes made during import.
+	 * @param int         $session_id       Session ID.
+	 * @param int|null    $external_post_id External post ID, or null if not provided.
+	 * @param string      $title            Post title.
+	 * @param string      $status           Import status (success, error, updated).
+	 * @param int|null    $post_id          WordPress post ID; null for error status.
+	 * @param string|null $error            Error message; null for success/updated.
+	 * @param array       $changes          Changes made during import.
 	 * @return int|WP_Error Item ID or error.
 	 */
 	public function log_import_action(
 		int $session_id,
-		?int $external_id,
+		?int $external_post_id,
 		string $title,
 		string $status,
 		?int $post_id = null,
@@ -125,7 +125,7 @@ final class History_Repository {
 			array(
 				'session_id'           => $session_id,
 				'title'                => $title,
-				'external_id'          => $external_id,
+				'external_post_id'     => $external_post_id,
 				'status'               => $status,
 				'post_id'              => $post_id,
 				'error_message'        => $error,
@@ -159,7 +159,7 @@ final class History_Repository {
 			Imports_Table::table_name(),
 			array(
 				'status'       => 'completed',
-				'end_time_gmt' => current_time( 'mysql', true ),
+				'ended_at_gmt' => current_time( 'mysql', true ),
 			),
 			array( 'id' => $session_id ),
 			array( '%s', '%s' ),
@@ -259,7 +259,7 @@ final class History_Repository {
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				'SELECT id, session_id, title, external_id, status, post_id,'
+				'SELECT id, session_id, title, external_post_id, status, post_id,'
 					. ' error_message, has_previous_content, rolled_back,'
 					. " import_date_gmt FROM `{$table}` WHERE session_id = %d"
 					. ' ORDER BY id ASC',
