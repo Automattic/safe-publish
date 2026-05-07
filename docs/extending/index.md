@@ -36,7 +36,7 @@ See the [Hooks and Filters Reference](hooks.md) for full parameter documentation
 
 ## Integration Examples
 
-- **Event notifications** — use [`safe_publish_event_logged`](hooks.md#safe_publish_event_logged) to react to any import, export, or auth event (e.g. send a Slack message on failure).
+- **Event notifications** — use [`safe_publish_event_logged`](hooks.md#safe_publish_event_logged) to react to any plugin event (e.g. send a Slack message on failure).
 
 See the [Hooks and Filters Reference](hooks.md) for full parameter documentation and examples.
 
