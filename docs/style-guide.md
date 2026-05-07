@@ -6,10 +6,10 @@ This is the authoritative style guide for all Safe Publish documentation — int
 
 Every doc targets one of two audiences. Know which one before you start writing.
 
-| Audience | Who they are | Assumed knowledge |
-|----------|-------------|-------------------|
-| **End-user** | Content editors, content managers | Moderate WordPress knowledge; no coding skills |
-| **Developer** | Engineers installing, extending, or maintaining the plugin | PHP, WordPress plugin development, REST API |
+| Audience      | Who they are                                               | Assumed knowledge                              |
+| ------------- | ---------------------------------------------------------- | ---------------------------------------------- |
+| **End-user**  | Content editors, content managers                          | Moderate WordPress knowledge; no coding skills |
+| **Developer** | Engineers installing, extending, or maintaining the plugin | PHP, WordPress plugin development, REST API    |
 
 ## Voice and Tone
 
@@ -33,7 +33,7 @@ Every doc targets one of two audiences. Know which one before you start writing.
 - Use bullets for unordered items with no implied sequence.
 - Use numbered lists for steps that must be followed in order.
 - Keep list items parallel: all start with a verb, or all are nouns, not mixed.
-- All list items end with a period.
+- End list items with a period only if they are complete sentences.
 
 ### Code
 
@@ -96,8 +96,8 @@ Every concept and every hook, filter, or endpoint must have at least one example
 
 ## What not to document
 
-- Internal implementation details that may change next sprint.
-- Code that is unreachable, deprecated, or not yet merged.
+- Internal implementation details that may change next sprint
+- Code that is unreachable, deprecated, or not yet merged
 - Features with a `// TODO` or similar marker in the source — wait until they ship.
 
 ## Related

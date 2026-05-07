@@ -6,11 +6,11 @@ This guide explains how Safe Publish moves content from one WordPress site (sour
 
 The process consists of the following stages:
 
-1. **Fetch** - Retrieve post data from source site
-2. **Validate** - Check content integrity and structure
-3. **Transform and Import Media** - Process content, download media, replace URLs
-4. **Create Post** - Generate the draft post on the destination
-5. **Track** - Log the import action on the destination
+1. **Fetch** - Retrieve post data from source site.
+2. **Validate** - Check content integrity and structure.
+3. **Transform and Import Media** - Process content, download media, replace URLs.
+4. **Create Post** - Generate the draft post on the destination.
+5. **Track** - Log the import action on the destination.
 
 For error resolution at any stage, see the [Troubleshooting guide](../troubleshooting.md).
 
@@ -20,23 +20,23 @@ For error resolution at any stage, see the [Troubleshooting guide](../troublesho
 
 ### What Happens
 
-- The source site URL is validated to ensure it is properly formatted
-- Safe Publish sends a request to the source site's REST API
-- The endpoint `/wp-json/wp/v2/{post_type}/{post_id}` is queried
-- Response is received
-- Non-HTML fields (title, slug, statuses, etc.) are sanitized using WordPress' standard helpers (`sanitize_text_field`, `esc_url_raw`, `absint`); content and excerpt are kept raw for Stage 3
+- The source site URL is validated to ensure it is properly formatted.
+- Safe Publish sends a request to the source site's REST API.
+- The endpoint `/wp-json/wp/v2/{post_type}/{post_id}` is queried.
+- Response is received.
+- Non-HTML fields (title, slug, statuses, etc.) are sanitized using WordPress' standard helpers (`sanitize_text_field`, `esc_url_raw`, `absint`); content and excerpt are kept raw for Stage 3.
 
 ### Parameters Sent
 
-- `_embed` - Embeds related data; the plugin extracts term data (categories, tags, custom taxonomies) from the response
-- `context=edit` - Retrieves complete post data, including drafts
+- `_embed` - Embeds related data; the plugin extracts term data (categories, tags, custom taxonomies) from the response.
+- `context=edit` - Retrieves complete post data, including drafts.
 
 ## Stage 2: Validate
 
 ### What Happens
 
-- **Authentication** verifies that credentials are provided and are correct
-- **Post data** ensures the response is valid JSON, includes required fields, and uses a supported post type
+- **Authentication** verifies that credentials are provided and are correct.
+- **Post data** ensures the response is valid JSON, includes required fields, and uses a supported post type.
 
 See the [Content Validation](validation.md) guide for detailed information.
 
@@ -76,18 +76,18 @@ If an `<a>` tag ends in a file extension allowed by WordPress, it is processed i
 ### For Each Media URL Found
 
 1. **Resolve**: Relative URLs (URLs without a domain) are converted into absolute URLs by prepending the source site's base URL (scheme and host).
-2. **Normalize**: Query parameters are removed from the working URL; they are reapplied from the original URL in step 7
-3. **Filter**: Third-party domain URLs are left unchanged
-4. **Deduplicate**: If the URL was already imported, the existing attachment URL is used, and download is skipped
-5. **Download**: File fetched using WordPress core's `download_url()`; downloadability is verified at this point
-6. **Import**: File type is validated and added to the media library via `media_handle_sideload()`
-7. **Replace**: Source URL replaced with the new attachment URL in content; previously stripped query parameters are reapplied
+2. **Normalize**: Query parameters are removed from the working URL; they are reapplied from the original URL in step 7.
+3. **Filter**: Third-party domain URLs are left unchanged.
+4. **Deduplicate**: If the URL was already imported, the existing attachment URL is used, and download is skipped.
+5. **Download**: File fetched using WordPress core's `download_url()`; downloadability is verified at this point.
+6. **Import**: File type is validated and added to the media library via `media_handle_sideload()`.
+7. **Replace**: Source URL replaced with the new attachment URL in content; previously stripped query parameters are reapplied.
 
 ### Featured Image
 
-- Fetched separately via the `/wp-json/wp/v2/media/{id}` endpoint using the `featured_media` ID from the post response
-- Uploaded to media library
-- Set as post thumbnail via `set_post_thumbnail()`
+- Fetched separately via the `/wp-json/wp/v2/media/{id}` endpoint using the `featured_media` ID from the post response.
+- Uploaded to media library.
+- Set as post thumbnail via `set_post_thumbnail()`.
 
 ### URL Replacement
 
@@ -99,21 +99,21 @@ By default, no sanitization is applied to the post content or excerpt; both fiel
 
 ### Performance
 
-- Media files downloaded using WordPress core's `download_url()`
-- Media downloads are not affected by the [`safe_publish_request_timeout`](../extending/hooks.md#safe_publish_request_timeout) filter and use WordPress core's default timeout
+- Media files downloaded using WordPress core's `download_url()`.
+- Media downloads are not affected by the [`safe_publish_request_timeout`](../extending/hooks.md#safe_publish_request_timeout) filter and use WordPress core's default timeout.
 
 ## Stage 4: Create Post
 
 ### What Happens
 
-- New post created with `wp_insert_post()`
+- New post created with `wp_insert_post()`.
 - Post data set:
   - **Title**: From source post title
   - **Content**: Transformed content with updated URLs
   - **Slug**: From source post slug (WordPress appends `-2`, `-3`, etc. if the slug already exists)
   - **Status**: Always `draft`
   - **Post type**: Same as source post
-  - **Post Meta**: meta available via REST is transferred, see below for more details
+  - **Post Meta**: meta available via REST is transferred, see below for more details.
   - **Terms**: tags and categories are transferred. If they don't exist, they are created. Custom taxonomies that appear in a REST request are transferred if they exist. See below for more details.
 - Additional Post meta stored:
   - `safe_publish_external_post_id` — post ID on the source site
@@ -153,7 +153,7 @@ Custom taxonomies must be registered with `'show_in_rest' => true` on the source
 
 ### What Happens
 
-- Import event logged to database
+- Import event logged to database.
 - Record includes:
   - Timestamp
   - Source URL and post ID
@@ -161,7 +161,7 @@ Custom taxonomies must be registered with `'show_in_rest' => true` on the source
   - User who performed import
   - Import status (success, updated, or error)
   - Error message (if failed)
-- Import logged to History (session and per-item log entries)
+- Import logged to History (session and per-item log entries).
 
 See [History](history.md) for more details.
 
@@ -169,24 +169,24 @@ See [History](history.md) for more details.
 
 Bulk imports process multiple posts sequentially:
 
-1. Each post goes through all stages individually
-2. Failures in one post don't stop others
-3. Results aggregated and reported
-4. Import history updated for each post
+1. Each post goes through all stages individually.
+2. Failures in one post don't stop others.
+3. Results aggregated and reported.
+4. Import history updated for each post.
 
 ### Performance
 
-- Processes one post at a time (no parallel processing)
-- Bulk imports are capped at 50 posts per request
+- Processes one post at a time (no parallel processing).
+- Bulk imports are capped at 50 posts per request.
 
 ## Error Handling
 
 ### Failure Behavior
 
-- **Inline media download failures**: Import is aborted; any attachments already created during the run are deleted
-- **Featured image failures**: Import is aborted
-- **Meta/term failures**: Import is aborted; for new posts, the post and its attachments are deleted. For updates, the post is rolled back to its pre-update state
-- **Network timeouts on API requests**: No automatic retry; on WordPress VIP, consecutive failures will temporarily block further requests for up to 20 seconds to protect performance
+- **Inline media download failures**: Import is aborted; any attachments already created during the run are deleted.
+- **Featured image failures**: Import is aborted.
+- **Meta/term failures**: Import is aborted; for new posts, the post and its attachments are deleted. For updates, the post is rolled back to its pre-update state.
+- **Network timeouts on API requests**: No automatic retry; on WordPress VIP, consecutive failures will temporarily block further requests for up to 20 seconds to protect performance.
 
 ### Error Reporting
 
@@ -201,23 +201,23 @@ Errors are reported in multiple places:
 
 ### Before Importing
 
-1. **Test connection** to verify authentication
-2. **Preview content** using Post Diff
-3. **Check image accessibility** in preview
-4. **Verify post type** is correct
+1. **Test connection** to verify authentication.
+2. **Preview content** using Post Diff.
+3. **Check image accessibility** in preview.
+4. **Verify post type** is correct.
 
 ### During Import
 
-1. **Monitor progress** for errors
-2. **Don't close the browser** during bulk imports
-3. **Check History** periodically
+1. **Monitor progress** for errors.
+2. **Don't close the browser** during bulk imports.
+3. **Check History** periodically.
 
 ### After Import
 
-1. **Review draft posts** before publishing
-2. **Verify images** imported correctly
-3. **Check formatting** matches source
-4. **Test internal links** if present
+1. **Review draft posts** before publishing.
+2. **Verify images** imported correctly.
+3. **Check formatting** matches source.
+4. **Test internal links** if present.
 
 ## Known Limitations
 

@@ -28,8 +28,8 @@ register_post_type( 'book', [
 
 After registering with REST API support:
 
-1. Go to **Safe Publish** in WordPress admin
-2. Your custom post type should appear in the **Post Type** dropdown automatically
+1. Go to **Safe Publish** in WordPress admin.
+2. Your custom post type should appear in the **Post Type** dropdown automatically.
 
 ## REST API Configuration
 

@@ -162,7 +162,7 @@ Standard error responses:
 'X-WP-Nonce': wpApiSettings.nonce
 ```
 
-4. **Rate limit external API calls**
+4. **Rate limit external API calls**.
 
 ## Next Steps
 
