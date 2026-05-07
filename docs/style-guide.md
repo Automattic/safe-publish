@@ -41,7 +41,7 @@ Every doc targets one of two audiences. Know which one before you start writing.
 
   ````
   ```php
-  add_filter( 'safe_publish_request_timeout', fn( int $t ): int => 30 );
+  add_filter( 'safe_publish_request_timeout', fn( int $timeout ): int => 30 );
   ```
   ````
 
