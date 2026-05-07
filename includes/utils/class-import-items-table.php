@@ -5,6 +5,8 @@
  * @package Safe_Publish
  */
 
+declare(strict_types=1);
+
 namespace Safe_Publish\Utils;
 
 /**
@@ -68,14 +70,14 @@ final class Import_Items_Table {
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			session_id BIGINT UNSIGNED NOT NULL,
 			title TEXT NOT NULL,
-			external_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
-			status VARCHAR(16) NOT NULL,
+			external_post_id BIGINT UNSIGNED NULL DEFAULT NULL,
+			status VARCHAR(20) NOT NULL,
 			post_id BIGINT UNSIGNED NULL DEFAULT NULL,
 			error_message TEXT NULL DEFAULT NULL,
 			content_changes LONGTEXT NULL DEFAULT NULL,
 			has_previous_content TINYINT(1) NOT NULL DEFAULT 0,
 			rolled_back TINYINT(1) NOT NULL DEFAULT 0,
-			import_date DATETIME NOT NULL,
+			import_date_gmt DATETIME NOT NULL,
 			PRIMARY KEY  (id),
 			KEY session_id_status (session_id, status),
 			KEY post_id (post_id)

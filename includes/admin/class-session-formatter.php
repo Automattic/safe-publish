@@ -5,6 +5,8 @@
  * @package Safe_Publish
  */
 
+declare(strict_types=1);
+
 namespace Safe_Publish\Admin;
 
 // Prevent direct access.
@@ -42,14 +44,15 @@ final class Session_Formatter {
 	 * @return array Formatted session data.
 	 */
 	public function format_session( array $session ): array {
-		$total      = (int) ( $session['total_items'] ?? 0 );
-		$successful = (int) ( $session['successful'] ?? 0 );
-		$failed     = (int) ( $session['failed'] ?? 0 );
-		$updated    = (int) ( $session['updated'] ?? 0 );
-		$status     = (string) ( $session['status'] ?? '' );
-		$source_url = (string) ( $session['source_url'] ?? '' );
+		$total      = (int) $session['total_items'];
+		$successful = (int) $session['successful'];
+		$failed     = (int) $session['failed'];
+		$updated    = (int) $session['updated'];
+		$status     = (string) $session['status'];
+		$source_url = (string) $session['source_url'];
+		$created    = (string) $session['created_at_gmt'];
 
-		$user = (string) ( $session['user_display_name'] ?? '' );
+		$user = (string) $session['user_display_name'];
 		if ( '' === $user ) {
 			$user = __( 'Unknown user', 'safe-publish' );
 		}
@@ -58,7 +61,7 @@ final class Session_Formatter {
 
 		return array(
 			'id'           => (int) $session['id'],
-			'date'         => (string) ( $session['created_at'] ?? '' ),
+			'date'         => str_replace( ' ', 'T', $created ) . 'Z',
 			'user'         => $user,
 			'total_items'  => $total,
 			'successful'   => $successful,
@@ -99,18 +102,20 @@ final class Session_Formatter {
 	 * @return array Formatted item data.
 	 */
 	public function format_item( array $item ): array {
-		$item_status = (string) ( $item['status'] ?? '' );
-		$post_id     = (int) ( $item['post_id'] ?? 0 );
-		$external_id = (int) ( $item['external_id'] ?? 0 );
-		$error_msg   = (string) ( $item['error_message'] ?? '' );
-		$error       = '' !== $error_msg ? $error_msg : null;
+		$item_status      = (string) $item['status'];
+		$post_id          = (int) ( $item['post_id'] ?? 0 );
+		$external_post_id = null !== $item['external_post_id']
+			? (int) $item['external_post_id']
+			: null;
+		$error_msg        = (string) ( $item['error_message'] ?? '' );
+		$error            = '' !== $error_msg ? $error_msg : null;
 
-		$has_previous_content = 1 === (int) ( $item['has_previous_content'] ?? 0 );
+		$has_previous_content = 1 === (int) $item['has_previous_content'];
 
 		$is_updated_post     = ( 'updated' === $item_status );
 		$should_show_changes = $has_previous_content || $is_updated_post;
 
-		$is_rolled_back = 0 !== (int) ( $item['rolled_back'] ?? 0 );
+		$is_rolled_back = 0 !== (int) $item['rolled_back'];
 
 		$can_rollback_item = $this->can_rollback_item(
 			$is_rolled_back,
@@ -130,18 +135,18 @@ final class Session_Formatter {
 		$status_labels = $this->get_item_status_labels();
 
 		return array(
-			'id'              => (int) $item['id'],
-			'title'           => (string) ( $item['title'] ?? '' ),
-			'status'          => $item_status,
-			'status_label'    => $status_labels[ $item_status ] ?? $item_status,
-			'external_id'     => $external_id,
-			'post_id'         => $post_id > 0 ? $post_id : null,
-			'error'           => $error,
-			'has_changes'     => $should_show_changes,
-			'edit_url'        => $edit_url,
-			'can_rollback'    => $can_rollback_item,
-			'is_rolled_back'  => $is_rolled_back,
-			'rollback_action' => $rollback_action,
+			'id'               => (int) $item['id'],
+			'title'            => (string) $item['title'],
+			'status'           => $item_status,
+			'status_label'     => $status_labels[ $item_status ] ?? $item_status,
+			'external_post_id' => $external_post_id,
+			'post_id'          => $post_id > 0 ? $post_id : null,
+			'error'            => $error,
+			'has_changes'      => $should_show_changes,
+			'edit_url'         => $edit_url,
+			'can_rollback'     => $can_rollback_item,
+			'is_rolled_back'   => $is_rolled_back,
+			'rollback_action'  => $rollback_action,
 		);
 	}
 

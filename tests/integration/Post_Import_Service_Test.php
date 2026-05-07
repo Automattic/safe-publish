@@ -19,6 +19,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\External_Posts_API\External_Posts_API_Test_Base;
 use Safe_Publish\Utils\Options;
+use WP_Error;
 
 /**
  * Integration tests for Post_Import_Service.
@@ -92,7 +93,11 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * @param string                $url     Request URL.
 	 * @return false|array|\WP_Error Preemptive response or false to let later filters run.
 	 */
-	public function mock_media_api_request( $preempt, array $args, string $url ) {
+	public function mock_media_api_request(
+		false|array|WP_Error $preempt,
+		array $args,
+		string $url
+	): false|array|WP_Error {
 		unset( $args );
 
 		if ( ! str_contains( $url, 'wp-json/wp/v2/media/' ) ) {
@@ -147,7 +152,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 
 		// ASSERT: No post should have been created with the broken staging URL in its content.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',
@@ -201,7 +207,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 
 		// ASSERT: No post should have been created.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',
@@ -255,7 +262,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 
 		// ASSERT: No post should have been created.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',
@@ -358,7 +366,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 
 		// ASSERT: No post should have been created.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',
@@ -425,7 +434,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 
 		// ASSERT: No post should have been created.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',
@@ -465,8 +475,17 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 
 		// ASSERT: Import fails and no post was created.
 		$this->assertFalse( $result['success'], 'Import should fail when no source URL is configured.' );
-		$this->assertNotEmpty( $result['error'], 'A non-empty error message should be returned.' );
-		$this->assertEmpty(
+		$this->assertIsString(
+			$result['error'],
+			'An error message should be returned.'
+		);
+		$this->assertNotSame(
+			'',
+			$result['error'],
+			'A non-empty error message should be returned.'
+		);
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'      => 'post',
@@ -490,7 +509,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 
 		// ASSERT: Update path also aborts correctly.
 		$this->assertFalse( $update_result['success'], 'Re-import should fail when no source URL is configured.' );
-		$this->assertNotEmpty( $update_result['error'] );
+		$this->assertIsString( $update_result['error'] );
+		$this->assertNotSame( '', $update_result['error'] );
 	}
 
 	/**
@@ -829,7 +849,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 
 		// ASSERT: No post should have been created.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',
@@ -1274,7 +1295,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 		$this->assertSame(
 			9803,
-			(int) $items[0]['external_id'],
+			(int) $items[0]['external_post_id'],
 			'Item row must reference the failing external post ID.'
 		);
 	}
@@ -1341,6 +1362,11 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 		$this->assertSame( 'error', $items[0]['status'] );
 		$this->assertSame( 'error', $items[1]['status'] );
+
+		// ASSERT: external_post_id is preserved when present (missing_title)
+		// and stored as null when the source payload lacks an id (missing_id).
+		$this->assertSame( 9810, (int) $items[0]['external_post_id'] );
+		$this->assertNull( $items[1]['external_post_id'] );
 
 		// ASSERT: Session counts project the failures from the items table.
 		$session = $this->repository->get_session( $session_id );

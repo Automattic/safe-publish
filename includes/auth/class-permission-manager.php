@@ -5,6 +5,8 @@
  * @package Safe_Publish
  */
 
+declare(strict_types=1);
+
 namespace Safe_Publish\Auth;
 
 use Safe_Publish\API\Export_Logger;
@@ -243,9 +245,9 @@ class Permission_Manager {
 		$this->logger->log_event(
 			'META_CAP_OVERRIDE',
 			array(
-				'capability'    => $cap,
-				'user_id'       => $user_id,
-				'original_caps' => $caps,
+				'capability'     => $cap,
+				'target_user_id' => $user_id,
+				'original_caps'  => $caps,
 			)
 		);
 

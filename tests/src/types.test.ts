@@ -11,13 +11,13 @@ describe( 'Type validation', () => {
 				id: 1,
 				link: 'https://example.com/post',
 				title: 'Test Post',
-				modified: '2024-03-15T10:30:00',
+				modified_gmt: '2024-03-15T10:30:00Z',
 			};
 
 			expect( post.id ).toBe( 1 );
 			expect( post.link ).toBe( 'https://example.com/post' );
 			expect( post.title ).toBe( 'Test Post' );
-			expect( post.modified ).toBe( '2024-03-15T10:30:00' );
+			expect( post.modified_gmt ).toBe( '2024-03-15T10:30:00Z' );
 		} );
 
 		it( 'should accept post with optional fields', () => {
@@ -25,15 +25,15 @@ describe( 'Type validation', () => {
 				id: 1,
 				link: 'https://example.com/post',
 				title: 'Test Post',
-				modified: '2024-03-15T10:30:00',
+				modified_gmt: '2024-03-15T10:30:00Z',
 				content: 'Post content',
 				excerpt: 'Post excerpt',
 				author: 'John Doe',
 				status: 'publish',
 				featured_media: 123,
 				post_type: 'post',
-				meta: [ { key: 'value' } ],
-				terms: [ { taxonomy: 'category', name: 'News' } ],
+				meta: { key: 'value' },
+				terms: { category: [ 'News' ] },
 			};
 
 			expect( post.content ).toBe( 'Post content' );
@@ -103,7 +103,7 @@ describe( 'Type validation', () => {
 				title: 'Test Post',
 				status: 'success',
 				status_label: 'Success',
-				external_id: 123,
+				external_post_id: 123,
 				post_id: 456,
 				has_changes: true,
 				edit_url: 'https://example.com/edit',
@@ -126,7 +126,7 @@ describe( 'Type validation', () => {
 					title: 'Test',
 					status,
 					status_label: status,
-					external_id: 123,
+					external_post_id: 123,
 					has_changes: false,
 					can_rollback: false,
 					is_rolled_back: false,
@@ -145,7 +145,7 @@ describe( 'Type validation', () => {
 					title: 'Test',
 					status: 'success',
 					status_label: 'Success',
-					external_id: 123,
+					external_post_id: 123,
 					has_changes: false,
 					can_rollback: true,
 					is_rolled_back: false,
@@ -153,6 +153,23 @@ describe( 'Type validation', () => {
 				};
 				expect( item.rollback_action ).toBe( action );
 			} );
+		} );
+
+		it( 'should accept null external_post_id when source data lacks an id', () => {
+			const item: ImportItem = {
+				id: 1,
+				title: 'Malformed Source',
+				status: 'error',
+				status_label: 'Error',
+				external_post_id: null,
+				error: 'Source data missing id',
+				has_changes: false,
+				can_rollback: false,
+				is_rolled_back: false,
+				rollback_action: 'delete',
+			};
+
+			expect( item.external_post_id ).toBeNull();
 		} );
 	} );
 

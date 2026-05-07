@@ -8,6 +8,8 @@
  * @package Safe_Publish
  */
 
+declare(strict_types=1);
+
 // Test database settings - uses environment variables with fallbacks.
 define( 'DB_NAME', getenv( 'WP_DB_NAME' ) ? getenv( 'WP_DB_NAME' ) : 'wordpress_test' );
 define( 'DB_USER', getenv( 'WP_DB_USER' ) ? getenv( 'WP_DB_USER' ) : 'root' );

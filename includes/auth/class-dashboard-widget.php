@@ -5,6 +5,8 @@
  * @package Safe_Publish
  */
 
+declare(strict_types=1);
+
 namespace Safe_Publish\Auth;
 
 use Safe_Publish\Utils\Audit_Log_Table;
@@ -303,8 +305,12 @@ class Dashboard_Widget {
 	 * @param array $event Authentication event data.
 	 */
 	private function render_event_item( array $event ): void {
-		$event_type = $event['event'] ?? 'UNKNOWN';
-		$timestamp  = $event['created_at'] ?? 'unknown';
+		$event_type    = $event['event'];
+		$timestamp_gmt = (string) $event['created_at_gmt'];
+		$timestamp     = wp_date(
+			get_option( 'date_format' ) . ' ' . get_option( 'time_format' ),
+			strtotime( $timestamp_gmt . ' UTC' )
+		);
 
 		$icon  = '•';
 		$color = '#666';

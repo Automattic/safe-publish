@@ -226,7 +226,9 @@ class External_Posts_API {
 			'id'             => isset( $post['id'] ) ? absint( $post['id'] ) : 0,
 			'link'           => isset( $post['link'] ) ? esc_url_raw( $post['link'] ) : '#',
 			'title'          => isset( $post['title']['rendered'] ) ? sanitize_text_field( wp_strip_all_tags( $post['title']['rendered'] ) ) : __( 'No Title', 'safe-publish' ),
-			'modified'       => isset( $post['modified'] ) ? sanitize_text_field( $post['modified'] ) : '',
+			'modified_gmt'   => isset( $post['modified_gmt'] )
+				? sanitize_text_field( $post['modified_gmt'] ) . 'Z'
+				: '',
 			'thumbnail'      => isset( $post['featured_media'] ) ? esc_url( get_the_post_thumbnail_url( $post['id'], 'thumbnail' ) ) : '',
 			'featured_media' => isset( $post['featured_media'] ) ? absint( $post['featured_media'] ) : 0,
 			'excerpt'        => isset( $post['excerpt']['rendered'] ) ? wp_kses_post( $post['excerpt']['rendered'] ) : '',
@@ -368,9 +370,9 @@ class External_Posts_API {
 			$this->logger->log_error(
 				Log_Events::CONTENT_FETCH_FAILED,
 				array(
-					'post_id'  => $external_post_id,
-					'site_url' => $site_url,
-					'error'    => $response->get_error_message(),
+					'post_id'         => $external_post_id,
+					'source_site_url' => $site_url,
+					'error'           => $response->get_error_message(),
 				)
 			);
 
@@ -384,8 +386,8 @@ class External_Posts_API {
 			$this->logger->log_error(
 				Log_Events::CONTENT_FETCH_INVALID_RESPONSE,
 				array(
-					'post_id'  => $external_post_id,
-					'site_url' => $site_url,
+					'post_id'         => $external_post_id,
+					'source_site_url' => $site_url,
 				)
 			);
 
@@ -401,8 +403,8 @@ class External_Posts_API {
 			$this->logger->log_error(
 				Log_Events::CONTENT_FETCH_RAW_UNAVAILABLE,
 				array(
-					'post_id'  => $external_post_id,
-					'site_url' => $site_url,
+					'post_id'         => $external_post_id,
+					'source_site_url' => $site_url,
 				)
 			);
 

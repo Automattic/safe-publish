@@ -80,7 +80,15 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify expected elements are present.
-		$this->assertNotEmpty( $processed_content, "Content should not be empty for: {$description}" );
+		$this->assertIsString(
+			$processed_content,
+			"Content should be a string for: {$description}"
+		);
+		$this->assertNotSame(
+			'',
+			$processed_content,
+			"Content should not be empty for: {$description}"
+		);
 
 		foreach ( $expected_strings as $expected ) {
 			$this->assertStringContainsString( $expected, $processed_content, "Should contain '{$expected}' for: {$description}" );
@@ -250,7 +258,8 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify all elements are present and transformed.
-		$this->assertNotEmpty( $processed_content );
+		$this->assertIsString( $processed_content );
+		$this->assertNotSame( '', $processed_content );
 		$this->assertStringContainsString( 'Article with Media', $processed_content );
 		$this->assertStringContainsString( 'Header', $processed_content );
 		$this->assertStringContainsString( 'Footer', $processed_content );

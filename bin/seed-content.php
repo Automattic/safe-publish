@@ -26,6 +26,8 @@
  * @package Safe_Publish
  */
 
+declare(strict_types=1);
+
 if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
 	die( 'This script must be run via WP-CLI.' . PHP_EOL );
 }

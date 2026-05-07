@@ -5,6 +5,8 @@
  * @package Safe_Publish
  */
 
+declare(strict_types=1);
+
 namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\Admin\History_Repository;
@@ -94,8 +96,42 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 
 		// ASSERT: Item columns were stored correctly.
 		$this->assertSame( 'success', $item['status'] );
-		$this->assertSame( 123, (int) $item['external_id'] );
+		$this->assertSame( 123, (int) $item['external_post_id'] );
 		$this->assertSame( $session_id, (int) $item['session_id'] );
+	}
+
+	/**
+	 * Verifies that a null external_post_id round-trips through storage and the
+	 * formatter. Source data sometimes lacks a usable id (malformed payload
+	 * or unexpected exception); the schema and API surface must preserve
+	 * that null instead of forcing a 0 sentinel.
+	 */
+	public function test_null_external_post_id_round_trips_through_formatter(): void {
+		// ARRANGE: Create session.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+
+		// ACT: Log an error item with null external_post_id (e.g. from
+		// build_exception_result when the source payload had no id).
+		$item_id = $this->repository->log_import_action(
+			$session_id,
+			null,
+			'Malformed Source',
+			'error',
+			null,
+			'Source data missing id',
+			array()
+		);
+
+		// ASSERT: Item was created and external_post_id stored as null.
+		$this->assertIsInt( $item_id );
+
+		$item = $this->repository->get_item( $item_id );
+		$this->assertIsArray( $item );
+		$this->assertNull( $item['external_post_id'] );
+
+		// ASSERT: Formatter exposes external_post_id as null at the API boundary.
+		$formatted = $this->formatter->format_item( $item );
+		$this->assertNull( $formatted['external_post_id'] );
 	}
 
 	/**
@@ -230,10 +266,42 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 		// ACT: Complete the session.
 		$this->repository->complete_session( $session_id );
 
-		// ASSERT: Status is completed and end_time is set.
+		// ASSERT: Status is completed and ended_at_gmt is set.
 		$session = $this->repository->get_session( $session_id );
 		$this->assertSame( 'completed', $session['status'] );
-		$this->assertNotEmpty( $session['end_time'] );
+		$this->assertIsString( $session['ended_at_gmt'] );
+		$this->assertNotSame( '', $session['ended_at_gmt'] );
+	}
+
+	/**
+	 * Verifies that timestamps are written as GMT regardless of the site's
+	 * configured timezone, so the API contract stays browser-friendly.
+	 */
+	public function test_timestamps_are_stored_in_gmt(): void {
+		// ARRANGE: Configure the site to a non-UTC timezone.
+		update_option( 'timezone_string', 'America/New_York' );
+		$now = time();
+
+		// ACT: Create a session, an item, and complete the session.
+		$sid = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$this->repository->log_import_action( $sid, 1, 'P', 'success', 1 );
+		$this->repository->complete_session( $sid );
+
+		// ASSERT: All three timestamps parse as GMT (within a small tolerance)
+		// — i.e. they are NOT shifted by the site's UTC offset.
+		$session = $this->repository->get_session( $sid );
+		$items   = $this->repository->get_session_items( $sid );
+
+		$created = strtotime( $session['created_at_gmt'] . ' UTC' );
+		$ended   = strtotime( $session['ended_at_gmt'] . ' UTC' );
+		$dated   = strtotime( $items[0]['import_date_gmt'] . ' UTC' );
+
+		$this->assertEqualsWithDelta( $now, $created, 5 );
+		$this->assertEqualsWithDelta( $now, $ended, 5 );
+		$this->assertEqualsWithDelta( $now, $dated, 5 );
+
+		// CLEANUP.
+		delete_option( 'timezone_string' );
 	}
 
 	/**
@@ -304,6 +372,13 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 		$this->assertSame( 'completed', $formatted_session['status'] );
 		$this->assertSame( 1, $formatted_session['total_items'] );
 		$this->assertSame( 1, $formatted_session['successful'] );
+
+		// ASSERT: Date is ISO 8601 with explicit UTC marker so JS parses it
+		// in browser-local time, not as site-local.
+		$this->assertMatchesRegularExpression(
+			'/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/',
+			$formatted_session['date']
+		);
 	}
 
 	/**

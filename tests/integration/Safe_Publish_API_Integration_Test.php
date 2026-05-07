@@ -155,7 +155,11 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 
 		// ASSERT: Verify diff was generated.
 		$this->assertIsString( $result['contentDiffHtml'] );
-		$this->assertNotEmpty( $result['contentDiffHtml'], 'Content diff should not be empty' );
+		$this->assertNotSame(
+			'',
+			$result['contentDiffHtml'],
+			'Content diff should not be empty'
+		);
 
 		// ASSERT: Verify incoming data extracted correctly from mock response.
 		$this->assertSame( 'Updated External Title', $result['incoming']['title'] );

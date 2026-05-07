@@ -6,7 +6,7 @@
  *
  * @file This file defines the SessionDetailsModal component.
  */
-import { getErrorMessage } from '../utils';
+import { formatDateTime, getErrorMessage } from '../utils';
 import {
 	Button,
 	__experimentalHStack as HStack,
@@ -218,7 +218,7 @@ export function SessionDetailsModal( {
 	 */
 	const renderSessionInfo = (): JSX.Element => (
 		<VStack spacing={ 2 } style={ { marginBottom: '24px' } }>
-			<Text><strong>{ __( 'Date:', 'safe-publish' ) }</strong> { session.date }</Text>
+			<Text><strong>{ __( 'Date:', 'safe-publish' ) }</strong> { formatDateTime( session.date ) }</Text>
 			<Text><strong>{ __( 'User:', 'safe-publish' ) }</strong> { session.user }</Text>
 			<Text><strong>{ __( 'Source:', 'safe-publish' ) }</strong> { session.source_url }</Text>
 			<Text>
@@ -323,9 +323,11 @@ export function SessionDetailsModal( {
 								<span className={ `safe-publish-status-${ item.status }` }>
 									{ item.status_label }
 								</span>
-								<Text>{ /* translators: %s is the external ID of the imported item */
-								__( 'External ID: %s', 'safe-publish' )
-									.replace( '%s', String( item.external_id ) ) }</Text>
+								{ null !== item.external_post_id && (
+									<Text>{ /* translators: %s is the external ID of the imported item */
+									__( 'External ID: %s', 'safe-publish' )
+										.replace( '%s', String( item.external_post_id ) ) }</Text>
+								) }
 								{ item.error && (
 									<>
 										<Text>|</Text>

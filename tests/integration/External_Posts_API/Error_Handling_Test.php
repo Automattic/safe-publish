@@ -35,7 +35,8 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify content processed despite failed media.
-		$this->assertNotEmpty( $processed_content );
+		$this->assertIsString( $processed_content );
+		$this->assertNotSame( '', $processed_content );
 		$this->assertStringContainsString( 'Content with', $processed_content );
 		$this->assertStringContainsString( 'broken image', $processed_content );
 		$this->assertStringContainsString( 'alt="Broken"', $processed_content );
@@ -106,7 +107,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 
 		// ASSERT: Verify content returned without errors.
 		$this->assertIsString( $processed_content );
-		$this->assertNotEmpty( $processed_content );
+		$this->assertNotSame( '', $processed_content );
 		$this->assertStringContainsString( 'Unclosed paragraph', $processed_content );
 		$this->assertStringContainsString( 'Mixed tags', $processed_content );
 	}
@@ -163,7 +164,8 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Verify content processed despite server error.
-		$this->assertNotEmpty( $processed_content );
+		$this->assertIsString( $processed_content );
+		$this->assertNotSame( '', $processed_content );
 		$this->assertStringContainsString( 'Content with', $processed_content );
 		$this->assertStringContainsString( 'failed image', $processed_content );
 		$this->assertStringContainsString( 'alt="Server Error"', $processed_content );
@@ -217,7 +219,8 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 			$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 			// ASSERT: Verify content processed despite WP_Error.
-			$this->assertNotEmpty( $processed_content );
+			$this->assertIsString( $processed_content );
+			$this->assertNotSame( '', $processed_content );
 			$this->assertStringContainsString( 'Content with', $processed_content );
 			$this->assertStringContainsString( 'failed image', $processed_content );
 			$this->assertStringContainsString( 'alt="Network Error"', $processed_content );
@@ -291,7 +294,8 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 			$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 			// ASSERT: Verify content processed despite sideload failure.
-			$this->assertNotEmpty( $processed_content );
+			$this->assertIsString( $processed_content );
+			$this->assertNotSame( '', $processed_content );
 			$this->assertStringContainsString( 'Content with', $processed_content );
 			$this->assertStringContainsString( 'broken image', $processed_content );
 			$this->assertStringContainsString( 'alt="Invalid Data"', $processed_content );
@@ -340,7 +344,8 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
 
 		// ASSERT: Processor output is non-empty and the alt text is intact.
-		$this->assertNotEmpty( $processed_content );
+		$this->assertIsString( $processed_content );
+		$this->assertNotSame( '', $processed_content );
 		$this->assertStringContainsString( 'alt="Test"', $processed_content );
 
 		// ASSERT: The failed srcset URL is tracked so the import service can abort.

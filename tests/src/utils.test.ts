@@ -1,7 +1,8 @@
 /**
  * Tests for utility functions
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { getSettings, setSettings } from '@wordpress/date';
 import {
 	formatDate,
 	formatDateTime,
@@ -15,10 +16,47 @@ import {
 } from '@/utils';
 import type { Post } from '@/types';
 
+// Pin WP date settings so format/timezone-sensitive tests are deterministic.
+let originalDateSettings: ReturnType< typeof getSettings >;
+
+beforeEach( () => {
+	originalDateSettings = getSettings();
+	setSettings( {
+		...originalDateSettings,
+		formats: {
+			date:                'F j, Y',
+			time:                'g:i a',
+			datetime:            'F j, Y g:i a',
+			datetimeAbbreviated: 'M j, Y g:i a',
+		},
+		timezone: {
+			offset:          '-4',
+			offsetFormatted: '-4',
+			string:          'America/New_York',
+			abbr:            'EDT',
+		},
+	} );
+} );
+
+afterEach( () => {
+	setSettings( originalDateSettings );
+} );
+
 describe( 'formatDate', () => {
-	it( 'should format a valid date string', () => {
-		const result = formatDate( '2024-03-15T10:30:00' );
-		expect( result ).toContain( '2024' );
+	it( 'should render a Z-marked timestamp in site timezone', () => {
+		// ARRANGE: Site set to America/New_York, date format 'F j, Y'.
+		// ACT: format a mid-day UTC timestamp (10:30 UTC -> 06:30 EDT).
+		const result = formatDate( '2024-07-15T10:30:00Z' );
+		// ASSERT: same calendar day in EDT.
+		expect( result ).toBe( 'July 15, 2024' );
+	} );
+
+	it( 'should reflect site timezone on UTC/site day boundary', () => {
+		// ARRANGE: 2024-07-15T01:30:00Z is 21:30 EDT on July 14.
+		// ACT: format the early-UTC timestamp.
+		const result = formatDate( '2024-07-15T01:30:00Z' );
+		// ASSERT: rolls back to the previous EDT day.
+		expect( result ).toBe( 'July 14, 2024' );
 	} );
 
 	it( 'should return "Invalid Date" for invalid date string', () => {
@@ -31,9 +69,28 @@ describe( 'formatDate', () => {
 } );
 
 describe( 'formatDateTime', () => {
-	it( 'should format a valid date string with time', () => {
-		const result = formatDateTime( '2024-03-15T10:30:00' );
-		expect( result ).toContain( '2024' );
+	it( 'should render a Z-marked timestamp with full date and time', () => {
+		// ARRANGE: Site set to America/New_York, format 'F j, Y g:i a'.
+		// ACT: format a mid-day UTC timestamp (10:30 UTC -> 06:30 EDT).
+		const result = formatDateTime( '2024-07-15T10:30:00Z' );
+		// ASSERT: full date and time, EDT-shifted.
+		expect( result ).toBe( 'July 15, 2024 6:30 am' );
+	} );
+
+	it( 'should pick up changes to the WP date and time formats', () => {
+		// ARRANGE: switch to a distinctive format pair.
+		setSettings( {
+			...getSettings(),
+			formats: {
+				...getSettings().formats,
+				date: 'Y-m-d',
+				time: 'H:i',
+			},
+		} );
+		// ACT: format with the new format pair active.
+		const result = formatDateTime( '2024-07-15T10:30:00Z' );
+		// ASSERT: ISO-style render in site timezone (06:30 EDT).
+		expect( result ).toBe( '2024-07-15 06:30' );
 	} );
 
 	it( 'should return "Invalid Date" for invalid date string', () => {
@@ -47,7 +104,7 @@ describe( 'isValidPost', () => {
 			id: 1,
 			link: 'https://example.com/post',
 			title: 'Test Post',
-			modified: '2024-03-15T10:30:00',
+			modified_gmt: '2024-03-15T10:30:00',
 		};
 		expect( isValidPost( validPost ) ).toBe( true );
 	} );
@@ -56,7 +113,7 @@ describe( 'isValidPost', () => {
 		const invalidPost = {
 			link: 'https://example.com/post',
 			title: 'Test Post',
-			modified: '2024-03-15T10:30:00',
+			modified_gmt: '2024-03-15T10:30:00',
 		};
 		expect( isValidPost( invalidPost ) ).toBe( false );
 	} );
@@ -65,7 +122,7 @@ describe( 'isValidPost', () => {
 		const invalidPost = {
 			id: 1,
 			title: 'Test Post',
-			modified: '2024-03-15T10:30:00',
+			modified_gmt: '2024-03-15T10:30:00',
 		};
 		expect( isValidPost( invalidPost ) ).toBe( false );
 	} );
@@ -74,12 +131,12 @@ describe( 'isValidPost', () => {
 		const invalidPost = {
 			id: 1,
 			link: 'https://example.com/post',
-			modified: '2024-03-15T10:30:00',
+			modified_gmt: '2024-03-15T10:30:00',
 		};
 		expect( isValidPost( invalidPost ) ).toBe( false );
 	} );
 
-	it( 'should return false for post missing modified', () => {
+	it( 'should return false for post missing modified_gmt', () => {
 		const invalidPost = {
 			id: 1,
 			link: 'https://example.com/post',
@@ -106,9 +163,9 @@ describe( 'isValidPost', () => {
 describe( 'sanitizePosts', () => {
 	it( 'should filter out invalid posts', () => {
 		const posts = [
-			{ id: 1, link: 'https://example.com/1', title: 'Post 1', modified: '2024-03-15' },
-			{ id: 2, link: 'https://example.com/2', title: 'Post 2' }, // Missing modified.
-			{ id: 3, link: 'https://example.com/3', title: 'Post 3', modified: '2024-03-16' },
+			{ id: 1, link: 'https://example.com/1', title: 'Post 1', modified_gmt: '2024-03-15' },
+			{ id: 2, link: 'https://example.com/2', title: 'Post 2' }, // Missing modified_gmt.
+			{ id: 3, link: 'https://example.com/3', title: 'Post 3', modified_gmt: '2024-03-16' },
 			null,
 			{ title: 'Invalid' }, // Missing required fields.
 		];
@@ -133,9 +190,9 @@ describe( 'sanitizePosts', () => {
 
 describe( 'searchPosts', () => {
 	const posts: Post[] = [
-		{ id: 1, link: 'https://example.com/1', title: 'React Tutorial', modified: '2024-03-15' },
-		{ id: 2, link: 'https://example.com/2', title: 'TypeScript Guide', modified: '2024-03-16' },
-		{ id: 3, link: 'https://example.com/3', title: 'React Testing', modified: '2024-03-17' },
+		{ id: 1, link: 'https://example.com/1', title: 'React Tutorial', modified_gmt: '2024-03-15' },
+		{ id: 2, link: 'https://example.com/2', title: 'TypeScript Guide', modified_gmt: '2024-03-16' },
+		{ id: 3, link: 'https://example.com/3', title: 'React Testing', modified_gmt: '2024-03-17' },
 	];
 
 	it( 'should return all posts for empty search term', () => {
@@ -160,22 +217,47 @@ describe( 'searchPosts', () => {
 		expect( searchPosts( posts, 'nonexistent' ) ).toEqual( [] );
 	} );
 
-	it( 'should filter posts by modified date (ISO partial match)', () => {
+	it( 'should filter posts by modified_gmt date (ISO partial match)', () => {
 		const result = searchPosts( posts, '2024-03-16' );
 		expect( result ).toHaveLength( 1 );
 		expect( result[ 0 ].id ).toBe( 2 );
 	} );
 
-	it( 'should filter posts by modified year', () => {
+	it( 'should match via formatDate when raw ISO lacks the term', () => {
+		// ARRANGE: Z input renders as 'July 15, 2024' in site tz.
+		// Raw ISO has '07', not 'July'; only formatDate branch can match.
+		const datePosts: Post[] = [
+			{ id: 1, link: 'https://example.com/1', title: 'Alpha', modified_gmt: '2024-07-15T10:30:00Z' },
+			{ id: 2, link: 'https://example.com/2', title: 'Beta', modified_gmt: '2024-12-20T10:30:00Z' },
+		];
+		// ACT: search for the formatted month name.
+		const result = searchPosts( datePosts, 'July' );
+		// ASSERT: only the July post matches.
+		expect( result ).toHaveLength( 1 );
+		expect( result[ 0 ].id ).toBe( 1 );
+	} );
+
+	it( 'should not match when neither raw ISO nor formatDate match', () => {
+		// ARRANGE: a single July post in the corpus.
+		const datePosts: Post[] = [
+			{ id: 1, link: 'https://example.com/1', title: 'Alpha', modified_gmt: '2024-07-15T10:30:00Z' },
+		];
+		// ACT: search a month name that appears in neither form.
+		const result = searchPosts( datePosts, 'December' );
+		// ASSERT: no over-match across either branch.
+		expect( result ).toHaveLength( 0 );
+	} );
+
+	it( 'should filter posts by modified_gmt year', () => {
 		const result = searchPosts( posts, '2024' );
 		expect( result ).toHaveLength( 3 );
 	} );
 
 	it( 'should filter posts by post type', () => {
 		const typedPosts: Post[] = [
-			{ id: 1, link: 'https://example.com/1', title: 'Post A', modified: '2024-03-15', post_type: 'post' },
-			{ id: 2, link: 'https://example.com/2', title: 'Post B', modified: '2024-03-16', post_type: 'page' },
-			{ id: 3, link: 'https://example.com/3', title: 'Post C', modified: '2024-03-17', post_type: 'post' },
+			{ id: 1, link: 'https://example.com/1', title: 'Post A', modified_gmt: '2024-03-15', post_type: 'post' },
+			{ id: 2, link: 'https://example.com/2', title: 'Post B', modified_gmt: '2024-03-16', post_type: 'page' },
+			{ id: 3, link: 'https://example.com/3', title: 'Post C', modified_gmt: '2024-03-17', post_type: 'post' },
 		];
 
 		const result = searchPosts( typedPosts, 'page' );
@@ -191,9 +273,9 @@ describe( 'searchPosts', () => {
 
 	it( 'should filter posts by sync status', () => {
 		const statusPosts: Post[] = [
-			{ id: 1, link: 'https://example.com/1', title: 'Post A', modified: '2024-03-15', is_imported: false },
-			{ id: 2, link: 'https://example.com/2', title: 'Post B', modified: '2024-03-16', is_imported: true, has_update: false },
-			{ id: 3, link: 'https://example.com/3', title: 'Post C', modified: '2024-03-17', is_imported: true, has_update: true },
+			{ id: 1, link: 'https://example.com/1', title: 'Post A', modified_gmt: '2024-03-15', is_imported: false },
+			{ id: 2, link: 'https://example.com/2', title: 'Post B', modified_gmt: '2024-03-16', is_imported: true, has_update: false },
+			{ id: 3, link: 'https://example.com/3', title: 'Post C', modified_gmt: '2024-03-17', is_imported: true, has_update: true },
 		];
 
 		expect( searchPosts( statusPosts, 'available' ) ).toHaveLength( 1 );
@@ -208,10 +290,10 @@ describe( 'searchPosts', () => {
 
 	it( 'should filter posts by publish status', () => {
 		const statusPosts: Post[] = [
-			{ id: 1, link: 'https://example.com/1', title: 'Post A', modified: '2024-03-15', is_imported: true, local_status: 'publish' },
-			{ id: 2, link: 'https://example.com/2', title: 'Post B', modified: '2024-03-16', is_imported: true, local_status: 'draft' },
-			{ id: 3, link: 'https://example.com/3', title: 'Post C', modified: '2024-03-17', is_imported: true, local_status: 'pending' },
-			{ id: 4, link: 'https://example.com/4', title: 'Post D', modified: '2024-03-18', is_imported: false },
+			{ id: 1, link: 'https://example.com/1', title: 'Post A', modified_gmt: '2024-03-15', is_imported: true, local_status: 'publish' },
+			{ id: 2, link: 'https://example.com/2', title: 'Post B', modified_gmt: '2024-03-16', is_imported: true, local_status: 'draft' },
+			{ id: 3, link: 'https://example.com/3', title: 'Post C', modified_gmt: '2024-03-17', is_imported: true, local_status: 'pending' },
+			{ id: 4, link: 'https://example.com/4', title: 'Post D', modified_gmt: '2024-03-18', is_imported: false },
 		];
 
 		expect( searchPosts( statusPosts, 'published' ) ).toHaveLength( 1 );
@@ -230,9 +312,9 @@ describe( 'searchPosts', () => {
 
 describe( 'sortPosts', () => {
 	const posts: Post[] = [
-		{ id: 2, link: 'https://example.com/2', title: 'Beta Post', modified: '2024-03-15' },
-		{ id: 1, link: 'https://example.com/1', title: 'Alpha Post', modified: '2024-03-17' },
-		{ id: 3, link: 'https://example.com/3', title: 'Gamma Post', modified: '2024-03-16' },
+		{ id: 2, link: 'https://example.com/2', title: 'Beta Post', modified_gmt: '2024-03-15' },
+		{ id: 1, link: 'https://example.com/1', title: 'Alpha Post', modified_gmt: '2024-03-17' },
+		{ id: 3, link: 'https://example.com/3', title: 'Gamma Post', modified_gmt: '2024-03-16' },
 	];
 
 	it( 'should sort posts by id ascending', () => {
@@ -256,18 +338,18 @@ describe( 'sortPosts', () => {
 		expect( result[ 2 ].title ).toBe( 'Gamma Post' );
 	} );
 
-	it( 'should sort posts by modified date descending (default)', () => {
-		const result = sortPosts( posts, 'modified' );
-		expect( result[ 0 ].modified ).toBe( '2024-03-17' );
-		expect( result[ 1 ].modified ).toBe( '2024-03-16' );
-		expect( result[ 2 ].modified ).toBe( '2024-03-15' );
+	it( 'should sort posts by modified_gmt date descending (default)', () => {
+		const result = sortPosts( posts, 'modified_gmt' );
+		expect( result[ 0 ].modified_gmt ).toBe( '2024-03-17' );
+		expect( result[ 1 ].modified_gmt ).toBe( '2024-03-16' );
+		expect( result[ 2 ].modified_gmt ).toBe( '2024-03-15' );
 	} );
 
-	it( 'should sort posts by modified date ascending', () => {
-		const result = sortPosts( posts, 'modified', 'asc' );
-		expect( result[ 0 ].modified ).toBe( '2024-03-15' );
-		expect( result[ 1 ].modified ).toBe( '2024-03-16' );
-		expect( result[ 2 ].modified ).toBe( '2024-03-17' );
+	it( 'should sort posts by modified_gmt date ascending', () => {
+		const result = sortPosts( posts, 'modified_gmt', 'asc' );
+		expect( result[ 0 ].modified_gmt ).toBe( '2024-03-15' );
+		expect( result[ 1 ].modified_gmt ).toBe( '2024-03-16' );
+		expect( result[ 2 ].modified_gmt ).toBe( '2024-03-17' );
 	} );
 
 	it( 'should not mutate original array', () => {
@@ -282,7 +364,7 @@ describe( 'paginatePosts', () => {
 		id: i + 1,
 		link: `https://example.com/${ i + 1 }`,
 		title: `Post ${ i + 1 }`,
-		modified: '2024-03-15',
+		modified_gmt: '2024-03-15',
 	} ) );
 
 	it( 'should return first page of posts', () => {

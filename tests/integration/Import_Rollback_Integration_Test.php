@@ -24,6 +24,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\External_Posts_API\External_Posts_API_Test_Base;
 use Safe_Publish\Utils\Options;
+use WP_Error;
 
 /**
  * Import Rollback Integration Test Class.
@@ -107,7 +108,11 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 	 * @param string                $url     Request URL.
 	 * @return false|array|\WP_Error Preemptive response or false.
 	 */
-	public function mock_media_api_request( $preempt, array $args, string $url ) {
+	public function mock_media_api_request(
+		false|array|WP_Error $preempt,
+		array $args,
+		string $url
+	): false|array|WP_Error {
 		unset( $args );
 
 		if ( ! str_contains( $url, 'wp-json/wp/v2/media/' ) ) {
@@ -169,7 +174,8 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		$this->assertStringContainsString( 'nonexistent-partial.jpg', $result['error'] );
 
 		// ASSERT: No post was created.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',
@@ -223,7 +229,8 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		$this->assertStringContainsString( 'nonexistent_taxonomy_xyz', $result['error'] );
 
 		// ASSERT: No post was created.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',
@@ -282,7 +289,8 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		$this->assertStringContainsString( 'featured image', $result['error'] );
 
 		// ASSERT: The orphaned draft must have been deleted.
-		$this->assertEmpty(
+		$this->assertSame(
+			array(),
 			get_posts(
 				array(
 					'post_type'        => 'post',
@@ -373,7 +381,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		$original_title   = get_post_field( 'post_title', $post_id );
 		$original_content = get_post_field( 'post_content', $post_id );
 		$original_link    = get_post_meta( $post_id, Options::META_EXTERNAL_LINK, true );
-		$original_date    = get_post_meta( $post_id, Options::META_IMPORT_DATE, true );
+		$original_date    = get_post_meta( $post_id, Options::META_IMPORT_DATE_GMT, true );
 
 		// ARRANGE: Fresh content will return updated title/content and a featured
 		// image. The fail filter makes the media API return 404 to trigger failure.
@@ -400,17 +408,17 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		$this->assertSame( $original_title, get_post_field( 'post_title', $post_id ), 'Title must be unchanged after failed update.' );
 		$this->assertSame( $original_content, get_post_field( 'post_content', $post_id ), 'Content must be unchanged after failed update.' );
 		$this->assertSame( $original_link, get_post_meta( $post_id, Options::META_EXTERNAL_LINK, true ), 'External link meta must be unchanged after failed update.' );
-		$this->assertSame( $original_date, get_post_meta( $post_id, Options::META_IMPORT_DATE, true ), 'Import date meta must be unchanged after failed update.' );
+		$this->assertSame( $original_date, get_post_meta( $post_id, Options::META_IMPORT_DATE_GMT, true ), 'Import date meta must be unchanged after failed update.' );
 	}
 
 	/**
 	 * Verifies that the bulk update path returns a failure and rolls back the
 	 * post when the tracking meta write fails.
 	 *
-	 * If update_post_meta fails for META_IMPORT_DATE (e.g., a DB error), the
+	 * If update_post_meta fails for META_IMPORT_DATE_GMT (e.g., a DB error), the
 	 * import must report failure and restore the post to its pre-update state.
 	 * The filter blocks all writes for this key, so the rollback's own restore
-	 * of META_IMPORT_DATE is also blocked; only the post fields and external
+	 * of META_IMPORT_DATE_GMT is also blocked; only the post fields and external
 	 * link meta are verified here.
 	 */
 	public function test_bulk_update_fails_when_tracking_meta_write_fails(): void {
@@ -448,7 +456,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 			'content' => '<p>Updated content.</p>',
 		);
 
-		// ARRANGE: Block update_post_meta for META_IMPORT_DATE to simulate a DB
+		// ARRANGE: Block update_post_meta for META_IMPORT_DATE_GMT to simulate a DB
 		// failure.
 		$block_meta = function (
 			$check,
@@ -458,7 +466,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 			$prev_value
 		) {
 			unset( $object_id, $meta_value, $prev_value );
-			if ( Options::META_IMPORT_DATE === $meta_key ) {
+			if ( Options::META_IMPORT_DATE_GMT === $meta_key ) {
 				return false;
 			}
 			return $check;
@@ -538,7 +546,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		$original_content = get_post_field( 'post_content', $post_id );
 		$original_date    = get_post_meta(
 			$post_id,
-			Options::META_IMPORT_DATE,
+			Options::META_IMPORT_DATE_GMT,
 			true
 		);
 
@@ -579,7 +587,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 			$original_date,
 			get_post_meta(
 				$post_id,
-				Options::META_IMPORT_DATE,
+				Options::META_IMPORT_DATE_GMT,
 				true
 			),
 			'Import date must remain unchanged when wp_update_post fails silently.'
@@ -635,7 +643,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		);
 		$original_date         = get_post_meta(
 			$post_id,
-			Options::META_IMPORT_DATE,
+			Options::META_IMPORT_DATE_GMT,
 			true
 		);
 		$original_meta         = get_post_meta(
@@ -724,7 +732,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 			$original_date,
 			get_post_meta(
 				$post_id,
-				Options::META_IMPORT_DATE,
+				Options::META_IMPORT_DATE_GMT,
 				true
 			),
 			'Import date meta must be restored after custom meta failure.'
@@ -788,7 +796,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		$original_content = get_post_field( 'post_content', $post_id );
 		$original_date    = get_post_meta(
 			$post_id,
-			Options::META_IMPORT_DATE,
+			Options::META_IMPORT_DATE_GMT,
 			true
 		);
 		$original_meta    = get_post_meta( $post_id, 'my_field', true );
@@ -844,7 +852,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 			$original_date,
 			get_post_meta(
 				$post_id,
-				Options::META_IMPORT_DATE,
+				Options::META_IMPORT_DATE_GMT,
 				true
 			),
 			'Import date meta must be restored after term failure.'
@@ -1055,7 +1063,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 	/**
 	 * Verifies that media sideloaded for the new content (both featured image
 	 * and inline) is deleted when the bulk update path rolls back due to a
-	 * tracking-meta (META_IMPORT_DATE) write failure.
+	 * tracking-meta (META_IMPORT_DATE_GMT) write failure.
 	 *
 	 * This branch fires before set_post_thumbnail() runs, so the new featured
 	 * image is sideloaded but never assigned. Cleanup must still happen
@@ -1098,7 +1106,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 				. '</p>',
 		);
 
-		// ARRANGE: Block the first META_IMPORT_DATE write to trigger the
+		// ARRANGE: Block the first META_IMPORT_DATE_GMT write to trigger the
 		// import_date_update_failed branch. Subsequent writes (e.g. the
 		// rollback's restore call) pass through so the test environment
 		// matches production behavior.
@@ -1111,7 +1119,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		) {
 			static $has_blocked = false;
 			unset( $object_id, $meta_value, $prev_value );
-			if ( Options::META_IMPORT_DATE === $meta_key && ! $has_blocked ) {
+			if ( Options::META_IMPORT_DATE_GMT === $meta_key && ! $has_blocked ) {
 				$has_blocked = true;
 				return false;
 			}

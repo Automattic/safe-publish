@@ -36,7 +36,7 @@ export type JsonValue = JsonPrimitive | JsonArray | JsonObject;
  * @property {number}                   id               Unique post ID.
  * @property {string}                   link             Permalink URL of the post.
  * @property {string}                   title            Post title.
- * @property {string}                   modified         Last modified date in ISO format.
+ * @property {string}                   modified_gmt     Last modified date in ISO 8601 UTC.
  * @property {string}                   [content]        Full post content.
  * @property {string}                   [excerpt]        Post excerpt.
  * @property {string}                   [author]         Post author name.
@@ -50,7 +50,7 @@ export interface Post {
 	id: number;
 	link: string;
 	title: string;
-	modified: string;
+	modified_gmt: string;
 	content?: string;
 	excerpt?: string;
 	author?: string;
@@ -101,16 +101,16 @@ export interface CreateDraftResponse {
 /**
  * Individual result from bulk import operation.
  *
- * @property {number}  external_id External post ID.
- * @property {string}  title       Post title.
- * @property {boolean} success     Whether import succeeded.
- * @property {number}  [post_id]   Local post ID if successful.
- * @property {string}  [edit_url]  URL to edit the post.
- * @property {string}  [error]     Error message if failed.
- * @property {boolean} [existing]  Whether post already existed.
+ * @property {number|null} external_post_id External post ID, or null if not provided.
+ * @property {string}      title            Post title.
+ * @property {boolean}     success          Whether import succeeded.
+ * @property {number}      [post_id]        Local post ID if successful.
+ * @property {string}      [edit_url]       URL to edit the post.
+ * @property {string}      [error]          Error message if failed.
+ * @property {boolean}     [existing]       Whether post already existed.
  */
 export interface BulkImportResult {
-	external_id: number;
+	external_post_id: number | null;
 	title: string;
 	success: boolean;
 	post_id?: number;
@@ -359,25 +359,25 @@ export interface ImportSession {
 /**
  * Represents an individual import item.
  *
- * @property {number}  id              Unique item ID.
- * @property {string}  title           Title of the imported post.
- * @property {string}  status          Import status.
- * @property {string}  status_label    Human-readable status label.
- * @property {number}  external_id     ID from the external source.
- * @property {number}  [post_id]       Local WordPress post ID.
- * @property {string}  [error]         Error message if failed.
- * @property {boolean} has_changes     Whether changes were detected.
- * @property {string}  [edit_url]      URL to edit the post.
- * @property {boolean} can_rollback    Whether the item can be rolled back.
- * @property {boolean} is_rolled_back  Whether the item has been rolled back.
- * @property {string}  rollback_action Type of rollback action.
+ * @property {number}      id               Unique item ID.
+ * @property {string}      title            Title of the imported post.
+ * @property {string}      status           Import status.
+ * @property {string}      status_label     Human-readable status label.
+ * @property {number|null} external_post_id External post ID, or null if not provided.
+ * @property {number}      [post_id]        Local WordPress post ID.
+ * @property {string}      [error]          Error message if failed.
+ * @property {boolean}     has_changes      Whether changes were detected.
+ * @property {string}      [edit_url]       URL to edit the post.
+ * @property {boolean}     can_rollback     Whether the item can be rolled back.
+ * @property {boolean}     is_rolled_back   Whether the item has been rolled back.
+ * @property {string}      rollback_action  Type of rollback action.
  */
 export interface ImportItem {
 	id: number;
 	title: string;
 	status: 'success' | 'updated' | 'error';
 	status_label: string;
-	external_id: number;
+	external_post_id: number | null;
 	post_id?: number;
 	error?: string;
 	has_changes: boolean;

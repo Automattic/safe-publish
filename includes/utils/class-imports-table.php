@@ -5,6 +5,8 @@
  * @package Safe_Publish
  */
 
+declare(strict_types=1);
+
 namespace Safe_Publish\Utils;
 
 /**
@@ -81,13 +83,13 @@ final class Imports_Table {
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			user_display_name VARCHAR(250) NOT NULL DEFAULT '',
-			source_url TEXT NOT NULL,
-			session_type VARCHAR(8) NOT NULL,
-			status VARCHAR(16) NOT NULL,
-			end_time DATETIME NULL DEFAULT NULL,
-			created_at DATETIME NOT NULL,
+			source_url VARCHAR(255) NOT NULL,
+			session_type VARCHAR(20) NOT NULL,
+			status VARCHAR(20) NOT NULL,
+			ended_at_gmt DATETIME NULL DEFAULT NULL,
+			created_at_gmt DATETIME NOT NULL,
 			PRIMARY KEY  (id),
-			KEY created_at (created_at)
+			KEY created_at_gmt (created_at_gmt)
 		) {$charset};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';

@@ -5,6 +5,8 @@
  * @package Safe_Publish
  */
 
+declare(strict_types=1);
+
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\Utils\Audit_Log_Table;
@@ -167,7 +169,7 @@ final class Import_History {
 			wp_send_json_error( __( 'Session not found', 'safe-publish' ) );
 		}
 
-		$status          = (string) ( $session['status'] ?? '' );
+		$status          = (string) $session['status'];
 		$session_data    = $this->formatter->format_session( $session );
 		$items           = $this->repository->get_session_items( $session_id );
 		$formatted_items = $this->formatter->format_items( $items, $status );
@@ -348,10 +350,12 @@ final class Import_History {
 
 		$events = array_map(
 			static function ( array $row ): array {
-				$data = $row['data'];
+				$data    = $row['data'];
+				$created = (string) $row['created_at_gmt'];
+
 				return array(
 					'id'              => (int) $row['id'],
-					'date'            => $row['created_at'],
+					'date'            => str_replace( ' ', 'T', $created ) . 'Z',
 					'level'           => $row['level'],
 					'event'           => $row['event'],
 					'destination_url' => $data['destination_url'] ?? '',

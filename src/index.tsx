@@ -23,6 +23,7 @@ import {
 import { PostTypeSelector } from './post-type-selector';
 import {
 	extractUrlPath,
+	formatDateTime,
 	getErrorMessage,
 	getPaginationInfo,
 	paginatePosts,
@@ -38,7 +39,6 @@ import {
 	Notice,
 } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
-import { dateI18n, getSettings } from '@wordpress/date';
 import { useState, useEffect, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
@@ -73,12 +73,12 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 		perPage: DEFAULT_POSTS_PER_PAGE,
 		page: 1,
 		sort: {
-			field: 'modified',
+			field: 'modified_gmt',
 			direction: 'desc',
 		},
 		search: '',
 		filters: [],
-		fields: [ 'permalink', 'modified', 'sync_status', 'publish_status' ],
+		fields: [ 'permalink', 'modified_gmt', 'sync_status', 'publish_status' ],
 		titleField: 'title',
 		descriptionField: 'description',
 		mediaField: 'image',
@@ -164,13 +164,12 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 			},
 		},
 		{
-			id: 'modified',
+			id: 'modified_gmt',
 			label: __( 'Last Modified', 'safe-publish' ),
 			enableSorting: true,
 			enableGlobalSearch: true,
 			render: ( { item }: { item: Post } ): JSX.Element => {
-				const { formats } = getSettings();
-				return <span>{ dateI18n( `${ formats.date } ${ formats.time }`, item.modified ) }</span>;
+				return <span>{ formatDateTime( item.modified_gmt ) }</span>;
 			},
 		},
 		{

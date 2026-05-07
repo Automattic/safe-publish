@@ -15,5 +15,5 @@ vendor
 *.config.js
 webpack.utils.js
 
-# Test files (not in tsconfig.json)
+# Test files
 tests/

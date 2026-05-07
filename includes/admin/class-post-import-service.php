@@ -5,6 +5,8 @@
  * @package Safe_Publish
  */
 
+declare(strict_types=1);
+
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\External_Posts_API;
@@ -181,11 +183,14 @@ class Post_Import_Service {
 	 * Extracts and sanitizes post fields from raw post data.
 	 *
 	 * @param array $post_data Raw post data array.
-	 * @return array Sanitized post fields keyed by field name.
+	 * @return array Sanitized post fields. The external_post_id key
+	 *               is null if not provided.
 	 */
 	private function extract_post_fields( array $post_data ): array {
+		$external_post_id = absint( $post_data['id'] ?? 0 );
+
 		return array(
-			'external_post_id'  => absint( $post_data['id'] ?? 0 ),
+			'external_post_id'  => $external_post_id > 0 ? $external_post_id : null,
 			'title'             => sanitize_text_field( $post_data['title'] ?? '' ),
 			'external_link'     => esc_url_raw( $post_data['link'] ?? '' ),
 			'featured_media_id' => absint( $post_data['featured_media'] ?? 0 ),
@@ -205,14 +210,14 @@ class Post_Import_Service {
 	 *
 	 * @param array  $fields        Sanitized post fields.
 	 * @param string $error_message Error description.
-	 * @return array Error result with external_id, title, success, and error keys.
+	 * @return array Error result with external_post_id, title, success, and error keys.
 	 */
 	private function build_error_result( array $fields, string $error_message ): array {
 		return array(
-			'external_id' => $fields['external_post_id'],
-			'title'       => $fields['title'],
-			'success'     => false,
-			'error'       => $error_message,
+			'external_post_id' => $fields['external_post_id'],
+			'title'            => $fields['title'],
+			'success'          => false,
+			'error'            => $error_message,
 		);
 	}
 
@@ -222,16 +227,16 @@ class Post_Import_Service {
 	 * @param array $fields   Sanitized post fields.
 	 * @param int   $post_id  Created or updated WordPress post ID.
 	 * @param bool  $existing Whether the post was updated (true) or newly created (false).
-	 * @return array Success result with external_id, title, success, post_id, edit_url, and existing keys.
+	 * @return array Success result with external_post_id, title, success, post_id, edit_url, and existing keys.
 	 */
 	private function build_success_result( array $fields, int $post_id, bool $existing ): array {
 		return array(
-			'external_id' => $fields['external_post_id'],
-			'title'       => $fields['title'],
-			'success'     => true,
-			'post_id'     => $post_id,
-			'edit_url'    => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
-			'existing'    => $existing,
+			'external_post_id' => $fields['external_post_id'],
+			'title'            => $fields['title'],
+			'success'          => true,
+			'post_id'          => $post_id,
+			'edit_url'         => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
+			'existing'         => $existing,
 		);
 	}
 
@@ -242,7 +247,7 @@ class Post_Import_Service {
 	 * @return array|null Error result array on failure, null on success.
 	 */
 	private function validate_required_fields( array $fields ): ?array {
-		if ( empty( $fields['title'] ) || empty( $fields['external_post_id'] ) ) {
+		if ( '' === $fields['title'] || null === $fields['external_post_id'] ) {
 			return $this->build_error_result(
 				$fields,
 				__( 'Missing required post data.', 'safe-publish' )
@@ -382,8 +387,9 @@ class Post_Import_Service {
 			$post['is_imported'] = (bool) $imported;
 
 			if ( $imported ) {
-				$external_modified      = strtotime( $post['modified'] );
-				$local_modified         = strtotime( $imported->post_modified );
+				$external_modified = strtotime( $post['modified_gmt'] );
+				$local_modified    = strtotime( $imported->post_modified_gmt );
+
 				$post['has_update']     = false !== $external_modified
 					&& false !== $local_modified
 					&& $external_modified > $local_modified;
@@ -631,7 +637,7 @@ class Post_Import_Service {
 					Options::META_EXTERNAL_POST_ID => $fields['external_post_id'],
 					Options::META_EXTERNAL_LINK    => $fields['external_link'],
 					Options::META_IMPORTED_FROM    => Options::META_IMPORTED_FROM_VALUE,
-					Options::META_IMPORT_DATE      => current_time( 'mysql' ),
+					Options::META_IMPORT_DATE_GMT  => current_time( 'mysql', true ),
 				),
 			),
 			$featured_attachment_id,
@@ -809,11 +815,11 @@ class Post_Import_Service {
 			$external_link
 		);
 
-		delete_post_meta( $post_id, Options::META_IMPORT_DATE );
+		delete_post_meta( $post_id, Options::META_IMPORT_DATE_GMT );
 		if ( false === update_post_meta(
 			$post_id,
-			Options::META_IMPORT_DATE,
-			current_time( 'mysql' )
+			Options::META_IMPORT_DATE_GMT,
+			current_time( 'mysql', true )
 		) ) {
 			$this->rollback_failed_update( $post_id, $snapshot );
 
@@ -886,14 +892,14 @@ class Post_Import_Service {
 		$snapshot = array(
 			'post_fields'    => $post,
 			'tracking_meta'  => array(
-				Options::META_EXTERNAL_LINK => get_post_meta(
+				Options::META_EXTERNAL_LINK   => get_post_meta(
 					$post_id,
 					Options::META_EXTERNAL_LINK,
 					true
 				),
-				Options::META_IMPORT_DATE   => get_post_meta(
+				Options::META_IMPORT_DATE_GMT => get_post_meta(
 					$post_id,
-					Options::META_IMPORT_DATE,
+					Options::META_IMPORT_DATE_GMT,
 					true
 				),
 			),
@@ -1138,17 +1144,17 @@ class Post_Import_Service {
 	/**
 	 * Logs an import action to history, only when a session ID is provided.
 	 *
-	 * @param int|null    $session_id  Import session ID.
-	 * @param int         $external_id External post ID.
-	 * @param string      $title       Post title.
-	 * @param string      $status      Import status (success, updated, error).
-	 * @param int|null    $post_id     WordPress post ID or null on failure.
-	 * @param string|null $error       Error message or null on success.
-	 * @param array       $changes     Contextual changes data for the item.
+	 * @param int|null    $session_id       Import session ID.
+	 * @param int|null    $external_post_id External post ID, or null if not provided.
+	 * @param string      $title            Post title.
+	 * @param string      $status           Import status (success, updated, error).
+	 * @param int|null    $post_id          WordPress post ID or null on failure.
+	 * @param string|null $error            Error message or null on success.
+	 * @param array       $changes          Contextual changes data for the item.
 	 */
 	private function log_import_if_session(
 		?int $session_id,
-		int $external_id,
+		?int $external_post_id,
 		string $title,
 		string $status,
 		?int $post_id,
@@ -1161,7 +1167,7 @@ class Post_Import_Service {
 
 		$this->repository->log_import_action(
 			$session_id,
-			$external_id,
+			$external_post_id,
 			$title,
 			$status,
 			$post_id,
@@ -1185,18 +1191,16 @@ class Post_Import_Service {
 		?int $session_id,
 		Exception $e
 	): array {
-		$external_id = (int) ( $post_data['id'] ?? 0 );
-		$title       = $post_data['title'] ?? __( 'Unknown', 'safe-publish' );
+		$fields = $this->extract_post_fields( $post_data );
 
-		$fields = array(
-			'external_post_id' => $external_id,
-			'title'            => $title,
-		);
+		if ( '' === $fields['title'] ) {
+			$fields['title'] = __( 'Unknown', 'safe-publish' );
+		}
 
 		$this->log_import_if_session(
 			$session_id,
-			$external_id,
-			$title,
+			$fields['external_post_id'],
+			$fields['title'],
 			'error',
 			null,
 			$e->getMessage(),

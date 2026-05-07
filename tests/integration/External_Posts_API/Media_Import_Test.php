@@ -62,7 +62,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 
 		// ASSERT: Verify import succeeded and returned a non-empty URL string.
 		$this->assertIsString( $local_url, 'Import should return local URL string' );
-		$this->assertNotEmpty( $local_url, 'Import should return a non-empty URL' );
+		$this->assertNotSame( '', $local_url, 'Import should return a non-empty URL' );
 
 		// Find the attachment by the local URL.
 		$attachment_id = attachment_url_to_postid( $local_url );
@@ -153,7 +153,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 
 		// ASSERT: Verify import succeeded.
 		$this->assertIsString( $local_url, "Should successfully import {$format}" );
-		$this->assertNotEmpty( $local_url, 'Should return a non-empty URL' );
+		$this->assertNotSame( '', $local_url, 'Should return a non-empty URL' );
 
 		// ASSERT: Verify attachment created.
 		$attachments_after = $this->get_attachment_count();

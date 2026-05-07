@@ -5,6 +5,8 @@
  * @package Safe_Publish
  */
 
+declare(strict_types=1);
+
 namespace Safe_Publish;
 
 use Safe_Publish\Admin\Admin_Ajax_Controller;

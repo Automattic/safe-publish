@@ -15,6 +15,7 @@ use Safe_Publish\Tests\Integration\Mock_Post_API_Trait;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
+use WP_Error;
 use WPAjaxDieContinueException;
 use WPAjaxDieStopException;
 
@@ -86,7 +87,11 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 	 * @param string                $url     Request URL.
 	 * @return false|array|\WP_Error Mocked response, or the prior return value.
 	 */
-	public function mock_post_api( $preempt, array $_args, string $url ) {
+	public function mock_post_api(
+		false|array|WP_Error $preempt,
+		array $_args,
+		string $url
+	): false|array|WP_Error {
 		if ( false !== $preempt || ! preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
 			return $preempt;
 		}
@@ -515,7 +520,7 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 	 * Verifies that the single-import update path returns an error when the
 	 * tracking meta write fails.
 	 *
-	 * If update_post_meta fails for META_IMPORT_DATE (e.g., a DB error), the
+	 * If update_post_meta fails for META_IMPORT_DATE_GMT (e.g., a DB error), the
 	 * import must report failure rather than silently leaving the tracking meta
 	 * stale.
 	 */
@@ -546,7 +551,7 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 			'force_update'     => 'true',
 		);
 
-		// ARRANGE: Block update_post_meta for META_IMPORT_DATE to simulate a DB
+		// ARRANGE: Block update_post_meta for META_IMPORT_DATE_GMT to simulate a DB
 		// failure.
 		$block_meta = function (
 			$check,
@@ -556,7 +561,7 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 			$prev_value
 		) {
 			unset( $object_id, $meta_value, $prev_value );
-			if ( Options::META_IMPORT_DATE === $meta_key ) {
+			if ( Options::META_IMPORT_DATE_GMT === $meta_key ) {
 				return false;
 			}
 
@@ -590,8 +595,8 @@ class Admin_Ajax_Controller_Test extends \WP_Ajax_UnitTestCase {
 		// the subsequent write was blocked, so no value was committed.
 		$this->assertSame(
 			'',
-			get_post_meta( $existing_post_id, Options::META_IMPORT_DATE, true ),
-			'META_IMPORT_DATE must be absent when the write was blocked after a delete.'
+			get_post_meta( $existing_post_id, Options::META_IMPORT_DATE_GMT, true ),
+			'META_IMPORT_DATE_GMT must be absent when the write was blocked after a delete.'
 		);
 	}
 

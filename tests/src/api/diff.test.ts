@@ -7,7 +7,6 @@ import {
 	updatePostContent,
 	type DiffPreviewPayload,
 	type DiffPreviewResult,
-	type UpdatePostResult,
 } from '@/api/diff';
 
 describe( 'fetchDiffPreview', () => {
@@ -185,7 +184,9 @@ describe( 'updatePostContent', () => {
 		} );
 
 		const result = await updatePostContent( 123, 'Content' );
-		expect( result.success ).toBe( false );
+		if ( result.success ) {
+			throw new Error( 'Expected failure result' );
+		}
 		expect( result.error ).toBe( 'Forbidden' );
 	} );
 
@@ -199,7 +200,9 @@ describe( 'updatePostContent', () => {
 		} );
 
 		const result = await updatePostContent( 123, 'Content' );
-		expect( result.success ).toBe( false );
+		if ( result.success ) {
+			throw new Error( 'Expected failure result' );
+		}
 		expect( result.error ).toBe( 'HTTP 500' );
 	} );
 
@@ -212,7 +215,9 @@ describe( 'updatePostContent', () => {
 		} );
 
 		const result = await updatePostContent( 123, 'Content' );
-		expect( result.success ).toBe( false );
+		if ( result.success ) {
+			throw new Error( 'Expected failure result' );
+		}
 		expect( result.error ).toBe( 'Invalid response from server' );
 	} );
 
@@ -223,7 +228,9 @@ describe( 'updatePostContent', () => {
 		} );
 
 		const result = await updatePostContent( 123, 'Content' );
-		expect( result.success ).toBe( false );
+		if ( result.success ) {
+			throw new Error( 'Expected failure result' );
+		}
 		expect( result.error ).toBe( 'Custom error' );
 	} );
 
