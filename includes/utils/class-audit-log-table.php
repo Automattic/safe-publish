@@ -72,9 +72,7 @@ final class Audit_Log_Table {
 			created_at_gmt DATETIME NOT NULL,
 			data LONGTEXT NOT NULL,
 			PRIMARY KEY  (id),
-			KEY channel_created_gmt (channel, created_at_gmt),
-			KEY level (level),
-			KEY event (event)
+			KEY channel_created_gmt (channel, created_at_gmt)
 		) {$charset};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
