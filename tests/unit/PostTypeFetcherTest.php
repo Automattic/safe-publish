@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests;
 use PHPUnit\Framework\TestCase;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Post_Type_Fetcher;
+use WP_Error;
 
 /**
  * Post Type Fetcher Test.
@@ -42,7 +43,7 @@ class PostTypeFetcherTest extends TestCase {
 	public function test_fetch_post_types_with_invalid_url_returns_error(): void {
 		$result = $this->fetcher->fetch_post_types( 'invalid-url' );
 
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'invalid_url', $result->get_error_code() );
 	}
 
@@ -52,7 +53,7 @@ class PostTypeFetcherTest extends TestCase {
 	public function test_fetch_post_types_with_empty_url_returns_error(): void {
 		$result = $this->fetcher->fetch_post_types( '' );
 
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'invalid_url', $result->get_error_code() );
 	}
 }

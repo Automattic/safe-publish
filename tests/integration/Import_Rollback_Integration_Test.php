@@ -103,10 +103,10 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 	 *
 	 * Registered at priority 5 — runs before the base-class image mock at 10.
 	 *
-	 * @param false|array|\WP_Error $preempt Early-return value passed by WP.
-	 * @param array                 $args    Request arguments (unused).
-	 * @param string                $url     Request URL.
-	 * @return false|array|\WP_Error Preemptive response or false.
+	 * @param false|array|WP_Error $preempt Early-return value passed by WP.
+	 * @param array                $args    Request arguments (unused).
+	 * @param string               $url     Request URL.
+	 * @return false|array|WP_Error Preemptive response or false.
 	 */
 	public function mock_media_api_request(
 		false|array|WP_Error $preempt,

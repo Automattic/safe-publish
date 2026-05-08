@@ -11,6 +11,7 @@ namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
 use Safe_Publish\Auth\VIP_Safe_Auth;
+use WP_Error;
 
 /**
  * VIP Safe Auth Test.
@@ -352,7 +353,7 @@ class VIPSafeAuthTest extends TestCase {
 	 */
 	public function test_test_authorization_returns_unreachable_on_wp_error(): void {
 		// ARRANGE: Stub the transport to return a WP_Error.
-		set_test_http_response( new \WP_Error( 'http_request_failed', 'Connection refused' ) );
+		set_test_http_response( new WP_Error( 'http_request_failed', 'Connection refused' ) );
 		$site_url    = 'https://example.com';
 		$auth_config = array(
 			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',

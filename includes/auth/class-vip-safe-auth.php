@@ -9,8 +9,6 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Auth;
 
-use WP_Error;
-
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -80,7 +78,7 @@ final class VIP_Safe_Auth {
 
 		// Basic auth can be layered on top of shared secret auth.
 		if ( ! empty( $auth_config['username'] ) && ! empty( $auth_config['password'] ) ) {
-			$basic_params = self::get_basic_auth( $site_url, $auth_config );
+			$basic_params = self::get_basic_auth( $auth_config );
 			if ( ! empty( $basic_params['headers'] ) ) {
 				$params['headers'] = array_merge( $params['headers'] ?? array(), $basic_params['headers'] );
 			}
@@ -256,14 +254,10 @@ final class VIP_Safe_Auth {
 	 * Uses Authorization header with Basic auth. Intended as an optional layer
 	 * on top of the required Shared Secret authentication.
 	 *
-	 * @param string $site_url    Destination site URL.
-	 * @param array  $auth_config Authentication configuration.
+	 * @param array $auth_config Authentication configuration.
 	 * @return array Request modifications.
 	 */
-	private static function get_basic_auth(
-		string $site_url,
-		array $auth_config
-	): array {
+	private static function get_basic_auth( array $auth_config ): array {
 		$username = $auth_config['username'] ?? '';
 		$password = $auth_config['password'] ?? '';
 

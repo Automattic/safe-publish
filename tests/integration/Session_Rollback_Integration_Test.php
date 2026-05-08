@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests\Integration;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\Utils\Audit_Log_Table;
+use WP_Error;
 
 /**
  * Session Rollback Integration Test Class.
@@ -151,7 +152,7 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		$result = $this->rollback_service->rollback_session( $fake_session_id );
 
 		// ASSERT: Returns WP_Error.
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'session_not_found', $result->get_error_code() );
 	}
 
@@ -166,7 +167,7 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		$result = $this->rollback_service->rollback_item( $fake_item_id );
 
 		// ASSERT: Returns WP_Error.
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'item_not_found', $result->get_error_code() );
 	}
 
