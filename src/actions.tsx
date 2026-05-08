@@ -6,7 +6,7 @@
  *
  * @file This file defines DataViews actions for the Safe Publish plugin.
  */
-import { drafts, download, edit, trash } from '@wordpress/icons';
+import { drafts, download, pencil, trash } from '@wordpress/icons';
 
 import DeletePostModal from './components/DeletePostModal';
 import ImportModal from './components/ImportModal';
@@ -353,7 +353,7 @@ export const createActions = (
 	{
 		id: 'edit-post',
 		label: __( 'Edit', 'safe-publish' ),
-		icon: edit,
+		icon: pencil,
 		isPrimary: true,
 		isEligible: ( item: Post ) => Boolean( item.is_imported && item.local_edit_url ),
 		callback: ( items: Post[] ) => {
