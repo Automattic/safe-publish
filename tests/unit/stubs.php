@@ -18,7 +18,7 @@ function __( string $text ): string {
 }
 
 function is_wp_error( mixed $thing ): bool {
-	return $thing instanceof \WP_Error;
+	return $thing instanceof WP_Error;
 }
 
 function wp_parse_url( string $url, int $component = -1 ): mixed {

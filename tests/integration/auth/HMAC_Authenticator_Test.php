@@ -14,6 +14,7 @@ use Safe_Publish\Auth\Auth_Logger;
 use Safe_Publish\Auth\HMAC_Authenticator;
 use Safe_Publish\Auth\Permission_Manager;
 use Safe_Publish\Utils\Audit_Log_Table;
+use WP_Error;
 use WP_REST_Request;
 use WP_UnitTestCase;
 
@@ -94,7 +95,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'safe_publish_auth_invalid', $result->get_error_code() );
 		$this->assertSame( 401, $result->get_error_data()['status'] );
 		$this->assertFalse( $this->authenticator->is_authenticated() );
@@ -117,7 +118,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'safe_publish_auth_expired', $result->get_error_code() );
 		$this->assertSame( 401, $result->get_error_data()['status'] );
 		$this->assertFalse( $this->authenticator->is_authenticated() );
@@ -161,7 +162,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'safe_publish_auth_content_hash_missing', $result->get_error_code() );
 		$this->assertSame( 401, $result->get_error_data()['status'] );
 		$this->assertFalse( $this->authenticator->is_authenticated() );
@@ -189,7 +190,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'safe_publish_auth_content_hash_invalid', $result->get_error_code() );
 		$this->assertSame( 401, $result->get_error_data()['status'] );
 		$this->assertFalse( $this->authenticator->is_authenticated() );
@@ -218,7 +219,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 	public function test_auth_test_endpoint_passes_through_with_invalid_headers(): void {
 		// ARRANGE: Malformed Safe Publish headers targeting the diagnostic endpoint.
 		$timestamp = time();
-		$request   = new \WP_REST_Request( 'GET', '/safe-publish/v1/auth-test' );
+		$request   = new WP_REST_Request( 'GET', '/safe-publish/v1/auth-test' );
 		$request->set_header( 'X-Safe-Publish-Timestamp', (string) $timestamp );
 		$request->set_header( 'X-Safe-Publish-Content-Hash', hash( 'sha256', '' ) );
 		$request->set_header( 'X-Safe-Publish-Signature', 'totally-wrong-signature' );
@@ -260,7 +261,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'safe_publish_auth_expired', $result->get_error_code() );
 		$this->assertSame( 401, $result->get_error_data()['status'] );
 		$this->assertFalse( $this->authenticator->is_authenticated() );
@@ -284,7 +285,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$result = $authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: Returns 500 WP_Error; authentication state is unchanged.
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'safe_publish_auth_no_connected_site_url', $result->get_error_code() );
 		$this->assertSame( 500, $result->get_error_data()['status'] );
 		$this->assertFalse( $authenticator->is_authenticated() );
@@ -308,7 +309,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$result = $authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: Returns 403 WP_Error; authentication state is unchanged.
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'safe_publish_auth_site_url_mismatch', $result->get_error_code() );
 		$this->assertSame( 403, $result->get_error_data()['status'] );
 		$this->assertFalse( $authenticator->is_authenticated() );
@@ -333,7 +334,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$result = $authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'safe_publish_auth_site_url_missing', $result->get_error_code() );
 		$this->assertSame( 401, $result->get_error_data()['status'] );
 		$this->assertFalse( $authenticator->is_authenticated() );

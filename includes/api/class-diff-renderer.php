@@ -13,6 +13,7 @@ use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use stdClass;
 use WP_Error;
+use WP_Post;
 use WP_Query;
 use WP_REST_Request;
 
@@ -140,9 +141,9 @@ final class Diff_Renderer {
 	 * @param int    $external_post_id External post ID to search for.
 	 * @param string $post_type        Post type to search.
 	 *
-	 * @return \WP_Post|WP_Error Post object on success, WP_Error if not found.
+	 * @return WP_Post|WP_Error Post object on success, WP_Error if not found.
 	 */
-	private function find_local_post( int $external_post_id, string $post_type ): \WP_Post|WP_Error {
+	private function find_local_post( int $external_post_id, string $post_type ): WP_Post|WP_Error {
 		$query = new WP_Query(
 			array(
 				'meta_key'       => Options::META_EXTERNAL_POST_ID,
@@ -165,7 +166,7 @@ final class Diff_Renderer {
 
 		$post = $query->posts[0];
 
-		if ( ! $post instanceof \WP_Post ) {
+		if ( ! $post instanceof WP_Post ) {
 			return new WP_Error(
 				'invalid_post',
 				__( 'Invalid post object returned.', 'safe-publish' ),
@@ -266,11 +267,11 @@ final class Diff_Renderer {
 	/**
 	 * Extracts current data from local post.
 	 *
-	 * @param \WP_Post $post Local post object.
+	 * @param WP_Post $post Local post object.
 	 *
 	 * @return array Structured current data.
 	 */
-	private function extract_current_data( \WP_Post $post ): array {
+	private function extract_current_data( WP_Post $post ): array {
 		$current = array(
 			'title'   => get_the_title( $post->ID ),
 			'content' => $post->post_content,

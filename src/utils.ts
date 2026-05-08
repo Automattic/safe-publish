@@ -64,7 +64,7 @@ export function getErrorMessage(
  * Renders in the site's configured timezone using the WordPress `date_format`
  * option, matching how WP admin displays dates elsewhere.
  *
- * @param {string} dateString ISO 8601 date string (with or without `Z`).
+ * @param {string} dateString UTC ISO 8601 date string (trailing `Z`).
  *
  * @return {string} Formatted date string, or 'Invalid Date' if parsing fails.
  */
@@ -83,7 +83,7 @@ export function formatDate( dateString: string ): string {
  * Renders in the site's configured timezone using the WordPress `date_format`
  * and `time_format` options, matching how WP admin displays dates elsewhere.
  *
- * @param {string} dateString ISO 8601 date string (with or without `Z`).
+ * @param {string} dateString UTC ISO 8601 date string (trailing `Z`).
  *
  * @return {string} Formatted date/time string, or 'Invalid Date' on failure.
  */
