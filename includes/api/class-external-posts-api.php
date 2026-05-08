@@ -209,9 +209,8 @@ class External_Posts_API {
 	/**
 	 * Prepares a single post for display in the admin listing UI.
 	 *
-	 * Uses `rendered` field values since this data is display-only and never
-	 * stored. The actual import always re-fetches via fetch_fresh_post_content()
-	 * which requires raw values.
+	 * The output is consumed for display only and never stored; the actual
+	 * import re-fetches via fetch_fresh_post_content() to obtain raw values.
 	 *
 	 * @param array  $post      Raw post data from the REST API.
 	 * @param string $post_type Post type being listed. Default 'posts'.
