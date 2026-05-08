@@ -56,3 +56,7 @@ The plugin's purpose is migrating data from a source to a destination site, keep
 - After applying changes, run `npm run fix` and then `npm run check`. Fix and repeat as needed. Disregard issues unrelated to our changes.
 - Run integration tests with `npm run test:integration` and unit tests with `npm run test`.
 - When adjustments are made to the single import/update path, verify whether identical changes are needed to the bulk import/update path, and vice versa.
+
+## Dependencies
+
+**`@wordpress/*` and WP stubs are pinned to the wp-6.8 dist-tag line** to match the plugin's `Requires at least: 6.8`. Bumping them past their current major would type-check our code against APIs that don't exist in WP 6.8's bundled `wp.*` globals, causing silent runtime failures. Raising the WP floor requires updating the plugin header, `php-stubs/wordpress-{stubs,tests-stubs}`, and the relevant `@wordpress/*` packages together to the next wp-X.Y dist-tag.
