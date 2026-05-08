@@ -109,7 +109,7 @@ export function ExportHistory(): JSX.Element {
 			label: __( 'Destination', 'safe-publish' ),
 			enableSorting: false,
 			render: ( { item }: { item: ExportEvent } ): JSX.Element => (
-				<span>{ item.destination_url || __( 'Unknown destination', 'safe-publish' ) }</span>
+				<span>{ item.destination_site_url || __( 'Unknown destination', 'safe-publish' ) }</span>
 			),
 		},
 		{

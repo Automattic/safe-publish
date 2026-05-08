@@ -10,9 +10,11 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\API\Diff_Renderer;
+use WP_Post;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
+use WP_Term;
 
 /**
  * Safe Publish API Integration Test Class.
@@ -254,7 +256,7 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 
 		// ASSERT: Verify post was updated.
 		$updated_post = get_post( $this->post_id );
-		$this->assertInstanceOf( \WP_Post::class, $updated_post, 'Post should exist after update' );
+		$this->assertInstanceOf( WP_Post::class, $updated_post, 'Post should exist after update' );
 		$this->assertSame( 'Updated Title', $updated_post->post_title );
 		$this->assertSame( '<p>Updated content.</p>', $updated_post->post_content );
 		$this->assertSame( 'Updated excerpt.', $updated_post->post_excerpt );
@@ -342,7 +344,7 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 			)
 		);
 		$category    = get_term( $category_id );
-		$this->assertInstanceOf( \WP_Term::class, $category, 'Category should be a WP_Term object' );
+		$this->assertInstanceOf( WP_Term::class, $category, 'Category should be a WP_Term object' );
 
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/update-post' );
 		$request->set_param( 'postId', $this->post_id );

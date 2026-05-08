@@ -165,7 +165,7 @@ class Auth_Manager {
 
 		[ $status, $health_score, $issues ] = $this->calculate_health( $shared_secret, $recent_events );
 
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			array(
 				'status'              => $status,
 				'health_score'        => $health_score,
@@ -226,7 +226,7 @@ class Auth_Manager {
 		);
 		$total  = Audit_Log_Table::count( $count_args );
 
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			array(
 				'events'     => $events,
 				'pagination' => array(
@@ -252,7 +252,7 @@ class Auth_Manager {
 
 		$this->logger->log_event( 'LOGS_CLEARED' );
 
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			array(
 				'message'   => 'Authentication logs cleared',
 				'timestamp' => self::iso_now(),
@@ -281,7 +281,7 @@ class Auth_Manager {
 			)
 		);
 
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			array(
 				'message'                      => 'Safe Publish Authentication Test Endpoint',
 				'timestamp'                    => self::iso_now(),

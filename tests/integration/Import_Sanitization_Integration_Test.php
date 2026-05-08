@@ -94,10 +94,10 @@ class Import_Sanitization_Integration_Test extends Integration_Test_Case {
 	/**
 	 * Intercepts HTTP requests to the single-post REST endpoint.
 	 *
-	 * @param false|array|\WP_Error $preempt Preemptive return value.
-	 * @param array                 $_args   HTTP request arguments (unused).
-	 * @param string                $url     Request URL.
-	 * @return false|array|\WP_Error Mocked response or prior value.
+	 * @param false|array|WP_Error $preempt Preemptive return value.
+	 * @param array                $_args   HTTP request arguments (unused).
+	 * @param string               $url     Request URL.
+	 * @return false|array|WP_Error Mocked response or prior value.
 	 */
 	public function mock_post_api(
 		false|array|WP_Error $preempt,

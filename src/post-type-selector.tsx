@@ -37,13 +37,13 @@ interface PostTypeOption {
 /**
  * Props for the PostTypeSelector component.
  *
- * @property {string}   siteUrl            External site URL.
+ * @property {string}   sourceSiteUrl      Source site URL.
  * @property {Function} [onPostTypeChange] Callback when post type changes.
  * @property {Function} [onError]          Callback when the error state changes.
  * @property {string}   [selectedPostType] Initially selected post type.
  */
 interface PostTypeSelectorProps {
-	siteUrl: string;
+	sourceSiteUrl: string;
 	onPostTypeChange?: ( postType: string ) => void;
 	onError?: ( error: string | null ) => void;
 	selectedPostType?: string;
@@ -56,7 +56,7 @@ interface PostTypeSelectorProps {
  * dropdown for selection with automatic refresh on site URL change.
  *
  * @param {Object}   props                    Component props.
- * @param {string}   props.siteUrl            External site URL.
+ * @param {string}   props.sourceSiteUrl      Source site URL.
  * @param {Function} [props.onPostTypeChange] Callback when post type changes.
  * @param {Function} [props.onError]          Callback when the error state changes.
  * @param {string}   [props.selectedPostType] Initially selected post type.
@@ -64,7 +64,7 @@ interface PostTypeSelectorProps {
  * @return {JSX.Element} Rendered PostTypeSelector component.
  */
 export function PostTypeSelector( {
-	siteUrl,
+	sourceSiteUrl,
 	onPostTypeChange,
 	onError,
 	selectedPostType = 'posts',
@@ -75,17 +75,17 @@ export function PostTypeSelector( {
 	const [ currentPostType, setCurrentPostType ] = useState( selectedPostType );
 
 	/**
-	 * Gets the current site URL from saved settings.
+	 * Gets the source site URL from saved settings.
 	 *
-	 * Retrieves the external site URL from the global admin data, which is more
+	 * Retrieves the source site URL from the global admin data, which is more
 	 * reliable than reading from input fields.
 	 *
-	 * @return {string} External site URL.
+	 * @return {string} Source site URL.
 	 */
-	const getExternalSiteUrl = useCallback( (): string => {
+	const getSourceSiteUrl = useCallback( (): string => {
 		// Use saved settings from window.safePublishAdminData.
-		return window.safePublishAdminData?.siteUrl || siteUrl || '';
-	}, [ siteUrl ] );
+		return window.safePublishAdminData?.sourceSiteUrl || sourceSiteUrl || '';
+	}, [ sourceSiteUrl ] );
 
 	/**
 	 * Makes an AJAX request to WordPress.
@@ -126,9 +126,9 @@ export function PostTypeSelector( {
 	 * @return {Promise<void>} Resolves when post types are loaded.
 	 */
 	const loadPostTypes = useCallback( async (): Promise< void > => {
-		const currentSiteUrl = getExternalSiteUrl();
+		const currentSourceSiteUrl = getSourceSiteUrl();
 
-		if ( ! currentSiteUrl ) {
+		if ( ! currentSourceSiteUrl ) {
 			setPostTypes( [] );
 			setError( null );
 			return;
@@ -140,7 +140,7 @@ export function PostTypeSelector( {
 		try {
 			const response = await makeRequest(
 				'safe_publish_fetch_post_types',
-				{ site_url: currentSiteUrl }
+				{ source_site_url: currentSourceSiteUrl }
 			) as ApiResponse< Record< string, PostTypeOption > >;
 
 			if ( response.success ) {
@@ -164,7 +164,7 @@ export function PostTypeSelector( {
 		} finally {
 			setIsLoading( false );
 		}
-	}, [ getExternalSiteUrl, makeRequest ] );
+	}, [ getSourceSiteUrl, makeRequest ] );
 
 	/**
 	 * Handles post type selection change.
@@ -184,7 +184,7 @@ export function PostTypeSelector( {
 	useEffect( () => {
 		// eslint-disable-next-line no-console
 		loadPostTypes().catch( console.error );
-	}, [ siteUrl, loadPostTypes ] );
+	}, [ sourceSiteUrl, loadPostTypes ] );
 
 	// Propagate error state to parent.
 	useEffect( () => {
@@ -218,7 +218,7 @@ export function PostTypeSelector( {
 				/>
 			</div>
 
-			{ ! getExternalSiteUrl() && (
+			{ ! getSourceSiteUrl() && (
 				<Notice status="info">
 					{ createInterpolateElement(
 						__( 'Please enter a site URL in the <link>settings page</link> to load available post types.', 'safe-publish' ),

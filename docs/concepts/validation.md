@@ -8,7 +8,7 @@ Before importing content, Safe Publish performs several validation checks to ens
 
 **What it checks:**
 
-- External site URL is properly formatted.
+- Source site URL is properly formatted.
 - URL uses HTTPS (required for production domains; HTTP is allowed for local development domains like `.test`, `.local`, `.dev`).
 - Domain is accessible and responds to requests.
 - Site is a WordPress installation with REST API enabled.

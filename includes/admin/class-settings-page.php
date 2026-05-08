@@ -25,8 +25,8 @@ final class Settings_Page {
 	 * Renders the settings page.
 	 */
 	public function render(): void {
-		$site_url  = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
-		$sync_mode = get_option( Options::OPTION_SYNC_MODE, '' );
+		$connected_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$sync_mode          = get_option( Options::OPTION_SYNC_MODE, '' );
 
 		// Basic auth credentials (development only).
 		$username = get_option( Options::OPTION_USERNAME, '' );
@@ -44,7 +44,7 @@ final class Settings_Page {
 
 			<?php settings_errors(); ?>
 
-			<?php if ( '' === $sync_mode || '' === $site_url ) : ?>
+			<?php if ( '' === $sync_mode || '' === $connected_site_url ) : ?>
 			<div class="notice notice-info">
 				<p>
 						<?php esc_html_e( 'Configure a Sync Mode and Connected Site URL to get started.', 'safe-publish' ); ?>
@@ -122,7 +122,7 @@ final class Settings_Page {
 										type="url"
 										id="safe_publish_connected_site_url"
 										name="safe_publish_connected_site_url"
-										value="<?php echo esc_attr( $site_url ); ?>"
+										value="<?php echo esc_attr( $connected_site_url ); ?>"
 										class="regular-text"
 										placeholder="<?php echo esc_attr__( 'https://example.com', 'safe-publish' ); ?>"
 									/>
@@ -218,11 +218,11 @@ final class Settings_Page {
 					 * @param {string}            nonce    Nonce for the safe_publish_ajax_nonce action.
 					 */
 					function testConnection( testBtn, resultEl, ajaxUrl, nonce ) {
-						const siteUrl     = document.getElementById( 'safe_publish_connected_site_url' ).value;
-						const usernameEl  = document.getElementById( 'safe_publish_username' );
-						const passwordEl  = document.getElementById( 'safe_publish_password' );
+						const connectedSiteUrl = document.getElementById( 'safe_publish_connected_site_url' ).value;
+						const usernameEl       = document.getElementById( 'safe_publish_username' );
+						const passwordEl       = document.getElementById( 'safe_publish_password' );
 
-						if ( ! siteUrl ) {
+						if ( ! connectedSiteUrl ) {
 							resultEl.className   = 'notice notice-error inline';
 							resultEl.textContent = "<?php echo esc_js( __( 'Please enter a Connected Site URL first.', 'safe-publish' ) ); ?>";
 							return;
@@ -235,7 +235,7 @@ final class Settings_Page {
 						const formData = new FormData();
 						formData.append( 'action', 'safe_publish_test_connection' );
 						formData.append( 'nonce', nonce );
-						formData.append( 'site_url', siteUrl );
+						formData.append( 'connected_site_url', connectedSiteUrl );
 						if ( usernameEl ) formData.append( 'username', usernameEl.value );
 						if ( passwordEl ) formData.append( 'password', passwordEl.value );
 
@@ -302,11 +302,11 @@ final class Settings_Page {
 
 						if ( 'unauthorized' === status ) {
 							level   = 'error';
-							message = "<?php echo esc_js( __( 'Source site rejected the shared secret. Set SAFE_PUBLISH_SHARED_SECRET in wp-config.php on both sites to the same value (at least 16 characters).', 'safe-publish' ) ); ?>";
+							message = "<?php echo esc_js( __( 'Connected site rejected the shared secret. Set SAFE_PUBLISH_SHARED_SECRET in wp-config.php on both sites to the same value (at least 16 characters).', 'safe-publish' ) ); ?>";
 						} else if ( 'unreachable' === status ) {
-							message = "<?php echo esc_js( __( 'Source site could not be reached. Verify the connected site URL and that the source site is online.', 'safe-publish' ) ); ?>";
+							message = "<?php echo esc_js( __( 'Connected site could not be reached. Verify the connected site URL and that the site is online.', 'safe-publish' ) ); ?>";
 						} else {
-							message = "<?php echo esc_js( __( 'Source site URL is not configured.', 'safe-publish' ) ); ?>";
+							message = "<?php echo esc_js( __( 'Connected site URL is not configured.', 'safe-publish' ) ); ?>";
 						}
 
 						banner.hidden    = false;

@@ -9,8 +9,6 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Auth;
 
-use WP_Error;
-
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -27,7 +25,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class VIP_Safe_Auth {
 
 	/**
-	 * Probe status: source site accepted the credentials and granted edit
+	 * Probe status: probed site accepted the credentials and granted edit
 	 * context.
 	 *
 	 * @var string
@@ -35,14 +33,14 @@ final class VIP_Safe_Auth {
 	const STATUS_AUTHORIZED = 'authorized';
 
 	/**
-	 * Probe status: source site rejected the credentials (HTTP 401/403).
+	 * Probe status: probed site rejected the credentials (HTTP 401/403).
 	 *
 	 * @var string
 	 */
 	const STATUS_UNAUTHORIZED = 'unauthorized';
 
 	/**
-	 * Probe status: source site could not be reached (network failure or
+	 * Probe status: probed site could not be reached (network failure or
 	 * unexpected response code).
 	 *
 	 * @var string
@@ -50,7 +48,7 @@ final class VIP_Safe_Auth {
 	const STATUS_UNREACHABLE = 'unreachable';
 
 	/**
-	 * Probe status: source site URL is not configured.
+	 * Probe status: site URL to probe is not configured.
 	 *
 	 * @var string
 	 */
@@ -59,7 +57,7 @@ final class VIP_Safe_Auth {
 	/**
 	 * Gets authentication parameters for requests.
 	 *
-	 * @param string $site_url    Destination site URL.
+	 * @param string $site_url    Site URL of the API endpoint being called.
 	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
 	 * @param string $method      Optional. HTTP method for the request. Default 'GET'.
 	 * @param string $body        Optional. Request body for content hash generation. Default ''.
@@ -80,7 +78,7 @@ final class VIP_Safe_Auth {
 
 		// Basic auth can be layered on top of shared secret auth.
 		if ( ! empty( $auth_config['username'] ) && ! empty( $auth_config['password'] ) ) {
-			$basic_params = self::get_basic_auth( $site_url, $auth_config );
+			$basic_params = self::get_basic_auth( $auth_config );
 			if ( ! empty( $basic_params['headers'] ) ) {
 				$params['headers'] = array_merge( $params['headers'] ?? array(), $basic_params['headers'] );
 			}
@@ -93,7 +91,7 @@ final class VIP_Safe_Auth {
 	 * Checks whether the configured credentials are well-formed.
 	 *
 	 * Validates the shared secret's presence and minimum length. Does not
-	 * verify that the source site accepts the credentials — use
+	 * verify that the configured site accepts the credentials — use
 	 * test_authorization() for that.
 	 *
 	 * @param array $auth_config Optional. Authentication configuration array. Default empty array.
@@ -106,16 +104,16 @@ final class VIP_Safe_Auth {
 	}
 
 	/**
-	 * Probes the source site to verify the shared secret is accepted.
+	 * Probes the configured site to verify the shared secret is accepted.
 	 *
 	 * Returns `url_unset` for an empty URL or `unauthorized` if the format
 	 * check rejects the credentials. Otherwise, hits
 	 * `wp/v2/posts?context=edit&per_page=1` and inspects the response code:
-	 * 200 means the source accepts the HMAC signature and grants edit
+	 * 200 means the probed site accepts the HMAC signature and grants edit
 	 * context; 401/403 means the credentials are rejected; anything else is
 	 * treated as unreachable.
 	 *
-	 * @param string $site_url    Source site URL.
+	 * @param string $site_url    Site URL to probe.
 	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
 	 * @return array Probe result with `status`, optional `code`/`message`.
 	 */
@@ -125,7 +123,7 @@ final class VIP_Safe_Auth {
 		}
 
 		// Without well-formed credentials we cannot sign the request, so the
-		// source would reject it as unauthorized.
+		// probed site would reject it as unauthorized.
 		if ( ! self::has_valid_credential_format( $auth_config ) ) {
 			return array( 'status' => self::STATUS_UNAUTHORIZED );
 		}
@@ -191,7 +189,7 @@ final class VIP_Safe_Auth {
 	 * Uses HMAC signature in custom headers that VIP allows.
 	 * Compatible with the Safe Publish VIP mu-plugin authentication handler.
 	 *
-	 * @param string $site_url    Destination site URL.
+	 * @param string $site_url    Site URL of the API endpoint being called.
 	 * @param array  $auth_config Authentication configuration.
 	 * @param string $method      Optional. HTTP method for the request. Default 'GET'.
 	 * @param string $body        Optional. Request body for content hash generation. Default ''.
@@ -232,20 +230,20 @@ final class VIP_Safe_Auth {
 			$path = '/wp/v2/posts';
 		}
 
-		// Include this site's URL in the signature, so the destination can
-		// verify the request origin against its configured connected site URL.
-		$source_site_url = untrailingslashit( home_url() );
+		$this_site_url = untrailingslashit( home_url() );
 
-		// Create signature string: METHOD|URI|TIMESTAMP|CONTENT_HASH|SOURCE_SITE_URL.
+		// Create signature string: METHOD|URI|TIMESTAMP|CONTENT_HASH|CONNECTED_SITE_URL.
+		// The trailing slot carries this site's home_url; the receiver verifies
+		// it matches its configured connected site URL.
 		$content_hash   = hash( 'sha256', $body );
-		$string_to_sign = $method . '|' . $path . '|' . $timestamp . '|' . $content_hash . '|' . $source_site_url;
+		$string_to_sign = $method . '|' . $path . '|' . $timestamp . '|' . $content_hash . '|' . $this_site_url;
 
 		return array(
 			'headers' => array(
 				'X-Safe-Publish-Timestamp'    => $timestamp,
 				'X-Safe-Publish-Content-Hash' => $content_hash,
 				'X-Safe-Publish-Signature'    => hash_hmac( 'sha256', $string_to_sign, $shared_secret ),
-				'X-Safe-Publish-Site-URL'     => $source_site_url,
+				'X-Safe-Publish-Site-URL'     => $this_site_url,
 			),
 		);
 	}
@@ -256,14 +254,10 @@ final class VIP_Safe_Auth {
 	 * Uses Authorization header with Basic auth. Intended as an optional layer
 	 * on top of the required Shared Secret authentication.
 	 *
-	 * @param string $site_url    Destination site URL.
-	 * @param array  $auth_config Authentication configuration.
+	 * @param array $auth_config Authentication configuration.
 	 * @return array Request modifications.
 	 */
-	private static function get_basic_auth(
-		string $site_url,
-		array $auth_config
-	): array {
+	private static function get_basic_auth( array $auth_config ): array {
 		$username = $auth_config['username'] ?? '';
 		$password = $auth_config['password'] ?? '';
 

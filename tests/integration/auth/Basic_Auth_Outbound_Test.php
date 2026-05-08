@@ -246,7 +246,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 		$result      = ( new External_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
 
 		// ASSERT: A WP_Error is returned; no posts were fetched.
-		$this->assertInstanceOf( \WP_Error::class, $result, 'fetch_posts() should return WP_Error on 401.' );
+		$this->assertInstanceOf( WP_Error::class, $result, 'fetch_posts() should return WP_Error on 401.' );
 		$this->assertSame( 'http_error', $result->get_error_code(), 'Error code should identify an HTTP-level failure.' );
 	}
 
@@ -254,9 +254,9 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 	 * Intercepts outbound HTTP requests, captures the request arguments, and
 	 * returns a mock response controlled by $mock_status_code.
 	 *
-	 * @param false|array|\WP_Error $preempt Preemptive return value.
-	 * @param array                 $args    HTTP request arguments.
-	 * @param string                $url     Request URL.
+	 * @param false|array|WP_Error $preempt Preemptive return value.
+	 * @param array                $args    HTTP request arguments.
+	 * @param string               $url     Request URL.
 	 * @return array Mock HTTP response.
 	 */
 	public function intercept_http_request(

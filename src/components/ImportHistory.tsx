@@ -339,7 +339,7 @@ export function ImportHistory(): JSX.Element {
 			label: __( 'Source', 'safe-publish' ),
 			enableSorting: false,
 			render: ( { item }: { item: ImportSession } ): JSX.Element => (
-				<span>{ item.source_url }</span>
+				<span>{ item.source_site_url }</span>
 			),
 		},
 	];

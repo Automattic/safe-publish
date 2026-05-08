@@ -23,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Settings_Sanitizer {
 
 	/**
-	 * Sanitizes the external site URL setting.
+	 * Sanitizes the connected site URL setting.
 	 *
 	 * @param mixed $url URL to sanitize.
 	 * @return string Sanitized URL or empty string on failure.

@@ -23,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Media Importer Class.
  *
- * Handles importing media files from external sites into the WordPress media library.
+ * Handles importing media files from the source site into the WordPress media library.
  */
 class Media_Importer {
 
@@ -359,27 +359,27 @@ class Media_Importer {
 	 * Imports featured image from external post.
 	 *
 	 * @param int    $featured_media_id External featured media ID.
-	 * @param string $site_url          External site URL.
+	 * @param string $source_site_url   Source site URL.
 	 * @param array  $auth_credentials  Optional. Authentication credentials. Default empty array.
 	 * @return int|false Attachment ID on success, false on failure.
 	 */
 	public function import_featured_image(
 		int $featured_media_id,
-		string $site_url,
+		string $source_site_url,
 		array $auth_credentials = array()
 	): int|false {
-		if ( empty( $featured_media_id ) || empty( $site_url ) ) {
+		if ( empty( $featured_media_id ) || empty( $source_site_url ) ) {
 			return false;
 		}
 
 		// Check if we already imported this featured image.
-		$existing_attachment = $this->get_attachment_by_featured_media_id( $featured_media_id, $site_url );
+		$existing_attachment = $this->get_attachment_by_featured_media_id( $featured_media_id, $source_site_url );
 		if ( $existing_attachment ) {
 			return $existing_attachment;
 		}
 
-		// Fetch media details from external site.
-		$media_api_url = trailingslashit( $site_url ) . 'wp-json/wp/v2/media/' . $featured_media_id;
+		// Fetch media details from source site.
+		$media_api_url = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/media/' . $featured_media_id;
 		$response      = $this->http_client->make_request( $media_api_url, $auth_credentials );
 
 		if ( is_wp_error( $response ) ) {
@@ -387,7 +387,7 @@ class Media_Importer {
 				Log_Events::FEATURED_IMAGE_FETCH_FAILED,
 				array(
 					'media_id'        => $featured_media_id,
-					'source_site_url' => $site_url,
+					'source_site_url' => $source_site_url,
 					'error'           => $response->get_error_message(),
 				)
 			);
@@ -403,7 +403,7 @@ class Media_Importer {
 				Log_Events::FEATURED_IMAGE_MISSING_SOURCE,
 				array(
 					'media_id'        => $featured_media_id,
-					'source_site_url' => $site_url,
+					'source_site_url' => $source_site_url,
 				)
 			);
 
@@ -411,13 +411,13 @@ class Media_Importer {
 		}
 
 		// Import the media and get the attachment ID.
-		$attachment_id = $this->import_external_media_as_attachment( $media_data['source_url'], $site_url );
+		$attachment_id = $this->import_external_media_as_attachment( $media_data['source_url'], $source_site_url );
 
 		if ( $attachment_id ) {
 			// Inline content imports don't set META_IMPORTED_FROM; setting it
 			// explicitly here ensures get_attachment_by_featured_media_id()'s
 			// AND-query can find it.
-			update_post_meta( $attachment_id, Options::META_IMPORTED_FROM, $site_url );
+			update_post_meta( $attachment_id, Options::META_IMPORTED_FROM, $source_site_url );
 			update_post_meta( $attachment_id, Options::META_FEATURED_MEDIA_ID, $featured_media_id );
 			update_post_meta( $attachment_id, Options::META_MEDIA_TYPE, 'featured_image' );
 
@@ -538,12 +538,12 @@ class Media_Importer {
 	 * Gets attachment ID by external featured media ID.
 	 *
 	 * @param int    $featured_media_id External featured media ID.
-	 * @param string $site_url          External site URL.
+	 * @param string $source_site_url   Source site URL.
 	 * @return int|false Attachment ID on success, false on failure.
 	 */
 	private function get_attachment_by_featured_media_id(
 		int $featured_media_id,
-		string $site_url
+		string $source_site_url
 	): int|false {
 		$attachments = get_posts(
 			array(
@@ -557,7 +557,7 @@ class Media_Importer {
 					),
 					array(
 						'key'   => Options::META_IMPORTED_FROM,
-						'value' => $site_url,
+						'value' => $source_site_url,
 					),
 				),
 				'posts_per_page'   => 1,

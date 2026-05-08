@@ -354,13 +354,13 @@ final class Import_History {
 				$created = (string) $row['created_at_gmt'];
 
 				return array(
-					'id'              => (int) $row['id'],
-					'date'            => str_replace( ' ', 'T', $created ) . 'Z',
-					'level'           => $row['level'],
-					'event'           => $row['event'],
-					'destination_url' => $data['destination_url'] ?? '',
-					'post_ids'        => array_map( 'intval', (array) ( $data['post_ids'] ?? array() ) ),
-					'post_count'      => isset( $data['post_count'] ) ? (int) $data['post_count'] : count( $data['post_ids'] ?? array() ),
+					'id'                   => (int) $row['id'],
+					'date'                 => str_replace( ' ', 'T', $created ) . 'Z',
+					'level'                => $row['level'],
+					'event'                => $row['event'],
+					'destination_site_url' => $data['destination_site_url'] ?? '',
+					'post_ids'             => array_map( 'intval', (array) ( $data['post_ids'] ?? array() ) ),
+					'post_count'           => isset( $data['post_count'] ) ? (int) $data['post_count'] : count( $data['post_ids'] ?? array() ),
 				);
 			},
 			$rows

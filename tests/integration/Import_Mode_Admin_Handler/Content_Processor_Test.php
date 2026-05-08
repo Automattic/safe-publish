@@ -63,10 +63,10 @@ class Content_Processor_Test extends Integration_Test_Case {
 	/**
 	 * Mocks HTTP requests for media downloads, serving real fixture files.
 	 *
-	 * @param false|array|\WP_Error $preempt A preemptive return value.
-	 * @param array                 $args    HTTP request arguments.
-	 * @param string                $url     The request URL.
-	 * @return false|array|\WP_Error
+	 * @param false|array|WP_Error $preempt A preemptive return value.
+	 * @param array                $args    HTTP request arguments.
+	 * @param string               $url     The request URL.
+	 * @return false|array|WP_Error
 	 */
 	public function mock_http_request(
 		false|array|WP_Error $preempt,
@@ -104,11 +104,11 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 */
 	public function test_process_content_preserves_relative_links(): void {
 		// ARRANGE: Classic HTML with a root-relative anchor href.
-		$source_site = 'https://source.example.com';
-		$content     = '<a href="/about-us">About Us</a>';
+		$source_site_url = 'https://source.example.com';
+		$content         = '<a href="/about-us">About Us</a>';
 
 		// ACT: Process content against the source site.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Relative href is unchanged — not converted to an absolute URL.
 		$this->assertStringContainsString(
@@ -136,12 +136,12 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 */
 	public function test_process_content_preserves_third_party_links(): void {
 		// ARRANGE: Content with a link to an unrelated third-party domain.
-		$source_site = 'https://source.example.com';
-		$third_party = 'https://third-party.example.org/page';
-		$content     = '<a href="' . $third_party . '">Third party</a>';
+		$source_site_url = 'https://source.example.com';
+		$third_party     = 'https://third-party.example.org/page';
+		$content         = '<a href="' . $third_party . '">Third party</a>';
 
 		// ACT: Process content against the source site.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Third-party href is unchanged.
 		$this->assertStringContainsString(
@@ -160,12 +160,12 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 */
 	public function test_process_content_replaces_source_site_urls_with_current_site_url(): void {
 		// ARRANGE: Content with an absolute link to the source site.
-		$source_site = 'https://source.example.com';
-		$content     = '<a href="https://source.example.com/the-article">Read more</a>';
-		$current_url = get_site_url();
+		$source_site_url = 'https://source.example.com';
+		$content         = '<a href="https://source.example.com/the-article">Read more</a>';
+		$current_url     = get_site_url();
 
 		// ACT: Process content against the source site.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Source site URL was replaced with the current site URL.
 		$this->assertStringNotContainsString(
@@ -186,11 +186,11 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 */
 	public function test_process_content_preserves_iframe_embeds_without_extra_attributes(): void {
 		// ARRANGE: Classic HTML with a YouTube iframe embed.
-		$source_site = 'https://source.example.com';
-		$content     = '<iframe src="https://www.youtube.com/embed/abc123"></iframe>';
+		$source_site_url = 'https://source.example.com';
+		$content         = '<iframe src="https://www.youtube.com/embed/abc123"></iframe>';
 
 		// ACT: Process content against the source site.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Iframe src is preserved unchanged.
 		$this->assertStringContainsString(
@@ -221,9 +221,9 @@ class Content_Processor_Test extends Integration_Test_Case {
 	public function test_replace_external_urls_preserves_markup(): void {
 		// ARRANGE: Content with markup that DOMDocument would alter,
 		// plus a source-site link to trigger replacement.
-		$source_site = 'https://source.example.com';
-		$current_url = get_site_url();
-		$content     = '<p>Hello &amp; world</p>'
+		$source_site_url = 'https://source.example.com';
+		$current_url     = get_site_url();
+		$content         = '<p>Hello &amp; world</p>'
 			. '<img src="/local.jpg" alt="test"/>'
 			. '<br/>'
 			. '<a href="https://source.example.com/page">Link</a>';
@@ -231,7 +231,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		// ACT: Call replace_external_urls() directly.
 		$processed = $this->processor->replace_external_urls(
 			$content,
-			$source_site
+			$source_site_url
 		);
 
 		// ASSERT: Link was replaced.
@@ -267,14 +267,14 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 */
 	public function test_replace_external_urls_replaces_http_variant(): void {
 		// ARRANGE: Source site is HTTPS, but content has a legacy HTTP link.
-		$source_site = 'https://source.example.com';
-		$current_url = get_site_url();
-		$content     = '<a href="http://source.example.com/old-page">Old link</a>';
+		$source_site_url = 'https://source.example.com';
+		$current_url     = get_site_url();
+		$content         = '<a href="http://source.example.com/old-page">Old link</a>';
 
 		// ACT: Call replace_external_urls() directly.
 		$processed = $this->processor->replace_external_urls(
 			$content,
-			$source_site
+			$source_site_url
 		);
 
 		// ASSERT: The HTTP URL was replaced with the current site URL.
@@ -297,14 +297,14 @@ class Content_Processor_Test extends Integration_Test_Case {
 	public function test_replace_external_urls_does_not_replace_longer_domain(): void {
 		// ARRANGE: Content with a URL to a longer domain that starts with the
 		// source domain string.
-		$source_site = 'https://source.example.com';
-		$longer_url  = 'https://source.example.company.com/page';
-		$content     = '<a href="' . $longer_url . '">Link</a>';
+		$source_site_url = 'https://source.example.com';
+		$longer_url      = 'https://source.example.company.com/page';
+		$content         = '<a href="' . $longer_url . '">Link</a>';
 
 		// ACT: Call replace_external_urls() directly.
 		$processed = $this->processor->replace_external_urls(
 			$content,
-			$source_site
+			$source_site_url
 		);
 
 		// ASSERT: The longer domain URL is unchanged.
@@ -326,11 +326,11 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 */
 	public function test_process_gutenberg_content_preserves_block_structure(): void {
 		// ARRANGE: Minimal Gutenberg block content with no external media.
-		$source_site = 'https://source.example.com';
-		$content     = '<!-- wp:paragraph --><p>Hello Gutenberg.</p><!-- /wp:paragraph -->';
+		$source_site_url = 'https://source.example.com';
+		$content         = '<!-- wp:paragraph --><p>Hello Gutenberg.</p><!-- /wp:paragraph -->';
 
 		// ACT: Process content against the source site.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Block comment delimiters are preserved (Gutenberg path was used).
 		$this->assertStringContainsString(
@@ -364,12 +364,12 @@ class Content_Processor_Test extends Integration_Test_Case {
 	public function test_process_gutenberg_content_rewrites_source_site_links_in_blocks(): void {
 		// ARRANGE: Paragraph block with a link to the source site; the presence
 		// of the source domain forces the full parse-process-serialize path.
-		$source_site = 'https://source.example.com';
-		$content     = '<!-- wp:paragraph --><p><a href="https://source.example.com/the-article">Read more</a></p><!-- /wp:paragraph -->';
-		$current_url = get_site_url();
+		$source_site_url = 'https://source.example.com';
+		$content         = '<!-- wp:paragraph --><p><a href="https://source.example.com/the-article">Read more</a></p><!-- /wp:paragraph -->';
+		$current_url     = get_site_url();
 
 		// ACT: Process content against the source site.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Block comment delimiters are preserved after serialization.
 		$this->assertStringContainsString(
@@ -406,16 +406,16 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 */
 	public function test_process_gutenberg_image_block_imports_media_and_updates_attrs(): void {
 		// ARRANGE: A core/image block referencing an external image on the source site.
-		$source_site  = 'https://source.example.com';
-		$external_url = 'https://source.example.com/photo.jpg';
-		$content      = '<!-- wp:image {"url":"' . $external_url . '"} -->'
+		$source_site_url = 'https://source.example.com';
+		$external_url    = 'https://source.example.com/photo.jpg';
+		$content         = '<!-- wp:image {"url":"' . $external_url . '"} -->'
 			. '<figure class="wp-block-image"><img src="' . $external_url . '" alt="A photo"/></figure>'
 			. '<!-- /wp:image -->';
 
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process the block content through the full Gutenberg path.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Exactly one attachment was created.
 		$this->assertSame( $attachments_before + 1, $this->get_attachment_count(), 'Should create exactly one attachment' );
@@ -448,10 +448,10 @@ class Content_Processor_Test extends Integration_Test_Case {
 	public function test_process_image_block_with_link_to_media_sideloads_anchor_href(): void {
 		// ARRANGE: A core/image block where <img src> is a thumbnail and
 		// <a href> is the full-size image (linkDestination: media).
-		$source_site   = 'https://source.example.com';
-		$thumbnail_url = 'https://source.example.com/photo-300x200.jpg';
-		$fullsize_url  = 'https://source.example.com/photo.jpg';
-		$content       = '<!-- wp:image {"url":"' . $thumbnail_url . '","linkDestination":"media"} -->'
+		$source_site_url = 'https://source.example.com';
+		$thumbnail_url   = 'https://source.example.com/photo-300x200.jpg';
+		$fullsize_url    = 'https://source.example.com/photo.jpg';
+		$content         = '<!-- wp:image {"url":"' . $thumbnail_url . '","linkDestination":"media"} -->'
 			. '<figure class="wp-block-image">'
 			. '<a href="' . $fullsize_url . '">'
 			. '<img src="' . $thumbnail_url . '" alt="A photo"/>'
@@ -461,7 +461,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process the block content through the full Gutenberg path.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Two attachments were created (thumbnail + full-size).
 		$this->assertSame(
@@ -505,10 +505,10 @@ class Content_Processor_Test extends Integration_Test_Case {
 	public function test_process_image_block_with_third_party_src_sideloads_anchor_href(): void {
 		// ARRANGE: An image block whose <img src> is a third-party CDN URL,
 		// wrapped in an <a href> pointing at a source-hosted file.
-		$source_site = 'https://source.example.com';
-		$cdn_url     = 'https://cdn.example.com/photo-300x200.jpg';
-		$href_url    = 'https://source.example.com/photo.jpg';
-		$content     = '<!-- wp:image {"url":"' . $cdn_url . '","linkDestination":"media"} -->'
+		$source_site_url = 'https://source.example.com';
+		$cdn_url         = 'https://cdn.example.com/photo-300x200.jpg';
+		$href_url        = 'https://source.example.com/photo.jpg';
+		$content         = '<!-- wp:image {"url":"' . $cdn_url . '","linkDestination":"media"} -->'
 			. '<figure class="wp-block-image">'
 			. '<a href="' . $href_url . '">'
 			. '<img src="' . $cdn_url . '" alt="A photo"/>'
@@ -518,7 +518,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process the block content through the full Gutenberg path.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: One attachment was created (from the anchor href only).
 		$this->assertSame(
@@ -557,10 +557,10 @@ class Content_Processor_Test extends Integration_Test_Case {
 	public function test_process_image_block_with_failed_src_still_sideloads_anchor_href(): void {
 		// ARRANGE: A source-domain <img src> forced to fail, plus a separate
 		// source-domain <a href> that should still be sideloaded.
-		$source_site = 'https://source.example.com';
-		$broken_url  = 'https://source.example.com/broken-photo.jpg';
-		$href_url    = 'https://source.example.com/photo.jpg';
-		$content     = '<!-- wp:image {"url":"' . $broken_url . '","linkDestination":"media"} -->'
+		$source_site_url = 'https://source.example.com';
+		$broken_url      = 'https://source.example.com/broken-photo.jpg';
+		$href_url        = 'https://source.example.com/photo.jpg';
+		$content         = '<!-- wp:image {"url":"' . $broken_url . '","linkDestination":"media"} -->'
 			. '<figure class="wp-block-image">'
 			. '<a href="' . $href_url . '">'
 			. '<img src="' . $broken_url . '" alt="A photo"/>'
@@ -587,7 +587,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		try {
 			// ACT: Process the block content.
-			$processed = $this->processor->process_content( $content, $source_site );
+			$processed = $this->processor->process_content( $content, $source_site_url );
 		} finally {
 			remove_filter( 'pre_http_request', $force_failure, 5 );
 		}
@@ -627,10 +627,10 @@ class Content_Processor_Test extends Integration_Test_Case {
 	public function test_process_video_block_with_third_party_src_sideloads_anchor_href(): void {
 		// ARRANGE: A video block whose src is a third-party CDN URL, with a
 		// source-domain <a href> in innerHTML pointing at a related file.
-		$source_site = 'https://source.example.com';
-		$cdn_url     = 'https://cdn.example.com/video.mp4';
-		$href_url    = 'https://source.example.com/poster.jpg';
-		$content     = '<!-- wp:video {"src":"' . $cdn_url . '"} -->'
+		$source_site_url = 'https://source.example.com';
+		$cdn_url         = 'https://cdn.example.com/video.mp4';
+		$href_url        = 'https://source.example.com/poster.jpg';
+		$content         = '<!-- wp:video {"src":"' . $cdn_url . '"} -->'
 			. '<figure class="wp-block-video">'
 			. '<a href="' . $href_url . '">Poster</a>'
 			. '<video controls src="' . $cdn_url . '"></video>'
@@ -640,7 +640,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process the block content through the full Gutenberg path.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: One attachment was created (from the anchor href only).
 		$this->assertSame(
@@ -679,9 +679,9 @@ class Content_Processor_Test extends Integration_Test_Case {
 	public function test_process_image_block_with_empty_url_still_sideloads_anchor_href(): void {
 		// ARRANGE: An image block with no <img> and no attrs.url, only a
 		// source-domain <a href> in innerHTML.
-		$source_site = 'https://source.example.com';
-		$href_url    = 'https://source.example.com/file.jpg';
-		$content     = '<!-- wp:image -->'
+		$source_site_url = 'https://source.example.com';
+		$href_url        = 'https://source.example.com/file.jpg';
+		$content         = '<!-- wp:image -->'
 			. '<figure class="wp-block-image">'
 			. '<a href="' . $href_url . '">Download</a>'
 			. '</figure>'
@@ -690,7 +690,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process the block content.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: One attachment was created (from the anchor href).
 		$this->assertSame(
@@ -721,9 +721,9 @@ class Content_Processor_Test extends Integration_Test_Case {
 	public function test_process_video_block_with_empty_src_still_sideloads_anchor_href(): void {
 		// ARRANGE: A video block with no attrs.src, only a source-domain
 		// <a href> in innerHTML.
-		$source_site = 'https://source.example.com';
-		$href_url    = 'https://source.example.com/file.jpg';
-		$content     = '<!-- wp:video -->'
+		$source_site_url = 'https://source.example.com';
+		$href_url        = 'https://source.example.com/file.jpg';
+		$content         = '<!-- wp:video -->'
 			. '<figure class="wp-block-video">'
 			. '<a href="' . $href_url . '">Download</a>'
 			. '</figure>'
@@ -732,7 +732,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process the block content.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: One attachment was created (from the anchor href).
 		$this->assertSame(
@@ -764,10 +764,10 @@ class Content_Processor_Test extends Integration_Test_Case {
 	public function test_process_video_block_with_failed_src_still_sideloads_anchor_href(): void {
 		// ARRANGE: A source-domain video src forced to fail, plus a separate
 		// source-domain <a href> that should still be sideloaded.
-		$source_site = 'https://source.example.com';
-		$broken_url  = 'https://source.example.com/broken-video.mp4';
-		$href_url    = 'https://source.example.com/poster.jpg';
-		$content     = '<!-- wp:video {"src":"' . $broken_url . '"} -->'
+		$source_site_url = 'https://source.example.com';
+		$broken_url      = 'https://source.example.com/broken-video.mp4';
+		$href_url        = 'https://source.example.com/poster.jpg';
+		$content         = '<!-- wp:video {"src":"' . $broken_url . '"} -->'
 			. '<figure class="wp-block-video">'
 			. '<a href="' . $href_url . '">Poster</a>'
 			. '<video controls src="' . $broken_url . '"></video>'
@@ -794,7 +794,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		try {
 			// ACT: Process the block content.
-			$processed = $this->processor->process_content( $content, $source_site );
+			$processed = $this->processor->process_content( $content, $source_site_url );
 		} finally {
 			remove_filter( 'pre_http_request', $force_failure, 5 );
 		}
@@ -829,10 +829,10 @@ class Content_Processor_Test extends Integration_Test_Case {
 	public function test_process_gallery_block_with_inner_blocks_sideloads_outer_anchor_href(): void {
 		// ARRANGE: A block-based gallery whose outer innerHTML contains a
 		// standalone source-domain <a href>, alongside a child image block.
-		$source_site = 'https://source.example.com';
-		$image_url   = 'https://source.example.com/photo.jpg';
-		$href_url    = 'https://source.example.com/download.jpg';
-		$content     = '<!-- wp:gallery {"linkTo":"none"} -->'
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/photo.jpg';
+		$href_url        = 'https://source.example.com/download.jpg';
+		$content         = '<!-- wp:gallery {"linkTo":"none"} -->'
 			. '<figure class="wp-block-gallery has-nested-images">'
 			. '<a href="' . $href_url . '">Download all</a>'
 			. '<!-- wp:image {"id":1} -->'
@@ -846,7 +846,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process the block content.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Two attachments were created — the inner image and the
 		// gallery wrapper href.
@@ -886,8 +886,8 @@ class Content_Processor_Test extends Integration_Test_Case {
 	public function test_process_source_site_image_with_non_standard_extension_imports_media(): void {
 		// ARRANGE: A source-site image URL with .heic extension (absent from the
 		// old extension allow-list and not a substring of any entry in it).
-		$source_site = 'https://source.example.com';
-		$image_url   = 'https://source.example.com/photo.heic';
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/photo.heic';
 
 		$content = '<!-- wp:image {"url":"' . $image_url . '"} -->'
 			. '<figure class="wp-block-image">'
@@ -898,7 +898,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process through the full Gutenberg path.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Exactly one attachment was created.
 		$this->assertSame(
@@ -935,14 +935,14 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 */
 	public function test_process_classic_content_leaves_third_party_image_unchanged(): void {
 		// ARRANGE: HTML with an img from an unrelated CDN (not source.example.com).
-		$source_site   = 'https://source.example.com';
-		$cdn_image_url = 'https://third-party.example.com/photo-123.jpg';
-		$content       = '<p>Hello</p><img src="' . $cdn_image_url . '" alt="stock photo">';
+		$source_site_url = 'https://source.example.com';
+		$cdn_image_url   = 'https://third-party.example.com/photo-123.jpg';
+		$content         = '<p>Hello</p><img src="' . $cdn_image_url . '" alt="stock photo">';
 
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process classic HTML content containing the third-party image.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: No attachment was created for the third-party image.
 		$this->assertSame(
@@ -972,16 +972,16 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 */
 	public function test_process_gutenberg_block_leaves_third_party_image_unchanged(): void {
 		// ARRANGE: core/image block with a stock-photo CDN URL.
-		$source_site   = 'https://source.example.com';
-		$cdn_image_url = 'https://third-party.example.com/photo-456.jpg';
-		$content       = '<!-- wp:image {"url":"' . $cdn_image_url . '"} -->'
+		$source_site_url = 'https://source.example.com';
+		$cdn_image_url   = 'https://third-party.example.com/photo-456.jpg';
+		$content         = '<!-- wp:image {"url":"' . $cdn_image_url . '"} -->'
 			. '<figure class="wp-block-image"><img src="' . $cdn_image_url . '" alt="stock"/></figure>'
 			. '<!-- /wp:image -->';
 
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process the block content containing the third-party image URL.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: No attachment was created for the third-party image.
 		$this->assertSame(
@@ -1015,16 +1015,16 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 */
 	public function test_process_custom_block_imports_media_from_attrs(): void {
 		// ARRANGE: A custom block storing media only in attrs, not in innerHTML.
-		$source_site  = 'https://source.example.com';
-		$external_url = 'https://source.example.com/hero-bg.jpg';
-		$content      = '<!-- wp:my-plugin/hero {"backgroundUrl":"' . $external_url . '"} -->'
+		$source_site_url = 'https://source.example.com';
+		$external_url    = 'https://source.example.com/hero-bg.jpg';
+		$content         = '<!-- wp:my-plugin/hero {"backgroundUrl":"' . $external_url . '"} -->'
 			. '<div class="wp-block-my-plugin-hero"></div>'
 			. '<!-- /wp:my-plugin/hero -->';
 
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process through the full Gutenberg path.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Exactly one attachment was created for the attrs media URL.
 		$this->assertSame(
@@ -1065,15 +1065,15 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 */
 	public function test_process_classic_content_preserves_embed_shortcodes(): void {
 		// ARRANGE: Classic content with an [embed] shortcode.
-		$source_site = 'https://source.example.com';
-		$embed_url   = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
-		$content     = '<p>Watch this:</p>' . "\n"
+		$source_site_url = 'https://source.example.com';
+		$embed_url       = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+		$content         = '<p>Watch this:</p>' . "\n"
 			. '[embed]' . $embed_url . '[/embed]';
 
 		// ACT: Process content against the source site.
 		$processed = $this->processor->process_content(
 			$content,
-			$source_site
+			$source_site_url
 		);
 
 		// ASSERT: The [embed] shortcode is preserved in the output.
@@ -1101,15 +1101,15 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 */
 	public function test_process_classic_content_preserves_bare_oembed_urls(): void {
 		// ARRANGE: Classic content with a bare YouTube URL on its own line.
-		$source_site = 'https://source.example.com';
-		$video_url   = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
-		$content     = '<p>Check out this video:</p>' . "\n"
+		$source_site_url = 'https://source.example.com';
+		$video_url       = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+		$content         = '<p>Check out this video:</p>' . "\n"
 			. $video_url;
 
 		// ACT: Process content against the source site.
 		$processed = $this->processor->process_content(
 			$content,
-			$source_site
+			$source_site_url
 		);
 
 		// ASSERT: The bare URL is preserved in the output.
@@ -1142,16 +1142,16 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 */
 	public function test_process_custom_block_skips_third_party_url_in_attrs(): void {
 		// ARRANGE: A custom block with a third-party CDN URL in attrs only.
-		$source_site   = 'https://source.example.com';
-		$cdn_image_url = 'https://third-party.example.com/banner.jpg';
-		$content       = '<!-- wp:my-plugin/hero {"backgroundUrl":"' . $cdn_image_url . '"} -->'
+		$source_site_url = 'https://source.example.com';
+		$cdn_image_url   = 'https://third-party.example.com/banner.jpg';
+		$content         = '<!-- wp:my-plugin/hero {"backgroundUrl":"' . $cdn_image_url . '"} -->'
 			. '<div class="wp-block-my-plugin-hero"></div>'
 			. '<!-- /wp:my-plugin/hero -->';
 
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process through the full Gutenberg path.
-		$processed = $this->processor->process_content( $content, $source_site );
+		$processed = $this->processor->process_content( $content, $source_site_url );
 
 		// ASSERT: No attachment was created for the third-party URL.
 		$this->assertSame(

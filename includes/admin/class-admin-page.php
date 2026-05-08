@@ -25,7 +25,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Admin_Page {
 
 	/**
-	 * Default number of posts to fetch from the external site on initial page
+	 * Default number of posts to fetch from the source site on initial page
 	 * load.
 	 */
 	const DEFAULT_NUMBER_OF_POSTS = 20;
@@ -62,7 +62,7 @@ final class Admin_Page {
 	 * Renders the admin page.
 	 */
 	public function render(): void {
-		$site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
 		?>
 		<div class="wrap" id="safe-publish-admin-page">
@@ -72,11 +72,11 @@ final class Admin_Page {
 				<div class="safe-publish-dataviews-section">
 					<h2>
 					<?php
-					if ( ! empty( $site_url ) ) {
+					if ( ! empty( $source_site_url ) ) {
 						printf(
 							/* translators: %s: source site URL */
 							esc_html__( 'Recent Posts from %s', 'safe-publish' ),
-							esc_url( $site_url )
+							esc_url( $source_site_url )
 						);
 					} else {
 						esc_html_e( 'Recent Posts from Source Site', 'safe-publish' );
@@ -84,13 +84,13 @@ final class Admin_Page {
 					?>
 				</h2>
 
-					<?php if ( empty( $site_url ) ) : ?>
+					<?php if ( empty( $source_site_url ) ) : ?>
 						<div class="notice notice-warning">
 							<p>
 								<?php
 								printf(
 									/* translators: %s: Settings page URL */
-									esc_html__( 'Please configure the source site URL in the %s to see posts.', 'safe-publish' ),
+									esc_html__( 'Please configure the connected site URL in the %s to see posts.', 'safe-publish' ),
 									'<a href="' . esc_url( admin_url( 'admin.php?page=safe-publish-settings' ) ) . '">' . esc_html__( 'settings page', 'safe-publish' ) . '</a>'
 								);
 								?>
@@ -139,13 +139,13 @@ final class Admin_Page {
 	 */
 	private function enqueue_standard_assets(): void {
 		// Fetch posts data from the source site.
-		$site_url        = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 		$number_of_posts = self::DEFAULT_NUMBER_OF_POSTS;
 		$posts_data      = array();
 
-		if ( ! empty( $site_url ) ) {
+		if ( ! empty( $source_site_url ) ) {
 			$auth_credentials = Auth_Credential_Provider::get_credentials();
-			$posts            = $this->api->fetch_posts( $site_url, $number_of_posts, $auth_credentials );
+			$posts            = $this->api->fetch_posts( $source_site_url, $number_of_posts, $auth_credentials );
 
 			// Handle API errors.
 			if ( ! is_wp_error( $posts ) ) {
@@ -293,14 +293,14 @@ final class Admin_Page {
 
 		$json_data = wp_json_encode(
 			array(
-				'ajaxurl'     => admin_url( 'admin-ajax.php' ),
-				'settingsUrl' => admin_url( 'admin.php?page=safe-publish-settings' ),
-				'nonce'       => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-				'restNonce'   => wp_create_nonce( 'wp_rest' ),
-				'siteUrl'     => $site_url,
-				'numPosts'    => $number_of_posts,
-				'containerId' => 'safe-publish-dataviews-container',
-				'postsData'   => $posts_data,
+				'ajaxurl'       => admin_url( 'admin-ajax.php' ),
+				'settingsUrl'   => admin_url( 'admin.php?page=safe-publish-settings' ),
+				'nonce'         => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+				'restNonce'     => wp_create_nonce( 'wp_rest' ),
+				'sourceSiteUrl' => $source_site_url,
+				'numPosts'      => $number_of_posts,
+				'containerId'   => 'safe-publish-dataviews-container',
+				'postsData'     => $posts_data,
 			)
 		);
 

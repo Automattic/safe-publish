@@ -625,17 +625,17 @@ class Permission_Manager {
 
 		$route = $request->get_route();
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__HTTP_USER_AGENT__
-		$raw_user_agent  = $_SERVER['HTTP_USER_AGENT'] ?? '';
-		$destination_url = $this->parse_destination_url( $raw_user_agent );
+		$raw_user_agent       = $_SERVER['HTTP_USER_AGENT'] ?? '';
+		$destination_site_url = $this->parse_destination_site_url( $raw_user_agent );
 
 		if ( is_wp_error( $response ) ) {
 			$this->export_logger->log_error(
 				Log_Events::EXPORT_FAILED,
 				array(
-					'route'           => $route,
-					'destination_url' => $destination_url,
-					'error_code'      => $response->get_error_code(),
-					'error_message'   => $response->get_error_message(),
+					'route'                => $route,
+					'destination_site_url' => $destination_site_url,
+					'error_code'           => $response->get_error_code(),
+					'error_message'        => $response->get_error_message(),
 				)
 			);
 			return $response;
@@ -647,9 +647,9 @@ class Permission_Manager {
 			$this->export_logger->log_error(
 				Log_Events::EXPORT_FAILED,
 				array(
-					'route'           => $route,
-					'destination_url' => $destination_url,
-					'status'          => $status,
+					'route'                => $route,
+					'destination_site_url' => $destination_site_url,
+					'status'               => $status,
 				)
 			);
 			return $response;
@@ -663,10 +663,10 @@ class Permission_Manager {
 			$this->export_logger->log_event(
 				'CONTENT_EXPORTED',
 				array(
-					'rest_base'       => $matches[1],
-					'destination_url' => $destination_url,
-					'post_ids'        => $post_ids,
-					'post_count'      => count( $post_ids ),
+					'rest_base'            => $matches[1],
+					'destination_site_url' => $destination_site_url,
+					'post_ids'             => $post_ids,
+					'post_count'           => count( $post_ids ),
 				)
 			);
 		} elseif ( 1 === preg_match( '#^/wp/v2/([^/]+)/(\d+)$#', $route, $matches ) ) {
@@ -677,10 +677,10 @@ class Permission_Manager {
 			$this->export_logger->log_event(
 				'CONTENT_EXPORTED',
 				array(
-					'rest_base'       => $matches[1],
-					'destination_url' => $destination_url,
-					'post_ids'        => array( $post_id ),
-					'post_count'      => 1,
+					'rest_base'            => $matches[1],
+					'destination_site_url' => $destination_site_url,
+					'post_ids'             => array( $post_id ),
+					'post_count'           => 1,
 				)
 			);
 		}
@@ -698,7 +698,7 @@ class Permission_Manager {
 	 * @param string $user_agent Raw HTTP_USER_AGENT value.
 	 * @return string Destination URL, or empty string if header is absent.
 	 */
-	private function parse_destination_url( string $user_agent ): string {
+	private function parse_destination_site_url( string $user_agent ): string {
 		if ( '' === $user_agent ) {
 			return '';
 		}

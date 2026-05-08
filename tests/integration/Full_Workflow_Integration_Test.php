@@ -120,10 +120,10 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	 *
 	 * Returns a post response built from defaults merged with $this->mock_post_overrides.
 	 *
-	 * @param false|array|\WP_Error $preempt Preemptive return value.
-	 * @param array                 $_args   HTTP request arguments (unused).
-	 * @param string                $url     Request URL.
-	 * @return false|array|\WP_Error Mocked response, or the prior return value.
+	 * @param false|array|WP_Error $preempt Preemptive return value.
+	 * @param array                $_args   HTTP request arguments (unused).
+	 * @param string               $url     Request URL.
+	 * @return false|array|WP_Error Mocked response, or the prior return value.
 	 */
 	public function mock_post_api(
 		false|array|WP_Error $preempt,
@@ -469,7 +469,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		$auth_result = $this->authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: Auth failed; no import should have proceeded.
-		$this->assertInstanceOf( \WP_Error::class, $auth_result );
+		$this->assertInstanceOf( WP_Error::class, $auth_result );
 		$this->assertSame( 'safe_publish_auth_invalid', $auth_result->get_error_code() );
 		$this->assertFalse( $this->authenticator->is_authenticated() );
 	}
@@ -494,16 +494,16 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		}
 
 		$secret         = defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : self::FALLBACK_SECRET;
-		$site_url       = home_url();
+		$this_site_url  = home_url();
 		$content_hash   = hash( 'sha256', $body );
-		$string_to_sign = $method . '|' . $route . '|' . $timestamp . '|' . $content_hash . '|' . $site_url;
+		$string_to_sign = $method . '|' . $route . '|' . $timestamp . '|' . $content_hash . '|' . $this_site_url;
 		$signature      = hash_hmac( 'sha256', $string_to_sign, $secret );
 
 		$request = new WP_REST_Request( $method, $route );
 		$request->set_body( $body );
 		$request->set_header( 'X-Safe-Publish-Timestamp', (string) $timestamp );
 		$request->set_header( 'X-Safe-Publish-Content-Hash', $content_hash );
-		$request->set_header( 'X-Safe-Publish-Site-URL', $site_url );
+		$request->set_header( 'X-Safe-Publish-Site-URL', $this_site_url );
 		$request->set_header( 'X-Safe-Publish-Signature', $signature );
 
 		return $request;

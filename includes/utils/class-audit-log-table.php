@@ -14,7 +14,7 @@ namespace Safe_Publish\Utils;
  *
  * Handles table creation, row insertion, querying, and deletion.
  */
-class Audit_Log_Table {
+final class Audit_Log_Table {
 
 	/**
 	 * Table schema version.
@@ -71,10 +71,8 @@ class Audit_Log_Table {
 			event VARCHAR(64) NOT NULL,
 			created_at_gmt DATETIME NOT NULL,
 			data LONGTEXT NOT NULL,
-			PRIMARY KEY (id),
-			KEY channel_created_gmt (channel, created_at_gmt),
-			KEY level (level),
-			KEY event (event)
+			PRIMARY KEY  (id),
+			KEY channel_created_gmt (channel, created_at_gmt)
 		) {$charset};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
