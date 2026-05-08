@@ -390,20 +390,20 @@ export interface ImportItem {
 /**
  * Represents a single export event from the audit log table.
  *
- * @property {number}         id              Unique event ID.
- * @property {string}         date            Date the event was recorded.
- * @property {'info'|'error'} level           Event severity level.
- * @property {string}         event           Event type (e.g. CONTENT_EXPORTED).
- * @property {string}         destination_url URL of the destination site.
- * @property {number[]}       post_ids        IDs of the exported posts.
- * @property {number}         post_count      Number of exported posts.
+ * @property {number}         id                   Unique event ID.
+ * @property {string}         date                 Date the event was recorded.
+ * @property {'info'|'error'} level                Event severity level.
+ * @property {string}         event                Event type (e.g. CONTENT_EXPORTED).
+ * @property {string}         destination_site_url URL of the destination site.
+ * @property {number[]}       post_ids             IDs of the exported posts.
+ * @property {number}         post_count           Number of exported posts.
  */
 export interface ExportEvent {
 	id: number;
 	date: string;
 	level: 'info' | 'error';
 	event: string;
-	destination_url: string;
+	destination_site_url: string;
 	post_ids: number[];
 	post_count: number;
 }
