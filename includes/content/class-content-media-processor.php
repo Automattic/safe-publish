@@ -74,7 +74,7 @@ class Content_Media_Processor {
 	 * and textarea content are natively skipped by the HTML API.
 	 *
 	 * @param string $content         Post content with external media URLs.
-	 * @param string $source_site_url External site URL.
+	 * @param string $source_site_url Source site URL.
 	 * @return string Processed content with imported media.
 	 */
 	public function process_content(

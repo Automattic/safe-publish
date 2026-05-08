@@ -44,13 +44,13 @@ final class Session_Formatter {
 	 * @return array Formatted session data.
 	 */
 	public function format_session( array $session ): array {
-		$total      = (int) $session['total_items'];
-		$successful = (int) $session['successful'];
-		$failed     = (int) $session['failed'];
-		$updated    = (int) $session['updated'];
-		$status     = (string) $session['status'];
-		$source_url = (string) $session['source_url'];
-		$created    = (string) $session['created_at_gmt'];
+		$total           = (int) $session['total_items'];
+		$successful      = (int) $session['successful'];
+		$failed          = (int) $session['failed'];
+		$updated         = (int) $session['updated'];
+		$status          = (string) $session['status'];
+		$source_site_url = (string) $session['source_site_url'];
+		$created         = (string) $session['created_at_gmt'];
 
 		$user = (string) $session['user_display_name'];
 		if ( '' === $user ) {
@@ -60,17 +60,17 @@ final class Session_Formatter {
 		$status_labels = $this->get_status_labels();
 
 		return array(
-			'id'           => (int) $session['id'],
-			'date'         => str_replace( ' ', 'T', $created ) . 'Z',
-			'user'         => $user,
-			'total_items'  => $total,
-			'successful'   => $successful,
-			'failed'       => $failed,
-			'updated'      => $updated,
-			'status'       => $status,
-			'status_label' => $status_labels[ $status ] ?? $status,
-			'source_url'   => $source_url,
-			'can_rollback' => ( 'completed' === $status && $successful > 0 ),
+			'id'              => (int) $session['id'],
+			'date'            => str_replace( ' ', 'T', $created ) . 'Z',
+			'user'            => $user,
+			'total_items'     => $total,
+			'successful'      => $successful,
+			'failed'          => $failed,
+			'updated'         => $updated,
+			'status'          => $status,
+			'status_label'    => $status_labels[ $status ] ?? $status,
+			'source_site_url' => $source_site_url,
+			'can_rollback'    => ( 'completed' === $status && $successful > 0 ),
 		);
 	}
 

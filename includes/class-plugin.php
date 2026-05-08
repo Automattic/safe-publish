@@ -73,8 +73,8 @@ final class Plugin {
 		Imports_Table::maybe_create_table();
 		Import_Items_Table::maybe_create_table();
 
-		$sync_mode     = get_option( Options::OPTION_SYNC_MODE, '' );
-		$connected_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$sync_mode          = get_option( Options::OPTION_SYNC_MODE, '' );
+		$connected_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
 		$can_export = in_array(
 			$sync_mode,
@@ -82,7 +82,7 @@ final class Plugin {
 			true
 		);
 
-		if ( $can_export && ! empty( $connected_url ) ) {
+		if ( $can_export && ! empty( $connected_site_url ) ) {
 			$auth_manager = new Auth_Manager();
 			$auth_manager->init();
 		}

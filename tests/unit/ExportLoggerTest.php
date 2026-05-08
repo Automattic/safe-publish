@@ -30,12 +30,12 @@ class ExportLoggerTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that parse_destination_url extracts the URL from a standard
+	 * Verifies that parse_destination_site_url extracts the URL from a standard
 	 * Safe Publish User-Agent string.
 	 */
-	public function test_parse_destination_url_extracts_url_from_user_agent(): void {
+	public function test_parse_destination_site_url_extracts_url_from_user_agent(): void {
 		$manager = new Permission_Manager( new Auth_Logger(), new Export_Logger() );
-		$method  = get_private_method( Permission_Manager::class, 'parse_destination_url' );
+		$method  = get_private_method( Permission_Manager::class, 'parse_destination_site_url' );
 
 		$result = $method->invoke( $manager, 'Safe Publish/1.2.3; https://dest.example.com' );
 
@@ -43,23 +43,23 @@ class ExportLoggerTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that parse_destination_url returns an empty string for an absent
+	 * Verifies that parse_destination_site_url returns an empty string for an absent
 	 * User-Agent header.
 	 */
-	public function test_parse_destination_url_returns_empty_string_for_missing_header(): void {
+	public function test_parse_destination_site_url_returns_empty_string_for_missing_header(): void {
 		$manager = new Permission_Manager( new Auth_Logger(), new Export_Logger() );
-		$method  = get_private_method( Permission_Manager::class, 'parse_destination_url' );
+		$method  = get_private_method( Permission_Manager::class, 'parse_destination_site_url' );
 
 		$this->assertSame( '', $method->invoke( $manager, '' ) );
 	}
 
 	/**
-	 * Verifies that parse_destination_url returns the raw value when the
+	 * Verifies that parse_destination_site_url returns the raw value when the
 	 * User-Agent does not match the expected format.
 	 */
-	public function test_parse_destination_url_returns_raw_value_for_unknown_format(): void {
+	public function test_parse_destination_site_url_returns_raw_value_for_unknown_format(): void {
 		$manager = new Permission_Manager( new Auth_Logger(), new Export_Logger() );
-		$method  = get_private_method( Permission_Manager::class, 'parse_destination_url' );
+		$method  = get_private_method( Permission_Manager::class, 'parse_destination_site_url' );
 
 		$result = $method->invoke( $manager, 'curl/7.88.0' );
 

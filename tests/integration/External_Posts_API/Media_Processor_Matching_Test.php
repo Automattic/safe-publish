@@ -33,13 +33,13 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 		string $description
 	): void {
 		// ARRANGE: Record attachment count before processing.
-		$source_site        = 'https://example.com';
+		$source_site_url    = 'https://example.com';
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content through the media processor.
 		$result = $this->content_media_processor->process_content(
 			$content,
-			$source_site
+			$source_site_url
 		);
 
 		// ASSERT: The source-domain URL was replaced.
@@ -247,14 +247,14 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 		string $description
 	): void {
 		// ARRANGE: Reset tracking and record attachment count.
-		$source_site = 'https://example.com';
+		$source_site_url = 'https://example.com';
 		$this->content_media_processor->reset_failed_media();
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content.
 		$result = $this->content_media_processor->process_content(
 			$content,
-			$source_site
+			$source_site_url
 		);
 
 		// ASSERT: Content is byte-for-byte identical.
@@ -401,15 +401,15 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 	 */
 	public function test_gt_in_attribute_preserves_surrounding_markup(): void {
 		// ARRANGE: img with > in alt text before src.
-		$source_site = 'https://example.com';
-		$url         = 'https://example.com/photo.jpg';
-		$content     = '<img alt="A > B" class="hero" src="'
+		$source_site_url = 'https://example.com';
+		$url             = 'https://example.com/photo.jpg';
+		$content         = '<img alt="A > B" class="hero" src="'
 			. $url . '" width="100">';
 
 		// ACT: Process content.
 		$result = $this->content_media_processor->process_content(
 			$content,
-			$source_site
+			$source_site_url
 		);
 
 		// ASSERT: Media URL was replaced.
@@ -445,16 +445,16 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 	 */
 	public function test_url_inside_html_comment_not_imported(): void {
 		// ARRANGE: An img tag inside an HTML comment.
-		$source_site = 'https://example.com';
-		$url         = 'https://example.com/photo.jpg';
-		$content     = '<!-- <img src="' . $url . '"> -->';
+		$source_site_url = 'https://example.com';
+		$url             = 'https://example.com/photo.jpg';
+		$content         = '<!-- <img src="' . $url . '"> -->';
 
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content.
 		$result = $this->content_media_processor->process_content(
 			$content,
-			$source_site
+			$source_site_url
 		);
 
 		// ASSERT: Content is unchanged — comment preserved.
@@ -477,8 +477,8 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 	 */
 	public function test_comment_preserved_alongside_real_media(): void {
 		// ARRANGE: A real img and a commented-out img.
-		$source_site = 'https://example.com';
-		$content     = '<!-- <img src="https://example.com/old.jpg"> -->'
+		$source_site_url = 'https://example.com';
+		$content         = '<!-- <img src="https://example.com/old.jpg"> -->'
 			. '<img src="https://example.com/real.jpg">';
 
 		$attachments_before = $this->get_attachment_count();
@@ -486,7 +486,7 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 		// ACT: Process content.
 		$result = $this->content_media_processor->process_content(
 			$content,
-			$source_site
+			$source_site_url
 		);
 
 		// ASSERT: Real img was imported.
@@ -515,16 +515,16 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 	 */
 	public function test_malformed_html_records_missed_url_as_failure(): void {
 		// ARRANGE: Img with unclosed quote — regex cannot match.
-		$source_site = 'https://example.com';
-		$url         = 'https://example.com/photo.jpg';
-		$content     = '<img src="' . $url;
+		$source_site_url = 'https://example.com';
+		$url             = 'https://example.com/photo.jpg';
+		$content         = '<img src="' . $url;
 
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content.
 		$result = $this->content_media_processor->process_content(
 			$content,
-			$source_site
+			$source_site_url
 		);
 
 		// ASSERT: Content is unchanged (regex couldn't match).
@@ -560,9 +560,9 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 	 */
 	public function test_url_inside_script_not_imported(): void {
 		// ARRANGE: An img template string inside a script.
-		$source_site = 'https://example.com';
-		$url         = 'https://example.com/photo.jpg';
-		$content     = '<script type="text/javascript">'
+		$source_site_url = 'https://example.com';
+		$url             = 'https://example.com/photo.jpg';
+		$content         = '<script type="text/javascript">'
 			. 'var tpl = \'<img src="' . $url . '">\';</script>';
 
 		$attachments_before = $this->get_attachment_count();
@@ -570,7 +570,7 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 		// ACT: Process content.
 		$result = $this->content_media_processor->process_content(
 			$content,
-			$source_site
+			$source_site_url
 		);
 
 		// ASSERT: Content is unchanged.
@@ -592,8 +592,8 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 	 */
 	public function test_url_inside_style_not_imported(): void {
 		// ARRANGE: A background-image URL inside a style tag.
-		$source_site = 'https://example.com';
-		$content     = '<style>.hero { background-image:'
+		$source_site_url = 'https://example.com';
+		$content         = '<style>.hero { background-image:'
 			. ' url("https://example.com/bg.jpg"); }'
 			. '</style>';
 
@@ -602,7 +602,7 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 		// ACT: Process content.
 		$result = $this->content_media_processor->process_content(
 			$content,
-			$source_site
+			$source_site_url
 		);
 
 		// ASSERT: Content is unchanged.
@@ -635,14 +635,14 @@ class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
 		string $description
 	): void {
 		// ARRANGE: Reset tracking arrays.
-		$source_site = 'https://example.com';
+		$source_site_url = 'https://example.com';
 		$this->content_media_processor->reset_failed_media();
 		$this->content_media_processor->reset_unprocessable_media();
 
 		// ACT: Process content.
 		$this->content_media_processor->process_content(
 			$content,
-			$source_site
+			$source_site_url
 		);
 
 		// ASSERT: No false failure or detection recorded.

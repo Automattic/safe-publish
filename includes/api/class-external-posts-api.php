@@ -89,15 +89,15 @@ class External_Posts_API {
 	/**
 	 * Fetches posts from external site.
 	 *
-	 * @param string $site_url         External site URL.
+	 * @param string $source_site_url  Source site URL.
 	 * @param int    $number_of_posts  Optional. Number of posts to fetch. Default 10.
 	 * @param array  $auth_credentials Optional. Authentication credentials array. Default empty array.
 	 * @param string $post_type        Optional. Post type to fetch. Default 'posts'.
 	 * @return array|WP_Error Posts data or error.
 	 */
-	public function fetch_posts( string $site_url, int $number_of_posts = 10, array $auth_credentials = array(), string $post_type = 'posts' ): array|WP_Error {
+	public function fetch_posts( string $source_site_url, int $number_of_posts = 10, array $auth_credentials = array(), string $post_type = 'posts' ): array|WP_Error {
 		// Validate URL first.
-		if ( ! URL_Validator::is_valid_external_url( $site_url ) ) {
+		if ( ! URL_Validator::is_valid_external_url( $source_site_url ) ) {
 			return new WP_Error(
 				'invalid_url',
 				__( 'Invalid URL provided.', 'safe-publish' )
@@ -105,7 +105,7 @@ class External_Posts_API {
 		}
 
 		// Build API URL.
-		$api_url = $this->build_api_url( $site_url, $number_of_posts, $auth_credentials, $post_type );
+		$api_url = $this->build_api_url( $source_site_url, $number_of_posts, $auth_credentials, $post_type );
 
 		// Make request.
 		$response = $this->make_request( $api_url, $auth_credentials );
@@ -127,15 +127,15 @@ class External_Posts_API {
 	/**
 	 * Builds API URL.
 	 *
-	 * @param string $site_url         Base site URL.
+	 * @param string $source_site_url  Source site URL.
 	 * @param int    $number_of_posts  Number of posts.
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
 	 * @param string $post_type        Optional. Post type to fetch. Default 'posts'.
 	 * @return string Built API URL.
 	 */
-	private function build_api_url( string $site_url, int $number_of_posts, array $auth_credentials = array(), string $post_type = 'posts' ): string {
+	private function build_api_url( string $source_site_url, int $number_of_posts, array $auth_credentials = array(), string $post_type = 'posts' ): string {
 		$endpoint     = Post_Type_Map::to_rest_endpoint( $post_type );
-		$api_endpoint = trailingslashit( $site_url ) . 'wp-json/wp/v2/' . $endpoint;
+		$api_endpoint = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/' . $endpoint;
 
 		$query_args = array(
 			'orderby'  => 'modified',
@@ -155,10 +155,10 @@ class External_Posts_API {
 		 * Filters API query arguments.
 		 *
 		 * @param array  $query_args      Query arguments.
-		 * @param string $site_url        Site URL.
+		 * @param string $source_site_url Source site URL.
 		 * @param int    $number_of_posts Number of posts.
 		 */
-		$query_args = apply_filters( 'safe_publish_api_query_args', $query_args, $site_url, $number_of_posts );
+		$query_args = apply_filters( 'safe_publish_api_query_args', $query_args, $source_site_url, $number_of_posts );
 
 		$final_url = add_query_arg( $query_args, $api_endpoint );
 
@@ -257,20 +257,20 @@ class External_Posts_API {
 	 * Tests API connection.
 	 *
 	 * Delegates to the shared-secret probe so the result reflects whether the
-	 * source site actually grants edit context, not just whether a public
+	 * connected site actually grants edit context, not just whether a public
 	 * endpoint responds.
 	 *
-	 * @param string $site_url         Site URL to test.
-	 * @param array  $auth_credentials Authentication credentials.
+	 * @param string $connected_site_url Connected site URL to test.
+	 * @param array  $auth_credentials   Authentication credentials.
 	 * @return array Test results: success, status, response_time, message.
 	 */
 	public function test_connection(
-		string $site_url,
+		string $connected_site_url,
 		array $auth_credentials
 	): array {
 		$start_time = microtime( true );
 		$probe      = VIP_Safe_Auth::test_authorization(
-			$site_url,
+			$connected_site_url,
 			$auth_credentials
 		);
 		$end_time   = microtime( true );
@@ -295,22 +295,22 @@ class External_Posts_API {
 		switch ( $status ) {
 			case VIP_Safe_Auth::STATUS_AUTHORIZED:
 				return __(
-					'Source site accepts the shared secret and grants edit context.',
+					'Connected site accepts the shared secret and grants edit context.',
 					'safe-publish'
 				);
 			case VIP_Safe_Auth::STATUS_UNAUTHORIZED:
 				return __(
-					'Source site rejected the shared secret. Verify SAFE_PUBLISH_SHARED_SECRET matches on both sites in wp-config.php.',
+					'Connected site rejected the shared secret. Verify SAFE_PUBLISH_SHARED_SECRET matches on both sites in wp-config.php.',
 					'safe-publish'
 				);
 			case VIP_Safe_Auth::STATUS_UNREACHABLE:
 				return __(
-					'Source site could not be reached. Verify the URL and that the site is online.',
+					'Connected site could not be reached. Verify the URL and that the site is online.',
 					'safe-publish'
 				);
 			case VIP_Safe_Auth::STATUS_URL_UNSET:
 				return __(
-					'Source site URL is not configured.',
+					'Connected site URL is not configured.',
 					'safe-publish'
 				);
 			default:
@@ -326,25 +326,25 @@ class External_Posts_API {
 	 * type-aware sanitization in Meta_Terms_Manager.
 	 *
 	 * @param int    $external_post_id  External post ID.
-	 * @param string $site_url          Site URL.
+	 * @param string $source_site_url   Source site URL.
 	 * @param array  $auth_credentials  Optional. Authentication credentials. Default empty array.
 	 * @param string $post_type         Optional. Post type slug or REST endpoint. Default 'posts'.
 	 * @return array|false Post data array on success, false on failure.
 	 */
 	public function fetch_fresh_post_content(
 		int $external_post_id,
-		string $site_url,
+		string $source_site_url,
 		array $auth_credentials = array(),
 		string $post_type = 'posts'
 	): array|false {
 		// Validate URL first.
-		if ( ! URL_Validator::is_valid_external_url( $site_url ) ) {
+		if ( ! URL_Validator::is_valid_external_url( $source_site_url ) ) {
 			return false;
 		}
 
 		// Build API URL for single post.
 		$endpoint     = Post_Type_Map::to_rest_endpoint( $post_type );
-		$api_endpoint = trailingslashit( $site_url ) . 'wp-json/wp/v2/' . $endpoint . '/' . $external_post_id;
+		$api_endpoint = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/' . $endpoint . '/' . $external_post_id;
 
 		$query_args = array(
 			'_embed' => '1',
@@ -371,7 +371,7 @@ class External_Posts_API {
 				Log_Events::CONTENT_FETCH_FAILED,
 				array(
 					'post_id'         => $external_post_id,
-					'source_site_url' => $site_url,
+					'source_site_url' => $source_site_url,
 					'error'           => $response->get_error_message(),
 				)
 			);
@@ -387,7 +387,7 @@ class External_Posts_API {
 				Log_Events::CONTENT_FETCH_INVALID_RESPONSE,
 				array(
 					'post_id'         => $external_post_id,
-					'source_site_url' => $site_url,
+					'source_site_url' => $source_site_url,
 				)
 			);
 
@@ -404,7 +404,7 @@ class External_Posts_API {
 				Log_Events::CONTENT_FETCH_RAW_UNAVAILABLE,
 				array(
 					'post_id'         => $external_post_id,
-					'source_site_url' => $site_url,
+					'source_site_url' => $source_site_url,
 				)
 			);
 

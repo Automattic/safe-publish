@@ -494,16 +494,16 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		}
 
 		$secret         = defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : self::FALLBACK_SECRET;
-		$site_url       = home_url();
+		$this_site_url  = home_url();
 		$content_hash   = hash( 'sha256', $body );
-		$string_to_sign = $method . '|' . $route . '|' . $timestamp . '|' . $content_hash . '|' . $site_url;
+		$string_to_sign = $method . '|' . $route . '|' . $timestamp . '|' . $content_hash . '|' . $this_site_url;
 		$signature      = hash_hmac( 'sha256', $string_to_sign, $secret );
 
 		$request = new WP_REST_Request( $method, $route );
 		$request->set_body( $body );
 		$request->set_header( 'X-Safe-Publish-Timestamp', (string) $timestamp );
 		$request->set_header( 'X-Safe-Publish-Content-Hash', $content_hash );
-		$request->set_header( 'X-Safe-Publish-Site-URL', $site_url );
+		$request->set_header( 'X-Safe-Publish-Site-URL', $this_site_url );
 		$request->set_header( 'X-Safe-Publish-Signature', $signature );
 
 		return $request;

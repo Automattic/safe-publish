@@ -50,10 +50,10 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 	 */
 	public function test_complete_import_session_workflow_succeeds(): void {
 		// ARRANGE: Create a test session.
-		$source_url = 'https://example.com';
+		$source_site_url = 'https://example.com';
 
 		// ACT: Create session.
-		$session_id = $this->repository->create_session( $source_url, 'bulk' );
+		$session_id = $this->repository->create_session( $source_site_url, 'bulk' );
 
 		// ASSERT: Session created successfully.
 		$this->assertIsInt( $session_id );
@@ -63,7 +63,7 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 		$this->assertIsArray( $session );
 
 		// ASSERT: Session row was stored correctly.
-		$this->assertSame( 'https://example.com', $session['source_url'] );
+		$this->assertSame( 'https://example.com', $session['source_site_url'] );
 		$this->assertSame( 'bulk', $session['session_type'] );
 		$this->assertSame( 'in_progress', $session['status'] );
 	}
@@ -416,7 +416,7 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 
 		$by_url = array();
 		foreach ( $sessions as $row ) {
-			$by_url[ (string) $row['source_url'] ] = $row;
+			$by_url[ (string) $row['source_site_url'] ] = $row;
 		}
 
 		$this->assertSame( 2, (int) $by_url['https://a.example.com']['total_items'] );

@@ -126,7 +126,7 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 
 		$data = $events[0]['data'];
 		$this->assertSame( 'posts', $data['rest_base'] );
-		$this->assertSame( 'https://dest.example.com', $data['destination_url'] );
+		$this->assertSame( 'https://dest.example.com', $data['destination_site_url'] );
 		$this->assertSame( array( 10, 20 ), $data['post_ids'] );
 		$this->assertSame( 2, $data['post_count'] );
 

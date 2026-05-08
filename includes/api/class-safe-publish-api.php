@@ -382,15 +382,15 @@ final class Safe_Publish_API extends REST_Base {
 		int $post_id,
 		int $featured_media_id
 	): bool {
-		$site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
-		if ( null === $this->media_importer || empty( $site_url ) ) {
+		if ( null === $this->media_importer || empty( $source_site_url ) ) {
 			return false;
 		}
 
 		$attachment_id = $this->media_importer->import_featured_image(
 			$featured_media_id,
-			$site_url
+			$source_site_url
 		);
 
 		if ( false === $attachment_id ) {
@@ -413,9 +413,9 @@ final class Safe_Publish_API extends REST_Base {
 			return $content;
 		}
 
-		$site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
-		return $this->content_processor->process_content( $content, $site_url );
+		return $this->content_processor->process_content( $content, $source_site_url );
 	}
 
 	/**

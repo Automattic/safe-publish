@@ -43,13 +43,13 @@ class Post_Type_Fetcher {
 	/**
 	 * Fetches available post types from external site.
 	 *
-	 * @param string $site_url         External site URL.
+	 * @param string $source_site_url  Source site URL.
 	 * @param array  $auth_credentials Optional. Authentication credentials array. Default empty array.
 	 * @return array|WP_Error Post types data or error.
 	 */
-	public function fetch_post_types( string $site_url, array $auth_credentials = array() ): array|WP_Error {
+	public function fetch_post_types( string $source_site_url, array $auth_credentials = array() ): array|WP_Error {
 		// Validate URL first.
-		if ( ! URL_Validator::is_valid_external_url( $site_url ) ) {
+		if ( ! URL_Validator::is_valid_external_url( $source_site_url ) ) {
 			return new WP_Error(
 				'invalid_url',
 				__( 'Invalid URL provided.', 'safe-publish' )
@@ -57,7 +57,7 @@ class Post_Type_Fetcher {
 		}
 
 		// Build API URL for post types.
-		$api_url = trailingslashit( $site_url ) . 'wp-json/wp/v2/types';
+		$api_url = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/types';
 
 		// Make request.
 		$response = $this->http_client->make_request( $api_url, $auth_credentials );

@@ -59,7 +59,7 @@ describe( 'Type validation', () => {
 				updated: 5,
 				status: 'completed',
 				status_label: 'Completed',
-				source_url: 'https://example.com',
+				source_site_url: 'https://example.com',
 				can_rollback: true,
 			};
 
@@ -88,7 +88,7 @@ describe( 'Type validation', () => {
 					updated: 0,
 					status,
 					status_label: status,
-					source_url: 'https://example.com',
+					source_site_url: 'https://example.com',
 					can_rollback: true,
 				};
 				expect( session.status ).toBe( status );

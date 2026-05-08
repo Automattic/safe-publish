@@ -45,12 +45,12 @@ final class History_Repository {
 	/**
 	 * Creates a new import session.
 	 *
-	 * @param string $source_url   Source site URL.
-	 * @param string $session_type Type of import (single, bulk).
+	 * @param string $source_site_url Source site URL.
+	 * @param string $session_type    Type of import (single, bulk).
 	 * @return int|WP_Error Session ID or error.
 	 */
 	public function create_session(
-		string $source_url,
+		string $source_site_url,
 		string $session_type = 'bulk'
 	): int|WP_Error {
 		global $wpdb;
@@ -65,7 +65,7 @@ final class History_Repository {
 				'user_display_name' => $user
 					? $user->display_name
 					: __( 'Unknown user', 'safe-publish' ),
-				'source_url'        => $source_url,
+				'source_site_url'   => $source_site_url,
 				'session_type'      => $session_type,
 				'status'            => 'in_progress',
 				'ended_at_gmt'      => null,
