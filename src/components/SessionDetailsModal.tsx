@@ -220,7 +220,7 @@ export function SessionDetailsModal( {
 		<VStack spacing={ 2 } style={ { marginBottom: '24px' } }>
 			<Text><strong>{ __( 'Date:', 'safe-publish' ) }</strong> { formatDateTime( session.date ) }</Text>
 			<Text><strong>{ __( 'User:', 'safe-publish' ) }</strong> { session.user }</Text>
-			<Text><strong>{ __( 'Source:', 'safe-publish' ) }</strong> { session.source_url }</Text>
+			<Text><strong>{ __( 'Source:', 'safe-publish' ) }</strong> { session.source_site_url }</Text>
 			<Text>
 				<strong>{ __( 'Status:', 'safe-publish' ) } </strong>
 				<span className={ `safe-publish-status-${ session.status }` }>

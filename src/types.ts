@@ -352,7 +352,7 @@ export interface ImportSession {
 	updated: number;
 	status: 'in_progress' | 'completed' | 'failed' | 'rolled_back';
 	status_label: string;
-	source_url: string;
+	source_site_url: string;
 	can_rollback: boolean;
 }
 
