@@ -120,10 +120,10 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	 *
 	 * Returns a post response built from defaults merged with $this->mock_post_overrides.
 	 *
-	 * @param false|array|\WP_Error $preempt Preemptive return value.
-	 * @param array                 $_args   HTTP request arguments (unused).
-	 * @param string                $url     Request URL.
-	 * @return false|array|\WP_Error Mocked response, or the prior return value.
+	 * @param false|array|WP_Error $preempt Preemptive return value.
+	 * @param array                $_args   HTTP request arguments (unused).
+	 * @param string               $url     Request URL.
+	 * @return false|array|WP_Error Mocked response, or the prior return value.
 	 */
 	public function mock_post_api(
 		false|array|WP_Error $preempt,
@@ -469,7 +469,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		$auth_result = $this->authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: Auth failed; no import should have proceeded.
-		$this->assertInstanceOf( \WP_Error::class, $auth_result );
+		$this->assertInstanceOf( WP_Error::class, $auth_result );
 		$this->assertSame( 'safe_publish_auth_invalid', $auth_result->get_error_code() );
 		$this->assertFalse( $this->authenticator->is_authenticated() );
 	}

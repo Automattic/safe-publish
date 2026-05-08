@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\API;
 
 use Safe_Publish\Validators\URL_Validator;
+use WP_Error;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -44,12 +45,12 @@ class Post_Type_Fetcher {
 	 *
 	 * @param string $site_url         External site URL.
 	 * @param array  $auth_credentials Optional. Authentication credentials array. Default empty array.
-	 * @return array|\WP_Error Post types data or error.
+	 * @return array|WP_Error Post types data or error.
 	 */
-	public function fetch_post_types( string $site_url, array $auth_credentials = array() ): array|\WP_Error {
+	public function fetch_post_types( string $site_url, array $auth_credentials = array() ): array|WP_Error {
 		// Validate URL first.
 		if ( ! URL_Validator::is_valid_external_url( $site_url ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'invalid_url',
 				__( 'Invalid URL provided.', 'safe-publish' )
 			);
@@ -70,7 +71,7 @@ class Post_Type_Fetcher {
 
 		// Check for authentication error responses.
 		if ( is_array( $post_types_data ) && isset( $post_types_data['code'] ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'api_error',
 				$post_types_data['message'] ?? __( 'Unknown API error occurred.', 'safe-publish' )
 			);
@@ -82,7 +83,7 @@ class Post_Type_Fetcher {
 				__( 'No post types found. Response: %s', 'safe-publish' ),
 				substr( $response_body, 0, 200 ) . ( strlen( $response_body ) > 200 ? '…' : '' )
 			);
-			return new \WP_Error(
+			return new WP_Error(
 				'no_post_types',
 				$error_msg
 			);

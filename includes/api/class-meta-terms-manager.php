@@ -83,9 +83,9 @@ final class Meta_Terms_Manager {
 	 *
 	 * @param int          $post_id Post ID to update terms for.
 	 * @param array|object $terms   Terms to set, keyed by taxonomy.
-	 * @return true|\WP_Error True on success, WP_Error on failure.
+	 * @return true|WP_Error True on success, WP_Error on failure.
 	 */
-	public function update_terms( int $post_id, array|object $terms ): true|\WP_Error {
+	public function update_terms( int $post_id, array|object $terms ): true|WP_Error {
 		// Update terms if provided (accept array/object; supports IDs, slugs, names, or objects).
 		$terms_array = (array) $terms;
 		if ( array() !== $terms_array ) {

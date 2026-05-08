@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests;
 use PHPUnit\Framework\TestCase;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\Auth\VIP_Safe_Auth;
+use WP_Error;
 
 /**
  * External Posts API Test.
@@ -47,7 +48,7 @@ class ExternalPostsAPITest extends TestCase {
 	public function test_fetch_posts_with_invalid_url_returns_error(): void {
 		$result = $this->api->fetch_posts( 'invalid-url', 10 );
 
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'invalid_url', $result->get_error_code() );
 	}
 
@@ -57,7 +58,7 @@ class ExternalPostsAPITest extends TestCase {
 	public function test_fetch_posts_with_empty_url_returns_error(): void {
 		$result = $this->api->fetch_posts( '', 10 );
 
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'invalid_url', $result->get_error_code() );
 	}
 
