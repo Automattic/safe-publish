@@ -60,14 +60,14 @@ import './style.scss';
  * Renders a DataViews table with search, sort, and pagination capabilities
  * for displaying posts fetched from external WordPress sites.
  *
- * @param {Object} props              Component props.
- * @param {Post[]} props.initialPosts Posts to display on initial load.
- * @param {string} props.siteUrl      External site URL.
- * @param {number} props.numberPosts  Number of posts to fetch.
+ * @param {Object} props               Component props.
+ * @param {Post[]} props.initialPosts  Posts to display on initial load.
+ * @param {string} props.sourceSiteUrl Source site URL.
+ * @param {number} props.numberPosts   Number of posts to fetch.
  *
  * @return {JSX.Element} Rendered DataViews component.
  */
-function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: ExternalPostsDataViewProps ): JSX.Element {
+function ExternalPostsDataView( { initialPosts, sourceSiteUrl, numberPosts }: ExternalPostsDataViewProps ): JSX.Element {
 	const [ view, setView ] = useState< View >( {
 		type: 'table',
 		perPage: DEFAULT_POSTS_PER_PAGE,
@@ -301,7 +301,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 	 * @return {Promise<void>} Resolves when fetch completes.
 	 */
 	const fetchPostsByType = async ( postType: string, numPosts: number ): Promise< void > => {
-		if ( ! siteUrl ) {
+		if ( ! sourceSiteUrl ) {
 			return;
 		}
 
@@ -311,7 +311,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 		const formData = new FormData();
 		formData.append( 'action', 'safe_publish_fetch_posts' );
 		formData.append( 'nonce', window.safePublishAdminData.nonce );
-		formData.append( 'site_url', siteUrl );
+		formData.append( 'source_site_url', sourceSiteUrl );
 		formData.append( 'number_of_posts', numPosts.toString() );
 		formData.append( 'post_type', postType );
 
@@ -407,7 +407,7 @@ function ExternalPostsDataView( { initialPosts, siteUrl, numberPosts }: External
 			/>
 			<div className="safe-publish-controls-row">
 				<PostTypeSelector
-					siteUrl={ siteUrl }
+					sourceSiteUrl={ sourceSiteUrl }
 					selectedPostType={ selectedPostType }
 					onPostTypeChange={ handlePostTypeChange }
 					onError={ setPostTypeError }
@@ -502,7 +502,7 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 		return;
 	}
 
-	const siteUrl = window.safePublishAdminData?.siteUrl || '';
+	const sourceSiteUrl = window.safePublishAdminData?.sourceSiteUrl || '';
 	const numberPosts = window.safePublishAdminData?.numPosts ?? 0;
 
 	// Get posts data from localized script.
@@ -522,7 +522,7 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 	createRoot( dataviewContainer ).render(
 		<ExternalPostsDataView
 			initialPosts={ initialPosts }
-			siteUrl={ siteUrl }
+			sourceSiteUrl={ sourceSiteUrl }
 			numberPosts={ numberPosts }
 		/>
 	);

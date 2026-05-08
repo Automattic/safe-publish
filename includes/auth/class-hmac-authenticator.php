@@ -236,7 +236,7 @@ class HMAC_Authenticator {
 			);
 
 			return new WP_Error(
-				'safe_publish_auth_no_connected_url',
+				'safe_publish_auth_no_connected_site_url',
 				'Safe Publish connected site URL not configured',
 				array( 'status' => 500 )
 			);
@@ -266,10 +266,10 @@ class HMAC_Authenticator {
 			$this->logger->log_error(
 				Log_Events::SITE_URL_MISMATCH,
 				array(
-					'route'            => $route,
-					'method'           => $method,
-					'request_site_url' => $request_site_url,
-					'configured_url'   => $this->connected_site_url,
+					'route'              => $route,
+					'method'             => $method,
+					'request_site_url'   => $request_site_url,
+					'connected_site_url' => $this->connected_site_url,
 				)
 			);
 
@@ -369,14 +369,14 @@ class HMAC_Authenticator {
 	/**
 	 * Validates the HMAC-SHA256 signature.
 	 *
-	 * Signature covers: METHOD|URI|TIMESTAMP|CONTENT_HASH|CONFIGURED_SITE_URL
+	 * Signature covers: METHOD|URI|TIMESTAMP|CONTENT_HASH|SITE_URL
 	 *
-	 * @param string $signature    Provided signature.
-	 * @param string $method       HTTP method.
-	 * @param string $uri          Request URI.
-	 * @param int    $timestamp    Request timestamp.
-	 * @param string $content_hash SHA-256 hash of request body.
-	 * @param string $site_url     The authoritative site URL to include in the expected signature string.
+	 * @param string $signature          Provided signature.
+	 * @param string $method             HTTP method.
+	 * @param string $uri                Request URI.
+	 * @param int    $timestamp          Request timestamp.
+	 * @param string $content_hash       SHA-256 hash of request body.
+	 * @param string $connected_site_url The authoritative site URL to include in the expected signature string.
 	 * @return bool True if valid.
 	 */
 	private function validate_signature(
@@ -385,9 +385,9 @@ class HMAC_Authenticator {
 		string $uri,
 		int $timestamp,
 		string $content_hash,
-		string $site_url
+		string $connected_site_url
 	): bool {
-		$string_to_sign = $method . '|' . $uri . '|' . $timestamp . '|' . $content_hash . '|' . $site_url;
+		$string_to_sign = $method . '|' . $uri . '|' . $timestamp . '|' . $content_hash . '|' . $connected_site_url;
 		$expected       = hash_hmac( 'sha256', $string_to_sign, $this->shared_secret );
 		return hash_equals( $expected, $signature );
 	}

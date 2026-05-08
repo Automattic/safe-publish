@@ -175,19 +175,19 @@ final class Admin_Ajax_Controller {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability();
 
-		$site_url        = sanitize_text_field( wp_unslash( $_POST['site_url'] ?? '' ) );
+		$source_site_url = sanitize_text_field( wp_unslash( $_POST['source_site_url'] ?? '' ) );
 		$number_of_posts = absint( $_POST['number_of_posts'] ?? 10 );
 		$post_type       = sanitize_text_field( wp_unslash( $_POST['post_type'] ?? 'posts' ) );
 
-		if ( empty( $site_url ) ) {
-			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
+		if ( empty( $source_site_url ) ) {
+			wp_send_json_error( __( 'Source site URL is required.', 'safe-publish' ) );
 		}
 
 		$this->validate_auth_or_fail();
 
 		$auth_credentials = Auth_Credential_Provider::get_credentials();
 
-		$posts = $this->api->fetch_posts( $site_url, $number_of_posts, $auth_credentials, $post_type );
+		$posts = $this->api->fetch_posts( $source_site_url, $number_of_posts, $auth_credentials, $post_type );
 
 		if ( is_wp_error( $posts ) ) {
 			wp_send_json_error( $posts->get_error_message() );
@@ -205,17 +205,17 @@ final class Admin_Ajax_Controller {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability();
 
-		$site_url = sanitize_text_field( wp_unslash( $_POST['site_url'] ?? '' ) );
+		$source_site_url = sanitize_text_field( wp_unslash( $_POST['source_site_url'] ?? '' ) );
 
-		if ( empty( $site_url ) ) {
-			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
+		if ( empty( $source_site_url ) ) {
+			wp_send_json_error( __( 'Source site URL is required.', 'safe-publish' ) );
 		}
 
 		$this->validate_auth_or_fail();
 
 		$auth_credentials = Auth_Credential_Provider::get_credentials();
 
-		$post_types = $this->post_type_fetcher->fetch_post_types( $site_url, $auth_credentials );
+		$post_types = $this->post_type_fetcher->fetch_post_types( $source_site_url, $auth_credentials );
 
 		if ( is_wp_error( $post_types ) ) {
 			wp_send_json_error( $post_types->get_error_message() );
@@ -231,10 +231,10 @@ final class Admin_Ajax_Controller {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability();
 
-		$site_url = sanitize_text_field( wp_unslash( $_POST['site_url'] ?? '' ) );
+		$connected_site_url = sanitize_text_field( wp_unslash( $_POST['connected_site_url'] ?? '' ) );
 
-		if ( empty( $site_url ) ) {
-			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
+		if ( empty( $connected_site_url ) ) {
+			wp_send_json_error( __( 'Connected site URL is required.', 'safe-publish' ) );
 		}
 
 		$this->validate_auth_or_fail();
@@ -256,7 +256,7 @@ final class Admin_Ajax_Controller {
 			}
 		}
 
-		$results = $this->api->test_connection( $site_url, $auth_credentials );
+		$results = $this->api->test_connection( $connected_site_url, $auth_credentials );
 
 		wp_send_json_success( $results );
 	}
@@ -369,8 +369,8 @@ final class Admin_Ajax_Controller {
 		}
 
 		// Create single import session for tracking.
-		$source_url     = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
-		$session_result = $this->repository->create_session( $source_url, 'single' );
+		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$session_result  = $this->repository->create_session( $source_site_url, 'single' );
 
 		if ( is_wp_error( $session_result ) ) {
 			wp_send_json_error( $session_result->get_error_message() );
@@ -378,7 +378,7 @@ final class Admin_Ajax_Controller {
 
 		$session_id = $session_result;
 
-		// Fetch fresh content from the external site.
+		// Fetch fresh content from the source site.
 		$fresh_result = $this->fetch_fresh_content(
 			$external_post_id,
 			$raw_post_type
@@ -548,8 +548,8 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( __( 'Bulk import limited to 50 posts at a time.', 'safe-publish' ) );
 		}
 
-		$source_url     = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
-		$session_result = $this->repository->create_session( $source_url, 'bulk' );
+		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$session_result  = $this->repository->create_session( $source_site_url, 'bulk' );
 
 		if ( is_wp_error( $session_result ) ) {
 			wp_send_json_error( $session_result->get_error_message() );
@@ -592,15 +592,15 @@ final class Admin_Ajax_Controller {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability();
 
-		$site_url = sanitize_text_field( wp_unslash( $_POST['site_url'] ?? '' ) );
+		$connected_site_url = sanitize_text_field( wp_unslash( $_POST['connected_site_url'] ?? '' ) );
 
-		if ( empty( $site_url ) ) {
-			wp_send_json_error( __( 'Site URL is required.', 'safe-publish' ) );
+		if ( empty( $connected_site_url ) ) {
+			wp_send_json_error( __( 'Connected site URL is required.', 'safe-publish' ) );
 		}
 
 		$auth_credentials = Auth_Credential_Provider::get_credentials();
 
-		$api_url = trailingslashit( $site_url ) . 'wp-json/wp/v2/types';
+		$api_url = trailingslashit( $connected_site_url ) . 'wp-json/wp/v2/types';
 
 		$auth_params = \Safe_Publish\Auth\VIP_Safe_Auth::get_auth_params(
 			$api_url,
@@ -614,7 +614,7 @@ final class Admin_Ajax_Controller {
 		}
 
 		$debug_info = array(
-			'site_url'                   => $site_url,
+			'connected_site_url'         => $connected_site_url,
 			'api_url'                    => $api_url,
 			'auth_credentials_available' => ! empty( $auth_credentials['shared_secret'] ),
 			'auth_credentials_type'      => $auth_type,
@@ -1021,9 +1021,9 @@ final class Admin_Ajax_Controller {
 		$processed = $content;
 
 		if ( ! empty( $content ) && ! empty( $external_link ) ) {
-			$site_url  = wp_parse_url( $external_link, PHP_URL_SCHEME )
+			$source_site_url = wp_parse_url( $external_link, PHP_URL_SCHEME )
 				. '://' . wp_parse_url( $external_link, PHP_URL_HOST );
-			$processed = $this->content_processor->process_content( $content, $site_url );
+			$processed       = $this->content_processor->process_content( $content, $source_site_url );
 
 			if ( is_wp_error( $processed ) ) {
 				return $processed;
@@ -1075,7 +1075,7 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Fetches fresh post content from the configured external site.
+	 * Fetches fresh post content from the configured source site.
 	 *
 	 * Returns a WP_Error when the fetch fails for any reason, including when no
 	 * source site URL is configured. Callers should abort the import on error.
@@ -1088,11 +1088,11 @@ final class Admin_Ajax_Controller {
 		int $external_post_id,
 		string $post_type
 	): array|WP_Error {
-		$configured_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
-		if ( '' === $configured_site_url ) {
+		if ( '' === $source_site_url ) {
 			return new WP_Error(
-				'fresh_content_fetch_no_source_url',
+				'fresh_content_fetch_no_source_site_url',
 				__( 'No source site URL is configured.', 'safe-publish' )
 			);
 		}
@@ -1102,7 +1102,7 @@ final class Admin_Ajax_Controller {
 		try {
 			$fresh_data = $this->api->fetch_fresh_post_content(
 				$external_post_id,
-				$configured_site_url,
+				$source_site_url,
 				$auth_credentials,
 				$post_type
 			);

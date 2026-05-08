@@ -77,7 +77,7 @@ The import history table displays one row per session:
 | User   | Who performed the import                           |
 | Items  | Total, successful, failed, and updated item counts |
 | Status | Session status indicator                           |
-| Source | External site URL                                  |
+| Source | Source site URL                                    |
 
 Click the **Date** link or the **View Details** action to drill into the session's individual log entries.
 

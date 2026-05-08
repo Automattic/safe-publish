@@ -361,8 +361,8 @@ class Post_Import_Service {
 			return $this->sanitize_field( $content, self::FIELD_CONTENT );
 		}
 
-		$site_url  = $this->extract_site_url( $external_link );
-		$processed = $this->content_processor->process_content( $content, $site_url );
+		$source_site_url = $this->extract_site_url( $external_link );
+		$processed       = $this->content_processor->process_content( $content, $source_site_url );
 
 		if ( is_wp_error( $processed ) ) {
 			return $processed;
@@ -431,7 +431,7 @@ class Post_Import_Service {
 	/**
 	 * Handles import flow when a matching post already exists in WordPress.
 	 *
-	 * Fetches fresh content from the external site and updates the existing
+	 * Fetches fresh content from the source site and updates the existing
 	 * post. Aborts with an error result if the fetch fails; the post will
 	 * not be updated with stale snapshot data.
 	 *
@@ -557,7 +557,7 @@ class Post_Import_Service {
 	/**
 	 * Handles import flow when no matching post exists yet in WordPress.
 	 *
-	 * Fetches fresh content from the external site and creates a new draft
+	 * Fetches fresh content from the source site and creates a new draft
 	 * post. Aborts with an error result if the fetch fails; the post will
 	 * not be created with stale snapshot data.
 	 *
@@ -1054,7 +1054,7 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Fetches fresh post content from the configured external site.
+	 * Fetches fresh post content from the configured source site.
 	 *
 	 * Returns a WP_Error when the fetch fails for any reason, including when no
 	 * source site URL is configured. Callers should abort the import on error.
@@ -1067,11 +1067,11 @@ class Post_Import_Service {
 		int $external_post_id,
 		string $post_type
 	): array|WP_Error {
-		$configured_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
-		if ( '' === $configured_site_url ) {
+		if ( '' === $source_site_url ) {
 			return new WP_Error(
-				'fresh_content_fetch_no_source_url',
+				'fresh_content_fetch_no_source_site_url',
 				__( 'No source site URL is configured.', 'safe-publish' )
 			);
 		}
@@ -1081,7 +1081,7 @@ class Post_Import_Service {
 		try {
 			$fresh_data = $this->api->fetch_fresh_post_content(
 				$external_post_id,
-				$configured_site_url,
+				$source_site_url,
 				$auth_credentials,
 				$post_type
 			);
@@ -1131,11 +1131,11 @@ class Post_Import_Service {
 			return 0;
 		}
 
-		$site_url = $this->extract_site_url( $external_link );
+		$source_site_url = $this->extract_site_url( $external_link );
 
 		$attachment_id = $this->media_importer->import_featured_image(
 			$featured_media_id,
-			$site_url
+			$source_site_url
 		);
 
 		return $attachment_id;

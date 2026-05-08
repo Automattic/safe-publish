@@ -78,16 +78,16 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 	 */
 	public function test_invalid_signature_fails_with_401(): void {
 		// ARRANGE: Valid timestamp, content hash, and site URL — but wrong signature.
-		$timestamp    = time();
-		$body         = 'some body content';
-		$content_hash = hash( 'sha256', $body );
-		$site_url     = home_url();
+		$timestamp     = time();
+		$body          = 'some body content';
+		$content_hash  = hash( 'sha256', $body );
+		$this_site_url = home_url();
 
 		$request = new WP_REST_Request( 'POST', '/wp/v2/posts' );
 		$request->set_body( $body );
 		$request->set_header( 'X-Safe-Publish-Timestamp', (string) $timestamp );
 		$request->set_header( 'X-Safe-Publish-Content-Hash', $content_hash );
-		$request->set_header( 'X-Safe-Publish-Site-URL', $site_url );
+		$request->set_header( 'X-Safe-Publish-Site-URL', $this_site_url );
 		$request->set_header( 'X-Safe-Publish-Signature', 'totally-invalid-signature' );
 
 		// ACT: Attempt authentication with the tampered signature.
@@ -285,7 +285,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 
 		// ASSERT: Returns 500 WP_Error; authentication state is unchanged.
 		$this->assertInstanceOf( \WP_Error::class, $result );
-		$this->assertSame( 'safe_publish_auth_no_connected_url', $result->get_error_code() );
+		$this->assertSame( 'safe_publish_auth_no_connected_site_url', $result->get_error_code() );
 		$this->assertSame( 500, $result->get_error_data()['status'] );
 		$this->assertFalse( $authenticator->is_authenticated() );
 	}
@@ -395,7 +395,8 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 	 * @param string      $route     REST route path.
 	 * @param string      $body      Request body.
 	 * @param int         $timestamp Optional. Unix timestamp. Defaults to current time.
-	 * @param string|null $site_url  Optional. Source site URL to include in the request. Null uses home_url(), '' omits the header.
+	 * @param string|null $site_url  Optional. URL to include in the X-Safe-Publish-Site-URL header.
+	 *                               Null uses home_url(), '' omits the header.
 	 * @return WP_REST_Request Signed request.
 	 */
 	private function build_signed_request(

@@ -18,7 +18,7 @@ Fires after any event is recorded to the audit log (e.g. import, export, auth, c
 
 - `string $channel` — event channel (e.g. `'import'`, `'export'`, `'auth'`, `'content'`, `'media'`)
 - `string $event` — event type identifier (e.g. `'CONTENT_EXPORTED'`, `'AUTH_FAILURE'`)
-- `array $data` — event payload. Always includes `timestamp` (GMT mysql), `site_url`, `user_agent`, `request_uri`, `actor_user_id` (int), `actor_display_name` (string snapshot), and `actor_source` (one of `cli`, `cron`, `hmac`, `xmlrpc`, `ajax`, `rest`, `admin`, `front`, `unknown`). Unauthenticated contexts (e.g. webhook callbacks) record `actor_user_id` of `0` and an empty display name; `actor_source` then disambiguates the origin. Channel-specific fields are merged in alongside these reserved keys, which cannot be overridden by callers.
+- `array $data` — event payload. Always includes `timestamp` (GMT mysql), `site_url` (local site, from `get_site_url()`), `user_agent`, `request_uri`, `actor_user_id` (int), `actor_display_name` (string snapshot), and `actor_source` (one of `cli`, `cron`, `hmac`, `xmlrpc`, `ajax`, `rest`, `admin`, `front`, `unknown`). Unauthenticated contexts (e.g. webhook callbacks) record `actor_user_id` of `0` and an empty display name; `actor_source` then disambiguates the origin. Channel-specific fields are merged in alongside these reserved keys, which cannot be overridden by callers.
 
 **Example:**
 
@@ -59,7 +59,7 @@ Filter query arguments sent to the external site's REST API when fetching the li
 **Parameters:**
 
 - `array $args` — query arguments
-- `string $site_url` — external site URL
+- `string $source_site_url` — source site URL
 - `int $number_of_posts` — number of posts to fetch
 
 **Returns:** `array`
@@ -67,7 +67,7 @@ Filter query arguments sent to the external site's REST API when fetching the li
 **Example:**
 
 ```php
-add_filter( 'safe_publish_api_query_args', function( array $args, string $site_url, int $number_of_posts ): array {
+add_filter( 'safe_publish_api_query_args', function( array $args, string $source_site_url, int $number_of_posts ): array {
     $args['orderby'] = 'modified';
     $args['order']   = 'desc';
     return $args;

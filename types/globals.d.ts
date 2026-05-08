@@ -10,7 +10,7 @@ declare global {
 		safePublishAdminData: {
 			ajaxurl: string;
 			nonce: string;
-			siteUrl: string;
+			sourceSiteUrl: string;
 			numPosts: number;
 			containerId: string;
 			postsData: string;

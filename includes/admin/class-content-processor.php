@@ -80,18 +80,18 @@ class Content_Processor {
 	 * processing strategy. Replaces external URLs in the content after processing.
 	 *
 	 * @param string $content  Post content to process.
-	 * @param string $site_url Source site URL.
+	 * @param string $source_site_url Source site URL.
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
-	public function process_content( string $content, string $site_url ): string|WP_Error {
+	public function process_content( string $content, string $source_site_url ): string|WP_Error {
 		$this->failed_media        = array();
 		$this->unprocessable_media = array();
 		$this->media_importer->reset_newly_created_attachment_ids();
 
 		if ( $this->is_gutenberg_content( $content ) ) {
-			$processed_content = $this->process_gutenberg_blocks( $content, $site_url );
+			$processed_content = $this->process_gutenberg_blocks( $content, $source_site_url );
 		} else {
-			$processed_content = $this->content_media_processor->process_content( $content, $site_url );
+			$processed_content = $this->content_media_processor->process_content( $content, $source_site_url );
 		}
 
 		// Merge failures from content_media_processor (used in both the
@@ -113,7 +113,7 @@ class Content_Processor {
 		$this->content_media_processor->reset_failed_media();
 		$this->content_media_processor->reset_unprocessable_media();
 
-		return $this->replace_external_urls( $processed_content, $site_url );
+		return $this->replace_external_urls( $processed_content, $source_site_url );
 	}
 
 	/**
@@ -130,10 +130,10 @@ class Content_Processor {
 	 * Processes Gutenberg blocks and imports media.
 	 *
 	 * @param string $content  Post content with blocks.
-	 * @param string $site_url Source site URL.
+	 * @param string $source_site_url Source site URL.
 	 * @return string Processed content.
 	 */
-	public function process_gutenberg_blocks( string $content, string $site_url ): string {
+	public function process_gutenberg_blocks( string $content, string $source_site_url ): string {
 		if ( empty( $content ) ) {
 			return $content;
 		}
@@ -150,8 +150,8 @@ class Content_Processor {
 
 		// Process each block.
 		$processed_blocks = array_map(
-			function ( $block ) use ( $site_url ) {
-				return $this->process_single_block( $block, $site_url );
+			function ( $block ) use ( $source_site_url ) {
+				return $this->process_single_block( $block, $source_site_url );
 			},
 			$blocks
 		);
@@ -163,22 +163,22 @@ class Content_Processor {
 	}
 
 	/**
-	 * Replaces external site URLs with current site URLs in content.
+	 * Replaces source site URLs with current site URLs in content.
 	 *
 	 * Uses string replacement instead of DOM parsing to avoid altering
 	 * markup (entity encoding, self-closing tags, whitespace, etc.).
 	 *
 	 * @param string $content           Content to process.
-	 * @param string $external_site_url External site URL (scheme://host).
+	 * @param string $source_site_url Source site URL (scheme://host).
 	 * @return string|WP_Error Content with URLs replaced, or WP_Error on failure.
 	 */
-	public function replace_external_urls( string $content, string $external_site_url ): string|WP_Error {
-		if ( empty( $content ) || empty( $external_site_url ) ) {
+	public function replace_external_urls( string $content, string $source_site_url ): string|WP_Error {
+		if ( empty( $content ) || empty( $source_site_url ) ) {
 			return $content;
 		}
 
 		$current_site_url = get_site_url();
-		$external_host    = wp_parse_url( $external_site_url, PHP_URL_HOST );
+		$external_host    = wp_parse_url( $source_site_url, PHP_URL_HOST );
 		$current_host     = wp_parse_url( $current_site_url, PHP_URL_HOST );
 
 		// Skip if URLs are the same.
@@ -335,27 +335,27 @@ class Content_Processor {
 	/**
 	 * Processes a single Gutenberg block.
 	 *
-	 * @param array  $block    Block data.
-	 * @param string $site_url Source site URL.
+	 * @param array  $block Block data.
+	 * @param string $source_site_url Source site URL.
 	 * @return array Processed block.
 	 */
-	private function process_single_block( array $block, string $site_url ): array {
+	private function process_single_block( array $block, string $source_site_url ): array {
 		if ( empty( $block['blockName'] ) ) {
 			return $block;
 		}
 
 		switch ( $block['blockName'] ) {
 			case 'core/image':
-				$block = $this->process_image_block( $block, $site_url );
+				$block = $this->process_image_block( $block, $source_site_url );
 				break;
 
 			case 'core/gallery':
-				$block = $this->process_gallery_block( $block, $site_url );
+				$block = $this->process_gallery_block( $block, $source_site_url );
 				break;
 
 			case 'core/video':
 			case 'core/audio':
-				$block = $this->process_media_block( $block, $site_url );
+				$block = $this->process_media_block( $block, $source_site_url );
 				break;
 
 			case 'core/embed':
@@ -363,18 +363,18 @@ class Content_Processor {
 			case 'core-embed/vimeo':
 			case 'core-embed/twitter':
 			case 'core-embed/instagram':
-				$block = $this->process_embed_block( $block, $site_url );
+				$block = $this->process_embed_block( $block, $source_site_url );
 				break;
 
 			case 'core/html':
-				$block = $this->process_html_block( $block, $site_url );
+				$block = $this->process_html_block( $block, $source_site_url );
 				break;
 
 			case 'core/paragraph':
 			case 'core/heading':
 			case 'core/list':
 			case 'core/quote':
-				$block = $this->process_text_block( $block, $site_url );
+				$block = $this->process_text_block( $block, $source_site_url );
 				break;
 
 			default:
@@ -383,7 +383,7 @@ class Content_Processor {
 				if ( isset( $block['attrs'] ) && array() !== $block['attrs'] ) {
 					$block['attrs'] = $this->replace_urls_in_attrs(
 						$block['attrs'],
-						$site_url,
+						$source_site_url,
 						$block
 					);
 				}
@@ -393,7 +393,7 @@ class Content_Processor {
 				if ( isset( $block['innerHTML'] ) && '' !== $block['innerHTML'] ) {
 					$block['innerHTML'] = $this->content_media_processor->process_content(
 						$block['innerHTML'],
-						$site_url
+						$source_site_url
 					);
 				}
 				break;
@@ -405,11 +405,11 @@ class Content_Processor {
 	/**
 	 * Processes image block to import media and update block attributes.
 	 *
-	 * @param array  $block    Image block data.
-	 * @param string $site_url Source site URL.
+	 * @param array  $block Image block data.
+	 * @param string $source_site_url Source site URL.
 	 * @return array Processed block.
 	 */
-	private function process_image_block( array $block, string $site_url ): array {
+	private function process_image_block( array $block, string $source_site_url ): array {
 		$original_url = '';
 
 		// First try to get URL from block attributes.
@@ -421,27 +421,27 @@ class Content_Processor {
 		}
 
 		if ( empty( $original_url ) ) {
-			return $this->process_block_inner_html( $block, $site_url );
+			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
-		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
+		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $source_site_url );
 
 		if ( null === $attachment_id ) {
 			// Third-party src — leave attrs unchanged but still process
 			// innerHTML so any source-domain anchor hrefs get sideloaded.
-			return $this->process_block_inner_html( $block, $site_url );
+			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		if ( false === $attachment_id ) {
 			$this->failed_media[] = $original_url;
-			return $this->process_block_inner_html( $block, $site_url );
+			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		$new_url = wp_get_attachment_url( $attachment_id );
 
 		if ( false === $new_url ) {
 			$this->failed_media[] = $original_url;
-			return $this->process_block_inner_html( $block, $site_url );
+			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		// Initialize attrs if it doesn't exist.
@@ -478,17 +478,17 @@ class Content_Processor {
 			}
 		}
 
-		return $this->process_block_inner_html( $block, $site_url );
+		return $this->process_block_inner_html( $block, $source_site_url );
 	}
 
 	/**
 	 * Processes gallery block to import media from all contained images.
 	 *
-	 * @param array  $block    Gallery block data.
-	 * @param string $site_url Source site URL.
+	 * @param array  $block Gallery block data.
+	 * @param string $source_site_url Source site URL.
 	 * @return array Processed block.
 	 */
-	private function process_gallery_block( array $block, string $site_url ): array {
+	private function process_gallery_block( array $block, string $source_site_url ): array {
 		// Handle traditional gallery format with images in attributes.
 		if ( ! empty( $block['attrs']['images'] ) && is_array( $block['attrs']['images'] ) ) {
 			foreach ( $block['attrs']['images'] as $index => $image ) {
@@ -497,7 +497,7 @@ class Content_Processor {
 				}
 
 				$original_url  = $image['url'];
-				$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
+				$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $source_site_url );
 
 				if ( null === $attachment_id ) {
 					continue; // Third-party src — skip this image's attrs.
@@ -545,9 +545,9 @@ class Content_Processor {
 		if ( ! empty( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] ) ) {
 			foreach ( $block['innerBlocks'] as $index => $inner_block ) {
 				if ( ! empty( $inner_block['blockName'] ) && 'core/image' === $inner_block['blockName'] ) {
-					$block['innerBlocks'][ $index ] = $this->process_image_block( $inner_block, $site_url );
+					$block['innerBlocks'][ $index ] = $this->process_image_block( $inner_block, $source_site_url );
 				} else {
-					$block['innerBlocks'][ $index ] = $this->process_single_block( $inner_block, $site_url );
+					$block['innerBlocks'][ $index ] = $this->process_single_block( $inner_block, $source_site_url );
 				}
 			}
 
@@ -573,40 +573,40 @@ class Content_Processor {
 			}
 		}
 
-		return $this->process_block_inner_html( $block, $site_url );
+		return $this->process_block_inner_html( $block, $source_site_url );
 	}
 
 	/**
 	 * Processes a media block (video or audio) to import its source.
 	 *
-	 * @param array  $block    Block data.
-	 * @param string $site_url Source site URL.
+	 * @param array  $block Block data.
+	 * @param string $source_site_url Source site URL.
 	 * @return array Processed block.
 	 */
-	private function process_media_block( array $block, string $site_url ): array {
+	private function process_media_block( array $block, string $source_site_url ): array {
 		if ( empty( $block['attrs']['src'] ) ) {
-			return $this->process_block_inner_html( $block, $site_url );
+			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		$original_url  = $block['attrs']['src'];
-		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $site_url );
+		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $source_site_url );
 
 		if ( null === $attachment_id ) {
 			// Third-party src — leave attrs unchanged but still process
 			// innerHTML so any source-domain anchor hrefs get sideloaded.
-			return $this->process_block_inner_html( $block, $site_url );
+			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		if ( false === $attachment_id ) {
 			$this->failed_media[] = $original_url;
-			return $this->process_block_inner_html( $block, $site_url );
+			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		$new_url = wp_get_attachment_url( $attachment_id );
 
 		if ( false === $new_url ) {
 			$this->failed_media[] = $original_url;
-			return $this->process_block_inner_html( $block, $site_url );
+			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		$block['attrs']['src'] = $new_url;
@@ -637,21 +637,21 @@ class Content_Processor {
 			}
 		}
 
-		return $this->process_block_inner_html( $block, $site_url );
+		return $this->process_block_inner_html( $block, $source_site_url );
 	}
 
 	/**
 	 * Processes embed block content.
 	 *
-	 * @param array  $block    Embed block data.
-	 * @param string $site_url Source site URL.
+	 * @param array  $block Embed block data.
+	 * @param string $source_site_url Source site URL.
 	 * @return array Processed block.
 	 */
-	private function process_embed_block( array $block, string $site_url ): array {
+	private function process_embed_block( array $block, string $source_site_url ): array {
 		// Most embed blocks work with URLs that don't need media import,
 		// but we can process the innerHTML for any embedded media.
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = $this->content_media_processor->process_content( $block['innerHTML'], $site_url );
+			$block['innerHTML'] = $this->content_media_processor->process_content( $block['innerHTML'], $source_site_url );
 		}
 
 		return $block;
@@ -660,20 +660,20 @@ class Content_Processor {
 	/**
 	 * Processes HTML block to import media.
 	 *
-	 * @param array  $block    HTML block data.
-	 * @param string $site_url Source site URL.
+	 * @param array  $block HTML block data.
+	 * @param string $source_site_url Source site URL.
 	 * @return array Processed block.
 	 */
-	private function process_html_block( array $block, string $site_url ): array {
+	private function process_html_block( array $block, string $source_site_url ): array {
 		if ( ! empty( $block['attrs']['content'] ) ) {
 			$block['attrs']['content'] = $this->content_media_processor->process_content(
 				$block['attrs']['content'],
-				$site_url
+				$source_site_url
 			);
 		}
 
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = $this->content_media_processor->process_content( $block['innerHTML'], $site_url );
+			$block['innerHTML'] = $this->content_media_processor->process_content( $block['innerHTML'], $source_site_url );
 		}
 
 		return $block;
@@ -682,13 +682,13 @@ class Content_Processor {
 	/**
 	 * Processes text blocks (paragraph, heading, list, quote) to import media.
 	 *
-	 * @param array  $block    Text block data.
-	 * @param string $site_url Source site URL.
+	 * @param array  $block Text block data.
+	 * @param string $source_site_url Source site URL.
 	 * @return array Processed block.
 	 */
-	private function process_text_block( array $block, string $site_url ): array {
+	private function process_text_block( array $block, string $source_site_url ): array {
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = $this->content_media_processor->process_content( $block['innerHTML'], $site_url );
+			$block['innerHTML'] = $this->content_media_processor->process_content( $block['innerHTML'], $source_site_url );
 		}
 
 		return $block;
@@ -699,15 +699,15 @@ class Content_Processor {
 	 * <a href> wrapping a media element) that block-specific handling did not
 	 * cover.
 	 *
-	 * @param array  $block    Block data.
-	 * @param string $site_url Source site URL.
+	 * @param array  $block Block data.
+	 * @param string $source_site_url Source site URL.
 	 * @return array Block with processed HTML.
 	 */
-	private function process_block_inner_html( array $block, string $site_url ): array {
+	private function process_block_inner_html( array $block, string $source_site_url ): array {
 		if ( ! empty( $block['innerHTML'] ) ) {
 			$block['innerHTML'] = $this->content_media_processor->process_content(
 				$block['innerHTML'],
-				$site_url
+				$source_site_url
 			);
 		}
 
@@ -716,7 +716,7 @@ class Content_Processor {
 				if ( is_string( $content ) ) {
 					$block['innerContent'][ $index ] = $this->content_media_processor->process_content(
 						$content,
-						$site_url
+						$source_site_url
 					);
 				}
 			}
@@ -837,21 +837,21 @@ class Content_Processor {
 	 * $block['innerContent'] are also updated so they stay consistent.
 	 *
 	 * @param array  $attrs    Attributes array to walk (possibly nested).
-	 * @param string $site_url Source site URL.
-	 * @param array  $block    Block data; updated by reference for innerHTML
+	 * @param string $source_site_url Source site URL.
+	 * @param array  $block Block data; updated by reference for innerHTML
 	 *                         and innerContent.
 	 * @return array Updated attributes array.
 	 */
 	private function replace_urls_in_attrs(
 		array $attrs,
-		string $site_url,
+		string $source_site_url,
 		array &$block
 	): array {
 		foreach ( $attrs as $key => $value ) {
 			if ( is_array( $value ) ) {
 				$attrs[ $key ] = $this->replace_urls_in_attrs(
 					$value,
-					$site_url,
+					$source_site_url,
 					$block
 				);
 			} elseif (
@@ -859,7 +859,7 @@ class Content_Processor {
 				filter_var( $value, FILTER_VALIDATE_URL )
 			) {
 				$attachment_id = $this->media_importer
-					->import_external_media_as_attachment( $value, $site_url );
+					->import_external_media_as_attachment( $value, $source_site_url );
 
 				if ( null === $attachment_id ) {
 					continue; // Third-party or non-source URL — leave unchanged.

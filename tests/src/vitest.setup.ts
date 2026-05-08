@@ -8,7 +8,7 @@ import { afterEach } from 'vitest';
 		ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
 		nonce: 'test-nonce',
 		restNonce: 'test-rest-nonce',
-		siteUrl: 'https://example.com',
+		sourceSiteUrl: 'https://example.com',
 		numPosts: 10,
 		containerId: 'safe-publish-admin-posts',
 		postsData: [],

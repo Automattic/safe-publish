@@ -47,7 +47,7 @@ final class Diff_Renderer {
 		$post_type        = (string) $request->get_param( 'postType' );
 		$mode             = (string) $request->get_param( 'mode' );
 		$cleanup          = (bool) $request->get_param( 'cleanup' );
-		$site_url         = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$source_site_url  = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
 		$mapped_post_type = Post_Type_Map::to_wp_slug( $post_type );
 
@@ -59,7 +59,7 @@ final class Diff_Renderer {
 
 		// Fetch external post data.
 		$external_data = $this->fetch_external_post(
-			$site_url,
+			$source_site_url,
 			$post_type,
 			$external_post_id,
 			$make_request,
@@ -98,7 +98,7 @@ final class Diff_Renderer {
 		// Generate featured media diff with preview.
 		$featured_media_html = $this->generate_featured_media_diff(
 			$local_post->ID,
-			$site_url,
+			$source_site_url,
 			$external_data,
 			$make_request,
 			$credentials
@@ -179,7 +179,7 @@ final class Diff_Renderer {
 	/**
 	 * Fetches external post data via API.
 	 *
-	 * @param string   $site_url    External site URL.
+	 * @param string   $source_site_url    Source site URL.
 	 * @param string   $post_type   Post type to fetch.
 	 * @param int      $post_id     External post ID.
 	 * @param callable $make_request Function to make HTTP requests.
@@ -188,14 +188,14 @@ final class Diff_Renderer {
 	 * @return array|WP_Error Post data on success, WP_Error on failure.
 	 */
 	private function fetch_external_post(
-		string $site_url,
+		string $source_site_url,
 		string $post_type,
 		int $post_id,
 		callable $make_request,
 		array $credentials
 	): array|WP_Error {
 		$endpoint         = Post_Type_Map::to_rest_endpoint( $post_type );
-		$api_base         = trailingslashit( $site_url ) . 'wp-json/wp/v2/' . $endpoint . '/' . $post_id;
+		$api_base         = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/' . $endpoint . '/' . $post_id;
 		$query_args       = array(
 			'context' => 'edit',
 			'_embed'  => '1',
@@ -452,7 +452,7 @@ final class Diff_Renderer {
 	 * Generates featured media diff with image previews.
 	 *
 	 * @param int      $local_post_id Local post ID.
-	 * @param string   $site_url      External site URL.
+	 * @param string   $source_site_url      Source site URL.
 	 * @param array    $external_data External post data.
 	 * @param callable $make_request  Function to make HTTP requests.
 	 * @param array    $credentials   Authentication credentials.
@@ -461,7 +461,7 @@ final class Diff_Renderer {
 	 */
 	private function generate_featured_media_diff(
 		int $local_post_id,
-		string $site_url,
+		string $source_site_url,
 		array $external_data,
 		callable $make_request,
 		array $credentials
@@ -469,8 +469,8 @@ final class Diff_Renderer {
 		$incoming_featured_id  = isset( $external_data['featured_media'] ) ? absint( $external_data['featured_media'] ) : 0;
 		$incoming_featured_url = '';
 
-		if ( $incoming_featured_id && ! empty( $site_url ) ) {
-			$media_api_url  = trailingslashit( $site_url ) . 'wp-json/wp/v2/media/' . $incoming_featured_id;
+		if ( $incoming_featured_id && ! empty( $source_site_url ) ) {
+			$media_api_url  = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/media/' . $incoming_featured_id;
 			$media_response = $make_request( $media_api_url, $credentials );
 
 			if ( ! is_wp_error( $media_response ) ) {

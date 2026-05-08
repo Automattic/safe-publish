@@ -73,11 +73,11 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		string $description
 	): void {
 		// ARRANGE: Prepare content based on data provider.
-		$source_site        = 'https://example.com';
+		$source_site_url    = 'https://example.com';
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content.
-		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Verify expected elements are present.
 		$this->assertIsString(
@@ -119,8 +119,8 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 	 */
 	public function test_relative_urls_preserved_as_is(): void {
 		// ARRANGE: Create content with multiple relative URL patterns.
-		$source_site = 'https://example.com';
-		$content     = '
+		$source_site_url = 'https://example.com';
+		$content         = '
 			<div>
 				<a href="/root-relative">Root</a>
 				<a href="relative-path">Relative</a>
@@ -129,7 +129,7 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		';
 
 		// ACT: Process content.
-		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Verify root-relative URL is preserved as-is.
 		$this->assertStringContainsString( 'href="/root-relative"', $processed_content );
@@ -175,8 +175,8 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		string $url
 	): void {
 		// ARRANGE: Create media element from data provider.
-		$source_site = 'https://example.com';
-		$content     = sprintf(
+		$source_site_url = 'https://example.com';
+		$content         = sprintf(
 			'<%s src="%s" controls></%s>',
 			$element,
 			$url,
@@ -186,7 +186,7 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		// ACT: Process content.
 		$processed_content = $this->content_media_processor->process_content(
 			$content,
-			$source_site
+			$source_site_url
 		);
 
 		// ASSERT: Verify source controls attribute is preserved.
@@ -217,11 +217,11 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 	 */
 	public function test_iframe_embeds_preserved_without_extra_attributes(): void {
 		// ARRANGE: Create content with YouTube iframe embed.
-		$source_site = 'https://example.com';
-		$content     = '<iframe src="https://www.youtube.com/embed/abc123"></iframe>';
+		$source_site_url = 'https://example.com';
+		$content         = '<iframe src="https://www.youtube.com/embed/abc123"></iframe>';
 
 		// ACT: Process content.
-		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Verify iframe src is preserved.
 		$this->assertStringContainsString( 'youtube.com', $processed_content );
@@ -240,7 +240,7 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 	 */
 	public function test_complex_mixed_media_content_processes_correctly(): void {
 		// ARRANGE: Create complex content with multiple media types.
-		$source_site        = 'https://example.com';
+		$source_site_url    = 'https://example.com';
 		$attachments_before = $this->get_attachment_count();
 		$content            = '
 			<div>
@@ -255,7 +255,7 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 		';
 
 		// ACT: Process complex content.
-		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Verify all elements are present and transformed.
 		$this->assertIsString( $processed_content );
@@ -288,14 +288,14 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 	 */
 	public function test_data_urls_not_processed_as_media(): void {
 		// ARRANGE: Create content with data URL.
-		$source_site = 'https://example.com';
-		$data_url    = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-		$content     = sprintf( '<img src="%s" alt="Data URL">', $data_url );
+		$source_site_url = 'https://example.com';
+		$data_url        = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+		$content         = sprintf( '<img src="%s" alt="Data URL">', $data_url );
 
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Process content with data URL.
-		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Verify data URL is preserved (not processed as external media).
 		$this->assertStringContainsString( 'data:image/png;base64', $processed_content );
@@ -354,10 +354,10 @@ class Content_Processing_Test extends External_Posts_API_Test_Base {
 	 */
 	public function test_url_edge_cases( string $content, array $expected_strings, string $description ): void {
 		// ARRANGE: Prepare content from data provider.
-		$source_site = 'https://example.com';
+		$source_site_url = 'https://example.com';
 
 		// ACT: Process content.
-		$processed_content = $this->content_media_processor->process_content( $content, $source_site );
+		$processed_content = $this->content_media_processor->process_content( $content, $source_site_url );
 
 		// ASSERT: Verify expected strings present.
 		foreach ( $expected_strings as $expected ) {

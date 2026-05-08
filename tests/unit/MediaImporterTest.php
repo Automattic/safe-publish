@@ -249,9 +249,9 @@ class MediaImporterTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that import_featured_image returns false for empty site URLs.
+	 * Verifies that import_featured_image returns false for empty source site URLs.
 	 */
-	public function test_import_featured_image_with_empty_site_url_returns_false(): void {
+	public function test_import_featured_image_with_empty_source_site_url_returns_false(): void {
 		$result = $this->importer->import_featured_image( 123, '' );
 
 		$this->assertFalse( $result );
@@ -263,11 +263,11 @@ class MediaImporterTest extends TestCase {
 	 */
 	public function test_import_external_media_returns_null_for_third_party_domain(): void {
 		// ARRANGE: media on a CDN that is unrelated to the source site.
-		$source_site = 'https://source.example.com';
-		$media_url   = 'https://third-party.example.com/photo-123.jpg';
+		$source_site_url = 'https://source.example.com';
+		$media_url       = 'https://third-party.example.com/photo-123.jpg';
 
 		// ACT: Call with a third-party URL.
-		$result = $this->importer->import_external_media( $media_url, $source_site );
+		$result = $this->importer->import_external_media( $media_url, $source_site_url );
 
 		// ASSERT: null signals "skipped, not our domain" — not a failure.
 		$this->assertNull( $result );
@@ -279,11 +279,11 @@ class MediaImporterTest extends TestCase {
 	 */
 	public function test_import_external_media_as_attachment_returns_null_for_third_party_domain(): void {
 		// ARRANGE: video file hosted on an unrelated CDN.
-		$source_site = 'https://source.example.com';
-		$media_url   = 'https://third-party.example.com/clip.mp4';
+		$source_site_url = 'https://source.example.com';
+		$media_url       = 'https://third-party.example.com/clip.mp4';
 
 		// ACT: Call with a third-party URL.
-		$result = $this->importer->import_external_media_as_attachment( $media_url, $source_site );
+		$result = $this->importer->import_external_media_as_attachment( $media_url, $source_site_url );
 
 		// ASSERT: null signals "skipped, not our domain" — not a failure.
 		$this->assertNull( $result );

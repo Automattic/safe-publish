@@ -223,33 +223,33 @@ export interface RollbackItemData {
 /**
  * Props for the ExternalPostsDataView component.
  *
- * @property {Post[]} initialPosts Posts to display on initial load.
- * @property {string} siteUrl      External site URL.
- * @property {number} numberPosts  Number of posts to fetch.
+ * @property {Post[]} initialPosts  Posts to display on initial load.
+ * @property {string} sourceSiteUrl Source site URL.
+ * @property {number} numberPosts   Number of posts to fetch.
  */
 export interface ExternalPostsDataViewProps {
 	initialPosts: Post[];
-	siteUrl: string;
+	sourceSiteUrl: string;
 	numberPosts: number;
 }
 
 /**
  * Admin data passed from PHP via wp_add_inline_script.
  *
- * @property {string}    ajaxurl     WordPress AJAX URL.
- * @property {string}    nonce       Security nonce for AJAX requests.
- * @property {string}    restNonce   Security nonce for REST API requests.
- * @property {string}    siteUrl     External site URL.
- * @property {string}    settingsUrl URL to the plugin settings page.
- * @property {number}    numPosts    Number of posts to fetch.
- * @property {string}    containerId Container element ID.
- * @property {JsonArray} postsData   Raw posts data from PHP.
+ * @property {string}    ajaxurl       WordPress AJAX URL.
+ * @property {string}    nonce         Security nonce for AJAX requests.
+ * @property {string}    restNonce     Security nonce for REST API requests.
+ * @property {string}    sourceSiteUrl Source site URL.
+ * @property {string}    settingsUrl   URL to the plugin settings page.
+ * @property {number}    numPosts      Number of posts to fetch.
+ * @property {string}    containerId   Container element ID.
+ * @property {JsonArray} postsData     Raw posts data from PHP.
  */
 export interface AdminData {
 	ajaxurl: string;
 	nonce: string;
 	restNonce: string;
-	siteUrl: string;
+	sourceSiteUrl: string;
 	settingsUrl: string;
 	numPosts: number;
 	containerId: string;
@@ -330,17 +330,17 @@ export interface PaginationInfo {
 /**
  * Represents an import session record.
  *
- * @property {number}  id           Unique session ID.
- * @property {string}  date         Date of the import.
- * @property {string}  user         User who performed the import.
- * @property {number}  total_items  Total items in the session.
- * @property {number}  successful   Number of successful imports.
- * @property {number}  failed       Number of failed imports.
- * @property {number}  updated      Number of updated posts.
- * @property {string}  status       Session status.
- * @property {string}  status_label Human-readable status label.
- * @property {string}  source_url   URL of the external source.
- * @property {boolean} can_rollback Whether the session can be rolled back.
+ * @property {number}  id              Unique session ID.
+ * @property {string}  date            Date of the import.
+ * @property {string}  user            User who performed the import.
+ * @property {number}  total_items     Total items in the session.
+ * @property {number}  successful      Number of successful imports.
+ * @property {number}  failed          Number of failed imports.
+ * @property {number}  updated         Number of updated posts.
+ * @property {string}  status          Session status.
+ * @property {string}  status_label    Human-readable status label.
+ * @property {string}  source_site_url URL of the source site.
+ * @property {boolean} can_rollback    Whether the session can be rolled back.
  */
 export interface ImportSession {
 	id: number;
