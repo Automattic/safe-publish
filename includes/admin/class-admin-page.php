@@ -90,7 +90,7 @@ final class Admin_Page {
 								<?php
 								printf(
 									/* translators: %s: Settings page URL */
-									esc_html__( 'Please configure the source site URL in the %s to see posts.', 'safe-publish' ),
+									esc_html__( 'Please configure the connected site URL in the %s to see posts.', 'safe-publish' ),
 									'<a href="' . esc_url( admin_url( 'admin.php?page=safe-publish-settings' ) ) . '">' . esc_html__( 'settings page', 'safe-publish' ) . '</a>'
 								);
 								?>

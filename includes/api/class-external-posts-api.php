@@ -257,20 +257,20 @@ class External_Posts_API {
 	 * Tests API connection.
 	 *
 	 * Delegates to the shared-secret probe so the result reflects whether the
-	 * source site actually grants edit context, not just whether a public
+	 * connected site actually grants edit context, not just whether a public
 	 * endpoint responds.
 	 *
-	 * @param string $source_site_url  Source site URL to test.
-	 * @param array  $auth_credentials Authentication credentials.
+	 * @param string $connected_site_url Connected site URL to test.
+	 * @param array  $auth_credentials   Authentication credentials.
 	 * @return array Test results: success, status, response_time, message.
 	 */
 	public function test_connection(
-		string $source_site_url,
+		string $connected_site_url,
 		array $auth_credentials
 	): array {
 		$start_time = microtime( true );
 		$probe      = VIP_Safe_Auth::test_authorization(
-			$source_site_url,
+			$connected_site_url,
 			$auth_credentials
 		);
 		$end_time   = microtime( true );
@@ -295,22 +295,22 @@ class External_Posts_API {
 		switch ( $status ) {
 			case VIP_Safe_Auth::STATUS_AUTHORIZED:
 				return __(
-					'Source site accepts the shared secret and grants edit context.',
+					'Connected site accepts the shared secret and grants edit context.',
 					'safe-publish'
 				);
 			case VIP_Safe_Auth::STATUS_UNAUTHORIZED:
 				return __(
-					'Source site rejected the shared secret. Verify SAFE_PUBLISH_SHARED_SECRET matches on both sites in wp-config.php.',
+					'Connected site rejected the shared secret. Verify SAFE_PUBLISH_SHARED_SECRET matches on both sites in wp-config.php.',
 					'safe-publish'
 				);
 			case VIP_Safe_Auth::STATUS_UNREACHABLE:
 				return __(
-					'Source site could not be reached. Verify the URL and that the site is online.',
+					'Connected site could not be reached. Verify the URL and that the site is online.',
 					'safe-publish'
 				);
 			case VIP_Safe_Auth::STATUS_URL_UNSET:
 				return __(
-					'Source site URL is not configured.',
+					'Connected site URL is not configured.',
 					'safe-publish'
 				);
 			default:

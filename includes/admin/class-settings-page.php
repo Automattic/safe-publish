@@ -302,11 +302,11 @@ final class Settings_Page {
 
 						if ( 'unauthorized' === status ) {
 							level   = 'error';
-							message = "<?php echo esc_js( __( 'Source site rejected the shared secret. Set SAFE_PUBLISH_SHARED_SECRET in wp-config.php on both sites to the same value (at least 16 characters).', 'safe-publish' ) ); ?>";
+							message = "<?php echo esc_js( __( 'Connected site rejected the shared secret. Set SAFE_PUBLISH_SHARED_SECRET in wp-config.php on both sites to the same value (at least 16 characters).', 'safe-publish' ) ); ?>";
 						} else if ( 'unreachable' === status ) {
-							message = "<?php echo esc_js( __( 'Source site could not be reached. Verify the connected site URL and that the source site is online.', 'safe-publish' ) ); ?>";
+							message = "<?php echo esc_js( __( 'Connected site could not be reached. Verify the connected site URL and that the site is online.', 'safe-publish' ) ); ?>";
 						} else {
-							message = "<?php echo esc_js( __( 'Source site URL is not configured.', 'safe-publish' ) ); ?>";
+							message = "<?php echo esc_js( __( 'Connected site URL is not configured.', 'safe-publish' ) ); ?>";
 						}
 
 						banner.hidden    = false;

@@ -1078,7 +1078,7 @@ final class Admin_Ajax_Controller {
 	 * Fetches fresh post content from the configured source site.
 	 *
 	 * Returns a WP_Error when the fetch fails for any reason, including when no
-	 * source site URL is configured. Callers should abort the import on error.
+	 * connected site URL is configured. Callers should abort the import on error.
 	 *
 	 * @param int    $external_post_id External post ID to fetch.
 	 * @param string $post_type        Post type slug or REST endpoint.
@@ -1092,8 +1092,8 @@ final class Admin_Ajax_Controller {
 
 		if ( '' === $source_site_url ) {
 			return new WP_Error(
-				'fresh_content_fetch_no_source_site_url',
-				__( 'No source site URL is configured.', 'safe-publish' )
+				'fresh_content_fetch_no_connected_site_url',
+				__( 'No connected site URL is configured.', 'safe-publish' )
 			);
 		}
 
