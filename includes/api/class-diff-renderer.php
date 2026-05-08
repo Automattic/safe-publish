@@ -180,11 +180,11 @@ final class Diff_Renderer {
 	/**
 	 * Fetches external post data via API.
 	 *
-	 * @param string   $source_site_url    Source site URL.
-	 * @param string   $post_type   Post type to fetch.
-	 * @param int      $post_id     External post ID.
-	 * @param callable $make_request Function to make HTTP requests.
-	 * @param array    $credentials Authentication credentials.
+	 * @param string   $source_site_url Source site URL.
+	 * @param string   $post_type       Post type to fetch.
+	 * @param int      $post_id         External post ID.
+	 * @param callable $make_request    Function to make HTTP requests.
+	 * @param array    $credentials     Authentication credentials.
 	 *
 	 * @return array|WP_Error Post data on success, WP_Error on failure.
 	 */
@@ -452,11 +452,11 @@ final class Diff_Renderer {
 	/**
 	 * Generates featured media diff with image previews.
 	 *
-	 * @param int      $local_post_id Local post ID.
-	 * @param string   $source_site_url      Source site URL.
-	 * @param array    $external_data External post data.
-	 * @param callable $make_request  Function to make HTTP requests.
-	 * @param array    $credentials   Authentication credentials.
+	 * @param int      $local_post_id   Local post ID.
+	 * @param string   $source_site_url Source site URL.
+	 * @param array    $external_data   External post data.
+	 * @param callable $make_request    Function to make HTTP requests.
+	 * @param array    $credentials     Authentication credentials.
 	 *
 	 * @return string Featured media diff HTML with previews.
 	 */

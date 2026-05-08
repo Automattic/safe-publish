@@ -79,7 +79,7 @@ class Content_Processor {
 	 * Detects whether content uses Gutenberg blocks and applies the appropriate
 	 * processing strategy. Replaces external URLs in the content after processing.
 	 *
-	 * @param string $content  Post content to process.
+	 * @param string $content         Post content to process.
 	 * @param string $source_site_url Source site URL.
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
@@ -129,7 +129,7 @@ class Content_Processor {
 	/**
 	 * Processes Gutenberg blocks and imports media.
 	 *
-	 * @param string $content  Post content with blocks.
+	 * @param string $content         Post content with blocks.
 	 * @param string $source_site_url Source site URL.
 	 * @return string Processed content.
 	 */
@@ -168,7 +168,7 @@ class Content_Processor {
 	 * Uses string replacement instead of DOM parsing to avoid altering
 	 * markup (entity encoding, self-closing tags, whitespace, etc.).
 	 *
-	 * @param string $content           Content to process.
+	 * @param string $content         Content to process.
 	 * @param string $source_site_url Source site URL (scheme://host).
 	 * @return string|WP_Error Content with URLs replaced, or WP_Error on failure.
 	 */
@@ -335,7 +335,7 @@ class Content_Processor {
 	/**
 	 * Processes a single Gutenberg block.
 	 *
-	 * @param array  $block Block data.
+	 * @param array  $block           Block data.
 	 * @param string $source_site_url Source site URL.
 	 * @return array Processed block.
 	 */
@@ -405,7 +405,7 @@ class Content_Processor {
 	/**
 	 * Processes image block to import media and update block attributes.
 	 *
-	 * @param array  $block Image block data.
+	 * @param array  $block           Image block data.
 	 * @param string $source_site_url Source site URL.
 	 * @return array Processed block.
 	 */
@@ -484,7 +484,7 @@ class Content_Processor {
 	/**
 	 * Processes gallery block to import media from all contained images.
 	 *
-	 * @param array  $block Gallery block data.
+	 * @param array  $block           Gallery block data.
 	 * @param string $source_site_url Source site URL.
 	 * @return array Processed block.
 	 */
@@ -579,7 +579,7 @@ class Content_Processor {
 	/**
 	 * Processes a media block (video or audio) to import its source.
 	 *
-	 * @param array  $block Block data.
+	 * @param array  $block           Block data.
 	 * @param string $source_site_url Source site URL.
 	 * @return array Processed block.
 	 */
@@ -643,7 +643,7 @@ class Content_Processor {
 	/**
 	 * Processes embed block content.
 	 *
-	 * @param array  $block Embed block data.
+	 * @param array  $block           Embed block data.
 	 * @param string $source_site_url Source site URL.
 	 * @return array Processed block.
 	 */
@@ -660,7 +660,7 @@ class Content_Processor {
 	/**
 	 * Processes HTML block to import media.
 	 *
-	 * @param array  $block HTML block data.
+	 * @param array  $block           HTML block data.
 	 * @param string $source_site_url Source site URL.
 	 * @return array Processed block.
 	 */
@@ -682,7 +682,7 @@ class Content_Processor {
 	/**
 	 * Processes text blocks (paragraph, heading, list, quote) to import media.
 	 *
-	 * @param array  $block Text block data.
+	 * @param array  $block           Text block data.
 	 * @param string $source_site_url Source site URL.
 	 * @return array Processed block.
 	 */
@@ -699,7 +699,7 @@ class Content_Processor {
 	 * <a href> wrapping a media element) that block-specific handling did not
 	 * cover.
 	 *
-	 * @param array  $block Block data.
+	 * @param array  $block           Block data.
 	 * @param string $source_site_url Source site URL.
 	 * @return array Block with processed HTML.
 	 */
@@ -836,10 +836,10 @@ class Content_Processor {
 	 * attachment URL. Matching occurrences in $block['innerHTML'] and
 	 * $block['innerContent'] are also updated so they stay consistent.
 	 *
-	 * @param array  $attrs    Attributes array to walk (possibly nested).
+	 * @param array  $attrs           Attributes array to walk (possibly nested).
 	 * @param string $source_site_url Source site URL.
-	 * @param array  $block Block data; updated by reference for innerHTML
-	 *                         and innerContent.
+	 * @param array  $block           Block data; updated by reference for
+	 *                                innerHTML and innerContent.
 	 * @return array Updated attributes array.
 	 */
 	private function replace_urls_in_attrs(
