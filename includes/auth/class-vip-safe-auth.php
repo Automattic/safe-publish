@@ -230,11 +230,11 @@ final class VIP_Safe_Auth {
 			$path = '/wp/v2/posts';
 		}
 
-		// Include this site's URL in the signature, so the receiving site can
-		// verify the request origin against its configured connected site URL.
 		$this_site_url = untrailingslashit( home_url() );
 
-		// Create signature string: METHOD|URI|TIMESTAMP|CONTENT_HASH|SITE_URL.
+		// Create signature string: METHOD|URI|TIMESTAMP|CONTENT_HASH|CONNECTED_SITE_URL.
+		// The trailing slot carries this site's home_url; the receiver verifies
+		// it matches its configured connected site URL.
 		$content_hash   = hash( 'sha256', $body );
 		$string_to_sign = $method . '|' . $path . '|' . $timestamp . '|' . $content_hash . '|' . $this_site_url;
 

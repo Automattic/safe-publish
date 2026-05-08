@@ -369,7 +369,7 @@ class HMAC_Authenticator {
 	/**
 	 * Validates the HMAC-SHA256 signature.
 	 *
-	 * Signature covers: METHOD|URI|TIMESTAMP|CONTENT_HASH|SITE_URL
+	 * Signature covers: METHOD|URI|TIMESTAMP|CONTENT_HASH|CONNECTED_SITE_URL
 	 *
 	 * @param string $signature          Provided signature.
 	 * @param string $method             HTTP method.
