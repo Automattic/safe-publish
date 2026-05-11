@@ -13,7 +13,6 @@ use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Auth_Credential_Provider;
-use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use Exception;
@@ -1095,13 +1094,10 @@ class Post_Import_Service {
 
 			return $fresh_data;
 		} catch ( Exception $e ) {
-			$this->logger->log_error(
-				Log_Events::CONTENT_FETCH_FAILED,
-				array(
-					'external_post_id' => $external_post_id,
-					'source_site_url'  => $source_site_url,
-					'error'            => $e->getMessage(),
-				)
+			$this->logger->content_fetch_failed(
+				$external_post_id,
+				$source_site_url,
+				$e->getMessage()
 			);
 
 			return new WP_Error(

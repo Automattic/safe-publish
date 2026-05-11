@@ -15,8 +15,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Central registry of log event codes used with Logger::log_event() and
- * Logger::log_error().
+ * Central registry of log event codes referenced by the per-event helper
+ * methods on each channel logger (Auth_Logger, Export_Logger, Content_Logger,
+ * Media_Logger, Import_Logger). The constants here are the contract; the
+ * helpers enforce the payload shape per event.
  */
 class Log_Events {
 	// Media import events.
@@ -44,16 +46,30 @@ class Log_Events {
 	const SIGNATURE_INVALID           = 'SIGNATURE_INVALID';
 	const AUTH_SUCCESS                = 'AUTH_SUCCESS';
 
+	// Permission and auth diagnostic events.
+	const CAPABILITY_BASED_AUTH_SETUP    = 'CAPABILITY_BASED_AUTH_SETUP';
+	const PERMISSION_CHECK_INTERCEPTED   = 'PERMISSION_CHECK_INTERCEPTED';
+	const META_CAP_OVERRIDE              = 'META_CAP_OVERRIDE';
+	const PERMISSION_OVERRIDE_APPLIED    = 'PERMISSION_OVERRIDE_APPLIED';
+	const PERMISSION_CALLBACK_OVERRIDDEN = 'PERMISSION_CALLBACK_OVERRIDDEN';
+	const COLLECTION_PARAMS_OVERRIDDEN   = 'COLLECTION_PARAMS_OVERRIDDEN';
+	const CONTEXT_ERROR_OVERRIDDEN       = 'CONTEXT_ERROR_OVERRIDDEN';
+	const EDIT_CONTEXT_ALLOWED           = 'EDIT_CONTEXT_ALLOWED';
+	const PERMISSION_ERROR_INTERCEPTED   = 'PERMISSION_ERROR_INTERCEPTED';
+	const LOGS_CLEARED                   = 'LOGS_CLEARED';
+	const TEST_ENDPOINT_ACCESSED         = 'TEST_ENDPOINT_ACCESSED';
+
 	// Export events.
 	const CONTENT_EXPORTED     = 'CONTENT_EXPORTED';
 	const EXPORT_REQUEST_ERROR = 'EXPORT_REQUEST_ERROR';
 	const EXPORT_BAD_STATUS    = 'EXPORT_BAD_STATUS';
 
-	// Rollback events.
+	// Import session and item lifecycle events.
 	const SESSION_ROLLED_BACK     = 'SESSION_ROLLED_BACK';
 	const ITEM_ROLLED_BACK        = 'ITEM_ROLLED_BACK';
 	const SESSION_ROLLBACK_NOOP   = 'SESSION_ROLLBACK_NOOP';
 	const ITEM_ROLLBACK_NOOP      = 'ITEM_ROLLBACK_NOOP';
 	const SESSION_ROLLBACK_FAILED = 'SESSION_ROLLBACK_FAILED';
 	const ITEM_ROLLBACK_FAILED    = 'ITEM_ROLLBACK_FAILED';
+	const SESSION_DELETED         = 'SESSION_DELETED';
 }

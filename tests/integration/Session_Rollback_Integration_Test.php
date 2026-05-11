@@ -561,4 +561,73 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 			$wpdb->suppress_errors( false );
 		}
 	}
+
+	/**
+	 * Verifies that deleting a session emits a SESSION_DELETED audit event
+	 * with the session ID, source site URL snapshot, and items_deleted count.
+	 */
+	public function test_delete_session_emits_audit_event(): void {
+		// ARRANGE: Create a session with two items.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id_1  = $this->factory()->post->create( array( 'post_title' => 'Imported Post 1' ) );
+		$post_id_2  = $this->factory()->post->create( array( 'post_title' => 'Imported Post 2' ) );
+		$this->repository->log_import_action(
+			$session_id,
+			1,
+			'Imported Post 1',
+			'success',
+			$post_id_1
+		);
+		$this->repository->log_import_action(
+			$session_id,
+			2,
+			'Imported Post 2',
+			'success',
+			$post_id_2
+		);
+
+		// ACT: Delete the session.
+		$deleted = $this->repository->delete_session( $session_id );
+
+		// ASSERT: The repository reports success.
+		$this->assertTrue( $deleted );
+
+		// ASSERT: One SESSION_DELETED event was emitted with the snapshotted
+		// source URL and the count of items removed alongside the session.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'SESSION_DELETED',
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( 'info', $events[0]['level'] );
+		$this->assertSame( $session_id, $events[0]['data']['session_id'] );
+		$this->assertSame( 'https://example.com', $events[0]['data']['source_site_url'] );
+		$this->assertSame( 2, $events[0]['data']['items_deleted'] );
+	}
+
+	/**
+	 * Verifies that attempting to delete a non-existent session does not emit
+	 * a SESSION_DELETED audit event.
+	 */
+	public function test_delete_session_emits_no_event_when_session_missing(): void {
+		// ARRANGE: A session ID that does not exist.
+		$nonexistent_id = 9999999;
+
+		// ACT: Try to delete it.
+		$deleted = $this->repository->delete_session( $nonexistent_id );
+
+		// ASSERT: The repository reports no deletion happened.
+		$this->assertFalse( $deleted );
+
+		// ASSERT: No SESSION_DELETED event was emitted.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'SESSION_DELETED',
+			)
+		);
+		$this->assertCount( 0, $events );
+	}
 }
