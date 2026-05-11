@@ -58,7 +58,9 @@ run_seeder() {
 	label="$2"
 	args="$3"
 	echo "Seeding $label site: $args"
-	wp-env run "$container" --env-cwd=wp-content/plugins/compliant-content-publisher wp eval-file ./bin/seed-content.php $args
+	# --use-include runs the file via include() instead of eval(), which is required
+	# for declare(strict_types=1) to be permitted (PHP disallows declare inside eval).
+	wp-env run "$container" --env-cwd=wp-content/plugins/compliant-content-publisher wp eval-file --use-include ./bin/seed-content.php $args
 }
 
 run_preset_full() {
