@@ -53,7 +53,7 @@
     "test:php": "composer test",
     "test:php:coverage": "composer test-coverage",
     "test:php:debug": "wp-env run tests-cli --env-cwd=wp-content/plugins/compliant-content-publisher ./vendor/bin/phpunit",
-    "test:integration": "npm run test:integration:sync-bidirectional && npm run test:integration:sync-import && npm run test:integration:sync-export",
+    "test:integration": "./bin/test-integration",
     "test:integration:sync-bidirectional": "wp-env run tests-cli --env-cwd=wp-content/plugins/compliant-content-publisher ./vendor/bin/phpunit -c ./phpunit-integration-sync-bidirectional.xml",
     "test:integration:sync-import": "wp-env run tests-cli --env-cwd=wp-content/plugins/compliant-content-publisher ./vendor/bin/phpunit -c ./phpunit-integration-sync-import.xml",
     "test:integration:sync-export": "wp-env run tests-cli --env-cwd=wp-content/plugins/compliant-content-publisher ./vendor/bin/phpunit -c ./phpunit-integration-sync-export.xml",

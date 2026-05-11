@@ -1,0 +1,17 @@
+#!/bin/sh
+#
+# Run all PHPUnit integration test suites, forwarding any extra args
+# to each suite. Useful for sharing flags like --filter across suites.
+#
+# Usage: bin/test-integration [phpunit args...]
+
+set -e
+
+for config in \
+	phpunit-integration-sync-bidirectional.xml \
+	phpunit-integration-sync-import.xml \
+	phpunit-integration-sync-export.xml; do
+	wp-env run tests-cli \
+		--env-cwd=wp-content/plugins/compliant-content-publisher \
+		./vendor/bin/phpunit -c "./$config" "$@"
+done
