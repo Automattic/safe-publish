@@ -630,4 +630,142 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		);
 		$this->assertCount( 0, $events );
 	}
+
+	/**
+	 * Verifies that a session deletion whose items-table DELETE fails at the
+	 * SQL layer emits a SESSION_DELETE_FAILED audit event, bails out before
+	 * the imports-table DELETE, and leaves the session row intact.
+	 */
+	public function test_delete_session_emits_failed_when_items_delete_errors(): void {
+		global $wpdb;
+
+		// ARRANGE: Create a session with one item, then force the next DELETE
+		// on the items table to fail at the SQL layer by rewriting it to
+		// invalid SQL via the 'query' filter. try/finally guarantees filter
+		// removal.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create( array( 'post_title' => 'Imported Post' ) );
+		$this->repository->log_import_action(
+			$session_id,
+			1,
+			'Imported Post',
+			'success',
+			$post_id
+		);
+		$items_table     = Import_Items_Table::table_name();
+		$filter_callback = function ( $query ) use ( $items_table ) {
+			if ( 0 === strpos( $query, "DELETE FROM `{$items_table}`" ) ) {
+				return 'DELETE FROM safe_publish_nonexistent_table_for_test WHERE x = 1';
+			}
+			return $query;
+		};
+		add_filter( 'query', $filter_callback );
+		$wpdb->suppress_errors( true );
+
+		try {
+			// ACT: Attempt to delete the session.
+			$deleted = $this->repository->delete_session( $session_id );
+
+			// ASSERT: The repository reports no deletion.
+			$this->assertFalse( $deleted );
+
+			// ASSERT: A SESSION_DELETE_FAILED error event was emitted with the
+			// session ID, the snapshotted source_site_url, and a non-empty
+			// wpdb_error string.
+			$events = Audit_Log_Table::get_events(
+				array(
+					'channel'    => 'import',
+					'event_type' => 'SESSION_DELETE_FAILED',
+				)
+			);
+			$this->assertCount( 1, $events );
+			$this->assertSame( 'error', $events[0]['level'] );
+			$this->assertSame( $session_id, $events[0]['data']['session_id'] );
+			$this->assertSame( 'https://example.com', $events[0]['data']['source_site_url'] );
+			$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
+
+			// ASSERT: No success event was recorded.
+			$success_events = Audit_Log_Table::get_events(
+				array(
+					'channel'    => 'import',
+					'event_type' => 'SESSION_DELETED',
+				)
+			);
+			$this->assertCount( 0, $success_events );
+
+			// ASSERT: The session row was not deleted (the bail-out preserves
+			// it so the caller can retry).
+			$session = $this->repository->get_session( $session_id );
+			$this->assertNotNull( $session );
+		} finally {
+			remove_filter( 'query', $filter_callback );
+			$wpdb->suppress_errors( false );
+		}
+	}
+
+	/**
+	 * Verifies that a session deletion whose imports-table DELETE fails at the
+	 * SQL layer (after the items-table DELETE has already succeeded) emits a
+	 * SESSION_DELETE_FAILED audit event.
+	 */
+	public function test_delete_session_emits_failed_when_imports_delete_errors(): void {
+		global $wpdb;
+
+		// ARRANGE: Create a session with one item, then force the next DELETE
+		// on the imports table to fail at the SQL layer. The items-table
+		// DELETE runs first and succeeds.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create( array( 'post_title' => 'Imported Post' ) );
+		$this->repository->log_import_action(
+			$session_id,
+			1,
+			'Imported Post',
+			'success',
+			$post_id
+		);
+		$imports_table   = Imports_Table::table_name();
+		$filter_callback = function ( $query ) use ( $imports_table ) {
+			if ( 0 === strpos( $query, "DELETE FROM `{$imports_table}`" ) ) {
+				return 'DELETE FROM safe_publish_nonexistent_table_for_test WHERE x = 1';
+			}
+			return $query;
+		};
+		add_filter( 'query', $filter_callback );
+		$wpdb->suppress_errors( true );
+
+		try {
+			// ACT: Attempt to delete the session.
+			$deleted = $this->repository->delete_session( $session_id );
+
+			// ASSERT: The repository reports no deletion.
+			$this->assertFalse( $deleted );
+
+			// ASSERT: A SESSION_DELETE_FAILED error event was emitted with the
+			// session ID, the snapshotted source_site_url, and a non-empty
+			// wpdb_error string.
+			$events = Audit_Log_Table::get_events(
+				array(
+					'channel'    => 'import',
+					'event_type' => 'SESSION_DELETE_FAILED',
+				)
+			);
+			$this->assertCount( 1, $events );
+			$this->assertSame( 'error', $events[0]['level'] );
+			$this->assertSame( $session_id, $events[0]['data']['session_id'] );
+			$this->assertSame( 'https://example.com', $events[0]['data']['source_site_url'] );
+			$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
+
+			// ASSERT: No success event was recorded.
+			$success_events = Audit_Log_Table::get_events(
+				array(
+					'channel'    => 'import',
+					'event_type' => 'SESSION_DELETED',
+				)
+			);
+			$this->assertCount( 0, $success_events );
+		} finally {
+			remove_filter( 'query', $filter_callback );
+			$wpdb->suppress_errors( false );
+		}
+	}
 }
