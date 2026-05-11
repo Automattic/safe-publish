@@ -158,4 +158,26 @@ class Import_Logger extends Logger {
 			)
 		);
 	}
+
+	/**
+	 * Logs a session deletion that failed at the SQL layer.
+	 *
+	 * @param int    $session_id      Session whose delete failed.
+	 * @param string $source_site_url Source site of the session (snapshot).
+	 * @param string $wpdb_error      Last MySQL error from $wpdb->last_error.
+	 */
+	public function session_delete_failed(
+		int $session_id,
+		string $source_site_url,
+		string $wpdb_error
+	): void {
+		$this->log_error(
+			Log_Events::SESSION_DELETE_FAILED,
+			array(
+				'session_id'      => $session_id,
+				'source_site_url' => $source_site_url,
+				'wpdb_error'      => $wpdb_error,
+			)
+		);
+	}
 }

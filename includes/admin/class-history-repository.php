@@ -458,17 +458,35 @@ final class History_Repository {
 		// is recorded).
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$session_row = $wpdb->get_row(
-			$wpdb->prepare( "SELECT source_site_url FROM {$imports_table} WHERE id = %d", $session_id ),
+			$wpdb->prepare(
+				"SELECT source_site_url FROM {$imports_table} WHERE id = %d",
+				$session_id
+			),
 			ARRAY_A
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$source_site_url = isset( $session_row['source_site_url'] ) ? (string) $session_row['source_site_url'] : '';
+		$source_site_url = isset( $session_row['source_site_url'] )
+			? (string) $session_row['source_site_url']
+			: '';
 
-		$items_deleted = (int) $wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// Bail out on a DB error to avoid orphaning items and emitting a
+		// misleading `items_deleted` count in the audit log.
+		$items_result = $wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 			Import_Items_Table::table_name(),
 			array( 'session_id' => $session_id ),
 			array( '%d' )
 		);
+
+		if ( false === $items_result ) {
+			$this->logger->session_delete_failed(
+				$session_id,
+				$source_site_url,
+				$wpdb->last_error
+			);
+			return false;
+		}
+
+		$items_deleted = (int) $items_result;
 
 		$result = $wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 			$imports_table,
@@ -476,10 +494,23 @@ final class History_Repository {
 			array( '%d' )
 		);
 
-		$deleted = false !== $result && $result > 0;
+		if ( false === $result ) {
+			$this->logger->session_delete_failed(
+				$session_id,
+				$source_site_url,
+				$wpdb->last_error
+			);
+			return false;
+		}
+
+		$deleted = $result > 0;
 
 		if ( $deleted ) {
-			$this->logger->session_deleted( $session_id, $source_site_url, $items_deleted );
+			$this->logger->session_deleted(
+				$session_id,
+				$source_site_url,
+				$items_deleted
+			);
 		}
 
 		return $deleted;
