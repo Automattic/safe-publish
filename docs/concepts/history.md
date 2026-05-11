@@ -55,15 +55,15 @@ Imports are tracked in a session-based model. Each import operation creates one 
 
 Export events are logged automatically when posts are served to a destination site. Each event is stored in the `{$wpdb->prefix}safe_publish_audit_log` database table.
 
-| Field           | Description                                       |
-| --------------- | ------------------------------------------------- |
-| ID              | Unique event ID                                   |
-| Date            | When the export occurred                          |
-| Level           | `info` (successful) or `error` (failed)           |
-| Event           | Event type: `CONTENT_EXPORTED` or `EXPORT_FAILED` |
-| Destination URL | URL of the destination site                       |
-| Post IDs        | IDs of the exported posts                         |
-| Post Count      | Number of posts in the export                     |
+| Field           | Description                                                                    |
+| --------------- | ------------------------------------------------------------------------------ |
+| ID              | Unique event ID                                                                |
+| Date            | When the export occurred                                                       |
+| Level           | `info` (successful) or `error` (failed)                                        |
+| Event           | Event type: `CONTENT_EXPORTED`, `EXPORT_REQUEST_ERROR`, or `EXPORT_BAD_STATUS` |
+| Destination URL | URL of the destination site                                                    |
+| Post IDs        | IDs of the exported posts                                                      |
+| Post Count      | Number of posts in the export                                                  |
 
 ## Viewing History
 

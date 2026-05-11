@@ -1118,7 +1118,11 @@ final class Admin_Ajax_Controller {
 		} catch ( Exception $e ) {
 			$this->logger->log_error(
 				Log_Events::CONTENT_FETCH_FAILED,
-				array( 'error' => $e->getMessage() )
+				array(
+					'external_post_id' => $external_post_id,
+					'source_site_url'  => $source_site_url,
+					'error'            => $e->getMessage(),
+				)
 			);
 
 			return new WP_Error(

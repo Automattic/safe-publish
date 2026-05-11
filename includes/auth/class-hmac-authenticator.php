@@ -309,11 +309,12 @@ class HMAC_Authenticator {
 		$this->authenticated = true;
 
 		$this->logger->log_event(
-			'AUTH_SUCCESS',
+			Log_Events::AUTH_SUCCESS,
 			array(
 				'route'             => $route,
 				'method'            => $method,
 				'request_timestamp' => $timestamp,
+				'request_site_url'  => $request_site_url,
 			)
 		);
 

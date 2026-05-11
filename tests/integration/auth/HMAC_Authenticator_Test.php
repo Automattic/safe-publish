@@ -387,6 +387,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$this->assertCount( 1, $success_events );
 		$this->assertSame( 'GET', $success_events[0]['data']['method'] );
 		$this->assertSame( '/wp/v2/posts', $success_events[0]['data']['route'] );
+		$this->assertSame( home_url(), $success_events[0]['data']['request_site_url'] );
 	}
 
 	/**
