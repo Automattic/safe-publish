@@ -406,7 +406,10 @@ final class History_Repository {
 		// can link to both parents regardless of update outcome.
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$item = $wpdb->get_row(
-			$wpdb->prepare( "SELECT session_id, post_id FROM {$table} WHERE id = %d", $item_id ),
+			$wpdb->prepare(
+				"SELECT session_id, post_id FROM {$table} WHERE id = %d",
+				$item_id
+			),
 			ARRAY_A
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching

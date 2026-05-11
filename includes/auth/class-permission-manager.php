@@ -603,7 +603,9 @@ class Permission_Manager {
 	}
 
 	/**
-	 * Logs a CONTENT_EXPORTED event after a successful authenticated export.
+	 * Logs an audit event for each authenticated export response:
+	 * CONTENT_EXPORTED on success, EXPORT_REQUEST_ERROR for WP_Error
+	 * responses, or EXPORT_BAD_STATUS for non-200 HTTP statuses.
 	 *
 	 * Fires on rest_post_dispatch at priority 20, so it runs after all
 	 * permission overrides and context re-dispatches are complete. Skipped

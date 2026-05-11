@@ -458,7 +458,7 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		// SQL via the 'query' filter. try/finally guarantees filter removal.
 		$session_id      = $this->repository->create_session( 'https://example.com', 'bulk' );
 		$imports_table   = Imports_Table::table_name();
-		$filter_callback = function ( $query ) use ( $imports_table ) {
+		$filter_callback = function ( string $query ) use ( $imports_table ): string {
 			if ( 0 === strpos( $query, "UPDATE `{$imports_table}`" ) ) {
 				return 'UPDATE safe_publish_nonexistent_table_for_test SET x = 1';
 			}
@@ -468,7 +468,7 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		$wpdb->suppress_errors( true );
 
 		try {
-			// ACT.
+			// ACT: Roll back the session.
 			$this->repository->mark_session_rolled_back( $session_id );
 
 			// ASSERT: A SESSION_ROLLBACK_FAILED error event was emitted with
@@ -518,7 +518,7 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 			$post_id
 		);
 		$items_table     = Import_Items_Table::table_name();
-		$filter_callback = function ( $query ) use ( $items_table ) {
+		$filter_callback = function ( string $query ) use ( $items_table ): string {
 			if ( 0 === strpos( $query, "UPDATE `{$items_table}`" ) ) {
 				return 'UPDATE safe_publish_nonexistent_table_for_test SET x = 1';
 			}
@@ -528,7 +528,7 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		$wpdb->suppress_errors( true );
 
 		try {
-			// ACT.
+			// ACT: Roll back the item.
 			$this->repository->mark_item_rolled_back( $item_id );
 
 			// ASSERT: An ITEM_ROLLBACK_FAILED error event was emitted with the
