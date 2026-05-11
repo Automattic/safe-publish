@@ -225,7 +225,17 @@ class External_Posts_API {
 		$prepared_post = array(
 			'id'             => isset( $post['id'] ) ? absint( $post['id'] ) : 0,
 			'link'           => isset( $post['link'] ) ? esc_url_raw( $post['link'] ) : '#',
-			'title'          => isset( $post['title']['rendered'] ) ? sanitize_text_field( wp_strip_all_tags( $post['title']['rendered'] ) ) : __( 'No Title', 'safe-publish' ),
+			'title'          => isset( $post['title']['rendered'] )
+				? sanitize_text_field(
+					wp_strip_all_tags(
+						html_entity_decode(
+							$post['title']['rendered'],
+							ENT_QUOTES | ENT_HTML5,
+							'UTF-8'
+						)
+					)
+				)
+				: __( 'No Title', 'safe-publish' ),
 			'modified_gmt'   => isset( $post['modified_gmt'] )
 				? sanitize_text_field( $post['modified_gmt'] ) . 'Z'
 				: '',
