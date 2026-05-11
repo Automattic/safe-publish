@@ -2,39 +2,39 @@
 
 # Function to increment version
 increment_version() {
-    version=$1
-    release=$2
+	version=$1
+	release=$2
 
-    major=$(echo "$version" | cut -d. -f1)
-    minor=$(echo "$version" | cut -d. -f2)
-    patch=$(echo "$version" | cut -d. -f3)
+	major=$(echo "$version" | cut -d. -f1)
+	minor=$(echo "$version" | cut -d. -f2)
+	patch=$(echo "$version" | cut -d. -f3)
 
-    case $release in
-        major)
-            major=$((major + 1))
-            minor=0
-            patch=0
-            ;;
-        minor)
-            minor=$((minor + 1))
-            patch=0
-            ;;
-        patch)
-            patch=$((patch + 1))
-            ;;
-        *)
-            echo "Invalid release type. Use 'major', 'minor', or 'patch'."
-            exit 1
-            ;;
-    esac
+	case $release in
+		major)
+			major=$((major + 1))
+			minor=0
+			patch=0
+			;;
+		minor)
+			minor=$((minor + 1))
+			patch=0
+			;;
+		patch)
+			patch=$((patch + 1))
+			;;
+		*)
+			echo "Invalid release type. Use 'major', 'minor', or 'patch'."
+			exit 1
+			;;
+	esac
 
-    echo "${major}.${minor}.${patch}"
+	echo "${major}.${minor}.${patch}"
 }
 
 # Check if an argument is provided
 if [ $# -eq 0 ]; then
-    echo "Please provide a release type: major, minor, or patch"
-    exit 1
+	echo "Please provide a release type: major, minor, or patch"
+	exit 1
 fi
 
 release_type=$1
