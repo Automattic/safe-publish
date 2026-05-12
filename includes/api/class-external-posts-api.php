@@ -11,8 +11,6 @@ namespace Safe_Publish\API;
 
 use Safe_Publish\Admin\Content_Logger;
 use Safe_Publish\Auth\VIP_Safe_Auth;
-use Safe_Publish\Utils\Log_Events;
-use Safe_Publish\Utils\Logger;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Validators\URL_Validator;
 use WP_Error;
@@ -37,9 +35,9 @@ class External_Posts_API {
 	/**
 	 * Logger instance.
 	 *
-	 * @var Logger
+	 * @var Content_Logger
 	 */
-	private Logger $logger;
+	private Content_Logger $logger;
 
 	/**
 	 * Constructs the External_Posts_API instance.
@@ -377,13 +375,10 @@ class External_Posts_API {
 		$response = $this->make_request( $api_url, $auth_credentials );
 
 		if ( is_wp_error( $response ) ) {
-			$this->logger->log_error(
-				Log_Events::CONTENT_FETCH_FAILED,
-				array(
-					'external_post_id' => $external_post_id,
-					'source_site_url'  => $source_site_url,
-					'error'            => $response->get_error_message(),
-				)
+			$this->logger->content_fetch_failed(
+				$external_post_id,
+				$source_site_url,
+				$response->get_error_message()
 			);
 
 			return false;
@@ -393,12 +388,9 @@ class External_Posts_API {
 		$data = json_decode( $body, true );
 
 		if ( ! is_array( $data ) || array() === $data ) {
-			$this->logger->log_error(
-				Log_Events::CONTENT_FETCH_INVALID_RESPONSE,
-				array(
-					'external_post_id' => $external_post_id,
-					'source_site_url'  => $source_site_url,
-				)
+			$this->logger->content_fetch_invalid_response(
+				$external_post_id,
+				$source_site_url
 			);
 
 			return false;
@@ -410,12 +402,9 @@ class External_Posts_API {
 			! isset( $data['content']['raw'] ) ||
 			! isset( $data['excerpt']['raw'] )
 		) {
-			$this->logger->log_error(
-				Log_Events::CONTENT_FETCH_RAW_UNAVAILABLE,
-				array(
-					'external_post_id' => $external_post_id,
-					'source_site_url'  => $source_site_url,
-				)
+			$this->logger->content_fetch_raw_unavailable(
+				$external_post_id,
+				$source_site_url
 			);
 
 			return false;

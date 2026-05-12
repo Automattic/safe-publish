@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace Safe_Publish\Auth;
 
 use Safe_Publish\API\Export_Logger;
-use Safe_Publish\Utils\Log_Events;
 use WP_Error;
 use WP_HTTP_Response;
 use WP_Post;
@@ -102,14 +101,11 @@ class Permission_Manager {
 
 		// VIP-friendly approach: use capability system without creating actual users.
 		// This avoids 2FA requirements and is more secure.
-		$this->logger->log_event(
-			'CAPABILITY_BASED_AUTH_SETUP',
-			array(
-				'route'    => $request->get_route(),
-				'method'   => $request->get_method(),
-				'approach' => 'capability_only',
-				'reason'   => 'VIP 2FA compliance - no user creation needed',
-			)
+		$this->logger->capability_based_auth_setup(
+			$request->get_route(),
+			$request->get_method(),
+			'capability_only',
+			'VIP 2FA compliance - no user creation needed'
 		);
 
 		add_filter( 'rest_pre_dispatch', array( $this, 'bypass_permission_checks' ), 11, 3 );
@@ -189,14 +185,11 @@ class Permission_Manager {
 			4
 		);
 
-		$this->logger->log_event(
-			'PERMISSION_CHECK_INTERCEPTED',
-			array(
-				'route'            => $route,
-				'method'           => $request->get_method(),
-				'context'          => $request->get_param( 'context' ),
-				'handler_callback' => isset( $handler['callback'] ) ? 'set' : 'not_set',
-			)
+		$this->logger->permission_check_intercepted(
+			$route,
+			$request->get_method(),
+			$request->get_param( 'context' ),
+			isset( $handler['callback'] ) ? 'set' : 'not_set'
 		);
 
 		return $response;
@@ -242,14 +235,7 @@ class Permission_Manager {
 			return $caps;
 		}
 
-		$this->logger->log_event(
-			'META_CAP_OVERRIDE',
-			array(
-				'capability'     => $cap,
-				'target_user_id' => $user_id,
-				'original_caps'  => $caps,
-			)
-		);
+		$this->logger->meta_cap_override( $cap, $user_id, $caps );
 
 		// Grant the capability by returning 'exist' (always granted).
 		return array( 'exist' );
@@ -299,13 +285,10 @@ class Permission_Manager {
 			return current_user_can( 'read' );
 		}
 
-		$this->logger->log_event(
-			'PERMISSION_OVERRIDE_APPLIED',
-			array(
-				'route'   => $request ? $request->get_route() : 'unknown',
-				'method'  => $request ? $request->get_method() : 'unknown',
-				'context' => $request ? $request->get_param( 'context' ) : 'unknown',
-			)
+		$this->logger->permission_override_applied(
+			$request ? $request->get_route() : 'unknown',
+			$request ? $request->get_method() : 'unknown',
+			$request ? $request->get_param( 'context' ) : 'unknown'
 		);
 
 		return true;
@@ -339,13 +322,7 @@ class Permission_Manager {
 
 				$handler['permission_callback'] = array( $this, 'allow_all_permissions' );
 
-				$this->logger->log_event(
-					'PERMISSION_CALLBACK_OVERRIDDEN',
-					array(
-						'route'   => $route,
-						'methods' => $handler['methods'],
-					)
-				);
+				$this->logger->permission_callback_overridden( $route, $handler['methods'] );
 			}
 		}
 
@@ -374,13 +351,7 @@ class Permission_Manager {
 		$params['context']['default'] = 'edit';
 		unset( $params['context']['required'] );
 
-		$this->logger->log_event(
-			'COLLECTION_PARAMS_OVERRIDDEN',
-			array(
-				'post_type'       => $post_type->name,
-				'default_context' => 'edit',
-			)
-		);
+		$this->logger->collection_params_overridden( $post_type->name, 'edit' );
 
 		return $params;
 	}
@@ -414,14 +385,11 @@ class Permission_Manager {
 			return $result;
 		}
 
-		$this->logger->log_event(
-			'CONTEXT_ERROR_OVERRIDDEN',
-			array(
-				'original_error' => $result->get_error_message(),
-				'route'          => $request->get_route(),
-				'method'         => $request->get_method(),
-				'context'        => $request->get_param( 'context' ),
-			)
+		$this->logger->context_error_overridden(
+			$result->get_error_message(),
+			$request->get_route(),
+			$request->get_method(),
+			$request->get_param( 'context' )
 		);
 
 		$this->context_override = true;
@@ -454,14 +422,14 @@ class Permission_Manager {
 	 * Ensures edit context access for Safe Publish authenticated requests.
 	 *
 	 * @param WP_REST_Response $response Response object.
-	 * @param WP_Post          $post     Post object.
-	 * @param WP_REST_Request  $request  Request object.
+	 * @param WP_Post          $_post    Post object (unused; required by filter signature).
+	 * @param WP_REST_Request  $_request Request object (unused; required by filter signature).
 	 * @return WP_REST_Response Response object, unchanged.
 	 */
-	public function ensure_edit_context_access(
+	public function ensure_edit_context_access( // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		WP_REST_Response $response,
-		WP_Post $post,
-		WP_REST_Request $request
+		WP_Post $_post,
+		WP_REST_Request $_request
 	): WP_REST_Response {
 		if ( ! $this->authenticated ) {
 			return $response;
@@ -478,15 +446,6 @@ class Permission_Manager {
 			},
 			999,
 			4
-		);
-
-		$this->logger->log_event(
-			'EDIT_CONTEXT_ACCESS_ENSURED',
-			array(
-				'post_id'   => $post->ID,
-				'post_type' => $post->post_type,
-				'context'   => $request->get_param( 'context' ),
-			)
 		);
 
 		return $response;
@@ -535,13 +494,10 @@ class Permission_Manager {
 		}
 
 		if ( 'edit' === $request->get_param( 'context' ) ) {
-			$this->logger->log_event(
-				'EDIT_CONTEXT_ALLOWED',
-				array(
-					'post_id'   => $post->ID,
-					'post_type' => $post->post_type,
-					'route'     => $request->get_route(),
-				)
+			$this->logger->edit_context_allowed(
+				$post->ID,
+				$post->post_type,
+				$request->get_route()
 			);
 		}
 
@@ -577,27 +533,13 @@ class Permission_Manager {
 			return $response;
 		}
 
-		$this->logger->log_event(
-			'PERMISSION_ERROR_INTERCEPTED',
-			array(
-				'error_code'    => $error_code,
-				'error_message' => $response->get_error_message(),
-				'route'         => $request->get_route(),
-				'method'        => $request->get_method(),
-				'context'       => $request->get_param( 'context' ),
-			)
+		$this->logger->permission_error_intercepted(
+			$error_code,
+			$response->get_error_message(),
+			$request->get_route(),
+			$request->get_method(),
+			$request->get_param( 'context' )
 		);
-
-		if ( 'rest_forbidden_context' === $error_code ) {
-			// Fallback logging — the proper fix is in the capability system above.
-			$this->logger->log_event(
-				'CONTEXT_PERMISSION_OVERRIDE_NEEDED',
-				array(
-					'route'          => $request->get_route(),
-					'original_error' => $response->get_error_message(),
-				)
-			);
-		}
 
 		return $response;
 	}
@@ -631,14 +573,11 @@ class Permission_Manager {
 		$destination_site_url = $this->parse_destination_site_url( $raw_user_agent );
 
 		if ( is_wp_error( $response ) ) {
-			$this->export_logger->log_error(
-				Log_Events::EXPORT_REQUEST_ERROR,
-				array(
-					'route'                => $route,
-					'destination_site_url' => $destination_site_url,
-					'error_code'           => $response->get_error_code(),
-					'error_message'        => $response->get_error_message(),
-				)
+			$this->export_logger->export_request_error(
+				$route,
+				$destination_site_url,
+				$response->get_error_code(),
+				$response->get_error_message()
 			);
 			return $response;
 		}
@@ -646,14 +585,7 @@ class Permission_Manager {
 		$status = $response->get_status();
 
 		if ( 200 !== $status ) {
-			$this->export_logger->log_error(
-				Log_Events::EXPORT_BAD_STATUS,
-				array(
-					'route'                => $route,
-					'destination_site_url' => $destination_site_url,
-					'status'               => $status,
-				)
-			);
+			$this->export_logger->export_bad_status( $route, $destination_site_url, $status );
 			return $response;
 		}
 
@@ -662,28 +594,20 @@ class Permission_Manager {
 			$data     = $response->get_data();
 			$post_ids = is_array( $data ) ? array_values( array_filter( array_column( $data, 'id' ), 'is_int' ) ) : array();
 
-			$this->export_logger->log_event(
-				Log_Events::CONTENT_EXPORTED,
-				array(
-					'rest_base'            => $matches[1],
-					'destination_site_url' => $destination_site_url,
-					'post_ids'             => $post_ids,
-					'post_count'           => count( $post_ids ),
-				)
+			$this->export_logger->content_exported(
+				$matches[1],
+				$destination_site_url,
+				$post_ids
 			);
 		} elseif ( 1 === preg_match( '#^/wp/v2/([^/]+)/(\d+)$#', $route, $matches ) ) {
 			// Matches routes like /wp/v2/posts/123, /wp/v2/pages/123.
 			$data    = $response->get_data();
 			$post_id = is_array( $data ) && isset( $data['id'] ) && is_int( $data['id'] ) ? $data['id'] : (int) $matches[2];
 
-			$this->export_logger->log_event(
-				Log_Events::CONTENT_EXPORTED,
-				array(
-					'rest_base'            => $matches[1],
-					'destination_site_url' => $destination_site_url,
-					'post_ids'             => array( $post_id ),
-					'post_count'           => 1,
-				)
+			$this->export_logger->content_exported(
+				$matches[1],
+				$destination_site_url,
+				array( $post_id )
 			);
 		}
 

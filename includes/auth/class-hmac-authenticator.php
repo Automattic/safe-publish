@@ -9,7 +9,6 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Auth;
 
-use Safe_Publish\Utils\Log_Events;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -150,13 +149,7 @@ class HMAC_Authenticator {
 		$shared_secret = $this->shared_secret;
 
 		if ( empty( $shared_secret ) ) {
-			$this->logger->log_error(
-				Log_Events::NO_SECRET_CONFIGURED,
-				array(
-					'route'  => $route,
-					'method' => $method,
-				)
-			);
+			$this->logger->no_secret_configured( $route, $method );
 
 			return new WP_Error(
 				'safe_publish_auth_no_secret',
@@ -172,16 +165,13 @@ class HMAC_Authenticator {
 		if ( ! $this->validate_timestamp( $timestamp, $max_diff ) ) {
 			$time_diff = abs( time() - $timestamp );
 
-			$this->logger->log_error(
-				Log_Events::TIMESTAMP_EXPIRED,
-				array(
-					'route'             => $route,
-					'method'            => $method,
-					'request_timestamp' => $timestamp,
-					'current_time'      => time(),
-					'time_diff'         => $time_diff,
-					'max_allowed'       => $max_diff,
-				)
+			$this->logger->timestamp_expired(
+				$route,
+				$method,
+				$timestamp,
+				time(),
+				$time_diff,
+				$max_diff
 			);
 
 			return new WP_Error(
@@ -192,13 +182,7 @@ class HMAC_Authenticator {
 		}
 
 		if ( ! isset( $headers['x_safe_publish_content_hash'] ) ) {
-			$this->logger->log_error(
-				Log_Events::CONTENT_HASH_MISSING,
-				array(
-					'route'  => $route,
-					'method' => $method,
-				)
-			);
+			$this->logger->content_hash_missing( $route, $method );
 
 			return new WP_Error(
 				'safe_publish_auth_content_hash_missing',
@@ -211,13 +195,7 @@ class HMAC_Authenticator {
 		$body          = $request->get_body();
 
 		if ( ! $this->validate_content_hash( $body, $received_hash ) ) {
-			$this->logger->log_error(
-				Log_Events::CONTENT_HASH_MISMATCH,
-				array(
-					'route'  => $route,
-					'method' => $method,
-				)
-			);
+			$this->logger->content_hash_mismatch( $route, $method );
 
 			return new WP_Error(
 				'safe_publish_auth_content_hash_invalid',
@@ -227,13 +205,7 @@ class HMAC_Authenticator {
 		}
 
 		if ( empty( $this->connected_site_url ) ) {
-			$this->logger->log_error(
-				Log_Events::NO_CONNECTED_URL_CONFIGURED,
-				array(
-					'route'  => $route,
-					'method' => $method,
-				)
-			);
+			$this->logger->no_connected_url_configured( $route, $method );
 
 			return new WP_Error(
 				'safe_publish_auth_no_connected_site_url',
@@ -247,13 +219,7 @@ class HMAC_Authenticator {
 			: '';
 
 		if ( empty( $request_site_url ) ) {
-			$this->logger->log_error(
-				Log_Events::SITE_URL_HEADER_MISSING,
-				array(
-					'route'  => $route,
-					'method' => $method,
-				)
-			);
+			$this->logger->site_url_header_missing( $route, $method );
 
 			return new WP_Error(
 				'safe_publish_auth_site_url_missing',
@@ -263,14 +229,11 @@ class HMAC_Authenticator {
 		}
 
 		if ( ! $this->validate_site_url( $request_site_url ) ) {
-			$this->logger->log_error(
-				Log_Events::SITE_URL_MISMATCH,
-				array(
-					'route'              => $route,
-					'method'             => $method,
-					'request_site_url'   => $request_site_url,
-					'connected_site_url' => $this->connected_site_url,
-				)
+			$this->logger->site_url_mismatch(
+				$route,
+				$method,
+				$request_site_url,
+				$this->connected_site_url
 			);
 
 			return new WP_Error(
@@ -288,15 +251,12 @@ class HMAC_Authenticator {
 			$received_hash,
 			$this->connected_site_url
 		) ) {
-			$this->logger->log_error(
-				Log_Events::SIGNATURE_INVALID,
-				array(
-					'route'               => $route,
-					'method'              => $method,
-					'request_timestamp'   => $timestamp,
-					'request_site_url'    => $request_site_url,
-					'received_sig_length' => strlen( $signature ),
-				)
+			$this->logger->signature_invalid(
+				$route,
+				$method,
+				$timestamp,
+				$request_site_url,
+				strlen( $signature )
 			);
 
 			return new WP_Error(
@@ -308,14 +268,11 @@ class HMAC_Authenticator {
 
 		$this->authenticated = true;
 
-		$this->logger->log_event(
-			Log_Events::AUTH_SUCCESS,
-			array(
-				'route'             => $route,
-				'method'            => $method,
-				'request_timestamp' => $timestamp,
-				'request_site_url'  => $request_site_url,
-			)
+		$this->logger->auth_success(
+			$route,
+			$method,
+			$timestamp,
+			$request_site_url
 		);
 
 		if ( ! headers_sent() ) {

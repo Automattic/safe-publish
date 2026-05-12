@@ -14,8 +14,10 @@ namespace Safe_Publish\Utils;
  *
  * Info events are stored in the database and fire a WordPress action hook.
  * Error events additionally write to the server error log.
- * Subclasses define the channel and may override store_log_event() to add
- * side effects while preserving base storage behavior.
+ * Subclasses define the channel and expose typed per-event helper methods
+ * (e.g. Auth_Logger::auth_success) that internally call log_event/log_error.
+ * Those methods are the only entry point — log_event and log_error are
+ * protected so each event's payload shape is locked to a single contract.
  */
 abstract class Logger {
 
@@ -32,10 +34,13 @@ abstract class Logger {
 	/**
 	 * Logs an informational event to the database and fires a hook.
 	 *
+	 * Protected so callers must go through a channel logger's typed helper
+	 * method, keeping each event's payload shape under a single contract.
+	 *
 	 * @param string $event Event type.
 	 * @param array  $data  Optional. Additional event data. Default empty array.
 	 */
-	public function log_event( string $event, array $data = array() ): void {
+	protected function log_event( string $event, array $data = array() ): void {
 		$this->write( $event, $data, false );
 	}
 
@@ -43,10 +48,13 @@ abstract class Logger {
 	 * Logs a failure event to the server error log and the database, and fires
 	 * a hook.
 	 *
+	 * Protected so callers must go through a channel logger's typed helper
+	 * method, keeping each event's payload shape under a single contract.
+	 *
 	 * @param string $event Event type.
 	 * @param array  $data  Optional. Additional event data. Default empty array.
 	 */
-	public function log_error( string $event, array $data = array() ): void {
+	protected function log_error( string $event, array $data = array() ): void {
 		$this->write( $event, $data, true );
 	}
 

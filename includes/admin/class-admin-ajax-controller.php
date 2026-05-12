@@ -14,8 +14,6 @@ use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
-use Safe_Publish\Utils\Log_Events;
-use Safe_Publish\Utils\Logger;
 use Safe_Publish\Utils\Options;
 use Exception;
 use WP_Error;
@@ -96,9 +94,9 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Logger instance.
 	 *
-	 * @var Logger
+	 * @var Content_Logger
 	 */
-	private Logger $logger;
+	private Content_Logger $logger;
 
 	/**
 	 * Constructs the Admin_Ajax_Controller instance.
@@ -1116,13 +1114,10 @@ final class Admin_Ajax_Controller {
 
 			return $fresh_data;
 		} catch ( Exception $e ) {
-			$this->logger->log_error(
-				Log_Events::CONTENT_FETCH_FAILED,
-				array(
-					'external_post_id' => $external_post_id,
-					'source_site_url'  => $source_site_url,
-					'error'            => $e->getMessage(),
-				)
+			$this->logger->content_fetch_failed(
+				$external_post_id,
+				$source_site_url,
+				$e->getMessage()
 			);
 
 			return new WP_Error(

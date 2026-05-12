@@ -9,13 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
-use Safe_Publish\Admin\Content_Logger;
-use Safe_Publish\Admin\Import_Logger;
-use Safe_Publish\API\Export_Logger;
-use Safe_Publish\Auth\Auth_Logger;
-use Safe_Publish\Media\Media_Logger;
 use Safe_Publish\Utils\Audit_Log_Table;
-use Safe_Publish\Utils\Logger;
 
 /**
  * Audit Log Actor Attribution Test Class.
@@ -62,35 +56,35 @@ class Audit_Log_Actor_Attribution_Test extends Integration_Test_Case {
 	 * Verifies that the auth channel records the acting user.
 	 */
 	public function test_auth_channel_records_actor(): void {
-		$this->assert_channel_records_actor( new Auth_Logger(), 'auth' );
+		$this->assert_channel_records_actor( new Test_Logger( 'auth' ), 'auth' );
 	}
 
 	/**
 	 * Verifies that the content channel records the acting user.
 	 */
 	public function test_content_channel_records_actor(): void {
-		$this->assert_channel_records_actor( new Content_Logger(), 'content' );
+		$this->assert_channel_records_actor( new Test_Logger( 'content' ), 'content' );
 	}
 
 	/**
 	 * Verifies that the export channel records the acting user.
 	 */
 	public function test_export_channel_records_actor(): void {
-		$this->assert_channel_records_actor( new Export_Logger(), 'export' );
+		$this->assert_channel_records_actor( new Test_Logger( 'export' ), 'export' );
 	}
 
 	/**
 	 * Verifies that the import channel records the acting user.
 	 */
 	public function test_import_channel_records_actor(): void {
-		$this->assert_channel_records_actor( new Import_Logger(), 'import' );
+		$this->assert_channel_records_actor( new Test_Logger( 'import' ), 'import' );
 	}
 
 	/**
 	 * Verifies that the media channel records the acting user.
 	 */
 	public function test_media_channel_records_actor(): void {
-		$this->assert_channel_records_actor( new Media_Logger(), 'media' );
+		$this->assert_channel_records_actor( new Test_Logger( 'media' ), 'media' );
 	}
 
 	/**
@@ -102,7 +96,7 @@ class Audit_Log_Actor_Attribution_Test extends Integration_Test_Case {
 		wp_set_current_user( 0 );
 
 		// ACT: Log an event; auth channel is representative.
-		( new Auth_Logger() )->log_event( 'TEST_UNAUTH' );
+		( new Test_Logger( 'auth' ) )->fire_event( 'TEST_UNAUTH' );
 
 		// ASSERT: Actor fields reflect "no user".
 		$events = Audit_Log_Table::get_events(
@@ -133,7 +127,7 @@ class Audit_Log_Actor_Attribution_Test extends Integration_Test_Case {
 		wp_set_current_user( $user_id );
 
 		// ACT: Log an event, then delete the user.
-		( new Auth_Logger() )->log_event( 'TEST_SNAPSHOT' );
+		( new Test_Logger( 'auth' ) )->fire_event( 'TEST_SNAPSHOT' );
 		wp_delete_user( $user_id );
 
 		// ASSERT: The audit row still carries the captured display name.
@@ -168,7 +162,7 @@ class Audit_Log_Actor_Attribution_Test extends Integration_Test_Case {
 
 		try {
 			// ACT: Log an event in any channel; auth is representative.
-			( new Auth_Logger() )->log_event( 'TEST_HMAC_SOURCE' );
+			( new Test_Logger( 'auth' ) )->fire_event( 'TEST_HMAC_SOURCE' );
 
 			// ASSERT: The audit row is tagged hmac.
 			$events = Audit_Log_Table::get_events(
@@ -197,7 +191,7 @@ class Audit_Log_Actor_Attribution_Test extends Integration_Test_Case {
 		wp_set_current_user( $user_id );
 
 		// ACT: Log with $data that tries to spoof every reserved key.
-		( new Auth_Logger() )->log_event(
+		( new Test_Logger( 'auth' ) )->fire_event(
 			'TEST_RESERVED_KEYS',
 			array(
 				'actor_user_id'      => 99999,
@@ -242,11 +236,11 @@ class Audit_Log_Actor_Attribution_Test extends Integration_Test_Case {
 	/**
 	 * Asserts that a logger records the current user's id and display name.
 	 *
-	 * @param Logger $logger  Logger instance to test.
-	 * @param string $channel Audit log channel.
+	 * @param Test_Logger $logger  Logger instance to test.
+	 * @param string      $channel Audit log channel.
 	 */
 	private function assert_channel_records_actor(
-		Logger $logger,
+		Test_Logger $logger,
 		string $channel
 	): void {
 		// ARRANGE: Create a user with a known display name and act as them.
@@ -256,7 +250,7 @@ class Audit_Log_Actor_Attribution_Test extends Integration_Test_Case {
 		wp_set_current_user( $user_id );
 
 		// ACT: Log an event on the given channel.
-		$logger->log_event( 'TEST_EVENT' );
+		$logger->fire_event( 'TEST_EVENT' );
 
 		// ASSERT: Actor fields are populated from the current user.
 		$events = Audit_Log_Table::get_events(

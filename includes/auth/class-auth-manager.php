@@ -250,7 +250,7 @@ class Auth_Manager {
 	public function clear_auth_logs_callback( WP_REST_Request $_request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 		Audit_Log_Table::clear( 'auth' );
 
-		$this->logger->log_event( 'LOGS_CLEARED' );
+		$this->logger->logs_cleared();
 
 		return new WP_REST_Response(
 			array(
@@ -273,12 +273,9 @@ class Auth_Manager {
 			&& isset( $headers['x_safe_publish_signature'] );
 		$shared_secret            = $this->get_shared_secret();
 
-		$this->logger->log_event(
-			'TEST_ENDPOINT_ACCESSED',
-			array(
-				'headers_present' => $has_safe_publish_headers,
-				'test_type'       => 'manual_endpoint_test',
-			)
+		$this->logger->test_endpoint_accessed(
+			$has_safe_publish_headers,
+			'manual_endpoint_test'
 		);
 
 		return new WP_REST_Response(

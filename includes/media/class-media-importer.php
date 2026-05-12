@@ -11,8 +11,6 @@ namespace Safe_Publish\Media;
 
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\Media\Media_Logger;
-use Safe_Publish\Utils\Log_Events;
-use Safe_Publish\Utils\Logger;
 use Safe_Publish\Utils\Options;
 
 // Prevent direct access.
@@ -37,9 +35,9 @@ class Media_Importer {
 	/**
 	 * Logger instance.
 	 *
-	 * @var Logger
+	 * @var Media_Logger
 	 */
-	private Logger $logger;
+	private Media_Logger $logger;
 
 	/**
 	 * Attachment IDs created during the current import run.
@@ -106,13 +104,10 @@ class Media_Importer {
 		$temp_file = download_url( $media_url );
 
 		if ( is_wp_error( $temp_file ) ) {
-			$this->logger->log_error(
-				Log_Events::MEDIA_DOWNLOAD_FAILED,
-				array(
-					'url'             => $media_url,
-					'source_site_url' => $source_site_url,
-					'error'           => $temp_file->get_error_message(),
-				)
+			$this->logger->media_download_failed(
+				$media_url,
+				$source_site_url,
+				$temp_file->get_error_message()
 			);
 			return false;
 		}
@@ -137,13 +132,10 @@ class Media_Importer {
 		$this->http_client->cleanup_temp_file( $temp_file );
 
 		if ( is_wp_error( $attachment_id ) ) {
-			$this->logger->log_error(
-				Log_Events::MEDIA_SIDELOAD_FAILED,
-				array(
-					'url'             => $media_url,
-					'source_site_url' => $source_site_url,
-					'error'           => $attachment_id->get_error_message(),
-				)
+			$this->logger->media_sideload_failed(
+				$media_url,
+				$source_site_url,
+				$attachment_id->get_error_message()
 			);
 			return false;
 		}
@@ -211,13 +203,10 @@ class Media_Importer {
 		$temp_file = $this->http_client->download_external_file( $media_url );
 
 		if ( is_wp_error( $temp_file ) ) {
-			$this->logger->log_error(
-				Log_Events::MEDIA_DOWNLOAD_FAILED,
-				array(
-					'url'             => $media_url,
-					'source_site_url' => $source_site_url,
-					'error'           => $temp_file->get_error_message(),
-				)
+			$this->logger->media_download_failed(
+				$media_url,
+				$source_site_url,
+				$temp_file->get_error_message()
 			);
 
 			// Remove the filter if we added it.
@@ -256,13 +245,10 @@ class Media_Importer {
 		}
 
 		if ( false === $file_type['type'] ) {
-			$this->logger->log_error(
-				Log_Events::MEDIA_UNSUPPORTED_FILE_TYPE,
-				array(
-					'url'                => $media_url,
-					'source_site_url'    => $source_site_url,
-					'detected_extension' => $file_info['extension'] ?? '',
-				)
+			$this->logger->media_unsupported_file_type(
+				$media_url,
+				$source_site_url,
+				$file_info['extension'] ?? ''
 			);
 
 			$this->http_client->cleanup_temp_file( $temp_file );
@@ -308,26 +294,20 @@ class Media_Importer {
 		remove_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ) );
 
 		if ( is_wp_error( $attachment_id ) ) {
-			$this->logger->log_error(
-				Log_Events::MEDIA_IMPORT_FAILED,
-				array(
-					'url'             => $media_url,
-					'source_site_url' => $source_site_url,
-					'error'           => $attachment_id->get_error_message(),
-				)
+			$this->logger->media_import_failed(
+				$media_url,
+				$source_site_url,
+				$attachment_id->get_error_message()
 			);
 			return false;
 		}
 
 		// Verify the attachment was actually created.
 		if ( ! $attachment_id || ! is_numeric( $attachment_id ) ) {
-			$this->logger->log_error(
-				Log_Events::INVALID_ATTACHMENT_ID,
-				array(
-					'url'             => $media_url,
-					'source_site_url' => $source_site_url,
-					'attachment_id'   => $attachment_id,
-				)
+			$this->logger->invalid_attachment_id(
+				$media_url,
+				$source_site_url,
+				$attachment_id
 			);
 			return false;
 		}
@@ -393,13 +373,10 @@ class Media_Importer {
 		$response      = $this->http_client->make_request( $media_api_url, $auth_credentials );
 
 		if ( is_wp_error( $response ) ) {
-			$this->logger->log_error(
-				Log_Events::FEATURED_IMAGE_FETCH_FAILED,
-				array(
-					'media_id'        => $featured_media_id,
-					'source_site_url' => $source_site_url,
-					'error'           => $response->get_error_message(),
-				)
+			$this->logger->featured_image_fetch_failed(
+				$featured_media_id,
+				$source_site_url,
+				$response->get_error_message()
 			);
 
 			return false;
@@ -409,12 +386,9 @@ class Media_Importer {
 		$media_data    = json_decode( $response_body, true );
 
 		if ( ! isset( $media_data['source_url'] ) || '' === $media_data['source_url'] ) {
-			$this->logger->log_error(
-				Log_Events::FEATURED_IMAGE_MISSING_SOURCE,
-				array(
-					'media_id'        => $featured_media_id,
-					'source_site_url' => $source_site_url,
-				)
+			$this->logger->featured_image_missing_source(
+				$featured_media_id,
+				$source_site_url
 			);
 
 			return false;

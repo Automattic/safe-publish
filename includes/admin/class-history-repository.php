@@ -11,7 +11,6 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
-use Safe_Publish\Utils\Log_Events;
 use WP_Error;
 
 // Prevent direct access.
@@ -373,24 +372,15 @@ final class History_Repository {
 		);
 
 		if ( false === $updated ) {
-			$this->logger->log_error(
-				Log_Events::SESSION_ROLLBACK_FAILED,
-				array(
-					'session_id' => $session_id,
-					'wpdb_error' => $wpdb->last_error,
-				)
-			);
+			$this->logger->session_rollback_failed( $session_id, $wpdb->last_error );
 			return;
 		}
 
-		$event = 0 === $updated
-			? Log_Events::SESSION_ROLLBACK_NOOP
-			: Log_Events::SESSION_ROLLED_BACK;
-
-		$this->logger->log_event(
-			$event,
-			array( 'session_id' => $session_id )
-		);
+		if ( 0 === $updated ) {
+			$this->logger->session_rollback_noop( $session_id );
+		} else {
+			$this->logger->session_rolled_back( $session_id );
+		}
 	}
 
 	/**
@@ -425,30 +415,20 @@ final class History_Repository {
 		);
 
 		if ( false === $updated ) {
-			$this->logger->log_error(
-				Log_Events::ITEM_ROLLBACK_FAILED,
-				array(
-					'item_id'    => $item_id,
-					'session_id' => $session_id,
-					'post_id'    => $post_id,
-					'wpdb_error' => $wpdb->last_error,
-				)
+			$this->logger->item_rollback_failed(
+				$item_id,
+				$session_id,
+				$post_id,
+				$wpdb->last_error
 			);
 			return;
 		}
 
-		$event = 0 === $updated
-			? Log_Events::ITEM_ROLLBACK_NOOP
-			: Log_Events::ITEM_ROLLED_BACK;
-
-		$this->logger->log_event(
-			$event,
-			array(
-				'item_id'    => $item_id,
-				'session_id' => $session_id,
-				'post_id'    => $post_id,
-			)
-		);
+		if ( 0 === $updated ) {
+			$this->logger->item_rollback_noop( $item_id, $session_id, $post_id );
+		} else {
+			$this->logger->item_rolled_back( $item_id, $session_id, $post_id );
+		}
 	}
 
 	/**
@@ -475,18 +455,67 @@ final class History_Repository {
 	public function delete_session( int $session_id ): bool {
 		global $wpdb;
 
-		$wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$imports_table = Imports_Table::table_name();
+		// Snapshot source_site_url before delete so the audit row can describe
+		// the session that was removed (the row is gone by the time the event
+		// is recorded).
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$session_row = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT source_site_url FROM {$imports_table} WHERE id = %d",
+				$session_id
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$source_site_url = isset( $session_row['source_site_url'] )
+			? (string) $session_row['source_site_url']
+			: '';
+
+		// Bail out on a DB error to avoid orphaning items and emitting a
+		// misleading `items_deleted` count in the audit log.
+		$items_result = $wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 			Import_Items_Table::table_name(),
 			array( 'session_id' => $session_id ),
 			array( '%d' )
 		);
 
+		if ( false === $items_result ) {
+			$this->logger->session_delete_failed(
+				$session_id,
+				$source_site_url,
+				$wpdb->last_error
+			);
+			return false;
+		}
+
+		$items_deleted = (int) $items_result;
+
 		$result = $wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-			Imports_Table::table_name(),
+			$imports_table,
 			array( 'id' => $session_id ),
 			array( '%d' )
 		);
 
-		return false !== $result && $result > 0;
+		if ( false === $result ) {
+			$this->logger->session_delete_failed(
+				$session_id,
+				$source_site_url,
+				$wpdb->last_error
+			);
+			return false;
+		}
+
+		$deleted = $result > 0;
+
+		if ( $deleted ) {
+			$this->logger->session_deleted(
+				$session_id,
+				$source_site_url,
+				$items_deleted
+			);
+		}
+
+		return $deleted;
 	}
 }
