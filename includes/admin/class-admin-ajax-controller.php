@@ -92,13 +92,6 @@ final class Admin_Ajax_Controller {
 	private HTTP_Client $http_client;
 
 	/**
-	 * Logger instance.
-	 *
-	 * @var Content_Logger
-	 */
-	private Content_Logger $logger;
-
-	/**
 	 * Constructs the Admin_Ajax_Controller instance.
 	 *
 	 * @param Source_Posts_API    $api                 Source Posts API instance.
@@ -122,7 +115,6 @@ final class Admin_Ajax_Controller {
 		$this->post_import_service = $post_import_service;
 		$this->post_type_fetcher   = $post_type_fetcher;
 		$this->http_client         = $http_client;
-		$this->logger              = new Content_Logger();
 	}
 
 	/**
@@ -377,7 +369,7 @@ final class Admin_Ajax_Controller {
 		$session_id = $session_result;
 
 		// Fetch fresh content from the source site.
-		$fresh_result = $this->fetch_fresh_content(
+		$fresh_result = $this->api->fetch_fresh_post(
 			$source_post_id,
 			$raw_post_type
 		);
@@ -1070,60 +1062,5 @@ final class Admin_Ajax_Controller {
 		}
 
 		return $previous_content;
-	}
-
-	/**
-	 * Fetches fresh post content from the configured source site.
-	 *
-	 * Returns a WP_Error when the fetch fails for any reason, including when no
-	 * connected site URL is configured. Callers should abort the import on error.
-	 *
-	 * @param int    $source_post_id Source post ID to fetch.
-	 * @param string $post_type      Post type slug or REST endpoint.
-	 * @return array|WP_Error Fresh post data, or an error on failure.
-	 */
-	private function fetch_fresh_content(
-		int $source_post_id,
-		string $post_type
-	): array|WP_Error {
-		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
-
-		if ( '' === $source_site_url ) {
-			return new WP_Error(
-				'fresh_content_fetch_no_connected_site_url',
-				__( 'No connected site URL is configured.', 'safe-publish' )
-			);
-		}
-
-		$auth_credentials = Auth_Credential_Provider::get_credentials();
-
-		try {
-			$fresh_data = $this->api->fetch_fresh_post_content(
-				$source_post_id,
-				$source_site_url,
-				$auth_credentials,
-				$post_type
-			);
-
-			if ( ! $fresh_data ) {
-				return new WP_Error(
-					'fresh_content_fetch_failed',
-					__( 'Could not fetch fresh content from the source site. The post was not imported.', 'safe-publish' )
-				);
-			}
-
-			return $fresh_data;
-		} catch ( Exception $e ) {
-			$this->logger->content_fetch_failed(
-				$source_post_id,
-				$source_site_url,
-				$e->getMessage()
-			);
-
-			return new WP_Error(
-				'fresh_content_fetch_exception',
-				$e->getMessage()
-			);
-		}
 	}
 }

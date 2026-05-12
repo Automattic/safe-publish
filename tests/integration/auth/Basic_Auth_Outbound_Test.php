@@ -102,7 +102,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
 		add_filter( 'pre_http_request', array( $this, 'intercept_http_request' ), 5, 3 );
 
-		// Configure the connected site URL so fetch_fresh_content() can make requests.
+		// Configure the connected site URL so fetch_fresh_post() can make requests.
 		update_option( Options::OPTION_CONNECTED_SITE_URL, self::SOURCE_SITE_URL );
 	}
 
@@ -144,7 +144,8 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 		);
 
 		$this->assertSame(
-			'Basic ' . base64_encode( 'testuser:testpass' ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
+			// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
+			'Basic ' . base64_encode( 'testuser:testpass' ),
 			$headers['Authorization'] ?? null,
 			'Basic Auth Authorization header should be correctly encoded.'
 		);
@@ -281,7 +282,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 			);
 		}
 
-		// Single-post endpoint used by fetch_fresh_content(): return a post object.
+		// Single-post endpoint used by fetch_fresh_post(): return a post object.
 		if ( preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
 			return array(
 				'headers'  => array(),

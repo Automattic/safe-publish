@@ -10,8 +10,8 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\API\Export_Logger;
+use Safe_Publish\Tests\Integration\Ajax_Die_Continue_Trait;
 use Safe_Publish\Utils\Audit_Log_Table;
-use WPAjaxDieContinueException;
 use WP_Ajax_UnitTestCase;
 
 /**
@@ -22,6 +22,8 @@ use WP_Ajax_UnitTestCase;
  * the React display can render them in browser-local time.
  */
 class Export_History_Integration_Test extends WP_Ajax_UnitTestCase {
+
+	use Ajax_Die_Continue_Trait;
 
 	/**
 	 * Sets up the audit log table and an admin user for AJAX requests.
@@ -81,14 +83,8 @@ class Export_History_Integration_Test extends WP_Ajax_UnitTestCase {
 			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 		);
 
-		// ACT: Trigger the AJAX handler. wp_send_json_success() outputs JSON
-		// then calls wp_die(), which throws WPAjaxDieContinueException after
-		// buffering output.
-		try {
-			$this->_handleAjax( 'safe_publish_get_export_events' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		}
+		// ACT: Trigger the export events AJAX handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_get_export_events' );
 
 		// ASSERT: Response contains a date matching the ISO 8601 UTC format.
 		$response = json_decode( $this->_last_response, true );

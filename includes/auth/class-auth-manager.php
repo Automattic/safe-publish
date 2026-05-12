@@ -152,7 +152,9 @@ class Auth_Manager {
 	 * @param WP_REST_Request $_request REST request object.
 	 * @return WP_REST_Response Response containing auth status data.
 	 */
-	public function auth_status_callback( WP_REST_Request $_request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	public function auth_status_callback( // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		WP_REST_Request $_request
+	): WP_REST_Response {
 		$shared_secret = $this->get_shared_secret();
 		$recent_events = Audit_Log_Table::get_events(
 			array(
@@ -247,7 +249,9 @@ class Auth_Manager {
 	 * @param WP_REST_Request $_request REST request object.
 	 * @return WP_REST_Response Response confirming logs were cleared.
 	 */
-	public function clear_auth_logs_callback( WP_REST_Request $_request ): WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	public function clear_auth_logs_callback( // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		WP_REST_Request $_request
+	): WP_REST_Response {
 		Audit_Log_Table::clear( 'auth' );
 
 		$this->logger->logs_cleared();

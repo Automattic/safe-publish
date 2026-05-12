@@ -12,7 +12,7 @@ namespace Safe_Publish\Tests\Integration;
 /**
  * Provides a reusable mock for the WordPress REST API single-post endpoint.
  *
- * Used across test classes to simulate fetch_fresh_content() responses without
+ * Used across test classes to simulate fetch_fresh_post() responses without
  * making real HTTP requests.
  */
 trait Mock_Post_API_Trait {

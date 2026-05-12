@@ -66,7 +66,7 @@ abstract class Source_Posts_API_Test_Base extends Integration_Test_Case {
 			$this->media_importer
 		);
 
-		// Configure the connected site URL so fetch_fresh_content() can make requests.
+		// Configure the connected site URL so fetch_fresh_post() can make requests.
 		update_option( Options::OPTION_CONNECTED_SITE_URL, 'https://source.example.com' );
 
 		// Mock HTTP requests to return test image data.
@@ -118,7 +118,7 @@ abstract class Source_Posts_API_Test_Base extends Integration_Test_Case {
 			return $preempt;
 		}
 
-		// Handle single-post REST endpoint used by fetch_fresh_content().
+		// Handle single-post REST endpoint used by fetch_fresh_post().
 		if ( preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
 			return $this->build_mock_post_response();
 		}
