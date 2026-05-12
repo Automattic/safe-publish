@@ -10,96 +10,96 @@ WP_HOME="${WP_ENV_HOME_URL-http://localhost:$PORT}"
 TEST_PORT="${WP_ENV_TEST_PORT-8889}"
 
 cleanup() {
-    echo ""
-    echo "✊ Caught SIG signal. Stopping..."
+	echo ""
+	echo "✊ Caught SIG signal. Stopping..."
 
-    printf "Stop WordPress? (y/n) "
-    read -r answer
-    if [ "$answer" != "${answer#[Yy]}" ]; then
-        npm run -s dev:stop
-    fi
+	printf "Stop WordPress? (y/n) "
+	read -r answer
+	if [ "$answer" != "${answer#[Yy]}" ]; then
+		npm run -s dev:stop
+	fi
 
-    exit 0
+	exit 0
 }
 
 activate_plugin() {
-    slug="$1"
+	slug="$1"
 
-    if (npm run -s wp-cli plugin is-active "$slug" 2>/dev/null); then
-        echo "✏️ $slug is already active."
-    else
-        echo "✏️ Activating $slug..."
-        npm run -s wp-cli plugin activate "$slug"
-    fi
+	if (npm run -s wp-cli plugin is-active "$slug" 2>/dev/null); then
+		echo "✏️ $slug is already active."
+	else
+		echo "✏️ Activating $slug..."
+		npm run -s wp-cli plugin activate "$slug"
+	fi
 }
 
 deactivate_plugin() {
-    slug="$1"
+	slug="$1"
 
-    if (npm run -s wp-cli plugin is-active "$slug" 2>/dev/null); then
-        echo "✏️ Deactivating $slug..."
-        npm run -s wp-cli plugin deactivate "$slug"
-    fi
+	if (npm run -s wp-cli plugin is-active "$slug" 2>/dev/null); then
+		echo "✏️ Deactivating $slug..."
+		npm run -s wp-cli plugin deactivate "$slug"
+	fi
 }
 
 install_and_activate_plugin() {
-    plugin="$1"
-    slug="$2"
+	plugin="$1"
+	slug="$2"
 
-    if (npm run -s wp-cli plugin is-installed "$slug" 2>/dev/null); then
-        echo "✏️ $slug is already installed."
-    else
-        echo "✏️ Installing $slug..."
-        npm run -s wp-cli plugin install "$plugin"
-    fi
+	if (npm run -s wp-cli plugin is-installed "$slug" 2>/dev/null); then
+		echo "✏️ $slug is already installed."
+	else
+		echo "✏️ Installing $slug..."
+		npm run -s wp-cli plugin install "$plugin"
+	fi
 
-    activate_plugin "$slug"
+	activate_plugin "$slug"
 }
 
 configure_wordpress() {
-    echo "✏️ Updating home option..."
-    npm run -s wp-cli config set WP_HOME "$WP_HOME"
+	echo "✏️ Updating home option..."
+	npm run -s wp-cli config set WP_HOME "$WP_HOME"
 }
 
 start_wordpress() {
-    # Enable Xdebug when starting the server in "start" mode.
-    FLAGS=""
-    if [ "$SCRIPT_MODE" = "start" ]; then
-        FLAGS="${WP_ENV_FLAGS---xdebug}"
-    fi
+	# Enable Xdebug when starting the server in "start" mode.
+	FLAGS=""
+	if [ "$SCRIPT_MODE" = "start" ]; then
+		FLAGS="${WP_ENV_FLAGS---xdebug}"
+	fi
 
-    echo "🔼 Starting WordPress..."
-    WP_ENV_PORT="$PORT" npx wp-env start "$FLAGS"
+	echo "🔼 Starting WordPress..."
+	WP_ENV_PORT="$PORT" npx wp-env start "$FLAGS"
 }
 
 open_browser() {
-    WP_ADMIN="http://localhost:$PORT/wp-admin/"
-    TEST_URL="http://localhost:$TEST_PORT/wp-admin/"
+	WP_ADMIN="http://localhost:$PORT/wp-admin/"
+	TEST_URL="http://localhost:$TEST_PORT/wp-admin/"
 
-    echo ""
-    echo "> Safe Publish Destination Site"
-    echo "> 🌐 $WP_ADMIN"
-    echo "> 🔑 Username: admin"
-    echo "> 🔑 Password: password"
-    echo ""
-    echo "> Safe Publish Source Site"
-    echo "> 🌐 $TEST_URL"
-    echo "> 🔑 Username: admin"
-    echo "> 🔑 Password: password"
-    echo ""
+	echo ""
+	echo "> Safe Publish Destination Site"
+	echo "> 🌐 $WP_ADMIN"
+	echo "> 🔑 Username: admin"
+	echo "> 🔑 Password: password"
+	echo ""
+	echo "> Safe Publish Source Site"
+	echo "> 🌐 $TEST_URL"
+	echo "> 🔑 Username: admin"
+	echo "> 🔑 Password: password"
+	echo ""
 
-    # Opening the browser is disruptive, make users opt-in.
-    if [ -z "$WP_ENV_OPEN_BROWSER" ]; then
-        return
-    fi
+	# Opening the browser is disruptive, make users opt-in.
+	if [ -z "$WP_ENV_OPEN_BROWSER" ]; then
+		return
+	fi
 
-    UNAME="$(uname -s)"
+	UNAME="$(uname -s)"
 
-    if [ "Darwin" = "$UNAME" ]; then
-        open "$WP_ADMIN"
-    elif [ "Linux" = "$UNAME" ]; then
-        xdg-open "$WP_ADMIN"
-    fi
+	if [ "Darwin" = "$UNAME" ]; then
+		open "$WP_ADMIN"
+	elif [ "Linux" = "$UNAME" ]; then
+		xdg-open "$WP_ADMIN"
+	fi
 }
 
 # Cleanup after error or trapping SIGINT (Ctrl+C) and SIGTERM signals
@@ -109,13 +109,13 @@ start_wordpress
 configure_wordpress
 
 if [ "$SCRIPT_MODE" = "build" ]; then
-    echo "🔼 Starting build process..."
-    npm run build
-    echo "🔼 Build completed."
+	echo "🔼 Starting build process..."
+	npm run build
+	echo "🔼 Build completed."
 elif [ "$SCRIPT_MODE" = "start" ]; then
-    open_browser
+	open_browser
 
-    # Start hot-reloading wp-scripts start
-    echo "🔼 Starting build process for development..."
-    npm start
+	# Start hot-reloading wp-scripts start
+	echo "🔼 Starting build process for development..."
+	npm start
 fi
