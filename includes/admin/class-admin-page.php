@@ -249,19 +249,29 @@ final class Admin_Page {
 			true
 		);
 
+		// Enqueue shared design tokens before any plugin stylesheet.
+		$tokens_css_path = plugin_dir_path( dirname( __DIR__ ) ) . 'assets/css/tokens.css';
+		$tokens_css_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/tokens.css';
+
+		if ( file_exists( $tokens_css_path ) ) {
+			wp_enqueue_style(
+				'safe-publish-tokens',
+				$tokens_css_url,
+				array(),
+				$script_version
+			);
+		}
+
 		// Enqueue DataViews styles with VIP-safe versioning.
 		$style_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/style-index.css';
 		$style_file_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'build/style-index.css';
 
 		if ( file_exists( $style_file_path ) ) {
-			// Use same versioning strategy as scripts.
-			$style_version = $script_version;
-
 			wp_enqueue_style(
 				'safe-publish-admin-dataviews-style',
 				$style_file_url,
-				array( 'wp-components' ),
-				$style_version
+				array( 'wp-components', 'safe-publish-tokens' ),
+				$script_version
 			);
 		}
 
@@ -273,7 +283,7 @@ final class Admin_Page {
 			wp_enqueue_style(
 				'safe-publish-admin-style',
 				$admin_css_url,
-				array(),
+				array( 'safe-publish-tokens' ),
 				$script_version
 			);
 		}
@@ -286,7 +296,7 @@ final class Admin_Page {
 			wp_enqueue_style(
 				'safe-publish-react-components-style',
 				$react_css_url,
-				array( 'wp-components' ),
+				array( 'wp-components', 'safe-publish-tokens' ),
 				$script_version
 			);
 		}

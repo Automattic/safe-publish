@@ -13,17 +13,17 @@
 }
 
 .safe-publish-settings-section {
-	background: #fff;
-	border: 1px solid #c3c4c7;
-	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+	background: var(--safe-publish-surface-bg);
+	border: 1px solid var(--safe-publish-border-strong);
+	box-shadow: var(--safe-publish-surface-shadow);
 	padding: 20px;
 }
 
 .safe-publish-dataviews-section {
 	grid-column: 1 / -1;
-	background: #fff;
-	border: 1px solid #c3c4c7;
-	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+	background: var(--safe-publish-surface-bg);
+	border: 1px solid var(--safe-publish-border-strong);
+	box-shadow: var(--safe-publish-surface-shadow);
 	padding: 20px;
 	margin-top: 20px;
 }
@@ -31,7 +31,7 @@
 .safe-publish-dataviews-section h2 {
 	margin-top: 0;
 	margin-bottom: 15px;
-	border-bottom: 1px solid #dcdcde;
+	border-bottom: 1px solid var(--safe-publish-border);
 	padding-bottom: 10px;
 }
 
@@ -40,63 +40,13 @@
 	min-height: 400px;
 }
 
-.safe-publish-loading {
-	text-align: center;
-	padding: 40px 20px;
-	color: #666;
-	font-style: italic;
-}
-
-.safe-publish-error {
-	background: #f8d7da;
-	border: 1px solid #f5c6cb;
-	color: #721c24;
-	padding: 15px;
-	border-radius: 4px;
-	margin: 20px 0;
-}
-
-.safe-publish-no-results {
-	background: #d1ecf1;
-	border: 1px solid #bee5eb;
-	color: #0c5460;
-	padding: 15px;
-	border-radius: 4px;
-	margin: 20px 0;
-	text-align: center;
-}
-
-.safe-publish-results {
-	margin-top: 15px;
-	padding: 10px 15px;
-	border-radius: 4px;
-}
-
-.safe-publish-results.success {
-	background: #d1e7dd;
-	border: 1px solid #badbcc;
-	color: #0f5132;
-}
-
-.safe-publish-results.error {
-	background: #f8d7da;
-	border: 1px solid #f5c6cb;
-	color: #721c24;
-}
-
-.safe-publish-results.info {
-	background: #d1ecf1;
-	border: 1px solid #bee5eb;
-	color: #0c5460;
-}
-
 /* DataViews specific styling */
 .dataviews-wrapper {
 	margin: 20px 0;
 }
 
 .dataviews-view-table .dataviews-view-table__wrapper {
-	border: 1px solid #dcdcde;
+	border: 1px solid var(--safe-publish-border);
 	border-radius: 4px;
 	overflow: hidden;
 }
@@ -110,17 +60,17 @@
 .dataviews-view-table td {
 	padding: 12px 16px;
 	text-align: left;
-	border-bottom: 1px solid #f0f0f1;
+	border-bottom: 1px solid var(--safe-publish-border-subtle);
 }
 
 .dataviews-view-table th {
-	background-color: #f6f7f7;
+	background-color: var(--safe-publish-bg-muted);
 	font-weight: 600;
-	border-bottom: 1px solid #dcdcde;
+	border-bottom: 1px solid var(--safe-publish-border);
 }
 
 .dataviews-view-table tr:hover {
-	background-color: #f6f7f7;
+	background-color: var(--safe-publish-bg-muted);
 }
 
 .dataviews-view-table tr:last-child td {
@@ -133,7 +83,7 @@
 	justify-content: space-between;
 	align-items: center;
 	padding: 15px 0;
-	border-top: 1px solid #dcdcde;
+	border-top: 1px solid var(--safe-publish-border);
 }
 
 .dataviews-search {
@@ -144,7 +94,7 @@
 	width: 100%;
 	max-width: 300px;
 	padding: 8px 12px;
-	border: 1px solid #dcdcde;
+	border: 1px solid var(--safe-publish-border);
 	border-radius: 4px;
 }
 
@@ -159,70 +109,4 @@
 		padding: 8px 10px;
 		font-size: 14px;
 	}
-}
-
-/* Admin Tools Styles */
-.safe-publish-tool {
-	border-bottom: 1px solid #dcdcde;
-	margin-bottom: 20px;
-	padding-bottom: 20px;
-}
-
-.safe-publish-tool:last-child {
-	border-bottom: none;
-	margin-bottom: 0;
-}
-
-.safe-publish-tool h3 {
-	margin: 0 0 10px 0;
-	font-size: 14px;
-	font-weight: 600;
-}
-
-.safe-publish-tool p {
-	margin: 0 0 15px 0;
-	color: #646970;
-}
-
-/* WordPress Components Notice styles */
-.safe-publish-test-result,
-.safe-publish-preview-result,
-.safe-publish-cache-result {
-	margin-top: 15px;
-}
-
-/* Preview posts styling */
-.safe-publish-preview-posts {
-	margin-top: 15px;
-	max-height: 300px;
-	overflow-y: auto;
-	border: 1px solid #dcdcde;
-	border-radius: 4px;
-}
-
-.safe-publish-preview-post {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 10px 15px;
-	border-bottom: 1px solid #f0f0f1;
-}
-
-.safe-publish-preview-post:last-child {
-	border-bottom: none;
-}
-
-.safe-publish-preview-post-title {
-	font-weight: 500;
-	color: #1d2327;
-}
-
-.safe-publish-preview-post-link {
-	color: #0073aa;
-	text-decoration: none;
-	font-size: 13px;
-}
-
-.safe-publish-preview-post-link:hover {
-	text-decoration: underline;
 }
