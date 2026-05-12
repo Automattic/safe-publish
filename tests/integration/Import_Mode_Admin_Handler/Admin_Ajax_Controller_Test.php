@@ -11,13 +11,13 @@ namespace Safe_Publish\Tests\Integration\Import_Mode_Admin_Handler;
 
 use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Auth\VIP_Safe_Auth;
+use Safe_Publish\Tests\Integration\Ajax_Die_Continue_Trait;
 use Safe_Publish\Tests\Integration\Mock_Post_API_Trait;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
 use WP_Error;
-use WPAjaxDieContinueException;
 use WPAjaxDieStopException;
 
 /**
@@ -27,6 +27,7 @@ use WPAjaxDieStopException;
  */
 class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
+	use Ajax_Die_Continue_Trait;
 	use Mock_Post_API_Trait;
 
 	/**
@@ -151,15 +152,8 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 		);
 
-		// ACT: wp_send_json_error() terminates via wp_die(), which throws
-		// WPAjaxDieContinueException.
-		try {
-			$this->_handleAjax( 'safe_publish_bulk_import' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		// ACT: Trigger the bulk import handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_import' );
 
 		// ASSERT: Response is a JSON failure with a forbidden error message.
 		$response = json_decode( $this->_last_response, true );
@@ -196,16 +190,8 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			'posts_data' => wp_json_encode( $posts_data ),
 		);
 
-		// ACT: Trigger AJAX handler; wp_send_json_success outputs JSON then
-		// calls wp_die(), which throws WPAjaxDieContinueException after
-		// buffering output.
-		try {
-			$this->_handleAjax( 'safe_publish_bulk_import' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		// ACT: Trigger the bulk import handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_import' );
 
 		// ASSERT: Response is a valid JSON success with correct counts.
 		$response = json_decode( $this->_last_response, true );
@@ -267,15 +253,8 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			'title'            => 'Some Title',
 		);
 
-		// ACT: wp_send_json_error() terminates via wp_die(), which throws
-		// WPAjaxDieContinueException.
-		try {
-			$this->_handleAjax( 'safe_publish_create_draft' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		// ACT: Trigger the create draft AJAX handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
 
 		// ASSERT: Response is a JSON failure with a permission error message.
 		$response = json_decode( $this->_last_response, true );
@@ -305,13 +284,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		// ACT: Trigger the create draft AJAX handler.
-		try {
-			$this->_handleAjax( 'safe_publish_create_draft' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
 
 		// ASSERT: Response is a JSON success for a newly created post.
 		$response = json_decode( $this->_last_response, true );
@@ -371,13 +344,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		// ACT: Trigger handler without force_update — should not overwrite.
-		try {
-			$this->_handleAjax( 'safe_publish_create_draft' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
 
 		// ASSERT: A confirmation prompt is returned, not a new post.
 		$response = json_decode( $this->_last_response, true );
@@ -417,13 +384,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		// ACT: Trigger the create draft AJAX handler.
-		try {
-			$this->_handleAjax( 'safe_publish_create_draft' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
 
 		// ASSERT: Response is a JSON failure.
 		$response = json_decode( $this->_last_response, true );
@@ -467,13 +428,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		// ACT: Trigger the bulk import handler with an oversized batch.
-		try {
-			$this->_handleAjax( 'safe_publish_bulk_import' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_import' );
 
 		// ASSERT: Response is a JSON failure indicating the limit was exceeded.
 		$response = json_decode( $this->_last_response, true );
@@ -514,13 +469,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		// ACT: Trigger the bulk import handler.
-		try {
-			$this->_handleAjax( 'safe_publish_bulk_import' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_import' );
 
 		// ASSERT: One post succeeded, one failed; results array reports per-item outcome.
 		$response = json_decode( $this->_last_response, true );
@@ -588,13 +537,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 		// ACT: Trigger the create draft handler; with force_update it takes the
 		// update path.
-		try {
-			$this->_handleAjax( 'safe_publish_create_draft' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
 
 		remove_filter( 'update_post_metadata', $block_meta, 10 );
 
@@ -643,13 +586,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		// ACT: Trigger the create draft handler.
-		try {
-			$this->_handleAjax( 'safe_publish_create_draft' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
 
 		// ASSERT: Response is a success.
 		$response = json_decode( $this->_last_response, true );
@@ -726,13 +663,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		// ACT: Trigger the create draft handler with force_update.
-		try {
-			$this->_handleAjax( 'safe_publish_create_draft' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
 
 		// ASSERT: Response is a success.
 		$response = json_decode( $this->_last_response, true );
@@ -787,13 +718,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		// ACT: Trigger the create draft handler.
-		try {
-			$this->_handleAjax( 'safe_publish_create_draft' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
 
 		// ASSERT: Response is a success.
 		$response = json_decode( $this->_last_response, true );
@@ -849,13 +774,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		// ACT: Trigger the create draft handler with force_update.
-		try {
-			$this->_handleAjax( 'safe_publish_create_draft' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
 
 		// ASSERT: Response is a success.
 		$response = json_decode( $this->_last_response, true );
@@ -897,15 +816,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		// ACT: Trigger the create draft handler.
-		try {
-			$this->_handleAjax( 'safe_publish_create_draft' );
-			$this->fail(
-				'Expected WPAjaxDieContinueException'
-			);
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
 
 		// ASSERT: Response must not contain password.
 		$response = json_decode( $this->_last_response, true );
@@ -949,13 +860,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		// ACT: Trigger the AJAX handler.
-		try {
-			$this->_handleAjax( 'safe_publish_auth_status' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		$this->dispatch_ajax_expecting_die( 'safe_publish_auth_status' );
 
 		// ASSERT: Subscriber receives a forbidden response.
 		$response = json_decode( $this->_last_response, true );
@@ -984,13 +889,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		// ACT: Trigger the AJAX handler.
-		try {
-			$this->_handleAjax( 'safe_publish_auth_status' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		$this->dispatch_ajax_expecting_die( 'safe_publish_auth_status' );
 
 		// ASSERT: Response carries the cached status payload.
 		$response = json_decode( $this->_last_response, true );
@@ -1035,13 +934,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		// ACT: Trigger the AJAX handler.
-		try {
-			$this->_handleAjax( 'safe_publish_auth_status' );
-			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-		} catch ( WPAjaxDieContinueException $e ) {
-			// Expected; the AJAX handler ends execution via wp_die().
-		}
+		$this->dispatch_ajax_expecting_die( 'safe_publish_auth_status' );
 
 		remove_filter( 'pre_http_request', $probe_filter, 1 );
 
