@@ -99,7 +99,8 @@ final class Audit_Log_Table {
 	): void {
 		global $wpdb;
 
-		$wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$wpdb->insert(
 			self::table_name(),
 			array(
 				'channel'        => $channel,
@@ -263,7 +264,8 @@ final class Audit_Log_Table {
 	public static function clear( string $channel ): void {
 		global $wpdb;
 
-		$wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->delete(
 			self::table_name(),
 			array( 'channel' => $channel ),
 			array( '%s' )

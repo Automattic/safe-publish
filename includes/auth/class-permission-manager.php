@@ -145,7 +145,8 @@ class Permission_Manager {
 
 		add_filter(
 			'user_has_cap',
-			function ( $allcaps, $_caps, $_args, $_user ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			function ( $allcaps, $_caps, $_args, $_user ): array {
 				$safe_publish_caps = array(
 					'read',
 					'edit_posts',
@@ -437,7 +438,8 @@ class Permission_Manager {
 
 		add_filter(
 			'user_has_cap',
-			function ( $allcaps, $_caps, $_args, $_user ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			function ( $allcaps, $_caps, $_args, $_user ): array {
 				$allcaps['edit_posts']         = true;
 				$allcaps['edit_others_posts']  = true;
 				$allcaps['edit_private_posts'] = true;
@@ -516,7 +518,8 @@ class Permission_Manager {
 	 */
 	public function ensure_response_success(
 		WP_REST_Response|WP_Error $response,
-		WP_REST_Server $_server, // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundBeforeLastUsed
+		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundBeforeLastUsed
+		WP_REST_Server $_server,
 		WP_REST_Request $request
 	): WP_REST_Response|WP_Error {
 		if ( ! $this->authenticated ) {
@@ -560,7 +563,8 @@ class Permission_Manager {
 	 */
 	public function log_export_event(
 		WP_REST_Response|WP_Error $response,
-		WP_REST_Server $_server, // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundBeforeLastUsed
+		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundBeforeLastUsed
+		WP_REST_Server $_server,
 		WP_REST_Request $request
 	): WP_REST_Response|WP_Error {
 		if ( ! $this->authenticated || $this->context_override ) {

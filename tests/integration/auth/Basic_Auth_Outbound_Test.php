@@ -144,7 +144,8 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 		);
 
 		$this->assertSame(
-			'Basic ' . base64_encode( 'testuser:testpass' ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
+			// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
+			'Basic ' . base64_encode( 'testuser:testpass' ),
 			$headers['Authorization'] ?? null,
 			'Basic Auth Authorization header should be correctly encoded.'
 		);

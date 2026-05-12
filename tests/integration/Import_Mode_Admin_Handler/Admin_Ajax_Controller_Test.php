@@ -156,7 +156,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_bulk_import' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		// ASSERT: Response is a JSON failure with a forbidden error message.
@@ -200,7 +202,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_bulk_import' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		// ASSERT: Response is a valid JSON success with correct counts.
@@ -268,7 +272,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_create_draft' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		// ASSERT: Response is a JSON failure with a permission error message.
@@ -302,7 +308,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_create_draft' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		// ASSERT: Response is a JSON success for a newly created post.
@@ -366,7 +374,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_create_draft' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		// ASSERT: A confirmation prompt is returned, not a new post.
@@ -410,7 +420,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_create_draft' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		// ASSERT: Response is a JSON failure.
@@ -458,7 +470,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_bulk_import' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		// ASSERT: Response is a JSON failure indicating the limit was exceeded.
@@ -503,7 +517,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_bulk_import' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		// ASSERT: One post succeeded, one failed; results array reports per-item outcome.
@@ -575,7 +591,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_create_draft' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		remove_filter( 'update_post_metadata', $block_meta, 10 );
@@ -628,7 +646,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_create_draft' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		// ASSERT: Response is a success.
@@ -709,7 +729,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_create_draft' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		// ASSERT: Response is a success.
@@ -768,7 +790,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_create_draft' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		// ASSERT: Response is a success.
@@ -828,7 +852,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_create_draft' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		// ASSERT: Response is a success.
@@ -876,7 +902,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			$this->fail(
 				'Expected WPAjaxDieContinueException'
 			);
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		// ASSERT: Response must not contain password.
@@ -924,7 +952,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_auth_status' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		// ASSERT: Subscriber receives a forbidden response.
@@ -957,7 +987,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_auth_status' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		// ASSERT: Response carries the cached status payload.
@@ -1006,7 +1038,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_auth_status' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		remove_filter( 'pre_http_request', $probe_filter, 1 );

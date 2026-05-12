@@ -57,7 +57,8 @@ final class History_Repository {
 		$user_id = get_current_user_id();
 		$user    = get_userdata( $user_id );
 
-		$inserted = $wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$inserted = $wpdb->insert(
 			Imports_Table::table_name(),
 			array(
 				'user_id'           => $user_id,
@@ -121,7 +122,8 @@ final class History_Repository {
 			}
 		}
 
-		$inserted = $wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$inserted = $wpdb->insert(
 			Import_Items_Table::table_name(),
 			array(
 				'session_id'           => $session_id,
@@ -156,7 +158,8 @@ final class History_Repository {
 	public function complete_session( int $session_id ): void {
 		global $wpdb;
 
-		$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->update(
 			Imports_Table::table_name(),
 			array(
 				'status'       => 'completed',
@@ -363,7 +366,8 @@ final class History_Repository {
 	public function mark_session_rolled_back( int $session_id ): void {
 		global $wpdb;
 
-		$updated = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$updated = $wpdb->update(
 			Imports_Table::table_name(),
 			array( 'status' => 'rolled_back' ),
 			array( 'id' => $session_id ),
@@ -406,7 +410,8 @@ final class History_Repository {
 		$session_id = isset( $item['session_id'] ) ? (int) $item['session_id'] : 0;
 		$post_id    = isset( $item['post_id'] ) ? (int) $item['post_id'] : 0;
 
-		$updated = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$updated = $wpdb->update(
 			$table,
 			array( 'rolled_back' => 1 ),
 			array( 'id' => $item_id ),
@@ -474,7 +479,8 @@ final class History_Repository {
 
 		// Bail out on a DB error to avoid orphaning items and emitting a
 		// misleading `items_deleted` count in the audit log.
-		$items_result = $wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$items_result = $wpdb->delete(
 			Import_Items_Table::table_name(),
 			array( 'session_id' => $session_id ),
 			array( '%d' )
@@ -491,7 +497,8 @@ final class History_Repository {
 
 		$items_deleted = (int) $items_result;
 
-		$result = $wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$result = $wpdb->delete(
 			$imports_table,
 			array( 'id' => $session_id ),
 			array( '%d' )

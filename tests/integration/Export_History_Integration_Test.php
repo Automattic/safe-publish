@@ -87,7 +87,9 @@ class Export_History_Integration_Test extends WP_Ajax_UnitTestCase {
 		try {
 			$this->_handleAjax( 'safe_publish_get_export_events' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
-		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( WPAjaxDieContinueException $e ) {
+			// Expected; the AJAX handler ends execution via wp_die().
 		}
 
 		// ASSERT: Response contains a date matching the ISO 8601 UTC format.
