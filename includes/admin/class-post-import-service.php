@@ -12,7 +12,6 @@ namespace Safe_Publish\Admin;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Media\Media_Importer;
-use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use Exception;
@@ -70,14 +69,6 @@ class Post_Import_Service {
 	private Meta_Terms_Manager $meta_terms_manager;
 
 	/**
-	 * Logger instance.
-	 *
-	 * @var Content_Logger
-	 */
-	private Content_Logger $logger;
-
-
-	/**
 	 * Constructs the Post_Import_Service instance.
 	 *
 	 * @param External_Posts_API $api                External Posts API instance.
@@ -98,7 +89,6 @@ class Post_Import_Service {
 		$this->content_processor  = $content_processor;
 		$this->repository         = $repository;
 		$this->meta_terms_manager = $meta_terms_manager;
-		$this->logger             = new Content_Logger();
 	}
 
 	/**
@@ -690,7 +680,7 @@ class Post_Import_Service {
 	 * @return array{fields: array, processed_content: string}|WP_Error Prepared data or error.
 	 */
 	private function prepare_fresh_content( array $fields ): array|WP_Error {
-		$fresh_result = $this->fetch_fresh_content(
+		$fresh_result = $this->api->fetch_fresh_post(
 			$fields['external_post_id'],
 			$fields['raw_post_type']
 		);
@@ -1050,61 +1040,6 @@ class Post_Import_Service {
 		}
 
 		return $post_id;
-	}
-
-	/**
-	 * Fetches fresh post content from the configured source site.
-	 *
-	 * Returns a WP_Error when the fetch fails for any reason, including when no
-	 * connected site URL is configured. Callers should abort the import on error.
-	 *
-	 * @param int    $external_post_id External post ID to fetch.
-	 * @param string $post_type        Post type slug or REST endpoint.
-	 * @return array|WP_Error Fresh post data, or an error on failure.
-	 */
-	private function fetch_fresh_content(
-		int $external_post_id,
-		string $post_type
-	): array|WP_Error {
-		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
-
-		if ( '' === $source_site_url ) {
-			return new WP_Error(
-				'fresh_content_fetch_no_connected_site_url',
-				__( 'No connected site URL is configured.', 'safe-publish' )
-			);
-		}
-
-		$auth_credentials = Auth_Credential_Provider::get_credentials();
-
-		try {
-			$fresh_data = $this->api->fetch_fresh_post_content(
-				$external_post_id,
-				$source_site_url,
-				$auth_credentials,
-				$post_type
-			);
-
-			if ( ! $fresh_data ) {
-				return new WP_Error(
-					'fresh_content_fetch_failed',
-					__( 'Could not fetch fresh content from the source site. The post was not imported.', 'safe-publish' )
-				);
-			}
-
-			return $fresh_data;
-		} catch ( Exception $e ) {
-			$this->logger->content_fetch_failed(
-				$external_post_id,
-				$source_site_url,
-				$e->getMessage()
-			);
-
-			return new WP_Error(
-				'fresh_content_fetch_exception',
-				$e->getMessage()
-			);
-		}
 	}
 
 	/**
