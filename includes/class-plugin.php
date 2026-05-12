@@ -22,7 +22,7 @@ use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\Admin\Settings_Page;
 use Safe_Publish\Admin\Settings_Sanitizer;
 use Safe_Publish\Auth\Auth_Manager;
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\API\Post_Type_Fetcher;
@@ -45,11 +45,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Plugin {
 
 	/**
-	 * External Posts API instance.
+	 * Source Posts API instance.
 	 *
-	 * @var External_Posts_API|null
+	 * @var Source_Posts_API|null
 	 */
-	private ?External_Posts_API $api = null;
+	private ?Source_Posts_API $api = null;
 
 	/**
 	 * Safe Publish API instance.
@@ -155,8 +155,8 @@ final class Plugin {
 		$content_media_processor = new Content_Media_Processor( $media_importer );
 		$post_type_fetcher       = new Post_Type_Fetcher( $http_client );
 
-		// Initialize External Posts API with shared HTTP client.
-		$this->api = new External_Posts_API( $http_client );
+		// Initialize Source Posts API with shared HTTP client.
+		$this->api = new Source_Posts_API( $http_client );
 
 		// Build content processor with direct media service dependencies.
 		$content_processor = new Content_Processor( $media_importer, $content_media_processor );
@@ -177,15 +177,15 @@ final class Plugin {
 	 * Builds and wires the Import_Mode_Admin_Handler with all required
 	 * sub-services for import mode.
 	 *
-	 * @param External_Posts_API $api                External Posts API instance.
-	 * @param Content_Processor  $content_processor  Content Processor instance.
-	 * @param Media_Importer     $media_importer     Media Importer instance.
-	 * @param Post_Type_Fetcher  $post_type_fetcher  Post Type Fetcher instance.
-	 * @param HTTP_Client        $http_client        HTTP Client instance.
+	 * @param Source_Posts_API  $api                Source Posts API instance.
+	 * @param Content_Processor $content_processor  Content Processor instance.
+	 * @param Media_Importer    $media_importer     Media Importer instance.
+	 * @param Post_Type_Fetcher $post_type_fetcher  Post Type Fetcher instance.
+	 * @param HTTP_Client       $http_client        HTTP Client instance.
 	 * @return Import_Mode_Admin_Handler Fully constructed Import_Mode_Admin_Handler coordinator.
 	 */
 	private function build_full_admin_handler(
-		External_Posts_API $api,
+		Source_Posts_API $api,
 		Content_Processor $content_processor,
 		Media_Importer $media_importer,
 		Post_Type_Fetcher $post_type_fetcher,

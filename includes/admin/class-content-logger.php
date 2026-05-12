@@ -27,21 +27,21 @@ class Content_Logger extends Logger {
 	/**
 	 * Logs a content fetch failure.
 	 *
-	 * @param int    $external_post_id External post ID that was being fetched.
+	 * @param int    $source_post_id   Source post ID that was being fetched.
 	 * @param string $source_site_url  Source site the fetch targeted.
 	 * @param string $error            Error message from the underlying failure.
 	 */
 	public function content_fetch_failed(
-		int $external_post_id,
+		int $source_post_id,
 		string $source_site_url,
 		string $error
 	): void {
 		$this->log_error(
 			Log_Events::CONTENT_FETCH_FAILED,
 			array(
-				'external_post_id' => $external_post_id,
-				'source_site_url'  => $source_site_url,
-				'error'            => $error,
+				'source_post_id'  => $source_post_id,
+				'source_site_url' => $source_site_url,
+				'error'           => $error,
 			)
 		);
 	}
@@ -49,18 +49,18 @@ class Content_Logger extends Logger {
 	/**
 	 * Logs a content fetch that returned a non-array or empty response body.
 	 *
-	 * @param int    $external_post_id External post ID that was being fetched.
+	 * @param int    $source_post_id   Source post ID that was being fetched.
 	 * @param string $source_site_url  Source site the fetch targeted.
 	 */
 	public function content_fetch_invalid_response(
-		int $external_post_id,
+		int $source_post_id,
 		string $source_site_url
 	): void {
 		$this->log_error(
 			Log_Events::CONTENT_FETCH_INVALID_RESPONSE,
 			array(
-				'external_post_id' => $external_post_id,
-				'source_site_url'  => $source_site_url,
+				'source_post_id'  => $source_post_id,
+				'source_site_url' => $source_site_url,
 			)
 		);
 	}
@@ -68,18 +68,18 @@ class Content_Logger extends Logger {
 	/**
 	 * Logs a content fetch whose response lacked the raw edit-context fields.
 	 *
-	 * @param int    $external_post_id External post ID that was being fetched.
+	 * @param int    $source_post_id   Source post ID that was being fetched.
 	 * @param string $source_site_url  Source site the fetch targeted.
 	 */
 	public function content_fetch_raw_unavailable(
-		int $external_post_id,
+		int $source_post_id,
 		string $source_site_url
 	): void {
 		$this->log_error(
 			Log_Events::CONTENT_FETCH_RAW_UNAVAILABLE,
 			array(
-				'external_post_id' => $external_post_id,
-				'source_site_url'  => $source_site_url,
+				'source_post_id'  => $source_post_id,
+				'source_site_url' => $source_site_url,
 			)
 		);
 	}

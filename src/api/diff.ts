@@ -14,7 +14,7 @@ import type { JsonObject, JsonValue } from '../types';
 /**
  * Payload for requesting a diff preview.
  *
- * @property {number}  postId     External post ID to compare.
+ * @property {number}  postId     Source post ID to compare.
  * @property {string}  [postType] Post type slug.
  * @property {string}  [content]  Incoming content to compare.
  * @property {string}  [mode]     Display mode: 'split' or 'inline'.

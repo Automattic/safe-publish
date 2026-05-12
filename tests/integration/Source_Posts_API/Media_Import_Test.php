@@ -1,13 +1,13 @@
 <?php
 /**
- * Media Import Tests for External Posts API
+ * Media Import Tests for Source Posts API
  *
  * @package Safe_Publish
  */
 
 declare(strict_types=1);
 
-namespace Safe_Publish\Tests\Integration\External_Posts_API;
+namespace Safe_Publish\Tests\Integration\Source_Posts_API;
 
 /**
  * Tests actual media downloads and attachment creation.
@@ -17,16 +17,16 @@ namespace Safe_Publish\Tests\Integration\External_Posts_API;
  *
  * phpcs:disable WordPressVIPMinimum.Functions.RestrictedFunctions.attachment_url_to_postid_attachment_url_to_postid
  */
-class Media_Import_Test extends External_Posts_API_Test_Base {
+class Media_Import_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Verifies that media is successfully imported and URL is replaced.
 	 *
 	 * Tests the complete import workflow: download from mocked HTTP, create
-	 * attachment, replace external URL with local WordPress URL.
+	 * attachment, replace source URL with local WordPress URL.
 	 */
 	public function test_successful_media_import_creates_attachment(): void {
-		// ARRANGE: Create content with external image.
+		// ARRANGE: Create content with source image.
 		$source_site_url    = 'https://example.com';
 		$external_url       = 'https://example.com/test-image.jpg';
 		$content            = sprintf( '<img src="%s" alt="Test Image">', $external_url );
@@ -39,7 +39,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$attachments_after = $this->get_attachment_count();
 		$this->assertSame( $attachments_before + 1, $attachments_after, 'Should create exactly one attachment' );
 
-		// ASSERT: Verify external URL was replaced with local URL.
+		// ASSERT: Verify source URL was replaced with local URL.
 		$this->assertStringNotContainsString( $external_url, $processed_content, 'External URL should be replaced' );
 		$this->assertStringContainsString( 'wp-content/uploads', $processed_content, 'Should contain local upload URL' );
 		$this->assertStringContainsString( 'alt="Test Image"', $processed_content, 'Should preserve alt text' );
@@ -58,7 +58,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$external_url    = 'https://example.com/metadata-test.jpg';
 
 		// ACT: Import media directly (HTTP mock serves real fixture file).
-		$local_url = $this->media_importer->import_external_media( $external_url, $source_site_url );
+		$local_url = $this->media_importer->import_source_media( $external_url, $source_site_url );
 
 		// ASSERT: Verify import succeeded and returned a non-empty URL string.
 		$this->assertIsString( $local_url, 'Import should return local URL string' );
@@ -89,14 +89,14 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Import media first time.
-		$first_local_url = $this->media_importer->import_external_media( $external_url, $source_site_url );
+		$first_local_url = $this->media_importer->import_source_media( $external_url, $source_site_url );
 		$this->assertNotFalse( $first_local_url, 'First import should succeed' );
 
 		$attachments_after_first = $this->get_attachment_count();
 		$this->assertSame( $attachments_before + 1, $attachments_after_first, 'First import should create attachment' );
 
 		// ACT: Import same URL again (should use existing).
-		$second_local_url = $this->media_importer->import_external_media( $external_url, $source_site_url );
+		$second_local_url = $this->media_importer->import_source_media( $external_url, $source_site_url );
 
 		// ASSERT: Verify no new attachment created.
 		$attachments_after_second = $this->get_attachment_count();
@@ -149,7 +149,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Import image (HTTP mock serves real fixture file based on extension).
-		$local_url = $this->media_importer->import_external_media( $url, $source_site_url );
+		$local_url = $this->media_importer->import_source_media( $url, $source_site_url );
 
 		// ASSERT: Verify import succeeded.
 		$this->assertIsString( $local_url, "Should successfully import {$format}" );
@@ -203,7 +203,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 			'Should create three attachments'
 		);
 
-		// ASSERT: Verify all external URLs replaced.
+		// ASSERT: Verify all source URLs replaced.
 		$this->assertStringNotContainsString( 'example.com/image1.jpg', $processed_content );
 		$this->assertStringNotContainsString( 'example.com/image2.png', $processed_content );
 		$this->assertStringNotContainsString( 'example.com/image3.gif', $processed_content );
@@ -244,7 +244,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$attachments_after = $this->get_attachment_count();
 		$this->assertSame( $attachments_before + 1, $attachments_after, 'Should create exactly one attachment for image' );
 
-		// ASSERT: Verify external URL was replaced with local one.
+		// ASSERT: Verify source URL was replaced with local one.
 		$this->assertStringNotContainsString( 'example.com/img.jpg', $processed_content, 'External URL should be replaced' );
 	}
 
@@ -261,7 +261,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Import featured image.
-		$featured_image_local = $this->media_importer->import_external_media( $featured_image_url, $source_site_url );
+		$featured_image_local = $this->media_importer->import_source_media( $featured_image_url, $source_site_url );
 
 		// ASSERT: Verify import succeeded.
 		$this->assertNotFalse( $featured_image_local, 'Featured image should import successfully' );
@@ -291,7 +291,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 	 * Verifies that inline images are batch imported with URL replacement.
 	 *
 	 * Tests that multiple images in content are all imported and their
-	 * external URLs are replaced with local WordPress URLs.
+	 * source URLs are replaced with local WordPress URLs.
 	 */
 	public function test_inline_images_batch_import_and_url_replacement(): void {
 		// ARRANGE: Create content with multiple inline images.
@@ -395,14 +395,14 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Import first URL with query parameters.
-		$first_local_url = $this->media_importer->import_external_media( $url_with_params_v1, $source_site_url );
+		$first_local_url = $this->media_importer->import_source_media( $url_with_params_v1, $source_site_url );
 		$this->assertNotFalse( $first_local_url, 'First import should succeed' );
 
 		$attachments_after_first = $this->get_attachment_count();
 		$this->assertSame( $attachments_before + 1, $attachments_after_first, 'First import should create attachment' );
 
 		// ACT: Import second URL with different query parameters.
-		$second_local_url = $this->media_importer->import_external_media( $url_with_params_v2, $source_site_url );
+		$second_local_url = $this->media_importer->import_source_media( $url_with_params_v2, $source_site_url );
 
 		// ASSERT: Verify no new attachment created (query params stripped, treated as duplicate).
 		$attachments_after_second = $this->get_attachment_count();
@@ -420,7 +420,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		);
 
 		// ACT: Import third URL without query parameters (should still match).
-		$third_local_url = $this->media_importer->import_external_media( $url_without_params, $source_site_url );
+		$third_local_url = $this->media_importer->import_source_media( $url_without_params, $source_site_url );
 
 		// ASSERT: Verify still using the same attachment.
 		$attachments_after_third = $this->get_attachment_count();
@@ -461,7 +461,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Import from first domain.
-		$first_local_url = $this->media_importer->import_external_media( $url_from_site_a, $source_site_url_a );
+		$first_local_url = $this->media_importer->import_source_media( $url_from_site_a, $source_site_url_a );
 		$this->assertNotFalse( $first_local_url, 'First import should succeed' );
 
 		$attachments_after_first = $this->get_attachment_count();
@@ -477,7 +477,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		);
 
 		// ACT: Import from second domain with same filename.
-		$second_local_url = $this->media_importer->import_external_media( $url_from_site_b, $source_site_url_b );
+		$second_local_url = $this->media_importer->import_source_media( $url_from_site_b, $source_site_url_b );
 		$this->assertNotFalse( $second_local_url, 'Second import should succeed' );
 
 		// ASSERT: Verify a NEW attachment was created (not treated as duplicate).
@@ -523,7 +523,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Import base URL.
-		$base_local_url = $this->media_importer->import_external_media( $base_url, $source_site_url );
+		$base_local_url = $this->media_importer->import_source_media( $base_url, $source_site_url );
 		$this->assertNotFalse( $base_local_url, 'Base import should succeed' );
 		$attachments_after_base = $this->get_attachment_count();
 		$this->assertSame( $attachments_before + 1, $attachments_after_base, 'Base import should create attachment' );
@@ -531,7 +531,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		// TEST 1: Different path, same filename - should create NEW attachment.
 		// This is NOT the same image even though filename matches.
 		$different_path_url   = 'https://example.com/images/logo.png';
-		$different_path_local = $this->media_importer->import_external_media( $different_path_url, $source_site_url );
+		$different_path_local = $this->media_importer->import_source_media( $different_path_url, $source_site_url );
 		$this->assertNotFalse( $different_path_local, 'Different path import should succeed' );
 		$attachments_after_different_path = $this->get_attachment_count();
 		$this->assertSame(
@@ -547,7 +547,7 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 
 		// TEST 2: Same exact URL imported twice - should return existing attachment.
 		$duplicate_url   = $base_url; // Exact same URL as base.
-		$duplicate_local = $this->media_importer->import_external_media( $duplicate_url, $source_site_url );
+		$duplicate_local = $this->media_importer->import_source_media( $duplicate_url, $source_site_url );
 		$this->assertNotFalse( $duplicate_local, 'Duplicate URL import should succeed' );
 		$attachments_after_duplicate = $this->get_attachment_count();
 		$this->assertSame(
@@ -576,14 +576,14 @@ class Media_Import_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Import from original URL.
-		$original_local = $this->media_importer->import_external_media( $original_url, $source_site_url );
+		$original_local = $this->media_importer->import_source_media( $original_url, $source_site_url );
 		$this->assertNotFalse( $original_local, 'Original import should succeed' );
 		$attachments_after_original = $this->get_attachment_count();
 		$this->assertSame( $attachments_before + 1, $attachments_after_original, 'Should create attachment for original' );
 
 		// Simulate source site reorganizing files to a new path.
 		$reorganized_url   = 'https://example.com/2024/reorganized/hero.jpg';
-		$reorganized_local = $this->media_importer->import_external_media( $reorganized_url, $source_site_url );
+		$reorganized_local = $this->media_importer->import_source_media( $reorganized_url, $source_site_url );
 		$this->assertNotFalse( $reorganized_local, 'Reorganized path import should succeed' );
 
 		// ASSERT: Should create NEW attachment when path changes.

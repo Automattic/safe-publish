@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Auth_Credential_Provider;
@@ -35,11 +35,11 @@ class Post_Import_Service {
 	use Sanitizes_Content;
 
 	/**
-	 * External Posts API instance.
+	 * Source Posts API instance.
 	 *
-	 * @var External_Posts_API
+	 * @var Source_Posts_API
 	 */
-	private External_Posts_API $api;
+	private Source_Posts_API $api;
 
 	/**
 	 * Media Importer instance.
@@ -80,14 +80,14 @@ class Post_Import_Service {
 	/**
 	 * Constructs the Post_Import_Service instance.
 	 *
-	 * @param External_Posts_API $api                External Posts API instance.
+	 * @param Source_Posts_API   $api                Source Posts API instance.
 	 * @param Media_Importer     $media_importer     Media Importer instance.
 	 * @param Content_Processor  $content_processor  Content Processor instance.
 	 * @param History_Repository $repository         History repository instance.
 	 * @param Meta_Terms_Manager $meta_terms_manager Meta Terms Manager instance.
 	 */
 	public function __construct(
-		External_Posts_API $api,
+		Source_Posts_API $api,
 		Media_Importer $media_importer,
 		Content_Processor $content_processor,
 		History_Repository $repository,
@@ -102,7 +102,7 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Imports a single post from external post data.
+	 * Imports a single post from source post data.
 	 *
 	 * @param array    $post_data  Post data array containing id, title, content, link, etc.
 	 * @param int|null $session_id Optional import session ID for history tracking.
@@ -130,7 +130,7 @@ class Post_Import_Service {
 		if ( null !== $validation_error ) {
 			$this->log_import_if_session(
 				$session_id,
-				$fields['external_post_id'],
+				$fields['source_post_id'],
 				$fields['title'],
 				'error',
 				null,
@@ -146,7 +146,7 @@ class Post_Import_Service {
 		if ( is_wp_error( $post_type ) ) {
 			$this->log_import_if_session(
 				$session_id,
-				$fields['external_post_id'],
+				$fields['source_post_id'],
 				$fields['title'],
 				'error',
 				null,
@@ -160,7 +160,7 @@ class Post_Import_Service {
 			);
 		}
 
-		$imported_post = $this->find_imported_post( $fields['external_post_id'] );
+		$imported_post = $this->find_imported_post( $fields['source_post_id'] );
 
 		if ( $imported_post ) {
 			return $this->handle_imported_post(
@@ -182,16 +182,16 @@ class Post_Import_Service {
 	 * Extracts and sanitizes post fields from raw post data.
 	 *
 	 * @param array $post_data Raw post data array.
-	 * @return array Sanitized post fields. The external_post_id key
+	 * @return array Sanitized post fields. The source_post_id key
 	 *               is null if not provided.
 	 */
 	private function extract_post_fields( array $post_data ): array {
-		$external_post_id = absint( $post_data['id'] ?? 0 );
+		$source_post_id = absint( $post_data['id'] ?? 0 );
 
 		return array(
-			'external_post_id'  => $external_post_id > 0 ? $external_post_id : null,
+			'source_post_id'    => $source_post_id > 0 ? $source_post_id : null,
 			'title'             => sanitize_text_field( $post_data['title'] ?? '' ),
-			'external_link'     => esc_url_raw( $post_data['link'] ?? '' ),
+			'source_link'       => esc_url_raw( $post_data['link'] ?? '' ),
 			'featured_media_id' => absint( $post_data['featured_media'] ?? 0 ),
 			'raw_post_type'     => sanitize_text_field( $post_data['post_type'] ?? 'post' ),
 			'slug'              => sanitize_text_field( $post_data['slug'] ?? '' ),
@@ -209,14 +209,14 @@ class Post_Import_Service {
 	 *
 	 * @param array  $fields        Sanitized post fields.
 	 * @param string $error_message Error description.
-	 * @return array Error result with external_post_id, title, success, and error keys.
+	 * @return array Error result with source_post_id, title, success, and error keys.
 	 */
 	private function build_error_result( array $fields, string $error_message ): array {
 		return array(
-			'external_post_id' => $fields['external_post_id'],
-			'title'            => $fields['title'],
-			'success'          => false,
-			'error'            => $error_message,
+			'source_post_id' => $fields['source_post_id'],
+			'title'          => $fields['title'],
+			'success'        => false,
+			'error'          => $error_message,
 		);
 	}
 
@@ -226,16 +226,16 @@ class Post_Import_Service {
 	 * @param array $fields   Sanitized post fields.
 	 * @param int   $post_id  Created or updated WordPress post ID.
 	 * @param bool  $existing Whether the post was updated (true) or newly created (false).
-	 * @return array Success result with external_post_id, title, success, post_id, edit_url, and existing keys.
+	 * @return array Success result with source_post_id, title, success, post_id, edit_url, and existing keys.
 	 */
 	private function build_success_result( array $fields, int $post_id, bool $existing ): array {
 		return array(
-			'external_post_id' => $fields['external_post_id'],
-			'title'            => $fields['title'],
-			'success'          => true,
-			'post_id'          => $post_id,
-			'edit_url'         => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
-			'existing'         => $existing,
+			'source_post_id' => $fields['source_post_id'],
+			'title'          => $fields['title'],
+			'success'        => true,
+			'post_id'        => $post_id,
+			'edit_url'       => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
+			'existing'       => $existing,
 		);
 	}
 
@@ -246,7 +246,7 @@ class Post_Import_Service {
 	 * @return array|null Error result array on failure, null on success.
 	 */
 	private function validate_required_fields( array $fields ): ?array {
-		if ( '' === $fields['title'] || null === $fields['external_post_id'] ) {
+		if ( '' === $fields['title'] || null === $fields['source_post_id'] ) {
 			return $this->build_error_result(
 				$fields,
 				__( 'Missing required post data.', 'safe-publish' )
@@ -264,7 +264,7 @@ class Post_Import_Service {
 	 * a WP_Error when the post type does not exist or the current user
 	 * lacks the required capability.
 	 *
-	 * @param string $raw_post_type Raw post type string from external API.
+	 * @param string $raw_post_type Raw post type string from source API.
 	 * @return string|WP_Error Resolved post type slug, or WP_Error on failure.
 	 */
 	public function resolve_post_type( string $raw_post_type ): string|WP_Error {
@@ -351,16 +351,16 @@ class Post_Import_Service {
 	 * Returns a WP_Error if content processing fails or if kses is enabled and
 	 * sanitization would modify the content.
 	 *
-	 * @param string $content       Raw post content.
-	 * @param string $external_link External post URL used to derive site URL.
+	 * @param string $content     Raw post content.
+	 * @param string $source_link Source post URL used to derive site URL.
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
-	private function process_post_content( string $content, string $external_link ): string|WP_Error {
-		if ( empty( $external_link ) ) {
+	private function process_post_content( string $content, string $source_link ): string|WP_Error {
+		if ( empty( $source_link ) ) {
 			return $this->sanitize_field( $content, self::FIELD_CONTENT );
 		}
 
-		$source_site_url = $this->extract_site_url( $external_link );
+		$source_site_url = $this->extract_site_url( $source_link );
 		$processed       = $this->content_processor->process_content( $content, $source_site_url );
 
 		if ( is_wp_error( $processed ) ) {
@@ -375,10 +375,10 @@ class Post_Import_Service {
 	 *
 	 * Adds `is_imported` (bool), `has_update` (bool), `local_status` (string),
 	 * and `local_edit_url` (string) keys to every element based on whether a
-	 * matching local post exists and whether the external post's modified date
+	 * matching local post exists and whether the source post's modified date
 	 * is newer.
 	 *
-	 * @param array $posts Posts array fetched from the external API, passed by reference.
+	 * @param array $posts Posts array fetched from the source API, passed by reference.
 	 */
 	public function annotate_posts_with_import_status( array &$posts ): void {
 		foreach ( $posts as &$post ) {
@@ -386,12 +386,12 @@ class Post_Import_Service {
 			$post['is_imported'] = (bool) $imported;
 
 			if ( $imported ) {
-				$external_modified = strtotime( $post['modified_gmt'] );
-				$local_modified    = strtotime( $imported->post_modified_gmt );
+				$source_modified = strtotime( $post['modified_gmt'] );
+				$local_modified  = strtotime( $imported->post_modified_gmt );
 
-				$post['has_update']     = false !== $external_modified
+				$post['has_update']     = false !== $source_modified
 					&& false !== $local_modified
-					&& $external_modified > $local_modified;
+					&& $source_modified > $local_modified;
 				$post['local_status']   = $imported->post_status;
 				$post['local_edit_url'] = get_edit_post_link( $imported->ID, 'raw' );
 			} else {
@@ -405,17 +405,17 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Finds a previously imported WordPress post by its external post ID.
+	 * Finds a previously imported WordPress post by its source post ID.
 	 *
-	 * @param int $external_post_id External post ID stored in post meta.
+	 * @param int $source_post_id Source post ID stored in post meta.
 	 * @return WP_Post|null Imported post or null if not found.
 	 */
-	public function find_imported_post( int $external_post_id ): ?WP_Post {
+	public function find_imported_post( int $source_post_id ): ?WP_Post {
 		$existing_posts = get_posts(
 			array(
-				'meta_key'         => Options::META_EXTERNAL_POST_ID,
+				'meta_key'         => Options::META_SOURCE_POST_ID,
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-				'meta_value'       => $external_post_id,
+				'meta_value'       => $source_post_id,
 				// 'any' excludes 'trash', 'auto-draft', and statuses with
 				// exclude_from_search=true
 				'post_status'      => 'any',
@@ -459,7 +459,7 @@ class Post_Import_Service {
 
 			$this->log_import_if_session(
 				$session_id,
-				$error_fields['external_post_id'],
+				$error_fields['source_post_id'],
 				$error_fields['title'],
 				'error',
 				null,
@@ -480,7 +480,7 @@ class Post_Import_Service {
 		// failure here does not leave the post in a partially-updated state.
 		$featured_attachment_id = $this->import_featured_image_attachment(
 			$fields['featured_media_id'],
-			$fields['external_link']
+			$fields['source_link']
 		);
 
 		if ( false === $featured_attachment_id ) {
@@ -488,7 +488,7 @@ class Post_Import_Service {
 
 			$this->log_import_if_session(
 				$session_id,
-				$fields['external_post_id'],
+				$fields['source_post_id'],
 				$fields['title'],
 				'error',
 				null,
@@ -513,7 +513,7 @@ class Post_Import_Service {
 				'post_password'  => $fields['password'],
 			),
 			$featured_attachment_id,
-			$fields['external_link'],
+			$fields['source_link'],
 			$fields['meta'],
 			$fields['terms']
 		);
@@ -526,7 +526,7 @@ class Post_Import_Service {
 
 			$this->log_import_if_session(
 				$session_id,
-				$fields['external_post_id'],
+				$fields['source_post_id'],
 				$fields['title'],
 				'error',
 				$imported_post->ID,
@@ -542,7 +542,7 @@ class Post_Import_Service {
 
 		$this->log_import_if_session(
 			$session_id,
-			$fields['external_post_id'],
+			$fields['source_post_id'],
 			$fields['title'],
 			'updated',
 			$post_id,
@@ -580,7 +580,7 @@ class Post_Import_Service {
 
 			$this->log_import_if_session(
 				$session_id,
-				$error_fields['external_post_id'],
+				$error_fields['source_post_id'],
 				$error_fields['title'],
 				'error',
 				null,
@@ -601,7 +601,7 @@ class Post_Import_Service {
 		// failure here does not leave an orphaned draft in the DB.
 		$featured_attachment_id = $this->import_featured_image_attachment(
 			$fields['featured_media_id'],
-			$fields['external_link']
+			$fields['source_link']
 		);
 
 		if ( false === $featured_attachment_id ) {
@@ -609,7 +609,7 @@ class Post_Import_Service {
 
 			$this->log_import_if_session(
 				$session_id,
-				$fields['external_post_id'],
+				$fields['source_post_id'],
 				$fields['title'],
 				'error',
 				null,
@@ -633,10 +633,10 @@ class Post_Import_Service {
 				'menu_order'     => $fields['menu_order'],
 				'post_password'  => $fields['password'],
 				'meta_input'     => array(
-					Options::META_EXTERNAL_POST_ID => $fields['external_post_id'],
-					Options::META_EXTERNAL_LINK    => $fields['external_link'],
-					Options::META_IMPORTED_FROM    => Options::META_IMPORTED_FROM_VALUE,
-					Options::META_IMPORT_DATE_GMT  => current_time( 'mysql', true ),
+					Options::META_SOURCE_POST_ID  => $fields['source_post_id'],
+					Options::META_SOURCE_LINK     => $fields['source_link'],
+					Options::META_IMPORTED_FROM   => Options::META_IMPORTED_FROM_VALUE,
+					Options::META_IMPORT_DATE_GMT => current_time( 'mysql', true ),
 				),
 			),
 			$featured_attachment_id,
@@ -652,7 +652,7 @@ class Post_Import_Service {
 
 			$this->log_import_if_session(
 				$session_id,
-				$fields['external_post_id'],
+				$fields['source_post_id'],
 				$fields['title'],
 				'error',
 				null,
@@ -668,7 +668,7 @@ class Post_Import_Service {
 
 		$this->log_import_if_session(
 			$session_id,
-			$fields['external_post_id'],
+			$fields['source_post_id'],
 			$fields['title'],
 			'success',
 			$post_id,
@@ -691,7 +691,7 @@ class Post_Import_Service {
 	 */
 	private function prepare_fresh_content( array $fields ): array|WP_Error {
 		$fresh_result = $this->fetch_fresh_content(
-			$fields['external_post_id'],
+			$fields['source_post_id'],
 			$fields['raw_post_type']
 		);
 
@@ -727,7 +727,7 @@ class Post_Import_Service {
 
 		$processed_content = $this->process_post_content(
 			$fresh_result['content'] ?? '',
-			$fields['external_link']
+			$fields['source_link']
 		);
 
 		if ( is_wp_error( $processed_content ) ) {
@@ -765,15 +765,15 @@ class Post_Import_Service {
 	/**
 	 * Persists an existing post update with all associated data.
 	 *
-	 * Handles wp_update_post, external link meta, import date, thumbnail,
+	 * Handles wp_update_post, source link meta, import date, thumbnail,
 	 * custom meta, and terms. If any step after wp_update_post() fails, the
 	 * post is rolled back to its pre-update state and any media sideloaded
 	 * during this attempt is deleted. Used by both single and bulk import
 	 * paths.
 	 *
-	 * @param array        $post_args              Arguments for wp_update_post().
+	 * @param array        $post_args               Arguments for wp_update_post().
 	 * @param int          $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
-	 * @param string       $external_link           External post URL for meta tracking.
+	 * @param string       $source_link             Source post URL for meta tracking.
 	 * @param array|object $meta                    Meta data.
 	 * @param array|object $terms                   Terms data.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
@@ -781,7 +781,7 @@ class Post_Import_Service {
 	public function persist_updated_post(
 		array $post_args,
 		int $featured_attachment_id,
-		string $external_link,
+		string $source_link,
 		array|object $meta,
 		array|object $terms
 	): int|WP_Error {
@@ -810,8 +810,8 @@ class Post_Import_Service {
 
 		update_post_meta(
 			$post_id,
-			Options::META_EXTERNAL_LINK,
-			$external_link
+			Options::META_SOURCE_LINK,
+			$source_link
 		);
 
 		delete_post_meta( $post_id, Options::META_IMPORT_DATE_GMT );
@@ -891,9 +891,9 @@ class Post_Import_Service {
 		$snapshot = array(
 			'post_fields'    => $post,
 			'tracking_meta'  => array(
-				Options::META_EXTERNAL_LINK   => get_post_meta(
+				Options::META_SOURCE_LINK     => get_post_meta(
 					$post_id,
-					Options::META_EXTERNAL_LINK,
+					Options::META_SOURCE_LINK,
 					true
 				),
 				Options::META_IMPORT_DATE_GMT => get_post_meta(
@@ -1058,12 +1058,12 @@ class Post_Import_Service {
 	 * Returns a WP_Error when the fetch fails for any reason, including when no
 	 * connected site URL is configured. Callers should abort the import on error.
 	 *
-	 * @param int    $external_post_id External post ID to fetch.
-	 * @param string $post_type        Post type slug or REST endpoint.
+	 * @param int    $source_post_id Source post ID to fetch.
+	 * @param string $post_type      Post type slug or REST endpoint.
 	 * @return array|WP_Error Fresh post data, or an error on failure.
 	 */
 	private function fetch_fresh_content(
-		int $external_post_id,
+		int $source_post_id,
 		string $post_type
 	): array|WP_Error {
 		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
@@ -1079,7 +1079,7 @@ class Post_Import_Service {
 
 		try {
 			$fresh_data = $this->api->fetch_fresh_post_content(
-				$external_post_id,
+				$source_post_id,
 				$source_site_url,
 				$auth_credentials,
 				$post_type
@@ -1095,7 +1095,7 @@ class Post_Import_Service {
 			return $fresh_data;
 		} catch ( Exception $e ) {
 			$this->logger->content_fetch_failed(
-				$external_post_id,
+				$source_post_id,
 				$source_site_url,
 				$e->getMessage()
 			);
@@ -1108,7 +1108,7 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Sideloads a featured image from an external post without setting it as a
+	 * Sideloads a featured image from a source post without setting it as a
 	 * post thumbnail.
 	 *
 	 * Separating the sideload from thumbnail assignment allows callers to fetch
@@ -1119,19 +1119,19 @@ class Post_Import_Service {
 	 * attachment ID (> 0) on a successful import. Returns false when a featured
 	 * media ID is set but the import fails.
 	 *
-	 * @param int    $featured_media_id External featured media ID.
-	 * @param string $external_link     External post URL used to derive site URL.
+	 * @param int    $featured_media_id Source featured media ID.
+	 * @param string $source_link       Source post URL used to derive site URL.
 	 * @return int|false Attachment ID on success, 0 when not configured, false on failure.
 	 */
 	public function import_featured_image_attachment(
 		int $featured_media_id,
-		string $external_link
+		string $source_link
 	): int|false {
-		if ( empty( $featured_media_id ) || empty( $external_link ) ) {
+		if ( empty( $featured_media_id ) || empty( $source_link ) ) {
 			return 0;
 		}
 
-		$source_site_url = $this->extract_site_url( $external_link );
+		$source_site_url = $this->extract_site_url( $source_link );
 
 		$attachment_id = $this->media_importer->import_featured_image(
 			$featured_media_id,
@@ -1145,7 +1145,7 @@ class Post_Import_Service {
 	 * Logs an import action to history, only when a session ID is provided.
 	 *
 	 * @param int|null    $session_id       Import session ID.
-	 * @param int|null    $external_post_id External post ID, or null if not provided.
+	 * @param int|null    $source_post_id   Source post ID, or null if not provided.
 	 * @param string      $title            Post title.
 	 * @param string      $status           Import status (success, updated, error).
 	 * @param int|null    $post_id          WordPress post ID or null on failure.
@@ -1154,7 +1154,7 @@ class Post_Import_Service {
 	 */
 	private function log_import_if_session(
 		?int $session_id,
-		?int $external_post_id,
+		?int $source_post_id,
 		string $title,
 		string $status,
 		?int $post_id,
@@ -1167,7 +1167,7 @@ class Post_Import_Service {
 
 		$this->repository->log_import_action(
 			$session_id,
-			$external_post_id,
+			$source_post_id,
 			$title,
 			$status,
 			$post_id,
@@ -1199,7 +1199,7 @@ class Post_Import_Service {
 
 		$this->log_import_if_session(
 			$session_id,
-			$fields['external_post_id'],
+			$fields['source_post_id'],
 			$fields['title'],
 			'error',
 			null,

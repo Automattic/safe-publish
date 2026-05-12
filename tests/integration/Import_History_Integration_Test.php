@@ -96,21 +96,21 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 
 		// ASSERT: Item columns were stored correctly.
 		$this->assertSame( 'success', $item['status'] );
-		$this->assertSame( 123, (int) $item['external_post_id'] );
+		$this->assertSame( 123, (int) $item['source_post_id'] );
 		$this->assertSame( $session_id, (int) $item['session_id'] );
 	}
 
 	/**
-	 * Verifies that a null external_post_id round-trips through storage and the
+	 * Verifies that a null source_post_id round-trips through storage and the
 	 * formatter. Source data sometimes lacks a usable id (malformed payload
 	 * or unexpected exception); the schema and API surface must preserve
 	 * that null instead of forcing a 0 sentinel.
 	 */
-	public function test_null_external_post_id_round_trips_through_formatter(): void {
+	public function test_null_source_post_id_round_trips_through_formatter(): void {
 		// ARRANGE: Create session.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
 
-		// ACT: Log an error item with null external_post_id (e.g. from
+		// ACT: Log an error item with null source_post_id (e.g. from
 		// build_exception_result when the source payload had no id).
 		$item_id = $this->repository->log_import_action(
 			$session_id,
@@ -122,16 +122,16 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 			array()
 		);
 
-		// ASSERT: Item was created and external_post_id stored as null.
+		// ASSERT: Item was created and source_post_id stored as null.
 		$this->assertIsInt( $item_id );
 
 		$item = $this->repository->get_item( $item_id );
 		$this->assertIsArray( $item );
-		$this->assertNull( $item['external_post_id'] );
+		$this->assertNull( $item['source_post_id'] );
 
-		// ASSERT: Formatter exposes external_post_id as null at the API boundary.
+		// ASSERT: Formatter exposes source_post_id as null at the API boundary.
 		$formatted = $this->formatter->format_item( $item );
-		$this->assertNull( $formatted['external_post_id'] );
+		$this->assertNull( $formatted['source_post_id'] );
 	}
 
 	/**

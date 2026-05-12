@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\Auth\VIP_Safe_Auth;
@@ -50,11 +50,11 @@ final class Admin_Ajax_Controller {
 	const AUTH_STATUS_TTL = 5 * MINUTE_IN_SECONDS;
 
 	/**
-	 * External Posts API instance.
+	 * Source Posts API instance.
 	 *
-	 * @var External_Posts_API
+	 * @var Source_Posts_API
 	 */
-	private External_Posts_API $api;
+	private Source_Posts_API $api;
 
 	/**
 	 * History repository instance.
@@ -101,7 +101,7 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Constructs the Admin_Ajax_Controller instance.
 	 *
-	 * @param External_Posts_API  $api                 External Posts API instance.
+	 * @param Source_Posts_API    $api                 Source Posts API instance.
 	 * @param History_Repository  $repository          History repository instance.
 	 * @param Content_Processor   $content_processor   Content Processor instance.
 	 * @param Post_Import_Service $post_import_service Post Import Service instance.
@@ -109,7 +109,7 @@ final class Admin_Ajax_Controller {
 	 * @param HTTP_Client         $http_client         HTTP Client instance.
 	 */
 	public function __construct(
-		External_Posts_API $api,
+		Source_Posts_API $api,
 		History_Repository $repository,
 		Content_Processor $content_processor,
 		Post_Import_Service $post_import_service,
@@ -301,7 +301,7 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Handles AJAX request for creating a draft post.
 	 *
-	 * Validates input, checks for an existing post with the same external ID,
+	 * Validates input, checks for an existing post with the same source post ID,
 	 * returns a confirmation prompt when one exists (unless force_update is set),
 	 * processes content, creates or updates the post, and logs history.
 	 */
@@ -326,10 +326,10 @@ final class Admin_Ajax_Controller {
 
 		$this->validate_auth_or_fail();
 
-		$external_post_id = absint( $_POST['external_post_id'] ?? 0 );
-		$title            = sanitize_text_field( wp_unslash( $_POST['title'] ?? '' ) );
-		$external_link    = esc_url_raw( wp_unslash( $_POST['external_link'] ?? '' ) );
-		$raw_post_type    = sanitize_text_field( wp_unslash( $_POST['post_type'] ?? 'post' ) );
+		$source_post_id = absint( $_POST['source_post_id'] ?? 0 );
+		$title          = sanitize_text_field( wp_unslash( $_POST['title'] ?? '' ) );
+		$source_link    = esc_url_raw( wp_unslash( $_POST['source_link'] ?? '' ) );
+		$raw_post_type  = sanitize_text_field( wp_unslash( $_POST['post_type'] ?? 'post' ) );
 
 		$post_type = $this->post_import_service->resolve_post_type( $raw_post_type );
 
@@ -341,11 +341,11 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( __( 'Post title is required.', 'safe-publish' ) );
 		}
 
-		if ( empty( $external_post_id ) ) {
-			wp_send_json_error( __( 'External post ID is required.', 'safe-publish' ) );
+		if ( empty( $source_post_id ) ) {
+			wp_send_json_error( __( 'Source post ID is required.', 'safe-publish' ) );
 		}
 
-		$imported_post = $this->post_import_service->find_imported_post( $external_post_id );
+		$imported_post = $this->post_import_service->find_imported_post( $source_post_id );
 		$force_update  = isset( $_POST['force_update'] ) && 'true' === $_POST['force_update'];
 
 		// If post was previously imported and no force update, ask for confirmation.
@@ -358,7 +358,7 @@ final class Admin_Ajax_Controller {
 					'edit_url'       => admin_url( 'post.php?post=' . $imported_post->ID . '&action=edit' ),
 					'message'        => sprintf(
 						/* translators: %s: title of the existing post */
-						__( 'Post "%s" already exists. Do you want to update it with the latest content from the external site?', 'safe-publish' ),
+						__( 'Post "%s" already exists. Do you want to update it with the latest content from the source site?', 'safe-publish' ),
 						$imported_post->post_title
 					),
 					'confirm_action' => 'update_existing',
@@ -378,7 +378,7 @@ final class Admin_Ajax_Controller {
 
 		// Fetch fresh content from the source site.
 		$fresh_result = $this->fetch_fresh_content(
-			$external_post_id,
+			$source_post_id,
 			$raw_post_type
 		);
 
@@ -387,7 +387,7 @@ final class Admin_Ajax_Controller {
 
 			$this->repository->log_import_action(
 				$session_id,
-				$external_post_id,
+				$source_post_id,
 				$title,
 				'error',
 				null,
@@ -417,7 +417,7 @@ final class Admin_Ajax_Controller {
 
 			$this->repository->log_import_action(
 				$session_id,
-				$external_post_id,
+				$source_post_id,
 				$title,
 				'error',
 				null,
@@ -434,14 +434,14 @@ final class Admin_Ajax_Controller {
 		$meta    = $fresh_result['meta'] ?? array();
 		$terms   = $fresh_result['terms'] ?? array();
 
-		$processed_content = $this->process_draft_content( $content, $external_link );
+		$processed_content = $this->process_draft_content( $content, $source_link );
 
 		if ( is_wp_error( $processed_content ) ) {
 			$error_message = $processed_content->get_error_message();
 
 			$this->repository->log_import_action(
 				$session_id,
-				$external_post_id,
+				$source_post_id,
 				$title,
 				'error',
 				null,
@@ -459,7 +459,7 @@ final class Admin_Ajax_Controller {
 		if ( null !== $media_error ) {
 			$this->repository->log_import_action(
 				$session_id,
-				$external_post_id,
+				$source_post_id,
 				$title,
 				'error',
 				null,
@@ -479,12 +479,12 @@ final class Admin_Ajax_Controller {
 				$excerpt,
 				$post_type,
 				$processed_content,
-				$external_link,
+				$source_link,
 				$featured_media_id,
 				$meta,
 				$terms,
 				$session_id,
-				$external_post_id,
+				$source_post_id,
 				$slug,
 				$comment_status,
 				$ping_status,
@@ -497,8 +497,8 @@ final class Admin_Ajax_Controller {
 				$excerpt,
 				$post_type,
 				$processed_content,
-				$external_link,
-				$external_post_id,
+				$source_link,
+				$source_post_id,
 				$featured_media_id,
 				$meta,
 				$terms,
@@ -647,19 +647,19 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Handles AJAX request for deleting a locally imported post.
 	 *
-	 * Moves the post to trash by its external post ID.
+	 * Moves the post to trash by its source post ID.
 	 */
 	public function ajax_delete_post(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability( 'delete_posts' );
 
-		$external_post_id = absint( $_POST['external_post_id'] ?? 0 );
+		$source_post_id = absint( $_POST['source_post_id'] ?? 0 );
 
-		if ( ! $external_post_id ) {
-			wp_send_json_error( __( 'External post ID is required.', 'safe-publish' ) );
+		if ( ! $source_post_id ) {
+			wp_send_json_error( __( 'Source post ID is required.', 'safe-publish' ) );
 		}
 
-		$imported_post = $this->post_import_service->find_imported_post( $external_post_id );
+		$imported_post = $this->post_import_service->find_imported_post( $source_post_id );
 
 		if ( ! $imported_post ) {
 			wp_send_json_error( __( 'Post not found.', 'safe-publish' ) );
@@ -692,12 +692,12 @@ final class Admin_Ajax_Controller {
 	 * @param string  $excerpt           Post excerpt.
 	 * @param string  $post_type         Resolved post type slug.
 	 * @param string  $processed_content Processed post content.
-	 * @param string  $external_link     External post URL.
-	 * @param int     $featured_media_id External featured media ID.
+	 * @param string  $source_link       Source post URL.
+	 * @param int     $featured_media_id Source featured media ID.
 	 * @param mixed   $meta              Meta data (array or object).
 	 * @param mixed   $terms             Terms data (array or object).
 	 * @param int     $session_id        Import session ID.
-	 * @param int     $external_post_id  External post ID.
+	 * @param int     $source_post_id    Source post ID.
 	 * @param string  $slug              Post slug.
 	 * @param string  $comment_status    Comment status ('open' or 'closed').
 	 * @param string  $ping_status       Ping status ('open' or 'closed').
@@ -711,12 +711,12 @@ final class Admin_Ajax_Controller {
 		string $excerpt,
 		string $post_type,
 		string $processed_content,
-		string $external_link,
+		string $source_link,
 		int $featured_media_id,
 		mixed $meta,
 		mixed $terms,
 		int $session_id,
-		int $external_post_id,
+		int $source_post_id,
 		string $slug,
 		string $comment_status,
 		string $ping_status,
@@ -729,13 +729,13 @@ final class Admin_Ajax_Controller {
 		// failure here does not leave the post in a partially-updated state.
 		$featured_attachment_id = $this->post_import_service->import_featured_image_attachment(
 			$featured_media_id,
-			$external_link
+			$source_link
 		);
 
 		if ( false === $featured_attachment_id ) {
 			return $this->log_single_error_and_return(
 				$session_id,
-				$external_post_id,
+				$source_post_id,
 				$title,
 				$imported_post->ID,
 				__( 'Failed to import featured image.', 'safe-publish' ),
@@ -759,7 +759,7 @@ final class Admin_Ajax_Controller {
 				'post_password'  => $password,
 			),
 			$featured_attachment_id,
-			$external_link,
+			$source_link,
 			$meta,
 			$terms
 		);
@@ -772,7 +772,7 @@ final class Admin_Ajax_Controller {
 
 			return $this->log_single_error_and_return(
 				$session_id,
-				$external_post_id,
+				$source_post_id,
 				$title,
 				$imported_post->ID,
 				$post_id->get_error_message(),
@@ -782,7 +782,7 @@ final class Admin_Ajax_Controller {
 
 		$this->repository->log_import_action(
 			$session_id,
-			$external_post_id,
+			$source_post_id,
 			$title,
 			'updated',
 			$post_id,
@@ -808,9 +808,9 @@ final class Admin_Ajax_Controller {
 	 * @param string $excerpt           Post excerpt.
 	 * @param string $post_type         Resolved post type slug.
 	 * @param string $processed_content Processed post content.
-	 * @param string $external_link     External post URL.
-	 * @param int    $external_post_id  External post ID.
-	 * @param int    $featured_media_id External featured media ID.
+	 * @param string $source_link       Source post URL.
+	 * @param int    $source_post_id    Source post ID.
+	 * @param int    $featured_media_id Source featured media ID.
 	 * @param mixed  $meta              Meta data (array or object).
 	 * @param mixed  $terms             Terms data (array or object).
 	 * @param int    $session_id        Import session ID.
@@ -826,8 +826,8 @@ final class Admin_Ajax_Controller {
 		string $excerpt,
 		string $post_type,
 		string $processed_content,
-		string $external_link,
-		int $external_post_id,
+		string $source_link,
+		int $source_post_id,
 		int $featured_media_id,
 		mixed $meta,
 		mixed $terms,
@@ -842,13 +842,13 @@ final class Admin_Ajax_Controller {
 		// failure here does not leave an orphaned draft in the DB.
 		$featured_attachment_id = $this->post_import_service->import_featured_image_attachment(
 			$featured_media_id,
-			$external_link
+			$source_link
 		);
 
 		if ( false === $featured_attachment_id ) {
 			return $this->log_single_error_and_return(
 				$session_id,
-				$external_post_id,
+				$source_post_id,
 				$title,
 				null,
 				__( 'Failed to import featured image.', 'safe-publish' ),
@@ -869,10 +869,10 @@ final class Admin_Ajax_Controller {
 				'menu_order'     => $menu_order,
 				'post_password'  => $password,
 				'meta_input'     => array(
-					Options::META_EXTERNAL_POST_ID => $external_post_id,
-					Options::META_EXTERNAL_LINK    => $external_link,
-					Options::META_IMPORTED_FROM    => Options::META_IMPORTED_FROM_VALUE,
-					Options::META_IMPORT_DATE_GMT  => current_time( 'mysql', true ),
+					Options::META_SOURCE_POST_ID  => $source_post_id,
+					Options::META_SOURCE_LINK     => $source_link,
+					Options::META_IMPORTED_FROM   => Options::META_IMPORTED_FROM_VALUE,
+					Options::META_IMPORT_DATE_GMT => current_time( 'mysql', true ),
 				),
 			),
 			$featured_attachment_id,
@@ -888,7 +888,7 @@ final class Admin_Ajax_Controller {
 
 			return $this->log_single_error_and_return(
 				$session_id,
-				$external_post_id,
+				$source_post_id,
 				$title,
 				null,
 				$post_id->get_error_message(),
@@ -898,7 +898,7 @@ final class Admin_Ajax_Controller {
 
 		$this->repository->log_import_action(
 			$session_id,
-			$external_post_id,
+			$source_post_id,
 			$title,
 			'success',
 			$post_id,
@@ -920,7 +920,7 @@ final class Admin_Ajax_Controller {
 	 * the standard error array.
 	 *
 	 * @param int      $session_id       Import session ID.
-	 * @param int      $external_post_id External post ID.
+	 * @param int      $source_post_id   Source post ID.
 	 * @param string   $title            Post title.
 	 * @param int|null $post_id          WordPress post ID or null.
 	 * @param string   $error_message    Error description.
@@ -929,7 +929,7 @@ final class Admin_Ajax_Controller {
 	 */
 	private function log_single_error_and_return(
 		int $session_id,
-		int $external_post_id,
+		int $source_post_id,
 		string $title,
 		?int $post_id,
 		string $error_message,
@@ -937,7 +937,7 @@ final class Admin_Ajax_Controller {
 	): array {
 		$this->repository->log_import_action(
 			$session_id,
-			$external_post_id,
+			$source_post_id,
 			$title,
 			'error',
 			$post_id,
@@ -1011,16 +1011,16 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Processes draft post content by importing media and fixing links.
 	 *
-	 * @param string $content       Raw post content.
-	 * @param string $external_link External post URL used to derive site URL.
+	 * @param string $content     Raw post content.
+	 * @param string $source_link Source post URL used to derive site URL.
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
-	private function process_draft_content( string $content, string $external_link ): string|WP_Error {
+	private function process_draft_content( string $content, string $source_link ): string|WP_Error {
 		$processed = $content;
 
-		if ( ! empty( $content ) && ! empty( $external_link ) ) {
-			$source_site_url = wp_parse_url( $external_link, PHP_URL_SCHEME )
-				. '://' . wp_parse_url( $external_link, PHP_URL_HOST );
+		if ( ! empty( $content ) && ! empty( $source_link ) ) {
+			$source_site_url = wp_parse_url( $source_link, PHP_URL_SCHEME )
+				. '://' . wp_parse_url( $source_link, PHP_URL_HOST );
 			$processed       = $this->content_processor->process_content( $content, $source_site_url );
 
 			if ( is_wp_error( $processed ) ) {
@@ -1058,7 +1058,7 @@ final class Admin_Ajax_Controller {
 		$meta_keys_to_preserve = array(
 			'_edit_last',
 			'_edit_lock',
-			Options::META_EXTERNAL_LINK,
+			Options::META_SOURCE_LINK,
 			Options::META_IMPORT_DATE_GMT,
 		);
 
@@ -1078,12 +1078,12 @@ final class Admin_Ajax_Controller {
 	 * Returns a WP_Error when the fetch fails for any reason, including when no
 	 * connected site URL is configured. Callers should abort the import on error.
 	 *
-	 * @param int    $external_post_id External post ID to fetch.
-	 * @param string $post_type        Post type slug or REST endpoint.
+	 * @param int    $source_post_id Source post ID to fetch.
+	 * @param string $post_type      Post type slug or REST endpoint.
 	 * @return array|WP_Error Fresh post data, or an error on failure.
 	 */
 	private function fetch_fresh_content(
-		int $external_post_id,
+		int $source_post_id,
 		string $post_type
 	): array|WP_Error {
 		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
@@ -1099,7 +1099,7 @@ final class Admin_Ajax_Controller {
 
 		try {
 			$fresh_data = $this->api->fetch_fresh_post_content(
-				$external_post_id,
+				$source_post_id,
 				$source_site_url,
 				$auth_credentials,
 				$post_type
@@ -1115,7 +1115,7 @@ final class Admin_Ajax_Controller {
 			return $fresh_data;
 		} catch ( Exception $e ) {
 			$this->logger->content_fetch_failed(
-				$external_post_id,
+				$source_post_id,
 				$source_site_url,
 				$e->getMessage()
 			);

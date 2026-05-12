@@ -77,7 +77,7 @@ class Content_Processor {
 	 * Processes post content by importing media and replacing URLs.
 	 *
 	 * Detects whether content uses Gutenberg blocks and applies the appropriate
-	 * processing strategy. Replaces external URLs in the content after processing.
+	 * processing strategy. Replaces source URLs in the content after processing.
 	 *
 	 * @param string $content         Post content to process.
 	 * @param string $source_site_url Source site URL.
@@ -113,7 +113,7 @@ class Content_Processor {
 		$this->content_media_processor->reset_failed_media();
 		$this->content_media_processor->reset_unprocessable_media();
 
-		return $this->replace_external_urls( $processed_content, $source_site_url );
+		return $this->replace_source_urls( $processed_content, $source_site_url );
 	}
 
 	/**
@@ -172,30 +172,30 @@ class Content_Processor {
 	 * @param string $source_site_url Source site URL (scheme://host).
 	 * @return string|WP_Error Content with URLs replaced, or WP_Error on failure.
 	 */
-	public function replace_external_urls( string $content, string $source_site_url ): string|WP_Error {
+	public function replace_source_urls( string $content, string $source_site_url ): string|WP_Error {
 		if ( empty( $content ) || empty( $source_site_url ) ) {
 			return $content;
 		}
 
 		$current_site_url = get_site_url();
-		$external_host    = wp_parse_url( $source_site_url, PHP_URL_HOST );
+		$source_host      = wp_parse_url( $source_site_url, PHP_URL_HOST );
 		$current_host     = wp_parse_url( $current_site_url, PHP_URL_HOST );
 
 		// Skip if URLs are the same.
-		if ( $external_host === $current_host ) {
+		if ( $source_host === $current_host ) {
 			return $content;
 		}
 
-		// Skip if the external host doesn't appear in the content.
-		if ( false === strpos( $content, $external_host ) ) {
+		// Skip if the source host doesn't appear in the content.
+		if ( false === strpos( $content, $source_host ) ) {
 			return $content;
 		}
 
-		// Match both http and https variants of the external URL so that legacy
+		// Match both http and https variants of the source URL so that legacy
 		// http:// references are also replaced. The lookahead prevents partial
 		// domain matches (e.g., "source.example.com" must not match inside
 		// "source.example.company.com").
-		$pattern = '/https?:\/\/' . preg_quote( $external_host, '/' )
+		$pattern = '/https?:\/\/' . preg_quote( $source_host, '/' )
 			. '(?=[^a-zA-Z0-9.]|$)/';
 
 		$result = preg_replace( $pattern, $current_site_url, $content );
@@ -204,7 +204,7 @@ class Content_Processor {
 			return new WP_Error(
 				'url_replacement_failed',
 				__(
-					'Failed to replace external URLs in content.',
+					'Failed to replace source site URLs in content.',
 					'safe-publish'
 				)
 			);
@@ -424,7 +424,7 @@ class Content_Processor {
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
-		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $source_site_url );
+		$attachment_id = $this->media_importer->import_source_media_as_attachment( $original_url, $source_site_url );
 
 		if ( null === $attachment_id ) {
 			// Third-party src — leave attrs unchanged but still process
@@ -497,7 +497,7 @@ class Content_Processor {
 				}
 
 				$original_url  = $image['url'];
-				$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $source_site_url );
+				$attachment_id = $this->media_importer->import_source_media_as_attachment( $original_url, $source_site_url );
 
 				if ( null === $attachment_id ) {
 					continue; // Third-party src — skip this image's attrs.
@@ -589,7 +589,7 @@ class Content_Processor {
 		}
 
 		$original_url  = $block['attrs']['src'];
-		$attachment_id = $this->media_importer->import_external_media_as_attachment( $original_url, $source_site_url );
+		$attachment_id = $this->media_importer->import_source_media_as_attachment( $original_url, $source_site_url );
 
 		if ( null === $attachment_id ) {
 			// Third-party src — leave attrs unchanged but still process
@@ -859,7 +859,7 @@ class Content_Processor {
 				filter_var( $value, FILTER_VALIDATE_URL )
 			) {
 				$attachment_id = $this->media_importer
-					->import_external_media_as_attachment( $value, $source_site_url );
+					->import_source_media_as_attachment( $value, $source_site_url );
 
 				if ( null === $attachment_id ) {
 					continue; // Third-party or non-source URL — leave unchanged.

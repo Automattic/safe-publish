@@ -8,7 +8,7 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 
 #### "Authentication failed" error
 
-**Symptoms**: Cannot connect to external site, authentication error message
+**Symptoms**: Cannot connect to source site, authentication error message
 
 **Solutions**:
 
@@ -181,7 +181,7 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 
 **Solutions**:
 
-Safe Publish tracks imported posts using the `safe_publish_external_post_id` meta key and automatically detects already-imported content. Posts that already exist locally are shown with an **Update** action instead of **Import**.
+Safe Publish tracks imported posts using the `safe_publish_source_post_id` meta key and automatically detects already-imported content. Posts that already exist locally are shown with an **Update** action instead of **Import**.
 
 If duplicates still occur:
 
@@ -197,7 +197,7 @@ This is a known limitation of WordPress' embed cache when imported posts referen
 | Error code           | Cause                                                  | Solution                                          |
 | -------------------- | ------------------------------------------------------ | ------------------------------------------------- |
 | `invalid_url`        | URL not valid or accessible                            | Check URL format and ensure the site is reachable |
-| `request_failed`     | HTTP request to the external site failed               | Check network connectivity and site availability  |
+| `request_failed`     | HTTP request to the source site failed                 | Check network connectivity and site availability  |
 | `meta_update_failed` | One or more post meta keys failed to save              | Check destination site database permissions       |
 | `unknown_taxonomy`   | A taxonomy from the source post does not exist locally | Register the taxonomy on the destination site     |
 

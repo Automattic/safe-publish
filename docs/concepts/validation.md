@@ -31,7 +31,7 @@ Before importing content, Safe Publish performs several validation checks to ens
 **What it checks:**
 
 - Credentials are provided (shared secret or basic auth).
-- Authentication succeeds with the external site.
+- Authentication succeeds with the source site.
 - User has required permissions (for basic auth).
 
 **Common failures:**
@@ -90,7 +90,7 @@ Kses sanitization can be opted into via the [`safe_publish_import_kses`](../exte
 
 ### 5. Media Validation
 
-Media is validated during the import process itself, not as a separate pre-import step. Failed media does not block the import — the post is still created and the original external URL is preserved.
+Media is validated during the import process itself, not as a separate pre-import step. Failed media does not block the import — the post is still created and the original source URL is preserved.
 
 **What it checks (at import time):**
 

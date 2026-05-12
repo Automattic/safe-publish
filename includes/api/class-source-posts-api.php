@@ -1,6 +1,6 @@
 <?php
 /**
- * External Posts API class
+ * Source Posts API class
  *
  * @package Safe_Publish
  */
@@ -21,9 +21,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * External Posts API Class.
+ * Source Posts API Class.
  */
-class External_Posts_API {
+class Source_Posts_API {
 
 	/**
 	 * HTTP Client instance.
@@ -40,7 +40,7 @@ class External_Posts_API {
 	private Content_Logger $logger;
 
 	/**
-	 * Constructs the External_Posts_API instance.
+	 * Constructs the Source_Posts_API instance.
 	 *
 	 * @param HTTP_Client|null $http_client Optional. HTTP client for making requests.
 	 */
@@ -85,7 +85,7 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Fetches posts from external site.
+	 * Fetches posts from source site.
 	 *
 	 * @param string $source_site_url  Source site URL.
 	 * @param int    $number_of_posts  Optional. Number of posts to fetch. Default 10.
@@ -188,7 +188,7 @@ class External_Posts_API {
 		if ( ! is_array( $posts ) ) {
 			return new WP_Error(
 				'invalid_response',
-				__( 'Invalid response from external API.', 'safe-publish' ),
+				__( 'Invalid response from source API.', 'safe-publish' ),
 				array( 'response_body' => $body )
 			);
 		}
@@ -327,20 +327,20 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Fetches fresh post content from external site.
+	 * Fetches fresh post content from source site.
 	 *
 	 * `content`, `meta`, and `terms` are returned unsanitized. `content` must
 	 * pass through the block processor first, and `meta`/`terms` require
 	 * type-aware sanitization in Meta_Terms_Manager.
 	 *
-	 * @param int    $external_post_id  External post ID.
+	 * @param int    $source_post_id    Source post ID.
 	 * @param string $source_site_url   Source site URL.
 	 * @param array  $auth_credentials  Optional. Authentication credentials. Default empty array.
 	 * @param string $post_type         Optional. Post type slug or REST endpoint. Default 'posts'.
 	 * @return array|false Post data array on success, false on failure.
 	 */
 	public function fetch_fresh_post_content(
-		int $external_post_id,
+		int $source_post_id,
 		string $source_site_url,
 		array $auth_credentials = array(),
 		string $post_type = 'posts'
@@ -352,7 +352,7 @@ class External_Posts_API {
 
 		// Build API URL for single post.
 		$endpoint     = Post_Type_Map::to_rest_endpoint( $post_type );
-		$api_endpoint = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/' . $endpoint . '/' . $external_post_id;
+		$api_endpoint = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/' . $endpoint . '/' . $source_post_id;
 
 		$query_args = array(
 			'_embed' => '1',
@@ -376,7 +376,7 @@ class External_Posts_API {
 
 		if ( is_wp_error( $response ) ) {
 			$this->logger->content_fetch_failed(
-				$external_post_id,
+				$source_post_id,
 				$source_site_url,
 				$response->get_error_message()
 			);
@@ -389,7 +389,7 @@ class External_Posts_API {
 
 		if ( ! is_array( $data ) || array() === $data ) {
 			$this->logger->content_fetch_invalid_response(
-				$external_post_id,
+				$source_post_id,
 				$source_site_url
 			);
 
@@ -403,7 +403,7 @@ class External_Posts_API {
 			! isset( $data['excerpt']['raw'] )
 		) {
 			$this->logger->content_fetch_raw_unavailable(
-				$external_post_id,
+				$source_post_id,
 				$source_site_url
 			);
 
