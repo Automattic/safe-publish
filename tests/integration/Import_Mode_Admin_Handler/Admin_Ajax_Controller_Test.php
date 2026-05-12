@@ -60,10 +60,10 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			array( 'role' => 'administrator' )
 		);
 
-		// Configure the connected site URL so fetch_fresh_content() can make requests.
+		// Configure the connected site URL so fetch_fresh_post() can make requests.
 		update_option( Options::OPTION_CONNECTED_SITE_URL, 'https://source.example.com' );
 
-		// Mock the single-post REST endpoint used by fetch_fresh_content().
+		// Mock the single-post REST endpoint used by fetch_fresh_post().
 		add_filter( 'pre_http_request', array( $this, 'mock_post_api' ), 1, 3 );
 	}
 

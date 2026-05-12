@@ -11,6 +11,8 @@ namespace Safe_Publish\API;
 
 use Safe_Publish\Admin\Content_Logger;
 use Safe_Publish\Auth\VIP_Safe_Auth;
+use Safe_Publish\Utils\Auth_Credential_Provider;
+use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Validators\URL_Validator;
 use WP_Error;
@@ -435,5 +437,49 @@ class External_Posts_API {
 		$post_data['terms'] = self::extract_embedded_terms( $data );
 
 		return $post_data;
+	}
+
+	/**
+	 * Fetches fresh post content using the configured connected site URL.
+	 *
+	 * Convenience wrapper around fetch_fresh_post_content() that reads the
+	 * connected site URL from options, obtains credentials, and converts
+	 * the underlying false return into a WP_Error so callers can abort
+	 * the import on a uniform error type.
+	 *
+	 * @param int    $external_post_id External post ID to fetch.
+	 * @param string $post_type        Post type slug or REST endpoint.
+	 * @return array|WP_Error Fresh post data, or an error on failure.
+	 */
+	public function fetch_fresh_post(
+		int $external_post_id,
+		string $post_type
+	): array|WP_Error {
+		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+
+		if ( '' === $source_site_url ) {
+			return new WP_Error(
+				'fresh_content_fetch_no_connected_site_url',
+				__( 'No connected site URL is configured.', 'safe-publish' )
+			);
+		}
+
+		$auth_credentials = Auth_Credential_Provider::get_credentials();
+
+		$fresh_data = $this->fetch_fresh_post_content(
+			$external_post_id,
+			$source_site_url,
+			$auth_credentials,
+			$post_type
+		);
+
+		if ( false === $fresh_data ) {
+			return new WP_Error(
+				'fresh_content_fetch_failed',
+				__( 'Could not fetch fresh content from the source site. The post was not imported.', 'safe-publish' )
+			);
+		}
+
+		return $fresh_data;
 	}
 }
