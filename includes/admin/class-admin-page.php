@@ -250,17 +250,12 @@ final class Admin_Page {
 		);
 
 		// Enqueue shared design tokens before any plugin stylesheet.
-		$tokens_css_path = plugin_dir_path( dirname( __DIR__ ) ) . 'assets/css/tokens.css';
-		$tokens_css_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/tokens.css';
-
-		if ( file_exists( $tokens_css_path ) ) {
-			wp_enqueue_style(
-				'safe-publish-tokens',
-				$tokens_css_url,
-				array(),
-				$script_version
-			);
-		}
+		wp_enqueue_style(
+			'safe-publish-tokens',
+			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/tokens.css',
+			array(),
+			$script_version
+		);
 
 		// Enqueue DataViews styles with VIP-safe versioning.
 		$style_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/style-index.css';
@@ -275,31 +270,21 @@ final class Admin_Page {
 			);
 		}
 
-		// Enqueue admin styles with VIP-safe versioning.
-		$admin_css_path = plugin_dir_path( dirname( __DIR__ ) ) . 'assets/css/admin.css';
-		$admin_css_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/admin.css';
-
-		if ( file_exists( $admin_css_path ) ) {
-			wp_enqueue_style(
-				'safe-publish-admin-style',
-				$admin_css_url,
-				array( 'safe-publish-tokens' ),
-				$script_version
-			);
-		}
+		// Enqueue admin styles.
+		wp_enqueue_style(
+			'safe-publish-admin-style',
+			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/admin.css',
+			array( 'safe-publish-tokens' ),
+			$script_version
+		);
 
 		// Enqueue React components styles.
-		$react_css_path = plugin_dir_path( dirname( __DIR__ ) ) . 'assets/css/react-components.css';
-		$react_css_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/react-components.css';
-
-		if ( file_exists( $react_css_path ) ) {
-			wp_enqueue_style(
-				'safe-publish-react-components-style',
-				$react_css_url,
-				array( 'wp-components', 'safe-publish-tokens' ),
-				$script_version
-			);
-		}
+		wp_enqueue_style(
+			'safe-publish-react-components-style',
+			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/react-components.css',
+			array( 'wp-components', 'safe-publish-tokens' ),
+			$script_version
+		);
 
 		$json_data = wp_json_encode(
 			array(
