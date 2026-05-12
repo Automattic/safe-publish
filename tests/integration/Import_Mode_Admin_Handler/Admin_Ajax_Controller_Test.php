@@ -571,14 +571,15 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		add_filter( 'update_post_metadata', $block_meta, 10, 5 );
 
 		// ACT: Trigger the create draft handler; with force_update it takes the
-		// update path.
+		// update path. The finally clause guarantees the filter is removed even
+		// if the dispatch throws an unexpected exception type.
 		try {
 			$this->_handleAjax( 'safe_publish_create_draft' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
 		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} finally {
+			remove_filter( 'update_post_metadata', $block_meta, 10 );
 		}
-
-		remove_filter( 'update_post_metadata', $block_meta, 10 );
 
 		// ASSERT: Response is a JSON failure with a descriptive error.
 		$response = json_decode( $this->_last_response, true );
@@ -1002,14 +1003,16 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 		);
 
-		// ACT: Trigger the AJAX handler.
+		// ACT: Trigger the AJAX handler. The finally clause guarantees the
+		// probe filter is removed even if the dispatch throws an unexpected
+		// exception type.
 		try {
 			$this->_handleAjax( 'safe_publish_auth_status' );
 			$this->fail( 'Expected WPAjaxDieContinueException was not thrown' );
 		} catch ( WPAjaxDieContinueException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} finally {
+			remove_filter( 'pre_http_request', $probe_filter, 1 );
 		}
-
-		remove_filter( 'pre_http_request', $probe_filter, 1 );
 
 		// ASSERT: Response reflects the probe verdict and the transient was
 		// populated with the same payload.
