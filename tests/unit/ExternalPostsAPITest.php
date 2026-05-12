@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests;
 use PHPUnit\Framework\TestCase;
 use Safe_Publish\API\External_Posts_API;
 use Safe_Publish\Auth\VIP_Safe_Auth;
+use Safe_Publish\Utils\Options;
 use WP_Error;
 
 /**
@@ -154,5 +155,50 @@ class ExternalPostsAPITest extends TestCase {
 		$result = $this->api->fetch_fresh_post_content( 123, 'invalid-url' );
 
 		$this->assertFalse( $result );
+	}
+
+	/**
+	 * Verifies that fetch_fresh_post returns the "no connected
+	 * site URL" WP_Error when the option is unset, so callers abort instead
+	 * of issuing a request against an empty host.
+	 */
+	public function test_fetch_fresh_post_returns_error_when_url_unset(): void {
+		// ARRANGE: Connected site URL option is empty.
+		set_test_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+
+		// ACT: Invoke the wrapper.
+		$result = $this->api->fetch_fresh_post( 123, 'posts' );
+
+		// ASSERT: Returns the explicit "no connected site URL" WP_Error.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'fresh_content_fetch_no_connected_site_url',
+			$result->get_error_code()
+		);
+
+		reset_test_options();
+	}
+
+	/**
+	 * Verifies that fetch_fresh_post converts a false return
+	 * from the underlying fetch_fresh_post_content into a WP_Error with the
+	 * fetch_failed code, preserving the import abort contract.
+	 */
+	public function test_fetch_fresh_post_converts_underlying_false_to_error(): void {
+		// ARRANGE: Configure a URL the URL_Validator rejects so the underlying
+		// fetch_fresh_post_content short-circuits to false.
+		set_test_option( Options::OPTION_CONNECTED_SITE_URL, 'not-a-real-url' );
+
+		// ACT: Invoke the wrapper.
+		$result = $this->api->fetch_fresh_post( 123, 'posts' );
+
+		// ASSERT: Returns the fetch_failed WP_Error.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'fresh_content_fetch_failed',
+			$result->get_error_code()
+		);
+
+		reset_test_options();
 	}
 }
