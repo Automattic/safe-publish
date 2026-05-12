@@ -454,7 +454,7 @@ final class Diff_Renderer {
 	 *
 	 * @param int      $local_post_id   Local post ID.
 	 * @param string   $source_site_url Source site URL.
-	 * @param array    $source_data   Source post data.
+	 * @param array    $source_data     Source post data.
 	 * @param callable $make_request    Function to make HTTP requests.
 	 * @param array    $credentials     Authentication credentials.
 	 *
