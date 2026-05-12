@@ -603,7 +603,9 @@ class Permission_Manager {
 	}
 
 	/**
-	 * Logs a CONTENT_EXPORTED event after a successful authenticated export.
+	 * Logs an audit event for each authenticated export response:
+	 * CONTENT_EXPORTED on success, EXPORT_REQUEST_ERROR for WP_Error
+	 * responses, or EXPORT_BAD_STATUS for non-200 HTTP statuses.
 	 *
 	 * Fires on rest_post_dispatch at priority 20, so it runs after all
 	 * permission overrides and context re-dispatches are complete. Skipped
@@ -630,7 +632,7 @@ class Permission_Manager {
 
 		if ( is_wp_error( $response ) ) {
 			$this->export_logger->log_error(
-				Log_Events::EXPORT_FAILED,
+				Log_Events::EXPORT_REQUEST_ERROR,
 				array(
 					'route'                => $route,
 					'destination_site_url' => $destination_site_url,
@@ -645,7 +647,7 @@ class Permission_Manager {
 
 		if ( 200 !== $status ) {
 			$this->export_logger->log_error(
-				Log_Events::EXPORT_FAILED,
+				Log_Events::EXPORT_BAD_STATUS,
 				array(
 					'route'                => $route,
 					'destination_site_url' => $destination_site_url,
@@ -661,7 +663,7 @@ class Permission_Manager {
 			$post_ids = is_array( $data ) ? array_values( array_filter( array_column( $data, 'id' ), 'is_int' ) ) : array();
 
 			$this->export_logger->log_event(
-				'CONTENT_EXPORTED',
+				Log_Events::CONTENT_EXPORTED,
 				array(
 					'rest_base'            => $matches[1],
 					'destination_site_url' => $destination_site_url,
@@ -675,7 +677,7 @@ class Permission_Manager {
 			$post_id = is_array( $data ) && isset( $data['id'] ) && is_int( $data['id'] ) ? $data['id'] : (int) $matches[2];
 
 			$this->export_logger->log_event(
-				'CONTENT_EXPORTED',
+				Log_Events::CONTENT_EXPORTED,
 				array(
 					'rest_base'            => $matches[1],
 					'destination_site_url' => $destination_site_url,

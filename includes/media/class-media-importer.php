@@ -109,8 +109,9 @@ class Media_Importer {
 			$this->logger->log_error(
 				Log_Events::MEDIA_DOWNLOAD_FAILED,
 				array(
-					'url'   => $media_url,
-					'error' => $temp_file->get_error_message(),
+					'url'             => $media_url,
+					'source_site_url' => $source_site_url,
+					'error'           => $temp_file->get_error_message(),
 				)
 			);
 			return false;
@@ -139,8 +140,9 @@ class Media_Importer {
 			$this->logger->log_error(
 				Log_Events::MEDIA_SIDELOAD_FAILED,
 				array(
-					'url'   => $media_url,
-					'error' => $attachment_id->get_error_message(),
+					'url'             => $media_url,
+					'source_site_url' => $source_site_url,
+					'error'           => $attachment_id->get_error_message(),
 				)
 			);
 			return false;
@@ -208,16 +210,15 @@ class Media_Importer {
 		// Download file using VIP-compatible method.
 		$temp_file = $this->http_client->download_external_file( $media_url );
 
-		if ( is_wp_error( $temp_file ) || ! $temp_file ) {
-			if ( is_wp_error( $temp_file ) ) {
-				$this->logger->log_error(
-					Log_Events::MEDIA_DOWNLOAD_FAILED,
-					array(
-						'url'   => $media_url,
-						'error' => $temp_file->get_error_message(),
-					)
-				);
-			}
+		if ( is_wp_error( $temp_file ) ) {
+			$this->logger->log_error(
+				Log_Events::MEDIA_DOWNLOAD_FAILED,
+				array(
+					'url'             => $media_url,
+					'source_site_url' => $source_site_url,
+					'error'           => $temp_file->get_error_message(),
+				)
+			);
 
 			// Remove the filter if we added it.
 			if ( $webp_filter_added ) {
@@ -257,7 +258,11 @@ class Media_Importer {
 		if ( false === $file_type['type'] ) {
 			$this->logger->log_error(
 				Log_Events::MEDIA_UNSUPPORTED_FILE_TYPE,
-				array( 'url' => $media_url )
+				array(
+					'url'                => $media_url,
+					'source_site_url'    => $source_site_url,
+					'detected_extension' => $file_info['extension'] ?? '',
+				)
 			);
 
 			$this->http_client->cleanup_temp_file( $temp_file );
@@ -306,8 +311,9 @@ class Media_Importer {
 			$this->logger->log_error(
 				Log_Events::MEDIA_IMPORT_FAILED,
 				array(
-					'url'   => $media_url,
-					'error' => $attachment_id->get_error_message(),
+					'url'             => $media_url,
+					'source_site_url' => $source_site_url,
+					'error'           => $attachment_id->get_error_message(),
 				)
 			);
 			return false;
@@ -317,7 +323,11 @@ class Media_Importer {
 		if ( ! $attachment_id || ! is_numeric( $attachment_id ) ) {
 			$this->logger->log_error(
 				Log_Events::INVALID_ATTACHMENT_ID,
-				array( 'url' => $media_url )
+				array(
+					'url'             => $media_url,
+					'source_site_url' => $source_site_url,
+					'attachment_id'   => $attachment_id,
+				)
 			);
 			return false;
 		}

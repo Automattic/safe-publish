@@ -188,7 +188,7 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 
 	/**
 	 * Verifies that an authenticated request with a non-2xx response logs an
-	 * EXPORT_FAILED error event with the HTTP status code.
+	 * EXPORT_BAD_STATUS error event with the HTTP status code.
 	 */
 	public function test_log_export_event_logs_failed_http_response(): void {
 		// ARRANGE: Set up an authenticated context with a 403 response.
@@ -200,11 +200,11 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 		// ACT: Trigger log_export_event on the failed response.
 		$this->permission_manager->log_export_event( $response, rest_get_server(), $request );
 
-		// ASSERT: One EXPORT_FAILED error event is stored with the HTTP status and route.
+		// ASSERT: One EXPORT_BAD_STATUS error event is stored with the HTTP status and route.
 		$events = Audit_Log_Table::get_events(
 			array(
 				'channel'    => 'export',
-				'event_type' => 'EXPORT_FAILED',
+				'event_type' => 'EXPORT_BAD_STATUS',
 				'level'      => 'error',
 			)
 		);
@@ -215,7 +215,7 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 
 	/**
 	 * Verifies that an authenticated request that results in a WP_Error logs an
-	 * EXPORT_FAILED error event with the error code and message.
+	 * EXPORT_REQUEST_ERROR event with the error code and message.
 	 */
 	public function test_log_export_event_logs_wp_error_response(): void {
 		// ARRANGE: Set up an authenticated context with a WP_Error for an invalid post ID.
@@ -227,11 +227,11 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 		// ACT: Trigger log_export_event on the WP_Error response.
 		$this->permission_manager->log_export_event( $error, rest_get_server(), $request );
 
-		// ASSERT: One EXPORT_FAILED error event is stored with the error code and message.
+		// ASSERT: One EXPORT_REQUEST_ERROR event is stored with the error code and message.
 		$events = Audit_Log_Table::get_events(
 			array(
 				'channel'    => 'export',
-				'event_type' => 'EXPORT_FAILED',
+				'event_type' => 'EXPORT_REQUEST_ERROR',
 				'level'      => 'error',
 			)
 		);

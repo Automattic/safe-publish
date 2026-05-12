@@ -374,10 +374,10 @@ final class History_Repository {
 
 		if ( false === $updated ) {
 			$this->logger->log_error(
-				Log_Events::ROLLBACK_FAILED,
+				Log_Events::SESSION_ROLLBACK_FAILED,
 				array(
-					'scope'      => 'session',
 					'session_id' => $session_id,
+					'wpdb_error' => $wpdb->last_error,
 				)
 			);
 			return;
@@ -401,8 +401,23 @@ final class History_Repository {
 	public function mark_item_rolled_back( int $item_id ): void {
 		global $wpdb;
 
+		$table = Import_Items_Table::table_name();
+		// Snapshot session_id and post_id before the UPDATE so the audit row
+		// can link to both parents regardless of update outcome.
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$item = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT session_id, post_id FROM {$table} WHERE id = %d",
+				$item_id
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$session_id = isset( $item['session_id'] ) ? (int) $item['session_id'] : 0;
+		$post_id    = isset( $item['post_id'] ) ? (int) $item['post_id'] : 0;
+
 		$updated = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-			Import_Items_Table::table_name(),
+			$table,
 			array( 'rolled_back' => 1 ),
 			array( 'id' => $item_id ),
 			array( '%d' ),
@@ -411,10 +426,12 @@ final class History_Repository {
 
 		if ( false === $updated ) {
 			$this->logger->log_error(
-				Log_Events::ROLLBACK_FAILED,
+				Log_Events::ITEM_ROLLBACK_FAILED,
 				array(
-					'scope'   => 'item',
-					'item_id' => $item_id,
+					'item_id'    => $item_id,
+					'session_id' => $session_id,
+					'post_id'    => $post_id,
+					'wpdb_error' => $wpdb->last_error,
 				)
 			);
 			return;
@@ -426,7 +443,11 @@ final class History_Repository {
 
 		$this->logger->log_event(
 			$event,
-			array( 'item_id' => $item_id )
+			array(
+				'item_id'    => $item_id,
+				'session_id' => $session_id,
+				'post_id'    => $post_id,
+			)
 		);
 	}
 

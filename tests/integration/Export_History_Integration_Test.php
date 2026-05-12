@@ -11,6 +11,7 @@ namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\API\Export_Logger;
 use Safe_Publish\Utils\Audit_Log_Table;
+use Safe_Publish\Utils\Log_Events;
 use WPAjaxDieContinueException;
 use WP_Ajax_UnitTestCase;
 
@@ -50,7 +51,7 @@ class Export_History_Integration_Test extends WP_Ajax_UnitTestCase {
 		$now = time();
 
 		// ACT: Log an export event via Export_Logger.
-		( new Export_Logger() )->log_event( 'CONTENT_EXPORTED', array() );
+		( new Export_Logger() )->log_event( Log_Events::CONTENT_EXPORTED, array() );
 
 		// ASSERT: The created_at_gmt column parses as GMT — i.e. it is NOT
 		// shifted by the site's UTC offset.
@@ -75,7 +76,7 @@ class Export_History_Integration_Test extends WP_Ajax_UnitTestCase {
 	 */
 	public function test_ajax_get_export_events_response_date_is_iso_utc(): void {
 		// ARRANGE: Log one export event so the endpoint has a row to return.
-		( new Export_Logger() )->log_event( 'CONTENT_EXPORTED', array() );
+		( new Export_Logger() )->log_event( Log_Events::CONTENT_EXPORTED, array() );
 
 		$_POST = array(
 			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),

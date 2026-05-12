@@ -193,9 +193,9 @@ final class HTTP_Client {
 	 * Downloads external file using WordPress core function.
 	 *
 	 * @param string $url External file URL.
-	 * @return string|WP_Error|false Path to downloaded file on success, WP_Error or false on failure.
+	 * @return string|WP_Error Path to downloaded file on success, WP_Error on failure.
 	 */
-	public function download_external_file( string $url ): string|WP_Error|false {
+	public function download_external_file( string $url ): string|WP_Error {
 		// Use download_url for proper file handling - WordPress core function.
 		return download_url( $url );
 	}
