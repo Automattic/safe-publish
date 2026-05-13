@@ -4,7 +4,19 @@ This repository includes tools for starting a local development environment usin
 
 ## Set up
 
-Clone this repository and install its dependencies:.
+### Hosts file
+
+The source site is served on a hostname (`host.docker.internal`) that both the destination Docker container and your browser need to resolve. Containers already resolve it via Docker Desktop; the host machine doesn't by default. Add a one-line entry so your browser can reach the source site at the same URL the destination uses internally:
+
+```sh
+echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts
+```
+
+Without this, source URLs in imported content (image src, links) won't resolve when previewing posts in the destination admin, and you won't be able to log in to the source site from your browser.
+
+### Install and start
+
+Clone this repository and install its dependencies:
 
 ```sh
 npm install
@@ -20,7 +32,7 @@ This will spin up two WordPress environments, build the block editor scripts, se
 
 The "destination" WordPress environment will be available at `http://localhost:8888` (admin user: `admin`, password: `password`). The source site URL is automatically configured to `http://host.docker.internal:8889`.
 
-The "source" WordPress environment will be available at `http://localhost:8889` (admin user: `admin`, password: `password`).
+The "source" WordPress environment will be available at `http://host.docker.internal:8889` (admin user: `admin`, password: `password`). The same hostname is used from both your browser and from inside the destination container, so any media URLs the destination imports resolve consistently.
 
 Stop the development environment with `Ctrl+C` and resume it by running the same command. You can also manually stop the environment with `npm run dev:stop`. Stopping the environment optionally stops the WordPress containers but preserves their state.
 
