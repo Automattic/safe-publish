@@ -188,13 +188,11 @@
 
 		&__added {
 			background: var(--safe-publish-diff-added-bg);
-			border: 1px solid var(--safe-publish-diff-added-text);
 			padding: 8px;
 		}
 
 		&__removed {
 			background: var(--safe-publish-diff-removed-bg);
-			border: 1px solid var(--safe-publish-diff-removed-text);
 			padding: 8px;
 		}
 
