@@ -1,7 +1,7 @@
 /**
  * Action definitions for the DataViews component.
  *
- * Defines the available actions for external posts including creating drafts,
+ * Defines the available actions for source posts including creating drafts,
  * bulk importing, updating posts, and viewing post diffs.
  *
  * @file This file defines DataViews actions for the Safe Publish plugin.
@@ -95,7 +95,7 @@ const bulkImportPosts = async (
 };
 
 /**
- * Creates DataViews actions for external posts.
+ * Creates DataViews actions for source posts.
  *
  * Defines the available actions that can be performed on posts in the DataViews
  * component, including creating drafts, bulk importing, updating, and viewing
@@ -236,7 +236,7 @@ export const createActions = (
 									{ __( 'This will import all selected posts including their content, images, links, and formatting.', 'safe-publish' ) }
 								</Text>
 								<Text style={ { fontSize: '0.8em', color: '#d63638', fontWeight: 'bold' } }>
-									{ __( '⚠️ Note: Posts that already exist will be automatically updated with the latest content from the external site.', 'safe-publish' ) }
+									{ __( '⚠️ Note: Posts that already exist will be automatically updated with the latest content from the source site.', 'safe-publish' ) }
 								</Text>
 							</VStack>
 						</>
@@ -414,7 +414,7 @@ export const createActions = (
 	 * Post Diff action.
 	 *
 	 * Displays a visual comparison between the local post content and the
-	 * incoming external content.
+	 * incoming source content.
 	 */
 	{
 		id: 'post-diff',

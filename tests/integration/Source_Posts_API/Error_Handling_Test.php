@@ -1,13 +1,13 @@
 <?php
 /**
- * Error Handling Tests for External Posts API
+ * Error Handling Tests for Source Posts API
  *
  * @package Safe_Publish
  */
 
 declare(strict_types=1);
 
-namespace Safe_Publish\Tests\Integration\External_Posts_API;
+namespace Safe_Publish\Tests\Integration\Source_Posts_API;
 
 use WP_Error;
 
@@ -18,7 +18,7 @@ use WP_Error;
  * that failed image URLs are tracked for the import service to act on, and that
  * edge-case inputs are handled correctly.
  */
-class Error_Handling_Test extends External_Posts_API_Test_Base {
+class Error_Handling_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Verifies that content processing continues when a media download returns 404.
@@ -71,12 +71,12 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that import_external_media() handles failures gracefully.
+	 * Verifies that import_source_media() handles failures gracefully.
 	 *
-	 * Tests that calling import_external_media() with a non-existent URL
+	 * Tests that calling import_source_media() with a non-existent URL
 	 * returns false without crashing.
 	 */
-	public function test_import_external_media_handles_failure(): void {
+	public function test_import_source_media_handles_failure(): void {
 		// ARRANGE: Prepare non-existent URL.
 		$source_site_url    = 'https://example.com';
 		$featured_image_url = 'https://example.com/nonexistent-featured.jpg';
@@ -84,7 +84,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 		$attachments_before = $this->get_attachment_count();
 
 		// ACT: Try to import media from non-existent URL.
-		$imported_url = $this->media_importer->import_external_media( $featured_image_url, $source_site_url );
+		$imported_url = $this->media_importer->import_source_media( $featured_image_url, $source_site_url );
 
 		// ASSERT: Verify import returns false for non-existent URL.
 		$this->assertFalse(
@@ -330,7 +330,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 	 * import.
 	 *
 	 * A browser typically requests a srcset variant rather than the base src on
-	 * retina/HiDPI displays. Leaving a failed srcset URL pointing at the external
+	 * retina/HiDPI displays. Leaving a failed srcset URL pointing at the source
 	 * staging site would silently defeat the whole purpose of the import. Failed
 	 * srcset URLs must be tracked in get_failed_media() exactly like base src failures.
 	 */
@@ -365,7 +365,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 	 * Verifies that a failed classic-HTML video src import is tracked as a failure.
 	 *
 	 * A video with a staging URL left in its src attribute would serve the file
-	 * from the external site. The failed URL must be tracked exactly like a
+	 * from the source site. The failed URL must be tracked exactly like a
 	 * broken image src so the import service can abort.
 	 */
 	public function test_failed_video_src_tracked_as_failed(): void {
@@ -389,7 +389,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 	 *
 	 * The poster attribute is an image displayed before playback. Leaving a staging URL
 	 * in the poster attribute while correctly importing the video is inconsistent and
-	 * will silently reference the external site.
+	 * will silently reference the source site.
 	 */
 	public function test_failed_video_poster_tracked_as_failed(): void {
 		// ARRANGE: A video with a working src but a non-existent poster image.
@@ -411,7 +411,7 @@ class Error_Handling_Test extends External_Posts_API_Test_Base {
 	 * Verifies that a failed classic-HTML audio src import is tracked as a failure.
 	 *
 	 * An audio element with a staging URL left in its src attribute would stream
-	 * audio from the external site. The failed URL must abort the import.
+	 * audio from the source site. The failed URL must abort the import.
 	 */
 	public function test_failed_audio_src_tracked_as_failed(): void {
 		// ARRANGE: Content with an <audio> that points at a non-existent file.

@@ -116,8 +116,8 @@ By default, no sanitization is applied to the post content or excerpt; both fiel
   - **Post Meta**: meta available via REST is transferred, see below for more details.
   - **Terms**: tags and categories are transferred. If they don't exist, they are created. Custom taxonomies that appear in a REST request are transferred if they exist. See below for more details.
 - Additional Post meta stored:
-  - `safe_publish_external_post_id` — post ID on the source site
-  - `safe_publish_external_link` — URL of the source post
+  - `safe_publish_source_post_id` — post ID on the source site
+  - `safe_publish_source_link` — URL of the source post
   - `safe_publish_imported_from` — plugin identifier (`safe-publish`)
   - `safe_publish_import_date_gmt` — GMT timestamp of the import (`Y-m-d H:i:s`)
 

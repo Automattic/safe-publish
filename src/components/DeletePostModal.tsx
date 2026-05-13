@@ -49,7 +49,7 @@ const DeletePostModal = ( { items, closeModal, onRefresh }: DeletePostModalProps
 		const formData = new FormData();
 		formData.append( 'action', 'safe_publish_delete_post' );
 		formData.append( 'nonce', window.safePublishAdminData.nonce );
-		formData.append( 'external_post_id', post.id.toString() );
+		formData.append( 'source_post_id', post.id.toString() );
 
 		fetch( window.safePublishAdminData.ajaxurl, {
 			method: 'POST',

@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\Auth\VIP_Safe_Auth;
@@ -48,11 +48,11 @@ final class Admin_Ajax_Controller {
 	const AUTH_STATUS_TTL = 5 * MINUTE_IN_SECONDS;
 
 	/**
-	 * External Posts API instance.
+	 * Source Posts API instance.
 	 *
-	 * @var External_Posts_API
+	 * @var Source_Posts_API
 	 */
-	private External_Posts_API $api;
+	private Source_Posts_API $api;
 
 	/**
 	 * History repository instance.
@@ -85,14 +85,14 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Constructs the Admin_Ajax_Controller instance.
 	 *
-	 * @param External_Posts_API  $api                 External Posts API instance.
+	 * @param Source_Posts_API    $api                 Source Posts API instance.
 	 * @param History_Repository  $repository          History repository instance.
 	 * @param Post_Import_Service $post_import_service Post Import Service instance.
 	 * @param Post_Type_Fetcher   $post_type_fetcher   Post Type Fetcher instance.
 	 * @param HTTP_Client         $http_client         HTTP Client instance.
 	 */
 	public function __construct(
-		External_Posts_API $api,
+		Source_Posts_API $api,
 		History_Repository $repository,
 		Post_Import_Service $post_import_service,
 		Post_Type_Fetcher $post_type_fetcher,
@@ -281,7 +281,7 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Handles AJAX request for creating a draft post.
 	 *
-	 * Validates input, checks for an existing post with the same external ID,
+	 * Validates input, checks for an existing post with the same source ID,
 	 * returns a confirmation prompt when one exists (unless force_update is set),
 	 * processes content, creates or updates the post, and logs history.
 	 */
@@ -291,10 +291,10 @@ final class Admin_Ajax_Controller {
 
 		$this->validate_auth_or_fail();
 
-		$external_post_id = absint( $_POST['external_post_id'] ?? 0 );
-		$title            = sanitize_text_field( wp_unslash( $_POST['title'] ?? '' ) );
-		$raw_post_type    = sanitize_text_field( wp_unslash( $_POST['post_type'] ?? 'post' ) );
-		$force_update     = isset( $_POST['force_update'] ) && 'true' === $_POST['force_update'];
+		$source_post_id = absint( $_POST['source_post_id'] ?? 0 );
+		$title          = sanitize_text_field( wp_unslash( $_POST['title'] ?? '' ) );
+		$raw_post_type  = sanitize_text_field( wp_unslash( $_POST['post_type'] ?? 'post' ) );
+		$force_update   = isset( $_POST['force_update'] ) && 'true' === $_POST['force_update'];
 
 		// Validate basic input before any session or duplicate-detection work so
 		// that malformed requests do not leave history rows behind and cannot
@@ -302,8 +302,8 @@ final class Admin_Ajax_Controller {
 		// Post_Import_Service::validate_required_fields() and resolve_post_type()
 		// repeat these checks as defense-in-depth and to cover the bulk-import
 		// code path.
-		if ( 0 === $external_post_id ) {
-			wp_send_json_error( __( 'External post ID is required.', 'safe-publish' ) );
+		if ( 0 === $source_post_id ) {
+			wp_send_json_error( __( 'Source post ID is required.', 'safe-publish' ) );
 		}
 
 		if ( '' === $title ) {
@@ -319,7 +319,7 @@ final class Admin_Ajax_Controller {
 		// Force-update confirmation prompt is HTTP UX, not import logic: if the
 		// post is already imported and the caller hasn't opted into updating,
 		// return the prompt response instead of running the import.
-		$imported_post = $this->post_import_service->find_imported_post( $external_post_id );
+		$imported_post = $this->post_import_service->find_imported_post( $source_post_id );
 
 		if ( $imported_post && ! $force_update ) {
 			wp_send_json_success(
@@ -330,7 +330,7 @@ final class Admin_Ajax_Controller {
 					'edit_url'       => admin_url( 'post.php?post=' . $imported_post->ID . '&action=edit' ),
 					'message'        => sprintf(
 						/* translators: %s: title of the existing post */
-						__( 'Post "%s" already exists. Do you want to update it with the latest content from the external site?', 'safe-publish' ),
+						__( 'Post "%s" already exists. Do you want to update it with the latest content from the source site?', 'safe-publish' ),
 						$imported_post->post_title
 					),
 					'confirm_action' => 'update_existing',
@@ -351,10 +351,10 @@ final class Admin_Ajax_Controller {
 		$session_id = $session_result;
 
 		$post_data = array(
-			'id'             => $external_post_id,
+			'id'             => $source_post_id,
 			'title'          => $title,
 			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized by Post_Import_Service::extract_post_fields().
-			'link'           => wp_unslash( $_POST['external_link'] ?? '' ),
+			'link'           => wp_unslash( $_POST['source_link'] ?? '' ),
 			'post_type'      => $raw_post_type,
 			'featured_media' => absint( $_POST['featured_media_id'] ?? 0 ),
 		);
@@ -527,19 +527,19 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Handles AJAX request for deleting a locally imported post.
 	 *
-	 * Moves the post to trash by its external post ID.
+	 * Moves the post to trash by its source post ID.
 	 */
 	public function ajax_delete_post(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability( 'delete_posts' );
 
-		$external_post_id = absint( $_POST['external_post_id'] ?? 0 );
+		$source_post_id = absint( $_POST['source_post_id'] ?? 0 );
 
-		if ( ! $external_post_id ) {
-			wp_send_json_error( __( 'External post ID is required.', 'safe-publish' ) );
+		if ( ! $source_post_id ) {
+			wp_send_json_error( __( 'Source post ID is required.', 'safe-publish' ) );
 		}
 
-		$imported_post = $this->post_import_service->find_imported_post( $external_post_id );
+		$imported_post = $this->post_import_service->find_imported_post( $source_post_id );
 
 		if ( ! $imported_post ) {
 			wp_send_json_error( __( 'Post not found.', 'safe-publish' ) );

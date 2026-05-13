@@ -7,7 +7,7 @@
 
 declare(strict_types=1);
 
-namespace Safe_Publish\Tests\Integration\External_Posts_API;
+namespace Safe_Publish\Tests\Integration\Source_Posts_API;
 
 /**
  * Tests element matching behavior of Content_Media_Processor.
@@ -17,7 +17,7 @@ namespace Safe_Publish\Tests\Integration\External_Posts_API;
  * all other contexts untouched. Links are only processed when the href points
  * to a file with an uploadable extension.
  */
-class Media_Processor_Matching_Test extends External_Posts_API_Test_Base {
+class Media_Processor_Matching_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Verifies that the processor finds and replaces a media URL in a

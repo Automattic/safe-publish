@@ -1,8 +1,8 @@
 /**
- * DataViews implementation for displaying external posts in the admin.
+ * DataViews implementation for displaying source posts in the admin.
  *
- * Main entry point for the external posts DataViews component that provides
- * a table, grid, or list view of posts from external WordPress sites.
+ * Main entry point for the source posts DataViews component that provides
+ * a table, grid, or list view of posts from source WordPress sites.
  *
  * @file This file defines the main DataViews component for the Safe Publish plugin.
  */
@@ -47,7 +47,7 @@ import type {
 	AuthStatus,
 	AuthStatusData,
 	DataViewsField,
-	ExternalPostsDataViewProps,
+	SourcePostsDataViewProps,
 	PaginationInfo,
 	Post,
 } from './types';
@@ -55,10 +55,10 @@ import type {
 import './style.scss';
 
 /**
- * DataViews component for external posts.
+ * DataViews component for source posts.
  *
  * Renders a DataViews table with search, sort, and pagination capabilities
- * for displaying posts fetched from external WordPress sites.
+ * for displaying posts fetched from source WordPress sites.
  *
  * @param {Object} props               Component props.
  * @param {Post[]} props.initialPosts  Posts to display on initial load.
@@ -67,7 +67,7 @@ import './style.scss';
  *
  * @return {JSX.Element} Rendered DataViews component.
  */
-function ExternalPostsDataView( { initialPosts, sourceSiteUrl, numberPosts }: ExternalPostsDataViewProps ): JSX.Element {
+function SourcePostsDataView( { initialPosts, sourceSiteUrl, numberPosts }: SourcePostsDataViewProps ): JSX.Element {
 	const [ view, setView ] = useState< View >( {
 		type: 'table',
 		perPage: DEFAULT_POSTS_PER_PAGE,
@@ -520,7 +520,7 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 	dataviewContainer.innerHTML = '';
 
 	createRoot( dataviewContainer ).render(
-		<ExternalPostsDataView
+		<SourcePostsDataView
 			initialPosts={ initialPosts }
 			sourceSiteUrl={ sourceSiteUrl }
 			numberPosts={ numberPosts }
