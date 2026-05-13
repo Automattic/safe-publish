@@ -4,7 +4,7 @@
 .safe-publish-dataviews-wrapper {
 
 	.dataviews-bulk-actions {
-		background: var(--safe-publish-notice-info-bg);
+		background: var(--safe-publish-bg-info);
 		border: 1px solid var(--safe-publish-primary);
 		border-radius: 3px;
 		margin-bottom: 16px;
@@ -18,7 +18,7 @@
 
 	// Highlight selected rows
 	.dataviews-view-table tr[aria-selected="true"] {
-		background-color: var(--safe-publish-notice-info-bg) !important;
+		background-color: var(--safe-publish-bg-info) !important;
 		border-left: 3px solid var(--safe-publish-primary);
 	}
 

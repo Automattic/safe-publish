@@ -81,7 +81,7 @@
 /* DataViews Bulk Actions */
 .safe-publish-history .dataviews-bulk-actions {
 	padding: 12px 20px;
-	background: var(--safe-publish-notice-info-bg);
+	background: var(--safe-publish-bg-info);
 	border-bottom: 1px solid var(--safe-publish-primary);
 	display: flex;
 	align-items: center;

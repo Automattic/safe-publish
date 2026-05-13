@@ -35,8 +35,8 @@
 	--safe-publish-pill-bg-neutral: #dcdcde;
 	--safe-publish-pill-bg-muted: #646970;
 
-	/* Notice background (WP-native tinted alert). */
-	--safe-publish-notice-info-bg: #f0f6fc;
+	/* Info-tinted background surface (matches WP-native notice alert tone). */
+	--safe-publish-bg-info: #f0f6fc;
 
 	/* Diff palette (unified across inline highlights and block surfaces). */
 	--safe-publish-diff-added-bg: #d1f2a5;
