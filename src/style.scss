@@ -207,7 +207,7 @@
 		font-size: 10px;
 		padding: 2px 6px;
 		border-radius: 2em;
-		background: var(--safe-publish-border);
+		background: var(--safe-publish-pill-bg-neutral);
 
 		&.safe-publish-added {
 			background: var(--safe-publish-status-success);
@@ -225,7 +225,7 @@
 		}
 
 		&.safe-publish-unchanged {
-			background: var(--safe-publish-text-muted);
+			background: var(--safe-publish-pill-bg-muted);
 			color: #fff;
 		}
 	}

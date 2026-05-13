@@ -31,6 +31,10 @@
 	--safe-publish-status-error: #d63638;
 	--safe-publish-status-error-hover: #b32d2e;
 
+	/* Pills. */
+	--safe-publish-pill-bg-neutral: #dcdcde;
+	--safe-publish-pill-bg-muted: #646970;
+
 	/* Notice background (WP-native tinted alert). */
 	--safe-publish-notice-info-bg: #f0f6fc;
 
