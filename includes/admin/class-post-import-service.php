@@ -324,15 +324,22 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Extracts the site base URL (scheme + host) from a full URL.
+	 * Extracts the site base URL (scheme + host + port) from a full URL.
+	 *
+	 * Preserves the port so non-default ports (e.g. local dev environments,
+	 * staging on alternate ports) reach the right service when used as a
+	 * base for REST endpoint URLs.
 	 *
 	 * @param string $url Full URL to extract the base from.
-	 * @return string Site base URL (e.g. "https://example.com").
+	 * @return string Site base URL (e.g. "https://example.com" or
+	 *                "http://example.com:8889").
 	 */
 	private function extract_site_url( string $url ): string {
-		return wp_parse_url( $url, PHP_URL_SCHEME )
-			. '://'
-			. wp_parse_url( $url, PHP_URL_HOST );
+		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
+		$host   = wp_parse_url( $url, PHP_URL_HOST );
+		$port   = wp_parse_url( $url, PHP_URL_PORT );
+
+		return $scheme . '://' . $host . ( is_int( $port ) ? ':' . $port : '' );
 	}
 
 	/**

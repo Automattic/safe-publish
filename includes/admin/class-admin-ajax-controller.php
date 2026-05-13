@@ -1011,8 +1011,10 @@ final class Admin_Ajax_Controller {
 		$processed = $content;
 
 		if ( ! empty( $content ) && ! empty( $external_link ) ) {
-			$source_site_url = wp_parse_url( $external_link, PHP_URL_SCHEME )
-				. '://' . wp_parse_url( $external_link, PHP_URL_HOST );
+			$scheme          = wp_parse_url( $external_link, PHP_URL_SCHEME );
+			$host            = wp_parse_url( $external_link, PHP_URL_HOST );
+			$port            = wp_parse_url( $external_link, PHP_URL_PORT );
+			$source_site_url = $scheme . '://' . $host . ( is_int( $port ) ? ':' . $port : '' );
 			$processed       = $this->content_processor->process_content( $content, $source_site_url );
 
 			if ( is_wp_error( $processed ) ) {
