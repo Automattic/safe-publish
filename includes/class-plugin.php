@@ -216,7 +216,6 @@ final class Plugin {
 		$ajax_controller = new Admin_Ajax_Controller(
 			$api,
 			$repository,
-			$content_processor,
 			$post_import_service,
 			$post_type_fetcher,
 			$http_client

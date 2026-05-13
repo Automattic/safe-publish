@@ -313,9 +313,16 @@ export const createActions = (
 
 									return (
 										<div key={ index } className="safe-publish-import-result-item">
-											<span className={ `safe-publish-result-title ${ result.success ? 'success' : 'error' }` }>
-												{ result.title }
-											</span>
+											<div className="safe-publish-result-text">
+												<span className={ `safe-publish-result-title ${ result.success ? 'success' : 'error' }` }>
+													{ result.title }
+												</span>
+												{ ! result.success && result.error && (
+													<span className="safe-publish-result-error">
+														{ result.error }
+													</span>
+												) }
+											</div>
 											<span className="safe-publish-result-status">
 												{ status }
 											</span>

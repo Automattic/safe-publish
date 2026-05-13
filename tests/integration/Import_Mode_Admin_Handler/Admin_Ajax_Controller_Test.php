@@ -256,14 +256,14 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Trigger the create draft AJAX handler.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
 
-		// ASSERT: Response is a JSON failure with a permission error message.
+		// ASSERT: Response is a JSON failure delivered by the capability guard.
 		$response = json_decode( $this->_last_response, true );
 		$this->assertIsArray( $response, 'Response should be a JSON object' );
 		$this->assertFalse( $response['success'], 'Subscriber should be denied' );
-		$this->assertStringContainsString(
-			'permission',
-			$response['data']['message'],
-			'Error message should mention permissions'
+		$this->assertSame(
+			'Forbidden',
+			$response['data'],
+			'Capability rejection should return the Forbidden error from verify_ajax_capability()'
 		);
 	}
 
@@ -370,7 +370,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 	/**
 	 * Verifies that the create draft endpoint returns an error when the title is
-	 * missing, and does not leave an open import session in the database.
+	 * missing, and does not leave any import session in the database.
 	 */
 	public function test_ajax_create_draft_rejects_empty_title_without_leaking_session(): void {
 		// ARRANGE: Authenticate as admin but omit the title.
@@ -386,7 +386,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Trigger the create draft AJAX handler.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
 
-		// ASSERT: Response is a JSON failure.
+		// ASSERT: Response is a JSON failure that mentions the title field.
 		$response = json_decode( $this->_last_response, true );
 		$this->assertIsArray( $response, 'Response should be a JSON object' );
 		$this->assertFalse( $response['success'], 'Should return an error for a missing title' );
@@ -396,12 +396,135 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			'Error message should mention the title field'
 		);
 
-		// ASSERT: No import session was opened — validation failed before any
-		// tracking row should have been created.
+		// ASSERT: No tracking row was written — validation must run before the
+		// session is created, otherwise rejected requests pollute import history.
 		$this->assertSame(
 			0,
-			$this->count_open_sessions(),
-			'No open session should remain after a validation failure'
+			$this->count_all_sessions(),
+			'No session row should exist after a validation failure'
+		);
+	}
+
+	/**
+	 * Verifies that the create draft endpoint rejects an empty-title request
+	 * even when the external post already exists locally, so the duplicate-post
+	 * confirmation prompt cannot mask a basic validation error.
+	 */
+	public function test_ajax_create_draft_rejects_empty_title_when_post_already_imported(): void {
+		// ARRANGE: Pre-create a post tagged with the external ID under test so
+		// that find_imported_post() would otherwise return it and trigger the
+		// confirm-prompt branch.
+		$existing_post_id = wp_insert_post(
+			array(
+				'post_title'  => 'Pre-existing Import',
+				'post_status' => 'draft',
+				'post_type'   => 'post',
+			)
+		);
+		update_post_meta( $existing_post_id, 'safe_publish_external_post_id', '8002' );
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'            => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'external_post_id' => '8002',
+			'title'            => '',
+			'external_link'    => 'https://source.example.com/no-title-existing',
+			'post_type'        => 'post',
+		);
+
+		// ACT: Trigger the create draft AJAX handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: Response is a JSON failure mentioning the title field, not a
+		// confirmation prompt.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertFalse(
+			$response['success'],
+			'Should return an error for a missing title even when the post is already imported'
+		);
+		$this->assertStringContainsString(
+			'title',
+			strtolower( $response['data'] ),
+			'Error message should mention the title field'
+		);
+
+		// ASSERT: The duplicate-post confirmation branch must not be taken when
+		// validation has already failed.
+		$response_data = is_array( $response['data'] ?? null ) ? $response['data'] : array();
+		$this->assertArrayNotHasKey(
+			'confirm_action',
+			$response_data,
+			'Validation failure must not surface as a duplicate-post confirmation prompt'
+		);
+
+		// ASSERT: No tracking row was written.
+		$this->assertSame(
+			0,
+			$this->count_all_sessions(),
+			'No session row should exist after a validation failure'
+		);
+	}
+
+	/**
+	 * Verifies that the create draft endpoint rejects an unregistered post_type
+	 * even when the external post already exists locally, so the duplicate-post
+	 * confirmation prompt cannot mask a post-type validation error and no
+	 * tracking row is written.
+	 */
+	public function test_ajax_create_draft_rejects_invalid_post_type_when_post_already_imported(): void {
+		// ARRANGE: Pre-create a post tagged with the external ID under test so
+		// that find_imported_post() would otherwise return it and trigger the
+		// confirm-prompt branch.
+		$existing_post_id = wp_insert_post(
+			array(
+				'post_title'  => 'Pre-existing Import',
+				'post_status' => 'draft',
+				'post_type'   => 'post',
+			)
+		);
+		update_post_meta( $existing_post_id, 'safe_publish_external_post_id', '8003' );
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'            => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'external_post_id' => '8003',
+			'title'            => 'Has Title But Bad Type',
+			'external_link'    => 'https://source.example.com/bad-type-existing',
+			'post_type'        => '__definitely_not_a_real_type__',
+		);
+
+		// ACT: Trigger the create draft AJAX handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: Response is a JSON failure mentioning the post type, not a
+		// confirmation prompt.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertFalse(
+			$response['success'],
+			'Should return an error for an unregistered post type even when the post is already imported'
+		);
+		$this->assertStringContainsString(
+			'post type',
+			strtolower( $response['data'] ),
+			'Error message should mention the post type'
+		);
+
+		// ASSERT: The duplicate-post confirmation branch must not be taken when
+		// post-type validation has already failed.
+		$response_data = is_array( $response['data'] ?? null ) ? $response['data'] : array();
+		$this->assertArrayNotHasKey(
+			'confirm_action',
+			$response_data,
+			'Post-type validation failure must not surface as a duplicate-post confirmation prompt'
+		);
+
+		// ASSERT: No tracking row was written.
+		$this->assertSame(
+			0,
+			$this->count_all_sessions(),
+			'No session row should exist after a post-type validation failure'
 		);
 	}
 
@@ -1061,6 +1184,26 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 				"SELECT COUNT(*) FROM `{$table}` WHERE status = %s",
 				'in_progress'
 			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+	}
+
+	/**
+	 * Returns the total number of import session rows in any state.
+	 *
+	 * Use this when asserting that a rejected request leaves no trace in the
+	 * history table — an immediately-completed session would still count.
+	 *
+	 * @return int
+	 */
+	private function count_all_sessions(): int {
+		global $wpdb;
+
+		$table = Imports_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		return (int) $wpdb->get_var(
+			"SELECT COUNT(*) FROM `{$table}`"
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 	}

@@ -96,11 +96,20 @@ class Post_Import_Service {
 	 *
 	 * @param array    $post_data  Post data array containing id, title, content, link, etc.
 	 * @param int|null $session_id Optional import session ID for history tracking.
+	 * @param array    $options    Optional behavior overrides:
+	 *                             - 'force_draft_on_update' (bool, default false): when
+	 *                               true, override post_status to 'draft' when updating
+	 *                               an existing imported post. Single-import review flow
+	 *                               uses this; bulk preserves the existing status.
 	 * @return array Result data with success status, post_id, edit_url, and error keys.
 	 */
-	public function import_post( array $post_data, ?int $session_id = null ): array {
+	public function import_post(
+		array $post_data,
+		?int $session_id = null,
+		array $options = array()
+	): array {
 		try {
-			return $this->process_post_import( $post_data, $session_id );
+			return $this->process_post_import( $post_data, $session_id, $options );
 		} catch ( Exception $e ) {
 			return $this->build_exception_result( $post_data, $session_id, $e );
 		}
@@ -111,9 +120,14 @@ class Post_Import_Service {
 	 *
 	 * @param array    $post_data  Raw post data.
 	 * @param int|null $session_id Import session ID.
+	 * @param array    $options    Behavior overrides; see import_post().
 	 * @return array Import result data.
 	 */
-	private function process_post_import( array $post_data, ?int $session_id ): array {
+	private function process_post_import(
+		array $post_data,
+		?int $session_id,
+		array $options
+	): array {
 		$fields = $this->extract_post_fields( $post_data );
 
 		$validation_error = $this->validate_required_fields( $fields );
@@ -157,7 +171,8 @@ class Post_Import_Service {
 				$imported_post,
 				$fields,
 				$post_type,
-				$session_id
+				$session_id,
+				$options
 			);
 		}
 
@@ -236,10 +251,17 @@ class Post_Import_Service {
 	 * @return array|null Error result array on failure, null on success.
 	 */
 	private function validate_required_fields( array $fields ): ?array {
-		if ( '' === $fields['title'] || null === $fields['external_post_id'] ) {
+		if ( null === $fields['external_post_id'] ) {
 			return $this->build_error_result(
 				$fields,
-				__( 'Missing required post data.', 'safe-publish' )
+				__( 'External post ID is required.', 'safe-publish' )
+			);
+		}
+
+		if ( '' === $fields['title'] ) {
+			return $this->build_error_result(
+				$fields,
+				__( 'Post title is required.', 'safe-publish' )
 			);
 		}
 
@@ -424,20 +446,23 @@ class Post_Import_Service {
 	 * post. Aborts with an error result if the fetch fails; the post will
 	 * not be updated with stale snapshot data.
 	 *
-	 * Post status is preserved (not reset to 'draft') to avoid silently
-	 * unpublishing live posts during automated bulk runs.
+	 * Post status is preserved by default to avoid silently unpublishing live
+	 * posts during automated bulk runs. Callers using the single-import review
+	 * flow can pass `force_draft_on_update` in $options to override.
 	 *
 	 * @param WP_Post  $imported_post Imported WordPress post.
 	 * @param array    $fields        Sanitized post fields.
 	 * @param string   $post_type     Resolved post type slug.
 	 * @param int|null $session_id    Import session ID for logging.
+	 * @param array    $options       Behavior overrides; see import_post().
 	 * @return array Import result data.
 	 */
 	private function handle_imported_post(
 		WP_Post $imported_post,
 		array $fields,
 		string $post_type,
-		?int $session_id
+		?int $session_id,
+		array $options
 	): array {
 		$prepared = $this->prepare_fresh_content( $fields );
 
@@ -489,19 +514,27 @@ class Post_Import_Service {
 			return $this->build_error_result( $fields, $error_message );
 		}
 
+		$previous_content = $this->capture_previous_content( $imported_post );
+
+		$post_args = array(
+			'ID'             => $imported_post->ID,
+			'post_title'     => $fields['title'],
+			'post_excerpt'   => $fields['excerpt'],
+			'post_content'   => $processed_content,
+			'post_type'      => $post_type,
+			'post_name'      => $fields['slug'],
+			'comment_status' => $fields['comment_status'],
+			'ping_status'    => $fields['ping_status'],
+			'menu_order'     => $fields['menu_order'],
+			'post_password'  => $fields['password'],
+		);
+
+		if ( ! empty( $options['force_draft_on_update'] ) ) {
+			$post_args['post_status'] = 'draft';
+		}
+
 		$post_id = $this->persist_updated_post(
-			array(
-				'ID'             => $imported_post->ID,
-				'post_title'     => $fields['title'],
-				'post_excerpt'   => $fields['excerpt'],
-				'post_content'   => $processed_content,
-				'post_type'      => $post_type,
-				'post_name'      => $fields['slug'],
-				'comment_status' => $fields['comment_status'],
-				'ping_status'    => $fields['ping_status'],
-				'menu_order'     => $fields['menu_order'],
-				'post_password'  => $fields['password'],
-			),
+			$post_args,
 			$featured_attachment_id,
 			$fields['external_link'],
 			$fields['meta'],
@@ -537,7 +570,7 @@ class Post_Import_Service {
 			'updated',
 			$post_id,
 			null,
-			array( 'action' => 'updated_existing' )
+			$previous_content
 		);
 
 		return $this->build_success_result( $fields, $post_id, true );
@@ -1074,6 +1107,50 @@ class Post_Import_Service {
 		);
 
 		return $attachment_id;
+	}
+
+	/**
+	 * Captures the previous content of an existing post for the session
+	 * rollback history log.
+	 *
+	 * Stores the current post fields, featured image, and tracking meta so
+	 * the update can be reverted via session rollback. The returned array is
+	 * used as the `changes` payload of the history log entry for an
+	 * 'updated_existing' action.
+	 *
+	 * @param WP_Post $existing_post Existing WordPress post.
+	 * @return array Previous content keyed by field name.
+	 */
+	private function capture_previous_content( WP_Post $existing_post ): array {
+		$previous_content = array(
+			'previous_content'        => $existing_post->post_content,
+			'previous_title'          => $existing_post->post_title,
+			'previous_excerpt'        => $existing_post->post_excerpt,
+			'previous_slug'           => $existing_post->post_name,
+			'previous_comment_status' => $existing_post->comment_status,
+			'previous_ping_status'    => $existing_post->ping_status,
+			'previous_menu_order'     => $existing_post->menu_order,
+			'previous_password'       => $existing_post->post_password,
+			'previous_featured_image' => get_post_thumbnail_id( $existing_post->ID ),
+			'previous_meta'           => array(),
+			'action'                  => 'updated_existing',
+		);
+
+		$meta_keys_to_preserve = array(
+			'_edit_last',
+			'_edit_lock',
+			Options::META_EXTERNAL_LINK,
+			Options::META_IMPORT_DATE_GMT,
+		);
+
+		foreach ( $meta_keys_to_preserve as $meta_key ) {
+			$meta_value = get_post_meta( $existing_post->ID, $meta_key, true );
+			if ( '' !== $meta_value ) {
+				$previous_content['previous_meta'][ $meta_key ] = $meta_value;
+			}
+		}
+
+		return $previous_content;
 	}
 
 	/**
