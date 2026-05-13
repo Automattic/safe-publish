@@ -436,7 +436,44 @@ class Source_Posts_API {
 
 		$post_data['terms'] = self::extract_embedded_terms( $data );
 
+		// `null` distinguishes "source did not provide the field" (older plugin
+		// version on the source) from "field present but author cannot be
+		// resolved on the source" (empty strings).
+		$post_data['source_author'] = self::extract_source_author( $data );
+
 		return $post_data;
+	}
+
+	/**
+	 * Extracts the safe_publish_author payload from a REST response.
+	 *
+	 * @param array $data Decoded REST response for a single post.
+	 * @return array{email: string, login: string, display_name: string}|null
+	 *         Sanitized author payload, or null when the source did not
+	 *         include the field.
+	 */
+	private static function extract_source_author( array $data ): ?array {
+		if ( ! array_key_exists( 'safe_publish_author', $data ) ) {
+			return null;
+		}
+
+		$author = $data['safe_publish_author'];
+
+		if ( ! is_array( $author ) ) {
+			return null;
+		}
+
+		return array(
+			'email'        => isset( $author['email'] )
+				? sanitize_email( (string) $author['email'] )
+				: '',
+			'login'        => isset( $author['login'] )
+				? sanitize_user( (string) $author['login'], true )
+				: '',
+			'display_name' => isset( $author['display_name'] )
+				? sanitize_text_field( (string) $author['display_name'] )
+				: '',
+		);
 	}
 
 	/**

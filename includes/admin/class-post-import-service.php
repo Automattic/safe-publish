@@ -191,7 +191,81 @@ class Post_Import_Service {
 			'password'          => sanitize_text_field( $post_data['password'] ?? '' ),
 			'meta'              => is_array( $post_data['meta'] ?? null ) ? $post_data['meta'] : array(),
 			'terms'             => is_array( $post_data['terms'] ?? null ) ? $post_data['terms'] : array(),
+			'source_author'     => is_array( $post_data['source_author'] ?? null )
+				? $post_data['source_author']
+				: null,
+			'matched_author_id' => 0,
 		);
+	}
+
+	/**
+	 * Resolves the source author to a destination user ID by email.
+	 *
+	 * Matches by email only — login collisions across sites can produce silent
+	 * misattribution. No capability check: post_author is data attribution, not
+	 * authorization, so a destination Subscriber matching by email is a valid
+	 * post_author for an imported post.
+	 *
+	 * @param array|null $source_author Author payload from the source REST
+	 *                                  response: { email, login, display_name }.
+	 *                                  Null when the source did not include the
+	 *                                  field.
+	 * @return int|WP_Error Matched destination user ID on success, WP_Error with
+	 *                      a specific operator-facing message on failure.
+	 */
+	public function resolve_source_author( ?array $source_author ): int|WP_Error {
+		if ( null === $source_author ) {
+			return new WP_Error(
+				'source_author_missing',
+				__(
+					'Source did not provide author information. Update Safe Publish on the source site.',
+					'safe-publish'
+				),
+				array( 'action' => 'source_author_missing' )
+			);
+		}
+
+		$email        = isset( $source_author['email'] )
+			? (string) $source_author['email']
+			: '';
+		$login        = isset( $source_author['login'] )
+			? (string) $source_author['login']
+			: '';
+		$display_name = isset( $source_author['display_name'] )
+			? (string) $source_author['display_name']
+			: '';
+
+		if ( '' === $email ) {
+			return new WP_Error(
+				'source_author_unresolved',
+				__(
+					'Source post has no author or its author has been deleted on the source.',
+					'safe-publish'
+				),
+				array( 'action' => 'source_author_unresolved' )
+			);
+		}
+
+		$user = get_user_by( 'email', $email );
+
+		if ( false === $user ) {
+			return new WP_Error(
+				'source_author_not_found',
+				sprintf(
+					/* translators: 1: display name, 2: email, 3: login. */
+					__(
+						'Source author %1$s (%2$s, login: %3$s) was not found on this site. Create a user with this email on the destination, then re-import.',
+						'safe-publish'
+					),
+					$display_name,
+					$email,
+					$login
+				),
+				array( 'action' => 'source_author_not_found' )
+			);
+		}
+
+		return (int) $user->ID;
 	}
 
 	/**
@@ -501,11 +575,13 @@ class Post_Import_Service {
 				'ping_status'    => $fields['ping_status'],
 				'menu_order'     => $fields['menu_order'],
 				'post_password'  => $fields['password'],
+				'post_author'    => $fields['matched_author_id'],
 			),
 			$featured_attachment_id,
 			$fields['source_link'],
 			$fields['meta'],
-			$fields['terms']
+			$fields['terms'],
+			$fields['source_author']
 		);
 
 		if ( is_wp_error( $post_id ) ) {
@@ -622,6 +698,7 @@ class Post_Import_Service {
 				'ping_status'    => $fields['ping_status'],
 				'menu_order'     => $fields['menu_order'],
 				'post_password'  => $fields['password'],
+				'post_author'    => $fields['matched_author_id'],
 				'meta_input'     => array(
 					Options::META_SOURCE_POST_ID  => $fields['source_post_id'],
 					Options::META_SOURCE_LINK     => $fields['source_link'],
@@ -631,7 +708,8 @@ class Post_Import_Service {
 			),
 			$featured_attachment_id,
 			$fields['meta'],
-			$fields['terms']
+			$fields['terms'],
+			$fields['source_author']
 		);
 
 		if ( is_wp_error( $post_id ) ) {
@@ -699,6 +777,25 @@ class Post_Import_Service {
 		$fields['ping_status']       = $fresh_result['ping_status'];
 		$fields['menu_order']        = $fresh_result['menu_order'];
 		$fields['password']          = $fresh_result['password'];
+		$fields['source_author']     = is_array( $fresh_result['source_author'] ?? null )
+			? $fresh_result['source_author']
+			: null;
+
+		// Resolve the source author before any media processing so a failed
+		// resolution does not leave orphan attachments behind.
+		$matched_author_id = $this->resolve_source_author(
+			$fields['source_author']
+		);
+
+		if ( is_wp_error( $matched_author_id ) ) {
+			return new WP_Error(
+				$matched_author_id->get_error_code(),
+				$matched_author_id->get_error_message(),
+				array( 'fields' => $fields )
+			);
+		}
+
+		$fields['matched_author_id'] = $matched_author_id;
 
 		$sanitized_excerpt = $this->sanitize_field(
 			$fresh_result['excerpt'],
@@ -766,6 +863,8 @@ class Post_Import_Service {
 	 * @param string       $source_link             Source post URL for meta tracking.
 	 * @param array|object $meta                    Meta data.
 	 * @param array|object $terms                   Terms data.
+	 * @param array        $source_author           Source author payload (email, login, display_name)
+	 *                                              used to refresh diagnostic meta on the destination post.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
 	 */
 	public function persist_updated_post(
@@ -773,7 +872,8 @@ class Post_Import_Service {
 		int $featured_attachment_id,
 		string $source_link,
 		array|object $meta,
-		array|object $terms
+		array|object $terms,
+		array $source_author
 	): int|WP_Error {
 		$post_id  = $post_args['ID'];
 		$snapshot = $this->capture_pre_update_state(
@@ -825,6 +925,8 @@ class Post_Import_Service {
 		if ( $featured_attachment_id > 0 ) {
 			set_post_thumbnail( $post_id, $featured_attachment_id );
 		}
+
+		$this->write_source_author_meta( $post_id, $source_author );
 
 		$meta_result = $this->meta_terms_manager->update_meta(
 			$post_id,
@@ -881,14 +983,24 @@ class Post_Import_Service {
 		$snapshot = array(
 			'post_fields'    => $post,
 			'tracking_meta'  => array(
-				Options::META_SOURCE_LINK     => get_post_meta(
+				Options::META_SOURCE_LINK         => get_post_meta(
 					$post_id,
 					Options::META_SOURCE_LINK,
 					true
 				),
-				Options::META_IMPORT_DATE_GMT => get_post_meta(
+				Options::META_IMPORT_DATE_GMT     => get_post_meta(
 					$post_id,
 					Options::META_IMPORT_DATE_GMT,
+					true
+				),
+				Options::META_SOURCE_AUTHOR_EMAIL => get_post_meta(
+					$post_id,
+					Options::META_SOURCE_AUTHOR_EMAIL,
+					true
+				),
+				Options::META_SOURCE_AUTHOR_LOGIN => get_post_meta(
+					$post_id,
+					Options::META_SOURCE_AUTHOR_LOGIN,
 					true
 				),
 			),
@@ -987,13 +1099,16 @@ class Post_Import_Service {
 	 * @param int          $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
 	 * @param array|object $meta                    Meta data.
 	 * @param array|object $terms                   Terms data.
+	 * @param array        $source_author           Source author payload (email, login, display_name)
+	 *                                              used to write diagnostic meta on the new post.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
 	 */
 	public function persist_new_post(
 		array $post_args,
 		int $featured_attachment_id,
 		array|object $meta,
-		array|object $terms
+		array|object $terms,
+		array $source_author
 	): int|WP_Error {
 		$this->content_processor->disable_content_filters();
 		$post_id = wp_insert_post( $post_args );
@@ -1006,6 +1121,8 @@ class Post_Import_Service {
 		if ( $featured_attachment_id > 0 ) {
 			set_post_thumbnail( $post_id, $featured_attachment_id );
 		}
+
+		$this->write_source_author_meta( $post_id, $source_author );
 
 		$meta_result = $this->meta_terms_manager->update_meta(
 			$post_id,
@@ -1040,6 +1157,33 @@ class Post_Import_Service {
 		}
 
 		return $post_id;
+	}
+
+	/**
+	 * Writes the diagnostic source author meta on an imported post.
+	 *
+	 * Stores the source author email and login under private (underscore-
+	 * prefixed) meta keys for traceability. Always overwrites previous values
+	 * so the meta reflects the current source state; the audit trail of
+	 * historical values lives in the per-item history table.
+	 *
+	 * @param int   $post_id       Destination post ID.
+	 * @param array $source_author Source author payload (email, login, display_name).
+	 */
+	private function write_source_author_meta(
+		int $post_id,
+		array $source_author
+	): void {
+		update_post_meta(
+			$post_id,
+			Options::META_SOURCE_AUTHOR_EMAIL,
+			isset( $source_author['email'] ) ? (string) $source_author['email'] : ''
+		);
+		update_post_meta(
+			$post_id,
+			Options::META_SOURCE_AUTHOR_LOGIN,
+			isset( $source_author['login'] ) ? (string) $source_author['login'] : ''
+		);
 	}
 
 	/**

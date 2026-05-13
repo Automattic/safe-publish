@@ -1046,6 +1046,58 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that a single-import author-resolution failure produces an
+	 * `import_items` row with status 'error' and a descriptive error_message.
+	 */
+	public function test_ajax_create_draft_logs_author_resolution_failure(): void {
+		// ARRANGE: Source response advertises an author email that does not
+		// exist on the destination — strict resolution must abort.
+		wp_set_current_user( $this->admin_user_id );
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'ghost@source.example',
+				'login'        => 'ghost',
+				'display_name' => 'Ghost Author',
+			),
+		);
+		$_POST                     = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '6010',
+			'title'          => 'Author Resolution Logging',
+			'source_link'    => 'https://source.example.com/author-logging',
+			'post_type'      => 'post',
+		);
+
+		// ACT: Trigger the create draft AJAX handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: Response is a JSON error naming the unmatched source author.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response );
+		$this->assertFalse( $response['success'] );
+		$this->assertStringContainsString( 'Ghost Author', $response['data'] );
+
+		// ASSERT: A single error item row was written for this failure.
+		global $wpdb;
+		$items_table = Import_Items_Table::table_name();
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT status, error_message FROM `{$items_table}` WHERE source_post_id = %d",
+				6010
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$this->assertCount( 1, $rows );
+		$this->assertSame( 'error', $rows[0]['status'] );
+		$this->assertStringContainsString( 'Ghost Author', (string) $rows[0]['error_message'] );
+
+		// ASSERT: The session was finalized — no open session remains.
+		$this->assertSame( 0, $this->count_open_sessions() );
+	}
+
+	/**
 	 * Returns the number of import sessions currently in the 'in_progress' state.
 	 *
 	 * @return int

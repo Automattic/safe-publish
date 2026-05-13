@@ -1411,4 +1411,586 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			'Error should mention insufficient permission.'
 		);
 	}
+
+	/**
+	 * Verifies that the resolved source author is used as post_author when a
+	 * matching destination user exists.
+	 */
+	public function test_import_sets_post_author_from_matched_destination_user(): void {
+		// ARRANGE: Destination user that matches the source author email.
+		$destination_author_id = self::factory()->user->create(
+			array(
+				'role'       => 'editor',
+				'user_email' => 'jane@source.example',
+				'user_login' => 'jane-dest',
+			)
+		);
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'jane@source.example',
+				'login'        => 'jane-source',
+				'display_name' => 'Jane Doe',
+			),
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9900,
+			'title'     => 'Post With Author Resolution',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/author-resolution',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Post is attributed to the matched destination user.
+		$this->assertTrue( $result['success'], 'Import should succeed when author matches.' );
+		$post = get_post( $result['post_id'] );
+		$this->assertSame(
+			$destination_author_id,
+			(int) $post->post_author,
+			'post_author must be the matched destination user ID.'
+		);
+	}
+
+	/**
+	 * Verifies that re-importing a post updates post_author to the freshly
+	 * matched destination user.
+	 */
+	public function test_reimport_updates_post_author_from_matched_destination_user(): void {
+		// ARRANGE: Two destination users with different emails.
+		$first_author_id  = self::factory()->user->create(
+			array(
+				'role'       => 'author',
+				'user_email' => 'first@source.example',
+			)
+		);
+		$second_author_id = self::factory()->user->create(
+			array(
+				'role'       => 'author',
+				'user_email' => 'second@source.example',
+			)
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9901,
+			'title'     => 'Author Update Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/author-update',
+			'post_type' => 'posts',
+		);
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'first@source.example',
+				'login'        => 'first',
+				'display_name' => 'First',
+			),
+		);
+
+		// ACT: Initial import with the first author.
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
+		$this->assertSame(
+			$first_author_id,
+			(int) get_post( $first['post_id'] )->post_author
+		);
+
+		// ARRANGE: Source now reports the second author.
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'second@source.example',
+				'login'        => 'second',
+				'display_name' => 'Second',
+			),
+		);
+
+		// ACT: Re-import.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: post_author reflects the new match.
+		$this->assertTrue( $second['success'], 'Re-import should succeed.' );
+		$this->assertSame(
+			$second_author_id,
+			(int) get_post( $second['post_id'] )->post_author,
+			'post_author must be updated to the freshly matched destination user.'
+		);
+	}
+
+	/**
+	 * Verifies that import aborts with a specific error when no destination
+	 * user matches the source author email.
+	 */
+	public function test_import_aborts_when_source_author_has_no_match(): void {
+		// ARRANGE: Source author whose email has no destination match.
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'unknown@source.example',
+				'login'        => 'unknown',
+				'display_name' => 'Unknown User',
+			),
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9902,
+			'title'     => 'Unmatched Author Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/unmatched-author',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import fails with a message naming display name, email, and login.
+		$this->assertFalse( $result['success'], 'Import must fail when author cannot be matched.' );
+		$this->assertStringContainsString( 'Unknown User', $result['error'] );
+		$this->assertStringContainsString( 'unknown@source.example', $result['error'] );
+		$this->assertStringContainsString( 'login: unknown', $result['error'] );
+
+		// ASSERT: No post was created.
+		$this->assertSame(
+			array(),
+			get_posts(
+				array(
+					'post_type'        => 'post',
+					'posts_per_page'   => 1,
+					'suppress_filters' => false,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => '9902',
+				)
+			)
+		);
+	}
+
+	/**
+	 * Verifies that import aborts with a distinct error when the source post
+	 * has no resolvable author (deleted user or user ID 0 on the source).
+	 */
+	public function test_import_aborts_when_source_author_is_deleted(): void {
+		// ARRANGE: Empty author payload — source post had no resolvable author.
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => '',
+				'login'        => '',
+				'display_name' => '',
+			),
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9903,
+			'title'     => 'Deleted Author Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/deleted-author',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Failure with the "deleted on source" message.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'deleted on the source', $result['error'] );
+	}
+
+	/**
+	 * Verifies that import aborts with the "update Safe Publish on the source"
+	 * message when the source response omits the safe_publish_author field.
+	 */
+	public function test_import_aborts_when_source_field_is_absent(): void {
+		// ARRANGE: Source response omits the field entirely.
+		$this->mock_post_overrides = array(
+			'omit_safe_publish_author' => true,
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9904,
+			'title'     => 'Missing Field Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/missing-field',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Failure with the "Update Safe Publish on the source" message.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString(
+			'Update Safe Publish on the source site',
+			$result['error']
+		);
+	}
+
+	/**
+	 * Verifies that author resolution runs before media download so a failed
+	 * resolution does not leave orphan attachments on the destination.
+	 */
+	public function test_author_resolution_fails_before_media_is_downloaded(): void {
+		// ARRANGE: Source content references an importable image, but the
+		// safe_publish_author payload does not match any destination user.
+		$this->mock_post_overrides = array(
+			'content'             => '<p><img src="https://source.example.com/test-image.jpg" alt=""></p>',
+			'safe_publish_author' => array(
+				'email'        => 'noone@source.example',
+				'login'        => 'noone',
+				'display_name' => 'No One',
+			),
+		);
+
+		$attachments_before = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'posts_per_page' => -1,
+				'post_status'    => 'any',
+			)
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9905,
+			'title'     => 'Media Skipped Test',
+			'content'   => '<p>Stale.</p>',
+			'link'      => 'https://source.example.com/media-skipped',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import fails with the no-match error.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'No One', $result['error'] );
+
+		// ASSERT: No new attachments were created.
+		$attachments_after = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'posts_per_page' => -1,
+				'post_status'    => 'any',
+			)
+		);
+		$this->assertCount(
+			count( $attachments_before ),
+			$attachments_after,
+			'Author-resolution failure must not produce orphan attachments.'
+		);
+	}
+
+	/**
+	 * Verifies that a Subscriber on the destination is attributed as
+	 * post_author when matched by email — no capability check is applied to
+	 * the matched user.
+	 */
+	public function test_subscriber_match_is_attributed_as_post_author(): void {
+		// ARRANGE: Destination Subscriber whose email matches the source author.
+		$subscriber_id = self::factory()->user->create(
+			array(
+				'role'       => 'subscriber',
+				'user_email' => 'subscriber@source.example',
+			)
+		);
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'subscriber@source.example',
+				'login'        => 'sub-source',
+				'display_name' => 'Sub Source',
+			),
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9906,
+			'title'     => 'Subscriber Author Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/subscriber-author',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import succeeds and post_author is the Subscriber.
+		$this->assertTrue(
+			$result['success'],
+			'Subscriber match must succeed — post_author has no capability requirement.'
+		);
+		$this->assertSame(
+			$subscriber_id,
+			(int) get_post( $result['post_id'] )->post_author
+		);
+	}
+
+	/**
+	 * Verifies that diagnostic source author meta is written on insert and
+	 * refreshed on update.
+	 */
+	public function test_diagnostic_meta_is_written_and_refreshed(): void {
+		// ARRANGE: Two destination users matching two different source emails.
+		self::factory()->user->create(
+			array(
+				'user_email' => 'first@source.example',
+			)
+		);
+		self::factory()->user->create(
+			array(
+				'user_email' => 'second@source.example',
+			)
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'first@source.example',
+				'login'        => 'first',
+				'display_name' => 'First',
+			),
+		);
+
+		$post_data = array(
+			'id'        => 9907,
+			'title'     => 'Diagnostic Meta Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/diagnostic-meta',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Initial import writes meta from the first source author.
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		// ASSERT: Meta stored from initial import.
+		$this->assertSame(
+			'first@source.example',
+			get_post_meta( $first['post_id'], Options::META_SOURCE_AUTHOR_EMAIL, true )
+		);
+		$this->assertSame(
+			'first',
+			get_post_meta( $first['post_id'], Options::META_SOURCE_AUTHOR_LOGIN, true )
+		);
+
+		// ARRANGE: Source now reports a different author.
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'second@source.example',
+				'login'        => 'second',
+				'display_name' => 'Second',
+			),
+		);
+
+		// ACT: Re-import refreshes the meta.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $second['success'] );
+
+		// ASSERT: Meta now reflects the second source author.
+		$this->assertSame(
+			'second@source.example',
+			get_post_meta( $second['post_id'], Options::META_SOURCE_AUTHOR_EMAIL, true )
+		);
+		$this->assertSame(
+			'second',
+			get_post_meta( $second['post_id'], Options::META_SOURCE_AUTHOR_LOGIN, true )
+		);
+	}
+
+	/**
+	 * Verifies that the diagnostic source author meta is restored to its
+	 * pre-update value when a re-import is rolled back.
+	 *
+	 * Mirrors the existing tracking_meta rollback behavior so that the meta
+	 * describes the post's most recent SUCCESSFUL import, not a failed
+	 * attempt.
+	 */
+	public function test_source_author_meta_is_restored_on_rollback(): void {
+		// ARRANGE: Two destination users matching two source emails.
+		self::factory()->user->create(
+			array( 'user_email' => 'first@source.example' )
+		);
+		self::factory()->user->create(
+			array( 'user_email' => 'second@source.example' )
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9909,
+			'title'     => 'Rollback Meta Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/rollback-meta',
+			'post_type' => 'posts',
+			'meta'      => array( 'custom_field' => 'original' ),
+		);
+
+		$this->mock_post_overrides = array(
+			'meta'                => array( 'custom_field' => 'original' ),
+			'safe_publish_author' => array(
+				'email'        => 'first@source.example',
+				'login'        => 'first',
+				'display_name' => 'First',
+			),
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		// ARRANGE: Fresh content reports the second source author, but a
+		// custom-meta write will fail and trigger rollback.
+		$this->mock_post_overrides = array(
+			'meta'                => array( 'custom_field' => 'updated' ),
+			'safe_publish_author' => array(
+				'email'        => 'second@source.example',
+				'login'        => 'second',
+				'display_name' => 'Second',
+			),
+		);
+
+		$block_meta = function ( $check, $object_id, $meta_key ) {
+			unset( $object_id );
+			if ( 'custom_field' === $meta_key ) {
+				return false;
+			}
+			return $check;
+		};
+		add_filter( 'update_post_metadata', $block_meta, 10, 3 );
+
+		// ACT: Re-import — must fail and roll back.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'update_post_metadata', $block_meta, 10 );
+
+		// ASSERT: Re-import failed.
+		$this->assertFalse( $result['success'] );
+
+		// ASSERT: source_author meta is restored to first-import values.
+		$this->assertSame(
+			'first@source.example',
+			get_post_meta( $first['post_id'], Options::META_SOURCE_AUTHOR_EMAIL, true ),
+			'Source author email meta must be rolled back to the pre-update value.'
+		);
+		$this->assertSame(
+			'first',
+			get_post_meta( $first['post_id'], Options::META_SOURCE_AUTHOR_LOGIN, true ),
+			'Source author login meta must be rolled back to the pre-update value.'
+		);
+	}
+
+	/**
+	 * Verifies that the diagnostic source author meta keys never appear in the
+	 * public REST response for a destination post.
+	 *
+	 * The underscore prefix marks the meta as private and we deliberately do
+	 * not register it with show_in_rest, so REST consumers cannot read
+	 * imported author PII from the destination site.
+	 */
+	public function test_diagnostic_meta_is_absent_from_public_rest_response(): void {
+		// ARRANGE: Destination user matching the source author and a successful
+		// import that writes the diagnostic meta.
+		self::factory()->user->create(
+			array(
+				'user_email' => 'visible@source.example',
+			)
+		);
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'visible@source.example',
+				'login'        => 'visible',
+				'display_name' => 'Visible',
+			),
+		);
+
+		$post_data = array(
+			'id'        => 9908,
+			'title'     => 'REST Visibility Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/rest-visibility',
+			'post_type' => 'posts',
+		);
+
+		$result = $this->import_service->import_post( $post_data );
+		$this->assertTrue( $result['success'] );
+
+		// ACT: Boot a fresh REST server and fetch the destination post.
+		global $wp_rest_server;
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound, Squiz.PHP.DisallowMultipleAssignments.Found
+		$server = $wp_rest_server = new \WP_REST_Server();
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
+		do_action( 'rest_api_init' );
+
+		$response = $server->dispatch(
+			new \WP_REST_Request( 'GET', '/wp/v2/posts/' . $result['post_id'] )
+		);
+
+		$data = $response->get_data();
+		$meta = isset( $data['meta'] ) && is_array( $data['meta'] ) ? $data['meta'] : array();
+
+		// ASSERT: Neither private meta key appears in the response or its
+		// meta sub-object.
+		$encoded = (string) wp_json_encode( $data );
+		$this->assertStringNotContainsString(
+			Options::META_SOURCE_AUTHOR_EMAIL,
+			$encoded,
+			'Source author email meta key must not appear in public REST response.'
+		);
+		$this->assertStringNotContainsString(
+			Options::META_SOURCE_AUTHOR_LOGIN,
+			$encoded,
+			'Source author login meta key must not appear in public REST response.'
+		);
+		$this->assertArrayNotHasKey(
+			Options::META_SOURCE_AUTHOR_EMAIL,
+			$meta
+		);
+		$this->assertArrayNotHasKey(
+			Options::META_SOURCE_AUTHOR_LOGIN,
+			$meta
+		);
+
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
+		$wp_rest_server = null;
+	}
 }

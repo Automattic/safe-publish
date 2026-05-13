@@ -21,8 +21,12 @@ trait Mock_Post_API_Trait {
 	 * Per-test overrides for the mocked single-post API response.
 	 *
 	 * Keys: title, featured_media, content, excerpt, meta, terms, slug,
-	 *       comment_status, ping_status, menu_order, password.
+	 *       comment_status, ping_status, menu_order, password,
+	 *       safe_publish_author, omit_safe_publish_author.
 	 * Terms: array keyed by taxonomy slug with arrays of term names as values.
+	 * safe_publish_author: array {email, login, display_name} or null.
+	 * omit_safe_publish_author: bool — when true, the field is excluded from
+	 * the response body so the destination sees "field absent".
 	 *
 	 * @var array<string, mixed>
 	 */
@@ -31,7 +35,10 @@ trait Mock_Post_API_Trait {
 	/**
 	 * Builds a mock HTTP response for the single-post REST endpoint.
 	 *
-	 * Applies $this->mock_post_overrides on top of sensible defaults.
+	 * Applies $this->mock_post_overrides on top of sensible defaults. By
+	 * default emits a safe_publish_author payload with the test admin's
+	 * credentials so the destination's author resolution can run; tests can
+	 * override the payload or omit the field entirely.
 	 *
 	 * @return array Mock HTTP response array compatible with pre_http_request.
 	 */
@@ -50,6 +57,11 @@ trait Mock_Post_API_Trait {
 			'password'       => $this->mock_post_overrides['password'] ?? '',
 			'meta'           => $this->mock_post_overrides['meta'] ?? array(),
 		);
+
+		if ( true !== ( $this->mock_post_overrides['omit_safe_publish_author'] ?? false ) ) {
+			$body['safe_publish_author'] = $this->mock_post_overrides['safe_publish_author']
+				?? $this->default_safe_publish_author();
+		}
 
 		if ( ! empty( $this->mock_post_overrides['terms'] ) ) {
 			$term_groups = array();
@@ -75,6 +87,27 @@ trait Mock_Post_API_Trait {
 			'headers'  => array(),
 			'cookies'  => array(),
 			'filename' => null,
+		);
+	}
+
+	/**
+	 * Returns the default safe_publish_author payload used when a test does
+	 * not provide one.
+	 *
+	 * Matches the email of the current user (administrator created by
+	 * Integration_Test_Case::setUp) so the destination resolver matches by
+	 * default and tests that don't care about author resolution don't have to
+	 * stage a destination user.
+	 *
+	 * @return array{email: string, login: string, display_name: string} Default author payload.
+	 */
+	private function default_safe_publish_author(): array {
+		$user = wp_get_current_user();
+
+		return array(
+			'email'        => $user instanceof \WP_User ? (string) $user->user_email : '',
+			'login'        => $user instanceof \WP_User ? (string) $user->user_login : '',
+			'display_name' => $user instanceof \WP_User ? (string) $user->display_name : '',
 		);
 	}
 }
