@@ -40,7 +40,9 @@ describe( 'fetchDiffPreview', () => {
 			'/wp-json/safe-publish/v1/diff-preview',
 			expect.objectContaining( {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: expect.objectContaining( {
+					'Content-Type': 'application/json',
+				} ),
 				body: JSON.stringify( payload ),
 			} )
 		);
@@ -95,6 +97,28 @@ describe( 'fetchDiffPreview', () => {
 			'/wp-json/safe-publish/v1/diff-preview',
 			expect.objectContaining( {
 				body: JSON.stringify( payload ),
+			} )
+		);
+	} );
+
+	it( 'should include X-WP-Nonce header so WP can authenticate the request', async () => {
+		// ARRANGE: the vitest setup file already provides restNonce on window.
+		( global.fetch as any ).mockResolvedValue( {
+			ok: true,
+			json: async () => ( {} ),
+		} );
+
+		// ACT: trigger a diff preview request.
+		await fetchDiffPreview( { postId: 123, content: 'New content' } );
+
+		// ASSERT: the request carried the nonce so current_user_can() works.
+		expect( global.fetch ).toHaveBeenCalledWith(
+			'/wp-json/safe-publish/v1/diff-preview',
+			expect.objectContaining( {
+				headers: expect.objectContaining( {
+					'Content-Type': 'application/json',
+					'X-WP-Nonce': 'test-rest-nonce',
+				} ),
 			} )
 		);
 	} );
