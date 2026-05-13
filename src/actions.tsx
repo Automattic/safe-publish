@@ -204,22 +204,42 @@ export const createActions = (
 				closeModal?.();
 			};
 
+			const allFailed =
+				importResults !== null &&
+				importResults.successful === 0 &&
+				importResults.failed > 0;
+			const partialFailure =
+				importResults !== null &&
+				importResults.successful > 0 &&
+				importResults.failed > 0;
+
+			let summaryHeading = __( 'Import completed!', 'safe-publish' );
+			let summaryColor = '#008a20';
+			if ( allFailed ) {
+				summaryHeading = __( 'Import failed', 'safe-publish' );
+				summaryColor = '#d63638';
+			} else if ( partialFailure ) {
+				summaryHeading = __( 'Import completed with errors', 'safe-publish' );
+				summaryColor = '#996800';
+			}
+
 			return (
 				<VStack spacing="5" style={ { minWidth: '400px' } } className="safe-publish-bulk-import-modal">
-					<Text>
-						{ /* translators: %d is the number of posts */
-						__( 'Import %d selected posts as drafts?', 'safe-publish' ).replace( '%d', items.length.toString() ) }
-					</Text>
-
 					{ ! importResults && (
-						<VStack spacing="2">
-							<Text style={ { fontSize: '0.9em', color: '#666' } }>
-								{ __( 'This will import all selected posts including their content, images, links, and formatting.', 'safe-publish' ) }
+						<>
+							<Text>
+								{ /* translators: %d is the number of posts */
+								__( 'Import %d selected posts as drafts?', 'safe-publish' ).replace( '%d', items.length.toString() ) }
 							</Text>
-							<Text style={ { fontSize: '0.8em', color: '#d63638', fontWeight: 'bold' } }>
-								{ __( '⚠️ Note: Posts that already exist will be automatically updated with the latest content from the external site.', 'safe-publish' ) }
-							</Text>
-						</VStack>
+							<VStack spacing="2">
+								<Text style={ { fontSize: '0.9em', color: '#666' } }>
+									{ __( 'This will import all selected posts including their content, images, links, and formatting.', 'safe-publish' ) }
+								</Text>
+								<Text style={ { fontSize: '0.8em', color: '#d63638', fontWeight: 'bold' } }>
+									{ __( '⚠️ Note: Posts that already exist will be automatically updated with the latest content from the external site.', 'safe-publish' ) }
+								</Text>
+							</VStack>
+						</>
 					) }
 
 					{ isLoading && (
@@ -244,12 +264,12 @@ export const createActions = (
 
 					{ importResults && (
 						<VStack spacing="3">
-							<Text style={ { color: '#008a20', fontWeight: 'bold' } }>
-								{ __( 'Import completed!', 'safe-publish' ) }
+							<Text style={ { color: summaryColor, fontWeight: 'bold' } }>
+								{ summaryHeading }
 							</Text>
 							<Text>
 								{ /* translators: 1: successful count, 2: total count */
-								__( 'Successfully imported: %1$d of %2$d posts', 'safe-publish' )
+								__( 'Imported: %1$d of %2$d posts', 'safe-publish' )
 									.replace( '%1$d', importResults.successful.toString() )
 									.replace( '%2$d', importResults.total.toString() ) }
 							</Text>
