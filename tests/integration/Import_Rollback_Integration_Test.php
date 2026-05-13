@@ -17,12 +17,12 @@ use Closure;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Post_Import_Service;
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Media\Media_Importer;
-use Safe_Publish\Tests\Integration\External_Posts_API\External_Posts_API_Test_Base;
+use Safe_Publish\Tests\Integration\Source_Posts_API\Source_Posts_API_Test_Base;
 use Safe_Publish\Utils\Options;
 use WP_Error;
 
@@ -33,7 +33,7 @@ use WP_Error;
  * written data (posts, attachments, meta, terms) is rolled back to its
  * pre-import state.
  */
-class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
+class Import_Rollback_Integration_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Post import service instance.
@@ -75,7 +75,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		);
 
 		$this->import_service = new Post_Import_Service(
-			new External_Posts_API( new HTTP_Client() ),
+			new Source_Posts_API( new HTTP_Client() ),
 			$media_importer,
 			$content_processor,
 			$this->repository,
@@ -181,7 +181,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8301',
 				)
@@ -236,7 +236,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '9210',
 				)
@@ -297,7 +297,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 					'post_status'      => 'any',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '9101',
 				)
@@ -380,7 +380,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 
 		$original_title   = get_post_field( 'post_title', $post_id );
 		$original_content = get_post_field( 'post_content', $post_id );
-		$original_link    = get_post_meta( $post_id, Options::META_EXTERNAL_LINK, true );
+		$original_link    = get_post_meta( $post_id, Options::META_SOURCE_LINK, true );
 		$original_date    = get_post_meta( $post_id, Options::META_IMPORT_DATE_GMT, true );
 
 		// ARRANGE: Fresh content will return updated title/content and a featured
@@ -407,7 +407,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		// aborted before any DB write.
 		$this->assertSame( $original_title, get_post_field( 'post_title', $post_id ), 'Title must be unchanged after failed update.' );
 		$this->assertSame( $original_content, get_post_field( 'post_content', $post_id ), 'Content must be unchanged after failed update.' );
-		$this->assertSame( $original_link, get_post_meta( $post_id, Options::META_EXTERNAL_LINK, true ), 'External link meta must be unchanged after failed update.' );
+		$this->assertSame( $original_link, get_post_meta( $post_id, Options::META_SOURCE_LINK, true ), 'Source link meta must be unchanged after failed update.' );
 		$this->assertSame( $original_date, get_post_meta( $post_id, Options::META_IMPORT_DATE_GMT, true ), 'Import date meta must be unchanged after failed update.' );
 	}
 
@@ -418,7 +418,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 	 * If update_post_meta fails for META_IMPORT_DATE_GMT (e.g., a DB error), the
 	 * import must report failure and restore the post to its pre-update state.
 	 * The filter blocks all writes for this key, so the rollback's own restore
-	 * of META_IMPORT_DATE_GMT is also blocked; only the post fields and external
+	 * of META_IMPORT_DATE_GMT is also blocked; only the post fields and source
 	 * link meta are verified here.
 	 */
 	public function test_bulk_update_fails_when_tracking_meta_write_fails(): void {
@@ -445,7 +445,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		$original_content = get_post_field( 'post_content', $post_id );
 		$original_link    = get_post_meta(
 			$post_id,
-			Options::META_EXTERNAL_LINK,
+			Options::META_SOURCE_LINK,
 			true
 		);
 
@@ -503,10 +503,10 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 			$original_link,
 			get_post_meta(
 				$post_id,
-				Options::META_EXTERNAL_LINK,
+				Options::META_SOURCE_LINK,
 				true
 			),
-			'External link meta must be restored after tracking meta failure.'
+			'Source link meta must be restored after tracking meta failure.'
 		);
 	}
 
@@ -638,7 +638,7 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 		$original_thumbnail_id = (int) get_post_thumbnail_id( $post_id );
 		$original_link         = get_post_meta(
 			$post_id,
-			Options::META_EXTERNAL_LINK,
+			Options::META_SOURCE_LINK,
 			true
 		);
 		$original_date         = get_post_meta(
@@ -723,10 +723,10 @@ class Import_Rollback_Integration_Test extends External_Posts_API_Test_Base {
 			$original_link,
 			get_post_meta(
 				$post_id,
-				Options::META_EXTERNAL_LINK,
+				Options::META_SOURCE_LINK,
 				true
 			),
-			'External link meta must be restored after custom meta failure.'
+			'Source link meta must be restored after custom meta failure.'
 		);
 		$this->assertSame(
 			$original_date,

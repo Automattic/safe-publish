@@ -77,18 +77,18 @@ class Options {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Meta key storing the original external post ID.
+	 * Meta key storing the source post ID.
 	 *
 	 * @var string
 	 */
-	const META_EXTERNAL_POST_ID = 'safe_publish_external_post_id';
+	const META_SOURCE_POST_ID = 'safe_publish_source_post_id';
 
 	/**
-	 * Meta key storing the external post permalink.
+	 * Meta key storing the source post permalink.
 	 *
 	 * @var string
 	 */
-	const META_EXTERNAL_LINK = 'safe_publish_external_link';
+	const META_SOURCE_LINK = 'safe_publish_source_link';
 
 	/**
 	 * Meta key storing the GMT timestamp of the most recent import.
@@ -105,14 +105,14 @@ class Options {
 	const META_IMPORTED_FROM = 'safe_publish_imported_from';
 
 	/**
-	 * Meta key storing the original external URL of an imported media attachment.
+	 * Meta key storing the original source URL of an imported media attachment.
 	 *
 	 * @var string
 	 */
 	const META_ORIGINAL_URL = 'safe_publish_original_url';
 
 	/**
-	 * Meta key storing the external featured media ID on an imported attachment.
+	 * Meta key storing the source featured media ID on an imported attachment.
 	 *
 	 * @var string
 	 */

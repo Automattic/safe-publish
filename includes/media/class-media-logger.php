@@ -139,7 +139,7 @@ class Media_Logger extends Logger {
 	/**
 	 * Logs a failure to fetch a featured image's details from the source site.
 	 *
-	 * @param int    $media_id        External media ID being fetched.
+	 * @param int    $media_id        Source media ID being fetched.
 	 * @param string $source_site_url Source site the request targeted.
 	 * @param string $error           WP_Error message from the request.
 	 */
@@ -161,7 +161,7 @@ class Media_Logger extends Logger {
 	/**
 	 * Logs a featured image response whose payload lacked source_url.
 	 *
-	 * @param int    $media_id        External media ID that was fetched.
+	 * @param int    $media_id        Source media ID that was fetched.
 	 * @param string $source_site_url Source site the request targeted.
 	 */
 	public function featured_image_missing_source(

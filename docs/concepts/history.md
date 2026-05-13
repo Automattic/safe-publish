@@ -30,7 +30,7 @@ Imports are tracked in a session-based model. Each import operation creates one 
 | ID           | Unique session ID                                      |
 | Date         | When the session started                               |
 | User         | WordPress user who performed the import                |
-| Source URL   | URL of the external WordPress site                     |
+| Source URL   | URL of the source WordPress site                       |
 | Session Type | `bulk` (multiple posts) or `single` (one post)         |
 | Total Items  | Number of posts in the session                         |
 | Successful   | Count of newly imported posts                          |
@@ -40,16 +40,16 @@ Imports are tracked in a session-based model. Each import operation creates one 
 
 #### Log Entry Data (per post in a session)
 
-| Field        | Description                                    |
-| ------------ | ---------------------------------------------- |
-| ID           | Unique log entry ID                            |
-| Title        | Title of the imported post                     |
-| External ID  | Post ID on the external source site            |
-| Status       | `success`, `updated`, or `error`               |
-| Post ID      | Local WordPress post ID (on success or update) |
-| Error        | Error message (if failed)                      |
-| Edit URL     | Link to edit the imported post (if available)  |
-| Can Rollback | Whether rollback is available for this entry   |
+| Field          | Description                                    |
+| -------------- | ---------------------------------------------- |
+| ID             | Unique log entry ID                            |
+| Title          | Title of the imported post                     |
+| Source post ID | Post ID on the source site                     |
+| Status         | `success`, `updated`, or `error`               |
+| Post ID        | Local WordPress post ID (on success or update) |
+| Error          | Error message (if failed)                      |
+| Edit URL       | Link to edit the imported post (if available)  |
+| Can Rollback   | Whether rollback is available for this entry   |
 
 ### Export History
 

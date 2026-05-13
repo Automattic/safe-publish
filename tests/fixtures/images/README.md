@@ -27,4 +27,4 @@ This approach enables:
 - Full media validation (WordPress receives real image files)
 - Complete import workflow testing (attachments created, metadata stored, URLs replaced)
 
-See `External_Posts_API_Integration_Test.php` for the implementation.
+See `Source_Posts_API_Test_Base.php` for the implementation.

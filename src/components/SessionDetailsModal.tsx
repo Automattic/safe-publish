@@ -323,10 +323,10 @@ export function SessionDetailsModal( {
 								<span className={ `safe-publish-status-${ item.status }` }>
 									{ item.status_label }
 								</span>
-								{ null !== item.external_post_id && (
-									<Text>{ /* translators: %s is the external ID of the imported item */
-									__( 'External ID: %s', 'safe-publish' )
-										.replace( '%s', String( item.external_post_id ) ) }</Text>
+								{ null !== item.source_post_id && (
+									<Text>{ /* translators: %s is the source post ID of the imported item */
+									__( 'Source ID: %s', 'safe-publish' )
+										.replace( '%s', String( item.source_post_id ) ) }</Text>
 								) }
 								{ item.error && (
 									<>

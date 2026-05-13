@@ -12,7 +12,7 @@ namespace Safe_Publish\Tests\Integration\Auth;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Post_Import_Service;
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Content\Content_Media_Processor;
@@ -93,7 +93,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 		);
 
 		$this->import_service = new Post_Import_Service(
-			new External_Posts_API( new HTTP_Client() ),
+			new Source_Posts_API( new HTTP_Client() ),
 			$media_importer,
 			$content_processor,
 			$this->repository,
@@ -129,7 +129,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
 		// ACT: Fetch posts using credentials sourced from plugin options.
 		$credentials = Auth_Credential_Provider::get_credentials();
-		$result      = ( new External_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
+		$result      = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
 
 		// ASSERT: Both HMAC and Basic Auth headers were sent in the outbound request.
 		$this->assertNotNull( $this->captured_request_args, 'HTTP request should have been intercepted.' );
@@ -164,7 +164,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
 		// ACT: Fetch posts without Basic Auth credentials.
 		$credentials = Auth_Credential_Provider::get_credentials();
-		$result      = ( new External_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
+		$result      = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
 
 		// ASSERT: HMAC header is present but no Authorization header was sent.
 		$this->assertNotNull( $this->captured_request_args, 'HTTP request should have been intercepted.' );
@@ -189,7 +189,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
 		// ACT: Fetch posts with incomplete credentials.
 		$credentials = Auth_Credential_Provider::get_credentials();
-		$result      = ( new External_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
+		$result      = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
 
 		// ASSERT: No Authorization header was sent because the password is missing.
 		$this->assertNotNull( $this->captured_request_args, 'HTTP request should have been intercepted.' );
@@ -213,7 +213,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 		update_option( Options::OPTION_PASSWORD, 'testpass' );
 
 		$credentials = Auth_Credential_Provider::get_credentials();
-		$posts       = ( new External_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
+		$posts       = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
 
 		$this->assertIsArray( $posts, 'fetch_posts() should return an array when the source responds with 200.' );
 		$this->assertCount( 1, $posts, 'fetch_posts() should return exactly one post.' );
@@ -244,7 +244,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
 		// ACT: Attempt to fetch posts with credentials the source site rejects.
 		$credentials = Auth_Credential_Provider::get_credentials();
-		$result      = ( new External_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
+		$result      = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
 
 		// ASSERT: A WP_Error is returned; no posts were fetched.
 		$this->assertInstanceOf( WP_Error::class, $result, 'fetch_posts() should return WP_Error on 401.' );

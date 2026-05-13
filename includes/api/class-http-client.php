@@ -80,7 +80,7 @@ final class HTTP_Client {
 		if ( is_wp_error( $response ) ) {
 			return new WP_Error(
 				'request_failed',
-				__( 'Failed to fetch data from external site.', 'safe-publish' ) . ' ' . $response->get_error_message()
+				__( 'Failed to fetch data from source site.', 'safe-publish' ) . ' ' . $response->get_error_message()
 			);
 		}
 
@@ -90,7 +90,7 @@ final class HTTP_Client {
 				'http_error',
 				sprintf(
 					/* translators: %d: HTTP response code */
-					__( 'External site returned HTTP error %d.', 'safe-publish' ),
+					__( 'Source site returned HTTP error %d.', 'safe-publish' ),
 					$response_code
 				)
 			);
@@ -190,12 +190,12 @@ final class HTTP_Client {
 	}
 
 	/**
-	 * Downloads external file using WordPress core function.
+	 * Downloads a file using the WordPress core function.
 	 *
-	 * @param string $url External file URL.
+	 * @param string $url File URL.
 	 * @return string|WP_Error Path to downloaded file on success, WP_Error on failure.
 	 */
-	public function download_external_file( string $url ): string|WP_Error {
+	public function download_file( string $url ): string|WP_Error {
 		// Use download_url for proper file handling - WordPress core function.
 		return download_url( $url );
 	}

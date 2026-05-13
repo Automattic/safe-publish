@@ -2,7 +2,7 @@
  * Post Diff Modal component.
  *
  * Displays a modal with a visual comparison between the current post content
- * and incoming external content.
+ * and incoming source content.
  *
  * @file This file defines the PostDiffModal component.
  */
