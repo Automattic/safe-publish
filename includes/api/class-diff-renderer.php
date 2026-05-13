@@ -143,7 +143,7 @@ final class Diff_Renderer {
 	 *
 	 * @return WP_Post|WP_Error Post object on success, WP_Error if not found.
 	 */
-	private function find_local_post( int $external_post_id, string $post_type ): WP_Post|WP_Error {
+	public function find_local_post( int $external_post_id, string $post_type ): WP_Post|WP_Error {
 		$query = new WP_Query(
 			array(
 				'meta_key'       => Options::META_EXTERNAL_POST_ID,

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\API\Diff_Renderer;
+use Safe_Publish\API\Safe_Publish_API;
 use WP_Post;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -226,6 +227,30 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 		// ASSERT: Users without capability get 403 (not 404) for non-existent posts.
 		$this->assertInstanceOf( WP_REST_Response::class, $response );
 		$this->assert_403_response( $response, 'Should return 403 without edit_others_posts capability' );
+	}
+
+	/**
+	 * Verifies that diff-preview permission resolves an external post ID to a
+	 * local post before checking capabilities.
+	 *
+	 * Regression test: the permission callback used to call get_post() on the
+	 * external ID directly, returning rest_post_not_found for every authorized
+	 * request because external IDs almost never collide with local post IDs.
+	 */
+	public function test_diff_preview_permission_resolves_external_id_to_local_post(): void {
+		// ARRANGE: Authenticate as a user who can edit the mapped local post.
+		wp_set_current_user( $this->admin_user_id );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::EXTERNAL_POST_ID );
+		$request->set_param( 'postType', 'post' );
+
+		// ACT: Invoke the permission callback the route is wired to.
+		$api    = new Safe_Publish_API();
+		$result = $api->check_diff_preview_permission( $request );
+
+		// ASSERT: The callback grants access via the resolved local post.
+		$this->assertTrue( $result, 'Permission callback should grant access when external ID maps to an editable local post' );
 	}
 
 	/**
