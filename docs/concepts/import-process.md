@@ -129,9 +129,23 @@ New posts are always created as **drafts** to allow review before publishing. Th
 
 Some source post fields are not migrated:
 
-- **Author**: Set to the importing user.
 - **Date**: Not preserved; the destination site uses its own publish date.
 - **Parent**: Parent/child relationships (mainly pages) are not mapped across sites.
+
+### Author Resolution
+
+By default, Safe Publish requires the source post's author to exist on the destination site. The source author is matched against destination users by email (`get_user_by( 'email', ... )`). If no destination user matches, the import is aborted with a specific error message that includes the source author's display name, email, and login so the operator can create the user and re-import.
+
+Author resolution happens before any media download. A failed resolution never produces orphan attachments on the destination.
+
+For diagnostics, every imported post stores two private meta values:
+
+- `_safe_publish_source_author_email` — the source author's email at import time.
+- `_safe_publish_source_author_login` — the source author's login at import time.
+
+Both values are refreshed on every update to reflect current source state. The audit trail of historical values lives in the per-item history.
+
+No capability check is applied to the matched user: WordPress does not enforce capabilities on `post_author`, and a Subscriber on the destination who matches by email is legitimately attributed as the author of an imported post.
 
 ### Custom Post Types
 
