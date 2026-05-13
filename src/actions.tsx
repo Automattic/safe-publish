@@ -393,6 +393,7 @@ export const createActions = (
 		id: 'post-diff',
 		label: __( 'Post Diff', 'safe-publish' ),
 		icon: drafts,
+		isEligible: ( item: Post ) => Boolean( item.is_imported ),
 		hideModalHeader: false,
 		supportsBulk: false,
 		modalSize: 'fill',
