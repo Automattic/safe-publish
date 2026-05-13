@@ -103,7 +103,7 @@ describe( 'Type validation', () => {
 				title: 'Test Post',
 				status: 'success',
 				status_label: 'Success',
-				external_post_id: 123,
+				source_post_id: 123,
 				post_id: 456,
 				has_changes: true,
 				edit_url: 'https://example.com/edit',
@@ -126,7 +126,7 @@ describe( 'Type validation', () => {
 					title: 'Test',
 					status,
 					status_label: status,
-					external_post_id: 123,
+					source_post_id: 123,
 					has_changes: false,
 					can_rollback: false,
 					is_rolled_back: false,
@@ -145,7 +145,7 @@ describe( 'Type validation', () => {
 					title: 'Test',
 					status: 'success',
 					status_label: 'Success',
-					external_post_id: 123,
+					source_post_id: 123,
 					has_changes: false,
 					can_rollback: true,
 					is_rolled_back: false,
@@ -155,13 +155,13 @@ describe( 'Type validation', () => {
 			} );
 		} );
 
-		it( 'should accept null external_post_id when source data lacks an id', () => {
+		it( 'should accept null source_post_id when source data lacks an id', () => {
 			const item: ImportItem = {
 				id: 1,
 				title: 'Malformed Source',
 				status: 'error',
 				status_label: 'Error',
-				external_post_id: null,
+				source_post_id: null,
 				error: 'Source data missing id',
 				has_changes: false,
 				can_rollback: false,
@@ -169,7 +169,7 @@ describe( 'Type validation', () => {
 				rollback_action: 'delete',
 			};
 
-			expect( item.external_post_id ).toBeNull();
+			expect( item.source_post_id ).toBeNull();
 		} );
 	} );
 

@@ -375,7 +375,7 @@ final class Safe_Publish_API extends REST_Base {
 	 * fails or when configuration required to import is missing.
 	 *
 	 * @param int $post_id           Post ID to set featured image for.
-	 * @param int $featured_media_id External featured media ID to import.
+	 * @param int $featured_media_id Source featured media ID to import.
 	 * @return bool True on success, false on failure or missing configuration.
 	 */
 	private function import_and_set_featured_image(
@@ -419,7 +419,7 @@ final class Safe_Publish_API extends REST_Base {
 	}
 
 	/**
-	 * Renders the diff preview for an external post.
+	 * Renders the diff preview for a source post.
 	 *
 	 * @param WP_REST_Request $req REST request object.
 	 *

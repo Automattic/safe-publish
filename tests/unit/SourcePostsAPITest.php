@@ -1,6 +1,6 @@
 <?php
 /**
- * External Posts API Test.
+ * Source Posts API Test.
  *
  * @package Safe_Publish
  */
@@ -10,22 +10,22 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Options;
 use WP_Error;
 
 /**
- * External Posts API Test.
+ * Source Posts API Test.
  *
- * Tests the external API integration functionality.
+ * Tests the source API integration functionality.
  */
-class ExternalPostsAPITest extends TestCase {
+class SourcePostsAPITest extends TestCase {
 
 	/**
-	 * @var External_Posts_API External Posts API instance for testing.
+	 * @var Source_Posts_API Source Posts API instance for testing.
 	 */
-	private External_Posts_API $api;
+	private Source_Posts_API $api;
 
 	/**
 	 * Sets up test fixtures.
@@ -33,14 +33,14 @@ class ExternalPostsAPITest extends TestCase {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
-		$this->api = new External_Posts_API();
+		$this->api = new Source_Posts_API();
 	}
 
 	/**
-	 * Verifies that the External Posts API initializes correctly.
+	 * Verifies that the Source Posts API initializes correctly.
 	 */
 	public function test_api_initializes(): void {
-		$this->assertInstanceOf( External_Posts_API::class, $this->api );
+		$this->assertInstanceOf( Source_Posts_API::class, $this->api );
 	}
 
 	/**
@@ -142,7 +142,7 @@ class ExternalPostsAPITest extends TestCase {
 
 		// ACT + ASSERT: Each status maps to a non-empty description.
 		foreach ( $statuses as $status ) {
-			$description = External_Posts_API::describe_auth_status( $status );
+			$description = Source_Posts_API::describe_auth_status( $status );
 			$this->assertIsString( $description );
 			$this->assertNotSame( '', $description );
 		}

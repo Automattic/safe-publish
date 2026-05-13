@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
@@ -31,9 +31,9 @@ final class Admin_Page {
 	const DEFAULT_NUMBER_OF_POSTS = 20;
 
 	/**
-	 * External Posts API instance.
+	 * Source Posts API instance.
 	 *
-	 * @var External_Posts_API
+	 * @var Source_Posts_API
 	 */
 	private $api;
 
@@ -47,11 +47,11 @@ final class Admin_Page {
 	/**
 	 * Constructs the Admin_Page instance.
 	 *
-	 * @param External_Posts_API  $api                 External Posts API instance.
+	 * @param Source_Posts_API    $api                 Source Posts API instance.
 	 * @param Post_Import_Service $post_import_service Post Import Service instance.
 	 */
 	public function __construct(
-		External_Posts_API $api,
+		Source_Posts_API $api,
 		Post_Import_Service $post_import_service
 	) {
 		$this->api                 = $api;

@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\Admin\Post_Import_Service;
 
 // Prevent direct access.
@@ -23,11 +23,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Admin_Menu_Manager {
 
 	/**
-	 * External Posts API instance.
+	 * Source Posts API instance.
 	 *
-	 * @var External_Posts_API
+	 * @var Source_Posts_API
 	 */
-	private External_Posts_API $api;
+	private Source_Posts_API $api;
 
 	/**
 	 * Post Import Service instance.
@@ -39,11 +39,11 @@ class Admin_Menu_Manager {
 	/**
 	 * Constructs the Admin_Menu_Manager instance.
 	 *
-	 * @param External_Posts_API  $api                 External Posts API instance.
+	 * @param Source_Posts_API    $api                 Source Posts API instance.
 	 * @param Post_Import_Service $post_import_service Post Import Service instance.
 	 */
 	public function __construct(
-		External_Posts_API $api,
+		Source_Posts_API $api,
 		Post_Import_Service $post_import_service
 	) {
 		$this->api                 = $api;

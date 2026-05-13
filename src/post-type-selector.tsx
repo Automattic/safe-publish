@@ -1,7 +1,7 @@
 /**
  * Post Type Selector React component.
  *
- * Provides a dropdown selector for choosing post types from external WordPress
+ * Provides a dropdown selector for choosing post types from source WordPress
  * sites, with automatic loading and error handling.
  *
  * @file This file defines the PostTypeSelector component for the Safe Publish plugin.
@@ -18,7 +18,7 @@ import {
 import { __ } from '@wordpress/i18n';
 
 /**
- * Represents a post type option from the external site.
+ * Represents a post type option from the source site.
  *
  * @property {string} slug          Post type slug.
  * @property {string} name          Post type name.
@@ -50,9 +50,9 @@ interface PostTypeSelectorProps {
 }
 
 /**
- * Post Type Selector component for choosing post types from external sites.
+ * Post Type Selector component for choosing post types from source sites.
  *
- * Fetches available post types from the external WordPress site and provides a
+ * Fetches available post types from the source WordPress site and provides a
  * dropdown for selection with automatic refresh on site URL change.
  *
  * @param {Object}   props                    Component props.
@@ -118,9 +118,9 @@ export function PostTypeSelector( {
 	}, [] );
 
 	/**
-	 * Loads available post types from the external site.
+	 * Loads available post types from the source site.
 	 *
-	 * Fetches the list of public post types from the external WordPress site
+	 * Fetches the list of public post types from the source WordPress site
 	 * and updates the component state with the available options.
 	 *
 	 * @return {Promise<void>} Resolves when post types are loaded.

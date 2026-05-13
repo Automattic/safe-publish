@@ -29,7 +29,7 @@ Extend the plugin's REST API capabilities. The REST API surface is intentionally
 
 - **Modify fetched post data** — use [`safe_publish_sanitized_post`](hooks.md#safe_publish_sanitized_post) to add taxonomy terms, normalize titles, or transform any post field before it is stored.
 - **Control import sanitization** — use [`safe_publish_import_kses`](hooks.md#safe_publish_import_kses) to enable kses sanitization, and [`safe_publish_import_kses_allowed_html`](hooks.md#safe_publish_import_kses_allowed_html) to customize allowed tags.
-- **Customize API request parameters** — use [`safe_publish_api_query_args`](hooks.md#safe_publish_api_query_args) to change ordering, filtering, or any other query argument sent to the external site.
+- **Customize API request parameters** — use [`safe_publish_api_query_args`](hooks.md#safe_publish_api_query_args) to change ordering, filtering, or any other query argument sent to the source site.
 - **Add custom request headers** — use [`safe_publish_request_args`](hooks.md#safe_publish_request_args) to inject authentication headers or other HTTP arguments.
 
 See the [Hooks and Filters Reference](hooks.md) for full parameter documentation and examples.
@@ -74,7 +74,7 @@ add_filter( 'safe_publish_sanitized_post', function( array $sanitized_post, arra
 
 - Avoid expensive operations in filters that run frequently.
 - Use caching where appropriate.
-- Be mindful of external API calls.
+- Be mindful of source API calls.
 
 ### 4. VIP Compatibility
 

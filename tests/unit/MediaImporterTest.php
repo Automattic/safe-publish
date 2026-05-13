@@ -258,32 +258,32 @@ class MediaImporterTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that import_external_media returns null for a URL whose domain
+	 * Verifies that import_source_media returns null for a URL whose domain
 	 * does not match the source site, without recording a failure.
 	 */
-	public function test_import_external_media_returns_null_for_third_party_domain(): void {
+	public function test_import_source_media_returns_null_for_third_party_domain(): void {
 		// ARRANGE: media on a CDN that is unrelated to the source site.
 		$source_site_url = 'https://source.example.com';
 		$media_url       = 'https://third-party.example.com/photo-123.jpg';
 
 		// ACT: Call with a third-party URL.
-		$result = $this->importer->import_external_media( $media_url, $source_site_url );
+		$result = $this->importer->import_source_media( $media_url, $source_site_url );
 
 		// ASSERT: null signals "skipped, not our domain" — not a failure.
 		$this->assertNull( $result );
 	}
 
 	/**
-	 * Verifies that import_external_media_as_attachment returns null for a
+	 * Verifies that import_source_media_as_attachment returns null for a
 	 * URL whose domain does not match the source site.
 	 */
-	public function test_import_external_media_as_attachment_returns_null_for_third_party_domain(): void {
+	public function test_import_source_media_as_attachment_returns_null_for_third_party_domain(): void {
 		// ARRANGE: video file hosted on an unrelated CDN.
 		$source_site_url = 'https://source.example.com';
 		$media_url       = 'https://third-party.example.com/clip.mp4';
 
 		// ACT: Call with a third-party URL.
-		$result = $this->importer->import_external_media_as_attachment( $media_url, $source_site_url );
+		$result = $this->importer->import_source_media_as_attachment( $media_url, $source_site_url );
 
 		// ASSERT: null signals "skipped, not our domain" — not a failure.
 		$this->assertNull( $result );

@@ -12,12 +12,12 @@ namespace Safe_Publish\Tests\Integration;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Post_Import_Service;
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Media\Media_Importer;
-use Safe_Publish\Tests\Integration\External_Posts_API\External_Posts_API_Test_Base;
+use Safe_Publish\Tests\Integration\Source_Posts_API\Source_Posts_API_Test_Base;
 use Safe_Publish\Utils\Options;
 use WP_Error;
 
@@ -27,7 +27,7 @@ use WP_Error;
  * Extends the media-aware base class so that image downloads are intercepted
  * by the existing HTTP mock infrastructure.
  */
-class Post_Import_Service_Test extends External_Posts_API_Test_Base {
+class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Post import service instance.
@@ -64,7 +64,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 
 		$this->import_service = new Post_Import_Service(
-			new External_Posts_API( new HTTP_Client() ),
+			new Source_Posts_API( new HTTP_Client() ),
 			$media_importer,
 			$content_processor,
 			$this->repository,
@@ -159,7 +159,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8001',
 				)
@@ -214,7 +214,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8002',
 				)
@@ -228,7 +228,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * video that cannot be downloaded.
 	 *
 	 * The core/video block is processed by Content_Processor::process_media_block(),
-	 * which calls import_external_media_as_attachment() directly and must track
+	 * which calls import_source_media_as_attachment() directly and must track
 	 * failures in Content_Processor::$failed_media so the import service aborts.
 	 */
 	public function test_import_fails_when_gutenberg_video_block_cannot_be_downloaded(): void {
@@ -269,7 +269,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8003',
 				)
@@ -332,7 +332,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * audio file that cannot be downloaded.
 	 *
 	 * The core/audio block is processed by Content_Processor::process_media_block(),
-	 * which calls import_external_media_as_attachment() directly and must track
+	 * which calls import_source_media_as_attachment() directly and must track
 	 * failures in Content_Processor::$failed_media so the import service aborts.
 	 */
 	public function test_import_fails_when_gutenberg_audio_block_cannot_be_downloaded(): void {
@@ -373,7 +373,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8005',
 				)
@@ -441,7 +441,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8006',
 				)
@@ -490,7 +490,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 				array(
 					'post_type'      => 'post',
 					'posts_per_page' => 1,
-					'meta_key'       => 'safe_publish_external_post_id',
+					'meta_key'       => 'safe_publish_source_post_id',
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'     => '9901',
 				)
@@ -856,7 +856,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '9200',
 				)
@@ -1295,8 +1295,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 		$this->assertSame(
 			9803,
-			(int) $items[0]['external_post_id'],
-			'Item row must reference the failing external post ID.'
+			(int) $items[0]['source_post_id'],
+			'Item row must reference the failing source post ID.'
 		);
 	}
 
@@ -1310,7 +1310,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 */
 	public function test_bulk_import_logs_failure_for_missing_required_fields(): void {
 		// ARRANGE: Bulk session and two malformed payloads — one missing
-		// the title, one missing the external ID.
+		// the title, one missing the source post ID.
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
@@ -1349,7 +1349,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 		$this->assertFalse(
 			$result_missing_id['success'],
-			'Import should fail when external ID is zero.'
+			'Import should fail when source post ID is zero.'
 		);
 
 		// ASSERT: Two item rows were written, both with status 'error'.
@@ -1363,10 +1363,10 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		$this->assertSame( 'error', $items[0]['status'] );
 		$this->assertSame( 'error', $items[1]['status'] );
 
-		// ASSERT: external_post_id is preserved when present (missing_title)
+		// ASSERT: source_post_id is preserved when present (missing_title)
 		// and stored as null when the source payload lacks an id (missing_id).
-		$this->assertSame( 9810, (int) $items[0]['external_post_id'] );
-		$this->assertNull( $items[1]['external_post_id'] );
+		$this->assertSame( 9810, (int) $items[0]['source_post_id'] );
+		$this->assertNull( $items[1]['source_post_id'] );
 
 		// ASSERT: Session counts project the failures from the items table.
 		$session = $this->repository->get_session( $session_id );

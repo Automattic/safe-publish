@@ -61,10 +61,10 @@ const ImportModal = ( { items, closeModal, onRefresh }: ImportModalProps ) => {
 		const formData = new FormData();
 		formData.append( 'action', 'safe_publish_create_draft' );
 		formData.append( 'nonce', window.safePublishAdminData.nonce );
-		formData.append( 'external_post_id', post.id.toString() );
+		formData.append( 'source_post_id', post.id.toString() );
 		formData.append( 'title', post.title );
 		formData.append( 'content', post.content || post.excerpt || '' );
-		formData.append( 'external_link', post.link );
+		formData.append( 'source_link', post.link );
 		formData.append( 'post_type', post.post_type || 'post' );
 
 		if ( isUpdate ) {
@@ -163,7 +163,7 @@ const ImportModal = ( { items, closeModal, onRefresh }: ImportModalProps ) => {
 		<VStack spacing="5">
 			<Text>{ isUpdate
 				? sprintf( /* translators: %s is the post title */
-					__( 'Update "%s" with the latest content from the external site?', 'safe-publish' ),
+					__( 'Update "%s" with the latest content from the source site?', 'safe-publish' ),
 					post.title
 				)
 				: sprintf( /* translators: %s is the post title */

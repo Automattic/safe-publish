@@ -54,7 +54,7 @@ add_filter( 'safe_publish_allowed_domains', function( array $domains, string $ho
 
 ### `safe_publish_api_query_args`
 
-Filter query arguments sent to the external site's REST API when fetching the list of posts.
+Filter query arguments sent to the source site's REST API when fetching the list of posts.
 
 **Parameters:**
 
@@ -76,7 +76,7 @@ add_filter( 'safe_publish_api_query_args', function( array $args, string $source
 
 ### `safe_publish_sanitized_post`
 
-Filter sanitized post data after it is fetched and sanitized from the external REST API.
+Filter sanitized post data after it is fetched and sanitized from the source REST API.
 
 **Parameters:**
 
@@ -115,7 +115,7 @@ add_filter( 'safe_publish_request_timeout', fn( int $timeout ): int => 30 );
 
 ### `safe_publish_request_args`
 
-Filter HTTP request arguments before any outgoing request to an external site.
+Filter HTTP request arguments before any outgoing request to a source site.
 
 **Parameters:**
 

@@ -1,13 +1,13 @@
 <?php
 /**
- * Base class for External Posts API tests
+ * Base class for Source Posts API tests
  *
  * @package Safe_Publish
  */
 
 declare(strict_types=1);
 
-namespace Safe_Publish\Tests\Integration\External_Posts_API;
+namespace Safe_Publish\Tests\Integration\Source_Posts_API;
 
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\Content\Content_Media_Processor;
@@ -19,12 +19,12 @@ use Safe_Publish\Utils\Options;
 use WP_Error;
 
 /**
- * Base class for External Posts API Integration Tests.
+ * Base class for Source Posts API Integration Tests.
  *
- * Provides shared setup, mocking, and helper methods for all External Posts API
+ * Provides shared setup, mocking, and helper methods for all Source Posts API
  * test classes.
  */
-abstract class External_Posts_API_Test_Base extends Integration_Test_Case {
+abstract class Source_Posts_API_Test_Base extends Integration_Test_Case {
 
 	use Mock_Media_HTTP_Trait;
 	use Mock_Post_API_Trait;
