@@ -88,6 +88,16 @@ class Auth_Manager {
 	}
 
 	/**
+	 * Returns the HMAC authenticator so callers can check whether the current
+	 * REST request was authenticated by Safe Publish.
+	 *
+	 * @return HMAC_Authenticator HMAC authenticator instance.
+	 */
+	public function get_authenticator(): HMAC_Authenticator {
+		return $this->authenticator;
+	}
+
+	/**
 	 * Initializes authentication and permission filters for REST API.
 	 */
 	public function init_auth_handler(): void {

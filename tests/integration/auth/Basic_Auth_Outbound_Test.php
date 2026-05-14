@@ -284,22 +284,29 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
 		// Single-post endpoint used by fetch_fresh_post(): return a post object.
 		if ( preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
+			$current_user = wp_get_current_user();
+
 			return array(
 				'headers'  => array(),
 				'body'     => (string) wp_json_encode(
 					array(
-						'id'             => 1,
-						'link'           => 'https://source.example.com/test-post',
-						'title'          => array( 'raw' => 'Test Post' ),
-						'modified'       => '2026-01-01T00:00:00',
-						'featured_media' => 0,
-						'content'        => array( 'raw' => '<p>Test content.</p>' ),
-						'excerpt'        => array( 'raw' => '' ),
-						'slug'           => 'test-post',
-						'comment_status' => 'open',
-						'ping_status'    => 'open',
-						'menu_order'     => 0,
-						'meta'           => array(),
+						'id'                  => 1,
+						'link'                => 'https://source.example.com/test-post',
+						'title'               => array( 'raw' => 'Test Post' ),
+						'modified'            => '2026-01-01T00:00:00',
+						'featured_media'      => 0,
+						'content'             => array( 'raw' => '<p>Test content.</p>' ),
+						'excerpt'             => array( 'raw' => '' ),
+						'slug'                => 'test-post',
+						'comment_status'      => 'open',
+						'ping_status'         => 'open',
+						'menu_order'          => 0,
+						'meta'                => array(),
+						'safe_publish_author' => array(
+							'email'        => (string) $current_user->user_email,
+							'login'        => (string) $current_user->user_login,
+							'display_name' => (string) $current_user->display_name,
+						),
 					)
 				),
 				'response' => array(

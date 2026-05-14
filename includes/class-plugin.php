@@ -27,6 +27,7 @@ use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\API\Safe_Publish_API;
+use Safe_Publish\API\Source_Author_REST_Field;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Audit_Log_Table;
@@ -85,6 +86,12 @@ final class Plugin {
 		if ( $can_export && ! empty( $connected_site_url ) ) {
 			$auth_manager = new Auth_Manager();
 			$auth_manager->init();
+
+			$source_author_field = new Source_Author_REST_Field(
+				$auth_manager->get_authenticator()
+			);
+
+			$source_author_field->init();
 		}
 
 		$can_import = in_array(

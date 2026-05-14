@@ -398,6 +398,34 @@ final class Admin_Ajax_Controller {
 		$ping_status       = $fresh_result['ping_status'];
 		$menu_order        = $fresh_result['menu_order'];
 		$password          = $fresh_result['password'];
+		$source_author     = is_array( $fresh_result['source_author'] ?? null )
+			? $fresh_result['source_author']
+			: null;
+
+		// Resolve the source author before any media or content processing so a
+		// failed resolution does not leave orphan attachments behind.
+		$matched_author_id = $this->post_import_service->resolve_source_author( $source_author );
+
+		if ( is_wp_error( $matched_author_id ) ) {
+			$error_data    = $matched_author_id->get_error_data();
+			$error_action  = is_array( $error_data ) && isset( $error_data['action'] )
+				? (string) $error_data['action']
+				: $matched_author_id->get_error_code();
+			$error_message = $matched_author_id->get_error_message();
+
+			$this->repository->log_import_action(
+				$session_id,
+				$source_post_id,
+				$title,
+				'error',
+				null,
+				$error_message,
+				array( 'action' => $error_action )
+			);
+			$this->repository->complete_session( $session_id );
+
+			wp_send_json_error( $error_message );
+		}
 
 		$excerpt = $this->sanitize_field(
 			$fresh_result['excerpt'],
@@ -481,7 +509,9 @@ final class Admin_Ajax_Controller {
 				$comment_status,
 				$ping_status,
 				$menu_order,
-				$password
+				$password,
+				$matched_author_id,
+				$source_author
 			);
 		} else {
 			$result = $this->create_new_draft(
@@ -499,7 +529,9 @@ final class Admin_Ajax_Controller {
 				$comment_status,
 				$ping_status,
 				$menu_order,
-				$password
+				$password,
+				$matched_author_id,
+				$source_author
 			);
 		}
 
@@ -695,6 +727,8 @@ final class Admin_Ajax_Controller {
 	 * @param string  $ping_status       Ping status ('open' or 'closed').
 	 * @param int     $menu_order        Menu order.
 	 * @param string  $password          Post password.
+	 * @param int     $matched_author_id Destination user ID resolved from the source author.
+	 * @param array   $source_author     Source author payload (email, login, display_name).
 	 * @return array Result data with post_id, edit_url, message, and existing keys, or error key on failure.
 	 */
 	private function update_imported_draft(
@@ -713,7 +747,9 @@ final class Admin_Ajax_Controller {
 		string $comment_status,
 		string $ping_status,
 		int $menu_order,
-		string $password
+		string $password,
+		int $matched_author_id,
+		array $source_author
 	): array {
 		$previous_content = $this->capture_previous_content( $imported_post );
 
@@ -749,11 +785,13 @@ final class Admin_Ajax_Controller {
 				'ping_status'    => $ping_status,
 				'menu_order'     => $menu_order,
 				'post_password'  => $password,
+				'post_author'    => $matched_author_id,
 			),
 			$featured_attachment_id,
 			$source_link,
 			$meta,
-			$terms
+			$terms,
+			$source_author
 		);
 
 		if ( is_wp_error( $post_id ) ) {
@@ -811,6 +849,8 @@ final class Admin_Ajax_Controller {
 	 * @param string $ping_status       Ping status ('open' or 'closed').
 	 * @param int    $menu_order        Menu order.
 	 * @param string $password          Post password.
+	 * @param int    $matched_author_id Destination user ID resolved from the source author.
+	 * @param array  $source_author     Source author payload (email, login, display_name).
 	 * @return array Result data with post_id, edit_url, message, and existing keys, or error key on failure.
 	 */
 	private function create_new_draft(
@@ -828,7 +868,9 @@ final class Admin_Ajax_Controller {
 		string $comment_status,
 		string $ping_status,
 		int $menu_order,
-		string $password
+		string $password,
+		int $matched_author_id,
+		array $source_author
 	): array {
 		// Sideload the featured image before creating the post so that a
 		// failure here does not leave an orphaned draft in the DB.
@@ -860,6 +902,7 @@ final class Admin_Ajax_Controller {
 				'ping_status'    => $ping_status,
 				'menu_order'     => $menu_order,
 				'post_password'  => $password,
+				'post_author'    => $matched_author_id,
 				'meta_input'     => array(
 					Options::META_SOURCE_POST_ID  => $source_post_id,
 					Options::META_SOURCE_LINK     => $source_link,
@@ -869,7 +912,8 @@ final class Admin_Ajax_Controller {
 			),
 			$featured_attachment_id,
 			$meta,
-			$terms
+			$terms,
+			$source_author
 		);
 
 		if ( is_wp_error( $post_id ) ) {

@@ -126,6 +126,20 @@ class Options {
 	const META_MEDIA_TYPE = 'safe_publish_media_type';
 
 	/**
+	 * Private meta key storing the source author's email at import time.
+	 *
+	 * @var string
+	 */
+	const META_SOURCE_AUTHOR_EMAIL = '_safe_publish_source_author_email';
+
+	/**
+	 * Private meta key storing the source author's login at import time.
+	 *
+	 * @var string
+	 */
+	const META_SOURCE_AUTHOR_LOGIN = '_safe_publish_source_author_login';
+
+	/**
 	 * WordPress settings-API group slug shared by all plugin options.
 	 *
 	 * @var string
