@@ -113,31 +113,10 @@ final class Admin_Page {
 	 * Enqueues admin assets with VIP compatibility.
 	 */
 	public function enqueue_assets(): void {
-		// Early return if not in admin or wrong page.
 		if ( ! is_admin() ) {
 			return;
 		}
 
-		// VIP-specific environment check.
-		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
-			// Add VIP-specific asset handling if needed.
-			$this->enqueue_vip_safe_assets();
-		} else {
-			$this->enqueue_standard_assets();
-		}
-	}
-
-	/**
-	 * Enqueues assets with VIP-specific optimizations.
-	 */
-	private function enqueue_vip_safe_assets(): void {
-		$this->enqueue_standard_assets();
-	}
-
-	/**
-	 * Enqueues standard assets.
-	 */
-	private function enqueue_standard_assets(): void {
 		// Fetch posts data from the source site.
 		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 		$number_of_posts = self::DEFAULT_NUMBER_OF_POSTS;
