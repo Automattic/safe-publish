@@ -164,7 +164,6 @@ final class Admin_Page {
 
 		// Validate that the file exists and is within the plugin directory.
 		if ( $real_asset_file &&
-			file_exists( $asset_file_path ) &&
 			0 === strpos( $real_asset_file, $real_plugin_dir ) &&
 			'.php' === substr( $asset_file_path, -4 ) ) {
 			// phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable -- Safe file inclusion within plugin directory with validation
@@ -206,17 +205,6 @@ final class Admin_Page {
 		// VIP-safe version handling - use plugin version as fallback.
 		$script_version = $asset_file['version'];
 
-		// In VIP environment, use plugin version instead of filemtime for better caching.
-		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
-			// Get plugin version for VIP environment.
-			$plugin_data    = get_file_data( dirname( dirname( __DIR__ ) ) . '/safe-publish.php', array( 'Version' => 'Version' ) );
-			$script_version = ! empty( $plugin_data['Version'] ) ? $plugin_data['Version'] : '1.1.0';
-		} elseif ( file_exists( $script_path ) && function_exists( 'filemtime' ) ) {
-			// Only use filemtime if available (not always available in VIP).
-			$script_version = filemtime( $script_path );
-		}
-
-		// VIP environment: Ensure script file exists before enqueueing.
 		if ( ! file_exists( $script_path ) ) {
 			// Show admin notice for missing build files only in admin context.
 			add_action(
@@ -238,7 +226,17 @@ final class Admin_Page {
 				}
 			);
 
-			return; // Exit early if script file doesn't exist.
+			return;
+		}
+
+		// In VIP environment, use plugin version instead of filemtime for better caching.
+		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
+			// Get plugin version for VIP environment.
+			$plugin_data    = get_file_data( dirname( dirname( __DIR__ ) ) . '/safe-publish.php', array( 'Version' => 'Version' ) );
+			$script_version = ! empty( $plugin_data['Version'] ) ? $plugin_data['Version'] : '1.1.0';
+		} elseif ( function_exists( 'filemtime' ) ) {
+			// Only use filemtime if available (not always available in VIP).
+			$script_version = filemtime( $script_path );
 		}
 
 		wp_enqueue_script(
