@@ -22,11 +22,9 @@ trait Mock_Post_API_Trait {
 	 *
 	 * Keys: title, featured_media, content, excerpt, meta, terms, slug,
 	 *       comment_status, ping_status, menu_order, password,
-	 *       safe_publish_author, omit_safe_publish_author.
+	 *       safe_publish_author.
 	 * Terms: array keyed by taxonomy slug with arrays of term names as values.
-	 * safe_publish_author: array {email, login, display_name} or null.
-	 * omit_safe_publish_author: bool — when true, the field is excluded from
-	 * the response body so the destination sees "field absent".
+	 * safe_publish_author: array {email, login, display_name}.
 	 *
 	 * @var array<string, mixed>
 	 */
@@ -58,10 +56,8 @@ trait Mock_Post_API_Trait {
 			'meta'           => $this->mock_post_overrides['meta'] ?? array(),
 		);
 
-		if ( true !== ( $this->mock_post_overrides['omit_safe_publish_author'] ?? false ) ) {
-			$body['safe_publish_author'] = $this->mock_post_overrides['safe_publish_author']
-				?? $this->default_safe_publish_author();
-		}
+		$body['safe_publish_author'] = $this->mock_post_overrides['safe_publish_author']
+			?? $this->default_safe_publish_author();
 
 		if ( ! empty( $this->mock_post_overrides['terms'] ) ) {
 			$term_groups = array();

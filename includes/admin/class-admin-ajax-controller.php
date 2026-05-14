@@ -405,26 +405,38 @@ final class Admin_Ajax_Controller {
 		// Resolve the source author before any media or content processing so a
 		// failed resolution does not leave orphan attachments behind.
 		$matched_author_id = $this->post_import_service->resolve_source_author( $source_author );
+		$warnings          = array();
 
 		if ( is_wp_error( $matched_author_id ) ) {
-			$error_data    = $matched_author_id->get_error_data();
-			$error_action  = is_array( $error_data ) && isset( $error_data['action'] )
-				? (string) $error_data['action']
-				: $matched_author_id->get_error_code();
-			$error_message = $matched_author_id->get_error_message();
-
-			$this->repository->log_import_action(
-				$session_id,
-				$source_post_id,
-				$title,
-				'error',
-				null,
-				$error_message,
-				array( 'action' => $error_action )
+			$fallback = $this->post_import_service->apply_author_fallback(
+				$matched_author_id,
+				$source_author,
+				$imported_post ? (int) $imported_post->post_author : null
 			);
-			$this->repository->complete_session( $session_id );
 
-			wp_send_json_error( $error_message );
+			if ( is_wp_error( $fallback ) ) {
+				$error_data    = $fallback->get_error_data();
+				$error_action  = is_array( $error_data ) && isset( $error_data['action'] )
+					? (string) $error_data['action']
+					: $fallback->get_error_code();
+				$error_message = $fallback->get_error_message();
+
+				$this->repository->log_import_action(
+					$session_id,
+					$source_post_id,
+					$title,
+					'error',
+					null,
+					$error_message,
+					array( 'action' => $error_action )
+				);
+				$this->repository->complete_session( $session_id );
+
+				wp_send_json_error( $error_message );
+			}
+
+			$matched_author_id = $fallback['author_id'];
+			$warnings[]        = $fallback['warning'];
 		}
 
 		$excerpt = $this->sanitize_field(
@@ -511,7 +523,8 @@ final class Admin_Ajax_Controller {
 				$menu_order,
 				$password,
 				$matched_author_id,
-				$source_author
+				$source_author,
+				$warnings
 			);
 		} else {
 			$result = $this->create_new_draft(
@@ -531,7 +544,8 @@ final class Admin_Ajax_Controller {
 				$menu_order,
 				$password,
 				$matched_author_id,
-				$source_author
+				$source_author,
+				$warnings
 			);
 		}
 
@@ -727,9 +741,11 @@ final class Admin_Ajax_Controller {
 	 * @param string  $ping_status       Ping status ('open' or 'closed').
 	 * @param int     $menu_order        Menu order.
 	 * @param string  $password          Post password.
-	 * @param int     $matched_author_id Destination user ID resolved from the source author.
+	 * @param int     $matched_author_id Destination user ID to assign as post_author.
 	 * @param array   $source_author     Source author payload (email, login, display_name).
-	 * @return array Result data with post_id, edit_url, message, and existing keys, or error key on failure.
+	 * @param array   $warnings          Non-fatal warnings raised during import.
+	 * @return array Result data with post_id, edit_url, message, existing, and
+	 *               warnings keys, or error key on failure.
 	 */
 	private function update_imported_draft(
 		WP_Post $imported_post,
@@ -749,7 +765,8 @@ final class Admin_Ajax_Controller {
 		int $menu_order,
 		string $password,
 		int $matched_author_id,
-		array $source_author
+		array $source_author,
+		array $warnings
 	): array {
 		$previous_content = $this->capture_previous_content( $imported_post );
 
@@ -817,7 +834,8 @@ final class Admin_Ajax_Controller {
 			'updated',
 			$post_id,
 			null,
-			$previous_content
+			$previous_content,
+			$warnings
 		);
 		$this->repository->complete_session( $session_id );
 
@@ -826,6 +844,7 @@ final class Admin_Ajax_Controller {
 			'edit_url' => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
 			'message'  => __( 'Existing draft updated with latest content.', 'safe-publish' ),
 			'existing' => true,
+			'warnings' => $warnings,
 		);
 	}
 
@@ -849,9 +868,11 @@ final class Admin_Ajax_Controller {
 	 * @param string $ping_status       Ping status ('open' or 'closed').
 	 * @param int    $menu_order        Menu order.
 	 * @param string $password          Post password.
-	 * @param int    $matched_author_id Destination user ID resolved from the source author.
+	 * @param int    $matched_author_id Destination user ID to assign as post_author.
 	 * @param array  $source_author     Source author payload (email, login, display_name).
-	 * @return array Result data with post_id, edit_url, message, and existing keys, or error key on failure.
+	 * @param array  $warnings          Non-fatal warnings raised during import.
+	 * @return array Result data with post_id, edit_url, message, existing, and
+	 *               warnings keys, or error key on failure.
 	 */
 	private function create_new_draft(
 		string $title,
@@ -870,7 +891,8 @@ final class Admin_Ajax_Controller {
 		int $menu_order,
 		string $password,
 		int $matched_author_id,
-		array $source_author
+		array $source_author,
+		array $warnings
 	): array {
 		// Sideload the featured image before creating the post so that a
 		// failure here does not leave an orphaned draft in the DB.
@@ -939,7 +961,8 @@ final class Admin_Ajax_Controller {
 			'success',
 			$post_id,
 			null,
-			array( 'action' => 'created_new_post' )
+			array( 'action' => 'created_new_post' ),
+			$warnings
 		);
 		$this->repository->complete_session( $session_id );
 
@@ -948,6 +971,7 @@ final class Admin_Ajax_Controller {
 			'edit_url' => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
 			'message'  => __( 'Draft post created successfully.', 'safe-publish' ),
 			'existing' => false,
+			'warnings' => $warnings,
 		);
 	}
 

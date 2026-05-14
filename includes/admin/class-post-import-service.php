@@ -195,6 +195,7 @@ class Post_Import_Service {
 				? $post_data['source_author']
 				: null,
 			'matched_author_id' => 0,
+			'warnings'          => array(),
 		);
 	}
 
@@ -214,17 +215,6 @@ class Post_Import_Service {
 	 *                      a specific operator-facing message on failure.
 	 */
 	public function resolve_source_author( ?array $source_author ): int|WP_Error {
-		if ( null === $source_author ) {
-			return new WP_Error(
-				'source_author_missing',
-				__(
-					'Source did not provide author information. Update Safe Publish on the source site.',
-					'safe-publish'
-				),
-				array( 'action' => 'source_author_missing' )
-			);
-		}
-
 		$email        = isset( $source_author['email'] )
 			? (string) $source_author['email']
 			: '';
@@ -269,6 +259,75 @@ class Post_Import_Service {
 	}
 
 	/**
+	 * Applies the opt-in author fallback.
+	 *
+	 * The fallback applies only when the error code is source_author_not_found
+	 * and the safe_publish_import_allow_author_fallback filter returns true.
+	 * Otherwise the WP_Error is returned verbatim — other resolution errors
+	 * signal source-side data-quality issues that fallback would mask.
+	 *
+	 * For new posts (existing author id null), falls back to the importing user.
+	 * For updates, returns the existing post_author so the destination's current
+	 * attribution is preserved.
+	 *
+	 * @param WP_Error   $resolution_error        WP_Error from resolve_source_author().
+	 * @param array|null $source_author           Source author payload used to build the warning.
+	 * @param int|null   $existing_post_author_id Destination post's existing post_author for
+	 *                                            updates; null for new posts.
+	 * @return array{author_id: int, warning: array}|WP_Error Fallback applied, or the original
+	 *                                            WP_Error returned verbatim.
+	 */
+	public function apply_author_fallback(
+		WP_Error $resolution_error,
+		?array $source_author,
+		?int $existing_post_author_id
+	): array|WP_Error {
+		if ( 'source_author_not_found' !== $resolution_error->get_error_code() ) {
+			return $resolution_error;
+		}
+
+		/**
+		 * Filters whether the import may fall back to a different author when
+		 * the source author cannot be matched on the destination site.
+		 *
+		 * When true, new posts are attributed to the importing user and
+		 * updates preserve the destination's existing author; a warning is
+		 * recorded in the import History in both cases. When false (default),
+		 * imports abort with a no-match error.
+		 *
+		 * @param bool $enabled Whether the fallback is enabled. Default false.
+		 */
+		$fallback_enabled = apply_filters(
+			'safe_publish_import_allow_author_fallback',
+			false
+		);
+
+		if ( true !== $fallback_enabled ) {
+			return $resolution_error;
+		}
+
+		$is_update = null !== $existing_post_author_id;
+		$author_id = $is_update
+			? $existing_post_author_id
+			: get_current_user_id();
+
+		$warning = array(
+			'type'             => 'author_fallback_applied',
+			'source'           => array(
+				'email'        => (string) ( $source_author['email'] ?? '' ),
+				'login'        => (string) ( $source_author['login'] ?? '' ),
+				'display_name' => (string) ( $source_author['display_name'] ?? '' ),
+			),
+			'fallback_user_id' => $is_update ? null : $author_id,
+		);
+
+		return array(
+			'author_id' => $author_id,
+			'warning'   => $warning,
+		);
+	}
+
+	/**
 	 * Builds a standardized error result array for an import operation.
 	 *
 	 * @param array  $fields        Sanitized post fields.
@@ -290,7 +349,8 @@ class Post_Import_Service {
 	 * @param array $fields   Sanitized post fields.
 	 * @param int   $post_id  Created or updated WordPress post ID.
 	 * @param bool  $existing Whether the post was updated (true) or newly created (false).
-	 * @return array Success result with source_post_id, title, success, post_id, edit_url, and existing keys.
+	 * @return array Success result with source_post_id, title, success, post_id, edit_url,
+	 *               existing, and warnings keys.
 	 */
 	private function build_success_result( array $fields, int $post_id, bool $existing ): array {
 		return array(
@@ -300,6 +360,7 @@ class Post_Import_Service {
 			'post_id'        => $post_id,
 			'edit_url'       => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
 			'existing'       => $existing,
+			'warnings'       => $fields['warnings'],
 		);
 	}
 
@@ -513,7 +574,10 @@ class Post_Import_Service {
 		string $post_type,
 		?int $session_id
 	): array {
-		$prepared = $this->prepare_fresh_content( $fields );
+		$prepared = $this->prepare_fresh_content(
+			$fields,
+			(int) $imported_post->post_author
+		);
 
 		if ( is_wp_error( $prepared ) ) {
 			$error_data   = $prepared->get_error_data();
@@ -613,7 +677,8 @@ class Post_Import_Service {
 			'updated',
 			$post_id,
 			null,
-			array( 'action' => 'updated_existing' )
+			array( 'action' => 'updated_existing' ),
+			$fields['warnings']
 		);
 
 		return $this->build_success_result( $fields, $post_id, true );
@@ -741,7 +806,8 @@ class Post_Import_Service {
 			'success',
 			$post_id,
 			null,
-			array( 'action' => 'created_new_post' )
+			array( 'action' => 'created_new_post' ),
+			$fields['warnings']
 		);
 
 		return $this->build_success_result( $fields, $post_id, false );
@@ -754,10 +820,15 @@ class Post_Import_Service {
 	 * processing, and media error checks that are common to both the new and
 	 * existing post import flows.
 	 *
-	 * @param array $fields Sanitized post fields from extract_post_fields().
+	 * @param array    $fields                  Sanitized post fields from extract_post_fields().
+	 * @param int|null $existing_post_author_id Destination post's existing post_author for the
+	 *                                          update path; null for new posts.
 	 * @return array{fields: array, processed_content: string}|WP_Error Prepared data or error.
 	 */
-	private function prepare_fresh_content( array $fields ): array|WP_Error {
+	private function prepare_fresh_content(
+		array $fields,
+		?int $existing_post_author_id = null
+	): array|WP_Error {
 		$fresh_result = $this->api->fetch_fresh_post(
 			$fields['source_post_id'],
 			$fields['raw_post_type']
@@ -788,14 +859,25 @@ class Post_Import_Service {
 		);
 
 		if ( is_wp_error( $matched_author_id ) ) {
-			return new WP_Error(
-				$matched_author_id->get_error_code(),
-				$matched_author_id->get_error_message(),
-				array( 'fields' => $fields )
+			$fallback = $this->apply_author_fallback(
+				$matched_author_id,
+				$fields['source_author'],
+				$existing_post_author_id
 			);
-		}
 
-		$fields['matched_author_id'] = $matched_author_id;
+			if ( is_wp_error( $fallback ) ) {
+				return new WP_Error(
+					$fallback->get_error_code(),
+					$fallback->get_error_message(),
+					array( 'fields' => $fields )
+				);
+			}
+
+			$fields['matched_author_id'] = $fallback['author_id'];
+			$fields['warnings'][]        = $fallback['warning'];
+		} else {
+			$fields['matched_author_id'] = $matched_author_id;
+		}
 
 		$sanitized_excerpt = $this->sanitize_field(
 			$fresh_result['excerpt'],
@@ -1230,6 +1312,7 @@ class Post_Import_Service {
 	 * @param int|null    $post_id          WordPress post ID or null on failure.
 	 * @param string|null $error            Error message or null on success.
 	 * @param array       $changes          Contextual changes data for the item.
+	 * @param array       $warnings         Non-fatal warnings raised during import.
 	 */
 	private function log_import_if_session(
 		?int $session_id,
@@ -1238,7 +1321,8 @@ class Post_Import_Service {
 		string $status,
 		?int $post_id,
 		?string $error,
-		array $changes
+		array $changes,
+		array $warnings = array()
 	): void {
 		if ( null === $session_id ) {
 			return;
@@ -1251,7 +1335,8 @@ class Post_Import_Service {
 			$status,
 			$post_id,
 			$error,
-			$changes
+			$changes,
+			$warnings
 		);
 	}
 

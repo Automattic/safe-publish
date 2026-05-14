@@ -8,8 +8,8 @@
  * @file This file defines the ImportModal component.
  */
 
-import { ApiResponse, CreateDraftResponse, Post } from '../types';
-import { getErrorMessage } from '../utils';
+import { ApiResponse, CreateDraftResponse, Post, Warning } from '../types';
+import { getErrorMessage, renderWarningMessage } from '../utils';
 import {
 	Button,
 	__experimentalText as Text,
@@ -42,6 +42,7 @@ const ImportModal = ( { items, closeModal, onRefresh }: ImportModalProps ) => {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
 	const [ editUrl, setEditUrl ] = useState< string | null >( null );
+	const [ warnings, setWarnings ] = useState< Warning[] >( [] );
 
 	const post = items[ 0 ];
 	const isUpdate = Boolean( post?.is_imported );
@@ -111,6 +112,7 @@ const ImportModal = ( { items, closeModal, onRefresh }: ImportModalProps ) => {
 				return;
 			}
 
+			setWarnings( Array.isArray( data.warnings ) ? data.warnings : [] );
 			setEditUrl( data.edit_url );
 		} )
 		.catch( err => {
@@ -132,6 +134,15 @@ const ImportModal = ( { items, closeModal, onRefresh }: ImportModalProps ) => {
 		return (
 			<VStack spacing="5">
 				<Text>{ successMessage }</Text>
+				{ warnings.length > 0 && (
+					<VStack spacing="2" className="safe-publish-import-warnings" role="status">
+						{ warnings.map( ( warning, index ) => (
+							<Text key={ index } className="safe-publish-import-warning">
+								{ renderWarningMessage( warning ) }
+							</Text>
+						) ) }
+					</VStack>
+				) }
 				<HStack justify="right">
 					<Button
 						__next40pxDefaultSize

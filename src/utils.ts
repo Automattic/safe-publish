@@ -8,9 +8,9 @@
  */
 
 import { dateI18n, getSettings } from '@wordpress/date';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
-import type { Post, JsonValue } from './types';
+import type { Post, JsonValue, Warning } from './types';
 
 /**
  * Extracts a human-readable error message from an API response.
@@ -299,6 +299,61 @@ export function getPaginationInfo( totalItems: number, perPage: number ) {
 		totalItems,
 		totalPages: Math.ceil( totalItems / perPage ),
 	};
+}
+
+/**
+ * Renders an import warning as a long-form, user-facing message.
+ *
+ * @param {Warning} warning Warning to render.
+ *
+ * @return {string} Localized message text.
+ */
+export function renderWarningMessage( warning: Warning ): string {
+	switch ( warning.type ) {
+		case 'author_fallback_applied':
+			return warning.fallback_user_id !== null
+				? sprintf(
+					/* translators: 1: display name, 2: email */
+					__(
+						'Original author %1$s (%2$s) was not found on this site. Post attributed to the current user.',
+						'safe-publish'
+					),
+					warning.source.display_name,
+					warning.source.email
+				)
+				: sprintf(
+					/* translators: %s: email */
+					__(
+						'Source author %s was not found on this site. Keeping the current author.',
+						'safe-publish'
+					),
+					warning.source.email
+				);
+		default: {
+			const _exhaustive: never = warning.type;
+			return String( _exhaustive );
+		}
+	}
+}
+
+/**
+ * Renders an import warning as a short label for the bulk results modal.
+ *
+ * Labels are joined inline with commas, so they should be lowercase phrases.
+ *
+ * @param {Warning} warning Warning to render.
+ *
+ * @return {string} Localized short label.
+ */
+export function renderWarningShortLabel( warning: Warning ): string {
+	switch ( warning.type ) {
+		case 'author_fallback_applied':
+			return __( 'author fallback', 'safe-publish' );
+		default: {
+			const _exhaustive: never = warning.type;
+			return String( _exhaustive );
+		}
+	}
 }
 
 /**
