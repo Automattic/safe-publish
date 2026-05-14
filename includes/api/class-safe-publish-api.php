@@ -182,7 +182,9 @@ final class Safe_Publish_API extends REST_Base {
 	 *                       WP_Error if post ID is invalid or no local post
 	 *                       matches the external ID.
 	 */
-	public function check_diff_preview_permission( WP_REST_Request $request ): bool|WP_Error {
+	public function check_diff_preview_permission(
+		WP_REST_Request $request
+	): bool|WP_Error {
 		$external_post_id = (int) $request->get_param( 'postId' );
 
 		if ( $external_post_id < 1 ) {
