@@ -107,10 +107,10 @@ class Title_Field_Test extends Source_Posts_API_Test_Base {
 	 * case the REST API uses for ampersands in titles.
 	 */
 	public function test_prepared_title_decodes_named_entities(): void {
-		// ARRANGE + ACT.
+		// ARRANGE + ACT: ampersand arrives as &amp; in the REST response.
 		$title = $this->prepared_title_for( 'Tom &amp; Jerry' );
 
-		// ASSERT.
+		// ASSERT: Listing UI receives the literal ampersand.
 		$this->assertSame( 'Tom & Jerry', $title );
 	}
 
@@ -122,7 +122,7 @@ class Title_Field_Test extends Source_Posts_API_Test_Base {
 	 * later render as HTML.
 	 */
 	public function test_prepared_title_strips_tags_after_decoding_entities(): void {
-		// ARRANGE + ACT.
+		// ARRANGE + ACT: encoded script tag arrives in the REST response.
 		$title = $this->prepared_title_for(
 			'Title &lt;script&gt;alert(1)&lt;/script&gt;'
 		);

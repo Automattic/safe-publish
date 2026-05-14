@@ -7,8 +7,7 @@
     "SAFE_PUBLISH_SHARED_SECRET": "local-dev-secret-4ilEg6NA3K1lLJV"
   },
   "mappings": {
-    ".htaccess": "./bin/conf/htaccess",
-    "wp-content/mu-plugins": "./mu-plugins"
+    ".htaccess": "./bin/conf/htaccess"
   },
   "core": "WordPress/WordPress#master",
   "plugins": ["."],
@@ -24,8 +23,7 @@
         "SAFE_PUBLISH_SHARED_SECRET": "local-dev-secret-4ilEg6NA3K1lLJV"
       },
       "mappings": {
-        ".htaccess": "./bin/conf/htaccess",
-        "wp-content/mu-plugins": "./mu-plugins"
+        ".htaccess": "./bin/conf/htaccess"
       },
       "plugins": ["."]
     }

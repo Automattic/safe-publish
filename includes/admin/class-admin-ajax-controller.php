@@ -865,8 +865,8 @@ final class Admin_Ajax_Controller {
 	 * @param int     $source_parent_id  Source post's parent ID for diagnostic meta.
 	 * @param int     $post_parent_id    Resolved destination post_parent (0 when none).
 	 * @param array   $warnings          Non-fatal warnings raised during import.
-	 * @return array Result data with post_id, edit_url, message, existing, and warnings keys,
-	 *               or error key on failure.
+	 * @return array Result data with post_id, edit_url, message, existing, and
+	 *               warnings keys, or error key on failure.
 	 */
 	private function update_imported_draft(
 		WP_Post $imported_post,
@@ -998,8 +998,8 @@ final class Admin_Ajax_Controller {
 	 * @param int    $source_parent_id  Source post's parent ID for diagnostic meta.
 	 * @param int    $post_parent_id    Resolved destination post_parent (0 when none).
 	 * @param array  $warnings          Non-fatal warnings raised during import.
-	 * @return array Result data with post_id, edit_url, message, existing, and warnings keys,
-	 *               or error key on failure.
+	 * @return array Result data with post_id, edit_url, message, existing, and
+	 *               warnings keys, or error key on failure.
 	 */
 	private function create_new_draft(
 		string $title,

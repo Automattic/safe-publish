@@ -4,32 +4,32 @@
 .safe-publish-dataviews-wrapper {
 
 	.dataviews-bulk-actions {
-		background: #f0f6fc;
-		border: 1px solid #c3dbf0;
+		background: var(--safe-publish-bg-info);
+		border: 1px solid var(--safe-publish-primary);
 		border-radius: 3px;
 		margin-bottom: 16px;
 		padding: 12px 16px;
 
 		.dataviews-bulk-actions__selection-count {
 			font-weight: 600;
-			color: #1e3a8a;
+			color: var(--safe-publish-primary);
 		}
 	}
 
 	// Highlight selected rows
 	.dataviews-view-table tr[aria-selected="true"] {
-		background-color: #f0f6fc !important;
-		border-left: 3px solid #3858e9;
+		background-color: var(--safe-publish-bg-info) !important;
+		border-left: 3px solid var(--safe-publish-primary);
 	}
 
 	// Style bulk action buttons
 	.dataviews-bulk-actions button[data-action-id="bulk-import"] {
-		background: #3858e9;
+		background: var(--safe-publish-primary);
 		color: #fff;
 		font-weight: 600;
 
 		&:hover {
-			background: #2145e6;
+			background: var(--safe-publish-primary-hover);
 		}
 	}
 }
@@ -44,8 +44,8 @@
 	.safe-publish-import-results {
 		max-height: 200px;
 		overflow-y: auto;
-		background: #f9f9f9;
-		border: 1px solid #ddd;
+		background: var(--safe-publish-bg-muted);
+		border: 1px solid var(--safe-publish-border);
 		border-radius: 4px;
 		padding: 10px;
 
@@ -54,7 +54,7 @@
 			justify-content: space-between;
 			align-items: center;
 			padding: 4px 0;
-			border-bottom: 1px solid #eee;
+			border-bottom: 1px solid var(--safe-publish-border-subtle);
 
 			&:last-child {
 				border-bottom: none;
@@ -65,7 +65,7 @@
 				font-size: 0.85em;
 
 				&.success {
-					color: #008a20;
+					color: var(--safe-publish-status-success);
 				}
 
 				&.warning {
@@ -73,13 +73,13 @@
 				}
 
 				&.error {
-					color: #d63638;
+					color: var(--safe-publish-status-error);
 				}
 			}
 
 			.safe-publish-result-status {
 				font-size: 0.8em;
-				color: #666;
+				color: var(--safe-publish-text-muted);
 				font-weight: 500;
 			}
 		}
@@ -127,16 +127,16 @@
 	}
 }
 
-// Loading and error states
+// Loading and empty states (canonical declaration; loaded on every admin page).
 .safe-publish-loading {
 	text-align: center;
-	padding: 20px;
-	color: #666;
+	padding: 40px 20px;
+	color: var(--safe-publish-text-muted);
 }
 
 .safe-publish-no-data {
 	padding: 16px 20px 40px 48px;
-	color: #666;
+	color: var(--safe-publish-text-muted);
 	font-style: italic;
 }
 
@@ -154,35 +154,35 @@
 	}
 
 	&--empty {
-		color: #999;
+		color: var(--safe-publish-text-muted);
 	}
 
 	&--available {
-		color: #007cba;
+		color: var(--safe-publish-primary);
 	}
 
 	&--up-to-date {
-		color: #1e7e34;
+		color: var(--safe-publish-status-success);
 	}
 
 	&--outdated {
-		color: #996800;
+		color: var(--safe-publish-status-warning);
 	}
 
 	&--publish {
-		color: #1e7e34;
+		color: var(--safe-publish-status-success);
 	}
 
 	&--draft {
-		color: #666;
+		color: var(--safe-publish-text-muted);
 	}
 
 	&--pending {
-		color: #996800;
+		color: var(--safe-publish-status-warning);
 	}
 
 	&--private {
-		color: #007cba;
+		color: var(--safe-publish-primary);
 	}
 
 	&--future {
@@ -203,8 +203,8 @@
 	gap: 12px;
 
 	.safe-publish-block-diff {
-		border: 1px solid #e2e8f0;
-		background: #fff;
+		border: 1px solid var(--safe-publish-border);
+		background: var(--safe-publish-surface-bg);
 		padding: 10px 12px;
 		border-radius: 4px;
 
@@ -223,28 +223,26 @@
 
 			.safe-publish-block-diff__col {
 				flex: 1;
-				border: 1px solid #eef2f7;
+				border: 1px solid var(--safe-publish-border-subtle);
 				padding: 8px;
-				background: #fafbfc;
+				background: var(--safe-publish-bg-muted);
 				max-width: 50%;
 				overflow-x: auto;
 			}
 		}
 
 		&__added {
-			background: #f0fff4;
-			border: 1px solid #c6f6d5;
+			background: var(--safe-publish-diff-added-bg);
 			padding: 8px;
 		}
 
 		&__removed {
-			background: #fff5f5;
-			border: 1px solid #fed7d7;
+			background: var(--safe-publish-diff-removed-bg);
 			padding: 8px;
 		}
 
 		&__unchanged {
-			background: #f8f9fa;
+			background: var(--safe-publish-bg-muted);
 			padding: 8px;
 		}
 	}
@@ -254,36 +252,36 @@
 		font-size: 10px;
 		padding: 2px 6px;
 		border-radius: 2em;
-		background: #e2e8f0;
+		background: var(--safe-publish-pill-bg-neutral);
 
 		&.safe-publish-added {
-			background: #38a169;
+			background: var(--safe-publish-status-success);
 			color: #fff;
 		}
 
 		&.safe-publish-removed {
-			background: #e53e3e;
+			background: var(--safe-publish-status-error);
 			color: #fff;
 		}
 
 		&.safe-publish-modified {
-			background: #3182ce;
+			background: var(--safe-publish-primary);
 			color: #fff;
 		}
 
 		&.safe-publish-unchanged {
-			background: #a0aec0;
+			background: var(--safe-publish-pill-bg-muted);
 			color: #fff;
 		}
 	}
 
 	.safe-publish-inline-added {
-		background: #c6f6d5;
+		background: var(--safe-publish-diff-added-bg);
 		border-radius: 2px;
 	}
 
 	.safe-publish-inline-removed {
-		background: #fed7d7;
+		background: var(--safe-publish-diff-removed-bg);
 		text-decoration: line-through;
 		border-radius: 2px;
 	}
