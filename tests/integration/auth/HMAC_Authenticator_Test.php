@@ -63,13 +63,13 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 	 * Verifies that a request with a valid HMAC signature passes authentication.
 	 */
 	public function test_valid_hmac_request_succeeds(): void {
-		// ARRANGE.
+		// ARRANGE: Valid signed POST request.
 		$request = $this->build_signed_request( 'POST', '/wp/v2/posts', 'body content' );
 
-		// ACT.
+		// ACT: Authenticate the request.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT.
+		// ASSERT: Authenticated; null returned and authenticator state set.
 		$this->assertNull( $result );
 		$this->assertTrue( $this->authenticator->is_authenticated() );
 	}
@@ -132,7 +132,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ARRANGE: Request with no Safe Publish headers.
 		$request = new WP_REST_Request( 'GET', '/wp/v2/posts' );
 
-		// ACT.
+		// ACT: Authenticate the request.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: Pass-through (null returned, not a WP_Error).
@@ -204,7 +204,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ARRANGE: Valid Safe Publish headers targeting a monitoring route.
 		$request = $this->build_signed_request( 'GET', '/safe-publish/v1/auth-status', '' );
 
-		// ACT.
+		// ACT: Authenticate the request.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: Authenticated — must prove knowledge of the shared secret.
@@ -224,7 +224,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$request->set_header( 'X-Safe-Publish-Content-Hash', hash( 'sha256', '' ) );
 		$request->set_header( 'X-Safe-Publish-Signature', 'totally-wrong-signature' );
 
-		// ACT.
+		// ACT: Authenticate the request.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: Pass-through — auth-test is excluded from the route guard so the
@@ -241,7 +241,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ARRANGE: Valid Safe Publish headers but targeting an unrelated route.
 		$request = $this->build_signed_request( 'GET', '/woocommerce/v1/orders', '' );
 
-		// ACT.
+		// ACT: Authenticate the request.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: Pass-through — route guard returns early.
@@ -345,7 +345,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 	 * configured connected site URL.
 	 */
 	public function test_matching_site_url_succeeds(): void {
-		// ARRANGE.
+		// ARRANGE: Authenticator restricted to a URL; request signed from it.
 		$allowed_url   = 'https://allowed-receiver.example.com';
 		$authenticator = new HMAC_Authenticator(
 			new Auth_Logger(),
@@ -355,10 +355,10 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		);
 		$request       = $this->build_signed_request( 'GET', '/wp/v2/posts', '', 0, $allowed_url );
 
-		// ACT.
+		// ACT: Authenticate the request.
 		$result = $authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT.
+		// ASSERT: Authenticated; null returned and authenticator state set.
 		$this->assertNull( $result );
 		$this->assertTrue( $authenticator->is_authenticated() );
 	}
