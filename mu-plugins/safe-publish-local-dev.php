@@ -17,7 +17,10 @@ declare( strict_types = 1 );
 // development environment. The repository excludes this file from the
 // release zip, but a defensive guard keeps the behavior local even if it
 // gets dropped into a non-dev install by hand.
-if ( ! defined( 'WP_ENVIRONMENT_TYPE' ) || 'development' !== WP_ENVIRONMENT_TYPE ) {
+if (
+	! defined( 'WP_ENVIRONMENT_TYPE' )
+	|| 'development' !== WP_ENVIRONMENT_TYPE
+) {
 	return;
 }
 

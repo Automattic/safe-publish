@@ -20,4 +20,9 @@ wp-env run tests-cli wp rewrite flush
 # same hostname so freshly uploaded media URLs match. Skip the guid column
 # (WP requires GUIDs to be immutable). Safe to re-run; idempotent once the
 # rewrite has completed.
-wp-env run tests-cli wp search-replace 'http://localhost:8889' 'http://host.docker.internal:8889' --all-tables --skip-columns=guid --quiet
+wp-env run tests-cli wp search-replace \
+	'http://localhost:8889' \
+	'http://host.docker.internal:8889' \
+	--all-tables \
+	--skip-columns=guid \
+	--quiet
