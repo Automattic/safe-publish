@@ -744,8 +744,8 @@ final class Admin_Ajax_Controller {
 	 * @param int     $matched_author_id Destination user ID to assign as post_author.
 	 * @param array   $source_author     Source author payload (email, login, display_name).
 	 * @param array   $warnings          Non-fatal warnings raised during import.
-	 * @return array Result data with post_id, edit_url, message, existing, and warnings keys,
-	 *               or error key on failure.
+	 * @return array Result data with post_id, edit_url, message, existing, and
+	 *               warnings keys, or error key on failure.
 	 */
 	private function update_imported_draft(
 		WP_Post $imported_post,
@@ -871,8 +871,8 @@ final class Admin_Ajax_Controller {
 	 * @param int    $matched_author_id Destination user ID to assign as post_author.
 	 * @param array  $source_author     Source author payload (email, login, display_name).
 	 * @param array  $warnings          Non-fatal warnings raised during import.
-	 * @return array Result data with post_id, edit_url, message, existing, and warnings keys,
-	 *               or error key on failure.
+	 * @return array Result data with post_id, edit_url, message, existing, and
+	 *               warnings keys, or error key on failure.
 	 */
 	private function create_new_draft(
 		string $title,

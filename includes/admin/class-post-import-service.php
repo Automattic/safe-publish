@@ -297,7 +297,12 @@ class Post_Import_Service {
 		 *
 		 * @param bool $enabled Whether the fallback is enabled. Default false.
 		 */
-		if ( true !== apply_filters( 'safe_publish_import_allow_author_fallback', false ) ) {
+		$fallback_enabled = apply_filters(
+			'safe_publish_import_allow_author_fallback',
+			false
+		);
+
+		if ( true !== $fallback_enabled ) {
 			return $resolution_error;
 		}
 
