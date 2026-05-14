@@ -530,7 +530,7 @@ class Post_Import_Service {
 			'post_password'  => $fields['password'],
 		);
 
-		if ( ! empty( $options['force_draft_on_update'] ) ) {
+		if ( true === ( $options['force_draft_on_update'] ?? false ) ) {
 			$post_args['post_status'] = 'draft';
 		}
 

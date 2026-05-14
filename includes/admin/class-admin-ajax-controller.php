@@ -391,7 +391,7 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( $result['error'] );
 		}
 
-		$result['message'] = ! empty( $result['existing'] )
+		$result['message'] = $result['existing']
 			? __( 'Existing draft updated with latest content.', 'safe-publish' )
 			: __( 'Draft post created successfully.', 'safe-publish' );
 
