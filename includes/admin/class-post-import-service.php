@@ -1182,8 +1182,8 @@ class Post_Import_Service {
 	 * @param string       $source_link            Source post URL for meta tracking.
 	 * @param array|object $meta                   Meta data.
 	 * @param array|object $terms                  Terms data.
-	 * @param array        $source_author          Source author payload (email, login, display_name)
-	 *                                             used to refresh diagnostic meta on the destination post.
+	 * @param array        $source_author          Source author payload (email, login,
+	 *                                             display_name) used to refresh diagnostic meta.
 	 * @param int          $source_parent_id       Source post's parent ID used to refresh the
 	 *                                             diagnostic parent meta on hierarchical posts.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
@@ -1431,8 +1431,8 @@ class Post_Import_Service {
 	 * @param int          $featured_attachment_id Sideloaded featured image attachment ID (0 = none).
 	 * @param array|object $meta                   Meta data.
 	 * @param array|object $terms                  Terms data.
-	 * @param array        $source_author          Source author payload (email, login, display_name)
-	 *                                             used to write diagnostic meta on the new post.
+	 * @param array        $source_author          Source author payload (email, login,
+	 *                                             display_name) used to write diagnostic meta.
 	 * @param int          $source_parent_id       Source post's parent ID used to write the
 	 *                                             diagnostic parent meta on hierarchical posts.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
@@ -1510,7 +1510,7 @@ class Post_Import_Service {
 	 * the per-item history table.
 	 *
 	 * @param int    $post_id          Destination post ID.
-	 * @param int    $source_parent_id Source post's parent ID (0 when top-level).
+	 * @param int    $source_parent_id Source post's parent ID (0 = top-level).
 	 * @param string $post_type        Destination post type slug.
 	 */
 	private function write_source_parent_meta(
