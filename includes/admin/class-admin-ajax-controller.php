@@ -15,6 +15,7 @@ use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Topological_Sorter;
 use Exception;
 use WP_Error;
 use WP_Post;
@@ -439,6 +440,47 @@ final class Admin_Ajax_Controller {
 			$warnings[]        = $fallback['warning'];
 		}
 
+		// Resolve the source parent next so a strict failure aborts before
+		// any media or content processing.
+		$source_parent_id = absint( $fresh_result['parent'] ?? 0 );
+		$post_parent_id   = 0;
+		$resolved_parent  = $this->post_import_service->resolve_source_parent(
+			$source_parent_id,
+			$post_type
+		);
+
+		if ( $resolved_parent instanceof WP_Error ) {
+			$fallback = $this->post_import_service->apply_parent_fallback(
+				$resolved_parent
+			);
+
+			if ( is_wp_error( $fallback ) ) {
+				$error_data    = $fallback->get_error_data();
+				$error_action  = is_array( $error_data ) && isset( $error_data['action'] )
+					? (string) $error_data['action']
+					: $fallback->get_error_code();
+				$error_message = $fallback->get_error_message();
+
+				$this->repository->log_import_action(
+					$session_id,
+					$source_post_id,
+					$title,
+					'error',
+					null,
+					$error_message,
+					array( 'action' => $error_action )
+				);
+				$this->repository->complete_session( $session_id );
+
+				wp_send_json_error( $error_message );
+			}
+
+			$post_parent_id = $fallback['post_parent_id'];
+			$warnings[]     = $fallback['warning'];
+		} elseif ( null !== $resolved_parent ) {
+			$post_parent_id = (int) $resolved_parent;
+		}
+
 		$excerpt = $this->sanitize_field(
 			$fresh_result['excerpt'],
 			self::FIELD_EXCERPT
@@ -524,6 +566,8 @@ final class Admin_Ajax_Controller {
 				$password,
 				$matched_author_id,
 				$source_author,
+				$source_parent_id,
+				$post_parent_id,
 				$warnings
 			);
 		} else {
@@ -545,6 +589,8 @@ final class Admin_Ajax_Controller {
 				$password,
 				$matched_author_id,
 				$source_author,
+				$source_parent_id,
+				$post_parent_id,
 				$warnings
 			);
 		}
@@ -558,6 +604,11 @@ final class Admin_Ajax_Controller {
 
 	/**
 	 * Handles AJAX request for bulk importing posts.
+	 *
+	 * Runs in two passes so parent-child relationships are preserved across a
+	 * batch: pass 1 fetches each post's fresh REST payload without writing to
+	 * the DB, and pass 2 processes the batch in topological order so a source
+	 * parent is imported before its children.
 	 */
 	public function ajax_bulk_import(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
@@ -593,12 +644,80 @@ final class Admin_Ajax_Controller {
 
 		$session_id = $session_result;
 
+		// Pass 1: fetch each post's REST payload without touching the DB. The
+		// payload is the same source of truth used by pass 2, so prefetched
+		// posts skip the in-pipeline fetch when they're processed.
+		$batch_fresh_data = array();
+		$request_index    = array();
+		foreach ( $posts_data as $index => $post_data ) {
+			$source_post_id = absint( $post_data['id'] ?? 0 );
+			if ( 0 === $source_post_id ) {
+				continue;
+			}
+
+			$post_type = sanitize_text_field( $post_data['post_type'] ?? 'posts' );
+			$fresh     = $this->api->fetch_fresh_post( $source_post_id, $post_type );
+			if ( is_wp_error( $fresh ) ) {
+				continue;
+			}
+
+			$batch_fresh_data[ $source_post_id ] = $fresh;
+			$request_index[ $source_post_id ]    = $index;
+		}
+
+		// Topologically sort so each source parent is processed before its
+		// children. Cycle leftovers fall through to the normal unresolvable-
+		// parent error path.
+		$parent_map = array();
+		foreach ( $batch_fresh_data as $source_id => $fresh ) {
+			$parent_map[ $source_id ] = absint( $fresh['parent'] ?? 0 );
+		}
+
+		$sort_result  = Topological_Sorter::sort( $parent_map );
+		$sorted_order = array_merge( $sort_result['sorted'], $sort_result['leftover'] );
+		$processed    = array();
+
 		$results    = array();
 		$successful = 0;
 		$failed     = 0;
 
+		// Pass 2: process in topological order, then append items whose pass-1
+		// fetch failed (or was skipped) in request order — import_post() will
+		// re-fetch them and surface the underlying failure.
+		foreach ( $sorted_order as $source_id ) {
+			$index     = $request_index[ $source_id ];
+			$post_data = $posts_data[ $index ];
+			$prefetch  = $batch_fresh_data[ $source_id ];
+
+			$result    = $this->post_import_service->import_post(
+				$post_data,
+				$session_id,
+				$prefetch,
+				$batch_fresh_data
+			);
+			$results[] = $result;
+
+			$processed[ $source_id ] = true;
+
+			if ( $result['success'] ) {
+				++$successful;
+			} else {
+				++$failed;
+			}
+		}
+
 		foreach ( $posts_data as $post_data ) {
-			$result    = $this->post_import_service->import_post( $post_data, $session_id );
+			$source_post_id = absint( $post_data['id'] ?? 0 );
+			if ( $source_post_id > 0 && isset( $processed[ $source_post_id ] ) ) {
+				continue;
+			}
+
+			$result    = $this->post_import_service->import_post(
+				$post_data,
+				$session_id,
+				null,
+				$batch_fresh_data
+			);
 			$results[] = $result;
 
 			if ( $result['success'] ) {
@@ -612,7 +731,7 @@ final class Admin_Ajax_Controller {
 
 		wp_send_json_success(
 			array(
-				'total'      => count( $posts_data ),
+				'total'      => count( $results ),
 				'successful' => $successful,
 				'failed'     => $failed,
 				'results'    => $results,
@@ -743,6 +862,8 @@ final class Admin_Ajax_Controller {
 	 * @param string  $password          Post password.
 	 * @param int     $matched_author_id Destination user ID to assign as post_author.
 	 * @param array   $source_author     Source author payload (email, login, display_name).
+	 * @param int     $source_parent_id  Source post's parent ID for diagnostic meta.
+	 * @param int     $post_parent_id    Resolved destination post_parent (0 when none).
 	 * @param array   $warnings          Non-fatal warnings raised during import.
 	 * @return array Result data with post_id, edit_url, message, existing, and warnings keys,
 	 *               or error key on failure.
@@ -766,6 +887,8 @@ final class Admin_Ajax_Controller {
 		string $password,
 		int $matched_author_id,
 		array $source_author,
+		int $source_parent_id,
+		int $post_parent_id,
 		array $warnings
 	): array {
 		$previous_content = $this->capture_previous_content( $imported_post );
@@ -798,6 +921,7 @@ final class Admin_Ajax_Controller {
 				'post_status'    => 'draft',
 				'post_type'      => $post_type,
 				'post_name'      => $slug,
+				'post_parent'    => $post_parent_id,
 				'comment_status' => $comment_status,
 				'ping_status'    => $ping_status,
 				'menu_order'     => $menu_order,
@@ -808,7 +932,8 @@ final class Admin_Ajax_Controller {
 			$source_link,
 			$meta,
 			$terms,
-			$source_author
+			$source_author,
+			$source_parent_id
 		);
 
 		if ( is_wp_error( $post_id ) ) {
@@ -870,6 +995,8 @@ final class Admin_Ajax_Controller {
 	 * @param string $password          Post password.
 	 * @param int    $matched_author_id Destination user ID to assign as post_author.
 	 * @param array  $source_author     Source author payload (email, login, display_name).
+	 * @param int    $source_parent_id  Source post's parent ID for diagnostic meta.
+	 * @param int    $post_parent_id    Resolved destination post_parent (0 when none).
 	 * @param array  $warnings          Non-fatal warnings raised during import.
 	 * @return array Result data with post_id, edit_url, message, existing, and warnings keys,
 	 *               or error key on failure.
@@ -892,6 +1019,8 @@ final class Admin_Ajax_Controller {
 		string $password,
 		int $matched_author_id,
 		array $source_author,
+		int $source_parent_id,
+		int $post_parent_id,
 		array $warnings
 	): array {
 		// Sideload the featured image before creating the post so that a
@@ -920,6 +1049,7 @@ final class Admin_Ajax_Controller {
 				'post_type'      => $post_type,
 				'post_excerpt'   => $excerpt,
 				'post_name'      => $slug,
+				'post_parent'    => $post_parent_id,
 				'comment_status' => $comment_status,
 				'ping_status'    => $ping_status,
 				'menu_order'     => $menu_order,
@@ -935,7 +1065,8 @@ final class Admin_Ajax_Controller {
 			$featured_attachment_id,
 			$meta,
 			$terms,
-			$source_author
+			$source_author,
+			$source_parent_id
 		);
 
 		if ( is_wp_error( $post_id ) ) {

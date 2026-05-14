@@ -329,8 +329,28 @@ export function renderWarningMessage( warning: Warning ): string {
 					),
 					warning.source.email
 				);
+		case 'parent_orphaned':
+			if ( warning.reason === 'failed_in_batch' && warning.source.parent_title !== null ) {
+				return sprintf(
+					/* translators: 1: parent post title, 2: parent post ID */
+					__(
+						'Source parent post "%1$s" (ID %2$d) failed to import earlier in this batch. Imported as top-level.',
+						'safe-publish'
+					),
+					warning.source.parent_title,
+					warning.source.parent_id
+				);
+			}
+			return sprintf(
+				/* translators: %d: parent post ID */
+				__(
+					'Source parent post (ID %d) is not on this site. Imported as top-level.',
+					'safe-publish'
+				),
+				warning.source.parent_id
+			);
 		default: {
-			const _exhaustive: never = warning.type;
+			const _exhaustive: never = warning;
 			return String( _exhaustive );
 		}
 	}
@@ -349,8 +369,10 @@ export function renderWarningShortLabel( warning: Warning ): string {
 	switch ( warning.type ) {
 		case 'author_fallback_applied':
 			return __( 'author fallback', 'safe-publish' );
+		case 'parent_orphaned':
+			return __( 'parent orphaned', 'safe-publish' );
 		default: {
-			const _exhaustive: never = warning.type;
+			const _exhaustive: never = warning;
 			return String( _exhaustive );
 		}
 	}

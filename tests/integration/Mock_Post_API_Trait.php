@@ -21,7 +21,7 @@ trait Mock_Post_API_Trait {
 	 * Per-test overrides for the mocked single-post API response.
 	 *
 	 * Keys: title, featured_media, content, excerpt, meta, terms, slug,
-	 *       comment_status, ping_status, menu_order, password,
+	 *       comment_status, ping_status, menu_order, password, parent,
 	 *       safe_publish_author.
 	 * Terms: array keyed by taxonomy slug with arrays of term names as values.
 	 * safe_publish_author: array {email, login, display_name}.
@@ -53,6 +53,7 @@ trait Mock_Post_API_Trait {
 			'ping_status'    => $this->mock_post_overrides['ping_status'] ?? '',
 			'menu_order'     => $this->mock_post_overrides['menu_order'] ?? 0,
 			'password'       => $this->mock_post_overrides['password'] ?? '',
+			'parent'         => $this->mock_post_overrides['parent'] ?? 0,
 			'meta'           => $this->mock_post_overrides['meta'] ?? array(),
 		);
 

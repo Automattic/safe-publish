@@ -140,6 +140,13 @@ class Options {
 	const META_SOURCE_AUTHOR_LOGIN = '_safe_publish_source_author_login';
 
 	/**
+	 * Private meta key storing the source post's parent ID at import time.
+	 *
+	 * @var string
+	 */
+	const META_SOURCE_POST_PARENT_ID = '_safe_publish_source_post_parent_id';
+
+	/**
 	 * WordPress settings-API group slug shared by all plugin options.
 	 *
 	 * @var string

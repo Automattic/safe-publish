@@ -16,7 +16,7 @@ import {
 	renderWarningMessage,
 	renderWarningShortLabel,
 } from '@/utils';
-import type { AuthorFallbackWarning, Post } from '@/types';
+import type { AuthorFallbackWarning, ParentOrphanedWarning, Post } from '@/types';
 
 // Pin WP date settings so format/timezone-sensitive tests are deterministic.
 let originalDateSettings: ReturnType< typeof getSettings >;
@@ -491,6 +491,36 @@ describe( 'renderWarningMessage', () => {
 		expect( message ).toContain( 'gone@example.com' );
 		expect( message ).toContain( 'Keeping the current author' );
 	} );
+
+	it( 'should render the "not on this site" message for parent_orphaned when never imported', () => {
+		// ARRANGE: parent never imported on destination.
+		const warning: ParentOrphanedWarning = {
+			type: 'parent_orphaned',
+			source: { parent_id: 42, parent_title: null },
+			reason: 'not_imported',
+		};
+		// ACT: render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: includes the parent ID and "Imported as top-level" hint.
+		expect( message ).toContain( '42' );
+		expect( message ).toContain( 'is not on this site' );
+		expect( message ).toContain( 'Imported as top-level' );
+	} );
+
+	it( 'should render the "failed earlier" message for parent_orphaned in a batch', () => {
+		// ARRANGE: parent was part of the bulk batch but did not succeed.
+		const warning: ParentOrphanedWarning = {
+			type: 'parent_orphaned',
+			source: { parent_id: 99, parent_title: 'Pending Parent' },
+			reason: 'failed_in_batch',
+		};
+		// ACT: render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: includes parent title, ID, and the failure phrasing.
+		expect( message ).toContain( 'Pending Parent' );
+		expect( message ).toContain( '99' );
+		expect( message ).toContain( 'failed to import earlier' );
+	} );
 } );
 
 describe( 'renderWarningShortLabel', () => {
@@ -505,5 +535,18 @@ describe( 'renderWarningShortLabel', () => {
 		const label = renderWarningShortLabel( warning );
 		// ASSERT: short label is the comma-joinable string used in the bulk modal.
 		expect( label ).toBe( 'author fallback' );
+	} );
+
+	it( 'should return "parent orphaned" for parent_orphaned', () => {
+		// ARRANGE: any parent_orphaned warning.
+		const warning: ParentOrphanedWarning = {
+			type: 'parent_orphaned',
+			source: { parent_id: 1, parent_title: null },
+			reason: 'not_imported',
+		};
+		// ACT: render the short label.
+		const label = renderWarningShortLabel( warning );
+		// ASSERT: short label is the comma-joinable string used in the bulk modal.
+		expect( label ).toBe( 'parent orphaned' );
 	} );
 } );
