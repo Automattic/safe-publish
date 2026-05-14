@@ -80,14 +80,36 @@ export type ApiResponse< T = unknown > =
 	| { success: false; data?: JsonValue; error?: string };
 
 /**
+ * Surfaced when the opt-in author fallback was applied during import.
+ *
+ * `fallback_user_id` is non-null for inserts (the importing user) and null
+ * for updates (where the destination's existing author was preserved).
+ */
+export interface AuthorFallbackWarning {
+	type: 'author_fallback_applied';
+	source: {
+		email: string;
+		login: string;
+		display_name: string;
+	};
+	fallback_user_id: number | null;
+}
+
+/**
+ * Discriminated union of all import warning types.
+ */
+export type Warning = AuthorFallbackWarning;
+
+/**
  * Response from create draft post operation.
  *
- * @property {number}  post_id          Created/updated post ID.
- * @property {string}  edit_url         URL to edit the post.
- * @property {string}  message          Success message.
- * @property {boolean} [existing]       Whether post already existed.
- * @property {string}  [post_title]     Post title.
- * @property {string}  [confirm_action] Action requiring confirmation.
+ * @property {number}    post_id          Created/updated post ID.
+ * @property {string}    edit_url         URL to edit the post.
+ * @property {string}    message          Success message.
+ * @property {boolean}   [existing]       Whether post already existed.
+ * @property {string}    [post_title]     Post title.
+ * @property {string}    [confirm_action] Action requiring confirmation.
+ * @property {Warning[]} [warnings]       Non-fatal warnings raised during import.
  */
 export interface CreateDraftResponse {
 	post_id: number;
@@ -96,6 +118,7 @@ export interface CreateDraftResponse {
 	existing?: boolean;
 	post_title?: string;
 	confirm_action?: string;
+	warnings?: Warning[];
 }
 
 /**
@@ -108,6 +131,7 @@ export interface CreateDraftResponse {
  * @property {string}      [edit_url]     URL to edit the post.
  * @property {string}      [error]        Error message if failed.
  * @property {boolean}     [existing]     Whether post already existed.
+ * @property {Warning[]}   [warnings]     Non-fatal warnings raised during import.
  */
 export interface BulkImportResult {
 	source_post_id: number | null;
@@ -117,6 +141,7 @@ export interface BulkImportResult {
 	edit_url?: string;
 	error?: string;
 	existing?: boolean;
+	warnings?: Warning[];
 }
 
 /**

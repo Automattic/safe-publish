@@ -13,8 +13,10 @@ import {
 	paginatePosts,
 	getPaginationInfo,
 	extractUrlPath,
+	renderWarningMessage,
+	renderWarningShortLabel,
 } from '@/utils';
-import type { Post } from '@/types';
+import type { AuthorFallbackWarning, Post } from '@/types';
 
 // Pin WP date settings so format/timezone-sensitive tests are deterministic.
 let originalDateSettings: ReturnType< typeof getSettings >;
@@ -449,5 +451,59 @@ describe( 'extractUrlPath', () => {
 
 	it( 'should handle URL with hash', () => {
 		expect( extractUrlPath( 'https://example.com/page#section' ) ).toBe( '/page' );
+	} );
+} );
+
+describe( 'renderWarningMessage', () => {
+	it( 'should render the "attributed to importer" message when the author fallback applies on insert', () => {
+		// ARRANGE: New-post author fallback warning (non-null fallback_user_id).
+		const warning: AuthorFallbackWarning = {
+			type: 'author_fallback_applied',
+			source: {
+				email: 'orphan@example.com',
+				login: 'orphan',
+				display_name: 'Orphan',
+			},
+			fallback_user_id: 42,
+		};
+		// ACT: render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: insert wording includes the source display name and email.
+		expect( message ).toContain( 'Orphan' );
+		expect( message ).toContain( 'orphan@example.com' );
+		expect( message ).toContain( 'attributed to the current user' );
+	} );
+
+	it( 'should render the "keeping current author" message when the author fallback applies on update', () => {
+		// ARRANGE: Update-path author fallback warning (null fallback_user_id).
+		const warning: AuthorFallbackWarning = {
+			type: 'author_fallback_applied',
+			source: {
+				email: 'gone@example.com',
+				login: 'gone',
+				display_name: 'Gone',
+			},
+			fallback_user_id: null,
+		};
+		// ACT: render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: update wording mentions the email and the kept author.
+		expect( message ).toContain( 'gone@example.com' );
+		expect( message ).toContain( 'Keeping the current author' );
+	} );
+} );
+
+describe( 'renderWarningShortLabel', () => {
+	it( 'should return "author fallback" for author_fallback_applied', () => {
+		// ARRANGE: any author fallback warning.
+		const warning: AuthorFallbackWarning = {
+			type: 'author_fallback_applied',
+			source: { email: '', login: '', display_name: '' },
+			fallback_user_id: null,
+		};
+		// ACT: render the short label.
+		const label = renderWarningShortLabel( warning );
+		// ASSERT: short label is the comma-joinable string used in the bulk modal.
+		expect( label ).toBe( 'author fallback' );
 	} );
 } );

@@ -68,6 +68,10 @@
 					color: #008a20;
 				}
 
+				&.warning {
+					color: var(--safe-publish-status-warning);
+				}
+
 				&.error {
 					color: #d63638;
 				}
@@ -79,6 +83,47 @@
 				font-weight: 500;
 			}
 		}
+	}
+
+	.safe-publish-import-warnings-list {
+		background: #fff8e5;
+		border: 1px solid #f0d589;
+		border-radius: 4px;
+		padding: 10px 12px;
+
+		ul {
+			margin: 6px 0 0;
+			padding-left: 20px;
+			font-size: 0.85em;
+
+			li + li {
+				margin-top: 2px;
+			}
+
+			a {
+				color: var(--safe-publish-status-warning);
+				text-decoration: underline;
+			}
+		}
+	}
+
+	.safe-publish-warning-count,
+	.safe-publish-warning-list-heading {
+		color: var(--safe-publish-status-warning);
+		font-weight: 600;
+	}
+}
+
+// Single-import modal warnings. Mirrors the bulk-modal amber treatment for
+// visual continuity.
+.safe-publish-import-warnings {
+	background: #fff8e5;
+	border: 1px solid #f0d589;
+	border-radius: 4px;
+	padding: 10px 12px;
+
+	.safe-publish-import-warning {
+		color: var(--safe-publish-status-warning);
 	}
 }
 

@@ -1098,6 +1098,178 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that with the author fallback filter enabled, the single-import
+	 * create endpoint attributes an unmatched-author post to the importing
+	 * user. The resulting warning is returned in the AJAX response and
+	 * persisted on the history item row.
+	 */
+	public function test_ajax_create_draft_applies_author_fallback_on_insert(): void {
+		// ARRANGE: Importing user authenticated; source author with no match;
+		// author fallback filter enabled.
+		wp_set_current_user( $this->admin_user_id );
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'orphan@source.example',
+				'login'        => 'orphan',
+				'display_name' => 'Orphan',
+			),
+		);
+		$_POST                     = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '6020',
+			'title'          => 'Single Fallback Insert',
+			'source_link'    => 'https://source.example.com/single-fallback-insert',
+			'post_type'      => 'post',
+		);
+
+		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+
+		// ACT: Trigger the create draft AJAX handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		remove_filter(
+			'safe_publish_import_allow_author_fallback',
+			'__return_true'
+		);
+
+		// ASSERT: Response is success and the post is attributed to the importer.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response );
+		$this->assertTrue( $response['success'] );
+
+		$post_id = (int) $response['data']['post_id'];
+		$this->assertGreaterThan( 0, $post_id );
+		$this->assertSame(
+			$this->admin_user_id,
+			(int) get_post( $post_id )->post_author
+		);
+
+		// ASSERT: Response payload carries the structured warning.
+		$this->assertSame(
+			array(
+				array(
+					'type'             => 'author_fallback_applied',
+					'source'           => array(
+						'email'        => 'orphan@source.example',
+						'login'        => 'orphan',
+						'display_name' => 'Orphan',
+					),
+					'fallback_user_id' => $this->admin_user_id,
+				),
+			),
+			$response['data']['warnings']
+		);
+
+		// ASSERT: History item row mirrors the response payload.
+		global $wpdb;
+		$items_table = Import_Items_Table::table_name();
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT status, warnings FROM `{$items_table}` WHERE source_post_id = %d",
+				6020
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$this->assertSame( 'success', $row['status'] );
+		$this->assertSame(
+			$response['data']['warnings'],
+			json_decode( (string) $row['warnings'], true )
+		);
+	}
+
+	/**
+	 * Verifies that with the author fallback filter enabled, a force-update on
+	 * an existing post with an unmatched author preserves the existing
+	 * post_author. The warning's fallback_user_id is null in this case.
+	 */
+	public function test_ajax_update_draft_applies_author_fallback_on_update(): void {
+		// ARRANGE: Existing destination post owned by a different user from
+		// the importing one, with the source post id meta in place.
+		$existing_author_id = $this->factory()->user->create(
+			array( 'role' => 'editor' )
+		);
+		$existing_post_id   = $this->factory()->post->create(
+			array(
+				'post_title'  => 'Existing Post',
+				'post_status' => 'draft',
+				'post_type'   => 'post',
+				'post_author' => $existing_author_id,
+			)
+		);
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_POST_ID,
+			'6021'
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'gone@source.example',
+				'login'        => 'gone',
+				'display_name' => 'Gone',
+			),
+		);
+		$_POST                     = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '6021',
+			'title'          => 'Existing Post',
+			'source_link'    => 'https://source.example.com/single-fallback-update',
+			'post_type'      => 'post',
+			'force_update'   => 'true',
+		);
+
+		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+
+		// ACT: Trigger the create draft AJAX handler in update mode.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		remove_filter(
+			'safe_publish_import_allow_author_fallback',
+			'__return_true'
+		);
+
+		// ASSERT: Response is success and post_author is unchanged.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response );
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( $existing_post_id, (int) $response['data']['post_id'] );
+		$this->assertSame(
+			$existing_author_id,
+			(int) get_post( $existing_post_id )->post_author,
+			'Update fallback must preserve the existing post_author.'
+		);
+
+		// ASSERT: Warning has null fallback_user_id (kept-author semantic).
+		$this->assertCount( 1, $response['data']['warnings'] );
+		$this->assertNull( $response['data']['warnings'][0]['fallback_user_id'] );
+		$this->assertSame(
+			'gone@source.example',
+			$response['data']['warnings'][0]['source']['email']
+		);
+
+		// ASSERT: History item row carries the warning JSON.
+		global $wpdb;
+		$items_table = Import_Items_Table::table_name();
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT status, warnings FROM `{$items_table}` WHERE source_post_id = %d",
+				6021
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$this->assertSame( 'updated', $row['status'] );
+		$this->assertSame(
+			$response['data']['warnings'],
+			json_decode( (string) $row['warnings'], true )
+		);
+	}
+
+	/**
 	 * Returns the number of import sessions currently in the 'in_progress' state.
 	 *
 	 * @return int

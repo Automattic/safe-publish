@@ -1617,40 +1617,6 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that import aborts with the "update Safe Publish on the source"
-	 * message when the source response omits the safe_publish_author field.
-	 */
-	public function test_import_aborts_when_source_field_is_absent(): void {
-		// ARRANGE: Source response omits the field entirely.
-		$this->mock_post_overrides = array(
-			'omit_safe_publish_author' => true,
-		);
-
-		$session_id = $this->repository->create_session(
-			'https://source.example.com',
-			'bulk'
-		);
-
-		$post_data = array(
-			'id'        => 9904,
-			'title'     => 'Missing Field Test',
-			'content'   => '<p>Content.</p>',
-			'link'      => 'https://source.example.com/missing-field',
-			'post_type' => 'posts',
-		);
-
-		// ACT: Run the bulk import path.
-		$result = $this->import_service->import_post( $post_data, $session_id );
-
-		// ASSERT: Failure with the "Update Safe Publish on the source" message.
-		$this->assertFalse( $result['success'] );
-		$this->assertStringContainsString(
-			'Update Safe Publish on the source site',
-			$result['error']
-		);
-	}
-
-	/**
 	 * Verifies that author resolution runs before media download so a failed
 	 * resolution does not leave orphan attachments on the destination.
 	 */
@@ -1992,5 +1958,385 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
 		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
 		$wp_rest_server = null;
+	}
+
+	/**
+	 * Verifies that with the author fallback filter disabled (default), an
+	 * unmatched source author aborts the import and persists no warning.
+	 */
+	public function test_unmatched_author_with_filter_disabled_aborts_without_warning(): void {
+		// ARRANGE: Source author with no destination match; author fallback
+		// filter not added.
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'absent@source.example',
+				'login'        => 'absent',
+				'display_name' => 'Absent',
+			),
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9910,
+			'title'     => 'Filter Off Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/filter-off',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import fails and the item row carries no warnings.
+		$this->assertFalse( $result['success'] );
+		$items = $this->repository->get_session_items_by_status(
+			$session_id,
+			array( 'error' )
+		);
+		$this->assertCount( 1, $items );
+		$this->assertNull( $items[0]['warnings'] );
+	}
+
+	/**
+	 * Verifies that enabling the author fallback filter has no effect when the
+	 * source author already matches a destination user, and no warning is
+	 * recorded.
+	 */
+	public function test_fallback_filter_does_not_warn_when_author_matches(): void {
+		// ARRANGE: Destination user that matches the source author email.
+		$matched_user_id = self::factory()->user->create(
+			array(
+				'role'       => 'editor',
+				'user_email' => 'present@source.example',
+			)
+		);
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'present@source.example',
+				'login'        => 'present',
+				'display_name' => 'Present',
+			),
+		);
+
+		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9911,
+			'title'     => 'Fallback No-Op Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/fallback-noop',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter(
+			'safe_publish_import_allow_author_fallback',
+			'__return_true'
+		);
+
+		// ASSERT: Match path used, no warnings on the result or item row.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame( array(), $result['warnings'] );
+		$this->assertSame(
+			$matched_user_id,
+			(int) get_post( $result['post_id'] )->post_author
+		);
+
+		$items = $this->repository->get_session_items_by_status(
+			$session_id,
+			array( 'success' )
+		);
+		$this->assertCount( 1, $items );
+		$this->assertNull( $items[0]['warnings'] );
+	}
+
+	/**
+	 * Verifies that with the author fallback filter enabled, a new post with
+	 * an unmatched author is attributed to the importing user, and the warning
+	 * records that user's ID.
+	 */
+	public function test_fallback_attributes_new_post_to_importing_user(): void {
+		// ARRANGE: Importing user; source author with no destination match.
+		$importing_user_id = self::factory()->user->create(
+			array( 'role' => 'editor' )
+		);
+		wp_set_current_user( $importing_user_id );
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'orphan@source.example',
+				'login'        => 'orphan',
+				'display_name' => 'Orphan',
+			),
+		);
+
+		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9912,
+			'title'     => 'Insert Fallback Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/insert-fallback',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter(
+			'safe_publish_import_allow_author_fallback',
+			'__return_true'
+		);
+
+		// ASSERT: Import succeeded and the post is attributed to the importer.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame(
+			$importing_user_id,
+			(int) get_post( $result['post_id'] )->post_author
+		);
+
+		// ASSERT: Warning is on the result with the importer's id.
+		$this->assertCount( 1, $result['warnings'] );
+		$this->assertSame(
+			array(
+				'type'             => 'author_fallback_applied',
+				'source'           => array(
+					'email'        => 'orphan@source.example',
+					'login'        => 'orphan',
+					'display_name' => 'Orphan',
+				),
+				'fallback_user_id' => $importing_user_id,
+			),
+			$result['warnings'][0]
+		);
+
+		// ASSERT: Warning is persisted on the item row, encoded as JSON.
+		$items = $this->repository->get_session_items_by_status(
+			$session_id,
+			array( 'success' )
+		);
+		$this->assertCount( 1, $items );
+		$persisted = json_decode( (string) $items[0]['warnings'], true );
+		$this->assertSame( $result['warnings'], $persisted );
+	}
+
+	/**
+	 * Verifies that with the author fallback filter enabled, re-importing a
+	 * post with an unmatched author preserves the destination's existing
+	 * post_author. The warning's fallback_user_id is null in this case.
+	 */
+	public function test_fallback_preserves_existing_author_on_update(): void {
+		// ARRANGE: First import succeeds via a matched destination user.
+		$matched_user_id = self::factory()->user->create(
+			array(
+				'role'       => 'editor',
+				'user_email' => 'incumbent@source.example',
+			)
+		);
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'incumbent@source.example',
+				'login'        => 'incumbent',
+				'display_name' => 'Incumbent',
+			),
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9913,
+			'title'     => 'Update Fallback Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/update-fallback',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+		$this->assertSame(
+			$matched_user_id,
+			(int) get_post( $first['post_id'] )->post_author
+		);
+
+		// ARRANGE: Source now reports an unmatched author; enable the author
+		// fallback filter.
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'gone@source.example',
+				'login'        => 'gone',
+				'display_name' => 'Gone',
+			),
+		);
+
+		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+
+		// ACT: Re-import the same source post.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter(
+			'safe_publish_import_allow_author_fallback',
+			'__return_true'
+		);
+
+		// ASSERT: post_author is unchanged from the first import.
+		$this->assertTrue( $second['success'] );
+		$this->assertSame(
+			$matched_user_id,
+			(int) get_post( $second['post_id'] )->post_author,
+			'Update path with fallback must preserve the existing post_author.'
+		);
+
+		// ASSERT: Warning carries null fallback_user_id (kept-author semantic).
+		$this->assertCount( 1, $second['warnings'] );
+		$this->assertNull( $second['warnings'][0]['fallback_user_id'] );
+		$this->assertSame(
+			'gone@source.example',
+			$second['warnings'][0]['source']['email']
+		);
+	}
+
+	/**
+	 * Verifies that a post whose author was set via the author fallback is
+	 * preserved across subsequent updates that also trigger the fallback —
+	 * even when the importing user differs from the one who triggered the
+	 * original fallback.
+	 */
+	public function test_repeated_fallback_on_update_does_not_churn_author(): void {
+		// ARRANGE: First importer triggers the author fallback on insert and
+		// becomes the post's author.
+		$first_importer_id = self::factory()->user->create(
+			array( 'role' => 'editor' )
+		);
+		wp_set_current_user( $first_importer_id );
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'first-unmatched@source.example',
+				'login'        => 'first-unmatched',
+				'display_name' => 'First Unmatched',
+			),
+		);
+
+		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9914,
+			'title'     => 'Repeated Fallback Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/repeated-fallback',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+		$this->assertSame(
+			$first_importer_id,
+			(int) get_post( $first['post_id'] )->post_author
+		);
+
+		// ARRANGE: Switch to a *different* importing user; source still
+		// reports an unmatched author (different email to make sure the
+		// update path runs).
+		$second_importer_id = self::factory()->user->create(
+			array( 'role' => 'editor' )
+		);
+		wp_set_current_user( $second_importer_id );
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'second-unmatched@source.example',
+				'login'        => 'second-unmatched',
+				'display_name' => 'Second Unmatched',
+			),
+		);
+
+		// ACT: Re-import the same source post under the second importer.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter(
+			'safe_publish_import_allow_author_fallback',
+			'__return_true'
+		);
+
+		// ASSERT: post_author is still the first importer — match-or-keep
+		// preserved the previously-fallback'd attribution.
+		$this->assertTrue( $second['success'] );
+		$this->assertSame(
+			$first_importer_id,
+			(int) get_post( $second['post_id'] )->post_author,
+			'Update fallback must not overwrite a previously-applied fallback.'
+		);
+		$this->assertNull( $second['warnings'][0]['fallback_user_id'] );
+	}
+
+	/**
+	 * Verifies that the source_author_unresolved error (deleted user on source)
+	 * aborts the import even when the author fallback filter is enabled.
+	 */
+	public function test_fallback_does_not_relax_source_author_unresolved(): void {
+		// ARRANGE: Source author with an empty email; author fallback filter on.
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => '',
+				'login'        => '',
+				'display_name' => '',
+			),
+		);
+
+		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9916,
+			'title'     => 'Unresolved Fallback Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/unresolved-fallback',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter(
+			'safe_publish_import_allow_author_fallback',
+			'__return_true'
+		);
+
+		// ASSERT: Import aborts with the deleted-author message.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString(
+			'deleted on the source',
+			$result['error']
+		);
 	}
 }

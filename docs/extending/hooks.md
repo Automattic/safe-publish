@@ -133,6 +133,33 @@ add_filter( 'safe_publish_request_args', function( array $args, string $url ): a
 }, 10, 2 );
 ```
 
+### `safe_publish_import_allow_author_fallback`
+
+Filter whether the import may fall back to the importing author when the source author cannot be matched on the destination site. By default, an unmatched source author aborts the import.
+
+When this filter returns `true`:
+
+- **New post + no author match** — `post_author` is set to the importing user (`get_current_user_id()`).
+- **Update + no author match** — the destination post's existing `post_author` is preserved unchanged.
+- Either case records a warning on the import History item row and surfaces it in the import results UI.
+
+Imports still abort when the source post has no resolvable author (e.g., the author was deleted on the source).
+
+Enabling the fallback relaxes the source-canonical guarantee.
+
+**Parameters:**
+
+- `bool $enabled` — whether the fallback is enabled (default `false`)
+
+**Returns:** `bool`
+
+**Example:**
+
+```php
+// Allow the importing user to take over when the source author is unmatched.
+add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+```
+
 ### `safe_publish_import_kses`
 
 Filter whether to apply kses sanitization to imported content and excerpts. By default, kses is disabled during import to preserve content fidelity, matching WordPress core importer behavior. Return `true` to enable kses sanitization.
