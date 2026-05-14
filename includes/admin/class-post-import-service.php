@@ -97,10 +97,11 @@ class Post_Import_Service {
 	 * @param array    $post_data  Post data array containing id, title, content, link, etc.
 	 * @param int|null $session_id Optional import session ID for history tracking.
 	 * @param array    $options    Optional behavior overrides:
-	 *                             - 'force_draft_on_update' (bool, default false): when
-	 *                               true, override post_status to 'draft' when updating
-	 *                               an existing imported post. Single-import review flow
-	 *                               uses this; bulk preserves the existing status.
+	 *                             - 'force_draft_on_update' (bool, default
+	 *                               false): when true, override post_status
+	 *                               to 'draft' when updating an existing
+	 *                               imported post. Single-import review
+	 *                               flow uses this; bulk preserves status.
 	 * @return array Result data with success status, post_id, edit_url, and error keys.
 	 */
 	public function import_post(
