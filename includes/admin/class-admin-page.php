@@ -117,22 +117,6 @@ final class Admin_Page {
 			return;
 		}
 
-		// Fetch posts data from the source site.
-		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
-		$number_of_posts = self::DEFAULT_NUMBER_OF_POSTS;
-		$posts_data      = array();
-
-		if ( ! empty( $source_site_url ) ) {
-			$auth_credentials = Auth_Credential_Provider::get_credentials();
-			$posts            = $this->api->fetch_posts( $source_site_url, $number_of_posts, $auth_credentials );
-
-			// Handle API errors.
-			if ( ! is_wp_error( $posts ) ) {
-				$this->post_import_service->annotate_posts_with_import_status( $posts );
-				$posts_data = $posts;
-			}
-		}
-
 		$asset_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/index.asset.php';
 		$script_url      = plugin_dir_url( dirname( __DIR__ ) ) . 'build/index.js';
 		$script_path     = plugin_dir_path( dirname( __DIR__ ) ) . 'build/index.js';
@@ -158,6 +142,22 @@ final class Admin_Page {
 			);
 
 			return;
+		}
+
+		// Fetch posts data from the source site.
+		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$number_of_posts = self::DEFAULT_NUMBER_OF_POSTS;
+		$posts_data      = array();
+
+		if ( ! empty( $source_site_url ) ) {
+			$auth_credentials = Auth_Credential_Provider::get_credentials();
+			$posts            = $this->api->fetch_posts( $source_site_url, $number_of_posts, $auth_credentials );
+
+			// Handle API errors.
+			if ( ! is_wp_error( $posts ) ) {
+				$this->post_import_service->annotate_posts_with_import_status( $posts );
+				$posts_data = $posts;
+			}
 		}
 
 		// phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable -- Path is built from plugin_dir_path() and a hardcoded filename.
