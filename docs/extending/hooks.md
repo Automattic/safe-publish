@@ -160,6 +160,30 @@ Enabling the fallback relaxes the source-canonical guarantee.
 add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
 ```
 
+### `safe_publish_import_allow_orphans`
+
+Filter whether a hierarchical post may be imported as orphan when its source parent cannot be resolved on the destination site. By default, an unresolved parent aborts the import.
+
+When this filter returns `true`:
+
+- The post is imported with `post_parent = 0`.
+- A `parent_orphaned` warning is recorded on the import History item row and surfaced in the import results UI. The warning carries a `reason` of either `not_imported` (parent never imported and not in the current bulk batch) or `failed_in_batch` (parent was in the batch but did not succeed).
+
+Enabling the fallback relaxes the source-canonical guarantee for parent relationships. Review the import results UI or History for warnings whenever it's enabled.
+
+**Parameters:**
+
+- `bool $enabled` — whether the fallback is enabled (default `false`)
+
+**Returns:** `bool`
+
+**Example:**
+
+```php
+// Allow hierarchical posts to be imported as orphans when their parent is unresolved.
+add_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+```
+
 ### `safe_publish_import_kses`
 
 Filter whether to apply kses sanitization to imported content and excerpts. By default, kses is disabled during import to preserve content fidelity, matching WordPress core importer behavior. Return `true` to enable kses sanitization.
