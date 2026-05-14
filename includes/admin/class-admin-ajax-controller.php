@@ -1014,7 +1014,8 @@ final class Admin_Ajax_Controller {
 			$scheme          = wp_parse_url( $external_link, PHP_URL_SCHEME );
 			$host            = wp_parse_url( $external_link, PHP_URL_HOST );
 			$port            = wp_parse_url( $external_link, PHP_URL_PORT );
-			$source_site_url = $scheme . '://' . $host . ( is_int( $port ) ? ':' . $port : '' );
+			$port_suffix     = is_int( $port ) ? ':' . $port : '';
+			$source_site_url = $scheme . '://' . $host . $port_suffix;
 			$processed       = $this->content_processor->process_content( $content, $source_site_url );
 
 			if ( is_wp_error( $processed ) ) {
