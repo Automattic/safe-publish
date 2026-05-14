@@ -32,26 +32,6 @@ add_action( 'safe_publish_event_logged', function( string $channel, string $even
 
 ## Filters
 
-### `safe_publish_allowed_domains`
-
-Filter the list of allowed external domains when validating source URLs.
-
-**Parameters:**
-
-- `array $domains` — currently allowed domains
-- `string $host` — the host being validated
-
-**Returns:** `array`
-
-**Example:**
-
-```php
-add_filter( 'safe_publish_allowed_domains', function( array $domains, string $host ): array {
-    $domains[] = 'staging.example.com';
-    return $domains;
-}, 10, 2 );
-```
-
 ### `safe_publish_api_query_args`
 
 Filter query arguments sent to the source site's REST API when fetching the list of posts.
