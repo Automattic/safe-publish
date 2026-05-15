@@ -56,16 +56,6 @@ class Admin_Menu_Manager {
 	public function register(): void {
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		add_action( 'admin_menu', array( $this, 'add_settings_submenu' ), 20 );
-
-		// Early VIP-specific asset preparation.
-		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
-			add_action(
-				'admin_enqueue_scripts',
-				array( $this, 'prepare_vip_dependencies' ),
-				5
-			);
-		}
-
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 	}
 
@@ -142,37 +132,6 @@ class Admin_Menu_Manager {
 
 		$settings_page = new Settings_Page();
 		$settings_page->render();
-	}
-
-	/**
-	 * Prepares VIP-specific dependencies early.
-	 *
-	 * @param string $hook_suffix Current admin page hook suffix.
-	 */
-	public function prepare_vip_dependencies( string $hook_suffix ): void {
-		// Only on our specific admin page.
-		if ( 'toplevel_page_safe-publish' !== $hook_suffix ) {
-			return;
-		}
-
-		// Force registration of required WordPress core scripts in VIP environment.
-		wp_enqueue_script( 'wp-element' );
-		wp_enqueue_script( 'wp-components' );
-
-		// Try to register wp-dataviews if available.
-		if ( ! wp_script_is( 'wp-dataviews', 'registered' ) ) {
-			// Attempt to register wp-dataviews if the file exists.
-			$dataviews_path = ABSPATH . WPINC . '/js/dist/dataviews.min.js';
-			if ( file_exists( $dataviews_path ) ) {
-				wp_register_script(
-					'wp-dataviews',
-					includes_url( 'js/dist/dataviews.min.js' ),
-					array( 'wp-element', 'wp-components' ),
-					get_bloginfo( 'version' ),
-					true
-				);
-			}
-		}
 	}
 
 	/**
