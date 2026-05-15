@@ -51,7 +51,7 @@ final class History_Renderer {
 		$css_file = plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/history.css';
 		wp_enqueue_style( 'safe-publish-history', $css_file, array( 'safe-publish-tokens' ), '1.0.0' );
 
-		// Enqueue DataViews styles with VIP-safe versioning.
+		// Enqueue DataViews styles.
 		$style_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/style-index.css';
 		$style_file_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'build/style-index.css';
 
