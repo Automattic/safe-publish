@@ -14,9 +14,10 @@ import PostDiffModal from './components/PostDiffModal';
 import {
 	ApiResponse,
 	BulkImportResponse,
+	BulkImportResult,
 	Post,
 } from './types';
-import { getErrorMessage } from './utils';
+import { getErrorMessage, renderWarningShortLabel } from './utils';
 import {
 	Button,
 	__experimentalText as Text,
@@ -27,7 +28,23 @@ import {
 } from '@wordpress/components';
 import { Action } from '@wordpress/dataviews/build-types';
 import { useState } from '@wordpress/element';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
+
+/**
+ * Maximum number of warning entries shown in the bulk results titles list
+ * before collapsing the remainder into a "…and N more" line.
+ */
+const MAX_VISIBLE_WARNING_TITLES = 10;
+
+/**
+ * Returns true when the result is a successful import that carries warnings.
+ *
+ * @param {BulkImportResult} result Per-post result entry.
+ *
+ * @return {boolean} True when warnings were attached to a successful import.
+ */
+const hasWarnings = ( result: BulkImportResult ): boolean =>
+	Boolean( result.success && result.warnings && result.warnings.length > 0 );
 
 /**
  * Imports multiple posts in bulk with progress tracking.
@@ -242,70 +259,144 @@ export const createActions = (
 						</VStack>
 					) }
 
-					{ importResults && (
-						<VStack spacing="3">
-							<Text style={ { color: '#008a20', fontWeight: 'bold' } }>
-								{ __( 'Import completed!', 'safe-publish' ) }
-							</Text>
-							<Text>
-								{ /* translators: 1: successful count, 2: total count */
-								__( 'Successfully imported: %1$d of %2$d posts', 'safe-publish' )
-									.replace( '%1$d', importResults.successful.toString() )
-									.replace( '%2$d', importResults.total.toString() ) }
-							</Text>
-							{ importResults.successful > 0 && (
-								<Text style={ { fontSize: '0.9em', color: '#666' } }>
-									{ (() => {
-										const created = importResults.results.filter( result => result.success && !result.existing ).length;
-										const updated = importResults.results.filter( result => result.success && result.existing ).length;
-										const parts = [];
-										if ( created > 0 ) {
-											/* translators: %d is the number of posts created */
-											parts.push( __( '%d created', 'safe-publish' ).replace( '%d', created.toString() ) );
-										}
-										if ( updated > 0 ) {
-											/* translators: %d is the number of posts updated */
-											parts.push( __( '%d updated with latest content', 'safe-publish' )
-												.replace( '%d', updated.toString() ) );
-										}
-										return parts.join( ', ' );
-									} )() }
-								</Text>
-							) }
-							{ importResults.failed > 0 && (
-								<Text style={ { color: '#d63638' } }>
-									{ /* translators: %d is the number of failed imports */
-									__( 'Failed imports: %d', 'safe-publish' ).replace( '%d', importResults.failed.toString() ) }
-								</Text>
-							) }
+					{ importResults && (() => {
+						const withWarnings = importResults.results.filter( hasWarnings );
+						const visibleWarnings = withWarnings.slice( 0, MAX_VISIBLE_WARNING_TITLES );
+						const hiddenWarnings = withWarnings.length - visibleWarnings.length;
 
-							{ importResults.results.length > 0 && (
-								<div className="safe-publish-import-results">
-								{ importResults.results.map( ( result, index ) => {
-									let status;
-									if ( ! result.success ) {
-										status = __( 'Failed', 'safe-publish' );
-									} else if ( result.existing ) {
-										status = __( 'Updated', 'safe-publish' );
-									} else {
-										status = __( 'Created', 'safe-publish' );
-									}
+						return (
+							<VStack spacing="3">
+								<Text style={ { color: '#008a20', fontWeight: 'bold' } }>
+									{ __( 'Import completed!', 'safe-publish' ) }
+								</Text>
+								<Text>
+									{ /* translators: 1: successful count, 2: total count */
+									__( 'Successfully imported: %1$d of %2$d posts', 'safe-publish' )
+										.replace( '%1$d', importResults.successful.toString() )
+										.replace( '%2$d', importResults.total.toString() ) }
+								</Text>
+								{ importResults.successful > 0 && (
+									<Text style={ { fontSize: '0.9em', color: '#666' } }>
+										{ (() => {
+											const created = importResults.results.filter( result => result.success && !result.existing ).length;
+											const updated = importResults.results.filter( result => result.success && result.existing ).length;
+											const parts = [];
+											if ( created > 0 ) {
+												/* translators: %d is the number of posts created */
+												parts.push( __( '%d created', 'safe-publish' ).replace( '%d', created.toString() ) );
+											}
+											if ( updated > 0 ) {
+												/* translators: %d is the number of posts updated */
+												parts.push( __( '%d updated with latest content', 'safe-publish' )
+													.replace( '%d', updated.toString() ) );
+											}
+											return parts.join( ', ' );
+										} )() }
+									</Text>
+								) }
+								{ withWarnings.length > 0 && (
+									<Text className="safe-publish-warning-count">
+										{ sprintf(
+											/* translators: %d is the number of imports with warnings */
+											__( 'Imported with warnings: %d', 'safe-publish' ),
+											withWarnings.length
+										) }
+									</Text>
+								) }
+								{ withWarnings.length > 0 && (
+									<div className="safe-publish-import-warnings-list">
+										<Text className="safe-publish-warning-list-heading">
+											{ sprintf(
+												/* translators: %d is the number of imports with warnings */
+												__( 'Imported with warnings (%d):', 'safe-publish' ),
+												withWarnings.length
+											) }
+										</Text>
+										<ul>
+											{ visibleWarnings.map( ( result, index ) => {
+												const reasons = ( result.warnings ?? [] )
+													.map( renderWarningShortLabel )
+													.join( ', ' );
 
-									return (
-										<div key={ index } className="safe-publish-import-result-item">
-											<span className={ `safe-publish-result-title ${ result.success ? 'success' : 'error' }` }>
-												{ result.title }
-											</span>
-											<span className="safe-publish-result-status">
-												{ status }
-											</span>
-										</div>
-									);
-								} ) }
-								</div>
-							) }
-						</VStack>
-					) }
+												return (
+													<li key={ index }>
+														{ result.edit_url ? (
+															<a
+																href={ result.edit_url }
+																target="_blank"
+																rel="noreferrer"
+															>
+																{ result.title }
+															</a>
+														) : (
+															<span>{ result.title }</span>
+														) }
+														{ ' — ' }
+														{ reasons }
+													</li>
+												);
+											} ) }
+											{ hiddenWarnings > 0 && (
+												<li>
+													{ sprintf(
+														/* translators: %d is the number of additional posts with warnings */
+														__( '…and %d more', 'safe-publish' ),
+														hiddenWarnings
+													) }
+												</li>
+											) }
+										</ul>
+									</div>
+								) }
+								{ importResults.failed > 0 && (
+									<Text style={ { color: '#d63638' } }>
+										{ /* translators: %d is the number of failed imports */
+										__( 'Failed imports: %d', 'safe-publish' ).replace( '%d', importResults.failed.toString() ) }
+									</Text>
+								) }
+
+								{ importResults.results.length > 0 && (
+									<div className="safe-publish-import-results">
+									{ importResults.results.map( ( result, index ) => {
+										const warned = hasWarnings( result );
+										let titleClass: 'success' | 'warning' | 'error';
+										if ( ! result.success ) {
+											titleClass = 'error';
+										} else if ( warned ) {
+											titleClass = 'warning';
+										} else {
+											titleClass = 'success';
+										}
+
+										let status;
+										if ( ! result.success ) {
+											status = __( 'Failed', 'safe-publish' );
+										} else if ( result.existing ) {
+											status = warned
+												? __( 'Updated (warning)', 'safe-publish' )
+												: __( 'Updated', 'safe-publish' );
+										} else {
+											status = warned
+												? __( 'Created (warning)', 'safe-publish' )
+												: __( 'Created', 'safe-publish' );
+										}
+
+										return (
+											<div key={ index } className="safe-publish-import-result-item">
+												<span className={ `safe-publish-result-title ${ titleClass }` }>
+													{ result.title }
+												</span>
+												<span className="safe-publish-result-status">
+													{ status }
+												</span>
+											</div>
+										);
+									} ) }
+									</div>
+								) }
+							</VStack>
+						);
+					} )() }
 
 					{ error && (
 						<Text style={ { color: '#d63638' } }>{ error }</Text>

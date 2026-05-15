@@ -134,18 +134,28 @@ Some source post fields are not migrated:
 
 ### Author Resolution
 
-By default, Safe Publish requires the source post's author to exist on the destination site. The source author is matched against destination users by email (`get_user_by( 'email', ... )`). If no destination user matches, the import is aborted with a specific error message that includes the source author's display name, email, and login so the operator can create the user and re-import.
+By default, Safe Publish requires the source post's author to exist on the destination site; authors are matched by email (`get_user_by( 'email', ... )`).
 
-Author resolution happens before any media download. A failed resolution never produces orphan attachments on the destination.
+In the event of no match, the import is aborted with an error message, so the operator can create the user and re-import.
 
 For diagnostics, every imported post stores two private meta values:
 
 - `_safe_publish_source_author_email` — the source author's email at import time.
 - `_safe_publish_source_author_login` — the source author's login at import time.
 
-Both values are refreshed on every update to reflect current source state. The audit trail of historical values lives in the per-item history.
+On updates, the destination's `post_author` and the two private meta values above are refreshed to reflect the source's current author. The audit trail of historical values lives in the per-item history.
 
 No capability check is applied to the matched user: WordPress does not enforce capabilities on `post_author`, and a Subscriber on the destination who matches by email is legitimately attributed as the author of an imported post.
+
+#### Author Fallback
+
+Author resolution can be relaxed via the [`safe_publish_import_allow_author_fallback`](../extending/hooks.md#safe_publish_import_allow_author_fallback) filter. With the fallback enabled, new posts with an unmatched author are attributed to the importing user.
+
+For updates with an unmatched author, the destination's existing `post_author` is preserved unchanged.
+
+Whenever the fallback is applied, a warning is recorded on the import History item row and surfaced in the import results UI.
+
+The import still aborts when the source post has no resolvable author (e.g., the author was deleted on the source).
 
 ### Custom Post Types
 

@@ -200,7 +200,6 @@ This is a known limitation of WordPress' embed cache when imported posts referen
 | `request_failed`           | HTTP request to the source site failed                 | Check network connectivity and site availability         |
 | `meta_update_failed`       | One or more post meta keys failed to save              | Check destination site database permissions              |
 | `unknown_taxonomy`         | A taxonomy from the source post does not exist locally | Register the taxonomy on the destination site            |
-| `source_author_missing`    | Source response omits the `safe_publish_author` field  | Update Safe Publish on the source site                   |
 | `source_author_unresolved` | Source post has no author or its author was deleted    | Restore the source author or attribute the post manually |
 | `source_author_not_found`  | Source author's email has no match on the destination  | Create a user with the same email on the destination     |
 
