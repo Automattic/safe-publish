@@ -141,7 +141,6 @@ class Source_Posts_API {
 			'orderby'  => 'modified',
 			'order'    => 'desc',
 			'per_page' => min( $number_of_posts, 100 ), // Max 100 per request.
-			// '_fields' => 'id,link,title,modified,featured_media,content,excerpt,slug,comment_status,ping_status,menu_order', // Fetch all needed fields.
 			'_embed'   => '1',
 		);
 
@@ -358,11 +357,6 @@ class Source_Posts_API {
 
 		$query_args = array(
 			'_embed' => '1',
-			/**
-			 * TODO: Check if we want/need this.
-			 *
-			 * '_fields' => 'id,link,title,modified,featured_media,content,excerpt,tags,categories,meta,slug,comment_status,ping_status,menu_order,password', // Fetch all needed fields
-			 */
 		);
 
 		// Edit context provides raw field values (title, content, excerpt)
