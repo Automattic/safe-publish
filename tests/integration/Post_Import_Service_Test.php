@@ -2339,4 +2339,726 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$result['error']
 		);
 	}
+
+	/**
+	 * Verifies that a hierarchical post with source parent 0 is imported as
+	 * top-level and stores no diagnostic parent meta.
+	 */
+	public function test_top_level_hierarchical_post_imports_without_parent_meta(): void {
+		// ARRANGE: Page with source parent 0.
+		$this->mock_post_overrides = array( 'parent' => 0 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9920,
+			'title'     => 'Top Level Page',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/top-level-page',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Run the import.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Imported as top-level with no diagnostic meta.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame(
+			0,
+			(int) get_post( $result['post_id'] )->post_parent
+		);
+		$this->assertSame(
+			'',
+			get_post_meta(
+				$result['post_id'],
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			)
+		);
+		$this->assertSame( array(), $result['warnings'] );
+	}
+
+	/**
+	 * Verifies that a non-hierarchical post with a non-zero source parent is
+	 * imported as top-level with no diagnostic meta — the field is ignored.
+	 */
+	public function test_non_hierarchical_post_ignores_source_parent(): void {
+		// ARRANGE: 'posts' (non-hierarchical) with a non-zero parent in source.
+		$this->mock_post_overrides = array( 'parent' => 555 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9921,
+			'title'     => 'Non Hierarchical Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/non-hierarchical',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the import.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: post_parent stays 0 and diagnostic meta is absent.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame(
+			0,
+			(int) get_post( $result['post_id'] )->post_parent
+		);
+		$this->assertSame(
+			'',
+			get_post_meta(
+				$result['post_id'],
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a hierarchical post whose source parent matches an
+	 * already-imported destination post sets post_parent and writes the
+	 * diagnostic parent meta.
+	 */
+	public function test_resolvable_parent_sets_post_parent_and_meta(): void {
+		// ARRANGE: A destination page that was previously imported with
+		// source post id 700.
+		$existing_parent_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta(
+			$existing_parent_id,
+			Options::META_SOURCE_POST_ID,
+			700
+		);
+
+		$this->mock_post_overrides = array( 'parent' => 700 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9922,
+			'title'     => 'Child Page',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/child',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Run the import.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: post_parent matches the existing destination post and the
+		// diagnostic meta stores the source parent id.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame(
+			$existing_parent_id,
+			(int) get_post( $result['post_id'] )->post_parent
+		);
+		$this->assertSame(
+			'700',
+			get_post_meta(
+				$result['post_id'],
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			)
+		);
+	}
+
+	/**
+	 * Verifies that an unresolvable parent aborts the import with the
+	 * "has not been imported" message when the parent is not part of the
+	 * current batch.
+	 */
+	public function test_unresolvable_parent_not_in_batch_aborts(): void {
+		// ARRANGE: Hierarchical post whose source parent has no destination
+		// match and is not part of any batch context.
+		$this->mock_post_overrides = array( 'parent' => 8888 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9923,
+			'title'     => 'Orphaned Child',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/orphaned',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Run the import.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Failure with the no-match message and no post created.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString(
+			'has not been imported on this site',
+			$result['error']
+		);
+		$this->assertStringNotContainsString( '"', $result['error'] );
+
+		$this->assertSame(
+			array(),
+			get_posts(
+				array(
+					'post_type'        => 'page',
+					'posts_per_page'   => 1,
+					'suppress_filters' => false,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => '9923',
+				)
+			)
+		);
+	}
+
+	/**
+	 * Verifies that when the parent is part of the current bulk batch but
+	 * never made it to a successful destination import, the error message
+	 * uses the in-batch variant carrying the parent's title.
+	 */
+	public function test_unresolvable_parent_in_batch_uses_failed_in_batch_message(): void {
+		// ARRANGE: Pretend the parent's pass-1 fresh data is in scope by
+		// passing $batch_fresh_data directly to import_post().
+		$batch_fresh_data = array(
+			800 => array( 'title' => 'Pending Parent Page' ),
+		);
+
+		$this->mock_post_overrides = array( 'parent' => 800 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9924,
+			'title'     => 'Child Pending On Parent',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/child-pending',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Import with batch context but no destination match for 800.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id,
+			null,
+			$batch_fresh_data
+		);
+
+		// ASSERT: Failure with the in-batch message including the title.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString(
+			'failed to import earlier in this batch',
+			$result['error']
+		);
+		$this->assertStringContainsString( 'Pending Parent Page', $result['error'] );
+	}
+
+	/**
+	 * Verifies that the orphan fallback filter relaxes resolution: the post
+	 * imports as top-level and records a parent_orphaned warning with
+	 * reason 'not_imported' and a null title.
+	 */
+	public function test_orphan_fallback_not_imported_emits_warning(): void {
+		// ARRANGE: Hierarchical post with unresolvable parent + fallback on.
+		$this->mock_post_overrides = array( 'parent' => 9999 );
+
+		add_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9925,
+			'title'     => 'Orphan Fallback Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/orphan-fallback',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Run the import.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+
+		// ASSERT: Imported as top-level with a parent_orphaned warning.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame(
+			0,
+			(int) get_post( $result['post_id'] )->post_parent
+		);
+		$this->assertCount( 1, $result['warnings'] );
+		$this->assertSame( 'parent_orphaned', $result['warnings'][0]['type'] );
+		$this->assertSame( 'not_imported', $result['warnings'][0]['reason'] );
+		$this->assertSame( 9999, $result['warnings'][0]['source']['parent_id'] );
+		$this->assertNull( $result['warnings'][0]['source']['parent_title'] );
+	}
+
+	/**
+	 * Verifies that the orphan fallback for an in-batch parent records the
+	 * 'failed_in_batch' reason with the parent's title populated.
+	 */
+	public function test_orphan_fallback_failed_in_batch_includes_title(): void {
+		// ARRANGE: In-batch parent with no destination match + fallback on.
+		$batch_fresh_data = array(
+			801 => array( 'title' => 'Failed Parent' ),
+		);
+
+		$this->mock_post_overrides = array( 'parent' => 801 );
+
+		add_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9926,
+			'title'     => 'Child With Batch Parent',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/child-batch',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Import with batch context.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id,
+			null,
+			$batch_fresh_data
+		);
+
+		remove_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+
+		// ASSERT: Top-level orphan with failed_in_batch warning carrying the
+		// parent's title.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame(
+			0,
+			(int) get_post( $result['post_id'] )->post_parent
+		);
+		$this->assertSame( 'parent_orphaned', $result['warnings'][0]['type'] );
+		$this->assertSame( 'failed_in_batch', $result['warnings'][0]['reason'] );
+		$this->assertSame( 801, $result['warnings'][0]['source']['parent_id'] );
+		$this->assertSame(
+			'Failed Parent',
+			$result['warnings'][0]['source']['parent_title']
+		);
+	}
+
+	/**
+	 * Verifies that re-importing a page with the source parent unchanged
+	 * leaves post_parent and the diagnostic meta in place.
+	 */
+	public function test_reimport_with_unchanged_parent_preserves_state(): void {
+		// ARRANGE: Destination parent post.
+		$parent_dest_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_POST_ID,
+			900
+		);
+
+		$this->mock_post_overrides = array( 'parent' => 900 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9927,
+			'title'     => 'Stable Child',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/stable-child',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Initial import + re-import with no source changes.
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Same post id, same parent, same diagnostic meta.
+		$this->assertTrue( $second['success'] );
+		$this->assertSame( $first['post_id'], $second['post_id'] );
+		$this->assertSame(
+			$parent_dest_id,
+			(int) get_post( $second['post_id'] )->post_parent
+		);
+		$this->assertSame(
+			'900',
+			get_post_meta(
+				$second['post_id'],
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			)
+		);
+	}
+
+	/**
+	 * Verifies that re-importing with a changed source parent refreshes both
+	 * post_parent and the diagnostic meta.
+	 */
+	public function test_reimport_with_changed_parent_refreshes_state(): void {
+		// ARRANGE: Two destination parent posts.
+		$first_parent_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta(
+			$first_parent_id,
+			Options::META_SOURCE_POST_ID,
+			910
+		);
+		$second_parent_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta(
+			$second_parent_id,
+			Options::META_SOURCE_POST_ID,
+			920
+		);
+
+		$this->mock_post_overrides = array( 'parent' => 910 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9928,
+			'title'     => 'Migrating Child',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/migrating',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Initial import then re-import with a new parent.
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		$this->mock_post_overrides = array( 'parent' => 920 );
+		$second                    = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: post_parent and meta refreshed.
+		$this->assertTrue( $second['success'] );
+		$this->assertSame(
+			$second_parent_id,
+			(int) get_post( $second['post_id'] )->post_parent
+		);
+		$this->assertSame(
+			'920',
+			get_post_meta(
+				$second['post_id'],
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			)
+		);
+	}
+
+	/**
+	 * Verifies that re-importing a page that becomes top-level on the source
+	 * clears the previously-stored diagnostic parent meta so the meta tracks
+	 * the current source state.
+	 */
+	public function test_reimport_clears_parent_meta_when_source_becomes_top_level(): void {
+		// ARRANGE: Destination parent + a first import that writes the meta.
+		$parent_dest_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_POST_ID,
+			950
+		);
+
+		$this->mock_post_overrides = array( 'parent' => 950 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9933,
+			'title'     => 'Now Top-Level',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/now-top-level',
+			'post_type' => 'pages',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+		$this->assertSame(
+			'950',
+			get_post_meta(
+				$first['post_id'],
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			),
+			'First import should write the diagnostic parent meta.'
+		);
+
+		// ARRANGE: Source post now reports parent = 0 (top-level).
+		$this->mock_post_overrides = array( 'parent' => 0 );
+
+		// ACT: Re-import.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: post_parent is back to 0 and the diagnostic meta is gone.
+		$this->assertTrue( $second['success'] );
+		$this->assertSame( $first['post_id'], $second['post_id'] );
+		$this->assertSame(
+			0,
+			(int) get_post( $second['post_id'] )->post_parent
+		);
+		$this->assertSame(
+			'',
+			get_post_meta(
+				$second['post_id'],
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			),
+			'Diagnostic parent meta must be cleared when the source post is now top-level.'
+		);
+	}
+
+	/**
+	 * Verifies that re-importing a previously-orphaned post links it to its
+	 * source parent once that parent has been imported on the destination.
+	 */
+	public function test_reimport_links_orphan_once_parent_exists(): void {
+		// ARRANGE: First import with the fallback enabled and no destination
+		// match for the parent — the child is imported as an orphan.
+		$this->mock_post_overrides = array( 'parent' => 940 );
+
+		add_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9932,
+			'title'     => 'Late-Bound Child',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/late-bound',
+			'post_type' => 'pages',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		remove_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+
+		$this->assertTrue( $first['success'] );
+		$this->assertSame( 0, (int) get_post( $first['post_id'] )->post_parent );
+
+		// ARRANGE: Parent is now imported on the destination.
+		$parent_dest_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_POST_ID,
+			940
+		);
+
+		// ACT: Re-import the same source post — strict resolution should now
+		// succeed because the parent exists.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: post_parent and diagnostic meta now point at the parent.
+		$this->assertTrue( $second['success'] );
+		$this->assertSame( $first['post_id'], $second['post_id'] );
+		$this->assertSame(
+			$parent_dest_id,
+			(int) get_post( $second['post_id'] )->post_parent
+		);
+		$this->assertSame(
+			'940',
+			get_post_meta(
+				$second['post_id'],
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a strict re-import with an unresolvable parent aborts and
+	 * leaves the destination post untouched.
+	 */
+	public function test_strict_reimport_with_unresolvable_parent_aborts(): void {
+		// ARRANGE: Destination parent + successful first import.
+		$parent_dest_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_POST_ID,
+			930
+		);
+
+		$this->mock_post_overrides = array( 'parent' => 930 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9929,
+			'title'     => 'Strict Reimport Child',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/strict-reimport',
+			'post_type' => 'pages',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+		$first_title = get_post( $first['post_id'] )->post_title;
+
+		// ARRANGE: Source now reports an unresolvable parent.
+		$this->mock_post_overrides = array(
+			'parent' => 4242,
+			'title'  => 'Should Not Apply',
+		);
+
+		// ACT: Re-import must abort and leave state untouched.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Failure, original parent preserved, title unchanged.
+		$this->assertFalse( $second['success'] );
+		$post_after = get_post( $first['post_id'] );
+		$this->assertSame(
+			$parent_dest_id,
+			(int) $post_after->post_parent,
+			'Update must not retarget post_parent on a failed re-import.'
+		);
+		$this->assertSame( $first_title, $post_after->post_title );
+	}
+
+	/**
+	 * Verifies that an author fallback and a parent orphan applied to the
+	 * same import are both persisted as discrete warnings.
+	 */
+	public function test_author_and_parent_fallback_emit_two_warnings(): void {
+		// ARRANGE: No destination user matches the source author and the
+		// source parent is unresolvable. Both fallback filters on.
+		$this->mock_post_overrides = array(
+			'parent'              => 7777,
+			'safe_publish_author' => array(
+				'email'        => 'nobody@source.example',
+				'login'        => 'nobody',
+				'display_name' => 'Nobody',
+			),
+		);
+
+		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+		add_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9930,
+			'title'     => 'Both Fallbacks Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/both-fallbacks',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Run the import.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+		remove_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+
+		// ASSERT: Both warnings present.
+		$this->assertTrue( $result['success'] );
+		$this->assertCount( 2, $result['warnings'] );
+
+		$types = array_column( $result['warnings'], 'type' );
+		$this->assertContains( 'author_fallback_applied', $types );
+		$this->assertContains( 'parent_orphaned', $types );
+	}
+
+	/**
+	 * Verifies that the diagnostic source parent meta key never appears in
+	 * the public REST response for a destination post.
+	 */
+	public function test_source_parent_meta_is_absent_from_public_rest_response(): void {
+		// ARRANGE: Hierarchical import with a resolvable parent so the
+		// diagnostic meta is written.
+		$parent_dest_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_POST_ID,
+			950
+		);
+
+		$this->mock_post_overrides = array( 'parent' => 950 );
+
+		$post_data = array(
+			'id'        => 9931,
+			'title'     => 'Parent Meta Visibility Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/parent-rest-visibility',
+			'post_type' => 'pages',
+		);
+
+		$result = $this->import_service->import_post( $post_data );
+		$this->assertTrue( $result['success'] );
+
+		// ACT: Boot a fresh REST server and fetch the destination page.
+		global $wp_rest_server;
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound, Squiz.PHP.DisallowMultipleAssignments.Found
+		$server = $wp_rest_server = new \WP_REST_Server();
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
+		do_action( 'rest_api_init' );
+
+		$response = $server->dispatch(
+			new \WP_REST_Request( 'GET', '/wp/v2/pages/' . $result['post_id'] )
+		);
+
+		$data    = $response->get_data();
+		$meta    = isset( $data['meta'] ) && is_array( $data['meta'] ) ? $data['meta'] : array();
+		$encoded = (string) wp_json_encode( $data );
+
+		// ASSERT: Key is absent from both the encoded body and the meta map.
+		$this->assertStringNotContainsString(
+			Options::META_SOURCE_POST_PARENT_ID,
+			$encoded
+		);
+		$this->assertArrayNotHasKey(
+			Options::META_SOURCE_POST_PARENT_ID,
+			$meta
+		);
+
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
+		$wp_rest_server = null;
+	}
 }

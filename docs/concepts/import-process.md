@@ -127,10 +127,7 @@ New posts are always created as **drafts** to allow review before publishing. Th
 
 ### Excluded Fields
 
-Some source post fields are not migrated:
-
-- **Date**: Not preserved; the destination site uses its own publish date.
-- **Parent**: Parent/child relationships (mainly pages) are not mapped across sites.
+Source post publish date is not preserved; the destination site uses its own publish date.
 
 ### Author Resolution
 
@@ -156,6 +153,27 @@ For updates with an unmatched author, the destination's existing `post_author` i
 Whenever the fallback is applied, a warning is recorded on the import History item row and surfaced in the import results UI.
 
 The import still aborts when the source post has no resolvable author (e.g., the author was deleted on the source).
+
+### Parent Resolution
+
+For hierarchical post types (pages and any custom post type registered with `'hierarchical' => true`), the source post's parent is matched against destination posts using the `safe_publish_source_post_id` meta lookup — the same lookup that determines whether a source post is already imported.
+
+- **Top-level source posts** (source `parent = 0`) are imported as top-level on the destination. No resolution is performed.
+- **Non-hierarchical post types** ignore the source `parent` entirely.
+- **Match found**: `post_parent` is set to the destination post ID.
+- **No match (strict default)**: the import aborts with an error that identifies the unresolved parent. The error distinguishes "has not been imported on this site" (the parent was never imported and is not part of the current batch) from "failed to import earlier in this batch" (the parent was part of the bulk batch but did not succeed).
+
+Bulk imports run in two passes. Pass 1 fetches each post's REST payload without writing to the database; pass 2 then processes the batch in topological order so the destination parent exists by the time its children look it up. Posts in a cycle (or whose parent is outside the batch) are processed at the end of pass 2 and route through the same unresolvable-parent path.
+
+For diagnostics, every hierarchical post imported with a non-zero source parent stores one private meta value:
+
+- `_safe_publish_source_post_parent_id` — the source post's parent ID at import time.
+
+On updates, the meta is refreshed to reflect the current source state. The audit trail of historical values lives in the per-item history.
+
+#### Orphan Fallback
+
+Parent resolution can be relaxed via the [`safe_publish_import_allow_orphans`](../extending/hooks.md#safe_publish_import_allow_orphans) filter. With the fallback enabled, posts whose parent cannot be resolved are imported with `post_parent = 0` (top-level), and a warning is recorded on the import History item row and surfaced in the import results UI.
 
 ### Custom Post Types
 

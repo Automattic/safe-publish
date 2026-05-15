@@ -96,9 +96,26 @@ export interface AuthorFallbackWarning {
 }
 
 /**
+ * Surfaced when a hierarchical post was imported as orphan because its source
+ * parent could not be resolved on the destination.
+ *
+ * `parent_title` is null for `not_imported` (the title is not available
+ * without an extra REST call to the source). For `failed_in_batch` the
+ * parent's title is always present because pass-1 fetched its REST data.
+ */
+export interface ParentOrphanedWarning {
+	type: 'parent_orphaned';
+	source: {
+		parent_id: number;
+		parent_title: string | null;
+	};
+	reason: 'not_imported' | 'failed_in_batch';
+}
+
+/**
  * Discriminated union of all import warning types.
  */
-export type Warning = AuthorFallbackWarning;
+export type Warning = AuthorFallbackWarning | ParentOrphanedWarning;
 
 /**
  * Response from create draft post operation.

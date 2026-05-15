@@ -422,6 +422,7 @@ class Source_Posts_API {
 		$post_data['ping_status']    = sanitize_text_field( $data['ping_status'] ?? '' );
 		$post_data['menu_order']     = absint( $data['menu_order'] ?? 0 );
 		$post_data['password']       = sanitize_text_field( $data['password'] ?? '' );
+		$post_data['parent']         = absint( $data['parent'] ?? 0 );
 
 		if ( isset( $data['link'] ) ) {
 			$post_data['link'] = esc_url_raw( $data['link'] );
