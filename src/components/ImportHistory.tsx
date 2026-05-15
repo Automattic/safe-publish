@@ -481,7 +481,7 @@ export function ImportHistory(): JSX.Element {
 					<div
 						className="safe-publish-modal-content components-modal__frame"
 						style={ {
-							backgroundColor: 'white',
+							backgroundColor: 'var(--safe-publish-surface-bg)',
 							borderRadius: '2px',
 							maxWidth: '800px',
 							maxHeight: '80vh',
@@ -580,7 +580,7 @@ export function ImportHistory(): JSX.Element {
 					<div
 						className="safe-publish-modal-content components-modal__frame"
 						style={ {
-							backgroundColor: 'white',
+							backgroundColor: 'var(--safe-publish-surface-bg)',
 							borderRadius: '2px',
 							maxWidth: '900px',
 							maxHeight: '80vh',
