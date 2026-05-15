@@ -119,7 +119,7 @@ export function ExportHistory(): JSX.Element {
 			render: ( { item }: { item: ExportEvent } ): JSX.Element => {
 				const isError = 'error' === item.level;
 				return (
-					<span className={ `safe-publish-status-${ isError ? 'failed' : 'completed' }` }>
+					<span className={ `safe-publish-status-${ isError ? 'error' : 'completed' }` }>
 						{ isError
 							? __( 'Failed', 'safe-publish' )
 							: __( 'Exported', 'safe-publish' ) }

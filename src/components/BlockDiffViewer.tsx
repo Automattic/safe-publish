@@ -112,7 +112,7 @@ export default function BlockDiffViewer( { blocks = [], highlight = true }: Prop
                 }
 
                 return (
-                    <div key={ key } className={ `safe-publish-block-diff safe-publish-block-${ status }` }>
+                    <div key={ key } className="safe-publish-block-diff">
                         <div className="safe-publish-block-diff__header">
                             <Text>
                                 { title || __( 'Block', 'safe-publish' ) }
@@ -135,8 +135,8 @@ export default function BlockDiffViewer( { blocks = [], highlight = true }: Prop
                         ) }
                         { status === 'modified' && (
                             <div className="safe-publish-block-diff__modified">
-                                <div className="safe-publish-block-diff__col safe-publish-before" dangerouslySetInnerHTML={ { __html: currentHtml } } />
-                                <div className="safe-publish-block-diff__col safe-publish-after" dangerouslySetInnerHTML={ { __html: modifiedIncoming } } />
+                                <div className="safe-publish-block-diff__col" dangerouslySetInnerHTML={ { __html: currentHtml } } />
+                                <div className="safe-publish-block-diff__col" dangerouslySetInnerHTML={ { __html: modifiedIncoming } } />
                             </div>
                         ) }
                     </div>
