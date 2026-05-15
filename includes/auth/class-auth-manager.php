@@ -187,7 +187,6 @@ class Auth_Manager {
 					'shared_secret_configured' => ! empty( $shared_secret ),
 					'secret_length'            => strlen( $shared_secret ),
 					'secret_source'            => $this->get_secret_source(),
-					'vip_environment'          => defined( 'WPCOM_IS_VIP_ENV' ) ? WPCOM_IS_VIP_ENV : false,
 					'debug_mode'               => defined( 'WP_DEBUG' ) ? WP_DEBUG : false,
 				),
 				'statistics'          => array(
@@ -299,7 +298,6 @@ class Auth_Manager {
 				'safe_publish_headers_present' => $has_safe_publish_headers,
 				'shared_secret_configured'     => ! empty( $shared_secret ),
 				'secret_length'                => strlen( $shared_secret ),
-				'vip_environment'              => defined( 'WPCOM_IS_VIP_ENV' ) ? WPCOM_IS_VIP_ENV : false,
 				'debug_mode'                   => defined( 'WP_DEBUG' ) ? WP_DEBUG : false,
 				'logging_info'                 => array(
 					'error_log_available' => function_exists( 'error_log' ),
