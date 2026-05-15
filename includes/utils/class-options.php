@@ -35,14 +35,14 @@ class Options {
 	 *
 	 * @var string
 	 */
-	const OPTION_USERNAME = 'safe_publish_username';
+	const OPTION_BASIC_AUTH_USERNAME = 'safe_publish_basic_auth_username';
 
 	/**
 	 * Option key for the Basic Auth password.
 	 *
 	 * @var string
 	 */
-	const OPTION_PASSWORD = 'safe_publish_password';
+	const OPTION_BASIC_AUTH_PASSWORD = 'safe_publish_basic_auth_password';
 
 	/**
 	 * Option key for the sync mode of this site.

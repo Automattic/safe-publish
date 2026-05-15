@@ -40,8 +40,8 @@ class Auth_Credential_Provider {
 		}
 
 		// Basic auth is optional and can be layered on top of shared secret auth.
-		$username = get_option( Options::OPTION_USERNAME, '' );
-		$password = get_option( Options::OPTION_PASSWORD, '' );
+		$username = get_option( Options::OPTION_BASIC_AUTH_USERNAME, '' );
+		$password = get_option( Options::OPTION_BASIC_AUTH_PASSWORD, '' );
 
 		if ( ! empty( $username ) && ! empty( $password ) ) {
 			$credentials['username'] = $username;

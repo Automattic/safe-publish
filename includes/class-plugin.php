@@ -135,7 +135,7 @@ final class Plugin {
 
 		register_setting(
 			Options::SETTINGS_GROUP,
-			Options::OPTION_USERNAME,
+			Options::OPTION_BASIC_AUTH_USERNAME,
 			array(
 				'sanitize_callback' => array( $sanitizer, 'sanitize_username' ),
 				'default'           => '',
@@ -144,7 +144,7 @@ final class Plugin {
 
 		register_setting(
 			Options::SETTINGS_GROUP,
-			Options::OPTION_PASSWORD,
+			Options::OPTION_BASIC_AUTH_PASSWORD,
 			array(
 				'sanitize_callback' => array( $sanitizer, 'sanitize_password' ),
 				'default'           => '',
