@@ -91,7 +91,7 @@ class Permission_Manager {
 
 		// Grant caps via filter — HMAC already authenticated the caller, so we
 		// don't need a real WP user.
-		$this->logger->capability_based_auth_setup(
+		$this->logger->authenticated_context_installed(
 			$request->get_route(),
 			$request->get_method(),
 			'capability_only',
@@ -226,7 +226,7 @@ class Permission_Manager {
 			return $caps;
 		}
 
-		$this->logger->meta_cap_override( $cap, $user_id, $caps );
+		$this->logger->meta_cap_overridden( $cap, $user_id, $caps );
 
 		// Grant the capability by returning 'exist' (always granted).
 		return array( 'exist' );
@@ -540,7 +540,7 @@ class Permission_Manager {
 	/**
 	 * Logs an audit event for each authenticated export response:
 	 * CONTENT_EXPORTED on success, EXPORT_REQUEST_ERROR for WP_Error
-	 * responses, or EXPORT_BAD_STATUS for non-200 HTTP statuses.
+	 * responses, or EXPORT_RESPONSE_BAD_STATUS for non-200 HTTP statuses.
 	 *
 	 * Fires on rest_post_dispatch at priority 20, so it runs after all
 	 * permission overrides and context re-dispatches are complete. Skipped
@@ -579,7 +579,7 @@ class Permission_Manager {
 		$status = $response->get_status();
 
 		if ( 200 !== $status ) {
-			$this->export_logger->export_bad_status( $route, $destination_site_url, $status );
+			$this->export_logger->export_response_bad_status( $route, $destination_site_url, $status );
 			return $response;
 		}
 

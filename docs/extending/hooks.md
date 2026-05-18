@@ -24,7 +24,7 @@ Fires after any event is recorded to the audit log (e.g. import, export, auth, c
 
 ```php
 add_action( 'safe_publish_event_logged', function( string $channel, string $event, array $data ): void {
-    if ( 'export' === $channel && in_array( $event, array( 'EXPORT_REQUEST_ERROR', 'EXPORT_BAD_STATUS' ), true ) ) {
+    if ( 'export' === $channel && in_array( $event, array( 'EXPORT_REQUEST_ERROR', 'EXPORT_RESPONSE_BAD_STATUS' ), true ) ) {
         error_log( 'Safe Publish export failed: ' . wp_json_encode( $data ) );
     }
 }, 10, 3 );

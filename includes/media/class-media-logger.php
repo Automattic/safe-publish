@@ -47,16 +47,19 @@ class Media_Logger extends Logger {
 	}
 
 	/**
-	 * Logs a sideload failure for media imported via wp_handle_sideload.
+	 * Logs a sideload failure surfaced by media_handle_sideload.
 	 *
 	 * @param string $url             Media URL whose sideload failed.
 	 * @param string $source_site_url Source site the media originated from.
 	 * @param string $error           Error message from media_handle_sideload.
+	 * @param string $import_path     'inline' (in-content media) or
+	 *                                'attachment' (tracked attachments).
 	 */
 	public function media_sideload_failed(
 		string $url,
 		string $source_site_url,
-		string $error
+		string $error,
+		string $import_path
 	): void {
 		$this->log_error(
 			Log_Events::MEDIA_SIDELOAD_FAILED,
@@ -64,28 +67,7 @@ class Media_Logger extends Logger {
 				'url'             => $url,
 				'source_site_url' => $source_site_url,
 				'error'           => $error,
-			)
-		);
-	}
-
-	/**
-	 * Logs a media import failure surfaced by media_handle_sideload.
-	 *
-	 * @param string $url             Media URL whose import failed.
-	 * @param string $source_site_url Source site the media originated from.
-	 * @param string $error           Error message from media_handle_sideload.
-	 */
-	public function media_import_failed(
-		string $url,
-		string $source_site_url,
-		string $error
-	): void {
-		$this->log_error(
-			Log_Events::MEDIA_IMPORT_FAILED,
-			array(
-				'url'             => $url,
-				'source_site_url' => $source_site_url,
-				'error'           => $error,
+				'import_path'     => $import_path,
 			)
 		);
 	}
@@ -164,12 +146,12 @@ class Media_Logger extends Logger {
 	 * @param int    $media_id        Source media ID that was fetched.
 	 * @param string $source_site_url Source site the request targeted.
 	 */
-	public function featured_image_missing_source(
+	public function featured_image_source_missing(
 		int $media_id,
 		string $source_site_url
 	): void {
 		$this->log_error(
-			Log_Events::FEATURED_IMAGE_MISSING_SOURCE,
+			Log_Events::FEATURED_IMAGE_SOURCE_MISSING,
 			array(
 				'media_id'        => $media_id,
 				'source_site_url' => $source_site_url,

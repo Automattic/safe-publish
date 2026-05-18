@@ -15,7 +15,7 @@ namespace Safe_Publish\Utils;
  * Info events are stored in the database and fire a WordPress action hook.
  * Error events additionally write to the server error log.
  * Subclasses define the channel and expose typed per-event helper methods
- * (e.g. Auth_Logger::auth_success) that internally call log_event/log_error.
+ * (e.g. Auth_Logger::request_authenticated) that internally call log_event/log_error.
  * Those methods are the only entry point — log_event and log_error are
  * protected so each event's payload shape is locked to a single contract.
  */

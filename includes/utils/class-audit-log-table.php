@@ -86,7 +86,7 @@ final class Audit_Log_Table {
 	 *
 	 * @param string $channel        Logger channel (e.g. 'auth').
 	 * @param string $level          Event level: 'info' or 'error'.
-	 * @param string $event          Event type string (e.g. 'AUTH_SUCCESS').
+	 * @param string $event          Event type string (e.g. 'REQUEST_AUTHENTICATED').
 	 * @param string $created_at_gmt MySQL-formatted GMT datetime string.
 	 * @param array  $data           Event payload, stored as JSON.
 	 */

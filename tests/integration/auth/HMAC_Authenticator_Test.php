@@ -373,15 +373,15 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ACT: Authenticate the request.
 		$this->authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT: AUTH_SUCCESS entry exists with correct route and method.
-		// Note: additional events (e.g. CAPABILITY_BASED_AUTH_SETUP) may follow.
+		// ASSERT: REQUEST_AUTHENTICATED entry exists with correct route and method.
+		// Note: additional events (e.g. AUTHENTICATED_CONTEXT_INSTALLED) may follow.
 		$log_events  = Audit_Log_Table::get_events( array( 'channel' => 'auth' ) );
 		$event_types = array_column( $log_events, 'event' );
-		$this->assertContains( 'AUTH_SUCCESS', $event_types );
+		$this->assertContains( 'REQUEST_AUTHENTICATED', $event_types );
 		$success_events = array_values(
 			array_filter(
 				$log_events,
-				fn( array $e ) => 'AUTH_SUCCESS' === $e['event']
+				fn( array $e ) => 'REQUEST_AUTHENTICATED' === $e['event']
 			)
 		);
 		$this->assertCount( 1, $success_events );

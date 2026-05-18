@@ -394,7 +394,7 @@ final class History_Repository {
 		}
 
 		if ( 0 === $updated ) {
-			$this->logger->session_rollback_noop( $session_id );
+			$this->logger->session_already_rolled_back( $session_id );
 		} else {
 			$this->logger->session_rolled_back( $session_id );
 		}
@@ -443,7 +443,7 @@ final class History_Repository {
 		}
 
 		if ( 0 === $updated ) {
-			$this->logger->item_rollback_noop( $item_id, $session_id, $post_id );
+			$this->logger->item_already_rolled_back( $item_id, $session_id, $post_id );
 		} else {
 			$this->logger->item_rolled_back( $item_id, $session_id, $post_id );
 		}

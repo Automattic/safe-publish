@@ -134,7 +134,8 @@ class Media_Importer {
 			$this->logger->media_sideload_failed(
 				$media_url,
 				$source_site_url,
-				$attachment_id->get_error_message()
+				$attachment_id->get_error_message(),
+				'inline'
 			);
 			return false;
 		}
@@ -292,10 +293,11 @@ class Media_Importer {
 		remove_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ) );
 
 		if ( is_wp_error( $attachment_id ) ) {
-			$this->logger->media_import_failed(
+			$this->logger->media_sideload_failed(
 				$media_url,
 				$source_site_url,
-				$attachment_id->get_error_message()
+				$attachment_id->get_error_message(),
+				'attachment'
 			);
 			return false;
 		}
@@ -384,7 +386,7 @@ class Media_Importer {
 		$media_data    = json_decode( $response_body, true );
 
 		if ( ! isset( $media_data['source_url'] ) || '' === $media_data['source_url'] ) {
-			$this->logger->featured_image_missing_source(
+			$this->logger->featured_image_source_missing(
 				$featured_media_id,
 				$source_site_url
 			);
