@@ -1,0 +1,18 @@
+title = "Gitleaks configuration for compliant-content-publisher"
+
+[extend]
+useDefault = true
+
+# Test files hardcode fixed dummy secrets/keys used only by the test suite
+# (e.g. "integration-test-secret-key-32chars-ok", "1234567890abcdef").
+# These are not real credentials — scoped to the generic-api-key rule within
+# the specific test files that contain them.
+[[allowlists]]
+description = "generic-api-key test fixtures (hardcoded dummy secrets in test suite)"
+targetRules = ["generic-api-key"]
+paths = [
+  '''^tests/integration/Bulk_Import_Topological_Sort_Test\.php$''',
+  '''^tests/integration/Import_Mode_Admin_Handler/Admin_Ajax_Controller_Test\.php$''',
+  '''^tests/integration/auth/HMAC_Authenticator_Test\.php$''',
+  '''^tests/unit/VIPSafeAuthTest\.php$''',
+]
