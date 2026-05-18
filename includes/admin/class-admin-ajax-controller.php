@@ -141,8 +141,8 @@ final class Admin_Ajax_Controller {
 	private function register_auth_status_invalidation(): void {
 		$options  = array(
 			Options::OPTION_CONNECTED_SITE_URL,
-			Options::OPTION_USERNAME,
-			Options::OPTION_PASSWORD,
+			Options::OPTION_BASIC_AUTH_USERNAME,
+			Options::OPTION_BASIC_AUTH_PASSWORD,
 		);
 		$callback = array( __CLASS__, 'bust_auth_status_cache' );
 

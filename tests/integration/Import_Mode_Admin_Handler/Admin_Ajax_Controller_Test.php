@@ -981,22 +981,22 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			),
 			'add basic auth username'    => array(
 				'add',
-				Options::OPTION_USERNAME,
+				Options::OPTION_BASIC_AUTH_USERNAME,
 				'new-user',
 			),
 			'update basic auth username' => array(
 				'update',
-				Options::OPTION_USERNAME,
+				Options::OPTION_BASIC_AUTH_USERNAME,
 				'updated-user',
 			),
 			'add basic auth password'    => array(
 				'add',
-				Options::OPTION_PASSWORD,
+				Options::OPTION_BASIC_AUTH_PASSWORD,
 				'new-password',
 			),
 			'update basic auth password' => array(
 				'update',
-				Options::OPTION_PASSWORD,
+				Options::OPTION_BASIC_AUTH_PASSWORD,
 				'updated-password',
 			),
 		);

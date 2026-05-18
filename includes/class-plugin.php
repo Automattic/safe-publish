@@ -19,6 +19,7 @@ use Safe_Publish\Admin\Import_History;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\Admin\Session_Formatter;
 use Safe_Publish\Admin\Session_Rollback_Service;
+use Safe_Publish\Admin\Settings_Logger;
 use Safe_Publish\Admin\Settings_Page;
 use Safe_Publish\Admin\Settings_Sanitizer;
 use Safe_Publish\Auth\Auth_Manager;
@@ -73,6 +74,8 @@ final class Plugin {
 		Audit_Log_Table::maybe_create_table();
 		Imports_Table::maybe_create_table();
 		Import_Items_Table::maybe_create_table();
+
+		( new Settings_Logger() )->register_handlers();
 
 		$sync_mode          = get_option( Options::OPTION_SYNC_MODE, '' );
 		$connected_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
@@ -135,7 +138,7 @@ final class Plugin {
 
 		register_setting(
 			Options::SETTINGS_GROUP,
-			Options::OPTION_USERNAME,
+			Options::OPTION_BASIC_AUTH_USERNAME,
 			array(
 				'sanitize_callback' => array( $sanitizer, 'sanitize_username' ),
 				'default'           => '',
@@ -144,7 +147,7 @@ final class Plugin {
 
 		register_setting(
 			Options::SETTINGS_GROUP,
-			Options::OPTION_PASSWORD,
+			Options::OPTION_BASIC_AUTH_PASSWORD,
 			array(
 				'sanitize_callback' => array( $sanitizer, 'sanitize_password' ),
 				'default'           => '',

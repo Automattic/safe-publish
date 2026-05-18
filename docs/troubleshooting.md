@@ -371,8 +371,8 @@ If you need to start fresh:
 wp option delete safe_publish_connected_site_url
 wp option delete safe_publish_sync_mode
 wp option delete safe_publish_number_of_posts
-wp option delete safe_publish_username
-wp option delete safe_publish_password
+wp option delete safe_publish_basic_auth_username
+wp option delete safe_publish_basic_auth_password
 ```
 
 ### Clear Import History
