@@ -211,7 +211,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 				'post_type'      => 'post',
 				'post_status'    => 'draft',
 				'posts_per_page' => 1,
-				'meta_key'       => 'safe_publish_external_post_id',
+				'meta_key'       => 'safe_publish_source_post_id',
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'     => '9001',
 			)
@@ -225,8 +225,8 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 		$this->assertSame(
 			'https://source.example.com/test-import-post',
-			get_post_meta( $imported_posts[0]->ID, Options::META_EXTERNAL_LINK, true ),
-			'External link meta should be stored'
+			get_post_meta( $imported_posts[0]->ID, Options::META_SOURCE_LINK, true ),
+			'Source link meta should be stored'
 		);
 		$this->assertSame(
 			Options::META_IMPORTED_FROM_VALUE,
@@ -248,9 +248,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 		wp_set_current_user( $subscriber_id );
 		$_POST = array(
-			'nonce'            => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-			'external_post_id' => '42',
-			'title'            => 'Some Title',
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '42',
+			'title'          => 'Some Title',
 		);
 
 		// ACT: Trigger the create draft AJAX handler.
@@ -275,12 +275,12 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		// ARRANGE: Authenticate as admin with valid nonce and minimal post data.
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
-			'nonce'            => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-			'external_post_id' => '7001',
-			'title'            => 'Single Draft Import',
-			'content'          => '<p>Plain text, no external media.</p>',
-			'external_link'    => 'https://source.example.com/single-draft',
-			'post_type'        => 'post',
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '7001',
+			'title'          => 'Single Draft Import',
+			'content'        => '<p>Plain text, no external media.</p>',
+			'source_link'    => 'https://source.example.com/single-draft',
+			'post_type'      => 'post',
 		);
 
 		// ACT: Trigger the create draft AJAX handler.
@@ -307,22 +307,22 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		$this->assertSame( 'draft', $post->post_status, 'Post should be saved as a draft' );
 		$this->assertSame(
 			'7001',
-			get_post_meta( $post_id, Options::META_EXTERNAL_POST_ID, true ),
-			'External post ID meta should be stored'
+			get_post_meta( $post_id, Options::META_SOURCE_POST_ID, true ),
+			'Source post ID meta should be stored'
 		);
 		$this->assertSame(
 			'https://source.example.com/single-draft',
-			get_post_meta( $post_id, Options::META_EXTERNAL_LINK, true ),
-			'External link meta should be stored'
+			get_post_meta( $post_id, Options::META_SOURCE_LINK, true ),
+			'Source link meta should be stored'
 		);
 	}
 
 	/**
 	 * Verifies that the create draft endpoint returns a confirmation prompt
-	 * when a post with the same external ID already exists.
+	 * when a post with the same source post ID already exists.
 	 */
 	public function test_ajax_create_draft_returns_existing_post_confirmation(): void {
-		// ARRANGE: Pre-create a post with a known external ID so the duplicate
+		// ARRANGE: Pre-create a post with a known source post ID so the duplicate
 		// is detected.
 		$existing_post_id = wp_insert_post(
 			array(
@@ -331,16 +331,16 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 				'post_type'   => 'post',
 			)
 		);
-		update_post_meta( $existing_post_id, 'safe_publish_external_post_id', '8001' );
+		update_post_meta( $existing_post_id, 'safe_publish_source_post_id', '8001' );
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
-			'nonce'            => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-			'external_post_id' => '8001',
-			'title'            => 'Already Imported',
-			'content'          => '<p>Same content.</p>',
-			'external_link'    => 'https://source.example.com/already-imported',
-			'post_type'        => 'post',
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '8001',
+			'title'          => 'Already Imported',
+			'content'        => '<p>Same content.</p>',
+			'source_link'    => 'https://source.example.com/already-imported',
+			'post_type'      => 'post',
 		);
 
 		// ACT: Trigger handler without force_update — should not overwrite.
@@ -376,11 +376,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		// ARRANGE: Authenticate as admin but omit the title.
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
-			'nonce'            => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-			'external_post_id' => '9999',
-			'title'            => '',
-			'external_link'    => 'https://source.example.com/no-title',
-			'post_type'        => 'post',
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '9999',
+			'title'          => '',
+			'source_link'    => 'https://source.example.com/no-title',
+			'post_type'      => 'post',
 		);
 
 		// ACT: Trigger the create draft AJAX handler.
@@ -441,7 +441,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	 * Verifies that the bulk import endpoint correctly reports failures for
 	 * invalid post data.
 	 *
-	 * Posts missing required fields (title or external ID) should count as
+	 * Posts missing required fields (title or source post ID) should count as
 	 * failed without aborting the rest of the batch.
 	 */
 	public function test_ajax_bulk_import_reports_partial_failure(): void {
@@ -491,7 +491,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	 * stale.
 	 */
 	public function test_ajax_update_draft_fails_when_tracking_meta_write_fails(): void {
-		// ARRANGE: Pre-create a post with a known external ID so the update
+		// ARRANGE: Pre-create a post with a known source post ID so the update
 		// path is taken.
 		$existing_post_id = wp_insert_post(
 			array(
@@ -502,19 +502,19 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 		update_post_meta(
 			$existing_post_id,
-			Options::META_EXTERNAL_POST_ID,
+			Options::META_SOURCE_POST_ID,
 			'8050'
 		);
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
-			'nonce'            => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-			'external_post_id' => '8050',
-			'title'            => 'Existing Post',
-			'content'          => '<p>Updated content.</p>',
-			'external_link'    => 'https://source.example.com/existing-post',
-			'post_type'        => 'post',
-			'force_update'     => 'true',
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '8050',
+			'title'          => 'Existing Post',
+			'content'        => '<p>Updated content.</p>',
+			'source_link'    => 'https://source.example.com/existing-post',
+			'post_type'      => 'post',
+			'force_update'   => 'true',
 		);
 
 		// ARRANGE: Block update_post_meta for META_IMPORT_DATE_GMT to simulate a DB
@@ -577,12 +577,12 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
-			'nonce'            => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-			'external_post_id' => '7100',
-			'title'            => 'Post With Source Fields',
-			'content'          => '<p>Content.</p>',
-			'external_link'    => 'https://source.example.com/source-slug',
-			'post_type'        => 'post',
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '7100',
+			'title'          => 'Post With Source Fields',
+			'content'        => '<p>Content.</p>',
+			'source_link'    => 'https://source.example.com/source-slug',
+			'post_type'      => 'post',
 		);
 
 		// ACT: Trigger the create draft handler.
@@ -639,7 +639,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 		update_post_meta(
 			$existing_post_id,
-			Options::META_EXTERNAL_POST_ID,
+			Options::META_SOURCE_POST_ID,
 			'7101'
 		);
 
@@ -653,13 +653,13 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
-			'nonce'            => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-			'external_post_id' => '7101',
-			'title'            => 'Existing Post',
-			'content'          => '<p>Updated content.</p>',
-			'external_link'    => 'https://source.example.com/new-slug',
-			'post_type'        => 'post',
-			'force_update'     => 'true',
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '7101',
+			'title'          => 'Existing Post',
+			'content'        => '<p>Updated content.</p>',
+			'source_link'    => 'https://source.example.com/new-slug',
+			'post_type'      => 'post',
+			'force_update'   => 'true',
 		);
 
 		// ACT: Trigger the create draft handler with force_update.
@@ -709,12 +709,12 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
-			'nonce'            => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-			'external_post_id' => '7200',
-			'title'            => 'Password Protected Post',
-			'content'          => '<p>Content.</p>',
-			'external_link'    => 'https://source.example.com/password-post',
-			'post_type'        => 'post',
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '7200',
+			'title'          => 'Password Protected Post',
+			'content'        => '<p>Content.</p>',
+			'source_link'    => 'https://source.example.com/password-post',
+			'post_type'      => 'post',
 		);
 
 		// ACT: Trigger the create draft handler.
@@ -753,7 +753,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 		update_post_meta(
 			$existing_post_id,
-			Options::META_EXTERNAL_POST_ID,
+			Options::META_SOURCE_POST_ID,
 			'7201'
 		);
 
@@ -764,13 +764,13 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
-			'nonce'            => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-			'external_post_id' => '7201',
-			'title'            => 'Existing Post',
-			'content'          => '<p>Updated content.</p>',
-			'external_link'    => 'https://source.example.com/password-update',
-			'post_type'        => 'post',
-			'force_update'     => 'true',
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '7201',
+			'title'          => 'Existing Post',
+			'content'        => '<p>Updated content.</p>',
+			'source_link'    => 'https://source.example.com/password-update',
+			'post_type'      => 'post',
+			'force_update'   => 'true',
 		);
 
 		// ACT: Trigger the create draft handler with force_update.
@@ -805,14 +805,14 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
-			'nonce'            => wp_create_nonce(
+			'nonce'          => wp_create_nonce(
 				'safe_publish_ajax_nonce'
 			),
-			'external_post_id' => '7300',
-			'title'            => 'Password Leak Check',
-			'content'          => '<p>Content.</p>',
-			'external_link'    => 'https://source.example.com/pw-leak',
-			'post_type'        => 'post',
+			'source_post_id' => '7300',
+			'title'          => 'Password Leak Check',
+			'content'        => '<p>Content.</p>',
+			'source_link'    => 'https://source.example.com/pw-leak',
+			'post_type'      => 'post',
 		);
 
 		// ACT: Trigger the create draft handler.
@@ -981,22 +981,22 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			),
 			'add basic auth username'    => array(
 				'add',
-				Options::OPTION_USERNAME,
+				Options::OPTION_BASIC_AUTH_USERNAME,
 				'new-user',
 			),
 			'update basic auth username' => array(
 				'update',
-				Options::OPTION_USERNAME,
+				Options::OPTION_BASIC_AUTH_USERNAME,
 				'updated-user',
 			),
 			'add basic auth password'    => array(
 				'add',
-				Options::OPTION_PASSWORD,
+				Options::OPTION_BASIC_AUTH_PASSWORD,
 				'new-password',
 			),
 			'update basic auth password' => array(
 				'update',
-				Options::OPTION_PASSWORD,
+				Options::OPTION_BASIC_AUTH_PASSWORD,
 				'updated-password',
 			),
 		);
@@ -1043,6 +1043,230 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		delete_option( $option );
+	}
+
+	/**
+	 * Verifies that a single-import author-resolution failure produces an
+	 * `import_items` row with status 'error' and a descriptive error_message.
+	 */
+	public function test_ajax_create_draft_logs_author_resolution_failure(): void {
+		// ARRANGE: Source response advertises an author email that does not
+		// exist on the destination — strict resolution must abort.
+		wp_set_current_user( $this->admin_user_id );
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'ghost@source.example',
+				'login'        => 'ghost',
+				'display_name' => 'Ghost Author',
+			),
+		);
+		$_POST                     = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '6010',
+			'title'          => 'Author Resolution Logging',
+			'source_link'    => 'https://source.example.com/author-logging',
+			'post_type'      => 'post',
+		);
+
+		// ACT: Trigger the create draft AJAX handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: Response is a JSON error naming the unmatched source author.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response );
+		$this->assertFalse( $response['success'] );
+		$this->assertStringContainsString( 'Ghost Author', $response['data'] );
+
+		// ASSERT: A single error item row was written for this failure.
+		global $wpdb;
+		$items_table = Import_Items_Table::table_name();
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT status, error_message FROM `{$items_table}` WHERE source_post_id = %d",
+				6010
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$this->assertCount( 1, $rows );
+		$this->assertSame( 'error', $rows[0]['status'] );
+		$this->assertStringContainsString( 'Ghost Author', (string) $rows[0]['error_message'] );
+
+		// ASSERT: The session was finalized — no open session remains.
+		$this->assertSame( 0, $this->count_open_sessions() );
+	}
+
+	/**
+	 * Verifies that with the author fallback filter enabled, the single-import
+	 * create endpoint attributes an unmatched-author post to the importing
+	 * user. The resulting warning is returned in the AJAX response and
+	 * persisted on the history item row.
+	 */
+	public function test_ajax_create_draft_applies_author_fallback_on_insert(): void {
+		// ARRANGE: Importing user authenticated; source author with no match;
+		// author fallback filter enabled.
+		wp_set_current_user( $this->admin_user_id );
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'orphan@source.example',
+				'login'        => 'orphan',
+				'display_name' => 'Orphan',
+			),
+		);
+		$_POST                     = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '6020',
+			'title'          => 'Single Fallback Insert',
+			'source_link'    => 'https://source.example.com/single-fallback-insert',
+			'post_type'      => 'post',
+		);
+
+		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+
+		// ACT: Trigger the create draft AJAX handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		remove_filter(
+			'safe_publish_import_allow_author_fallback',
+			'__return_true'
+		);
+
+		// ASSERT: Response is success and the post is attributed to the importer.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response );
+		$this->assertTrue( $response['success'] );
+
+		$post_id = (int) $response['data']['post_id'];
+		$this->assertGreaterThan( 0, $post_id );
+		$this->assertSame(
+			$this->admin_user_id,
+			(int) get_post( $post_id )->post_author
+		);
+
+		// ASSERT: Response payload carries the structured warning.
+		$this->assertSame(
+			array(
+				array(
+					'type'             => 'author_fallback_applied',
+					'source'           => array(
+						'email'        => 'orphan@source.example',
+						'login'        => 'orphan',
+						'display_name' => 'Orphan',
+					),
+					'fallback_user_id' => $this->admin_user_id,
+				),
+			),
+			$response['data']['warnings']
+		);
+
+		// ASSERT: History item row mirrors the response payload.
+		global $wpdb;
+		$items_table = Import_Items_Table::table_name();
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT status, warnings FROM `{$items_table}` WHERE source_post_id = %d",
+				6020
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$this->assertSame( 'success', $row['status'] );
+		$this->assertSame(
+			$response['data']['warnings'],
+			json_decode( (string) $row['warnings'], true )
+		);
+	}
+
+	/**
+	 * Verifies that with the author fallback filter enabled, a force-update on
+	 * an existing post with an unmatched author preserves the existing
+	 * post_author. The warning's fallback_user_id is null in this case.
+	 */
+	public function test_ajax_update_draft_applies_author_fallback_on_update(): void {
+		// ARRANGE: Existing destination post owned by a different user from
+		// the importing one, with the source post id meta in place.
+		$existing_author_id = $this->factory()->user->create(
+			array( 'role' => 'editor' )
+		);
+		$existing_post_id   = $this->factory()->post->create(
+			array(
+				'post_title'  => 'Existing Post',
+				'post_status' => 'draft',
+				'post_type'   => 'post',
+				'post_author' => $existing_author_id,
+			)
+		);
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_POST_ID,
+			'6021'
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'gone@source.example',
+				'login'        => 'gone',
+				'display_name' => 'Gone',
+			),
+		);
+		$_POST                     = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '6021',
+			'title'          => 'Existing Post',
+			'source_link'    => 'https://source.example.com/single-fallback-update',
+			'post_type'      => 'post',
+			'force_update'   => 'true',
+		);
+
+		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+
+		// ACT: Trigger the create draft AJAX handler in update mode.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		remove_filter(
+			'safe_publish_import_allow_author_fallback',
+			'__return_true'
+		);
+
+		// ASSERT: Response is success and post_author is unchanged.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response );
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( $existing_post_id, (int) $response['data']['post_id'] );
+		$this->assertSame(
+			$existing_author_id,
+			(int) get_post( $existing_post_id )->post_author,
+			'Update fallback must preserve the existing post_author.'
+		);
+
+		// ASSERT: Warning has null fallback_user_id (kept-author semantic).
+		$this->assertCount( 1, $response['data']['warnings'] );
+		$this->assertNull( $response['data']['warnings'][0]['fallback_user_id'] );
+		$this->assertSame(
+			'gone@source.example',
+			$response['data']['warnings'][0]['source']['email']
+		);
+
+		// ASSERT: History item row carries the warning JSON.
+		global $wpdb;
+		$items_table = Import_Items_Table::table_name();
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT status, warnings FROM `{$items_table}` WHERE source_post_id = %d",
+				6021
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$this->assertSame( 'updated', $row['status'] );
+		$this->assertSame(
+			$response['data']['warnings'],
+			json_decode( (string) $row['warnings'], true )
+		);
 	}
 
 	/**

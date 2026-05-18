@@ -257,12 +257,7 @@ export function SessionDetailsModal( {
 		return (
 			<VStack spacing={ 2 }>
 				{ items.map( ( item ) => (
-					<div key={ item.id } className="safe-publish-item-row" style={ {
-						background: '#fff',
-						border: '1px solid #ddd',
-						borderRadius: '4px',
-						padding: '15px',
-					} }>
+					<div key={ item.id } className="safe-publish-item-row">
 						<VStack spacing={ 2 }>
 							<HStack justify="space-between">
 								<Text><strong>{ item.title }</strong></Text>
@@ -323,10 +318,10 @@ export function SessionDetailsModal( {
 								<span className={ `safe-publish-status-${ item.status }` }>
 									{ item.status_label }
 								</span>
-								{ null !== item.external_post_id && (
-									<Text>{ /* translators: %s is the external ID of the imported item */
-									__( 'External ID: %s', 'safe-publish' )
-										.replace( '%s', String( item.external_post_id ) ) }</Text>
+								{ null !== item.source_post_id && (
+									<Text>{ /* translators: %s is the source post ID of the imported item */
+									__( 'Source ID: %s', 'safe-publish' )
+										.replace( '%s', String( item.source_post_id ) ) }</Text>
 								) }
 								{ item.error && (
 									<>

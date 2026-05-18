@@ -83,13 +83,13 @@ class Export_Logger extends Logger {
 	 * @param string $destination_site_url URL of the destination that fetched.
 	 * @param int    $status               HTTP status code returned.
 	 */
-	public function export_bad_status(
+	public function export_response_bad_status(
 		string $route,
 		string $destination_site_url,
 		int $status
 	): void {
 		$this->log_error(
-			Log_Events::EXPORT_BAD_STATUS,
+			Log_Events::EXPORT_RESPONSE_BAD_STATUS,
 			array(
 				'route'                => $route,
 				'destination_site_url' => $destination_site_url,

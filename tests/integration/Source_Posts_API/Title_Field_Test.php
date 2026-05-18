@@ -7,25 +7,25 @@
 
 declare(strict_types=1);
 
-namespace Safe_Publish\Tests\Integration\External_Posts_API;
+namespace Safe_Publish\Tests\Integration\Source_Posts_API;
 
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 
 /**
- * Verifies that External_Posts_API::prepare_post_for_listing() emits the title
+ * Verifies that Source_Posts_API::prepare_post_for_listing() emits the title
  * as plain text — HTML entities decoded, tags stripped — so the destination
  * listing UI can render item.title directly without it appearing as raw entity
  * markup or smuggling tags through.
  */
-class Title_Field_Test extends External_Posts_API_Test_Base {
+class Title_Field_Test extends Source_Posts_API_Test_Base {
 
 	/**
-	 * External Posts API instance.
+	 * Source Posts API instance.
 	 *
-	 * @var External_Posts_API
+	 * @var Source_Posts_API
 	 */
-	private External_Posts_API $api;
+	private Source_Posts_API $api;
 
 	/**
 	 * Sets up the API instance reused by each case.
@@ -33,7 +33,7 @@ class Title_Field_Test extends External_Posts_API_Test_Base {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
-		$this->api = new External_Posts_API( new HTTP_Client() );
+		$this->api = new Source_Posts_API( new HTTP_Client() );
 	}
 
 	/**
@@ -107,10 +107,10 @@ class Title_Field_Test extends External_Posts_API_Test_Base {
 	 * case the REST API uses for ampersands in titles.
 	 */
 	public function test_prepared_title_decodes_named_entities(): void {
-		// ARRANGE + ACT.
+		// ARRANGE + ACT: ampersand arrives as &amp; in the REST response.
 		$title = $this->prepared_title_for( 'Tom &amp; Jerry' );
 
-		// ASSERT.
+		// ASSERT: Listing UI receives the literal ampersand.
 		$this->assertSame( 'Tom & Jerry', $title );
 	}
 
@@ -122,7 +122,7 @@ class Title_Field_Test extends External_Posts_API_Test_Base {
 	 * later render as HTML.
 	 */
 	public function test_prepared_title_strips_tags_after_decoding_entities(): void {
-		// ARRANGE + ACT.
+		// ARRANGE + ACT: encoded script tag arrives in the REST response.
 		$title = $this->prepared_title_for(
 			'Title &lt;script&gt;alert(1)&lt;/script&gt;'
 		);

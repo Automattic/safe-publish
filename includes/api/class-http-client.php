@@ -20,13 +20,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * HTTP Client Class.
  *
- * Provides a centralized service for making HTTP requests with VIP
- * compatibility, authentication handling, and error management.
+ * Provides a centralized service for making HTTP requests with authentication
+ * handling and error management.
  */
 final class HTTP_Client {
 
 	/**
-	 * Makes HTTP request with VIP compatibility.
+	 * Makes an HTTP request.
 	 *
 	 * @param string $url              Request URL.
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
@@ -34,7 +34,7 @@ final class HTTP_Client {
 	 * @return array|WP_Error Response or error.
 	 */
 	public function make_request( string $url, array $auth_credentials = array(), array $additional_args = array() ): array|WP_Error {
-		// VIP-optimized timeout (max 10 seconds recommended for VIP environments).
+		// Default request timeout in seconds (filterable).
 		$timeout = apply_filters( 'safe_publish_request_timeout', 10 );
 
 		// Determine SSL verification based on environment.
@@ -50,7 +50,7 @@ final class HTTP_Client {
 			$additional_args
 		);
 
-		// Use VIP-safe authentication instead of Basic Auth.
+		// Apply HMAC auth headers; Basic Auth layers on top when configured.
 		$body        = $request_args['body'] ?? '';
 		$auth_params = VIP_Safe_Auth::get_auth_params( $url, $auth_credentials, 'GET', $body );
 
@@ -80,7 +80,7 @@ final class HTTP_Client {
 		if ( is_wp_error( $response ) ) {
 			return new WP_Error(
 				'request_failed',
-				__( 'Failed to fetch data from external site.', 'safe-publish' ) . ' ' . $response->get_error_message()
+				__( 'Failed to fetch data from source site.', 'safe-publish' ) . ' ' . $response->get_error_message()
 			);
 		}
 
@@ -90,7 +90,7 @@ final class HTTP_Client {
 				'http_error',
 				sprintf(
 					/* translators: %d: HTTP response code */
-					__( 'External site returned HTTP error %d.', 'safe-publish' ),
+					__( 'Source site returned HTTP error %d.', 'safe-publish' ),
 					$response_code
 				)
 			);
@@ -116,7 +116,7 @@ final class HTTP_Client {
 	}
 
 	/**
-	 * Makes safe remote GET request with VIP compatibility.
+	 * Makes a safe remote GET request.
 	 *
 	 * @param string $url  Request URL.
 	 * @param array  $args Optional. Request arguments. Default empty array.
@@ -173,7 +173,7 @@ final class HTTP_Client {
 	}
 
 	/**
-	 * Cleans up temporary file with VIP compatibility.
+	 * Cleans up a temporary file.
 	 *
 	 * @param string $temp_file Path to temporary file.
 	 */
@@ -190,12 +190,12 @@ final class HTTP_Client {
 	}
 
 	/**
-	 * Downloads external file using WordPress core function.
+	 * Downloads a file using the WordPress core function.
 	 *
-	 * @param string $url External file URL.
+	 * @param string $url File URL.
 	 * @return string|WP_Error Path to downloaded file on success, WP_Error on failure.
 	 */
-	public function download_external_file( string $url ): string|WP_Error {
+	public function download_file( string $url ): string|WP_Error {
 		// Use download_url for proper file handling - WordPress core function.
 		return download_url( $url );
 	}

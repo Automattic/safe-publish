@@ -43,11 +43,15 @@ final class History_Renderer {
 			wp_enqueue_script( 'wp-dataviews' );
 		}
 
+		// Enqueue shared design tokens before any plugin stylesheet.
+		$tokens_css_url = plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/tokens.css';
+		wp_enqueue_style( 'safe-publish-tokens', $tokens_css_url, array(), '1.0.0' );
+
 		// Enqueue custom CSS.
 		$css_file = plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/history.css';
-		wp_enqueue_style( 'safe-publish-history', $css_file, array(), '1.0.0' );
+		wp_enqueue_style( 'safe-publish-history', $css_file, array( 'safe-publish-tokens' ), '1.0.0' );
 
-		// Enqueue DataViews styles with VIP-safe versioning.
+		// Enqueue DataViews styles.
 		$style_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/style-index.css';
 		$style_file_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'build/style-index.css';
 
@@ -55,7 +59,7 @@ final class History_Renderer {
 			wp_enqueue_style(
 				'safe-publish-admin-dataviews-style',
 				$style_file_url,
-				array( 'wp-components' ),
+				array( 'wp-components', 'safe-publish-tokens' ),
 				filemtime( $style_file_path )
 			);
 		}

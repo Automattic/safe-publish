@@ -116,8 +116,8 @@ By default, no sanitization is applied to the post content or excerpt; both fiel
   - **Post Meta**: meta available via REST is transferred, see below for more details.
   - **Terms**: tags and categories are transferred. If they don't exist, they are created. Custom taxonomies that appear in a REST request are transferred if they exist. See below for more details.
 - Additional Post meta stored:
-  - `safe_publish_external_post_id` — post ID on the source site
-  - `safe_publish_external_link` — URL of the source post
+  - `safe_publish_source_post_id` — post ID on the source site
+  - `safe_publish_source_link` — URL of the source post
   - `safe_publish_imported_from` — plugin identifier (`safe-publish`)
   - `safe_publish_import_date_gmt` — GMT timestamp of the import (`Y-m-d H:i:s`)
 
@@ -127,11 +127,53 @@ New posts are always created as **drafts** to allow review before publishing. Th
 
 ### Excluded Fields
 
-Some source post fields are not migrated:
+Source post publish date is not preserved; the destination site uses its own publish date.
 
-- **Author**: Set to the importing user.
-- **Date**: Not preserved; the destination site uses its own publish date.
-- **Parent**: Parent/child relationships (mainly pages) are not mapped across sites.
+### Author Resolution
+
+By default, Safe Publish requires the source post's author to exist on the destination site; authors are matched by email (`get_user_by( 'email', ... )`).
+
+In the event of no match, the import is aborted with an error message, so the operator can create the user and re-import.
+
+For diagnostics, every imported post stores two private meta values:
+
+- `_safe_publish_source_author_email` — the source author's email at import time.
+- `_safe_publish_source_author_login` — the source author's login at import time.
+
+On updates, the destination's `post_author` and the two private meta values above are refreshed to reflect the source's current author. The audit trail of historical values lives in the per-item history.
+
+No capability check is applied to the matched user: WordPress does not enforce capabilities on `post_author`, and a Subscriber on the destination who matches by email is legitimately attributed as the author of an imported post.
+
+#### Author Fallback
+
+Author resolution can be relaxed via the [`safe_publish_import_allow_author_fallback`](../extending/hooks.md#safe_publish_import_allow_author_fallback) filter. With the fallback enabled, new posts with an unmatched author are attributed to the importing user.
+
+For updates with an unmatched author, the destination's existing `post_author` is preserved unchanged.
+
+Whenever the fallback is applied, a warning is recorded on the import History item row and surfaced in the import results UI.
+
+The import still aborts when the source post has no resolvable author (e.g., the author was deleted on the source).
+
+### Parent Resolution
+
+For hierarchical post types (pages and any custom post type registered with `'hierarchical' => true`), the source post's parent is matched against destination posts using the `safe_publish_source_post_id` meta lookup — the same lookup that determines whether a source post is already imported.
+
+- **Top-level source posts** (source `parent = 0`) are imported as top-level on the destination. No resolution is performed.
+- **Non-hierarchical post types** ignore the source `parent` entirely.
+- **Match found**: `post_parent` is set to the destination post ID.
+- **No match (strict default)**: the import aborts with an error that identifies the unresolved parent. The error distinguishes "has not been imported on this site" (the parent was never imported and is not part of the current batch) from "failed to import earlier in this batch" (the parent was part of the bulk batch but did not succeed).
+
+Bulk imports run in two passes. Pass 1 fetches each post's REST payload without writing to the database; pass 2 then processes the batch in topological order so the destination parent exists by the time its children look it up. Posts in a cycle (or whose parent is outside the batch) are processed at the end of pass 2 and route through the same unresolvable-parent path.
+
+For diagnostics, every hierarchical post imported with a non-zero source parent stores one private meta value:
+
+- `_safe_publish_source_post_parent_id` — the source post's parent ID at import time.
+
+On updates, the meta is refreshed to reflect the current source state. The audit trail of historical values lives in the per-item history.
+
+#### Orphan Fallback
+
+Parent resolution can be relaxed via the [`safe_publish_import_allow_orphans`](../extending/hooks.md#safe_publish_import_allow_orphans) filter. With the fallback enabled, posts whose parent cannot be resolved are imported with `post_parent = 0` (top-level), and a warning is recorded on the import History item row and surfaced in the import results UI.
 
 ### Custom Post Types
 

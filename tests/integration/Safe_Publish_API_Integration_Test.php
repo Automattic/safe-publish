@@ -47,14 +47,14 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 	private int $admin_user_id;
 
 	/**
-	 * External post ID for test fixtures.
+	 * Source post ID for test fixtures.
 	 */
-	private const EXTERNAL_POST_ID = 123;
+	private const SOURCE_POST_ID = 123;
 
 	/**
-	 * Non-existent external post ID for error tests.
+	 * Non-existent source post ID for error tests.
 	 */
-	private const NON_EXISTENT_EXTERNAL_POST_ID = 555;
+	private const NON_EXISTENT_SOURCE_POST_ID = 555;
 
 	/**
 	 * Non-existent local post ID for error tests.
@@ -79,7 +79,7 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 		do_action( 'rest_api_init' );
 
-		// Create test post with external ID meta.
+		// Create test post with source post ID meta.
 		$this->post_id = $this->factory()->post->create(
 			array(
 				'post_title'   => 'Original Title',
@@ -89,12 +89,12 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 			)
 		);
 
-		update_post_meta( $this->post_id, 'safe_publish_external_post_id', self::EXTERNAL_POST_ID );
+		update_post_meta( $this->post_id, 'safe_publish_source_post_id', self::SOURCE_POST_ID );
 	}
 
 	/**
 	 * Verifies that the diff renderer generates diff structure successfully
-	 * with external data, including correct extraction of meta, terms, and
+	 * with source data, including correct extraction of meta, terms, and
 	 * non-content diff keys.
 	 *
 	 * Uses mocked HTTP callable. Does not call the REST endpoint to limit test
@@ -109,8 +109,8 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 				'body'     => wp_json_encode(
 					array(
 						'title'     => array( 'raw' => 'Updated External Title' ),
-						'content'   => array( 'raw' => '<p>Updated external content.</p>' ),
-						'excerpt'   => array( 'raw' => 'Updated external excerpt.' ),
+						'content'   => array( 'raw' => '<p>Updated source content.</p>' ),
+						'excerpt'   => array( 'raw' => 'Updated source excerpt.' ),
 						'meta'      => array( 'custom_meta' => 'meta_value' ),
 						'_embedded' => array(
 							'wp:term' => array(
@@ -118,7 +118,7 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 									array(
 										'taxonomy' => 'category',
 										'name'     => 'External Category',
-										'slug'     => 'external-category',
+										'slug'     => 'source-category',
 									),
 								),
 							),
@@ -133,7 +133,7 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 
 		// Create request.
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
-		$request->set_param( 'postId', self::EXTERNAL_POST_ID );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'post' );
 		$request->set_param( 'mode', 'split' );
 
@@ -165,7 +165,7 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 
 		// ASSERT: Verify incoming data extracted correctly from mock response.
 		$this->assertSame( 'Updated External Title', $result['incoming']['title'] );
-		$this->assertSame( 'Updated external excerpt.', $result['incoming']['excerpt'] );
+		$this->assertSame( 'Updated source excerpt.', $result['incoming']['excerpt'] );
 
 		// ASSERT: Verify current data extracted from local post.
 		$this->assertSame( 'Original Title', $result['current']['title'] );
@@ -186,15 +186,15 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that the diff-preview endpoint returns 404 when no local post
-	 * matches the external ID, and the user has the edit_others_posts capability.
+	 * matches the source post ID, and the user has the edit_others_posts capability.
 	 */
-	public function test_diff_preview_endpoint_returns_404_for_nonexistent_external_id_with_edit_others_posts_capability(): void {
+	public function test_diff_preview_endpoint_returns_404_for_nonexistent_source_post_id_with_edit_others_posts_capability(): void {
 		// ARRANGE: Authenticate as user with edit_others_posts capability.
 		wp_set_current_user( $this->admin_user_id );
 
-		// Create request where no local post has this external ID.
+		// Create request where no local post has this source post ID.
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
-		$request->set_param( 'postId', self::NON_EXISTENT_EXTERNAL_POST_ID );
+		$request->set_param( 'postId', self::NON_EXISTENT_SOURCE_POST_ID );
 		$request->set_param( 'content', wp_json_encode( array( 'title' => 'New Title' ) ) );
 		$request->set_param( 'postType', 'post' );
 
@@ -208,15 +208,15 @@ class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that the diff-preview endpoint returns 403 when no local post
-	 * matches the external ID, and the user lacks the edit_others_posts capability.
+	 * matches the source post ID, and the user lacks the edit_others_posts capability.
 	 */
-	public function test_diff_preview_endpoint_returns_403_for_nonexistent_external_id_without_edit_others_posts_capability(): void {
+	public function test_diff_preview_endpoint_returns_403_for_nonexistent_source_post_id_without_edit_others_posts_capability(): void {
 		// ARRANGE: Create user without edit_others_posts capability.
 		$this->create_user_and_authenticate( 'author' );
 
 		// Create request for non-existent post.
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
-		$request->set_param( 'postId', self::NON_EXISTENT_EXTERNAL_POST_ID );
+		$request->set_param( 'postId', self::NON_EXISTENT_SOURCE_POST_ID );
 		$request->set_param( 'content', wp_json_encode( array( 'title' => 'New Title' ) ) );
 		$request->set_param( 'postType', 'post' );
 

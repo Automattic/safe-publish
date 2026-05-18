@@ -35,14 +35,14 @@ class Options {
 	 *
 	 * @var string
 	 */
-	const OPTION_USERNAME = 'safe_publish_username';
+	const OPTION_BASIC_AUTH_USERNAME = 'safe_publish_basic_auth_username';
 
 	/**
 	 * Option key for the Basic Auth password.
 	 *
 	 * @var string
 	 */
-	const OPTION_PASSWORD = 'safe_publish_password';
+	const OPTION_BASIC_AUTH_PASSWORD = 'safe_publish_basic_auth_password';
 
 	/**
 	 * Option key for the sync mode of this site.
@@ -77,18 +77,18 @@ class Options {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Meta key storing the original external post ID.
+	 * Meta key storing the source post ID.
 	 *
 	 * @var string
 	 */
-	const META_EXTERNAL_POST_ID = 'safe_publish_external_post_id';
+	const META_SOURCE_POST_ID = 'safe_publish_source_post_id';
 
 	/**
-	 * Meta key storing the external post permalink.
+	 * Meta key storing the source post permalink.
 	 *
 	 * @var string
 	 */
-	const META_EXTERNAL_LINK = 'safe_publish_external_link';
+	const META_SOURCE_LINK = 'safe_publish_source_link';
 
 	/**
 	 * Meta key storing the GMT timestamp of the most recent import.
@@ -105,14 +105,14 @@ class Options {
 	const META_IMPORTED_FROM = 'safe_publish_imported_from';
 
 	/**
-	 * Meta key storing the original external URL of an imported media attachment.
+	 * Meta key storing the original source URL of an imported media attachment.
 	 *
 	 * @var string
 	 */
 	const META_ORIGINAL_URL = 'safe_publish_original_url';
 
 	/**
-	 * Meta key storing the external featured media ID on an imported attachment.
+	 * Meta key storing the source featured media ID on an imported attachment.
 	 *
 	 * @var string
 	 */
@@ -124,6 +124,27 @@ class Options {
 	 * @var string
 	 */
 	const META_MEDIA_TYPE = 'safe_publish_media_type';
+
+	/**
+	 * Private meta key storing the source author's email at import time.
+	 *
+	 * @var string
+	 */
+	const META_SOURCE_AUTHOR_EMAIL = '_safe_publish_source_author_email';
+
+	/**
+	 * Private meta key storing the source author's login at import time.
+	 *
+	 * @var string
+	 */
+	const META_SOURCE_AUTHOR_LOGIN = '_safe_publish_source_author_login';
+
+	/**
+	 * Private meta key storing the source post's parent ID at import time.
+	 *
+	 * @var string
+	 */
+	const META_SOURCE_POST_PARENT_ID = '_safe_publish_source_post_parent_id';
 
 	/**
 	 * WordPress settings-API group slug shared by all plugin options.

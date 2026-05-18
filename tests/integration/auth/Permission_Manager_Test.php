@@ -188,7 +188,7 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 
 	/**
 	 * Verifies that an authenticated request with a non-2xx response logs an
-	 * EXPORT_BAD_STATUS error event with the HTTP status code.
+	 * EXPORT_RESPONSE_BAD_STATUS error event with the HTTP status code.
 	 */
 	public function test_log_export_event_logs_failed_http_response(): void {
 		// ARRANGE: Set up an authenticated context with a 403 response.
@@ -200,11 +200,11 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 		// ACT: Trigger log_export_event on the failed response.
 		$this->permission_manager->log_export_event( $response, rest_get_server(), $request );
 
-		// ASSERT: One EXPORT_BAD_STATUS error event is stored with the HTTP status and route.
+		// ASSERT: One EXPORT_RESPONSE_BAD_STATUS error event is stored with the HTTP status and route.
 		$events = Audit_Log_Table::get_events(
 			array(
 				'channel'    => 'export',
-				'event_type' => 'EXPORT_BAD_STATUS',
+				'event_type' => 'EXPORT_RESPONSE_BAD_STATUS',
 				'level'      => 'error',
 			)
 		);

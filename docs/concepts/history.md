@@ -30,7 +30,7 @@ Imports are tracked in a session-based model. Each import operation creates one 
 | ID           | Unique session ID                                      |
 | Date         | When the session started                               |
 | User         | WordPress user who performed the import                |
-| Source URL   | URL of the external WordPress site                     |
+| Source URL   | URL of the source WordPress site                       |
 | Session Type | `bulk` (multiple posts) or `single` (one post)         |
 | Total Items  | Number of posts in the session                         |
 | Successful   | Count of newly imported posts                          |
@@ -40,30 +40,30 @@ Imports are tracked in a session-based model. Each import operation creates one 
 
 #### Log Entry Data (per post in a session)
 
-| Field        | Description                                    |
-| ------------ | ---------------------------------------------- |
-| ID           | Unique log entry ID                            |
-| Title        | Title of the imported post                     |
-| External ID  | Post ID on the external source site            |
-| Status       | `success`, `updated`, or `error`               |
-| Post ID      | Local WordPress post ID (on success or update) |
-| Error        | Error message (if failed)                      |
-| Edit URL     | Link to edit the imported post (if available)  |
-| Can Rollback | Whether rollback is available for this entry   |
+| Field          | Description                                    |
+| -------------- | ---------------------------------------------- |
+| ID             | Unique log entry ID                            |
+| Title          | Title of the imported post                     |
+| Source post ID | Post ID on the source site                     |
+| Status         | `success`, `updated`, or `error`               |
+| Post ID        | Local WordPress post ID (on success or update) |
+| Error          | Error message (if failed)                      |
+| Edit URL       | Link to edit the imported post (if available)  |
+| Can Rollback   | Whether rollback is available for this entry   |
 
 ### Export History
 
 Export events are logged automatically when posts are served to a destination site. Each event is stored in the `{$wpdb->prefix}safe_publish_audit_log` database table.
 
-| Field           | Description                                                                    |
-| --------------- | ------------------------------------------------------------------------------ |
-| ID              | Unique event ID                                                                |
-| Date            | When the export occurred                                                       |
-| Level           | `info` (successful) or `error` (failed)                                        |
-| Event           | Event type: `CONTENT_EXPORTED`, `EXPORT_REQUEST_ERROR`, or `EXPORT_BAD_STATUS` |
-| Destination URL | URL of the destination site                                                    |
-| Post IDs        | IDs of the exported posts                                                      |
-| Post Count      | Number of posts in the export                                                  |
+| Field           | Description                                                                             |
+| --------------- | --------------------------------------------------------------------------------------- |
+| ID              | Unique event ID                                                                         |
+| Date            | When the export occurred                                                                |
+| Level           | `info` (successful) or `error` (failed)                                                 |
+| Event           | Event type: `CONTENT_EXPORTED`, `EXPORT_REQUEST_ERROR`, or `EXPORT_RESPONSE_BAD_STATUS` |
+| Destination URL | URL of the destination site                                                             |
+| Post IDs        | IDs of the exported posts                                                               |
+| Post Count      | Number of posts in the export                                                           |
 
 ## Viewing History
 

@@ -74,8 +74,8 @@ class AuthCredentialProviderTest extends TestCase {
 	 * password options are set.
 	 */
 	public function test_includes_basic_auth_when_both_credentials_configured(): void {
-		set_test_option( Options::OPTION_USERNAME, 'editor' );
-		set_test_option( Options::OPTION_PASSWORD, 's3cr3t!' );
+		set_test_option( Options::OPTION_BASIC_AUTH_USERNAME, 'editor' );
+		set_test_option( Options::OPTION_BASIC_AUTH_PASSWORD, 's3cr3t!' );
 
 		$credentials = Auth_Credential_Provider::get_credentials();
 
@@ -90,7 +90,7 @@ class AuthCredentialProviderTest extends TestCase {
 	 * (password is absent).
 	 */
 	public function test_omits_basic_auth_when_only_username_configured(): void {
-		set_test_option( Options::OPTION_USERNAME, 'editor' );
+		set_test_option( Options::OPTION_BASIC_AUTH_USERNAME, 'editor' );
 		// No password option set.
 
 		$credentials = Auth_Credential_Provider::get_credentials();
@@ -104,7 +104,7 @@ class AuthCredentialProviderTest extends TestCase {
 	 * (username is absent).
 	 */
 	public function test_omits_basic_auth_when_only_password_configured(): void {
-		set_test_option( Options::OPTION_PASSWORD, 's3cr3t!' );
+		set_test_option( Options::OPTION_BASIC_AUTH_PASSWORD, 's3cr3t!' );
 		// No username option set.
 
 		$credentials = Auth_Credential_Provider::get_credentials();
@@ -122,8 +122,8 @@ class AuthCredentialProviderTest extends TestCase {
 			define( 'SAFE_PUBLISH_SHARED_SECRET', 'test-shared-secret-value-for-unit-tests' );
 		}
 
-		set_test_option( Options::OPTION_USERNAME, 'editor' );
-		set_test_option( Options::OPTION_PASSWORD, 's3cr3t!' );
+		set_test_option( Options::OPTION_BASIC_AUTH_USERNAME, 'editor' );
+		set_test_option( Options::OPTION_BASIC_AUTH_PASSWORD, 's3cr3t!' );
 
 		$credentials = Auth_Credential_Provider::get_credentials();
 
