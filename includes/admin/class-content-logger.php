@@ -71,12 +71,12 @@ class Content_Logger extends Logger {
 	 * @param int    $source_post_id   Source post ID that was being fetched.
 	 * @param string $source_site_url  Source site the fetch targeted.
 	 */
-	public function content_fetch_raw_unavailable(
+	public function content_fetch_raw_fields_missing(
 		int $source_post_id,
 		string $source_site_url
 	): void {
 		$this->log_error(
-			Log_Events::CONTENT_FETCH_RAW_UNAVAILABLE,
+			Log_Events::CONTENT_FETCH_RAW_FIELDS_MISSING,
 			array(
 				'source_post_id'  => $source_post_id,
 				'source_site_url' => $source_site_url,

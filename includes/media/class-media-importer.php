@@ -128,14 +128,14 @@ class Media_Importer {
 		$attachment_id = media_handle_sideload( $file_array, 0 );
 		remove_filter( 'big_image_size_threshold', '__return_false' );
 
-		// Clean up temp file - VIP-compatible cleanup.
 		$this->http_client->cleanup_temp_file( $temp_file );
 
 		if ( is_wp_error( $attachment_id ) ) {
 			$this->logger->media_sideload_failed(
 				$media_url,
 				$source_site_url,
-				$attachment_id->get_error_message()
+				$attachment_id->get_error_message(),
+				'inline'
 			);
 			return false;
 		}
@@ -199,7 +199,6 @@ class Media_Importer {
 		// Also add a filter specifically for media_handle_sideload to bypass restrictions.
 		add_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ), 10, 3 );
 
-		// Download file using VIP-compatible method.
 		$temp_file = $this->http_client->download_file( $media_url );
 
 		if ( is_wp_error( $temp_file ) ) {
@@ -294,10 +293,11 @@ class Media_Importer {
 		remove_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ) );
 
 		if ( is_wp_error( $attachment_id ) ) {
-			$this->logger->media_import_failed(
+			$this->logger->media_sideload_failed(
 				$media_url,
 				$source_site_url,
-				$attachment_id->get_error_message()
+				$attachment_id->get_error_message(),
+				'attachment'
 			);
 			return false;
 		}
@@ -386,7 +386,7 @@ class Media_Importer {
 		$media_data    = json_decode( $response_body, true );
 
 		if ( ! isset( $media_data['source_url'] ) || '' === $media_data['source_url'] ) {
-			$this->logger->featured_image_missing_source(
+			$this->logger->featured_image_source_missing(
 				$featured_media_id,
 				$source_site_url
 			);
@@ -511,7 +511,8 @@ class Media_Importer {
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'       => $original_url,
 				'posts_per_page'   => 1,
-				'suppress_filters' => false, // Enable caching for VIP compatibility.
+				// Don't suppress posts_* filters; required for cache plugins.
+				'suppress_filters' => false,
 			)
 		);
 
@@ -545,7 +546,8 @@ class Media_Importer {
 					),
 				),
 				'posts_per_page'   => 1,
-				'suppress_filters' => false, // Enable caching for VIP compatibility.
+				// Don't suppress posts_* filters; required for cache plugins.
+				'suppress_filters' => false,
 			)
 		);
 

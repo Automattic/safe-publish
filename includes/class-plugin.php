@@ -19,6 +19,7 @@ use Safe_Publish\Admin\Import_History;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\Admin\Session_Formatter;
 use Safe_Publish\Admin\Session_Rollback_Service;
+use Safe_Publish\Admin\Settings_Logger;
 use Safe_Publish\Admin\Settings_Page;
 use Safe_Publish\Admin\Settings_Sanitizer;
 use Safe_Publish\Auth\Auth_Manager;
@@ -27,6 +28,7 @@ use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\API\Safe_Publish_API;
+use Safe_Publish\API\Source_Author_REST_Field;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Audit_Log_Table;
@@ -73,6 +75,8 @@ final class Plugin {
 		Imports_Table::maybe_create_table();
 		Import_Items_Table::maybe_create_table();
 
+		( new Settings_Logger() )->register_handlers();
+
 		$sync_mode          = get_option( Options::OPTION_SYNC_MODE, '' );
 		$connected_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
@@ -85,6 +89,12 @@ final class Plugin {
 		if ( $can_export && ! empty( $connected_site_url ) ) {
 			$auth_manager = new Auth_Manager();
 			$auth_manager->init();
+
+			$source_author_field = new Source_Author_REST_Field(
+				$auth_manager->get_authenticator()
+			);
+
+			$source_author_field->init();
 		}
 
 		$can_import = in_array(
@@ -128,7 +138,7 @@ final class Plugin {
 
 		register_setting(
 			Options::SETTINGS_GROUP,
-			Options::OPTION_USERNAME,
+			Options::OPTION_BASIC_AUTH_USERNAME,
 			array(
 				'sanitize_callback' => array( $sanitizer, 'sanitize_username' ),
 				'default'           => '',
@@ -137,7 +147,7 @@ final class Plugin {
 
 		register_setting(
 			Options::SETTINGS_GROUP,
-			Options::OPTION_PASSWORD,
+			Options::OPTION_BASIC_AUTH_PASSWORD,
 			array(
 				'sanitize_callback' => array( $sanitizer, 'sanitize_password' ),
 				'default'           => '',

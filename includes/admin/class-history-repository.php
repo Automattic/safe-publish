@@ -94,6 +94,7 @@ final class History_Repository {
 	 * @param int|null    $post_id          WordPress post ID; null for error status.
 	 * @param string|null $error            Error message; null for success/updated.
 	 * @param array       $changes          Changes made during import.
+	 * @param array       $warnings         Non-fatal warnings raised during import.
 	 * @return int|WP_Error Item ID or error.
 	 */
 	public function log_import_action(
@@ -103,7 +104,8 @@ final class History_Repository {
 		string $status,
 		?int $post_id = null,
 		?string $error = null,
-		array $changes = array()
+		array $changes = array(),
+		array $warnings = array()
 	): int|WP_Error {
 		global $wpdb;
 
@@ -122,6 +124,16 @@ final class History_Repository {
 			}
 		}
 
+		$encoded_warnings = null;
+
+		if ( count( $warnings ) > 0 ) {
+			$json = wp_json_encode( $warnings );
+
+			if ( false !== $json ) {
+				$encoded_warnings = $json;
+			}
+		}
+
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$inserted = $wpdb->insert(
 			Import_Items_Table::table_name(),
@@ -133,11 +145,12 @@ final class History_Repository {
 				'post_id'              => $post_id,
 				'error_message'        => $error,
 				'content_changes'      => $encoded_changes,
+				'warnings'             => $encoded_warnings,
 				'has_previous_content' => $has_previous_content,
 				'rolled_back'          => 0,
 				'import_date_gmt'      => current_time( 'mysql', true ),
 			),
-			array( '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%d', '%d', '%s' )
+			array( '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%s', '%d', '%d', '%s' )
 		);
 
 		if ( false === $inserted ) {
@@ -381,7 +394,7 @@ final class History_Repository {
 		}
 
 		if ( 0 === $updated ) {
-			$this->logger->session_rollback_noop( $session_id );
+			$this->logger->session_already_rolled_back( $session_id );
 		} else {
 			$this->logger->session_rolled_back( $session_id );
 		}
@@ -430,7 +443,7 @@ final class History_Repository {
 		}
 
 		if ( 0 === $updated ) {
-			$this->logger->item_rollback_noop( $item_id, $session_id, $post_id );
+			$this->logger->item_already_rolled_back( $item_id, $session_id, $post_id );
 		} else {
 			$this->logger->item_rolled_back( $item_id, $session_id, $post_id );
 		}

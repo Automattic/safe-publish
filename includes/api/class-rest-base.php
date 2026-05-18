@@ -70,7 +70,7 @@ abstract class REST_Base {
 	}
 
 	/**
-	 * Makes safe remote GET request with VIP compatibility.
+	 * Makes a safe remote GET request.
 	 *
 	 * @param string $url  Request URL.
 	 * @param array  $args Optional. Request arguments. Default empty array.

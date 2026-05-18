@@ -80,16 +80,6 @@ class Permission_Manager {
 	 *
 	 * Grants necessary permissions for REST API operations.
 	 *
-	 * VIP 2FA COMPLIANCE NOTE:
-	 * This uses a capability-based authentication approach instead of
-	 * creating actual WordPress users. This is VIP-friendly because:
-	 *
-	 * 1. No real users are created that would require 2FA
-	 * 2. Authentication is handled via shared secret HMAC (already validated)
-	 * 3. Permissions are granted temporarily via capability filters
-	 * 4. More secure than bypassing 2FA requirements
-	 * 5. Complies with VIP platform security policies
-	 *
 	 * @param WP_REST_Request $request Authenticated REST request.
 	 */
 	public function setup_authenticated_context(
@@ -99,13 +89,13 @@ class Permission_Manager {
 
 		add_filter( 'user_has_cap', array( $this, 'grant_api_capabilities' ), 10, 4 );
 
-		// VIP-friendly approach: use capability system without creating actual users.
-		// This avoids 2FA requirements and is more secure.
-		$this->logger->capability_based_auth_setup(
+		// Grant caps via filter — HMAC already authenticated the caller, so we
+		// don't need a real WP user.
+		$this->logger->authenticated_context_installed(
 			$request->get_route(),
 			$request->get_method(),
 			'capability_only',
-			'VIP 2FA compliance - no user creation needed'
+			'HMAC already authenticated the caller'
 		);
 
 		add_filter( 'rest_pre_dispatch', array( $this, 'bypass_permission_checks' ), 11, 3 );
@@ -236,7 +226,7 @@ class Permission_Manager {
 			return $caps;
 		}
 
-		$this->logger->meta_cap_override( $cap, $user_id, $caps );
+		$this->logger->meta_cap_overridden( $cap, $user_id, $caps );
 
 		// Grant the capability by returning 'exist' (always granted).
 		return array( 'exist' );
@@ -550,7 +540,7 @@ class Permission_Manager {
 	/**
 	 * Logs an audit event for each authenticated export response:
 	 * CONTENT_EXPORTED on success, EXPORT_REQUEST_ERROR for WP_Error
-	 * responses, or EXPORT_BAD_STATUS for non-200 HTTP statuses.
+	 * responses, or EXPORT_RESPONSE_BAD_STATUS for non-200 HTTP statuses.
 	 *
 	 * Fires on rest_post_dispatch at priority 20, so it runs after all
 	 * permission overrides and context re-dispatches are complete. Skipped
@@ -589,7 +579,7 @@ class Permission_Manager {
 		$status = $response->get_status();
 
 		if ( 200 !== $status ) {
-			$this->export_logger->export_bad_status( $route, $destination_site_url, $status );
+			$this->export_logger->export_response_bad_status( $route, $destination_site_url, $status );
 			return $response;
 		}
 

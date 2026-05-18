@@ -25,6 +25,7 @@ class Audit_Log_Actor_Attribution_Test extends Integration_Test_Case {
 		'export',
 		'import',
 		'media',
+		'settings',
 	);
 
 	private const VALID_SOURCES = array(
@@ -64,6 +65,13 @@ class Audit_Log_Actor_Attribution_Test extends Integration_Test_Case {
 	 */
 	public function test_content_channel_records_actor(): void {
 		$this->assert_channel_records_actor( new Test_Logger( 'content' ), 'content' );
+	}
+
+	/**
+	 * Verifies that the settings channel records the acting user.
+	 */
+	public function test_settings_channel_records_actor(): void {
+		$this->assert_channel_records_actor( new Test_Logger( 'settings' ), 'settings' );
 	}
 
 	/**

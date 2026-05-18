@@ -71,8 +71,6 @@ class Dashboard_Widget {
 		$this->render_recent_events_section( $recent_events );
 		echo '<hr style="margin: 15px 0;">';
 		$this->render_debug_section();
-		echo '<hr style="margin: 15px 0;">';
-		echo '<p><small>' . esc_html__( 'MU-Plugin: Safe Publish VIP Authentication Handler with Enhanced Logging v1.1.0', 'safe-publish' ) . '</small></p>';
 		echo '</div>';
 	}
 
@@ -96,7 +94,7 @@ class Dashboard_Widget {
 
 		if ( empty( $this->shared_secret ) ) {
 			wp_admin_notice(
-				__( 'Safe Publish Authentication: Shared secret not configured. Set the <code>SAFE_PUBLISH_SHARED_SECRET</code> environment variable in VIP dashboard to enable Safe Publish authentication.', 'safe-publish' ),
+				__( 'Safe Publish Authentication: Shared secret not configured. Set the <code>SAFE_PUBLISH_SHARED_SECRET</code> environment variable to enable Safe Publish authentication.', 'safe-publish' ),
 				array( 'type' => 'warning' )
 			);
 		} elseif ( $secret_length < 32 ) {
@@ -249,8 +247,7 @@ class Dashboard_Widget {
 	private function render_status_section( string $shared_secret, int $secret_length ): void {
 		if ( empty( $shared_secret ) ) {
 			echo '<p><span style="color: #d63638;">❌</span> <strong>' . esc_html__( 'Not Configured', 'safe-publish' ) . '</strong></p>';
-			echo '<p>' . esc_html__( 'Set the SAFE_PUBLISH_SHARED_SECRET environment variable in VIP dashboard.', 'safe-publish' ) . '</p>';
-			echo '<p><a href="https://dashboard.wpvip.com/" target="_blank">' . esc_html__( 'Open VIP Dashboard →', 'safe-publish' ) . '</a></p>';
+			echo '<p>' . esc_html__( 'Set the SAFE_PUBLISH_SHARED_SECRET environment variable to enable authentication.', 'safe-publish' ) . '</p>';
 			return;
 		}
 
@@ -270,7 +267,6 @@ class Dashboard_Widget {
 			esc_html__( '%d characters', 'safe-publish' ),
 			absint( $secret_length )
 		) . '</p>';
-		echo '<p><strong>✅ ' . esc_html__( 'VIP 2FA Compliant:', 'safe-publish' ) . '</strong> ' . esc_html__( 'Uses capability-based authentication (no user creation)', 'safe-publish' ) . '</p>';
 		echo '<p><strong>✅ ' . esc_html__( 'Editing Permissions:', 'safe-publish' ) . '</strong> ' . esc_html__( 'Enabled for Safe Publish authenticated requests', 'safe-publish' ) . '</p>';
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -375,7 +371,6 @@ class Dashboard_Widget {
 	private function render_log_locations(): void {
 		echo '<p><strong>' . esc_html__( 'Log Locations:', 'safe-publish' ) . '</strong></p>';
 		echo '<ul style="margin-left: 20px; font-size: 11px;">';
-		echo '<li>' . esc_html__( 'VIP Error Log:', 'safe-publish' ) . ' <code>/tmp/error_log</code></li>';
 		echo '<li>' . esc_html__( 'WordPress Debug Log:', 'safe-publish' ) . ' <code>/wp-content/debug.log</code></li>';
 		echo '<li>' . esc_html__( 'Database Audit Log:', 'safe-publish' ) . ' <code>' . esc_html( Audit_Log_Table::table_name() ) . '</code></li>';
 		echo '<li>' . esc_html__( 'New Relic:', 'safe-publish' ) . ' Custom Events → Safe_Publish_Auth_Event</li>';

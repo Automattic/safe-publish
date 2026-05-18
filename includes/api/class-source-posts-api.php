@@ -141,7 +141,6 @@ class Source_Posts_API {
 			'orderby'  => 'modified',
 			'order'    => 'desc',
 			'per_page' => min( $number_of_posts, 100 ), // Max 100 per request.
-			// '_fields' => 'id,link,title,modified,featured_media,content,excerpt,slug,comment_status,ping_status,menu_order', // Fetch all needed fields.
 			'_embed'   => '1',
 		);
 
@@ -358,11 +357,6 @@ class Source_Posts_API {
 
 		$query_args = array(
 			'_embed' => '1',
-			/**
-			 * TODO: Check if we want/need this.
-			 *
-			 * '_fields' => 'id,link,title,modified,featured_media,content,excerpt,tags,categories,meta,slug,comment_status,ping_status,menu_order,password', // Fetch all needed fields
-			 */
 		);
 
 		// Edit context provides raw field values (title, content, excerpt)
@@ -404,7 +398,7 @@ class Source_Posts_API {
 			! isset( $data['content']['raw'] ) ||
 			! isset( $data['excerpt']['raw'] )
 		) {
-			$this->logger->content_fetch_raw_unavailable(
+			$this->logger->content_fetch_raw_fields_missing(
 				$source_post_id,
 				$source_site_url
 			);
@@ -422,6 +416,7 @@ class Source_Posts_API {
 		$post_data['ping_status']    = sanitize_text_field( $data['ping_status'] ?? '' );
 		$post_data['menu_order']     = absint( $data['menu_order'] ?? 0 );
 		$post_data['password']       = sanitize_text_field( $data['password'] ?? '' );
+		$post_data['parent']         = absint( $data['parent'] ?? 0 );
 
 		if ( isset( $data['link'] ) ) {
 			$post_data['link'] = esc_url_raw( $data['link'] );
@@ -436,7 +431,44 @@ class Source_Posts_API {
 
 		$post_data['terms'] = self::extract_embedded_terms( $data );
 
+		// `null` distinguishes "source did not provide the field" (older plugin
+		// version on the source) from "field present but author cannot be
+		// resolved on the source" (empty strings).
+		$post_data['source_author'] = self::extract_source_author( $data );
+
 		return $post_data;
+	}
+
+	/**
+	 * Extracts the safe_publish_author payload from a REST response.
+	 *
+	 * @param array $data Decoded REST response for a single post.
+	 * @return array{email: string, login: string, display_name: string}|null
+	 *         Sanitized author payload, or null when the source did not
+	 *         include the field.
+	 */
+	private static function extract_source_author( array $data ): ?array {
+		if ( ! array_key_exists( 'safe_publish_author', $data ) ) {
+			return null;
+		}
+
+		$author = $data['safe_publish_author'];
+
+		if ( ! is_array( $author ) ) {
+			return null;
+		}
+
+		return array(
+			'email'        => isset( $author['email'] )
+				? sanitize_email( (string) $author['email'] )
+				: '',
+			'login'        => isset( $author['login'] )
+				? sanitize_user( (string) $author['login'], true )
+				: '',
+			'display_name' => isset( $author['display_name'] )
+				? sanitize_text_field( (string) $author['display_name'] )
+				: '',
+		);
 	}
 
 	/**
