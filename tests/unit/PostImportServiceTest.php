@@ -10,32 +10,15 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
-use ReflectionClass;
 use Safe_Publish\Admin\Post_Import_Service;
 
 /**
  * Post Import Service Test.
  *
  * Exercises pure URL-parsing helpers on Post_Import_Service that don't
- * depend on the service's collaborators. The method under test is
- * private; the service is built without invoking its constructor so the
- * full dependency graph doesn't need to be mocked.
+ * depend on the service's collaborators.
  */
 class PostImportServiceTest extends TestCase {
-
-	/**
-	 * Invokes the private extract_site_url method.
-	 *
-	 * @param string $url Full URL to extract the base from.
-	 * @return string Site base URL as returned by the method.
-	 */
-	private function extract_site_url( string $url ): string {
-		$reflection = new ReflectionClass( Post_Import_Service::class );
-		$method     = $reflection->getMethod( 'extract_site_url' );
-		$instance   = $reflection->newInstanceWithoutConstructor();
-
-		return (string) $method->invoke( $instance, $url );
-	}
 
 	/**
 	 * Verifies that an explicit non-default port survives the extraction so
@@ -47,7 +30,7 @@ class PostImportServiceTest extends TestCase {
 		$url = 'http://host.docker.internal:8889/blog/some-post/';
 
 		// ACT: derive the site base.
-		$base = $this->extract_site_url( $url );
+		$base = Post_Import_Service::extract_site_url( $url );
 
 		// ASSERT: the port stays on the site base.
 		$this->assertSame( 'http://host.docker.internal:8889', $base );
@@ -62,7 +45,7 @@ class PostImportServiceTest extends TestCase {
 		$url = 'https://example.com/2024/06/some-post/';
 
 		// ACT: derive the site base.
-		$base = $this->extract_site_url( $url );
+		$base = Post_Import_Service::extract_site_url( $url );
 
 		// ASSERT: scheme and host only.
 		$this->assertSame( 'https://example.com', $base );
@@ -77,7 +60,7 @@ class PostImportServiceTest extends TestCase {
 		$url = 'https://example.com:8443/path/to/post?foo=1#section';
 
 		// ACT: derive the site base.
-		$base = $this->extract_site_url( $url );
+		$base = Post_Import_Service::extract_site_url( $url );
 
 		// ASSERT: only scheme + host + port remains.
 		$this->assertSame( 'https://example.com:8443', $base );

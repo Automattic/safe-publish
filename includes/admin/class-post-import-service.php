@@ -642,7 +642,7 @@ class Post_Import_Service {
 	 * @return string Site base URL (e.g. "https://example.com" or
 	 *                "http://example.com:8889").
 	 */
-	private function extract_site_url( string $url ): string {
+	public static function extract_site_url( string $url ): string {
 		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
 		$host   = wp_parse_url( $url, PHP_URL_HOST );
 		$port   = wp_parse_url( $url, PHP_URL_PORT );
@@ -665,7 +665,7 @@ class Post_Import_Service {
 			return $this->sanitize_field( $content, self::FIELD_CONTENT );
 		}
 
-		$source_site_url = $this->extract_site_url( $source_link );
+		$source_site_url = self::extract_site_url( $source_link );
 		$processed       = $this->content_processor->process_content( $content, $source_site_url );
 
 		if ( is_wp_error( $processed ) ) {
@@ -1597,7 +1597,7 @@ class Post_Import_Service {
 			return 0;
 		}
 
-		$source_site_url = $this->extract_site_url( $source_link );
+		$source_site_url = self::extract_site_url( $source_link );
 
 		$attachment_id = $this->media_importer->import_featured_image(
 			$featured_media_id,
