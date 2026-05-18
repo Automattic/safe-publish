@@ -124,17 +124,26 @@ class Content_Generator {
 	private int $reference_time;
 
 	/**
+	 * Base URL used to build absolute links in the payload.
+	 *
+	 * @var string
+	 */
+	private string $source_base_url;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param string $type           Post type slug.
-	 * @param string $editor         Editor mode: 'gutenberg', 'classic', or 'mixed'.
-	 * @param string $images_mode    Image mode: '1', '2', '2-resized', or 'auto'.
-	 * @param int    $count          Number of posts in the batch.
-	 * @param int    $start          Starting index of the batch.
-	 * @param int    $date_offset    Days to shift all dates further into the past.
-	 * @param string $prefix         Title prefix (no trailing space); empty
-	 *                               string disables prefixing.
-	 * @param int    $reference_time Unix timestamp used as "now" for date math.
+	 * @param string $type            Post type slug.
+	 * @param string $editor          Editor mode: 'gutenberg', 'classic', or 'mixed'.
+	 * @param string $images_mode     Image mode: '1', '2', '2-resized', or 'auto'.
+	 * @param int    $count           Number of posts in the batch.
+	 * @param int    $start           Starting index of the batch.
+	 * @param int    $date_offset     Days to shift all dates further into the past.
+	 * @param string $prefix          Title prefix (no trailing space); empty
+	 *                                string disables prefixing.
+	 * @param int    $reference_time  Unix timestamp used as "now" for date math.
+	 * @param string $source_base_url Base URL used when building absolute links;
+	 *                                trailing slashes are trimmed.
 	 *
 	 * @throws \InvalidArgumentException When $editor or $images_mode is not
 	 *                                   one of the supported values.
@@ -147,7 +156,8 @@ class Content_Generator {
 		int $start,
 		int $date_offset,
 		string $prefix,
-		int $reference_time
+		int $reference_time,
+		string $source_base_url
 	) {
 		if ( ! in_array( $editor, self::VALID_EDITORS, true ) ) {
 			throw new \InvalidArgumentException(
@@ -167,14 +177,15 @@ class Content_Generator {
 			);
 		}
 
-		$this->type           = $type;
-		$this->editor         = $editor;
-		$this->images_mode    = $images_mode;
-		$this->count          = max( 1, $count );
-		$this->start          = max( 1, $start );
-		$this->date_offset    = max( 0, $date_offset );
-		$this->prefix         = $prefix;
-		$this->reference_time = $reference_time;
+		$this->type            = $type;
+		$this->editor          = $editor;
+		$this->images_mode     = $images_mode;
+		$this->count           = max( 1, $count );
+		$this->start           = max( 1, $start );
+		$this->date_offset     = max( 0, $date_offset );
+		$this->prefix          = $prefix;
+		$this->reference_time  = $reference_time;
+		$this->source_base_url = rtrim( $source_base_url, '/' );
 	}
 
 	/**
@@ -484,6 +495,7 @@ class Content_Generator {
 	 * @return array{
 	 *     title: string,
 	 *     slug: string,
+	 *     link: string,
 	 *     content: string,
 	 *     excerpt: string,
 	 *     post_type: string,
@@ -498,6 +510,7 @@ class Content_Generator {
 		$use_gutenberg = $this->resolve_editor( $index );
 		$image_mode    = $this->resolve_image_mode( $index );
 		$img_count     = count( $image_refs );
+		$slug          = $this->slug( $index );
 
 		$content = $use_gutenberg
 			? $this->gutenberg_content( $index, $image_refs )
@@ -510,7 +523,8 @@ class Content_Generator {
 				$image_mode,
 				$img_count
 			),
-			'slug'           => $this->slug( $index ),
+			'slug'           => $slug,
+			'link'           => $this->source_base_url . '/' . $slug,
 			'content'        => $content,
 			'excerpt'        => $this->excerpt( $index ),
 			'post_type'      => $this->type,

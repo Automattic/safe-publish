@@ -79,7 +79,8 @@ function safe_publish_seeder_run( array $args ): void {
 			$start,
 			$offset,
 			$prefix,
-			time()
+			time(),
+			home_url()
 		);
 	} catch ( \InvalidArgumentException $e ) {
 		// WP_CLI::error() exits; the return keeps flow explicit for static analysis.
