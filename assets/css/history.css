@@ -114,7 +114,7 @@
 .safe-publish-history .components-button.is-primary {
 	background: var(--safe-publish-primary);
 	border-color: var(--safe-publish-primary);
-	color: #fff;
+	color: var(--safe-publish-text-on-fill);
 }
 
 .safe-publish-history .components-button.is-primary:hover {
@@ -125,7 +125,7 @@
 .safe-publish-history .components-button.is-destructive {
 	background: var(--safe-publish-status-error);
 	border-color: var(--safe-publish-status-error);
-	color: #fff;
+	color: var(--safe-publish-text-on-fill);
 }
 
 .safe-publish-history .components-button.is-destructive:hover {

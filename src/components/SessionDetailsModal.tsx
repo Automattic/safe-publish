@@ -258,7 +258,7 @@ export function SessionDetailsModal( {
 			<VStack spacing={ 2 }>
 				{ items.map( ( item ) => (
 					<div key={ item.id } className="safe-publish-item-row" style={ {
-						background: '#fff',
+						background: 'var(--safe-publish-surface-bg)',
 						border: '1px solid #ddd',
 						borderRadius: '4px',
 						padding: '15px',

@@ -118,7 +118,7 @@ export default function BlockDiffViewer( { blocks = [], highlight = true }: Prop
                                 { title || __( 'Block', 'safe-publish' ) }
                                 <span className={ `safe-publish-badge safe-publish-${ status }` }>{ status }</span>
                                 { hasImage && block.status === 'modified' && status !== 'unchanged' && (
-                                    <span className="safe-publish-badge" style={ { background: '#6b7280', color: '#fff' } }>
+                                    <span className="safe-publish-badge" style={ { background: '#6b7280', color: 'var(--safe-publish-text-on-fill)' } }>
                                         image (no inline diff)
                                     </span>
                                 ) }

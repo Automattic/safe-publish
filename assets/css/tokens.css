@@ -10,6 +10,7 @@
 	/* Text. */
 	--safe-publish-text: #1d2327;
 	--safe-publish-text-muted: #646970;
+	--safe-publish-text-on-fill: #fff;
 
 	/* Surfaces. */
 	--safe-publish-surface-bg: #fff;
@@ -28,6 +29,8 @@
 	/* Status. */
 	--safe-publish-status-success: #008a20;
 	--safe-publish-status-warning: #996800;
+	--safe-publish-status-warning-bg: #fff8e5;
+	--safe-publish-status-warning-border: #f0d589;
 	--safe-publish-status-error: #d63638;
 	--safe-publish-status-error-hover: #b32d2e;
 
