@@ -634,6 +634,9 @@ class Post_Import_Service {
 	/**
 	 * Extracts the site base URL (scheme + host + port) from a full URL.
 	 *
+	 * Internal helper shared by the single-import and draft-processing paths.
+	 * This is public only so both workflows can call the same implementation.
+	 *
 	 * Preserves the port so non-default ports (e.g. local dev environments,
 	 * staging on alternate ports) reach the right service when used as a
 	 * base for REST endpoint URLs.
