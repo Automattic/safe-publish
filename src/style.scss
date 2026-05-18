@@ -25,7 +25,7 @@
 	// Style bulk action buttons
 	.dataviews-bulk-actions button[data-action-id="bulk-import"] {
 		background: var(--safe-publish-primary);
-		color: #fff;
+		color: var(--safe-publish-text-on-fill);
 		font-weight: 600;
 
 		&:hover {
@@ -86,8 +86,8 @@
 	}
 
 	.safe-publish-import-warnings-list {
-		background: #fff8e5;
-		border: 1px solid #f0d589;
+		background: var(--safe-publish-status-warning-bg);
+		border: 1px solid var(--safe-publish-status-warning-border);
 		border-radius: 4px;
 		padding: 10px 12px;
 
@@ -117,8 +117,8 @@
 // Single-import modal warnings. Mirrors the bulk-modal amber treatment for
 // visual continuity.
 .safe-publish-import-warnings {
-	background: #fff8e5;
-	border: 1px solid #f0d589;
+	background: var(--safe-publish-status-warning-bg);
+	border: 1px solid var(--safe-publish-status-warning-border);
 	border-radius: 4px;
 	padding: 10px 12px;
 
@@ -256,22 +256,22 @@
 
 		&.safe-publish-added {
 			background: var(--safe-publish-status-success);
-			color: #fff;
+			color: var(--safe-publish-text-on-fill);
 		}
 
 		&.safe-publish-removed {
 			background: var(--safe-publish-status-error);
-			color: #fff;
+			color: var(--safe-publish-text-on-fill);
 		}
 
 		&.safe-publish-modified {
 			background: var(--safe-publish-primary);
-			color: #fff;
+			color: var(--safe-publish-text-on-fill);
 		}
 
 		&.safe-publish-unchanged {
 			background: var(--safe-publish-pill-bg-muted);
-			color: #fff;
+			color: var(--safe-publish-text-on-fill);
 		}
 	}
 
