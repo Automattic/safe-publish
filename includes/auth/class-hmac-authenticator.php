@@ -153,7 +153,7 @@ class HMAC_Authenticator {
 
 			return new WP_Error(
 				'safe_publish_auth_no_secret',
-				'Safe Publish shared secret not configured in VIP environment',
+				'Safe Publish shared secret not configured',
 				array( 'status' => 500 )
 			);
 		}
