@@ -66,7 +66,7 @@ class Settings_Logger_Test extends Integration_Test_Case {
 
 		// ASSERT: One event with previous_value '' and the new value.
 		$data = $this->get_single_event_data(
-			Log_Events::SETTINGS_CONNECTED_SITE_URL_CHANGED
+			Log_Events::CONNECTED_SITE_URL_CHANGED
 		);
 		$this->assertSame( '', $data['previous_value'] );
 		$this->assertSame( 'https://source.example.com', $data['new_value'] );
@@ -86,7 +86,7 @@ class Settings_Logger_Test extends Integration_Test_Case {
 
 		// ASSERT: One event captures both old and new values.
 		$data = $this->get_single_event_data(
-			Log_Events::SETTINGS_CONNECTED_SITE_URL_CHANGED
+			Log_Events::CONNECTED_SITE_URL_CHANGED
 		);
 		$this->assertSame( 'https://old.example.com', $data['previous_value'] );
 		$this->assertSame( 'https://new.example.com', $data['new_value'] );
@@ -104,7 +104,7 @@ class Settings_Logger_Test extends Integration_Test_Case {
 
 		// ASSERT: One event with previous_value '' and the new value.
 		$data = $this->get_single_event_data(
-			Log_Events::SETTINGS_BASIC_AUTH_USERNAME_CHANGED
+			Log_Events::BASIC_AUTH_USERNAME_CHANGED
 		);
 		$this->assertSame( '', $data['previous_value'] );
 		$this->assertSame( 'editor', $data['new_value'] );
@@ -123,7 +123,7 @@ class Settings_Logger_Test extends Integration_Test_Case {
 
 		// ASSERT: One event captures both old and new values.
 		$data = $this->get_single_event_data(
-			Log_Events::SETTINGS_BASIC_AUTH_USERNAME_CHANGED
+			Log_Events::BASIC_AUTH_USERNAME_CHANGED
 		);
 		$this->assertSame( 'editor', $data['previous_value'] );
 		$this->assertSame( 'admin', $data['new_value'] );
@@ -143,7 +143,7 @@ class Settings_Logger_Test extends Integration_Test_Case {
 
 		// ASSERT: Event tagged 'set' and no field carries the value.
 		$data = $this->get_single_event_data(
-			Log_Events::SETTINGS_BASIC_AUTH_PASSWORD_CHANGED
+			Log_Events::BASIC_AUTH_PASSWORD_CHANGED
 		);
 		$this->assertSame( 'set', $data['change_type'] );
 		$this->assert_payload_does_not_leak_password( $data, $password );
@@ -165,7 +165,7 @@ class Settings_Logger_Test extends Integration_Test_Case {
 
 		// ASSERT: Event tagged 'rotated' and no field carries either value.
 		$data = $this->get_single_event_data(
-			Log_Events::SETTINGS_BASIC_AUTH_PASSWORD_CHANGED
+			Log_Events::BASIC_AUTH_PASSWORD_CHANGED
 		);
 		$this->assertSame( 'rotated', $data['change_type'] );
 		$this->assert_payload_does_not_leak_password( $data, $previous );
@@ -184,7 +184,7 @@ class Settings_Logger_Test extends Integration_Test_Case {
 
 		// ASSERT: One event with previous_value '' and the new value.
 		$data = $this->get_single_event_data(
-			Log_Events::SETTINGS_SYNC_MODE_CHANGED
+			Log_Events::SYNC_MODE_CHANGED
 		);
 		$this->assertSame( '', $data['previous_value'] );
 		$this->assertSame( Options::SYNC_MODE_IMPORT, $data['new_value'] );
@@ -203,7 +203,7 @@ class Settings_Logger_Test extends Integration_Test_Case {
 
 		// ASSERT: One event captures both old and new values.
 		$data = $this->get_single_event_data(
-			Log_Events::SETTINGS_SYNC_MODE_CHANGED
+			Log_Events::SYNC_MODE_CHANGED
 		);
 		$this->assertSame( Options::SYNC_MODE_IMPORT, $data['previous_value'] );
 		$this->assertSame(

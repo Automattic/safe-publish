@@ -116,7 +116,7 @@ class Settings_Logger extends Logger {
 		string $new_value
 	): void {
 		$this->log_event(
-			Log_Events::SETTINGS_CONNECTED_SITE_URL_CHANGED,
+			Log_Events::CONNECTED_SITE_URL_CHANGED,
 			array(
 				'previous_value' => $previous_value,
 				'new_value'      => $new_value,
@@ -135,7 +135,7 @@ class Settings_Logger extends Logger {
 		string $new_value
 	): void {
 		$this->log_event(
-			Log_Events::SETTINGS_BASIC_AUTH_USERNAME_CHANGED,
+			Log_Events::BASIC_AUTH_USERNAME_CHANGED,
 			array(
 				'previous_value' => $previous_value,
 				'new_value'      => $new_value,
@@ -153,7 +153,7 @@ class Settings_Logger extends Logger {
 	 */
 	public function basic_auth_password_changed( string $change_type ): void {
 		$this->log_event(
-			Log_Events::SETTINGS_BASIC_AUTH_PASSWORD_CHANGED,
+			Log_Events::BASIC_AUTH_PASSWORD_CHANGED,
 			array(
 				'change_type' => $change_type,
 			)
@@ -171,7 +171,7 @@ class Settings_Logger extends Logger {
 		string $new_value
 	): void {
 		$this->log_event(
-			Log_Events::SETTINGS_SYNC_MODE_CHANGED,
+			Log_Events::SYNC_MODE_CHANGED,
 			array(
 				'previous_value' => $previous_value,
 				'new_value'      => $new_value,

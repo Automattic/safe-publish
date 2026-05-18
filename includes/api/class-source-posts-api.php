@@ -398,7 +398,7 @@ class Source_Posts_API {
 			! isset( $data['content']['raw'] ) ||
 			! isset( $data['excerpt']['raw'] )
 		) {
-			$this->logger->content_fetch_raw_unavailable(
+			$this->logger->content_fetch_raw_fields_missing(
 				$source_post_id,
 				$source_site_url
 			);
