@@ -16,7 +16,7 @@ import {
 } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
 import { useState, useEffect } from '@wordpress/element';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
 import type { ApiResponse, DataViewsField, ExportEvent } from '../types';
 
@@ -42,7 +42,7 @@ export function ExportHistory(): JSX.Element {
 		},
 		search: '',
 		filters: [],
-		fields: [ 'date', 'destination', 'status', 'posts' ],
+		fields: [ 'date', 'user', 'destination', 'status', 'posts' ],
 	} );
 
 	const [ paginationInfo, setPaginationInfo ] = useState( {
@@ -103,6 +103,25 @@ export function ExportHistory(): JSX.Element {
 			render: ( { item }: { item: ExportEvent } ): JSX.Element => (
 				<span>{ formatDateTime( item.date ) }</span>
 			),
+		},
+		{
+			id: 'user',
+			label: __( 'User', 'safe-publish' ),
+			enableSorting: true,
+			render: ( { item }: { item: ExportEvent } ): JSX.Element => {
+				const hasUser = item.actor_user_id > 0 && '' !== item.actor_display_name;
+				return (
+					<span>
+						{ hasUser
+							? item.actor_display_name
+							: sprintf(
+								/* translators: %s is the invocation context identifier (cli, cron, hmac, etc.). */
+								__( 'System (%s)', 'safe-publish' ),
+								item.actor_source
+							) }
+					</span>
+				);
+			},
 		},
 		{
 			id: 'destination',
