@@ -31,22 +31,20 @@ if (
  * through `wp_safe_remote_get()` → `wp_http_validate_url()`, which
  * rejects URLs whose host resolves to a private/loopback IP. On Docker
  * Desktop, `host.docker.internal` resolves into the 192.168.x range and
- * would otherwise be blocked. We opt the dev hosts back in via the
- * documented filter so cross-container media downloads succeed.
+ * would otherwise be blocked. We opt that one host back in via the
+ * documented filter so cross-container media downloads succeed. The
+ * allowlist is intentionally a single value: with `WP_HOME` set to
+ * `host.docker.internal`, nothing legitimate in this stack should be
+ * issuing safe HTTP calls against `localhost` or `127.0.0.1`. If one
+ * shows up, that's a misconfiguration to surface rather than paper over.
  *
  * @param bool   $external Whether the request host is considered external.
  * @param string $host     The host being requested.
- * @return bool True for the wp-env dev hosts, otherwise the original
+ * @return bool True for the wp-env dev host, otherwise the original
  *              decision.
  */
-function safe_publish_dev_allow_docker_host( $external, $host ) {
-	$allowed = array(
-		'host.docker.internal',
-		'localhost',
-		'127.0.0.1',
-	);
-
-	if ( in_array( $host, $allowed, true ) ) {
+function safe_publish_dev_allow_docker_host( bool $external, string $host ): bool {
+	if ( 'host.docker.internal' === $host ) {
 		return true;
 	}
 
@@ -73,7 +71,7 @@ add_filter(
  * @param int[] $ports Currently allowed ports.
  * @return int[] Ports with the wp-env dev ports appended.
  */
-function safe_publish_dev_allow_wp_env_ports( $ports ) {
+function safe_publish_dev_allow_wp_env_ports( array $ports ): array {
 	$dev_ports = array( 8888, 8889 );
 
 	foreach ( $dev_ports as $port ) {
