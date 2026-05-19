@@ -14,11 +14,9 @@ use Safe_Publish\Admin\Session_Formatter;
 use Safe_Publish\Utils\Imports_Table;
 
 /**
- * Import History Integration Test Class.
- *
- * Tests the complete history tracking workflow end-to-end.
+ * Import History Test Class.
  */
-class Import_History_Integration_Test extends Integration_Test_Case {
+class Import_History_Test extends Integration_Test_Case {
 
 	/**
 	 * History repository instance.

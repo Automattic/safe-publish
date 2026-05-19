@@ -20,10 +20,10 @@ use WP_REST_Server;
 use WP_UnitTestCase;
 
 /**
- * Source Author REST Field Test.
+ * Source Author REST Field Test Class.
  *
- * Verifies that the safe_publish_author REST field is only populated for
- * Safe Publish HMAC-authenticated requests and that its payload reflects the
+ * Access control: the safe_publish_author REST field is populated only for
+ * Safe Publish HMAC-authenticated requests, and its payload reflects the
  * source post's author at the time of the request.
  */
 class Source_Author_REST_Field_Test extends WP_UnitTestCase {

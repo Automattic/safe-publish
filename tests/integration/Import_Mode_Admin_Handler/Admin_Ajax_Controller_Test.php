@@ -21,9 +21,7 @@ use WP_Error;
 use WPAjaxDieStopException;
 
 /**
- * Admin Ajax Controller Integration Test Class.
- *
- * Tests the AJAX endpoints exposed by the admin controller.
+ * Admin Ajax Controller Test Class.
  */
 class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 

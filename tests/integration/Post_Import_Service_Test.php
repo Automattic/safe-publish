@@ -22,7 +22,7 @@ use Safe_Publish\Utils\Options;
 use WP_Error;
 
 /**
- * Integration tests for Post_Import_Service.
+ * Post Import Service Test Class.
  *
  * Extends the media-aware base class so that image downloads are intercepted
  * by the existing HTTP mock infrastructure.
