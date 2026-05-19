@@ -128,8 +128,24 @@ function esc_url_raw( string $url ): string {
 	return $url;
 }
 
+function esc_url( string $url ): string {
+	return $url;
+}
+
+function esc_html( string $text ): string {
+	return $text;
+}
+
+function absint( mixed $value ): int {
+	return abs( (int) $value );
+}
+
 class WP_Error {
-	public function __construct( private string $code = '', private string $message = '', private mixed $data = null ) {}
+	public function __construct(
+		private string $code = '',
+		private string $message = '',
+		private mixed $data = null
+	) {}
 
 	public function get_error_code(): string {
 		return $this->code;
