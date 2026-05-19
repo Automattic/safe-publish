@@ -37,3 +37,6 @@ coverage
 .vscode/*
 !.vscode/*.example
 .zed
+
+# Claude Code
+.claude/worktrees/
