@@ -169,10 +169,9 @@ final class Import_History {
 			wp_send_json_error( __( 'Session not found', 'safe-publish' ) );
 		}
 
-		$status          = (string) $session['status'];
 		$session_data    = $this->formatter->format_session( $session );
 		$items           = $this->repository->get_session_items( $session_id );
-		$formatted_items = $this->formatter->format_items( $items, $status );
+		$formatted_items = $this->formatter->format_items( $items );
 
 		wp_send_json_success(
 			array(

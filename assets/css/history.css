@@ -176,6 +176,11 @@
 	border-color: #8c8f94;
 }
 
+.safe-publish-item-row.is-rolled-back {
+	opacity: 0.6;
+	background: var(--safe-publish-bg-muted);
+}
+
 /* Status indicators */
 .safe-publish-status-success {
 	color: var(--safe-publish-status-success);

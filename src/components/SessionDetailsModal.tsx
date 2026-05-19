@@ -239,15 +239,6 @@ export function SessionDetailsModal( {
 	 * @return {JSX.Element} Rendered import items list.
 	 */
 	const renderImportItems = (): JSX.Element => {
-		if ( 'rolled_back' === session.status ) {
-			return (
-				<div className="safe-publish-item-row">
-					<Text><strong>{ __( 'This session has been rolled back.', 'safe-publish' ) }</strong></Text>
-					<Text>{ __( 'All imported posts from this session have been deleted and are no longer available.', 'safe-publish' ) }</Text>
-				</div>
-			);
-		}
-
 		if ( 0 === items.length ) {
 			return (
 				<Text>{ __( 'No detailed items available for this session.', 'safe-publish' ) }</Text>
@@ -257,7 +248,10 @@ export function SessionDetailsModal( {
 		return (
 			<VStack spacing={ 2 }>
 				{ items.map( ( item ) => (
-					<div key={ item.id } className="safe-publish-item-row">
+					<div
+						key={ item.id }
+						className={ `safe-publish-item-row${ item.is_rolled_back ? ' is-rolled-back' : '' }` }
+					>
 						<VStack spacing={ 2 }>
 							<HStack justify="space-between">
 								<Text><strong>{ item.title }</strong></Text>
