@@ -632,15 +632,24 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Extracts the site base URL (scheme + host) from a full URL.
+	 * Extracts the site base URL (scheme + host + port) from a full URL.
+	 *
+	 * Internal helper shared by the single-import and draft-processing paths.
+	 *
+	 * Preserves the port so non-default ports (e.g. local dev environments,
+	 * staging on alternate ports) reach the right service when used as a
+	 * base for REST endpoint URLs.
 	 *
 	 * @param string $url Full URL to extract the base from.
-	 * @return string Site base URL (e.g. "https://example.com").
+	 * @return string Site base URL (e.g. "https://example.com" or
+	 *                "http://example.com:8889").
 	 */
-	private function extract_site_url( string $url ): string {
-		return wp_parse_url( $url, PHP_URL_SCHEME )
-			. '://'
-			. wp_parse_url( $url, PHP_URL_HOST );
+	public static function extract_site_url( string $url ): string {
+		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
+		$host   = wp_parse_url( $url, PHP_URL_HOST );
+		$port   = wp_parse_url( $url, PHP_URL_PORT );
+
+		return $scheme . '://' . $host . ( is_int( $port ) ? ':' . $port : '' );
 	}
 
 	/**
@@ -658,7 +667,7 @@ class Post_Import_Service {
 			return $this->sanitize_field( $content, self::FIELD_CONTENT );
 		}
 
-		$source_site_url = $this->extract_site_url( $source_link );
+		$source_site_url = self::extract_site_url( $source_link );
 		$processed       = $this->content_processor->process_content( $content, $source_site_url );
 
 		if ( is_wp_error( $processed ) ) {
@@ -1590,7 +1599,7 @@ class Post_Import_Service {
 			return 0;
 		}
 
-		$source_site_url = $this->extract_site_url( $source_link );
+		$source_site_url = self::extract_site_url( $source_link );
 
 		$attachment_id = $this->media_importer->import_featured_image(
 			$featured_media_id,
