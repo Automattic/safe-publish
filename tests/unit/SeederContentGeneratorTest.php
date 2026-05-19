@@ -52,7 +52,8 @@ class SeederContentGeneratorTest extends TestCase {
 			$start,
 			$date_offset,
 			$prefix,
-			self::REFERENCE_TIME
+			self::REFERENCE_TIME,
+			'https://source.example.com'
 		);
 	}
 
@@ -574,6 +575,10 @@ class SeederContentGeneratorTest extends TestCase {
 		// ASSERT: keys match the documented payload structure.
 		$this->assertSame( 'Post 1 - 1P', $payload['title'] );
 		$this->assertSame( 'seeder-post-1', $payload['slug'] );
+		$this->assertSame(
+			'https://source.example.com/seeder-post-1',
+			$payload['link']
+		);
 		$this->assertSame( 'post', $payload['post_type'] );
 		$this->assertSame( 'publish', $payload['status'] );
 		$this->assertSame( 42, $payload['featured_media'] );
