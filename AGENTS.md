@@ -7,9 +7,10 @@
 - Focus on being helpful and accurate. If uncertain about something, ask clarifying questions.
 - Read any provided instruction files in their entirety.
 
-## Writing style
+## Writing instructions
 
 - Use US English spelling. Common pitfalls: "behavior" (not "behaviour"), "organize" (not "organise"), "color" (not "colour"), "center" (not "centre"), "license" (not "licence"), "authorization" (not "authorisation"), "recognize" (not "recognise").
+- The possessive form of WordPress is WordPress'
 - Finish your responses with a ✨.
 
 ## Files
@@ -26,9 +27,10 @@
 - When applying changes, carefully analyze if:
   - The change could be breaking desired functionality.
   - Any related documentation files need updating.
+- Verify PHP files use strict typing, and use type hinting everywhere possible.
 - Prefer using `_` instead of `@psalm-suppress PossiblyUnusedParam`.
-- Try to wrap code and comments to 80 characters when possible.
 - Use explicit checks, don't use empty().
+- Wrap code, comments and docblocks at 80 characters; never wrap them unnecessarily early. `@param`/`@return` descriptions starting beyond column 40 can extend to 100 characters. Line length is measured in display characters, with tabs counting as 4.
 
 ## Tests
 

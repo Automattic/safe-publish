@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(composer dump-autoload*)",
+      "Bash(npm run check *)",
+      "Bash(npm run check)",
+      "Bash(npm run fix *)",
+      "Bash(npm run fix)",
+      "Bash(npm run test*)",
+      "Bash(pbcopy *)",
+      "WebFetch(domain:developer.wordpress.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:make.wordpress.org)",
+      "WebSearch"
+    ]
+  }
+}
