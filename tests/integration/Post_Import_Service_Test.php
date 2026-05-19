@@ -119,7 +119,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	/**
 	 * Verifies that import_post() fails when an inline image cannot be downloaded.
 	 *
-	 * When processed content contains an image whose download returns a non-2xx
+	 * When processed content contains an image whose download returns a non-200
 	 * response, the import must return success: false with a descriptive error and
 	 * must not create a post with the broken staging URL left in the content.
 	 */

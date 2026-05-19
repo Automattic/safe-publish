@@ -187,7 +187,7 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that an authenticated request with a non-2xx response logs an
+	 * Verifies that an authenticated request with a non-200 response logs an
 	 * EXPORT_RESPONSE_BAD_STATUS error event with the HTTP status code.
 	 */
 	public function test_log_export_event_logs_failed_http_response(): void {
