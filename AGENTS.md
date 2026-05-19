@@ -27,7 +27,7 @@
 - When applying changes, carefully analyze if:
   - The change could be breaking desired functionality.
   - Any related documentation files need updating.
-- Verify PHP files use strict typing, and use type hinting everywhere possible
+- Verify PHP files use strict typing, and use type hinting everywhere possible.
 - Prefer using `_` instead of `@psalm-suppress PossiblyUnusedParam`.
 - Use explicit checks, don't use empty().
 - Wrap code, comments and docblocks at 80 characters; never wrap them unnecessarily early. `@param`/`@return` descriptions starting beyond column 40 can extend to 100 characters. Line length is measured in display characters, with tabs counting as 4.
