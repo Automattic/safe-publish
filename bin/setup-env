@@ -26,3 +26,31 @@ wp-env run tests-cli wp search-replace \
 	--all-tables \
 	--skip-columns=guid \
 	--quiet
+
+# Reconcile attachment DB rows with the filesystem. Container recreation
+# (config edits, dev:destroy, Docker Desktop updates, host reboot) wipes
+# the in-container uploads directory while the DB volume survives,
+# leaving attachment posts pointing at files that no longer exist on
+# disk. Delete those orphan rows so the DB matches reality. Inline image
+# URLs baked into post_content are left broken on purpose — the visible
+# breakage is the signal to re-seed (npm run seed:source).
+RECONCILE_ORPHANS='
+$removed = 0;
+foreach ( get_posts( [
+	"post_type"      => "attachment",
+	"post_status"    => "any",
+	"posts_per_page" => -1,
+	"fields"         => "ids",
+] ) as $id ) {
+	$path = get_attached_file( $id );
+	if ( $path && ! file_exists( $path ) ) {
+		wp_delete_attachment( $id, true );
+		$removed++;
+	}
+}
+if ( $removed > 0 ) {
+	WP_CLI::log( sprintf( "Removed %d orphan attachment(s).", $removed ) );
+}
+'
+wp-env run cli wp eval "$RECONCILE_ORPHANS"
+wp-env run tests-cli wp eval "$RECONCILE_ORPHANS"

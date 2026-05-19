@@ -1,9 +1,5 @@
 .wp-env.override.json
 
-# Persistent wp-env uploads — bind-mounted into the containers so files
-# survive container recreation (config edits, dev:destroy, host reboots).
-.uploads/
-
 # Logs
 logs
 *.log

@@ -8,8 +8,7 @@
   },
   "mappings": {
     ".htaccess": "./bin/conf/htaccess",
-    "wp-content/mu-plugins": "./mu-plugins",
-    "wp-content/uploads": "./.uploads/default"
+    "wp-content/mu-plugins": "./mu-plugins"
   },
   "core": "WordPress/WordPress#master",
   "plugins": ["."],
@@ -28,8 +27,7 @@
       },
       "mappings": {
         ".htaccess": "./bin/conf/htaccess",
-        "wp-content/mu-plugins": "./mu-plugins",
-        "wp-content/uploads": "./.uploads/tests"
+        "wp-content/mu-plugins": "./mu-plugins"
       },
       "plugins": ["."]
     }
