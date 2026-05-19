@@ -141,7 +141,11 @@ function absint( mixed $value ): int {
 }
 
 class WP_Error {
-	public function __construct( private string $code = '', private string $message = '', private mixed $data = null ) {}
+	public function __construct(
+		private string $code = '',
+		private string $message = '',
+		private mixed $data = null
+	) {}
 
 	public function get_error_code(): string {
 		return $this->code;

@@ -235,7 +235,8 @@ class Content_Generator {
 			return $this->images_mode;
 		}
 
-		return self::CONCRETE_IMAGE_MODES[ max( 0, $index - 1 ) % count( self::CONCRETE_IMAGE_MODES ) ];
+		$modes = self::CONCRETE_IMAGE_MODES;
+		return $modes[ max( 0, $index - 1 ) % count( $modes ) ];
 	}
 
 	/**
@@ -433,9 +434,10 @@ class Content_Generator {
 	 * @return array<string, string|int> Meta key => value.
 	 */
 	public function meta_values( int $index ): array {
+		$color_index = max( 0, $index ) % count( self::COLORS );
 		return array(
 			self::SEEDER_META_KEY => '1',
-			'seeder_color'        => self::COLORS[ max( 0, $index ) % count( self::COLORS ) ],
+			'seeder_color'        => self::COLORS[ $color_index ],
 			'seeder_priority'     => ( $index % 10 ) + 1,
 		);
 	}

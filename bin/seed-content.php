@@ -196,7 +196,7 @@ function safe_publish_seeder_apply_term_assignments(
 			$field
 		);
 
-		if ( ! empty( $ids ) ) {
+		if ( array() !== $ids ) {
 			wp_set_object_terms( $post_id, $ids, $taxonomy );
 		}
 	}
