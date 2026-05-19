@@ -337,6 +337,8 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	 * phase that covers URL/ID rewriting.
 	 */
 	public function test_content_columns_parity(): void {
+		// ARRANGE + ACT: batch already imported in setUp.
+		// ASSERT: each dest post matches source on content columns.
 		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
 			Post_Parity_Asserter::assert_content_columns(
 				$this->source_rest_bodies[ $source_id ],
@@ -347,10 +349,13 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that status-style columns (post_status, comment_status,
-	 * ping_status, post_password) match source.
+	 * Verifies that status-style columns (comment_status, ping_status,
+	 * post_password) match source. post_status diverges by design and is
+	 * asserted separately in test_post_status_locks_to_draft.
 	 */
 	public function test_status_columns_parity(): void {
+		// ARRANGE + ACT: batch already imported in setUp.
+		// ASSERT: each dest post matches source on status columns.
 		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
 			Post_Parity_Asserter::assert_status_columns(
 				$this->source_rest_bodies[ $source_id ],
@@ -365,6 +370,9 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	 * with no source-side value land on the WordPress default on dest.
 	 */
 	public function test_misc_columns_parity(): void {
+		// ARRANGE + ACT: batch already imported in setUp.
+		// ASSERT: each dest post matches source on misc columns and WP
+		// defaults.
 		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
 			Post_Parity_Asserter::assert_misc_columns(
 				$this->source_rest_bodies[ $source_id ],
@@ -380,6 +388,8 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	 * a column is omitted from the rules.
 	 */
 	public function test_no_unmodeled_columns(): void {
+		// ARRANGE + ACT: nothing to set up; pure static check.
+		// ASSERT: every wp_posts column is classified.
 		Post_Parity_Asserter::assert_no_unmodeled_columns( $this );
 	}
 
