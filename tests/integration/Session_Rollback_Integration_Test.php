@@ -63,7 +63,7 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		$post_id_2 = $this->factory()->post->create( array( 'post_title' => 'Imported Post 2' ) );
 
 		// Log the imports.
-		$this->repository->log_import_action(
+		$item_id_1 = $this->repository->log_import_action(
 			$session_id,
 			1,
 			'Imported Post 1',
@@ -71,7 +71,7 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 			$post_id_1
 		);
 
-		$this->repository->log_import_action(
+		$item_id_2 = $this->repository->log_import_action(
 			$session_id,
 			2,
 			'Imported Post 2',
@@ -100,6 +100,13 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 		// ASSERT: Verify session marked as rolled back.
 		$session = $this->repository->get_session( $session_id );
 		$this->assertSame( 'rolled_back', $session['status'] );
+
+		// ASSERT: Each item row is flagged so the per-item rolled_back state
+		// stays consistent with the item-level rollback path.
+		$item_1 = $this->repository->get_item( $item_id_1 );
+		$item_2 = $this->repository->get_item( $item_id_2 );
+		$this->assertSame( 1, (int) $item_1['rolled_back'] );
+		$this->assertSame( 1, (int) $item_2['rolled_back'] );
 	}
 
 	/**

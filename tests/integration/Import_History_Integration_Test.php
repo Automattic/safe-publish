@@ -436,6 +436,72 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that format_items() surfaces rolled-back items so the session
+	 * details modal can render them with the right per-item state.
+	 *
+	 * Error items remain ineligible for rollback and must not be flagged.
+	 */
+	public function test_format_items_returns_rolled_back_session_items(): void {
+		// ARRANGE: Real WP posts back the success/updated items so can_rollback
+		// would otherwise return true; the only thing keeping it false is the
+		// is_rolled_back flag.
+		$success_post = $this->factory()->post->create();
+		$updated_post = $this->factory()->post->create();
+
+		$session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+
+		$success_id = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Success Post',
+			'success',
+			$success_post
+		);
+		$updated_id = $this->repository->log_import_action(
+			$session_id,
+			2,
+			'Updated Post',
+			'updated',
+			$updated_post
+		);
+		$error_id   = $this->repository->log_import_action(
+			$session_id,
+			3,
+			'Failed Post',
+			'error',
+			null,
+			'Import failed'
+		);
+
+		$this->repository->complete_session( $session_id );
+		$this->repository->mark_session_rolled_back( $session_id );
+
+		// ACT: Format the items as the AJAX handler would.
+		$items     = $this->repository->get_session_items( $session_id );
+		$formatted = $this->formatter->format_items( $items );
+
+		// ASSERT: All items are returned.
+		$this->assertCount( 3, $formatted );
+
+		$by_id = array();
+		foreach ( $formatted as $item ) {
+			$by_id[ $item['id'] ] = $item;
+		}
+
+		// ASSERT: Success/updated items are flagged; error item is not.
+		$this->assertTrue( $by_id[ $success_id ]['is_rolled_back'] );
+		$this->assertTrue( $by_id[ $updated_id ]['is_rolled_back'] );
+		$this->assertFalse( $by_id[ $error_id ]['is_rolled_back'] );
+
+		// ASSERT: Rolled-back items cannot be rolled back again.
+		$this->assertFalse( $by_id[ $success_id ]['can_rollback'] );
+		$this->assertFalse( $by_id[ $updated_id ]['can_rollback'] );
+	}
+
+	/**
 	 * Verifies that Imports_Table::count() reflects the number of session rows.
 	 */
 	public function test_imports_table_count_reflects_session_rows(): void {
