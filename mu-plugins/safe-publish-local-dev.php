@@ -58,26 +58,28 @@ add_filter(
 );
 
 /**
- * Allows the wp-env dev ports through WP's safe-port allowlist.
+ * Allows the source's wp-env port through WP's safe-port allowlist.
  *
  * `wp_http_validate_url()` has a second gate after the host check: an
  * allowlist of ports (default 80, 443, 8080) applied via
- * `http_allowed_safe_ports`. The wp-env default and tests ports — 8888
- * and 8889 — aren't in that list, so `download_url()` rejects source
- * media URLs with "A valid URL was not provided" even when the host is
- * whitelisted. Append the dev ports so cross-container downloads pass
- * both gates.
+ * `http_allowed_safe_ports`. The source's port — 8889 — isn't in that
+ * list, so `download_url()` rejects source media URLs with "A valid URL
+ * was not provided" even when the host is whitelisted. Append it so
+ * destination-side cross-container downloads pass both gates.
+ *
+ * Only 8889 is listed: the destination's own port (8888) isn't fetched
+ * via the safe HTTP API anywhere in this codebase — both connectivity
+ * probes go through `vip_safe_wp_remote_get()`/`wp_remote_get()`, which
+ * skip `wp_http_validate_url()` entirely. If 8888 ever needs to be
+ * here, that's a signal a new safe-API call site appeared, not
+ * something to paper over.
  *
  * @param int[] $ports Currently allowed ports.
- * @return int[] Ports with the wp-env dev ports appended.
+ * @return int[] Ports with the source's wp-env port appended.
  */
 function safe_publish_dev_allow_wp_env_ports( array $ports ): array {
-	$dev_ports = array( 8888, 8889 );
-
-	foreach ( $dev_ports as $port ) {
-		if ( ! in_array( $port, $ports, true ) ) {
-			$ports[] = $port;
-		}
+	if ( ! in_array( 8889, $ports, true ) ) {
+		$ports[] = 8889;
 	}
 
 	return $ports;
