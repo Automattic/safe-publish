@@ -13,6 +13,6 @@ wp-env run cli wp rewrite flush
 # Source site (tests env / tests-cli / port $TESTS_PORT)
 wp-env run tests-cli wp option update blogname 'Safe Publish Source'
 wp-env run tests-cli wp option update safe_publish_sync_mode 'export'
-wp-env run tests-cli wp option update safe_publish_connected_site_url "http://host.docker.internal:$PORT"
+wp-env run tests-cli wp option update safe_publish_connected_site_url "http://localhost:$PORT"
 wp-env run tests-cli wp rewrite structure '/%postname%/'
 wp-env run tests-cli wp rewrite flush
