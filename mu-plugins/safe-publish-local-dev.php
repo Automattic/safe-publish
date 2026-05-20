@@ -58,28 +58,34 @@ add_filter(
 );
 
 /**
- * Allows the source's wp-env port through WP's safe-port allowlist.
+ * Allows the peer site's wp-env port through WP's safe-port allowlist.
  *
- * `wp_http_validate_url()` has a second gate after the host check: an
- * allowlist of ports (default 80, 443, 8080) applied via
- * `http_allowed_safe_ports`. The source's port — 8889 — isn't in that
- * list, so `download_url()` rejects source media URLs with "A valid URL
- * was not provided" even when the host is whitelisted. Append it so
- * destination-side cross-container downloads pass both gates.
+ * `wp_http_validate_url()` gates outbound fetches on an allowlist of
+ * ports (default 80, 443, 8080). The peer's wp-env port isn't in that
+ * list, so cross-container media URLs would be rejected with "A valid
+ * URL was not provided" even with the host gate opened. Append the
+ * peer's port to pass both gates.
  *
- * Only 8889 is listed: the destination's own port (8888) isn't fetched
- * via the safe HTTP API anywhere in this codebase — both connectivity
- * probes go through `vip_safe_wp_remote_get()`/`wp_remote_get()`, which
- * skip `wp_http_validate_url()` entirely. If 8888 ever needs to be
- * here, that's a signal a new safe-API call site appeared, not
- * something to paper over.
+ * Derived at request time from `safe_publish_connected_site_url`, set
+ * per-site by `bin/setup-env`, so any worktree port pair just works.
  *
  * @param int[] $ports Currently allowed ports.
- * @return int[] Ports with the source's wp-env port appended.
+ * @return int[] Ports with the peer's wp-env port appended.
  */
 function safe_publish_dev_allow_wp_env_ports( array $ports ): array {
-	if ( ! in_array( 8889, $ports, true ) ) {
-		$ports[] = 8889;
+	$connected = get_option( 'safe_publish_connected_site_url', '' );
+	if ( '' === $connected ) {
+		return $ports;
+	}
+
+	$peer_port = wp_parse_url( $connected, PHP_URL_PORT );
+	if ( ! $peer_port ) {
+		return $ports;
+	}
+
+	$peer_port = (int) $peer_port;
+	if ( ! in_array( $peer_port, $ports, true ) ) {
+		$ports[] = $peer_port;
 	}
 
 	return $ports;
