@@ -17,13 +17,11 @@ use WP_REST_Server;
 use WP_Term;
 
 /**
- * Safe Publish API Integration Test Class.
- *
- * Tests the Safe Publish API REST endpoints.
+ * Safe Publish API Test Class.
  *
  * @psalm-suppress InvalidArgument
  */
-class Safe_Publish_API_Integration_Test extends Integration_Test_Case {
+class Safe_Publish_API_Test extends Integration_Test_Case {
 
 	/**
 	 * REST server instance for dispatching requests.

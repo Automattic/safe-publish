@@ -25,13 +25,9 @@ use Safe_Publish\Utils\Options;
 use WP_Error;
 
 /**
- * Import Sanitization Integration Test Class.
- *
- * Tests kses filtering, content preservation, error message quality for
- * stripped HTML, cosmetic whitespace tolerance, and custom allowed tags
- * during import.
+ * Import Sanitization Test Class.
  */
-class Import_Sanitization_Integration_Test extends Integration_Test_Case {
+class Import_Sanitization_Test extends Integration_Test_Case {
 
 	use Mock_Post_API_Trait;
 

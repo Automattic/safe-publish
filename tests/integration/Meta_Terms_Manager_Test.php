@@ -13,7 +13,7 @@ use Safe_Publish\API\Meta_Terms_Manager;
 use WP_Error;
 
 /**
- * Integration tests for Meta_Terms_Manager.
+ * Meta Terms Manager Test Class.
  */
 class Meta_Terms_Manager_Test extends Integration_Test_Case {
 

@@ -27,11 +27,9 @@ use WP_Error;
 use WP_REST_Request;
 
 /**
- * Full Workflow Integration Test Class.
- *
- * Tests the complete auth → import → history workflow end-to-end.
+ * Full Workflow Test Class.
  */
-class Full_Workflow_Integration_Test extends Integration_Test_Case {
+class Full_Workflow_Test extends Integration_Test_Case {
 
 	use Mock_Post_API_Trait;
 

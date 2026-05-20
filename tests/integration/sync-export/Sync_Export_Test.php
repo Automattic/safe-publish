@@ -14,12 +14,12 @@ use WP_REST_Server;
 use WP_UnitTestCase;
 
 /**
- * Verifies that in "export" sync mode only export functionality is active.
+ * Sync Export Test Class.
  *
- * These tests are run exclusively via phpunit-integration-sync-export.xml, which
+ * These tests run exclusively via phpunit-integration-sync-export.xml, which
  * boots the plugin with WP_TEST_SYNC_MODE=export.
  */
-class Sync_Export_Integration_Test extends WP_UnitTestCase {
+class Sync_Export_Test extends WP_UnitTestCase {
 
 	/**
 	 * REST server instance.

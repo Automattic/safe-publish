@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests\Integration\Import_Mode_Admin_Handler;
 use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Tests\Integration\Ajax_Die_Continue_Trait;
+use Safe_Publish\Tests\Integration\Mock_Media_HTTP_Trait;
 use Safe_Publish\Tests\Integration\Mock_Post_API_Trait;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
@@ -21,13 +22,12 @@ use WP_Error;
 use WPAjaxDieStopException;
 
 /**
- * Admin Ajax Controller Integration Test Class.
- *
- * Tests the AJAX endpoints exposed by the admin controller.
+ * Admin Ajax Controller Test Class.
  */
 class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 	use Ajax_Die_Continue_Trait;
+	use Mock_Media_HTTP_Trait;
 	use Mock_Post_API_Trait;
 
 	/**
@@ -66,6 +66,18 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 		// Mock the single-post REST endpoint used by fetch_fresh_post().
 		add_filter( 'pre_http_request', array( $this, 'mock_post_api' ), 1, 3 );
+		add_filter(
+			'pre_http_request',
+			array( $this, 'mock_media_download_request' ),
+			10,
+			3
+		);
+		add_filter(
+			'wp_handle_sideload_prefilter',
+			array( $this, 'fix_empty_temp_files' ),
+			10,
+			1
+		);
 	}
 
 	/**
@@ -74,6 +86,16 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	#[\Override]
 	protected function tearDown(): void {
 		remove_filter( 'pre_http_request', array( $this, 'mock_post_api' ), 1 );
+		remove_filter(
+			'pre_http_request',
+			array( $this, 'mock_media_download_request' ),
+			10
+		);
+		remove_filter(
+			'wp_handle_sideload_prefilter',
+			array( $this, 'fix_empty_temp_files' ),
+			10
+		);
 		delete_option( Options::OPTION_CONNECTED_SITE_URL );
 		delete_site_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
 		parent::tearDown();
@@ -99,6 +121,37 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		}
 
 		return $this->build_mock_post_response();
+	}
+
+	/**
+	 * Intercepts media download requests used by draft content processing.
+	 *
+	 * Serves a real fixture image so relative media URLs can be resolved and
+	 * sideloaded during the AJAX draft flow.
+	 *
+	 * @param false|array|WP_Error $preempt Preemptive return value.
+	 * @param array                $_args   HTTP request arguments (unused).
+	 * @param string               $url     Request URL.
+	 * @return false|array|WP_Error Mocked response, or the prior return value.
+	 */
+	public function mock_media_download_request(
+		false|array|WP_Error $preempt,
+		array $_args,
+		string $url
+	): false|array|WP_Error {
+		if ( false !== $preempt ) {
+			return $preempt;
+		}
+
+		if ( ! str_contains( $url, 'source.example.com:8889' ) ) {
+			return $preempt;
+		}
+
+		if ( ! str_ends_with( $url, '.jpg' ) ) {
+			return $preempt;
+		}
+
+		return $this->get_fixture_response( 'test-1x1.jpg', 'image/jpeg' );
 	}
 
 	/**
@@ -314,6 +367,68 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			'https://source.example.com/single-draft',
 			get_post_meta( $post_id, Options::META_SOURCE_LINK, true ),
 			'Source link meta should be stored'
+		);
+	}
+
+	/**
+	 * Verifies that the draft path preserves a non-default source port when
+	 * resolving relative media URLs for content processing.
+	 */
+	public function test_ajax_create_draft_preserves_port_for_relative_media_imports(): void {
+		// ARRANGE: Mock fresh content with a relative image URL.
+		$this->mock_post_overrides = array(
+			'content' => '<p><img src="/port-test.jpg" alt="Port test"></p>',
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$attachments_before = $this->get_attachment_count();
+		$_POST              = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '7002',
+			'title'          => 'Draft With Relative Media',
+			'content'        => '<p>Ignored in favor of fresh content.</p>',
+			'source_link'    => 'https://source.example.com:8889/single-draft',
+			'post_type'      => 'post',
+		);
+
+		// ACT: Trigger the create draft AJAX handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: The draft import succeeds and creates one attachment.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertTrue( $response['success'], 'Create draft should return success' );
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Relative media should create exactly one attachment'
+		);
+
+		$attachments = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'posts_per_page' => -1,
+				'post_status'    => 'any',
+				'meta_key'       => Options::META_IMPORTED_FROM,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'meta_value'     => 'https://source.example.com:8889',
+			)
+		);
+
+		// ASSERT: The imported attachment tracks the source site with the port.
+		$this->assertCount(
+			1,
+			$attachments,
+			'Attachment metadata should preserve the source port'
+		);
+		$this->assertSame(
+			'https://source.example.com:8889/port-test.jpg',
+			get_post_meta(
+				$attachments[0]->ID,
+				Options::META_ORIGINAL_URL,
+				true
+			),
+			'Original media URL should be resolved against the source port'
 		);
 	}
 

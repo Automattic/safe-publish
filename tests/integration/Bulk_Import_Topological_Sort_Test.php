@@ -16,11 +16,7 @@ use WP_Ajax_UnitTestCase;
 use WP_Error;
 
 /**
- * Bulk Import Topological Sort Integration Test Class.
- *
- * Exercises the two-pass bulk-import flow end-to-end to confirm that source
- * parents are imported before their children and that cycle members route
- * through the unresolvable-parent path without crashing.
+ * Bulk Import Topological Sort Test Class.
  */
 class Bulk_Import_Topological_Sort_Test extends WP_Ajax_UnitTestCase {
 

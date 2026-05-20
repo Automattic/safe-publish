@@ -1210,8 +1210,7 @@ final class Admin_Ajax_Controller {
 		$processed = $content;
 
 		if ( ! empty( $content ) && ! empty( $source_link ) ) {
-			$source_site_url = wp_parse_url( $source_link, PHP_URL_SCHEME )
-				. '://' . wp_parse_url( $source_link, PHP_URL_HOST );
+			$source_site_url = Post_Import_Service::extract_site_url( $source_link );
 			$processed       = $this->content_processor->process_content( $content, $source_site_url );
 
 			if ( is_wp_error( $processed ) ) {
