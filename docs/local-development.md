@@ -24,6 +24,32 @@ The "source" WordPress environment will be available at `http://localhost:8889` 
 
 Stop the development environment with `Ctrl+C` and resume it by running the same command. You can also manually stop the environment with `npm run dev:stop`. Stopping the environment optionally stops the WordPress containers but preserves their state.
 
+### Worktrees
+
+To run additional checkouts (e.g. `git worktree` siblings) alongside the main one, each worktree's wp-env needs its own port pair so it doesn't collide with other running wp-envs. From the worktree, run:
+
+```sh
+bin/setup-worktree
+```
+
+The script installs dependencies and prints the next free `WP_ENV_PORT` and `WP_ENV_TESTS_PORT` pair (8890/8891 for the first worktree, 8892/8893 for the next, and so on). Then start wp-env with the printed values:
+
+```sh
+WP_ENV_PORT=8890 WP_ENV_TESTS_PORT=8891 npm run dev
+```
+
+When you're done with a worktree, tear it down so containers and volumes don't orphan:
+
+```sh
+# From inside the worktree:
+npm run dev:destroy
+
+# Then from another worktree (e.g. the main checkout):
+git worktree remove ../<worktree-dir>
+```
+
+Skipping `dev:destroy` before removing leaves wp-env containers and volumes behind, identifiable via `docker ps -a` and `docker volume ls`.
+
 ### Setting up authentication for testing
 
 For local development, you'll need two WordPress sites to test import functionality:

@@ -59,6 +59,11 @@ The plugin's purpose is migrating data from a source to a destination site, keep
 - Run integration tests with `npm run test:integration` and unit tests with `npm run test`.
 - When adjustments are made to the single import/update path, verify whether identical changes are needed to the bulk import/update path, and vice versa.
 
+## Worktrees
+
+- Run `bin/setup-worktree` to install dependencies and pick a free wp-env port pair so it doesn't collide with the main checkout's 8888/8889. The script prints the `WP_ENV_PORT` and `WP_ENV_TESTS_PORT` values to use with `npm run dev`.
+- Before removing a worktree, run `npm run dev:destroy` from inside it to avoid orphan wp-env containers and volumes.
+
 ## Dependencies
 
 **`@wordpress/*` and WP stubs are pinned to the wp-6.8 dist-tag line** to match the plugin's `Requires at least: 6.8`. Bumping them past their current major would type-check our code against APIs that don't exist in WP 6.8's bundled `wp.*` globals, causing silent runtime failures. Raising the WP floor requires updating the plugin header, `php-stubs/wordpress-{stubs,tests-stubs}`, and the relevant `@wordpress/*` packages together to the next wp-X.Y dist-tag.
