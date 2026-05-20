@@ -456,7 +456,7 @@ export type ActorSource =
  * @property {string}         date                 Date the event was recorded.
  * @property {'info'|'error'} level                Event severity level.
  * @property {string}         event                Event type (e.g. CONTENT_EXPORTED).
- * @property {number}         actor_user_id        WP user ID that triggered the event, or 0 for system events.
+ * @property {number}         actor_user_id        Acting user ID; 0 if system.
  * @property {string}         actor_display_name   Snapshotted display name at log time.
  * @property {ActorSource}    actor_source         Invocation context (cli, cron, hmac, etc.).
  * @property {string}         destination_site_url URL of the destination site.

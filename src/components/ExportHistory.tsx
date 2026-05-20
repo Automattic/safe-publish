@@ -108,19 +108,33 @@ export function ExportHistory(): JSX.Element {
 			id: 'user',
 			label: __( 'User', 'safe-publish' ),
 			enableSorting: true,
+			sort: (
+				eventA: ExportEvent,
+				eventB: ExportEvent,
+				direction
+			): number => {
+				const aVal = eventA.actor_display_name || eventA.actor_source;
+				const bVal = eventB.actor_display_name || eventB.actor_source;
+				const diff = aVal.localeCompare( bVal );
+				return 'asc' === direction ? diff : -diff;
+			},
 			render: ( { item }: { item: ExportEvent } ): JSX.Element => {
-				const hasUser = item.actor_user_id > 0 && '' !== item.actor_display_name;
-				return (
-					<span>
-						{ hasUser
-							? item.actor_display_name
-							: sprintf(
-								/* translators: %s is the invocation context identifier (cli, cron, hmac, etc.). */
-								__( 'System (%s)', 'safe-publish' ),
-								item.actor_source
-							) }
-					</span>
+				if ( item.actor_user_id > 0 ) {
+					const name = item.actor_display_name || sprintf(
+						/* translators: %d is the WordPress user ID. */
+						__( 'User #%d', 'safe-publish' ),
+						item.actor_user_id
+					);
+					return <span>{ name }</span>;
+				}
+
+				const label = sprintf(
+					/* translators: %s is the actor source (e.g. cli, cron) */
+					__( 'System (%s)', 'safe-publish' ),
+					item.actor_source
 				);
+
+				return <span>{ label }</span>;
 			},
 		},
 		{

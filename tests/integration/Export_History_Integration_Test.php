@@ -112,7 +112,11 @@ class Export_History_Integration_Test extends WP_Ajax_UnitTestCase {
 		);
 		wp_set_current_user( $user_id );
 
-		( new Export_Logger() )->content_exported( 'posts', 'https://destination.example/', array() );
+		( new Export_Logger() )->content_exported(
+			'posts',
+			'https://destination.example/',
+			array()
+		);
 
 		$_POST = array(
 			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
@@ -128,7 +132,10 @@ class Export_History_Integration_Test extends WP_Ajax_UnitTestCase {
 		$this->assertTrue( $response['success'] );
 		$this->assertCount( 1, $response['data'] );
 		$this->assertSame( $user_id, $response['data'][0]['actor_user_id'] );
-		$this->assertSame( 'Export Triggerer', $response['data'][0]['actor_display_name'] );
+		$this->assertSame(
+			'Export Triggerer',
+			$response['data'][0]['actor_display_name']
+		);
 		$this->assertSame( 'ajax', $response['data'][0]['actor_source'] );
 	}
 
@@ -139,8 +146,8 @@ class Export_History_Integration_Test extends WP_Ajax_UnitTestCase {
 	 */
 	public function test_ajax_get_export_events_response_surfaces_system_actor_source(): void {
 		// ARRANGE: Insert an HMAC-triggered audit row directly. This bypasses
-		// Logger detection (which is covered by Audit_Log_Actor_Attribution_Test)
-		// and isolates the AJAX surfacing behavior.
+		// Logger detection (covered by Audit_Log_Actor_Attribution_Test) and
+		// isolates the AJAX surfacing behavior.
 		Audit_Log_Table::insert(
 			'export',
 			'info',
