@@ -888,8 +888,9 @@ class Post_Import_Service {
 	/**
 	 * Captures previous post content for the session rollback history log.
 	 *
-	 * Stores the current post fields, featured image, and selected meta so the
-	 * import can be reverted via session rollback.
+	 * Internal helper shared by the single-import and bulk-import update
+	 * paths. Stores the current post fields, featured image, and selected
+	 * meta so the import can be reverted via session rollback.
 	 *
 	 * @param WP_Post $existing_post Existing WordPress post.
 	 * @return array Previous content keyed by field name.
