@@ -263,11 +263,13 @@ final class Import_History {
 			wp_send_json_error( __( 'No import history found for this post', 'safe-publish' ) );
 		}
 
-		$changes = History_Repository::decode_item_changes( $item['content_changes'] ?? null ) ?? array();
+		$changes = History_Repository::decode_item_changes(
+			$item['content_changes']
+		) ?? array();
 
-		$old_content = (string) ( $changes['previous_content'] ?? '' );
-		$old_title   = (string) ( $changes['previous_title'] ?? '' );
-		$old_excerpt = (string) ( $changes['previous_excerpt'] ?? '' );
+		$old_content = (string) $changes['previous_content'];
+		$old_title   = (string) $changes['previous_title'];
+		$old_excerpt = (string) $changes['previous_excerpt'];
 
 		// Current content.
 		$new_content = $post->post_content;
