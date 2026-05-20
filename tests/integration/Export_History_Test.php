@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for Export History (audit log) timezone handling.
+ * Integration tests for the Export History audit log AJAX endpoint.
  *
  * @package Safe_Publish
  */
@@ -95,5 +95,88 @@ class Export_History_Test extends WP_Ajax_UnitTestCase {
 			'/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/',
 			$response['data'][0]['date']
 		);
+	}
+
+	/**
+	 * Verifies that the export events AJAX response surfaces the acting user's
+	 * ID, snapshotted display name, and invocation context so the UI can render
+	 * a User column for user-triggered exports.
+	 */
+	public function test_ajax_get_export_events_response_includes_actor_fields(): void {
+		// ARRANGE: Act as a known admin user and log one export event.
+		$user_id = self::factory()->user->create(
+			array(
+				'role'         => 'administrator',
+				'display_name' => 'Export Triggerer',
+			)
+		);
+		wp_set_current_user( $user_id );
+
+		( new Export_Logger() )->content_exported(
+			'posts',
+			'https://destination.example/',
+			array()
+		);
+
+		$_POST = array(
+			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+		);
+
+		// ACT: Trigger the export events AJAX handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_get_export_events' );
+
+		// ASSERT: Response carries the captured actor identity. The source
+		// resolves to 'ajax' because the test runs under WP_Ajax_UnitTestCase.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response );
+		$this->assertTrue( $response['success'] );
+		$this->assertCount( 1, $response['data'] );
+		$this->assertSame( $user_id, $response['data'][0]['actor_user_id'] );
+		$this->assertSame(
+			'Export Triggerer',
+			$response['data'][0]['actor_display_name']
+		);
+		$this->assertSame( 'ajax', $response['data'][0]['actor_source'] );
+	}
+
+	/**
+	 * Verifies that the export events AJAX response surfaces actor_source for
+	 * system-triggered events so the UI can render "System (<source>)" instead
+	 * of a blank cell when no WordPress user is acting.
+	 */
+	public function test_ajax_get_export_events_response_surfaces_system_actor_source(): void {
+		// ARRANGE: Insert an HMAC-triggered audit row directly. This bypasses
+		// Logger detection (covered by Audit_Log_Actor_Attribution_Test) and
+		// isolates the AJAX surfacing behavior.
+		Audit_Log_Table::insert(
+			'export',
+			'info',
+			'CONTENT_EXPORTED',
+			gmdate( 'Y-m-d H:i:s' ),
+			array(
+				'actor_user_id'        => 0,
+				'actor_display_name'   => '',
+				'actor_source'         => 'hmac',
+				'destination_site_url' => 'https://destination.example/',
+				'post_ids'             => array(),
+				'post_count'           => 0,
+			)
+		);
+
+		$_POST = array(
+			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+		);
+
+		// ACT: Trigger the export events AJAX handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_get_export_events' );
+
+		// ASSERT: System-event fields are passed through verbatim.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response );
+		$this->assertTrue( $response['success'] );
+		$this->assertCount( 1, $response['data'] );
+		$this->assertSame( 0, $response['data'][0]['actor_user_id'] );
+		$this->assertSame( '', $response['data'][0]['actor_display_name'] );
+		$this->assertSame( 'hmac', $response['data'][0]['actor_source'] );
 	}
 }
