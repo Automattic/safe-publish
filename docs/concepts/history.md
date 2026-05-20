@@ -55,15 +55,18 @@ Imports are tracked in a session-based model. Each import operation creates one 
 
 Export events are logged automatically when posts are served to a destination site. Each event is stored in the `{$wpdb->prefix}safe_publish_audit_log` database table.
 
-| Field           | Description                                                                             |
-| --------------- | --------------------------------------------------------------------------------------- |
-| ID              | Unique event ID                                                                         |
-| Date            | When the export occurred                                                                |
-| Level           | `info` (successful) or `error` (failed)                                                 |
-| Event           | Event type: `CONTENT_EXPORTED`, `EXPORT_REQUEST_ERROR`, or `EXPORT_RESPONSE_BAD_STATUS` |
-| Destination URL | URL of the destination site                                                             |
-| Post IDs        | IDs of the exported posts                                                               |
-| Post Count      | Number of posts in the export                                                           |
+| Field              | Description                                                                                         |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
+| ID                 | Unique event ID                                                                                     |
+| Date               | When the export occurred                                                                            |
+| Level              | `info` (successful) or `error` (failed)                                                             |
+| Event              | Event type: `CONTENT_EXPORTED`, `EXPORT_REQUEST_ERROR`, or `EXPORT_RESPONSE_BAD_STATUS`             |
+| Actor User ID      | WordPress user ID that triggered the event, or `0` for system events                                |
+| Actor Display Name | Snapshot of the user's display name at log time; empty for system events                            |
+| Actor Source       | Invocation context: `cli`, `cron`, `hmac`, `xmlrpc`, `ajax`, `rest`, `admin`, `front`, or `unknown` |
+| Destination URL    | URL of the destination site                                                                         |
+| Post IDs           | IDs of the exported posts                                                                           |
+| Post Count         | Number of posts in the export                                                                       |
 
 ## Viewing History
 
@@ -83,12 +86,13 @@ Click the **Date** link or the **View Details** action to drill into the session
 
 ### Export History Table
 
-| Column      | Description              |
-| ----------- | ------------------------ |
-| Date        | When the export occurred |
-| Destination | Destination site URL     |
-| Status      | Exported or Failed       |
-| Posts       | Number of posts exported |
+| Column      | Description                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------- |
+| Date        | When the export occurred                                                                    |
+| User        | WordPress user who triggered the export, or `System (<source>)` for system-triggered events |
+| Destination | Destination site URL                                                                        |
+| Status      | Exported or Failed                                                                          |
+| Posts       | Number of posts exported                                                                    |
 
 ### Sorting
 
@@ -155,7 +159,7 @@ Export events are stored in a custom database table:
 - Table name: `{$wpdb->prefix}safe_publish_audit_log`
 - Indexed on: `channel` + `created_at_gmt`, `level`, `event`
 
-Every event in this table records `actor_user_id`, `actor_display_name`, and `actor_source` in its data payload to identify which WordPress user triggered the event and how. The display name is snapshotted at log time so it survives user deletion. Unauthenticated contexts (e.g. webhook callbacks) record `actor_user_id` of `0` and an empty display name; `actor_source` (one of `cli`, `cron`, `hmac`, `xmlrpc`, `ajax`, `rest`, `admin`, `front`, `unknown`) then disambiguates the origin.
+`actor_display_name` is captured at log time so the record survives renaming or deletion of the originating user. For system-triggered events (where `actor_user_id` is `0`), `actor_source` disambiguates the origin.
 
 ## Using Import History
 

@@ -374,10 +374,33 @@ final class History_Repository {
 	/**
 	 * Marks a session as rolled back and emits an audit log event.
 	 *
+	 * Bulk-flips the per-item `rolled_back` flag on the success/updated items
+	 * the session-level rollback acted on so the items table stays consistent
+	 * with the item-level rollback path.
+	 *
 	 * @param int $session_id Session ID.
 	 */
 	public function mark_session_rolled_back( int $session_id ): void {
 		global $wpdb;
+
+		$items_table = Import_Items_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$items_updated = $wpdb->query(
+			$wpdb->prepare(
+				"UPDATE `{$items_table}` SET rolled_back = 1"
+					. " WHERE session_id = %d AND status IN ( 'success', 'updated' )",
+				$session_id
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		// Bail before touching the session row so a retry can heal the
+		// partial rollback.
+		if ( false === $items_updated ) {
+			$this->logger->session_rollback_failed( $session_id, $wpdb->last_error );
+			return;
+		}
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$updated = $wpdb->update(

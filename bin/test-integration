@@ -7,11 +7,15 @@
 
 set -e
 
+# wp-env mounts the plugin under wp-content/plugins/<checkout dir name>,
+# which differs from the canonical slug in worktrees.
+PLUGIN_DIR="$(basename "$(git rev-parse --show-toplevel)")"
+
 for config in \
 	phpunit-integration-sync-bidirectional.xml \
 	phpunit-integration-sync-import.xml \
 	phpunit-integration-sync-export.xml; do
 	wp-env run tests-cli \
-		--env-cwd=wp-content/plugins/compliant-content-publisher \
+		--env-cwd="wp-content/plugins/$PLUGIN_DIR" \
 		./vendor/bin/phpunit -c "./$config" "$@"
 done

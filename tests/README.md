@@ -23,9 +23,9 @@ tests/
 │   ├── bootstrap.php             # Integration test bootstrap
 │   ├── Integration_Test_Case.php # Base class for integration tests
 │   ├── Source_Posts_API/                        # Source Posts API tests (media import, content processing, etc.)
-│   ├── Safe_Publish_API_Integration_Test.php    # REST API integration tests
-│   ├── Import_History_Integration_Test.php      # Import history tests
-│   └── Session_Rollback_Integration_Test.php    # Rollback functionality tests
+│   ├── Safe_Publish_API_Test.php                # REST API integration tests
+│   ├── Import_History_Test.php                  # Import history tests
+│   └── Session_Rollback_Test.php                # Rollback functionality tests
 ├── fixtures/                     # Test fixtures (images, etc.)
 │   └── images/                   # Real image files for testing
 │       ├── README.md             # Fixture documentation
@@ -116,17 +116,17 @@ The test suite provides comprehensive coverage for:
   - Error handling and edge cases
   - Complex content with mixed media types
 
-- **Safe Publish API** (`Safe_Publish_API_Integration_Test.php`)
+- **Safe Publish API** (`Safe_Publish_API_Test.php`)
   - REST API endpoints in WordPress environment
   - Request/response handling
   - Authentication and permissions
 
-- **Import History** (`Import_History_Integration_Test.php`)
+- **Import History** (`Import_History_Test.php`)
   - Session tracking
   - Import logging and retrieval
   - History filtering
 
-- **Session Rollback** (`Session_Rollback_Integration_Test.php`)
+- **Session Rollback** (`Session_Rollback_Test.php`)
   - Rollback functionality
   - Post deletion and cleanup
   - Session state management

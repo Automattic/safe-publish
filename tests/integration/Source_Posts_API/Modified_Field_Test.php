@@ -21,10 +21,10 @@ use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 
 /**
- * Verifies that Source_Posts_API emits modified_gmt as a Z-marked GMT
- * timestamp and that Post_Import_Service::annotate_posts_with_import_status()
- * compares both sides as GMT — so has_update is correct when the source and
- * destination sites live in different timezones.
+ * Modified Field Test Class.
+ *
+ * Cross-system contract: modified_gmt comparisons happen in GMT so has_update
+ * is correct when source and destination sites live in different timezones.
  */
 class Modified_Field_Test extends Source_Posts_API_Test_Base {
 

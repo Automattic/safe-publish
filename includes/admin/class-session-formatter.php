@@ -77,15 +77,10 @@ final class Session_Formatter {
 	/**
 	 * Formats session items for display.
 	 *
-	 * @param array[] $items  Array of item rows.
-	 * @param string  $status Session status.
+	 * @param array[] $items Array of item rows.
 	 * @return array[] Formatted item data.
 	 */
-	public function format_items( array $items, string $status ): array {
-		if ( 'rolled_back' === $status ) {
-			return array();
-		}
-
+	public function format_items( array $items ): array {
 		$formatted = array();
 
 		foreach ( $items as $item ) {

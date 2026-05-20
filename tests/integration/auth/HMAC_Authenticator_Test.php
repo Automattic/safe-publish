@@ -19,9 +19,7 @@ use WP_REST_Request;
 use WP_UnitTestCase;
 
 /**
- * HMAC Authenticator Test.
- *
- * Tests the complete HMAC authentication workflow end-to-end.
+ * HMAC Authenticator Test Class.
  */
 class HMAC_Authenticator_Test extends WP_UnitTestCase {
 

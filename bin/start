@@ -4,10 +4,13 @@ set -e # Exit immediately if any command exits with a non-zero status.
 
 SCRIPT_MODE=${1:-start} # "build" or "start". Default is "start".
 
-# Set WordPress port and home URL.
-PORT="${WP_ENV_PORT-8888}"
+# Set WordPress ports and home URL. Exported so wp-env (and lifecycle
+# scripts like bin/setup-env) inherit them.
+export WP_ENV_PORT="${WP_ENV_PORT-8888}"
+export WP_ENV_TESTS_PORT="${WP_ENV_TESTS_PORT-8889}"
+PORT="$WP_ENV_PORT"
+TESTS_PORT="$WP_ENV_TESTS_PORT"
 WP_HOME="${WP_ENV_HOME_URL-http://localhost:$PORT}"
-TEST_PORT="${WP_ENV_TEST_PORT-8889}"
 
 cleanup() {
 	echo ""
@@ -69,12 +72,12 @@ start_wordpress() {
 	fi
 
 	echo "🔼 Starting WordPress..."
-	WP_ENV_PORT="$PORT" npx wp-env start "$FLAGS"
+	npx wp-env start "$FLAGS"
 }
 
 open_browser() {
 	WP_ADMIN="http://localhost:$PORT/wp-admin/"
-	TEST_URL="http://localhost:$TEST_PORT/wp-admin/"
+	TEST_URL="http://localhost:$TESTS_PORT/wp-admin/"
 
 	echo ""
 	echo "> Safe Publish Destination Site"

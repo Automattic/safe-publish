@@ -13,10 +13,11 @@ use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 
 /**
- * Verifies that Source_Posts_API::prepare_post_for_listing() emits the title
- * as plain text — HTML entities decoded, tags stripped — so the destination
- * listing UI can render item.title directly without it appearing as raw entity
- * markup or smuggling tags through.
+ * Title Field Test Class.
+ *
+ * UI/security contract: titles are emitted as plain text (HTML entities
+ * decoded, tags stripped) so the destination listing UI can render them
+ * directly without raw entity markup or smuggled tags.
  */
 class Title_Field_Test extends Source_Posts_API_Test_Base {
 

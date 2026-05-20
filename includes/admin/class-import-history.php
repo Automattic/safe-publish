@@ -169,10 +169,9 @@ final class Import_History {
 			wp_send_json_error( __( 'Session not found', 'safe-publish' ) );
 		}
 
-		$status          = (string) $session['status'];
 		$session_data    = $this->formatter->format_session( $session );
 		$items           = $this->repository->get_session_items( $session_id );
-		$formatted_items = $this->formatter->format_items( $items, $status );
+		$formatted_items = $this->formatter->format_items( $items );
 
 		wp_send_json_success(
 			array(
@@ -358,7 +357,10 @@ final class Import_History {
 					'date'                 => str_replace( ' ', 'T', $created ) . 'Z',
 					'level'                => $row['level'],
 					'event'                => $row['event'],
-					'destination_site_url' => $data['destination_site_url'] ?? '',
+					'actor_user_id'        => (int) $data['actor_user_id'],
+					'actor_display_name'   => (string) $data['actor_display_name'],
+					'actor_source'         => (string) $data['actor_source'],
+					'destination_site_url' => (string) $data['destination_site_url'],
 					'post_ids'             => array_map( 'intval', (array) ( $data['post_ids'] ?? array() ) ),
 					'post_count'           => isset( $data['post_count'] ) ? (int) $data['post_count'] : count( $data['post_ids'] ?? array() ),
 				);

@@ -430,12 +430,35 @@ export interface ImportItem {
 }
 
 /**
+ * Invocation context identifier captured for every audit log event.
+ *
+ * Matches the precedence resolved server-side by `Logger::detect_actor_source()`.
+ */
+export type ActorSource =
+	| 'cli'
+	| 'cron'
+	| 'hmac'
+	| 'xmlrpc'
+	| 'ajax'
+	| 'rest'
+	| 'admin'
+	| 'front'
+	| 'unknown';
+
+/**
  * Represents a single export event from the audit log table.
+ *
+ * `actor_user_id` is 0 for system-triggered events (cron, cli, hmac, etc.);
+ * `actor_display_name` is the snapshot taken when the event was recorded;
+ * `actor_source` disambiguates the invocation context for system events.
  *
  * @property {number}         id                   Unique event ID.
  * @property {string}         date                 Date the event was recorded.
  * @property {'info'|'error'} level                Event severity level.
  * @property {string}         event                Event type (e.g. CONTENT_EXPORTED).
+ * @property {number}         actor_user_id        Acting user ID; 0 if system.
+ * @property {string}         actor_display_name   Snapshotted display name at log time.
+ * @property {ActorSource}    actor_source         Invocation context (cli, cron, hmac, etc.).
  * @property {string}         destination_site_url URL of the destination site.
  * @property {number[]}       post_ids             IDs of the exported posts.
  * @property {number}         post_count           Number of exported posts.
@@ -445,6 +468,9 @@ export interface ExportEvent {
 	date: string;
 	level: 'info' | 'error';
 	event: string;
+	actor_user_id: number;
+	actor_display_name: string;
+	actor_source: ActorSource;
 	destination_site_url: string;
 	post_ids: number[];
 	post_count: number;
