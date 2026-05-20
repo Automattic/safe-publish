@@ -386,7 +386,7 @@ final class History_Repository {
 		$items_table = Import_Items_Table::table_name();
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$wpdb->query(
+		$items_updated = $wpdb->query(
 			$wpdb->prepare(
 				"UPDATE `{$items_table}` SET rolled_back = 1"
 					. " WHERE session_id = %d AND status IN ( 'success', 'updated' )",
@@ -394,6 +394,13 @@ final class History_Repository {
 			)
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		// Bail before touching the session row so a retry can heal the
+		// partial rollback.
+		if ( false === $items_updated ) {
+			$this->logger->session_rollback_failed( $session_id, $wpdb->last_error );
+			return;
+		}
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$updated = $wpdb->update(

@@ -506,6 +506,75 @@ class Session_Rollback_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a failed bulk items UPDATE inside
+	 * mark_session_rolled_back() emits SESSION_ROLLBACK_FAILED and leaves
+	 * the session row untouched so a retry can heal the partial rollback.
+	 */
+	public function test_mark_session_rolled_back_emits_failed_when_items_update_errors(): void {
+		global $wpdb;
+
+		// ARRANGE: Create a session with a success item, then force the bulk
+		// UPDATE on the items table to fail at the SQL layer by rewriting it
+		// via the 'query' filter. try/finally guarantees filter removal.
+		$session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$this->repository->log_import_action(
+			$session_id,
+			1,
+			'Imported Post',
+			'success',
+			$this->factory()->post->create()
+		);
+		$items_table     = Import_Items_Table::table_name();
+		$filter_callback = function ( string $query ) use ( $items_table ): string {
+			if ( 0 === strpos( $query, "UPDATE `{$items_table}`" ) ) {
+				return 'UPDATE safe_publish_nonexistent_table_for_test SET x = 1';
+			}
+			return $query;
+		};
+		add_filter( 'query', $filter_callback );
+		$wpdb->suppress_errors( true );
+
+		try {
+			// ACT: Roll back the session; the items UPDATE fails first.
+			$this->repository->mark_session_rolled_back( $session_id );
+
+			// ASSERT: A SESSION_ROLLBACK_FAILED error event was emitted with
+			// the session ID and a non-empty wpdb_error string.
+			$events = Audit_Log_Table::get_events(
+				array(
+					'channel'    => 'import',
+					'event_type' => 'SESSION_ROLLBACK_FAILED',
+				)
+			);
+			$this->assertCount( 1, $events );
+			$this->assertSame( 'error', $events[0]['level'] );
+			$this->assertSame( $session_id, $events[0]['data']['session_id'] );
+			$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
+
+			// ASSERT: The session row was not flipped — the early return
+			// must run before the session UPDATE so a retry can heal the
+			// partial rollback.
+			$session = $this->repository->get_session( $session_id );
+			$this->assertSame( 'in_progress', $session['status'] );
+
+			// ASSERT: No success event was recorded.
+			$success_events = Audit_Log_Table::get_events(
+				array(
+					'channel'    => 'import',
+					'event_type' => 'SESSION_ROLLED_BACK',
+				)
+			);
+			$this->assertCount( 0, $success_events );
+		} finally {
+			remove_filter( 'query', $filter_callback );
+			$wpdb->suppress_errors( false );
+		}
+	}
+
+	/**
 	 * Verifies that a failed item rollback (SQL-layer failure) emits an
 	 * ITEM_ROLLBACK_FAILED audit event with the wpdb error captured.
 	 */
