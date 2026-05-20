@@ -17,12 +17,10 @@ use WP_Ajax_UnitTestCase;
 use WP_Error;
 
 /**
- * Seeder Content Parity Integration Test Class.
+ * Seeder Content Parity Test Class.
  *
- * Drives seeded source content through the bulk-import pipeline and asserts
- * source-to-destination parity using the Post_Parity_Asserter. Coverage is
- * scoped to the columns the asserter classifies; the asserter itself is the
- * source of truth for which fields are checked versus deferred.
+ * Coverage is scoped to the columns the asserter classifies; the asserter
+ * itself is the source of truth for which fields are checked versus deferred.
  */
 class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 

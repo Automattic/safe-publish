@@ -15,13 +15,13 @@ use Safe_Publish\Utils\Audit_Log_Table;
 use WP_Ajax_UnitTestCase;
 
 /**
- * Export History Integration Test Class.
+ * Export History Test Class.
  *
- * Tests that audit log timestamps are stored in GMT and that the export
- * events AJAX endpoint emits ISO 8601 dates with an explicit Z marker, so
- * the React display can render them in browser-local time.
+ * Cross-system contract: timestamps are stored as GMT and emitted as ISO
+ * 8601 with an explicit Z marker so the React display can render them in
+ * browser-local time.
  */
-class Export_History_Integration_Test extends WP_Ajax_UnitTestCase {
+class Export_History_Test extends WP_Ajax_UnitTestCase {
 
 	use Ajax_Die_Continue_Trait;
 

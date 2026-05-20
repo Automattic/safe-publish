@@ -18,9 +18,7 @@ use Safe_Publish\Tests\Integration\Mock_Media_HTTP_Trait;
 use WP_Error;
 
 /**
- * Content Processor Integration Test Class.
- *
- * Tests the admin Content_Processor's HTML transformation pipeline.
+ * Content Processor Test Class.
  */
 class Content_Processor_Test extends Integration_Test_Case {
 

@@ -23,12 +23,7 @@ use Safe_Publish\Utils\Options;
 use WP_Error;
 
 /**
- * Basic Auth Outbound Test.
- *
- * Tests that the full wp_options → Auth_Credential_Provider → HTTP_Client
- * → outbound request chain correctly includes both HMAC and Basic Auth
- * headers when credentials are configured, and that imports succeed or fail
- * accordingly.
+ * Basic Auth Outbound Test Class.
  */
 class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
