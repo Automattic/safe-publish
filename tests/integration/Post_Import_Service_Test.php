@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests\Integration;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Post_Import_Service;
+use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
@@ -3060,5 +3061,89 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
 		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
 		$wp_rest_server = null;
+	}
+
+	/**
+	 * Verifies that rolling back a bulk-reimported post restores its previous
+	 * title, content, and excerpt.
+	 *
+	 * The bulk update path captures the pre-update state alongside the single
+	 * update path, so rollback is non-destructive in both flows.
+	 */
+	public function test_bulk_reimport_rollback_restores_previous_post_fields(): void {
+		// ARRANGE: Initial import seeds the post in the destination.
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$this->mock_post_overrides = array(
+			'title'   => 'Original Title',
+			'content' => '<p>Original content.</p>',
+			'excerpt' => 'Original excerpt.',
+		);
+
+		$post_data = array(
+			'id'        => 9601,
+			'title'     => 'Snapshot Title',
+			'content'   => '<p>Snapshot content.</p>',
+			'link'      => 'https://source.example.com/rollback-restore-test',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
+		$post_id = (int) $first['post_id'];
+
+		$pre_update_title   = get_post_field( 'post_title', $post_id );
+		$pre_update_content = get_post_field( 'post_content', $post_id );
+		$pre_update_excerpt = get_post_field( 'post_excerpt', $post_id );
+
+		// ARRANGE: Re-importing with new values exercises the bulk update path.
+		$this->mock_post_overrides = array(
+			'title'   => 'Updated Title',
+			'content' => '<p>Updated content.</p>',
+			'excerpt' => 'Updated excerpt.',
+		);
+
+		// ACT: Re-import the same source post.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $second['success'], 'Re-import should succeed.' );
+		$this->assertTrue(
+			$second['existing'],
+			'Re-import should flag the post as existing.'
+		);
+		$this->assertSame(
+			'Updated Title',
+			get_post_field( 'post_title', $post_id ),
+			'Pre-rollback sanity: post must reflect the updated values.'
+		);
+
+		// ACT: Roll back the most recent item logged for this post.
+		$item             = $this->repository->get_item_for_post( $post_id );
+		$rollback_service = new Session_Rollback_Service( $this->repository );
+		$result           = $rollback_service->rollback_item( (int) $item['id'] );
+
+		// ASSERT: Rollback restored the post instead of deleting it.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'restored', $result['action'] );
+		$this->assertNotNull(
+			get_post( $post_id ),
+			'Rollback must not delete the post on the bulk update path.'
+		);
+
+		// ASSERT: Post fields match the pre-update state.
+		$this->assertSame(
+			$pre_update_title,
+			get_post_field( 'post_title', $post_id )
+		);
+		$this->assertSame(
+			$pre_update_content,
+			get_post_field( 'post_content', $post_id )
+		);
+		$this->assertSame(
+			$pre_update_excerpt,
+			get_post_field( 'post_excerpt', $post_id )
+		);
 	}
 }
