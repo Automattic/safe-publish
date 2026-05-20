@@ -17,11 +17,9 @@ use Safe_Publish\Utils\Imports_Table;
 use WP_Error;
 
 /**
- * Session Rollback Integration Test Class.
- *
- * Tests rollback operations for import sessions.
+ * Session Rollback Test Class.
  */
-class Session_Rollback_Integration_Test extends Integration_Test_Case {
+class Session_Rollback_Test extends Integration_Test_Case {
 
 	/**
 	 * History repository instance.

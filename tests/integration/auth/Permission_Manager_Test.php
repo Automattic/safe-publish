@@ -19,9 +19,7 @@ use WP_REST_Response;
 use WP_UnitTestCase;
 
 /**
- * Permission Manager Test.
- *
- * Tests permission assignment for authenticated vs unauthenticated requests.
+ * Permission Manager Test Class.
  */
 class Permission_Manager_Test extends WP_UnitTestCase {
 
