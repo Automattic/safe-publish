@@ -839,10 +839,8 @@ final class Admin_Ajax_Controller {
 	 * Updates an existing post with fresh imported content.
 	 *
 	 * Delegates the write to Post_Import_Service::persist_updated_post().
-	 * Intentional differences from the bulk-import update path:
-	 * - Resets post_status to 'draft' (keeps the single-import review flow
-	 *   intact).
-	 * - Captures previous content for the session rollback history log.
+	 * Resets post_status to 'draft' to keep the single-import review flow
+	 * intact; the bulk-import update path preserves status instead.
 	 *
 	 * @param WP_Post $imported_post     Imported WordPress post.
 	 * @param string  $title             Post title.
@@ -891,7 +889,8 @@ final class Admin_Ajax_Controller {
 		int $post_parent_id,
 		array $warnings
 	): array {
-		$previous_content = $this->capture_previous_content( $imported_post );
+		$previous_content = $this->post_import_service
+			->capture_previous_content( $imported_post );
 
 		// Sideload the featured image before writing the post so that a
 		// failure here does not leave the post in a partially-updated state.
@@ -1219,46 +1218,5 @@ final class Admin_Ajax_Controller {
 		}
 
 		return $this->sanitize_field( $processed, self::FIELD_CONTENT );
-	}
-
-	/**
-	 * Captures previous post content for the session rollback history log.
-	 *
-	 * Stores the current post fields, featured image, and selected meta so the
-	 * import can be reverted via session rollback.
-	 *
-	 * @param WP_Post $existing_post Existing WordPress post.
-	 * @return array Previous content keyed by field name.
-	 */
-	private function capture_previous_content( WP_Post $existing_post ): array {
-		$previous_content = array(
-			'previous_content'        => $existing_post->post_content,
-			'previous_title'          => $existing_post->post_title,
-			'previous_excerpt'        => $existing_post->post_excerpt,
-			'previous_slug'           => $existing_post->post_name,
-			'previous_comment_status' => $existing_post->comment_status,
-			'previous_ping_status'    => $existing_post->ping_status,
-			'previous_menu_order'     => $existing_post->menu_order,
-			'previous_password'       => $existing_post->post_password,
-			'previous_featured_image' => get_post_thumbnail_id( $existing_post->ID ),
-			'previous_meta'           => array(),
-			'action'                  => 'updated_existing',
-		);
-
-		$meta_keys_to_preserve = array(
-			'_edit_last',
-			'_edit_lock',
-			Options::META_SOURCE_LINK,
-			Options::META_IMPORT_DATE_GMT,
-		);
-
-		foreach ( $meta_keys_to_preserve as $meta_key ) {
-			$meta_value = get_post_meta( $existing_post->ID, $meta_key, true );
-			if ( '' !== $meta_value ) {
-				$previous_content['previous_meta'][ $meta_key ] = $meta_value;
-			}
-		}
-
-		return $previous_content;
 	}
 }
