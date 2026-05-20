@@ -14,12 +14,12 @@ use WP_REST_Request;
 use WP_REST_Server;
 
 /**
- * Verifies that in "import" sync mode only import functionality is active.
+ * Sync Import Test Class.
  *
- * These tests are run exclusively via phpunit-integration-sync-import.xml,
- * which boots the plugin with WP_TEST_SYNC_MODE=import.
+ * These tests run exclusively via phpunit-integration-sync-import.xml, which
+ * boots the plugin with WP_TEST_SYNC_MODE=import.
  */
-class Sync_Import_Integration_Test extends Integration_Test_Case {
+class Sync_Import_Test extends Integration_Test_Case {
 
 	/**
 	 * REST server instance.

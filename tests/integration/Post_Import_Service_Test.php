@@ -12,22 +12,23 @@ namespace Safe_Publish\Tests\Integration;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Post_Import_Service;
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\Admin\Session_Rollback_Service;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Media\Media_Importer;
-use Safe_Publish\Tests\Integration\External_Posts_API\External_Posts_API_Test_Base;
+use Safe_Publish\Tests\Integration\Source_Posts_API\Source_Posts_API_Test_Base;
 use Safe_Publish\Utils\Options;
 use WP_Error;
 
 /**
- * Integration tests for Post_Import_Service.
+ * Post Import Service Test Class.
  *
  * Extends the media-aware base class so that image downloads are intercepted
  * by the existing HTTP mock infrastructure.
  */
-class Post_Import_Service_Test extends External_Posts_API_Test_Base {
+class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Post import service instance.
@@ -64,7 +65,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 
 		$this->import_service = new Post_Import_Service(
-			new External_Posts_API( new HTTP_Client() ),
+			new Source_Posts_API( new HTTP_Client() ),
 			$media_importer,
 			$content_processor,
 			$this->repository,
@@ -119,7 +120,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	/**
 	 * Verifies that import_post() fails when an inline image cannot be downloaded.
 	 *
-	 * When processed content contains an image whose download returns a non-2xx
+	 * When processed content contains an image whose download returns a non-200
 	 * response, the import must return success: false with a descriptive error and
 	 * must not create a post with the broken staging URL left in the content.
 	 */
@@ -159,7 +160,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8001',
 				)
@@ -214,7 +215,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8002',
 				)
@@ -228,7 +229,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * video that cannot be downloaded.
 	 *
 	 * The core/video block is processed by Content_Processor::process_media_block(),
-	 * which calls import_external_media_as_attachment() directly and must track
+	 * which calls import_source_media_as_attachment() directly and must track
 	 * failures in Content_Processor::$failed_media so the import service aborts.
 	 */
 	public function test_import_fails_when_gutenberg_video_block_cannot_be_downloaded(): void {
@@ -269,7 +270,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8003',
 				)
@@ -332,7 +333,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 * audio file that cannot be downloaded.
 	 *
 	 * The core/audio block is processed by Content_Processor::process_media_block(),
-	 * which calls import_external_media_as_attachment() directly and must track
+	 * which calls import_source_media_as_attachment() directly and must track
 	 * failures in Content_Processor::$failed_media so the import service aborts.
 	 */
 	public function test_import_fails_when_gutenberg_audio_block_cannot_be_downloaded(): void {
@@ -373,7 +374,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8005',
 				)
@@ -441,7 +442,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '8006',
 				)
@@ -490,7 +491,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 				array(
 					'post_type'      => 'post',
 					'posts_per_page' => 1,
-					'meta_key'       => 'safe_publish_external_post_id',
+					'meta_key'       => 'safe_publish_source_post_id',
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'     => '9901',
 				)
@@ -856,7 +857,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 					'post_type'        => 'post',
 					'posts_per_page'   => 1,
 					'suppress_filters' => false,
-					'meta_key'         => Options::META_EXTERNAL_POST_ID,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
 					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 					'meta_value'       => '9200',
 				)
@@ -1295,8 +1296,8 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 		$this->assertSame(
 			9803,
-			(int) $items[0]['external_post_id'],
-			'Item row must reference the failing external post ID.'
+			(int) $items[0]['source_post_id'],
+			'Item row must reference the failing source post ID.'
 		);
 	}
 
@@ -1310,7 +1311,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 	 */
 	public function test_bulk_import_logs_failure_for_missing_required_fields(): void {
 		// ARRANGE: Bulk session and two malformed payloads — one missing
-		// the title, one missing the external ID.
+		// the title, one missing the source post ID.
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
@@ -1349,7 +1350,7 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		);
 		$this->assertFalse(
 			$result_missing_id['success'],
-			'Import should fail when external ID is zero.'
+			'Import should fail when source post ID is zero.'
 		);
 
 		// ASSERT: Two item rows were written, both with status 'error'.
@@ -1363,10 +1364,10 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 		$this->assertSame( 'error', $items[0]['status'] );
 		$this->assertSame( 'error', $items[1]['status'] );
 
-		// ASSERT: external_post_id is preserved when present (missing_title)
+		// ASSERT: source_post_id is preserved when present (missing_title)
 		// and stored as null when the source payload lacks an id (missing_id).
-		$this->assertSame( 9810, (int) $items[0]['external_post_id'] );
-		$this->assertNull( $items[1]['external_post_id'] );
+		$this->assertSame( 9810, (int) $items[0]['source_post_id'] );
+		$this->assertNull( $items[1]['source_post_id'] );
 
 		// ASSERT: Session counts project the failures from the items table.
 		$session = $this->repository->get_session( $session_id );
@@ -1409,6 +1410,1740 @@ class Post_Import_Service_Test extends External_Posts_API_Test_Base {
 			'permission',
 			$result['error'],
 			'Error should mention insufficient permission.'
+		);
+	}
+
+	/**
+	 * Verifies that the resolved source author is used as post_author when a
+	 * matching destination user exists.
+	 */
+	public function test_import_sets_post_author_from_matched_destination_user(): void {
+		// ARRANGE: Destination user that matches the source author email.
+		$destination_author_id = self::factory()->user->create(
+			array(
+				'role'       => 'editor',
+				'user_email' => 'jane@source.example',
+				'user_login' => 'jane-dest',
+			)
+		);
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'jane@source.example',
+				'login'        => 'jane-source',
+				'display_name' => 'Jane Doe',
+			),
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9900,
+			'title'     => 'Post With Author Resolution',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/author-resolution',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Post is attributed to the matched destination user.
+		$this->assertTrue( $result['success'], 'Import should succeed when author matches.' );
+		$post = get_post( $result['post_id'] );
+		$this->assertSame(
+			$destination_author_id,
+			(int) $post->post_author,
+			'post_author must be the matched destination user ID.'
+		);
+	}
+
+	/**
+	 * Verifies that re-importing a post updates post_author to the freshly
+	 * matched destination user.
+	 */
+	public function test_reimport_updates_post_author_from_matched_destination_user(): void {
+		// ARRANGE: Two destination users with different emails.
+		$first_author_id  = self::factory()->user->create(
+			array(
+				'role'       => 'author',
+				'user_email' => 'first@source.example',
+			)
+		);
+		$second_author_id = self::factory()->user->create(
+			array(
+				'role'       => 'author',
+				'user_email' => 'second@source.example',
+			)
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9901,
+			'title'     => 'Author Update Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/author-update',
+			'post_type' => 'posts',
+		);
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'first@source.example',
+				'login'        => 'first',
+				'display_name' => 'First',
+			),
+		);
+
+		// ACT: Initial import with the first author.
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
+		$this->assertSame(
+			$first_author_id,
+			(int) get_post( $first['post_id'] )->post_author
+		);
+
+		// ARRANGE: Source now reports the second author.
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'second@source.example',
+				'login'        => 'second',
+				'display_name' => 'Second',
+			),
+		);
+
+		// ACT: Re-import.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: post_author reflects the new match.
+		$this->assertTrue( $second['success'], 'Re-import should succeed.' );
+		$this->assertSame(
+			$second_author_id,
+			(int) get_post( $second['post_id'] )->post_author,
+			'post_author must be updated to the freshly matched destination user.'
+		);
+	}
+
+	/**
+	 * Verifies that import aborts with a specific error when no destination
+	 * user matches the source author email.
+	 */
+	public function test_import_aborts_when_source_author_has_no_match(): void {
+		// ARRANGE: Source author whose email has no destination match.
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'unknown@source.example',
+				'login'        => 'unknown',
+				'display_name' => 'Unknown User',
+			),
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9902,
+			'title'     => 'Unmatched Author Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/unmatched-author',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import fails with a message naming display name, email, and login.
+		$this->assertFalse( $result['success'], 'Import must fail when author cannot be matched.' );
+		$this->assertStringContainsString( 'Unknown User', $result['error'] );
+		$this->assertStringContainsString( 'unknown@source.example', $result['error'] );
+		$this->assertStringContainsString( 'login: unknown', $result['error'] );
+
+		// ASSERT: No post was created.
+		$this->assertSame(
+			array(),
+			get_posts(
+				array(
+					'post_type'        => 'post',
+					'posts_per_page'   => 1,
+					'suppress_filters' => false,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => '9902',
+				)
+			)
+		);
+	}
+
+	/**
+	 * Verifies that import aborts with a distinct error when the source post
+	 * has no resolvable author (deleted user or user ID 0 on the source).
+	 */
+	public function test_import_aborts_when_source_author_is_deleted(): void {
+		// ARRANGE: Empty author payload — source post had no resolvable author.
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => '',
+				'login'        => '',
+				'display_name' => '',
+			),
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9903,
+			'title'     => 'Deleted Author Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/deleted-author',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Failure with the "deleted on source" message.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'deleted on the source', $result['error'] );
+	}
+
+	/**
+	 * Verifies that author resolution runs before media download so a failed
+	 * resolution does not leave orphan attachments on the destination.
+	 */
+	public function test_author_resolution_fails_before_media_is_downloaded(): void {
+		// ARRANGE: Source content references an importable image, but the
+		// safe_publish_author payload does not match any destination user.
+		$this->mock_post_overrides = array(
+			'content'             => '<p><img src="https://source.example.com/test-image.jpg" alt=""></p>',
+			'safe_publish_author' => array(
+				'email'        => 'noone@source.example',
+				'login'        => 'noone',
+				'display_name' => 'No One',
+			),
+		);
+
+		$attachments_before = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'posts_per_page' => -1,
+				'post_status'    => 'any',
+			)
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9905,
+			'title'     => 'Media Skipped Test',
+			'content'   => '<p>Stale.</p>',
+			'link'      => 'https://source.example.com/media-skipped',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import fails with the no-match error.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'No One', $result['error'] );
+
+		// ASSERT: No new attachments were created.
+		$attachments_after = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'posts_per_page' => -1,
+				'post_status'    => 'any',
+			)
+		);
+		$this->assertCount(
+			count( $attachments_before ),
+			$attachments_after,
+			'Author-resolution failure must not produce orphan attachments.'
+		);
+	}
+
+	/**
+	 * Verifies that a Subscriber on the destination is attributed as
+	 * post_author when matched by email — no capability check is applied to
+	 * the matched user.
+	 */
+	public function test_subscriber_match_is_attributed_as_post_author(): void {
+		// ARRANGE: Destination Subscriber whose email matches the source author.
+		$subscriber_id = self::factory()->user->create(
+			array(
+				'role'       => 'subscriber',
+				'user_email' => 'subscriber@source.example',
+			)
+		);
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'subscriber@source.example',
+				'login'        => 'sub-source',
+				'display_name' => 'Sub Source',
+			),
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9906,
+			'title'     => 'Subscriber Author Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/subscriber-author',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import succeeds and post_author is the Subscriber.
+		$this->assertTrue(
+			$result['success'],
+			'Subscriber match must succeed — post_author has no capability requirement.'
+		);
+		$this->assertSame(
+			$subscriber_id,
+			(int) get_post( $result['post_id'] )->post_author
+		);
+	}
+
+	/**
+	 * Verifies that diagnostic source author meta is written on insert and
+	 * refreshed on update.
+	 */
+	public function test_diagnostic_meta_is_written_and_refreshed(): void {
+		// ARRANGE: Two destination users matching two different source emails.
+		self::factory()->user->create(
+			array(
+				'user_email' => 'first@source.example',
+			)
+		);
+		self::factory()->user->create(
+			array(
+				'user_email' => 'second@source.example',
+			)
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'first@source.example',
+				'login'        => 'first',
+				'display_name' => 'First',
+			),
+		);
+
+		$post_data = array(
+			'id'        => 9907,
+			'title'     => 'Diagnostic Meta Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/diagnostic-meta',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Initial import writes meta from the first source author.
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		// ASSERT: Meta stored from initial import.
+		$this->assertSame(
+			'first@source.example',
+			get_post_meta( $first['post_id'], Options::META_SOURCE_AUTHOR_EMAIL, true )
+		);
+		$this->assertSame(
+			'first',
+			get_post_meta( $first['post_id'], Options::META_SOURCE_AUTHOR_LOGIN, true )
+		);
+
+		// ARRANGE: Source now reports a different author.
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'second@source.example',
+				'login'        => 'second',
+				'display_name' => 'Second',
+			),
+		);
+
+		// ACT: Re-import refreshes the meta.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $second['success'] );
+
+		// ASSERT: Meta now reflects the second source author.
+		$this->assertSame(
+			'second@source.example',
+			get_post_meta( $second['post_id'], Options::META_SOURCE_AUTHOR_EMAIL, true )
+		);
+		$this->assertSame(
+			'second',
+			get_post_meta( $second['post_id'], Options::META_SOURCE_AUTHOR_LOGIN, true )
+		);
+	}
+
+	/**
+	 * Verifies that the diagnostic source author meta is restored to its
+	 * pre-update value when a re-import is rolled back.
+	 *
+	 * Mirrors the existing tracking_meta rollback behavior so that the meta
+	 * describes the post's most recent SUCCESSFUL import, not a failed
+	 * attempt.
+	 */
+	public function test_source_author_meta_is_restored_on_rollback(): void {
+		// ARRANGE: Two destination users matching two source emails.
+		self::factory()->user->create(
+			array( 'user_email' => 'first@source.example' )
+		);
+		self::factory()->user->create(
+			array( 'user_email' => 'second@source.example' )
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9909,
+			'title'     => 'Rollback Meta Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/rollback-meta',
+			'post_type' => 'posts',
+			'meta'      => array( 'custom_field' => 'original' ),
+		);
+
+		$this->mock_post_overrides = array(
+			'meta'                => array( 'custom_field' => 'original' ),
+			'safe_publish_author' => array(
+				'email'        => 'first@source.example',
+				'login'        => 'first',
+				'display_name' => 'First',
+			),
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		// ARRANGE: Fresh content reports the second source author, but a
+		// custom-meta write will fail and trigger rollback.
+		$this->mock_post_overrides = array(
+			'meta'                => array( 'custom_field' => 'updated' ),
+			'safe_publish_author' => array(
+				'email'        => 'second@source.example',
+				'login'        => 'second',
+				'display_name' => 'Second',
+			),
+		);
+
+		$block_meta = function ( $check, $object_id, $meta_key ) {
+			unset( $object_id );
+			if ( 'custom_field' === $meta_key ) {
+				return false;
+			}
+			return $check;
+		};
+		add_filter( 'update_post_metadata', $block_meta, 10, 3 );
+
+		// ACT: Re-import — must fail and roll back.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'update_post_metadata', $block_meta, 10 );
+
+		// ASSERT: Re-import failed.
+		$this->assertFalse( $result['success'] );
+
+		// ASSERT: source_author meta is restored to first-import values.
+		$this->assertSame(
+			'first@source.example',
+			get_post_meta( $first['post_id'], Options::META_SOURCE_AUTHOR_EMAIL, true ),
+			'Source author email meta must be rolled back to the pre-update value.'
+		);
+		$this->assertSame(
+			'first',
+			get_post_meta( $first['post_id'], Options::META_SOURCE_AUTHOR_LOGIN, true ),
+			'Source author login meta must be rolled back to the pre-update value.'
+		);
+	}
+
+	/**
+	 * Verifies that the diagnostic source author meta keys never appear in the
+	 * public REST response for a destination post.
+	 *
+	 * The underscore prefix marks the meta as private and we deliberately do
+	 * not register it with show_in_rest, so REST consumers cannot read
+	 * imported author PII from the destination site.
+	 */
+	public function test_diagnostic_meta_is_absent_from_public_rest_response(): void {
+		// ARRANGE: Destination user matching the source author and a successful
+		// import that writes the diagnostic meta.
+		self::factory()->user->create(
+			array(
+				'user_email' => 'visible@source.example',
+			)
+		);
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'visible@source.example',
+				'login'        => 'visible',
+				'display_name' => 'Visible',
+			),
+		);
+
+		$post_data = array(
+			'id'        => 9908,
+			'title'     => 'REST Visibility Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/rest-visibility',
+			'post_type' => 'posts',
+		);
+
+		$result = $this->import_service->import_post( $post_data );
+		$this->assertTrue( $result['success'] );
+
+		// ACT: Boot a fresh REST server and fetch the destination post.
+		global $wp_rest_server;
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound, Squiz.PHP.DisallowMultipleAssignments.Found
+		$server = $wp_rest_server = new \WP_REST_Server();
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
+		do_action( 'rest_api_init' );
+
+		$response = $server->dispatch(
+			new \WP_REST_Request( 'GET', '/wp/v2/posts/' . $result['post_id'] )
+		);
+
+		$data = $response->get_data();
+		$meta = isset( $data['meta'] ) && is_array( $data['meta'] ) ? $data['meta'] : array();
+
+		// ASSERT: Neither private meta key appears in the response or its
+		// meta sub-object.
+		$encoded = (string) wp_json_encode( $data );
+		$this->assertStringNotContainsString(
+			Options::META_SOURCE_AUTHOR_EMAIL,
+			$encoded,
+			'Source author email meta key must not appear in public REST response.'
+		);
+		$this->assertStringNotContainsString(
+			Options::META_SOURCE_AUTHOR_LOGIN,
+			$encoded,
+			'Source author login meta key must not appear in public REST response.'
+		);
+		$this->assertArrayNotHasKey(
+			Options::META_SOURCE_AUTHOR_EMAIL,
+			$meta
+		);
+		$this->assertArrayNotHasKey(
+			Options::META_SOURCE_AUTHOR_LOGIN,
+			$meta
+		);
+
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
+		$wp_rest_server = null;
+	}
+
+	/**
+	 * Verifies that with the author fallback filter disabled (default), an
+	 * unmatched source author aborts the import and persists no warning.
+	 */
+	public function test_unmatched_author_with_filter_disabled_aborts_without_warning(): void {
+		// ARRANGE: Source author with no destination match; author fallback
+		// filter not added.
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'absent@source.example',
+				'login'        => 'absent',
+				'display_name' => 'Absent',
+			),
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9910,
+			'title'     => 'Filter Off Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/filter-off',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import fails and the item row carries no warnings.
+		$this->assertFalse( $result['success'] );
+		$items = $this->repository->get_session_items_by_status(
+			$session_id,
+			array( 'error' )
+		);
+		$this->assertCount( 1, $items );
+		$this->assertNull( $items[0]['warnings'] );
+	}
+
+	/**
+	 * Verifies that enabling the author fallback filter has no effect when the
+	 * source author already matches a destination user, and no warning is
+	 * recorded.
+	 */
+	public function test_fallback_filter_does_not_warn_when_author_matches(): void {
+		// ARRANGE: Destination user that matches the source author email.
+		$matched_user_id = self::factory()->user->create(
+			array(
+				'role'       => 'editor',
+				'user_email' => 'present@source.example',
+			)
+		);
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'present@source.example',
+				'login'        => 'present',
+				'display_name' => 'Present',
+			),
+		);
+
+		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9911,
+			'title'     => 'Fallback No-Op Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/fallback-noop',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter(
+			'safe_publish_import_allow_author_fallback',
+			'__return_true'
+		);
+
+		// ASSERT: Match path used, no warnings on the result or item row.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame( array(), $result['warnings'] );
+		$this->assertSame(
+			$matched_user_id,
+			(int) get_post( $result['post_id'] )->post_author
+		);
+
+		$items = $this->repository->get_session_items_by_status(
+			$session_id,
+			array( 'success' )
+		);
+		$this->assertCount( 1, $items );
+		$this->assertNull( $items[0]['warnings'] );
+	}
+
+	/**
+	 * Verifies that with the author fallback filter enabled, a new post with
+	 * an unmatched author is attributed to the importing user, and the warning
+	 * records that user's ID.
+	 */
+	public function test_fallback_attributes_new_post_to_importing_user(): void {
+		// ARRANGE: Importing user; source author with no destination match.
+		$importing_user_id = self::factory()->user->create(
+			array( 'role' => 'editor' )
+		);
+		wp_set_current_user( $importing_user_id );
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'orphan@source.example',
+				'login'        => 'orphan',
+				'display_name' => 'Orphan',
+			),
+		);
+
+		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9912,
+			'title'     => 'Insert Fallback Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/insert-fallback',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter(
+			'safe_publish_import_allow_author_fallback',
+			'__return_true'
+		);
+
+		// ASSERT: Import succeeded and the post is attributed to the importer.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame(
+			$importing_user_id,
+			(int) get_post( $result['post_id'] )->post_author
+		);
+
+		// ASSERT: Warning is on the result with the importer's id.
+		$this->assertCount( 1, $result['warnings'] );
+		$this->assertSame(
+			array(
+				'type'             => 'author_fallback_applied',
+				'source'           => array(
+					'email'        => 'orphan@source.example',
+					'login'        => 'orphan',
+					'display_name' => 'Orphan',
+				),
+				'fallback_user_id' => $importing_user_id,
+			),
+			$result['warnings'][0]
+		);
+
+		// ASSERT: Warning is persisted on the item row, encoded as JSON.
+		$items = $this->repository->get_session_items_by_status(
+			$session_id,
+			array( 'success' )
+		);
+		$this->assertCount( 1, $items );
+		$persisted = json_decode( (string) $items[0]['warnings'], true );
+		$this->assertSame( $result['warnings'], $persisted );
+	}
+
+	/**
+	 * Verifies that with the author fallback filter enabled, re-importing a
+	 * post with an unmatched author preserves the destination's existing
+	 * post_author. The warning's fallback_user_id is null in this case.
+	 */
+	public function test_fallback_preserves_existing_author_on_update(): void {
+		// ARRANGE: First import succeeds via a matched destination user.
+		$matched_user_id = self::factory()->user->create(
+			array(
+				'role'       => 'editor',
+				'user_email' => 'incumbent@source.example',
+			)
+		);
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'incumbent@source.example',
+				'login'        => 'incumbent',
+				'display_name' => 'Incumbent',
+			),
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9913,
+			'title'     => 'Update Fallback Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/update-fallback',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+		$this->assertSame(
+			$matched_user_id,
+			(int) get_post( $first['post_id'] )->post_author
+		);
+
+		// ARRANGE: Source now reports an unmatched author; enable the author
+		// fallback filter.
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'gone@source.example',
+				'login'        => 'gone',
+				'display_name' => 'Gone',
+			),
+		);
+
+		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+
+		// ACT: Re-import the same source post.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter(
+			'safe_publish_import_allow_author_fallback',
+			'__return_true'
+		);
+
+		// ASSERT: post_author is unchanged from the first import.
+		$this->assertTrue( $second['success'] );
+		$this->assertSame(
+			$matched_user_id,
+			(int) get_post( $second['post_id'] )->post_author,
+			'Update path with fallback must preserve the existing post_author.'
+		);
+
+		// ASSERT: Warning carries null fallback_user_id (kept-author semantic).
+		$this->assertCount( 1, $second['warnings'] );
+		$this->assertNull( $second['warnings'][0]['fallback_user_id'] );
+		$this->assertSame(
+			'gone@source.example',
+			$second['warnings'][0]['source']['email']
+		);
+	}
+
+	/**
+	 * Verifies that a post whose author was set via the author fallback is
+	 * preserved across subsequent updates that also trigger the fallback —
+	 * even when the importing user differs from the one who triggered the
+	 * original fallback.
+	 */
+	public function test_repeated_fallback_on_update_does_not_churn_author(): void {
+		// ARRANGE: First importer triggers the author fallback on insert and
+		// becomes the post's author.
+		$first_importer_id = self::factory()->user->create(
+			array( 'role' => 'editor' )
+		);
+		wp_set_current_user( $first_importer_id );
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'first-unmatched@source.example',
+				'login'        => 'first-unmatched',
+				'display_name' => 'First Unmatched',
+			),
+		);
+
+		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9914,
+			'title'     => 'Repeated Fallback Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/repeated-fallback',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+		$this->assertSame(
+			$first_importer_id,
+			(int) get_post( $first['post_id'] )->post_author
+		);
+
+		// ARRANGE: Switch to a *different* importing user; source still
+		// reports an unmatched author (different email to make sure the
+		// update path runs).
+		$second_importer_id = self::factory()->user->create(
+			array( 'role' => 'editor' )
+		);
+		wp_set_current_user( $second_importer_id );
+
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => 'second-unmatched@source.example',
+				'login'        => 'second-unmatched',
+				'display_name' => 'Second Unmatched',
+			),
+		);
+
+		// ACT: Re-import the same source post under the second importer.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter(
+			'safe_publish_import_allow_author_fallback',
+			'__return_true'
+		);
+
+		// ASSERT: post_author is still the first importer — match-or-keep
+		// preserved the previously-fallback'd attribution.
+		$this->assertTrue( $second['success'] );
+		$this->assertSame(
+			$first_importer_id,
+			(int) get_post( $second['post_id'] )->post_author,
+			'Update fallback must not overwrite a previously-applied fallback.'
+		);
+		$this->assertNull( $second['warnings'][0]['fallback_user_id'] );
+	}
+
+	/**
+	 * Verifies that the source_author_unresolved error (deleted user on source)
+	 * aborts the import even when the author fallback filter is enabled.
+	 */
+	public function test_fallback_does_not_relax_source_author_unresolved(): void {
+		// ARRANGE: Source author with an empty email; author fallback filter on.
+		$this->mock_post_overrides = array(
+			'safe_publish_author' => array(
+				'email'        => '',
+				'login'        => '',
+				'display_name' => '',
+			),
+		);
+
+		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9916,
+			'title'     => 'Unresolved Fallback Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/unresolved-fallback',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the bulk import path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter(
+			'safe_publish_import_allow_author_fallback',
+			'__return_true'
+		);
+
+		// ASSERT: Import aborts with the deleted-author message.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString(
+			'deleted on the source',
+			$result['error']
+		);
+	}
+
+	/**
+	 * Verifies that a hierarchical post with source parent 0 is imported as
+	 * top-level and stores no diagnostic parent meta.
+	 */
+	public function test_top_level_hierarchical_post_imports_without_parent_meta(): void {
+		// ARRANGE: Page with source parent 0.
+		$this->mock_post_overrides = array( 'parent' => 0 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9920,
+			'title'     => 'Top Level Page',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/top-level-page',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Run the import.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Imported as top-level with no diagnostic meta.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame(
+			0,
+			(int) get_post( $result['post_id'] )->post_parent
+		);
+		$this->assertSame(
+			'',
+			get_post_meta(
+				$result['post_id'],
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			)
+		);
+		$this->assertSame( array(), $result['warnings'] );
+	}
+
+	/**
+	 * Verifies that a non-hierarchical post with a non-zero source parent is
+	 * imported as top-level with no diagnostic meta — the field is ignored.
+	 */
+	public function test_non_hierarchical_post_ignores_source_parent(): void {
+		// ARRANGE: 'posts' (non-hierarchical) with a non-zero parent in source.
+		$this->mock_post_overrides = array( 'parent' => 555 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9921,
+			'title'     => 'Non Hierarchical Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/non-hierarchical',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Run the import.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: post_parent stays 0 and diagnostic meta is absent.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame(
+			0,
+			(int) get_post( $result['post_id'] )->post_parent
+		);
+		$this->assertSame(
+			'',
+			get_post_meta(
+				$result['post_id'],
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a hierarchical post whose source parent matches an
+	 * already-imported destination post sets post_parent and writes the
+	 * diagnostic parent meta.
+	 */
+	public function test_resolvable_parent_sets_post_parent_and_meta(): void {
+		// ARRANGE: A destination page that was previously imported with
+		// source post id 700.
+		$existing_parent_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta(
+			$existing_parent_id,
+			Options::META_SOURCE_POST_ID,
+			700
+		);
+
+		$this->mock_post_overrides = array( 'parent' => 700 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9922,
+			'title'     => 'Child Page',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/child',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Run the import.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: post_parent matches the existing destination post and the
+		// diagnostic meta stores the source parent id.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame(
+			$existing_parent_id,
+			(int) get_post( $result['post_id'] )->post_parent
+		);
+		$this->assertSame(
+			'700',
+			get_post_meta(
+				$result['post_id'],
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			)
+		);
+	}
+
+	/**
+	 * Verifies that an unresolvable parent aborts the import with the
+	 * "has not been imported" message when the parent is not part of the
+	 * current batch.
+	 */
+	public function test_unresolvable_parent_not_in_batch_aborts(): void {
+		// ARRANGE: Hierarchical post whose source parent has no destination
+		// match and is not part of any batch context.
+		$this->mock_post_overrides = array( 'parent' => 8888 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9923,
+			'title'     => 'Orphaned Child',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/orphaned',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Run the import.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Failure with the no-match message and no post created.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString(
+			'has not been imported on this site',
+			$result['error']
+		);
+		$this->assertStringNotContainsString( '"', $result['error'] );
+
+		$this->assertSame(
+			array(),
+			get_posts(
+				array(
+					'post_type'        => 'page',
+					'posts_per_page'   => 1,
+					'suppress_filters' => false,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => '9923',
+				)
+			)
+		);
+	}
+
+	/**
+	 * Verifies that when the parent is part of the current bulk batch but
+	 * never made it to a successful destination import, the error message
+	 * uses the in-batch variant carrying the parent's title.
+	 */
+	public function test_unresolvable_parent_in_batch_uses_failed_in_batch_message(): void {
+		// ARRANGE: Pretend the parent's pass-1 fresh data is in scope by
+		// passing $batch_fresh_data directly to import_post().
+		$batch_fresh_data = array(
+			800 => array( 'title' => 'Pending Parent Page' ),
+		);
+
+		$this->mock_post_overrides = array( 'parent' => 800 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9924,
+			'title'     => 'Child Pending On Parent',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/child-pending',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Import with batch context but no destination match for 800.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id,
+			null,
+			$batch_fresh_data
+		);
+
+		// ASSERT: Failure with the in-batch message including the title.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString(
+			'failed to import earlier in this batch',
+			$result['error']
+		);
+		$this->assertStringContainsString( 'Pending Parent Page', $result['error'] );
+	}
+
+	/**
+	 * Verifies that the orphan fallback filter relaxes resolution: the post
+	 * imports as top-level and records a parent_orphaned warning with
+	 * reason 'not_imported' and a null title.
+	 */
+	public function test_orphan_fallback_not_imported_emits_warning(): void {
+		// ARRANGE: Hierarchical post with unresolvable parent + fallback on.
+		$this->mock_post_overrides = array( 'parent' => 9999 );
+
+		add_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9925,
+			'title'     => 'Orphan Fallback Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/orphan-fallback',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Run the import.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+
+		// ASSERT: Imported as top-level with a parent_orphaned warning.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame(
+			0,
+			(int) get_post( $result['post_id'] )->post_parent
+		);
+		$this->assertCount( 1, $result['warnings'] );
+		$this->assertSame( 'parent_orphaned', $result['warnings'][0]['type'] );
+		$this->assertSame( 'not_imported', $result['warnings'][0]['reason'] );
+		$this->assertSame( 9999, $result['warnings'][0]['source']['parent_id'] );
+		$this->assertNull( $result['warnings'][0]['source']['parent_title'] );
+	}
+
+	/**
+	 * Verifies that the orphan fallback for an in-batch parent records the
+	 * 'failed_in_batch' reason with the parent's title populated.
+	 */
+	public function test_orphan_fallback_failed_in_batch_includes_title(): void {
+		// ARRANGE: In-batch parent with no destination match + fallback on.
+		$batch_fresh_data = array(
+			801 => array( 'title' => 'Failed Parent' ),
+		);
+
+		$this->mock_post_overrides = array( 'parent' => 801 );
+
+		add_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9926,
+			'title'     => 'Child With Batch Parent',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/child-batch',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Import with batch context.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id,
+			null,
+			$batch_fresh_data
+		);
+
+		remove_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+
+		// ASSERT: Top-level orphan with failed_in_batch warning carrying the
+		// parent's title.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame(
+			0,
+			(int) get_post( $result['post_id'] )->post_parent
+		);
+		$this->assertSame( 'parent_orphaned', $result['warnings'][0]['type'] );
+		$this->assertSame( 'failed_in_batch', $result['warnings'][0]['reason'] );
+		$this->assertSame( 801, $result['warnings'][0]['source']['parent_id'] );
+		$this->assertSame(
+			'Failed Parent',
+			$result['warnings'][0]['source']['parent_title']
+		);
+	}
+
+	/**
+	 * Verifies that re-importing a page with the source parent unchanged
+	 * leaves post_parent and the diagnostic meta in place.
+	 */
+	public function test_reimport_with_unchanged_parent_preserves_state(): void {
+		// ARRANGE: Destination parent post.
+		$parent_dest_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_POST_ID,
+			900
+		);
+
+		$this->mock_post_overrides = array( 'parent' => 900 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9927,
+			'title'     => 'Stable Child',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/stable-child',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Initial import + re-import with no source changes.
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Same post id, same parent, same diagnostic meta.
+		$this->assertTrue( $second['success'] );
+		$this->assertSame( $first['post_id'], $second['post_id'] );
+		$this->assertSame(
+			$parent_dest_id,
+			(int) get_post( $second['post_id'] )->post_parent
+		);
+		$this->assertSame(
+			'900',
+			get_post_meta(
+				$second['post_id'],
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			)
+		);
+	}
+
+	/**
+	 * Verifies that re-importing with a changed source parent refreshes both
+	 * post_parent and the diagnostic meta.
+	 */
+	public function test_reimport_with_changed_parent_refreshes_state(): void {
+		// ARRANGE: Two destination parent posts.
+		$first_parent_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta(
+			$first_parent_id,
+			Options::META_SOURCE_POST_ID,
+			910
+		);
+		$second_parent_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta(
+			$second_parent_id,
+			Options::META_SOURCE_POST_ID,
+			920
+		);
+
+		$this->mock_post_overrides = array( 'parent' => 910 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9928,
+			'title'     => 'Migrating Child',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/migrating',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Initial import then re-import with a new parent.
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		$this->mock_post_overrides = array( 'parent' => 920 );
+		$second                    = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: post_parent and meta refreshed.
+		$this->assertTrue( $second['success'] );
+		$this->assertSame(
+			$second_parent_id,
+			(int) get_post( $second['post_id'] )->post_parent
+		);
+		$this->assertSame(
+			'920',
+			get_post_meta(
+				$second['post_id'],
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			)
+		);
+	}
+
+	/**
+	 * Verifies that re-importing a page that becomes top-level on the source
+	 * clears the previously-stored diagnostic parent meta so the meta tracks
+	 * the current source state.
+	 */
+	public function test_reimport_clears_parent_meta_when_source_becomes_top_level(): void {
+		// ARRANGE: Destination parent + a first import that writes the meta.
+		$parent_dest_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_POST_ID,
+			950
+		);
+
+		$this->mock_post_overrides = array( 'parent' => 950 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9933,
+			'title'     => 'Now Top-Level',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/now-top-level',
+			'post_type' => 'pages',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+		$this->assertSame(
+			'950',
+			get_post_meta(
+				$first['post_id'],
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			),
+			'First import should write the diagnostic parent meta.'
+		);
+
+		// ARRANGE: Source post now reports parent = 0 (top-level).
+		$this->mock_post_overrides = array( 'parent' => 0 );
+
+		// ACT: Re-import.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: post_parent is back to 0 and the diagnostic meta is gone.
+		$this->assertTrue( $second['success'] );
+		$this->assertSame( $first['post_id'], $second['post_id'] );
+		$this->assertSame(
+			0,
+			(int) get_post( $second['post_id'] )->post_parent
+		);
+		$this->assertSame(
+			'',
+			get_post_meta(
+				$second['post_id'],
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			),
+			'Diagnostic parent meta must be cleared when the source post is now top-level.'
+		);
+	}
+
+	/**
+	 * Verifies that re-importing a previously-orphaned post links it to its
+	 * source parent once that parent has been imported on the destination.
+	 */
+	public function test_reimport_links_orphan_once_parent_exists(): void {
+		// ARRANGE: First import with the fallback enabled and no destination
+		// match for the parent — the child is imported as an orphan.
+		$this->mock_post_overrides = array( 'parent' => 940 );
+
+		add_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9932,
+			'title'     => 'Late-Bound Child',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/late-bound',
+			'post_type' => 'pages',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		remove_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+
+		$this->assertTrue( $first['success'] );
+		$this->assertSame( 0, (int) get_post( $first['post_id'] )->post_parent );
+
+		// ARRANGE: Parent is now imported on the destination.
+		$parent_dest_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_POST_ID,
+			940
+		);
+
+		// ACT: Re-import the same source post — strict resolution should now
+		// succeed because the parent exists.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: post_parent and diagnostic meta now point at the parent.
+		$this->assertTrue( $second['success'] );
+		$this->assertSame( $first['post_id'], $second['post_id'] );
+		$this->assertSame(
+			$parent_dest_id,
+			(int) get_post( $second['post_id'] )->post_parent
+		);
+		$this->assertSame(
+			'940',
+			get_post_meta(
+				$second['post_id'],
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a strict re-import with an unresolvable parent aborts and
+	 * leaves the destination post untouched.
+	 */
+	public function test_strict_reimport_with_unresolvable_parent_aborts(): void {
+		// ARRANGE: Destination parent + successful first import.
+		$parent_dest_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_POST_ID,
+			930
+		);
+
+		$this->mock_post_overrides = array( 'parent' => 930 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9929,
+			'title'     => 'Strict Reimport Child',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/strict-reimport',
+			'post_type' => 'pages',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+		$first_title = get_post( $first['post_id'] )->post_title;
+
+		// ARRANGE: Source now reports an unresolvable parent.
+		$this->mock_post_overrides = array(
+			'parent' => 4242,
+			'title'  => 'Should Not Apply',
+		);
+
+		// ACT: Re-import must abort and leave state untouched.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Failure, original parent preserved, title unchanged.
+		$this->assertFalse( $second['success'] );
+		$post_after = get_post( $first['post_id'] );
+		$this->assertSame(
+			$parent_dest_id,
+			(int) $post_after->post_parent,
+			'Update must not retarget post_parent on a failed re-import.'
+		);
+		$this->assertSame( $first_title, $post_after->post_title );
+	}
+
+	/**
+	 * Verifies that an author fallback and a parent orphan applied to the
+	 * same import are both persisted as discrete warnings.
+	 */
+	public function test_author_and_parent_fallback_emit_two_warnings(): void {
+		// ARRANGE: No destination user matches the source author and the
+		// source parent is unresolvable. Both fallback filters on.
+		$this->mock_post_overrides = array(
+			'parent'              => 7777,
+			'safe_publish_author' => array(
+				'email'        => 'nobody@source.example',
+				'login'        => 'nobody',
+				'display_name' => 'Nobody',
+			),
+		);
+
+		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+		add_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'        => 9930,
+			'title'     => 'Both Fallbacks Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/both-fallbacks',
+			'post_type' => 'pages',
+		);
+
+		// ACT: Run the import.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+		remove_filter( 'safe_publish_import_allow_orphans', '__return_true' );
+
+		// ASSERT: Both warnings present.
+		$this->assertTrue( $result['success'] );
+		$this->assertCount( 2, $result['warnings'] );
+
+		$types = array_column( $result['warnings'], 'type' );
+		$this->assertContains( 'author_fallback_applied', $types );
+		$this->assertContains( 'parent_orphaned', $types );
+	}
+
+	/**
+	 * Verifies that the diagnostic source parent meta key never appears in
+	 * the public REST response for a destination post.
+	 */
+	public function test_source_parent_meta_is_absent_from_public_rest_response(): void {
+		// ARRANGE: Hierarchical import with a resolvable parent so the
+		// diagnostic meta is written.
+		$parent_dest_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_POST_ID,
+			950
+		);
+
+		$this->mock_post_overrides = array( 'parent' => 950 );
+
+		$post_data = array(
+			'id'        => 9931,
+			'title'     => 'Parent Meta Visibility Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/parent-rest-visibility',
+			'post_type' => 'pages',
+		);
+
+		$result = $this->import_service->import_post( $post_data );
+		$this->assertTrue( $result['success'] );
+
+		// ACT: Boot a fresh REST server and fetch the destination page.
+		global $wp_rest_server;
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound, Squiz.PHP.DisallowMultipleAssignments.Found
+		$server = $wp_rest_server = new \WP_REST_Server();
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
+		do_action( 'rest_api_init' );
+
+		$response = $server->dispatch(
+			new \WP_REST_Request( 'GET', '/wp/v2/pages/' . $result['post_id'] )
+		);
+
+		$data    = $response->get_data();
+		$meta    = isset( $data['meta'] ) && is_array( $data['meta'] ) ? $data['meta'] : array();
+		$encoded = (string) wp_json_encode( $data );
+
+		// ASSERT: Key is absent from both the encoded body and the meta map.
+		$this->assertStringNotContainsString(
+			Options::META_SOURCE_POST_PARENT_ID,
+			$encoded
+		);
+		$this->assertArrayNotHasKey(
+			Options::META_SOURCE_POST_PARENT_ID,
+			$meta
+		);
+
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
+		$wp_rest_server = null;
+	}
+
+	/**
+	 * Verifies that rolling back a bulk-reimported post restores its previous
+	 * title, content, and excerpt.
+	 *
+	 * The bulk update path captures the pre-update state alongside the single
+	 * update path, so rollback is non-destructive in both flows.
+	 */
+	public function test_bulk_reimport_rollback_restores_previous_post_fields(): void {
+		// ARRANGE: Initial import seeds the post in the destination.
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$this->mock_post_overrides = array(
+			'title'   => 'Original Title',
+			'content' => '<p>Original content.</p>',
+			'excerpt' => 'Original excerpt.',
+		);
+
+		$post_data = array(
+			'id'        => 9601,
+			'title'     => 'Snapshot Title',
+			'content'   => '<p>Snapshot content.</p>',
+			'link'      => 'https://source.example.com/rollback-restore-test',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
+		$post_id = (int) $first['post_id'];
+
+		$pre_update_title   = get_post_field( 'post_title', $post_id );
+		$pre_update_content = get_post_field( 'post_content', $post_id );
+		$pre_update_excerpt = get_post_field( 'post_excerpt', $post_id );
+
+		// ARRANGE: Re-importing with new values exercises the bulk update path.
+		$this->mock_post_overrides = array(
+			'title'   => 'Updated Title',
+			'content' => '<p>Updated content.</p>',
+			'excerpt' => 'Updated excerpt.',
+		);
+
+		// ACT: Re-import the same source post.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $second['success'], 'Re-import should succeed.' );
+		$this->assertTrue(
+			$second['existing'],
+			'Re-import should flag the post as existing.'
+		);
+		$this->assertSame(
+			'Updated Title',
+			get_post_field( 'post_title', $post_id ),
+			'Pre-rollback sanity: post must reflect the updated values.'
+		);
+
+		// ACT: Roll back the most recent item logged for this post.
+		$item             = $this->repository->get_item_for_post( $post_id );
+		$rollback_service = new Session_Rollback_Service( $this->repository );
+		$result           = $rollback_service->rollback_item( (int) $item['id'] );
+
+		// ASSERT: Rollback restored the post instead of deleting it.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'restored', $result['action'] );
+		$this->assertNotNull(
+			get_post( $post_id ),
+			'Rollback must not delete the post on the bulk update path.'
+		);
+
+		// ASSERT: Post fields match the pre-update state.
+		$this->assertSame(
+			$pre_update_title,
+			get_post_field( 'post_title', $post_id )
+		);
+		$this->assertSame(
+			$pre_update_content,
+			get_post_field( 'post_content', $post_id )
+		);
+		$this->assertSame(
+			$pre_update_excerpt,
+			get_post_field( 'post_excerpt', $post_id )
 		);
 	}
 }

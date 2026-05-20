@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
@@ -31,9 +31,9 @@ final class Admin_Page {
 	const DEFAULT_NUMBER_OF_POSTS = 20;
 
 	/**
-	 * External Posts API instance.
+	 * Source Posts API instance.
 	 *
-	 * @var External_Posts_API
+	 * @var Source_Posts_API
 	 */
 	private $api;
 
@@ -47,11 +47,11 @@ final class Admin_Page {
 	/**
 	 * Constructs the Admin_Page instance.
 	 *
-	 * @param External_Posts_API  $api                 External Posts API instance.
+	 * @param Source_Posts_API    $api                 Source Posts API instance.
 	 * @param Post_Import_Service $post_import_service Post Import Service instance.
 	 */
 	public function __construct(
-		External_Posts_API $api,
+		Source_Posts_API $api,
 		Post_Import_Service $post_import_service
 	) {
 		$this->api                 = $api;
@@ -110,34 +110,40 @@ final class Admin_Page {
 	}
 
 	/**
-	 * Enqueues admin assets with VIP compatibility.
+	 * Enqueues admin assets.
 	 */
 	public function enqueue_assets(): void {
-		// Early return if not in admin or wrong page.
 		if ( ! is_admin() ) {
 			return;
 		}
 
-		// VIP-specific environment check.
-		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
-			// Add VIP-specific asset handling if needed.
-			$this->enqueue_vip_safe_assets();
-		} else {
-			$this->enqueue_standard_assets();
+		$asset_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/index.asset.php';
+		$script_url      = plugin_dir_url( dirname( __DIR__ ) ) . 'build/index.js';
+		$script_path     = plugin_dir_path( dirname( __DIR__ ) ) . 'build/index.js';
+
+		if ( ! file_exists( $script_path ) || ! file_exists( $asset_file_path ) ) {
+			add_action(
+				'admin_notices',
+				function () {
+					// Skip during REST/AJAX so the notice only renders on real admin pageviews.
+					if ( ! is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && constant( 'REST_REQUEST' ) ) ) {
+						return;
+					}
+
+					if ( defined( 'WP_DEBUG' ) && constant( 'WP_DEBUG' ) ) {
+						echo '<div class="notice notice-error"><p>';
+						echo '<strong>' . esc_html__( 'Safe Publish:', 'safe-publish' ) . '</strong> ';
+						echo esc_html__( 'Build assets are missing. ', 'safe-publish' );
+						/* translators: npm run build is a command and should not be translated */
+						echo esc_html__( 'Run <code>npm run build</code> to generate them.', 'safe-publish' );
+						echo '</p></div>';
+					}
+				}
+			);
+
+			return;
 		}
-	}
 
-	/**
-	 * Enqueues assets with VIP-specific optimizations.
-	 */
-	private function enqueue_vip_safe_assets(): void {
-		$this->enqueue_standard_assets();
-	}
-
-	/**
-	 * Enqueues standard assets.
-	 */
-	private function enqueue_standard_assets(): void {
 		// Fetch posts data from the source site.
 		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 		$number_of_posts = self::DEFAULT_NUMBER_OF_POSTS;
@@ -154,142 +160,54 @@ final class Admin_Page {
 			}
 		}
 
-		// Get the asset file for proper dependencies (TypeScript build).
-		$asset_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/index.asset.php';
-
-		// VIP-safe file inclusion with proper validation.
-		$plugin_dir      = plugin_dir_path( dirname( __DIR__ ) );
-		$real_plugin_dir = realpath( $plugin_dir );
-		$real_asset_file = realpath( $asset_file_path );
-
-		// Validate that the file exists and is within the plugin directory.
-		if ( $real_asset_file &&
-			file_exists( $asset_file_path ) &&
-			0 === strpos( $real_asset_file, $real_plugin_dir ) &&
-			'.php' === substr( $asset_file_path, -4 ) ) {
-			// phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable -- Safe file inclusion within plugin directory with validation
-			$asset_file = include $asset_file_path;
-		} else {
-			$asset_file = array(
-				'dependencies' => array( 'wp-element', 'wp-components', 'wp-dataviews' ),
-				'version'      => '1.1.0',
-			);
-		}
-
-		// VIP-safe dependency validation - ensure required scripts are available.
-		$required_deps  = array( 'wp-element', 'wp-components' );
-		$available_deps = array();
-
-		// In VIP, ensure these core scripts are loaded first.
-		foreach ( $required_deps as $dep ) {
-			// Force register/enqueue core dependencies in VIP.
-			if ( ! wp_script_is( $dep, 'registered' ) ) {
-				wp_enqueue_script( $dep );
-			}
-			if ( wp_script_is( $dep, 'registered' ) || wp_script_is( $dep, 'enqueued' ) ) {
-				$available_deps[] = $dep;
-			}
-		}
-
-		// Add wp-dataviews if available, otherwise fallback gracefully.
-		if ( wp_script_is( 'wp-dataviews', 'registered' ) ) {
-			$available_deps[] = 'wp-dataviews';
-		}
-
-		// Use validated dependencies or fallback to minimal safe dependencies.
-		$script_deps = ! empty( $available_deps ) ? $available_deps : array( 'wp-element' );
-
-		// Enqueue the TypeScript DataViews script.
-		$script_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'build/index.js';
-		$script_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/index.js';
-
-		// VIP-safe version handling - use plugin version as fallback.
+		// phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable -- Path is built from plugin_dir_path() and a hardcoded filename.
+		$asset_file     = include $asset_file_path;
 		$script_version = $asset_file['version'];
-
-		// In VIP environment, use plugin version instead of filemtime for better caching.
-		if ( defined( 'WPCOM_IS_VIP_ENV' ) && WPCOM_IS_VIP_ENV ) {
-			// Get plugin version for VIP environment.
-			$plugin_data    = get_file_data( dirname( dirname( __DIR__ ) ) . '/safe-publish.php', array( 'Version' => 'Version' ) );
-			$script_version = ! empty( $plugin_data['Version'] ) ? $plugin_data['Version'] : '1.1.0';
-		} elseif ( file_exists( $script_path ) && function_exists( 'filemtime' ) ) {
-			// Only use filemtime if available (not always available in VIP).
-			$script_version = filemtime( $script_path );
-		}
-
-		// VIP environment: Ensure script file exists before enqueueing.
-		if ( ! file_exists( $script_path ) ) {
-			// Show admin notice for missing build files only in admin context.
-			add_action(
-				'admin_notices',
-				function () {
-					// Only show notices in admin context, not during REST API requests.
-					if ( ! is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && constant( 'REST_REQUEST' ) ) ) {
-						return;
-					}
-
-					if ( defined( 'WP_DEBUG' ) && constant( 'WP_DEBUG' ) ) {
-						echo '<div class="notice notice-error"><p>';
-						echo '<strong>' . esc_html__( 'Safe Publish:', 'safe-publish' ) . '</strong> ';
-						echo esc_html__( 'Build assets are missing. ', 'safe-publish' );
-						/* translators: npm run build is a command and should not be translated */
-						echo esc_html__( 'Run <code>npm run build</code> and commit the build files for VIP deployment.', 'safe-publish' );
-						echo '</p></div>';
-					}
-				}
-			);
-
-			return; // Exit early if script file doesn't exist.
-		}
 
 		wp_enqueue_script(
 			'safe-publish-admin-dataviews-script',
 			$script_url,
-			$script_deps,
+			$asset_file['dependencies'],
 			$script_version,
 			true
 		);
 
-		// Enqueue DataViews styles with VIP-safe versioning.
+		// Enqueue shared design tokens before any plugin stylesheet.
+		wp_enqueue_style(
+			'safe-publish-tokens',
+			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/tokens.css',
+			array(),
+			$script_version
+		);
+
+		// Enqueue DataViews styles.
 		$style_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/style-index.css';
 		$style_file_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'build/style-index.css';
 
 		if ( file_exists( $style_file_path ) ) {
-			// Use same versioning strategy as scripts.
-			$style_version = $script_version;
-
 			wp_enqueue_style(
 				'safe-publish-admin-dataviews-style',
 				$style_file_url,
-				array( 'wp-components' ),
-				$style_version
-			);
-		}
-
-		// Enqueue admin styles with VIP-safe versioning.
-		$admin_css_path = plugin_dir_path( dirname( __DIR__ ) ) . 'assets/css/admin.css';
-		$admin_css_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/admin.css';
-
-		if ( file_exists( $admin_css_path ) ) {
-			wp_enqueue_style(
-				'safe-publish-admin-style',
-				$admin_css_url,
-				array(),
+				array( 'wp-components', 'safe-publish-tokens' ),
 				$script_version
 			);
 		}
+
+		// Enqueue admin styles.
+		wp_enqueue_style(
+			'safe-publish-admin-style',
+			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/admin.css',
+			array( 'safe-publish-tokens' ),
+			$script_version
+		);
 
 		// Enqueue React components styles.
-		$react_css_path = plugin_dir_path( dirname( __DIR__ ) ) . 'assets/css/react-components.css';
-		$react_css_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/react-components.css';
-
-		if ( file_exists( $react_css_path ) ) {
-			wp_enqueue_style(
-				'safe-publish-react-components-style',
-				$react_css_url,
-				array( 'wp-components' ),
-				$script_version
-			);
-		}
+		wp_enqueue_style(
+			'safe-publish-react-components-style',
+			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/react-components.css',
+			array( 'wp-components', 'safe-publish-tokens' ),
+			$script_version
+		);
 
 		$json_data = wp_json_encode(
 			array(
@@ -313,19 +231,5 @@ final class Admin_Page {
 			sprintf( 'window.safePublishAdminData = %s;', $json_data ),
 			'before'
 		);
-
-		// Add hook to verify script was loaded properly in VIP.
-		add_action( 'admin_print_footer_scripts', array( $this, 'verify_script_loaded' ), 999 );
-	}
-
-	/**
-	 * Verify that scripts loaded properly (useful for VIP debugging).
-	 */
-	public function verify_script_loaded(): void {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG && wp_script_is( 'safe-publish-admin-dataviews-script', 'done' ) ) {
-			echo '<!-- Safe Publish: Admin script loaded successfully -->';
-		} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			echo '<!-- Safe Publish: Admin script failed to load -->';
-		}
 	}
 }

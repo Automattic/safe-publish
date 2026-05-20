@@ -29,8 +29,8 @@ final class Settings_Page {
 		$sync_mode          = get_option( Options::OPTION_SYNC_MODE, '' );
 
 		// Basic auth credentials (development only).
-		$username = get_option( Options::OPTION_USERNAME, '' );
-		$password = get_option( Options::OPTION_PASSWORD, '' );
+		$username = get_option( Options::OPTION_BASIC_AUTH_USERNAME, '' );
+		$password = get_option( Options::OPTION_BASIC_AUTH_PASSWORD, '' );
 
 		$show_import_fields = in_array(
 			$sync_mode,
@@ -137,26 +137,26 @@ final class Settings_Page {
 									<p class="description">
 										<?php esc_html_e( 'Only needed if the connected site is protected by HTTP Basic Authentication. Leave blank otherwise.', 'safe-publish' ); ?>
 									</p><br />
-									<label for="safe_publish_username" class="screen-reader-text">
+									<label for="safe_publish_basic_auth_username" class="screen-reader-text">
 										<?php esc_html_e( 'Basic Auth Username', 'safe-publish' ); ?>
 									</label>
 									<input
 										type="text"
-										id="safe_publish_username"
-										name="safe_publish_username"
+										id="safe_publish_basic_auth_username"
+										name="safe_publish_basic_auth_username"
 										value="<?php echo esc_attr( $username ); ?>"
 										class="regular-text"
 										placeholder="<?php echo esc_attr__( 'Username', 'safe-publish' ); ?>"
 										autocomplete="username"
 									/>
 									<br />
-									<label for="safe_publish_password" class="screen-reader-text">
+									<label for="safe_publish_basic_auth_password" class="screen-reader-text">
 										<?php esc_html_e( 'Basic Auth Password', 'safe-publish' ); ?>
 									</label>
 									<input
 										type="password"
-										id="safe_publish_password"
-										name="safe_publish_password"
+										id="safe_publish_basic_auth_password"
+										name="safe_publish_basic_auth_password"
 										value="<?php echo esc_attr( $password ); ?>"
 										class="regular-text"
 										placeholder="<?php echo esc_attr__( 'Password', 'safe-publish' ); ?>"
@@ -219,8 +219,8 @@ final class Settings_Page {
 					 */
 					function testConnection( testBtn, resultEl, ajaxUrl, nonce ) {
 						const connectedSiteUrl = document.getElementById( 'safe_publish_connected_site_url' ).value;
-						const usernameEl       = document.getElementById( 'safe_publish_username' );
-						const passwordEl       = document.getElementById( 'safe_publish_password' );
+						const usernameEl       = document.getElementById( 'safe_publish_basic_auth_username' );
+						const passwordEl       = document.getElementById( 'safe_publish_basic_auth_password' );
 
 						if ( ! connectedSiteUrl ) {
 							resultEl.className   = 'notice notice-error inline';

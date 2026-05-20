@@ -12,7 +12,7 @@ namespace Safe_Publish\Tests\Integration\Auth;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Post_Import_Service;
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Content\Content_Media_Processor;
@@ -23,12 +23,7 @@ use Safe_Publish\Utils\Options;
 use WP_Error;
 
 /**
- * Basic Auth Outbound Test.
- *
- * Tests that the full wp_options → Auth_Credential_Provider → HTTP_Client
- * → outbound request chain correctly includes both HMAC and Basic Auth
- * headers when credentials are configured, and that imports succeed or fail
- * accordingly.
+ * Basic Auth Outbound Test Class.
  */
 class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
@@ -93,7 +88,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 		);
 
 		$this->import_service = new Post_Import_Service(
-			new External_Posts_API( new HTTP_Client() ),
+			new Source_Posts_API( new HTTP_Client() ),
 			$media_importer,
 			$content_processor,
 			$this->repository,
@@ -112,8 +107,8 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 	#[\Override]
 	protected function tearDown(): void {
 		remove_filter( 'pre_http_request', array( $this, 'intercept_http_request' ), 5 );
-		delete_option( Options::OPTION_USERNAME );
-		delete_option( Options::OPTION_PASSWORD );
+		delete_option( Options::OPTION_BASIC_AUTH_USERNAME );
+		delete_option( Options::OPTION_BASIC_AUTH_PASSWORD );
 		delete_option( Options::OPTION_CONNECTED_SITE_URL );
 		parent::tearDown();
 	}
@@ -124,12 +119,12 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 	 */
 	public function test_fetch_posts_sends_both_hmac_and_basic_auth_headers(): void {
 		// ARRANGE: Configure both username and password in plugin options.
-		update_option( Options::OPTION_USERNAME, 'testuser' );
-		update_option( Options::OPTION_PASSWORD, 'testpass' );
+		update_option( Options::OPTION_BASIC_AUTH_USERNAME, 'testuser' );
+		update_option( Options::OPTION_BASIC_AUTH_PASSWORD, 'testpass' );
 
 		// ACT: Fetch posts using credentials sourced from plugin options.
 		$credentials = Auth_Credential_Provider::get_credentials();
-		$result      = ( new External_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
+		$result      = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
 
 		// ASSERT: Both HMAC and Basic Auth headers were sent in the outbound request.
 		$this->assertNotNull( $this->captured_request_args, 'HTTP request should have been intercepted.' );
@@ -164,7 +159,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
 		// ACT: Fetch posts without Basic Auth credentials.
 		$credentials = Auth_Credential_Provider::get_credentials();
-		$result      = ( new External_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
+		$result      = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
 
 		// ASSERT: HMAC header is present but no Authorization header was sent.
 		$this->assertNotNull( $this->captured_request_args, 'HTTP request should have been intercepted.' );
@@ -185,11 +180,11 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 	 */
 	public function test_fetch_posts_omits_basic_auth_with_partial_credentials(): void {
 		// ARRANGE: Only a username is configured; no password.
-		update_option( Options::OPTION_USERNAME, 'testuser' );
+		update_option( Options::OPTION_BASIC_AUTH_USERNAME, 'testuser' );
 
 		// ACT: Fetch posts with incomplete credentials.
 		$credentials = Auth_Credential_Provider::get_credentials();
-		$result      = ( new External_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
+		$result      = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
 
 		// ASSERT: No Authorization header was sent because the password is missing.
 		$this->assertNotNull( $this->captured_request_args, 'HTTP request should have been intercepted.' );
@@ -209,11 +204,11 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 	public function test_full_import_succeeds_with_hmac_and_basic_auth(): void {
 		// ARRANGE: Configure both username and password in plugin options, then
 		// fetch posts from the (mocked) source site.
-		update_option( Options::OPTION_USERNAME, 'testuser' );
-		update_option( Options::OPTION_PASSWORD, 'testpass' );
+		update_option( Options::OPTION_BASIC_AUTH_USERNAME, 'testuser' );
+		update_option( Options::OPTION_BASIC_AUTH_PASSWORD, 'testpass' );
 
 		$credentials = Auth_Credential_Provider::get_credentials();
-		$posts       = ( new External_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
+		$posts       = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
 
 		$this->assertIsArray( $posts, 'fetch_posts() should return an array when the source responds with 200.' );
 		$this->assertCount( 1, $posts, 'fetch_posts() should return exactly one post.' );
@@ -237,14 +232,14 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 	 */
 	public function test_fetch_posts_fails_when_source_site_returns_401(): void {
 		// ARRANGE: Configure incorrect credentials and set mock to return 401.
-		update_option( Options::OPTION_USERNAME, 'wronguser' );
-		update_option( Options::OPTION_PASSWORD, 'wrongpass' );
+		update_option( Options::OPTION_BASIC_AUTH_USERNAME, 'wronguser' );
+		update_option( Options::OPTION_BASIC_AUTH_PASSWORD, 'wrongpass' );
 
 		$this->mock_status_code = 401;
 
 		// ACT: Attempt to fetch posts with credentials the source site rejects.
 		$credentials = Auth_Credential_Provider::get_credentials();
-		$result      = ( new External_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
+		$result      = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
 
 		// ASSERT: A WP_Error is returned; no posts were fetched.
 		$this->assertInstanceOf( WP_Error::class, $result, 'fetch_posts() should return WP_Error on 401.' );
@@ -284,22 +279,29 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
 		// Single-post endpoint used by fetch_fresh_post(): return a post object.
 		if ( preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
+			$current_user = wp_get_current_user();
+
 			return array(
 				'headers'  => array(),
 				'body'     => (string) wp_json_encode(
 					array(
-						'id'             => 1,
-						'link'           => 'https://source.example.com/test-post',
-						'title'          => array( 'raw' => 'Test Post' ),
-						'modified'       => '2026-01-01T00:00:00',
-						'featured_media' => 0,
-						'content'        => array( 'raw' => '<p>Test content.</p>' ),
-						'excerpt'        => array( 'raw' => '' ),
-						'slug'           => 'test-post',
-						'comment_status' => 'open',
-						'ping_status'    => 'open',
-						'menu_order'     => 0,
-						'meta'           => array(),
+						'id'                  => 1,
+						'link'                => 'https://source.example.com/test-post',
+						'title'               => array( 'raw' => 'Test Post' ),
+						'modified'            => '2026-01-01T00:00:00',
+						'featured_media'      => 0,
+						'content'             => array( 'raw' => '<p>Test content.</p>' ),
+						'excerpt'             => array( 'raw' => '' ),
+						'slug'                => 'test-post',
+						'comment_status'      => 'open',
+						'ping_status'         => 'open',
+						'menu_order'          => 0,
+						'meta'                => array(),
+						'safe_publish_author' => array(
+							'email'        => (string) $current_user->user_email,
+							'login'        => (string) $current_user->user_login,
+							'display_name' => (string) $current_user->display_name,
+						),
 					)
 				),
 				'response' => array(

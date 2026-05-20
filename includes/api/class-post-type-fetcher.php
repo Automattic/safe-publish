@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Post Type Fetcher Class.
  *
- * Handles fetching and filtering post types from external WordPress sites.
+ * Handles fetching and filtering post types from source WordPress sites.
  */
 class Post_Type_Fetcher {
 
@@ -41,7 +41,7 @@ class Post_Type_Fetcher {
 	}
 
 	/**
-	 * Fetches available post types from external site.
+	 * Fetches available post types from source site.
 	 *
 	 * @param string $source_site_url  Source site URL.
 	 * @param array  $auth_credentials Optional. Authentication credentials array. Default empty array.

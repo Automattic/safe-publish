@@ -8,12 +8,12 @@
 
 declare(strict_types=1);
 
-namespace Safe_Publish\Tests\Integration\External_Posts_API;
+namespace Safe_Publish\Tests\Integration\Source_Posts_API;
 
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Post_Import_Service;
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Content\Content_Media_Processor;
@@ -21,19 +21,19 @@ use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 
 /**
- * Verifies that External_Posts_API emits modified_gmt as a Z-marked GMT
- * timestamp and that Post_Import_Service::annotate_posts_with_import_status()
- * compares both sides as GMT — so has_update is correct when the source and
- * destination sites live in different timezones.
+ * Modified Field Test Class.
+ *
+ * Cross-system contract: modified_gmt comparisons happen in GMT so has_update
+ * is correct when source and destination sites live in different timezones.
  */
-class Modified_Field_Test extends External_Posts_API_Test_Base {
+class Modified_Field_Test extends Source_Posts_API_Test_Base {
 
 	/**
-	 * External Posts API instance.
+	 * Source Posts API instance.
 	 *
-	 * @var External_Posts_API
+	 * @var Source_Posts_API
 	 */
-	private External_Posts_API $api;
+	private Source_Posts_API $api;
 
 	/**
 	 * Post import service instance.
@@ -49,7 +49,7 @@ class Modified_Field_Test extends External_Posts_API_Test_Base {
 	protected function setUp(): void {
 		parent::setUp();
 
-		$this->api = new External_Posts_API( new HTTP_Client() );
+		$this->api = new Source_Posts_API( new HTTP_Client() );
 
 		$media_importer    = new Media_Importer( new HTTP_Client() );
 		$content_processor = new Content_Processor(
@@ -152,7 +152,7 @@ class Modified_Field_Test extends External_Posts_API_Test_Base {
 					'post_status' => 'publish',
 					'post_title'  => 'Local Post',
 					'meta_input'  => array(
-						Options::META_EXTERNAL_POST_ID => 999,
+						Options::META_SOURCE_POST_ID => 999,
 					),
 				)
 			);
@@ -219,7 +219,7 @@ class Modified_Field_Test extends External_Posts_API_Test_Base {
 					'post_status' => 'publish',
 					'post_title'  => 'Local Post',
 					'meta_input'  => array(
-						Options::META_EXTERNAL_POST_ID => 1001,
+						Options::META_SOURCE_POST_ID => 1001,
 					),
 				)
 			);

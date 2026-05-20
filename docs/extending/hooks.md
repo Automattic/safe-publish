@@ -24,7 +24,7 @@ Fires after any event is recorded to the audit log (e.g. import, export, auth, c
 
 ```php
 add_action( 'safe_publish_event_logged', function( string $channel, string $event, array $data ): void {
-    if ( 'export' === $channel && in_array( $event, array( 'EXPORT_REQUEST_ERROR', 'EXPORT_BAD_STATUS' ), true ) ) {
+    if ( 'export' === $channel && in_array( $event, array( 'EXPORT_REQUEST_ERROR', 'EXPORT_RESPONSE_BAD_STATUS' ), true ) ) {
         error_log( 'Safe Publish export failed: ' . wp_json_encode( $data ) );
     }
 }, 10, 3 );
@@ -32,29 +32,9 @@ add_action( 'safe_publish_event_logged', function( string $channel, string $even
 
 ## Filters
 
-### `safe_publish_allowed_domains`
-
-Filter the list of allowed external domains when validating source URLs.
-
-**Parameters:**
-
-- `array $domains` — currently allowed domains
-- `string $host` — the host being validated
-
-**Returns:** `array`
-
-**Example:**
-
-```php
-add_filter( 'safe_publish_allowed_domains', function( array $domains, string $host ): array {
-    $domains[] = 'staging.example.com';
-    return $domains;
-}, 10, 2 );
-```
-
 ### `safe_publish_api_query_args`
 
-Filter query arguments sent to the external site's REST API when fetching the list of posts.
+Filter query arguments sent to the source site's REST API when fetching the list of posts.
 
 **Parameters:**
 
@@ -76,7 +56,7 @@ add_filter( 'safe_publish_api_query_args', function( array $args, string $source
 
 ### `safe_publish_sanitized_post`
 
-Filter sanitized post data after it is fetched and sanitized from the external REST API.
+Filter sanitized post data after it is fetched and sanitized from the source REST API.
 
 **Parameters:**
 
@@ -115,7 +95,7 @@ add_filter( 'safe_publish_request_timeout', fn( int $timeout ): int => 30 );
 
 ### `safe_publish_request_args`
 
-Filter HTTP request arguments before any outgoing request to an external site.
+Filter HTTP request arguments before any outgoing request to a source site.
 
 **Parameters:**
 
@@ -131,6 +111,57 @@ add_filter( 'safe_publish_request_args', function( array $args, string $url ): a
     $args['headers']['X-Custom-Header'] = 'value';
     return $args;
 }, 10, 2 );
+```
+
+### `safe_publish_import_allow_author_fallback`
+
+Filter whether the import may fall back to the importing author when the source author cannot be matched on the destination site. By default, an unmatched source author aborts the import.
+
+When this filter returns `true`:
+
+- **New post + no author match** — `post_author` is set to the importing user (`get_current_user_id()`).
+- **Update + no author match** — the destination post's existing `post_author` is preserved unchanged.
+- Either case records a warning on the import History item row and surfaces it in the import results UI.
+
+Imports still abort when the source post has no resolvable author (e.g., the author was deleted on the source).
+
+Enabling the fallback relaxes the source-canonical guarantee.
+
+**Parameters:**
+
+- `bool $enabled` — whether the fallback is enabled (default `false`)
+
+**Returns:** `bool`
+
+**Example:**
+
+```php
+// Allow the importing user to take over when the source author is unmatched.
+add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
+```
+
+### `safe_publish_import_allow_orphans`
+
+Filter whether a hierarchical post may be imported as orphan when its source parent cannot be resolved on the destination site. By default, an unresolved parent aborts the import.
+
+When this filter returns `true`:
+
+- The post is imported with `post_parent = 0`.
+- A `parent_orphaned` warning is recorded on the import History item row and surfaced in the import results UI. The warning carries a `reason` of either `not_imported` (parent never imported and not in the current bulk batch) or `failed_in_batch` (parent was in the batch but did not succeed).
+
+Enabling the fallback relaxes the source-canonical guarantee for parent relationships. Review the import results UI or History for warnings whenever it's enabled.
+
+**Parameters:**
+
+- `bool $enabled` — whether the fallback is enabled (default `false`)
+
+**Returns:** `bool`
+
+**Example:**
+
+```php
+// Allow hierarchical posts to be imported as orphans when their parent is unresolved.
+add_filter( 'safe_publish_import_allow_orphans', '__return_true' );
 ```
 
 ### `safe_publish_import_kses`

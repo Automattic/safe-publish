@@ -64,16 +64,16 @@ class Content_Media_Processor {
 	}
 
 	/**
-	 * Processes and imports media from external post content.
+	 * Processes and imports media from source post content.
 	 *
 	 * Iterates over media elements (img, video, audio, source), file download
 	 * links (a), and embedded documents (embed, object) in a single pass,
-	 * importing external URLs and replacing them with local equivalents. For
+	 * importing source URLs and replacing them with local equivalents. For
 	 * links, only URLs whose path ends in a file extension allowed by WordPress
 	 * are processed; page links are left untouched. Comments, script, style,
 	 * and textarea content are natively skipped by the HTML API.
 	 *
-	 * @param string $content         Post content with external media URLs.
+	 * @param string $content         Post content with source media URLs.
 	 * @param string $source_site_url Source site URL.
 	 * @return string Processed content with imported media.
 	 */
@@ -200,7 +200,7 @@ class Content_Media_Processor {
 	}
 
 	/**
-	 * Imports an external URL from a single attribute and replaces it with the
+	 * Imports a source URL from a single attribute and replaces it with the
 	 * local equivalent.
 	 *
 	 * @param WP_HTML_Tag_Processor $processor       HTML processor positioned on the current tag.
@@ -219,7 +219,7 @@ class Content_Media_Processor {
 		}
 
 		$new_url = $this->media_importer
-			->import_external_media( $url, $source_site_url );
+			->import_source_media( $url, $source_site_url );
 
 		if ( is_string( $new_url ) ) {
 			$new_url = Media_Importer::reapply_query_parameters(
@@ -288,7 +288,7 @@ class Content_Media_Processor {
 				continue;
 			}
 
-			$new_url = $this->media_importer->import_external_media(
+			$new_url = $this->media_importer->import_source_media(
 				$url,
 				$source_site_url
 			);

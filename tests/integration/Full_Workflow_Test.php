@@ -13,7 +13,7 @@ use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\API\Export_Logger;
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Auth\Auth_Logger;
@@ -27,11 +27,9 @@ use WP_Error;
 use WP_REST_Request;
 
 /**
- * Full Workflow Integration Test Class.
- *
- * Tests the complete auth → import → history workflow end-to-end.
+ * Full Workflow Test Class.
  */
-class Full_Workflow_Integration_Test extends Integration_Test_Case {
+class Full_Workflow_Test extends Integration_Test_Case {
 
 	use Mock_Post_API_Trait;
 
@@ -91,7 +89,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		);
 
 		$this->import_service = new Post_Import_Service(
-			new External_Posts_API( new HTTP_Client() ),
+			new Source_Posts_API( new HTTP_Client() ),
 			$media_importer,
 			$content_processor,
 			$this->repository,
@@ -172,7 +170,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		$imported_post = get_post( $result['post_id'] );
 		$this->assertSame( 'Test Post', $imported_post->post_title, 'Imported post title should match fresh-content response.' );
 		$this->assertSame( 'draft', $imported_post->post_status, 'Newly imported post should be created as draft.' );
-		$this->assertSame( '4001', get_post_meta( $result['post_id'], Options::META_EXTERNAL_POST_ID, true ), 'Imported post should store the external post ID.' );
+		$this->assertSame( '4001', get_post_meta( $result['post_id'], Options::META_SOURCE_POST_ID, true ), 'Imported post should store the source post ID.' );
 		$this->assertSame( Options::META_IMPORTED_FROM_VALUE, get_post_meta( $result['post_id'], Options::META_IMPORTED_FROM, true ), 'Imported post should be tagged with the plugin identifier.' );
 
 		// STEP 3 — HISTORY: Complete the session, then assert.
@@ -195,7 +193,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that importing the same external post a second time updates the
+	 * Verifies that importing the same source post a second time updates the
 	 * existing post rather than creating a duplicate.
 	 */
 	public function test_reimporting_same_post_updates_existing_post(): void {
@@ -216,7 +214,7 @@ class Full_Workflow_Integration_Test extends Integration_Test_Case {
 		$this->assertTrue( $first_result['success'], 'First import should succeed.' );
 		$this->assertFalse( $first_result['existing'], 'First import should create a new post.' );
 
-		// ACT: Re-import the same external post ID.
+		// ACT: Re-import the same source post ID.
 		$second_result = $this->import_service->import_post( $post_data, $session_id );
 
 		// ASSERT: Second import takes the update path.

@@ -16,16 +16,16 @@ tests/
 │   ├── URLValidatorTest.php      # URL validation tests
 │   ├── VIPSafeAuthTest.php       # Authentication tests
 │   ├── HTTPClientTest.php        # HTTP client tests
-│   ├── ExternalPostsAPITest.php  # External API tests
+│   ├── SourcePostsAPITest.php    # Source API tests
 │   ├── SafePublishAPITest.php    # REST API tests
 │   └── RESTBaseTest.php          # REST base class tests
 ├── integration/                  # Integration tests (WP Test Suite)
 │   ├── bootstrap.php             # Integration test bootstrap
 │   ├── Integration_Test_Case.php # Base class for integration tests
-│   ├── External_Posts_API_Integration_Test.php  # Media import workflow tests
-│   ├── Safe_Publish_API_Integration_Test.php    # REST API integration tests
-│   ├── Import_History_Integration_Test.php      # Import history tests
-│   └── Session_Rollback_Integration_Test.php    # Rollback functionality tests
+│   ├── Source_Posts_API/                        # Source Posts API tests (media import, content processing, etc.)
+│   ├── Safe_Publish_API_Test.php                # REST API integration tests
+│   ├── Import_History_Test.php                  # Import history tests
+│   └── Session_Rollback_Test.php                # Rollback functionality tests
 ├── fixtures/                     # Test fixtures (images, etc.)
 │   └── images/                   # Real image files for testing
 │       ├── README.md             # Fixture documentation
@@ -106,7 +106,7 @@ The test suite provides comprehensive coverage for:
 
 ### Integration Tests
 
-- **External Posts API** (`External_Posts_API_Integration_Test.php`)
+- **Source Posts API** (`Source_Posts_API/`)
   - Complete media import workflow (27 tests, 112 assertions)
   - Fixture-based mocking for real image validation
   - Attachment creation and metadata storage
@@ -116,17 +116,17 @@ The test suite provides comprehensive coverage for:
   - Error handling and edge cases
   - Complex content with mixed media types
 
-- **Safe Publish API** (`Safe_Publish_API_Integration_Test.php`)
+- **Safe Publish API** (`Safe_Publish_API_Test.php`)
   - REST API endpoints in WordPress environment
   - Request/response handling
   - Authentication and permissions
 
-- **Import History** (`Import_History_Integration_Test.php`)
+- **Import History** (`Import_History_Test.php`)
   - Session tracking
   - Import logging and retrieval
   - History filtering
 
-- **Session Rollback** (`Session_Rollback_Integration_Test.php`)
+- **Session Rollback** (`Session_Rollback_Test.php`)
   - Rollback functionality
   - Post deletion and cleanup
   - Session state management
@@ -140,7 +140,7 @@ See `tests/fixtures/images/README.md` for implementation details.
 
 ### Unit Tests - API Components
 
-- **External Posts API** (`ExternalPostsAPITest.php`)
+- **Source Posts API** (`SourcePostsAPITest.php`)
   - Post fetching and validation
   - Post type fetching
   - Connection testing

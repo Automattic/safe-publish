@@ -14,13 +14,12 @@ use WP_REST_Server;
 use WP_UnitTestCase;
 
 /**
- * Verifies that in "bidirectional" sync mode all send and receive functionality
- * is active simultaneously.
+ * Sync Bidirectional Test Class.
  *
- * These tests are run exclusively via phpunit-integration-sync-bidirectional.xml,
+ * These tests run exclusively via phpunit-integration-sync-bidirectional.xml,
  * which boots the plugin with WP_TEST_SYNC_MODE=bidirectional.
  */
-class Sync_Bidirectional_Integration_Test extends WP_UnitTestCase {
+class Sync_Bidirectional_Test extends WP_UnitTestCase {
 
 	/**
 	 * REST server instance.

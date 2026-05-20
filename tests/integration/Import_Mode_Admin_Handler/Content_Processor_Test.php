@@ -18,9 +18,7 @@ use Safe_Publish\Tests\Integration\Mock_Media_HTTP_Trait;
 use WP_Error;
 
 /**
- * Content Processor Integration Test Class.
- *
- * Tests the admin Content_Processor's HTML transformation pipeline.
+ * Content Processor Test Class.
  */
 class Content_Processor_Test extends Integration_Test_Case {
 
@@ -155,7 +153,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * Verifies that absolute source-site URLs are replaced with the current
 	 * site URL.
 	 *
-	 * Links pointing to the external source site should be rewritten to point
+	 * Links pointing to the source site should be rewritten to point
 	 * to the current site so that imported content links stay internal.
 	 */
 	public function test_process_content_replaces_source_site_urls_with_current_site_url(): void {
@@ -218,7 +216,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * Self-closing tags, whitespace, entities, and SVG attributes must survive
 	 * the replacement pass unchanged.
 	 */
-	public function test_replace_external_urls_preserves_markup(): void {
+	public function test_replace_source_urls_preserves_markup(): void {
 		// ARRANGE: Content with markup that DOMDocument would alter,
 		// plus a source-site link to trigger replacement.
 		$source_site_url = 'https://source.example.com';
@@ -228,8 +226,8 @@ class Content_Processor_Test extends Integration_Test_Case {
 			. '<br/>'
 			. '<a href="https://source.example.com/page">Link</a>';
 
-		// ACT: Call replace_external_urls() directly.
-		$processed = $this->processor->replace_external_urls(
+		// ACT: Call replace_source_urls() directly.
+		$processed = $this->processor->replace_source_urls(
 			$content,
 			$source_site_url
 		);
@@ -265,14 +263,14 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * Verifies that legacy http:// URLs are replaced when the source site
 	 * uses https://.
 	 */
-	public function test_replace_external_urls_replaces_http_variant(): void {
+	public function test_replace_source_urls_replaces_http_variant(): void {
 		// ARRANGE: Source site is HTTPS, but content has a legacy HTTP link.
 		$source_site_url = 'https://source.example.com';
 		$current_url     = get_site_url();
 		$content         = '<a href="http://source.example.com/old-page">Old link</a>';
 
-		// ACT: Call replace_external_urls() directly.
-		$processed = $this->processor->replace_external_urls(
+		// ACT: Call replace_source_urls() directly.
+		$processed = $this->processor->replace_source_urls(
 			$content,
 			$source_site_url
 		);
@@ -294,15 +292,15 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * Verifies that a domain that starts with the source domain but continues
 	 * with more characters is not replaced.
 	 */
-	public function test_replace_external_urls_does_not_replace_longer_domain(): void {
+	public function test_replace_source_urls_does_not_replace_longer_domain(): void {
 		// ARRANGE: Content with a URL to a longer domain that starts with the
 		// source domain string.
 		$source_site_url = 'https://source.example.com';
 		$longer_url      = 'https://source.example.company.com/page';
 		$content         = '<a href="' . $longer_url . '">Link</a>';
 
-		// ACT: Call replace_external_urls() directly.
-		$processed = $this->processor->replace_external_urls(
+		// ACT: Call replace_source_urls() directly.
+		$processed = $this->processor->replace_source_urls(
 			$content,
 			$source_site_url
 		);
@@ -321,11 +319,11 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 *
 	 * The admin Content_Processor detects block markers and routes to
 	 * process_gutenberg_blocks() instead of the classic HTML processor.
-	 * When no external media is present the block structure must be returned
+	 * When no source media is present the block structure must be returned
 	 * unchanged.
 	 */
 	public function test_process_gutenberg_content_preserves_block_structure(): void {
-		// ARRANGE: Minimal Gutenberg block content with no external media.
+		// ARRANGE: Minimal Gutenberg block content with no source media.
 		$source_site_url = 'https://source.example.com';
 		$content         = '<!-- wp:paragraph --><p>Hello Gutenberg.</p><!-- /wp:paragraph -->';
 
@@ -397,15 +395,15 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a Gutenberg core/image block has its external URL imported
+	 * Verifies that a Gutenberg core/image block has its source URL imported
 	 * and its attrs updated with the local URL and attachment ID.
 	 *
 	 * This exercises process_image_block() through the full Content_Processor
-	 * pipeline, confirming that import_external_media_as_attachment() is used
+	 * pipeline, confirming that import_source_media_as_attachment() is used
 	 * and the block attrs are correctly rewritten.
 	 */
 	public function test_process_gutenberg_image_block_imports_media_and_updates_attrs(): void {
-		// ARRANGE: A core/image block referencing an external image on the source site.
+		// ARRANGE: A core/image block referencing a source-site image.
 		$source_site_url = 'https://source.example.com';
 		$external_url    = 'https://source.example.com/photo.jpg';
 		$content         = '<!-- wp:image {"url":"' . $external_url . '"} -->'
@@ -420,7 +418,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		// ASSERT: Exactly one attachment was created.
 		$this->assertSame( $attachments_before + 1, $this->get_attachment_count(), 'Should create exactly one attachment' );
 
-		// ASSERT: The external URL no longer appears anywhere in the output.
+		// ASSERT: The source URL no longer appears anywhere in the output.
 		$this->assertStringNotContainsString( $external_url, $processed, 'External URL should be replaced' );
 
 		// ASSERT: The local upload URL appears in the output.
@@ -429,7 +427,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		// ASSERT: No failure was recorded — the import succeeded.
 		$this->assertSame( array(), $this->processor->get_failed_media(), 'No media failures should be recorded' );
 
-		// ASSERT: The block attrs contain a local upload URL (not the external one).
+		// ASSERT: The block attrs contain a local upload URL (not the source one).
 		$this->assertMatchesRegularExpression(
 			'/"url":"[^"]*wp-content\/uploads[^"]*"/',
 			$processed,
@@ -470,7 +468,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'Should create two attachments'
 		);
 
-		// ASSERT: Neither external URL appears in the output.
+		// ASSERT: Neither source URL appears in the output.
 		$this->assertStringNotContainsString(
 			$thumbnail_url,
 			$processed,
@@ -608,7 +606,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		$this->assertStringNotContainsString(
 			$broken_url,
 			$processed,
-			'Failing src URL host should still be rewritten by replace_external_urls'
+			'Failing src URL host should still be rewritten by replace_source_urls'
 		);
 
 		// ASSERT: The failing src URL is recorded as a failure.
@@ -1033,7 +1031,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'Custom block attrs media should be sideloaded as an attachment'
 		);
 
-		// ASSERT: The external URL no longer appears anywhere in the output.
+		// ASSERT: The source URL no longer appears anywhere in the output.
 		$this->assertStringNotContainsString(
 			$external_url,
 			$processed,
@@ -1137,7 +1135,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * unchanged and not recorded as a failure.
 	 *
 	 * The replace_urls_in_attrs() method must skip URLs whose domain does not
-	 * match the source site (import_external_media_as_attachment returns null),
+	 * match the source site (import_source_media_as_attachment returns null),
 	 * without treating this as a sideload failure.
 	 */
 	public function test_process_custom_block_skips_third_party_url_in_attrs(): void {

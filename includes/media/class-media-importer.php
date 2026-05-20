@@ -61,15 +61,15 @@ class Media_Importer {
 	}
 
 	/**
-	 * Imports external media file to WordPress media library.
+	 * Imports source media file to WordPress media library.
 	 *
-	 * @param string $media_url       External media URL.
+	 * @param string $media_url       Source media URL.
 	 * @param string $source_site_url Source site URL for resolving relative URLs.
 	 * @return string|false|null New media URL on success, false on failure,
 	 *                           null when the URL belongs to a third-party
 	 *                           domain and should be left unchanged.
 	 */
-	public function import_external_media(
+	public function import_source_media(
 		string $media_url,
 		string $source_site_url
 	): string|false|null {
@@ -89,7 +89,7 @@ class Media_Importer {
 			return null;
 		}
 
-		// Strip query parameters for consistency with import_external_media_as_attachment().
+		// Strip query parameters for consistency with import_source_media_as_attachment().
 		$media_url = strtok( $media_url, '?' );
 
 		// Check if we already imported this media.
@@ -128,14 +128,14 @@ class Media_Importer {
 		$attachment_id = media_handle_sideload( $file_array, 0 );
 		remove_filter( 'big_image_size_threshold', '__return_false' );
 
-		// Clean up temp file - VIP-compatible cleanup.
 		$this->http_client->cleanup_temp_file( $temp_file );
 
 		if ( is_wp_error( $attachment_id ) ) {
 			$this->logger->media_sideload_failed(
 				$media_url,
 				$source_site_url,
-				$attachment_id->get_error_message()
+				$attachment_id->get_error_message(),
+				'inline'
 			);
 			return false;
 		}
@@ -150,15 +150,15 @@ class Media_Importer {
 	}
 
 	/**
-	 * Imports external media file to media library and returns attachment ID.
+	 * Imports source media file to media library and returns attachment ID.
 	 *
-	 * @param string $media_url       External media URL.
+	 * @param string $media_url       Source media URL.
 	 * @param string $source_site_url Source site URL for resolving relative URLs.
 	 * @return int|false|null Attachment ID on success, false on failure,
 	 *                        null when the URL belongs to a third-party
 	 *                        domain and should be left unchanged.
 	 */
-	public function import_external_media_as_attachment(
+	public function import_source_media_as_attachment(
 		string $media_url,
 		string $source_site_url
 	): int|false|null {
@@ -199,8 +199,7 @@ class Media_Importer {
 		// Also add a filter specifically for media_handle_sideload to bypass restrictions.
 		add_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ), 10, 3 );
 
-		// Download file using VIP-compatible method.
-		$temp_file = $this->http_client->download_external_file( $media_url );
+		$temp_file = $this->http_client->download_file( $media_url );
 
 		if ( is_wp_error( $temp_file ) ) {
 			$this->logger->media_download_failed(
@@ -294,10 +293,11 @@ class Media_Importer {
 		remove_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ) );
 
 		if ( is_wp_error( $attachment_id ) ) {
-			$this->logger->media_import_failed(
+			$this->logger->media_sideload_failed(
 				$media_url,
 				$source_site_url,
-				$attachment_id->get_error_message()
+				$attachment_id->get_error_message(),
+				'attachment'
 			);
 			return false;
 		}
@@ -346,9 +346,9 @@ class Media_Importer {
 	}
 
 	/**
-	 * Imports featured image from external post.
+	 * Imports featured image from source post.
 	 *
-	 * @param int    $featured_media_id External featured media ID.
+	 * @param int    $featured_media_id Source featured media ID.
 	 * @param string $source_site_url   Source site URL.
 	 * @param array  $auth_credentials  Optional. Authentication credentials. Default empty array.
 	 * @return int|false Attachment ID on success, false on failure.
@@ -386,7 +386,7 @@ class Media_Importer {
 		$media_data    = json_decode( $response_body, true );
 
 		if ( ! isset( $media_data['source_url'] ) || '' === $media_data['source_url'] ) {
-			$this->logger->featured_image_missing_source(
+			$this->logger->featured_image_source_missing(
 				$featured_media_id,
 				$source_site_url
 			);
@@ -395,7 +395,7 @@ class Media_Importer {
 		}
 
 		// Import the media and get the attachment ID.
-		$attachment_id = $this->import_external_media_as_attachment( $media_data['source_url'], $source_site_url );
+		$attachment_id = $this->import_source_media_as_attachment( $media_data['source_url'], $source_site_url );
 
 		if ( $attachment_id ) {
 			// Inline content imports don't set META_IMPORTED_FROM; setting it
@@ -499,7 +499,7 @@ class Media_Importer {
 	/**
 	 * Gets attachment ID by original URL.
 	 *
-	 * @param string $original_url Original external URL.
+	 * @param string $original_url Original source URL.
 	 * @return int|false Attachment ID on success, false on failure.
 	 */
 	private function get_attachment_by_url( string $original_url ): int|false {
@@ -511,7 +511,8 @@ class Media_Importer {
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'       => $original_url,
 				'posts_per_page'   => 1,
-				'suppress_filters' => false, // Enable caching for VIP compatibility.
+				// Don't suppress posts_* filters; required for cache plugins.
+				'suppress_filters' => false,
 			)
 		);
 
@@ -519,9 +520,9 @@ class Media_Importer {
 	}
 
 	/**
-	 * Gets attachment ID by external featured media ID.
+	 * Gets attachment ID by source featured media ID.
 	 *
-	 * @param int    $featured_media_id External featured media ID.
+	 * @param int    $featured_media_id Source featured media ID.
 	 * @param string $source_site_url   Source site URL.
 	 * @return int|false Attachment ID on success, false on failure.
 	 */
@@ -545,7 +546,8 @@ class Media_Importer {
 					),
 				),
 				'posts_per_page'   => 1,
-				'suppress_filters' => false, // Enable caching for VIP compatibility.
+				// Don't suppress posts_* filters; required for cache plugins.
+				'suppress_filters' => false,
 			)
 		);
 

@@ -6,7 +6,7 @@
 
 - [Quickstart](quickstart.md) - Get started with the plugin in minutes
 - [Core Concepts](concepts/index.md)
-  - [Authentication](concepts/authentication.md) - Connecting to external WordPress sites
+  - [Authentication](concepts/authentication.md) - Connecting to source WordPress sites
   - [Content Validation](concepts/validation.md) - How content is validated before import
   - [Import Process](concepts/import-process.md) - Understanding the content import workflow
   - [History](concepts/history.md) - Tracking and managing imported content

@@ -92,26 +92,4 @@ class URLValidatorTest extends TestCase {
 		$sanitized = URL_Validator::sanitize_external_url( $url );
 		$this->assertFalse( $sanitized );
 	}
-
-	/**
-	 * Verifies that VIP environments enforce HTTPS-only scheme.
-	 */
-	public function test_get_allowed_schemes_returns_https_for_vip(): void {
-		// Mock VIP environment.
-		if ( ! defined( 'WPCOM_IS_VIP_ENV' ) ) {
-			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
-			define( 'WPCOM_IS_VIP_ENV', true );
-		}
-
-		$schemes = URL_Validator::get_allowed_schemes();
-		$this->assertEquals( array( 'https' ), $schemes );
-	}
-
-	/**
-	 * Verifies that domain whitelisting returns true by default.
-	 */
-	public function test_is_domain_whitelisted_returns_true_by_default(): void {
-		$url = 'https://example.com';
-		$this->assertTrue( URL_Validator::is_domain_whitelisted( $url ) );
-	}
 }

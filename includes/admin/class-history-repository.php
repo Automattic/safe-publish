@@ -88,22 +88,24 @@ final class History_Repository {
 	 * Logs an import action.
 	 *
 	 * @param int         $session_id       Session ID.
-	 * @param int|null    $external_post_id External post ID, or null if not provided.
+	 * @param int|null    $source_post_id   Source post ID, or null if not provided.
 	 * @param string      $title            Post title.
 	 * @param string      $status           Import status (success, error, updated).
 	 * @param int|null    $post_id          WordPress post ID; null for error status.
 	 * @param string|null $error            Error message; null for success/updated.
 	 * @param array       $changes          Changes made during import.
+	 * @param array       $warnings         Non-fatal warnings raised during import.
 	 * @return int|WP_Error Item ID or error.
 	 */
 	public function log_import_action(
 		int $session_id,
-		?int $external_post_id,
+		?int $source_post_id,
 		string $title,
 		string $status,
 		?int $post_id = null,
 		?string $error = null,
-		array $changes = array()
+		array $changes = array(),
+		array $warnings = array()
 	): int|WP_Error {
 		global $wpdb;
 
@@ -122,22 +124,33 @@ final class History_Repository {
 			}
 		}
 
+		$encoded_warnings = null;
+
+		if ( count( $warnings ) > 0 ) {
+			$json = wp_json_encode( $warnings );
+
+			if ( false !== $json ) {
+				$encoded_warnings = $json;
+			}
+		}
+
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$inserted = $wpdb->insert(
 			Import_Items_Table::table_name(),
 			array(
 				'session_id'           => $session_id,
 				'title'                => $title,
-				'external_post_id'     => $external_post_id,
+				'source_post_id'       => $source_post_id,
 				'status'               => $status,
 				'post_id'              => $post_id,
 				'error_message'        => $error,
 				'content_changes'      => $encoded_changes,
+				'warnings'             => $encoded_warnings,
 				'has_previous_content' => $has_previous_content,
 				'rolled_back'          => 0,
 				'import_date_gmt'      => current_time( 'mysql', true ),
 			),
-			array( '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%d', '%d', '%s' )
+			array( '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%s', '%d', '%d', '%s' )
 		);
 
 		if ( false === $inserted ) {
@@ -263,7 +276,7 @@ final class History_Repository {
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				'SELECT id, session_id, title, external_post_id, status, post_id,'
+				'SELECT id, session_id, title, source_post_id, status, post_id,'
 					. ' error_message, has_previous_content, rolled_back,'
 					. " import_date_gmt FROM `{$table}` WHERE session_id = %d"
 					. ' ORDER BY id ASC',
@@ -361,10 +374,33 @@ final class History_Repository {
 	/**
 	 * Marks a session as rolled back and emits an audit log event.
 	 *
+	 * Bulk-flips the per-item `rolled_back` flag on the success/updated items
+	 * the session-level rollback acted on so the items table stays consistent
+	 * with the item-level rollback path.
+	 *
 	 * @param int $session_id Session ID.
 	 */
 	public function mark_session_rolled_back( int $session_id ): void {
 		global $wpdb;
+
+		$items_table = Import_Items_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$items_updated = $wpdb->query(
+			$wpdb->prepare(
+				"UPDATE `{$items_table}` SET rolled_back = 1"
+					. " WHERE session_id = %d AND status IN ( 'success', 'updated' )",
+				$session_id
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		// Bail before touching the session row so a retry can heal the
+		// partial rollback.
+		if ( false === $items_updated ) {
+			$this->logger->session_rollback_failed( $session_id, $wpdb->last_error );
+			return;
+		}
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$updated = $wpdb->update(
@@ -381,7 +417,7 @@ final class History_Repository {
 		}
 
 		if ( 0 === $updated ) {
-			$this->logger->session_rollback_noop( $session_id );
+			$this->logger->session_already_rolled_back( $session_id );
 		} else {
 			$this->logger->session_rolled_back( $session_id );
 		}
@@ -430,7 +466,7 @@ final class History_Repository {
 		}
 
 		if ( 0 === $updated ) {
-			$this->logger->item_rollback_noop( $item_id, $session_id, $post_id );
+			$this->logger->item_already_rolled_back( $item_id, $session_id, $post_id );
 		} else {
 			$this->logger->item_rolled_back( $item_id, $session_id, $post_id );
 		}

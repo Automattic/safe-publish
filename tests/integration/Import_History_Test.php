@@ -14,11 +14,9 @@ use Safe_Publish\Admin\Session_Formatter;
 use Safe_Publish\Utils\Imports_Table;
 
 /**
- * Import History Integration Test Class.
- *
- * Tests the complete history tracking workflow end-to-end.
+ * Import History Test Class.
  */
-class Import_History_Integration_Test extends Integration_Test_Case {
+class Import_History_Test extends Integration_Test_Case {
 
 	/**
 	 * History repository instance.
@@ -96,21 +94,21 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 
 		// ASSERT: Item columns were stored correctly.
 		$this->assertSame( 'success', $item['status'] );
-		$this->assertSame( 123, (int) $item['external_post_id'] );
+		$this->assertSame( 123, (int) $item['source_post_id'] );
 		$this->assertSame( $session_id, (int) $item['session_id'] );
 	}
 
 	/**
-	 * Verifies that a null external_post_id round-trips through storage and the
+	 * Verifies that a null source_post_id round-trips through storage and the
 	 * formatter. Source data sometimes lacks a usable id (malformed payload
 	 * or unexpected exception); the schema and API surface must preserve
 	 * that null instead of forcing a 0 sentinel.
 	 */
-	public function test_null_external_post_id_round_trips_through_formatter(): void {
+	public function test_null_source_post_id_round_trips_through_formatter(): void {
 		// ARRANGE: Create session.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
 
-		// ACT: Log an error item with null external_post_id (e.g. from
+		// ACT: Log an error item with null source_post_id (e.g. from
 		// build_exception_result when the source payload had no id).
 		$item_id = $this->repository->log_import_action(
 			$session_id,
@@ -122,16 +120,16 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 			array()
 		);
 
-		// ASSERT: Item was created and external_post_id stored as null.
+		// ASSERT: Item was created and source_post_id stored as null.
 		$this->assertIsInt( $item_id );
 
 		$item = $this->repository->get_item( $item_id );
 		$this->assertIsArray( $item );
-		$this->assertNull( $item['external_post_id'] );
+		$this->assertNull( $item['source_post_id'] );
 
-		// ASSERT: Formatter exposes external_post_id as null at the API boundary.
+		// ASSERT: Formatter exposes source_post_id as null at the API boundary.
 		$formatted = $this->formatter->format_item( $item );
-		$this->assertNull( $formatted['external_post_id'] );
+		$this->assertNull( $formatted['source_post_id'] );
 	}
 
 	/**
@@ -433,6 +431,72 @@ class Import_History_Integration_Test extends Integration_Test_Case {
 		$this->assertSame( 0, (int) $by_url['https://c.example.com']['successful'] );
 		$this->assertSame( 0, (int) $by_url['https://c.example.com']['updated'] );
 		$this->assertSame( 0, (int) $by_url['https://c.example.com']['failed'] );
+	}
+
+	/**
+	 * Verifies that format_items() surfaces rolled-back items so the session
+	 * details modal can render them with the right per-item state.
+	 *
+	 * Error items remain ineligible for rollback and must not be flagged.
+	 */
+	public function test_format_items_returns_rolled_back_session_items(): void {
+		// ARRANGE: Real WP posts back the success/updated items so can_rollback
+		// would otherwise return true; the only thing keeping it false is the
+		// is_rolled_back flag.
+		$success_post = $this->factory()->post->create();
+		$updated_post = $this->factory()->post->create();
+
+		$session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+
+		$success_id = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Success Post',
+			'success',
+			$success_post
+		);
+		$updated_id = $this->repository->log_import_action(
+			$session_id,
+			2,
+			'Updated Post',
+			'updated',
+			$updated_post
+		);
+		$error_id   = $this->repository->log_import_action(
+			$session_id,
+			3,
+			'Failed Post',
+			'error',
+			null,
+			'Import failed'
+		);
+
+		$this->repository->complete_session( $session_id );
+		$this->repository->mark_session_rolled_back( $session_id );
+
+		// ACT: Format the items as the AJAX handler would.
+		$items     = $this->repository->get_session_items( $session_id );
+		$formatted = $this->formatter->format_items( $items );
+
+		// ASSERT: All items are returned.
+		$this->assertCount( 3, $formatted );
+
+		$by_id = array();
+		foreach ( $formatted as $item ) {
+			$by_id[ $item['id'] ] = $item;
+		}
+
+		// ASSERT: Success/updated items are flagged; error item is not.
+		$this->assertTrue( $by_id[ $success_id ]['is_rolled_back'] );
+		$this->assertTrue( $by_id[ $updated_id ]['is_rolled_back'] );
+		$this->assertFalse( $by_id[ $error_id ]['is_rolled_back'] );
+
+		// ASSERT: Rolled-back items cannot be rolled back again.
+		$this->assertFalse( $by_id[ $success_id ]['can_rollback'] );
+		$this->assertFalse( $by_id[ $updated_id ]['can_rollback'] );
 	}
 
 	/**

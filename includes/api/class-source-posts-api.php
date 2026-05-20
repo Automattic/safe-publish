@@ -1,6 +1,6 @@
 <?php
 /**
- * External Posts API class
+ * Source Posts API class
  *
  * @package Safe_Publish
  */
@@ -23,9 +23,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * External Posts API Class.
+ * Source Posts API Class.
  */
-class External_Posts_API {
+class Source_Posts_API {
 
 	/**
 	 * HTTP Client instance.
@@ -42,7 +42,7 @@ class External_Posts_API {
 	private Content_Logger $logger;
 
 	/**
-	 * Constructs the External_Posts_API instance.
+	 * Constructs the Source_Posts_API instance.
 	 *
 	 * @param HTTP_Client|null $http_client Optional. HTTP client for making requests.
 	 */
@@ -87,7 +87,7 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Fetches posts from external site.
+	 * Fetches posts from source site.
 	 *
 	 * @param string $source_site_url  Source site URL.
 	 * @param int    $number_of_posts  Optional. Number of posts to fetch. Default 10.
@@ -141,7 +141,6 @@ class External_Posts_API {
 			'orderby'  => 'modified',
 			'order'    => 'desc',
 			'per_page' => min( $number_of_posts, 100 ), // Max 100 per request.
-			// '_fields' => 'id,link,title,modified,featured_media,content,excerpt,slug,comment_status,ping_status,menu_order', // Fetch all needed fields.
 			'_embed'   => '1',
 		);
 
@@ -190,7 +189,7 @@ class External_Posts_API {
 		if ( ! is_array( $posts ) ) {
 			return new WP_Error(
 				'invalid_response',
-				__( 'Invalid response from external API.', 'safe-publish' ),
+				__( 'Invalid response from source API.', 'safe-publish' ),
 				array( 'response_body' => $body )
 			);
 		}
@@ -329,20 +328,20 @@ class External_Posts_API {
 	}
 
 	/**
-	 * Fetches fresh post content from external site.
+	 * Fetches fresh post content from source site.
 	 *
 	 * `content`, `meta`, and `terms` are returned unsanitized. `content` must
 	 * pass through the block processor first, and `meta`/`terms` require
 	 * type-aware sanitization in Meta_Terms_Manager.
 	 *
-	 * @param int    $external_post_id  External post ID.
+	 * @param int    $source_post_id    Source post ID.
 	 * @param string $source_site_url   Source site URL.
 	 * @param array  $auth_credentials  Optional. Authentication credentials. Default empty array.
 	 * @param string $post_type         Optional. Post type slug or REST endpoint. Default 'posts'.
 	 * @return array|false Post data array on success, false on failure.
 	 */
 	public function fetch_fresh_post_content(
-		int $external_post_id,
+		int $source_post_id,
 		string $source_site_url,
 		array $auth_credentials = array(),
 		string $post_type = 'posts'
@@ -354,15 +353,10 @@ class External_Posts_API {
 
 		// Build API URL for single post.
 		$endpoint     = Post_Type_Map::to_rest_endpoint( $post_type );
-		$api_endpoint = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/' . $endpoint . '/' . $external_post_id;
+		$api_endpoint = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/' . $endpoint . '/' . $source_post_id;
 
 		$query_args = array(
 			'_embed' => '1',
-			/**
-			 * TODO: Check if we want/need this.
-			 *
-			 * '_fields' => 'id,link,title,modified,featured_media,content,excerpt,tags,categories,meta,slug,comment_status,ping_status,menu_order,password', // Fetch all needed fields
-			 */
 		);
 
 		// Edit context provides raw field values (title, content, excerpt)
@@ -378,7 +372,7 @@ class External_Posts_API {
 
 		if ( is_wp_error( $response ) ) {
 			$this->logger->content_fetch_failed(
-				$external_post_id,
+				$source_post_id,
 				$source_site_url,
 				$response->get_error_message()
 			);
@@ -391,7 +385,7 @@ class External_Posts_API {
 
 		if ( ! is_array( $data ) || array() === $data ) {
 			$this->logger->content_fetch_invalid_response(
-				$external_post_id,
+				$source_post_id,
 				$source_site_url
 			);
 
@@ -404,8 +398,8 @@ class External_Posts_API {
 			! isset( $data['content']['raw'] ) ||
 			! isset( $data['excerpt']['raw'] )
 		) {
-			$this->logger->content_fetch_raw_unavailable(
-				$external_post_id,
+			$this->logger->content_fetch_raw_fields_missing(
+				$source_post_id,
 				$source_site_url
 			);
 
@@ -422,6 +416,7 @@ class External_Posts_API {
 		$post_data['ping_status']    = sanitize_text_field( $data['ping_status'] ?? '' );
 		$post_data['menu_order']     = absint( $data['menu_order'] ?? 0 );
 		$post_data['password']       = sanitize_text_field( $data['password'] ?? '' );
+		$post_data['parent']         = absint( $data['parent'] ?? 0 );
 
 		if ( isset( $data['link'] ) ) {
 			$post_data['link'] = esc_url_raw( $data['link'] );
@@ -436,7 +431,44 @@ class External_Posts_API {
 
 		$post_data['terms'] = self::extract_embedded_terms( $data );
 
+		// `null` distinguishes "source did not provide the field" (older plugin
+		// version on the source) from "field present but author cannot be
+		// resolved on the source" (empty strings).
+		$post_data['source_author'] = self::extract_source_author( $data );
+
 		return $post_data;
+	}
+
+	/**
+	 * Extracts the safe_publish_author payload from a REST response.
+	 *
+	 * @param array $data Decoded REST response for a single post.
+	 * @return array{email: string, login: string, display_name: string}|null
+	 *         Sanitized author payload, or null when the source did not
+	 *         include the field.
+	 */
+	private static function extract_source_author( array $data ): ?array {
+		if ( ! array_key_exists( 'safe_publish_author', $data ) ) {
+			return null;
+		}
+
+		$author = $data['safe_publish_author'];
+
+		if ( ! is_array( $author ) ) {
+			return null;
+		}
+
+		return array(
+			'email'        => isset( $author['email'] )
+				? sanitize_email( (string) $author['email'] )
+				: '',
+			'login'        => isset( $author['login'] )
+				? sanitize_user( (string) $author['login'], true )
+				: '',
+			'display_name' => isset( $author['display_name'] )
+				? sanitize_text_field( (string) $author['display_name'] )
+				: '',
+		);
 	}
 
 	/**
@@ -447,12 +479,12 @@ class External_Posts_API {
 	 * the underlying false return into a WP_Error so callers can abort
 	 * the import on a uniform error type.
 	 *
-	 * @param int    $external_post_id External post ID to fetch.
-	 * @param string $post_type        Post type slug or REST endpoint.
+	 * @param int    $source_post_id Source post ID to fetch.
+	 * @param string $post_type      Post type slug or REST endpoint.
 	 * @return array|WP_Error Fresh post data, or an error on failure.
 	 */
 	public function fetch_fresh_post(
-		int $external_post_id,
+		int $source_post_id,
 		string $post_type
 	): array|WP_Error {
 		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
@@ -467,7 +499,7 @@ class External_Posts_API {
 		$auth_credentials = Auth_Credential_Provider::get_credentials();
 
 		$fresh_data = $this->fetch_fresh_post_content(
-			$external_post_id,
+			$source_post_id,
 			$source_site_url,
 			$auth_credentials,
 			$post_type

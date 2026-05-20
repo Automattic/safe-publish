@@ -1,21 +1,18 @@
 <?php
 /**
- * Content Processing Tests for External Posts API
+ * Content Processing Tests for Source Posts API
  *
  * @package Safe_Publish
  */
 
 declare(strict_types=1);
 
-namespace Safe_Publish\Tests\Integration\External_Posts_API;
+namespace Safe_Publish\Tests\Integration\Source_Posts_API;
 
 /**
- * Tests HTML content transformations and processing.
- *
- * Verifies that content is correctly transformed, URLs are converted, and
- * WordPress-specific classes and attributes are applied.
+ * Content Processing Test Class.
  */
-class Content_Processing_Test extends External_Posts_API_Test_Base {
+class Content_Processing_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Data provider for responsive image structures.

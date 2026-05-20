@@ -31,10 +31,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Diff_Renderer {
 
 	/**
-	 * Renders a comprehensive diff preview for an external post.
+	 * Renders a comprehensive diff preview for a source post.
 	 *
 	 * @param WP_REST_Request $request      REST request object.
-	 * @param callable        $make_request Callback to make external API requests.
+	 * @param callable        $make_request Callback to make source API requests.
 	 * @param array           $credentials  Authentication credentials.
 	 *
 	 * @return array|WP_Error Array on success, WP_Error if post not found.
@@ -44,34 +44,34 @@ final class Diff_Renderer {
 		callable $make_request,
 		array $credentials
 	): array|WP_Error {
-		$external_post_id = (int) $request->get_param( 'postId' );
-		$post_type        = (string) $request->get_param( 'postType' );
-		$mode             = (string) $request->get_param( 'mode' );
-		$cleanup          = (bool) $request->get_param( 'cleanup' );
-		$source_site_url  = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$source_post_id  = (int) $request->get_param( 'postId' );
+		$post_type       = (string) $request->get_param( 'postType' );
+		$mode            = (string) $request->get_param( 'mode' );
+		$cleanup         = (bool) $request->get_param( 'cleanup' );
+		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
 		$mapped_post_type = Post_Type_Map::to_wp_slug( $post_type );
 
-		// Find local post by external post ID.
-		$local_post = $this->find_local_post( $external_post_id, $mapped_post_type );
+		// Find local post by source post ID.
+		$local_post = $this->find_local_post( $source_post_id, $mapped_post_type );
 		if ( is_wp_error( $local_post ) ) {
 			return $local_post;
 		}
 
-		// Fetch external post data.
-		$external_data = $this->fetch_external_post(
+		// Fetch source post data.
+		$source_data = $this->fetch_source_post(
 			$source_site_url,
 			$post_type,
-			$external_post_id,
+			$source_post_id,
 			$make_request,
 			$credentials
 		);
-		if ( is_wp_error( $external_data ) ) {
-			return $external_data;
+		if ( is_wp_error( $source_data ) ) {
+			return $source_data;
 		}
 
-		// Extract incoming data from external response.
-		$incoming = $this->extract_incoming_data( $external_data );
+		// Extract incoming data from source response.
+		$incoming = $this->extract_incoming_data( $source_data );
 
 		if ( is_wp_error( $incoming ) ) {
 			return $incoming;
@@ -100,7 +100,7 @@ final class Diff_Renderer {
 		$featured_media_html = $this->generate_featured_media_diff(
 			$local_post->ID,
 			$source_site_url,
-			$external_data,
+			$source_data,
 			$make_request,
 			$credentials
 		);
@@ -136,22 +136,22 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Finds local post by external post ID.
+	 * Finds local post by source post ID.
 	 *
-	 * @param int    $external_post_id External post ID to search for.
-	 * @param string $post_type        Post type to search.
+	 * @param int    $source_post_id Source post ID to search for.
+	 * @param string $post_type      Post type to search.
 	 *
 	 * @return WP_Post|WP_Error Post object on success, WP_Error if not found.
 	 */
 	public function find_local_post(
-		int $external_post_id,
+		int $source_post_id,
 		string $post_type
 	): WP_Post|WP_Error {
 		$query = new WP_Query(
 			array(
-				'meta_key'       => Options::META_EXTERNAL_POST_ID,
+				'meta_key'       => Options::META_SOURCE_POST_ID,
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-				'meta_value'     => $external_post_id,
+				'meta_value'     => $source_post_id,
 				'post_type'      => $post_type,
 				'post_status'    => array( 'draft', 'publish', 'pending' ),
 				'posts_per_page' => 1,
@@ -181,37 +181,37 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Fetches external post data via API.
+	 * Fetches source post data via API.
 	 *
 	 * @param string   $source_site_url Source site URL.
 	 * @param string   $post_type       Post type to fetch.
-	 * @param int      $post_id         External post ID.
+	 * @param int      $post_id         Source post ID.
 	 * @param callable $make_request    Function to make HTTP requests.
 	 * @param array    $credentials     Authentication credentials.
 	 *
 	 * @return array|WP_Error Post data on success, WP_Error on failure.
 	 */
-	private function fetch_external_post(
+	private function fetch_source_post(
 		string $source_site_url,
 		string $post_type,
 		int $post_id,
 		callable $make_request,
 		array $credentials
 	): array|WP_Error {
-		$endpoint         = Post_Type_Map::to_rest_endpoint( $post_type );
-		$api_base         = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/' . $endpoint . '/' . $post_id;
-		$query_args       = array(
+		$endpoint       = Post_Type_Map::to_rest_endpoint( $post_type );
+		$api_base       = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/' . $endpoint . '/' . $post_id;
+		$query_args     = array(
 			'context' => 'edit',
 			'_embed'  => '1',
 		);
-		$external_api_url = add_query_arg( $query_args, $api_base );
+		$source_api_url = add_query_arg( $query_args, $api_base );
 
-		$response = $make_request( $external_api_url, $credentials );
+		$response = $make_request( $source_api_url, $credentials );
 
 		if ( is_wp_error( $response ) ) {
 			return new WP_Error(
-				'external_fetch_failed',
-				__( 'Failed to fetch external post.', 'safe-publish' ),
+				'source_fetch_failed',
+				__( 'Failed to fetch source post.', 'safe-publish' ),
 				array( 'status' => 500 )
 			);
 		}
@@ -222,7 +222,7 @@ final class Diff_Renderer {
 		if ( ! is_array( $data ) ) {
 			return new WP_Error(
 				'invalid_response',
-				__( 'Invalid response from external site.', 'safe-publish' ),
+				__( 'Invalid response from source site.', 'safe-publish' ),
 				array( 'status' => 500 )
 			);
 		}
@@ -231,9 +231,9 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Extracts incoming data from external API response.
+	 * Extracts incoming data from source API response.
 	 *
-	 * @param array $data External post data.
+	 * @param array $data Source post data.
 	 *
 	 * @return array|WP_Error Structured incoming data, or error when
 	 *                        raw fields are unavailable.
@@ -262,7 +262,7 @@ final class Diff_Renderer {
 			'terms'   => array(),
 		);
 
-		$incoming['terms'] = External_Posts_API::extract_embedded_terms( $data );
+		$incoming['terms'] = Source_Posts_API::extract_embedded_terms( $data );
 
 		return $incoming;
 	}
@@ -457,7 +457,7 @@ final class Diff_Renderer {
 	 *
 	 * @param int      $local_post_id   Local post ID.
 	 * @param string   $source_site_url Source site URL.
-	 * @param array    $external_data   External post data.
+	 * @param array    $source_data     Source post data.
 	 * @param callable $make_request    Function to make HTTP requests.
 	 * @param array    $credentials     Authentication credentials.
 	 *
@@ -466,11 +466,11 @@ final class Diff_Renderer {
 	private function generate_featured_media_diff(
 		int $local_post_id,
 		string $source_site_url,
-		array $external_data,
+		array $source_data,
 		callable $make_request,
 		array $credentials
 	): string {
-		$incoming_featured_id  = isset( $external_data['featured_media'] ) ? absint( $external_data['featured_media'] ) : 0;
+		$incoming_featured_id  = isset( $source_data['featured_media'] ) ? absint( $source_data['featured_media'] ) : 0;
 		$incoming_featured_url = '';
 
 		if ( $incoming_featured_id && ! empty( $source_site_url ) ) {

@@ -172,22 +172,22 @@ final class Safe_Publish_API extends REST_Base {
 	/**
 	 * Checks permission for the diff-preview route.
 	 *
-	 * The route receives an *external* post ID, so the capability check must
-	 * be performed against the locally-mapped post rather than treating the
-	 * external ID as a local one.
+	 * The route receives a *source* post ID, so the capability check must be
+	 * performed against the locally-mapped post rather than treating the
+	 * source ID as a local one.
 	 *
 	 * @param WP_REST_Request $request REST request object.
 	 *
 	 * @return bool|WP_Error Whether the current user can edit the mapped post,
 	 *                       WP_Error if post ID is invalid or no local post
-	 *                       matches the external ID.
+	 *                       matches the source ID.
 	 */
 	public function check_diff_preview_permission(
 		WP_REST_Request $request
 	): bool|WP_Error {
-		$external_post_id = (int) $request->get_param( 'postId' );
+		$source_post_id = (int) $request->get_param( 'postId' );
 
-		if ( $external_post_id < 1 ) {
+		if ( $source_post_id < 1 ) {
 			return new WP_Error(
 				'rest_invalid_param',
 				__( 'Invalid post ID. Must be a positive integer.', 'safe-publish' ),
@@ -198,7 +198,7 @@ final class Safe_Publish_API extends REST_Base {
 		$post_type        = (string) $request->get_param( 'postType' );
 		$mapped_post_type = Post_Type_Map::to_wp_slug( $post_type );
 		$local_post       = $this->diff_renderer->find_local_post(
-			$external_post_id,
+			$source_post_id,
 			$mapped_post_type
 		);
 
@@ -425,7 +425,7 @@ final class Safe_Publish_API extends REST_Base {
 	 * fails or when configuration required to import is missing.
 	 *
 	 * @param int $post_id           Post ID to set featured image for.
-	 * @param int $featured_media_id External featured media ID to import.
+	 * @param int $featured_media_id Source featured media ID to import.
 	 * @return bool True on success, false on failure or missing configuration.
 	 */
 	private function import_and_set_featured_image(
@@ -469,7 +469,7 @@ final class Safe_Publish_API extends REST_Base {
 	}
 
 	/**
-	 * Renders the diff preview for an external post.
+	 * Renders the diff preview for a source post.
 	 *
 	 * @param WP_REST_Request $req REST request object.
 	 *

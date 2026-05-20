@@ -6,7 +6,7 @@ Safe Publish is a WordPress plugin that allows editors to promote content from n
 
 **Safe Publish** is a plugin that enables controlled content migration from non-production WordPress environments (staging, development) to production environments. It provides a secure, user-friendly interface for:
 
-- Browsing content from external WordPress sites via the WordPress REST API
+- Browsing content from source WordPress sites via the WordPress REST API
 - Previewing and comparing content before importing
 - Importing posts, pages, and custom post types while preserving all formatting and media
 - Tracking import history for auditing and compliance purposes
@@ -28,7 +28,7 @@ See the [Authentication guide](authentication.md) for detailed setup instruction
 
 Before importing, Safe Publish validates content to ensure data integrity:
 
-- **URL validation**: Ensures the external site is a valid, accessible WordPress installation.
+- **URL validation**: Ensures the source site is a valid, accessible WordPress installation.
 - **Post data validation**: Verifies required fields are present.
 - **Content sanitization**: Optionally checks content against allowed HTML via the [`safe_publish_import_kses`](../extending/hooks.md#safe_publish_import_kses) filter (disabled by default for content fidelity).
 - **Media validation**: Checks image file types and downloadability at import time.
@@ -39,7 +39,7 @@ Learn more about [Content Validation](validation.md).
 
 The import process consists of several stages:
 
-1. **Fetch**: Retrieve post data from external site via REST API.
+1. **Fetch**: Retrieve post data from source site via REST API.
 2. **Validate**: Check content structure and accessibility.
 3. **Transform**: Process Gutenberg blocks and extract media references.
 4. **Import Media**: Download and import featured images and inline images.

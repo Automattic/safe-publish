@@ -37,3 +37,7 @@ coverage
 .vscode/*
 !.vscode/*.example
 .zed
+
+# Claude Code
+.claude/*
+!.claude/settings.json

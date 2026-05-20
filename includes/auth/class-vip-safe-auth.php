@@ -1,6 +1,6 @@
 <?php
 /**
- * VIP-Safe Authentication Handler
+ * Authentication parameter builder for outbound REST requests.
  *
  * @package Safe_Publish
  */
@@ -15,12 +15,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * VIP-Safe Authentication Class.
+ * Builds authentication parameters for outbound REST requests.
  *
- * Implements authentication methods that work on VIP:
- *
- * 1. Shared Secret (HMAC authentication) - Required for all environments.
- * 2. Basic Authentication - Optional, can be layered on top of Shared Secret.
+ * 1. Shared Secret (HMAC-SHA256 signed custom headers) - required.
+ * 2. Basic Authentication - optional, layered on top of the shared secret.
  */
 final class VIP_Safe_Auth {
 
@@ -184,10 +182,7 @@ final class VIP_Safe_Auth {
 	}
 
 	/**
-	 * Gets shared secret authentication parameters.
-	 *
-	 * Uses HMAC signature in custom headers that VIP allows.
-	 * Compatible with the Safe Publish VIP mu-plugin authentication handler.
+	 * Builds HMAC-SHA256 signed custom headers for shared-secret authentication.
 	 *
 	 * @param string $site_url    Site URL of the API endpoint being called.
 	 * @param array  $auth_config Authentication configuration.

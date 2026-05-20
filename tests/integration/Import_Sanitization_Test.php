@@ -16,7 +16,7 @@ namespace Safe_Publish\Tests\Integration;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Post_Import_Service;
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Content\Content_Media_Processor;
@@ -25,13 +25,9 @@ use Safe_Publish\Utils\Options;
 use WP_Error;
 
 /**
- * Import Sanitization Integration Test Class.
- *
- * Tests kses filtering, content preservation, error message quality for
- * stripped HTML, cosmetic whitespace tolerance, and custom allowed tags
- * during import.
+ * Import Sanitization Test Class.
  */
-class Import_Sanitization_Integration_Test extends Integration_Test_Case {
+class Import_Sanitization_Test extends Integration_Test_Case {
 
 	use Mock_Post_API_Trait;
 
@@ -66,7 +62,7 @@ class Import_Sanitization_Integration_Test extends Integration_Test_Case {
 		);
 
 		$this->import_service = new Post_Import_Service(
-			new External_Posts_API( $http_client ),
+			new Source_Posts_API( $http_client ),
 			$media_importer,
 			$content_processor,
 			$this->repository,

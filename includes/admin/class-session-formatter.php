@@ -77,15 +77,10 @@ final class Session_Formatter {
 	/**
 	 * Formats session items for display.
 	 *
-	 * @param array[] $items  Array of item rows.
-	 * @param string  $status Session status.
+	 * @param array[] $items Array of item rows.
 	 * @return array[] Formatted item data.
 	 */
-	public function format_items( array $items, string $status ): array {
-		if ( 'rolled_back' === $status ) {
-			return array();
-		}
-
+	public function format_items( array $items ): array {
 		$formatted = array();
 
 		foreach ( $items as $item ) {
@@ -102,13 +97,13 @@ final class Session_Formatter {
 	 * @return array Formatted item data.
 	 */
 	public function format_item( array $item ): array {
-		$item_status      = (string) $item['status'];
-		$post_id          = (int) ( $item['post_id'] ?? 0 );
-		$external_post_id = null !== $item['external_post_id']
-			? (int) $item['external_post_id']
+		$item_status    = (string) $item['status'];
+		$post_id        = (int) ( $item['post_id'] ?? 0 );
+		$source_post_id = null !== $item['source_post_id']
+			? (int) $item['source_post_id']
 			: null;
-		$error_msg        = (string) ( $item['error_message'] ?? '' );
-		$error            = '' !== $error_msg ? $error_msg : null;
+		$error_msg      = (string) ( $item['error_message'] ?? '' );
+		$error          = '' !== $error_msg ? $error_msg : null;
 
 		$has_previous_content = 1 === (int) $item['has_previous_content'];
 
@@ -135,18 +130,18 @@ final class Session_Formatter {
 		$status_labels = $this->get_item_status_labels();
 
 		return array(
-			'id'               => (int) $item['id'],
-			'title'            => (string) $item['title'],
-			'status'           => $item_status,
-			'status_label'     => $status_labels[ $item_status ] ?? $item_status,
-			'external_post_id' => $external_post_id,
-			'post_id'          => $post_id > 0 ? $post_id : null,
-			'error'            => $error,
-			'has_changes'      => $should_show_changes,
-			'edit_url'         => $edit_url,
-			'can_rollback'     => $can_rollback_item,
-			'is_rolled_back'   => $is_rolled_back,
-			'rollback_action'  => $rollback_action,
+			'id'              => (int) $item['id'],
+			'title'           => (string) $item['title'],
+			'status'          => $item_status,
+			'status_label'    => $status_labels[ $item_status ] ?? $item_status,
+			'source_post_id'  => $source_post_id,
+			'post_id'         => $post_id > 0 ? $post_id : null,
+			'error'           => $error,
+			'has_changes'     => $should_show_changes,
+			'edit_url'        => $edit_url,
+			'can_rollback'    => $can_rollback_item,
+			'is_rolled_back'  => $is_rolled_back,
+			'rollback_action' => $rollback_action,
 		);
 	}
 

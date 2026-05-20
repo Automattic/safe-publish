@@ -71,7 +71,7 @@ class Settings_Sanitizer {
 	public function sanitize_username( mixed $value ): string {
 		// preserve the existing value when sync mode is export-only.
 		if ( null === $value ) {
-			return (string) get_option( Options::OPTION_USERNAME, '' );
+			return (string) get_option( Options::OPTION_BASIC_AUTH_USERNAME, '' );
 		}
 
 		return sanitize_text_field( $value );
@@ -86,7 +86,7 @@ class Settings_Sanitizer {
 	public function sanitize_password( mixed $value ): string {
 		// preserve the existing value when sync mode is export-only.
 		if ( null === $value ) {
-			return (string) get_option( Options::OPTION_PASSWORD, '' );
+			return (string) get_option( Options::OPTION_BASIC_AUTH_PASSWORD, '' );
 		}
 
 		// Don't sanitize passwords beyond trimming whitespace.

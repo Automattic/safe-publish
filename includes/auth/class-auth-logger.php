@@ -30,12 +30,12 @@ class Auth_Logger extends Logger {
 	 * @param string $route  REST route of the request.
 	 * @param string $method HTTP method of the request.
 	 */
-	public function no_secret_configured(
+	public function secret_not_configured(
 		string $route,
 		string $method
 	): void {
 		$this->log_error(
-			Log_Events::NO_SECRET_CONFIGURED,
+			Log_Events::SECRET_NOT_CONFIGURED,
 			array(
 				'route'  => $route,
 				'method' => $method,
@@ -118,12 +118,12 @@ class Auth_Logger extends Logger {
 	 * @param string $route  REST route of the request.
 	 * @param string $method HTTP method of the request.
 	 */
-	public function no_connected_url_configured(
+	public function connected_url_not_configured(
 		string $route,
 		string $method
 	): void {
 		$this->log_error(
-			Log_Events::NO_CONNECTED_URL_CONFIGURED,
+			Log_Events::CONNECTED_URL_NOT_CONFIGURED,
 			array(
 				'route'  => $route,
 				'method' => $method,
@@ -211,14 +211,14 @@ class Auth_Logger extends Logger {
 	 * @param int    $request_timestamp Timestamp claimed by the request.
 	 * @param string $request_site_url  URL claimed by the request.
 	 */
-	public function auth_success(
+	public function request_authenticated(
 		string $route,
 		string $method,
 		int $request_timestamp,
 		string $request_site_url
 	): void {
 		$this->log_event(
-			Log_Events::AUTH_SUCCESS,
+			Log_Events::REQUEST_AUTHENTICATED,
 			array(
 				'route'             => $route,
 				'method'            => $method,
@@ -236,14 +236,14 @@ class Auth_Logger extends Logger {
 	 * @param string $approach Approach used (e.g. 'capability_only').
 	 * @param string $reason   Free-text reason for using the approach.
 	 */
-	public function capability_based_auth_setup(
+	public function authenticated_context_installed(
 		string $route,
 		string $method,
 		string $approach,
 		string $reason
 	): void {
 		$this->log_event(
-			Log_Events::CAPABILITY_BASED_AUTH_SETUP,
+			Log_Events::AUTHENTICATED_CONTEXT_INSTALLED,
 			array(
 				'route'    => $route,
 				'method'   => $method,
@@ -285,13 +285,13 @@ class Auth_Logger extends Logger {
 	 * @param int    $target_user_id User ID the check ran against.
 	 * @param array  $original_caps  Caps originally returned before override.
 	 */
-	public function meta_cap_override(
+	public function meta_cap_overridden(
 		string $capability,
 		int $target_user_id,
 		array $original_caps
 	): void {
 		$this->log_event(
-			Log_Events::META_CAP_OVERRIDE,
+			Log_Events::META_CAP_OVERRIDDEN,
 			array(
 				'capability'     => $capability,
 				'target_user_id' => $target_user_id,

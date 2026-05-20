@@ -16,7 +16,7 @@ import {
 } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
 import { useState, useEffect } from '@wordpress/element';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
 import type { ApiResponse, DataViewsField, ExportEvent } from '../types';
 
@@ -42,7 +42,7 @@ export function ExportHistory(): JSX.Element {
 		},
 		search: '',
 		filters: [],
-		fields: [ 'date', 'destination', 'status', 'posts' ],
+		fields: [ 'date', 'user', 'destination', 'status', 'posts' ],
 	} );
 
 	const [ paginationInfo, setPaginationInfo ] = useState( {
@@ -105,6 +105,39 @@ export function ExportHistory(): JSX.Element {
 			),
 		},
 		{
+			id: 'user',
+			label: __( 'User', 'safe-publish' ),
+			enableSorting: true,
+			sort: (
+				eventA: ExportEvent,
+				eventB: ExportEvent,
+				direction
+			): number => {
+				const aVal = eventA.actor_display_name || eventA.actor_source;
+				const bVal = eventB.actor_display_name || eventB.actor_source;
+				const diff = aVal.localeCompare( bVal );
+				return 'asc' === direction ? diff : -diff;
+			},
+			render: ( { item }: { item: ExportEvent } ): JSX.Element => {
+				if ( item.actor_user_id > 0 ) {
+					const name = item.actor_display_name || sprintf(
+						/* translators: %d is the WordPress user ID. */
+						__( 'User #%d', 'safe-publish' ),
+						item.actor_user_id
+					);
+					return <span>{ name }</span>;
+				}
+
+				const label = sprintf(
+					/* translators: %s is the actor source (e.g. cli, cron) */
+					__( 'System (%s)', 'safe-publish' ),
+					item.actor_source
+				);
+
+				return <span>{ label }</span>;
+			},
+		},
+		{
 			id: 'destination',
 			label: __( 'Destination', 'safe-publish' ),
 			enableSorting: false,
@@ -119,7 +152,7 @@ export function ExportHistory(): JSX.Element {
 			render: ( { item }: { item: ExportEvent } ): JSX.Element => {
 				const isError = 'error' === item.level;
 				return (
-					<span className={ `safe-publish-status-${ isError ? 'failed' : 'completed' }` }>
+					<span className={ `safe-publish-status-${ isError ? 'error' : 'completed' }` }>
 						{ isError
 							? __( 'Failed', 'safe-publish' )
 							: __( 'Exported', 'safe-publish' ) }

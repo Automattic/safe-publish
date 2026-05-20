@@ -31,7 +31,7 @@ export type JsonObject = { [key: string]: JsonValue };
 export type JsonValue = JsonPrimitive | JsonArray | JsonObject;
 
 /**
- * Represents a post from an external WordPress site.
+ * Represents a post from a source WordPress site.
  *
  * @property {number}                   id               Unique post ID.
  * @property {string}                   link             Permalink URL of the post.
@@ -80,14 +80,53 @@ export type ApiResponse< T = unknown > =
 	| { success: false; data?: JsonValue; error?: string };
 
 /**
+ * Surfaced when the opt-in author fallback was applied during import.
+ *
+ * `fallback_user_id` is non-null for inserts (the importing user) and null
+ * for updates (where the destination's existing author was preserved).
+ */
+export interface AuthorFallbackWarning {
+	type: 'author_fallback_applied';
+	source: {
+		email: string;
+		login: string;
+		display_name: string;
+	};
+	fallback_user_id: number | null;
+}
+
+/**
+ * Surfaced when a hierarchical post was imported as orphan because its source
+ * parent could not be resolved on the destination.
+ *
+ * `parent_title` is null for `not_imported` (the title is not available
+ * without an extra REST call to the source). For `failed_in_batch` the
+ * parent's title is always present because pass-1 fetched its REST data.
+ */
+export interface ParentOrphanedWarning {
+	type: 'parent_orphaned';
+	source: {
+		parent_id: number;
+		parent_title: string | null;
+	};
+	reason: 'not_imported' | 'failed_in_batch';
+}
+
+/**
+ * Discriminated union of all import warning types.
+ */
+export type Warning = AuthorFallbackWarning | ParentOrphanedWarning;
+
+/**
  * Response from create draft post operation.
  *
- * @property {number}  post_id          Created/updated post ID.
- * @property {string}  edit_url         URL to edit the post.
- * @property {string}  message          Success message.
- * @property {boolean} [existing]       Whether post already existed.
- * @property {string}  [post_title]     Post title.
- * @property {string}  [confirm_action] Action requiring confirmation.
+ * @property {number}    post_id          Created/updated post ID.
+ * @property {string}    edit_url         URL to edit the post.
+ * @property {string}    message          Success message.
+ * @property {boolean}   [existing]       Whether post already existed.
+ * @property {string}    [post_title]     Post title.
+ * @property {string}    [confirm_action] Action requiring confirmation.
+ * @property {Warning[]} [warnings]       Non-fatal warnings raised during import.
  */
 export interface CreateDraftResponse {
 	post_id: number;
@@ -96,27 +135,30 @@ export interface CreateDraftResponse {
 	existing?: boolean;
 	post_title?: string;
 	confirm_action?: string;
+	warnings?: Warning[];
 }
 
 /**
  * Individual result from bulk import operation.
  *
- * @property {number|null} external_post_id External post ID, or null if not provided.
- * @property {string}      title            Post title.
- * @property {boolean}     success          Whether import succeeded.
- * @property {number}      [post_id]        Local post ID if successful.
- * @property {string}      [edit_url]       URL to edit the post.
- * @property {string}      [error]          Error message if failed.
- * @property {boolean}     [existing]       Whether post already existed.
+ * @property {number|null} source_post_id Source post ID, or null if not provided.
+ * @property {string}      title          Post title.
+ * @property {boolean}     success        Whether import succeeded.
+ * @property {number}      [post_id]      Local post ID if successful.
+ * @property {string}      [edit_url]     URL to edit the post.
+ * @property {string}      [error]        Error message if failed.
+ * @property {boolean}     [existing]     Whether post already existed.
+ * @property {Warning[]}   [warnings]     Non-fatal warnings raised during import.
  */
 export interface BulkImportResult {
-	external_post_id: number | null;
+	source_post_id: number | null;
 	title: string;
 	success: boolean;
 	post_id?: number;
 	edit_url?: string;
 	error?: string;
 	existing?: boolean;
+	warnings?: Warning[];
 }
 
 /**
@@ -221,13 +263,13 @@ export interface RollbackItemData {
 }
 
 /**
- * Props for the ExternalPostsDataView component.
+ * Props for the SourcePostsDataView component.
  *
  * @property {Post[]} initialPosts  Posts to display on initial load.
  * @property {string} sourceSiteUrl Source site URL.
  * @property {number} numberPosts   Number of posts to fetch.
  */
-export interface ExternalPostsDataViewProps {
+export interface SourcePostsDataViewProps {
 	initialPosts: Post[];
 	sourceSiteUrl: string;
 	numberPosts: number;
@@ -359,25 +401,25 @@ export interface ImportSession {
 /**
  * Represents an individual import item.
  *
- * @property {number}      id               Unique item ID.
- * @property {string}      title            Title of the imported post.
- * @property {string}      status           Import status.
- * @property {string}      status_label     Human-readable status label.
- * @property {number|null} external_post_id External post ID, or null if not provided.
- * @property {number}      [post_id]        Local WordPress post ID.
- * @property {string}      [error]          Error message if failed.
- * @property {boolean}     has_changes      Whether changes were detected.
- * @property {string}      [edit_url]       URL to edit the post.
- * @property {boolean}     can_rollback     Whether the item can be rolled back.
- * @property {boolean}     is_rolled_back   Whether the item has been rolled back.
- * @property {string}      rollback_action  Type of rollback action.
+ * @property {number}      id              Unique item ID.
+ * @property {string}      title           Title of the imported post.
+ * @property {string}      status          Import status.
+ * @property {string}      status_label    Human-readable status label.
+ * @property {number|null} source_post_id  Source post ID, or null if not provided.
+ * @property {number}      [post_id]       Local WordPress post ID.
+ * @property {string}      [error]         Error message if failed.
+ * @property {boolean}     has_changes     Whether changes were detected.
+ * @property {string}      [edit_url]      URL to edit the post.
+ * @property {boolean}     can_rollback    Whether the item can be rolled back.
+ * @property {boolean}     is_rolled_back  Whether the item has been rolled back.
+ * @property {string}      rollback_action Type of rollback action.
  */
 export interface ImportItem {
 	id: number;
 	title: string;
 	status: 'success' | 'updated' | 'error';
 	status_label: string;
-	external_post_id: number | null;
+	source_post_id: number | null;
 	post_id?: number;
 	error?: string;
 	has_changes: boolean;
@@ -388,12 +430,35 @@ export interface ImportItem {
 }
 
 /**
+ * Invocation context identifier captured for every audit log event.
+ *
+ * Matches the precedence resolved server-side by `Logger::detect_actor_source()`.
+ */
+export type ActorSource =
+	| 'cli'
+	| 'cron'
+	| 'hmac'
+	| 'xmlrpc'
+	| 'ajax'
+	| 'rest'
+	| 'admin'
+	| 'front'
+	| 'unknown';
+
+/**
  * Represents a single export event from the audit log table.
+ *
+ * `actor_user_id` is 0 for system-triggered events (cron, cli, hmac, etc.);
+ * `actor_display_name` is the snapshot taken when the event was recorded;
+ * `actor_source` disambiguates the invocation context for system events.
  *
  * @property {number}         id                   Unique event ID.
  * @property {string}         date                 Date the event was recorded.
  * @property {'info'|'error'} level                Event severity level.
  * @property {string}         event                Event type (e.g. CONTENT_EXPORTED).
+ * @property {number}         actor_user_id        Acting user ID; 0 if system.
+ * @property {string}         actor_display_name   Snapshotted display name at log time.
+ * @property {ActorSource}    actor_source         Invocation context (cli, cron, hmac, etc.).
  * @property {string}         destination_site_url URL of the destination site.
  * @property {number[]}       post_ids             IDs of the exported posts.
  * @property {number}         post_count           Number of exported posts.
@@ -403,6 +468,9 @@ export interface ExportEvent {
 	date: string;
 	level: 'info' | 'error';
 	event: string;
+	actor_user_id: number;
+	actor_display_name: string;
+	actor_source: ActorSource;
 	destination_site_url: string;
 	post_ids: number[];
 	post_count: number;

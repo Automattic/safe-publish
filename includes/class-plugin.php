@@ -19,14 +19,16 @@ use Safe_Publish\Admin\Import_History;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\Admin\Session_Formatter;
 use Safe_Publish\Admin\Session_Rollback_Service;
+use Safe_Publish\Admin\Settings_Logger;
 use Safe_Publish\Admin\Settings_Page;
 use Safe_Publish\Admin\Settings_Sanitizer;
 use Safe_Publish\Auth\Auth_Manager;
-use Safe_Publish\API\External_Posts_API;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\API\Safe_Publish_API;
+use Safe_Publish\API\Source_Author_REST_Field;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Audit_Log_Table;
@@ -45,11 +47,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Plugin {
 
 	/**
-	 * External Posts API instance.
+	 * Source Posts API instance.
 	 *
-	 * @var External_Posts_API|null
+	 * @var Source_Posts_API|null
 	 */
-	private ?External_Posts_API $api = null;
+	private ?Source_Posts_API $api = null;
 
 	/**
 	 * Safe Publish API instance.
@@ -73,6 +75,8 @@ final class Plugin {
 		Imports_Table::maybe_create_table();
 		Import_Items_Table::maybe_create_table();
 
+		( new Settings_Logger() )->register_handlers();
+
 		$sync_mode          = get_option( Options::OPTION_SYNC_MODE, '' );
 		$connected_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
@@ -85,6 +89,12 @@ final class Plugin {
 		if ( $can_export && ! empty( $connected_site_url ) ) {
 			$auth_manager = new Auth_Manager();
 			$auth_manager->init();
+
+			$source_author_field = new Source_Author_REST_Field(
+				$auth_manager->get_authenticator()
+			);
+
+			$source_author_field->init();
 		}
 
 		$can_import = in_array(
@@ -128,7 +138,7 @@ final class Plugin {
 
 		register_setting(
 			Options::SETTINGS_GROUP,
-			Options::OPTION_USERNAME,
+			Options::OPTION_BASIC_AUTH_USERNAME,
 			array(
 				'sanitize_callback' => array( $sanitizer, 'sanitize_username' ),
 				'default'           => '',
@@ -137,7 +147,7 @@ final class Plugin {
 
 		register_setting(
 			Options::SETTINGS_GROUP,
-			Options::OPTION_PASSWORD,
+			Options::OPTION_BASIC_AUTH_PASSWORD,
 			array(
 				'sanitize_callback' => array( $sanitizer, 'sanitize_password' ),
 				'default'           => '',
@@ -155,8 +165,8 @@ final class Plugin {
 		$content_media_processor = new Content_Media_Processor( $media_importer );
 		$post_type_fetcher       = new Post_Type_Fetcher( $http_client );
 
-		// Initialize External Posts API with shared HTTP client.
-		$this->api = new External_Posts_API( $http_client );
+		// Initialize Source Posts API with shared HTTP client.
+		$this->api = new Source_Posts_API( $http_client );
 
 		// Build content processor with direct media service dependencies.
 		$content_processor = new Content_Processor( $media_importer, $content_media_processor );
@@ -177,15 +187,15 @@ final class Plugin {
 	 * Builds and wires the Import_Mode_Admin_Handler with all required
 	 * sub-services for import mode.
 	 *
-	 * @param External_Posts_API $api                External Posts API instance.
-	 * @param Content_Processor  $content_processor  Content Processor instance.
-	 * @param Media_Importer     $media_importer     Media Importer instance.
-	 * @param Post_Type_Fetcher  $post_type_fetcher  Post Type Fetcher instance.
-	 * @param HTTP_Client        $http_client        HTTP Client instance.
+	 * @param Source_Posts_API  $api                Source Posts API instance.
+	 * @param Content_Processor $content_processor  Content Processor instance.
+	 * @param Media_Importer    $media_importer     Media Importer instance.
+	 * @param Post_Type_Fetcher $post_type_fetcher  Post Type Fetcher instance.
+	 * @param HTTP_Client       $http_client        HTTP Client instance.
 	 * @return Import_Mode_Admin_Handler Fully constructed Import_Mode_Admin_Handler coordinator.
 	 */
 	private function build_full_admin_handler(
-		External_Posts_API $api,
+		Source_Posts_API $api,
 		Content_Processor $content_processor,
 		Media_Importer $media_importer,
 		Post_Type_Fetcher $post_type_fetcher,

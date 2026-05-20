@@ -149,11 +149,11 @@ class HMAC_Authenticator {
 		$shared_secret = $this->shared_secret;
 
 		if ( empty( $shared_secret ) ) {
-			$this->logger->no_secret_configured( $route, $method );
+			$this->logger->secret_not_configured( $route, $method );
 
 			return new WP_Error(
 				'safe_publish_auth_no_secret',
-				'Safe Publish shared secret not configured in VIP environment',
+				'Safe Publish shared secret not configured',
 				array( 'status' => 500 )
 			);
 		}
@@ -205,7 +205,7 @@ class HMAC_Authenticator {
 		}
 
 		if ( empty( $this->connected_site_url ) ) {
-			$this->logger->no_connected_url_configured( $route, $method );
+			$this->logger->connected_url_not_configured( $route, $method );
 
 			return new WP_Error(
 				'safe_publish_auth_no_connected_site_url',
@@ -268,7 +268,7 @@ class HMAC_Authenticator {
 
 		$this->authenticated = true;
 
-		$this->logger->auth_success(
+		$this->logger->request_authenticated(
 			$route,
 			$method,
 			$timestamp,
