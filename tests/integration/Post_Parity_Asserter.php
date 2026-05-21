@@ -10,18 +10,20 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
+use Safe_Publish\Utils\Options;
+use WP_Error;
 use WP_Post;
 
 /**
  * Schema-driven asserter for source-to-destination post parity.
  *
- * Models every wp_posts column explicitly: each column is either checked for
- * equality, listed in the divergence registry with a reason it must differ,
- * or listed as deferred (covered in a later test phase). The
- * assert_no_unmodeled_columns() check fails loudly if a column ever appears
- * outside these three categories — so adding a wp_posts column (e.g. a future
- * WordPress release) or omitting one from the rules surfaces as a test
- * failure rather than silent skipping.
+ * Models every wp_posts column, every dest meta key, and every term
+ * assignment explicitly: each is either checked for parity, listed in a
+ * divergence / plugin-added registry with the documented reason, or listed as
+ * deferred (covered in a later test phase). The assert_no_unmodeled_*
+ * checks fail loudly if a column, meta key, or term assignment ever appears
+ * outside these categories — so a future schema change or import-pipeline
+ * tweak surfaces as a test failure rather than silent skipping.
  */
 final class Post_Parity_Asserter {
 
@@ -158,6 +160,57 @@ final class Post_Parity_Asserter {
 	);
 
 	/**
+	 * Plugin-added meta keys the importer writes on every imported post. The
+	 * expected value per post is computed in assert_plugin_added_meta() — this
+	 * map only documents what each key means so reviewers can audit the set.
+	 *
+	 * META_IMPORT_DATE_GMT is plugin-added too but its value is a wall-clock
+	 * timestamp computed at import time, so it gets a format check rather than
+	 * a value-equality check.
+	 *
+	 * @var array<string, string>
+	 */
+	private const PLUGIN_ADDED_META = array(
+		Options::META_SOURCE_POST_ID      => 'source post ID (from source body id)',
+		Options::META_SOURCE_LINK         => 'source post URL (from source body link)',
+		Options::META_IMPORTED_FROM       => 'plugin marker (Options::META_IMPORTED_FROM_VALUE)',
+		Options::META_IMPORT_DATE_GMT     => 'import GMT timestamp (format-checked)',
+		Options::META_SOURCE_AUTHOR_EMAIL => 'source author email at import time',
+		Options::META_SOURCE_AUTHOR_LOGIN => 'source author login at import time',
+	);
+
+	/**
+	 * Meta keys WordPress core may attach automatically to imported posts.
+	 * Allowed when present, absence is fine. Empty for now; populate when
+	 * runs reveal core defaults that need an allowlist entry (e.g. _edit_lock,
+	 * _edit_last when posts are opened in the editor).
+	 *
+	 * @var array<string, string>
+	 */
+	private const WP_DEFAULT_META = array();
+
+	/**
+	 * Meta keys whose parity check is deferred to a later test phase. Allowed
+	 * but not asserted; entries move into PLUGIN_ADDED_META when the matching
+	 * phase ships and starts emitting them.
+	 *
+	 * @var array<string, string>
+	 */
+	private const DEFERRED_META = array(
+		'_thumbnail_id'                     => 'deferred: featured-image parity (PR 2c)',
+		Options::META_SOURCE_POST_PARENT_ID => 'deferred: hierarchical post support',
+	);
+
+	/**
+	 * Taxonomies whose term assignments are verified for parity. Aligned with
+	 * the seeder's term_config(); extend alongside it when new taxonomies are
+	 * added.
+	 *
+	 * @var list<string>
+	 */
+	private const TERM_TAXONOMIES_CHECKED = array( 'category', 'post_tag' );
+
+	/**
 	 * Asserts parity for identity-style columns (type, slug).
 	 *
 	 * @param array<string, mixed> $source_body Source REST response body.
@@ -280,6 +333,304 @@ final class Post_Parity_Asserter {
 			'Every wp_posts column must be classified; unmodeled columns: '
 			. implode( ', ', $unmodeled )
 		);
+	}
+
+	/**
+	 * Asserts that every meta key in the source body's `meta` field
+	 * round-trips to the destination post unchanged.
+	 *
+	 * Compares with string coercion because update_post_meta() serializes
+	 * scalars as strings — int 5 becomes "5" on the way back through
+	 * get_post_meta(). Array values aren't seeded yet; when they appear, this
+	 * helper will need a deserialization-aware comparison.
+	 *
+	 * @param array<string, mixed> $source_body Source REST response body.
+	 * @param WP_Post              $dest_post   Imported destination post.
+	 * @param TestCase             $test        Active test case.
+	 */
+	public static function assert_source_matched_meta(
+		array $source_body,
+		WP_Post $dest_post,
+		TestCase $test
+	): void {
+		$source_meta = (array) ( $source_body['meta'] ?? array() );
+
+		foreach ( $source_meta as $key => $value ) {
+			$key        = (string) $key;
+			$dest_value = get_post_meta( $dest_post->ID, $key, true );
+
+			$test->assertSame(
+				self::coerce_meta_value_for_comparison( $value ),
+				self::coerce_meta_value_for_comparison( $dest_value ),
+				"Meta key '{$key}' should round-trip from source to dest"
+			);
+		}
+	}
+
+	/**
+	 * Asserts that every plugin-added meta key carries the expected value.
+	 *
+	 * META_SOURCE_POST_ID, META_SOURCE_LINK, META_IMPORTED_FROM, and the
+	 * source-author meta values are deterministic and asserted strictly.
+	 * META_IMPORT_DATE_GMT is checked for shape only (MySQL datetime format)
+	 * because the timestamp depends on import wall time.
+	 *
+	 * @param array<string, mixed> $source_body Source REST response body.
+	 * @param WP_Post              $dest_post   Imported destination post.
+	 * @param TestCase             $test        Active test case.
+	 */
+	public static function assert_plugin_added_meta(
+		array $source_body,
+		WP_Post $dest_post,
+		TestCase $test
+	): void {
+		$source_author = (array) ( $source_body['safe_publish_author'] ?? array() );
+
+		$expected = array(
+			Options::META_SOURCE_POST_ID      => (string) ( $source_body['id'] ?? '' ),
+			Options::META_SOURCE_LINK         => (string) ( $source_body['link'] ?? '' ),
+			Options::META_IMPORTED_FROM       => Options::META_IMPORTED_FROM_VALUE,
+			Options::META_SOURCE_AUTHOR_EMAIL => (string) ( $source_author['email'] ?? '' ),
+			Options::META_SOURCE_AUTHOR_LOGIN => (string) ( $source_author['login'] ?? '' ),
+		);
+
+		foreach ( $expected as $key => $expected_value ) {
+			$actual = (string) get_post_meta( $dest_post->ID, $key, true );
+			$test->assertSame(
+				$expected_value,
+				$actual,
+				"Plugin-added meta '{$key}' should match the expected value"
+			);
+		}
+
+		$import_date = (string) get_post_meta(
+			$dest_post->ID,
+			Options::META_IMPORT_DATE_GMT,
+			true
+		);
+		$test->assertMatchesRegularExpression(
+			'/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/',
+			$import_date,
+			'META_IMPORT_DATE_GMT should be a MySQL datetime string'
+		);
+	}
+
+	/**
+	 * Asserts that every meta key present on the destination post is
+	 * classified: a key from the source body's `meta` field, a plugin-added
+	 * key, an allowed WordPress default, or a deferred key reserved for a
+	 * later phase. Fails loudly when an unmodeled key appears so the
+	 * registries stay synced with what the import pipeline actually writes.
+	 *
+	 * @param array<string, mixed> $source_body Source REST response body.
+	 * @param WP_Post              $dest_post   Imported destination post.
+	 * @param TestCase             $test        Active test case.
+	 */
+	public static function assert_no_unmodeled_meta_keys(
+		array $source_body,
+		WP_Post $dest_post,
+		TestCase $test
+	): void {
+		$source_meta_keys = array_map(
+			'strval',
+			array_keys( (array) ( $source_body['meta'] ?? array() ) )
+		);
+
+		$classified = array_values(
+			array_unique(
+				array_merge(
+					$source_meta_keys,
+					array_keys( self::PLUGIN_ADDED_META ),
+					array_keys( self::WP_DEFAULT_META ),
+					array_keys( self::DEFERRED_META )
+				)
+			)
+		);
+
+		$dest_meta_keys = array_keys( (array) get_post_meta( $dest_post->ID ) );
+		$unmodeled      = array_values(
+			array_diff( $dest_meta_keys, $classified )
+		);
+
+		$test->assertSame(
+			array(),
+			$unmodeled,
+			sprintf(
+				'Every dest meta key on post %d must be classified;'
+				. ' unmodeled: %s',
+				$dest_post->ID,
+				implode( ', ', $unmodeled )
+			)
+		);
+	}
+
+	/**
+	 * Asserts that every meta key listed in DEFERRED_META is absent on the
+	 * destination post. Locks the current phase's behavior so that when a
+	 * later phase starts emitting one of these keys (e.g. PR 2c attaching
+	 * `_thumbnail_id`), the test fails and forces an explicit move out of
+	 * DEFERRED_META into PLUGIN_ADDED_META.
+	 *
+	 * @param WP_Post  $dest_post Imported destination post.
+	 * @param TestCase $test      Active test case.
+	 */
+	public static function assert_deferred_meta_absent(
+		WP_Post $dest_post,
+		TestCase $test
+	): void {
+		foreach ( self::DEFERRED_META as $key => $reason ) {
+			$test->assertFalse(
+				metadata_exists( 'post', $dest_post->ID, $key ),
+				"Deferred meta '{$key}' should be absent in current phase"
+				. " ({$reason}); move it to PLUGIN_ADDED_META when the"
+				. ' phase that emits it ships.'
+			);
+		}
+	}
+
+	/**
+	 * Asserts that every taxonomy assignment in the source body has a
+	 * matching dest term and that the dest post is assigned to it.
+	 *
+	 * Source assignments come from `_embedded['wp:term']`, where each entry
+	 * carries a taxonomy and a name. The importer resolves dest terms by
+	 * slug (`sanitize_title( name )`) and creates the term if missing. This
+	 * helper also reverse-asserts that dest terms land with parent=0 and
+	 * description='' to lock in the importer's default-create behavior — a
+	 * future change that propagates parent or description must update this
+	 * assertion alongside the import code.
+	 *
+	 * @param array<string, mixed> $source_body Source REST response body.
+	 * @param WP_Post              $dest_post   Imported destination post.
+	 * @param TestCase             $test        Active test case.
+	 */
+	public static function assert_term_assignments(
+		array $source_body,
+		WP_Post $dest_post,
+		TestCase $test
+	): void {
+		$source_assignments = self::source_term_assignments( $source_body );
+
+		foreach ( $source_assignments as $taxonomy => $names ) {
+			foreach ( $names as $name ) {
+				$slug = sanitize_title( $name );
+				$term = get_term_by( 'slug', $slug, $taxonomy );
+
+				$test->assertNotFalse(
+					$term,
+					"Source term '{$name}' (slug '{$slug}') should exist"
+					. " on dest in taxonomy '{$taxonomy}'"
+				);
+
+				$test->assertSame(
+					$name,
+					(string) $term->name,
+					"Dest term '{$slug}' in '{$taxonomy}' should keep its"
+					. ' source name'
+				);
+				$test->assertSame(
+					0,
+					(int) $term->parent,
+					"Dest term '{$slug}' in '{$taxonomy}' should have"
+					. ' parent=0 (importer default)'
+				);
+				$test->assertSame(
+					'',
+					(string) $term->description,
+					"Dest term '{$slug}' in '{$taxonomy}' should have"
+					. ' empty description (importer default)'
+				);
+
+				$test->assertTrue(
+					has_term( $term->term_id, $taxonomy, $dest_post ),
+					"Dest post should be assigned term '{$slug}' in"
+					. " '{$taxonomy}'"
+				);
+			}
+		}
+	}
+
+	/**
+	 * Asserts that every dest term assignment in a checked taxonomy traces
+	 * back to a source assignment. Fails loudly if the importer ever attaches
+	 * a term the source didn't ask for.
+	 *
+	 * @param array<string, mixed> $source_body Source REST response body.
+	 * @param WP_Post              $dest_post   Imported destination post.
+	 * @param TestCase             $test        Active test case.
+	 */
+	public static function assert_no_unmodeled_term_assignments(
+		array $source_body,
+		WP_Post $dest_post,
+		TestCase $test
+	): void {
+		$source_slugs_by_taxonomy = array();
+		foreach (
+			self::source_term_assignments( $source_body ) as $taxonomy => $names
+		) {
+			foreach ( $names as $name ) {
+				$source_slugs_by_taxonomy[ $taxonomy ][ sanitize_title( $name ) ]
+					= true;
+			}
+		}
+
+		foreach ( self::TERM_TAXONOMIES_CHECKED as $taxonomy ) {
+			$dest_terms = wp_get_object_terms( $dest_post->ID, $taxonomy );
+			$test->assertNotInstanceOf(
+				WP_Error::class,
+				$dest_terms,
+				"wp_get_object_terms('{$taxonomy}') returned WP_Error;"
+				. ' check TERM_TAXONOMIES_CHECKED for taxonomies that'
+				. ' are registered on the test site'
+			);
+
+			foreach ( (array) $dest_terms as $term ) {
+				$test->assertArrayHasKey(
+					$term->slug,
+					$source_slugs_by_taxonomy[ $taxonomy ] ?? array(),
+					"Dest post has term '{$term->slug}' in '{$taxonomy}'"
+					. ' with no matching source assignment'
+				);
+			}
+		}
+	}
+
+	/**
+	 * Reads `_embedded['wp:term']` and returns a flat taxonomy => list of
+	 * names map.
+	 *
+	 * @param array<string, mixed> $source_body Source REST response body.
+	 * @return array<string, list<string>>
+	 */
+	private static function source_term_assignments( array $source_body ): array {
+		$assignments = array();
+		$embedded    = $source_body['_embedded']['wp:term'] ?? array();
+
+		foreach ( (array) $embedded as $group ) {
+			foreach ( (array) $group as $term ) {
+				$taxonomy = (string) ( $term['taxonomy'] ?? '' );
+				$name     = (string) ( $term['name'] ?? '' );
+				if ( '' === $taxonomy || '' === $name ) {
+					continue;
+				}
+				$assignments[ $taxonomy ][] = $name;
+			}
+		}
+
+		return $assignments;
+	}
+
+	/**
+	 * Coerces a meta value to a comparable representation. Scalars become
+	 * strings because update_post_meta() stores them that way; arrays and
+	 * objects pass through unchanged so deserialized values still compare
+	 * structurally when they're seeded in a future phase.
+	 *
+	 * @param mixed $value Raw meta value.
+	 * @return mixed
+	 */
+	private static function coerce_meta_value_for_comparison( mixed $value ): mixed {
+		return is_scalar( $value ) ? (string) $value : $value;
 	}
 
 	/**
