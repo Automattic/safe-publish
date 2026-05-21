@@ -14,17 +14,18 @@ use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
-use WP_Error;
 
 /**
  * Seeder Content Parity Test Class.
  *
- * Coverage is scoped to the columns the asserter classifies; the asserter
- * itself is the source of truth for which fields are checked versus deferred.
+ * Coverage is scoped to the rules the asserter classifies; the asserter itself
+ * is the source of truth for which fields, meta keys, and term assignments
+ * are checked versus deferred.
  */
 class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 
 	use Ajax_Die_Continue_Trait;
+	use Per_Source_Id_Post_Api_Mock_Trait;
 
 	/**
 	 * Fallback shared secret used when no environment constant is defined.
@@ -100,12 +101,7 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 
 		$this->source_rest_bodies = $this->build_source_rest_bodies();
 
-		add_filter(
-			'pre_http_request',
-			array( $this, 'mock_pre_http_request' ),
-			1,
-			3
-		);
+		$this->add_per_source_id_post_api_mock();
 
 		$this->dest_post_ids = $this->run_bulk_import();
 	}
@@ -115,26 +111,38 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	 */
 	#[\Override]
 	protected function tearDown(): void {
-		remove_filter(
-			'pre_http_request',
-			array( $this, 'mock_pre_http_request' ),
-			1
-		);
+		$this->remove_per_source_id_post_api_mock();
 		delete_option( Options::OPTION_CONNECTED_SITE_URL );
 		parent::tearDown();
 	}
 
 	/**
+	 * Returns the pre-built source REST body for the trait. Falls back to null
+	 * so unregistered IDs surface as a WP_Error.
+	 *
+	 * @param int $source_id Source post ID parsed from the request URL.
+	 * @return array<string, mixed>|null Mock body, or null when not mocked.
+	 */
+	#[\Override]
+	protected function mock_body_for_source_id( int $source_id ): ?array {
+		return $this->source_rest_bodies[ $source_id ] ?? null;
+	}
+
+	/**
 	 * Builds the source REST bodies for the test batch via Content_Generator.
 	 *
-	 * Generates two posts with no embedded images so this phase doesn't need
-	 * to mock the attachment download/sideload flow. Editor coverage is not
-	 * required at this phase — wp_posts columns are editor-agnostic.
+	 * Generates six posts with no embedded images so this phase doesn't need
+	 * to mock the attachment download/sideload flow. Six is the smallest
+	 * batch that exercises the generator's full source-status rotation
+	 * (publish by default, draft every 5th, private every 6th), so the
+	 * input-parser path is exercised on every source status even though
+	 * dest always lands as draft. Meta and term parity are editor-
+	 * independent like the wp_posts columns covered in earlier phases.
 	 *
 	 * @return array<int, array<string, mixed>> Source ID => REST body.
 	 */
 	private function build_source_rest_bodies(): array {
-		$count = 2;
+		$count = 6;
 
 		$generator = new Content_Generator(
 			'post',
@@ -231,47 +239,6 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Intercepts source-site HTTP requests and serves a per-source-id body.
-	 *
-	 * @param false|array|WP_Error $preempt Preemptive return value.
-	 * @param array                $_args   HTTP arguments (unused).
-	 * @param string               $url     Request URL.
-	 * @return false|array|WP_Error
-	 */
-	public function mock_pre_http_request(
-		false|array|WP_Error $preempt,
-		array $_args,
-		string $url
-	): false|array|WP_Error {
-		if ( false !== $preempt ) {
-			return $preempt;
-		}
-
-		if ( ! preg_match( '#/wp-json/wp/v2/[a-z0-9_-]+/(\d+)#', $url, $matches ) ) {
-			return $preempt;
-		}
-
-		$source_id = (int) $matches[1];
-		if ( ! isset( $this->source_rest_bodies[ $source_id ] ) ) {
-			return new WP_Error(
-				'safe_publish_test_no_mock_body',
-				"No mock body registered for source ID {$source_id}"
-			);
-		}
-
-		return array(
-			'response' => array(
-				'code'    => 200,
-				'message' => 'OK',
-			),
-			'body'     => (string) wp_json_encode(
-				$this->source_rest_bodies[ $source_id ]
-			),
-			'headers'  => array(),
-		);
-	}
-
-	/**
 	 * Dispatches the bulk-import AJAX action for the configured batch and
 	 * returns a source ID => destination post ID mapping.
 	 *
@@ -309,6 +276,14 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 			);
 			$dest_ids[ (int) $result['source_post_id'] ] = (int) $result['post_id'];
 		}
+
+		// Guard against silent-pass tests: every later assertion iterates
+		// $dest_ids, so an empty or short batch would let them pass trivially.
+		$this->assertCount(
+			count( $this->source_rest_bodies ),
+			$dest_ids,
+			'Bulk import should return one dest ID per source body'
+		);
 
 		return $dest_ids;
 	}
@@ -447,6 +422,109 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 				60,
 				$delta,
 				"Source ID {$source_id} post_date should be within 60s of now"
+			);
+		}
+	}
+
+	/**
+	 * Verifies that every meta key in the source body's `meta` field
+	 * round-trips to the destination post unchanged.
+	 */
+	public function test_source_matched_meta_parity(): void {
+		// ARRANGE + ACT: batch already imported in setUp.
+		// ASSERT: each dest post carries the source meta values.
+		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+			Post_Parity_Asserter::assert_source_matched_meta(
+				$this->source_rest_bodies[ $source_id ],
+				get_post( $dest_id ),
+				$this
+			);
+		}
+	}
+
+	/**
+	 * Verifies that every plugin-added meta key (source post ID, link,
+	 * imported-from marker, source author email/login) is present on each
+	 * dest post with the expected value, and that the import-date meta has
+	 * the right shape.
+	 */
+	public function test_plugin_added_meta_present(): void {
+		// ARRANGE + ACT: batch already imported in setUp.
+		// ASSERT: each dest post carries the plugin-added meta keys.
+		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+			Post_Parity_Asserter::assert_plugin_added_meta(
+				$this->source_rest_bodies[ $source_id ],
+				get_post( $dest_id ),
+				$this
+			);
+		}
+	}
+
+	/**
+	 * Verifies that every meta key listed in DEFERRED_META is absent on each
+	 * dest post. Locks the current phase's "not yet emitted" state so that a
+	 * future phase emitting one of these keys (e.g. _thumbnail_id in PR 2c)
+	 * surfaces as a test failure and forces the registry to be updated.
+	 */
+	public function test_deferred_meta_keys_absent(): void {
+		// ARRANGE + ACT: batch already imported in setUp.
+		// ASSERT: no deferred meta key is present on any dest post.
+		foreach ( $this->dest_post_ids as $dest_id ) {
+			Post_Parity_Asserter::assert_deferred_meta_absent(
+				get_post( $dest_id ),
+				$this
+			);
+		}
+	}
+
+	/**
+	 * Verifies that every meta key actually present on each dest post is
+	 * classified by the asserter (source-matched, plugin-added, WP default,
+	 * or deferred). Guards against silent gaps when the import pipeline
+	 * starts emitting a new meta key.
+	 */
+	public function test_no_unmodeled_meta_keys(): void {
+		// ARRANGE + ACT: batch already imported in setUp.
+		// ASSERT: every dest meta key on every imported post is classified.
+		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+			Post_Parity_Asserter::assert_no_unmodeled_meta_keys(
+				$this->source_rest_bodies[ $source_id ],
+				get_post( $dest_id ),
+				$this
+			);
+		}
+	}
+
+	/**
+	 * Verifies that for each source taxonomy assignment, the dest post is
+	 * assigned a matching term and that the dest term lands with the
+	 * importer's default parent (0) and description ('').
+	 */
+	public function test_term_assignments_parity(): void {
+		// ARRANGE + ACT: batch already imported in setUp.
+		// ASSERT: each dest post has the source term assignments.
+		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+			Post_Parity_Asserter::assert_term_assignments(
+				$this->source_rest_bodies[ $source_id ],
+				get_post( $dest_id ),
+				$this
+			);
+		}
+	}
+
+	/**
+	 * Verifies that every dest term assignment in the checked taxonomies
+	 * (category, post_tag) traces back to a source assignment. Locks in the
+	 * importer's behavior of attaching only the terms the source asked for.
+	 */
+	public function test_no_unmodeled_term_assignments(): void {
+		// ARRANGE + ACT: batch already imported in setUp.
+		// ASSERT: every dest term assignment traces to a source one.
+		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+			Post_Parity_Asserter::assert_no_unmodeled_term_assignments(
+				$this->source_rest_bodies[ $source_id ],
+				get_post( $dest_id ),
+				$this
 			);
 		}
 	}
