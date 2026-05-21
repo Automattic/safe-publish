@@ -4,13 +4,12 @@ set -e # Exit immediately if any command exits with a non-zero status.
 
 SCRIPT_MODE=${1:-start} # "build" or "start". Default is "start".
 
-# Set WordPress ports and home URL. Exported so wp-env (and lifecycle
-# scripts like bin/setup-env) inherit them.
+# Set WordPress ports. Exported so wp-env (and lifecycle scripts like
+# bin/setup-env, which configures WP_HOME for both sites) inherit them.
 export WP_ENV_PORT="${WP_ENV_PORT-8888}"
 export WP_ENV_TESTS_PORT="${WP_ENV_TESTS_PORT-8889}"
 PORT="$WP_ENV_PORT"
 TESTS_PORT="$WP_ENV_TESTS_PORT"
-WP_HOME="${WP_ENV_HOME_URL-http://localhost:$PORT}"
 
 cleanup() {
 	echo ""
@@ -59,11 +58,6 @@ install_and_activate_plugin() {
 	activate_plugin "$slug"
 }
 
-configure_wordpress() {
-	echo "✏️ Updating home option..."
-	npm run -s wp-cli config set WP_HOME "$WP_HOME"
-}
-
 start_wordpress() {
 	# Enable Xdebug when starting the server in "start" mode.
 	FLAGS=""
@@ -76,8 +70,8 @@ start_wordpress() {
 }
 
 open_browser() {
-	WP_ADMIN="http://localhost:$PORT/wp-admin/"
-	TEST_URL="http://localhost:$TESTS_PORT/wp-admin/"
+	WP_ADMIN="http://host.docker.internal:$PORT/wp-admin/"
+	TEST_URL="http://host.docker.internal:$TESTS_PORT/wp-admin/"
 
 	echo ""
 	echo "> Safe Publish Destination Site"
@@ -109,7 +103,6 @@ open_browser() {
 trap 'cleanup' INT TERM
 
 start_wordpress
-configure_wordpress
 
 if [ "$SCRIPT_MODE" = "build" ]; then
 	echo "🔼 Starting build process..."

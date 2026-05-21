@@ -21,8 +21,6 @@
         "WP_DEBUG_DISPLAY": true,
         "WP_DEVELOPMENT_MODE": "plugin",
         "WP_ENVIRONMENT_TYPE": "development",
-        "WP_HOME": "http://host.docker.internal:8889",
-        "WP_SITEURL": "http://host.docker.internal:8889",
         "SAFE_PUBLISH_SHARED_SECRET": "local-dev-secret-4ilEg6NA3K1lLJV"
       },
       "mappings": {

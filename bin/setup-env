@@ -2,30 +2,43 @@
 
 PORT="${WP_ENV_PORT-8888}"
 TESTS_PORT="${WP_ENV_TESTS_PORT-8889}"
+DEST_HOME="${WP_ENV_HOME_URL-http://host.docker.internal:$PORT}"
 
-# Target site (development env / cli / port $PORT)
+# Target site (development env / cli / port $PORT). Pin WP_HOME/WP_SITEURL
+# to $DEST_HOME so emitted URLs match what browsers and the source container
+# both reach it at.
+wp-env run cli wp config set WP_HOME "$DEST_HOME"
+wp-env run cli wp config set WP_SITEURL "$DEST_HOME"
 wp-env run cli wp option update blogname 'Safe Publish Destination'
 wp-env run cli wp option update safe_publish_sync_mode 'import'
 wp-env run cli wp option update safe_publish_connected_site_url "http://host.docker.internal:$TESTS_PORT"
 wp-env run cli wp rewrite structure '/%postname%/'
 wp-env run cli wp rewrite flush
 
-# Source site (tests env / tests-cli / port $TESTS_PORT)
+# Source site (tests env / tests-cli / port $TESTS_PORT). Pin WP_HOME/WP_SITEURL
+# to host.docker.internal:$TESTS_PORT so emitted URLs match what browsers and
+# the destination container both reach it at.
+wp-env run tests-cli wp config set WP_HOME "http://host.docker.internal:$TESTS_PORT"
+wp-env run tests-cli wp config set WP_SITEURL "http://host.docker.internal:$TESTS_PORT"
 wp-env run tests-cli wp option update blogname 'Safe Publish Source'
 wp-env run tests-cli wp option update safe_publish_sync_mode 'export'
-wp-env run tests-cli wp option update safe_publish_connected_site_url "http://localhost:$PORT"
+wp-env run tests-cli wp option update safe_publish_connected_site_url "$DEST_HOME"
 wp-env run tests-cli wp rewrite structure '/%postname%/'
 wp-env run tests-cli wp rewrite flush
 
-# Rewrite any existing source content that still references localhost:8889
-# to the canonical cross-container URL. The mu-plugin in
-# mu-plugins/safe-publish-local-dev.php keeps home/siteurl pointing at the
-# same hostname so freshly uploaded media URLs match. Skip the guid column
-# (WP requires GUIDs to be immutable). Safe to re-run; idempotent once the
-# rewrite has completed.
+# Rewrite any existing content that still references localhost URLs to the
+# canonical cross-container URLs (left over from before WP_HOME was pinned
+# above). Skip the guid column (WP requires GUIDs to be immutable). Safe to
+# re-run; idempotent once the rewrite has completed.
+wp-env run cli wp search-replace \
+	"http://localhost:$PORT" \
+	"http://host.docker.internal:$PORT" \
+	--all-tables \
+	--skip-columns=guid \
+	--quiet
 wp-env run tests-cli wp search-replace \
-	'http://localhost:8889' \
-	'http://host.docker.internal:8889' \
+	"http://localhost:$TESTS_PORT" \
+	"http://host.docker.internal:$TESTS_PORT" \
 	--all-tables \
 	--skip-columns=guid \
 	--quiet
