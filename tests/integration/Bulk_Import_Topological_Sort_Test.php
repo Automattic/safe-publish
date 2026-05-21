@@ -13,7 +13,6 @@ use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
-use WP_Error;
 
 /**
  * Bulk Import Topological Sort Test Class.
@@ -21,6 +20,7 @@ use WP_Error;
 class Bulk_Import_Topological_Sort_Test extends WP_Ajax_UnitTestCase {
 
 	use Ajax_Die_Continue_Trait;
+	use Per_Source_Id_Post_Api_Mock_Trait;
 
 	/**
 	 * Fallback shared secret used when no environment constant is defined.
@@ -67,7 +67,7 @@ class Bulk_Import_Topological_Sort_Test extends WP_Ajax_UnitTestCase {
 			'https://source.example.com'
 		);
 
-		add_filter( 'pre_http_request', array( $this, 'mock_post_api' ), 1, 3 );
+		$this->add_per_source_id_post_api_mock();
 	}
 
 	/**
@@ -75,39 +75,30 @@ class Bulk_Import_Topological_Sort_Test extends WP_Ajax_UnitTestCase {
 	 */
 	#[\Override]
 	protected function tearDown(): void {
-		remove_filter( 'pre_http_request', array( $this, 'mock_post_api' ), 1 );
+		$this->remove_per_source_id_post_api_mock();
 		delete_option( Options::OPTION_CONNECTED_SITE_URL );
 		$this->source_payloads = array();
 		parent::tearDown();
 	}
 
 	/**
-	 * Intercepts single-post REST requests and returns a body assembled from
-	 * the per-source-id payload registered via $this->source_payloads.
+	 * Builds the per-source-id REST body for the trait. Each test registers
+	 * the relevant IDs in $this->source_payloads; unregistered IDs surface as
+	 * a WP_Error via the trait.
 	 *
-	 * @param false|array|WP_Error $preempt Preemptive return value.
-	 * @param array                $_args   HTTP arguments (unused).
-	 * @param string               $url     Request URL.
-	 * @return false|array|WP_Error Mock response, or the prior return value.
+	 * @param int $source_id Source post ID parsed from the request URL.
+	 * @return array<string, mixed>|null Mock body, or null when not mocked.
 	 */
-	public function mock_post_api(
-		false|array|WP_Error $preempt,
-		array $_args,
-		string $url
-	): false|array|WP_Error {
-		if ( false !== $preempt ) {
-			return $preempt;
+	#[\Override]
+	protected function mock_body_for_source_id( int $source_id ): ?array {
+		if ( ! isset( $this->source_payloads[ $source_id ] ) ) {
+			return null;
 		}
 
-		if ( ! preg_match( '#/wp-json/wp/v2/[a-z0-9_-]+/(\d+)#', $url, $matches ) ) {
-			return $preempt;
-		}
+		$override = $this->source_payloads[ $source_id ];
+		$admin    = get_userdata( $this->admin_user_id );
 
-		$source_id = (int) $matches[1];
-		$override  = $this->source_payloads[ $source_id ] ?? array();
-
-		$admin = get_userdata( $this->admin_user_id );
-		$body  = array(
+		return array(
 			'id'                  => $source_id,
 			'title'               => array(
 				'raw' => $override['title'] ?? "Source Post {$source_id}",
@@ -128,15 +119,6 @@ class Bulk_Import_Topological_Sort_Test extends WP_Ajax_UnitTestCase {
 				'login'        => false !== $admin ? (string) $admin->user_login : '',
 				'display_name' => false !== $admin ? (string) $admin->display_name : '',
 			),
-		);
-
-		return array(
-			'response' => array(
-				'code'    => 200,
-				'message' => 'OK',
-			),
-			'body'     => (string) wp_json_encode( $body ),
-			'headers'  => array(),
 		);
 	}
 
