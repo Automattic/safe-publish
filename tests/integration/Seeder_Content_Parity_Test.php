@@ -134,9 +134,10 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	 * Generates six posts with no embedded images so this phase doesn't need
 	 * to mock the attachment download/sideload flow. Six is the smallest
 	 * batch that exercises the generator's full source-status rotation
-	 * (publish / draft / private) and covers the editor mix (Gutenberg +
-	 * classic) so the input-parser path is fully covered even though dest
-	 * always lands as draft.
+	 * (publish by default, draft every 5th, private every 6th), so the
+	 * input-parser path is exercised on every source status even though
+	 * dest always lands as draft. Meta and term parity are editor-
+	 * independent like the wp_posts columns covered in earlier phases.
 	 *
 	 * @return array<int, array<string, mixed>> Source ID => REST body.
 	 */

@@ -164,19 +164,19 @@ final class Post_Parity_Asserter {
 	 * expected value per post is computed in assert_plugin_added_meta() — this
 	 * map only documents what each key means so reviewers can audit the set.
 	 *
-	 * META_IMPORT_DATE_GMT is plugin-added too but its value is a wall-clock
-	 * timestamp computed at import time, so it gets a format check rather than
-	 * a value-equality check.
+	 * META_IMPORT_DATE_GMT's value is a wall-clock timestamp computed at
+	 * import time, so it gets a format check rather than a value-equality
+	 * check.
 	 *
 	 * @var array<string, string>
 	 */
 	private const PLUGIN_ADDED_META = array(
-		Options::META_SOURCE_POST_ID      => 'source post ID (from source body id)',
-		Options::META_SOURCE_LINK         => 'source post URL (from source body link)',
-		Options::META_IMPORTED_FROM       => 'plugin marker (Options::META_IMPORTED_FROM_VALUE)',
-		Options::META_IMPORT_DATE_GMT     => 'import GMT timestamp (format-checked)',
-		Options::META_SOURCE_AUTHOR_EMAIL => 'source author email at import time',
-		Options::META_SOURCE_AUTHOR_LOGIN => 'source author login at import time',
+		Options::META_SOURCE_POST_ID      => 'source post ID',
+		Options::META_SOURCE_LINK         => 'source post URL',
+		Options::META_IMPORTED_FROM       => 'plugin marker',
+		Options::META_IMPORT_DATE_GMT     => 'GMT timestamp (format-checked)',
+		Options::META_SOURCE_AUTHOR_EMAIL => 'source author email',
+		Options::META_SOURCE_AUTHOR_LOGIN => 'source author login',
 	);
 
 	/**
@@ -197,8 +197,8 @@ final class Post_Parity_Asserter {
 	 * @var array<string, string>
 	 */
 	private const DEFERRED_META = array(
-		'_thumbnail_id'                     => 'deferred: featured-image parity (PR 2c)',
-		Options::META_SOURCE_POST_PARENT_ID => 'deferred: hierarchical post support',
+		'_thumbnail_id'                     => 'featured-image parity (PR 2c)',
+		Options::META_SOURCE_POST_PARENT_ID => 'hierarchical post support',
 	);
 
 	/**
@@ -385,13 +385,17 @@ final class Post_Parity_Asserter {
 		TestCase $test
 	): void {
 		$source_author = (array) ( $source_body['safe_publish_author'] ?? array() );
+		$source_id     = (string) ( $source_body['id'] ?? '' );
+		$source_link   = (string) ( $source_body['link'] ?? '' );
+		$author_email  = (string) ( $source_author['email'] ?? '' );
+		$author_login  = (string) ( $source_author['login'] ?? '' );
 
 		$expected = array(
-			Options::META_SOURCE_POST_ID      => (string) ( $source_body['id'] ?? '' ),
-			Options::META_SOURCE_LINK         => (string) ( $source_body['link'] ?? '' ),
+			Options::META_SOURCE_POST_ID      => $source_id,
+			Options::META_SOURCE_LINK         => $source_link,
 			Options::META_IMPORTED_FROM       => Options::META_IMPORTED_FROM_VALUE,
-			Options::META_SOURCE_AUTHOR_EMAIL => (string) ( $source_author['email'] ?? '' ),
-			Options::META_SOURCE_AUTHOR_LOGIN => (string) ( $source_author['login'] ?? '' ),
+			Options::META_SOURCE_AUTHOR_EMAIL => $author_email,
+			Options::META_SOURCE_AUTHOR_LOGIN => $author_login,
 		);
 
 		foreach ( $expected as $key => $expected_value ) {
