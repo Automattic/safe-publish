@@ -66,11 +66,12 @@ class Permission_Manager {
 
 	/**
 	 * Suppresses every rest_post_dispatch firing after the first per HTTP
-	 * request. Primarily blocks the _embed subrequest log cascade
-	 * (subrequests inherit $_SERVER, including the action header); also a
-	 * generic guard against any other re-dispatch path. Latched after the
-	 * action-validity check so non-export actions that write no row still
-	 * block subrequest logs.
+	 * request. Primarily blocks the _embed subrequest log cascade for
+	 * import calls (subrequests inherit $_SERVER, including the action
+	 * header, so would otherwise log spurious CONTENT_EXPORTED rows for
+	 * authors, featured media, and terms). Also a generic guard against
+	 * any other re-dispatch path. Latched after the action-validity check
+	 * so unrecognized requests don't consume the flag.
 	 *
 	 * @var bool
 	 */
