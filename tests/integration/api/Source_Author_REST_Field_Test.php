@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration\API;
 
+use Safe_Publish\API\Dispatch_Logger;
 use Safe_Publish\API\Export_Logger;
 use Safe_Publish\API\Source_Author_REST_Field;
 use Safe_Publish\Auth\Auth_Logger;
@@ -51,7 +52,11 @@ class Source_Author_REST_Field_Test extends WP_UnitTestCase {
 
 		$this->authenticator = new HMAC_Authenticator(
 			new Auth_Logger(),
-			new Permission_Manager( new Auth_Logger(), new Export_Logger() ),
+			new Permission_Manager(
+				new Auth_Logger(),
+				new Export_Logger(),
+				new Dispatch_Logger()
+			),
 			'integration-test-secret-key-32chars-ok',
 			home_url()
 		);

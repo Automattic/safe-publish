@@ -60,7 +60,11 @@ class Post_Type_Fetcher {
 		$api_url = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/types';
 
 		// Make request.
-		$response = $this->http_client->make_request( $api_url, $auth_credentials );
+		$response = $this->http_client->make_request(
+			$api_url,
+			Request_Actions::LIST_ITEMS,
+			$auth_credentials
+		);
 
 		if ( is_wp_error( $response ) ) {
 			return $response;

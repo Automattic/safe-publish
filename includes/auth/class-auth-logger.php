@@ -210,12 +210,14 @@ class Auth_Logger extends Logger {
 	 * @param string $method            HTTP method of the request.
 	 * @param int    $request_timestamp Timestamp claimed by the request.
 	 * @param string $request_site_url  URL claimed by the request.
+	 * @param string $action            Declared X-Safe-Publish-Action header value.
 	 */
 	public function request_authenticated(
 		string $route,
 		string $method,
 		int $request_timestamp,
-		string $request_site_url
+		string $request_site_url,
+		string $action
 	): void {
 		$this->log_event(
 			Log_Events::REQUEST_AUTHENTICATED,
@@ -224,6 +226,34 @@ class Auth_Logger extends Logger {
 				'method'            => $method,
 				'request_timestamp' => $request_timestamp,
 				'request_site_url'  => $request_site_url,
+				'action'            => $action,
+			)
+		);
+	}
+
+	/**
+	 * Logs a successfully-authenticated request whose declared action header
+	 * is missing or unrecognized. Error level: indicates a destination bug,
+	 * version skew, or an unexpected client signing with a valid HMAC secret.
+	 *
+	 * @param string $route            REST route of the request.
+	 * @param string $method           HTTP method of the request.
+	 * @param string $received_action  Raw action value received (empty when header absent).
+	 * @param string $request_site_url URL claimed by the request.
+	 */
+	public function request_action_unrecognized(
+		string $route,
+		string $method,
+		string $received_action,
+		string $request_site_url
+	): void {
+		$this->log_error(
+			Log_Events::REQUEST_ACTION_UNRECOGNIZED,
+			array(
+				'route'            => $route,
+				'method'           => $method,
+				'received_action'  => $received_action,
+				'request_site_url' => $request_site_url,
 			)
 		);
 	}

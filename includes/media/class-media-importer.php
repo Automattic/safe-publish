@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Media;
 
 use Safe_Publish\API\HTTP_Client;
+use Safe_Publish\API\Request_Actions;
 use Safe_Publish\Media\Media_Logger;
 use Safe_Publish\Utils\Options;
 
@@ -370,7 +371,11 @@ class Media_Importer {
 
 		// Fetch media details from source site.
 		$media_api_url = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/media/' . $featured_media_id;
-		$response      = $this->http_client->make_request( $media_api_url, $auth_credentials );
+		$response      = $this->http_client->make_request(
+			$media_api_url,
+			Request_Actions::MEDIA_IMPORT,
+			$auth_credentials
+		);
 
 		if ( is_wp_error( $response ) ) {
 			$this->logger->featured_image_fetch_failed(

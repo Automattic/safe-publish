@@ -12,7 +12,9 @@ namespace Safe_Publish\Tests\Integration;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Post_Import_Service;
+use Safe_Publish\API\Dispatch_Logger;
 use Safe_Publish\API\Export_Logger;
+use Safe_Publish\API\Request_Actions;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
@@ -71,7 +73,11 @@ class Full_Workflow_Test extends Integration_Test_Case {
 		}
 
 		$logger             = new Auth_Logger();
-		$permission_manager = new Permission_Manager( $logger, new Export_Logger() );
+		$permission_manager = new Permission_Manager(
+			$logger,
+			new Export_Logger(),
+			new Dispatch_Logger()
+		);
 
 		$this->authenticator = new HMAC_Authenticator(
 			$logger,
@@ -479,13 +485,15 @@ class Full_Workflow_Test extends Integration_Test_Case {
 	 * @param string $route     REST route path.
 	 * @param string $body      Request body.
 	 * @param int    $timestamp Optional. Unix timestamp. Defaults to current time.
+	 * @param string $action    Optional. Declared request action. Defaults to IMPORT.
 	 * @return WP_REST_Request Signed request.
 	 */
 	private function build_signed_request(
 		string $method,
 		string $route,
 		string $body,
-		int $timestamp = 0
+		int $timestamp = 0,
+		string $action = Request_Actions::IMPORT
 	): WP_REST_Request {
 		if ( 0 === $timestamp ) {
 			$timestamp = time();
@@ -494,7 +502,12 @@ class Full_Workflow_Test extends Integration_Test_Case {
 		$secret         = defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ? SAFE_PUBLISH_SHARED_SECRET : self::FALLBACK_SECRET;
 		$this_site_url  = home_url();
 		$content_hash   = hash( 'sha256', $body );
-		$string_to_sign = $method . '|' . $route . '|' . $timestamp . '|' . $content_hash . '|' . $this_site_url;
+		$string_to_sign = $method
+			. '|' . $route
+			. '|' . $timestamp
+			. '|' . $content_hash
+			. '|' . $this_site_url
+			. '|' . $action;
 		$signature      = hash_hmac( 'sha256', $string_to_sign, $secret );
 
 		$request = new WP_REST_Request( $method, $route );
@@ -503,6 +516,7 @@ class Full_Workflow_Test extends Integration_Test_Case {
 		$request->set_header( 'X-Safe-Publish-Content-Hash', $content_hash );
 		$request->set_header( 'X-Safe-Publish-Site-URL', $this_site_url );
 		$request->set_header( 'X-Safe-Publish-Signature', $signature );
+		$request->set_header( 'X-Safe-Publish-Action', $action );
 
 		return $request;
 	}

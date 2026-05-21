@@ -16,9 +16,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Central registry of log event codes referenced by the per-event helper
- * methods on each channel logger (Auth_Logger, Content_Logger, Export_Logger,
- * Import_Logger, Media_Logger, Settings_Logger). The constants here are the
- * contract; the helpers enforce the payload shape per event.
+ * methods on each channel logger (Auth_Logger, Content_Logger, Dispatch_Logger,
+ * Export_Logger, Import_Logger, Media_Logger, Settings_Logger). The constants
+ * here are the contract; the helpers enforce the payload shape per event.
  */
 class Log_Events {
 	// Media import events.
@@ -44,6 +44,7 @@ class Log_Events {
 	const SITE_URL_MISMATCH            = 'SITE_URL_MISMATCH';
 	const SIGNATURE_INVALID            = 'SIGNATURE_INVALID';
 	const REQUEST_AUTHENTICATED        = 'REQUEST_AUTHENTICATED';
+	const REQUEST_ACTION_UNRECOGNIZED  = 'REQUEST_ACTION_UNRECOGNIZED';
 
 	// Permission and auth diagnostic events.
 	const AUTHENTICATED_CONTEXT_INSTALLED = 'AUTHENTICATED_CONTEXT_INSTALLED';
@@ -62,6 +63,10 @@ class Log_Events {
 	const CONTENT_EXPORTED           = 'CONTENT_EXPORTED';
 	const EXPORT_REQUEST_ERROR       = 'EXPORT_REQUEST_ERROR';
 	const EXPORT_RESPONSE_BAD_STATUS = 'EXPORT_RESPONSE_BAD_STATUS';
+
+	// Non-export dispatch events (list, preview, probe failures).
+	const DISPATCH_REQUEST_ERROR       = 'DISPATCH_REQUEST_ERROR';
+	const DISPATCH_RESPONSE_BAD_STATUS = 'DISPATCH_RESPONSE_BAD_STATUS';
 
 	// Import session and item lifecycle events.
 	const SESSION_ROLLED_BACK         = 'SESSION_ROLLED_BACK';
