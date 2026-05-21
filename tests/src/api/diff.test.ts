@@ -102,7 +102,10 @@ describe( 'fetchDiffPreview', () => {
 	} );
 
 	it( 'should include X-WP-Nonce header so WP can authenticate the request', async () => {
-		// ARRANGE: the vitest setup file already provides restNonce on window.
+		// ARRANGE: vitest.setup.ts provides restNonce on window. This pins
+		// the contract — if a nonce is exposed on window, it is sent as
+		// X-WP-Nonce — rather than the prod scenario where the page exposed
+		// a nonce but the request was not reading it.
 		( global.fetch as any ).mockResolvedValue( {
 			ok: true,
 			json: async () => ( {} ),

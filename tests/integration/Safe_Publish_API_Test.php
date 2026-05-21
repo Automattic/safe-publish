@@ -228,14 +228,14 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that diff-preview permission resolves an external post ID to a
+	 * Verifies that diff-preview permission resolves a source post ID to a
 	 * local post before checking capabilities.
 	 *
 	 * Regression test: the permission callback used to call get_post() on the
-	 * external ID directly, returning rest_post_not_found for every authorized
-	 * request because external IDs almost never collide with local post IDs.
+	 * source ID directly, returning rest_post_not_found for every authorized
+	 * request because source IDs almost never collide with local post IDs.
 	 */
-	public function test_diff_preview_permission_resolves_external_id_to_local_post(): void {
+	public function test_diff_preview_permission_resolves_source_id_to_local_post(): void {
 		// ARRANGE: Authenticate as a user who can edit the mapped local post.
 		wp_set_current_user( $this->admin_user_id );
 
@@ -248,7 +248,32 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$result = $api->check_diff_preview_permission( $request );
 
 		// ASSERT: The callback grants access via the resolved local post.
-		$this->assertTrue( $result, 'Permission callback should grant access when external ID maps to an editable local post' );
+		$this->assertTrue( $result, 'Permission callback should grant access when source ID maps to an editable local post' );
+	}
+
+	/**
+	 * Verifies that diff-preview returns 403 (not 404) when the source ID
+	 * resolves to a local post the user cannot edit.
+	 *
+	 * Covers the new branch in check_diff_preview_permission: when
+	 * find_local_post() succeeds but current_user_can( 'edit_post', ... )
+	 * fails, we must not leak the post's existence by responding 404.
+	 */
+	public function test_diff_preview_permission_returns_403_for_resolved_post_user_cannot_edit(): void {
+		// ARRANGE: Author user cannot edit the admin-owned mapped post.
+		$this->create_user_and_authenticate( 'author' );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'content', wp_json_encode( array( 'title' => 'New Title' ) ) );
+		$request->set_param( 'postType', 'post' );
+
+		// ACT: Dispatch through REST server.
+		$response = $this->server->dispatch( $request );
+
+		// ASSERT: 403, never 404 — resolved post exists but user cannot edit it.
+		$this->assertInstanceOf( WP_REST_Response::class, $response );
+		$this->assert_403_response( $response, 'Should return 403 when resolved post is not editable' );
 	}
 
 	/**
