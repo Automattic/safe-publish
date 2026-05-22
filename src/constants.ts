@@ -20,7 +20,7 @@ export const LAYOUT_GRID = 'grid';
 export const LAYOUT_LIST = 'list';
 
 // Posts control defaults and bounds.
-export const DEFAULT_POSTS_PER_PAGE = 10;
+export const DEFAULT_ITEMS_PER_PAGE = 20;
 export const MIN_POSTS_COUNT = 1;
 export const MAX_POSTS_COUNT = 100;
 

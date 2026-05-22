@@ -31,10 +31,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Diff_Renderer {
 
 	/**
-	 * Renders a comprehensive diff preview for a source post.
+	 * Renders a comprehensive diff preview for a source post. All
+	 * $make_request calls are tagged as Request_Actions::PREVIEW.
 	 *
 	 * @param WP_REST_Request $request      REST request object.
-	 * @param callable        $make_request Callback to make source API requests.
+	 * @param callable        $make_request fn($url, $action, $credentials): array|WP_Error.
 	 * @param array           $credentials  Authentication credentials.
 	 *
 	 * @return array|WP_Error Array on success, WP_Error if post not found.
@@ -186,7 +187,7 @@ final class Diff_Renderer {
 	 * @param string   $source_site_url Source site URL.
 	 * @param string   $post_type       Post type to fetch.
 	 * @param int      $post_id         Source post ID.
-	 * @param callable $make_request    Function to make HTTP requests.
+	 * @param callable $make_request    fn($url, $action, $credentials): array|WP_Error.
 	 * @param array    $credentials     Authentication credentials.
 	 *
 	 * @return array|WP_Error Post data on success, WP_Error on failure.
@@ -206,7 +207,11 @@ final class Diff_Renderer {
 		);
 		$source_api_url = add_query_arg( $query_args, $api_base );
 
-		$response = $make_request( $source_api_url, $credentials );
+		$response = $make_request(
+			$source_api_url,
+			Request_Actions::PREVIEW,
+			$credentials
+		);
 
 		if ( is_wp_error( $response ) ) {
 			return new WP_Error(
@@ -458,7 +463,7 @@ final class Diff_Renderer {
 	 * @param int      $local_post_id   Local post ID.
 	 * @param string   $source_site_url Source site URL.
 	 * @param array    $source_data     Source post data.
-	 * @param callable $make_request    Function to make HTTP requests.
+	 * @param callable $make_request    fn($url, $action, $credentials): array|WP_Error.
 	 * @param array    $credentials     Authentication credentials.
 	 *
 	 * @return string Featured media diff HTML with previews.
@@ -475,7 +480,11 @@ final class Diff_Renderer {
 
 		if ( $incoming_featured_id && ! empty( $source_site_url ) ) {
 			$media_api_url  = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/media/' . $incoming_featured_id;
-			$media_response = $make_request( $media_api_url, $credentials );
+			$media_response = $make_request(
+				$media_api_url,
+				Request_Actions::PREVIEW,
+				$credentials
+			);
 
 			if ( ! is_wp_error( $media_response ) ) {
 				$media_body = wp_remote_retrieve_body( $media_response );

@@ -101,7 +101,7 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	public function test_diff_renderer_generates_diff_structure_successfully(): void {
 		// ARRANGE: Mock HTTP callable that returns WordPress REST API response.
 		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-		$mock_http_callable = function ( $_url, $_credentials ) {
+		$mock_http_callable = function ( $_url, $_action, $_credentials ) {
 			return array(
 				'response' => array( 'code' => 200 ),
 				'body'     => wp_json_encode(

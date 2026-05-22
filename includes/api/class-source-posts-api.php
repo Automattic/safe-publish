@@ -108,7 +108,11 @@ class Source_Posts_API {
 		$api_url = $this->build_api_url( $source_site_url, $number_of_posts, $auth_credentials, $post_type );
 
 		// Make request.
-		$response = $this->make_request( $api_url, $auth_credentials );
+		$response = $this->make_request(
+			$api_url,
+			Request_Actions::LIST_ITEMS,
+			$auth_credentials
+		);
 
 		if ( is_wp_error( $response ) ) {
 			return $response;
@@ -168,11 +172,16 @@ class Source_Posts_API {
 	 * Makes HTTP request using shared HTTP client.
 	 *
 	 * @param string $url              Request URL.
+	 * @param string $action           Declared request action (see Request_Actions).
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
 	 * @return array|WP_Error Response or error.
 	 */
-	private function make_request( string $url, array $auth_credentials = array() ): array|WP_Error {
-		return $this->http_client->make_request( $url, $auth_credentials );
+	private function make_request(
+		string $url,
+		string $action,
+		array $auth_credentials = array()
+	): array|WP_Error {
+		return $this->http_client->make_request( $url, $action, $auth_credentials );
 	}
 
 	/**
@@ -368,7 +377,11 @@ class Source_Posts_API {
 		$api_url = add_query_arg( $query_args, $api_endpoint );
 
 		// Make request.
-		$response = $this->make_request( $api_url, $auth_credentials );
+		$response = $this->make_request(
+			$api_url,
+			Request_Actions::IMPORT,
+			$auth_credentials
+		);
 
 		if ( is_wp_error( $response ) ) {
 			$this->logger->content_fetch_failed(

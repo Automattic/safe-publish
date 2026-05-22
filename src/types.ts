@@ -310,6 +310,7 @@ export interface AdminData {
  * @property {boolean}  [enableGlobalSearch] Whether to include in global search.
  * @property {boolean}  [enableHiding]       Whether the field can be hidden.
  * @property {Function} [sort]               Custom sort function.
+ * @property {Function} [getValue]           Returns the searchable/sortable value.
  */
 export interface DataViewsField<T = Post> {
 	id: string;
@@ -319,6 +320,7 @@ export interface DataViewsField<T = Post> {
 	enableGlobalSearch?: boolean;
 	enableHiding?: boolean;
 	sort?: ( a: T, b: T, direction: 'asc' | 'desc' ) => number;
+	getValue?: ( args: { item: T } ) => string;
 }
 
 /**
@@ -356,17 +358,6 @@ export interface DataViewsState {
 	titleField?: string;
 	descriptionField?: string;
 	mediaField?: string;
-}
-
-/**
- * Pagination information for DataViews.
- *
- * @property {number} totalItems Total number of items.
- * @property {number} totalPages Total number of pages.
- */
-export interface PaginationInfo {
-	totalItems: number;
-	totalPages: number;
 }
 
 /**

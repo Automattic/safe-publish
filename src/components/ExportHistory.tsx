@@ -6,6 +6,9 @@
  *
  * @file This file defines the ExportHistory component.
  */
+import { getDestinationLabel, getStatusLabel, getUserLabel } from './event-fields';
+import { useDataViewsResult } from './hooks/useDataViewsResult';
+import { DEFAULT_ITEMS_PER_PAGE } from '../constants';
 import { formatDateTime, getErrorMessage } from '../utils';
 import {
 	Button,
@@ -16,7 +19,7 @@ import {
 } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
 import { useState, useEffect } from '@wordpress/element';
-import { __, sprintf } from '@wordpress/i18n';
+import { __ } from '@wordpress/i18n';
 
 import type { ApiResponse, DataViewsField, ExportEvent } from '../types';
 
@@ -34,7 +37,7 @@ export function ExportHistory(): JSX.Element {
 
 	const [ view, setView ] = useState< View >( {
 		type: 'table',
-		perPage: 20,
+		perPage: DEFAULT_ITEMS_PER_PAGE,
 		page: 1,
 		sort: {
 			field: 'date',
@@ -45,21 +48,9 @@ export function ExportHistory(): JSX.Element {
 		fields: [ 'date', 'user', 'destination', 'status', 'posts' ],
 	} );
 
-	const [ paginationInfo, setPaginationInfo ] = useState( {
-		totalItems: 0,
-		totalPages: 1,
-	} );
-
 	useEffect( () => {
 		void loadExportEvents();
 	}, [] );
-
-	useEffect( () => {
-		setPaginationInfo( {
-			totalItems: events.length,
-			totalPages: Math.ceil( events.length / ( view.perPage || 20 ) ),
-		} );
-	}, [ events, view.perPage ] );
 
 	/**
 	 * Loads export events from the backend.
@@ -94,12 +85,24 @@ export function ExportHistory(): JSX.Element {
 		}
 	};
 
-	// DataViews fields configuration.
 	const fields: DataViewsField< ExportEvent >[] = [
 		{
 			id: 'date',
 			label: __( 'Date', 'safe-publish' ),
 			enableSorting: true,
+			enableGlobalSearch: true,
+			// Match raw ISO and formatted date (e.g. "2026-05" or "May").
+			getValue: ( { item }: { item: ExportEvent } ): string =>
+				`${ item.date } ${ formatDateTime( item.date ) }`,
+			sort: (
+				eventA: ExportEvent,
+				eventB: ExportEvent,
+				direction
+			): number => {
+				// Sort by raw ISO; formatted strings won't sort chronologically.
+				const diff = eventA.date.localeCompare( eventB.date );
+				return 'asc' === direction ? diff : -diff;
+			},
 			render: ( { item }: { item: ExportEvent } ): JSX.Element => (
 				<span>{ formatDateTime( item.date ) }</span>
 			),
@@ -108,54 +111,48 @@ export function ExportHistory(): JSX.Element {
 			id: 'user',
 			label: __( 'User', 'safe-publish' ),
 			enableSorting: true,
-			sort: (
-				eventA: ExportEvent,
-				eventB: ExportEvent,
-				direction
-			): number => {
-				const aVal = eventA.actor_display_name || eventA.actor_source;
-				const bVal = eventB.actor_display_name || eventB.actor_source;
-				const diff = aVal.localeCompare( bVal );
-				return 'asc' === direction ? diff : -diff;
-			},
-			render: ( { item }: { item: ExportEvent } ): JSX.Element => {
-				if ( item.actor_user_id > 0 ) {
-					const name = item.actor_display_name || sprintf(
-						/* translators: %d is the WordPress user ID. */
-						__( 'User #%d', 'safe-publish' ),
-						item.actor_user_id
-					);
-					return <span>{ name }</span>;
-				}
-
-				const label = sprintf(
-					/* translators: %s is the actor source (e.g. cli, cron) */
-					__( 'System (%s)', 'safe-publish' ),
-					item.actor_source
-				);
-
-				return <span>{ label }</span>;
-			},
+			enableGlobalSearch: true,
+			getValue: ( { item }: { item: ExportEvent } ): string =>
+				getUserLabel( item ),
+			render: ( { item }: { item: ExportEvent } ): JSX.Element => (
+				<span>{ getUserLabel( item ) }</span>
+			),
 		},
 		{
 			id: 'destination',
 			label: __( 'Destination', 'safe-publish' ),
 			enableSorting: false,
+			enableGlobalSearch: true,
+			getValue: ( { item }: { item: ExportEvent } ): string =>
+				getDestinationLabel( item ),
 			render: ( { item }: { item: ExportEvent } ): JSX.Element => (
-				<span>{ item.destination_site_url || __( 'Unknown destination', 'safe-publish' ) }</span>
+				<span>{ getDestinationLabel( item ) }</span>
 			),
 		},
 		{
 			id: 'status',
 			label: __( 'Status', 'safe-publish' ),
 			enableSorting: true,
+			enableGlobalSearch: true,
+			getValue: ( { item }: { item: ExportEvent } ): string =>
+				getStatusLabel( item ),
+			sort: (
+				eventA: ExportEvent,
+				eventB: ExportEvent,
+				direction
+			): number => {
+				const diff = eventA.level.localeCompare( eventB.level );
+				return 'asc' === direction ? diff : -diff;
+			},
 			render: ( { item }: { item: ExportEvent } ): JSX.Element => {
 				const isError = 'error' === item.level;
 				return (
-					<span className={ `safe-publish-status-${ isError ? 'error' : 'completed' }` }>
-						{ isError
-							? __( 'Failed', 'safe-publish' )
-							: __( 'Exported', 'safe-publish' ) }
+					<span
+						className={ `safe-publish-status-${
+							isError ? 'error' : 'completed'
+						}` }
+					>
+						{ getStatusLabel( item ) }
 					</span>
 				);
 			},
@@ -169,6 +166,9 @@ export function ExportHistory(): JSX.Element {
 			),
 		},
 	];
+
+	const { data: filteredEvents, paginationInfo } =
+		useDataViewsResult( events, view, fields );
 
 	if ( isLoading ) {
 		return (
@@ -209,7 +209,7 @@ export function ExportHistory(): JSX.Element {
 					<Text>{ __( 'No export events found.', 'safe-publish' ) }</Text>
 				) : (
 					<DataViews
-						data={ events }
+						data={ filteredEvents }
 						fields={ fields }
 						view={ view }
 						onChangeView={ setView }

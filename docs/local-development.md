@@ -4,7 +4,19 @@ This repository includes tools for starting a local development environment usin
 
 ## Set up
 
-Clone this repository and install its dependencies:.
+### Hosts file
+
+Both sites are served on the `host.docker.internal` hostname so each container reaches the other at the same address WordPress emits in its URLs. Docker Desktop resolves the name inside containers; the host machine doesn't by default. Add a one-line entry so your browser can reach either site at the same URL the containers use internally:
+
+```sh
+echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts
+```
+
+Without this, browsing either site from your machine fails, and source URLs baked into imported content (image src, links) won't resolve when previewing posts in the destination admin.
+
+### Install and start
+
+Clone this repository and install its dependencies:
 
 ```sh
 npm install
@@ -18,9 +30,12 @@ npm run dev
 
 This will spin up two WordPress environments, build the block editor scripts, set the shared secrets, and watch for changes.
 
-The "destination" WordPress environment will be available at `http://localhost:8888` (admin user: `admin`, password: `password`). The source site URL is automatically configured to `http://host.docker.internal:8889`.
+Both WordPress environments are served on `host.docker.internal` (admin user: `admin`, password: `password`):
 
-The "source" WordPress environment will be available at `http://localhost:8889` (admin user: `admin`, password: `password`).
+- Destination: `http://host.docker.internal:8888`
+- Source: `http://host.docker.internal:8889`
+
+The same hostname is used from your browser and from inside either container, so cross-container HTTP calls and HMAC validation both line up against the same canonical URL.
 
 Stop the development environment with `Ctrl+C` and resume it by running the same command. You can also manually stop the environment with `npm run dev:stop`. Stopping the environment optionally stops the WordPress containers but preserves their state.
 
