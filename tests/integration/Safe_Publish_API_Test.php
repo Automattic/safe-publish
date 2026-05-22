@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\API\Diff_Renderer;
-use Safe_Publish\API\Safe_Publish_API;
 use WP_Post;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -229,26 +228,49 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that diff-preview permission resolves a source post ID to a
-	 * local post before checking capabilities.
+	 * local post before checking capabilities, and that the route is wired to
+	 * the new callback.
 	 *
 	 * Regression test: the permission callback used to call get_post() on the
 	 * source ID directly, returning rest_post_not_found for every authorized
 	 * request because source IDs almost never collide with local post IDs.
+	 * Dispatched through the REST server (not invoked directly) so a future
+	 * mis-wiring of the route would also surface here.
 	 */
 	public function test_diff_preview_permission_resolves_source_id_to_local_post(): void {
-		// ARRANGE: Authenticate as a user who can edit the mapped local post.
+		// ARRANGE: Authenticate, configure source URL, and stub the source fetch
+		// so render_diff can complete after the permission callback grants access.
 		wp_set_current_user( $this->admin_user_id );
+		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
+
+		$stub_source_fetch = static fn() => array(
+			'response' => array( 'code' => 200 ),
+			'body'     => wp_json_encode(
+				array(
+					'title'   => array( 'raw' => 'Source Title' ),
+					'content' => array( 'raw' => '<p>Source content.</p>' ),
+					'excerpt' => array( 'raw' => 'Source excerpt.' ),
+				)
+			),
+		);
+		add_filter( 'pre_http_request', $stub_source_fetch );
 
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'post' );
+		$request->set_param( 'content', wp_json_encode( array( 'title' => 'New Title' ) ) );
 
-		// ACT: Invoke the permission callback the route is wired to.
-		$api    = new Safe_Publish_API();
-		$result = $api->check_diff_preview_permission( $request );
+		try {
+			// ACT: Dispatch through the REST server so route wiring is exercised.
+			$response = $this->server->dispatch( $request );
 
-		// ASSERT: The callback grants access via the resolved local post.
-		$this->assertTrue( $result, 'Permission callback should grant access when source ID maps to an editable local post' );
+			// ASSERT: Permission resolved the source ID to a local post and the
+			// handler completed successfully.
+			$this->assertInstanceOf( WP_REST_Response::class, $response );
+			$this->assertSame( 200, $response->get_status(), 'Should return 200 when source ID maps to an editable local post' );
+		} finally {
+			remove_filter( 'pre_http_request', $stub_source_fetch );
+		}
 	}
 
 	/**
