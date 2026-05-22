@@ -682,10 +682,19 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	public function test_source_referenced_attachments_imported(): void {
 		// ARRANGE + ACT: batch already imported in setUp.
 		// ASSERT: each source URL resolves to a single classified dest
-		// attachment.
-		foreach ( $this->image_refs_by_source_id as $refs ) {
-			foreach ( $refs as $index => $ref ) {
-				$featured_id = 0 === $index ? $ref['id'] : null;
+		// attachment. Featured/inline classification is driven by the source
+		// body's `featured_media` field (same source-of-truth the asserter
+		// uses) rather than image_refs ordering.
+		foreach ( $this->image_refs_by_source_id as $source_id => $refs ) {
+			$featured_source_id = (int) (
+				$this->source_rest_bodies[ $source_id ]['featured_media'] ?? 0
+			);
+
+			foreach ( $refs as $ref ) {
+				$featured_id = $ref['id'] === $featured_source_id
+					? $ref['id']
+					: null;
+
 				Post_Parity_Asserter::assert_imported_attachment_for_source_url(
 					$ref['url'],
 					self::SOURCE_BASE_URL,
