@@ -25,7 +25,7 @@ if (
 }
 
 /**
- * Allows WordPress's safe HTTP API to reach the sibling wp-env container.
+ * Allows WordPress' safe HTTP API to reach the sibling wp-env container.
  *
  * `download_url()` — used by Media_Importer to fetch images — routes
  * through `wp_safe_remote_get()` → `wp_http_validate_url()`, which
