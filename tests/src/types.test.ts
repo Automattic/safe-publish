@@ -2,7 +2,7 @@
  * Tests for TypeScript type definitions and interfaces
  */
 import { describe, expect, it } from 'vitest';
-import type { Post, ImportSession, ImportItem, PaginationInfo } from '@/types';
+import type { Post, ImportSession, ImportItem } from '@/types';
 
 describe( 'Type validation', () => {
 	describe( 'Post type', () => {
@@ -173,15 +173,4 @@ describe( 'Type validation', () => {
 		} );
 	} );
 
-	describe( 'PaginationInfo type', () => {
-		it( 'should accept valid pagination info', () => {
-			const info: PaginationInfo = {
-				totalItems: 100,
-				totalPages: 10,
-			};
-
-			expect( info.totalItems ).toBe( 100 );
-			expect( info.totalPages ).toBe( 10 );
-		} );
-	} );
 } );
