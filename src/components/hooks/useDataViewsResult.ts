@@ -33,7 +33,8 @@ export function useDataViewsResult< T >(
 ) {
 	return useMemo(
 		() => filterSortAndPaginate( data, view, fields ),
-		// `fields` is stable across renders; intentionally omitted from deps.
+		// `fields` is recreated each render; getValue/sort must be pure
+		// so the memo can safely omit it from deps.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[ data, view ]
 	);
