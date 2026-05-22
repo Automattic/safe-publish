@@ -229,16 +229,6 @@ final class Safe_Publish_API extends REST_Base {
 			);
 		}
 
-		if ( ! current_user_can( 'edit_post', $post_id ) ) {
-			return new WP_REST_Response(
-				array(
-					'success' => false,
-					'error'   => __( 'Insufficient permissions', 'safe-publish' ),
-				),
-				403
-			);
-		}
-
 		$postarr = array( 'ID' => $post_id );
 
 		if ( $req->has_param( 'title' ) && isset( $title ) ) {
