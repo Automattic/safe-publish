@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Auth;
 
 use Safe_Publish\Utils\Audit_Log_Table;
+use Safe_Publish\API\Dispatch_Logger;
 use Safe_Publish\API\Export_Logger;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -64,7 +65,8 @@ class Auth_Manager {
 		$this->logger             = new Auth_Logger();
 		$this->permission_manager = new Permission_Manager(
 			$this->logger,
-			new Export_Logger()
+			new Export_Logger(),
+			new Dispatch_Logger()
 		);
 		$this->authenticator      = new HMAC_Authenticator(
 			$this->logger,

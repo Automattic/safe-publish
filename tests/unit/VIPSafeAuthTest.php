@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
+use Safe_Publish\API\Request_Actions;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use WP_Error;
 
@@ -29,7 +30,12 @@ class VIPSafeAuthTest extends TestCase {
 			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
 		);
 
-		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
+		$params = VIP_Safe_Auth::get_auth_params(
+			$site_url,
+			Request_Actions::IMPORT,
+			$auth_config,
+			'GET'
+		);
 
 		$this->assertArrayHasKey( 'X-Safe-Publish-Site-URL', $params['headers'] );
 		$this->assertSame(
@@ -47,27 +53,78 @@ class VIPSafeAuthTest extends TestCase {
 			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
 		);
 
-		$params_with_url = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
-		$source_url      = $params_with_url['headers']['X-Safe-Publish-Site-URL'];
-		$timestamp       = $params_with_url['headers']['X-Safe-Publish-Timestamp'];
-		$content_hash    = $params_with_url['headers']['X-Safe-Publish-Content-Hash'];
+		$params       = VIP_Safe_Auth::get_auth_params(
+			$site_url,
+			Request_Actions::IMPORT,
+			$auth_config,
+			'GET'
+		);
+		$source_url   = $params['headers']['X-Safe-Publish-Site-URL'];
+		$timestamp    = $params['headers']['X-Safe-Publish-Timestamp'];
+		$content_hash = $params['headers']['X-Safe-Publish-Content-Hash'];
 
 		// Recompute what the signature should be with and without the source URL.
 		$route       = '/wp/v2/posts';
 		$without_url = hash_hmac(
 			'sha256',
-			'GET|' . $route . '|' . $timestamp . '|' . $content_hash,
+			'GET|' . $route . '|' . $timestamp . '|' . $content_hash
+				. '||' . Request_Actions::IMPORT,
 			$auth_config['shared_secret']
 		);
 		$with_url    = hash_hmac(
 			'sha256',
-			'GET|' . $route . '|' . $timestamp . '|' . $content_hash . '|' . $source_url,
+			'GET|' . $route . '|' . $timestamp . '|' . $content_hash
+				. '|' . $source_url . '|' . Request_Actions::IMPORT,
 			$auth_config['shared_secret']
 		);
 
 		// The signature must match the one that includes the site URL.
-		$this->assertSame( $with_url, $params_with_url['headers']['X-Safe-Publish-Signature'] );
-		$this->assertNotSame( $without_url, $params_with_url['headers']['X-Safe-Publish-Signature'] );
+		$this->assertSame( $with_url, $params['headers']['X-Safe-Publish-Signature'] );
+		$this->assertNotSame( $without_url, $params['headers']['X-Safe-Publish-Signature'] );
+	}
+
+	/**
+	 * Verifies that the declared request action is baked into the HMAC
+	 * signature and emitted as a request header — tampering with the action
+	 * label after signing must invalidate the signature.
+	 */
+	public function test_action_is_included_in_signature_and_header(): void {
+		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		$params       = VIP_Safe_Auth::get_auth_params(
+			$site_url,
+			Request_Actions::IMPORT,
+			$auth_config,
+			'GET'
+		);
+		$source_url   = $params['headers']['X-Safe-Publish-Site-URL'];
+		$timestamp    = $params['headers']['X-Safe-Publish-Timestamp'];
+		$content_hash = $params['headers']['X-Safe-Publish-Content-Hash'];
+
+		// Recompute the signature with the wrong (tampered) action value.
+		$route        = '/wp/v2/posts';
+		$tampered_sig = hash_hmac(
+			'sha256',
+			'GET|' . $route . '|' . $timestamp . '|' . $content_hash
+				. '|' . $source_url . '|' . Request_Actions::LIST_ITEMS,
+			$auth_config['shared_secret']
+		);
+		$honest_sig   = hash_hmac(
+			'sha256',
+			'GET|' . $route . '|' . $timestamp . '|' . $content_hash
+				. '|' . $source_url . '|' . Request_Actions::IMPORT,
+			$auth_config['shared_secret']
+		);
+
+		$this->assertSame( $honest_sig, $params['headers']['X-Safe-Publish-Signature'] );
+		$this->assertNotSame( $tampered_sig, $params['headers']['X-Safe-Publish-Signature'] );
+		$this->assertSame(
+			Request_Actions::IMPORT,
+			$params['headers']['X-Safe-Publish-Action']
+		);
 	}
 
 	/**
@@ -79,7 +136,12 @@ class VIPSafeAuthTest extends TestCase {
 			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
 		);
 
-		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
+		$params = VIP_Safe_Auth::get_auth_params(
+			$site_url,
+			Request_Actions::IMPORT,
+			$auth_config,
+			'GET'
+		);
 
 		$this->assertIsArray( $params );
 		$this->assertArrayHasKey( 'headers', $params );
@@ -99,7 +161,12 @@ class VIPSafeAuthTest extends TestCase {
 			'password'      => 'hunter2',
 		);
 
-		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
+		$params = VIP_Safe_Auth::get_auth_params(
+			$site_url,
+			Request_Actions::IMPORT,
+			$auth_config,
+			'GET'
+		);
 
 		$this->assertArrayHasKey( 'X-Safe-Publish-Signature', $params['headers'] );
 		$this->assertArrayHasKey( 'Authorization', $params['headers'] );
@@ -117,7 +184,12 @@ class VIPSafeAuthTest extends TestCase {
 			'password' => 'hunter2',
 		);
 
-		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
+		$params = VIP_Safe_Auth::get_auth_params(
+			$site_url,
+			Request_Actions::IMPORT,
+			$auth_config,
+			'GET'
+		);
 
 		$this->assertSame( array(), $params );
 	}
@@ -129,7 +201,12 @@ class VIPSafeAuthTest extends TestCase {
 		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
 		$auth_config = array();
 
-		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
+		$params = VIP_Safe_Auth::get_auth_params(
+			$site_url,
+			Request_Actions::IMPORT,
+			$auth_config,
+			'GET'
+		);
 
 		$this->assertSame( array(), $params );
 	}
@@ -189,7 +266,12 @@ class VIPSafeAuthTest extends TestCase {
 			// No password.
 		);
 
-		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
+		$params = VIP_Safe_Auth::get_auth_params(
+			$site_url,
+			Request_Actions::IMPORT,
+			$auth_config,
+			'GET'
+		);
 
 		$this->assertArrayHasKey( 'X-Safe-Publish-Signature', $params['headers'] );
 		$this->assertArrayNotHasKey( 'Authorization', $params['headers'] );
@@ -205,7 +287,13 @@ class VIPSafeAuthTest extends TestCase {
 		);
 		$body        = '{"content":"Hello world"}';
 
-		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'POST', $body );
+		$params = VIP_Safe_Auth::get_auth_params(
+			$site_url,
+			Request_Actions::IMPORT,
+			$auth_config,
+			'POST',
+			$body
+		);
 
 		$this->assertArrayHasKey( 'X-Safe-Publish-Content-Hash', $params['headers'] );
 		$this->assertSame( hash( 'sha256', $body ), $params['headers']['X-Safe-Publish-Content-Hash'] );
@@ -220,7 +308,12 @@ class VIPSafeAuthTest extends TestCase {
 			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
 		);
 
-		$params = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'GET' );
+		$params = VIP_Safe_Auth::get_auth_params(
+			$site_url,
+			Request_Actions::IMPORT,
+			$auth_config,
+			'GET'
+		);
 
 		$this->assertArrayHasKey( 'X-Safe-Publish-Content-Hash', $params['headers'] );
 		$this->assertSame( hash( 'sha256', '' ), $params['headers']['X-Safe-Publish-Content-Hash'] );
@@ -235,8 +328,20 @@ class VIPSafeAuthTest extends TestCase {
 			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
 		);
 
-		$params_a = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'POST', 'body A' );
-		$params_b = VIP_Safe_Auth::get_auth_params( $site_url, $auth_config, 'POST', 'body B' );
+		$params_a = VIP_Safe_Auth::get_auth_params(
+			$site_url,
+			Request_Actions::IMPORT,
+			$auth_config,
+			'POST',
+			'body A'
+		);
+		$params_b = VIP_Safe_Auth::get_auth_params(
+			$site_url,
+			Request_Actions::IMPORT,
+			$auth_config,
+			'POST',
+			'body B'
+		);
 
 		$this->assertNotSame(
 			$params_a['headers']['X-Safe-Publish-Content-Hash'],

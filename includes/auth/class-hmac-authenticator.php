@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Auth;
 
+use Safe_Publish\API\Request_Actions;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -243,13 +244,18 @@ class HMAC_Authenticator {
 			);
 		}
 
+		$action = isset( $headers['x_safe_publish_action'] )
+			? (string) $headers['x_safe_publish_action'][0]
+			: '';
+
 		if ( ! $this->validate_signature(
 			$signature,
 			$method,
 			$route,
 			$timestamp,
 			$received_hash,
-			$this->connected_site_url
+			$this->connected_site_url,
+			$action
 		) ) {
 			$this->logger->signature_invalid(
 				$route,
@@ -272,8 +278,18 @@ class HMAC_Authenticator {
 			$route,
 			$method,
 			$timestamp,
-			$request_site_url
+			$request_site_url,
+			$action
 		);
+
+		if ( ! Request_Actions::is_valid( $action ) ) {
+			$this->logger->request_action_unrecognized(
+				$route,
+				$method,
+				$action,
+				$request_site_url
+			);
+		}
 
 		if ( ! headers_sent() ) {
 			header( 'X-Safe-Publish-Auth: success' );
@@ -327,7 +343,8 @@ class HMAC_Authenticator {
 	/**
 	 * Validates the HMAC-SHA256 signature.
 	 *
-	 * Signature covers: METHOD|URI|TIMESTAMP|CONTENT_HASH|CONNECTED_SITE_URL
+	 * Signature covers:
+	 * METHOD|URI|TIMESTAMP|CONTENT_HASH|CONNECTED_SITE_URL|ACTION
 	 *
 	 * @param string $signature          Provided signature.
 	 * @param string $method             HTTP method.
@@ -335,6 +352,7 @@ class HMAC_Authenticator {
 	 * @param int    $timestamp          Request timestamp.
 	 * @param string $content_hash       SHA-256 hash of request body.
 	 * @param string $connected_site_url The authoritative site URL to include in the expected signature string.
+	 * @param string $action             Declared X-Safe-Publish-Action header value.
 	 * @return bool True if valid.
 	 */
 	private function validate_signature(
@@ -343,9 +361,15 @@ class HMAC_Authenticator {
 		string $uri,
 		int $timestamp,
 		string $content_hash,
-		string $connected_site_url
+		string $connected_site_url,
+		string $action
 	): bool {
-		$string_to_sign = $method . '|' . $uri . '|' . $timestamp . '|' . $content_hash . '|' . $connected_site_url;
+		$string_to_sign = $method
+			. '|' . $uri
+			. '|' . $timestamp
+			. '|' . $content_hash
+			. '|' . $connected_site_url
+			. '|' . $action;
 		$expected       = hash_hmac( 'sha256', $string_to_sign, $this->shared_secret );
 		return hash_equals( $expected, $signature );
 	}

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
+use Safe_Publish\API\Dispatch_Logger;
 use Safe_Publish\API\Export_Logger;
 use Safe_Publish\Auth\Permission_Manager;
 use Safe_Publish\Auth\Auth_Logger;
@@ -34,7 +35,11 @@ class ExportLoggerTest extends TestCase {
 	 * Safe Publish User-Agent string.
 	 */
 	public function test_parse_destination_site_url_extracts_url_from_user_agent(): void {
-		$manager = new Permission_Manager( new Auth_Logger(), new Export_Logger() );
+		$manager = new Permission_Manager(
+			new Auth_Logger(),
+			new Export_Logger(),
+			new Dispatch_Logger()
+		);
 		$method  = get_private_method( Permission_Manager::class, 'parse_destination_site_url' );
 
 		$result = $method->invoke( $manager, 'Safe Publish/1.2.3; https://dest.example.com' );
@@ -47,7 +52,11 @@ class ExportLoggerTest extends TestCase {
 	 * User-Agent header.
 	 */
 	public function test_parse_destination_site_url_returns_empty_string_for_missing_header(): void {
-		$manager = new Permission_Manager( new Auth_Logger(), new Export_Logger() );
+		$manager = new Permission_Manager(
+			new Auth_Logger(),
+			new Export_Logger(),
+			new Dispatch_Logger()
+		);
 		$method  = get_private_method( Permission_Manager::class, 'parse_destination_site_url' );
 
 		$this->assertSame( '', $method->invoke( $manager, '' ) );
@@ -58,7 +67,11 @@ class ExportLoggerTest extends TestCase {
 	 * User-Agent does not match the expected format.
 	 */
 	public function test_parse_destination_site_url_returns_raw_value_for_unknown_format(): void {
-		$manager = new Permission_Manager( new Auth_Logger(), new Export_Logger() );
+		$manager = new Permission_Manager(
+			new Auth_Logger(),
+			new Export_Logger(),
+			new Dispatch_Logger()
+		);
 		$method  = get_private_method( Permission_Manager::class, 'parse_destination_site_url' );
 
 		$result = $method->invoke( $manager, 'curl/7.88.0' );

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
+use Safe_Publish\API\Request_Actions;
 use Safe_Publish\API\REST_Base;
 use WP_Error;
 
@@ -48,7 +49,7 @@ class RESTBaseTest extends TestCase {
 			 * @return array|WP_Error Response array or WP_Error on failure.
 			 */
 			public function test_make_request( string $url, array $auth_credentials = array() ): array|WP_Error {
-				return $this->make_request( $url, $auth_credentials );
+				return $this->make_request( $url, Request_Actions::IMPORT, $auth_credentials );
 			}
 		};
 	}

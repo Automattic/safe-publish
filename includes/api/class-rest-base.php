@@ -52,12 +52,23 @@ abstract class REST_Base {
 	 * Makes HTTP request using shared HTTP client.
 	 *
 	 * @param string $url              Request URL.
+	 * @param string $action           Declared request action (see Request_Actions).
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
 	 * @param array  $additional_args  Optional. Additional request arguments. Default empty array.
 	 * @return array|WP_Error Response or error.
 	 */
-	public function make_request( string $url, array $auth_credentials = array(), array $additional_args = array() ): array|WP_Error {
-		return $this->http_client->make_request( $url, $auth_credentials, $additional_args );
+	public function make_request(
+		string $url,
+		string $action,
+		array $auth_credentials = array(),
+		array $additional_args = array()
+	): array|WP_Error {
+		return $this->http_client->make_request(
+			$url,
+			$action,
+			$auth_credentials,
+			$additional_args
+		);
 	}
 
 	/**

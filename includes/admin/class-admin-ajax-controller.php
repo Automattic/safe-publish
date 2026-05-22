@@ -12,6 +12,7 @@ namespace Safe_Publish\Admin;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Post_Type_Fetcher;
+use Safe_Publish\API\Request_Actions;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
@@ -759,6 +760,7 @@ final class Admin_Ajax_Controller {
 
 		$auth_params = \Safe_Publish\Auth\VIP_Safe_Auth::get_auth_params(
 			$api_url,
+			Request_Actions::PROBE,
 			$auth_credentials,
 			'GET'
 		);
@@ -777,7 +779,11 @@ final class Admin_Ajax_Controller {
 		);
 
 		try {
-			$response = $this->http_client->make_request( $api_url, $auth_credentials );
+			$response = $this->http_client->make_request(
+				$api_url,
+				Request_Actions::PROBE,
+				$auth_credentials
+			);
 
 			if ( is_wp_error( $response ) ) {
 				$debug_info['request_error'] = $response->get_error_message();
