@@ -65,8 +65,9 @@ trait Per_Source_Id_Post_Api_Mock_Trait {
 	/**
 	 * Intercepts single-post REST requests and serves the body registered for
 	 * the source ID embedded in the URL. Returns the prior $preempt for URLs
-	 * outside the wp/v2/{type}/{id} pattern, and a WP_Error when no body has
-	 * been registered for the matched ID.
+	 * outside the wp/v2/{type}/{id} pattern and for wp/v2/media/{id}
+	 * (which Per_Source_Id_Media_Api_Mock_Trait handles), and a WP_Error
+	 * when no body has been registered for the matched ID.
 	 *
 	 * @param false|array|WP_Error $preempt Preemptive return value.
 	 * @param array                $_args   HTTP arguments (unused).

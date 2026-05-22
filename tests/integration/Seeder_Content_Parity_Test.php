@@ -606,8 +606,9 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	/**
 	 * Verifies that every meta key listed in DEFERRED_META is absent on each
 	 * dest post. Locks the current phase's "not yet emitted" state so that a
-	 * future phase emitting one of these keys (e.g. _thumbnail_id in PR 2c)
-	 * surfaces as a test failure and forces the registry to be updated.
+	 * future phase emitting one of these keys (e.g. META_SOURCE_POST_PARENT_ID
+	 * when hierarchical-post support ships) surfaces as a test failure and
+	 * forces the registry to be updated.
 	 */
 	public function test_deferred_meta_keys_absent(): void {
 		// ARRANGE + ACT: batch already imported in setUp.

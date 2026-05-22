@@ -161,15 +161,15 @@ final class Post_Parity_Asserter {
 	);
 
 	/**
-	 * Plugin-added meta keys the importer writes on every imported post. The
+	 * Plugin-added meta keys the importer writes when importing a post. The
 	 * expected value per post is computed in assert_plugin_added_meta() — this
 	 * map only documents what each key means so reviewers can audit the set.
 	 *
-	 * META_IMPORT_DATE_GMT's value is a wall-clock timestamp computed at
-	 * import time, so it gets a format check rather than a value-equality
-	 * check. _thumbnail_id's value is the dest attachment ID (dynamic), so it
-	 * gets a resolves-to-featured-attachment check rather than a value
-	 * comparison.
+	 * Entries are written unconditionally and value-checked strictly, except:
+	 * META_IMPORT_DATE_GMT is a wall-clock timestamp checked for shape only,
+	 * and _thumbnail_id is written only when the source had a featured_media
+	 * (its dynamic dest attachment ID is checked for resolution rather than
+	 * value-equality — see assert_thumbnail_id_for_source()).
 	 *
 	 * @var array<string, string>
 	 */
@@ -626,9 +626,9 @@ final class Post_Parity_Asserter {
 	/**
 	 * Asserts that every meta key listed in DEFERRED_META is absent on the
 	 * destination post. Locks the current phase's behavior so that when a
-	 * later phase starts emitting one of these keys (e.g. PR 2c attaching
-	 * `_thumbnail_id`), the test fails and forces an explicit move out of
-	 * DEFERRED_META into PLUGIN_ADDED_META.
+	 * later phase starts emitting one of these keys (e.g. a hierarchical-post
+	 * phase emitting `META_SOURCE_POST_PARENT_ID`), the test fails and forces
+	 * an explicit move out of DEFERRED_META into PLUGIN_ADDED_META.
 	 *
 	 * @param WP_Post  $dest_post Imported destination post.
 	 * @param TestCase $test      Active test case.
@@ -884,9 +884,11 @@ final class Post_Parity_Asserter {
 	}
 
 	/**
-	 * Asserts that every attachment-column key has been classified by the
-	 * asserter (parity, divergence, or deferred). Mirrors
-	 * assert_no_unmodeled_columns() but for the attachment-side rules.
+	 * Asserts that every wp_posts column has a place on the attachment side:
+	 * parity, divergence registry, deferred registry, or the in-method
+	 * "WP defaults" bucket (columns the importer never touches on the
+	 * attachment path). Mirrors assert_no_unmodeled_columns() but for
+	 * attachment-specific classification.
 	 *
 	 * @param TestCase $test Active test case.
 	 */
