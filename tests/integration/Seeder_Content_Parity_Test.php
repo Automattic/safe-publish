@@ -214,8 +214,9 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 				++$next_img_id;
 			}
 
-			$source_id                                   = self::SOURCE_ID_BASE + $i;
-			$payload                                     = $generator->generate( $i, $image_refs );
+			$source_id = self::SOURCE_ID_BASE + $i;
+			$payload   = $generator->generate( $i, $image_refs );
+
 			$this->image_refs_by_source_id[ $source_id ] = $image_refs;
 			$bodies[ $source_id ]                        = $this->payload_to_rest_body(
 				$source_id,
