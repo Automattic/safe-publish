@@ -114,16 +114,6 @@ export function ExportHistory(): JSX.Element {
 			enableGlobalSearch: true,
 			getValue: ( { item }: { item: ExportEvent } ): string =>
 				getUserLabel( item ),
-			sort: (
-				eventA: ExportEvent,
-				eventB: ExportEvent,
-				direction
-			): number => {
-				const aVal = eventA.actor_display_name || eventA.actor_source;
-				const bVal = eventB.actor_display_name || eventB.actor_source;
-				const diff = aVal.localeCompare( bVal );
-				return 'asc' === direction ? diff : -diff;
-			},
 			render: ( { item }: { item: ExportEvent } ): JSX.Element => (
 				<span>{ getUserLabel( item ) }</span>
 			),
