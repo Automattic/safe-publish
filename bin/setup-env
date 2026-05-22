@@ -2,7 +2,7 @@
 
 PORT="${WP_ENV_PORT-8888}"
 TESTS_PORT="${WP_ENV_TESTS_PORT-8889}"
-DEST_HOME="${WP_ENV_HOME_URL-http://host.docker.internal:$PORT}"
+DEST_HOME="http://host.docker.internal:$PORT"
 
 # Target site (development env / cli / port $PORT). Pin WP_HOME/WP_SITEURL
 # to $DEST_HOME so emitted URLs match what browsers and the source container
