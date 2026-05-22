@@ -20,6 +20,10 @@ use WP_Error;
  * a WP_Error so the failure surfaces clearly instead of degrading to a silent
  * default response.
  *
+ * The URL pattern excludes /media/ so a sibling
+ * Per_Source_Id_Media_Api_Mock_Trait can serve featured-media metadata
+ * requests without colliding with this trait.
+ *
  * Use the sibling Mock_Post_API_Trait for tests that mock a single fixed post
  * via $mock_post_overrides. This trait is for batches where the response body
  * varies by source ID.
@@ -78,8 +82,10 @@ trait Per_Source_Id_Post_Api_Mock_Trait {
 			return $preempt;
 		}
 
+		// Exclude /media/ so Per_Source_Id_Media_Api_Mock_Trait can serve
+		// featured-media metadata requests without colliding here.
 		if ( ! preg_match(
-			'#/wp-json/wp/v2/[a-z0-9_-]+/(\d+)#',
+			'#/wp-json/wp/v2/(?!media/)[a-z0-9_-]+/(\d+)#',
 			$url,
 			$matches
 		) ) {
