@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use WP_Error;
+
 /**
  * Provides reusable helpers for mocking HTTP media downloads in integration tests.
  *
@@ -16,6 +18,104 @@ namespace Safe_Publish\Tests\Integration;
  * serve real fixture files from tests/fixtures/images/ in place of live downloads.
  */
 trait Mock_Media_HTTP_Trait {
+
+	/**
+	 * MIME types served by mock_image_byte_response() keyed by file extension.
+	 *
+	 * @var array<string, array{file: string, mime: string}>
+	 */
+	private const IMAGE_FIXTURE_MAP = array(
+		'jpg'  => array(
+			'file' => 'test-1x1.jpg',
+			'mime' => 'image/jpeg',
+		),
+		'jpeg' => array(
+			'file' => 'test-1x1.jpg',
+			'mime' => 'image/jpeg',
+		),
+		'png'  => array(
+			'file' => 'test-1x1.png',
+			'mime' => 'image/png',
+		),
+		'gif'  => array(
+			'file' => 'test-1x1.gif',
+			'mime' => 'image/gif',
+		),
+		'webp' => array(
+			'file' => 'test-1x1.webp',
+			'mime' => 'image/webp',
+		),
+	);
+
+	/**
+	 * Registers the pre_http_request filter that serves fixture bytes for
+	 * image URLs and the wp_handle_sideload_prefilter that populates the empty
+	 * temp files download_url() leaves behind.
+	 *
+	 * Tests that also mock REST endpoints (post or media) should register those
+	 * mocks separately; this helper only wires the image-byte pipeline.
+	 */
+	protected function add_image_byte_response_mock(): void {
+		add_filter(
+			'pre_http_request',
+			array( $this, 'mock_image_byte_response' ),
+			1,
+			3
+		);
+		add_filter(
+			'wp_handle_sideload_prefilter',
+			array( $this, 'fix_empty_temp_files' ),
+			10,
+			1
+		);
+	}
+
+	/**
+	 * Removes the filters registered by add_image_byte_response_mock().
+	 */
+	protected function remove_image_byte_response_mock(): void {
+		remove_filter(
+			'pre_http_request',
+			array( $this, 'mock_image_byte_response' ),
+			1
+		);
+		remove_filter(
+			'wp_handle_sideload_prefilter',
+			array( $this, 'fix_empty_temp_files' ),
+			10
+		);
+	}
+
+	/**
+	 * Serves fixture bytes for any URL whose path has an image extension this
+	 * trait knows about. URLs without a recognized image extension fall
+	 * through so other pre_http_request filters can handle them.
+	 *
+	 * @param false|array|WP_Error $preempt Preemptive return value.
+	 * @param array                $_args   HTTP arguments (unused).
+	 * @param string               $url     Request URL.
+	 * @return false|array|WP_Error
+	 */
+	public function mock_image_byte_response(
+		false|array|WP_Error $preempt,
+		array $_args,
+		string $url
+	): false|array|WP_Error {
+		if ( false !== $preempt ) {
+			return $preempt;
+		}
+
+		$path      = (string) wp_parse_url( $url, PHP_URL_PATH );
+		$extension = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
+
+		if ( ! isset( self::IMAGE_FIXTURE_MAP[ $extension ] ) ) {
+			return $preempt;
+		}
+
+		$fixture = self::IMAGE_FIXTURE_MAP[ $extension ];
+
+		return $this->get_fixture_response( $fixture['file'], $fixture['mime'] );
+	}
 
 	/**
 	 * Fixes empty temp files created by download_url() before wp_handle_sideload()
