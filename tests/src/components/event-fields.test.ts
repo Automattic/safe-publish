@@ -33,8 +33,12 @@ describe( 'getUserLabel', () => {
 			actor_user_id: 42,
 			actor_display_name: 'Alex',
 		};
-		// ACT + ASSERT.
-		expect( getUserLabel( event ) ).toBe( 'Alex' );
+
+		// ACT: derive the user column label.
+		const result = getUserLabel( event );
+
+		// ASSERT: display name passes through unchanged.
+		expect( result ).toBe( 'Alex' );
 	} );
 
 	it( 'should fall back to "User #ID" when display name is empty', () => {
@@ -44,15 +48,23 @@ describe( 'getUserLabel', () => {
 			actor_user_id: 42,
 			actor_display_name: '',
 		};
-		// ACT + ASSERT: sprintf renders the numeric fallback.
-		expect( getUserLabel( event ) ).toBe( 'User #42' );
+
+		// ACT: derive the user column label.
+		const result = getUserLabel( event );
+
+		// ASSERT: sprintf renders the numeric fallback.
+		expect( result ).toBe( 'User #42' );
 	} );
 
 	it( 'should label system actors with their source', () => {
 		// ARRANGE: system-triggered event (actor_user_id = 0).
 		const event: ExportEvent = { ...baseEvent, actor_user_id: 0, actor_source: 'cron' };
-		// ACT + ASSERT.
-		expect( getUserLabel( event ) ).toBe( 'System (cron)' );
+
+		// ACT: derive the user column label.
+		const result = getUserLabel( event );
+
+		// ASSERT: system actors render with their invocation source.
+		expect( result ).toBe( 'System (cron)' );
 	} );
 } );
 
@@ -63,15 +75,23 @@ describe( 'getDestinationLabel', () => {
 			...baseEvent,
 			destination_site_url: 'https://destination.test',
 		};
-		// ACT + ASSERT.
-		expect( getDestinationLabel( event ) ).toBe( 'https://destination.test' );
+
+		// ACT: derive the destination column label.
+		const result = getDestinationLabel( event );
+
+		// ASSERT: URL passes through unchanged.
+		expect( result ).toBe( 'https://destination.test' );
 	} );
 
 	it( 'should fall back to "Unknown destination" when URL is empty', () => {
 		// ARRANGE: event with no destination URL recorded.
 		const event: ExportEvent = { ...baseEvent, destination_site_url: '' };
-		// ACT + ASSERT.
-		expect( getDestinationLabel( event ) ).toBe( 'Unknown destination' );
+
+		// ACT: derive the destination column label.
+		const result = getDestinationLabel( event );
+
+		// ASSERT: empty URL falls back to the localized label.
+		expect( result ).toBe( 'Unknown destination' );
 	} );
 } );
 
@@ -79,14 +99,22 @@ describe( 'getStatusLabel', () => {
 	it( 'should return "Failed" for error-level events', () => {
 		// ARRANGE: error-level event.
 		const event: ExportEvent = { ...baseEvent, level: 'error' };
-		// ACT + ASSERT.
-		expect( getStatusLabel( event ) ).toBe( 'Failed' );
+
+		// ACT: derive the status column label.
+		const result = getStatusLabel( event );
+
+		// ASSERT: error level renders as "Failed".
+		expect( result ).toBe( 'Failed' );
 	} );
 
 	it( 'should return "Exported" for info-level events', () => {
 		// ARRANGE: info-level event.
 		const event: ExportEvent = { ...baseEvent, level: 'info' };
-		// ACT + ASSERT.
-		expect( getStatusLabel( event ) ).toBe( 'Exported' );
+
+		// ACT: derive the status column label.
+		const result = getStatusLabel( event );
+
+		// ASSERT: info level renders as "Exported".
+		expect( result ).toBe( 'Exported' );
 	} );
 } );
