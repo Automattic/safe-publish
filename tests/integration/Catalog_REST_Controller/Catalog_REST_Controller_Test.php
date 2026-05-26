@@ -528,6 +528,42 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that two consecutive pages together cover every record —
+	 * pins against the off-by-one where `paged` + `per_page + 1` caused
+	 * WP_Query to skip one record between pages.
+	 */
+	public function test_consecutive_pages_cover_every_record(): void {
+		// ARRANGE: Three posts span a page boundary at per_page=2.
+		for ( $i = 0; $i < 3; $i++ ) {
+			self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		}
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Fetch both pages.
+		$page_1_ids = array_column(
+			$this->dispatch(
+				array(
+					'per_page' => 2,
+					'page'     => 1,
+				)
+			)->get_data()['items'],
+			'id'
+		);
+		$page_2_ids = array_column(
+			$this->dispatch(
+				array(
+					'per_page' => 2,
+					'page'     => 2,
+				)
+			)->get_data()['items'],
+			'id'
+		);
+
+		// ASSERT: All 3 records accounted for across the two pages.
+		$this->assertCount( 3, array_unique( array_merge( $page_1_ids, $page_2_ids ) ) );
+	}
+
+	/**
 	 * Verifies has_more is false on the last page.
 	 */
 	public function test_has_more_is_false_on_last_page(): void {

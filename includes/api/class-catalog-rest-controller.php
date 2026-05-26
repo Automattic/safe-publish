@@ -202,7 +202,7 @@ final class Catalog_REST_Controller {
 			'order'               => $order,
 			'no_found_rows'       => true,
 			'posts_per_page'      => $per_page + 1,
-			'paged'               => $page,
+			'offset'              => ( $page - 1 ) * $per_page,
 			'ignore_sticky_posts' => true,
 		);
 
