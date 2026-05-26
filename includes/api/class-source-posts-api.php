@@ -16,6 +16,7 @@ use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Validators\URL_Validator;
 use WP_Error;
+use WP_Post;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -526,5 +527,50 @@ class Source_Posts_API {
 		}
 
 		return $fresh_data;
+	}
+
+	/**
+	 * Prepares a single WP_Post for the catalog listing payload.
+	 *
+	 * The shape mirrors what the destination's listing UI expects.
+	 *
+	 * @param WP_Post $post Source post.
+	 * @return array Listing payload.
+	 */
+	public static function prepare_listing_payload_from_post( WP_Post $post ): array {
+		$permalink = get_permalink( $post );
+
+		return array(
+			'id'           => $post->ID,
+			'link'         => is_string( $permalink ) ? esc_url_raw( $permalink ) : '',
+			'title'        => sanitize_text_field(
+				wp_strip_all_tags(
+					html_entity_decode(
+						$post->post_title,
+						ENT_QUOTES | ENT_HTML5,
+						'UTF-8'
+					)
+				)
+			),
+			'post_type'    => $post->post_type,
+			'date_gmt'     => self::format_gmt_iso( $post->post_date_gmt ),
+			'modified_gmt' => self::format_gmt_iso( $post->post_modified_gmt ),
+			'status'       => $post->post_status,
+		);
+	}
+
+	/**
+	 * Converts a MySQL GMT datetime ("Y-m-d H:i:s") to ISO 8601 with a Z
+	 * marker. Empty/zero values yield an empty string.
+	 *
+	 * @param string $mysql_gmt MySQL GMT datetime.
+	 * @return string ISO 8601 GMT string or empty when input is unset.
+	 */
+	private static function format_gmt_iso( string $mysql_gmt ): string {
+		if ( '' === $mysql_gmt || str_starts_with( $mysql_gmt, '0000' ) ) {
+			return '';
+		}
+
+		return str_replace( ' ', 'T', $mysql_gmt ) . 'Z';
 	}
 }

@@ -23,6 +23,7 @@ use Safe_Publish\Admin\Settings_Logger;
 use Safe_Publish\Admin\Settings_Page;
 use Safe_Publish\Admin\Settings_Sanitizer;
 use Safe_Publish\Auth\Auth_Manager;
+use Safe_Publish\API\Catalog_REST_Controller;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
@@ -95,6 +96,12 @@ final class Plugin {
 			);
 
 			$source_author_field->init();
+
+			$catalog_controller = new Catalog_REST_Controller(
+				$auth_manager->get_authenticator()
+			);
+
+			$catalog_controller->init();
 		}
 
 		$can_import = in_array(
