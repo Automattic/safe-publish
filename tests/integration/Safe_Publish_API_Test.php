@@ -282,7 +282,8 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	 * fails, we must not leak the post's existence by responding 404.
 	 */
 	public function test_diff_preview_permission_returns_403_for_resolved_post_user_cannot_edit(): void {
-		// ARRANGE: Author user cannot edit the admin-owned mapped post.
+		// ARRANGE: Author user lacks edit_others_posts; the mapped post is
+		// owned by a different user (see setUp), so edit_post is denied.
 		$this->create_user_and_authenticate( 'author' );
 
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
