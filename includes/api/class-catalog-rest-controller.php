@@ -122,6 +122,16 @@ final class Catalog_REST_Controller {
 				'args'                => $this->route_args(),
 			)
 		);
+
+		register_rest_route(
+			self::REST_NAMESPACE,
+			'/catalog/post-types',
+			array(
+				'methods'             => 'GET',
+				'permission_callback' => array( $this, 'check_permission' ),
+				'callback'            => array( $this, 'handle_post_types_request' ),
+			)
+		);
 	}
 
 	/**
@@ -238,6 +248,48 @@ final class Catalog_REST_Controller {
 			),
 			200
 		);
+	}
+
+	/**
+	 * Lists post types the catalog endpoint will actually serve.
+	 *
+	 * Mirrors handle_request()'s `public && show_in_rest` gate so the
+	 * destination's dropdown only shows types that won't 400 when selected.
+	 * Excludes built-in types that pass the filter but don't represent
+	 * content posts in the catalog sense (attachments are files with status
+	 * `inherit`; navigation menus are structural). Custom CPTs that meet
+	 * the contract come through automatically.
+	 *
+	 * @return WP_REST_Response List of catalog-eligible post types.
+	 */
+	public function handle_post_types_request(): WP_REST_Response {
+		$internal_blocklist = array( 'attachment', 'wp_navigation' );
+
+		$items = array();
+		foreach ( get_post_types( array(), 'objects' ) as $slug => $object ) {
+			if ( in_array( $slug, $internal_blocklist, true ) ) {
+				continue;
+			}
+			if ( true !== $object->show_in_rest || true !== $object->public ) {
+				continue;
+			}
+
+			$name = isset( $object->labels->name ) && is_string( $object->labels->name )
+				? $object->labels->name
+				: $slug;
+
+			$items[] = array(
+				'slug'        => $slug,
+				'name'        => $name,
+				'label'       => $name,
+				'rest_base'   => is_string( $object->rest_base ) && '' !== $object->rest_base
+					? $object->rest_base
+					: $slug,
+				'description' => is_string( $object->description ) ? $object->description : '',
+			);
+		}
+
+		return new WP_REST_Response( $items, 200 );
 	}
 
 	/**

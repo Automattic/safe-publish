@@ -717,6 +717,75 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the post-types endpoint returns the WP built-in
+	 * content types (post, page) and excludes back-office types that
+	 * pass the public+show_in_rest filter but aren't catalog-serveable
+	 * (attachment, wp_navigation).
+	 */
+	public function test_post_types_endpoint_returns_only_catalog_eligible_types(): void {
+		// ARRANGE: Authenticated session; rely on the WP default post types.
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Hit the post-types route.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/safe-publish/v1/catalog/post-types' )
+		);
+
+		// ASSERT: 200, includes post + page, excludes attachment and wp_navigation.
+		$this->assertSame( 200, $response->get_status() );
+		$slugs = array_column( $response->get_data(), 'slug' );
+		$this->assertContains( 'post', $slugs );
+		$this->assertContains( 'page', $slugs );
+		$this->assertNotContains( 'attachment', $slugs );
+		$this->assertNotContains( 'wp_navigation', $slugs );
+	}
+
+	/**
+	 * Verifies that each post-types item carries the full shape the
+	 * destination's dropdown expects.
+	 */
+	public function test_post_types_endpoint_item_shape(): void {
+		// ARRANGE.
+		$this->force_hmac_authenticated( true );
+
+		// ACT.
+		$items = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/safe-publish/v1/catalog/post-types' )
+		)->get_data();
+
+		// ASSERT: Find 'post' and check it has the expected fields.
+		$post_entry = null;
+		foreach ( $items as $item ) {
+			if ( 'post' === $item['slug'] ) {
+				$post_entry = $item;
+				break;
+			}
+		}
+		$this->assertNotNull( $post_entry );
+		$this->assertArrayHasKey( 'name', $post_entry );
+		$this->assertArrayHasKey( 'label', $post_entry );
+		$this->assertArrayHasKey( 'rest_base', $post_entry );
+		$this->assertArrayHasKey( 'description', $post_entry );
+		$this->assertSame( 'posts', $post_entry['rest_base'] );
+	}
+
+	/**
+	 * Verifies that the post-types route is gated by HMAC auth like the
+	 * sibling catalog/posts route.
+	 */
+	public function test_post_types_endpoint_requires_hmac_auth(): void {
+		// ARRANGE: Authenticator stays in its default unauthenticated state.
+
+		// ACT: Dispatch without auth.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/safe-publish/v1/catalog/post-types' )
+		);
+
+		// ASSERT: 401/403.
+		$this->assertContains( $response->get_status(), array( 401, 403 ) );
+	}
+
+	/**
 	 * Dispatches the catalog route with optional overrides.
 	 *
 	 * @param array $params Query params to set on the request.
