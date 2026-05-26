@@ -228,14 +228,11 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that diff-preview permission resolves a source post ID to a
-	 * local post before checking capabilities, and that the route is wired to
-	 * the new callback.
+	 * local post before checking capabilities.
 	 *
-	 * Regression test: the permission callback used to call get_post() on the
-	 * source ID directly, returning rest_post_not_found for every authorized
-	 * request because source IDs almost never collide with local post IDs.
-	 * Dispatched through the REST server (not invoked directly) so a future
-	 * mis-wiring of the route would also surface here.
+	 * Regression: the callback used to treat the source ID as a local ID,
+	 * 404'ing every authorized request. Dispatches through the REST server
+	 * so route-wiring regressions also surface.
 	 */
 	public function test_diff_preview_permission_resolves_source_id_to_local_post(): void {
 		// ARRANGE: Authenticate, configure source URL, and stub the source fetch
@@ -275,11 +272,8 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that diff-preview returns 403 (not 404) when the source ID
-	 * resolves to a local post the user cannot edit.
-	 *
-	 * Covers the new branch in check_diff_preview_permission: when
-	 * find_local_post() succeeds but current_user_can( 'edit_post', ... )
-	 * fails, we must not leak the post's existence by responding 404.
+	 * resolves to a local post the user cannot edit, to avoid leaking the
+	 * post's existence to non-editors.
 	 */
 	public function test_diff_preview_permission_returns_403_for_resolved_post_user_cannot_edit(): void {
 		// ARRANGE: Author user lacks edit_others_posts; the mapped post is
