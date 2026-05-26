@@ -109,9 +109,15 @@ export interface DiffPreviewResult {
 export async function fetchDiffPreview(
 	payload: DiffPreviewPayload
 ): Promise< DiffPreviewResult > {
+	const headers: Record< string, string > = { 'Content-Type': 'application/json' };
+	const wpNonce = window.safePublishAdminData?.restNonce;
+	if ( wpNonce ) {
+		headers[ 'X-WP-Nonce' ] = wpNonce;
+	}
+
 	const res = await fetch( '/wp-json/safe-publish/v1/diff-preview', {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		headers,
 		body: JSON.stringify( payload ),
 	} );
 	if ( ! res.ok ) {

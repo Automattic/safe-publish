@@ -118,10 +118,7 @@ final class Session_Formatter {
 			$item_status
 		);
 
-		$rollback_action = $this->determine_rollback_action(
-			$item_status,
-			$has_previous_content
-		);
+		$rollback_action = $this->determine_rollback_action( $item_status );
 
 		$edit_url = $post_id > 0
 			? admin_url( "post.php?post={$post_id}&action=edit" )
@@ -172,19 +169,14 @@ final class Session_Formatter {
 	/**
 	 * Determines the rollback action for an item.
 	 *
-	 * @param string $item_status          Item status.
-	 * @param bool   $has_previous_content Whether previous content exists.
+	 * `success` items are newly created posts (deleted on rollback);
+	 * `updated` items have an import-time snapshot (restored on rollback).
+	 *
+	 * @param string $item_status Item status.
 	 * @return string Rollback action ('delete' or 'restore').
 	 */
-	private function determine_rollback_action(
-		string $item_status,
-		bool $has_previous_content
-	): string {
-		if ( 'success' === $item_status ) {
-			return 'delete';
-		}
-
-		return $has_previous_content ? 'restore' : 'delete';
+	private function determine_rollback_action( string $item_status ): string {
+		return 'success' === $item_status ? 'delete' : 'restore';
 	}
 
 	/**

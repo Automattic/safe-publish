@@ -118,4 +118,23 @@ describe( 'Post diff action', () => {
 		const diffAction = getModalAction( 'post-diff' );
 		expect( diffAction.modalSize ).toBe( 'fill' );
 	} );
+
+	it( 'isEligible only allows imported posts (avoids 404 from non-mapped source posts)', () => {
+		// ARRANGE: get the action under test.
+		const diffAction = getModalAction( 'post-diff' );
+
+		// ACT + ASSERT: imported posts have a local mapping to diff against.
+		expect(
+			diffAction?.isEligible?.( {
+				id: 1, link: '', title: 'Test', modified_gmt: '', is_imported: true,
+			} )
+		).toBe( true );
+
+		// ACT + ASSERT: source-only posts cannot be diffed — no local copy exists.
+		expect(
+			diffAction?.isEligible?.( {
+				id: 1, link: '', title: 'Test', modified_gmt: '', is_imported: false,
+			} )
+		).toBe( false );
+	} );
 } );
