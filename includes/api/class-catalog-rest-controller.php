@@ -280,6 +280,10 @@ final class Catalog_REST_Controller {
 	 * single-token inputs (slugs don't contain spaces); multi-token search
 	 * resolves through the AND'd title clauses.
 	 *
+	 * Same `LIKE '%foo%'` profile as `wp/v2/posts?search` (narrower scope,
+	 * indexed slug shortcut). VIP Enterprise Search is worth considering
+	 * if performance demands it.
+	 *
 	 * @param string   $search Existing search SQL fragment (ignored).
 	 * @param WP_Query $query  Current WP_Query instance.
 	 * @return string SQL fragment to splice into the WHERE clause.
