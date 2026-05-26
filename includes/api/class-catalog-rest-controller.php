@@ -170,6 +170,9 @@ final class Catalog_REST_Controller {
 			);
 		}
 
+		// no_found_rows skips SQL_CALC_FOUND_ROWS for performance, but loses
+		// the total page count. We only need "is there a next page?" — ask
+		// WP_Query for one extra row and let the slice below derive has_more.
 		$per_page_raw = $request->get_param( 'per_page' );
 		$per_page     = null === $per_page_raw
 			? self::DEFAULT_PER_PAGE
@@ -276,6 +279,10 @@ final class Catalog_REST_Controller {
 	 * post_name = %full_term%)`. The slug branch only meaningfully matches
 	 * single-token inputs (slugs don't contain spaces); multi-token search
 	 * resolves through the AND'd title clauses.
+	 *
+	 * Same `LIKE '%foo%'` profile as `wp/v2/posts?search` (narrower scope,
+	 * indexed slug shortcut). VIP Enterprise Search is worth considering
+	 * if performance demands it.
 	 *
 	 * @param string   $search Existing search SQL fragment (ignored).
 	 * @param WP_Query $query  Current WP_Query instance.

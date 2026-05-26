@@ -500,6 +500,77 @@ class Import_History_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the rollback action label tracks import status alone, so
+	 * the UI button label matches what Session_Rollback_Service actually does.
+	 *
+	 * Session_Rollback_Service restores updated items whenever any snapshot
+	 * field is present (title, slug, featured image, meta — not just content),
+	 * so the formatter must label every updated item as 'restore' regardless
+	 * of whether previous_content happened to be empty.
+	 */
+	public function test_rollback_action_follows_import_status_alone(): void {
+		// ARRANGE: Real WP posts back the items so format_item gets past the
+		// existence check in can_rollback_item.
+		$success_post        = $this->factory()->post->create();
+		$updated_empty_post  = $this->factory()->post->create();
+		$updated_filled_post = $this->factory()->post->create();
+
+		$session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+
+		// ACT: Log a success item plus two updated items, one with empty
+		// previous_content and one with non-empty previous_content.
+		$success_id = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Success Post',
+			'success',
+			$success_post
+		);
+		$empty_id   = $this->repository->log_import_action(
+			$session_id,
+			2,
+			'Updated Empty Post',
+			'updated',
+			$updated_empty_post,
+			null,
+			array( 'previous_content' => '' )
+		);
+		$filled_id  = $this->repository->log_import_action(
+			$session_id,
+			3,
+			'Updated Filled Post',
+			'updated',
+			$updated_filled_post,
+			null,
+			array( 'previous_content' => 'Existing body' )
+		);
+
+		// ASSERT: has_previous_content differs between the two rows, so the
+		// test exercises both branches of the prior formatter logic.
+		$empty_row  = $this->repository->get_item( $empty_id );
+		$filled_row = $this->repository->get_item( $filled_id );
+		$this->assertSame( 0, (int) $empty_row['has_previous_content'] );
+		$this->assertSame( 1, (int) $filled_row['has_previous_content'] );
+
+		// ACT: Format the items as the AJAX handler would.
+		$items     = $this->repository->get_session_items( $session_id );
+		$formatted = $this->formatter->format_items( $items );
+
+		$by_id = array();
+		foreach ( $formatted as $item ) {
+			$by_id[ $item['id'] ] = $item;
+		}
+
+		// ASSERT: success deletes; both updated variants restore.
+		$this->assertSame( 'delete', $by_id[ $success_id ]['rollback_action'] );
+		$this->assertSame( 'restore', $by_id[ $empty_id ]['rollback_action'] );
+		$this->assertSame( 'restore', $by_id[ $filled_id ]['rollback_action'] );
+	}
+
+	/**
 	 * Verifies that Imports_Table::count() reflects the number of session rows.
 	 */
 	public function test_imports_table_count_reflects_session_rows(): void {
