@@ -300,6 +300,31 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that diff-preview returns 400 when postId is not a positive
+	 * integer.
+	 *
+	 * REST argument validation accepts integer 0 and negative integers, so the
+	 * permission callback is the gate that rejects them.
+	 */
+	public function test_diff_preview_permission_returns_400_for_non_positive_post_id(): void {
+		// ARRANGE: Authenticate so the request reaches the permission callback.
+		wp_set_current_user( $this->admin_user_id );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', 0 );
+		$request->set_param( 'content', wp_json_encode( array( 'title' => 'New Title' ) ) );
+		$request->set_param( 'postType', 'post' );
+
+		// ACT: Dispatch through REST server.
+		$response = $this->server->dispatch( $request );
+
+		// ASSERT: 400 rest_invalid_param from the permission callback.
+		$this->assertInstanceOf( WP_REST_Response::class, $response );
+		$this->assertSame( 400, $response->get_status(), 'Should return 400 for non-positive post ID' );
+		$this->assertSame( 'rest_invalid_param', $response->get_data()['code'] ?? null );
+	}
+
+	/**
 	 * Verifies that the update-post endpoint updates post content successfully,
 	 * storing the exact title, content, and excerpt in the database.
 	 */
