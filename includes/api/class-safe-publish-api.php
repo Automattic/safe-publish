@@ -178,9 +178,9 @@ final class Safe_Publish_API extends REST_Base {
 	 *
 	 * @param WP_REST_Request $request REST request object.
 	 *
-	 * @return bool|WP_Error Whether the current user can edit the mapped post,
-	 *                       WP_Error if post ID is invalid or no local post
-	 *                       matches the source ID.
+	 * @return bool|WP_Error Whether the user can edit the mapped post; WP_Error
+	 *                       with status 400 for invalid IDs, or 404 when the
+	 *                       post is unmapped and the user has edit_others_posts.
 	 */
 	public function check_diff_preview_permission(
 		WP_REST_Request $request
