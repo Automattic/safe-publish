@@ -14,6 +14,7 @@ use Safe_Publish\Admin\Sanitizes_Content;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Post_Type_Map;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -96,7 +97,7 @@ final class Safe_Publish_API extends REST_Base {
 			'diff-preview',
 			array(
 				'methods'             => 'POST',
-				'permission_callback' => array( $this, 'check_edit_post_permission' ),
+				'permission_callback' => array( $this, 'check_diff_preview_permission' ),
 				'args'                => array(
 					'postId'   => array(
 						'required' => true,
@@ -166,6 +167,55 @@ final class Safe_Publish_API extends REST_Base {
 				'callback'            => array( $this, 'update_post_content' ),
 			)
 		);
+	}
+
+	/**
+	 * Checks permission for the diff-preview route.
+	 *
+	 * The route receives a *source* post ID, so the capability check must be
+	 * performed against the locally-mapped post rather than treating the
+	 * source ID as a local one.
+	 *
+	 * @param WP_REST_Request $request REST request object.
+	 *
+	 * @return bool|WP_Error Whether the user can edit the mapped post; WP_Error
+	 *                       with status 400 for invalid IDs, or 404 when the
+	 *                       post is unmapped and the user has edit_others_posts.
+	 */
+	public function check_diff_preview_permission(
+		WP_REST_Request $request
+	): bool|WP_Error {
+		$source_post_id = (int) $request->get_param( 'postId' );
+
+		if ( $source_post_id < 1 ) {
+			return new WP_Error(
+				'rest_invalid_param',
+				__( 'Invalid post ID. Must be a positive integer.', 'safe-publish' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		$post_type        = (string) $request->get_param( 'postType' );
+		$mapped_post_type = Post_Type_Map::to_wp_slug( $post_type );
+		$local_post       = $this->diff_renderer->find_local_post(
+			$source_post_id,
+			$mapped_post_type
+		);
+
+		if ( is_wp_error( $local_post ) ) {
+			// Surface 404 only to users who could reasonably know the post exists.
+			if ( current_user_can( 'edit_others_posts' ) ) {
+				return new WP_Error(
+					'rest_post_not_found',
+					__( 'Post not found.', 'safe-publish' ),
+					array( 'status' => 404 )
+				);
+			}
+
+			return false;
+		}
+
+		return current_user_can( 'edit_post', $local_post->ID );
 	}
 
 	/**
