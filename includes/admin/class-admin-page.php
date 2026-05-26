@@ -9,9 +9,6 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\API\Source_Posts_API;
-use Safe_Publish\Admin\Post_Import_Service;
-use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 
 // Prevent direct access.
@@ -23,40 +20,6 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Admin Page Class.
  */
 final class Admin_Page {
-
-	/**
-	 * Default number of posts to fetch from the source site on initial page
-	 * load.
-	 */
-	const DEFAULT_NUMBER_OF_POSTS = 20;
-
-	/**
-	 * Source Posts API instance.
-	 *
-	 * @var Source_Posts_API
-	 */
-	private $api;
-
-	/**
-	 * Post Import Service instance.
-	 *
-	 * @var Post_Import_Service
-	 */
-	private Post_Import_Service $post_import_service;
-
-	/**
-	 * Constructs the Admin_Page instance.
-	 *
-	 * @param Source_Posts_API    $api                 Source Posts API instance.
-	 * @param Post_Import_Service $post_import_service Post Import Service instance.
-	 */
-	public function __construct(
-		Source_Posts_API $api,
-		Post_Import_Service $post_import_service
-	) {
-		$this->api                 = $api;
-		$this->post_import_service = $post_import_service;
-	}
 
 	/**
 	 * Renders the admin page.
@@ -75,11 +38,11 @@ final class Admin_Page {
 					if ( ! empty( $source_site_url ) ) {
 						printf(
 							/* translators: %s: source site URL */
-							esc_html__( 'Recent Posts from %s', 'safe-publish' ),
+							esc_html__( 'Posts from %s', 'safe-publish' ),
 							esc_url( $source_site_url )
 						);
 					} else {
-						esc_html_e( 'Recent Posts from Source Site', 'safe-publish' );
+						esc_html_e( 'Posts from Source Site', 'safe-publish' );
 					}
 					?>
 				</h2>
@@ -144,21 +107,7 @@ final class Admin_Page {
 			return;
 		}
 
-		// Fetch posts data from the source site.
 		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
-		$number_of_posts = self::DEFAULT_NUMBER_OF_POSTS;
-		$posts_data      = array();
-
-		if ( ! empty( $source_site_url ) ) {
-			$auth_credentials = Auth_Credential_Provider::get_credentials();
-			$posts            = $this->api->fetch_posts( $source_site_url, $number_of_posts, $auth_credentials );
-
-			// Handle API errors.
-			if ( ! is_wp_error( $posts ) ) {
-				$this->post_import_service->annotate_posts_with_import_status( $posts );
-				$posts_data = $posts;
-			}
-		}
 
 		// phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable -- Path is built from plugin_dir_path() and a hardcoded filename.
 		$asset_file     = include $asset_file_path;
@@ -216,9 +165,7 @@ final class Admin_Page {
 				'nonce'         => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 				'restNonce'     => wp_create_nonce( 'wp_rest' ),
 				'sourceSiteUrl' => $source_site_url,
-				'numPosts'      => $number_of_posts,
 				'containerId'   => 'safe-publish-dataviews-container',
-				'postsData'     => $posts_data,
 			)
 		);
 

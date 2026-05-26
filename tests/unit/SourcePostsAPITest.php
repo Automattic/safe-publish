@@ -47,7 +47,7 @@ class SourcePostsAPITest extends TestCase {
 	 * Verifies that fetch_posts returns an error for invalid URLs.
 	 */
 	public function test_fetch_posts_with_invalid_url_returns_error(): void {
-		$result = $this->api->fetch_posts( 'invalid-url', 10 );
+		$result = $this->api->fetch_posts( 'invalid-url' );
 
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'invalid_url', $result->get_error_code() );
@@ -57,7 +57,7 @@ class SourcePostsAPITest extends TestCase {
 	 * Verifies that fetch_posts returns an error for empty URLs.
 	 */
 	public function test_fetch_posts_with_empty_url_returns_error(): void {
-		$result = $this->api->fetch_posts( '', 10 );
+		$result = $this->api->fetch_posts( '' );
 
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'invalid_url', $result->get_error_code() );

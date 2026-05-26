@@ -98,25 +98,35 @@ class Post_Type_Fetcher {
 	}
 
 	/**
-	 * Filters post types to only include those with REST API support.
+	 * Filters post types to only those the catalog will actually serve.
+	 *
+	 * Requires both a `rest_base` AND `viewable === true` so the dropdown
+	 * matches the Catalog_REST_Controller's `public && show_in_rest`
+	 * contract — back-office CPTs would otherwise appear in the picker but
+	 * fail with a 400 when selected.
 	 *
 	 * @param array $post_types_data Raw post types data from API.
-	 * @return array Filtered post types with REST API support.
+	 * @return array Filtered post types.
 	 */
 	private function filter_rest_enabled_post_types( array $post_types_data ): array {
 		$filtered_post_types = array();
 
 		foreach ( $post_types_data as $slug => $post_type ) {
-			// Include if it has a rest_base (which means it's REST API enabled).
-			if ( ! empty( $post_type['rest_base'] ) ) {
-				$filtered_post_types[ $slug ] = array(
-					'slug'        => $slug,
-					'name'        => $post_type['name'] ?? $slug,
-					'label'       => $post_type['name'] ?? $slug, // Use 'name' instead of nested labels.
-					'rest_base'   => $post_type['rest_base'],
-					'description' => $post_type['description'] ?? '',
-				);
+			if ( ! isset( $post_type['rest_base'] ) || '' === $post_type['rest_base'] ) {
+				continue;
 			}
+
+			if ( true !== ( $post_type['viewable'] ?? false ) ) {
+				continue;
+			}
+
+			$filtered_post_types[ $slug ] = array(
+				'slug'        => $slug,
+				'name'        => $post_type['name'] ?? $slug,
+				'label'       => $post_type['name'] ?? $slug,
+				'rest_base'   => $post_type['rest_base'],
+				'description' => $post_type['description'] ?? '',
+			);
 		}
 
 		return $filtered_post_types;
