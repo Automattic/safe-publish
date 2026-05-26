@@ -15,6 +15,14 @@ Require a WordPress user with `edit_post` capability for the target post.
 | `POST` | `/wp-json/safe-publish/v1/diff-preview` | Render a diff preview for a post |
 | `POST` | `/wp-json/safe-publish/v1/update-post`  | Apply imported content to a post |
 
+### Source Endpoints
+
+Registered only on source-mode installs. HMAC-authenticated; called by the destination's import UI.
+
+| Method | Endpoint                                 | Auth | Description                                |
+| ------ | ---------------------------------------- | ---- | ------------------------------------------ |
+| `GET`  | `/wp-json/safe-publish/v1/catalog/posts` | HMAC | Browsable, server-paginated source catalog |
+
 ### Monitoring Endpoints
 
 | Method   | Endpoint                               | Auth                     | Description                          |
