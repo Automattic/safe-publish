@@ -227,6 +227,98 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that diff-preview permission resolves a source post ID to a
+	 * local post before checking capabilities.
+	 *
+	 * Regression: the callback used to treat the source ID as a local ID,
+	 * 404'ing every authorized request. Dispatches through the REST server
+	 * so route-wiring regressions also surface.
+	 */
+	public function test_diff_preview_permission_resolves_source_id_to_local_post(): void {
+		// ARRANGE: Authenticate, configure source URL, and stub the source fetch
+		// so render_diff can complete after the permission callback grants access.
+		wp_set_current_user( $this->admin_user_id );
+		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
+
+		$stub_source_fetch = static fn() => array(
+			'response' => array( 'code' => 200 ),
+			'body'     => wp_json_encode(
+				array(
+					'title'   => array( 'raw' => 'Source Title' ),
+					'content' => array( 'raw' => '<p>Source content.</p>' ),
+					'excerpt' => array( 'raw' => 'Source excerpt.' ),
+				)
+			),
+		);
+		add_filter( 'pre_http_request', $stub_source_fetch );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+		$request->set_param( 'content', wp_json_encode( array( 'title' => 'New Title' ) ) );
+
+		try {
+			// ACT: Dispatch through the REST server so route wiring is exercised.
+			$response = $this->server->dispatch( $request );
+
+			// ASSERT: Permission resolved the source ID to a local post and the
+			// handler completed successfully.
+			$this->assertInstanceOf( WP_REST_Response::class, $response );
+			$this->assertSame( 200, $response->get_status(), 'Should return 200 when source ID maps to an editable local post' );
+		} finally {
+			remove_filter( 'pre_http_request', $stub_source_fetch );
+		}
+	}
+
+	/**
+	 * Verifies that diff-preview returns 403 (not 404) when the source ID
+	 * resolves to a local post the user cannot edit, to avoid leaking the
+	 * post's existence to non-editors.
+	 */
+	public function test_diff_preview_permission_returns_403_for_resolved_post_user_cannot_edit(): void {
+		// ARRANGE: Author user lacks edit_others_posts; the mapped post is
+		// owned by a different user (see setUp), so edit_post is denied.
+		$this->create_user_and_authenticate( 'author' );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'content', wp_json_encode( array( 'title' => 'New Title' ) ) );
+		$request->set_param( 'postType', 'post' );
+
+		// ACT: Dispatch through REST server.
+		$response = $this->server->dispatch( $request );
+
+		// ASSERT: 403, never 404 — resolved post exists but user cannot edit it.
+		$this->assertInstanceOf( WP_REST_Response::class, $response );
+		$this->assert_403_response( $response, 'Should return 403 when resolved post is not editable' );
+	}
+
+	/**
+	 * Verifies that diff-preview returns 400 when postId is not a positive
+	 * integer.
+	 *
+	 * REST argument validation accepts integer 0 and negative integers, so the
+	 * permission callback is the gate that rejects them.
+	 */
+	public function test_diff_preview_permission_returns_400_for_non_positive_post_id(): void {
+		// ARRANGE: Authenticate so the request reaches the permission callback.
+		wp_set_current_user( $this->admin_user_id );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', 0 );
+		$request->set_param( 'content', wp_json_encode( array( 'title' => 'New Title' ) ) );
+		$request->set_param( 'postType', 'post' );
+
+		// ACT: Dispatch through REST server.
+		$response = $this->server->dispatch( $request );
+
+		// ASSERT: 400 rest_invalid_param from the permission callback.
+		$this->assertInstanceOf( WP_REST_Response::class, $response );
+		$this->assertSame( 400, $response->get_status(), 'Should return 400 for non-positive post ID' );
+		$this->assertSame( 'rest_invalid_param', $response->get_data()['code'] ?? null );
+	}
+
+	/**
 	 * Verifies that the update-post endpoint updates post content successfully,
 	 * storing the exact title, content, and excerpt in the database.
 	 */
