@@ -106,7 +106,7 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 
 		if ( error ) {
 			return (
-				<Text style={ { color: '#d63638' } }>
+				<Text className="safe-publish-history-diff-error">
 					{ /* translators: %s is the error message */
 					__( 'Error: %s', 'safe-publish' ).replace( '%s', error ) }
 				</Text>
@@ -116,14 +116,7 @@ export function PostDiffModal( { postId, onClose }: PostDiffModalProps ): JSX.El
 		if ( diffHtml ) {
 			return (
 				<div
-					style={ {
-						maxHeight: '60vh',
-						overflowY: 'auto',
-						background: '#f9f9f9',
-						border: '1px solid #ddd',
-						borderRadius: '4px',
-						padding: '16px',
-					} }
+					className="safe-publish-history-diff-viewer"
 					dangerouslySetInnerHTML={ { __html: diffHtml } }
 				/>
 			);
