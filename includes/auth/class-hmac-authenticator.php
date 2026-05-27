@@ -81,8 +81,8 @@ class HMAC_Authenticator {
 	/**
 	 * Authenticates a REST API request.
 	 *
-	 * Covers all /wp/v2/ and /safe-publish/v1/ routes, except those in
-	 * $excluded_routes. Requests without Safe Publish headers pass through.
+	 * Covers all /wp/v2/ and /safe-publish/v1/ routes. Requests without Safe
+	 * Publish headers pass through.
 	 *
 	 * @param WP_REST_Response|WP_Error|null $result  Response to return instead of continuing.
 	 * @param WP_REST_Server|null            $_server Server instance.
@@ -96,14 +96,8 @@ class HMAC_Authenticator {
 	): WP_REST_Response|WP_Error|null {
 		$route = $request->get_route();
 
-		// auth-test is a diagnostic endpoint that must remain publicly reachable.
-		$excluded_routes = array(
-			'/safe-publish/v1/auth-test',
-		);
-
 		$is_wp_route           = $route && 0 === strpos( $route, '/wp/v2/' );
-		$is_safe_publish_route = $route && 0 === strpos( $route, '/safe-publish/v1/' )
-			&& ! in_array( $route, $excluded_routes, true );
+		$is_safe_publish_route = $route && 0 === strpos( $route, '/safe-publish/v1/' );
 
 		if ( ! $is_wp_route && ! $is_safe_publish_route ) {
 			return $result;
@@ -296,7 +290,8 @@ class HMAC_Authenticator {
 		}
 
 		// Set up user context and permissions for wp/v2 routes only.
-		// Monitoring endpoints (/safe-publish/v1/) only need the auth flag.
+		// Safe Publish source endpoints (/safe-publish/v1/) check the auth flag
+		// in their own permission callbacks.
 		if ( 0 === strpos( $route, '/wp/v2/' ) ) {
 			$this->permission_manager->setup_authenticated_context( $request );
 		}
