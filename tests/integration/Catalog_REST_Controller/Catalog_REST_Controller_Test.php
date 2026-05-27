@@ -155,7 +155,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies the default sort is published date DESC (newest first).
+	 * Verifies that the default sort is published date DESC (newest first).
 	 */
 	public function test_default_sort_is_published_date_desc(): void {
 		// ARRANGE: Two posts with a known publish-date gap.
@@ -176,7 +176,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$this->force_hmac_authenticated( true );
 
 		// ACT: Dispatch without orderby/order.
-		$items = $this->dispatch()->get_data()['items'];
+		$items = $this->dispatch_items();
 
 		// ASSERT: Newer comes first.
 		$this->assertSame( $newer, $items[0]['id'] );
@@ -209,12 +209,12 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$this->force_hmac_authenticated( true );
 
 		// ACT: Dispatch with title ASC.
-		$items = $this->dispatch(
+		$items = $this->dispatch_items(
 			array(
 				'orderby' => 'title',
 				'order'   => 'asc',
 			)
-		)->get_data()['items'];
+		);
 
 		// ASSERT: Alpha, Beta, Gamma in that order.
 		$this->assertSame( array( $alpha, $beta, $gamma ), array_column( $items, 'id' ) );
@@ -240,7 +240,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$this->force_hmac_authenticated( true );
 
 		// ACT: Request only drafts.
-		$items = $this->dispatch( array( 'status' => array( 'draft' ) ) )->get_data()['items'];
+		$items = $this->dispatch_items( array( 'status' => array( 'draft' ) ) );
 
 		// ASSERT: Only the draft is returned.
 		$this->assertCount( 1, $items );
@@ -259,12 +259,16 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$this->force_hmac_authenticated( true );
 
 		// ACT: Request a status not in the allowlist.
-		$items = $this->dispatch( array( 'status' => array( 'inherit' ) ) )->get_data()['items'];
+		$items = $this->dispatch_items(
+			array( 'status' => array( 'inherit' ) )
+		);
 
 		// ASSERT: Both allowlisted-status posts come back.
 		$ids = array_column( $items, 'id' );
 		sort( $ids );
-		$this->assertSame( array( $publish_id, $draft_id ), $ids );
+		$expected = array( $publish_id, $draft_id );
+		sort( $expected );
+		$this->assertSame( $expected, $ids );
 	}
 
 	/**
@@ -280,7 +284,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$this->force_hmac_authenticated( true );
 
 		// ACT: Dispatch without a status param.
-		$items = $this->dispatch()->get_data()['items'];
+		$items = $this->dispatch_items();
 
 		// ASSERT: All four come back.
 		$ids = array_column( $items, 'id' );
@@ -313,7 +317,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$this->force_hmac_authenticated( true );
 
 		// ACT: Search for 'migration'.
-		$items = $this->dispatch( array( 'search' => 'migration' ) )->get_data()['items'];
+		$items = $this->dispatch_items( array( 'search' => 'migration' ) );
 
 		// ASSERT: Only the title match comes back.
 		$this->assertCount( 1, $items );
@@ -321,7 +325,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies multi-token search AND's each token against post_title.
+	 * Verifies that multi-token search AND's each token against post_title.
 	 */
 	public function test_multi_token_search_ands_title_clauses(): void {
 		// ARRANGE: Posts that match one token each plus one that matches both.
@@ -346,7 +350,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$this->force_hmac_authenticated( true );
 
 		// ACT: Search both tokens.
-		$items = $this->dispatch( array( 'search' => 'quick brown' ) )->get_data()['items'];
+		$items = $this->dispatch_items( array( 'search' => 'quick brown' ) );
 
 		// ASSERT: Only the title containing both tokens matches.
 		$this->assertCount( 1, $items );
@@ -354,9 +358,9 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies the OR'd slug branch on the search override: a single-token
-	 * search term equal to a post's slug matches even when no title contains
-	 * the term.
+	 * Verifies that the OR'd slug branch on the search override matches a
+	 * single-token search term equal to a post's slug even when no title
+	 * contains the term.
 	 */
 	public function test_search_falls_back_to_slug_equality(): void {
 		// ARRANGE: Post whose slug equals the search term, but whose title does not.
@@ -370,7 +374,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$this->force_hmac_authenticated( true );
 
 		// ACT: Search by the slug as a free-text term.
-		$items = $this->dispatch( array( 'search' => 'sapphire' ) )->get_data()['items'];
+		$items = $this->dispatch_items( array( 'search' => 'sapphire' ) );
 
 		// ASSERT: Found via slug equality.
 		$this->assertCount( 1, $items );
@@ -400,7 +404,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$this->force_hmac_authenticated( true );
 
 		// ACT: Search for the literal "100%".
-		$items = $this->dispatch( array( 'search' => '100%' ) )->get_data()['items'];
+		$items = $this->dispatch_items( array( 'search' => '100%' ) );
 
 		// ASSERT: Only the post containing the literal "100%" matches.
 		$this->assertCount( 1, $items );
@@ -408,7 +412,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies the explicit `name` param performs exact slug lookup.
+	 * Verifies that the explicit `name` param performs exact slug lookup.
 	 */
 	public function test_name_param_returns_only_exact_slug_match(): void {
 		// ARRANGE: Two posts with slugs that share a prefix.
@@ -429,7 +433,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$this->force_hmac_authenticated( true );
 
 		// ACT: Look up by exact slug.
-		$items = $this->dispatch( array( 'name' => 'launch' ) )->get_data()['items'];
+		$items = $this->dispatch_items( array( 'name' => 'launch' ) );
 
 		// ASSERT: Only the exact-match slug is returned.
 		$this->assertCount( 1, $items );
@@ -466,12 +470,12 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$this->force_hmac_authenticated( true );
 
 		// ACT: Constrain to February through April.
-		$items = $this->dispatch(
+		$items = $this->dispatch_items(
 			array(
 				'published_after'  => '2024-02-01',
 				'published_before' => '2024-04-30',
 			)
-		)->get_data()['items'];
+		);
 
 		// ASSERT: Only the in-range post comes back.
 		$this->assertCount( 1, $items );
@@ -496,12 +500,12 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$this->force_hmac_authenticated( true );
 
 		// ACT: Set both bounds to that same calendar day.
-		$items = $this->dispatch(
+		$items = $this->dispatch_items(
 			array(
 				'published_after'  => '2024-03-15',
 				'published_before' => '2024-03-15',
 			)
-		)->get_data()['items'];
+		);
 
 		// ASSERT: The post falls inside the inclusive range.
 		$this->assertCount( 1, $items );
@@ -528,7 +532,43 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies has_more is false on the last page.
+	 * Verifies that two consecutive pages together cover every record —
+	 * pins against the off-by-one where `paged` + `per_page + 1` caused
+	 * WP_Query to skip one record between pages.
+	 */
+	public function test_consecutive_pages_cover_every_record(): void {
+		// ARRANGE: Three posts span a page boundary at per_page=2.
+		for ( $i = 0; $i < 3; $i++ ) {
+			self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		}
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Fetch both pages.
+		$page_1_ids = array_column(
+			$this->dispatch(
+				array(
+					'per_page' => 2,
+					'page'     => 1,
+				)
+			)->get_data()['items'],
+			'id'
+		);
+		$page_2_ids = array_column(
+			$this->dispatch(
+				array(
+					'per_page' => 2,
+					'page'     => 2,
+				)
+			)->get_data()['items'],
+			'id'
+		);
+
+		// ASSERT: All 3 records accounted for across the two pages.
+		$this->assertCount( 3, array_unique( array_merge( $page_1_ids, $page_2_ids ) ) );
+	}
+
+	/**
+	 * Verifies that has_more is false on the last page.
 	 */
 	public function test_has_more_is_false_on_last_page(): void {
 		// ARRANGE: Two posts; request page 1 with per_page=2.
@@ -573,7 +613,9 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	 *
 	 * @param int $per_page Non-positive per_page value to send.
 	 */
-	public function test_per_page_clamps_to_floor_on_non_positive_values( int $per_page ): void {
+	public function test_per_page_clamps_to_floor_on_non_positive_values(
+		int $per_page
+	): void {
 		// ARRANGE: Three posts so the floor and a normal page are distinguishable.
 		for ( $i = 0; $i < 3; $i++ ) {
 			self::factory()->post->create( array( 'post_status' => 'publish' ) );
@@ -621,7 +663,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$this->force_hmac_authenticated( true );
 
 		// ACT: Request post_type=page.
-		$items = $this->dispatch( array( 'post_type' => 'page' ) )->get_data()['items'];
+		$items = $this->dispatch_items( array( 'post_type' => 'page' ) );
 
 		// ASSERT: Only the page comes back.
 		$this->assertCount( 1, $items );
@@ -693,6 +735,16 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		}
 
 		return $this->server->dispatch( $request );
+	}
+
+	/**
+	 * Dispatches the catalog route and returns the items array directly.
+	 *
+	 * @param array $params Query params to set on the request.
+	 * @return array Items from the response payload.
+	 */
+	private function dispatch_items( array $params = array() ): array {
+		return $this->dispatch( $params )->get_data()['items'];
 	}
 
 	/**

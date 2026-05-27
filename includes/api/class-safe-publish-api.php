@@ -108,10 +108,6 @@ final class Safe_Publish_API extends REST_Base {
 						'type'     => 'string',
 						'default'  => 'post',
 					),
-					'content'  => array(
-						'required' => true,
-						'type'     => 'string',
-					),
 					'mode'     => array(
 						'required' => false,
 						'type'     => 'string',

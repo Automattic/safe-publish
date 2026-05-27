@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
+use Safe_Publish\API\Catalog_REST_Controller;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Post_Type_Fetcher;
@@ -161,33 +162,129 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Handles AJAX request for fetching posts.
+	 * Handles AJAX request for fetching a page of the source catalog.
+	 *
+	 * Translates the catalog UI's controls (search/status/date/sort/page)
+	 * into args the destination's Source_Posts_API passes through to the
+	 * source-side catalog endpoint, then annotates the returned items
+	 * with local import status before sending them back.
+	 *
+	 * Malformed date inputs are forwarded as-is — the source returns a 400
+	 * with a clear message, keeping date-format validation as a single
+	 * source of truth on the source side.
 	 */
 	public function ajax_fetch_posts(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability();
 
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- caller already verified via check_ajax_referer.
 		$source_site_url = sanitize_text_field( wp_unslash( $_POST['source_site_url'] ?? '' ) );
-		$number_of_posts = absint( $_POST['number_of_posts'] ?? 10 );
-		$post_type       = sanitize_text_field( wp_unslash( $_POST['post_type'] ?? 'posts' ) );
 
 		if ( empty( $source_site_url ) ) {
 			wp_send_json_error( __( 'Source site URL is required.', 'safe-publish' ) );
 		}
 
+		$args = $this->build_catalog_args();
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
 		$this->validate_auth_or_fail();
 
 		$auth_credentials = Auth_Credential_Provider::get_credentials();
 
-		$posts = $this->api->fetch_posts( $source_site_url, $number_of_posts, $auth_credentials, $post_type );
+		$result = $this->api->fetch_posts(
+			$source_site_url,
+			$auth_credentials,
+			$args
+		);
 
-		if ( is_wp_error( $posts ) ) {
-			wp_send_json_error( $posts->get_error_message() );
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( $result->get_error_message() );
 		}
 
-		$this->post_import_service->annotate_posts_with_import_status( $posts );
+		$this->post_import_service->annotate_posts_with_import_status( $result['items'] );
 
-		wp_send_json_success( $posts );
+		wp_send_json_success( $result );
+	}
+
+	/**
+	 * Sanitizes the catalog UI's filter/sort/page params.
+	 *
+	 * Allowlists for sort/status are imported from the source-side controller
+	 * so an in-tree change can't drift the two sides.
+	 *
+	 * @return array Validated args for Source_Posts_API::fetch_posts.
+	 */
+	private function build_catalog_args(): array {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- caller (ajax_fetch_posts) verified the nonce.
+		$orderby_raw = sanitize_text_field( wp_unslash( $_POST['orderby'] ?? '' ) );
+		$order_raw   = strtolower( sanitize_text_field( wp_unslash( $_POST['order'] ?? '' ) ) );
+
+		$args = array(
+			'page'      => max( 1, absint( $_POST['page'] ?? 1 ) ),
+			'per_page'  => max( 1, absint( $_POST['per_page'] ?? 20 ) ),
+			'orderby'   => in_array( $orderby_raw, Catalog_REST_Controller::ALLOWED_ORDERBY, true )
+				? $orderby_raw
+				: 'date',
+			'order'     => in_array( $order_raw, Catalog_REST_Controller::ALLOWED_ORDER, true )
+				? $order_raw
+				: 'desc',
+			'post_type' => sanitize_text_field( wp_unslash( $_POST['post_type'] ?? 'post' ) ),
+		);
+
+		$search = trim( sanitize_text_field( wp_unslash( $_POST['search'] ?? '' ) ) );
+		if ( '' !== $search ) {
+			$args['search'] = $search;
+		}
+
+		$name = sanitize_title( wp_unslash( $_POST['name'] ?? '' ) );
+		if ( '' !== $name ) {
+			$args['name'] = $name;
+		}
+
+		// Each element is reduced to the shared allowlist by normalize_statuses
+		// via sanitize_key, so the array as a whole is safe to pass through.
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$statuses = self::normalize_statuses( wp_unslash( $_POST['status'] ?? array() ) );
+		if ( array() !== $statuses ) {
+			$args['status'] = $statuses;
+		}
+
+		foreach ( array( 'published_after', 'published_before' ) as $param ) {
+			$raw = sanitize_text_field( wp_unslash( $_POST[ $param ] ?? '' ) );
+			if ( '' !== $raw ) {
+				$args[ $param ] = $raw;
+			}
+		}
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		return $args;
+	}
+
+	/**
+	 * Reduces a raw status param to the shared allowlist; unknown values
+	 * are dropped silently so a fat-fingered request still yields a result.
+	 *
+	 * @param mixed $raw Raw status value (array or string).
+	 * @return string[] Sanitized status list.
+	 */
+	private static function normalize_statuses( mixed $raw ): array {
+		if ( is_string( $raw ) ) {
+			$raw = '' === $raw ? array() : explode( ',', $raw );
+		}
+
+		if ( ! is_array( $raw ) ) {
+			return array();
+		}
+
+		return array_values(
+			array_intersect(
+				array_map(
+					static fn( string $v ): string => sanitize_key( $v ),
+					array_filter( $raw, 'is_string' )
+				),
+				Catalog_REST_Controller::ALLOWED_STATUSES
+			)
+		);
 	}
 
 	/**
@@ -656,7 +753,7 @@ final class Admin_Ajax_Controller {
 				continue;
 			}
 
-			$post_type = sanitize_text_field( $post_data['post_type'] ?? 'posts' );
+			$post_type = sanitize_text_field( $post_data['post_type'] ?? 'post' );
 			$fresh     = $this->api->fetch_fresh_post( $source_post_id, $post_type );
 			if ( is_wp_error( $fresh ) ) {
 				continue;
