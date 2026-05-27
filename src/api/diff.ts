@@ -16,14 +16,12 @@ import type { JsonObject, JsonValue } from '../types';
  *
  * @property {number}  postId     Source post ID to compare.
  * @property {string}  [postType] Post type slug.
- * @property {string}  [content]  Incoming content to compare.
  * @property {string}  [mode]     Display mode: 'split' or 'inline'.
  * @property {boolean} [cleanup]  Whether to clean up the diff output.
  */
 export interface DiffPreviewPayload {
 	postId: number;
 	postType?: string;
-	content?: string;
 	mode?: 'split' | 'inline';
 	cleanup?: boolean;
 }
@@ -81,9 +79,11 @@ export interface DiffPreviewResult {
 	localPostId?: number;
 	incoming?: {
 		title?: string;
+		content?: string;
 		excerpt?: string;
 		meta?: JsonObject;
 		terms?: Record< string, string[] >;
+		featuredMedia?: number;
 	};
 	current?: {
 		title?: string;
