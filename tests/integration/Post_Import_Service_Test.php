@@ -2554,9 +2554,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		$result = $this->import_service->import_post(
 			$post_data,
 			$session_id,
-			array(),
-			null,
-			$batch_fresh_data
+			array( 'batch_fresh_data' => $batch_fresh_data )
 		);
 
 		// ASSERT: Failure with the in-batch message including the title.
@@ -2641,9 +2639,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		$result = $this->import_service->import_post(
 			$post_data,
 			$session_id,
-			array(),
-			null,
-			$batch_fresh_data
+			array( 'batch_fresh_data' => $batch_fresh_data )
 		);
 
 		remove_filter( 'safe_publish_import_allow_orphans', '__return_true' );

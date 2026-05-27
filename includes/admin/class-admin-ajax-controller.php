@@ -489,9 +489,10 @@ final class Admin_Ajax_Controller {
 			$result    = $this->post_import_service->import_post(
 				$post_data,
 				$session_id,
-				array(),
-				$prefetch,
-				$batch_fresh_data
+				array(
+					'prefetched_fresh_result' => $prefetch,
+					'batch_fresh_data'        => $batch_fresh_data,
+				)
 			);
 			$results[] = $result;
 
@@ -513,9 +514,7 @@ final class Admin_Ajax_Controller {
 			$result    = $this->post_import_service->import_post(
 				$post_data,
 				$session_id,
-				array(),
-				null,
-				$batch_fresh_data
+				array( 'batch_fresh_data' => $batch_fresh_data )
 			);
 			$results[] = $result;
 
