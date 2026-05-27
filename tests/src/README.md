@@ -57,8 +57,6 @@ The test suite covers:
 
 - `formatDate()` - Date formatting
 - `formatDateTime()` - Date/time formatting
-- `isValidPost()` - Post validation
-- `sanitizePosts()` - Post array sanitization
 - `searchPosts()` - Post search functionality
 - `sortPosts()` - Post sorting (by date, title, ID)
 - `paginatePosts()` - Pagination logic

@@ -31,7 +31,6 @@ describe( 'fetchDiffPreview', () => {
 
 		const payload: DiffPreviewPayload = {
 			postId: 123,
-			content: 'New content',
 		};
 
 		const result = await fetchDiffPreview( payload );
@@ -87,7 +86,6 @@ describe( 'fetchDiffPreview', () => {
 		const payload: DiffPreviewPayload = {
 			postId: 123,
 			postType: 'page',
-			content: 'New content',
 			mode: 'split',
 			cleanup: true,
 		};
@@ -112,7 +110,7 @@ describe( 'fetchDiffPreview', () => {
 		} );
 
 		// ACT: trigger a diff preview request.
-		await fetchDiffPreview( { postId: 123, content: 'New content' } );
+		await fetchDiffPreview( { postId: 123 } );
 
 		// ASSERT: the request carried the nonce so current_user_can() works.
 		expect( global.fetch ).toHaveBeenCalledWith(

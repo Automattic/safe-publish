@@ -5,13 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getSettings, setSettings } from '@wordpress/date';
 import {
 	formatDateTime,
-	isValidPost,
-	sanitizePosts,
 	extractUrlPath,
 	renderWarningMessage,
 	renderWarningShortLabel,
 } from '@/utils';
-import type { AuthorFallbackWarning, ParentOrphanedWarning, Post } from '@/types';
+import type { AuthorFallbackWarning, ParentOrphanedWarning } from '@/types';
 
 // Pin WP date settings so format/timezone-sensitive tests are deterministic.
 let originalDateSettings: ReturnType< typeof getSettings >;
@@ -68,97 +66,6 @@ describe( 'formatDateTime', () => {
 		expect( formatDateTime( 'not-a-date' ) ).toBe( 'Invalid Date' );
 	} );
 } );
-
-describe( 'isValidPost', () => {
-	it( 'should return true for valid post object', () => {
-		const validPost: Post = {
-			id: 1,
-			link: 'https://example.com/post',
-			title: 'Test Post',
-			modified_gmt: '2024-03-15T10:30:00',
-		};
-		expect( isValidPost( validPost ) ).toBe( true );
-	} );
-
-	it( 'should return false for post missing id', () => {
-		const invalidPost = {
-			link: 'https://example.com/post',
-			title: 'Test Post',
-			modified_gmt: '2024-03-15T10:30:00',
-		};
-		expect( isValidPost( invalidPost ) ).toBe( false );
-	} );
-
-	it( 'should return false for post missing link', () => {
-		const invalidPost = {
-			id: 1,
-			title: 'Test Post',
-			modified_gmt: '2024-03-15T10:30:00',
-		};
-		expect( isValidPost( invalidPost ) ).toBe( false );
-	} );
-
-	it( 'should return false for post missing title', () => {
-		const invalidPost = {
-			id: 1,
-			link: 'https://example.com/post',
-			modified_gmt: '2024-03-15T10:30:00',
-		};
-		expect( isValidPost( invalidPost ) ).toBe( false );
-	} );
-
-	it( 'should return false for post missing modified_gmt', () => {
-		const invalidPost = {
-			id: 1,
-			link: 'https://example.com/post',
-			title: 'Test Post',
-		};
-		expect( isValidPost( invalidPost ) ).toBe( false );
-	} );
-
-	it( 'should return false for null', () => {
-		expect( isValidPost( null ) ).toBe( false );
-	} );
-
-	it( 'should return false for undefined', () => {
-		expect( isValidPost( undefined ) ).toBe( false );
-	} );
-
-	it( 'should return false for non-object types', () => {
-		expect( isValidPost( 'string' ) ).toBe( false );
-		expect( isValidPost( 123 ) ).toBe( false );
-		expect( isValidPost( true ) ).toBe( false );
-	} );
-} );
-
-describe( 'sanitizePosts', () => {
-	it( 'should filter out invalid posts', () => {
-		const posts = [
-			{ id: 1, link: 'https://example.com/1', title: 'Post 1', modified_gmt: '2024-03-15' },
-			{ id: 2, link: 'https://example.com/2', title: 'Post 2' }, // Missing modified_gmt.
-			{ id: 3, link: 'https://example.com/3', title: 'Post 3', modified_gmt: '2024-03-16' },
-			null,
-			{ title: 'Invalid' }, // Missing required fields.
-		];
-
-		const result = sanitizePosts( posts as any );
-		expect( result ).toHaveLength( 2 );
-		expect( result[ 0 ].id ).toBe( 1 );
-		expect( result[ 1 ].id ).toBe( 3 );
-	} );
-
-	it( 'should return empty array for non-array input', () => {
-		expect( sanitizePosts( null as any ) ).toEqual( [] );
-		expect( sanitizePosts( undefined as any ) ).toEqual( [] );
-		expect( sanitizePosts( {} as any ) ).toEqual( [] );
-		expect( sanitizePosts( 'not-array' as any ) ).toEqual( [] );
-	} );
-
-	it( 'should return empty array for empty array', () => {
-		expect( sanitizePosts( [] ) ).toEqual( [] );
-	} );
-} );
-
 
 describe( 'extractUrlPath', () => {
 	it( 'should extract path from valid URL', () => {

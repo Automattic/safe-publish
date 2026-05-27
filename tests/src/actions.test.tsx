@@ -9,6 +9,23 @@ import type { Action, ActionModal } from '@wordpress/dataviews/build-types';
 const actions = createActions();
 
 /**
+ * Builds a Post fixture with sensible listing-shape defaults. Tests can
+ * override any field that matters for the case at hand.
+ */
+function buildPost( overrides: Partial< Post > = {} ): Post {
+	return {
+		id: 1,
+		link: '',
+		title: 'Test',
+		date_gmt: '',
+		modified_gmt: '',
+		post_type: 'post',
+		status: 'publish',
+		...overrides,
+	};
+}
+
+/**
  * Returns the modal action with the given id, throwing if absent or not modal.
  */
 function getModalAction( id: string ): ActionModal< Post > {
@@ -36,7 +53,7 @@ describe( 'Actions configuration', () => {
 	it( 'bulk-import label returns "Import" for a single non-imported item', () => {
 		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
 		const label = typeof bulkAction?.label === 'function'
-			? bulkAction.label( [ { id: 1, link: '', title: 'Test', modified_gmt: '', is_imported: false } ] )
+			? bulkAction.label( [ buildPost( { is_imported: false } ) ] )
 			: bulkAction?.label;
 		expect( label ).toBe( 'Import' );
 	} );
@@ -44,7 +61,7 @@ describe( 'Actions configuration', () => {
 	it( 'bulk-import label returns "Update" for a single imported item with an update', () => {
 		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
 		const label = typeof bulkAction?.label === 'function'
-			? bulkAction.label( [ { id: 1, link: '', title: 'Test', modified_gmt: '', is_imported: true, has_update: true } ] )
+			? bulkAction.label( [ buildPost( { is_imported: true, has_update: true } ) ] )
 			: bulkAction?.label;
 		expect( label ).toBe( 'Update' );
 	} );
@@ -53,8 +70,8 @@ describe( 'Actions configuration', () => {
 		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
 		const label = typeof bulkAction?.label === 'function'
 			? bulkAction.label( [
-				{ id: 1, link: '', title: 'A', modified_gmt: '', is_imported: false },
-				{ id: 2, link: '', title: 'B', modified_gmt: '', is_imported: true, has_update: true },
+				buildPost( { id: 1, title: 'A', is_imported: false } ),
+				buildPost( { id: 2, title: 'B', is_imported: true, has_update: true } ),
 			] )
 			: bulkAction?.label;
 		expect( label ).toBe( 'Import / Update' );
@@ -62,21 +79,16 @@ describe( 'Actions configuration', () => {
 
 	it( 'bulk-import action isEligible covers posts that can be imported or updated', () => {
 		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
-		expect( bulkAction?.isEligible?.( { id: 1, link: '', title: 'Test', modified_gmt: '', is_imported: false } ) ).toBe( true );
-		expect( bulkAction?.isEligible?.( { id: 1, link: '', title: 'Test', modified_gmt: '', is_imported: true, has_update: true } ) ).toBe( true );
-		expect( bulkAction?.isEligible?.( { id: 1, link: '', title: 'Test', modified_gmt: '', is_imported: true, has_update: false } ) ).toBe( false );
+		expect( bulkAction?.isEligible?.( buildPost( { is_imported: false } ) ) ).toBe( true );
+		expect( bulkAction?.isEligible?.( buildPost( { is_imported: true, has_update: true } ) ) ).toBe( true );
+		expect( bulkAction?.isEligible?.( buildPost( { is_imported: true, has_update: false } ) ) ).toBe( false );
 	} );
 
 	it( 'bulk-import isEligible returns false when not authorized', () => {
 		const unauthorized = createActions( undefined, false );
 		const bulkAction = unauthorized.find( ( a ) => a.id === 'bulk-import' );
-		const importable = {
-			id: 1, link: '', title: 'Test', modified_gmt: '', is_imported: false,
-		};
-		const updatable = {
-			id: 1, link: '', title: 'Test', modified_gmt: '',
-			is_imported: true, has_update: true,
-		};
+		const importable = buildPost( { is_imported: false } );
+		const updatable = buildPost( { is_imported: true, has_update: true } );
 		expect( bulkAction?.isEligible?.( importable ) ).toBe( false );
 		expect( bulkAction?.isEligible?.( updatable ) ).toBe( false );
 	} );
@@ -126,14 +138,18 @@ describe( 'Post diff action', () => {
 		// ACT + ASSERT: imported posts have a local mapping to diff against.
 		expect(
 			diffAction?.isEligible?.( {
-				id: 1, link: '', title: 'Test', modified_gmt: '', is_imported: true,
+				id: 1, link: '', title: 'Test', modified_gmt: '',
+				date_gmt: '', post_type: 'post', status: 'publish',
+				is_imported: true,
 			} )
 		).toBe( true );
 
 		// ACT + ASSERT: source-only posts cannot be diffed — no local copy exists.
 		expect(
 			diffAction?.isEligible?.( {
-				id: 1, link: '', title: 'Test', modified_gmt: '', is_imported: false,
+				id: 1, link: '', title: 'Test', modified_gmt: '',
+				date_gmt: '', post_type: 'post', status: 'publish',
+				is_imported: false,
 			} )
 		).toBe( false );
 	} );
