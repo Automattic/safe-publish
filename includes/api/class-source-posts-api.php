@@ -90,9 +90,9 @@ class Source_Posts_API {
 	/**
 	 * Fetches a page of posts from the source site's catalog endpoint.
 	 *
-	 * Returns the source's `{ items, has_more }` envelope as-is. Items are
-	 * already prepared for the listing UI by the source-side controller, so
-	 * no further per-item normalization happens here.
+	 * Returns the source's `{ items, has_more }` envelope after each item
+	 * is shape-validated (see normalize_listing_item). HMAC vouches for
+	 * the source's identity, not the content's honesty.
 	 *
 	 * @param string $source_site_url  Source site URL.
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
@@ -139,26 +139,34 @@ class Source_Posts_API {
 		string $source_site_url,
 		array $args
 	): string {
-		$api_endpoint = trailingslashit( $source_site_url ) . 'wp-json/safe-publish/v1/catalog/posts';
-		$post_type    = isset( $args['post_type'] ) ? (string) $args['post_type'] : 'posts';
+		$api_endpoint = trailingslashit( $source_site_url )
+			. 'wp-json/safe-publish/v1/catalog/posts';
+
+		$post_type = (string) ( $args['post_type'] ?? 'post' );
 
 		$query_args = array_filter(
 			array(
 				'post_type'        => Post_Type_Map::to_wp_slug( $post_type ),
-				'page'             => isset( $args['page'] ) ? (int) $args['page'] : null,
-				'per_page'         => isset( $args['per_page'] ) ? (int) $args['per_page'] : null,
-				'search'           => isset( $args['search'] ) ? (string) $args['search'] : null,
-				'name'             => isset( $args['name'] ) ? (string) $args['name'] : null,
-				'published_after'  => isset( $args['published_after'] ) ? (string) $args['published_after'] : null,
-				'published_before' => isset( $args['published_before'] ) ? (string) $args['published_before'] : null,
-				'orderby'          => isset( $args['orderby'] ) ? (string) $args['orderby'] : null,
-				'order'            => isset( $args['order'] ) ? (string) $args['order'] : null,
+				'page'             => $args['page'] ?? null,
+				'per_page'         => $args['per_page'] ?? null,
+				'search'           => $args['search'] ?? null,
+				'name'             => $args['name'] ?? null,
+				'published_after'  => $args['published_after'] ?? null,
+				'published_before' => $args['published_before'] ?? null,
+				'orderby'          => $args['orderby'] ?? null,
+				'order'            => $args['order'] ?? null,
 			),
 			static fn( $v ): bool => null !== $v && '' !== $v
 		);
 
-		if ( isset( $args['status'] ) && is_array( $args['status'] ) && array() !== $args['status'] ) {
-			$query_args['status'] = array_values( array_map( 'strval', $args['status'] ) );
+		if (
+			isset( $args['status'] )
+			&& is_array( $args['status'] )
+			&& array() !== $args['status']
+		) {
+			$query_args['status'] = array_values(
+				array_map( 'strval', $args['status'] )
+			);
 		}
 
 		return add_query_arg( $query_args, $api_endpoint );
@@ -190,7 +198,11 @@ class Source_Posts_API {
 		$body    = wp_remote_retrieve_body( $response );
 		$decoded = json_decode( $body, true );
 
-		if ( ! is_array( $decoded ) || ! isset( $decoded['items'] ) || ! is_array( $decoded['items'] ) ) {
+		if (
+			! is_array( $decoded )
+			|| ! isset( $decoded['items'] )
+			|| ! is_array( $decoded['items'] )
+		) {
 			return new WP_Error(
 				'safe_publish_catalog_invalid_response',
 				__( 'Invalid response from source API.', 'safe-publish' ),
@@ -404,14 +416,14 @@ class Source_Posts_API {
 	 * @param int    $source_post_id    Source post ID.
 	 * @param string $source_site_url   Source site URL.
 	 * @param array  $auth_credentials  Optional. Authentication credentials. Default empty array.
-	 * @param string $post_type         Optional. Post type slug or REST endpoint. Default 'posts'.
+	 * @param string $post_type         Optional. Post type slug or REST endpoint. Default 'post'.
 	 * @return array|false Post data array on success, false on failure.
 	 */
 	public function fetch_fresh_post_content(
 		int $source_post_id,
 		string $source_site_url,
 		array $auth_credentials = array(),
-		string $post_type = 'posts'
+		string $post_type = 'post'
 	): array|false {
 		// Validate URL first.
 		if ( ! URL_Validator::is_valid_external_url( $source_site_url ) ) {

@@ -228,7 +228,7 @@ final class Admin_Ajax_Controller {
 			'order'     => in_array( $order_raw, Catalog_REST_Controller::ALLOWED_ORDER, true )
 				? $order_raw
 				: 'desc',
-			'post_type' => sanitize_text_field( wp_unslash( $_POST['post_type'] ?? 'posts' ) ),
+			'post_type' => sanitize_text_field( wp_unslash( $_POST['post_type'] ?? 'post' ) ),
 		);
 
 		$search = trim( sanitize_text_field( wp_unslash( $_POST['search'] ?? '' ) ) );
@@ -753,7 +753,7 @@ final class Admin_Ajax_Controller {
 				continue;
 			}
 
-			$post_type = sanitize_text_field( $post_data['post_type'] ?? 'posts' );
+			$post_type = sanitize_text_field( $post_data['post_type'] ?? 'post' );
 			$fresh     = $this->api->fetch_fresh_post( $source_post_id, $post_type );
 			if ( is_wp_error( $fresh ) ) {
 				continue;
