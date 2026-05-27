@@ -719,7 +719,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	/**
 	 * Verifies that the post-types endpoint returns the WP built-in
 	 * content types (post, page) and excludes back-office types that
-	 * pass the public+show_in_rest filter but aren't catalog-serveable
+	 * pass the public+show_in_rest filter but aren't catalog-servable
 	 * (attachment, wp_navigation).
 	 */
 	public function test_post_types_endpoint_returns_only_catalog_eligible_types(): void {
@@ -745,10 +745,10 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	 * destination's dropdown expects.
 	 */
 	public function test_post_types_endpoint_item_shape(): void {
-		// ARRANGE.
+		// ARRANGE: Authenticated session; rely on the WP default post types.
 		$this->force_hmac_authenticated( true );
 
-		// ACT.
+		// ACT: Hit the post-types route and grab the items.
 		$items = $this->server->dispatch(
 			new WP_REST_Request( 'GET', '/safe-publish/v1/catalog/post-types' )
 		)->get_data();

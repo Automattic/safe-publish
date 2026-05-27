@@ -109,7 +109,7 @@ final class Catalog_REST_Controller {
 	}
 
 	/**
-	 * Registers the catalog route.
+	 * Registers the catalog routes.
 	 */
 	public function register_routes(): void {
 		register_rest_route(
@@ -274,7 +274,8 @@ final class Catalog_REST_Controller {
 				continue;
 			}
 
-			$name = isset( $object->labels->name ) && is_string( $object->labels->name )
+			$name = isset( $object->labels->name )
+				&& is_string( $object->labels->name )
 				? $object->labels->name
 				: $slug;
 
@@ -282,10 +283,13 @@ final class Catalog_REST_Controller {
 				'slug'        => $slug,
 				'name'        => $name,
 				'label'       => $name,
-				'rest_base'   => is_string( $object->rest_base ) && '' !== $object->rest_base
+				'rest_base'   => is_string( $object->rest_base )
+					&& '' !== $object->rest_base
 					? $object->rest_base
 					: $slug,
-				'description' => is_string( $object->description ) ? $object->description : '',
+				'description' => is_string( $object->description )
+					? $object->description
+					: '',
 			);
 		}
 
@@ -378,7 +382,7 @@ final class Catalog_REST_Controller {
 
 	/**
 	 * Restricts the requested post type to one that's both registered and
-	 * REST-visible — same contract Post_Type_Fetcher advertises, so the
+	 * REST-visible — same gate handle_post_types_request() applies, so the
 	 * catalog can never surface internal types even with a crafted request.
 	 *
 	 * @param string $raw Raw post_type request param.
