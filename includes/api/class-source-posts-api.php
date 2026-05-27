@@ -88,16 +88,24 @@ class Source_Posts_API {
 	}
 
 	/**
-	 * Fetches posts from source site.
+	 * Fetches a page of posts from the source site's catalog endpoint.
+	 *
+	 * Returns the source's `{ items, has_more }` envelope after each item
+	 * is shape-validated (see normalize_listing_item). HMAC vouches for
+	 * the source's identity, not the content's honesty.
 	 *
 	 * @param string $source_site_url  Source site URL.
-	 * @param int    $number_of_posts  Optional. Number of posts to fetch. Default 10.
-	 * @param array  $auth_credentials Optional. Authentication credentials array. Default empty array.
-	 * @param string $post_type        Optional. Post type to fetch. Default 'posts'.
-	 * @return array|WP_Error Posts data or error.
+	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
+	 * @param array  $args             Optional. Catalog query args (post_type, page, per_page,
+	 *                                 search, name, status[], published_after, published_before,
+	 *                                 orderby, order). Default empty.
+	 * @return array|WP_Error Envelope { items, has_more } or WP_Error on failure.
 	 */
-	public function fetch_posts( string $source_site_url, int $number_of_posts = 10, array $auth_credentials = array(), string $post_type = 'posts' ): array|WP_Error {
-		// Validate URL first.
+	public function fetch_posts(
+		string $source_site_url,
+		array $auth_credentials = array(),
+		array $args = array()
+	): array|WP_Error {
 		if ( ! URL_Validator::is_valid_external_url( $source_site_url ) ) {
 			return new WP_Error(
 				'invalid_url',
@@ -105,10 +113,8 @@ class Source_Posts_API {
 			);
 		}
 
-		// Build API URL.
-		$api_url = $this->build_api_url( $source_site_url, $number_of_posts, $auth_credentials, $post_type );
+		$api_url = $this->build_catalog_url( $source_site_url, $args );
 
-		// Make request.
 		$response = $this->make_request(
 			$api_url,
 			Request_Actions::LIST_ITEMS,
@@ -119,54 +125,51 @@ class Source_Posts_API {
 			return $response;
 		}
 
-		// Process response.
-		$posts = $this->process_response( $response, $post_type );
-
-		if ( is_wp_error( $posts ) ) {
-			return $posts;
-		}
-
-		return $posts;
+		return $this->process_catalog_response( $response );
 	}
 
 	/**
-	 * Builds API URL.
+	 * Builds the source catalog endpoint URL with query arguments.
 	 *
-	 * @param string $source_site_url  Source site URL.
-	 * @param int    $number_of_posts  Number of posts.
-	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
-	 * @param string $post_type        Optional. Post type to fetch. Default 'posts'.
-	 * @return string Built API URL.
+	 * @param string $source_site_url Source site URL.
+	 * @param array  $args            Catalog query args.
+	 * @return string Final URL.
 	 */
-	private function build_api_url( string $source_site_url, int $number_of_posts, array $auth_credentials = array(), string $post_type = 'posts' ): string {
-		$endpoint     = Post_Type_Map::to_rest_endpoint( $post_type );
-		$api_endpoint = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/' . $endpoint;
+	private function build_catalog_url(
+		string $source_site_url,
+		array $args
+	): string {
+		$api_endpoint = trailingslashit( $source_site_url )
+			. 'wp-json/safe-publish/v1/catalog/posts';
 
-		$query_args = array(
-			'orderby'  => 'modified',
-			'order'    => 'desc',
-			'per_page' => min( $number_of_posts, 100 ), // Max 100 per request.
-			'_embed'   => '1',
+		$post_type = (string) ( $args['post_type'] ?? 'post' );
+
+		$query_args = array_filter(
+			array(
+				'post_type'        => Post_Type_Map::to_wp_slug( $post_type ),
+				'page'             => $args['page'] ?? null,
+				'per_page'         => $args['per_page'] ?? null,
+				'search'           => $args['search'] ?? null,
+				'name'             => $args['name'] ?? null,
+				'published_after'  => $args['published_after'] ?? null,
+				'published_before' => $args['published_before'] ?? null,
+				'orderby'          => $args['orderby'] ?? null,
+				'order'            => $args['order'] ?? null,
+			),
+			static fn( $v ): bool => null !== $v && '' !== $v
 		);
 
-		// Edit context provides raw field values (title, content, excerpt)
-		// needed to preserve data parity during import.
-		if ( VIP_Safe_Auth::has_valid_credential_format( $auth_credentials ) ) {
-			$query_args['context'] = 'edit';
+		if (
+			isset( $args['status'] )
+			&& is_array( $args['status'] )
+			&& array() !== $args['status']
+		) {
+			$query_args['status'] = array_values(
+				array_map( 'strval', $args['status'] )
+			);
 		}
 
-		/**
-		 * Filters API query arguments.
-		 *
-		 * @param array  $query_args      Query arguments.
-		 * @param string $source_site_url Source site URL.
-		 * @param int    $number_of_posts Number of posts.
-		 */
-		$query_args = apply_filters( 'safe_publish_api_query_args', $query_args, $source_site_url, $number_of_posts );
-
-		$final_url = add_query_arg( $query_args, $api_endpoint );
-
-		return $final_url;
+		return add_query_arg( $query_args, $api_endpoint );
 	}
 
 	/**
@@ -186,90 +189,156 @@ class Source_Posts_API {
 	}
 
 	/**
-	 * Processes API response.
+	 * Decodes and validates the source catalog envelope.
 	 *
-	 * @param array  $response  HTTP response.
-	 * @param string $post_type Optional. Post type being fetched. Default 'posts'.
-	 * @return array|WP_Error Processed posts or error.
+	 * @param array $response HTTP response from wp_remote_request.
+	 * @return array|WP_Error { items, has_more } or WP_Error on malformed body.
 	 */
-	private function process_response( array $response, string $post_type = 'posts' ): array|WP_Error {
-		$body  = wp_remote_retrieve_body( $response );
-		$posts = json_decode( $body, true );
+	private function process_catalog_response( array $response ): array|WP_Error {
+		$body    = wp_remote_retrieve_body( $response );
+		$decoded = json_decode( $body, true );
 
-		if ( ! is_array( $posts ) ) {
+		if (
+			! is_array( $decoded )
+			|| ! isset( $decoded['items'] )
+			|| ! is_array( $decoded['items'] )
+		) {
 			return new WP_Error(
-				'invalid_response',
+				'safe_publish_catalog_invalid_response',
 				__( 'Invalid response from source API.', 'safe-publish' ),
 				array( 'response_body' => $body )
 			);
 		}
 
-		// Prepare posts for the listing UI.
-		$filtered_posts = array();
-		foreach ( $posts as $post ) {
-			$filtered_post = $this->prepare_post_for_listing( $post, $post_type );
-			if ( $filtered_post ) {
-				$filtered_posts[] = $filtered_post;
+		$items = array();
+		foreach ( $decoded['items'] as $item ) {
+			$normalized = self::normalize_listing_item( $item );
+			if ( null !== $normalized ) {
+				$items[] = $normalized;
 			}
 		}
 
-		return $filtered_posts;
+		return array(
+			'items'    => $items,
+			'has_more' => isset( $decoded['has_more'] ) && true === (bool) $decoded['has_more'],
+		);
 	}
 
 	/**
-	 * Prepares a single post for display in the admin listing UI.
+	 * Shape-validates a single listing item received from the source.
 	 *
-	 * The output is consumed for display only and never stored; the actual
-	 * import re-fetches via fetch_fresh_post_content() to obtain raw values.
+	 * HMAC authenticates the source's identity, not its honesty: a
+	 * compromised source could return malicious fields the destination
+	 * renders. We type-coerce here, and additionally lock down two fields
+	 * the destination interpolates into HTML attributes/CSS class names:
 	 *
-	 * @param array  $post      Raw post data from the REST API.
-	 * @param string $post_type Post type being listed. Default 'posts'.
-	 * @return array|false Prepared post or false if invalid.
+	 * - `link` is forced through esc_url_raw with an http/https-only
+	 *   protocol allowlist so a hostile `javascript:` URL can't become an
+	 *   active anchor href.
+	 * - `status` is clamped to the catalog's status allowlist so a hostile
+	 *   value can't escape the `safe-publish-status-badge--<status>` class
+	 *   template (React doesn't escape className contents).
+	 *
+	 * Items without an id or title are dropped so the destination's listing
+	 * UI has stable shape guarantees regardless of source plugin version.
+	 *
+	 * @param mixed $item Raw item from the catalog response.
+	 * @return array|null Shape-valid item or null when required fields are missing.
 	 */
-	private function prepare_post_for_listing( array $post, string $post_type = 'posts' ): array|false {
-		if ( ! is_array( $post ) ) {
-			return false;
+	private static function normalize_listing_item( mixed $item ): ?array {
+		if ( ! is_array( $item ) ) {
+			return null;
 		}
 
-		$prepared_post = array(
-			'id'             => isset( $post['id'] ) ? absint( $post['id'] ) : 0,
-			'link'           => isset( $post['link'] ) ? esc_url_raw( $post['link'] ) : '#',
-			'title'          => isset( $post['title']['rendered'] )
-				? sanitize_text_field(
-					wp_strip_all_tags(
-						html_entity_decode(
-							$post['title']['rendered'],
-							ENT_QUOTES | ENT_HTML5,
-							'UTF-8'
-						)
+		$id = isset( $item['id'] ) ? absint( $item['id'] ) : 0;
+		if ( 0 === $id ) {
+			return null;
+		}
+
+		$title = isset( $item['title'] ) ? (string) $item['title'] : '';
+		if ( '' === $title ) {
+			return null;
+		}
+
+		$raw_link  = (string) ( $item['link'] ?? '' );
+		$safe_link = '' === $raw_link
+			? ''
+			: esc_url_raw( $raw_link, array( 'http', 'https' ) );
+
+		$raw_status  = (string) ( $item['status'] ?? '' );
+		$safe_status = in_array( $raw_status, self::CATALOG_STATUS_ALLOWLIST, true )
+			? $raw_status
+			: '';
+
+		return array(
+			'id'           => $id,
+			'link'         => $safe_link,
+			'title'        => $title,
+			'post_type'    => (string) ( $item['post_type'] ?? 'post' ),
+			'date_gmt'     => (string) ( $item['date_gmt'] ?? '' ),
+			'modified_gmt' => (string) ( $item['modified_gmt'] ?? '' ),
+			'status'       => $safe_status,
+		);
+	}
+
+	/**
+	 * Post statuses the catalog endpoint may return. Mirrors
+	 * Catalog_REST_Controller::ALLOWED_STATUSES — duplicated here to keep
+	 * the destination from depending on the source-only controller class.
+	 *
+	 * @var string[]
+	 */
+	private const CATALOG_STATUS_ALLOWLIST = array(
+		'publish',
+		'draft',
+		'pending',
+		'private',
+		'future',
+	);
+
+	/**
+	 * Prepares a single WP_Post for the catalog listing payload.
+	 *
+	 * The shape mirrors what the destination's listing UI expects.
+	 *
+	 * @param WP_Post $post Source post.
+	 * @return array Listing payload.
+	 */
+	public static function prepare_listing_payload_from_post( WP_Post $post ): array {
+		$permalink = get_permalink( $post );
+
+		return array(
+			'id'           => $post->ID,
+			'link'         => is_string( $permalink ) ? esc_url_raw( $permalink ) : '',
+			'title'        => sanitize_text_field(
+				wp_strip_all_tags(
+					html_entity_decode(
+						$post->post_title,
+						ENT_QUOTES | ENT_HTML5,
+						'UTF-8'
 					)
 				)
-				: __( 'No Title', 'safe-publish' ),
-			'modified_gmt'   => isset( $post['modified_gmt'] )
-				? sanitize_text_field( $post['modified_gmt'] ) . 'Z'
-				: '',
-			'thumbnail'      => isset( $post['featured_media'] ) ? esc_url( get_the_post_thumbnail_url( $post['id'], 'thumbnail' ) ) : '',
-			'featured_media' => isset( $post['featured_media'] ) ? absint( $post['featured_media'] ) : 0,
-			'excerpt'        => isset( $post['excerpt']['rendered'] ) ? wp_kses_post( $post['excerpt']['rendered'] ) : '',
-			'post_type'      => sanitize_text_field( $post_type ),
-			'content'        => isset( $post['content']['rendered'] ) ? $post['content']['rendered'] : '',
-			'meta'           => isset( $post['meta'] ) && is_array( $post['meta'] ) ? $post['meta'] : array(),
+			),
+			'post_type'    => $post->post_type,
+			'date_gmt'     => self::format_gmt_iso( $post->post_date_gmt ),
+			'modified_gmt' => self::format_gmt_iso( $post->post_modified_gmt ),
+			'status'       => $post->post_status,
 		);
+	}
 
-		// Validate required fields.
-		if ( 0 === $prepared_post['id'] || '' === $prepared_post['title'] ) {
-			return false;
+	/**
+	 * Converts a MySQL GMT datetime ("Y-m-d H:i:s") to ISO 8601 with a Z
+	 * marker. Empty/zero values yield an empty string.
+	 *
+	 * @param string $mysql_gmt MySQL GMT datetime.
+	 * @return string ISO 8601 GMT string or empty when input is unset.
+	 */
+	private static function format_gmt_iso( string $mysql_gmt ): string {
+		if ( '' === $mysql_gmt || str_starts_with( $mysql_gmt, '0000' ) ) {
+			return '';
 		}
 
-		$prepared_post['terms'] = self::extract_embedded_terms( $post );
-
-		/**
-		 * Filters post data prepared for the listing UI.
-		 *
-		 * @param array $prepared_post Prepared post data.
-		 * @param array $post          Original post data.
-		 */
-		return apply_filters( 'safe_publish_sanitized_post', $prepared_post, $post );
+		return str_replace( ' ', 'T', $mysql_gmt ) . 'Z';
 	}
 
 	/**
@@ -347,14 +416,14 @@ class Source_Posts_API {
 	 * @param int    $source_post_id    Source post ID.
 	 * @param string $source_site_url   Source site URL.
 	 * @param array  $auth_credentials  Optional. Authentication credentials. Default empty array.
-	 * @param string $post_type         Optional. Post type slug or REST endpoint. Default 'posts'.
+	 * @param string $post_type         Optional. Post type slug or REST endpoint. Default 'post'.
 	 * @return array|false Post data array on success, false on failure.
 	 */
 	public function fetch_fresh_post_content(
 		int $source_post_id,
 		string $source_site_url,
 		array $auth_credentials = array(),
-		string $post_type = 'posts'
+		string $post_type = 'post'
 	): array|false {
 		// Validate URL first.
 		if ( ! URL_Validator::is_valid_external_url( $source_site_url ) ) {
@@ -527,50 +596,5 @@ class Source_Posts_API {
 		}
 
 		return $fresh_data;
-	}
-
-	/**
-	 * Prepares a single WP_Post for the catalog listing payload.
-	 *
-	 * The shape mirrors what the destination's listing UI expects.
-	 *
-	 * @param WP_Post $post Source post.
-	 * @return array Listing payload.
-	 */
-	public static function prepare_listing_payload_from_post( WP_Post $post ): array {
-		$permalink = get_permalink( $post );
-
-		return array(
-			'id'           => $post->ID,
-			'link'         => is_string( $permalink ) ? esc_url_raw( $permalink ) : '',
-			'title'        => sanitize_text_field(
-				wp_strip_all_tags(
-					html_entity_decode(
-						$post->post_title,
-						ENT_QUOTES | ENT_HTML5,
-						'UTF-8'
-					)
-				)
-			),
-			'post_type'    => $post->post_type,
-			'date_gmt'     => self::format_gmt_iso( $post->post_date_gmt ),
-			'modified_gmt' => self::format_gmt_iso( $post->post_modified_gmt ),
-			'status'       => $post->post_status,
-		);
-	}
-
-	/**
-	 * Converts a MySQL GMT datetime ("Y-m-d H:i:s") to ISO 8601 with a Z
-	 * marker. Empty/zero values yield an empty string.
-	 *
-	 * @param string $mysql_gmt MySQL GMT datetime.
-	 * @return string ISO 8601 GMT string or empty when input is unset.
-	 */
-	private static function format_gmt_iso( string $mysql_gmt ): string {
-		if ( '' === $mysql_gmt || str_starts_with( $mysql_gmt, '0000' ) ) {
-			return '';
-		}
-
-		return str_replace( ' ', 'T', $mysql_gmt ) . 'Z';
 	}
 }

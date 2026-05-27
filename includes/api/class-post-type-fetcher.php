@@ -20,7 +20,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Post Type Fetcher Class.
  *
- * Handles fetching and filtering post types from source WordPress sites.
+ * Fetches catalog-eligible post types from source WordPress sites. The
+ * source's `/catalog/post-types` endpoint owns the filter, so this class
+ * just relays the response.
  */
 class Post_Type_Fetcher {
 
@@ -41,11 +43,11 @@ class Post_Type_Fetcher {
 	}
 
 	/**
-	 * Fetches available post types from source site.
+	 * Fetches catalog-eligible post types from the source site.
 	 *
 	 * @param string $source_site_url  Source site URL.
 	 * @param array  $auth_credentials Optional. Authentication credentials array. Default empty array.
-	 * @return array|WP_Error Post types data or error.
+	 * @return array|WP_Error List of catalog-eligible post types or error.
 	 */
 	public function fetch_post_types( string $source_site_url, array $auth_credentials = array() ): array|WP_Error {
 		// Validate URL first.
@@ -56,10 +58,14 @@ class Post_Type_Fetcher {
 			);
 		}
 
-		// Build API URL for post types.
-		$api_url = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/types';
+		// Build URL for the source's catalog-eligible post types. We hit the
+		// safe-publish catalog endpoint (not wp/v2/types) so the source is
+		// authoritative about which types the catalog can actually serve —
+		// otherwise the dropdown would list back-office types that 400 when
+		// selected.
+		$api_url = trailingslashit( $source_site_url )
+			. 'wp-json/safe-publish/v1/catalog/post-types';
 
-		// Make request.
 		$response = $this->http_client->make_request(
 			$api_url,
 			Request_Actions::LIST_ITEMS,
@@ -73,7 +79,6 @@ class Post_Type_Fetcher {
 		$response_body   = wp_remote_retrieve_body( $response );
 		$post_types_data = json_decode( $response_body, true );
 
-		// Check for authentication error responses.
 		if ( is_array( $post_types_data ) && isset( $post_types_data['code'] ) ) {
 			return new WP_Error(
 				'api_error',
@@ -81,7 +86,7 @@ class Post_Type_Fetcher {
 			);
 		}
 
-		if ( empty( $post_types_data ) || ! is_array( $post_types_data ) ) {
+		if ( ! is_array( $post_types_data ) || array() === $post_types_data ) {
 			$error_msg = sprintf(
 				/* translators: %s: Response body snippet */
 				__( 'No post types found. Response: %s', 'safe-publish' ),
@@ -93,32 +98,7 @@ class Post_Type_Fetcher {
 			);
 		}
 
-		// Filter to only show post types that support REST API.
-		return $this->filter_rest_enabled_post_types( $post_types_data );
-	}
-
-	/**
-	 * Filters post types to only include those with REST API support.
-	 *
-	 * @param array $post_types_data Raw post types data from API.
-	 * @return array Filtered post types with REST API support.
-	 */
-	private function filter_rest_enabled_post_types( array $post_types_data ): array {
-		$filtered_post_types = array();
-
-		foreach ( $post_types_data as $slug => $post_type ) {
-			// Include if it has a rest_base (which means it's REST API enabled).
-			if ( ! empty( $post_type['rest_base'] ) ) {
-				$filtered_post_types[ $slug ] = array(
-					'slug'        => $slug,
-					'name'        => $post_type['name'] ?? $slug,
-					'label'       => $post_type['name'] ?? $slug, // Use 'name' instead of nested labels.
-					'rest_base'   => $post_type['rest_base'],
-					'description' => $post_type['description'] ?? '',
-				);
-			}
-		}
-
-		return $filtered_post_types;
+		// Source filtered + shaped already; pass through.
+		return $post_types_data;
 	}
 }

@@ -115,7 +115,8 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that fetch_posts sends both HMAC and Basic Auth headers when
-	 * credentials are fully configured in plugin options, and returns one post.
+	 * credentials are fully configured in plugin options, and returns the
+	 * catalog envelope.
 	 */
 	public function test_fetch_posts_sends_both_hmac_and_basic_auth_headers(): void {
 		// ARRANGE: Configure both username and password in plugin options.
@@ -124,7 +125,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
 		// ACT: Fetch posts using credentials sourced from plugin options.
 		$credentials = Auth_Credential_Provider::get_credentials();
-		$result      = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
+		$result      = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, $credentials );
 
 		// ASSERT: Both HMAC and Basic Auth headers were sent in the outbound request.
 		$this->assertNotNull( $this->captured_request_args, 'HTTP request should have been intercepted.' );
@@ -145,21 +146,22 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 			'Basic Auth Authorization header should be correctly encoded.'
 		);
 
-		$this->assertIsArray( $result, 'fetch_posts() should return an array of posts.' );
-		$this->assertCount( 1, $result, 'fetch_posts() should return exactly one post.' );
+		$this->assertIsArray( $result, 'fetch_posts() should return an envelope array.' );
+		$this->assertArrayHasKey( 'items', $result, 'Envelope should expose items array.' );
+		$this->assertCount( 1, $result['items'], 'fetch_posts() should return exactly one item.' );
 	}
 
 	/**
 	 * Verifies that fetch_posts sends only HMAC headers and no Basic Auth
 	 * header when no credentials are configured in plugin options, and still
-	 * returns the expected posts.
+	 * returns the expected items.
 	 */
 	public function test_fetch_posts_sends_only_hmac_headers_without_basic_auth_credentials(): void {
 		// ARRANGE: No credentials configured (options are empty).
 
 		// ACT: Fetch posts without Basic Auth credentials.
 		$credentials = Auth_Credential_Provider::get_credentials();
-		$result      = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
+		$result      = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, $credentials );
 
 		// ASSERT: HMAC header is present but no Authorization header was sent.
 		$this->assertNotNull( $this->captured_request_args, 'HTTP request should have been intercepted.' );
@@ -169,14 +171,14 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 		$this->assertArrayHasKey( 'X-Safe-Publish-Signature', $headers, 'HMAC signature header should be present.' );
 		$this->assertArrayNotHasKey( 'Authorization', $headers, 'Authorization header should be absent without credentials.' );
 
-		$this->assertIsArray( $result, 'fetch_posts() should return an array of posts.' );
-		$this->assertCount( 1, $result, 'fetch_posts() should return exactly one post.' );
+		$this->assertIsArray( $result, 'fetch_posts() should return an envelope array.' );
+		$this->assertCount( 1, $result['items'], 'fetch_posts() should return exactly one item.' );
 	}
 
 	/**
 	 * Verifies that fetch_posts omits the Basic Auth header when only a
 	 * username is configured but no password, and still returns the expected
-	 * posts.
+	 * items.
 	 */
 	public function test_fetch_posts_omits_basic_auth_with_partial_credentials(): void {
 		// ARRANGE: Only a username is configured; no password.
@@ -184,7 +186,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
 		// ACT: Fetch posts with incomplete credentials.
 		$credentials = Auth_Credential_Provider::get_credentials();
-		$result      = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
+		$result      = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, $credentials );
 
 		// ASSERT: No Authorization header was sent because the password is missing.
 		$this->assertNotNull( $this->captured_request_args, 'HTTP request should have been intercepted.' );
@@ -193,8 +195,8 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
 		$this->assertArrayNotHasKey( 'Authorization', $headers, 'Authorization header should be absent with partial credentials.' );
 
-		$this->assertIsArray( $result, 'fetch_posts() should still return posts when Basic Auth is not sent.' );
-		$this->assertCount( 1, $result, 'fetch_posts() should return exactly one post even without Basic Auth.' );
+		$this->assertIsArray( $result, 'fetch_posts() should still return an envelope when Basic Auth is not sent.' );
+		$this->assertCount( 1, $result['items'], 'fetch_posts() should return exactly one item even without Basic Auth.' );
 	}
 
 	/**
@@ -208,14 +210,14 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 		update_option( Options::OPTION_BASIC_AUTH_PASSWORD, 'testpass' );
 
 		$credentials = Auth_Credential_Provider::get_credentials();
-		$posts       = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
+		$envelope    = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, $credentials );
 
-		$this->assertIsArray( $posts, 'fetch_posts() should return an array when the source responds with 200.' );
-		$this->assertCount( 1, $posts, 'fetch_posts() should return exactly one post.' );
+		$this->assertIsArray( $envelope, 'fetch_posts() should return an array when the source responds with 200.' );
+		$this->assertCount( 1, $envelope['items'], 'fetch_posts() should return exactly one item.' );
 
-		// ACT: Import the fetched post.
+		// ACT: Import the first item.
 		$session_id = $this->repository->create_session( self::SOURCE_SITE_URL, 'bulk' );
-		$result     = $this->import_service->import_post( $posts[0], $session_id );
+		$result     = $this->import_service->import_post( $envelope['items'][0], $session_id );
 
 		// ASSERT: Import succeeded and a WP post was created in the database.
 		$this->assertTrue( $result['success'], 'Import should succeed with valid credentials.' );
@@ -239,7 +241,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 
 		// ACT: Attempt to fetch posts with credentials the source site rejects.
 		$credentials = Auth_Credential_Provider::get_credentials();
-		$result      = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, 1, $credentials );
+		$result      = ( new Source_Posts_API( new HTTP_Client() ) )->fetch_posts( self::SOURCE_SITE_URL, $credentials );
 
 		// ASSERT: A WP_Error is returned; no posts were fetched.
 		$this->assertInstanceOf( WP_Error::class, $result, 'fetch_posts() should return WP_Error on 401.' );
@@ -313,20 +315,24 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 			);
 		}
 
-		// Posts list endpoint: return an array of posts.
+		// Catalog endpoint: return the { items, has_more } envelope using
+		// the source-side listing payload shape.
 		return array(
 			'headers'  => array(),
 			'body'     => (string) wp_json_encode(
 				array(
-					array(
-						'id'             => 1,
-						'link'           => 'https://source.example.com/test-post',
-						'title'          => array( 'raw' => 'Test Post' ),
-						'modified'       => '2026-01-01T00:00:00',
-						'featured_media' => 0,
-						'content'        => array( 'raw' => '<p>Test content.</p>' ),
-						'excerpt'        => array( 'raw' => '' ),
+					'items'    => array(
+						array(
+							'id'           => 1,
+							'link'         => 'https://source.example.com/test-post',
+							'title'        => 'Test Post',
+							'post_type'    => 'post',
+							'date_gmt'     => '2026-01-01T00:00:00Z',
+							'modified_gmt' => '2026-01-01T00:00:00Z',
+							'status'       => 'publish',
+						),
 					),
+					'has_more' => false,
 				)
 			),
 			'response' => array(

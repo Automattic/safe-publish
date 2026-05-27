@@ -67,64 +67,88 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that the prepared listing payload emits modified_gmt as a
-	 * Z-marked GMT timestamp derived from the source's modified_gmt field,
-	 * not from the source's site-local modified field.
+	 * Verifies that the source-side listing preparer emits modified_gmt as
+	 * a Z-marked GMT timestamp built from post_modified_gmt, so the
+	 * destination's has_update comparison stays correct across timezones.
 	 */
 	public function test_prepared_modified_gmt_is_zmarked(): void {
-		// ARRANGE: Mock the listing endpoint with a post whose two modified
-		// fields differ — modified is in NY local time, modified_gmt is UTC.
-		$body = (string) wp_json_encode(
+		global $wpdb;
+
+		// ARRANGE: Local post with the divergent modified / modified_gmt
+		// pair we used to assert against on the destination side. Direct
+		// $wpdb writes are needed because factory()->post->create() rewrites
+		// post_modified.
+		$post_id = self::factory()->post->create(
 			array(
-				array(
-					'id'           => 555,
-					'link'         => 'https://source.example.com/post',
-					'title'        => array( 'rendered' => 'Test Post' ),
-					'modified'     => '2024-07-15T11:00:00',
-					'modified_gmt' => '2024-07-15T15:00:00',
-				),
+				'post_status' => 'publish',
+				'post_title'  => 'Test Post',
 			)
 		);
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery
+		$wpdb->update(
+			$wpdb->posts,
+			array(
+				'post_date'         => '2024-07-15 11:00:00',
+				'post_date_gmt'     => '2024-07-15 15:00:00',
+				'post_modified'     => '2024-07-15 11:00:00',
+				'post_modified_gmt' => '2024-07-15 15:00:00',
+			),
+			array( 'ID' => $post_id )
+		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery
+		clean_post_cache( $post_id );
 
-		$callback = static function ( $preempt, $args, $url ) use ( $body ) {
-			unset( $args );
-			if ( false !== $preempt ) {
-				return $preempt;
-			}
-			if ( ! str_contains( $url, '/wp-json/wp/v2/posts?' ) ) {
-				return $preempt;
-			}
-			return array(
-				'response' => array(
-					'code'    => 200,
-					'message' => 'OK',
-				),
-				'body'     => $body,
-				'headers'  => array(),
-			);
-		};
+		$post = get_post( $post_id );
+		$this->assertNotNull( $post );
 
-		add_filter( 'pre_http_request', $callback, 5, 3 );
+		// ACT: Run the source-side preparer directly.
+		$prepared = Source_Posts_API::prepare_listing_payload_from_post( $post );
 
-		try {
-			// ACT: Fetch posts through the public API.
-			$result = $this->api->fetch_posts(
-				'https://source.example.com',
-				1
-			);
+		// ASSERT: modified_gmt is the Z-marked GMT timestamp; date_gmt
+		// likewise carries the Z marker.
+		$this->assertSame( '2024-07-15T15:00:00Z', $prepared['modified_gmt'] );
+		$this->assertSame( '2024-07-15T15:00:00Z', $prepared['date_gmt'] );
+	}
 
-			// ASSERT: modified_gmt is the Z-marked GMT timestamp, derived
-			// from the source's modified_gmt field.
-			$this->assertIsArray( $result );
-			$this->assertCount( 1, $result );
-			$this->assertSame(
-				'2024-07-15T15:00:00Z',
-				$result[0]['modified_gmt'],
-				'Prepared modified_gmt must carry a Z marker.'
-			);
-		} finally {
-			remove_filter( 'pre_http_request', $callback, 5 );
-		}
+	/**
+	 * Verifies that posts with the MySQL zero-date sentinel yield empty
+	 * strings rather than malformed ISO timestamps. The catalog allowlist
+	 * shouldn't admit auto-drafts (which is when WP writes the sentinel),
+	 * but corrupted-by-import or DB-manipulated posts can carry it too.
+	 */
+	public function test_prepared_payload_handles_zero_date_sentinel(): void {
+		global $wpdb;
+
+		// ARRANGE: A post whose dates are explicitly the MySQL zero sentinel.
+		$post_id = self::factory()->post->create(
+			array(
+				'post_status' => 'publish',
+				'post_title'  => 'Zero Date',
+			)
+		);
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery
+		$wpdb->update(
+			$wpdb->posts,
+			array(
+				'post_date'         => '0000-00-00 00:00:00',
+				'post_date_gmt'     => '0000-00-00 00:00:00',
+				'post_modified'     => '0000-00-00 00:00:00',
+				'post_modified_gmt' => '0000-00-00 00:00:00',
+			),
+			array( 'ID' => $post_id )
+		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery
+		clean_post_cache( $post_id );
+
+		$post = get_post( $post_id );
+		$this->assertNotNull( $post );
+
+		// ACT: Run the preparer.
+		$prepared = Source_Posts_API::prepare_listing_payload_from_post( $post );
+
+		// ASSERT: Zero dates collapse to empty strings, not to '0000-00-00T...Z'.
+		$this->assertSame( '', $prepared['date_gmt'] );
+		$this->assertSame( '', $prepared['modified_gmt'] );
 	}
 
 	/**
@@ -170,7 +194,7 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 			clean_post_cache( $local_post_id );
 
 			// ARRANGE: Source post payload as emitted by
-			// prepare_post_for_listing — modified_gmt is Z-marked GMT.
+			// prepare_listing_payload_from_post — modified_gmt is Z-marked GMT.
 			// 15:00 UTC > 14:00 UTC, so the source is genuinely newer.
 			$posts = array(
 				array(

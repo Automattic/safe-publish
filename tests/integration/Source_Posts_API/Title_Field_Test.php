@@ -38,65 +38,39 @@ class Title_Field_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Drives a single fetch_posts() call against a mocked listing endpoint
-	 * with the given rendered title, returning the prepared title.
+	 * Builds a local published post with the given title and runs it through
+	 * the source-side listing preparer.
 	 *
-	 * @param string $rendered_title Value placed in title.rendered.
+	 * The destination's normalize_listing_item only re-sanitizes already-
+	 * prepared payloads; the contract that the preparer must decode entities
+	 * before stripping tags lives entirely on the source side, so this test
+	 * exercises it directly.
+	 *
+	 * @param string $raw_title Title written to the post (entities still encoded).
 	 * @return string Prepared title from the listing payload.
 	 */
-	private function prepared_title_for( string $rendered_title ): string {
-		$body = (string) wp_json_encode(
+	private function prepared_title_for( string $raw_title ): string {
+		$post_id = self::factory()->post->create(
 			array(
-				array(
-					'id'           => 1,
-					'link'         => 'https://source.example.com/post',
-					'title'        => array( 'rendered' => $rendered_title ),
-					'modified_gmt' => '2024-07-15T15:00:00',
-				),
+				'post_status' => 'publish',
+				'post_title'  => $raw_title,
 			)
 		);
 
-		$callback = static function ( $preempt, $args, $url ) use ( $body ) {
-			unset( $args );
-			if ( false !== $preempt ) {
-				return $preempt;
-			}
-			if ( ! str_contains( $url, '/wp-json/wp/v2/posts?' ) ) {
-				return $preempt;
-			}
-			return array(
-				'response' => array(
-					'code'    => 200,
-					'message' => 'OK',
-				),
-				'body'     => $body,
-				'headers'  => array(),
-			);
-		};
+		$post = get_post( $post_id );
+		$this->assertNotNull( $post );
 
-		add_filter( 'pre_http_request', $callback, 5, 3 );
+		$prepared = Source_Posts_API::prepare_listing_payload_from_post( $post );
 
-		try {
-			$result = $this->api->fetch_posts(
-				'https://source.example.com',
-				1
-			);
-		} finally {
-			remove_filter( 'pre_http_request', $callback, 5 );
-		}
-
-		$this->assertIsArray( $result );
-		$this->assertCount( 1, $result );
-
-		return $result[0]['title'];
+		return $prepared['title'];
 	}
 
 	/**
-	 * Verifies that numeric HTML entities the REST API emits in title.rendered
-	 * are decoded to their literal characters in the listing payload.
+	 * Verifies that numeric HTML entities stored in post_title are decoded
+	 * to their literal characters in the listing payload.
 	 */
 	public function test_prepared_title_decodes_numeric_entities(): void {
-		// ARRANGE + ACT: en-dash arrives as &#8211; in the REST response.
+		// ARRANGE + ACT: en-dash stored as &#8211; in post_title.
 		$title = $this->prepared_title_for( 'Post 19 &#8211; 1P' );
 
 		// ASSERT: Listing UI receives the literal en-dash.
@@ -105,10 +79,10 @@ class Title_Field_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Verifies that named HTML entities are decoded too — covers the &amp;
-	 * case the REST API uses for ampersands in titles.
+	 * case for ampersands in titles.
 	 */
 	public function test_prepared_title_decodes_named_entities(): void {
-		// ARRANGE + ACT: ampersand arrives as &amp; in the REST response.
+		// ARRANGE + ACT: ampersand stored as &amp; in post_title.
 		$title = $this->prepared_title_for( 'Tom &amp; Jerry' );
 
 		// ASSERT: Listing UI receives the literal ampersand.
@@ -123,7 +97,7 @@ class Title_Field_Test extends Source_Posts_API_Test_Base {
 	 * later render as HTML.
 	 */
 	public function test_prepared_title_strips_tags_after_decoding_entities(): void {
-		// ARRANGE + ACT: encoded script tag arrives in the REST response.
+		// ARRANGE + ACT: encoded script tag stored in post_title.
 		$title = $this->prepared_title_for(
 			'Title &lt;script&gt;alert(1)&lt;/script&gt;'
 		);

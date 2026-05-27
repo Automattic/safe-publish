@@ -228,7 +228,7 @@ final class Plugin {
 			new Meta_Terms_Manager()
 		);
 
-		$menu_manager = new Admin_Menu_Manager( $api, $post_import_service );
+		$menu_manager = new Admin_Menu_Manager();
 
 		$ajax_controller = new Admin_Ajax_Controller(
 			$api,

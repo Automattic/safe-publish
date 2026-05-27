@@ -141,14 +141,10 @@ export function PostTypeSelector( {
 			const response = await makeRequest(
 				'safe_publish_fetch_post_types',
 				{ source_site_url: currentSourceSiteUrl }
-			) as ApiResponse< Record< string, PostTypeOption > >;
+			) as ApiResponse< PostTypeOption[] >;
 
 			if ( response.success ) {
-				// Convert object to array - don't filter out anything initially.
-				const postTypeArray = Object.values( response.data );
-
-				// Set the post types directly from the API response.
-				setPostTypes( postTypeArray );
+				setPostTypes( response.data );
 			} else {
 				// eslint-disable-next-line no-console
 				console.error( 'Safe Publish PostTypeSelector: API error:', response );

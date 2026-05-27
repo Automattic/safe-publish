@@ -9,9 +9,6 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\API\Source_Posts_API;
-use Safe_Publish\Admin\Post_Import_Service;
-
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -21,34 +18,6 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Manages admin menu registration, page rendering, and asset enqueueing.
  */
 class Admin_Menu_Manager {
-
-	/**
-	 * Source Posts API instance.
-	 *
-	 * @var Source_Posts_API
-	 */
-	private Source_Posts_API $api;
-
-	/**
-	 * Post Import Service instance.
-	 *
-	 * @var Post_Import_Service
-	 */
-	private Post_Import_Service $post_import_service;
-
-	/**
-	 * Constructs the Admin_Menu_Manager instance.
-	 *
-	 * @param Source_Posts_API    $api                 Source Posts API instance.
-	 * @param Post_Import_Service $post_import_service Post Import Service instance.
-	 */
-	public function __construct(
-		Source_Posts_API $api,
-		Post_Import_Service $post_import_service
-	) {
-		$this->api                 = $api;
-		$this->post_import_service = $post_import_service;
-	}
 
 	/**
 	 * Registers WordPress hooks for admin menu and assets.
@@ -113,7 +82,7 @@ class Admin_Menu_Manager {
 			);
 		}
 
-		$admin_page = new Admin_Page( $this->api, $this->post_import_service );
+		$admin_page = new Admin_Page();
 		$admin_page->render();
 	}
 
@@ -145,7 +114,7 @@ class Admin_Menu_Manager {
 			return;
 		}
 
-		$admin_page = new Admin_Page( $this->api, $this->post_import_service );
+		$admin_page = new Admin_Page();
 		$admin_page->enqueue_assets();
 	}
 }

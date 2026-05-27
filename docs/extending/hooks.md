@@ -32,49 +32,6 @@ add_action( 'safe_publish_event_logged', function( string $channel, string $even
 
 ## Filters
 
-### `safe_publish_api_query_args`
-
-Filter query arguments sent to the source site's REST API when fetching the list of posts.
-
-**Parameters:**
-
-- `array $args` — query arguments
-- `string $source_site_url` — source site URL
-- `int $number_of_posts` — number of posts to fetch
-
-**Returns:** `array`
-
-**Example:**
-
-```php
-add_filter( 'safe_publish_api_query_args', function( array $args, string $source_site_url, int $number_of_posts ): array {
-    $args['orderby'] = 'modified';
-    $args['order']   = 'desc';
-    return $args;
-}, 10, 3 );
-```
-
-### `safe_publish_sanitized_post`
-
-Filter sanitized post data after it is fetched and sanitized from the source REST API.
-
-**Parameters:**
-
-- `array $sanitized_post` — sanitized post data
-- `array $post` — raw post data from the API
-
-**Returns:** `array`
-
-**Example:**
-
-```php
-add_filter( 'safe_publish_sanitized_post', function( array $sanitized_post, array $post ): array {
-    // Override title casing
-    $sanitized_post['title'] = mb_convert_case( $sanitized_post['title'], MB_CASE_TITLE );
-    return $sanitized_post;
-}, 10, 2 );
-```
-
 ### `safe_publish_request_timeout`
 
 Filter the HTTP request timeout in seconds for REST API requests. Default: `10`.
