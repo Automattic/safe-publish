@@ -20,21 +20,28 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * HTTP Client Class.
  *
- * Provides a centralized service for making HTTP requests with VIP
- * compatibility, authentication handling, and error management.
+ * Provides a centralized service for making HTTP requests with authentication
+ * handling and error management.
  */
 final class HTTP_Client {
 
 	/**
-	 * Makes HTTP request with VIP compatibility.
+	 * Makes an HTTP request. $action is sent as X-Safe-Publish-Action and
+	 * signed into the HMAC payload by VIP_Safe_Auth::get_auth_params().
 	 *
 	 * @param string $url              Request URL.
+	 * @param string $action           Declared request action (see Request_Actions).
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
 	 * @param array  $additional_args  Optional. Additional request arguments. Default empty array.
 	 * @return array|WP_Error Response or error.
 	 */
-	public function make_request( string $url, array $auth_credentials = array(), array $additional_args = array() ): array|WP_Error {
-		// VIP-optimized timeout (max 10 seconds recommended for VIP environments).
+	public function make_request(
+		string $url,
+		string $action,
+		array $auth_credentials = array(),
+		array $additional_args = array()
+	): array|WP_Error {
+		// Default request timeout in seconds (filterable).
 		$timeout = apply_filters( 'safe_publish_request_timeout', 10 );
 
 		// Determine SSL verification based on environment.
@@ -50,9 +57,15 @@ final class HTTP_Client {
 			$additional_args
 		);
 
-		// Use VIP-safe authentication instead of Basic Auth.
+		// Apply HMAC auth headers; Basic Auth layers on top when configured.
 		$body        = $request_args['body'] ?? '';
-		$auth_params = VIP_Safe_Auth::get_auth_params( $url, $auth_credentials, 'GET', $body );
+		$auth_params = VIP_Safe_Auth::get_auth_params(
+			$url,
+			$action,
+			$auth_credentials,
+			'GET',
+			$body
+		);
 
 		// Add authentication headers if available.
 		if ( ! empty( $auth_params['headers'] ) ) {
@@ -116,7 +129,7 @@ final class HTTP_Client {
 	}
 
 	/**
-	 * Makes safe remote GET request with VIP compatibility.
+	 * Makes a safe remote GET request.
 	 *
 	 * @param string $url  Request URL.
 	 * @param array  $args Optional. Request arguments. Default empty array.
@@ -173,7 +186,7 @@ final class HTTP_Client {
 	}
 
 	/**
-	 * Cleans up temporary file with VIP compatibility.
+	 * Cleans up a temporary file.
 	 *
 	 * @param string $temp_file Path to temporary file.
 	 */

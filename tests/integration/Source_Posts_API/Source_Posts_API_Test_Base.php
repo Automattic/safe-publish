@@ -118,8 +118,9 @@ abstract class Source_Posts_API_Test_Base extends Integration_Test_Case {
 			return $preempt;
 		}
 
-		// Handle single-post REST endpoint used by fetch_fresh_post().
-		if ( preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
+		// Handle single-post REST endpoint used by fetch_fresh_post() for both
+		// post and page types.
+		if ( preg_match( '#/wp-json/wp/v2/(?:posts|pages)/\d+#', $url ) ) {
 			return $this->build_mock_post_response();
 		}
 

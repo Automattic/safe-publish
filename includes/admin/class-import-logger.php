@@ -42,9 +42,9 @@ class Import_Logger extends Logger {
 	 *
 	 * @param int $session_id Session that was already in the rolled-back state.
 	 */
-	public function session_rollback_noop( int $session_id ): void {
+	public function session_already_rolled_back( int $session_id ): void {
 		$this->log_event(
-			Log_Events::SESSION_ROLLBACK_NOOP,
+			Log_Events::SESSION_ALREADY_ROLLED_BACK,
 			array( 'session_id' => $session_id )
 		);
 	}
@@ -97,13 +97,13 @@ class Import_Logger extends Logger {
 	 * @param int $session_id Parent session of the item.
 	 * @param int $post_id    Local WP post the item rolled back.
 	 */
-	public function item_rollback_noop(
+	public function item_already_rolled_back(
 		int $item_id,
 		int $session_id,
 		int $post_id
 	): void {
 		$this->log_event(
-			Log_Events::ITEM_ROLLBACK_NOOP,
+			Log_Events::ITEM_ALREADY_ROLLED_BACK,
 			array(
 				'item_id'    => $item_id,
 				'session_id' => $session_id,

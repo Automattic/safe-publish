@@ -75,6 +75,7 @@ final class Import_Items_Table {
 			post_id BIGINT UNSIGNED NULL DEFAULT NULL,
 			error_message TEXT NULL DEFAULT NULL,
 			content_changes LONGTEXT NULL DEFAULT NULL,
+			warnings LONGTEXT NULL DEFAULT NULL,
 			has_previous_content TINYINT(1) NOT NULL DEFAULT 0,
 			rolled_back TINYINT(1) NOT NULL DEFAULT 0,
 			import_date_gmt DATETIME NOT NULL,

@@ -28,18 +28,22 @@ function wp_parse_url( string $url, int $component = -1 ): mixed {
 		return $parsed;
 	}
 
-	// Return specific component (PHP_URL_HOST = 1, etc.).
+	// Return specific component. Indexes correspond to PHP's PHP_URL_*
+	// constants: SCHEME=0, HOST=1, PORT=2, USER=3, PASS=4, PATH=5,
+	// QUERY=6, FRAGMENT=7.
 	if ( is_array( $parsed ) ) {
 		$map = array(
+			0 => 'scheme',
 			1 => 'host',
-			2 => 'scheme',
-			3 => 'port',
+			2 => 'port',
+			3 => 'user',
+			4 => 'pass',
 			5 => 'path',
 			6 => 'query',
 			7 => 'fragment',
 		);
 
-		return $parsed[ $map[ $component ] ] ?? null;
+		return $parsed[ $map[ $component ] ?? '' ] ?? null;
 	}
 
 	return null;
@@ -128,8 +132,24 @@ function esc_url_raw( string $url ): string {
 	return $url;
 }
 
+function esc_url( string $url ): string {
+	return $url;
+}
+
+function esc_html( string $text ): string {
+	return $text;
+}
+
+function absint( mixed $value ): int {
+	return abs( (int) $value );
+}
+
 class WP_Error {
-	public function __construct( private string $code = '', private string $message = '', private mixed $data = null ) {}
+	public function __construct(
+		private string $code = '',
+		private string $message = '',
+		private mixed $data = null
+	) {}
 
 	public function get_error_code(): string {
 		return $this->code;

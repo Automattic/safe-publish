@@ -12,11 +12,12 @@ namespace Safe_Publish\Admin;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Post_Type_Fetcher;
+use Safe_Publish\API\Request_Actions;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Topological_Sorter;
 use Exception;
-use WP_Error;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -128,8 +129,8 @@ final class Admin_Ajax_Controller {
 	private function register_auth_status_invalidation(): void {
 		$options  = array(
 			Options::OPTION_CONNECTED_SITE_URL,
-			Options::OPTION_USERNAME,
-			Options::OPTION_PASSWORD,
+			Options::OPTION_BASIC_AUTH_USERNAME,
+			Options::OPTION_BASIC_AUTH_PASSWORD,
 		);
 		$callback = array( __CLASS__, 'bust_auth_status_cache' );
 
@@ -400,6 +401,11 @@ final class Admin_Ajax_Controller {
 
 	/**
 	 * Handles AJAX request for bulk importing posts.
+	 *
+	 * Runs in two passes so parent-child relationships are preserved across a
+	 * batch: pass 1 fetches each post's fresh REST payload without writing to
+	 * the DB, and pass 2 processes the batch in topological order so a source
+	 * parent is imported before its children.
 	 */
 	public function ajax_bulk_import(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
@@ -435,12 +441,82 @@ final class Admin_Ajax_Controller {
 
 		$session_id = $session_result;
 
+		// Pass 1: fetch each post's REST payload without touching the DB. The
+		// payload is the same source of truth used by pass 2, so prefetched
+		// posts skip the in-pipeline fetch when they're processed.
+		$batch_fresh_data = array();
+		$request_index    = array();
+		foreach ( $posts_data as $index => $post_data ) {
+			$source_post_id = absint( $post_data['id'] ?? 0 );
+			if ( 0 === $source_post_id ) {
+				continue;
+			}
+
+			$post_type = sanitize_text_field( $post_data['post_type'] ?? 'posts' );
+			$fresh     = $this->api->fetch_fresh_post( $source_post_id, $post_type );
+			if ( is_wp_error( $fresh ) ) {
+				continue;
+			}
+
+			$batch_fresh_data[ $source_post_id ] = $fresh;
+			$request_index[ $source_post_id ]    = $index;
+		}
+
+		// Topologically sort so each source parent is processed before its
+		// children. Cycle leftovers fall through to the normal unresolvable-
+		// parent error path.
+		$parent_map = array();
+		foreach ( $batch_fresh_data as $source_id => $fresh ) {
+			$parent_map[ $source_id ] = absint( $fresh['parent'] ?? 0 );
+		}
+
+		$sort_result  = Topological_Sorter::sort( $parent_map );
+		$sorted_order = array_merge( $sort_result['sorted'], $sort_result['leftover'] );
+		$processed    = array();
+
 		$results    = array();
 		$successful = 0;
 		$failed     = 0;
 
+		// Pass 2: process in topological order, then append items whose pass-1
+		// fetch failed (or was skipped) in request order — import_post() will
+		// re-fetch them and surface the underlying failure.
+		foreach ( $sorted_order as $source_id ) {
+			$index     = $request_index[ $source_id ];
+			$post_data = $posts_data[ $index ];
+			$prefetch  = $batch_fresh_data[ $source_id ];
+
+			$result    = $this->post_import_service->import_post(
+				$post_data,
+				$session_id,
+				array(),
+				$prefetch,
+				$batch_fresh_data
+			);
+			$results[] = $result;
+
+			$processed[ $source_id ] = true;
+
+			if ( $result['success'] ) {
+				++$successful;
+			} else {
+				++$failed;
+			}
+		}
+
 		foreach ( $posts_data as $post_data ) {
-			$result    = $this->post_import_service->import_post( $post_data, $session_id );
+			$source_post_id = absint( $post_data['id'] ?? 0 );
+			if ( $source_post_id > 0 && isset( $processed[ $source_post_id ] ) ) {
+				continue;
+			}
+
+			$result    = $this->post_import_service->import_post(
+				$post_data,
+				$session_id,
+				array(),
+				null,
+				$batch_fresh_data
+			);
 			$results[] = $result;
 
 			if ( $result['success'] ) {
@@ -454,7 +530,7 @@ final class Admin_Ajax_Controller {
 
 		wp_send_json_success(
 			array(
-				'total'      => count( $posts_data ),
+				'total'      => count( $results ),
 				'successful' => $successful,
 				'failed'     => $failed,
 				'results'    => $results,
@@ -482,6 +558,7 @@ final class Admin_Ajax_Controller {
 
 		$auth_params = \Safe_Publish\Auth\VIP_Safe_Auth::get_auth_params(
 			$api_url,
+			Request_Actions::PROBE,
 			$auth_credentials,
 			'GET'
 		);
@@ -500,7 +577,11 @@ final class Admin_Ajax_Controller {
 		);
 
 		try {
-			$response = $this->http_client->make_request( $api_url, $auth_credentials );
+			$response = $this->http_client->make_request(
+				$api_url,
+				Request_Actions::PROBE,
+				$auth_credentials
+			);
 
 			if ( is_wp_error( $response ) ) {
 				$debug_info['request_error'] = $response->get_error_message();

@@ -35,14 +35,14 @@ class Options {
 	 *
 	 * @var string
 	 */
-	const OPTION_USERNAME = 'safe_publish_username';
+	const OPTION_BASIC_AUTH_USERNAME = 'safe_publish_basic_auth_username';
 
 	/**
 	 * Option key for the Basic Auth password.
 	 *
 	 * @var string
 	 */
-	const OPTION_PASSWORD = 'safe_publish_password';
+	const OPTION_BASIC_AUTH_PASSWORD = 'safe_publish_basic_auth_password';
 
 	/**
 	 * Option key for the sync mode of this site.
@@ -124,6 +124,27 @@ class Options {
 	 * @var string
 	 */
 	const META_MEDIA_TYPE = 'safe_publish_media_type';
+
+	/**
+	 * Private meta key storing the source author's email at import time.
+	 *
+	 * @var string
+	 */
+	const META_SOURCE_AUTHOR_EMAIL = '_safe_publish_source_author_email';
+
+	/**
+	 * Private meta key storing the source author's login at import time.
+	 *
+	 * @var string
+	 */
+	const META_SOURCE_AUTHOR_LOGIN = '_safe_publish_source_author_login';
+
+	/**
+	 * Private meta key storing the source post's parent ID at import time.
+	 *
+	 * @var string
+	 */
+	const META_SOURCE_POST_PARENT_ID = '_safe_publish_source_post_parent_id';
 
 	/**
 	 * WordPress settings-API group slug shared by all plugin options.

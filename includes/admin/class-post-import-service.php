@@ -94,23 +94,38 @@ class Post_Import_Service {
 	/**
 	 * Imports a single post from source post data.
 	 *
-	 * @param array    $post_data  Post data array containing id, title, content, link, etc.
-	 * @param int|null $session_id Optional import session ID for history tracking.
-	 * @param array    $options    Optional behavior overrides:
-	 *                             - 'force_draft_on_update' (bool, default
-	 *                               false): when true, override post_status
-	 *                               to 'draft' when updating an existing
-	 *                               imported post. Single-import review
-	 *                               flow uses this; bulk preserves status.
+	 * @param array      $post_data               Post data array containing id, title, content,
+	 *                                            link, etc.
+	 * @param int|null   $session_id              Optional import session ID for history tracking.
+	 * @param array      $options                 Optional behavior overrides:
+	 *                                            - 'force_draft_on_update' (bool, default
+	 *                                              false): when true, override post_status
+	 *                                              to 'draft' when updating an existing
+	 *                                              imported post. Single-import review
+	 *                                              flow uses this; bulk preserves status.
+	 * @param array|null $prefetched_fresh_result Pre-fetched response from
+	 *                                            Source_Posts_API::fetch_fresh_post(). Lets the
+	 *                                            bulk two-pass flow skip the in-pipeline fetch.
+	 * @param array|null $batch_fresh_data        Map of source ID => pass-1 fresh data for posts
+	 *                                            in the current bulk batch. Drives parent
+	 *                                            resolution's in-batch detection.
 	 * @return array Result data with success status, post_id, edit_url, and error keys.
 	 */
 	public function import_post(
 		array $post_data,
 		?int $session_id = null,
-		array $options = array()
+		array $options = array(),
+		?array $prefetched_fresh_result = null,
+		?array $batch_fresh_data = null
 	): array {
 		try {
-			return $this->process_post_import( $post_data, $session_id, $options );
+			return $this->process_post_import(
+				$post_data,
+				$session_id,
+				$options,
+				$prefetched_fresh_result,
+				$batch_fresh_data
+			);
 		} catch ( Exception $e ) {
 			return $this->build_exception_result( $post_data, $session_id, $e );
 		}
@@ -119,15 +134,19 @@ class Post_Import_Service {
 	/**
 	 * Processes the post import workflow end-to-end.
 	 *
-	 * @param array    $post_data  Raw post data.
-	 * @param int|null $session_id Import session ID.
-	 * @param array    $options    Behavior overrides; see import_post().
+	 * @param array      $post_data               Raw post data.
+	 * @param int|null   $session_id              Import session ID.
+	 * @param array      $options                 Behavior overrides; see import_post().
+	 * @param array|null $prefetched_fresh_result Optional pre-fetched fresh response.
+	 * @param array|null $batch_fresh_data        Optional pass-1 batch map.
 	 * @return array Import result data.
 	 */
 	private function process_post_import(
 		array $post_data,
 		?int $session_id,
-		array $options
+		array $options,
+		?array $prefetched_fresh_result = null,
+		?array $batch_fresh_data = null
 	): array {
 		$fields = $this->extract_post_fields( $post_data );
 
@@ -173,14 +192,18 @@ class Post_Import_Service {
 				$fields,
 				$post_type,
 				$session_id,
-				$options
+				$options,
+				$prefetched_fresh_result,
+				$batch_fresh_data
 			);
 		}
 
 		return $this->handle_new_post(
 			$fields,
 			$post_type,
-			$session_id
+			$session_id,
+			$prefetched_fresh_result,
+			$batch_fresh_data
 		);
 	}
 
@@ -207,6 +230,284 @@ class Post_Import_Service {
 			'password'          => sanitize_text_field( $post_data['password'] ?? '' ),
 			'meta'              => is_array( $post_data['meta'] ?? null ) ? $post_data['meta'] : array(),
 			'terms'             => is_array( $post_data['terms'] ?? null ) ? $post_data['terms'] : array(),
+			'source_author'     => is_array( $post_data['source_author'] ?? null )
+				? $post_data['source_author']
+				: null,
+			'matched_author_id' => 0,
+			'source_parent_id'  => absint( $post_data['parent'] ?? 0 ),
+			'post_parent_id'    => 0,
+			'warnings'          => array(),
+		);
+	}
+
+	/**
+	 * Resolves the source author to a destination user ID by email.
+	 *
+	 * Matches by email only — login collisions across sites can produce silent
+	 * misattribution. No capability check: post_author is data attribution, not
+	 * authorization, so a destination Subscriber matching by email is a valid
+	 * post_author for an imported post.
+	 *
+	 * @param array|null $source_author Author payload from the source REST
+	 *                                  response: { email, login, display_name }.
+	 *                                  Null when the source did not include the
+	 *                                  field.
+	 * @return int|WP_Error Matched destination user ID on success, WP_Error with
+	 *                      a specific operator-facing message on failure.
+	 */
+	public function resolve_source_author( ?array $source_author ): int|WP_Error {
+		$email        = isset( $source_author['email'] )
+			? (string) $source_author['email']
+			: '';
+		$login        = isset( $source_author['login'] )
+			? (string) $source_author['login']
+			: '';
+		$display_name = isset( $source_author['display_name'] )
+			? (string) $source_author['display_name']
+			: '';
+
+		if ( '' === $email ) {
+			return new WP_Error(
+				'source_author_unresolved',
+				__(
+					'Source post has no author or its author has been deleted on the source.',
+					'safe-publish'
+				),
+				array( 'action' => 'source_author_unresolved' )
+			);
+		}
+
+		$user = get_user_by( 'email', $email );
+
+		if ( false === $user ) {
+			return new WP_Error(
+				'source_author_not_found',
+				sprintf(
+					/* translators: 1: display name, 2: email, 3: login. */
+					__(
+						'Source author %1$s (%2$s, login: %3$s) was not found on this site. Create a user with this email on the destination, then re-import.',
+						'safe-publish'
+					),
+					$display_name,
+					$email,
+					$login
+				),
+				array( 'action' => 'source_author_not_found' )
+			);
+		}
+
+		return (int) $user->ID;
+	}
+
+	/**
+	 * Applies the opt-in author fallback.
+	 *
+	 * The fallback applies only when the error code is source_author_not_found
+	 * and the safe_publish_import_allow_author_fallback filter returns true.
+	 * Otherwise the WP_Error is returned verbatim — other resolution errors
+	 * signal source-side data-quality issues that fallback would mask.
+	 *
+	 * For new posts (existing author id null), falls back to the importing user.
+	 * For updates, returns the existing post_author so the destination's current
+	 * attribution is preserved.
+	 *
+	 * @param WP_Error   $resolution_error        WP_Error from resolve_source_author().
+	 * @param array|null $source_author           Source author payload used to build the warning.
+	 * @param int|null   $existing_post_author_id Destination post's existing post_author for
+	 *                                            updates; null for new posts.
+	 * @return array{author_id: int, warning: array}|WP_Error Fallback applied, or the original
+	 *                                            WP_Error returned verbatim.
+	 */
+	public function apply_author_fallback(
+		WP_Error $resolution_error,
+		?array $source_author,
+		?int $existing_post_author_id
+	): array|WP_Error {
+		if ( 'source_author_not_found' !== $resolution_error->get_error_code() ) {
+			return $resolution_error;
+		}
+
+		/**
+		 * Filters whether the import may fall back to a different author when
+		 * the source author cannot be matched on the destination site.
+		 *
+		 * When true, new posts are attributed to the importing user and
+		 * updates preserve the destination's existing author; a warning is
+		 * recorded in the import History in both cases. When false (default),
+		 * imports abort with a no-match error.
+		 *
+		 * @param bool $enabled Whether the fallback is enabled. Default false.
+		 */
+		$fallback_enabled = apply_filters(
+			'safe_publish_import_allow_author_fallback',
+			false
+		);
+
+		if ( true !== $fallback_enabled ) {
+			return $resolution_error;
+		}
+
+		$is_update = null !== $existing_post_author_id;
+		$author_id = $is_update
+			? $existing_post_author_id
+			: get_current_user_id();
+
+		$warning = array(
+			'type'             => 'author_fallback_applied',
+			'source'           => array(
+				'email'        => (string) ( $source_author['email'] ?? '' ),
+				'login'        => (string) ( $source_author['login'] ?? '' ),
+				'display_name' => (string) ( $source_author['display_name'] ?? '' ),
+			),
+			'fallback_user_id' => $is_update ? null : $author_id,
+		);
+
+		return array(
+			'author_id' => $author_id,
+			'warning'   => $warning,
+		);
+	}
+
+	/**
+	 * Resolves a source post's parent to a destination post ID.
+	 *
+	 * Returns null when no resolution applies (non-hierarchical post type or
+	 * top-level source post). Returns the destination post ID on a successful
+	 * lookup. Returns a WP_Error tagged with a reason — 'not_imported' when
+	 * the parent is unknown to both the destination and the current batch,
+	 * 'failed_in_batch' when the parent was part of pass-1 fetch data but
+	 * never reached a successful destination import.
+	 *
+	 * @param int        $source_parent_id Source post's parent ID. 0 means
+	 *                                     top-level on the source.
+	 * @param string     $post_type        Destination post type slug.
+	 * @param array|null $batch_fresh_data Map of source ID => pass-1 fresh
+	 *                                     data for posts in the current bulk
+	 *                                     batch. Null for single-import.
+	 * @return int|WP_Error|null Destination post ID, WP_Error when
+	 *                                     unresolved, or null when resolution
+	 *                                     does not apply.
+	 */
+	public function resolve_source_parent(
+		int $source_parent_id,
+		string $post_type,
+		?array $batch_fresh_data = null
+	): int|WP_Error|null {
+		if ( 0 === $source_parent_id ) {
+			return null;
+		}
+
+		if ( ! is_post_type_hierarchical( $post_type ) ) {
+			return null;
+		}
+
+		$destination_parent = $this->find_imported_post( $source_parent_id );
+
+		if ( null !== $destination_parent ) {
+			return (int) $destination_parent->ID;
+		}
+
+		$in_batch = null !== $batch_fresh_data
+			&& array_key_exists( $source_parent_id, $batch_fresh_data );
+
+		if ( $in_batch ) {
+			$parent_title = isset( $batch_fresh_data[ $source_parent_id ]['title'] )
+				? (string) $batch_fresh_data[ $source_parent_id ]['title']
+				: '';
+
+			$message = sprintf(
+				/* translators: 1: parent post ID, 2: parent post title */
+				__(
+					'Source parent post %1$d ("%2$s") failed to import earlier in this batch.',
+					'safe-publish'
+				),
+				$source_parent_id,
+				$parent_title
+			);
+
+			return new WP_Error(
+				'parent_not_resolved',
+				$message,
+				array(
+					'action'       => 'parent_not_resolved',
+					'parent_id'    => $source_parent_id,
+					'parent_title' => $parent_title,
+					'reason'       => 'failed_in_batch',
+				)
+			);
+		}
+
+		$message = sprintf(
+			/* translators: %d: parent post ID */
+			__(
+				'Source parent post %d has not been imported on this site.',
+				'safe-publish'
+			),
+			$source_parent_id
+		);
+
+		return new WP_Error(
+			'parent_not_resolved',
+			$message,
+			array(
+				'action'       => 'parent_not_resolved',
+				'parent_id'    => $source_parent_id,
+				'parent_title' => null,
+				'reason'       => 'not_imported',
+			)
+		);
+	}
+
+	/**
+	 * Applies the opt-in orphan fallback when a source parent cannot be
+	 * resolved on the destination.
+	 *
+	 * Sets post_parent to 0 and produces a parent_orphaned warning carrying
+	 * the source parent id, title (when known), and reason. The reason is
+	 * threaded back to the UI so admins know whether to import the parent
+	 * separately or investigate the parent's failure in the same batch.
+	 *
+	 * @param WP_Error $resolution_error WP_Error from resolve_source_parent().
+	 * @return array{post_parent_id: int, warning: array}|WP_Error Fallback
+	 *                                   applied, or the original WP_Error
+	 *                                   when the filter is not enabled.
+	 */
+	public function apply_parent_fallback(
+		WP_Error $resolution_error
+	): array|WP_Error {
+		if ( 'parent_not_resolved' !== $resolution_error->get_error_code() ) {
+			return $resolution_error;
+		}
+
+		/**
+		 * Filters whether the import may import a hierarchical post as an
+		 * orphan when its source parent cannot be resolved on the destination.
+		 *
+		 * When true, the post is imported with post_parent = 0 and a warning
+		 * is recorded in the import History and surfaced in the import
+		 * results UI. When false (default), imports abort with a no-match
+		 * error that identifies the unresolved parent.
+		 *
+		 * @param bool $enabled Whether the orphan fallback is enabled. Default false.
+		 */
+		if ( true !== apply_filters( 'safe_publish_import_allow_orphans', false ) ) {
+			return $resolution_error;
+		}
+
+		$error_data = (array) $resolution_error->get_error_data();
+
+		$warning = array(
+			'type'   => 'parent_orphaned',
+			'source' => array(
+				'parent_id'    => (int) $error_data['parent_id'],
+				'parent_title' => $error_data['parent_title'],
+			),
+			'reason' => (string) $error_data['reason'],
+		);
+
+		return array(
+			'post_parent_id' => 0,
+			'warning'        => $warning,
 		);
 	}
 
@@ -232,7 +533,8 @@ class Post_Import_Service {
 	 * @param array $fields   Sanitized post fields.
 	 * @param int   $post_id  Created or updated WordPress post ID.
 	 * @param bool  $existing Whether the post was updated (true) or newly created (false).
-	 * @return array Success result with source_post_id, title, success, post_id, edit_url, and existing keys.
+	 * @return array Success result with source_post_id, title, success, post_id, edit_url,
+	 *               existing, and warnings keys.
 	 */
 	private function build_success_result( array $fields, int $post_id, bool $existing ): array {
 		return array(
@@ -242,6 +544,7 @@ class Post_Import_Service {
 			'post_id'        => $post_id,
 			'edit_url'       => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
 			'existing'       => $existing,
+			'warnings'       => $fields['warnings'],
 		);
 	}
 
@@ -347,15 +650,24 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Extracts the site base URL (scheme + host) from a full URL.
+	 * Extracts the site base URL (scheme + host + port) from a full URL.
+	 *
+	 * Internal helper shared by the single-import and draft-processing paths.
+	 *
+	 * Preserves the port so non-default ports (e.g. local dev environments,
+	 * staging on alternate ports) reach the right service when used as a
+	 * base for REST endpoint URLs.
 	 *
 	 * @param string $url Full URL to extract the base from.
-	 * @return string Site base URL (e.g. "https://example.com").
+	 * @return string Site base URL (e.g. "https://example.com" or
+	 *                "http://example.com:8889").
 	 */
-	private function extract_site_url( string $url ): string {
-		return wp_parse_url( $url, PHP_URL_SCHEME )
-			. '://'
-			. wp_parse_url( $url, PHP_URL_HOST );
+	public static function extract_site_url( string $url ): string {
+		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
+		$host   = wp_parse_url( $url, PHP_URL_HOST );
+		$port   = wp_parse_url( $url, PHP_URL_PORT );
+
+		return $scheme . '://' . $host . ( is_int( $port ) ? ':' . $port : '' );
 	}
 
 	/**
@@ -373,7 +685,7 @@ class Post_Import_Service {
 			return $this->sanitize_field( $content, self::FIELD_CONTENT );
 		}
 
-		$source_site_url = $this->extract_site_url( $source_link );
+		$source_site_url = self::extract_site_url( $source_link );
 		$processed       = $this->content_processor->process_content( $content, $source_site_url );
 
 		if ( is_wp_error( $processed ) ) {
@@ -420,6 +732,10 @@ class Post_Import_Service {
 	/**
 	 * Finds a previously imported WordPress post by its source post ID.
 	 *
+	 * Looks across all public post types so callers importing pages or
+	 * custom hierarchical types can locate prior imports without knowing the
+	 * destination's post type up-front.
+	 *
 	 * @param int $source_post_id Source post ID stored in post meta.
 	 * @return WP_Post|null Imported post or null if not found.
 	 */
@@ -429,6 +745,10 @@ class Post_Import_Service {
 				'meta_key'         => Options::META_SOURCE_POST_ID,
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'       => $source_post_id,
+				// Source post IDs identify a source-side post irrespective of
+				// type, so look across every public type to support hierarchical
+				// imports (pages) and custom post types alongside posts.
+				'post_type'        => 'any',
 				// 'any' excludes 'trash', 'auto-draft', and statuses with
 				// exclude_from_search=true
 				'post_status'      => 'any',
@@ -451,11 +771,13 @@ class Post_Import_Service {
 	 * posts during automated bulk runs. Callers using the single-import review
 	 * flow can pass `force_draft_on_update` in $options to override.
 	 *
-	 * @param WP_Post  $imported_post Imported WordPress post.
-	 * @param array    $fields        Sanitized post fields.
-	 * @param string   $post_type     Resolved post type slug.
-	 * @param int|null $session_id    Import session ID for logging.
-	 * @param array    $options       Behavior overrides; see import_post().
+	 * @param WP_Post    $imported_post           Imported WordPress post.
+	 * @param array      $fields                  Sanitized post fields.
+	 * @param string     $post_type               Resolved post type slug.
+	 * @param int|null   $session_id              Import session ID for logging.
+	 * @param array      $options                 Behavior overrides; see import_post().
+	 * @param array|null $prefetched_fresh_result Optional pre-fetched fresh response.
+	 * @param array|null $batch_fresh_data        Optional pass-1 batch map.
 	 * @return array Import result data.
 	 */
 	private function handle_imported_post(
@@ -463,9 +785,17 @@ class Post_Import_Service {
 		array $fields,
 		string $post_type,
 		?int $session_id,
-		array $options
+		array $options,
+		?array $prefetched_fresh_result = null,
+		?array $batch_fresh_data = null
 	): array {
-		$prepared = $this->prepare_fresh_content( $fields );
+		$prepared = $this->prepare_fresh_content(
+			$fields,
+			$post_type,
+			(int) $imported_post->post_author,
+			$prefetched_fresh_result,
+			$batch_fresh_data
+		);
 
 		if ( is_wp_error( $prepared ) ) {
 			$error_data   = $prepared->get_error_data();
@@ -524,10 +854,12 @@ class Post_Import_Service {
 			'post_content'   => $processed_content,
 			'post_type'      => $post_type,
 			'post_name'      => $fields['slug'],
+			'post_parent'    => $fields['post_parent_id'],
 			'comment_status' => $fields['comment_status'],
 			'ping_status'    => $fields['ping_status'],
 			'menu_order'     => $fields['menu_order'],
 			'post_password'  => $fields['password'],
+			'post_author'    => $fields['matched_author_id'],
 		);
 
 		if ( true === ( $options['force_draft_on_update'] ?? false ) ) {
@@ -539,7 +871,9 @@ class Post_Import_Service {
 			$featured_attachment_id,
 			$fields['source_link'],
 			$fields['meta'],
-			$fields['terms']
+			$fields['terms'],
+			$fields['source_author'],
+			$fields['source_parent_id']
 		);
 
 		if ( is_wp_error( $post_id ) ) {
@@ -571,10 +905,55 @@ class Post_Import_Service {
 			'updated',
 			$post_id,
 			null,
-			$previous_content
+			$previous_content,
+			$fields['warnings']
 		);
 
 		return $this->build_success_result( $fields, $post_id, true );
+	}
+
+	/**
+	 * Captures the previous content of an existing post for the session
+	 * rollback history log.
+	 *
+	 * Stores the current post fields, featured image, and tracking meta so
+	 * the update can be reverted via session rollback. The returned array is
+	 * used as the `changes` payload of the history log entry for an
+	 * 'updated_existing' action.
+	 *
+	 * @param WP_Post $existing_post Existing WordPress post.
+	 * @return array Previous content keyed by field name.
+	 */
+	private function capture_previous_content( WP_Post $existing_post ): array {
+		$previous_content = array(
+			'previous_content'        => $existing_post->post_content,
+			'previous_title'          => $existing_post->post_title,
+			'previous_excerpt'        => $existing_post->post_excerpt,
+			'previous_slug'           => $existing_post->post_name,
+			'previous_comment_status' => $existing_post->comment_status,
+			'previous_ping_status'    => $existing_post->ping_status,
+			'previous_menu_order'     => $existing_post->menu_order,
+			'previous_password'       => $existing_post->post_password,
+			'previous_featured_image' => get_post_thumbnail_id( $existing_post->ID ),
+			'previous_meta'           => array(),
+			'action'                  => 'updated_existing',
+		);
+
+		$meta_keys_to_preserve = array(
+			'_edit_last',
+			'_edit_lock',
+			Options::META_SOURCE_LINK,
+			Options::META_IMPORT_DATE_GMT,
+		);
+
+		foreach ( $meta_keys_to_preserve as $meta_key ) {
+			$meta_value = get_post_meta( $existing_post->ID, $meta_key, true );
+			if ( '' !== $meta_value ) {
+				$previous_content['previous_meta'][ $meta_key ] = $meta_value;
+			}
+		}
+
+		return $previous_content;
 	}
 
 	/**
@@ -584,17 +963,27 @@ class Post_Import_Service {
 	 * post. Aborts with an error result if the fetch fails; the post will
 	 * not be created with stale snapshot data.
 	 *
-	 * @param array    $fields     Sanitized post fields.
-	 * @param string   $post_type  Resolved post type slug.
-	 * @param int|null $session_id Import session ID for logging.
+	 * @param array      $fields                  Sanitized post fields.
+	 * @param string     $post_type               Resolved post type slug.
+	 * @param int|null   $session_id              Import session ID for logging.
+	 * @param array|null $prefetched_fresh_result Optional pre-fetched fresh response.
+	 * @param array|null $batch_fresh_data        Optional pass-1 batch map.
 	 * @return array Import result data.
 	 */
 	private function handle_new_post(
 		array $fields,
 		string $post_type,
-		?int $session_id
+		?int $session_id,
+		?array $prefetched_fresh_result = null,
+		?array $batch_fresh_data = null
 	): array {
-		$prepared = $this->prepare_fresh_content( $fields );
+		$prepared = $this->prepare_fresh_content(
+			$fields,
+			$post_type,
+			null,
+			$prefetched_fresh_result,
+			$batch_fresh_data
+		);
 
 		if ( is_wp_error( $prepared ) ) {
 			$error_data   = $prepared->get_error_data();
@@ -652,10 +1041,12 @@ class Post_Import_Service {
 				'post_status'    => 'draft',
 				'post_type'      => $post_type,
 				'post_name'      => $fields['slug'],
+				'post_parent'    => $fields['post_parent_id'],
 				'comment_status' => $fields['comment_status'],
 				'ping_status'    => $fields['ping_status'],
 				'menu_order'     => $fields['menu_order'],
 				'post_password'  => $fields['password'],
+				'post_author'    => $fields['matched_author_id'],
 				'meta_input'     => array(
 					Options::META_SOURCE_POST_ID  => $fields['source_post_id'],
 					Options::META_SOURCE_LINK     => $fields['source_link'],
@@ -665,7 +1056,9 @@ class Post_Import_Service {
 			),
 			$featured_attachment_id,
 			$fields['meta'],
-			$fields['terms']
+			$fields['terms'],
+			$fields['source_author'],
+			$fields['source_parent_id']
 		);
 
 		if ( is_wp_error( $post_id ) ) {
@@ -697,7 +1090,8 @@ class Post_Import_Service {
 			'success',
 			$post_id,
 			null,
-			array( 'action' => 'created_new_post' )
+			array( 'action' => 'created_new_post' ),
+			$fields['warnings']
 		);
 
 		return $this->build_success_result( $fields, $post_id, false );
@@ -710,20 +1104,39 @@ class Post_Import_Service {
 	 * processing, and media error checks that are common to both the new and
 	 * existing post import flows.
 	 *
-	 * @param array $fields Sanitized post fields from extract_post_fields().
+	 * @param array      $fields                  Sanitized post fields from extract_post_fields().
+	 * @param string     $post_type               Resolved destination post type slug.
+	 * @param int|null   $existing_post_author_id Destination post's existing post_author for the
+	 *                                            update path; null for new posts.
+	 * @param array|null $prefetched_fresh_result Pre-fetched response from
+	 *                                            Source_Posts_API::fetch_fresh_post(). When
+	 *                                            present, the in-pipeline fetch is skipped.
+	 * @param array|null $batch_fresh_data        Map of source ID => pass-1 fresh data for posts
+	 *                                            in the current bulk batch. Used by parent
+	 *                                            resolution to identify in-batch parents.
 	 * @return array{fields: array, processed_content: string}|WP_Error Prepared data or error.
 	 */
-	private function prepare_fresh_content( array $fields ): array|WP_Error {
-		$fresh_result = $this->api->fetch_fresh_post(
-			$fields['source_post_id'],
-			$fields['raw_post_type']
-		);
-
-		if ( is_wp_error( $fresh_result ) ) {
-			return new WP_Error(
-				'fetch_failed',
-				$fresh_result->get_error_message()
+	private function prepare_fresh_content(
+		array $fields,
+		string $post_type,
+		?int $existing_post_author_id = null,
+		?array $prefetched_fresh_result = null,
+		?array $batch_fresh_data = null
+	): array|WP_Error {
+		if ( null !== $prefetched_fresh_result ) {
+			$fresh_result = $prefetched_fresh_result;
+		} else {
+			$fresh_result = $this->api->fetch_fresh_post(
+				$fields['source_post_id'],
+				$fields['raw_post_type']
 			);
+
+			if ( is_wp_error( $fresh_result ) ) {
+				return new WP_Error(
+					'fetch_failed',
+					$fresh_result->get_error_message()
+				);
+			}
 		}
 
 		$fields['title']             = $fresh_result['title'];
@@ -733,6 +1146,62 @@ class Post_Import_Service {
 		$fields['ping_status']       = $fresh_result['ping_status'];
 		$fields['menu_order']        = $fresh_result['menu_order'];
 		$fields['password']          = $fresh_result['password'];
+		$fields['source_parent_id']  = absint( $fresh_result['parent'] ?? 0 );
+		$fields['source_author']     = is_array( $fresh_result['source_author'] ?? null )
+			? $fresh_result['source_author']
+			: null;
+
+		// Resolve the source author before any media processing so a failed
+		// resolution does not leave orphan attachments behind.
+		$matched_author_id = $this->resolve_source_author(
+			$fields['source_author']
+		);
+
+		if ( is_wp_error( $matched_author_id ) ) {
+			$fallback = $this->apply_author_fallback(
+				$matched_author_id,
+				$fields['source_author'],
+				$existing_post_author_id
+			);
+
+			if ( is_wp_error( $fallback ) ) {
+				return new WP_Error(
+					$fallback->get_error_code(),
+					$fallback->get_error_message(),
+					array( 'fields' => $fields )
+				);
+			}
+
+			$fields['matched_author_id'] = $fallback['author_id'];
+			$fields['warnings'][]        = $fallback['warning'];
+		} else {
+			$fields['matched_author_id'] = $matched_author_id;
+		}
+
+		// Resolve the source parent before any media processing so a failed
+		// resolution does not leave orphan attachments behind.
+		$resolved_parent = $this->resolve_source_parent(
+			$fields['source_parent_id'],
+			$post_type,
+			$batch_fresh_data
+		);
+
+		if ( $resolved_parent instanceof WP_Error ) {
+			$fallback = $this->apply_parent_fallback( $resolved_parent );
+
+			if ( is_wp_error( $fallback ) ) {
+				return new WP_Error(
+					$fallback->get_error_code(),
+					$fallback->get_error_message(),
+					array( 'fields' => $fields )
+				);
+			}
+
+			$fields['post_parent_id'] = $fallback['post_parent_id'];
+			$fields['warnings'][]     = $fallback['warning'];
+		} elseif ( null !== $resolved_parent ) {
+			$fields['post_parent_id'] = (int) $resolved_parent;
+		}
 
 		$sanitized_excerpt = $this->sanitize_field(
 			$fresh_result['excerpt'],
@@ -795,11 +1264,15 @@ class Post_Import_Service {
 	 * during this attempt is deleted. Used by both single and bulk import
 	 * paths.
 	 *
-	 * @param array        $post_args               Arguments for wp_update_post().
-	 * @param int          $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
-	 * @param string       $source_link             Source post URL for meta tracking.
-	 * @param array|object $meta                    Meta data.
-	 * @param array|object $terms                   Terms data.
+	 * @param array        $post_args              Arguments for wp_update_post().
+	 * @param int          $featured_attachment_id Sideloaded featured image attachment ID (0 = none).
+	 * @param string       $source_link            Source post URL for meta tracking.
+	 * @param array|object $meta                   Meta data.
+	 * @param array|object $terms                  Terms data.
+	 * @param array        $source_author          Source author payload (email, login,
+	 *                                             display_name) used to refresh diagnostic meta.
+	 * @param int          $source_parent_id       Source post's parent ID used to refresh the
+	 *                                             diagnostic parent meta on hierarchical posts.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
 	 */
 	public function persist_updated_post(
@@ -807,7 +1280,9 @@ class Post_Import_Service {
 		int $featured_attachment_id,
 		string $source_link,
 		array|object $meta,
-		array|object $terms
+		array|object $terms,
+		array $source_author,
+		int $source_parent_id
 	): int|WP_Error {
 		$post_id  = $post_args['ID'];
 		$snapshot = $this->capture_pre_update_state(
@@ -859,6 +1334,13 @@ class Post_Import_Service {
 		if ( $featured_attachment_id > 0 ) {
 			set_post_thumbnail( $post_id, $featured_attachment_id );
 		}
+
+		$this->write_source_author_meta( $post_id, $source_author );
+		$this->write_source_parent_meta(
+			$post_id,
+			$source_parent_id,
+			(string) ( $post_args['post_type'] ?? '' )
+		);
 
 		$meta_result = $this->meta_terms_manager->update_meta(
 			$post_id,
@@ -915,14 +1397,29 @@ class Post_Import_Service {
 		$snapshot = array(
 			'post_fields'    => $post,
 			'tracking_meta'  => array(
-				Options::META_SOURCE_LINK     => get_post_meta(
+				Options::META_SOURCE_LINK           => get_post_meta(
 					$post_id,
 					Options::META_SOURCE_LINK,
 					true
 				),
-				Options::META_IMPORT_DATE_GMT => get_post_meta(
+				Options::META_IMPORT_DATE_GMT       => get_post_meta(
 					$post_id,
 					Options::META_IMPORT_DATE_GMT,
+					true
+				),
+				Options::META_SOURCE_AUTHOR_EMAIL   => get_post_meta(
+					$post_id,
+					Options::META_SOURCE_AUTHOR_EMAIL,
+					true
+				),
+				Options::META_SOURCE_AUTHOR_LOGIN   => get_post_meta(
+					$post_id,
+					Options::META_SOURCE_AUTHOR_LOGIN,
+					true
+				),
+				Options::META_SOURCE_POST_PARENT_ID => get_post_meta(
+					$post_id,
+					Options::META_SOURCE_POST_PARENT_ID,
 					true
 				),
 			),
@@ -1018,16 +1515,22 @@ class Post_Import_Service {
 	 * both single and bulk import paths.
 	 *
 	 * @param array        $post_args              Arguments for wp_insert_post() (including meta_input).
-	 * @param int          $featured_attachment_id  Sideloaded featured image attachment ID (0 = none).
-	 * @param array|object $meta                    Meta data.
-	 * @param array|object $terms                   Terms data.
+	 * @param int          $featured_attachment_id Sideloaded featured image attachment ID (0 = none).
+	 * @param array|object $meta                   Meta data.
+	 * @param array|object $terms                  Terms data.
+	 * @param array        $source_author          Source author payload (email, login,
+	 *                                             display_name) used to write diagnostic meta.
+	 * @param int          $source_parent_id       Source post's parent ID used to write the
+	 *                                             diagnostic parent meta on hierarchical posts.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
 	 */
 	public function persist_new_post(
 		array $post_args,
 		int $featured_attachment_id,
 		array|object $meta,
-		array|object $terms
+		array|object $terms,
+		array $source_author,
+		int $source_parent_id
 	): int|WP_Error {
 		$this->content_processor->disable_content_filters();
 		$post_id = wp_insert_post( $post_args );
@@ -1040,6 +1543,13 @@ class Post_Import_Service {
 		if ( $featured_attachment_id > 0 ) {
 			set_post_thumbnail( $post_id, $featured_attachment_id );
 		}
+
+		$this->write_source_author_meta( $post_id, $source_author );
+		$this->write_source_parent_meta(
+			$post_id,
+			$source_parent_id,
+			(string) ( $post_args['post_type'] ?? '' )
+		);
 
 		$meta_result = $this->meta_terms_manager->update_meta(
 			$post_id,
@@ -1077,6 +1587,68 @@ class Post_Import_Service {
 	}
 
 	/**
+	 * Writes the diagnostic source parent meta on a hierarchical imported post.
+	 *
+	 * Non-hierarchical post types ignore the meta entirely; their post_parent
+	 * always stays 0 and the value carries no meaning. On hierarchical types
+	 * the meta is overwritten with the current source parent, or deleted when
+	 * the source post is now top-level, so the meta tracks the current source
+	 * state on every update. The audit trail of historical values lives in
+	 * the per-item history table.
+	 *
+	 * @param int    $post_id          Destination post ID.
+	 * @param int    $source_parent_id Source post's parent ID (0 = top-level).
+	 * @param string $post_type        Destination post type slug.
+	 */
+	private function write_source_parent_meta(
+		int $post_id,
+		int $source_parent_id,
+		string $post_type
+	): void {
+		if ( ! is_post_type_hierarchical( $post_type ) ) {
+			return;
+		}
+
+		if ( 0 === $source_parent_id ) {
+			delete_post_meta( $post_id, Options::META_SOURCE_POST_PARENT_ID );
+			return;
+		}
+
+		update_post_meta(
+			$post_id,
+			Options::META_SOURCE_POST_PARENT_ID,
+			$source_parent_id
+		);
+	}
+
+	/**
+	 * Writes the diagnostic source author meta on an imported post.
+	 *
+	 * Stores the source author email and login under private (underscore-
+	 * prefixed) meta keys for traceability. Always overwrites previous values
+	 * so the meta reflects the current source state; the audit trail of
+	 * historical values lives in the per-item history table.
+	 *
+	 * @param int   $post_id       Destination post ID.
+	 * @param array $source_author Source author payload (email, login, display_name).
+	 */
+	private function write_source_author_meta(
+		int $post_id,
+		array $source_author
+	): void {
+		update_post_meta(
+			$post_id,
+			Options::META_SOURCE_AUTHOR_EMAIL,
+			isset( $source_author['email'] ) ? (string) $source_author['email'] : ''
+		);
+		update_post_meta(
+			$post_id,
+			Options::META_SOURCE_AUTHOR_LOGIN,
+			isset( $source_author['login'] ) ? (string) $source_author['login'] : ''
+		);
+	}
+
+	/**
 	 * Sideloads a featured image from a source post without setting it as a
 	 * post thumbnail.
 	 *
@@ -1100,7 +1672,7 @@ class Post_Import_Service {
 			return 0;
 		}
 
-		$source_site_url = $this->extract_site_url( $source_link );
+		$source_site_url = self::extract_site_url( $source_link );
 
 		$attachment_id = $this->media_importer->import_featured_image(
 			$featured_media_id,
@@ -1108,50 +1680,6 @@ class Post_Import_Service {
 		);
 
 		return $attachment_id;
-	}
-
-	/**
-	 * Captures the previous content of an existing post for the session
-	 * rollback history log.
-	 *
-	 * Stores the current post fields, featured image, and tracking meta so
-	 * the update can be reverted via session rollback. The returned array is
-	 * used as the `changes` payload of the history log entry for an
-	 * 'updated_existing' action.
-	 *
-	 * @param WP_Post $existing_post Existing WordPress post.
-	 * @return array Previous content keyed by field name.
-	 */
-	private function capture_previous_content( WP_Post $existing_post ): array {
-		$previous_content = array(
-			'previous_content'        => $existing_post->post_content,
-			'previous_title'          => $existing_post->post_title,
-			'previous_excerpt'        => $existing_post->post_excerpt,
-			'previous_slug'           => $existing_post->post_name,
-			'previous_comment_status' => $existing_post->comment_status,
-			'previous_ping_status'    => $existing_post->ping_status,
-			'previous_menu_order'     => $existing_post->menu_order,
-			'previous_password'       => $existing_post->post_password,
-			'previous_featured_image' => get_post_thumbnail_id( $existing_post->ID ),
-			'previous_meta'           => array(),
-			'action'                  => 'updated_existing',
-		);
-
-		$meta_keys_to_preserve = array(
-			'_edit_last',
-			'_edit_lock',
-			Options::META_SOURCE_LINK,
-			Options::META_IMPORT_DATE_GMT,
-		);
-
-		foreach ( $meta_keys_to_preserve as $meta_key ) {
-			$meta_value = get_post_meta( $existing_post->ID, $meta_key, true );
-			if ( '' !== $meta_value ) {
-				$previous_content['previous_meta'][ $meta_key ] = $meta_value;
-			}
-		}
-
-		return $previous_content;
 	}
 
 	/**
@@ -1164,6 +1692,7 @@ class Post_Import_Service {
 	 * @param int|null    $post_id          WordPress post ID or null on failure.
 	 * @param string|null $error            Error message or null on success.
 	 * @param array       $changes          Contextual changes data for the item.
+	 * @param array       $warnings         Non-fatal warnings raised during import.
 	 */
 	private function log_import_if_session(
 		?int $session_id,
@@ -1172,7 +1701,8 @@ class Post_Import_Service {
 		string $status,
 		?int $post_id,
 		?string $error,
-		array $changes
+		array $changes,
+		array $warnings = array()
 	): void {
 		if ( null === $session_id ) {
 			return;
@@ -1185,7 +1715,8 @@ class Post_Import_Service {
 			$status,
 			$post_id,
 			$error,
-			$changes
+			$changes,
+			$warnings
 		);
 	}
 

@@ -16,6 +16,7 @@ use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Validators\URL_Validator;
 use WP_Error;
+use WP_Post;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -108,7 +109,11 @@ class Source_Posts_API {
 		$api_url = $this->build_api_url( $source_site_url, $number_of_posts, $auth_credentials, $post_type );
 
 		// Make request.
-		$response = $this->make_request( $api_url, $auth_credentials );
+		$response = $this->make_request(
+			$api_url,
+			Request_Actions::LIST_ITEMS,
+			$auth_credentials
+		);
 
 		if ( is_wp_error( $response ) ) {
 			return $response;
@@ -141,7 +146,6 @@ class Source_Posts_API {
 			'orderby'  => 'modified',
 			'order'    => 'desc',
 			'per_page' => min( $number_of_posts, 100 ), // Max 100 per request.
-			// '_fields' => 'id,link,title,modified,featured_media,content,excerpt,slug,comment_status,ping_status,menu_order', // Fetch all needed fields.
 			'_embed'   => '1',
 		);
 
@@ -169,11 +173,16 @@ class Source_Posts_API {
 	 * Makes HTTP request using shared HTTP client.
 	 *
 	 * @param string $url              Request URL.
+	 * @param string $action           Declared request action (see Request_Actions).
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
 	 * @return array|WP_Error Response or error.
 	 */
-	private function make_request( string $url, array $auth_credentials = array() ): array|WP_Error {
-		return $this->http_client->make_request( $url, $auth_credentials );
+	private function make_request(
+		string $url,
+		string $action,
+		array $auth_credentials = array()
+	): array|WP_Error {
+		return $this->http_client->make_request( $url, $action, $auth_credentials );
 	}
 
 	/**
@@ -358,11 +367,6 @@ class Source_Posts_API {
 
 		$query_args = array(
 			'_embed' => '1',
-			/**
-			 * TODO: Check if we want/need this.
-			 *
-			 * '_fields' => 'id,link,title,modified,featured_media,content,excerpt,tags,categories,meta,slug,comment_status,ping_status,menu_order,password', // Fetch all needed fields
-			 */
 		);
 
 		// Edit context provides raw field values (title, content, excerpt)
@@ -374,7 +378,11 @@ class Source_Posts_API {
 		$api_url = add_query_arg( $query_args, $api_endpoint );
 
 		// Make request.
-		$response = $this->make_request( $api_url, $auth_credentials );
+		$response = $this->make_request(
+			$api_url,
+			Request_Actions::IMPORT,
+			$auth_credentials
+		);
 
 		if ( is_wp_error( $response ) ) {
 			$this->logger->content_fetch_failed(
@@ -404,7 +412,7 @@ class Source_Posts_API {
 			! isset( $data['content']['raw'] ) ||
 			! isset( $data['excerpt']['raw'] )
 		) {
-			$this->logger->content_fetch_raw_unavailable(
+			$this->logger->content_fetch_raw_fields_missing(
 				$source_post_id,
 				$source_site_url
 			);
@@ -422,6 +430,7 @@ class Source_Posts_API {
 		$post_data['ping_status']    = sanitize_text_field( $data['ping_status'] ?? '' );
 		$post_data['menu_order']     = absint( $data['menu_order'] ?? 0 );
 		$post_data['password']       = sanitize_text_field( $data['password'] ?? '' );
+		$post_data['parent']         = absint( $data['parent'] ?? 0 );
 
 		if ( isset( $data['link'] ) ) {
 			$post_data['link'] = esc_url_raw( $data['link'] );
@@ -436,7 +445,44 @@ class Source_Posts_API {
 
 		$post_data['terms'] = self::extract_embedded_terms( $data );
 
+		// `null` distinguishes "source did not provide the field" (older plugin
+		// version on the source) from "field present but author cannot be
+		// resolved on the source" (empty strings).
+		$post_data['source_author'] = self::extract_source_author( $data );
+
 		return $post_data;
+	}
+
+	/**
+	 * Extracts the safe_publish_author payload from a REST response.
+	 *
+	 * @param array $data Decoded REST response for a single post.
+	 * @return array{email: string, login: string, display_name: string}|null
+	 *         Sanitized author payload, or null when the source did not
+	 *         include the field.
+	 */
+	private static function extract_source_author( array $data ): ?array {
+		if ( ! array_key_exists( 'safe_publish_author', $data ) ) {
+			return null;
+		}
+
+		$author = $data['safe_publish_author'];
+
+		if ( ! is_array( $author ) ) {
+			return null;
+		}
+
+		return array(
+			'email'        => isset( $author['email'] )
+				? sanitize_email( (string) $author['email'] )
+				: '',
+			'login'        => isset( $author['login'] )
+				? sanitize_user( (string) $author['login'], true )
+				: '',
+			'display_name' => isset( $author['display_name'] )
+				? sanitize_text_field( (string) $author['display_name'] )
+				: '',
+		);
 	}
 
 	/**
@@ -481,5 +527,50 @@ class Source_Posts_API {
 		}
 
 		return $fresh_data;
+	}
+
+	/**
+	 * Prepares a single WP_Post for the catalog listing payload.
+	 *
+	 * The shape mirrors what the destination's listing UI expects.
+	 *
+	 * @param WP_Post $post Source post.
+	 * @return array Listing payload.
+	 */
+	public static function prepare_listing_payload_from_post( WP_Post $post ): array {
+		$permalink = get_permalink( $post );
+
+		return array(
+			'id'           => $post->ID,
+			'link'         => is_string( $permalink ) ? esc_url_raw( $permalink ) : '',
+			'title'        => sanitize_text_field(
+				wp_strip_all_tags(
+					html_entity_decode(
+						$post->post_title,
+						ENT_QUOTES | ENT_HTML5,
+						'UTF-8'
+					)
+				)
+			),
+			'post_type'    => $post->post_type,
+			'date_gmt'     => self::format_gmt_iso( $post->post_date_gmt ),
+			'modified_gmt' => self::format_gmt_iso( $post->post_modified_gmt ),
+			'status'       => $post->post_status,
+		);
+	}
+
+	/**
+	 * Converts a MySQL GMT datetime ("Y-m-d H:i:s") to ISO 8601 with a Z
+	 * marker. Empty/zero values yield an empty string.
+	 *
+	 * @param string $mysql_gmt MySQL GMT datetime.
+	 * @return string ISO 8601 GMT string or empty when input is unset.
+	 */
+	private static function format_gmt_iso( string $mysql_gmt ): string {
+		if ( '' === $mysql_gmt || str_starts_with( $mysql_gmt, '0000' ) ) {
+			return '';
+		}
+
+		return str_replace( ' ', 'T', $mysql_gmt ) . 'Z';
 	}
 }

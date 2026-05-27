@@ -12,11 +12,7 @@ namespace Safe_Publish\Tests\Integration\Source_Posts_API;
 use WP_Error;
 
 /**
- * Tests error scenarios and edge cases in the content processor layer.
- *
- * Verifies that the content processor does not crash on media download failures,
- * that failed image URLs are tracked for the import service to act on, and that
- * edge-case inputs are handled correctly.
+ * Error Handling Test Class.
  */
 class Error_Handling_Test extends Source_Posts_API_Test_Base {
 

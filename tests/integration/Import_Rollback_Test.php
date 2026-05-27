@@ -27,13 +27,9 @@ use Safe_Publish\Utils\Options;
 use WP_Error;
 
 /**
- * Import Rollback Integration Test Class.
- *
- * Tests that when a step in the import pipeline fails, all previously
- * written data (posts, attachments, meta, terms) is rolled back to its
- * pre-import state.
+ * Import Rollback Test Class.
  */
-class Import_Rollback_Integration_Test extends Source_Posts_API_Test_Base {
+class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Post import service instance.

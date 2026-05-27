@@ -112,13 +112,13 @@ export default function BlockDiffViewer( { blocks = [], highlight = true }: Prop
                 }
 
                 return (
-                    <div key={ key } className={ `safe-publish-block-diff safe-publish-block-${ status }` }>
+                    <div key={ key } className="safe-publish-block-diff">
                         <div className="safe-publish-block-diff__header">
                             <Text>
                                 { title || __( 'Block', 'safe-publish' ) }
                                 <span className={ `safe-publish-badge safe-publish-${ status }` }>{ status }</span>
                                 { hasImage && block.status === 'modified' && status !== 'unchanged' && (
-                                    <span className="safe-publish-badge" style={ { background: '#6b7280', color: '#fff' } }>
+                                    <span className="safe-publish-badge" style={ { background: '#6b7280', color: 'var(--safe-publish-text-on-fill)' } }>
                                         image (no inline diff)
                                     </span>
                                 ) }
@@ -135,8 +135,8 @@ export default function BlockDiffViewer( { blocks = [], highlight = true }: Prop
                         ) }
                         { status === 'modified' && (
                             <div className="safe-publish-block-diff__modified">
-                                <div className="safe-publish-block-diff__col safe-publish-before" dangerouslySetInnerHTML={ { __html: currentHtml } } />
-                                <div className="safe-publish-block-diff__col safe-publish-after" dangerouslySetInnerHTML={ { __html: modifiedIncoming } } />
+                                <div className="safe-publish-block-diff__col" dangerouslySetInnerHTML={ { __html: currentHtml } } />
+                                <div className="safe-publish-block-diff__col" dangerouslySetInnerHTML={ { __html: modifiedIncoming } } />
                             </div>
                         ) }
                     </div>

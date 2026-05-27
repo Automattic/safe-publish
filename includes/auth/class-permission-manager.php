@@ -9,7 +9,9 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Auth;
 
+use Safe_Publish\API\Dispatch_Logger;
 use Safe_Publish\API\Export_Logger;
+use Safe_Publish\API\Request_Actions;
 use WP_Error;
 use WP_HTTP_Response;
 use WP_Post;
@@ -42,6 +44,13 @@ class Permission_Manager {
 	private Export_Logger $export_logger;
 
 	/**
+	 * Dispatch logger instance for non-export REST dispatch outcomes.
+	 *
+	 * @var Dispatch_Logger
+	 */
+	private Dispatch_Logger $dispatch_logger;
+
+	/**
 	 * Whether the current request is authenticated.
 	 *
 	 * @var bool
@@ -56,14 +65,33 @@ class Permission_Manager {
 	private bool $context_override = false;
 
 	/**
+	 * Suppresses every rest_post_dispatch firing after the first per HTTP
+	 * request. Primarily blocks the _embed subrequest log cascade for
+	 * import calls (subrequests inherit $_SERVER, including the action
+	 * header, so would otherwise log spurious CONTENT_EXPORTED rows for
+	 * authors, featured media, and terms). Also a generic guard against
+	 * any other re-dispatch path. Latched after the action-validity check
+	 * so unrecognized requests don't consume the flag.
+	 *
+	 * @var bool
+	 */
+	private bool $dispatch_logged = false;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Auth_Logger   $logger        Auth logger instance.
-	 * @param Export_Logger $export_logger Export logger instance.
+	 * @param Auth_Logger     $logger          Auth logger instance.
+	 * @param Export_Logger   $export_logger   Export logger instance.
+	 * @param Dispatch_Logger $dispatch_logger Dispatch logger instance.
 	 */
-	public function __construct( Auth_Logger $logger, Export_Logger $export_logger ) {
-		$this->logger        = $logger;
-		$this->export_logger = $export_logger;
+	public function __construct(
+		Auth_Logger $logger,
+		Export_Logger $export_logger,
+		Dispatch_Logger $dispatch_logger
+	) {
+		$this->logger          = $logger;
+		$this->export_logger   = $export_logger;
+		$this->dispatch_logger = $dispatch_logger;
 	}
 
 	/**
@@ -80,16 +108,6 @@ class Permission_Manager {
 	 *
 	 * Grants necessary permissions for REST API operations.
 	 *
-	 * VIP 2FA COMPLIANCE NOTE:
-	 * This uses a capability-based authentication approach instead of
-	 * creating actual WordPress users. This is VIP-friendly because:
-	 *
-	 * 1. No real users are created that would require 2FA
-	 * 2. Authentication is handled via shared secret HMAC (already validated)
-	 * 3. Permissions are granted temporarily via capability filters
-	 * 4. More secure than bypassing 2FA requirements
-	 * 5. Complies with VIP platform security policies
-	 *
 	 * @param WP_REST_Request $request Authenticated REST request.
 	 */
 	public function setup_authenticated_context(
@@ -99,13 +117,13 @@ class Permission_Manager {
 
 		add_filter( 'user_has_cap', array( $this, 'grant_api_capabilities' ), 10, 4 );
 
-		// VIP-friendly approach: use capability system without creating actual users.
-		// This avoids 2FA requirements and is more secure.
-		$this->logger->capability_based_auth_setup(
+		// Grant caps via filter — HMAC already authenticated the caller, so we
+		// don't need a real WP user.
+		$this->logger->authenticated_context_installed(
 			$request->get_route(),
 			$request->get_method(),
 			'capability_only',
-			'VIP 2FA compliance - no user creation needed'
+			'HMAC already authenticated the caller'
 		);
 
 		add_filter( 'rest_pre_dispatch', array( $this, 'bypass_permission_checks' ), 11, 3 );
@@ -115,7 +133,7 @@ class Permission_Manager {
 		add_filter( 'rest_endpoints', array( $this, 'override_endpoint_permissions' ) );
 		add_filter( 'map_meta_cap', array( $this, 'override_meta_capabilities' ), 10, 4 );
 		add_filter( 'rest_post_dispatch', array( $this, 'override_context_permissions' ), 5, 3 );
-		add_filter( 'rest_post_dispatch', array( $this, 'log_export_event' ), 20, 3 );
+		add_filter( 'rest_post_dispatch', array( $this, 'log_dispatch_event' ), 20, 3 );
 	}
 
 	/**
@@ -236,7 +254,7 @@ class Permission_Manager {
 			return $caps;
 		}
 
-		$this->logger->meta_cap_override( $cap, $user_id, $caps );
+		$this->logger->meta_cap_overridden( $cap, $user_id, $caps );
 
 		// Grant the capability by returning 'exist' (always granted).
 		return array( 'exist' );
@@ -548,34 +566,87 @@ class Permission_Manager {
 	}
 
 	/**
-	 * Logs an audit event for each authenticated export response:
-	 * CONTENT_EXPORTED on success, EXPORT_REQUEST_ERROR for WP_Error
-	 * responses, or EXPORT_BAD_STATUS for non-200 HTTP statuses.
+	 * Routes each authenticated REST dispatch outcome to the appropriate
+	 * audit channel based on the declared X-Safe-Publish-Action header.
 	 *
-	 * Fires on rest_post_dispatch at priority 20, so it runs after all
-	 * permission overrides and context re-dispatches are complete. Skipped
-	 * during context-override re-dispatch to avoid duplicate entries.
+	 * - import / media-import → export channel: CONTENT_EXPORTED on
+	 *   success, EXPORT_REQUEST_ERROR for WP_Error, EXPORT_RESPONSE_BAD_STATUS
+	 *   for non-200.
+	 * - list / preview / probe → dispatch channel: DISPATCH_REQUEST_ERROR
+	 *   or DISPATCH_RESPONSE_BAD_STATUS on failure. Successes go unlogged
+	 *   here — REQUEST_AUTHENTICATED in the auth channel records them.
+	 * - Missing / unrecognized action → nothing written. The auth channel
+	 *   covers it via REQUEST_AUTHENTICATED plus REQUEST_ACTION_UNRECOGNIZED.
+	 *
+	 * Hooked on rest_post_dispatch at priority 20, after permission
+	 * overrides and context re-dispatches. Skipped for unauthenticated
+	 * requests, context-override re-dispatch, and once $dispatch_logged
+	 * has latched (see that field's doc for why).
 	 *
 	 * @param WP_REST_Response|WP_Error $response Response object.
 	 * @param WP_REST_Server            $_server  Server instance.
 	 * @param WP_REST_Request           $request  Request used to generate the response.
 	 * @return WP_REST_Response|WP_Error Unmodified response.
 	 */
-	public function log_export_event(
+	public function log_dispatch_event(
 		WP_REST_Response|WP_Error $response,
 		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundBeforeLastUsed
 		WP_REST_Server $_server,
 		WP_REST_Request $request
 	): WP_REST_Response|WP_Error {
-		if ( ! $this->authenticated || $this->context_override ) {
+		if ( ! $this->authenticated || $this->context_override || $this->dispatch_logged ) {
 			return $response;
 		}
+
+		// Source: $_SERVER, not $request->get_headers(). Synthetic _embed
+		// subrequests don't inherit headers, so reading from $request would
+		// skip them implicitly via the empty-action branch and obscure
+		// $dispatch_logged's role; $_SERVER persists across subrequest
+		// dispatch, keeping the flag as the explicit dedup mechanism.
+		// Not sanitized: HMAC_Authenticator signs the raw value, so any
+		// normalization here could let a crafted header classify differently
+		// than it verified. Request_Actions::is_valid() is the actual gate.
+		// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$action = isset( $_SERVER['HTTP_X_SAFE_PUBLISH_ACTION'] )
+			? (string) wp_unslash( $_SERVER['HTTP_X_SAFE_PUBLISH_ACTION'] )
+			: '';
+		// phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+
+		if ( ! Request_Actions::is_valid( $action ) ) {
+			return $response;
+		}
+
+		// Latch the flag before routing so any _embed subrequests that re-fire
+		// rest_post_dispatch after we return are short-circuited above.
+		$this->dispatch_logged = true;
 
 		$route = $request->get_route();
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__HTTP_USER_AGENT__
 		$raw_user_agent       = $_SERVER['HTTP_USER_AGENT'] ?? '';
 		$destination_site_url = $this->parse_destination_site_url( $raw_user_agent );
 
+		if ( Request_Actions::is_export( $action ) ) {
+			$this->log_export_outcome( $response, $route, $destination_site_url );
+		} else {
+			$this->log_non_export_outcome( $response, $action, $route, $destination_site_url );
+		}
+
+		return $response;
+	}
+
+	/**
+	 * Records a real export (import / media-import) outcome in the export
+	 * channel.
+	 *
+	 * @param WP_REST_Response|WP_Error $response             Response object.
+	 * @param string                    $route                REST route of the request.
+	 * @param string                    $destination_site_url URL of the destination that called.
+	 */
+	private function log_export_outcome(
+		WP_REST_Response|WP_Error $response,
+		string $route,
+		string $destination_site_url
+	): void {
 		if ( is_wp_error( $response ) ) {
 			$this->export_logger->export_request_error(
 				$route,
@@ -583,39 +654,72 @@ class Permission_Manager {
 				$response->get_error_code(),
 				$response->get_error_message()
 			);
-			return $response;
+			return;
 		}
 
 		$status = $response->get_status();
 
 		if ( 200 !== $status ) {
-			$this->export_logger->export_bad_status( $route, $destination_site_url, $status );
-			return $response;
+			$this->export_logger->export_response_bad_status( $route, $destination_site_url, $status );
+			return;
 		}
 
-		if ( 1 === preg_match( '#^/wp/v2/([^/]+)$#', $route, $matches ) ) {
-			// Matches routes like /wp/v2/posts, /wp/v2/pages.
-			$data     = $response->get_data();
-			$post_ids = is_array( $data ) ? array_values( array_filter( array_column( $data, 'id' ), 'is_int' ) ) : array();
-
-			$this->export_logger->content_exported(
-				$matches[1],
-				$destination_site_url,
-				$post_ids
-			);
-		} elseif ( 1 === preg_match( '#^/wp/v2/([^/]+)/(\d+)$#', $route, $matches ) ) {
-			// Matches routes like /wp/v2/posts/123, /wp/v2/pages/123.
-			$data    = $response->get_data();
-			$post_id = is_array( $data ) && isset( $data['id'] ) && is_int( $data['id'] ) ? $data['id'] : (int) $matches[2];
-
-			$this->export_logger->content_exported(
-				$matches[1],
-				$destination_site_url,
-				array( $post_id )
-			);
+		// content_exported needs the rest_base and a post_id. If the route
+		// doesn't match the single-resource shape, neither is reliably
+		// available, so we skip rather than log a malformed row.
+		if ( 1 !== preg_match( '#^/wp/v2/([^/]+)/(\d+)$#', $route, $matches ) ) {
+			return;
 		}
 
-		return $response;
+		$data    = $response->get_data();
+		$post_id = is_array( $data ) && isset( $data['id'] ) && is_int( $data['id'] )
+			? $data['id']
+			: (int) $matches[2];
+
+		$this->export_logger->content_exported(
+			$matches[1],
+			$destination_site_url,
+			array( $post_id )
+		);
+	}
+
+	/**
+	 * Records a non-export (list/preview/probe) failure in the dispatch
+	 * channel. Successes go unrecorded — REQUEST_AUTHENTICATED in the
+	 * auth channel covers them.
+	 *
+	 * @param WP_REST_Response|WP_Error $response             Response object.
+	 * @param string                    $action               Declared request action.
+	 * @param string                    $route                REST route of the request.
+	 * @param string                    $destination_site_url URL of the destination that called.
+	 */
+	private function log_non_export_outcome(
+		WP_REST_Response|WP_Error $response,
+		string $action,
+		string $route,
+		string $destination_site_url
+	): void {
+		if ( is_wp_error( $response ) ) {
+			$this->dispatch_logger->dispatch_request_error(
+				$route,
+				$action,
+				$destination_site_url,
+				$response->get_error_code(),
+				$response->get_error_message()
+			);
+			return;
+		}
+
+		$status = $response->get_status();
+
+		if ( 200 !== $status ) {
+			$this->dispatch_logger->dispatch_response_bad_status(
+				$route,
+				$action,
+				$destination_site_url,
+				$status
+			);
+		}
 	}
 
 	/**

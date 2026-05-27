@@ -1,0 +1,47 @@
+#!/bin/sh
+#
+# Bootstrap a worktree: install deps and pick a free wp-env port pair so it
+# doesn't collide with the main checkout's 8888/8889.
+#
+# Usage: bin/setup-worktree
+
+set -e
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "Installing npm and composer dependencies..."
+npm install
+
+is_free() {
+	! lsof -iTCP:"$1" -sTCP:LISTEN -P -n >/dev/null 2>&1
+}
+
+find_pair() {
+	port=8890
+	while [ "$port" -lt 9100 ]; do
+		tests_port=$((port + 1))
+		if is_free "$port" && is_free "$tests_port"; then
+			echo "$port $tests_port"
+			return 0
+		fi
+		port=$((port + 2))
+	done
+	echo "ERROR: no free port pair in 8890-9100" >&2
+	exit 1
+}
+
+pair=$(find_pair) && set -- $pair
+PORT="$1"
+TESTS_PORT="$2"
+
+echo ""
+echo "Picked ports: dev=$PORT tests=$TESTS_PORT"
+echo ""
+echo "Start this worktree's wp-env with:"
+echo ""
+echo "  WP_ENV_PORT=$PORT WP_ENV_TESTS_PORT=$TESTS_PORT npm run dev"
+echo ""
+echo "To make these the default for this shell:"
+echo ""
+echo "  export WP_ENV_PORT=$PORT WP_ENV_TESTS_PORT=$TESTS_PORT"
+echo ""

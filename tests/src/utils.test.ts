@@ -4,17 +4,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getSettings, setSettings } from '@wordpress/date';
 import {
-	formatDate,
 	formatDateTime,
 	isValidPost,
 	sanitizePosts,
-	searchPosts,
-	sortPosts,
-	paginatePosts,
-	getPaginationInfo,
 	extractUrlPath,
+	renderWarningMessage,
+	renderWarningShortLabel,
 } from '@/utils';
-import type { Post } from '@/types';
+import type { AuthorFallbackWarning, ParentOrphanedWarning, Post } from '@/types';
 
 // Pin WP date settings so format/timezone-sensitive tests are deterministic.
 let originalDateSettings: ReturnType< typeof getSettings >;
@@ -40,32 +37,6 @@ beforeEach( () => {
 
 afterEach( () => {
 	setSettings( originalDateSettings );
-} );
-
-describe( 'formatDate', () => {
-	it( 'should render a Z-marked timestamp in site timezone', () => {
-		// ARRANGE: Site set to America/New_York, date format 'F j, Y'.
-		// ACT: format a mid-day UTC timestamp (10:30 UTC -> 06:30 EDT).
-		const result = formatDate( '2024-07-15T10:30:00Z' );
-		// ASSERT: same calendar day in EDT.
-		expect( result ).toBe( 'July 15, 2024' );
-	} );
-
-	it( 'should reflect site timezone on UTC/site day boundary', () => {
-		// ARRANGE: 2024-07-15T01:30:00Z is 21:30 EDT on July 14.
-		// ACT: format the early-UTC timestamp.
-		const result = formatDate( '2024-07-15T01:30:00Z' );
-		// ASSERT: rolls back to the previous EDT day.
-		expect( result ).toBe( 'July 14, 2024' );
-	} );
-
-	it( 'should return "Invalid Date" for invalid date string', () => {
-		expect( formatDate( 'not-a-date' ) ).toBe( 'Invalid Date' );
-	} );
-
-	it( 'should return "Invalid Date" for empty string', () => {
-		expect( formatDate( '' ) ).toBe( 'Invalid Date' );
-	} );
 } );
 
 describe( 'formatDateTime', () => {
@@ -188,242 +159,6 @@ describe( 'sanitizePosts', () => {
 	} );
 } );
 
-describe( 'searchPosts', () => {
-	const posts: Post[] = [
-		{ id: 1, link: 'https://example.com/1', title: 'React Tutorial', modified_gmt: '2024-03-15' },
-		{ id: 2, link: 'https://example.com/2', title: 'TypeScript Guide', modified_gmt: '2024-03-16' },
-		{ id: 3, link: 'https://example.com/3', title: 'React Testing', modified_gmt: '2024-03-17' },
-	];
-
-	it( 'should return all posts for empty search term', () => {
-		expect( searchPosts( posts, '' ) ).toEqual( posts );
-		expect( searchPosts( posts, '   ' ) ).toEqual( posts );
-	} );
-
-	it( 'should filter posts by title (case-insensitive)', () => {
-		const result = searchPosts( posts, 'react' );
-		expect( result ).toHaveLength( 2 );
-		expect( result[ 0 ].title ).toContain( 'React' );
-		expect( result[ 1 ].title ).toContain( 'React' );
-	} );
-
-	it( 'should handle uppercase search term', () => {
-		const result = searchPosts( posts, 'TYPESCRIPT' );
-		expect( result ).toHaveLength( 1 );
-		expect( result[ 0 ].title ).toContain( 'TypeScript' );
-	} );
-
-	it( 'should return empty array for no matches', () => {
-		expect( searchPosts( posts, 'nonexistent' ) ).toEqual( [] );
-	} );
-
-	it( 'should filter posts by modified_gmt date (ISO partial match)', () => {
-		const result = searchPosts( posts, '2024-03-16' );
-		expect( result ).toHaveLength( 1 );
-		expect( result[ 0 ].id ).toBe( 2 );
-	} );
-
-	it( 'should match via formatDate when raw ISO lacks the term', () => {
-		// ARRANGE: Z input renders as 'July 15, 2024' in site tz.
-		// Raw ISO has '07', not 'July'; only formatDate branch can match.
-		const datePosts: Post[] = [
-			{ id: 1, link: 'https://example.com/1', title: 'Alpha', modified_gmt: '2024-07-15T10:30:00Z' },
-			{ id: 2, link: 'https://example.com/2', title: 'Beta', modified_gmt: '2024-12-20T10:30:00Z' },
-		];
-		// ACT: search for the formatted month name.
-		const result = searchPosts( datePosts, 'July' );
-		// ASSERT: only the July post matches.
-		expect( result ).toHaveLength( 1 );
-		expect( result[ 0 ].id ).toBe( 1 );
-	} );
-
-	it( 'should not match when neither raw ISO nor formatDate match', () => {
-		// ARRANGE: a single July post in the corpus.
-		const datePosts: Post[] = [
-			{ id: 1, link: 'https://example.com/1', title: 'Alpha', modified_gmt: '2024-07-15T10:30:00Z' },
-		];
-		// ACT: search a month name that appears in neither form.
-		const result = searchPosts( datePosts, 'December' );
-		// ASSERT: no over-match across either branch.
-		expect( result ).toHaveLength( 0 );
-	} );
-
-	it( 'should filter posts by modified_gmt year', () => {
-		const result = searchPosts( posts, '2024' );
-		expect( result ).toHaveLength( 3 );
-	} );
-
-	it( 'should filter posts by post type', () => {
-		const typedPosts: Post[] = [
-			{ id: 1, link: 'https://example.com/1', title: 'Post A', modified_gmt: '2024-03-15', post_type: 'post' },
-			{ id: 2, link: 'https://example.com/2', title: 'Post B', modified_gmt: '2024-03-16', post_type: 'page' },
-			{ id: 3, link: 'https://example.com/3', title: 'Post C', modified_gmt: '2024-03-17', post_type: 'post' },
-		];
-
-		const result = searchPosts( typedPosts, 'page' );
-		expect( result ).toHaveLength( 1 );
-		expect( result[ 0 ].id ).toBe( 2 );
-	} );
-
-	it( 'should filter posts by permalink', () => {
-		const result = searchPosts( posts, 'example.com/2' );
-		expect( result ).toHaveLength( 1 );
-		expect( result[ 0 ].id ).toBe( 2 );
-	} );
-
-	it( 'should filter posts by sync status', () => {
-		const statusPosts: Post[] = [
-			{ id: 1, link: 'https://example.com/1', title: 'Post A', modified_gmt: '2024-03-15', is_imported: false },
-			{ id: 2, link: 'https://example.com/2', title: 'Post B', modified_gmt: '2024-03-16', is_imported: true, has_update: false },
-			{ id: 3, link: 'https://example.com/3', title: 'Post C', modified_gmt: '2024-03-17', is_imported: true, has_update: true },
-		];
-
-		expect( searchPosts( statusPosts, 'available' ) ).toHaveLength( 1 );
-		expect( searchPosts( statusPosts, 'available' )[ 0 ].id ).toBe( 1 );
-
-		expect( searchPosts( statusPosts, 'up to date' ) ).toHaveLength( 1 );
-		expect( searchPosts( statusPosts, 'up to date' )[ 0 ].id ).toBe( 2 );
-
-		expect( searchPosts( statusPosts, 'outdated' ) ).toHaveLength( 1 );
-		expect( searchPosts( statusPosts, 'outdated' )[ 0 ].id ).toBe( 3 );
-	} );
-
-	it( 'should filter posts by publish status', () => {
-		const statusPosts: Post[] = [
-			{ id: 1, link: 'https://example.com/1', title: 'Post A', modified_gmt: '2024-03-15', is_imported: true, local_status: 'publish' },
-			{ id: 2, link: 'https://example.com/2', title: 'Post B', modified_gmt: '2024-03-16', is_imported: true, local_status: 'draft' },
-			{ id: 3, link: 'https://example.com/3', title: 'Post C', modified_gmt: '2024-03-17', is_imported: true, local_status: 'pending' },
-			{ id: 4, link: 'https://example.com/4', title: 'Post D', modified_gmt: '2024-03-18', is_imported: false },
-		];
-
-		expect( searchPosts( statusPosts, 'published' ) ).toHaveLength( 1 );
-		expect( searchPosts( statusPosts, 'published' )[ 0 ].id ).toBe( 1 );
-
-		expect( searchPosts( statusPosts, 'draft' ) ).toHaveLength( 1 );
-		expect( searchPosts( statusPosts, 'draft' )[ 0 ].id ).toBe( 2 );
-
-		expect( searchPosts( statusPosts, 'pending review' ) ).toHaveLength( 1 );
-		expect( searchPosts( statusPosts, 'pending review' )[ 0 ].id ).toBe( 3 );
-
-		// Non-imported post has no publish status and should not match.
-		expect( searchPosts( statusPosts, 'published' ) ).not.toContainEqual( expect.objectContaining( { id: 4 } ) );
-	} );
-} );
-
-describe( 'sortPosts', () => {
-	const posts: Post[] = [
-		{ id: 2, link: 'https://example.com/2', title: 'Beta Post', modified_gmt: '2024-03-15' },
-		{ id: 1, link: 'https://example.com/1', title: 'Alpha Post', modified_gmt: '2024-03-17' },
-		{ id: 3, link: 'https://example.com/3', title: 'Gamma Post', modified_gmt: '2024-03-16' },
-	];
-
-	it( 'should sort posts by id ascending', () => {
-		const result = sortPosts( posts, 'id', 'asc' );
-		expect( result[ 0 ].id ).toBe( 1 );
-		expect( result[ 1 ].id ).toBe( 2 );
-		expect( result[ 2 ].id ).toBe( 3 );
-	} );
-
-	it( 'should sort posts by id descending', () => {
-		const result = sortPosts( posts, 'id', 'desc' );
-		expect( result[ 0 ].id ).toBe( 3 );
-		expect( result[ 1 ].id ).toBe( 2 );
-		expect( result[ 2 ].id ).toBe( 1 );
-	} );
-
-	it( 'should sort posts by title ascending', () => {
-		const result = sortPosts( posts, 'title', 'asc' );
-		expect( result[ 0 ].title ).toBe( 'Alpha Post' );
-		expect( result[ 1 ].title ).toBe( 'Beta Post' );
-		expect( result[ 2 ].title ).toBe( 'Gamma Post' );
-	} );
-
-	it( 'should sort posts by modified_gmt date descending (default)', () => {
-		const result = sortPosts( posts, 'modified_gmt' );
-		expect( result[ 0 ].modified_gmt ).toBe( '2024-03-17' );
-		expect( result[ 1 ].modified_gmt ).toBe( '2024-03-16' );
-		expect( result[ 2 ].modified_gmt ).toBe( '2024-03-15' );
-	} );
-
-	it( 'should sort posts by modified_gmt date ascending', () => {
-		const result = sortPosts( posts, 'modified_gmt', 'asc' );
-		expect( result[ 0 ].modified_gmt ).toBe( '2024-03-15' );
-		expect( result[ 1 ].modified_gmt ).toBe( '2024-03-16' );
-		expect( result[ 2 ].modified_gmt ).toBe( '2024-03-17' );
-	} );
-
-	it( 'should not mutate original array', () => {
-		const original = [ ...posts ];
-		sortPosts( posts, 'id', 'asc' );
-		expect( posts ).toEqual( original );
-	} );
-} );
-
-describe( 'paginatePosts', () => {
-	const posts: Post[] = Array.from( { length: 25 }, ( _, i ) => ( {
-		id: i + 1,
-		link: `https://example.com/${ i + 1 }`,
-		title: `Post ${ i + 1 }`,
-		modified_gmt: '2024-03-15',
-	} ) );
-
-	it( 'should return first page of posts', () => {
-		const result = paginatePosts( posts, 1, 10 );
-		expect( result ).toHaveLength( 10 );
-		expect( result[ 0 ].id ).toBe( 1 );
-		expect( result[ 9 ].id ).toBe( 10 );
-	} );
-
-	it( 'should return second page of posts', () => {
-		const result = paginatePosts( posts, 2, 10 );
-		expect( result ).toHaveLength( 10 );
-		expect( result[ 0 ].id ).toBe( 11 );
-		expect( result[ 9 ].id ).toBe( 20 );
-	} );
-
-	it( 'should return last page with remaining posts', () => {
-		const result = paginatePosts( posts, 3, 10 );
-		expect( result ).toHaveLength( 5 );
-		expect( result[ 0 ].id ).toBe( 21 );
-		expect( result[ 4 ].id ).toBe( 25 );
-	} );
-
-	it( 'should return empty array for page beyond available data', () => {
-		const result = paginatePosts( posts, 10, 10 );
-		expect( result ).toEqual( [] );
-	} );
-
-	it( 'should handle different page sizes', () => {
-		const result = paginatePosts( posts, 1, 5 );
-		expect( result ).toHaveLength( 5 );
-	} );
-} );
-
-describe( 'getPaginationInfo', () => {
-	it( 'should calculate pagination info correctly', () => {
-		const result = getPaginationInfo( 25, 10 );
-		expect( result.totalItems ).toBe( 25 );
-		expect( result.totalPages ).toBe( 3 );
-	} );
-
-	it( 'should handle exact division', () => {
-		const result = getPaginationInfo( 30, 10 );
-		expect( result.totalItems ).toBe( 30 );
-		expect( result.totalPages ).toBe( 3 );
-	} );
-
-	it( 'should handle single page', () => {
-		const result = getPaginationInfo( 5, 10 );
-		expect( result.totalItems ).toBe( 5 );
-		expect( result.totalPages ).toBe( 1 );
-	} );
-
-	it( 'should handle zero items', () => {
-		const result = getPaginationInfo( 0, 10 );
-		expect( result.totalItems ).toBe( 0 );
-		expect( result.totalPages ).toBe( 0 );
-	} );
-} );
 
 describe( 'extractUrlPath', () => {
 	it( 'should extract path from valid URL', () => {
@@ -449,5 +184,102 @@ describe( 'extractUrlPath', () => {
 
 	it( 'should handle URL with hash', () => {
 		expect( extractUrlPath( 'https://example.com/page#section' ) ).toBe( '/page' );
+	} );
+} );
+
+describe( 'renderWarningMessage', () => {
+	it( 'should render the "attributed to importer" message when the author fallback applies on insert', () => {
+		// ARRANGE: New-post author fallback warning (non-null fallback_user_id).
+		const warning: AuthorFallbackWarning = {
+			type: 'author_fallback_applied',
+			source: {
+				email: 'orphan@example.com',
+				login: 'orphan',
+				display_name: 'Orphan',
+			},
+			fallback_user_id: 42,
+		};
+		// ACT: render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: insert wording includes the source display name and email.
+		expect( message ).toContain( 'Orphan' );
+		expect( message ).toContain( 'orphan@example.com' );
+		expect( message ).toContain( 'attributed to the current user' );
+	} );
+
+	it( 'should render the "keeping current author" message when the author fallback applies on update', () => {
+		// ARRANGE: Update-path author fallback warning (null fallback_user_id).
+		const warning: AuthorFallbackWarning = {
+			type: 'author_fallback_applied',
+			source: {
+				email: 'gone@example.com',
+				login: 'gone',
+				display_name: 'Gone',
+			},
+			fallback_user_id: null,
+		};
+		// ACT: render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: update wording mentions the email and the kept author.
+		expect( message ).toContain( 'gone@example.com' );
+		expect( message ).toContain( 'Keeping the current author' );
+	} );
+
+	it( 'should render the "not on this site" message for parent_orphaned when never imported', () => {
+		// ARRANGE: parent never imported on destination.
+		const warning: ParentOrphanedWarning = {
+			type: 'parent_orphaned',
+			source: { parent_id: 42, parent_title: null },
+			reason: 'not_imported',
+		};
+		// ACT: render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: includes the parent ID and "Imported as top-level" hint.
+		expect( message ).toContain( '42' );
+		expect( message ).toContain( 'is not on this site' );
+		expect( message ).toContain( 'Imported as top-level' );
+	} );
+
+	it( 'should render the "failed earlier" message for parent_orphaned in a batch', () => {
+		// ARRANGE: parent was part of the bulk batch but did not succeed.
+		const warning: ParentOrphanedWarning = {
+			type: 'parent_orphaned',
+			source: { parent_id: 99, parent_title: 'Pending Parent' },
+			reason: 'failed_in_batch',
+		};
+		// ACT: render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: includes parent title, ID, and the failure phrasing.
+		expect( message ).toContain( 'Pending Parent' );
+		expect( message ).toContain( '99' );
+		expect( message ).toContain( 'failed to import earlier' );
+	} );
+} );
+
+describe( 'renderWarningShortLabel', () => {
+	it( 'should return "author fallback" for author_fallback_applied', () => {
+		// ARRANGE: any author fallback warning.
+		const warning: AuthorFallbackWarning = {
+			type: 'author_fallback_applied',
+			source: { email: '', login: '', display_name: '' },
+			fallback_user_id: null,
+		};
+		// ACT: render the short label.
+		const label = renderWarningShortLabel( warning );
+		// ASSERT: short label is the comma-joinable string used in the bulk modal.
+		expect( label ).toBe( 'author fallback' );
+	} );
+
+	it( 'should return "parent orphaned" for parent_orphaned', () => {
+		// ARRANGE: any parent_orphaned warning.
+		const warning: ParentOrphanedWarning = {
+			type: 'parent_orphaned',
+			source: { parent_id: 1, parent_title: null },
+			reason: 'not_imported',
+		};
+		// ACT: render the short label.
+		const label = renderWarningShortLabel( warning );
+		// ASSERT: short label is the comma-joinable string used in the bulk modal.
+		expect( label ).toBe( 'parent orphaned' );
 	} );
 } );

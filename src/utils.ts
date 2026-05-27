@@ -1,16 +1,16 @@
 /**
  * Utility functions for the Safe Publish plugin.
  *
- * Provides helper functions for date formatting, post validation, searching,
- * sorting, pagination, and URL manipulation.
+ * Provides helper functions for date formatting, post validation, status
+ * labels, warning rendering, and URL manipulation.
  *
  * @file This file defines utility functions for the Safe Publish plugin.
  */
 
 import { dateI18n, getSettings } from '@wordpress/date';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
-import type { Post, JsonValue } from './types';
+import type { Post, JsonValue, Warning } from './types';
 
 /**
  * Extracts a human-readable error message from an API response.
@@ -56,25 +56,6 @@ export function getErrorMessage(
 	}
 
 	return fallback;
-}
-
-/**
- * Formats a date string for display.
- *
- * Renders in the site's configured timezone using the WordPress `date_format`
- * option, matching how WP admin displays dates elsewhere.
- *
- * @param {string} dateString UTC ISO 8601 date string (trailing `Z`).
- *
- * @return {string} Formatted date string, or 'Invalid Date' if parsing fails.
- */
-export function formatDate( dateString: string ): string {
-	const date = new Date( dateString );
-	if ( isNaN( date.getTime() ) ) {
-		return __( 'Invalid Date', 'safe-publish' );
-	}
-
-	return dateI18n( getSettings().formats.date, dateString );
 }
 
 /**
@@ -135,9 +116,6 @@ export function sanitizePosts( posts: unknown[] ): Post[] {
 
 /**
  * Display labels for sync statuses.
- *
- * Used by both rendering and search. Search helpers derive their values by
- * lowercasing these.
  */
 export const SYNC_STATUS_LABELS = {
 	outdated: __( 'Outdated', 'safe-publish' ),
@@ -147,9 +125,6 @@ export const SYNC_STATUS_LABELS = {
 
 /**
  * Display labels for publish statuses.
- *
- * Used by both rendering and search. Search helpers derive their values by
- * lowercasing these.
  */
 export const PUBLISH_STATUS_LABELS: Record< string, string > = {
 	publish: __( 'Published', 'safe-publish' ),
@@ -160,145 +135,80 @@ export const PUBLISH_STATUS_LABELS: Record< string, string > = {
 };
 
 /**
- * Returns the human-readable sync status text for a post.
+ * Renders an import warning as a long-form, user-facing message.
  *
- * @param {Post} post Post to get sync status text for.
+ * @param {Warning} warning Warning to render.
  *
- * @return {string} Sync status text.
+ * @return {string} Localized message text.
  */
-function getSyncStatusText( post: Post ): string {
-	if ( post.is_imported && post.has_update ) {
-		return SYNC_STATUS_LABELS.outdated.toLowerCase();
+export function renderWarningMessage( warning: Warning ): string {
+	switch ( warning.type ) {
+		case 'author_fallback_applied':
+			return warning.fallback_user_id !== null
+				? sprintf(
+					/* translators: 1: display name, 2: email */
+					__(
+						'Original author %1$s (%2$s) was not found on this site. Post attributed to the current user.',
+						'safe-publish'
+					),
+					warning.source.display_name,
+					warning.source.email
+				)
+				: sprintf(
+					/* translators: %s: email */
+					__(
+						'Source author %s was not found on this site. Keeping the current author.',
+						'safe-publish'
+					),
+					warning.source.email
+				);
+		case 'parent_orphaned':
+			if ( warning.reason === 'failed_in_batch' && warning.source.parent_title !== null ) {
+				return sprintf(
+					/* translators: 1: parent post title, 2: parent post ID */
+					__(
+						'Source parent post "%1$s" (ID %2$d) failed to import earlier in this batch. Imported as top-level.',
+						'safe-publish'
+					),
+					warning.source.parent_title,
+					warning.source.parent_id
+				);
+			}
+			return sprintf(
+				/* translators: %d: parent post ID */
+				__(
+					'Source parent post (ID %d) is not on this site. Imported as top-level.',
+					'safe-publish'
+				),
+				warning.source.parent_id
+			);
+		default: {
+			const _exhaustive: never = warning;
+			return String( _exhaustive );
+		}
 	}
-	if ( post.is_imported ) {
-		return SYNC_STATUS_LABELS.upToDate.toLowerCase();
+}
+
+/**
+ * Renders an import warning as a short label for the bulk results modal.
+ *
+ * Labels are joined inline with commas, so they should be lowercase phrases.
+ *
+ * @param {Warning} warning Warning to render.
+ *
+ * @return {string} Localized short label.
+ */
+export function renderWarningShortLabel( warning: Warning ): string {
+	switch ( warning.type ) {
+		case 'author_fallback_applied':
+			return __( 'author fallback', 'safe-publish' );
+		case 'parent_orphaned':
+			return __( 'parent orphaned', 'safe-publish' );
+		default: {
+			const _exhaustive: never = warning;
+			return String( _exhaustive );
+		}
 	}
-	return SYNC_STATUS_LABELS.available.toLowerCase();
-}
-
-/**
- * Returns the human-readable publish status text for a post.
- *
- * @param {Post} post Post to get publish status text for.
- *
- * @return {string} Publish status text.
- */
-function getPublishStatusText( post: Post ): string {
-	if ( ! post.is_imported || ! post.local_status ) {
-		return '';
-	}
-	return ( PUBLISH_STATUS_LABELS[ post.local_status ] ?? post.local_status ).toLowerCase();
-}
-
-/**
- * Searches posts by title, post type, permalink, sync status, and publish status.
- *
- * @param {Post[]} posts      Posts to search.
- * @param {string} searchTerm Search term to match against post fields.
- *
- * @return {Post[]} Posts matching the search term.
- */
-export function searchPosts( posts: Post[], searchTerm: string ): Post[] {
-	if ( ! searchTerm.trim() ) {
-		return posts;
-	}
-
-	const searchLower = searchTerm.toLowerCase();
-	return posts.filter( post =>
-		post.title.toLowerCase().includes( searchLower ) ||
-		( post.post_type ?? '' ).toLowerCase().includes( searchLower ) ||
-		( post.link ?? '' ).toLowerCase().includes( searchLower ) ||
-		getSyncStatusText( post ).includes( searchLower ) ||
-		getPublishStatusText( post ).includes( searchLower ) ||
-		post.modified_gmt.toLowerCase().includes( searchLower ) ||
-		formatDate( post.modified_gmt ).toLowerCase().includes( searchLower )
-	);
-}
-
-/**
- * Sorts posts by a given field.
- *
- * @param {Post[]}         posts       Posts to sort.
- * @param {keyof Post}     field       Field to sort by.
- * @param {'asc' | 'desc'} [direction] Sort direction. Default 'desc'.
- *
- * @return {Post[]} New array of posts sorted by the specified field.
- */
-export function sortPosts(
-	posts: Post[],
-	field: keyof Post | 'sync_status',
-	direction: 'asc' | 'desc' = 'desc'
-): Post[] {
-	// Status sort: Available (0) < Outdated (1) < Up to date (2) — alphabetical order.
-	const statusOrder = ( item: Post ): number => {
-		if ( item.is_imported && item.has_update ) {
-			return 1;
-		}
-
-		if ( item.is_imported ) {
-			return 2;
-		}
-
-		return 0;
-	};
-
-	return [ ...posts ].sort( ( postA, postB ) => {
-		if ( field === 'sync_status' ) {
-			const diff = statusOrder( postA ) - statusOrder( postB );
-			return direction === 'asc' ? diff : -diff;
-		}
-
-		/* eslint-disable security/detect-object-injection */
-		// TypeScript ensures 'field' is a valid Post key, making this type-safe.
-		const aVal = postA[ field ];
-		const bVal = postB[ field ];
-		/* eslint-enable security/detect-object-injection */
-
-		// Special handling for dates.
-		if ( field === 'modified_gmt' ) {
-			const dateA = new Date( aVal as string );
-			const dateB = new Date( bVal as string );
-			return direction === 'asc'
-				? dateA.getTime() - dateB.getTime()
-				: dateB.getTime() - dateA.getTime();
-		}
-
-		// Default string comparison.
-		if ( direction === 'asc' ) {
-			return String( aVal ).localeCompare( String( bVal ) );
-		}
-		return String( bVal ).localeCompare( String( aVal ) );
-	} );
-}
-
-/**
- * Paginates an array of posts.
- *
- * @param {Post[]} posts   Posts to paginate.
- * @param {number} page    Current page number (1-indexed).
- * @param {number} perPage Number of posts per page.
- *
- * @return {Post[]} Slice of posts for the specified page.
- */
-export function paginatePosts( posts: Post[], page: number, perPage: number ): Post[] {
-	const startIndex = ( page - 1 ) * perPage;
-	const endIndex = startIndex + perPage;
-	return posts.slice( startIndex, endIndex );
-}
-
-/**
- * Calculates pagination information.
- *
- * @param {number} totalItems Total number of items.
- * @param {number} perPage    Number of items per page.
- *
- * @return {Object} Object containing totalItems and totalPages.
- */
-export function getPaginationInfo( totalItems: number, perPage: number ) {
-	return {
-		totalItems,
-		totalPages: Math.ceil( totalItems / perPage ),
-	};
 }
 
 /**

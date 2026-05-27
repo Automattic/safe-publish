@@ -1,6 +1,6 @@
 <?php
 /**
- * VIP-Safe Authentication Handler
+ * Authentication parameter builder for outbound REST requests.
  *
  * @package Safe_Publish
  */
@@ -9,18 +9,19 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Auth;
 
+use Safe_Publish\API\HTTP_Client;
+use Safe_Publish\API\Request_Actions;
+
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
 /**
- * VIP-Safe Authentication Class.
+ * Builds authentication parameters for outbound REST requests.
  *
- * Implements authentication methods that work on VIP:
- *
- * 1. Shared Secret (HMAC authentication) - Required for all environments.
- * 2. Basic Authentication - Optional, can be layered on top of Shared Secret.
+ * 1. Shared Secret (HMAC-SHA256 signed custom headers) - required.
+ * 2. Basic Authentication - optional, layered on top of the shared secret.
  */
 final class VIP_Safe_Auth {
 
@@ -55,9 +56,11 @@ final class VIP_Safe_Auth {
 	const STATUS_URL_UNSET = 'url_unset';
 
 	/**
-	 * Gets authentication parameters for requests.
+	 * Gets authentication parameters for requests. $action is included in
+	 * the signed payload so any in-flight tampering of the label is detectable.
 	 *
 	 * @param string $site_url    Site URL of the API endpoint being called.
+	 * @param string $action      Declared request action (see Request_Actions).
 	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
 	 * @param string $method      Optional. HTTP method for the request. Default 'GET'.
 	 * @param string $body        Optional. Request body for content hash generation. Default ''.
@@ -65,6 +68,7 @@ final class VIP_Safe_Auth {
 	 */
 	public static function get_auth_params(
 		string $site_url,
+		string $action,
 		array $auth_config = array(),
 		string $method = 'GET',
 		string $body = ''
@@ -74,7 +78,13 @@ final class VIP_Safe_Auth {
 			return array();
 		}
 
-		$params = self::get_shared_secret_auth( $site_url, $auth_config, $method, $body );
+		$params = self::get_shared_secret_auth(
+			$site_url,
+			$action,
+			$auth_config,
+			$method,
+			$body
+		);
 
 		// Basic auth can be layered on top of shared secret auth.
 		if ( ! empty( $auth_config['username'] ) && ! empty( $auth_config['password'] ) ) {
@@ -135,12 +145,17 @@ final class VIP_Safe_Auth {
 			),
 			trailingslashit( $site_url ) . 'wp-json/wp/v2/posts'
 		);
-		$auth_params = self::get_auth_params( $test_url, $auth_config, 'GET' );
+		$auth_params = self::get_auth_params(
+			$test_url,
+			Request_Actions::PROBE,
+			$auth_config,
+			'GET'
+		);
 
 		$request_args = array(
 			'timeout'     => 3,
 			'redirection' => 0,
-			'user-agent'  => 'Safe-Publish-Auth-Test/1.0',
+			'user-agent'  => ( new HTTP_Client() )->get_user_agent(),
 		);
 
 		if ( isset( $auth_params['headers'] ) ) {
@@ -184,12 +199,10 @@ final class VIP_Safe_Auth {
 	}
 
 	/**
-	 * Gets shared secret authentication parameters.
-	 *
-	 * Uses HMAC signature in custom headers that VIP allows.
-	 * Compatible with the Safe Publish VIP mu-plugin authentication handler.
+	 * Builds HMAC-SHA256 signed custom headers for shared-secret authentication.
 	 *
 	 * @param string $site_url    Site URL of the API endpoint being called.
+	 * @param string $action      Declared request action included in the signed payload.
 	 * @param array  $auth_config Authentication configuration.
 	 * @param string $method      Optional. HTTP method for the request. Default 'GET'.
 	 * @param string $body        Optional. Request body for content hash generation. Default ''.
@@ -197,6 +210,7 @@ final class VIP_Safe_Auth {
 	 */
 	private static function get_shared_secret_auth(
 		string $site_url,
+		string $action,
 		array $auth_config,
 		string $method = 'GET',
 		string $body = ''
@@ -232,11 +246,17 @@ final class VIP_Safe_Auth {
 
 		$this_site_url = untrailingslashit( home_url() );
 
-		// Create signature string: METHOD|URI|TIMESTAMP|CONTENT_HASH|CONNECTED_SITE_URL.
-		// The trailing slot carries this site's home_url; the receiver verifies
-		// it matches its configured connected site URL.
+		// Signature string format:
+		// METHOD|URI|TIMESTAMP|CONTENT_HASH|CONNECTED_SITE_URL|ACTION.
+		// Site URL slot lets the receiver verify origin. Action slot
+		// makes the declared request intent tamper-evident.
 		$content_hash   = hash( 'sha256', $body );
-		$string_to_sign = $method . '|' . $path . '|' . $timestamp . '|' . $content_hash . '|' . $this_site_url;
+		$string_to_sign = $method
+			. '|' . $path
+			. '|' . $timestamp
+			. '|' . $content_hash
+			. '|' . $this_site_url
+			. '|' . $action;
 
 		return array(
 			'headers' => array(
@@ -244,6 +264,7 @@ final class VIP_Safe_Auth {
 				'X-Safe-Publish-Content-Hash' => $content_hash,
 				'X-Safe-Publish-Signature'    => hash_hmac( 'sha256', $string_to_sign, $shared_secret ),
 				'X-Safe-Publish-Site-URL'     => $this_site_url,
+				'X-Safe-Publish-Action'       => $action,
 			),
 		);
 	}

@@ -10,6 +10,8 @@ import { close } from '@wordpress/icons';
 
 import { PostDiffModal } from './ImportHistoryPostDiffModal';
 import { SessionDetailsModal } from './SessionDetailsModal';
+import { useDataViewsResult } from './hooks/useDataViewsResult';
+import { DEFAULT_ITEMS_PER_PAGE } from '../constants';
 import { formatDateTime, getErrorMessage } from '../utils';
 import {
 	Button,
@@ -52,7 +54,7 @@ export function ImportHistory(): JSX.Element {
 
 	const [ view, setView ] = useState< View >( {
 		type: 'table',
-		perPage: 20,
+		perPage: DEFAULT_ITEMS_PER_PAGE,
 		page: 1,
 		sort: {
 			field: 'date',
@@ -63,24 +65,10 @@ export function ImportHistory(): JSX.Element {
 		fields: [ 'date', 'user', 'items', 'status', 'source' ],
 	} );
 
-	// Pagination info for DataViews.
-	const [ paginationInfo, setPaginationInfo ] = useState( {
-		totalItems: 0,
-		totalPages: 1,
-	} );
-
 	// Load import sessions on component mount.
 	useEffect( () => {
 		void loadImportSessions();
 	}, [] );
-
-	// Update pagination info when sessions change.
-	useEffect( () => {
-		setPaginationInfo( {
-			totalItems: sessions.length,
-			totalPages: Math.ceil( sessions.length / ( view.perPage || 20 ) ),
-		} );
-	}, [ sessions, view.perPage ] );
 
 	// Handle ESC key to close modals.
 	useEffect( () => {
@@ -283,12 +271,24 @@ export function ImportHistory(): JSX.Element {
 		setIsDiffModalOpen( true );
 	};
 
-	// DataViews fields configuration.
 	const fields: DataViewsField<ImportSession>[] = [
 		{
 			id: 'date',
 			label: __( 'Date', 'safe-publish' ),
 			enableSorting: true,
+			enableGlobalSearch: true,
+			// Match raw ISO and formatted date (e.g. "2026-05" or "May").
+			getValue: ( { item }: { item: ImportSession } ): string =>
+				`${ item.date } ${ formatDateTime( item.date ) }`,
+			sort: (
+				sessionA: ImportSession,
+				sessionB: ImportSession,
+				direction
+			): number => {
+				// Sort by raw ISO; formatted strings won't sort chronologically.
+				const diff = sessionA.date.localeCompare( sessionB.date );
+				return 'asc' === direction ? diff : -diff;
+			},
 			render: ( { item }: { item: ImportSession } ): JSX.Element => (
 				<Button
 					variant="link"
@@ -303,6 +303,7 @@ export function ImportHistory(): JSX.Element {
 			id: 'user',
 			label: __( 'User', 'safe-publish' ),
 			enableSorting: true,
+			enableGlobalSearch: true,
 			render: ( { item }: { item: ImportSession } ): JSX.Element => (
 				<span>{ item.user }</span>
 			),
@@ -328,6 +329,9 @@ export function ImportHistory(): JSX.Element {
 			id: 'status',
 			label: __( 'Status', 'safe-publish' ),
 			enableSorting: true,
+			enableGlobalSearch: true,
+			getValue: ( { item }: { item: ImportSession } ): string =>
+				item.status_label,
 			render: ( { item }: { item: ImportSession } ): JSX.Element => (
 				<span className={ `safe-publish-status-${ item.status }` }>
 					{ item.status_label }
@@ -338,13 +342,18 @@ export function ImportHistory(): JSX.Element {
 			id: 'source',
 			label: __( 'Source', 'safe-publish' ),
 			enableSorting: false,
+			enableGlobalSearch: true,
+			getValue: ( { item }: { item: ImportSession } ): string =>
+				item.source_site_url,
 			render: ( { item }: { item: ImportSession } ): JSX.Element => (
 				<span>{ item.source_site_url }</span>
 			),
 		},
 	];
 
-	// DataViews actions.
+	const { data: filteredSessions, paginationInfo } =
+		useDataViewsResult( sessions, view, fields );
+
 	const actions = [
 		{
 			id: 'view-details',
@@ -432,7 +441,7 @@ export function ImportHistory(): JSX.Element {
 					<Text>{ __( 'No import sessions found.', 'safe-publish' ) }</Text>
 				) : (
 					<DataViews
-						data={ sessions }
+						data={ filteredSessions }
 						fields={ fields }
 						view={ view }
 						onChangeView={ setView }
@@ -481,7 +490,7 @@ export function ImportHistory(): JSX.Element {
 					<div
 						className="safe-publish-modal-content components-modal__frame"
 						style={ {
-							backgroundColor: 'white',
+							backgroundColor: 'var(--safe-publish-surface-bg)',
 							borderRadius: '2px',
 							maxWidth: '800px',
 							maxHeight: '80vh',
@@ -580,7 +589,7 @@ export function ImportHistory(): JSX.Element {
 					<div
 						className="safe-publish-modal-content components-modal__frame"
 						style={ {
-							backgroundColor: 'white',
+							backgroundColor: 'var(--safe-publish-surface-bg)',
 							borderRadius: '2px',
 							maxWidth: '900px',
 							maxHeight: '80vh',

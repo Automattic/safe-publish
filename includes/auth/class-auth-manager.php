@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Auth;
 
 use Safe_Publish\Utils\Audit_Log_Table;
+use Safe_Publish\API\Dispatch_Logger;
 use Safe_Publish\API\Export_Logger;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -64,7 +65,8 @@ class Auth_Manager {
 		$this->logger             = new Auth_Logger();
 		$this->permission_manager = new Permission_Manager(
 			$this->logger,
-			new Export_Logger()
+			new Export_Logger(),
+			new Dispatch_Logger()
 		);
 		$this->authenticator      = new HMAC_Authenticator(
 			$this->logger,
@@ -85,6 +87,16 @@ class Auth_Manager {
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			add_action( 'rest_api_init', array( $this, 'register_test_endpoint' ) );
 		}
+	}
+
+	/**
+	 * Returns the HMAC authenticator so callers can check whether the current
+	 * REST request was authenticated by Safe Publish.
+	 *
+	 * @return HMAC_Authenticator HMAC authenticator instance.
+	 */
+	public function get_authenticator(): HMAC_Authenticator {
+		return $this->authenticator;
 	}
 
 	/**
@@ -177,7 +189,6 @@ class Auth_Manager {
 					'shared_secret_configured' => ! empty( $shared_secret ),
 					'secret_length'            => strlen( $shared_secret ),
 					'secret_source'            => $this->get_secret_source(),
-					'vip_environment'          => defined( 'WPCOM_IS_VIP_ENV' ) ? WPCOM_IS_VIP_ENV : false,
 					'debug_mode'               => defined( 'WP_DEBUG' ) ? WP_DEBUG : false,
 				),
 				'statistics'          => array(
@@ -289,7 +300,6 @@ class Auth_Manager {
 				'safe_publish_headers_present' => $has_safe_publish_headers,
 				'shared_secret_configured'     => ! empty( $shared_secret ),
 				'secret_length'                => strlen( $shared_secret ),
-				'vip_environment'              => defined( 'WPCOM_IS_VIP_ENV' ) ? WPCOM_IS_VIP_ENV : false,
 				'debug_mode'                   => defined( 'WP_DEBUG' ) ? WP_DEBUG : false,
 				'logging_info'                 => array(
 					'error_log_available' => function_exists( 'error_log' ),

@@ -10,10 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration\Source_Posts_API;
 
 /**
- * Tests actual media downloads and attachment creation.
- *
- * Verifies that media files are correctly downloaded, stored in WordPress
- * media library, and tracked with proper metadata.
+ * Media Import Test Class.
  *
  * phpcs:disable WordPressVIPMinimum.Functions.RestrictedFunctions.attachment_url_to_postid_attachment_url_to_postid
  */

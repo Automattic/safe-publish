@@ -1,0 +1,626 @@
+<?php
+/**
+ * Seeder Content Generator Test.
+ *
+ * @package Safe_Publish
+ */
+
+declare(strict_types=1);
+
+namespace Safe_Publish\Tests;
+
+use InvalidArgumentException;
+use PHPUnit\Framework\TestCase;
+use Safe_Publish\Seeder\Content_Generator;
+
+/**
+ * Tests the Seeder Content_Generator pure logic.
+ */
+class SeederContentGeneratorTest extends TestCase {
+
+	/**
+	 * Fixed Unix timestamp used as "now" in tests: 2025-01-01 00:00:00 UTC.
+	 */
+	private const REFERENCE_TIME = 1735689600;
+
+	/**
+	 * Builds a generator with sensible defaults so tests stay focused.
+	 *
+	 * @param string $editor      Editor mode.
+	 * @param string $images_mode Image mode.
+	 * @param int    $count       Batch count.
+	 * @param int    $start       Batch start index.
+	 * @param int    $date_offset Additional days into the past.
+	 * @param string $prefix      Title prefix.
+	 * @param string $type        Post type slug.
+	 * @return Content_Generator Configured generator.
+	 */
+	private function build_generator(
+		string $editor = 'gutenberg',
+		string $images_mode = '1',
+		int $count = 10,
+		int $start = 1,
+		int $date_offset = 0,
+		string $prefix = '',
+		string $type = 'post'
+	): Content_Generator {
+		return new Content_Generator(
+			$type,
+			$editor,
+			$images_mode,
+			$count,
+			$start,
+			$date_offset,
+			$prefix,
+			self::REFERENCE_TIME,
+			'https://source.example.com'
+		);
+	}
+
+	/**
+	 * Verifies that the constructor rejects invalid editor values.
+	 */
+	public function test_constructor_throws_on_invalid_editor(): void {
+		// ARRANGE: an unsupported editor value.
+		$this->expectException( InvalidArgumentException::class );
+
+		// ACT + ASSERT: construction throws.
+		$this->build_generator( editor: 'invalid' );
+	}
+
+	/**
+	 * Verifies that the constructor rejects invalid image mode values.
+	 */
+	public function test_constructor_throws_on_invalid_images_mode(): void {
+		// ARRANGE: an unsupported image mode.
+		$this->expectException( InvalidArgumentException::class );
+
+		// ACT + ASSERT: construction throws.
+		$this->build_generator( images_mode: 'invalid' );
+	}
+
+	/**
+	 * Verifies that resolve_editor returns true for every index when
+	 * configured as gutenberg.
+	 */
+	public function test_resolve_editor_returns_true_for_gutenberg(): void {
+		// ARRANGE: generator in gutenberg mode.
+		$generator = $this->build_generator( editor: 'gutenberg' );
+
+		// ACT + ASSERT: every index uses the block editor.
+		$this->assertTrue( $generator->resolve_editor( 1 ) );
+		$this->assertTrue( $generator->resolve_editor( 5 ) );
+		$this->assertTrue( $generator->resolve_editor( 100 ) );
+	}
+
+	/**
+	 * Verifies that resolve_editor returns false for every index when
+	 * configured as classic.
+	 */
+	public function test_resolve_editor_returns_false_for_classic(): void {
+		// ARRANGE: generator in classic mode.
+		$generator = $this->build_generator( editor: 'classic' );
+
+		// ACT + ASSERT: every index uses the classic editor.
+		$this->assertFalse( $generator->resolve_editor( 1 ) );
+		$this->assertFalse( $generator->resolve_editor( 5 ) );
+		$this->assertFalse( $generator->resolve_editor( 100 ) );
+	}
+
+	/**
+	 * Verifies that resolve_editor rotates so two out of three posts use
+	 * the block editor in mixed mode.
+	 */
+	public function test_resolve_editor_rotates_in_mixed_mode(): void {
+		// ARRANGE: generator in mixed mode.
+		$generator = $this->build_generator( editor: 'mixed' );
+
+		// ACT + ASSERT: indices divisible by 3 fall back to classic.
+		$this->assertTrue( $generator->resolve_editor( 1 ) );
+		$this->assertTrue( $generator->resolve_editor( 2 ) );
+		$this->assertFalse( $generator->resolve_editor( 3 ) );
+		$this->assertTrue( $generator->resolve_editor( 4 ) );
+		$this->assertTrue( $generator->resolve_editor( 5 ) );
+		$this->assertFalse( $generator->resolve_editor( 6 ) );
+	}
+
+	/**
+	 * Verifies that resolve_image_mode returns the configured mode unchanged
+	 * when it is concrete (not 'auto').
+	 *
+	 * @dataProvider concrete_image_modes_provider
+	 *
+	 * @param string $mode Configured concrete image mode.
+	 */
+	public function test_resolve_image_mode_passes_through_concrete_modes(
+		string $mode
+	): void {
+		// ARRANGE: generator configured with a concrete mode.
+		$generator = $this->build_generator( images_mode: $mode );
+
+		// ACT + ASSERT: the same mode is returned regardless of index.
+		$this->assertSame( $mode, $generator->resolve_image_mode( 1 ) );
+		$this->assertSame( $mode, $generator->resolve_image_mode( 7 ) );
+	}
+
+	/**
+	 * Data provider for concrete image modes.
+	 *
+	 * @return array<string, array{0: string}>
+	 */
+	public static function concrete_image_modes_provider(): array {
+		return array(
+			'one'     => array( '1' ),
+			'two'     => array( '2' ),
+			'resized' => array( '2-resized' ),
+		);
+	}
+
+	/**
+	 * Verifies that resolve_image_mode cycles through 1, 2, 2-resized in
+	 * auto mode starting from index 1.
+	 */
+	public function test_resolve_image_mode_rotates_in_auto_mode(): void {
+		// ARRANGE: generator in auto mode.
+		$generator = $this->build_generator( images_mode: 'auto' );
+
+		// ACT + ASSERT: the rotation cycles every three indices.
+		$this->assertSame( '1', $generator->resolve_image_mode( 1 ) );
+		$this->assertSame( '2', $generator->resolve_image_mode( 2 ) );
+		$this->assertSame( '2-resized', $generator->resolve_image_mode( 3 ) );
+		$this->assertSame( '1', $generator->resolve_image_mode( 4 ) );
+		$this->assertSame( '2', $generator->resolve_image_mode( 5 ) );
+		$this->assertSame( '2-resized', $generator->resolve_image_mode( 6 ) );
+	}
+
+	/**
+	 * Verifies that resolve_status returns publish for indices that aren't
+	 * multiples of 5 or 6.
+	 */
+	public function test_resolve_status_publish_by_default(): void {
+		// ARRANGE: any generator.
+		$generator = $this->build_generator();
+
+		// ACT + ASSERT: non-rotating indices stay on publish.
+		$this->assertSame( 'publish', $generator->resolve_status( 1 ) );
+		$this->assertSame( 'publish', $generator->resolve_status( 2 ) );
+		$this->assertSame( 'publish', $generator->resolve_status( 7 ) );
+	}
+
+	/**
+	 * Verifies that resolve_status returns draft every 5th index when not
+	 * also divisible by 6.
+	 */
+	public function test_resolve_status_draft_every_fifth(): void {
+		// ARRANGE: any generator.
+		$generator = $this->build_generator();
+
+		// ACT + ASSERT: indices 5, 10, 25 land on draft.
+		$this->assertSame( 'draft', $generator->resolve_status( 5 ) );
+		$this->assertSame( 'draft', $generator->resolve_status( 10 ) );
+		$this->assertSame( 'draft', $generator->resolve_status( 25 ) );
+	}
+
+	/**
+	 * Verifies that resolve_status returns private every 6th index, which
+	 * takes priority over the draft rotation.
+	 */
+	public function test_resolve_status_private_every_sixth(): void {
+		// ARRANGE: any generator.
+		$generator = $this->build_generator();
+
+		// ACT + ASSERT: 6 and 12 are private; 30 (also divisible by 5) wins
+		// private because the check runs first.
+		$this->assertSame( 'private', $generator->resolve_status( 6 ) );
+		$this->assertSame( 'private', $generator->resolve_status( 12 ) );
+		$this->assertSame( 'private', $generator->resolve_status( 30 ) );
+	}
+
+	/**
+	 * Verifies that resolve_date produces deterministic UTC dates when given
+	 * a fixed reference time.
+	 */
+	public function test_resolve_date_is_deterministic(): void {
+		// ARRANGE: a batch of 10 starting at index 1.
+		$generator = $this->build_generator(
+			count: 10,
+			start: 1,
+		);
+
+		// ACT: derive the date for the first (oldest) index.
+		$date_first = $generator->resolve_date( 1 );
+
+		// ACT: derive the date for the last (newest) index.
+		$date_last = $generator->resolve_date( 10 );
+
+		// ASSERT: oldest is 81 days back (round( 9 * 90 / 10 )) from the
+		// 2025-01-01 reference time, newest is the reference itself.
+		$this->assertSame( '2024-10-12 00:00:00', $date_first );
+		$this->assertSame( '2025-01-01 00:00:00', $date_last );
+	}
+
+	/**
+	 * Verifies that resolve_date shifts the entire batch further into the
+	 * past when date_offset is set.
+	 */
+	public function test_resolve_date_applies_offset(): void {
+		// ARRANGE: same batch, with a 30-day offset.
+		$generator = $this->build_generator(
+			count: 10,
+			start: 1,
+			date_offset: 30,
+		);
+
+		// ACT: derive the date for the newest index.
+		$date_last = $generator->resolve_date( 10 );
+
+		// ASSERT: newest is 30 days back from the reference time.
+		$this->assertSame( '2024-12-02 00:00:00', $date_last );
+	}
+
+	/**
+	 * Verifies that image_label encodes both the image count and the
+	 * resized-mode flag.
+	 *
+	 * @dataProvider image_label_provider
+	 *
+	 * @param string $mode      Resolved image mode.
+	 * @param int    $img_count Number of images.
+	 * @param string $expected  Expected label.
+	 */
+	public function test_image_label(
+		string $mode,
+		int $img_count,
+		string $expected
+	): void {
+		// ARRANGE: any generator.
+		$generator = $this->build_generator();
+
+		// ACT: compute the label.
+		$label = $generator->image_label( $mode, $img_count );
+
+		// ASSERT: matches the expected encoding.
+		$this->assertSame( $expected, $label );
+	}
+
+	/**
+	 * Data provider for image_label.
+	 *
+	 * @return array<string, array{0: string, 1: int, 2: string}>
+	 */
+	public static function image_label_provider(): array {
+		return array(
+			'one image'          => array( '1', 1, '1P' ),
+			'two images'         => array( '2', 2, '2P' ),
+			'two resized images' => array( '2-resized', 2, '2PR' ),
+			'no images one mode' => array( '1', 0, '0P' ),
+			'no images resized'  => array( '2-resized', 0, '0PR' ),
+		);
+	}
+
+	/**
+	 * Verifies that the title for a gutenberg post omits the classic marker
+	 * and contains the type, index, and image label.
+	 */
+	public function test_title_for_gutenberg(): void {
+		// ARRANGE: a gutenberg generator.
+		$generator = $this->build_generator( editor: 'gutenberg' );
+
+		// ACT: build the title for index 1 with one image.
+		$title = $generator->title( 1, true, '1', 1 );
+
+		// ASSERT: format matches the seeder's historical output.
+		$this->assertSame( 'Post 1 - 1P', $title );
+	}
+
+	/**
+	 * Verifies that the title for a classic post includes the " C" marker.
+	 */
+	public function test_title_for_classic_includes_c_marker(): void {
+		// ARRANGE: any generator (mode doesn't affect title rendering).
+		$generator = $this->build_generator();
+
+		// ACT: build the title with use_gutenberg=false.
+		$title = $generator->title( 7, false, '2-resized', 2 );
+
+		// ASSERT: marker is present and resized images yield 2PR.
+		$this->assertSame( 'Post 7 C - 2PR', $title );
+	}
+
+	/**
+	 * Verifies that the configured prefix is prepended with a separating
+	 * space.
+	 */
+	public function test_title_includes_prefix_with_space(): void {
+		// ARRANGE: generator with a non-empty prefix.
+		$generator = $this->build_generator( prefix: 'Run2' );
+
+		// ACT: build the title for index 1.
+		$title = $generator->title( 1, true, '1', 1 );
+
+		// ASSERT: prefix is followed by a single space then the rest.
+		$this->assertSame( 'Run2 Post 1 - 1P', $title );
+	}
+
+	/**
+	 * Verifies that the slug encodes type and index in the seeder's format.
+	 */
+	public function test_slug_format(): void {
+		// ARRANGE: a page generator.
+		$generator = $this->build_generator( type: 'page' );
+
+		// ACT: build the slug for index 3.
+		$slug = $generator->slug( 3 );
+
+		// ASSERT: slug uses the seeder-{type}-{index} convention.
+		$this->assertSame( 'seeder-page-3', $slug );
+	}
+
+	/**
+	 * Verifies that the excerpt encodes type and index.
+	 */
+	public function test_excerpt_format(): void {
+		// ARRANGE: a post generator.
+		$generator = $this->build_generator();
+
+		// ACT: build the excerpt for index 12.
+		$excerpt = $generator->excerpt( 12 );
+
+		// ASSERT: standard sentence form.
+		$this->assertSame(
+			'Excerpt for seeded post number 12.',
+			$excerpt
+		);
+	}
+
+	/**
+	 * Verifies that gutenberg content includes the heading, paragraphs, and
+	 * list blocks even when no images are provided.
+	 */
+	public function test_gutenberg_content_with_no_images(): void {
+		// ARRANGE: any generator and an empty image_refs.
+		$generator = $this->build_generator();
+
+		// ACT: build content with no image references.
+		$content = $generator->gutenberg_content( 1, array() );
+
+		// ASSERT: structural block comments are present.
+		$this->assertStringContainsString( '<!-- wp:heading', $content );
+		$this->assertStringContainsString( '<!-- wp:paragraph', $content );
+		$this->assertStringContainsString( '<!-- wp:list', $content );
+
+		// ASSERT: no image block was rendered.
+		$this->assertStringNotContainsString( '<!-- wp:image', $content );
+	}
+
+	/**
+	 * Verifies that gutenberg content embeds an image block per image_ref,
+	 * referencing the caller-provided id and url verbatim.
+	 */
+	public function test_gutenberg_content_embeds_image_blocks(): void {
+		// ARRANGE: two image references.
+		$generator = $this->build_generator();
+		$refs      = array(
+			array(
+				'id'  => 100,
+				'url' => 'https://source.example.com/a.jpg',
+			),
+			array(
+				'id'  => 101,
+				'url' => 'https://source.example.com/b.jpg',
+			),
+		);
+
+		// ACT: build content with both images.
+		$content = $generator->gutenberg_content( 5, $refs );
+
+		// ASSERT: each image's id and url appear in expected block syntax.
+		$this->assertStringContainsString( '"id":100', $content );
+		$this->assertStringContainsString( '"id":101', $content );
+		$this->assertStringContainsString(
+			'src="https://source.example.com/a.jpg"',
+			$content
+		);
+		$this->assertStringContainsString(
+			'class="wp-image-100"',
+			$content
+		);
+	}
+
+	/**
+	 * Verifies that classic content wraps the first image in a [caption]
+	 * shortcode and leaves subsequent images inline.
+	 */
+	public function test_classic_content_caption_vs_inline(): void {
+		// ARRANGE: two image references.
+		$generator = $this->build_generator();
+		$refs      = array(
+			array(
+				'id'  => 200,
+				'url' => 'https://source.example.com/a.jpg',
+			),
+			array(
+				'id'  => 201,
+				'url' => 'https://source.example.com/b.jpg',
+			),
+		);
+
+		// ACT: build content with both images.
+		$content = $generator->classic_content( 3, $refs );
+
+		// ASSERT: first image is wrapped in a [caption] shortcode bound to
+		// its attachment id.
+		$this->assertStringContainsString(
+			'[caption id="attachment_200" align="aligncenter" width="800"]',
+			$content
+		);
+		$this->assertStringContainsString(
+			'Caption for seeded image 3.[/caption]',
+			$content
+		);
+
+		// ASSERT: second image appears inline (no shortcode wrap).
+		$this->assertStringContainsString(
+			'<p><img src="https://source.example.com/b.jpg"',
+			$content
+		);
+	}
+
+	/**
+	 * Verifies that meta_values include the seeder tag, a rotating color,
+	 * and a rotating priority within the documented range.
+	 */
+	public function test_meta_values_structure(): void {
+		// ARRANGE: any generator.
+		$generator = $this->build_generator();
+
+		// ACT: collect meta values for a sample index.
+		$meta = $generator->meta_values( 3 );
+
+		// ASSERT: tag key uses the published constant.
+		$this->assertSame(
+			'1',
+			$meta[ Content_Generator::SEEDER_META_KEY ]
+		);
+
+		// ASSERT: color rotates through the documented palette.
+		$this->assertSame( 'yellow', $meta['seeder_color'] );
+
+		// ASSERT: priority stays within 1..10.
+		$this->assertSame( 4, $meta['seeder_priority'] );
+	}
+
+	/**
+	 * Verifies that meta_values cycles seeder_color across the palette and
+	 * seeder_priority across 1..10.
+	 */
+	public function test_meta_values_rotate(): void {
+		// ARRANGE: any generator.
+		$generator = $this->build_generator();
+
+		// ACT + ASSERT: colors cycle every four indices.
+		$this->assertSame( 'green', $generator->meta_values( 1 )['seeder_color'] );
+		$this->assertSame( 'blue', $generator->meta_values( 2 )['seeder_color'] );
+		$this->assertSame( 'yellow', $generator->meta_values( 3 )['seeder_color'] );
+		$this->assertSame( 'red', $generator->meta_values( 4 )['seeder_color'] );
+		$this->assertSame( 'green', $generator->meta_values( 5 )['seeder_color'] );
+
+		// ACT + ASSERT: priority cycles every ten indices, offset by 1.
+		$this->assertSame( 2, $generator->meta_values( 1 )['seeder_priority'] );
+		$this->assertSame( 10, $generator->meta_values( 9 )['seeder_priority'] );
+		$this->assertSame( 1, $generator->meta_values( 10 )['seeder_priority'] );
+	}
+
+	/**
+	 * Verifies that term_assignments returns two terms per taxonomy and
+	 * uses the published names/slugs from term_config().
+	 */
+	public function test_term_assignments_returns_two_per_taxonomy(): void {
+		// ARRANGE: any generator.
+		$generator = $this->build_generator();
+
+		// ACT: collect term assignments for index 1.
+		$terms = $generator->term_assignments( 1 );
+
+		// ASSERT: both seeded taxonomies are present with exactly two terms.
+		$this->assertCount( 2, $terms['category'] );
+		$this->assertCount( 2, $terms['post_tag'] );
+
+		// ASSERT: values match the term_config() entries (category by name,
+		// post_tag by slug).
+		$this->assertSame(
+			array( 'Seeder Category B', 'Seeder Category C' ),
+			$terms['category']
+		);
+		$this->assertSame(
+			array( 'seeder-beta', 'seeder-gamma' ),
+			$terms['post_tag']
+		);
+	}
+
+	/**
+	 * Verifies that term_config exposes the canonical seeder taxonomies and
+	 * lookup fields.
+	 */
+	public function test_term_config_shape(): void {
+		// ARRANGE + ACT: read the static config.
+		$config = Content_Generator::term_config();
+
+		// ASSERT: categories look up by name; tags look up by slug.
+		$this->assertSame( 'name', $config['category']['field'] );
+		$this->assertSame( 'slug', $config['post_tag']['field'] );
+
+		// ASSERT: published term counts match documented values.
+		$this->assertCount( 3, $config['category']['terms'] );
+		$this->assertCount( 4, $config['post_tag']['terms'] );
+	}
+
+	/**
+	 * Verifies that generate() returns a payload covering all required keys
+	 * and the featured_media is the first image's id.
+	 */
+	public function test_generate_returns_complete_payload(): void {
+		// ARRANGE: a gutenberg generator and one image.
+		$generator = $this->build_generator( editor: 'gutenberg' );
+		$refs      = array(
+			array(
+				'id'  => 42,
+				'url' => 'https://source.example.com/a.jpg',
+			),
+		);
+
+		// ACT: generate the payload for index 1.
+		$payload = $generator->generate( 1, $refs );
+
+		// ASSERT: keys match the documented payload structure.
+		$this->assertSame( 'Post 1 - 1P', $payload['title'] );
+		$this->assertSame( 'seeder-post-1', $payload['slug'] );
+		$this->assertSame(
+			'https://source.example.com/seeder-post-1',
+			$payload['link']
+		);
+		$this->assertSame( 'post', $payload['post_type'] );
+		$this->assertSame( 'publish', $payload['status'] );
+		$this->assertSame( 42, $payload['featured_media'] );
+		$this->assertStringContainsString(
+			'<!-- wp:heading',
+			$payload['content']
+		);
+	}
+
+	/**
+	 * Verifies that generate() produces classic-editor content when the
+	 * resolved editor for that index is classic.
+	 */
+	public function test_generate_uses_classic_content_for_classic_editor(): void {
+		// ARRANGE: classic editor generator.
+		$generator = $this->build_generator( editor: 'classic' );
+
+		// ACT: generate the payload for index 1 with no images.
+		$payload = $generator->generate( 1, array() );
+
+		// ASSERT: classic content has no block comments.
+		$this->assertStringNotContainsString(
+			'<!-- wp:',
+			$payload['content']
+		);
+
+		// ASSERT: title carries the classic marker.
+		$this->assertStringContainsString( ' C - ', $payload['title'] );
+	}
+
+	/**
+	 * Verifies that generate() sets featured_media to 0 when no image_refs
+	 * are provided.
+	 */
+	public function test_generate_featured_media_zero_with_no_images(): void {
+		// ARRANGE: any generator, empty image_refs.
+		$generator = $this->build_generator();
+
+		// ACT: generate the payload.
+		$payload = $generator->generate( 1, array() );
+
+		// ASSERT: featured_media defaults to 0.
+		$this->assertSame( 0, $payload['featured_media'] );
+	}
+}

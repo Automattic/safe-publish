@@ -1,15 +1,72 @@
 #!/bin/sh
 
-# Target site (development env / cli / port 8888)
+PORT="${WP_ENV_PORT-8888}"
+TESTS_PORT="${WP_ENV_TESTS_PORT-8889}"
+DEST_HOME="http://host.docker.internal:$PORT"
+
+# Target site (development env / cli / port $PORT). Pin WP_HOME/WP_SITEURL
+# to $DEST_HOME so emitted URLs match what browsers and the source container
+# both reach it at.
+wp-env run cli wp config set WP_HOME "$DEST_HOME"
+wp-env run cli wp config set WP_SITEURL "$DEST_HOME"
 wp-env run cli wp option update blogname 'Safe Publish Destination'
 wp-env run cli wp option update safe_publish_sync_mode 'import'
-wp-env run cli wp option update safe_publish_connected_site_url 'http://host.docker.internal:8889'
+wp-env run cli wp option update safe_publish_connected_site_url "http://host.docker.internal:$TESTS_PORT"
 wp-env run cli wp rewrite structure '/%postname%/'
 wp-env run cli wp rewrite flush
 
-# Source site (tests env / tests-cli / port 8889)
+# Source site (tests env / tests-cli / port $TESTS_PORT). Pin WP_HOME/WP_SITEURL
+# to host.docker.internal:$TESTS_PORT so emitted URLs match what browsers and
+# the destination container both reach it at.
+wp-env run tests-cli wp config set WP_HOME "http://host.docker.internal:$TESTS_PORT"
+wp-env run tests-cli wp config set WP_SITEURL "http://host.docker.internal:$TESTS_PORT"
 wp-env run tests-cli wp option update blogname 'Safe Publish Source'
 wp-env run tests-cli wp option update safe_publish_sync_mode 'export'
-wp-env run tests-cli wp option update safe_publish_connected_site_url 'http://localhost:8888'
+wp-env run tests-cli wp option update safe_publish_connected_site_url "$DEST_HOME"
 wp-env run tests-cli wp rewrite structure '/%postname%/'
 wp-env run tests-cli wp rewrite flush
+
+# Rewrite any existing content that still references localhost URLs to the
+# canonical cross-container URLs (left over from before WP_HOME was pinned
+# above). Skip the guid column (WP requires GUIDs to be immutable). Safe to
+# re-run; idempotent once the rewrite has completed.
+wp-env run cli wp search-replace \
+	"http://localhost:$PORT" \
+	"http://host.docker.internal:$PORT" \
+	--all-tables \
+	--skip-columns=guid \
+	--quiet
+wp-env run tests-cli wp search-replace \
+	"http://localhost:$TESTS_PORT" \
+	"http://host.docker.internal:$TESTS_PORT" \
+	--all-tables \
+	--skip-columns=guid \
+	--quiet
+
+# Reconcile attachment DB rows with the filesystem. Container recreation
+# (config edits, dev:destroy, Docker Desktop updates, host reboot) wipes
+# the in-container uploads directory while the DB volume survives,
+# leaving attachment posts pointing at files that no longer exist on
+# disk. Delete those orphan rows so the DB matches reality. Inline image
+# URLs baked into post_content are left broken on purpose — the visible
+# breakage is the signal to re-seed (npm run seed:source).
+RECONCILE_ORPHANS='
+$removed = 0;
+foreach ( get_posts( [
+	"post_type"      => "attachment",
+	"post_status"    => "any",
+	"posts_per_page" => -1,
+	"fields"         => "ids",
+] ) as $id ) {
+	$path = get_attached_file( $id );
+	if ( $path && ! file_exists( $path ) ) {
+		wp_delete_attachment( $id, true );
+		$removed++;
+	}
+}
+if ( $removed > 0 ) {
+	WP_CLI::log( sprintf( "Removed %d orphan attachment(s).", $removed ) );
+}
+'
+wp-env run cli wp eval "$RECONCILE_ORPHANS"
+wp-env run tests-cli wp eval "$RECONCILE_ORPHANS"
