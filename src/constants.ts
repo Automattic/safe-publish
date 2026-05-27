@@ -19,13 +19,12 @@ export const LAYOUT_TABLE = 'table';
 export const LAYOUT_GRID = 'grid';
 export const LAYOUT_LIST = 'list';
 
-// Posts control defaults and bounds.
+// Catalog page size; matches the source controller's default.
 export const DEFAULT_ITEMS_PER_PAGE = 20;
-export const MIN_POSTS_COUNT = 1;
-export const MAX_POSTS_COUNT = 100;
 
-// Debounce delay (ms) for the posts-count input.
-export const NUMBER_POSTS_DEBOUNCE_DELAY = 600;
+// Debounce window for the search box. Long enough to avoid firing on
+// every keystroke; short enough to feel responsive on URL paste.
+export const SEARCH_DEBOUNCE_MS = 400;
 
 // Sorting constants (kept for potential future use).
 export const SORTING_DIRECTIONS = [ 'asc', 'desc' ] as const;

@@ -67,7 +67,7 @@ export function PostTypeSelector( {
 	sourceSiteUrl,
 	onPostTypeChange,
 	onError,
-	selectedPostType = 'posts',
+	selectedPostType = 'post',
 }: PostTypeSelectorProps ): JSX.Element {
 	const [ postTypes, setPostTypes ] = useState< PostTypeOption[] >( [] );
 	const [ isLoading, setIsLoading ] = useState( false );
@@ -188,16 +188,19 @@ export function PostTypeSelector( {
 	}, [ error, onError ] );
 
 	// Generate options for the select control.
+	// Use slug (not rest_base) as the option value: the catalog endpoint
+	// expects the WP post type slug, and centralizing on slug avoids the
+	// slug/rest_base translation gap for custom CPTs.
 	const selectOptions = postTypes.map( postType => ( {
 		label: postType.label,
-		value: postType.rest_base,
+		value: postType.slug,
 	} ) );
 
-	// Always ensure we have at least the default "posts" option.
+	// Always ensure we have at least the default "post" option.
 	if ( 0 === selectOptions.length && ! isLoading ) {
 		selectOptions.push( {
 			label: __( 'Posts (default)', 'safe-publish' ),
-			value: 'posts',
+			value: 'post',
 		} );
 	}
 
@@ -205,12 +208,13 @@ export function PostTypeSelector( {
 		<>
 			<div className="safe-publish-post-type-selector">
 				<SelectControl
-					label={ __( 'Post Type:', 'safe-publish' ) }
+					__next40pxDefaultSize
+					__nextHasNoMarginBottom
+					label={ __( 'Type', 'safe-publish' ) }
 					value={ currentPostType }
 					options={ selectOptions }
 					onChange={ handlePostTypeChange }
 					disabled={ isLoading }
-					__nextHasNoMarginBottom
 				/>
 			</div>
 

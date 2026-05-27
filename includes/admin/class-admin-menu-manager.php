@@ -29,11 +29,11 @@ class Admin_Menu_Manager {
 	}
 
 	/**
-	 * Adds the main admin menu page and Dashboard submenu entry.
+	 * Adds the main admin menu page and Source Posts submenu entry.
 	 */
 	public function add_admin_menu(): void {
 		add_menu_page(
-			__( 'Safe Publish Dashboard', 'safe-publish' ),
+			__( 'Source Posts', 'safe-publish' ),
 			__( 'Safe Publish', 'safe-publish' ),
 			'manage_options',
 			'safe-publish',
@@ -45,8 +45,8 @@ class Admin_Menu_Manager {
 		// Explicit first submenu entry to override the auto-generated one.
 		add_submenu_page(
 			'safe-publish',
-			__( 'Safe Publish Dashboard', 'safe-publish' ),
-			__( 'Dashboard', 'safe-publish' ),
+			__( 'Source Posts', 'safe-publish' ),
+			__( 'Source Posts', 'safe-publish' ),
 			'manage_options',
 			'safe-publish',
 			array( $this, 'render_admin_page' )

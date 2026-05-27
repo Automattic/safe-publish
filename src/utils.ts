@@ -10,7 +10,7 @@
 import { dateI18n, getSettings } from '@wordpress/date';
 import { __, sprintf } from '@wordpress/i18n';
 
-import type { Post, JsonValue, Warning } from './types';
+import type { JsonValue, Warning } from './types';
 
 /**
  * Extracts a human-readable error message from an API response.
@@ -76,42 +76,6 @@ export function formatDateTime( dateString: string ): string {
 
 	const { formats } = getSettings();
 	return dateI18n( `${ formats.date } ${ formats.time }`, dateString );
-}
-
-/**
- * Validates if a post object has required properties.
- *
- * @param {unknown} post Object to validate as a Post.
- *
- * @return {boolean} True if the object is a valid Post, false otherwise.
- */
-export function isValidPost( post: unknown ): post is Post {
-	if ( typeof post !== 'object' || post === null ) {
-		return false;
-	}
-
-	const postRecord = post as Record< string, unknown >;
-	return (
-		typeof postRecord.id === 'number' &&
-		typeof postRecord.link === 'string' &&
-		typeof postRecord.title === 'string' &&
-		typeof postRecord.modified_gmt === 'string'
-	);
-}
-
-/**
- * Sanitizes posts array, filtering out invalid posts.
- *
- * @param {unknown[]} posts Potential post objects to sanitize.
- *
- * @return {Post[]} Array containing only valid Post objects.
- */
-export function sanitizePosts( posts: unknown[] ): Post[] {
-	if ( ! Array.isArray( posts ) ) {
-		return [];
-	}
-
-	return posts.filter( isValidPost );
 }
 
 /**
