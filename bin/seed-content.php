@@ -70,6 +70,17 @@ function safe_publish_seeder_run( array $args ): void {
 		WP_CLI::error( "Post type '{$type}' is not registered." );
 	}
 
+	$author_id = safe_publish_seeder_resolve_author();
+	if ( 0 === $author_id ) {
+		WP_CLI::error(
+			'No users available to attribute seeded content to.'
+		);
+	}
+
+	// Drives post_author and attachment ownership for posts and media
+	// inserted below; eval-file runs unauthenticated by default.
+	wp_set_current_user( $author_id );
+
 	try {
 		$generator = new Content_Generator(
 			$type,
@@ -144,6 +155,43 @@ function safe_publish_seeder_run( array $args ): void {
 // $args is provided by WP-CLI eval-file.
 // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- $args is a WP-CLI global.
 safe_publish_seeder_run( $args ?? array() );
+
+/**
+ * Resolves the user ID to attribute seeded posts and media to.
+ *
+ * WP-CLI eval-file runs unauthenticated, so wp_insert_post() and
+ * media_handle_sideload() would otherwise default post_author to 0. Prefers
+ * the lowest-ID administrator and falls back to the lowest-ID user of any
+ * role.
+ *
+ * @return int User ID, or 0 if no users exist.
+ */
+function safe_publish_seeder_resolve_author(): int {
+	$admins = get_users(
+		array(
+			'role'    => 'administrator',
+			'number'  => 1,
+			'orderby' => 'ID',
+			'order'   => 'ASC',
+			'fields'  => 'ID',
+		)
+	);
+
+	if ( array() !== $admins ) {
+		return (int) $admins[0];
+	}
+
+	$users = get_users(
+		array(
+			'number'  => 1,
+			'orderby' => 'ID',
+			'order'   => 'ASC',
+			'fields'  => 'ID',
+		)
+	);
+
+	return array() === $users ? 0 : (int) $users[0];
+}
 
 /**
  * Converts an array of attachment IDs into the [id, url] structure expected
