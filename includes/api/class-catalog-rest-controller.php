@@ -144,8 +144,12 @@ final class Catalog_REST_Controller {
 	 * @param WP_REST_Request $request Incoming REST request.
 	 * @return WP_REST_Response|WP_Error Catalog envelope or error.
 	 */
-	public function handle_request( WP_REST_Request $request ): WP_REST_Response|WP_Error {
-		$post_type = $this->resolve_post_type( (string) $request->get_param( 'post_type' ) );
+	public function handle_request(
+		WP_REST_Request $request
+	): WP_REST_Response|WP_Error {
+		$post_type = $this->resolve_post_type(
+			(string) $request->get_param( 'post_type' )
+		);
 		if ( is_wp_error( $post_type ) ) {
 			return $post_type;
 		}
@@ -258,7 +262,11 @@ final class Catalog_REST_Controller {
 			$query = new WP_Query( $args );
 		} finally {
 			if ( $with_search ) {
-				remove_filter( 'posts_search', array( $this, 'override_posts_search' ), 10 );
+				remove_filter(
+					'posts_search',
+					array( $this, 'override_posts_search' ),
+					10
+				);
 			}
 		}
 
@@ -308,7 +316,10 @@ final class Catalog_REST_Controller {
 		$title_clauses = array();
 		foreach ( $tokens as $token ) {
 			$like            = '%' . $wpdb->esc_like( $token ) . '%';
-			$title_clauses[] = $wpdb->prepare( "{$wpdb->posts}.post_title LIKE %s", $like );
+			$title_clauses[] = $wpdb->prepare(
+				"{$wpdb->posts}.post_title LIKE %s",
+				$like
+			);
 		}
 
 		$title_sql = '' !== implode( '', $title_clauses )
@@ -336,7 +347,11 @@ final class Catalog_REST_Controller {
 		$slug = '' === $raw ? 'post' : sanitize_key( $raw );
 
 		$object = get_post_type_object( $slug );
-		if ( null === $object || true !== $object->show_in_rest || true !== $object->public ) {
+		if (
+			null === $object
+			|| true !== $object->show_in_rest
+			|| true !== $object->public
+		) {
 			return new WP_Error(
 				'safe_publish_catalog_invalid_post_type',
 				__(
@@ -428,7 +443,8 @@ final class Catalog_REST_Controller {
 	 *
 	 * @param mixed $value   Raw param value.
 	 * @param bool  $ceiling True when this is the upper bound of a range.
-	 * @return string|null|false Canonical datetime, null when absent, or false on parse failure.
+	 * @return string|null|false Canonical datetime, null when absent,
+	 *                           or false on parse failure.
 	 */
 	private static function sanitize_iso_datetime(
 		mixed $value,
