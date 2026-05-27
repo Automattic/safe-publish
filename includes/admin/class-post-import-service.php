@@ -94,30 +94,27 @@ class Post_Import_Service {
 	/**
 	 * Imports a single post from source post data.
 	 *
-	 * @param array      $post_data               Post data array containing id, title, content,
-	 *                                            link, etc.
-	 * @param int|null   $session_id              Optional import session ID for history tracking.
-	 * @param array|null $prefetched_fresh_result Pre-fetched response from
-	 *                                            Source_Posts_API::fetch_fresh_post(). Lets the
-	 *                                            bulk two-pass flow skip the in-pipeline fetch.
-	 * @param array|null $batch_fresh_data        Map of source ID => pass-1 fresh data for posts
-	 *                                            in the current bulk batch. Drives parent
-	 *                                            resolution's in-batch detection.
+	 * @param array    $post_data  Post data array containing id, title, content, link, etc.
+	 * @param int|null $session_id Optional import session ID for history tracking.
+	 * @param array    $options    Optional behavior overrides:
+	 *                             - 'force_draft_on_update' (bool, default false): override
+	 *                               post_status to 'draft' on update. Single-import uses this;
+	 *                               bulk preserves status.
+	 *                             - 'prefetched_fresh_result' (array|null, default null):
+	 *                               pre-fetched fetch_fresh_post() response; skips the
+	 *                               in-pipeline fetch in the bulk two-pass flow.
+	 *                             - 'batch_fresh_data' (array|null, default null): map of
+	 *                               source ID => pass-1 fresh data for the current bulk batch;
+	 *                               drives parent resolution's in-batch detection.
 	 * @return array Result data with success status, post_id, edit_url, and error keys.
 	 */
 	public function import_post(
 		array $post_data,
 		?int $session_id = null,
-		?array $prefetched_fresh_result = null,
-		?array $batch_fresh_data = null
+		array $options = array()
 	): array {
 		try {
-			return $this->process_post_import(
-				$post_data,
-				$session_id,
-				$prefetched_fresh_result,
-				$batch_fresh_data
-			);
+			return $this->process_post_import( $post_data, $session_id, $options );
 		} catch ( Exception $e ) {
 			return $this->build_exception_result( $post_data, $session_id, $e );
 		}
@@ -126,17 +123,15 @@ class Post_Import_Service {
 	/**
 	 * Processes the post import workflow end-to-end.
 	 *
-	 * @param array      $post_data               Raw post data.
-	 * @param int|null   $session_id              Import session ID.
-	 * @param array|null $prefetched_fresh_result Optional pre-fetched fresh response.
-	 * @param array|null $batch_fresh_data        Optional pass-1 batch map.
+	 * @param array    $post_data  Raw post data.
+	 * @param int|null $session_id Import session ID.
+	 * @param array    $options    Behavior overrides; see import_post().
 	 * @return array Import result data.
 	 */
 	private function process_post_import(
 		array $post_data,
 		?int $session_id,
-		?array $prefetched_fresh_result = null,
-		?array $batch_fresh_data = null
+		array $options
 	): array {
 		$fields = $this->extract_post_fields( $post_data );
 
@@ -182,8 +177,7 @@ class Post_Import_Service {
 				$fields,
 				$post_type,
 				$session_id,
-				$prefetched_fresh_result,
-				$batch_fresh_data
+				$options
 			);
 		}
 
@@ -191,8 +185,7 @@ class Post_Import_Service {
 			$fields,
 			$post_type,
 			$session_id,
-			$prefetched_fresh_result,
-			$batch_fresh_data
+			$options
 		);
 	}
 
@@ -544,10 +537,17 @@ class Post_Import_Service {
 	 * @return array|null Error result array on failure, null on success.
 	 */
 	private function validate_required_fields( array $fields ): ?array {
-		if ( '' === $fields['title'] || null === $fields['source_post_id'] ) {
+		if ( null === $fields['source_post_id'] ) {
 			return $this->build_error_result(
 				$fields,
-				__( 'Missing required post data.', 'safe-publish' )
+				__( 'Source post ID is required.', 'safe-publish' )
+			);
+		}
+
+		if ( '' === $fields['title'] ) {
+			return $this->build_error_result(
+				$fields,
+				__( 'Post title is required.', 'safe-publish' )
 			);
 		}
 
@@ -749,15 +749,15 @@ class Post_Import_Service {
 	 * post. Aborts with an error result if the fetch fails; the post will
 	 * not be updated with stale snapshot data.
 	 *
-	 * Post status is preserved (not reset to 'draft') to avoid silently
-	 * unpublishing live posts during automated bulk runs.
+	 * Post status is preserved by default to avoid silently unpublishing live
+	 * posts during automated bulk runs. Callers using the single-import review
+	 * flow can pass `force_draft_on_update` in $options to override.
 	 *
-	 * @param WP_Post    $imported_post           Imported WordPress post.
-	 * @param array      $fields                  Sanitized post fields.
-	 * @param string     $post_type               Resolved post type slug.
-	 * @param int|null   $session_id              Import session ID for logging.
-	 * @param array|null $prefetched_fresh_result Optional pre-fetched fresh response.
-	 * @param array|null $batch_fresh_data        Optional pass-1 batch map.
+	 * @param WP_Post  $imported_post Imported WordPress post.
+	 * @param array    $fields        Sanitized post fields.
+	 * @param string   $post_type     Resolved post type slug.
+	 * @param int|null $session_id    Import session ID for logging.
+	 * @param array    $options       Behavior overrides; see import_post().
 	 * @return array Import result data.
 	 */
 	private function handle_imported_post(
@@ -765,15 +765,13 @@ class Post_Import_Service {
 		array $fields,
 		string $post_type,
 		?int $session_id,
-		?array $prefetched_fresh_result = null,
-		?array $batch_fresh_data = null
+		array $options
 	): array {
 		$prepared = $this->prepare_fresh_content(
 			$fields,
 			$post_type,
 			(int) $imported_post->post_author,
-			$prefetched_fresh_result,
-			$batch_fresh_data
+			$options
 		);
 
 		if ( is_wp_error( $prepared ) ) {
@@ -826,21 +824,27 @@ class Post_Import_Service {
 
 		$previous_content = $this->capture_previous_content( $imported_post );
 
+		$post_args = array(
+			'ID'             => $imported_post->ID,
+			'post_title'     => $fields['title'],
+			'post_excerpt'   => $fields['excerpt'],
+			'post_content'   => $processed_content,
+			'post_type'      => $post_type,
+			'post_name'      => $fields['slug'],
+			'post_parent'    => $fields['post_parent_id'],
+			'comment_status' => $fields['comment_status'],
+			'ping_status'    => $fields['ping_status'],
+			'menu_order'     => $fields['menu_order'],
+			'post_password'  => $fields['password'],
+			'post_author'    => $fields['matched_author_id'],
+		);
+
+		if ( true === ( $options['force_draft_on_update'] ?? false ) ) {
+			$post_args['post_status'] = 'draft';
+		}
+
 		$post_id = $this->persist_updated_post(
-			array(
-				'ID'             => $imported_post->ID,
-				'post_title'     => $fields['title'],
-				'post_excerpt'   => $fields['excerpt'],
-				'post_content'   => $processed_content,
-				'post_type'      => $post_type,
-				'post_name'      => $fields['slug'],
-				'post_parent'    => $fields['post_parent_id'],
-				'comment_status' => $fields['comment_status'],
-				'ping_status'    => $fields['ping_status'],
-				'menu_order'     => $fields['menu_order'],
-				'post_password'  => $fields['password'],
-				'post_author'    => $fields['matched_author_id'],
-			),
+			$post_args,
 			$featured_attachment_id,
 			$fields['source_link'],
 			$fields['meta'],
@@ -886,16 +890,18 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Captures previous post content for the session rollback history log.
+	 * Captures the previous content of an existing post for the session
+	 * rollback history log.
 	 *
-	 * Internal helper shared by the single-import and bulk-import update
-	 * paths. Stores the current post fields, featured image, and selected
-	 * meta so the import can be reverted via session rollback.
+	 * Stores the current post fields, featured image, and tracking meta so
+	 * the update can be reverted via session rollback. The returned array is
+	 * used as the `changes` payload of the history log entry for an
+	 * 'updated_existing' action.
 	 *
 	 * @param WP_Post $existing_post Existing WordPress post.
 	 * @return array Previous content keyed by field name.
 	 */
-	public function capture_previous_content( WP_Post $existing_post ): array {
+	private function capture_previous_content( WP_Post $existing_post ): array {
 		$previous_content = array(
 			'previous_content'        => $existing_post->post_content,
 			'previous_title'          => $existing_post->post_title,
@@ -934,26 +940,23 @@ class Post_Import_Service {
 	 * post. Aborts with an error result if the fetch fails; the post will
 	 * not be created with stale snapshot data.
 	 *
-	 * @param array      $fields                  Sanitized post fields.
-	 * @param string     $post_type               Resolved post type slug.
-	 * @param int|null   $session_id              Import session ID for logging.
-	 * @param array|null $prefetched_fresh_result Optional pre-fetched fresh response.
-	 * @param array|null $batch_fresh_data        Optional pass-1 batch map.
+	 * @param array    $fields     Sanitized post fields.
+	 * @param string   $post_type  Resolved post type slug.
+	 * @param int|null $session_id Import session ID for logging.
+	 * @param array    $options    Behavior overrides; see import_post().
 	 * @return array Import result data.
 	 */
 	private function handle_new_post(
 		array $fields,
 		string $post_type,
 		?int $session_id,
-		?array $prefetched_fresh_result = null,
-		?array $batch_fresh_data = null
+		array $options
 	): array {
 		$prepared = $this->prepare_fresh_content(
 			$fields,
 			$post_type,
 			null,
-			$prefetched_fresh_result,
-			$batch_fresh_data
+			$options
 		);
 
 		if ( is_wp_error( $prepared ) ) {
@@ -1075,25 +1078,25 @@ class Post_Import_Service {
 	 * processing, and media error checks that are common to both the new and
 	 * existing post import flows.
 	 *
-	 * @param array      $fields                  Sanitized post fields from extract_post_fields().
-	 * @param string     $post_type               Resolved destination post type slug.
-	 * @param int|null   $existing_post_author_id Destination post's existing post_author for the
-	 *                                            update path; null for new posts.
-	 * @param array|null $prefetched_fresh_result Pre-fetched response from
-	 *                                            Source_Posts_API::fetch_fresh_post(). When
-	 *                                            present, the in-pipeline fetch is skipped.
-	 * @param array|null $batch_fresh_data        Map of source ID => pass-1 fresh data for posts
-	 *                                            in the current bulk batch. Used by parent
-	 *                                            resolution to identify in-batch parents.
+	 * @param array    $fields                  Sanitized post fields from extract_post_fields().
+	 * @param string   $post_type               Resolved destination post type slug.
+	 * @param int|null $existing_post_author_id Destination post's existing post_author for the
+	 *                                          update path; null for new posts.
+	 * @param array    $options                 Behavior overrides; see import_post(). Reads
+	 *                                          'prefetched_fresh_result' (skips the in-pipeline
+	 *                                          fetch) and 'batch_fresh_data' (drives parent
+	 *                                          resolution's in-batch detection).
 	 * @return array{fields: array, processed_content: string}|WP_Error Prepared data or error.
 	 */
 	private function prepare_fresh_content(
 		array $fields,
 		string $post_type,
-		?int $existing_post_author_id = null,
-		?array $prefetched_fresh_result = null,
-		?array $batch_fresh_data = null
+		?int $existing_post_author_id,
+		array $options
 	): array|WP_Error {
+		$prefetched_fresh_result = $options['prefetched_fresh_result'] ?? null;
+		$batch_fresh_data        = $options['batch_fresh_data'] ?? null;
+
 		if ( null !== $prefetched_fresh_result ) {
 			$fresh_result = $prefetched_fresh_result;
 		} else {
