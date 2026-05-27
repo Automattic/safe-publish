@@ -54,7 +54,7 @@ class Auth_Admin_UI {
 
 		$secret_length = strlen( $this->shared_secret );
 
-		if ( empty( $this->shared_secret ) ) {
+		if ( '' === $this->shared_secret ) {
 			wp_admin_notice(
 				__( 'Safe Publish Authentication: Shared secret not configured. Set the <code>SAFE_PUBLISH_SHARED_SECRET</code> environment variable to enable Safe Publish authentication.', 'safe-publish' ),
 				array( 'type' => 'warning' )
@@ -106,7 +106,7 @@ class Auth_Admin_UI {
 	public function site_health_test(): array {
 		$secret_length = strlen( $this->shared_secret );
 
-		if ( empty( $this->shared_secret ) ) {
+		if ( '' === $this->shared_secret ) {
 			return array(
 				'label'       => __( 'Safe Publish Authentication not configured', 'safe-publish' ),
 				'status'      => 'recommended',
