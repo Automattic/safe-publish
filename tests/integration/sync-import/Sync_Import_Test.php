@@ -93,24 +93,4 @@ class Sync_Import_Test extends Integration_Test_Case {
 		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_bulk_import' ) );
 		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_debug_auth' ) );
 	}
-
-	/**
-	 * Verifies that auth monitoring endpoints are not registered in "import"
-	 * sync mode.
-	 *
-	 * These endpoints are registered exclusively by Auth_Manager, which is only
-	 * instantiated in "export"/"bidirectional" sync mode. Their absence means that
-	 * HMAC authentication is not active.
-	 */
-	public function test_auth_monitoring_endpoints_are_not_registered(): void {
-		$status_response = $this->server->dispatch(
-			new WP_REST_Request( 'GET', '/safe-publish/v1/auth-status' )
-		);
-		$this->assertSame( 404, $status_response->get_status() );
-
-		$logs_response = $this->server->dispatch(
-			new WP_REST_Request( 'GET', '/safe-publish/v1/auth-logs' )
-		);
-		$this->assertSame( 404, $logs_response->get_status() );
-	}
 }

@@ -191,11 +191,7 @@ See the [Troubleshooting guide](troubleshooting.md#resetting-configuration).
 
 **Test authentication:**
 
-Use the **Test Connection** button on the settings page, or the auth-test REST endpoint on the source site:
-
-```
-/wp-json/safe-publish/v1/auth-test
-```
+Use the **Test Connection** button on the settings page.
 
 ## Local playground
 

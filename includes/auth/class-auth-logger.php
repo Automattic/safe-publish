@@ -464,30 +464,4 @@ class Auth_Logger extends Logger {
 			)
 		);
 	}
-
-	/**
-	 * Logs that the auth audit log was cleared.
-	 */
-	public function logs_cleared(): void {
-		$this->log_event( Log_Events::LOGS_CLEARED );
-	}
-
-	/**
-	 * Logs that the auth test endpoint was accessed.
-	 *
-	 * @param bool   $headers_present Whether Safe Publish headers were present.
-	 * @param string $test_type       Identifier for the type of test invocation.
-	 */
-	public function test_endpoint_accessed(
-		bool $headers_present,
-		string $test_type
-	): void {
-		$this->log_event(
-			Log_Events::TEST_ENDPOINT_ACCESSED,
-			array(
-				'headers_present' => $headers_present,
-				'test_type'       => $test_type,
-			)
-		);
-	}
 }

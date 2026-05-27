@@ -201,12 +201,11 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that /safe-publish/v1/ monitoring routes require HMAC
-	 * authentication.
+	 * Verifies that /safe-publish/v1/ source routes require HMAC authentication.
 	 */
-	public function test_safe_publish_monitoring_route_authenticates(): void {
-		// ARRANGE: Valid Safe Publish headers targeting a monitoring route.
-		$request = $this->build_signed_request( 'GET', '/safe-publish/v1/auth-status', '' );
+	public function test_safe_publish_route_authenticates(): void {
+		// ARRANGE: Valid Safe Publish headers targeting a source route.
+		$request = $this->build_signed_request( 'GET', '/safe-publish/v1/catalog/posts', '' );
 
 		// ACT: Authenticate the request.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
@@ -214,27 +213,6 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ASSERT: Authenticated — must prove knowledge of the shared secret.
 		$this->assertNull( $result );
 		$this->assertTrue( $this->authenticator->is_authenticated() );
-	}
-
-	/**
-	 * Verifies that the debug test endpoint passes through even with invalid
-	 * HMAC headers, so its diagnostic response is always reachable.
-	 */
-	public function test_auth_test_endpoint_passes_through_with_invalid_headers(): void {
-		// ARRANGE: Malformed Safe Publish headers targeting the diagnostic endpoint.
-		$timestamp = time();
-		$request   = new WP_REST_Request( 'GET', '/safe-publish/v1/auth-test' );
-		$request->set_header( 'X-Safe-Publish-Timestamp', (string) $timestamp );
-		$request->set_header( 'X-Safe-Publish-Content-Hash', hash( 'sha256', '' ) );
-		$request->set_header( 'X-Safe-Publish-Signature', 'totally-wrong-signature' );
-
-		// ACT: Authenticate the request.
-		$result = $this->authenticator->authenticate_request( null, null, $request );
-
-		// ASSERT: Pass-through — auth-test is excluded from the route guard so the
-		// diagnostic callback can always run and return useful debug information.
-		$this->assertNull( $result );
-		$this->assertFalse( $this->authenticator->is_authenticated() );
 	}
 
 	/**

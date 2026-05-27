@@ -180,48 +180,42 @@ final class History_Renderer {
 		if ( $old_title !== $new_title ) {
 			$diff_html .= '<div class="safe-publish-diff-section">';
 			$diff_html .= '<h4>' . __( 'Title Changes', 'safe-publish' ) . '</h4>';
-			$diff_html .= '<div class="safe-publish-diff-comparison">';
-			$diff_html .= '<div class="safe-publish-diff-before" style="background: #f8d7da; padding: 10px; margin-bottom: 10px; border-radius: 4px;">';
+			$diff_html .= '<div class="safe-publish-diff-before">';
 			$diff_html .= '<strong>' . __( 'Before:', 'safe-publish' ) . '</strong><br>';
 			$diff_html .= esc_html( $old_title );
 			$diff_html .= '</div>';
-			$diff_html .= '<div class="safe-publish-diff-after" style="background: #d4edda; padding: 10px; border-radius: 4px;">';
+			$diff_html .= '<div class="safe-publish-diff-after">';
 			$diff_html .= '<strong>' . __( 'After:', 'safe-publish' ) . '</strong><br>';
 			$diff_html .= esc_html( $new_title );
-			$diff_html .= '</div>';
 			$diff_html .= '</div>';
 			$diff_html .= '</div>';
 		}
 
 		// Excerpt diff.
 		if ( $old_excerpt !== $new_excerpt ) {
-			$diff_html .= '<div class="safe-publish-diff-section" style="margin-top: 20px;">';
+			$diff_html .= '<div class="safe-publish-diff-section">';
 			$diff_html .= '<h4>' . __( 'Excerpt Changes', 'safe-publish' ) . '</h4>';
-			$diff_html .= '<div class="safe-publish-diff-comparison">';
-			$diff_html .= '<div class="safe-publish-diff-before" style="background: #f8d7da; padding: 10px; margin-bottom: 10px; border-radius: 4px;">';
+			$diff_html .= '<div class="safe-publish-diff-before">';
 			$diff_html .= '<strong>' . __( 'Before:', 'safe-publish' ) . '</strong><br>';
 			$diff_html .= '<pre>' . esc_html( $old_excerpt ) . '</pre>';
 			$diff_html .= '</div>';
-			$diff_html .= '<div class="safe-publish-diff-after" style="background: #d4edda; padding: 10px; border-radius: 4px;">';
+			$diff_html .= '<div class="safe-publish-diff-after">';
 			$diff_html .= '<strong>' . __( 'After:', 'safe-publish' ) . '</strong><br>';
 			$diff_html .= '<pre>' . esc_html( $new_excerpt ) . '</pre>';
-			$diff_html .= '</div>';
 			$diff_html .= '</div>';
 			$diff_html .= '</div>';
 		}
 
 		// Content diff.
-		$diff_html .= '<div class="safe-publish-diff-section" style="margin-top: 20px;">';
+		$diff_html .= '<div class="safe-publish-diff-section is-scrollable">';
 		$diff_html .= '<h4>' . __( 'Content Changes', 'safe-publish' ) . '</h4>';
-		$diff_html .= '<div class="safe-publish-diff-comparison">';
-		$diff_html .= '<div class="safe-publish-diff-before" style="background: #f8d7da; padding: 10px; margin-bottom: 10px; border-radius: 4px;">';
+		$diff_html .= '<div class="safe-publish-diff-before">';
 		$diff_html .= '<strong>' . __( 'Before (Original Content):', 'safe-publish' ) . '</strong><br>';
-		$diff_html .= '<pre style="white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto;">' . esc_html( $old_content ) . '</pre>';
+		$diff_html .= '<pre>' . esc_html( $old_content ) . '</pre>';
 		$diff_html .= '</div>';
-		$diff_html .= '<div class="safe-publish-diff-after" style="background: #d4edda; padding: 10px; border-radius: 4px;">';
+		$diff_html .= '<div class="safe-publish-diff-after">';
 		$diff_html .= '<strong>' . __( 'After (Imported Content):', 'safe-publish' ) . '</strong><br>';
-		$diff_html .= '<pre style="white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto;">' . esc_html( $new_content ) . '</pre>';
-		$diff_html .= '</div>';
+		$diff_html .= '<pre>' . esc_html( $new_content ) . '</pre>';
 		$diff_html .= '</div>';
 		$diff_html .= '</div>';
 
@@ -243,10 +237,10 @@ final class History_Renderer {
 		string $new_excerpt,
 		string $new_content
 	): string {
-		$diff_html  = '<div class="safe-publish-no-diff-message" style="padding: 20px; text-align: center; background: #f9f9f9; border-radius: 4px;">';
+		$diff_html  = '<div class="safe-publish-no-diff-message">';
 		$diff_html .= '<h4>' . __( 'No Previous Content Available', 'safe-publish' ) . '</h4>';
 		$diff_html .= '<p>' . __( 'This import was processed before content change tracking was enabled. Only the current content is available.', 'safe-publish' ) . '</p>';
-		$diff_html .= '<div style="background: #fff; padding: 15px; border-radius: 4px; margin-top: 15px; text-align: left;">';
+		$diff_html .= '<div class="safe-publish-no-diff-current">';
 		$diff_html .= '<h5>' . __( 'Current Content:', 'safe-publish' ) . '</h5>';
 
 		if ( $new_title ) {
@@ -255,11 +249,15 @@ final class History_Renderer {
 
 		if ( $new_excerpt ) {
 			$diff_html .= '<p><strong>' . __( 'Excerpt:', 'safe-publish' ) . '</strong></p>';
-			$diff_html .= '<div style="background: #f8f8f8; padding: 10px; border-radius: 3px; margin: 5px 0;"><pre style="white-space: pre-wrap; margin: 0;">' . esc_html( $new_excerpt ) . '</pre></div>';
+			$diff_html .= '<div class="safe-publish-no-diff-field">';
+			$diff_html .= '<pre>' . esc_html( $new_excerpt ) . '</pre>';
+			$diff_html .= '</div>';
 		}
 
 		$diff_html .= '<p><strong>' . __( 'Content:', 'safe-publish' ) . '</strong></p>';
-		$diff_html .= '<div style="background: #f8f8f8; padding: 10px; border-radius: 3px; max-height: 300px; overflow-y: auto;"><pre style="white-space: pre-wrap; margin: 0;">' . esc_html( $new_content ) . '</pre></div>';
+		$diff_html .= '<div class="safe-publish-no-diff-field is-scrollable">';
+		$diff_html .= '<pre>' . esc_html( $new_content ) . '</pre>';
+		$diff_html .= '</div>';
 		$diff_html .= '</div>';
 		$diff_html .= '</div>';
 
