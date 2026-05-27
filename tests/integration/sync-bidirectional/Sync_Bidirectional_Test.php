@@ -93,22 +93,4 @@ class Sync_Bidirectional_Test extends WP_UnitTestCase {
 		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_bulk_import' ) );
 		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_debug_auth' ) );
 	}
-
-	/**
-	 * Verifies that auth monitoring endpoints are registered in "bidirectional"
-	 * sync mode.
-	 *
-	 * A non-404 response confirms the routes exist.
-	 */
-	public function test_auth_monitoring_endpoints_are_registered(): void {
-		$status_response = $this->server->dispatch(
-			new WP_REST_Request( 'GET', '/safe-publish/v1/auth-status' )
-		);
-		$this->assertNotSame( 404, $status_response->get_status() );
-
-		$logs_response = $this->server->dispatch(
-			new WP_REST_Request( 'GET', '/safe-publish/v1/auth-logs' )
-		);
-		$this->assertNotSame( 404, $logs_response->get_status() );
-	}
 }

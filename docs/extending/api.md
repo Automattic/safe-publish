@@ -23,17 +23,6 @@ Registered only on source-mode installs. HMAC-authenticated; called by the desti
 | ------ | ---------------------------------------- | ---- | ------------------------------------------ |
 | `GET`  | `/wp-json/safe-publish/v1/catalog/posts` | HMAC | Browsable, server-paginated source catalog |
 
-### Monitoring Endpoints
-
-| Method   | Endpoint                               | Auth                     | Description                          |
-| -------- | -------------------------------------- | ------------------------ | ------------------------------------ |
-| `GET`    | `/wp-json/safe-publish/v1/auth-status` | `manage_options` or HMAC | Authentication health and statistics |
-| `GET`    | `/wp-json/safe-publish/v1/auth-logs`   | `manage_options` or HMAC | Paginated authentication event log   |
-| `DELETE` | `/wp-json/safe-publish/v1/auth-logs`   | `manage_options`         | Clear authentication logs            |
-| `GET`    | `/wp-json/safe-publish/v1/auth-test`   | None (`WP_DEBUG` only)   | Authentication diagnostic test       |
-
-All datetime fields returned by monitoring endpoints (e.g. `timestamp`, `last_success`, `last_failure`, `created_at_gmt`) are ISO 8601 UTC strings (e.g. `2026-05-05T14:30:00Z`).
-
 ## Authentication
 
 ### Content endpoints
@@ -54,9 +43,9 @@ fetch('/wp-json/safe-publish/v1/update-post', {
 
 Application Passwords can also be used for external access to these endpoints, but are incompatible when [VIP Basic Authentication](https://docs.wpvip.com/security-controls/basic-authentication/) is enabled — see [Authentication](../concepts/authentication.md).
 
-### Monitoring endpoints
+### Source endpoints
 
-Monitoring endpoints accept either a WordPress user with `manage_options` capability, or a valid HMAC shared secret signature. The HMAC method has no conflict with VIP Basic Authentication, since it uses the custom `X-Safe-Publish-Signature` header rather than `Authorization: Basic`.
+Source endpoints require an HMAC shared secret signature via the `X-Safe-Publish-Signature` header. This has no conflict with VIP Basic Authentication, since it uses a custom header rather than `Authorization: Basic`. See [Authentication](../concepts/authentication.md) for the full signing protocol.
 
 ## Registering Custom Endpoints
 
