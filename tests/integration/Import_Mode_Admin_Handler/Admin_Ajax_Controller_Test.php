@@ -566,7 +566,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 		// ASSERT: The duplicate-post confirmation branch must not be taken when
 		// validation has already failed.
-		$response_data = is_array( $response['data'] ?? null ) ? $response['data'] : array();
+		$response_data = is_array( $response['data'] ?? null )
+			? $response['data']
+			: array();
 		$this->assertArrayNotHasKey(
 			'confirm_action',
 			$response_data,
@@ -628,7 +630,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 		// ASSERT: The duplicate-post confirmation branch must not be taken when
 		// post-type validation has already failed.
-		$response_data = is_array( $response['data'] ?? null ) ? $response['data'] : array();
+		$response_data = is_array( $response['data'] ?? null )
+			? $response['data']
+			: array();
 		$this->assertArrayNotHasKey(
 			'confirm_action',
 			$response_data,
