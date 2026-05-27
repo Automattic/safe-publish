@@ -13,16 +13,15 @@ import type { BlockDiff, DiffPreviewResult } from '../../api/diff';
 /**
  * Parameters for the useDiffPreview hook.
  *
+ * The diff renderer re-fetches source content server-side, so the
+ * frontend only needs to identify the post to diff.
+ *
  * @property {number} postId   ID of the post to fetch diff for.
  * @property {string} postType Post type slug.
- * @property {string} content  Post content.
- * @property {string} excerpt  Post excerpt.
  */
 interface UseDiffPreviewParams {
 	postId: number;
 	postType?: string;
-	content?: string;
-	excerpt?: string;
 }
 
 /**
@@ -58,8 +57,6 @@ interface UseDiffPreviewResult {
 export function useDiffPreview( {
 	postId,
 	postType,
-	content,
-	excerpt,
 }: UseDiffPreviewParams ): UseDiffPreviewResult {
 	const [ diffHtml, setDiffHtml ] = useState< string | null >( null );
 	const [ renderedDiffHtml, setRenderedDiffHtml ] = useState< string | null >( null );
@@ -87,7 +84,6 @@ export function useDiffPreview( {
 			const result = await fetchDiffPreview( {
 				postId,
 				postType,
-				content: content || excerpt || '',
 				mode: 'split',
 				cleanup: true,
 			} );
@@ -119,7 +115,7 @@ export function useDiffPreview( {
 		return () => {
 			mounted = false;
 		};
-	}, [ postId, postType, content, excerpt ] );
+	}, [ postId, postType ] );
 
 	return {
 		diffHtml,

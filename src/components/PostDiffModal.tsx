@@ -60,8 +60,6 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 	} = useDiffPreview( {
 		postId: firstItem.id,
 		postType: firstItem.post_type,
-		content: firstItem.content,
-		excerpt: firstItem.excerpt,
 	} );
 
 	const {
@@ -71,8 +69,6 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 		handleUpdatePost,
 	} = usePostUpdate( {
 		localPostId,
-		content: firstItem.content || firstItem.excerpt || '',
-		featuredMediaId: firstItem.featured_media,
 		incoming,
 	} );
 
