@@ -151,14 +151,13 @@ class VIPSafeAuthTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that Basic Auth headers are layered on top of Shared Secret headers.
+	 * Verifies that get_auth_params produces shared-secret headers and no
+	 * Authorization header when only a shared secret is configured.
 	 */
-	public function test_get_auth_params_layers_basic_auth_on_shared_secret(): void {
+	public function test_get_auth_params_emits_shared_secret_headers_only(): void {
 		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
 		$auth_config = array(
 			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
-			'username'      => 'admin',
-			'password'      => 'hunter2',
 		);
 
 		$params = VIP_Safe_Auth::get_auth_params(
@@ -169,29 +168,7 @@ class VIPSafeAuthTest extends TestCase {
 		);
 
 		$this->assertArrayHasKey( 'X-Safe-Publish-Signature', $params['headers'] );
-		$this->assertArrayHasKey( 'Authorization', $params['headers'] );
-		$this->assertStringStartsWith( 'Basic ', $params['headers']['Authorization'] );
-		$this->assertSame( 'Basic ' . base64_encode( 'admin:hunter2' ), $params['headers']['Authorization'] );
-	}
-
-	/**
-	 * Verifies that Basic Auth alone (no shared secret) returns empty params.
-	 */
-	public function test_get_auth_params_without_shared_secret_returns_empty(): void {
-		$site_url    = 'https://example.com/wp-json/wp/v2/posts';
-		$auth_config = array(
-			'username' => 'admin',
-			'password' => 'hunter2',
-		);
-
-		$params = VIP_Safe_Auth::get_auth_params(
-			$site_url,
-			Request_Actions::IMPORT,
-			$auth_config,
-			'GET'
-		);
-
-		$this->assertSame( array(), $params );
+		$this->assertArrayNotHasKey( 'Authorization', $params['headers'] );
 	}
 
 	/**
@@ -209,21 +186,6 @@ class VIPSafeAuthTest extends TestCase {
 		);
 
 		$this->assertSame( array(), $params );
-	}
-
-	/**
-	 * Verifies that Basic Auth credentials alone (no shared secret) fail the
-	 * credential format check.
-	 */
-	public function test_has_valid_credential_format_with_basic_auth_only_fails(): void {
-		$auth_config = array(
-			'username' => 'admin',
-			'password' => 'hunter2',
-		);
-
-		$result = VIP_Safe_Auth::has_valid_credential_format( $auth_config );
-
-		$this->assertFalse( $result );
 	}
 
 	/**

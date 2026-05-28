@@ -18,10 +18,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Builds authentication parameters for outbound REST requests.
- *
- * 1. Shared Secret (HMAC-SHA256 signed custom headers) - required.
- * 2. Basic Authentication - optional, layered on top of the shared secret.
+ * Builds authentication parameters for outbound REST requests using
+ * HMAC-SHA256 signed custom headers backed by a shared secret.
  */
 final class VIP_Safe_Auth {
 
@@ -73,28 +71,17 @@ final class VIP_Safe_Auth {
 		string $method = 'GET',
 		string $body = ''
 	): array {
-		// Shared secret is required.
 		if ( empty( $auth_config['shared_secret'] ) ) {
 			return array();
 		}
 
-		$params = self::get_shared_secret_auth(
+		return self::get_shared_secret_auth(
 			$site_url,
 			$action,
 			$auth_config,
 			$method,
 			$body
 		);
-
-		// Basic auth can be layered on top of shared secret auth.
-		if ( ! empty( $auth_config['username'] ) && ! empty( $auth_config['password'] ) ) {
-			$basic_params = self::get_basic_auth( $auth_config );
-			if ( ! empty( $basic_params['headers'] ) ) {
-				$params['headers'] = array_merge( $params['headers'] ?? array(), $basic_params['headers'] );
-			}
-		}
-
-		return $params;
 	}
 
 	/**
@@ -265,30 +252,6 @@ final class VIP_Safe_Auth {
 				'X-Safe-Publish-Signature'    => hash_hmac( 'sha256', $string_to_sign, $shared_secret ),
 				'X-Safe-Publish-Site-URL'     => $this_site_url,
 				'X-Safe-Publish-Action'       => $action,
-			),
-		);
-	}
-
-	/**
-	 * Gets basic authentication parameters.
-	 *
-	 * Uses Authorization header with Basic auth. Intended as an optional layer
-	 * on top of the required Shared Secret authentication.
-	 *
-	 * @param array $auth_config Authentication configuration.
-	 * @return array Request modifications.
-	 */
-	private static function get_basic_auth( array $auth_config ): array {
-		$username = $auth_config['username'] ?? '';
-		$password = $auth_config['password'] ?? '';
-
-		if ( empty( $username ) || empty( $password ) ) {
-			return array();
-		}
-
-		return array(
-			'headers' => array(
-				'Authorization' => 'Basic ' . base64_encode( $username . ':' . $password ),
 			),
 		);
 	}

@@ -131,8 +131,6 @@ final class Admin_Ajax_Controller {
 	private function register_auth_status_invalidation(): void {
 		$options  = array(
 			Options::OPTION_CONNECTED_SITE_URL,
-			Options::OPTION_BASIC_AUTH_USERNAME,
-			Options::OPTION_BASIC_AUTH_PASSWORD,
 		);
 		$callback = array( __CLASS__, 'bust_auth_status_cache' );
 
@@ -397,21 +395,6 @@ final class Admin_Ajax_Controller {
 		$this->validate_auth_or_fail();
 
 		$auth_credentials = Auth_Credential_Provider::get_credentials();
-
-		// When the settings form submits live credential fields, always honour
-		// them — including when they are empty — so cleared fields override any
-		// previously saved Basic Auth credentials.
-		if ( array_key_exists( 'username', $_POST ) && array_key_exists( 'password', $_POST ) ) {
-			$username = sanitize_text_field( wp_unslash( $_POST['username'] ) );
-			$password = sanitize_text_field( wp_unslash( $_POST['password'] ) );
-
-			if ( ! empty( $username ) && ! empty( $password ) ) {
-				$auth_credentials['username'] = $username;
-				$auth_credentials['password'] = $password;
-			} else {
-				unset( $auth_credentials['username'], $auth_credentials['password'] );
-			}
-		}
 
 		$results = $this->api->test_connection( $connected_site_url, $auth_credentials );
 
@@ -740,10 +723,7 @@ final class Admin_Ajax_Controller {
 			'GET'
 		);
 
-		$auth_type = 'none';
-		if ( ! empty( $auth_credentials['shared_secret'] ) ) {
-			$auth_type = ! empty( $auth_credentials['username'] ) ? 'shared_secret+basic_auth' : 'shared_secret';
-		}
+		$auth_type = ! empty( $auth_credentials['shared_secret'] ) ? 'shared_secret' : 'none';
 
 		$debug_info = array(
 			'connected_site_url'         => $connected_site_url,

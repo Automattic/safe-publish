@@ -32,8 +32,6 @@ class Settings_Logger_Test extends Integration_Test_Case {
 	 */
 	private const AUDITED_OPTIONS = array(
 		Options::OPTION_CONNECTED_SITE_URL,
-		Options::OPTION_BASIC_AUTH_USERNAME,
-		Options::OPTION_BASIC_AUTH_PASSWORD,
 		Options::OPTION_SYNC_MODE,
 	);
 
@@ -88,86 +86,6 @@ class Settings_Logger_Test extends Integration_Test_Case {
 		);
 		$this->assertSame( 'https://old.example.com', $data['previous_value'] );
 		$this->assertSame( 'https://new.example.com', $data['new_value'] );
-	}
-
-	/**
-	 * Verifies that the first-set of the Basic Auth username records an event
-	 * with an empty previous_value.
-	 */
-	public function test_basic_auth_username_first_set_emits_event_with_empty_previous_value(): void {
-		// ARRANGE: Option starts unset (cleared in setUp).
-
-		// ACT: First-time write triggers add_option_<name>.
-		update_option( Options::OPTION_BASIC_AUTH_USERNAME, 'editor' );
-
-		// ASSERT: One event with previous_value '' and the new value.
-		$data = $this->get_single_event_data(
-			Log_Events::BASIC_AUTH_USERNAME_CHANGED
-		);
-		$this->assertSame( '', $data['previous_value'] );
-		$this->assertSame( 'editor', $data['new_value'] );
-	}
-
-	/**
-	 * Verifies that an update to the Basic Auth username records both values.
-	 */
-	public function test_basic_auth_username_update_emits_event_with_both_values(): void {
-		// ARRANGE: Seed an existing value and discard its add_option event.
-		update_option( Options::OPTION_BASIC_AUTH_USERNAME, 'editor' );
-		Audit_Log_Table::clear( self::CHANNEL );
-
-		// ACT: Update fires update_option_<name>.
-		update_option( Options::OPTION_BASIC_AUTH_USERNAME, 'admin' );
-
-		// ASSERT: One event captures both old and new values.
-		$data = $this->get_single_event_data(
-			Log_Events::BASIC_AUTH_USERNAME_CHANGED
-		);
-		$this->assertSame( 'editor', $data['previous_value'] );
-		$this->assertSame( 'admin', $data['new_value'] );
-	}
-
-	/**
-	 * Verifies that the first-set of the Basic Auth password records an event
-	 * tagged 'set' with no value fields. This is the core sensitivity check —
-	 * the payload must not carry the password under any key.
-	 */
-	public function test_basic_auth_password_first_set_emits_event_with_change_type_set_and_no_value(): void {
-		// ARRANGE: Option starts unset (cleared in setUp).
-		$password = 's3cr3t-distinctive-value-1';
-
-		// ACT: First-time write triggers add_option_<name>.
-		update_option( Options::OPTION_BASIC_AUTH_PASSWORD, $password );
-
-		// ASSERT: Event tagged 'set' and no field carries the value.
-		$data = $this->get_single_event_data(
-			Log_Events::BASIC_AUTH_PASSWORD_CHANGED
-		);
-		$this->assertSame( 'set', $data['change_type'] );
-		$this->assert_payload_does_not_leak_password( $data, $password );
-	}
-
-	/**
-	 * Verifies that a rotation of the Basic Auth password records an event
-	 * tagged 'rotated' with no value fields.
-	 */
-	public function test_basic_auth_password_update_emits_event_with_change_type_rotated_and_no_value(): void {
-		// ARRANGE: Seed an existing value and discard its add_option event.
-		$previous = 's3cr3t-previous-distinctive-1';
-		$rotated  = 's3cr3t-rotated-distinctive-2';
-		update_option( Options::OPTION_BASIC_AUTH_PASSWORD, $previous );
-		Audit_Log_Table::clear( self::CHANNEL );
-
-		// ACT: Update fires update_option_<name>.
-		update_option( Options::OPTION_BASIC_AUTH_PASSWORD, $rotated );
-
-		// ASSERT: Event tagged 'rotated' and no field carries either value.
-		$data = $this->get_single_event_data(
-			Log_Events::BASIC_AUTH_PASSWORD_CHANGED
-		);
-		$this->assertSame( 'rotated', $data['change_type'] );
-		$this->assert_payload_does_not_leak_password( $data, $previous );
-		$this->assert_payload_does_not_leak_password( $data, $rotated );
 	}
 
 	/**
@@ -264,47 +182,5 @@ class Settings_Logger_Test extends Integration_Test_Case {
 
 		$this->assertCount( 1, $events, "Expected one {$event_type} event." );
 		return $events[0]['data'];
-	}
-
-	/**
-	 * Asserts that the audit payload contains no field that exposes the given
-	 * password — directly, partially, or via a derived form a caller might be
-	 * tempted to log (length, hash, prefix). This is broader than the explicit
-	 * previous_value/new_value check; it guards future contributors against
-	 * adding new "harmless" fields that would still leak.
-	 *
-	 * @param array  $data     Decoded event payload.
-	 * @param string $password Plaintext password seeded by the test.
-	 */
-	private function assert_payload_does_not_leak_password(
-		array $data,
-		string $password
-	): void {
-		foreach ( $data as $key => $value ) {
-			if ( is_string( $value ) ) {
-				$this->assertStringNotContainsString(
-					$password,
-					$value,
-					"Audit payload field '{$key}' must not contain the password."
-				);
-			}
-		}
-
-		$forbidden_keys = array(
-			'previous_value',
-			'new_value',
-			'value',
-			'password',
-			'password_hash',
-			'password_length',
-		);
-
-		foreach ( $forbidden_keys as $forbidden ) {
-			$this->assertArrayNotHasKey(
-				$forbidden,
-				$data,
-				"Audit payload must not include '{$forbidden}' for password events."
-			);
-		}
 	}
 }

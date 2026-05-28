@@ -31,20 +31,6 @@ class Options {
 	const OPTION_CONNECTED_SITE_URL = 'safe_publish_connected_site_url';
 
 	/**
-	 * Option key for the Basic Auth username.
-	 *
-	 * @var string
-	 */
-	const OPTION_BASIC_AUTH_USERNAME = 'safe_publish_basic_auth_username';
-
-	/**
-	 * Option key for the Basic Auth password.
-	 *
-	 * @var string
-	 */
-	const OPTION_BASIC_AUTH_PASSWORD = 'safe_publish_basic_auth_password';
-
-	/**
 	 * Option key for the sync mode of this site.
 	 *
 	 * @var string

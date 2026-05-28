@@ -63,37 +63,6 @@ class Settings_Sanitizer {
 	}
 
 	/**
-	 * Sanitizes the username for Basic authentication.
-	 *
-	 * @param mixed $value Value to sanitize.
-	 * @return string Sanitized username.
-	 */
-	public function sanitize_username( mixed $value ): string {
-		// preserve the existing value when sync mode is export-only.
-		if ( null === $value ) {
-			return (string) get_option( Options::OPTION_BASIC_AUTH_USERNAME, '' );
-		}
-
-		return sanitize_text_field( $value );
-	}
-
-	/**
-	 * Sanitizes the password for Basic authentication.
-	 *
-	 * @param mixed $value Value to sanitize.
-	 * @return string Sanitized password.
-	 */
-	public function sanitize_password( mixed $value ): string {
-		// preserve the existing value when sync mode is export-only.
-		if ( null === $value ) {
-			return (string) get_option( Options::OPTION_BASIC_AUTH_PASSWORD, '' );
-		}
-
-		// Don't sanitize passwords beyond trimming whitespace.
-		return trim( $value );
-	}
-
-	/**
 	 * Sanitizes the sync mode setting.
 	 *
 	 * @param mixed $value Value to sanitize.

@@ -28,10 +28,6 @@ final class Settings_Page {
 		$connected_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 		$sync_mode          = get_option( Options::OPTION_SYNC_MODE, '' );
 
-		// Basic auth credentials (development only).
-		$username = get_option( Options::OPTION_BASIC_AUTH_USERNAME, '' );
-		$password = get_option( Options::OPTION_BASIC_AUTH_PASSWORD, '' );
-
 		$show_import_fields = in_array(
 			$sync_mode,
 			array( Options::SYNC_MODE_IMPORT, Options::SYNC_MODE_BIDIRECTIONAL ),
@@ -130,44 +126,6 @@ final class Settings_Page {
 							</tr>
 
 							<tr class="safe-publish-import-field-row<?php echo $show_import_fields ? '' : ' hidden'; ?>">
-								<th scope="row">
-									<?php esc_html_e( 'Basic Auth Credentials', 'safe-publish' ); ?>
-								</th>
-								<td>
-									<p class="description">
-										<?php esc_html_e( 'Only needed if the connected site is protected by HTTP Basic Authentication. Leave blank otherwise.', 'safe-publish' ); ?>
-									</p><br />
-									<label for="safe_publish_basic_auth_username" class="screen-reader-text">
-										<?php esc_html_e( 'Basic Auth Username', 'safe-publish' ); ?>
-									</label>
-									<input
-										type="text"
-										id="safe_publish_basic_auth_username"
-										name="safe_publish_basic_auth_username"
-										value="<?php echo esc_attr( $username ); ?>"
-										class="regular-text"
-										placeholder="<?php echo esc_attr__( 'Username', 'safe-publish' ); ?>"
-										autocomplete="username"
-									/>
-									<br />
-									<label for="safe_publish_basic_auth_password" class="screen-reader-text">
-										<?php esc_html_e( 'Basic Auth Password', 'safe-publish' ); ?>
-									</label>
-									<input
-										type="password"
-										id="safe_publish_basic_auth_password"
-										name="safe_publish_basic_auth_password"
-										value="<?php echo esc_attr( $password ); ?>"
-										class="regular-text"
-										placeholder="<?php echo esc_attr__( 'Password', 'safe-publish' ); ?>"
-										autocomplete="current-password"
-										style="margin-top: 4px;"
-									/>
-									
-								</td>
-							</tr>
-
-							<tr class="safe-publish-import-field-row<?php echo $show_import_fields ? '' : ' hidden'; ?>">
 								<th scope="row"><?php esc_html_e( 'Test current connection settings', 'safe-publish' ); ?></th>
 								<td>
 									<button type="button" id="safe-publish-test-connection" class="button button-secondary">
@@ -208,9 +166,8 @@ final class Settings_Page {
 					}
 
 					/**
-					 * POSTs a test connection request using the current live values from
-					 * the Connected Site URL, Username, and Password fields, and shows
-					 * the result inline.
+					 * POSTs a test connection request using the current live value from
+					 * the Connected Site URL field, and shows the result inline.
 					 *
 					 * @param {HTMLButtonElement} testBtn  Button element, disabled while testing.
 					 * @param {HTMLElement}       resultEl Element where the result message is rendered.
@@ -219,8 +176,6 @@ final class Settings_Page {
 					 */
 					function testConnection( testBtn, resultEl, ajaxUrl, nonce ) {
 						const connectedSiteUrl = document.getElementById( 'safe_publish_connected_site_url' ).value;
-						const usernameEl       = document.getElementById( 'safe_publish_basic_auth_username' );
-						const passwordEl       = document.getElementById( 'safe_publish_basic_auth_password' );
 
 						if ( ! connectedSiteUrl ) {
 							resultEl.className   = 'notice notice-error inline';
@@ -236,8 +191,6 @@ final class Settings_Page {
 						formData.append( 'action', 'safe_publish_test_connection' );
 						formData.append( 'nonce', nonce );
 						formData.append( 'connected_site_url', connectedSiteUrl );
-						if ( usernameEl ) formData.append( 'username', usernameEl.value );
-						if ( passwordEl ) formData.append( 'password', passwordEl.value );
 
 						fetch( ajaxUrl, { method: 'POST', body: formData } )
 							.then( function ( r ) { return r.json(); } )

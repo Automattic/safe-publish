@@ -1131,35 +1131,15 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	 */
 	public function auth_option_provider(): array {
 		return array(
-			'add connected site URL'     => array(
+			'add connected site URL'    => array(
 				'add',
 				Options::OPTION_CONNECTED_SITE_URL,
 				'https://example.com',
 			),
-			'update connected site URL'  => array(
+			'update connected site URL' => array(
 				'update',
 				Options::OPTION_CONNECTED_SITE_URL,
 				'https://different.example.com',
-			),
-			'add basic auth username'    => array(
-				'add',
-				Options::OPTION_BASIC_AUTH_USERNAME,
-				'new-user',
-			),
-			'update basic auth username' => array(
-				'update',
-				Options::OPTION_BASIC_AUTH_USERNAME,
-				'updated-user',
-			),
-			'add basic auth password'    => array(
-				'add',
-				Options::OPTION_BASIC_AUTH_PASSWORD,
-				'new-password',
-			),
-			'update basic auth password' => array(
-				'update',
-				Options::OPTION_BASIC_AUTH_PASSWORD,
-				'updated-password',
 			),
 		);
 	}
