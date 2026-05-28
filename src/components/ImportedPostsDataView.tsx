@@ -211,7 +211,10 @@ export function ImportedPostsDataView(): JSX.Element {
 		() => setRefreshNonce( ( nonce ) => nonce + 1 ),
 		[]
 	);
-	const actions = useMemo( () => createImportedActions( refresh ), [ refresh ] );
+	const actions = useMemo(
+		() => createImportedActions( refresh ),
+		[ refresh ]
+	);
 
 	const currentPage = view.page ?? 1;
 	const currentPerPage = view.perPage ?? DEFAULT_ITEMS_PER_PAGE;

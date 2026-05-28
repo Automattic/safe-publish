@@ -94,7 +94,7 @@ class Imported_Posts_Listing_Test extends Integration_Test_Case {
 	/**
 	 * Verifies that posts are listed by their import date, newest first.
 	 */
-	public function test_lists_post_ids_ordered_by_most_recent_import_descending(): void {
+	public function test_lists_post_ids_newest_import_first(): void {
 		// ARRANGE: Three posts imported on different dates.
 		$this->insert_item( 101, '2024-01-01 00:00:00' );
 		$this->insert_item( 102, '2024-03-01 00:00:00' );
@@ -112,7 +112,8 @@ class Imported_Posts_Listing_Test extends Integration_Test_Case {
 	 * post with multiple items appears only once.
 	 */
 	public function test_orders_by_each_posts_most_recent_item(): void {
-		// ARRANGE: Post 401 has an old and a newer item; 402 has one in between.
+		// ARRANGE: Post 401 has an old and a newer item; 402 has one in
+		// between.
 		$this->insert_item( 401, '2024-01-01 00:00:00' );
 		$this->insert_item( 401, '2024-09-01 00:00:00' );
 		$this->insert_item( 402, '2024-05-01 00:00:00' );
@@ -144,7 +145,7 @@ class Imported_Posts_Listing_Test extends Integration_Test_Case {
 	 * probe) and that later pages resume at the correct offset.
 	 */
 	public function test_paginates_with_has_more_probe(): void {
-		// ARRANGE: Four posts, oldest to newest so order is 604, 603, 602, 601.
+		// ARRANGE: Four posts, newest to oldest so order is 601, 602, 603, 604.
 		$this->insert_item( 601, '2024-04-01 00:00:00' );
 		$this->insert_item( 602, '2024-03-01 00:00:00' );
 		$this->insert_item( 603, '2024-02-01 00:00:00' );
@@ -157,7 +158,8 @@ class Imported_Posts_Listing_Test extends Integration_Test_Case {
 		// ASSERT: Page one returns 3 IDs (2 + the has_more probe).
 		$this->assertSame( array( 601, 602, 603 ), $page_one );
 
-		// ASSERT: Page two resumes after the offset with the remainder.
+		// ASSERT: Page two re-includes the probe item (603), then the
+		// remainder.
 		$this->assertSame( array( 603, 604 ), $page_two );
 	}
 
@@ -181,7 +183,8 @@ class Imported_Posts_Listing_Test extends Integration_Test_Case {
 	 * keyed by post ID.
 	 */
 	public function test_get_items_returns_most_recent_item_per_post(): void {
-		// ARRANGE: Post 801 updated after its initial import; 802 imported once.
+		// ARRANGE: Post 801 updated after its initial import; 802 imported
+		// once.
 		$this->insert_item( 801, '2024-01-01 00:00:00', 'success' );
 		$this->insert_item( 801, '2024-05-01 00:00:00', 'updated' );
 		$this->insert_item( 802, '2024-03-01 00:00:00', 'success' );
@@ -191,7 +194,10 @@ class Imported_Posts_Listing_Test extends Integration_Test_Case {
 
 		// ASSERT: 801 resolves to its most recent (updated) item.
 		$this->assertSame( 'updated', $result[801]['status'] );
-		$this->assertSame( '2024-05-01 00:00:00', $result[801]['import_date_gmt'] );
+		$this->assertSame(
+			'2024-05-01 00:00:00',
+			$result[801]['import_date_gmt']
+		);
 
 		// ASSERT: 802 resolves to its single item.
 		$this->assertSame( 'success', $result[802]['status'] );
@@ -218,7 +224,11 @@ class Imported_Posts_Listing_Test extends Integration_Test_Case {
 	public function test_get_items_breaks_ties_by_highest_id(): void {
 		// ARRANGE: Two items for one post sharing an import date.
 		$this->insert_item( 1001, '2024-01-01 00:00:00', 'success' );
-		$later_id = $this->insert_item( 1001, '2024-01-01 00:00:00', 'updated' );
+		$later_id = $this->insert_item(
+			1001,
+			'2024-01-01 00:00:00',
+			'updated'
+		);
 
 		// ACT: Fetch the item for the post.
 		$result = $this->repository->get_items_for_posts( array( 1001 ) );

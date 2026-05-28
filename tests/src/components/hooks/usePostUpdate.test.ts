@@ -52,7 +52,7 @@ describe( 'usePostUpdate', () => {
 			} )
 		);
 
-		// ACT.
+		// ACT: Attempt the update.
 		await act( async () => {
 			await result.current.handleUpdatePost();
 		} );
@@ -78,7 +78,7 @@ describe( 'usePostUpdate', () => {
 			} )
 		);
 
-		// ACT.
+		// ACT: Attempt the update.
 		await act( async () => {
 			await result.current.handleUpdatePost();
 		} );

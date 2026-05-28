@@ -186,15 +186,6 @@ function DateRangeColumn( {
 }
 
 /**
- * Formats the published-date dropdown button label so the user can read
- * the active filter at a glance.
- *
- * @param {string|null} after  ISO date for the after bound, or null.
- * @param {string|null} before ISO date for the before bound, or null.
- *
- * @return {string} Translated label for the toggle button.
- */
-/**
  * Serializes a Date to its local calendar day ("YYYY-MM-DD") for
  * lexicographic comparison against ISO date strings the toolbar stores.
  * Uses local parts (not toISOString) so a user picking April 30 doesn't
@@ -207,6 +198,15 @@ function toCalendarDay( date: Date ): string {
 	return `${ date.getFullYear() }-${ String( date.getMonth() + 1 ).padStart( 2, '0' ) }-${ String( date.getDate() ).padStart( 2, '0' ) }`;
 }
 
+/**
+ * Formats the published-date dropdown button label so the user can read
+ * the active filter at a glance.
+ *
+ * @param {string|null} after  ISO date for the after bound, or null.
+ * @param {string|null} before ISO date for the before bound, or null.
+ *
+ * @return {string} Translated label for the toggle button.
+ */
 function formatDateRangeLabel(
 	after: string | null,
 	before: string | null
@@ -264,7 +264,13 @@ export function SourcePostsDataView( {
 			field: 'date_gmt',
 			direction: 'desc',
 		},
-		fields: [ 'permalink', 'sync_status', 'source_status', 'publish_status', 'date_gmt' ],
+		fields: [
+			'permalink',
+			'sync_status',
+			'source_status',
+			'publish_status',
+			'date_gmt',
+		],
 		titleField: 'title',
 	} );
 
