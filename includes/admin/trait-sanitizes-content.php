@@ -19,9 +19,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Provides optional kses sanitization with modification detection.
  *
- * Used by import paths. By default kses is disabled to preserve content
- * fidelity; when enabled via the safe_publish_import_kses filter, detects
- * and rejects modifications made by kses.
+ * Used by import paths. The default tracks the caller's `unfiltered_html`
+ * capability — callers that already hold that capability (administrators on
+ * single-site) skip kses to preserve content fidelity, callers that do not
+ * run through wp_kses, and any modification is reported as a WP_Error.
+ * Both behaviours are overridable via the safe_publish_import_kses filter.
  */
 trait Sanitizes_Content {
 
@@ -31,10 +33,11 @@ trait Sanitizes_Content {
 	/**
 	 * Sanitizes a field value and fails if sanitization modifies it.
 	 *
-	 * By default, kses is disabled during import to preserve content fidelity,
-	 * matching WordPress core importer behavior. When kses is enabled via the
-	 * safe_publish_import_kses filter, runs the value through wp_kses and
-	 * returns a WP_Error if sanitization strips or alters HTML.
+	 * Callers that already hold `unfiltered_html` skip kses to preserve
+	 * content fidelity (matching WordPress core importer behaviour). Other
+	 * callers run the value through wp_kses and receive a WP_Error when the
+	 * sanitizer changes anything. Both branches are overridable via the
+	 * safe_publish_import_kses filter.
 	 *
 	 * @param string $value The HTML value to sanitize.
 	 * @param string $field FIELD_CONTENT or FIELD_EXCERPT constant.
@@ -59,14 +62,19 @@ trait Sanitizes_Content {
 		/**
 		 * Filters whether to apply kses sanitization during import.
 		 *
-		 * By default, kses is disabled to preserve content fidelity, matching
-		 * WordPress core importer behavior. Return true to enable kses
-		 * sanitization.
+		 * Defaults to running kses for any caller that does not hold the
+		 * `unfiltered_html` capability, matching WordPress core's behaviour
+		 * for non-trusted authors. Return true to force kses, false to skip.
 		 *
-		 * @param bool   $enabled Whether to apply kses. Default false.
+		 * @param bool   $enabled Whether to apply kses. Defaults to
+		 *                        `! current_user_can( 'unfiltered_html' )`.
 		 * @param string $field   Field being sanitized: 'content' or 'excerpt'.
 		 */
-		$enabled = apply_filters( 'safe_publish_import_kses', false, $field );
+		$enabled = apply_filters(
+			'safe_publish_import_kses',
+			! current_user_can( 'unfiltered_html' ),
+			$field
+		);
 
 		if ( ! $enabled ) {
 			return $value;
