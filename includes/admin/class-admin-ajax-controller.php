@@ -717,7 +717,13 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Handles debug authentication AJAX request.
+	 * Handles debug connection AJAX request.
+	 *
+	 * Returns a minimal summary suitable for the Settings page diagnostic
+	 * panel — connection URL, HTTP status, and whether credentials are
+	 * configured. The detailed payload (raw response body preview) is only
+	 * included when `WP_DEBUG` is enabled, since that data is only useful
+	 * when actively troubleshooting a local environment.
 	 */
 	public function ajax_debug_auth(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
@@ -733,24 +739,10 @@ final class Admin_Ajax_Controller {
 
 		$api_url = trailingslashit( $connected_site_url ) . 'wp-json/wp/v2/types';
 
-		$auth_params = \Safe_Publish\Auth\VIP_Safe_Auth::get_auth_params(
-			$api_url,
-			Request_Actions::PROBE,
-			$auth_credentials,
-			'GET'
-		);
-
-		$auth_type = 'none';
-		if ( ! empty( $auth_credentials['shared_secret'] ) ) {
-			$auth_type = ! empty( $auth_credentials['username'] ) ? 'shared_secret+basic_auth' : 'shared_secret';
-		}
-
 		$debug_info = array(
 			'connected_site_url'         => $connected_site_url,
 			'api_url'                    => $api_url,
 			'auth_credentials_available' => ! empty( $auth_credentials['shared_secret'] ),
-			'auth_credentials_type'      => $auth_type,
-			'auth_params'                => $auth_params,
 		);
 
 		try {
@@ -763,16 +755,12 @@ final class Admin_Ajax_Controller {
 			if ( is_wp_error( $response ) ) {
 				$debug_info['request_error'] = $response->get_error_message();
 			} else {
-				$response_body                       = wp_remote_retrieve_body( $response );
-				$debug_info['response_code']         = wp_remote_retrieve_response_code( $response );
-				$debug_info['response_headers']      = wp_remote_retrieve_headers( $response );
-				$debug_info['response_body_length']  = strlen( $response_body );
-				$debug_info['response_body_preview'] = substr( $response_body, 0, 200 );
+				$debug_info['response_code'] = wp_remote_retrieve_response_code( $response );
 
-				$json_data = json_decode( $response_body, true );
-				if ( $json_data ) {
-					$debug_info['response_json_keys'] = array_keys( $json_data );
-					$debug_info['post_types_count']   = count( $json_data );
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					$response_body                       = wp_remote_retrieve_body( $response );
+					$debug_info['response_body_length']  = strlen( $response_body );
+					$debug_info['response_body_preview'] = substr( $response_body, 0, 200 );
 				}
 			}
 		} catch ( Exception $e ) {
