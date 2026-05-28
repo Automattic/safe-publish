@@ -29,6 +29,10 @@ final class Meta_Terms_Manager {
 	 * Updates post meta based on provided input.
 	 *
 	 * Accepts array or object; keys are meta keys, values are meta values.
+	 * Keys reported as protected by WordPress (`is_protected_meta` —
+	 * typically underscore-prefixed internal/private keys) are skipped so
+	 * the importer cannot accidentally cross the same boundary the REST
+	 * API enforces with `auth_callback` on registered meta.
 	 *
 	 * Returns true on success, or a WP_Error listing any keys that could not
 	 * be written due to a database error.
@@ -44,7 +48,31 @@ final class Meta_Terms_Manager {
 			$failed_keys = array();
 
 			foreach ( $meta_array as $meta_key => $meta_value ) {
-				$key    = sanitize_text_field( (string) $meta_key );
+				$key = sanitize_text_field( (string) $meta_key );
+
+				/**
+				 * Filters whether a given meta key should be skipped during
+				 * import.
+				 *
+				 * Defaults to WordPress' `is_protected_meta` check so the
+				 * importer matches REST API behaviour for protected meta.
+				 *
+				 * @param bool   $skip    Whether to skip the key. Default
+				 *                        `is_protected_meta( $key, 'post' )`.
+				 * @param string $key     Sanitized meta key.
+				 * @param int    $post_id Destination post ID.
+				 */
+				$skip = apply_filters(
+					'safe_publish_import_skip_protected_meta',
+					is_protected_meta( $key, 'post' ),
+					$key,
+					$post_id
+				);
+
+				if ( $skip ) {
+					continue;
+				}
+
 				$result = update_post_meta( $post_id, $key, $meta_value );
 
 				if ( false === $result ) {
