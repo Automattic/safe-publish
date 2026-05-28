@@ -12,6 +12,34 @@ cd "$(git rev-parse --show-toplevel)"
 echo "Installing npm and composer dependencies..."
 npm install
 
+# Generate a per-developer wp-env override that pairs the dev and tests
+# containers with a matching SAFE_PUBLISH_SHARED_SECRET. The override is
+# gitignored so each worktree has its own value.
+OVERRIDE_FILE=".wp-env.override.json"
+if [ ! -f "$OVERRIDE_FILE" ]; then
+	SHARED_SECRET=$(
+		LC_ALL=C tr -dc 'a-zA-Z0-9' </dev/urandom 2>/dev/null \
+			| head -c 48
+	)
+	cat >"$OVERRIDE_FILE" <<EOF
+{
+  "config": {
+    "SAFE_PUBLISH_SHARED_SECRET": "$SHARED_SECRET"
+  },
+  "env": {
+    "tests": {
+      "config": {
+        "SAFE_PUBLISH_SHARED_SECRET": "$SHARED_SECRET"
+      }
+    }
+  }
+}
+EOF
+	echo "Wrote $OVERRIDE_FILE with a fresh shared secret."
+else
+	echo "Keeping existing $OVERRIDE_FILE."
+fi
+
 is_free() {
 	! lsof -iTCP:"$1" -sTCP:LISTEN -P -n >/dev/null 2>&1
 }
