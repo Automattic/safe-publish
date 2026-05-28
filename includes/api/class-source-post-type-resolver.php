@@ -106,9 +106,11 @@ final class Source_Post_Type_Resolver {
 
 		$data = json_decode( wp_remote_retrieve_body( $response ), true );
 
-		// A REST error envelope ({code, message, ...}) or any non-list body
-		// is treated as a transient failure: return empty without memoizing.
-		if ( ! is_array( $data ) || isset( $data['code'] ) ) {
+		// The catalog endpoint returns a JSON list. A non-list body — a REST
+		// error envelope ({code, ...}) or anything else — is treated as a
+		// transient failure: return empty without memoizing so a later call
+		// can retry.
+		if ( ! is_array( $data ) || ! array_is_list( $data ) ) {
 			return array();
 		}
 

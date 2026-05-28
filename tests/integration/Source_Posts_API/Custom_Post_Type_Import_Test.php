@@ -59,7 +59,12 @@ class Custom_Post_Type_Import_Test extends Source_Posts_API_Test_Base {
 
 		// Serve the post-types map and the rest_base single-post endpoint
 		// before the base class's posts|pages mock (priority 10) runs.
-		add_filter( 'pre_http_request', array( $this, 'mock_custom_cpt_source' ), 5, 3 );
+		add_filter(
+			'pre_http_request',
+			array( $this, 'mock_custom_cpt_source' ),
+			5,
+			3
+		);
 
 		register_post_type(
 			'sp_movie',
@@ -92,7 +97,11 @@ class Custom_Post_Type_Import_Test extends Source_Posts_API_Test_Base {
 	 */
 	#[\Override]
 	protected function tearDown(): void {
-		remove_filter( 'pre_http_request', array( $this, 'mock_custom_cpt_source' ), 5 );
+		remove_filter(
+			'pre_http_request',
+			array( $this, 'mock_custom_cpt_source' ),
+			5
+		);
 		unregister_post_type( 'sp_movie' );
 		parent::tearDown();
 	}
@@ -167,7 +176,10 @@ class Custom_Post_Type_Import_Test extends Source_Posts_API_Test_Base {
 		$result = $this->import_service->import_post( $post_data );
 
 		// ASSERT: The import succeeded and created an sp_movie post.
-		$this->assertTrue( $result['success'], 'Custom CPT import should succeed.' );
+		$this->assertTrue(
+			$result['success'],
+			'Custom CPT import should succeed.'
+		);
 
 		$post = get_post( $result['post_id'] );
 		$this->assertInstanceOf( WP_Post::class, $post );
@@ -179,7 +191,11 @@ class Custom_Post_Type_Import_Test extends Source_Posts_API_Test_Base {
 		$this->assertSame( 'Imported Movie', $post->post_title );
 		$this->assertSame(
 			7100,
-			(int) get_post_meta( $post->ID, Options::META_SOURCE_POST_ID, true ),
+			(int) get_post_meta(
+				$post->ID,
+				Options::META_SOURCE_POST_ID,
+				true
+			),
 			'Imported post must record the source post ID.'
 		);
 	}
@@ -212,7 +228,10 @@ class Custom_Post_Type_Import_Test extends Source_Posts_API_Test_Base {
 		$result = $this->import_service->import_post( $post_data, $session_id );
 
 		// ASSERT: The import succeeded and created an sp_movie post.
-		$this->assertTrue( $result['success'], 'Bulk custom CPT import should succeed.' );
+		$this->assertTrue(
+			$result['success'],
+			'Bulk custom CPT import should succeed.'
+		);
 
 		$post = get_post( $result['post_id'] );
 		$this->assertInstanceOf( WP_Post::class, $post );

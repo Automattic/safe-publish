@@ -143,7 +143,9 @@ class PostTypeMapTest extends TestCase {
 	 *
 	 * @param string $post_type Post type slug or endpoint.
 	 */
-	public function test_is_builtin_true_for_known_types( string $post_type ): void {
+	public function test_is_builtin_true_for_known_types(
+		string $post_type
+	): void {
 		$this->assertTrue( Post_Type_Map::is_builtin( $post_type ) );
 	}
 
@@ -169,7 +171,9 @@ class PostTypeMapTest extends TestCase {
 	 *
 	 * @param string $post_type Custom or unknown post type.
 	 */
-	public function test_is_builtin_false_for_custom_types( string $post_type ): void {
+	public function test_is_builtin_false_for_custom_types(
+		string $post_type
+	): void {
 		$this->assertFalse( Post_Type_Map::is_builtin( $post_type ) );
 	}
 

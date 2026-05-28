@@ -35,7 +35,8 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 	 * Builds a make_request callable returning a catalog/post-types list and
 	 * counting how many times it is invoked.
 	 *
-	 * @param array $types      Post-type entries to encode in the response body.
+	 * @param array $types      Post-type entries to encode in the response
+	 *                          body.
 	 * @param int   $call_count Invocation counter, passed by reference.
 	 * @return callable fn($url, $action, $credentials): array
 	 */
@@ -157,7 +158,10 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 	 */
 	public function test_unreachable_source_falls_back_to_slug(): void {
 		// ARRANGE: Callable returns a transport error.
-		$make_request = static fn() => new WP_Error( 'http_request_failed', 'down' );
+		$make_request = static fn() => new WP_Error(
+			'http_request_failed',
+			'down'
+		);
 
 		// ACT: Resolve a custom slug with no reachable source.
 		$rest_base = Source_Post_Type_Resolver::resolve_rest_base(
@@ -251,12 +255,70 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a 200 response whose body is a JSON object rather than a
+	 * list is treated as a failure and not memoized, so a later call retries.
+	 */
+	public function test_non_list_body_is_not_memoized(): void {
+		// ARRANGE: First response is a JSON object, second is a valid list.
+		$attempt      = 0;
+		$make_request = function () use ( &$attempt ): array {
+			++$attempt;
+			if ( 1 === $attempt ) {
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => (string) wp_json_encode(
+						array( 'movie' => array( 'rest_base' => 'movies' ) )
+					),
+				);
+			}
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => (string) wp_json_encode(
+					array(
+						array(
+							'slug'      => 'movie',
+							'rest_base' => 'movies',
+						),
+					)
+				),
+			);
+		};
+
+		// ACT: First resolution sees the object body, second the list.
+		$first  = Source_Post_Type_Resolver::resolve_rest_base(
+			'movie',
+			self::SOURCE_URL,
+			$make_request,
+			array()
+		);
+		$second = Source_Post_Type_Resolver::resolve_rest_base(
+			'movie',
+			self::SOURCE_URL,
+			$make_request,
+			array()
+		);
+
+		// ASSERT: The object body was not memoized; the retry resolved it.
+		$this->assertSame(
+			'movie',
+			$first,
+			'A non-list body should fall back to the slug.'
+		);
+		$this->assertSame(
+			'movies',
+			$second,
+			'A non-list body must not be memoized.'
+		);
+	}
+
+	/**
 	 * Verifies that a rest_base outside the safe REST-path charset is rejected
 	 * so a compromised source cannot shape the request URL.
 	 *
 	 * @dataProvider unsafe_rest_base_provider
 	 *
-	 * @param string $unsafe_rest_base A rest_base the source must not be trusted with.
+	 * @param string $unsafe_rest_base A rest_base the source must not be
+	 *                                 trusted with.
 	 */
 	public function test_unsafe_rest_base_is_rejected(
 		string $unsafe_rest_base

@@ -31,8 +31,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Diff_Renderer {
 
 	/**
-	 * Renders a comprehensive diff preview for a source post. All
-	 * $make_request calls are tagged as Request_Actions::PREVIEW.
+	 * Renders a comprehensive diff preview for a source post. The post and
+	 * featured-media fetches are tagged Request_Actions::PREVIEW; the
+	 * rest_base lookup is tagged Request_Actions::LIST_ITEMS.
 	 *
 	 * @param WP_REST_Request $request      REST request object.
 	 * @param callable        $make_request fn($url, $action, $credentials): array|WP_Error.

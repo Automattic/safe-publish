@@ -218,7 +218,10 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			self::SOURCE_POST_ID
 		);
 
-		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
+		update_option(
+			'safe_publish_connected_site_url',
+			'https://example.com'
+		);
 
 		// Record requested URLs to prove the source post is addressed by
 		// rest_base (sp_movies), not the slug (sp_movie).
@@ -226,7 +229,10 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$make_request   = function ( $url ) use ( &$requested_urls ): array {
 			$requested_urls[] = $url;
 
-			if ( false !== strpos( $url, '/safe-publish/v1/catalog/post-types' ) ) {
+			if ( false !== strpos(
+				$url,
+				'/safe-publish/v1/catalog/post-types'
+			) ) {
 				return array(
 					'response' => array( 'code' => 200 ),
 					'body'     => (string) wp_json_encode(
@@ -248,21 +254,29 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 					'body'     => (string) wp_json_encode(
 						array(
 							'title'   => array( 'raw' => 'Source Movie' ),
-							'content' => array( 'raw' => '<p>Source movie content.</p>' ),
+							'content' => array(
+								'raw' => '<p>Source movie content.</p>',
+							),
 							'excerpt' => array( 'raw' => 'Source excerpt.' ),
 						)
 					),
 				);
 			}
 
-			// Any other endpoint (e.g. the slug-based /wp/v2/sp_movie/) is wrong.
+			// Any other endpoint (e.g. the slug-based /wp/v2/sp_movie/) is
+			// wrong.
 			return array(
 				'response' => array( 'code' => 404 ),
-				'body'     => (string) wp_json_encode( array( 'code' => 'rest_no_route' ) ),
+				'body'     => (string) wp_json_encode(
+					array( 'code' => 'rest_no_route' )
+				),
 			);
 		};
 
-		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request = new WP_REST_Request(
+			'POST',
+			'/safe-publish/v1/diff-preview'
+		);
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'sp_movie' );
 		$request->set_param( 'mode', 'split' );
@@ -271,18 +285,29 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$renderer = new Diff_Renderer();
 		$result   = $renderer->render_diff( $request, $make_request, array() );
 
-		// ASSERT: The diff resolved against the rest_base endpoint and succeeded.
-		$this->assertIsArray( $result, 'Diff should succeed for a custom CPT.' );
+		// ASSERT: The diff resolved against the rest_base endpoint and
+		// succeeded.
+		$this->assertIsArray(
+			$result,
+			'Diff should succeed for a custom CPT.'
+		);
 		$this->assertSame( 'Source Movie', $result['incoming']['title'] );
 
-		// ASSERT: The source post was fetched via rest_base, never via the slug.
+		// ASSERT: The source post was fetched via rest_base, never via the
+		// slug.
 		$hit_rest_base = false;
 		$hit_slug      = false;
 		foreach ( $requested_urls as $url ) {
-			if ( false !== strpos( $url, '/wp/v2/sp_movies/' . self::SOURCE_POST_ID ) ) {
+			if ( false !== strpos(
+				$url,
+				'/wp/v2/sp_movies/' . self::SOURCE_POST_ID
+			) ) {
 				$hit_rest_base = true;
 			}
-			if ( false !== strpos( $url, '/wp/v2/sp_movie/' . self::SOURCE_POST_ID ) ) {
+			if ( false !== strpos(
+				$url,
+				'/wp/v2/sp_movie/' . self::SOURCE_POST_ID
+			) ) {
 				$hit_slug = true;
 			}
 		}
