@@ -372,6 +372,108 @@ final class History_Repository {
 	}
 
 	/**
+	 * Returns the page of imported post IDs ordered by most-recent
+	 * import_date_gmt (descending), for the Imported Posts listing.
+	 *
+	 * Aggregates the items table to one row per post (the most recent
+	 * import event), then paginates. Returns up to per_page+1 IDs so the
+	 * caller can derive has_more without a separate count query.
+	 *
+	 * @param int $page     1-indexed page number.
+	 * @param int $per_page Items per page.
+	 * @return int[] Post IDs in display order.
+	 */
+	public function list_imported_post_ids(
+		int $page = 1,
+		int $per_page = 20
+	): array {
+		global $wpdb;
+
+		$table          = Import_Items_Table::table_name();
+		$offset         = max( 0, ( $page - 1 ) * $per_page );
+		$limit_plus_one = $per_page + 1;
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT post_id, MAX(import_date_gmt) AS max_date'
+					. " FROM `{$table}`"
+					. ' WHERE post_id IS NOT NULL'
+					. ' GROUP BY post_id'
+					. ' ORDER BY max_date DESC, post_id DESC'
+					. ' LIMIT %d OFFSET %d',
+				$limit_plus_one,
+				$offset
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		if ( ! is_array( $rows ) ) {
+			return array();
+		}
+
+		return array_map(
+			static fn( array $row ): int => (int) $row['post_id'],
+			$rows
+		);
+	}
+
+	/**
+	 * Bulk variant of get_item_for_post(): returns the most recent item row
+	 * for each provided post ID, keyed by post_id.
+	 *
+	 * Drives the Imported Posts listing — one query for the whole page
+	 * instead of N. Relies on the (post_id, import_date_gmt) composite
+	 * index for the inner aggregation. Ties on import_date_gmt resolve to
+	 * the highest id.
+	 *
+	 * @param int[] $post_ids Post IDs to look up.
+	 * @return array<int, array> Map of post_id → most recent item row.
+	 */
+	public function get_items_for_posts( array $post_ids ): array {
+		if ( 0 === count( $post_ids ) ) {
+			return array();
+		}
+
+		global $wpdb;
+
+		$table        = Import_Items_Table::table_name();
+		$placeholders = implode( ', ', array_fill( 0, count( $post_ids ), '%d' ) );
+		$values       = array_values( $post_ids );
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT t1.* FROM `{$table}` t1"
+					. ' INNER JOIN ( SELECT post_id, MAX(import_date_gmt) AS max_date'
+					. " FROM `{$table}` WHERE post_id IN ({$placeholders})"
+					. ' GROUP BY post_id ) t2'
+					. ' ON t1.post_id = t2.post_id'
+					. ' AND t1.import_date_gmt = t2.max_date'
+					. ' ORDER BY t1.id DESC',
+				...$values
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		if ( ! is_array( $rows ) ) {
+			return array();
+		}
+
+		$by_post_id = array();
+		foreach ( $rows as $row ) {
+			$post_id = (int) $row['post_id'];
+			if ( ! isset( $by_post_id[ $post_id ] ) ) {
+				$by_post_id[ $post_id ] = $row;
+			}
+		}
+
+		return $by_post_id;
+	}
+
+	/**
 	 * Marks a session as rolled back and emits an audit log event.
 	 *
 	 * Bulk-flips the per-item `rolled_back` flag on the success/updated items
