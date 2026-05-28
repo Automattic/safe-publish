@@ -165,33 +165,25 @@ class Permission_Manager {
 			'user_has_cap',
 			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			function ( $allcaps, $_caps, $_args, $_user ): array {
+				// Read-context scope only: what the destination needs to
+				// fetch post lists, single items, media, and term metadata
+				// from the source. Write/delete capabilities and
+				// site-level admin caps (manage_options, edit_files,
+				// unfiltered_html) are deliberately omitted.
 				$safe_publish_caps = array(
 					'read',
 					'edit_posts',
 					'edit_others_posts',
 					'edit_private_posts',
 					'edit_published_posts',
-					'publish_posts',
-					'delete_posts',
-					'delete_others_posts',
-					'delete_private_posts',
-					'delete_published_posts',
 					'read_private_posts',
 					'edit_pages',
 					'edit_others_pages',
 					'edit_private_pages',
 					'edit_published_pages',
-					'publish_pages',
-					'delete_pages',
-					'delete_others_pages',
-					'delete_private_pages',
-					'delete_published_pages',
 					'read_private_pages',
 					'manage_categories',
-					'manage_options',
 					'upload_files',
-					'edit_files',
-					'unfiltered_html',
 				);
 
 				foreach ( $safe_publish_caps as $cap ) {
@@ -243,11 +235,6 @@ class Permission_Manager {
 			'edit_published_posts',
 			'read_post',
 			'read_private_posts',
-			'delete_post',
-			'delete_posts',
-			'delete_others_posts',
-			'delete_private_posts',
-			'delete_published_posts',
 		);
 
 		if ( ! in_array( $cap, $edit_caps, true ) ) {
