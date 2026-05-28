@@ -592,7 +592,10 @@ export const createImportedActions = (
 		supportsBulk: false,
 		modalSize: 'fill',
 		RenderModal: ( { items, closeModal } ) => (
-			<PostDiffModal items={ items.map( toSourcePost ) } closeModal={ closeModal } />
+			<PostDiffModal
+				items={ items.map( toSourcePost ) }
+				closeModal={ closeModal }
+			/>
 		),
 	},
 	{
