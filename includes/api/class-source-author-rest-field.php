@@ -11,6 +11,7 @@ namespace Safe_Publish\API;
 
 use Safe_Publish\Auth\HMAC_Authenticator;
 use WP_Post;
+use WP_REST_Request;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -91,14 +92,28 @@ class Source_Author_REST_Field {
 	 *
 	 * Returns null for any non-HMAC request so the field value carries no
 	 * source author PII for public, cookie-authenticated, or third-party
-	 * consumers.
+	 * consumers. Also returns null for collection requests so the field
+	 * is only resolved during the per-post fetch the importer performs;
+	 * list endpoints never include author data in their responses.
 	 *
-	 * @param array $post_array Post data array as built by WP_REST_Posts_Controller.
+	 * @param array                $post_array     Post data array as built by WP_REST_Posts_Controller.
+	 * @param string               $_attribute     Field name (unused).
+	 * @param WP_REST_Request|null $request        Current REST request, if any.
 	 * @return array{email: string, login: string, display_name: string}|null
-	 *         Author payload, or null when the request is not HMAC-authenticated.
+	 *         Author payload, or null when the request is not HMAC-authenticated
+	 *         or is a collection request.
 	 */
-	public function get_callback( array $post_array ): ?array {
+	public function get_callback(
+		array $post_array,
+		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		string $_attribute = '',
+		?WP_REST_Request $request = null
+	): ?array {
 		if ( ! $this->authenticator->is_authenticated() ) {
+			return null;
+		}
+
+		if ( ! $this->is_single_item_request( $request, $post_array ) ) {
 			return null;
 		}
 
@@ -138,5 +153,42 @@ class Source_Author_REST_Field {
 			'login'        => '',
 			'display_name' => '',
 		);
+	}
+
+	/**
+	 * Detects whether the current REST request targets a single post.
+	 *
+	 * The importer resolves the source author one post at a time via
+	 * `/wp/v2/{post_type}/{id}`. Collection requests (`/wp/v2/posts`) never
+	 * need this field, and skipping them removes the per-row author lookup
+	 * cost from list responses.
+	 *
+	 * Falls back to inspecting the post array when the request is unavailable
+	 * (older WordPress versions that omit the request argument in the field
+	 * callback).
+	 *
+	 * @param WP_REST_Request|null $request    Current REST request, if any.
+	 * @param array                $post_array Post data array.
+	 * @return bool True when the request resolves a single item.
+	 */
+	private function is_single_item_request(
+		?WP_REST_Request $request,
+		array $post_array
+	): bool {
+		if ( $request instanceof WP_REST_Request ) {
+			$request_id = $request->get_param( 'id' );
+
+			if ( is_numeric( $request_id ) && (int) $request_id > 0 ) {
+				return true;
+			}
+
+			$route = (string) $request->get_route();
+
+			return (bool) preg_match( '#/\d+$#', $route );
+		}
+
+		$post_id = isset( $post_array['id'] ) ? (int) $post_array['id'] : 0;
+
+		return $post_id > 0;
 	}
 }
