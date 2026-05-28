@@ -133,6 +133,7 @@ final class Imported_Posts_Page {
 				'ajaxurl'     => admin_url( 'admin-ajax.php' ),
 				'settingsUrl' => admin_url( 'admin.php?page=safe-publish-settings' ),
 				'nonce'       => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+				'restNonce'   => wp_create_nonce( 'wp_rest' ),
 				'containerId' => 'safe-publish-imported-container',
 			)
 		);
@@ -141,9 +142,11 @@ final class Imported_Posts_Page {
 			$json_data = '{}';
 		}
 
+		// Same global the Source Posts page and the shared modals/diff hooks
+		// read, so Update/Diff/Delete work here without page-specific wiring.
 		wp_add_inline_script(
 			'safe-publish-imported-script',
-			sprintf( 'window.safePublishImportedData = %s;', $json_data ),
+			sprintf( 'window.safePublishAdminData = %s;', $json_data ),
 			'before'
 		);
 	}

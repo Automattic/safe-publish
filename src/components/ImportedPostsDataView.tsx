@@ -3,20 +3,17 @@
  *
  * Lists locally-imported posts via the destination-side
  * `safe_publish_list_imported_posts` AJAX action — purely local query, no
- * source roundtrip. This first cut renders the page with a minimal column
- * set and an Edit action; richer actions (Rollback, Update, Diff, Delete,
- * bulk operations) land in follow-up PRs on top of this scaffolding.
+ * source roundtrip. Rows support Edit, Update, Diff, and Delete; bulk
+ * operations, Rollback, and sync status land in follow-up PRs.
  *
  * @file This file defines the ImportedPostsDataView component.
  */
-import { pencil } from '@wordpress/icons';
-
+import { createImportedActions } from '../actions';
 import { DEFAULT_ITEMS_PER_PAGE, LAYOUT_GRID, LAYOUT_LIST, LAYOUT_TABLE } from '../constants';
 import { extractUrlPath, formatDateTime, getErrorMessage, PUBLISH_STATUS_LABELS } from '../utils';
 import { Notice, Spinner } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
-import { Action } from '@wordpress/dataviews/build-types';
-import { useState, useEffect, useMemo } from '@wordpress/element';
+import { useState, useEffect, useMemo, useCallback } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
 import type {
@@ -54,20 +51,21 @@ export function ImportedPostsDataView(): JSX.Element {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ hasFetchedOnce, setHasFetchedOnce ] = useState( false );
 	const [ fetchError, setFetchError ] = useState< string | null >( null );
+	const [ refreshNonce, setRefreshNonce ] = useState( 0 );
 
 	useEffect( () => {
 		const controller = new AbortController();
 
 		const formData = new FormData();
 		formData.append( 'action', 'safe_publish_list_imported_posts' );
-		formData.append( 'nonce', window.safePublishImportedData.nonce );
+		formData.append( 'nonce', window.safePublishAdminData.nonce );
 		formData.append( 'page', String( view.page ?? 1 ) );
 		formData.append( 'per_page', String( view.perPage ?? DEFAULT_ITEMS_PER_PAGE ) );
 
 		setIsLoading( true );
 		setFetchError( null );
 
-		fetch( window.safePublishImportedData.ajaxurl, {
+		fetch( window.safePublishAdminData.ajaxurl, {
 			method: 'POST',
 			body: formData,
 			signal: controller.signal,
@@ -117,7 +115,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		return () => {
 			controller.abort();
 		};
-	}, [ view.page, view.perPage ] );
+	}, [ view.page, view.perPage, refreshNonce ] );
 
 	const fields: DataViewsField< ImportedPost >[] = useMemo(
 		() => [
@@ -209,24 +207,11 @@ export function ImportedPostsDataView(): JSX.Element {
 		[]
 	);
 
-	const actions: Action< ImportedPost >[] = useMemo(
-		() => [
-			{
-				id: 'edit-post',
-				label: __( 'Edit', 'safe-publish' ),
-				icon: pencil,
-				isPrimary: true,
-				isEligible: ( item: ImportedPost ) => '' !== item.edit_url,
-				callback: ( items: ImportedPost[] ) => {
-					const url = items[ 0 ]?.edit_url;
-					if ( url ) {
-						window.open( url, '_blank', 'noreferrer' );
-					}
-				},
-			},
-		],
+	const refresh = useCallback(
+		() => setRefreshNonce( ( nonce ) => nonce + 1 ),
 		[]
 	);
+	const actions = useMemo( () => createImportedActions( refresh ), [ refresh ] );
 
 	const currentPage = view.page ?? 1;
 	const currentPerPage = view.perPage ?? DEFAULT_ITEMS_PER_PAGE;
