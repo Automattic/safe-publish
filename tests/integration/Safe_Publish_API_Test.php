@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\API\Diff_Renderer;
+use Safe_Publish\API\Source_Post_Type_Resolver;
 use WP_Post;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -65,6 +66,10 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
+
+		// The resolver memoizes the source post-types map per request; clear it
+		// so each test observes its own mocked source response.
+		Source_Post_Type_Resolver::reset_cache();
 
 		// Create admin user for tests.
 		$this->admin_user_id = $this->factory()->user->create( array( 'role' => 'administrator' ) );
@@ -180,6 +185,118 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$this->assertArrayHasKey( 'taxonomies', $result['nonContentDiffs'] );
 		$this->assertArrayHasKey( 'meta', $result['nonContentDiffs'] );
 		$this->assertArrayHasKey( 'featuredMedia', $result['nonContentDiffs'] );
+	}
+
+	/**
+	 * Verifies that the diff renderer addresses a custom post type by its
+	 * source rest_base rather than its slug.
+	 */
+	public function test_diff_renderer_resolves_custom_cpt_via_rest_base(): void {
+		// ARRANGE: Register a CPT whose rest_base differs from its slug and
+		// create a local post of that type mapped to the source post ID.
+		register_post_type(
+			'sp_movie',
+			array(
+				'public'       => true,
+				'show_in_rest' => true,
+				'rest_base'    => 'sp_movies',
+			)
+		);
+
+		$local_movie_id = $this->factory()->post->create(
+			array(
+				'post_type'    => 'sp_movie',
+				'post_title'   => 'Local Movie',
+				'post_content' => 'Local movie content.',
+				'post_excerpt' => 'Local excerpt.',
+				'post_status'  => 'draft',
+			)
+		);
+		update_post_meta(
+			$local_movie_id,
+			'safe_publish_source_post_id',
+			self::SOURCE_POST_ID
+		);
+
+		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
+
+		// Record requested URLs to prove the source post is addressed by
+		// rest_base (sp_movies), not the slug (sp_movie).
+		$requested_urls = array();
+		$make_request   = function ( $url ) use ( &$requested_urls ): array {
+			$requested_urls[] = $url;
+
+			if ( false !== strpos( $url, '/safe-publish/v1/catalog/post-types' ) ) {
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => (string) wp_json_encode(
+						array(
+							array(
+								'slug'      => 'sp_movie',
+								'name'      => 'Movies',
+								'label'     => 'Movies',
+								'rest_base' => 'sp_movies',
+							),
+						)
+					),
+				);
+			}
+
+			if ( false !== strpos( $url, '/wp/v2/sp_movies/' ) ) {
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => (string) wp_json_encode(
+						array(
+							'title'   => array( 'raw' => 'Source Movie' ),
+							'content' => array( 'raw' => '<p>Source movie content.</p>' ),
+							'excerpt' => array( 'raw' => 'Source excerpt.' ),
+						)
+					),
+				);
+			}
+
+			// Any other endpoint (e.g. the slug-based /wp/v2/sp_movie/) is wrong.
+			return array(
+				'response' => array( 'code' => 404 ),
+				'body'     => (string) wp_json_encode( array( 'code' => 'rest_no_route' ) ),
+			);
+		};
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'sp_movie' );
+		$request->set_param( 'mode', 'split' );
+
+		// ACT: Render the diff with the recording callable.
+		$renderer = new Diff_Renderer();
+		$result   = $renderer->render_diff( $request, $make_request, array() );
+
+		// ASSERT: The diff resolved against the rest_base endpoint and succeeded.
+		$this->assertIsArray( $result, 'Diff should succeed for a custom CPT.' );
+		$this->assertSame( 'Source Movie', $result['incoming']['title'] );
+
+		// ASSERT: The source post was fetched via rest_base, never via the slug.
+		$hit_rest_base = false;
+		$hit_slug      = false;
+		foreach ( $requested_urls as $url ) {
+			if ( false !== strpos( $url, '/wp/v2/sp_movies/' . self::SOURCE_POST_ID ) ) {
+				$hit_rest_base = true;
+			}
+			if ( false !== strpos( $url, '/wp/v2/sp_movie/' . self::SOURCE_POST_ID ) ) {
+				$hit_slug = true;
+			}
+		}
+
+		$this->assertTrue(
+			$hit_rest_base,
+			'Source post must be fetched via rest_base (sp_movies).'
+		);
+		$this->assertFalse(
+			$hit_slug,
+			'Source post must not be fetched via the slug (sp_movie).'
+		);
+
+		unregister_post_type( 'sp_movie' );
 	}
 
 	/**

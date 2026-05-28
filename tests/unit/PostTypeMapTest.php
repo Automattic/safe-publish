@@ -134,4 +134,55 @@ class PostTypeMapTest extends TestCase {
 			Post_Type_Map::to_wp_slug( 'custom_cpt' )
 		);
 	}
+
+	/**
+	 * Verifies that known built-ins are recognized in either slug or endpoint
+	 * form.
+	 *
+	 * @dataProvider builtin_provider
+	 *
+	 * @param string $post_type Post type slug or endpoint.
+	 */
+	public function test_is_builtin_true_for_known_types( string $post_type ): void {
+		$this->assertTrue( Post_Type_Map::is_builtin( $post_type ) );
+	}
+
+	/**
+	 * Data provider for known built-in slugs and endpoints.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function builtin_provider(): array {
+		return array(
+			'post slug'      => array( 'post' ),
+			'posts endpoint' => array( 'posts' ),
+			'page slug'      => array( 'page' ),
+			'pages endpoint' => array( 'pages' ),
+			'media'          => array( 'media' ),
+		);
+	}
+
+	/**
+	 * Verifies that custom and unknown types are not treated as built-ins.
+	 *
+	 * @dataProvider non_builtin_provider
+	 *
+	 * @param string $post_type Custom or unknown post type.
+	 */
+	public function test_is_builtin_false_for_custom_types( string $post_type ): void {
+		$this->assertFalse( Post_Type_Map::is_builtin( $post_type ) );
+	}
+
+	/**
+	 * Data provider for custom/unknown types.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function non_builtin_provider(): array {
+		return array(
+			'custom slug'     => array( 'movie' ),
+			'custom endpoint' => array( 'movies' ),
+			'empty string'    => array( '' ),
+		);
+	}
 }
