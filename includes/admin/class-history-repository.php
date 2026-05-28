@@ -558,7 +558,10 @@ final class History_Repository {
 	 * @param array $item       Snapshot row with id, post_id, and the
 	 *                          pre-UPDATE rolled_back value.
 	 */
-	private function log_item_rollback_event( int $session_id, array $item ): void {
+	private function log_item_rollback_event(
+		int $session_id,
+		array $item
+	): void {
 		$item_id = (int) $item['id'];
 		$post_id = isset( $item['post_id'] ) ? (int) $item['post_id'] : 0;
 
