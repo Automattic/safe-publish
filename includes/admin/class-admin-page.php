@@ -97,8 +97,11 @@ final class Admin_Page {
 						echo '<div class="notice notice-error"><p>';
 						echo '<strong>' . esc_html__( 'Safe Publish:', 'safe-publish' ) . '</strong> ';
 						echo esc_html__( 'Build assets are missing. ', 'safe-publish' );
-						/* translators: npm run build is a command and should not be translated */
-						echo esc_html__( 'Run <code>npm run build</code> to generate them.', 'safe-publish' );
+						printf(
+							/* translators: %s: the "npm run build" command. */
+							esc_html__( 'Run %s to generate them.', 'safe-publish' ),
+							'<code>npm run build</code>'
+						);
 						echo '</p></div>';
 					}
 				}

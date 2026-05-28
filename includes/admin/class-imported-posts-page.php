@@ -17,9 +17,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Renders the Imported Posts admin page and enqueues its bundle.
  *
- * Lists locally-imported posts (those carrying META_SOURCE_POST_ID),
- * joined with the import_items table for session and rollback metadata.
- * Pure local query — no source roundtrip on listing.
+ * The listing is driven by the import_items table — one row per post_id at its
+ * most recent import event, not by post meta. Pure local query — no source
+ * roundtrip on listing.
  */
 final class Imported_Posts_Page {
 
@@ -69,8 +69,11 @@ final class Imported_Posts_Page {
 						echo '<div class="notice notice-error"><p>';
 						echo '<strong>' . esc_html__( 'Safe Publish:', 'safe-publish' ) . '</strong> ';
 						echo esc_html__( 'Build assets are missing. ', 'safe-publish' );
-						/* translators: npm run build is a command and should not be translated */
-						echo esc_html__( 'Run <code>npm run build</code> to generate them.', 'safe-publish' );
+						printf(
+							/* translators: %s: the "npm run build" command. */
+							esc_html__( 'Run %s to generate them.', 'safe-publish' ),
+							'<code>npm run build</code>'
+						);
 						echo '</p></div>';
 					}
 				}

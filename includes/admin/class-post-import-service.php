@@ -698,7 +698,9 @@ class Post_Import_Service {
 			)
 		);
 
-		$imported_by_source_id = $this->fetch_imported_posts_by_source_ids( $source_ids );
+		$imported_by_source_id = $this->fetch_imported_posts_by_source_ids(
+			$source_ids
+		);
 
 		foreach ( $posts as &$post ) {
 			$source_id = absint( $post['id'] ?? 0 );
@@ -735,7 +737,9 @@ class Post_Import_Service {
 	 * @param int[] $source_ids Source post IDs to look up.
 	 * @return array<int, WP_Post> Map keyed by source post ID.
 	 */
-	private function fetch_imported_posts_by_source_ids( array $source_ids ): array {
+	private function fetch_imported_posts_by_source_ids(
+		array $source_ids
+	): array {
 		if ( 0 === count( $source_ids ) ) {
 			return array();
 		}
@@ -768,7 +772,10 @@ class Post_Import_Service {
 				)
 			);
 
-			if ( $source_id > 0 && ! isset( $imported_by_source_id[ $source_id ] ) ) {
+			if (
+				$source_id > 0
+				&& ! isset( $imported_by_source_id[ $source_id ] )
+			) {
 				$imported_by_source_id[ $source_id ] = $post;
 			}
 		}
