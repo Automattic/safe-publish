@@ -683,16 +683,30 @@ class Post_Import_Service {
 	 * Adds `is_imported` (bool), `has_update` (bool), `local_status` (string),
 	 * and `local_edit_url` (string) keys to every element based on whether a
 	 * matching local post exists and whether the source post's modified date
-	 * is newer.
+	 * is newer. The whole page's lookups are batched into a single query.
 	 *
 	 * @param array $posts Posts array fetched from the source API, passed by reference.
 	 */
 	public function annotate_posts_with_import_status( array &$posts ): void {
-		foreach ( $posts as &$post ) {
-			$imported            = $this->find_imported_post( absint( $post['id'] ?? 0 ) );
-			$post['is_imported'] = (bool) $imported;
+		$source_ids = array_values(
+			array_filter(
+				array_map(
+					static fn( $post ) => absint( $post['id'] ?? 0 ),
+					$posts
+				),
+				static fn( $id ) => $id > 0
+			)
+		);
 
-			if ( $imported ) {
+		$imported_by_source_id = $this->fetch_imported_posts_by_source_ids( $source_ids );
+
+		foreach ( $posts as &$post ) {
+			$source_id = absint( $post['id'] ?? 0 );
+			$imported  = $imported_by_source_id[ $source_id ] ?? null;
+
+			$post['is_imported'] = null !== $imported;
+
+			if ( null !== $imported ) {
 				$source_modified = strtotime( $post['modified_gmt'] );
 				$local_modified  = strtotime( $imported->post_modified_gmt );
 
@@ -709,6 +723,57 @@ class Post_Import_Service {
 		}
 
 		unset( $post );
+	}
+
+	/**
+	 * Returns a map of source post ID → local WP_Post for the provided IDs.
+	 *
+	 * Single `meta_query` IN lookup instead of N individual `find_imported_post`
+	 * calls. WP_Query primes the post-meta cache for the returned IDs, so
+	 * subsequent `get_post_meta` reads inside the indexing loop are cache hits.
+	 *
+	 * @param int[] $source_ids Source post IDs to look up.
+	 * @return array<int, WP_Post> Map keyed by source post ID.
+	 */
+	private function fetch_imported_posts_by_source_ids( array $source_ids ): array {
+		if ( 0 === count( $source_ids ) ) {
+			return array();
+		}
+
+		$imported_posts = get_posts(
+			array(
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query'             => array(
+					array(
+						'key'     => Options::META_SOURCE_POST_ID,
+						'value'   => $source_ids,
+						'compare' => 'IN',
+					),
+				),
+				'post_type'              => 'any',
+				'post_status'            => 'any',
+				'posts_per_page'         => count( $source_ids ),
+				'suppress_filters'       => false,
+				'update_post_term_cache' => false,
+			)
+		);
+
+		$imported_by_source_id = array();
+		foreach ( $imported_posts as $post ) {
+			$source_id = absint(
+				get_post_meta(
+					$post->ID,
+					Options::META_SOURCE_POST_ID,
+					true
+				)
+			);
+
+			if ( $source_id > 0 && ! isset( $imported_by_source_id[ $source_id ] ) ) {
+				$imported_by_source_id[ $source_id ] = $post;
+			}
+		}
+
+		return $imported_by_source_id;
 	}
 
 	/**
@@ -920,7 +985,6 @@ class Post_Import_Service {
 			'_edit_last',
 			'_edit_lock',
 			Options::META_SOURCE_LINK,
-			Options::META_IMPORT_DATE_GMT,
 		);
 
 		foreach ( $meta_keys_to_preserve as $meta_key ) {
@@ -1022,10 +1086,9 @@ class Post_Import_Service {
 				'post_password'  => $fields['password'],
 				'post_author'    => $fields['matched_author_id'],
 				'meta_input'     => array(
-					Options::META_SOURCE_POST_ID  => $fields['source_post_id'],
-					Options::META_SOURCE_LINK     => $fields['source_link'],
-					Options::META_IMPORTED_FROM   => Options::META_IMPORTED_FROM_VALUE,
-					Options::META_IMPORT_DATE_GMT => current_time( 'mysql', true ),
+					Options::META_SOURCE_POST_ID => $fields['source_post_id'],
+					Options::META_SOURCE_LINK    => $fields['source_link'],
+					Options::META_IMPORTED_FROM  => Options::META_IMPORTED_FROM_VALUE,
 				),
 			),
 			$featured_attachment_id,
@@ -1287,24 +1350,6 @@ class Post_Import_Service {
 			$source_link
 		);
 
-		delete_post_meta( $post_id, Options::META_IMPORT_DATE_GMT );
-		if ( false === update_post_meta(
-			$post_id,
-			Options::META_IMPORT_DATE_GMT,
-			current_time( 'mysql', true )
-		) ) {
-			$this->rollback_failed_update( $post_id, $snapshot );
-
-			return new WP_Error(
-				'import_date_update_failed',
-				__(
-					'Failed to update post tracking metadata.',
-					'safe-publish'
-				),
-				array( 'action' => 'meta_update_failed' )
-			);
-		}
-
 		if ( $featured_attachment_id > 0 ) {
 			set_post_thumbnail( $post_id, $featured_attachment_id );
 		}
@@ -1374,11 +1419,6 @@ class Post_Import_Service {
 				Options::META_SOURCE_LINK           => get_post_meta(
 					$post_id,
 					Options::META_SOURCE_LINK,
-					true
-				),
-				Options::META_IMPORT_DATE_GMT       => get_post_meta(
-					$post_id,
-					Options::META_IMPORT_DATE_GMT,
 					true
 				),
 				Options::META_SOURCE_AUTHOR_EMAIL   => get_post_meta(

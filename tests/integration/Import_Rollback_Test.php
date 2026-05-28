@@ -377,7 +377,6 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 		$original_title   = get_post_field( 'post_title', $post_id );
 		$original_content = get_post_field( 'post_content', $post_id );
 		$original_link    = get_post_meta( $post_id, Options::META_SOURCE_LINK, true );
-		$original_date    = get_post_meta( $post_id, Options::META_IMPORT_DATE_GMT, true );
 
 		// ARRANGE: Fresh content will return updated title/content and a featured
 		// image. The fail filter makes the media API return 404 to trigger failure.
@@ -404,106 +403,6 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 		$this->assertSame( $original_title, get_post_field( 'post_title', $post_id ), 'Title must be unchanged after failed update.' );
 		$this->assertSame( $original_content, get_post_field( 'post_content', $post_id ), 'Content must be unchanged after failed update.' );
 		$this->assertSame( $original_link, get_post_meta( $post_id, Options::META_SOURCE_LINK, true ), 'Source link meta must be unchanged after failed update.' );
-		$this->assertSame( $original_date, get_post_meta( $post_id, Options::META_IMPORT_DATE_GMT, true ), 'Import date meta must be unchanged after failed update.' );
-	}
-
-	/**
-	 * Verifies that the bulk update path returns a failure and rolls back the
-	 * post when the tracking meta write fails.
-	 *
-	 * If update_post_meta fails for META_IMPORT_DATE_GMT (e.g., a DB error), the
-	 * import must report failure and restore the post to its pre-update state.
-	 * The filter blocks all writes for this key, so the rollback's own restore
-	 * of META_IMPORT_DATE_GMT is also blocked; only the post fields and source
-	 * link meta are verified here.
-	 */
-	public function test_bulk_update_fails_when_tracking_meta_write_fails(): void {
-		$session_id = $this->repository->create_session(
-			'https://source.example.com',
-			'bulk'
-		);
-
-		// ARRANGE: Import the post once to create it in the DB.
-		$post_data = array(
-			'id'        => 9120,
-			'title'     => 'Post For Tracking Meta Failure Test',
-			'content'   => '<p>Original content.</p>',
-			'link'      => 'https://source.example.com/tracking-meta-failure-test',
-			'post_type' => 'posts',
-		);
-
-		$first = $this->import_service->import_post( $post_data, $session_id );
-		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
-		$post_id = $first['post_id'];
-
-		// ARRANGE: Capture pre-update values for rollback assertions.
-		$original_title   = get_post_field( 'post_title', $post_id );
-		$original_content = get_post_field( 'post_content', $post_id );
-		$original_link    = get_post_meta(
-			$post_id,
-			Options::META_SOURCE_LINK,
-			true
-		);
-
-		// ARRANGE: Fresh content returns updated fields so the update path
-		// writes new values before the meta failure triggers.
-		$this->mock_post_overrides = array(
-			'title'   => 'Updated Tracking Meta Title',
-			'content' => '<p>Updated content.</p>',
-		);
-
-		// ARRANGE: Block update_post_meta for META_IMPORT_DATE_GMT to simulate a DB
-		// failure.
-		$block_meta = function (
-			$check,
-			$object_id,
-			$meta_key,
-			$meta_value,
-			$prev_value
-		) {
-			unset( $object_id, $meta_value, $prev_value );
-			if ( Options::META_IMPORT_DATE_GMT === $meta_key ) {
-				return false;
-			}
-			return $check;
-		};
-		add_filter( 'update_post_metadata', $block_meta, 10, 5 );
-
-		// ACT: Re-import the same post (hits the update path).
-		$result = $this->import_service->import_post( $post_data, $session_id );
-
-		remove_filter( 'update_post_metadata', $block_meta, 10 );
-
-		// ASSERT: Import must report failure.
-		$this->assertFalse(
-			$result['success'],
-			'Update import should fail when tracking meta cannot be written.'
-		);
-		$this->assertStringContainsString(
-			'tracking metadata',
-			$result['error']
-		);
-
-		// ASSERT: Post fields must be rolled back.
-		$this->assertSame(
-			$original_title,
-			get_post_field( 'post_title', $post_id ),
-			'Title must be restored after tracking meta failure.'
-		);
-		$this->assertSame(
-			$original_content,
-			get_post_field( 'post_content', $post_id ),
-			'Content must be restored after tracking meta failure.'
-		);
-		$this->assertSame(
-			$original_link,
-			get_post_meta(
-				$post_id,
-				Options::META_SOURCE_LINK,
-				true
-			),
-			'Source link meta must be restored after tracking meta failure.'
-		);
 	}
 
 	/**
@@ -540,11 +439,6 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 		// ARRANGE: Capture pre-update values.
 		$original_title   = get_post_field( 'post_title', $post_id );
 		$original_content = get_post_field( 'post_content', $post_id );
-		$original_date    = get_post_meta(
-			$post_id,
-			Options::META_IMPORT_DATE_GMT,
-			true
-		);
 
 		// ARRANGE: Fresh content returns updated fields.
 		$this->mock_post_overrides = array(
@@ -578,15 +472,6 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 			$original_content,
 			get_post_field( 'post_content', $post_id ),
 			'Content must remain unchanged when wp_update_post fails silently.'
-		);
-		$this->assertSame(
-			$original_date,
-			get_post_meta(
-				$post_id,
-				Options::META_IMPORT_DATE_GMT,
-				true
-			),
-			'Import date must remain unchanged when wp_update_post fails silently.'
 		);
 	}
 
@@ -635,11 +520,6 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 		$original_link         = get_post_meta(
 			$post_id,
 			Options::META_SOURCE_LINK,
-			true
-		);
-		$original_date         = get_post_meta(
-			$post_id,
-			Options::META_IMPORT_DATE_GMT,
 			true
 		);
 		$original_meta         = get_post_meta(
@@ -724,15 +604,6 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 			),
 			'Source link meta must be restored after custom meta failure.'
 		);
-		$this->assertSame(
-			$original_date,
-			get_post_meta(
-				$post_id,
-				Options::META_IMPORT_DATE_GMT,
-				true
-			),
-			'Import date meta must be restored after custom meta failure.'
-		);
 
 		// ASSERT: Custom meta must be unchanged. The filter blocked both the
 		// import write and the rollback write for this key, but since the value
@@ -790,11 +661,6 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 		// ARRANGE: Capture pre-update values for rollback assertions.
 		$original_title   = get_post_field( 'post_title', $post_id );
 		$original_content = get_post_field( 'post_content', $post_id );
-		$original_date    = get_post_meta(
-			$post_id,
-			Options::META_IMPORT_DATE_GMT,
-			true
-		);
 		$original_meta    = get_post_meta( $post_id, 'my_field', true );
 		$original_terms   = wp_get_object_terms(
 			$post_id,
@@ -841,17 +707,6 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 			$original_content,
 			get_post_field( 'post_content', $post_id ),
 			'Content must be restored after term failure.'
-		);
-
-		// ASSERT: Tracking meta must be rolled back.
-		$this->assertSame(
-			$original_date,
-			get_post_meta(
-				$post_id,
-				Options::META_IMPORT_DATE_GMT,
-				true
-			),
-			'Import date meta must be restored after term failure.'
 		);
 
 		// ASSERT: Custom meta must be rolled back.
@@ -1053,97 +908,6 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 		$this->assert_no_new_attachments(
 			$attachments_before_update,
 			'New inline media must be deleted after rollback.'
-		);
-	}
-
-	/**
-	 * Verifies that media sideloaded for the new content (both featured image
-	 * and inline) is deleted when the bulk update path rolls back due to a
-	 * tracking-meta (META_IMPORT_DATE_GMT) write failure.
-	 *
-	 * This branch fires before set_post_thumbnail() runs, so the new featured
-	 * image is sideloaded but never assigned. Cleanup must still happen
-	 * because the attachment is in the media library.
-	 */
-	public function test_bulk_update_cleans_up_new_media_on_tracking_meta_failure(): void {
-		$session_id = $this->repository->create_session(
-			'https://source.example.com',
-			'bulk'
-		);
-
-		// ARRANGE: Initial import with no media so the re-import is the only
-		// source of new attachments.
-		$post_data = array(
-			'id'        => 9190,
-			'title'     => 'Post For Tracking Meta Cleanup Test',
-			'content'   => '<p>Original content.</p>',
-			'link'      => 'https://source.example.com/tracking-meta-cleanup-test',
-			'post_type' => 'posts',
-		);
-
-		$first = $this->import_service->import_post( $post_data, $session_id );
-		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
-
-		$attachments_before_update = $this->get_attachment_count();
-
-		// ARRANGE: Re-import with a new featured image (distinct source URL so
-		// a fresh attachment is sideloaded) and new inline media.
-		$distinct_media_filter = $this->make_distinct_media_url_filter(
-			200,
-			'tracking-featured-200.jpg'
-		);
-		add_filter( 'pre_http_request', $distinct_media_filter, 6, 3 );
-
-		$new_inline_url            = 'https://source.example.com/tracking-inline-new.jpg';
-		$this->mock_post_overrides = array(
-			'featured_media' => 200,
-			'content'        => '<p>Updated content '
-				. '<img src="' . $new_inline_url . '" alt="new">'
-				. '</p>',
-		);
-
-		// ARRANGE: Block the first META_IMPORT_DATE_GMT write to trigger the
-		// import_date_update_failed branch. Subsequent writes (e.g. the
-		// rollback's restore call) pass through so the test environment
-		// matches production behavior.
-		$block_meta = function (
-			$check,
-			$object_id,
-			$meta_key,
-			$meta_value,
-			$prev_value
-		) {
-			static $has_blocked = false;
-			unset( $object_id, $meta_value, $prev_value );
-			if ( Options::META_IMPORT_DATE_GMT === $meta_key && ! $has_blocked ) {
-				$has_blocked = true;
-				return false;
-			}
-			return $check;
-		};
-		add_filter( 'update_post_metadata', $block_meta, 10, 5 );
-
-		// ACT: Re-import the same post (hits the update path).
-		$result = $this->import_service->import_post( $post_data, $session_id );
-
-		remove_filter( 'update_post_metadata', $block_meta, 10 );
-		remove_filter( 'pre_http_request', $distinct_media_filter, 6 );
-
-		// ASSERT: Import must fail with a tracking-metadata error.
-		$this->assertFalse(
-			$result['success'],
-			'Update import should fail when tracking meta cannot be written.'
-		);
-		$this->assertStringContainsString(
-			'tracking metadata',
-			$result['error']
-		);
-
-		// ASSERT: Both newly sideloaded attachments (featured + inline) were
-		// cleaned up.
-		$this->assert_no_new_attachments(
-			$attachments_before_update,
-			'New media must be deleted after tracking-meta rollback.'
 		);
 	}
 
