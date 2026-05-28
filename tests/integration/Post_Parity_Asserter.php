@@ -165,11 +165,11 @@ final class Post_Parity_Asserter {
 	 * expected value per post is computed in assert_plugin_added_meta() — this
 	 * map only documents what each key means so reviewers can audit the set.
 	 *
-	 * Entries are written unconditionally and value-checked strictly, except:
-	 * META_IMPORT_DATE_GMT is a wall-clock timestamp checked for shape only,
-	 * and _thumbnail_id is written only when the source had a featured_media
-	 * (its dynamic dest attachment ID is checked for resolution rather than
-	 * value-equality — see assert_thumbnail_id_for_source()).
+	 * Entries are written unconditionally and value-checked strictly, except
+	 * _thumbnail_id, which is written only when the source had a
+	 * featured_media (its dynamic dest attachment ID is checked for
+	 * resolution rather than value-equality — see
+	 * assert_thumbnail_id_for_source()).
 	 *
 	 * @var array<string, string>
 	 */
@@ -177,7 +177,6 @@ final class Post_Parity_Asserter {
 		Options::META_SOURCE_POST_ID      => 'source post ID',
 		Options::META_SOURCE_LINK         => 'source post URL',
 		Options::META_IMPORTED_FROM       => 'plugin marker',
-		Options::META_IMPORT_DATE_GMT     => 'GMT timestamp (format-checked)',
 		Options::META_SOURCE_AUTHOR_EMAIL => 'source author email',
 		Options::META_SOURCE_AUTHOR_LOGIN => 'source author login',
 		'_thumbnail_id'                   => 'dest attachment ID (resolution-checked)',
@@ -462,10 +461,8 @@ final class Post_Parity_Asserter {
 	 *
 	 * META_SOURCE_POST_ID, META_SOURCE_LINK, META_IMPORTED_FROM, and the
 	 * source-author meta values are deterministic and asserted strictly.
-	 * META_IMPORT_DATE_GMT is checked for shape only (MySQL datetime format)
-	 * because the timestamp depends on import wall time. _thumbnail_id is
-	 * checked for presence + featured-attachment resolution when the source
-	 * had a featured_media; absence otherwise.
+	 * _thumbnail_id is checked for presence + featured-attachment resolution
+	 * when the source had a featured_media; absence otherwise.
 	 *
 	 * @param array<string, mixed> $source_body Source REST response body.
 	 * @param WP_Post              $dest_post   Imported destination post.
@@ -498,17 +495,6 @@ final class Post_Parity_Asserter {
 				"Plugin-added meta '{$key}' should match the expected value"
 			);
 		}
-
-		$import_date = (string) get_post_meta(
-			$dest_post->ID,
-			Options::META_IMPORT_DATE_GMT,
-			true
-		);
-		$test->assertMatchesRegularExpression(
-			'/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/',
-			$import_date,
-			'META_IMPORT_DATE_GMT should be a MySQL datetime string'
-		);
 
 		self::assert_thumbnail_id_for_source(
 			$source_body,

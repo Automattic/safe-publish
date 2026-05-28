@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin Page class
+ * Imported Posts Page class
  *
  * @package Safe_Publish
  */
@@ -9,63 +9,35 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\Utils\Options;
-
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
 /**
- * Admin Page Class.
+ * Renders the Imported Posts admin page and enqueues its bundle.
+ *
+ * The listing is driven by the import_items table — one row per post_id at its
+ * most recent import event, not by post meta. Pure local query — no source
+ * roundtrip on listing.
  */
-final class Admin_Page {
+final class Imported_Posts_Page {
 
 	/**
 	 * Renders the admin page.
 	 */
 	public function render(): void {
-		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
-
 		?>
-		<div class="wrap" id="safe-publish-admin-page">
-			<h1><?php esc_html_e( 'Safe Publish', 'safe-publish' ); ?></h1>
+		<div class="wrap" id="safe-publish-imported-page">
+			<h1><?php esc_html_e( 'Imported Posts', 'safe-publish' ); ?></h1>
 
 			<div class="safe-publish-admin-container">
 				<div class="safe-publish-dataviews-section">
-					<h2>
-					<?php
-					if ( ! empty( $source_site_url ) ) {
-						printf(
-							/* translators: %s: source site URL */
-							esc_html__( 'Posts from %s', 'safe-publish' ),
-							esc_url( $source_site_url )
-						);
-					} else {
-						esc_html_e( 'Posts from Source Site', 'safe-publish' );
-					}
-					?>
-				</h2>
-
-					<?php if ( empty( $source_site_url ) ) : ?>
-						<div class="notice notice-warning">
-							<p>
-								<?php
-								printf(
-									/* translators: %s: Settings page URL */
-									esc_html__( 'Please configure the connected site URL in the %s to see posts.', 'safe-publish' ),
-									'<a href="' . esc_url( admin_url( 'admin.php?page=safe-publish-settings' ) ) . '">' . esc_html__( 'settings page', 'safe-publish' ) . '</a>'
-								);
-								?>
-							</p>
+					<div id="safe-publish-imported-container">
+						<div class="safe-publish-loading">
+							<p><?php esc_html_e( 'Loading imported posts…', 'safe-publish' ); ?></p>
 						</div>
-					<?php else : ?>
-						<div id="safe-publish-dataviews-container">
-							<div class="safe-publish-loading">
-								<p><?php esc_html_e( 'Loading posts…', 'safe-publish' ); ?></p>
-							</div>
-						</div>
-					<?php endif; ?>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -73,16 +45,16 @@ final class Admin_Page {
 	}
 
 	/**
-	 * Enqueues admin assets.
+	 * Enqueues the Imported Posts page assets.
 	 */
 	public function enqueue_assets(): void {
 		if ( ! is_admin() ) {
 			return;
 		}
 
-		$asset_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/index.asset.php';
-		$script_url      = plugin_dir_url( dirname( __DIR__ ) ) . 'build/index.js';
-		$script_path     = plugin_dir_path( dirname( __DIR__ ) ) . 'build/index.js';
+		$asset_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/imported.asset.php';
+		$script_url      = plugin_dir_url( dirname( __DIR__ ) ) . 'build/imported.js';
+		$script_path     = plugin_dir_path( dirname( __DIR__ ) ) . 'build/imported.js';
 
 		if ( ! file_exists( $script_path ) || ! file_exists( $asset_file_path ) ) {
 			add_action(
@@ -110,21 +82,19 @@ final class Admin_Page {
 			return;
 		}
 
-		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
-
 		// phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable -- Path is built from plugin_dir_path() and a hardcoded filename.
 		$asset_file     = include $asset_file_path;
 		$script_version = $asset_file['version'];
 
 		wp_enqueue_script(
-			'safe-publish-admin-dataviews-script',
+			'safe-publish-imported-script',
 			$script_url,
 			$asset_file['dependencies'],
 			$script_version,
 			true
 		);
 
-		// Enqueue shared design tokens before any plugin stylesheet.
+		// Reuse the shared design tokens enqueued by the Source Posts page.
 		wp_enqueue_style(
 			'safe-publish-tokens',
 			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/tokens.css',
@@ -132,20 +102,21 @@ final class Admin_Page {
 			$script_version
 		);
 
-		// Enqueue DataViews styles.
+		// @wordpress/scripts merges the SCSS imports from every entry into a
+		// single style-index.css via splitChunks, so the Imported Posts page
+		// enqueues the same shared bundle as the Source Posts page.
 		$style_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/style-index.css';
 		$style_file_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'build/style-index.css';
 
 		if ( file_exists( $style_file_path ) ) {
 			wp_enqueue_style(
-				'safe-publish-admin-dataviews-style',
+				'safe-publish-imported-style',
 				$style_file_url,
 				array( 'wp-components', 'safe-publish-tokens' ),
 				$script_version
 			);
 		}
 
-		// Enqueue admin styles.
 		wp_enqueue_style(
 			'safe-publish-admin-style',
 			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/admin.css',
@@ -153,7 +124,6 @@ final class Admin_Page {
 			$script_version
 		);
 
-		// Enqueue React components styles.
 		wp_enqueue_style(
 			'safe-publish-react-components-style',
 			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/react-components.css',
@@ -163,12 +133,10 @@ final class Admin_Page {
 
 		$json_data = wp_json_encode(
 			array(
-				'ajaxurl'       => admin_url( 'admin-ajax.php' ),
-				'settingsUrl'   => admin_url( 'admin.php?page=safe-publish-settings' ),
-				'nonce'         => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-				'restNonce'     => wp_create_nonce( 'wp_rest' ),
-				'sourceSiteUrl' => $source_site_url,
-				'containerId'   => 'safe-publish-dataviews-container',
+				'ajaxurl'     => admin_url( 'admin-ajax.php' ),
+				'settingsUrl' => admin_url( 'admin.php?page=safe-publish-settings' ),
+				'nonce'       => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+				'containerId' => 'safe-publish-imported-container',
 			)
 		);
 
@@ -177,8 +145,8 @@ final class Admin_Page {
 		}
 
 		wp_add_inline_script(
-			'safe-publish-admin-dataviews-script',
-			sprintf( 'window.safePublishAdminData = %s;', $json_data ),
+			'safe-publish-imported-script',
+			sprintf( 'window.safePublishImportedData = %s;', $json_data ),
 			'before'
 		);
 	}

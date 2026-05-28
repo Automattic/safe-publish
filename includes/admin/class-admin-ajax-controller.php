@@ -112,6 +112,7 @@ final class Admin_Ajax_Controller {
 	 */
 	public function register_handlers(): void {
 		add_action( 'wp_ajax_safe_publish_fetch_posts', array( $this, 'ajax_fetch_posts' ) );
+		add_action( 'wp_ajax_safe_publish_list_imported_posts', array( $this, 'ajax_list_imported_posts' ) );
 		add_action( 'wp_ajax_safe_publish_fetch_post_types', array( $this, 'ajax_fetch_post_types' ) );
 		add_action( 'wp_ajax_safe_publish_test_connection', array( $this, 'ajax_test_connection' ) );
 		add_action( 'wp_ajax_safe_publish_auth_status', array( $this, 'ajax_auth_status' ) );
@@ -191,6 +192,86 @@ final class Admin_Ajax_Controller {
 		$this->post_import_service->annotate_posts_with_import_status( $result['items'] );
 
 		wp_send_json_success( $result );
+	}
+
+	/**
+	 * Handles AJAX request for the Imported Posts listing.
+	 *
+	 * Pure local query — no source roundtrip. Returns the paginated set of
+	 * imported posts ordered by most-recent import_date_gmt (from the items
+	 * table), joined with each post's most recent items row for session and
+	 * rollback eligibility metadata.
+	 */
+	public function ajax_list_imported_posts(): void {
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		$this->verify_ajax_capability();
+
+		// phpcs:disable WordPress.Security.NonceVerification.Missing
+		$page     = max( 1, absint( $_POST['page'] ?? 1 ) );
+		$per_page = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		$post_ids = $this->repository->list_imported_post_ids( $page, $per_page );
+
+		$has_more = count( $post_ids ) > $per_page;
+		if ( $has_more ) {
+			$post_ids = array_slice( $post_ids, 0, $per_page );
+		}
+
+		if ( 0 === count( $post_ids ) ) {
+			wp_send_json_success(
+				array(
+					'items'    => array(),
+					'has_more' => false,
+				)
+			);
+		}
+
+		// Hydrate WP_Post objects in the same order as the items-table sort.
+		$posts = get_posts(
+			array(
+				'post__in'               => $post_ids,
+				'post_type'              => 'any',
+				'post_status'            => 'any',
+				'posts_per_page'         => count( $post_ids ),
+				'orderby'                => 'post__in',
+				'suppress_filters'       => false,
+				'update_post_term_cache' => false,
+			)
+		);
+
+		$items_by_post_id = $this->repository->get_items_for_posts( $post_ids );
+
+		$rows = array();
+		foreach ( $posts as $post ) {
+			$item             = $items_by_post_id[ $post->ID ] ?? null;
+			$source_post_id   = (int) get_post_meta( $post->ID, Options::META_SOURCE_POST_ID, true );
+			$source_link      = (string) get_post_meta( $post->ID, Options::META_SOURCE_LINK, true );
+			$edit_url_or_null = get_edit_post_link( $post->ID, 'raw' );
+
+			$rows[] = array(
+				'id'                   => $post->ID,
+				'source_post_id'       => $source_post_id,
+				'title'                => $post->post_title,
+				'post_type'            => $post->post_type,
+				'local_status'         => $post->post_status,
+				'modified_gmt'         => $post->post_modified_gmt,
+				'edit_url'             => is_string( $edit_url_or_null ) ? $edit_url_or_null : '',
+				'source_link'          => $source_link,
+				'session_id'           => null !== $item ? (int) $item['session_id'] : null,
+				'rollback_status'      => null !== $item ? (string) $item['status'] : null,
+				'has_previous_content' => null !== $item ? (bool) $item['has_previous_content'] : false,
+				'rolled_back'          => null !== $item ? (bool) $item['rolled_back'] : false,
+				'import_date_gmt'      => null !== $item ? (string) $item['import_date_gmt'] : null,
+			);
+		}
+
+		wp_send_json_success(
+			array(
+				'items'    => $rows,
+				'has_more' => $has_more,
+			)
+		);
 	}
 
 	/**

@@ -81,7 +81,7 @@ final class Import_Items_Table {
 			import_date_gmt DATETIME NOT NULL,
 			PRIMARY KEY  (id),
 			KEY session_id_status (session_id, status),
-			KEY post_id (post_id)
+			KEY post_id_import_date (post_id, import_date_gmt)
 		) {$charset};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
