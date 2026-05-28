@@ -115,21 +115,6 @@ export interface ImportedPostsResponse {
 }
 
 /**
- * Admin data passed from PHP for the Imported Posts page.
- *
- * @property {string} ajaxurl     WordPress AJAX URL.
- * @property {string} nonce       Security nonce for AJAX requests.
- * @property {string} settingsUrl URL to the plugin settings page.
- * @property {string} containerId Container element ID.
- */
-export interface ImportedAdminData {
-	ajaxurl: string;
-	nonce: string;
-	settingsUrl: string;
-	containerId: string;
-}
-
-/**
  * Generic API response wrapper.
  *
  * Discriminated union type for WordPress AJAX/REST API responses.
@@ -337,20 +322,21 @@ export interface SourcePostsDataViewProps {
 }
 
 /**
- * Admin data passed from PHP via wp_add_inline_script.
+ * Admin data passed from PHP via wp_add_inline_script. Shared by the Source
+ * Posts and Imported Posts pages; `sourceSiteUrl` is only set by Source Posts.
  *
- * @property {string} ajaxurl       WordPress AJAX URL.
- * @property {string} nonce         Security nonce for AJAX requests.
- * @property {string} restNonce     Security nonce for REST API requests.
- * @property {string} sourceSiteUrl Source site URL.
- * @property {string} settingsUrl   URL to the plugin settings page.
- * @property {string} containerId   Container element ID.
+ * @property {string} ajaxurl         WordPress AJAX URL.
+ * @property {string} nonce           Security nonce for AJAX requests.
+ * @property {string} restNonce       Security nonce for REST API requests.
+ * @property {string} [sourceSiteUrl] Source site URL (Source Posts only).
+ * @property {string} settingsUrl     URL to the plugin settings page.
+ * @property {string} containerId     Container element ID.
  */
 export interface AdminData {
 	ajaxurl: string;
 	nonce: string;
 	restNonce: string;
-	sourceSiteUrl: string;
+	sourceSiteUrl?: string;
 	settingsUrl: string;
 	containerId: string;
 	showImportHistory?: boolean;
@@ -527,7 +513,6 @@ export interface ExportEvent {
 declare global {
 	interface Window {
 		safePublishAdminData: AdminData;
-		safePublishImportedData: ImportedAdminData;
 	}
 
 	interface HTMLElement {

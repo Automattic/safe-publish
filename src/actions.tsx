@@ -15,6 +15,7 @@ import {
 	ApiResponse,
 	BulkImportResponse,
 	BulkImportResult,
+	ImportedPost,
 	Post,
 } from './types';
 import { getErrorMessage, renderWarningShortLabel } from './utils';
@@ -518,5 +519,99 @@ export const createActions = (
 		RenderModal: ( { items, closeModal } ) => {
 			return <PostDiffModal items={ items } closeModal={ closeModal } />;
 		},
+	},
+];
+
+/**
+ * Maps an Imported Posts row to the Post shape the shared modals expect:
+ * they key off `id` as the source post ID (e.g. DeletePostModal sends it as
+ * source_post_id), so source_post_id -> id and source_link -> link.
+ *
+ * @param {ImportedPost} item Imported Posts listing row.
+ *
+ * @return {Post} Post-shaped object for the shared modals.
+ */
+const toSourcePost = ( item: ImportedPost ): Post => ( {
+	id: item.source_post_id,
+	link: item.source_link,
+	title: item.title,
+	date_gmt: '',
+	modified_gmt: item.modified_gmt,
+	post_type: item.post_type,
+	status: item.local_status,
+	is_imported: true,
+} );
+
+/**
+ * Creates DataViews actions for the Imported Posts page.
+ *
+ * Reuses the shared modals — Update (ImportModal with force_update), Post
+ * Diff, and Delete — via toSourcePost, plus an Edit action that opens the
+ * local editor.
+ *
+ * @param {Function} [onRefresh] Callback to refresh the listing after a change.
+ *
+ * @return {Action<ImportedPost>[]} Array of DataViews actions.
+ */
+export const createImportedActions = (
+	onRefresh?: () => void
+): Action< ImportedPost >[] => [
+	{
+		id: 'edit-post',
+		label: __( 'Edit', 'safe-publish' ),
+		icon: pencil,
+		isPrimary: true,
+		isEligible: ( item: ImportedPost ) => '' !== item.edit_url,
+		callback: ( items: ImportedPost[] ) => {
+			const url = items[ 0 ]?.edit_url;
+			if ( url ) {
+				window.open( url, '_blank', 'noreferrer' );
+			}
+		},
+	},
+	{
+		id: 'update-post',
+		label: __( 'Update', 'safe-publish' ),
+		icon: download,
+		isPrimary: true,
+		hideModalHeader: true,
+		modalFocusOnMount: 'firstContentElement',
+		RenderModal: ( { items, closeModal } ) => (
+			<ImportModal
+				items={ items.map( toSourcePost ) }
+				closeModal={ closeModal }
+				onRefresh={ onRefresh }
+			/>
+		),
+	},
+	{
+		id: 'post-diff',
+		label: __( 'Post Diff', 'safe-publish' ),
+		icon: drafts,
+		hideModalHeader: false,
+		supportsBulk: false,
+		modalSize: 'fill',
+		RenderModal: ( { items, closeModal } ) => (
+			<PostDiffModal
+				items={ items.map( toSourcePost ) }
+				closeModal={ closeModal }
+			/>
+		),
+	},
+	{
+		id: 'delete-post',
+		label: __( 'Delete', 'safe-publish' ),
+		icon: trash,
+		isDestructive: true,
+		isPrimary: true,
+		hideModalHeader: true,
+		modalFocusOnMount: 'firstContentElement',
+		RenderModal: ( { items, closeModal } ) => (
+			<DeletePostModal
+				items={ items.map( toSourcePost ) }
+				closeModal={ closeModal }
+				onRefresh={ onRefresh }
+			/>
+		),
 	},
 ];
