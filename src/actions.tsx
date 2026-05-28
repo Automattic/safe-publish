@@ -6,11 +6,12 @@
  *
  * @file This file defines DataViews actions for the Safe Publish plugin.
  */
-import { drafts, download, pencil, trash } from '@wordpress/icons';
+import { drafts, download, pencil, rotateLeft, trash } from '@wordpress/icons';
 
 import DeletePostModal from './components/DeletePostModal';
 import ImportModal from './components/ImportModal';
 import PostDiffModal from './components/PostDiffModal';
+import RollbackPostModal from './components/RollbackPostModal';
 import {
 	ApiResponse,
 	BulkImportResponse,
@@ -547,7 +548,7 @@ const toSourcePost = ( item: ImportedPost ): Post => ( {
  *
  * Reuses the shared modals — Update (ImportModal with force_update), Post
  * Diff, and Delete — via toSourcePost, plus an Edit action that opens the
- * local editor.
+ * local editor and a Roll back action that undoes the most recent import.
  *
  * @param {Function} [onRefresh] Callback to refresh the listing after a change.
  *
@@ -606,6 +607,27 @@ export const createImportedActions = (
 		RenderModal: ( { items, closeModal } ) => (
 			<DeletePostModal
 				items={ items.map( toSourcePost ) }
+				closeModal={ closeModal }
+				onRefresh={ onRefresh }
+			/>
+		),
+	},
+	{
+		id: 'rollback',
+		label: __( 'Roll back', 'safe-publish' ),
+		icon: rotateLeft,
+		isDestructive: true,
+		hideModalHeader: true,
+		modalFocusOnMount: 'firstContentElement',
+		supportsBulk: false,
+		isEligible: ( item: ImportedPost ) =>
+			null !== item.item_id &&
+			! item.rolled_back &&
+			( 'success' === item.rollback_status ||
+				'updated' === item.rollback_status ),
+		RenderModal: ( { items, closeModal } ) => (
+			<RollbackPostModal
+				items={ items }
 				closeModal={ closeModal }
 				onRefresh={ onRefresh }
 			/>
