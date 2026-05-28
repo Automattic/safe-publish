@@ -70,6 +70,66 @@ export interface CatalogResponse {
 }
 
 /**
+ * Represents a row in the Imported Posts listing.
+ *
+ * Joins the local post (title, status, edit url) with the most recent
+ * items-table row for the same post (session id, rollback status, import
+ * date) — the page's data source is local; no source roundtrip on listing.
+ *
+ * @property {number}      id                   Local WordPress post ID.
+ * @property {number}      source_post_id       Source post ID this row was imported from.
+ * @property {string}      title                Local post title.
+ * @property {string}      post_type            Local post type slug.
+ * @property {string}      local_status         Local post_status.
+ * @property {string}      modified_gmt         Local post_modified_gmt.
+ * @property {string}      edit_url             Local wp-admin edit URL.
+ * @property {string}      source_link          Source post permalink (from META_SOURCE_LINK).
+ * @property {number|null} session_id           Session ID of the most recent import event, or null.
+ * @property {string|null} rollback_status      Items-table status (success/updated/error), or null.
+ * @property {boolean}     has_previous_content Whether the row has a pre-update snapshot for rollback restore.
+ * @property {boolean}     rolled_back          Whether the most recent import event was rolled back.
+ * @property {string|null} import_date_gmt      Most recent import_date_gmt from the items table, or null.
+ */
+export interface ImportedPost {
+	id: number;
+	source_post_id: number;
+	title: string;
+	post_type: string;
+	local_status: string;
+	modified_gmt: string;
+	edit_url: string;
+	source_link: string;
+	session_id: number | null;
+	rollback_status: string | null;
+	has_previous_content: boolean;
+	rolled_back: boolean;
+	import_date_gmt: string | null;
+}
+
+/**
+ * Envelope returned by the destination-side imported-posts listing endpoint.
+ */
+export interface ImportedPostsResponse {
+	items: ImportedPost[];
+	has_more: boolean;
+}
+
+/**
+ * Admin data passed from PHP for the Imported Posts page.
+ *
+ * @property {string} ajaxurl     WordPress AJAX URL.
+ * @property {string} nonce       Security nonce for AJAX requests.
+ * @property {string} settingsUrl URL to the plugin settings page.
+ * @property {string} containerId Container element ID.
+ */
+export interface ImportedAdminData {
+	ajaxurl: string;
+	nonce: string;
+	settingsUrl: string;
+	containerId: string;
+}
+
+/**
  * Generic API response wrapper.
  *
  * Discriminated union type for WordPress AJAX/REST API responses.
@@ -467,6 +527,7 @@ export interface ExportEvent {
 declare global {
 	interface Window {
 		safePublishAdminData: AdminData;
+		safePublishImportedData: ImportedAdminData;
 	}
 
 	interface HTMLElement {
