@@ -103,6 +103,21 @@ final class Meta_Terms_Manager {
 					);
 				}
 
+				$taxonomy_object = get_taxonomy( $tax );
+				$can_create      = $taxonomy_object && current_user_can( $taxonomy_object->cap->edit_terms );
+				$can_assign      = $taxonomy_object && current_user_can( $taxonomy_object->cap->assign_terms );
+
+				if ( ! $can_assign ) {
+					return new WP_Error(
+						'taxonomy_assign_forbidden',
+						sprintf(
+							/* translators: %s: taxonomy name */
+							__( 'You are not allowed to assign terms in the "%s" taxonomy.', 'safe-publish' ),
+							$tax
+						)
+					);
+				}
+
 				$items    = is_array( $term_items ) ? $term_items : (array) $term_items;
 				$term_ids = array();
 
@@ -136,6 +151,18 @@ final class Meta_Terms_Manager {
 					if ( ! $term_id && ( $term_slug || $term_name ) ) {
 						$existing = $term_slug ? get_term_by( 'slug', $term_slug, $tax ) : false;
 						if ( ! $existing && $term_name ) {
+							if ( ! $can_create ) {
+								return new WP_Error(
+									'taxonomy_create_forbidden',
+									sprintf(
+										/* translators: 1: term name, 2: taxonomy name */
+										__( 'Cannot create term "%1$s" in taxonomy "%2$s": insufficient permissions.', 'safe-publish' ),
+										$term_name,
+										$tax
+									)
+								);
+							}
+
 							$inserted = wp_insert_term(
 								$term_name,
 								$tax,
