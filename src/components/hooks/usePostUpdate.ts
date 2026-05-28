@@ -14,15 +14,17 @@ import type { DiffPreviewResult } from '../../api/diff';
 /**
  * Parameters for the usePostUpdate hook.
  *
- * @property {number}                        localPostId     Local post ID.
- * @property {string}                        content         Post content.
- * @property {number}                        featuredMediaId Featured media ID.
- * @property {DiffPreviewResult['incoming']} incoming        Incoming data.
+ * @property {number}                        localPostId Local post ID.
+ * @property {DiffPreviewResult['incoming']} incoming    Source-side payload
+ *                                                       captured by the diff
+ *                                                       request; carries
+ *                                                       fresh content,
+ *                                                       title, excerpt,
+ *                                                       meta, terms, and
+ *                                                       featuredMedia.
  */
 interface UsePostUpdateParams {
 	localPostId: number;
-	content: string;
-	featuredMediaId?: number;
 	incoming: DiffPreviewResult['incoming'];
 }
 
@@ -50,8 +52,6 @@ interface UsePostUpdateResult {
  */
 export function usePostUpdate( {
 	localPostId,
-	content,
-	featuredMediaId,
 	incoming,
 }: UsePostUpdateParams ): UsePostUpdateResult {
 	const [ isUpdating, setIsUpdating ] = useState( false );
@@ -71,6 +71,19 @@ export function usePostUpdate( {
 		setUpdateError( null );
 		setUpdateSuccess( null );
 
+		// Refuse to submit when the diff renderer didn't return content —
+		// posting an empty string would silently wipe the destination post.
+		if ( typeof incoming?.content !== 'string' || '' === incoming.content ) {
+			setUpdateError(
+				__(
+					'Source content is unavailable. Close this diff and reopen it to retry.',
+					'safe-publish'
+				)
+			);
+			setIsUpdating( false );
+			return;
+		}
+
 		const meta = incoming?.meta;
 		const metaToSend =
 			meta && typeof meta === 'object'
@@ -85,14 +98,14 @@ export function usePostUpdate( {
 
 		const result = await updatePostContent(
 			localPostId,
-			content,
+			incoming.content,
 			window?.safePublishAdminData?.restNonce,
 			metaToSend,
 			incoming?.terms,
 			incoming?.title,
 			incoming?.excerpt,
-			typeof featuredMediaId === 'number'
-				? featuredMediaId
+			typeof incoming?.featuredMedia === 'number'
+				? incoming.featuredMedia
 				: undefined
 		);
 

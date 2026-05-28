@@ -6,7 +6,6 @@ import { describe, expect, it } from 'vitest';
 import {
 	getPostTypeLabel,
 	getSyncStatusLabel,
-	getSyncStatusOrder,
 	getPublishStatusLabel,
 } from '@/components/post-fields';
 import { PUBLISH_STATUS_LABELS, SYNC_STATUS_LABELS } from '@/utils';
@@ -17,7 +16,10 @@ const basePost: Post = {
 	id: 1,
 	link: 'https://example.com/1',
 	title: 'Example',
+	date_gmt: '2024-07-15T10:30:00Z',
 	modified_gmt: '2024-07-15T10:30:00Z',
+	post_type: 'post',
+	status: 'publish',
 };
 
 describe( 'getPostTypeLabel', () => {
@@ -86,41 +88,6 @@ describe( 'getSyncStatusLabel', () => {
 
 		// ASSERT: returns the localized "Available" label.
 		expect( result ).toBe( SYNC_STATUS_LABELS.available );
-	} );
-} );
-
-describe( 'getSyncStatusOrder', () => {
-	it( 'should rank available (0) below outdated (1) below up-to-date (2)', () => {
-		// ARRANGE: one post in each sync state.
-		const available: Post = { ...basePost, is_imported: false };
-		const outdated: Post = { ...basePost, is_imported: true, has_update: true };
-		const upToDate: Post = { ...basePost, is_imported: true, has_update: false };
-
-		// ACT: compute sort keys.
-		const availableOrder = getSyncStatusOrder( available );
-		const outdatedOrder = getSyncStatusOrder( outdated );
-		const upToDateOrder = getSyncStatusOrder( upToDate );
-
-		// ASSERT: exact sort keys per the documented contract.
-		expect( availableOrder ).toBe( 0 );
-		expect( outdatedOrder ).toBe( 1 );
-		expect( upToDateOrder ).toBe( 2 );
-	} );
-
-	it( 'should preserve relative order under numeric comparison', () => {
-		// ARRANGE: same triplet of posts.
-		const available: Post = { ...basePost, is_imported: false };
-		const outdated: Post = { ...basePost, is_imported: true, has_update: true };
-		const upToDate: Post = { ...basePost, is_imported: true, has_update: false };
-
-		// ACT: compute sort keys.
-		const availableOrder = getSyncStatusOrder( available );
-		const outdatedOrder = getSyncStatusOrder( outdated );
-		const upToDateOrder = getSyncStatusOrder( upToDate );
-
-		// ASSERT: arithmetic order matches the documented contract.
-		expect( availableOrder ).toBeLessThan( outdatedOrder );
-		expect( outdatedOrder ).toBeLessThan( upToDateOrder );
 	} );
 } );
 

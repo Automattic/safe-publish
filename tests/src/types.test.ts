@@ -11,39 +11,42 @@ describe( 'Type validation', () => {
 				id: 1,
 				link: 'https://example.com/post',
 				title: 'Test Post',
+				date_gmt: '2024-03-15T10:30:00Z',
 				modified_gmt: '2024-03-15T10:30:00Z',
+				post_type: 'post',
+				status: 'publish',
 			};
 
 			expect( post.id ).toBe( 1 );
 			expect( post.link ).toBe( 'https://example.com/post' );
 			expect( post.title ).toBe( 'Test Post' );
+			expect( post.date_gmt ).toBe( '2024-03-15T10:30:00Z' );
 			expect( post.modified_gmt ).toBe( '2024-03-15T10:30:00Z' );
+			expect( post.post_type ).toBe( 'post' );
+			expect( post.status ).toBe( 'publish' );
 		} );
 
-		it( 'should accept post with optional fields', () => {
+		it( 'should accept post with annotation fields from the destination', () => {
 			const post: Post = {
 				id: 1,
 				link: 'https://example.com/post',
 				title: 'Test Post',
+				date_gmt: '2024-03-15T10:30:00Z',
 				modified_gmt: '2024-03-15T10:30:00Z',
-				content: 'Post content',
-				excerpt: 'Post excerpt',
-				author: 'John Doe',
-				status: 'publish',
-				featured_media: 123,
 				post_type: 'post',
-				meta: { key: 'value' },
-				terms: { category: [ 'News' ] },
+				status: 'publish',
+				is_imported: true,
+				has_update: true,
+				local_status: 'draft',
+				local_edit_url: 'https://destination.example/wp-admin/post.php?post=99',
 			};
 
-			expect( post.content ).toBe( 'Post content' );
-			expect( post.excerpt ).toBe( 'Post excerpt' );
-			expect( post.author ).toBe( 'John Doe' );
-			expect( post.status ).toBe( 'publish' );
-			expect( post.featured_media ).toBe( 123 );
-			expect( post.post_type ).toBe( 'post' );
-			expect( post.meta ).toBeDefined();
-			expect( post.terms ).toBeDefined();
+			expect( post.is_imported ).toBe( true );
+			expect( post.has_update ).toBe( true );
+			expect( post.local_status ).toBe( 'draft' );
+			expect( post.local_edit_url ).toBe(
+				'https://destination.example/wp-admin/post.php?post=99'
+			);
 		} );
 	} );
 

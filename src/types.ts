@@ -31,38 +31,42 @@ export type JsonObject = { [key: string]: JsonValue };
 export type JsonValue = JsonPrimitive | JsonArray | JsonObject;
 
 /**
- * Represents a post from a source WordPress site.
+ * Represents a post item returned by the source catalog endpoint.
  *
- * @property {number}                   id               Unique post ID.
- * @property {string}                   link             Permalink URL of the post.
- * @property {string}                   title            Post title.
- * @property {string}                   modified_gmt     Last modified date in ISO 8601 UTC.
- * @property {string}                   [content]        Full post content.
- * @property {string}                   [excerpt]        Post excerpt.
- * @property {string}                   [author]         Post author name.
- * @property {string}                   [status]         Post status.
- * @property {number}                   [featured_media] Featured image attachment ID.
- * @property {string}                   [post_type]      Post type slug.
- * @property {JsonObject}               [meta]           Post meta fields.
- * @property {Record<string, string[]>} [terms]          Taxonomy terms assigned to the post.
+ * Listing-context only — the import path re-fetches via wp/v2/{type}/{id}
+ * to obtain raw content/meta/terms, so this shape stays minimal.
+ *
+ * @property {number} id           Unique post ID on the source.
+ * @property {string} link         Permalink URL on the source.
+ * @property {string} title        Sanitized post title.
+ * @property {string} date_gmt     Published date in ISO 8601 UTC.
+ * @property {string} modified_gmt Last modified date in ISO 8601 UTC.
+ * @property {string} post_type    Post type slug.
+ * @property {string} status       Source post status (publish, draft, …).
  */
 export interface Post {
 	id: number;
 	link: string;
 	title: string;
+	date_gmt: string;
 	modified_gmt: string;
-	content?: string;
-	excerpt?: string;
-	author?: string;
-	status?: string;
-	featured_media?: number;
-	post_type?: string;
-	meta?: JsonObject;
-	terms?: Record< string, string[] >;
+	post_type: string;
+	status: string;
 	is_imported?: boolean;
 	has_update?: boolean;
 	local_status?: string | null;
 	local_edit_url?: string | null;
+}
+
+/**
+ * Envelope returned by the source catalog endpoint.
+ *
+ * `has_more` lets the UI render a Next button without computing a total
+ * page count (the source skips SQL_CALC_FOUND_ROWS for huge sites).
+ */
+export interface CatalogResponse {
+	items: Post[];
+	has_more: boolean;
 }
 
 /**
@@ -265,27 +269,22 @@ export interface RollbackItemData {
 /**
  * Props for the SourcePostsDataView component.
  *
- * @property {Post[]} initialPosts  Posts to display on initial load.
- * @property {string} sourceSiteUrl Source site URL.
- * @property {number} numberPosts   Number of posts to fetch.
+ * @property {string} sourceSiteUrl Source site URL; component fetches the
+ *                                  first page on mount.
  */
 export interface SourcePostsDataViewProps {
-	initialPosts: Post[];
 	sourceSiteUrl: string;
-	numberPosts: number;
 }
 
 /**
  * Admin data passed from PHP via wp_add_inline_script.
  *
- * @property {string}    ajaxurl       WordPress AJAX URL.
- * @property {string}    nonce         Security nonce for AJAX requests.
- * @property {string}    restNonce     Security nonce for REST API requests.
- * @property {string}    sourceSiteUrl Source site URL.
- * @property {string}    settingsUrl   URL to the plugin settings page.
- * @property {number}    numPosts      Number of posts to fetch.
- * @property {string}    containerId   Container element ID.
- * @property {JsonArray} postsData     Raw posts data from PHP.
+ * @property {string} ajaxurl       WordPress AJAX URL.
+ * @property {string} nonce         Security nonce for AJAX requests.
+ * @property {string} restNonce     Security nonce for REST API requests.
+ * @property {string} sourceSiteUrl Source site URL.
+ * @property {string} settingsUrl   URL to the plugin settings page.
+ * @property {string} containerId   Container element ID.
  */
 export interface AdminData {
 	ajaxurl: string;
@@ -293,9 +292,7 @@ export interface AdminData {
 	restNonce: string;
 	sourceSiteUrl: string;
 	settingsUrl: string;
-	numPosts: number;
 	containerId: string;
-	postsData: JsonArray;
 	showImportHistory?: boolean;
 	showExportHistory?: boolean;
 }

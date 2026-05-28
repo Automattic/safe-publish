@@ -1,20 +1,20 @@
 /**
- * DataViews component for source posts.
+ * DataViews component for the source posts catalog.
  *
- * Renders a DataViews table/grid/list of posts fetched from a source
- * WordPress site, with search, sort, pagination, and per-row actions.
+ * Server-paginated browser of the source site's catalog, backed by the
+ * `safe-publish/v1/catalog/posts` endpoint. A custom toolbar drives all
+ * filter/search/sort/page changes; DataViews handles only the table render,
+ * sortable column clicks, layout switcher, and Prev/Next pagination.
  *
  * @file This file defines the SourcePostsDataView component.
  */
-import { update } from '@wordpress/icons';
+import { chevronDown, update } from '@wordpress/icons';
 
 import AuthStatusNotice from './AuthStatusNotice';
-import { useDataViewsResult } from './hooks/useDataViewsResult';
 import {
 	getPostTypeLabel,
 	getPublishStatusLabel,
 	getSyncStatusLabel,
-	getSyncStatusOrder,
 } from './post-fields';
 import { createActions } from '../actions';
 import {
@@ -22,9 +22,7 @@ import {
 	LAYOUT_GRID,
 	LAYOUT_LIST,
 	LAYOUT_TABLE,
-	MAX_POSTS_COUNT,
-	MIN_POSTS_COUNT,
-	NUMBER_POSTS_DEBOUNCE_DELAY,
+	SEARCH_DEBOUNCE_MS,
 } from '../constants';
 import { PostTypeSelector } from '../post-type-selector';
 import {
@@ -32,55 +30,248 @@ import {
 	formatDateTime,
 	getErrorMessage,
 	PUBLISH_STATUS_LABELS,
-	sanitizePosts,
 	SYNC_STATUS_LABELS,
 } from '../utils';
 import {
-	__experimentalNumberControl as NumberControl,
+	BaseControl,
 	Button,
+	DatePicker,
+	Dropdown,
+	FormTokenField,
 	Notice,
+	Spinner,
+	TextControl,
 } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
-import { useState, useEffect, useRef } from '@wordpress/element';
-import { __, sprintf } from '@wordpress/i18n';
+import { dateI18n, getSettings } from '@wordpress/date';
+import { useState, useEffect, useRef, useCallback, useMemo } from '@wordpress/element';
+import { __, _x, sprintf } from '@wordpress/i18n';
 
 import type {
 	ApiResponse,
 	AuthStatus,
 	AuthStatusData,
+	CatalogResponse,
 	DataViewsField,
 	SourcePostsDataViewProps,
 	Post,
 } from '../types';
 
 /**
- * DataViews component for source posts.
+ * Source status slugs the catalog UI is allowed to filter on. Must match
+ * the source-side controller's ALLOWED_STATUSES.
+ */
+const STATUS_VALUES: readonly string[] = [
+	'publish',
+	'draft',
+	'pending',
+	'private',
+	'future',
+];
+
+/**
+ * Pre-computed label list for the FormTokenField suggestions, hoisted so
+ * we don't allocate a fresh array on every render.
+ */
+const STATUS_LABEL_SUGGESTIONS = STATUS_VALUES.map(
+	// eslint-disable-next-line security/detect-object-injection -- value iterates STATUS_VALUES allowlist.
+	( value ) => PUBLISH_STATUS_LABELS[ value ] ?? value
+);
+
+/**
+ * Regex matching pasted URLs or absolute paths. Catches the "I have this
+ * post's link" workflow without needing to scope to the source's host.
+ */
+const URL_OR_PATH_RE = /^(https?:\/\/[^\s]+|\/[^\s]+)/;
+
+/**
+ * Extracts a slug from a pasted URL or path.
  *
- * Renders a DataViews table with search, sort, and pagination capabilities
- * for displaying posts fetched from source WordPress sites.
+ * Drops query/hash, strips trailing slashes, and returns the last
+ * non-empty path segment. Returns null when the input isn't URL-shaped,
+ * no slug can be recovered, or the URL host doesn't match the connected
+ * source — pasting a URL from a different site would otherwise query the
+ * source for a slug it doesn't have and silently return zero results.
+ *
+ * @param {string} raw       User input from the search box.
+ * @param {string} sourceUrl Connected source site URL for host validation.
+ *
+ * @return {string|null} Slug suitable for `name=` lookup, or null.
+ */
+function detectSlugFromInput( raw: string, sourceUrl: string ): string | null {
+	const trimmed = raw.trim();
+	if ( ! URL_OR_PATH_RE.test( trimmed ) ) {
+		return null;
+	}
+
+	const PLACEHOLDER_HOST = 'placeholder.example';
+	let path = trimmed;
+	try {
+		const url = new URL( trimmed, `https://${ PLACEHOLDER_HOST }` );
+		// Bare paths inherit the placeholder host; only validate when the
+		// input was a full URL with its own host.
+		if ( url.host !== PLACEHOLDER_HOST ) {
+			try {
+				const sourceHost = new URL( sourceUrl ).host;
+				if ( url.host !== sourceHost ) {
+					return null;
+				}
+			} catch {
+				// Source URL unparseable; skip validation rather than block.
+			}
+		}
+		path = url.pathname;
+	} catch {
+		// Already a bare path; fall through with `trimmed`.
+	}
+
+	const segments = path.split( '/' ).filter( ( seg ) => '' !== seg );
+	const last = segments.pop();
+	return last && '' !== last ? last : null;
+}
+
+/**
+ * One side of the published-date range popover: a labeled DatePicker
+ * with a Clear button that only renders when the bound is set.
+ *
+ * @param {Object}    props               Component props.
+ * @param {string}    props.label         Heading shown above the picker.
+ * @param {string?}   props.value         Currently selected ISO date, or null.
+ * @param {Function}  props.onChange      Called with the new ISO date or null.
+ * @param {Function?} props.isInvalidDate Optional predicate that disables
+ *                                        dates the caller considers invalid.
+ *
+ * @return {JSX.Element} Labeled picker with conditional Clear button.
+ */
+function DateRangeColumn( {
+	label,
+	value,
+	onChange,
+	isInvalidDate,
+}: {
+	label: string;
+	value: string | null;
+	onChange: ( next: string | null ) => void;
+	isInvalidDate?: ( date: Date ) => boolean;
+} ): JSX.Element {
+	// Honor WP's Settings → General → "Week Starts On" so the calendar
+	// matches the rest of the admin.
+	const startOfWeek = getSettings().l10n.startOfWeek;
+
+	return (
+		// role="group" with aria-label so screen readers can tell the two
+		// DatePickers apart — both render their own "Calendar" label that
+		// would otherwise read identically.
+		<div
+			className="safe-publish-date-picker-panel__group"
+			role="group"
+			aria-label={ label }
+		>
+			<p className="safe-publish-date-picker-panel__heading">{ label }</p>
+			<DatePicker
+				currentDate={ value ?? undefined }
+				onChange={ ( next: string ) =>
+					onChange( next ? next.slice( 0, 10 ) : null )
+				}
+				isInvalidDate={ isInvalidDate }
+				startOfWeek={ startOfWeek }
+			/>
+			{ null !== value && (
+				<Button variant="tertiary" onClick={ () => onChange( null ) }>
+					{ __( 'Clear', 'safe-publish' ) }
+				</Button>
+			) }
+		</div>
+	);
+}
+
+/**
+ * Serializes a Date to its local calendar day ("YYYY-MM-DD") for
+ * lexicographic comparison against ISO date strings the toolbar stores.
+ * Uses local parts (not toISOString) so a user picking April 30 doesn't
+ * get the previous day in negative-UTC-offset timezones.
+ *
+ * @param {Date} date Date instance to serialize.
+ * @return {string} Calendar day in YYYY-MM-DD form.
+ */
+function toCalendarDay( date: Date ): string {
+	return `${ date.getFullYear() }-${ String( date.getMonth() + 1 ).padStart( 2, '0' ) }-${ String( date.getDate() ).padStart( 2, '0' ) }`;
+}
+
+/**
+ * Formats the published-date dropdown button label so the user can read
+ * the active filter at a glance.
+ *
+ * @param {string|null} after  ISO date for the after bound, or null.
+ * @param {string|null} before ISO date for the before bound, or null.
+ *
+ * @return {string} Translated label for the toggle button.
+ */
+function formatDateRangeLabel(
+	after: string | null,
+	before: string | null
+): string {
+	if ( null === after && null === before ) {
+		return __( 'All dates', 'safe-publish' );
+	}
+
+	// Append `T00:00:00Z` so moment parses the calendar-day string as UTC
+	// midnight (bare date-only strings are parsed as *local* midnight).
+	// Combined with the `true` timezone arg (which formats in UTC), the
+	// label round-trips the picked calendar day in any browser timezone.
+	const fmt = ( iso: string ): string =>
+		dateI18n( getSettings().formats.date, `${ iso }T00:00:00Z`, true );
+
+	if ( null !== after && null !== before ) {
+		// Collapse a same-day range to the single date rather than the
+		// redundant "<date> – <date>".
+		if ( after === before ) {
+			return fmt( after );
+		}
+		return sprintf(
+			/* translators: 1: start date, 2: end date */
+			_x( '%1$s – %2$s', 'date range', 'safe-publish' ),
+			fmt( after ),
+			fmt( before )
+		);
+	}
+
+	if ( null !== after ) {
+		/* translators: %s: start date */
+		return sprintf( __( 'From %s', 'safe-publish' ), fmt( after ) );
+	}
+
+	/* translators: %s: end date */
+	return sprintf( __( 'To %s', 'safe-publish' ), fmt( before as string ) );
+}
+
+/**
+ * SourcePostsDataView component.
  *
  * @param {Object} props               Component props.
- * @param {Post[]} props.initialPosts  Posts to display on initial load.
  * @param {string} props.sourceSiteUrl Source site URL.
- * @param {number} props.numberPosts   Number of posts to fetch.
  *
  * @return {JSX.Element} Rendered DataViews component.
  */
-export function SourcePostsDataView( { initialPosts, sourceSiteUrl, numberPosts }: SourcePostsDataViewProps ): JSX.Element {
+export function SourcePostsDataView( {
+	sourceSiteUrl,
+}: SourcePostsDataViewProps ): JSX.Element {
 	const [ view, setView ] = useState< View >( {
 		type: 'table',
 		perPage: DEFAULT_ITEMS_PER_PAGE,
 		page: 1,
 		sort: {
-			field: 'modified_gmt',
+			field: 'date_gmt',
 			direction: 'desc',
 		},
-		search: '',
-		filters: [],
-		fields: [ 'permalink', 'modified_gmt', 'sync_status', 'publish_status' ],
+		fields: [
+			'permalink',
+			'sync_status',
+			'source_status',
+			'publish_status',
+			'date_gmt',
+		],
 		titleField: 'title',
-		descriptionField: 'description',
-		mediaField: 'image',
 	} );
 
 	const defaultLayouts = {
@@ -89,23 +280,295 @@ export function SourcePostsDataView( { initialPosts, sourceSiteUrl, numberPosts 
 		[ LAYOUT_LIST ]: {},
 	};
 
-	const [ allPosts, setAllPosts ] = useState< Post[] >( initialPosts );
-	const [ selectedPostType, setSelectedPostType ] = useState( 'posts' );
+	const [ pagePosts, setPagePosts ] = useState< Post[] >( [] );
+	const [ hasMore, setHasMore ] = useState( false );
+	const [ selectedPostType, setSelectedPostType ] = useState( 'post' );
+	const [ searchTerm, setSearchTerm ] = useState( '' );
+	const [ debouncedSearch, setDebouncedSearch ] = useState( '' );
+	const [ slugFromUrl, setSlugFromUrl ] = useState< string | null >( null );
+	const [ selectedStatuses, setSelectedStatuses ] = useState< string[] >( [] );
+	const [ publishedAfter, setPublishedAfter ] = useState< string | null >( null );
+	const [ publishedBefore, setPublishedBefore ] = useState< string | null >( null );
 	const [ isLoadingPosts, setIsLoadingPosts ] = useState( false );
+	const [ hasFetchedOnce, setHasFetchedOnce ] = useState( false );
 	const [ postTypeError, setPostTypeError ] = useState< string | null >( null );
+	const [ fetchError, setFetchError ] = useState< string | null >( null );
 	const [ authStatus, setAuthStatus ] = useState< AuthStatus | null >( null );
-	const [ numberPostsState, setNumberPostsState ] = useState( numberPosts );
-	const [ numberPostsInput, setNumberPostsInput ] = useState( String( numberPosts ) );
-	const numberPostsTimerRef = useRef< ReturnType< typeof setTimeout > | null >( null );
+	const [ refreshNonce, setRefreshNonce ] = useState( 0 );
+
+	const searchDebounceRef = useRef< ReturnType< typeof setTimeout > | null >( null );
+	const abortRef = useRef< AbortController | null >( null );
 
 	const isAuthorized = 'authorized' === authStatus;
+	// Don't lock Refresh on transient probe failures — a network blip
+	// shouldn't force the user to full-reload. Only a confirmed credential
+	// rejection blocks retry.
+	const refreshBlocked = 'unauthorized' === authStatus;
 
-	const fields: DataViewsField<Post>[] = [
+	// Probe live auth state so the banner and import buttons reflect whether
+	// the source site will accept signed requests before any user action.
+	useEffect( () => {
+		const controller = new AbortController();
+
+		const formData = new FormData();
+		formData.append( 'action', 'safe_publish_auth_status' );
+		formData.append( 'nonce', window.safePublishAdminData.nonce );
+
+		fetch( window.safePublishAdminData.ajaxurl, {
+			method: 'POST',
+			body: formData,
+			signal: controller.signal,
+		} )
+			.then(
+				( response ) =>
+					response.json() as Promise< ApiResponse< AuthStatusData > >
+			)
+			.then( ( result ) => {
+				if ( controller.signal.aborted ) {
+					return;
+				}
+				setAuthStatus( result.success ? result.data.status : 'unreachable' );
+			} )
+			.catch( () => {
+				if ( controller.signal.aborted ) {
+					return;
+				}
+				setAuthStatus( 'unreachable' );
+			} );
+
+		return () => {
+			controller.abort();
+		};
+	}, [] );
+
+	// Statuses join into a stable key so the effect re-fires on add/remove
+	// without re-firing on identical lists wrapped in a fresh array.
+	const statusKey = selectedStatuses.join( '|' );
+
+	useEffect( () => {
+		if ( ! sourceSiteUrl ) {
+			return;
+		}
+
+		// Abort any in-flight fetch so a fast typist doesn't see stale data
+		// land after their newest query.
+		abortRef.current?.abort();
+		const controller = new AbortController();
+		abortRef.current = controller;
+
+		const formData = new FormData();
+		formData.append( 'action', 'safe_publish_fetch_posts' );
+		formData.append( 'nonce', window.safePublishAdminData.nonce );
+		formData.append( 'source_site_url', sourceSiteUrl );
+		formData.append( 'post_type', selectedPostType );
+		formData.append( 'page', String( view.page ?? 1 ) );
+		formData.append( 'per_page', String( view.perPage ?? DEFAULT_ITEMS_PER_PAGE ) );
+		formData.append( 'orderby', view.sort?.field === 'title' ? 'title' : 'date' );
+		formData.append( 'order', view.sort?.direction === 'asc' ? 'asc' : 'desc' );
+
+		if ( null !== slugFromUrl ) {
+			formData.append( 'name', slugFromUrl );
+		} else if ( '' !== debouncedSearch ) {
+			formData.append( 'search', debouncedSearch );
+		}
+
+		selectedStatuses.forEach( ( status ) => {
+			formData.append( 'status[]', status );
+		} );
+
+		if ( null !== publishedAfter ) {
+			formData.append( 'published_after', publishedAfter );
+		}
+		if ( null !== publishedBefore ) {
+			formData.append( 'published_before', publishedBefore );
+		}
+
+		setIsLoadingPosts( true );
+		setFetchError( null );
+
+		fetch( window.safePublishAdminData.ajaxurl, {
+			method: 'POST',
+			body: formData,
+			signal: controller.signal,
+		} )
+			.then( ( response ) =>
+				response.json() as Promise< ApiResponse< CatalogResponse > >
+			)
+			.then( ( result ) => {
+				// Aborted fetches that already resolved still flow into .then; bail.
+				if ( controller.signal.aborted ) {
+					return;
+				}
+				if ( result.success ) {
+					setPagePosts( result.data.items );
+					setHasMore( Boolean( result.data.has_more ) );
+				} else {
+					setFetchError(
+						getErrorMessage(
+							result,
+							__( 'Failed to load posts.', 'safe-publish' )
+						)
+					);
+					setPagePosts( [] );
+					setHasMore( false );
+				}
+			} )
+			.catch( ( error: unknown ) => {
+				if ( controller.signal.aborted ) {
+					return;
+				}
+				if ( error instanceof DOMException && 'AbortError' === error.name ) {
+					return;
+				}
+				setFetchError( __( 'Network error while loading posts.', 'safe-publish' ) );
+				setPagePosts( [] );
+				setHasMore( false );
+			} )
+			.finally( () => {
+				if ( controller.signal.aborted ) {
+					return;
+				}
+				setIsLoadingPosts( false );
+				setHasFetchedOnce( true );
+			} );
+
+		return () => {
+			controller.abort();
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [
+		sourceSiteUrl,
+		selectedPostType,
+		view.page,
+		view.perPage,
+		view.sort?.field,
+		view.sort?.direction,
+		debouncedSearch,
+		slugFromUrl,
+		statusKey,
+		publishedAfter,
+		publishedBefore,
+		refreshNonce,
+	] );
+
+	// Cleanup outstanding fetch + debounce timer on unmount.
+	useEffect( () => () => {
+		abortRef.current?.abort();
+		if ( searchDebounceRef.current ) {
+			clearTimeout( searchDebounceRef.current );
+		}
+	}, [] );
+
+	const resetPage = useCallback( ( next: Partial< View > = {} ): void => {
+		// Cast: the spread destructures the View discriminated union into
+		// its base shape, but we always preserve `type` so reconstructing
+		// is safe.
+		setView( ( current ) => ( { ...current, ...next, page: 1 } as View ) );
+	}, [] );
+
+	const handleSearchChange = ( raw: string ): void => {
+		setSearchTerm( raw );
+
+		if ( searchDebounceRef.current ) {
+			clearTimeout( searchDebounceRef.current );
+		}
+
+		searchDebounceRef.current = setTimeout( () => {
+			const trimmed = raw.trim();
+			const slug = detectSlugFromInput( trimmed, sourceSiteUrl );
+
+			if ( null !== slug ) {
+				setSlugFromUrl( slug );
+				setDebouncedSearch( '' );
+			} else {
+				setSlugFromUrl( null );
+				setDebouncedSearch( trimmed );
+			}
+			resetPage();
+		}, SEARCH_DEBOUNCE_MS );
+	};
+
+	const handlePostTypeChange = ( postType: string ): void => {
+		// Cancel any pending search-box debounce before resetting search
+		// state — otherwise the timer fires later with the pre-change `raw`
+		// closure and resurrects the search term we just cleared.
+		if ( searchDebounceRef.current ) {
+			clearTimeout( searchDebounceRef.current );
+			searchDebounceRef.current = null;
+		}
+
+		setSelectedPostType( postType );
+		setSearchTerm( '' );
+		setDebouncedSearch( '' );
+		setSlugFromUrl( null );
+		setSelectedStatuses( [] );
+		setPublishedAfter( null );
+		setPublishedBefore( null );
+		resetPage();
+	};
+
+	// Resets the search/status/date filters but keeps Post Type — that's
+	// scope, not a filter, and resetting it would feel like a different
+	// action than "clear what I've narrowed down to."
+	const handleClearFilters = (): void => {
+		if ( searchDebounceRef.current ) {
+			clearTimeout( searchDebounceRef.current );
+			searchDebounceRef.current = null;
+		}
+
+		setSearchTerm( '' );
+		setDebouncedSearch( '' );
+		setSlugFromUrl( null );
+		setSelectedStatuses( [] );
+		setPublishedAfter( null );
+		setPublishedBefore( null );
+		resetPage();
+	};
+
+	const hasActiveFilters =
+		'' !== searchTerm ||
+		selectedStatuses.length > 0 ||
+		null !== publishedAfter ||
+		null !== publishedBefore;
+
+	const handleStatusesChange = ( tokens: ( string | { value: string } )[] ): void => {
+		const next = tokens
+			.map( ( token ) => ( 'string' === typeof token ? token : token.value ) )
+			.map( ( label ) => {
+				const match = STATUS_VALUES.find(
+					// eslint-disable-next-line security/detect-object-injection -- value iterates STATUS_VALUES allowlist.
+					( value ) => ( PUBLISH_STATUS_LABELS[ value ] ?? value ) === label
+				);
+				return match ?? label;
+			} )
+			.filter( ( value ): value is string => STATUS_VALUES.includes( value ) );
+
+		setSelectedStatuses( next );
+		resetPage();
+	};
+
+	const handleViewChange = ( next: View ): void => {
+		const sortChanged =
+			next.sort?.field !== view.sort?.field ||
+			next.sort?.direction !== view.sort?.direction;
+		const perPageChanged = next.perPage !== view.perPage;
+
+		// Layout-only updates omit `page` from `next`; preserve the current
+		// page rather than snapping the user back to 1.
+		setView( {
+			...next,
+			page: sortChanged || perPageChanged ? 1 : ( next.page ?? view.page ?? 1 ),
+		} );
+	};
+
+	// useMemo: the field render/getValue closures are pure, so a single
+	// allocation is enough — recreating per render churns DataViews' prop
+	// identity and defeats its internal memoization.
+	const fields: DataViewsField< Post >[] = useMemo( () => [
 		{
 			id: 'title',
 			label: __( 'Title', 'safe-publish' ),
 			enableSorting: true,
-			enableGlobalSearch: true,
 			render: ( { item }: { item: Post } ): JSX.Element => {
 				if ( item.local_edit_url ) {
 					return (
@@ -128,8 +591,7 @@ export function SourcePostsDataView( { initialPosts, sourceSiteUrl, numberPosts 
 		{
 			id: 'post_type',
 			label: __( 'Type', 'safe-publish' ),
-			enableSorting: true,
-			enableGlobalSearch: true,
+			enableSorting: false,
 			getValue: ( { item }: { item: Post } ): string =>
 				getPostTypeLabel( item ),
 			render: ( { item }: { item: Post } ): JSX.Element => (
@@ -140,11 +602,15 @@ export function SourcePostsDataView( { initialPosts, sourceSiteUrl, numberPosts 
 			id: 'permalink',
 			label: __( 'Permalink', 'safe-publish' ),
 			enableSorting: false,
-			enableGlobalSearch: true,
-			// 'permalink' has no matching property; search by item.link.
-			getValue: ( { item }: { item: Post } ): string => item.link ?? '',
+			getValue: ( { item }: { item: Post } ): string => item.link,
 			render: ( { item }: { item: Post } ): JSX.Element => {
+				// Drafts/private posts have no public URL — get_permalink() on
+				// the source returns the home URL, which extractUrlPath reduces
+				// to '/'. Render an em-dash so it doesn't look like a real link.
 				const path = extractUrlPath( item.link );
+				if ( '' === item.link || '/' === path ) {
+					return <span>—</span>;
+				}
 				return (
 					<a
 						href={ item.link }
@@ -158,41 +624,24 @@ export function SourcePostsDataView( { initialPosts, sourceSiteUrl, numberPosts 
 			},
 		},
 		{
-			id: 'modified_gmt',
-			label: __( 'Last Modified', 'safe-publish' ),
-			enableSorting: true,
-			enableGlobalSearch: true,
-			// Match raw ISO and formatted date (e.g. "2024-07" or "July").
-			getValue: ( { item }: { item: Post } ): string =>
-				`${ item.modified_gmt } ${ formatDateTime( item.modified_gmt ) }`,
-			sort: ( postA: Post, postB: Post, direction ): number => {
-				// Sort by raw ISO; formatted strings won't sort chronologically.
-				const diff = postA.modified_gmt.localeCompare( postB.modified_gmt );
-				return 'asc' === direction ? diff : -diff;
-			},
-			render: ( { item }: { item: Post } ): JSX.Element => (
-				<span>{ formatDateTime( item.modified_gmt ) }</span>
-			),
-		},
-		{
 			id: 'sync_status',
 			label: __( 'Sync Status', 'safe-publish' ),
-			enableSorting: true,
-			enableGlobalSearch: true,
-			// Virtual field derived from is_imported + has_update;
-			// default getValue and sort would miss the derivation.
+			enableSorting: false,
 			getValue: ( { item }: { item: Post } ): string =>
 				getSyncStatusLabel( item ),
-			sort: ( postA: Post, postB: Post, direction ): number => {
-				const diff = getSyncStatusOrder( postA ) - getSyncStatusOrder( postB );
-				return 'asc' === direction ? diff : -diff;
-			},
 			render: ( { item }: { item: Post } ): JSX.Element => {
 				if ( item.is_imported && item.has_update ) {
+					const label = '' === item.modified_gmt
+						? __( 'Outdated', 'safe-publish' )
+						: sprintf(
+							/* translators: %s: localized date when source was modified */
+							__( 'Outdated · Modified %s', 'safe-publish' ),
+							formatDateTime( item.modified_gmt )
+						);
 					return (
 						<span className="safe-publish-status-badge safe-publish-status-badge--outdated">
 							<span className="safe-publish-status-badge__dot" aria-hidden="true" />
-							{ SYNC_STATUS_LABELS.outdated }
+							{ label }
 						</span>
 					);
 				}
@@ -213,15 +662,35 @@ export function SourcePostsDataView( { initialPosts, sourceSiteUrl, numberPosts 
 			},
 		},
 		{
-			id: 'publish_status',
-			label: __( 'Publish Status', 'safe-publish' ),
+			id: 'source_status',
+			label: __( 'Source Status', 'safe-publish' ),
 			enableSorting: false,
-			enableGlobalSearch: true,
+			getValue: ( { item }: { item: Post } ): string =>
+				PUBLISH_STATUS_LABELS[ item.status ] ?? item.status,
+			render: ( { item }: { item: Post } ): JSX.Element => {
+				const label = PUBLISH_STATUS_LABELS[ item.status ] ?? item.status;
+				const modifierClass = `safe-publish-status-badge--${ item.status }`;
+				return (
+					<span className={ `safe-publish-status-badge ${ modifierClass }` }>
+						<span className="safe-publish-status-badge__dot" aria-hidden="true" />
+						{ label }
+					</span>
+				);
+			},
+		},
+		{
+			id: 'publish_status',
+			label: __( 'Local Status', 'safe-publish' ),
+			enableSorting: false,
 			getValue: ( { item }: { item: Post } ): string =>
 				getPublishStatusLabel( item ),
 			render: ( { item }: { item: Post } ): JSX.Element => {
 				if ( ! item.is_imported || ! item.local_status ) {
-					return <span className="safe-publish-status-badge safe-publish-status-badge--empty">—</span>;
+					return (
+						<span className="safe-publish-status-badge safe-publish-status-badge--empty">
+							—
+						</span>
+					);
 				}
 				const label = PUBLISH_STATUS_LABELS[ item.local_status ] ?? item.local_status;
 				const modifierClass = `safe-publish-status-badge--${ item.local_status }`;
@@ -233,135 +702,65 @@ export function SourcePostsDataView( { initialPosts, sourceSiteUrl, numberPosts 
 				);
 			},
 		},
-	];
+		{
+			id: 'date_gmt',
+			label: __( 'Published Date', 'safe-publish' ),
+			enableSorting: true,
+			getValue: ( { item }: { item: Post } ): string => item.date_gmt,
+			render: ( { item }: { item: Post } ): JSX.Element => (
+				<span>{ '' === item.date_gmt ? '—' : formatDateTime( item.date_gmt ) }</span>
+			),
+		},
+	], [] );
 
-	const { data: filteredData, paginationInfo } =
-		useDataViewsResult( allPosts, view, fields );
-
-	// Probe live auth state so the banner and import buttons reflect whether
-	// the source site will accept signed requests before any user action.
-	useEffect( () => {
-		const formData = new FormData();
-		formData.append( 'action', 'safe_publish_auth_status' );
-		formData.append( 'nonce', window.safePublishAdminData.nonce );
-
-		fetch( window.safePublishAdminData.ajaxurl, {
-			method: 'POST',
-			body: formData,
-		} )
-			.then(
-				( response ) =>
-					response.json() as Promise< ApiResponse< AuthStatusData > >
-			)
-			.then( ( result ) => {
-				if ( result.success ) {
-					setAuthStatus( result.data.status );
-				} else {
-					setAuthStatus( 'unreachable' );
-				}
-			} )
-			.catch( () => {
-				setAuthStatus( 'unreachable' );
-			} );
-	}, [] );
-
-	/**
-	 * Fetches posts for the given post type and updates the DataViews.
-	 *
-	 * @param {string} postType Post type slug to fetch.
-	 * @param {number} numPosts Number of posts to fetch.
-	 * @return {Promise<void>} Resolves when fetch completes.
-	 */
-	const fetchPostsByType = async ( postType: string, numPosts: number ): Promise< void > => {
-		if ( ! sourceSiteUrl ) {
-			return;
-		}
-
-		setIsLoadingPosts( true );
-		setPostTypeError( null );
-
-		const formData = new FormData();
-		formData.append( 'action', 'safe_publish_fetch_posts' );
-		formData.append( 'nonce', window.safePublishAdminData.nonce );
-		formData.append( 'source_site_url', sourceSiteUrl );
-		formData.append( 'number_of_posts', numPosts.toString() );
-		formData.append( 'post_type', postType );
-
-		try {
-			const response = await fetch( window.safePublishAdminData.ajaxurl, {
-				method: 'POST',
-				body: formData,
-			} );
-			const result = await response.json() as ApiResponse< Post[] >;
-
-			if ( result.success ) {
-				const newPosts = sanitizePosts( result.data );
-				setAllPosts( newPosts );
-
-				// Memo re-derives from the new posts and view automatically.
-				setView( { ...view, page: 1, search: '' } );
-			} else {
-				setPostTypeError( getErrorMessage( result, __( 'Unknown error', 'safe-publish' ) ) );
+	// Server-side pagination: no total upfront. On the last page we compute
+	// the true total from what's been seen; on earlier pages we overestimate
+	// by 1 so DataViews keeps rendering Next.
+	const currentPage = view.page ?? 1;
+	const currentPerPage = view.perPage ?? DEFAULT_ITEMS_PER_PAGE;
+	const paginationInfo = useMemo(
+		() => ! hasMore
+			? {
+				totalItems: ( currentPage - 1 ) * currentPerPage + pagePosts.length,
+				totalPages: currentPage,
 			}
-		} catch {
-			setPostTypeError( __( 'Network error while loading posts.', 'safe-publish' ) );
-		} finally {
-			setIsLoadingPosts( false );
-		}
-	};
+			: {
+				totalItems: currentPage * currentPerPage + 1,
+				totalPages: currentPage + 1,
+			},
+		[ currentPage, currentPerPage, hasMore, pagePosts.length ]
+	);
 
-	/**
-	 * Handles post type selection change from PostTypeSelector.
-	 *
-	 * @param {string} postType Newly selected post type.
-	 */
-	const handlePostTypeChange = ( postType: string ): void => {
-		setSelectedPostType( postType );
-		fetchPostsByType( postType, numberPostsState ).catch( ( error ) => {
-			// Only unexpected errors reach here.
-			// eslint-disable-next-line no-console
-			console.error( 'Unexpected error in fetchPostsByType:', error );
-		} );
-	};
+	const dateLabel = useMemo(
+		() => formatDateRangeLabel( publishedAfter, publishedBefore ),
+		[ publishedAfter, publishedBefore ]
+	);
+	const tokenValues = useMemo(
+		() => selectedStatuses.map(
+			// status from STATUS_VALUES allowlist via handleStatusesChange,
+			// not arbitrary input.
+			// eslint-disable-next-line security/detect-object-injection
+			( status ) => PUBLISH_STATUS_LABELS[ status ] ?? status
+		),
+		[ selectedStatuses ]
+	);
 
-	/**
-	 * Commits the number of posts input value after debouncing.
-	 *
-	 * @param {string} rawValue Raw input value from the NumberControl.
-	 */
-	const commitNumberPosts = ( rawValue: string ): void => {
-		if ( numberPostsTimerRef.current ) {
-			clearTimeout( numberPostsTimerRef.current );
-		}
-
-		const val = Math.min(
-			MAX_POSTS_COUNT,
-			Math.max( MIN_POSTS_COUNT, parseInt( rawValue, 10 ) || numberPostsState )
-		);
-		setNumberPostsInput( String( val ) );
-		handleNumberOfPostsChange( val );
-	};
-
-	/**
-	 * Handles number of posts changes and triggers a re-fetch.
-	 *
-	 * @param {number} numPosts New number of posts value.
-	 */
-	const handleNumberOfPostsChange = ( numPosts: number ): void => {
-		if ( numPosts === numberPostsState ) {
-			return;
-		}
-
-		setNumberPostsState( numPosts );
-		fetchPostsByType( selectedPostType, numPosts ).catch( ( error ) => {
-			// Only unexpected errors reach here.
-			// eslint-disable-next-line no-console
-			console.error( 'Unexpected error in fetchPostsByType:', error );
-		} );
-	};
+	// Surface the current page via a CSS variable so the DataViews
+	// pagination row can render "Page N" via ::before (see CSS). We replace
+	// DataViews' built-in page-select because our has_more pagination
+	// doesn't know the true total, so the SelectControl would list fake
+	// pages and the "of Y" suffix would grow on every Next click.
+	const pageStatusText = sprintf(
+		/* translators: %d: current page number */
+		__( 'Page %d', 'safe-publish' ),
+		currentPage
+	);
 
 	return (
-		<div className="safe-publish-dataviews-wrapper">
+		<div
+			className="safe-publish-dataviews-wrapper"
+			style={ { '--safe-publish-page-text': `"${ pageStatusText }"` } as React.CSSProperties }
+		>
 			<AuthStatusNotice
 				status={ authStatus }
 				settingsUrl={ window.safePublishAdminData?.settingsUrl }
@@ -373,48 +772,111 @@ export function SourcePostsDataView( { initialPosts, sourceSiteUrl, numberPosts 
 					onPostTypeChange={ handlePostTypeChange }
 					onError={ setPostTypeError }
 				/>
-				<NumberControl
-					label={ __( 'Count', 'safe-publish' ) }
-					value={ numberPostsInput }
-					min={ MIN_POSTS_COUNT }
-					max={ MAX_POSTS_COUNT }
-					className="safe-publish-number-of-posts-control"
-					onChange={ ( val ) => {
-						setNumberPostsInput( val ?? '' );
-						if ( numberPostsTimerRef.current ) {
-							clearTimeout( numberPostsTimerRef.current );
-						}
-
-						const parsed = parseInt( val ?? '', 10 );
-						if ( ! isNaN( parsed ) ) {
-							numberPostsTimerRef.current = setTimeout( () => {
-									commitNumberPosts( String( parsed ) );
-							}, NUMBER_POSTS_DEBOUNCE_DELAY );
-						}
-					} }
-					onBlur={ ( event ) => commitNumberPosts(
-						( event.target as HTMLInputElement ).value )
-					}
-					onKeyDown={ ( event ) => {
-						if ( 'Enter' === event.key ) {
-							event.preventDefault();
-							commitNumberPosts(
-								( event.target as HTMLInputElement ).value
-							);
-						}
-					} }
-				/>
+				<div className="safe-publish-control safe-publish-control--search">
+					<BaseControl
+						__nextHasNoMarginBottom
+						label={ __( 'Title or URL', 'safe-publish' ) }
+						id="safe-publish-search-input"
+					>
+						<TextControl
+							__nextHasNoMarginBottom
+							__next40pxDefaultSize
+							id="safe-publish-search-input"
+							label={ __( 'Search titles', 'safe-publish' ) }
+							hideLabelFromVision
+							value={ searchTerm }
+							onChange={ handleSearchChange }
+						/>
+					</BaseControl>
+				</div>
+				<div className="safe-publish-control safe-publish-control--statuses">
+					<FormTokenField
+						__next40pxDefaultSize
+						__nextHasNoMarginBottom
+						__experimentalExpandOnFocus
+						__experimentalShowHowTo={ false }
+						label={ __( 'Source Status', 'safe-publish' ) }
+						placeholder={ __( 'All statuses', 'safe-publish' ) }
+						value={ tokenValues }
+						suggestions={ STATUS_LABEL_SUGGESTIONS }
+						onChange={ handleStatusesChange }
+					/>
+				</div>
+				<div className="safe-publish-control safe-publish-control--dates">
+					<BaseControl
+						__nextHasNoMarginBottom
+						label={ __( 'Published Date', 'safe-publish' ) }
+						id="safe-publish-published-date"
+					>
+						<Dropdown
+							popoverProps={ { placement: 'bottom-start' } }
+							renderToggle={ ( { isOpen, onToggle } ) => (
+								<Button
+									id="safe-publish-published-date"
+									__next40pxDefaultSize
+									variant="secondary"
+									icon={ chevronDown }
+									iconPosition="right"
+									aria-expanded={ isOpen }
+									onClick={ onToggle }
+								>
+									{ dateLabel }
+								</Button>
+							) }
+						renderContent={ () => (
+							<div className="safe-publish-date-picker-panel">
+								<DateRangeColumn
+									label={ __( 'From', 'safe-publish' ) }
+									value={ publishedAfter }
+									isInvalidDate={
+										publishedBefore
+											? ( date ) => toCalendarDay( date ) > publishedBefore
+											: undefined
+									}
+									onChange={ ( next ) => {
+										setPublishedAfter( next );
+										resetPage();
+									} }
+								/>
+								<DateRangeColumn
+									label={ __( 'To', 'safe-publish' ) }
+									value={ publishedBefore }
+									isInvalidDate={
+										publishedAfter
+											? ( date ) => toCalendarDay( date ) < publishedAfter
+											: undefined
+									}
+									onChange={ ( next ) => {
+										setPublishedBefore( next );
+										resetPage();
+									} }
+								/>
+							</div>
+						) }
+					/>
+					</BaseControl>
+				</div>
+				{ hasActiveFilters && (
+					<Button
+						variant="tertiary"
+						onClick={ handleClearFilters }
+					>
+						{ __( 'Clear filters', 'safe-publish' ) }
+					</Button>
+				) }
 				<Button
 					variant="tertiary"
 					isBusy={ isLoadingPosts }
-					disabled={ isLoadingPosts || ! isAuthorized }
+					disabled={ isLoadingPosts || refreshBlocked }
 					icon={ update }
 					label={ __( 'Refresh', 'safe-publish' ) }
-					style={ { height: '32px', width: '32px', minWidth: 0 } }
-					onClick={ () => {
-						fetchPostsByType( selectedPostType, numberPostsState ).catch( () => {} );
-					} }
+					onClick={ () => setRefreshNonce( ( nonce ) => nonce + 1 ) }
 				/>
+				{ isLoadingPosts && hasFetchedOnce && (
+					<div className="safe-publish-control safe-publish-control--spinner">
+						<Spinner />
+					</div>
+				) }
 			</div>
 			{ postTypeError && (
 				<Notice
@@ -425,27 +887,36 @@ export function SourcePostsDataView( { initialPosts, sourceSiteUrl, numberPosts 
 					{ postTypeError }
 				</Notice>
 			) }
-			{ isLoadingPosts && (
-				<div className="safe-publish-loading">
+			{ fetchError && (
+				<Notice
+					className="safe-publish-post-type-error"
+					status="error"
+					onRemove={ () => setFetchError( null ) }
+				>
+					{ fetchError }
+				</Notice>
+			) }
+			{ isLoadingPosts && ! hasFetchedOnce && (
+				<div className="safe-publish-loading" role="status" aria-live="polite">
 					<p>{ __( 'Loading posts…', 'safe-publish' ) }</p>
 				</div>
 			) }
-			{ ! isLoadingPosts && ! postTypeError && 0 === allPosts.length && (
-				<div className="safe-publish-no-data">
-					<p>{ __( 'No posts available for the selected post type.', 'safe-publish' ) }</p>
+			{ hasFetchedOnce && ! fetchError && 0 === pagePosts.length && ! isLoadingPosts && (
+				<div className="safe-publish-no-data" role="status" aria-live="polite">
+					<p>{ __( 'No posts matched these filters.', 'safe-publish' ) }</p>
 				</div>
 			) }
-			{ ! isLoadingPosts && ! postTypeError && allPosts.length > 0 && (
+			{ hasFetchedOnce && pagePosts.length > 0 && (
 				<DataViews
 					getItemId={ ( item: Post ) => item.id.toString() }
-					data={ filteredData }
+					data={ pagePosts }
 					fields={ fields }
 					view={ view }
-					onChangeView={ setView }
+					onChangeView={ handleViewChange }
 					paginationInfo={ paginationInfo }
 					defaultLayouts={ defaultLayouts }
 					actions={ createActions( () => {
-						fetchPostsByType( selectedPostType, numberPostsState ).catch( () => {} );
+						setRefreshNonce( ( nonce ) => nonce + 1 );
 					}, isAuthorized ) }
 				/>
 			) }

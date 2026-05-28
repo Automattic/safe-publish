@@ -59,33 +59,17 @@ const ImportModal = ( { items, closeModal, onRefresh }: ImportModalProps ) => {
 		setIsLoading( true );
 		setError( null );
 
+		// ajax_create_draft re-fetches via fetch_fresh_post; only ID/title needed.
 		const formData = new FormData();
 		formData.append( 'action', 'safe_publish_create_draft' );
 		formData.append( 'nonce', window.safePublishAdminData.nonce );
 		formData.append( 'source_post_id', post.id.toString() );
 		formData.append( 'title', post.title );
-		formData.append( 'content', post.content || post.excerpt || '' );
 		formData.append( 'source_link', post.link );
 		formData.append( 'post_type', post.post_type || 'post' );
 
 		if ( isUpdate ) {
 			formData.append( 'force_update', 'true' );
-		}
-
-		if ( post.featured_media ) {
-			formData.append( 'featured_media_id', post.featured_media.toString() );
-		}
-
-		if ( post.excerpt ) {
-			formData.append( 'excerpt', post.excerpt );
-		}
-
-		if ( post.meta ) {
-			formData.append( 'meta', JSON.stringify( post.meta ) );
-		}
-
-		if ( post.terms ) {
-			formData.append( 'terms', JSON.stringify( post.terms ) );
 		}
 
 		fetch( window.safePublishAdminData.ajaxurl, {

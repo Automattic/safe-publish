@@ -43,27 +43,6 @@ export function getSyncStatusLabel( item: Post ): string {
 }
 
 /**
- * Returns the numeric ordering for sync status sort.
- *
- * Available (0) < Outdated (1) < Up to date (2). The numeric order is
- * locale-stable; sorting by the localized label would change with
- * translation.
- *
- * @param {Post} item Source post.
- *
- * @return {number} Sort key.
- */
-export function getSyncStatusOrder( item: Post ): number {
-	if ( item.is_imported && item.has_update ) {
-		return 1;
-	}
-	if ( item.is_imported ) {
-		return 2;
-	}
-	return 0;
-}
-
-/**
  * Returns the display label for the publish status column.
  *
  * @param {Post} item Source post.
