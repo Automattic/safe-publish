@@ -372,42 +372,114 @@ final class History_Repository {
 	}
 
 	/**
-	 * Returns the page of imported post IDs ordered by most-recent
-	 * import_date_gmt (descending), for the Imported Posts listing.
+	 * Returns a page of imported post IDs for the Imported Posts listing,
+	 * with search/filter/sort applied across the full dataset.
 	 *
-	 * Aggregates the items table to one row per post (the most recent
-	 * import event), then paginates. Returns up to per_page+1 IDs so the
-	 * caller can derive has_more without a separate count query.
+	 * Aggregates the items table to one row per post (the most recent import
+	 * event) and joins wp_posts so post-level search/filters/sort act on every
+	 * imported post, not just the current page. The inner join also drops items
+	 * whose post no longer exists, so the page never carries IDs that hydration
+	 * would discard. Returns up to per_page+1 IDs so the caller can derive
+	 * has_more without a separate count query.
 	 *
-	 * @param int $page     1-indexed page number.
-	 * @param int $per_page Items per page.
+	 * @param int   $page     1-indexed page number.
+	 * @param int   $per_page Items per page.
+	 * @param array $args     {
+	 *     Optional. Search/filter/sort criteria.
+	 *
+	 *     @type string   $search     Title substring to match.
+	 *     @type string[] $statuses   post_status values to include.
+	 *     @type string[] $post_types post_type values to include.
+	 *     @type int      $session_id Most-recent-item session to match, or 0.
+	 *     @type string   $orderby    'import_date' (default) or 'title'.
+	 *     @type string   $order      'asc' or 'desc' (default).
+	 * }
 	 * @return int[] Post IDs in display order.
 	 */
 	public function list_imported_post_ids(
 		int $page = 1,
-		int $per_page = 20
+		int $per_page = 20,
+		array $args = array()
 	): array {
 		global $wpdb;
 
-		$table          = Import_Items_Table::table_name();
-		$offset         = max( 0, ( $page - 1 ) * $per_page );
-		$limit_plus_one = $per_page + 1;
+		$items_table = Import_Items_Table::table_name();
+		$posts_table = $wpdb->posts;
+		$offset      = max( 0, ( $page - 1 ) * $per_page );
+		$limit       = $per_page + 1;
 
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$search     = isset( $args['search'] ) ? (string) $args['search'] : '';
+		$statuses   = isset( $args['statuses'] ) ? (array) $args['statuses'] : array();
+		$post_types = isset( $args['post_types'] ) ? (array) $args['post_types'] : array();
+		$session_id = isset( $args['session_id'] ) ? (int) $args['session_id'] : 0;
+		$orderby    = ( isset( $args['orderby'] ) && 'title' === $args['orderby'] )
+			? 'p.post_title'
+			: 'agg.max_date';
+		$order      = ( isset( $args['order'] ) && 'asc' === strtolower( (string) $args['order'] ) )
+			? 'ASC'
+			: 'DESC';
+
+		// Only %s/%d placeholders and allowlisted identifiers are interpolated
+		// below; every user value is bound through $wpdb->prepare().
+		$where  = array( 'agg.post_id IS NOT NULL' );
+		$params = array();
+
+		if ( '' !== $search ) {
+			$where[]  = 'p.post_title LIKE %s';
+			$params[] = '%' . $wpdb->esc_like( $search ) . '%';
+		}
+
+		if ( count( $statuses ) > 0 ) {
+			$placeholders = implode( ', ', array_fill( 0, count( $statuses ), '%s' ) );
+			$where[]      = "p.post_status IN ({$placeholders})";
+			array_push( $params, ...array_map( 'strval', $statuses ) );
+		} else {
+			// Mirror the get_posts( 'post_status' => 'any' ) hydration: exclude
+			// statuses hidden from search (trash, auto-draft, inherit) so the
+			// page count matches the rows that actually render.
+			$hidden = array_keys(
+				get_post_stati( array( 'exclude_from_search' => true ) )
+			);
+			if ( count( $hidden ) > 0 ) {
+				$placeholders = implode( ', ', array_fill( 0, count( $hidden ), '%s' ) );
+				$where[]      = "p.post_status NOT IN ({$placeholders})";
+				array_push( $params, ...array_map( 'strval', $hidden ) );
+			}
+		}
+
+		if ( count( $post_types ) > 0 ) {
+			$placeholders = implode( ', ', array_fill( 0, count( $post_types ), '%s' ) );
+			$where[]      = "p.post_type IN ({$placeholders})";
+			array_push( $params, ...array_map( 'strval', $post_types ) );
+		}
+
+		if ( $session_id > 0 ) {
+			$where[]  = "EXISTS ( SELECT 1 FROM `{$items_table}` mr"
+				. ' WHERE mr.post_id = agg.post_id'
+				. ' AND mr.import_date_gmt = agg.max_date'
+				. ' AND mr.session_id = %d )';
+			$params[] = $session_id;
+		}
+
+		$where_sql = implode( ' AND ', $where );
+		$params[]  = $limit;
+		$params[]  = $offset;
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				'SELECT post_id, MAX(import_date_gmt) AS max_date'
-					. " FROM `{$table}`"
-					. ' WHERE post_id IS NOT NULL'
-					. ' GROUP BY post_id'
-					. ' ORDER BY max_date DESC, post_id DESC'
+				'SELECT agg.post_id FROM ('
+					. "SELECT post_id, MAX(import_date_gmt) AS max_date FROM `{$items_table}`"
+					. ' WHERE post_id IS NOT NULL GROUP BY post_id'
+					. ") agg INNER JOIN `{$posts_table}` p ON p.ID = agg.post_id"
+					. " WHERE {$where_sql}"
+					. " ORDER BY {$orderby} {$order}, agg.post_id DESC"
 					. ' LIMIT %d OFFSET %d',
-				$limit_plus_one,
-				$offset
+				...$params
 			),
 			ARRAY_A
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
 		if ( ! is_array( $rows ) ) {
 			return array();
@@ -471,6 +543,129 @@ final class History_Repository {
 		}
 
 		return $by_post_id;
+	}
+
+	/**
+	 * Returns the filter options for the Imported Posts listing.
+	 *
+	 * Computed over the full imported set (not the current page) so the filter
+	 * dropdowns stay complete as the user narrows results.
+	 *
+	 * @return array<string, list<array{value: string, label: string}>> Options
+	 *               keyed by 'post_types' and 'sessions'.
+	 */
+	public function get_imported_filter_facets(): array {
+		return array(
+			'post_types' => $this->get_imported_post_type_facets(),
+			'sessions'   => $this->get_imported_session_facets(),
+		);
+	}
+
+	/**
+	 * Returns the distinct post types present among imported posts.
+	 *
+	 * @return list<array{value: string, label: string}> Post-type options.
+	 */
+	private function get_imported_post_type_facets(): array {
+		global $wpdb;
+
+		$items_table = Import_Items_Table::table_name();
+		$posts_table = $wpdb->posts;
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$types = $wpdb->get_col(
+			"SELECT DISTINCT p.post_type FROM `{$items_table}` it"
+				. " INNER JOIN `{$posts_table}` p ON p.ID = it.post_id"
+				. ' WHERE it.post_id IS NOT NULL'
+				. ' ORDER BY p.post_type ASC'
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		$facets = array();
+		foreach ( $types as $type ) {
+			$object   = get_post_type_object( (string) $type );
+			$label    = ( null !== $object )
+				? (string) $object->labels->singular_name
+				: (string) $type;
+			$facets[] = array(
+				'value' => (string) $type,
+				'label' => $label,
+			);
+		}
+
+		return $facets;
+	}
+
+	/**
+	 * Returns the import sessions that produced at least one existing post.
+	 *
+	 * @return list<array{value: string, label: string}> Session options, newest
+	 *               first.
+	 */
+	private function get_imported_session_facets(): array {
+		global $wpdb;
+
+		$items_table   = Import_Items_Table::table_name();
+		$imports_table = Imports_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rows = $wpdb->get_results(
+			"SELECT s.id, s.created_at_gmt FROM `{$imports_table}` s"
+				. " WHERE EXISTS ( SELECT 1 FROM `{$items_table}` it"
+				. ' WHERE it.session_id = s.id AND it.post_id IS NOT NULL )'
+				. ' ORDER BY s.created_at_gmt DESC, s.id DESC',
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		if ( ! is_array( $rows ) ) {
+			return array();
+		}
+
+		$facets = array();
+		foreach ( $rows as $row ) {
+			$id       = (int) $row['id'];
+			$facets[] = array(
+				'value' => (string) $id,
+				'label' => $this->format_session_facet_label(
+					$id,
+					(string) $row['created_at_gmt']
+				),
+			);
+		}
+
+		return $facets;
+	}
+
+	/**
+	 * Builds a human-readable label for a session filter option.
+	 *
+	 * @param int    $id             Session ID.
+	 * @param string $created_at_gmt Session creation datetime (UTC).
+	 * @return string Localized "date (#id)" label.
+	 */
+	private function format_session_facet_label(
+		int $id,
+		string $created_at_gmt
+	): string {
+		$timestamp = strtotime( $created_at_gmt . ' UTC' );
+
+		if ( false === $timestamp ) {
+			/* translators: %d: import session ID. */
+			return sprintf( __( 'Session #%d', 'safe-publish' ), $id );
+		}
+
+		$formatted = wp_date(
+			get_option( 'date_format' ) . ' ' . get_option( 'time_format' ),
+			$timestamp
+		);
+
+		return sprintf(
+			/* translators: 1: formatted session date, 2: import session ID. */
+			__( '%1$s (#%2$d)', 'safe-publish' ),
+			$formatted,
+			$id
+		);
 	}
 
 	/**
