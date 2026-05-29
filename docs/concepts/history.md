@@ -53,7 +53,7 @@ Imports are tracked in a session-based model. Each import operation creates one 
 
 ### Export History
 
-Export events are logged automatically when posts are served to a destination site. Each event is stored in the `{$wpdb->prefix}safe_publish_audit_log` database table.
+Export events are logged automatically when posts are served to a destination site. Each event is stored as a row in the `{$wpdb->prefix}safe_publish_audit_log` database table. The table itself has only six columns — `id`, `channel`, `level`, `event`, `created_at_gmt`, and `data`. The fields below are read from the event: ID, Date, Level, and Event map to columns, while the remaining fields are stored together in the `data` column as JSON.
 
 | Field              | Description                                                                                         |
 | ------------------ | --------------------------------------------------------------------------------------------------- |

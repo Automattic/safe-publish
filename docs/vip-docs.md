@@ -1,0 +1,242 @@
+<!-- Documentation for use on docs.wpvip.com -->
+<!-- Proposed URL: https://docs.wpvip.com/wordpress/safe-publish/ -->
+<!-- Parent section: WordPress on VIP -->
+<!--
+  NOTE: Single long-form page by request — covers the whole plugin on one
+  page rather than splitting into per-feature articles. Voice and formatting
+  follow docs.wpvip.com conventions; only the page length deviates.
+
+  Cross-reference suggestions (pages that should link TO this page):
+  - WordPress on VIP overview — add a card linking to "Safe Publish"
+  - Environments / going to production — reference Safe Publish as a way to
+    move editorial content from a non-production environment to production
+
+  Pages this doc should link TO (inline links — docs team to confirm exact URLs):
+  - "Roles and capabilities" → docs.wpvip.com roles/capabilities page
+  - "Environments" → docs.wpvip.com environments page
+  - "wp-config.php" reference on VIP
+
+  VERIFY IN-PRODUCT (Chrome walk-through was not available this session):
+  - Exact admin menu labels and submenu order
+  - Exact button/notice wording in the import, diff, and rollback modals
+-->
+
+# Safe Publish
+
+Safe Publish moves editorial content from a source WordPress site to a destination site over an authenticated connection, preserving the content's structure and format as closely as possible. It is built for teams that draft, stage, or review content on one environment and need to publish that content to another without exporting databases or copying files by hand.
+
+Safe Publish provides a controlled path to move content from the source to the destination via the WordPress Admin dashboard, previews exactly what will change with a side-by-side diff, imports one post or many in a single operation, and rolls back any import that was not wanted. Every action is recorded in an audit log, and each import — whether it moved one post or many — can be reversed as a unit. Separate imports are reversed independently of one another.
+
+This page covers connecting two sites, browsing and importing content, previewing diffs, rolling back imports, how media and audit logging behave. Full developer documentation and the source code are available on GitHub.
+
+## How Safe Publish works
+
+Safe Publish runs on both the source and the destination site, with each site assigned a role through its sync mode:
+
+- The **source site** holds the content to be published. It is usually a non-production environment — staging, a sandbox, or a separate editorial site. The source exposes its content through authenticated REST API endpoints (the catalog).
+- The **destination site** pulls content from the source. It is usually the production site. The destination owns the imported posts, media, import history, and audit log.
+
+Content moves in one direction per operation: the destination requests content from the source's catalog, the source returns it, and the destination creates or updates local posts. Requests between the two sites are signed with a shared secret using Hash-based Message Authentication Code (HMAC) so that only the paired sites can exchange content.
+
+Safe Publish imports content snapshots on demand. It does not run on a schedule, does not sync in real time, and does not copy plugins, themes, or site configuration — only posts, pages, custom post types, their media, and their taxonomy terms.
+
+### Key concepts
+
+The plugin uses a small set of terms consistently throughout its interface and this document:
+
+- **Source site** — the site content is published from. Configured on the destination as the connected site URL.
+- **Destination site** — the site content is published to. This is the site where the import is performed.
+- **Sync mode** — a per-site setting that determines whether a site acts as a source (`export`), a destination (`import`), or both (`bidirectional`).
+- **Catalog** — the list of posts available on the source site, served through a REST API endpoint and browsed from the destination.
+- **Import** — a single import operation and the unit of rollback. One import covers every post moved in one action, whether that is a single post or a bulk run.
+- **Diff** — a side-by-side or inline comparison of the incoming content against the current content on the destination, shown before an import is performed.
+- **Rollback** — reversing an import or an individual item. Rolling back a created post deletes it; rolling back an updated post restores the content that existed before the update.
+
+## Requirements
+
+To use Safe Publish, the following must be in place:
+
+- WordPress 6.8 or higher on both the source and destination sites.
+- PHP 8.2 or higher on both sites.
+- The Safe Publish integration enabled on both sites.
+
+The integration handles creating and setting the shared secret — provided to the plugin as the `SAFE_PUBLISH_SHARED_SECRET` environment variable — that secures the connection between the sites.
+
+## Roles and permissions
+
+Access to every Safe Publish admin screen — browsing source content, importing, viewing history, and rolling back — requires the `manage_options` capability. In a default WordPress installation, only administrators have this capability.
+
+Two further checks apply during an import:
+
+- Updating an existing post requires the `edit_post` capability for that specific post.
+- Previewing a diff against an existing post requires the `edit_post` or `edit_others_posts` capability for that post.
+
+Requests from the destination to the source site are not authorized by user capabilities. Instead, each cross-site request is authenticated with the shared secret.
+
+## Connecting two sites
+
+With the integration enabled and the shared secret in place, pair the source and destination by configuring the connection and sync mode on each site. Open the Safe Publish settings screen in WP Admin and set:
+
+- **Connected site URL** — the URL of the other site. On the destination, this is the source's URL.
+- **Sync mode** — the role this site plays:
+
+| Sync mode | Behavior |
+|---|---|
+| `export` | The site acts as a source only. It exposes its catalog endpoints but provides no import interface. |
+| `import` | The site acts as a destination only. It provides the full import interface but does not expose its catalog. |
+| `bidirectional` | The site acts as both source and destination. |
+
+- **Basic authentication username and password** (optional) — credentials for HTTP Basic authentication, if the source site is protected by it. These are sent with requests to the source in addition to the signed shared secret.
+
+A typical setup pairs a staging site in `export` mode with a production site in `import` mode. Use `bidirectional` only when content genuinely needs to move both ways.
+
+## Browsing the source catalog
+
+With the connection configured, the destination's main Safe Publish screen lists the posts, pages, and custom post types available on the source site. The catalog is presented as a sortable, filterable table.
+
+## Importing content
+
+Safe Publish supports importing a single post or many posts at once. Both paths produce the same result for each post: media is downloaded to the destination, source URLs in the content are rewritten to point at the destination, taxonomy terms and metadata are applied, and the operation is recorded and can be rolled back.
+
+### Import a single post
+
+1. In the source catalog, select the post to import.
+2. Review the diff preview to confirm what will be created or changed on the destination. See [Previewing changes with a diff](#previewing-changes-with-a-diff).
+3. Confirm the import.
+
+If a post with the same source post ID already exists on the destination, Safe Publish updates that post rather than creating a duplicate. If no matching post exists, it creates a new one.
+
+By default, a child post is skipped if its parent is not present on the destination, to avoid creating orphaned content. Developers can change this with the `safe_publish_import_allow_orphans` filter (see [Filters](#filters)).
+
+
+### Import multiple posts (bulk import)
+
+1. In the source catalog, select the posts to import.
+2. Start the bulk import.
+
+Safe Publish imports the selected posts as a single unit and records the result of each import. When the selection includes posts with parent–child relationships, the plugin orders the import so that parents are created before their children.
+
+## Previewing changes with a diff
+
+Before importing, you can see a diff between the incoming source content and the current content on the destination. The diff covers the title, content, excerpt, featured image, metadata, and taxonomy terms, and can be viewed inline or side by side.
+
+For content built with the block editor, the diff is computed block by block, so editors can see exactly which blocks were added, removed, or changed.
+
+## Reviewing and rolling back imports
+
+Safe Publish records every import so it can be reviewed and reversed. Two screens support this: an imported-posts list and an import history.
+
+### Imported posts
+
+The imported-posts screen lists every post on the destination that Safe Publish has created or updated. From here, an editor can view the diff of a previous import and roll back an individual post.
+
+### Import history
+
+The history screen lists imports in reverse chronological order. Each import records who ran it, the source site, whether it moved a single post or many, its status, and when it ran. Opening an import shows its items and the changes each one made.
+
+### Rolling back
+
+Rollback reverses an import. It can be performed for a single item or for an entire import:
+
+- **Item rollback** reverses one item. If the item created a post, the post is deleted. If the item updated a post, the post's previous content — captured at import time — is restored.
+- **Import rollback** reverses every item in one import in a single action and marks that import as rolled back.
+
+Rollback relies on the content snapshot captured when the post was updated. Because Safe Publish stores the pre-update content as part of the import record, it can restore an updated post to its earlier state without contacting the source site again.
+
+Note: Rolling back a created post deletes that post on the destination. Confirm the diff and the affected posts before rolling back an import, since the action applies to every item that import touched.
+
+## How media and content are processed
+
+When a post is imported, Safe Publish processes its content so that it renders correctly on the destination without depending on the source site:
+
+- **Featured images and inline media** referenced from the source site are downloaded and added to the destination's media library. This includes media in `img`, `video`, `audio`, and `source` elements, and file links in classic HTML and in block markup.
+- **Source URLs are rewritten** to point at the destination's copies, so the imported content no longer links back to the source.
+- **Media is deduplicated** by its original URL. If the same source file has already been imported, Safe Publish reuses the existing attachment on the destination instead of downloading it again.
+- **Third-party media is left untouched.** Files hosted on domains other than the source site are not downloaded; their original URLs are preserved as written.
+
+Safe Publish records where imported content came from in post metadata — including the source post ID and source permalink — so that subsequent imports of the same post update the existing post rather than duplicating it.
+
+## Author attribution
+
+Safe Publish attributes each imported post to a user on the destination site, matched by the source author's email address. The matched user becomes the imported post's author.
+
+If the source author's email does not match any user on the destination, Safe Publish does not guess. By default, the import stops with an error identifying the unmatched author, so an administrator can create a matching user and re-import. Developers can relax this with the `safe_publish_import_allow_author_fallback` filter: when enabled, a new post whose author cannot be matched is attributed to the user running the import, an updated post keeps its existing author, and a warning is recorded in the import history.
+
+The source author's email and login are also stored in post metadata for reference, regardless of how attribution is resolved.
+
+## Audit events
+
+Safe Publish writes an audit log of security- and content-relevant actions to the destination site. Logged events include authenticated cross-site requests, content exports, the result of each imported item, rollbacks, and changes to the connection settings.
+
+Each event records a channel (such as authentication, content, export, import, or media), a severity level (informational or error), the event type, a timestamp, and structured details. The export history is surfaced in the admin interface; the full log is available to developers through the plugin's query interface and through the `safe_publish_event_logged` action (see [Filters](#filters)).
+
+## Custom post types
+
+Safe Publish imports any registered post type, not only posts and pages. The source catalog can be filtered by post type, and custom post types are imported the same way as standard ones.
+
+Because a custom post type's REST API base can differ from its registered slug, Safe Publish resolves the correct REST base for each post type on the source site before fetching its content. Where a source post type slug differs from the destination's, the plugin maps the source slug to the destination equivalent during import.
+
+A post type must be registered on the destination for its content to import cleanly. If a source post type is not registered on the destination, its posts may not appear or behave as expected.
+
+## Filters
+
+Safe Publish exposes the following filters for developers. Add them in a theme or a small companion plugin.
+
+| Filter | Default | Purpose |
+|---|---|---|
+| `safe_publish_import_kses` | `false` | Enable `wp_kses` sanitization of imported content. |
+| `safe_publish_import_kses_allowed_html` | `wp_kses_allowed_html( 'post' )` | Customize the allowed HTML used when `safe_publish_import_kses` sanitization is enabled. Receives the allowed-tags array and the name of the field being sanitized. |
+| `safe_publish_import_allow_orphans` | `false` | Allow importing a child post when its parent is not present on the destination. |
+| `safe_publish_import_allow_author_fallback` | `false` | When the source author cannot be matched on the destination, attribute new posts to the importing user and keep the existing author on updates, instead of aborting the import. |
+| `safe_publish_auth_max_time_diff` | `300` | Maximum allowed difference, in seconds, between a signed request's timestamp and the current time. |
+| `safe_publish_request_timeout` | `10` | Timeout, in seconds, for HTTP requests to the source site. |
+| `safe_publish_request_args` | — | Customize the arguments passed to the HTTP request made to the source site. |
+| `safe_publish_dev_ssl_verify` | `false` | Development only: skip SSL verification for requests to non-localhost hosts. Leave disabled in production. |
+
+The `safe_publish_event_logged` action fires each time an audit event is recorded, receiving the channel, event type, and event data. Use it to forward audit events to external monitoring.
+
+```php
+add_action(
+	'safe_publish_event_logged',
+	function ( string $channel, string $event, array $data ): void {
+		// Forward the event to an external log or monitoring service.
+	},
+	10,
+	3
+);
+```
+
+## Limitations
+
+Safe Publish is scoped to publishing content between two paired sites. The following are not supported:
+
+- **Scheduled or automatic sync.** Imports are performed manually; there is no cron-based synchronization.
+- **Real-time, two-way sync.** Content moves as on-demand snapshots in one direction per operation, even when both sites are in `bidirectional` mode.
+- **Plugin, theme, or configuration transfer.** Only content — posts, pages, custom post types, their media, and their taxonomy terms — is imported.
+- **Third-party media import.** Media hosted off the source domain is left as-is; its URLs are not rewritten or localized.
+- **Importing children of missing parents.** By default, a child post whose parent is absent on the destination is skipped, unless `safe_publish_import_allow_orphans` is enabled.
+
+## Troubleshooting
+
+### Check the authentication status
+
+Safe Publish registers a "Safe Publish Authentication Configuration" test under **Tools → Site Health**. The test reports whether the shared secret is configured, too short (it recommends at least 32 characters), or set up correctly. Check it first when cross-site requests fail, before investigating other causes.
+
+### Requests fail with a timestamp error
+
+Cross-site requests are rejected when the source and destination clocks differ by more than the allowed window (300 seconds by default). Correct the system time on both servers. If a larger tolerance is genuinely required, raise it with the `safe_publish_auth_max_time_diff` filter.
+
+### A child post was skipped during import
+
+The post's parent was not present on the destination. Import the parent first, or enable `safe_publish_import_allow_orphans` to allow importing the child without its parent.
+
+### An import failed with an author error
+
+Safe Publish attributes each imported post to a destination user matched by the source author's email. Two cases stop an import:
+
+- **The source author was not found on the destination.** No destination user has the source author's email. Create a user with that email on the destination and re-import, or enable the `safe_publish_import_allow_author_fallback` filter to attribute unmatched new posts to the importing user.
+- **The source author could not be determined.** The source post has no author, or its author was deleted on the source site. This is a source-side data issue and is not covered by the author-fallback filter. Restore or reassign the author on the source, then re-import.
+
+### Imported media did not transfer
+
+Confirm the media is hosted on the source site's domain — third-party media is intentionally left in place and not downloaded. Media download and sideload failures are recorded in the audit log's media channel, which can be reviewed to identify the specific files that failed.

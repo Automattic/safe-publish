@@ -119,7 +119,8 @@ By default, no sanitization is applied to the post content or excerpt; both fiel
   - `safe_publish_source_post_id` — post ID on the source site
   - `safe_publish_source_link` — URL of the source post
   - `safe_publish_imported_from` — plugin identifier (`safe-publish`)
-  - `safe_publish_import_date_gmt` — GMT timestamp of the import (`Y-m-d H:i:s`)
+
+  The import timestamp is not stored as post meta; it is recorded in the import history table (the `import_date_gmt` column of `safe_publish_import_items`).
 
 ### Post Status
 

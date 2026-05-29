@@ -17,7 +17,7 @@ Add a matching shared secret to both sites' `wp-config.php`:
 define( 'SAFE_PUBLISH_SHARED_SECRET', 'your-secure-random-string-here' );
 ```
 
-You can generate a secure value with: `openssl rand -base64 32`. The secret must be at least 32 characters long. See the [Authentication guide](concepts/authentication.md) for full details.
+You can generate a secure value with: `openssl rand -base64 32`. The secret must be at least 16 characters long; 32 or more is recommended for security. See the [Authentication guide](concepts/authentication.md) for full details.
 
 ## Step 3: Activate and Configure the Plugin
 
@@ -26,17 +26,16 @@ Activate the plugin through the WordPress admin panel or [code](https://docs.wpv
 ### Source Site Configuration
 
 1. Navigate to **Safe Publish** in the WordPress admin sidebar.
-2. Set the **Sync Mode** to `Export`.
+2. Set the **Sync Mode** to **Source - Content will come from this site.**
 3. In **Connected Site URL**, enter the destination site's URL.
 4. Click **Save Settings**.
 
 ### Destination Site Configuration
 
 1. Navigate to **Safe Publish** in the WordPress admin sidebar.
-2. Set the **Sync Mode** to `Import`.
+2. Set the **Sync Mode** to **Destination - Content will be published to this site**.
 3. In **Connected Site URL**, enter the source site's URL.
-4. Optionally set the **number of posts** to another value.
-5. Click **Save Settings**.
+4. Click **Save Settings**.
 
 ### Optional: Basic Authentication
 

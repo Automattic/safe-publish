@@ -370,7 +370,6 @@ If you need to start fresh:
 // Using WP-CLI
 wp option delete safe_publish_connected_site_url
 wp option delete safe_publish_sync_mode
-wp option delete safe_publish_number_of_posts
 wp option delete safe_publish_basic_auth_username
 wp option delete safe_publish_basic_auth_password
 ```
