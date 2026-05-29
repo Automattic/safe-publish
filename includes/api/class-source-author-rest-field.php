@@ -88,32 +88,31 @@ class Source_Author_REST_Field {
 	}
 
 	/**
-	 * Returns the source author payload for HMAC-authenticated requests.
+	 * Returns the source author payload for HMAC-authenticated single-item
+	 * requests.
 	 *
-	 * Returns null for any non-HMAC request so the field value carries no
-	 * source author PII for public, cookie-authenticated, or third-party
-	 * consumers. Also returns null for collection requests so the field
-	 * is only resolved during the per-post fetch the importer performs;
-	 * list endpoints never include author data in their responses.
+	 * Returns null for non-HMAC requests, so the field carries no source author
+	 * PII for public, cookie-authenticated, or third-party consumers, and for
+	 * collection requests, to keep author PII off list responses.
 	 *
-	 * @param array                $post_array     Post data array as built by WP_REST_Posts_Controller.
-	 * @param string               $_attribute     Field name (unused).
-	 * @param WP_REST_Request|null $request        Current REST request, if any.
+	 * @param array           $post_array Post data as built by WP_REST_Posts_Controller.
+	 * @param string          $_attribute Field name (unused).
+	 * @param WP_REST_Request $request    Current REST request.
 	 * @return array{email: string, login: string, display_name: string}|null
-	 *         Author payload, or null when the request is not HMAC-authenticated
-	 *         or is a collection request.
+	 *         Author payload, or null when not HMAC-authenticated or not a
+	 *         single-item request.
 	 */
 	public function get_callback(
 		array $post_array,
 		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-		string $_attribute = '',
-		?WP_REST_Request $request = null
+		string $_attribute,
+		WP_REST_Request $request
 	): ?array {
 		if ( ! $this->authenticator->is_authenticated() ) {
 			return null;
 		}
 
-		if ( ! $this->is_single_item_request( $request, $post_array ) ) {
+		if ( ! $this->is_single_item_request( $request ) ) {
 			return null;
 		}
 
@@ -156,39 +155,19 @@ class Source_Author_REST_Field {
 	}
 
 	/**
-	 * Detects whether the current REST request targets a single post.
+	 * Detects whether the request resolves a single post via its `id` route
+	 * parameter (e.g. `/wp/v2/{post_type}/{id}`).
 	 *
-	 * The importer resolves the source author one post at a time via
-	 * `/wp/v2/{post_type}/{id}`. Collection requests (`/wp/v2/posts`) never
-	 * need this field, and skipping them removes the per-row author lookup
-	 * cost from list responses.
+	 * Reads the matched URL parameter rather than get_param() so a query string
+	 * such as `?id=5` on a collection route is not mistaken for a single-item
+	 * request.
 	 *
-	 * Falls back to inspecting the post array when the request is unavailable
-	 * (older WordPress versions that omit the request argument in the field
-	 * callback).
-	 *
-	 * @param WP_REST_Request|null $request    Current REST request, if any.
-	 * @param array                $post_array Post data array.
-	 * @return bool True when the request resolves a single item.
+	 * @param WP_REST_Request $request Current REST request.
+	 * @return bool True when the route bound a positive numeric `id`.
 	 */
-	private function is_single_item_request(
-		?WP_REST_Request $request,
-		array $post_array
-	): bool {
-		if ( $request instanceof WP_REST_Request ) {
-			$request_id = $request->get_param( 'id' );
+	private function is_single_item_request( WP_REST_Request $request ): bool {
+		$request_id = $request->get_url_params()['id'] ?? null;
 
-			if ( is_numeric( $request_id ) && (int) $request_id > 0 ) {
-				return true;
-			}
-
-			$route = (string) $request->get_route();
-
-			return (bool) preg_match( '#/\d+$#', $route );
-		}
-
-		$post_id = isset( $post_array['id'] ) ? (int) $post_array['id'] : 0;
-
-		return $post_id > 0;
+		return is_numeric( $request_id ) && (int) $request_id > 0;
 	}
 }
