@@ -3,8 +3,8 @@
  *
  * Lists locally-imported posts via the destination-side
  * `safe_publish_list_imported_posts` AJAX action — purely local query, no
- * source roundtrip. Rows support Edit, Update, Diff, and Delete; bulk
- * operations, Rollback, and sync status land in follow-up PRs.
+ * source roundtrip. Rows support Edit, Update, Diff, Delete, and Rollback
+ * (single or bulk); sync status lands in a follow-up PR.
  *
  * @file This file defines the ImportedPostsDataView component.
  */

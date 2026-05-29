@@ -8,6 +8,7 @@
  */
 import { drafts, download, pencil, rotateLeft, trash } from '@wordpress/icons';
 
+import BulkRollbackPostModal from './components/BulkRollbackPostModal';
 import DeletePostModal from './components/DeletePostModal';
 import ImportModal from './components/ImportModal';
 import PostDiffModal from './components/PostDiffModal';
@@ -622,18 +623,25 @@ export const createImportedActions = (
 		isDestructive: true,
 		hideModalHeader: true,
 		modalFocusOnMount: 'firstContentElement',
-		supportsBulk: false,
+		supportsBulk: true,
 		isEligible: ( item: ImportedPost ) =>
 			null !== item.item_id &&
 			! item.rolled_back &&
 			( 'success' === item.rollback_status ||
 				'updated' === item.rollback_status ),
-		RenderModal: ( { items, closeModal } ) => (
-			<RollbackPostModal
-				items={ items }
-				closeModal={ closeModal }
-				onRefresh={ onRefresh }
-			/>
-		),
+		RenderModal: ( { items, closeModal } ) =>
+			1 === items.length ? (
+				<RollbackPostModal
+					items={ items }
+					closeModal={ closeModal }
+					onRefresh={ onRefresh }
+				/>
+			) : (
+				<BulkRollbackPostModal
+					items={ items }
+					closeModal={ closeModal }
+					onRefresh={ onRefresh }
+				/>
+			),
 	},
 ];
