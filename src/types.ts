@@ -109,11 +109,30 @@ export interface ImportedPost {
 }
 
 /**
+ * A selectable option for a DataViews filter (value + display label).
+ */
+export interface FilterOption {
+	value: string;
+	label: string;
+}
+
+/**
+ * Filter facets for the Imported Posts listing, computed over the full
+ * imported set so the dropdowns stay complete as results are narrowed.
+ */
+export interface ImportedPostsFacets {
+	post_types: FilterOption[];
+	sessions: FilterOption[];
+}
+
+/**
  * Envelope returned by the destination-side imported-posts listing endpoint.
+ * `facets` is present only on the first load (requested via with_facets).
  */
 export interface ImportedPostsResponse {
 	items: ImportedPost[];
 	has_more: boolean;
+	facets?: ImportedPostsFacets;
 }
 
 /**
