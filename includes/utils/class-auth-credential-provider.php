@@ -26,10 +26,9 @@ class Auth_Credential_Provider {
 	/**
 	 * Returns authentication credentials from plugin settings.
 	 *
-	 * Shared Secret is read from the SAFE_PUBLISH_SHARED_SECRET constant or
-	 * the matching environment variable, mirroring how the inbound handler
-	 * resolves the same value. Basic Auth credentials are included when
-	 * configured.
+	 * Shared Secret is resolved via get_shared_secret() (constant or
+	 * environment variable) and included when set. Basic Auth credentials are
+	 * included when configured.
 	 *
 	 * @return array Authentication credentials array with appropriate keys.
 	 */
@@ -54,13 +53,18 @@ class Auth_Credential_Provider {
 	}
 
 	/**
-	 * Resolves the shared secret from constant or environment variable.
+	 * Resolves the shared secret from the SAFE_PUBLISH_SHARED_SECRET constant
+	 * or the matching environment variable, with the constant taking
+	 * precedence.
 	 *
 	 * @return string Shared secret, or empty string if not configured.
 	 */
-	private static function get_shared_secret(): string {
-		if ( defined( 'SAFE_PUBLISH_SHARED_SECRET' ) && ! empty( constant( 'SAFE_PUBLISH_SHARED_SECRET' ) ) ) {
-			return (string) constant( 'SAFE_PUBLISH_SHARED_SECRET' );
+	public static function get_shared_secret(): string {
+		if ( defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ) {
+			$constant_secret = (string) constant( 'SAFE_PUBLISH_SHARED_SECRET' );
+			if ( '' !== $constant_secret ) {
+				return $constant_secret;
+			}
 		}
 
 		$env_secret = getenv( 'SAFE_PUBLISH_SHARED_SECRET' );

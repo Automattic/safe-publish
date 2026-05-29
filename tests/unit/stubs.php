@@ -71,6 +71,18 @@ function reset_test_options(): void {
 	$GLOBALS['_test_options'] = array();
 }
 
+/**
+ * Sets or clears an environment variable for a test.
+ *
+ * @param string      $name  Environment variable name.
+ * @param string|null $value Value to set, or null to unset the variable.
+ */
+function set_test_env( string $name, ?string $value ): void {
+	$assignment = null === $value ? $name : "{$name}={$value}";
+	// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.runtime_configuration_putenv
+	putenv( $assignment );
+}
+
 function get_bloginfo( string $key ): string {
 	return 'http://localhost';
 }
