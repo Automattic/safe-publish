@@ -362,6 +362,159 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a session rollback emits an ITEM_ROLLED_BACK audit event
+	 * for every success/updated item it flags, excludes error items, and still
+	 * fires the session-level event.
+	 */
+	public function test_mark_session_rolled_back_emits_item_event_per_flagged_item(): void {
+		// ARRANGE: A session with two success items and one error item.
+		$session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$post_id_1  = $this->factory()->post->create(
+			array( 'post_title' => 'Imported Post 1' )
+		);
+		$post_id_2  = $this->factory()->post->create(
+			array( 'post_title' => 'Imported Post 2' )
+		);
+		$item_id_1  = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Imported Post 1',
+			'success',
+			$post_id_1
+		);
+		$item_id_2  = $this->repository->log_import_action(
+			$session_id,
+			2,
+			'Imported Post 2',
+			'success',
+			$post_id_2
+		);
+		$this->repository->log_import_action(
+			$session_id,
+			3,
+			'Failed Post',
+			'error',
+			null,
+			'Import failed'
+		);
+		$this->repository->complete_session( $session_id );
+
+		// ACT: Roll back the whole session.
+		$this->repository->mark_session_rolled_back( $session_id );
+
+		// ASSERT: One ITEM_ROLLED_BACK event per flagged item (two success
+		// items, not the error one), each carrying the session ID and the
+		// item's own ID and post ID. Order is not asserted because same-second
+		// events share a timestamp.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'ITEM_ROLLED_BACK',
+			)
+		);
+		$this->assertCount( 2, $events );
+
+		$post_by_item = array();
+		foreach ( $events as $event ) {
+			$this->assertSame( 'info', $event['level'] );
+			$this->assertSame( $session_id, $event['data']['session_id'] );
+			$post_by_item[ $event['data']['item_id'] ] = $event['data']['post_id'];
+		}
+		$this->assertArrayHasKey( $item_id_1, $post_by_item );
+		$this->assertArrayHasKey( $item_id_2, $post_by_item );
+		$this->assertSame( $post_id_1, $post_by_item[ $item_id_1 ] );
+		$this->assertSame( $post_id_2, $post_by_item[ $item_id_2 ] );
+
+		// ASSERT: Every flagged item was newly flagged, so none emit the
+		// already-rolled-back variant.
+		$already = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'ITEM_ALREADY_ROLLED_BACK',
+			)
+		);
+		$this->assertCount( 0, $already );
+
+		// ASSERT: The session-level event still fires alongside the per-item
+		// events.
+		$session_events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'SESSION_ROLLED_BACK',
+			)
+		);
+		$this->assertCount( 1, $session_events );
+		$this->assertSame(
+			$session_id,
+			$session_events[0]['data']['session_id']
+		);
+	}
+
+	/**
+	 * Verifies that a session rollback emits ITEM_ALREADY_ROLLED_BACK for an
+	 * item a prior rollback already flagged, mirroring the item-level path.
+	 */
+	public function test_mark_session_rolled_back_emits_item_already_rolled_back_for_preflagged_item(): void {
+		// ARRANGE: A session whose single success item is already flagged by a
+		// prior item-level rollback; clear the log so only the session
+		// rollback's events remain.
+		$session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$post_id    = $this->factory()->post->create(
+			array( 'post_title' => 'Imported Post' )
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Imported Post',
+			'success',
+			$post_id
+		);
+		$this->repository->mark_item_rolled_back( $item_id );
+		Audit_Log_Table::clear( 'import' );
+
+		// ACT: Roll back the whole session.
+		$this->repository->mark_session_rolled_back( $session_id );
+
+		// ASSERT: The already-flagged item emits ITEM_ALREADY_ROLLED_BACK with
+		// its IDs, not ITEM_ROLLED_BACK.
+		$already = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'ITEM_ALREADY_ROLLED_BACK',
+			)
+		);
+		$this->assertCount( 1, $already );
+		$this->assertSame( 'info', $already[0]['level'] );
+		$this->assertSame( $item_id, $already[0]['data']['item_id'] );
+		$this->assertSame( $session_id, $already[0]['data']['session_id'] );
+		$this->assertSame( $post_id, $already[0]['data']['post_id'] );
+
+		$rolled_back = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'ITEM_ROLLED_BACK',
+			)
+		);
+		$this->assertCount( 0, $rolled_back );
+
+		// ASSERT: The session row still flips fresh, so the session-level event
+		// is SESSION_ROLLED_BACK.
+		$session_events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'SESSION_ROLLED_BACK',
+			)
+		);
+		$this->assertCount( 1, $session_events );
+	}
+
+	/**
 	 * Verifies that a successful single-item rollback emits an ITEM_ROLLED_BACK
 	 * audit event with the item ID.
 	 */
