@@ -1432,6 +1432,68 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the debug-connection endpoint returns only the slim
+	 * connection summary and never the signed HMAC auth params or other verbose
+	 * internals, which would leak authentication material into the response.
+	 */
+	public function test_ajax_debug_auth_excludes_signed_auth_params(): void {
+		// ARRANGE: Authenticated admin and a mocked 200 from the types probe.
+		wp_set_current_user( $this->admin_user_id );
+
+		$types_filter = static function ( $preempt, array $_args, string $url ) {
+			if ( false !== $preempt || ! str_contains( $url, '/wp-json/wp/v2/types' ) ) {
+				return $preempt;
+			}
+
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => wp_json_encode( array( 'post' => array() ) ),
+				'headers'  => array( 'content-type' => 'application/json' ),
+			);
+		};
+		add_filter( 'pre_http_request', $types_filter, 1, 3 );
+
+		$_POST = array(
+			'nonce'              => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'connected_site_url' => 'https://source.example.com',
+		);
+
+		// ACT: Trigger the debug-connection handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_debug_auth' );
+
+		remove_filter( 'pre_http_request', $types_filter, 1 );
+
+		// ASSERT: Success with the slim payload and no signed/verbose internals.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response );
+		$this->assertTrue( $response['success'] );
+
+		$data          = $response['data'];
+		$leaked_fields = array(
+			'auth_params',
+			'auth_credentials_type',
+			'response_headers',
+			'response_json_keys',
+			'post_types_count',
+		);
+		foreach ( $leaked_fields as $field ) {
+			$this->assertArrayNotHasKey(
+				$field,
+				$data,
+				"Debug payload must not expose {$field}."
+			);
+		}
+
+		$this->assertSame( 'https://source.example.com', $data['connected_site_url'] );
+		$this->assertSame(
+			'https://source.example.com/wp-json/wp/v2/types',
+			$data['api_url']
+		);
+		$this->assertTrue( $data['auth_credentials_available'] );
+		$this->assertSame( 200, $data['response_code'] );
+	}
+
+	/**
 	 * Returns the number of import sessions currently in the 'in_progress' state.
 	 *
 	 * @return int

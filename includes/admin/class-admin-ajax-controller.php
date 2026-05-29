@@ -717,13 +717,10 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Handles debug connection AJAX request.
+	 * Handles the debug-connection AJAX request.
 	 *
-	 * Returns a minimal summary suitable for the Settings page diagnostic
-	 * panel — connection URL, HTTP status, and whether credentials are
-	 * configured. The detailed payload (raw response body preview) is only
-	 * included when `WP_DEBUG` is enabled, since that data is only useful
-	 * when actively troubleshooting a local environment.
+	 * Probes the connected site and returns a minimal connection summary; the
+	 * raw response body preview is included only when WP_DEBUG is enabled.
 	 */
 	public function ajax_debug_auth(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
