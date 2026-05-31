@@ -21,9 +21,9 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Used by import paths. The default tracks the caller's `unfiltered_html`
  * capability — callers that already hold that capability (administrators on
- * single-site) skip kses to preserve content fidelity, callers that do not
- * run through wp_kses, and any modification is reported as a WP_Error.
- * Both behaviours are overridable via the safe_publish_import_kses filter.
+ * single-site) skip kses to preserve content fidelity; other callers run
+ * through wp_kses, and any modification is reported as a WP_Error.
+ * Both behaviors are overridable via the safe_publish_import_kses filter.
  */
 trait Sanitizes_Content {
 
@@ -34,7 +34,7 @@ trait Sanitizes_Content {
 	 * Sanitizes a field value and fails if sanitization modifies it.
 	 *
 	 * Callers that already hold `unfiltered_html` skip kses to preserve
-	 * content fidelity (matching WordPress core importer behaviour). Other
+	 * content fidelity (matching WordPress core importer behavior). Other
 	 * callers run the value through wp_kses and receive a WP_Error when the
 	 * sanitizer changes anything. Both branches are overridable via the
 	 * safe_publish_import_kses filter.
@@ -63,7 +63,7 @@ trait Sanitizes_Content {
 		 * Filters whether to apply kses sanitization during import.
 		 *
 		 * Defaults to running kses for any caller that does not hold the
-		 * `unfiltered_html` capability, matching WordPress core's behaviour
+		 * `unfiltered_html` capability, matching WordPress core's behavior
 		 * for non-trusted authors. Return true to force kses, false to skip.
 		 *
 		 * @param bool   $enabled Whether to apply kses. Defaults to
