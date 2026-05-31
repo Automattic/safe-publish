@@ -18,7 +18,6 @@ use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Topological_Sorter;
-use Exception;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -119,7 +118,6 @@ final class Admin_Ajax_Controller {
 		add_action( 'wp_ajax_safe_publish_create_draft', array( $this, 'ajax_create_draft' ) );
 		add_action( 'wp_ajax_safe_publish_bulk_import', array( $this, 'ajax_bulk_import' ) );
 		add_action( 'wp_ajax_safe_publish_delete_post', array( $this, 'ajax_delete_post' ) );
-		add_action( 'wp_ajax_safe_publish_debug_auth', array( $this, 'ajax_debug_auth' ) );
 
 		$this->register_auth_status_invalidation();
 	}
@@ -817,72 +815,6 @@ final class Admin_Ajax_Controller {
 				'session_id' => $session_id,
 			)
 		);
-	}
-
-	/**
-	 * Handles debug authentication AJAX request.
-	 */
-	public function ajax_debug_auth(): void {
-		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
-		$this->verify_ajax_capability();
-
-		$connected_site_url = sanitize_text_field( wp_unslash( $_POST['connected_site_url'] ?? '' ) );
-
-		if ( empty( $connected_site_url ) ) {
-			wp_send_json_error( __( 'Connected site URL is required.', 'safe-publish' ) );
-		}
-
-		$auth_credentials = Auth_Credential_Provider::get_credentials();
-
-		$api_url = trailingslashit( $connected_site_url ) . 'wp-json/wp/v2/types';
-
-		$auth_params = \Safe_Publish\Auth\VIP_Safe_Auth::get_auth_params(
-			$api_url,
-			Request_Actions::PROBE,
-			$auth_credentials,
-			'GET'
-		);
-
-		$auth_type = 'none';
-		if ( ! empty( $auth_credentials['shared_secret'] ) ) {
-			$auth_type = ! empty( $auth_credentials['username'] ) ? 'shared_secret+basic_auth' : 'shared_secret';
-		}
-
-		$debug_info = array(
-			'connected_site_url'         => $connected_site_url,
-			'api_url'                    => $api_url,
-			'auth_credentials_available' => ! empty( $auth_credentials['shared_secret'] ),
-			'auth_credentials_type'      => $auth_type,
-			'auth_params'                => $auth_params,
-		);
-
-		try {
-			$response = $this->http_client->make_request(
-				$api_url,
-				Request_Actions::PROBE,
-				$auth_credentials
-			);
-
-			if ( is_wp_error( $response ) ) {
-				$debug_info['request_error'] = $response->get_error_message();
-			} else {
-				$response_body                       = wp_remote_retrieve_body( $response );
-				$debug_info['response_code']         = wp_remote_retrieve_response_code( $response );
-				$debug_info['response_headers']      = wp_remote_retrieve_headers( $response );
-				$debug_info['response_body_length']  = strlen( $response_body );
-				$debug_info['response_body_preview'] = substr( $response_body, 0, 200 );
-
-				$json_data = json_decode( $response_body, true );
-				if ( $json_data ) {
-					$debug_info['response_json_keys'] = array_keys( $json_data );
-					$debug_info['post_types_count']   = count( $json_data );
-				}
-			}
-		} catch ( Exception $e ) {
-			$debug_info['exception'] = $e->getMessage();
-		}
-
-		wp_send_json_success( $debug_info );
 	}
 
 	/**
