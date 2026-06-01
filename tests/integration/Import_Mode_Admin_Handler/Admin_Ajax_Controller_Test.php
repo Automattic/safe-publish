@@ -1685,6 +1685,241 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the listing endpoint resolves focus_source_id to the
+	 * matching imported row and returns it as focused_item, so deep links can
+	 * pin a specific post regardless of pagination.
+	 */
+	public function test_ajax_list_imported_posts_resolves_focus_source_to_focused_item(): void {
+		// ARRANGE: Two imported posts; the second carries the source ID the
+		// deep link will request.
+		wp_set_current_user( $this->admin_user_id );
+
+		$other_id = $this->factory()->post->create(
+			array(
+				'post_title'  => 'Other Imported',
+				'post_status' => 'publish',
+				'post_type'   => 'post',
+			)
+		);
+		update_post_meta( $other_id, Options::META_SOURCE_POST_ID, '111' );
+
+		$focus_post_id = $this->factory()->post->create(
+			array(
+				'post_title'  => 'Focused Imported',
+				'post_status' => 'publish',
+				'post_type'   => 'post',
+			)
+		);
+		update_post_meta( $focus_post_id, Options::META_SOURCE_POST_ID, '7777' );
+		update_post_meta(
+			$focus_post_id,
+			Options::META_SOURCE_LINK,
+			'https://source.example.com/focused-post'
+		);
+
+		$repository = new History_Repository();
+		$session_id = $repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		if ( is_wp_error( $session_id ) ) {
+			$this->fail( 'Failed to create the test import session.' );
+		}
+		$this->insert_import_item( $session_id, $other_id );
+		$focus_item_id = $this->insert_import_item( $session_id, $focus_post_id );
+
+		$_POST = array(
+			'nonce'           => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'page'            => '1',
+			'per_page'        => '20',
+			'focus_source_id' => '7777',
+		);
+
+		// ACT: Trigger the listing handler with a focus source ID.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_list_imported_posts' );
+
+		// ASSERT: The response carries focused_item populated with the same
+		// row shape used by the main listing, pointing at the focused post.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertTrue( $response['success'], 'Listing should return success' );
+		$this->assertArrayHasKey( 'focused_item', $response['data'] );
+
+		$focused = $response['data']['focused_item'];
+		$this->assertIsArray(
+			$focused,
+			'focused_item should be the resolved row, not null'
+		);
+		$this->assertSame( $focus_post_id, $focused['id'] );
+		$this->assertSame( 7777, $focused['source_post_id'] );
+		$this->assertSame( 'Focused Imported', $focused['title'] );
+		$this->assertSame(
+			'https://source.example.com/focused-post',
+			$focused['source_link']
+		);
+		$this->assertSame(
+			$focus_item_id,
+			$focused['item_id'],
+			'focused_item should carry the most-recent items-table row id'
+		);
+		$this->assertSame( $session_id, $focused['session_id'] );
+	}
+
+	/**
+	 * Verifies that the listing endpoint returns focused_item as null when the
+	 * requested source ID has no imported post, so the client can surface a
+	 * broken-deep-link message rather than silently dropping the affordance.
+	 */
+	public function test_ajax_list_imported_posts_returns_null_focused_item_when_source_unknown(): void {
+		// ARRANGE: One unrelated imported post and a focus_source_id that
+		// matches nothing.
+		wp_set_current_user( $this->admin_user_id );
+
+		$post_id = $this->factory()->post->create(
+			array(
+				'post_status' => 'publish',
+				'post_type'   => 'post',
+			)
+		);
+		update_post_meta( $post_id, Options::META_SOURCE_POST_ID, '222' );
+
+		$repository = new History_Repository();
+		$session_id = $repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		if ( is_wp_error( $session_id ) ) {
+			$this->fail( 'Failed to create the test import session.' );
+		}
+		$this->insert_import_item( $session_id, $post_id );
+
+		$_POST = array(
+			'nonce'           => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'page'            => '1',
+			'per_page'        => '20',
+			'focus_source_id' => '99999',
+		);
+
+		// ACT: Trigger the listing handler with an unmatched focus source ID.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_list_imported_posts' );
+
+		// ASSERT: focused_item is present but null; the listing rows are
+		// returned as usual.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertTrue( $response['success'], 'Listing should return success' );
+		$this->assertArrayHasKey( 'focused_item', $response['data'] );
+		$this->assertNull(
+			$response['data']['focused_item'],
+			'focused_item should be null when the source has no imported post'
+		);
+		$this->assertCount( 1, $response['data']['items'] );
+	}
+
+	/**
+	 * Verifies that the listing endpoint omits the focused_item key entirely
+	 * when no focus_source_id is sent, so the client can distinguish "not
+	 * requested" from "requested but not found".
+	 */
+	public function test_ajax_list_imported_posts_omits_focused_item_without_param(): void {
+		// ARRANGE: A single imported post and no focus param on the request.
+		wp_set_current_user( $this->admin_user_id );
+
+		$post_id = $this->factory()->post->create(
+			array(
+				'post_status' => 'publish',
+				'post_type'   => 'post',
+			)
+		);
+
+		$repository = new History_Repository();
+		$session_id = $repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		if ( is_wp_error( $session_id ) ) {
+			$this->fail( 'Failed to create the test import session.' );
+		}
+		$this->insert_import_item( $session_id, $post_id );
+
+		$_POST = array(
+			'nonce'    => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'page'     => '1',
+			'per_page' => '20',
+		);
+
+		// ACT: Trigger the listing handler without focus_source_id.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_list_imported_posts' );
+
+		// ASSERT: The response carries no focused_item key.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertTrue( $response['success'], 'Listing should return success' );
+		$this->assertArrayNotHasKey( 'focused_item', $response['data'] );
+	}
+
+	/**
+	 * Verifies that the focused_item lookup ignores the batch filter, so a
+	 * deep link to a specific post still surfaces it even when the active
+	 * session_id filter would otherwise hide every row.
+	 */
+	public function test_ajax_list_imported_posts_focus_survives_batch_filter(): void {
+		// ARRANGE: A post imported in session A; the request filters by an
+		// unrelated session B but focuses the session-A post by source ID.
+		wp_set_current_user( $this->admin_user_id );
+
+		$post_id = $this->factory()->post->create(
+			array(
+				'post_status' => 'publish',
+				'post_type'   => 'post',
+			)
+		);
+		update_post_meta( $post_id, Options::META_SOURCE_POST_ID, '4242' );
+
+		$repository     = new History_Repository();
+		$import_session = $repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		$other_session  = $repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		if ( is_wp_error( $import_session ) || is_wp_error( $other_session ) ) {
+			$this->fail( 'Failed to create the test import sessions.' );
+		}
+		$this->insert_import_item( $import_session, $post_id );
+
+		$_POST = array(
+			'nonce'           => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'page'            => '1',
+			'per_page'        => '20',
+			'session_id'      => (string) $other_session,
+			'focus_source_id' => '4242',
+		);
+
+		// ACT: Trigger the listing handler with a non-matching batch filter
+		// and a focus source ID that points at a row outside the batch.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_list_imported_posts' );
+
+		// ASSERT: The main listing is empty (the batch filter excludes the
+		// only imported row) but focused_item still resolves to it.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertTrue( $response['success'], 'Listing should return success' );
+		$this->assertSame(
+			array(),
+			$response['data']['items'],
+			'Batch filter should exclude the imported row from the listing'
+		);
+		$this->assertIsArray(
+			$response['data']['focused_item'],
+			'focused_item should resolve regardless of the batch filter'
+		);
+		$this->assertSame(
+			$post_id,
+			$response['data']['focused_item']['id']
+		);
+	}
+
+	/**
 	 * Verifies that the Failures endpoint lists items with status 'error'
 	 * across sessions, surfacing the source URL from the parent session.
 	 */

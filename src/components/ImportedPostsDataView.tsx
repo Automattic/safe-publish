@@ -10,7 +10,9 @@
  *
  * When invoked via the post-import notice's `?batch=N` deep-link, the
  * accompanying session id is applied as a hidden filter and surfaced as a
- * contextual pill the user can clear.
+ * contextual pill the user can clear. A `?focus_source=N` deep-link pins the
+ * imported row matching that source ID at the top of the view (resolved
+ * server-side so it appears even when off the current page or filtered out).
  *
  * @file This file defines the ImportedPostsDataView component.
  */
@@ -163,6 +165,35 @@ export function ImportedPostsDataView(): JSX.Element {
 		return Number.isFinite( parsed ) && parsed > 0 ? parsed : 0;
 	} );
 
+	// Focus is set from `?focus_source=N` on mount and resolved by the listing
+	// endpoint (so the row appears even when the active batch filter or
+	// pagination would otherwise hide it). It composes with the batch filter
+	// rather than overriding it: batch narrows the list, focus pins one row.
+	const [ focusSourceId, setFocusSourceId ] = useState< number >( () => {
+		const focusParam = new URLSearchParams( window.location.search ).get( 'focus_source' );
+		const parsed = focusParam ? parseInt( focusParam, 10 ) : 0;
+		return Number.isFinite( parsed ) && parsed > 0 ? parsed : 0;
+	} );
+	// `undefined` = no lookup yet (e.g. while the first fetch is in flight),
+	// `null` = the server confirmed no imported post for the requested source,
+	// row = resolved imported post.
+	const [ focusedItem, setFocusedItem ] = useState<
+		ImportedPost | null | undefined
+	>( undefined );
+
+	// Hoist the focused row to the top of the visible list. Server returned
+	// it via a separate lookup, so it may or may not also be in pageItems —
+	// dedup by id (DataViews' row identity) to avoid rendering it twice.
+	const displayItems = useMemo< ImportedPost[] >( () => {
+		if ( ! focusedItem ) {
+			return pageItems;
+		}
+		const others = pageItems.filter(
+			( item ) => item.id !== focusedItem.id
+		);
+		return [ focusedItem, ...others ];
+	}, [ pageItems, focusedItem ] );
+
 	const facetsLoadedRef = useRef( false );
 
 	const search = view.search ?? '';
@@ -195,12 +226,14 @@ export function ImportedPostsDataView(): JSX.Element {
 
 	// Latch DataViews mounted once it first appears, so a refetch that briefly
 	// empties the result set (e.g. clearing a search) can't unmount it and pull
-	// focus out of the search box.
+	// focus out of the search box. Keyed off displayItems so a focused-only
+	// view (server returned no page rows, just the pinned focus row) still
+	// counts as rendered.
 	useEffect( () => {
-		if ( pageItems.length > 0 || hasActiveFilters ) {
+		if ( displayItems.length > 0 || hasActiveFilters ) {
 			setHasRenderedGrid( true );
 		}
-	}, [ pageItems.length, hasActiveFilters ] );
+	}, [ displayItems.length, hasActiveFilters ] );
 
 	const statusesKey = statuses.join( '|' );
 	const postTypesKey = postTypes.join( '|' );
@@ -223,6 +256,9 @@ export function ImportedPostsDataView(): JSX.Element {
 		postTypes.forEach( ( type ) => formData.append( 'post_types[]', type ) );
 		if ( batchSessionId > 0 ) {
 			formData.append( 'session_id', String( batchSessionId ) );
+		}
+		if ( focusSourceId > 0 ) {
+			formData.append( 'focus_source_id', String( focusSourceId ) );
 		}
 		if ( ! facetsLoadedRef.current ) {
 			formData.append( 'with_facets', '1' );
@@ -252,6 +288,11 @@ export function ImportedPostsDataView(): JSX.Element {
 					}
 					if ( 'number' === typeof result.data.failed_count ) {
 						setFailedCount( result.data.failed_count );
+					}
+					// `focused_item` is present (item or null) only when
+					// focus_source_id was requested; absent otherwise.
+					if ( 'focused_item' in result.data ) {
+						setFocusedItem( result.data.focused_item ?? null );
 					}
 				} else {
 					setFetchError(
@@ -300,6 +341,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		statusesKey,
 		postTypesKey,
 		batchSessionId,
+		focusSourceId,
 		refreshNonce,
 	] );
 
@@ -309,7 +351,7 @@ export function ImportedPostsDataView(): JSX.Element {
 	useEffect( () => {
 		const sourceIds = Array.from(
 			new Set(
-				pageItems
+				displayItems
 					.map( ( item ) => item.source_post_id )
 					.filter( ( id ): id is number => id > 0 )
 			)
@@ -388,7 +430,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		return () => {
 			controller.abort();
 		};
-	}, [ pageItems ] );
+	}, [ displayItems ] );
 
 	const fields: DataViewsField< ImportedPost >[] = useMemo(
 		() => [
@@ -587,7 +629,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		hasFetchedOnce,
 		hasRenderedGrid,
 		hasError: null !== fetchError,
-		isEmpty: 0 === pageItems.length,
+		isEmpty: 0 === displayItems.length,
 		isLoading,
 		hasActiveFilters,
 	} );
@@ -619,6 +661,41 @@ export function ImportedPostsDataView(): JSX.Element {
 		}
 	}, [] );
 
+	const clearFocus = useCallback( (): void => {
+		setFocusSourceId( 0 );
+		// Reset to undefined so the stale resolved row doesn't linger in
+		// displayItems until the next fetch completes.
+		setFocusedItem( undefined );
+		const url = new URL( window.location.href );
+		if ( url.searchParams.has( 'focus_source' ) ) {
+			url.searchParams.delete( 'focus_source' );
+			window.history.replaceState( null, '', url.toString() );
+		}
+	}, [] );
+
+	// Three-state pill text so the deep link's user doesn't see a confident
+	// "Focused on …" claim before the lookup actually confirms one.
+	let focusPillText;
+	if ( undefined === focusedItem ) {
+		focusPillText = sprintf(
+			/* translators: %d: source post id */
+			__( 'Looking up source #%d…', 'safe-publish' ),
+			focusSourceId
+		);
+	} else if ( null === focusedItem ) {
+		focusPillText = sprintf(
+			/* translators: %d: source post id */
+			__( 'No imported post for source #%d', 'safe-publish' ),
+			focusSourceId
+		);
+	} else {
+		focusPillText = sprintf(
+			/* translators: %d: source post id */
+			__( 'Focused on source #%d', 'safe-publish' ),
+			focusSourceId
+		);
+	}
+
 	return (
 		<div
 			className="safe-publish-dataviews-wrapper safe-publish-dataviews-wrapper--with-builtins"
@@ -646,6 +723,18 @@ export function ImportedPostsDataView(): JSX.Element {
 						) }
 					</span>
 					<Button variant="tertiary" onClick={ clearBatch }>
+						{ __( 'Clear', 'safe-publish' ) }
+					</Button>
+				</div>
+			) }
+			{ focusSourceId > 0 && (
+				<div
+					className="safe-publish-batch-pill"
+					role="status"
+					aria-live="polite"
+				>
+					<span>{ focusPillText }</span>
+					<Button variant="tertiary" onClick={ clearFocus }>
 						{ __( 'Clear', 'safe-publish' ) }
 					</Button>
 				</div>
@@ -685,7 +774,7 @@ export function ImportedPostsDataView(): JSX.Element {
 			{ showGrid && (
 				<DataViews
 					getItemId={ ( item: ImportedPost ) => item.id.toString() }
-					data={ pageItems }
+					data={ displayItems }
 					fields={ fields }
 					view={ view }
 					onChangeView={ handleViewChange }
