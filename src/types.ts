@@ -126,12 +126,14 @@ export interface ImportedPostsFacets {
 
 /**
  * Envelope returned by the destination-side imported-posts listing endpoint.
- * `facets` is present only on the first load (requested via with_facets).
+ * `facets` and `failed_count` are present only on the first load (requested
+ * via with_facets); they cover the listing's full set, not the current page.
  */
 export interface ImportedPostsResponse {
 	items: ImportedPost[];
 	has_more: boolean;
 	facets?: ImportedPostsFacets;
+	failed_count?: number;
 }
 
 /**
@@ -360,15 +362,16 @@ export interface SourcePostsDataViewProps {
 /**
  * Admin data passed from PHP via wp_add_inline_script. Shared by the Source
  * Posts and Imports pages; `sourceSiteUrl` is only set by Source Posts;
- * `initialTab` is only set by the Imports page.
+ * `sourcePostsUrl` and `initialTab` are only set by the Imports page.
  *
- * @property {string} ajaxurl         WordPress AJAX URL.
- * @property {string} nonce           Security nonce for AJAX requests.
- * @property {string} restNonce       Security nonce for REST API requests.
- * @property {string} [sourceSiteUrl] Source site URL (Source Posts only).
- * @property {string} settingsUrl     URL to the plugin settings page.
- * @property {string} containerId     Container element ID.
- * @property {string} [initialTab]    Imports: 'posts' or 'failures' from ?tab=...
+ * @property {string} ajaxurl          WordPress AJAX URL.
+ * @property {string} nonce            Security nonce for AJAX requests.
+ * @property {string} restNonce        Security nonce for REST API requests.
+ * @property {string} [sourceSiteUrl]  Source site URL (Source Posts only).
+ * @property {string} settingsUrl      URL to the plugin settings page.
+ * @property {string} [sourcePostsUrl] URL to the Source Posts admin page (Imports only).
+ * @property {string} containerId      Container element ID.
+ * @property {string} [initialTab]     Imports: 'posts' or 'failures' from ?tab=...
  */
 export interface AdminData {
 	ajaxurl: string;
@@ -376,6 +379,7 @@ export interface AdminData {
 	restNonce: string;
 	sourceSiteUrl?: string;
 	settingsUrl: string;
+	sourcePostsUrl?: string;
 	containerId: string;
 	initialTab?: 'posts' | 'failures';
 }

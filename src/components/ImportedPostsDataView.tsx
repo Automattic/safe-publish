@@ -14,6 +14,9 @@
  *
  * @file This file defines the ImportedPostsDataView component.
  */
+import AuthStatusNotice from './AuthStatusNotice';
+import { ImportedPostsEmptyState } from './ImportedPostsEmptyState';
+import { useAuthStatus } from './hooks/useAuthStatus';
 import { getImportedSyncStatusLabel } from './post-fields';
 import { createImportedActions } from '../actions';
 import {
@@ -136,11 +139,16 @@ export function ImportedPostsDataView(): JSX.Element {
 	const [ facets, setFacets ] = useState< ImportedPostsFacets >( {
 		post_types: [],
 	} );
+	// Sent by the listing endpoint on first load alongside facets, so the
+	// empty state can surface "see Failures" without a separate roundtrip.
+	const [ failedCount, setFailedCount ] = useState< number | null >( null );
 	const [ debouncedSearch, setDebouncedSearch ] = useState( '' );
 	const [ hasRenderedGrid, setHasRenderedGrid ] = useState( false );
 	const [ syncStatuses, setSyncStatuses ] = useState<
 		Record< number, ImportSyncStatus >
 	>( {} );
+
+	const authStatus = useAuthStatus();
 
 	// Batch is set from `?batch=N` on mount and clears via the contextual pill
 	// below; it isn't surfaced as a user filter (sessions aren't a UI noun)
@@ -241,6 +249,9 @@ export function ImportedPostsDataView(): JSX.Element {
 					if ( result.data.facets ) {
 						setFacets( result.data.facets );
 						facetsLoadedRef.current = true;
+					}
+					if ( 'number' === typeof result.data.failed_count ) {
+						setFailedCount( result.data.failed_count );
 					}
 				} else {
 					setFetchError(
@@ -581,6 +592,16 @@ export function ImportedPostsDataView(): JSX.Element {
 		hasActiveFilters,
 	} );
 
+	// Stable for the lifetime of the mount — derived from the URL the page
+	// was loaded with, so the empty-state link routes through ImportsApp's
+	// own ?tab=... handling.
+	const failuresHref = useMemo( (): string => {
+		const url = new URL( window.location.href );
+		url.searchParams.set( 'tab', 'failures' );
+		url.searchParams.delete( 'batch' );
+		return url.toString();
+	}, [] );
+
 	const clearBatch = useCallback( (): void => {
 		setBatchSessionId( 0 );
 		// Match handleViewChange's filter-change behavior so the listing lands
@@ -603,6 +624,10 @@ export function ImportedPostsDataView(): JSX.Element {
 				} as React.CSSProperties
 			}
 		>
+			<AuthStatusNotice
+				status={ authStatus }
+				settingsUrl={ window.safePublishAdminData?.settingsUrl }
+			/>
 			{ batchSessionId > 0 && (
 				<div
 					className="safe-publish-batch-pill"
@@ -637,14 +662,11 @@ export function ImportedPostsDataView(): JSX.Element {
 				</div>
 			) }
 			{ showEmptyState && (
-				<div className="safe-publish-no-data" role="status" aria-live="polite">
-					<p>
-						{ __(
-							'No posts have been imported yet.',
-							'safe-publish'
-						) }
-					</p>
-				</div>
+				<ImportedPostsEmptyState
+					sourcePostsUrl={ window.safePublishAdminData?.sourcePostsUrl }
+					failedCount={ failedCount }
+					failuresHref={ failuresHref }
+				/>
 			) }
 			{ showGrid && (
 				<DataViews

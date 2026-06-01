@@ -155,6 +155,20 @@
 	padding: 16px 20px 40px 48px;
 	color: var(--safe-publish-text-muted);
 	font-style: italic;
+
+	&--cta {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 12px;
+		font-style: normal;
+	}
+
+	&__hint {
+		color: var(--safe-publish-text-muted);
+		font-style: italic;
+		margin: 0;
+	}
 }
 
 .safe-publish-status-badge {

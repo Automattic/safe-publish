@@ -233,7 +233,7 @@ final class Admin_Ajax_Controller {
 
 		if ( 0 === count( $post_ids ) ) {
 			wp_send_json_success(
-				$this->with_imported_facets(
+				$this->with_imported_listing_extras(
 					array(
 						'items'    => array(),
 						'has_more' => false,
@@ -284,7 +284,7 @@ final class Admin_Ajax_Controller {
 		}
 
 		wp_send_json_success(
-			$this->with_imported_facets(
+			$this->with_imported_listing_extras(
 				array(
 					'items'    => $rows,
 					'has_more' => $has_more,
@@ -417,18 +417,24 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Appends the listing filter facets to a response when requested.
+	 * Appends the listing's first-load extras to a response when requested.
 	 *
-	 * Facets are computed over the full imported set, so the client fetches
-	 * them once (on first load) rather than on every page/filter change.
+	 * Computes the filter facets and the count of failed imports over the
+	 * full set, so the client fetches them once (on first load) rather than
+	 * on every page/filter change.
 	 *
 	 * @param array $response    Response payload to augment.
-	 * @param bool  $with_facets Whether to attach the facets.
-	 * @return array Response, with a 'facets' key when $with_facets is true.
+	 * @param bool  $with_facets Whether to attach the first-load extras.
+	 * @return array Response, with `facets` and `failed_count` keys when
+	 *               `$with_facets` is true.
 	 */
-	private function with_imported_facets( array $response, bool $with_facets ): array {
+	private function with_imported_listing_extras(
+		array $response,
+		bool $with_facets
+	): array {
 		if ( $with_facets ) {
-			$response['facets'] = $this->repository->get_imported_filter_facets();
+			$response['facets']       = $this->repository->get_imported_filter_facets();
+			$response['failed_count'] = $this->repository->count_failed_items();
 		}
 
 		return $response;
