@@ -74,15 +74,40 @@ class AuthCredentialProviderTest extends TestCase {
 	 * password options are set.
 	 */
 	public function test_includes_basic_auth_when_both_credentials_configured(): void {
+		// ARRANGE.
 		set_test_option( Options::OPTION_BASIC_AUTH_USERNAME, 'editor' );
 		set_test_option( Options::OPTION_BASIC_AUTH_PASSWORD, 's3cr3t!' );
 
+		// ACT.
 		$credentials = Auth_Credential_Provider::get_credentials();
 
+		// ASSERT.
 		$this->assertArrayHasKey( 'username', $credentials );
 		$this->assertArrayHasKey( 'password', $credentials );
 		$this->assertSame( 'editor', $credentials['username'] );
 		$this->assertSame( 's3cr3t!', $credentials['password'] );
+	}
+
+	/**
+	 * Verifies that Basic Auth credentials are included when both username and
+	 * password constants are configured.
+	 *
+	 * @runInSeparateProcess
+	 * @preserveGlobalState disabled
+	 */
+	public function test_includes_basic_auth_when_both_constants_configured(): void {
+		// ARRANGE.
+		define( 'SAFE_PUBLISH_BASIC_AUTH_USERNAME', 'publisher' );
+		define( 'SAFE_PUBLISH_BASIC_AUTH_PASSWORD', 'constant-password' );
+
+		// ACT.
+		$credentials = Auth_Credential_Provider::get_credentials();
+
+		// ASSERT.
+		$this->assertArrayHasKey( 'username', $credentials );
+		$this->assertArrayHasKey( 'password', $credentials );
+		$this->assertSame( 'publisher', $credentials['username'] );
+		$this->assertSame( 'constant-password', $credentials['password'] );
 	}
 
 	/**

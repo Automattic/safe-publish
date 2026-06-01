@@ -78,8 +78,8 @@ final class Plugin {
 
 		( new Settings_Logger() )->register_handlers();
 
-		$sync_mode          = get_option( Options::OPTION_SYNC_MODE, '' );
-		$connected_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$sync_mode          = Options::get_value( Options::OPTION_SYNC_MODE, '' );
+		$connected_site_url = Options::get_value( Options::OPTION_CONNECTED_SITE_URL, '' );
 
 		$can_export = in_array(
 			$sync_mode,

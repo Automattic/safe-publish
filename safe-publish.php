@@ -21,7 +21,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
 }
 
+if ( defined( 'SAFE_PUBLISH_LOADED' ) ) {
+	return;
+}
+
 // Define plugin constants.
+define( 'SAFE_PUBLISH_LOADED', true );
 define( 'SAFE_PUBLISH_VERSION', '1.1.0' );
 define( 'SAFE_PUBLISH_PLUGIN_FILE', __FILE__ );
 define( 'SAFE_PUBLISH_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -85,6 +90,8 @@ spl_autoload_register(
 		}
 	}
 );
+
+\Safe_Publish\Utils\Options::register_constant_filters();
 
 // Initialize the plugin.
 add_action( 'plugins_loaded', 'safe_publish_init_plugin' );

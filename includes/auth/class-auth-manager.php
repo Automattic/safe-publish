@@ -11,6 +11,7 @@ namespace Safe_Publish\Auth;
 
 use Safe_Publish\API\Dispatch_Logger;
 use Safe_Publish\API\Export_Logger;
+use Safe_Publish\Utils\Options;
 
 /**
  * Coordinates authentication system initialization.
@@ -51,7 +52,7 @@ class Auth_Manager {
 			$logger,
 			$this->permission_manager,
 			$this->get_shared_secret(),
-			get_option( 'safe_publish_connected_site_url', '' )
+			Options::get_value( Options::OPTION_CONNECTED_SITE_URL, '' )
 		);
 		new Auth_Admin_UI( $this->get_shared_secret() );
 	}
