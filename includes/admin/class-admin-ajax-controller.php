@@ -112,6 +112,7 @@ final class Admin_Ajax_Controller {
 	public function register_handlers(): void {
 		add_action( 'wp_ajax_safe_publish_fetch_posts', array( $this, 'ajax_fetch_posts' ) );
 		add_action( 'wp_ajax_safe_publish_list_imported_posts', array( $this, 'ajax_list_imported_posts' ) );
+		add_action( 'wp_ajax_safe_publish_list_failed_imports', array( $this, 'ajax_list_failed_imports' ) );
 		add_action( 'wp_ajax_safe_publish_fetch_post_types', array( $this, 'ajax_fetch_post_types' ) );
 		add_action( 'wp_ajax_safe_publish_test_connection', array( $this, 'ajax_test_connection' ) );
 		add_action( 'wp_ajax_safe_publish_auth_status', array( $this, 'ajax_auth_status' ) );
@@ -193,7 +194,7 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Handles AJAX request for the Imported Posts listing.
+	 * Handles AJAX request for the Imports → Posts tab listing.
 	 *
 	 * Pure local query — no source roundtrip. Returns the paginated set of
 	 * imported posts ordered by most-recent import_date_gmt (from the items
@@ -282,7 +283,53 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Validates and normalizes the Imported Posts listing's search/filter/sort
+	 * Handles AJAX request for the Failures tab listing.
+	 *
+	 * Returns a page of items with status 'error' — failed imports that have no
+	 * local post — most recent first. Read-only; recovery happens by fixing the
+	 * source and re-importing from Source Posts.
+	 */
+	public function ajax_list_failed_imports(): void {
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		$this->verify_ajax_capability();
+
+		// phpcs:disable WordPress.Security.NonceVerification.Missing
+		$page     = max( 1, absint( $_POST['page'] ?? 1 ) );
+		$per_page = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		$rows = $this->repository->list_failed_items( $page, $per_page );
+
+		$has_more = count( $rows ) > $per_page;
+		if ( $has_more ) {
+			$rows = array_slice( $rows, 0, $per_page );
+		}
+
+		$items = array_map(
+			static fn( array $row ): array => array(
+				'id'              => (int) $row['id'],
+				'session_id'      => (int) $row['session_id'],
+				'title'           => (string) $row['title'],
+				'source_post_id'  => null !== $row['source_post_id']
+					? (int) $row['source_post_id']
+					: null,
+				'source_site_url' => (string) $row['source_site_url'],
+				'error_message'   => (string) ( $row['error_message'] ?? '' ),
+				'import_date_gmt' => (string) $row['import_date_gmt'],
+			),
+			$rows
+		);
+
+		wp_send_json_success(
+			array(
+				'items'    => $items,
+				'has_more' => $has_more,
+			)
+		);
+	}
+
+	/**
+	 * Validates and normalizes the Imports listing's search/filter/sort
 	 * params from the request.
 	 *
 	 * @return array{search?: string, statuses: list<string>, post_types: list<string>, session_id: int, orderby: string, order: string} Listing args.
@@ -805,6 +852,13 @@ final class Admin_Ajax_Controller {
 		}
 
 		$this->repository->complete_session( $session_id );
+
+		Post_Import_Notice::record(
+			$session_id,
+			count( $results ),
+			$successful,
+			$failed
+		);
 
 		wp_send_json_success(
 			array(

@@ -442,10 +442,11 @@ class Imported_Posts_Listing_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that facets list the post types and sessions present among
-	 * imported posts.
+	 * Verifies that facets list the post types present among imported posts.
+	 *
+	 * Sessions are an internal grouping concept and not exposed as a facet.
 	 */
-	public function test_filter_facets_list_present_types_and_sessions(): void {
+	public function test_filter_facets_list_present_post_types(): void {
 		// ARRANGE: A second session, plus a post and a page across both.
 		$other_session = $this->repository->create_session(
 			'https://other.example.com',
@@ -475,10 +476,8 @@ class Imported_Posts_Listing_Test extends Integration_Test_Case {
 		sort( $type_values );
 		$this->assertSame( array( 'page', 'post' ), $type_values );
 
-		// ASSERT: Both sessions that produced posts appear as options.
-		$session_values = array_column( $facets['sessions'], 'value' );
-		$this->assertContains( (string) $this->session_id, $session_values );
-		$this->assertContains( (string) $other_session, $session_values );
+		// ASSERT: Sessions are not exposed as a facet.
+		$this->assertArrayNotHasKey( 'sessions', $facets );
 	}
 
 	/**
