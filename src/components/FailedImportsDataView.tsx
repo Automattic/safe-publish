@@ -11,7 +11,7 @@ import { DEFAULT_ITEMS_PER_PAGE, LAYOUT_TABLE } from '../constants';
 import { formatDateTime, getErrorMessage } from '../utils';
 import { Notice, Spinner } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
-import { useState, useEffect, useMemo } from '@wordpress/element';
+import { useState, useEffect, useMemo, useCallback } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
 import type {
@@ -189,7 +189,21 @@ export function FailedImportsDataView(): JSX.Element {
 		currentPage
 	);
 
+	const handleViewChange = useCallback( ( next: View ): void => {
+		setView( ( current ) => {
+			// The Failures tab has no sort/filter/search controls, so perPage
+			// is the only trigger that should reset pagination. Layout-only
+			// changes keep the current page.
+			const perPageChanged = next.perPage !== current.perPage;
+			return {
+				...next,
+				page: perPageChanged ? 1 : ( next.page ?? current.page ?? 1 ),
+			};
+		} );
+	}, [] );
+
 	const showLoading = isLoading && ! hasFetchedOnce;
+	const showRefetch = isLoading && hasFetchedOnce;
 	const showEmptyState =
 		hasFetchedOnce && ! isLoading && 0 === pageItems.length && null === fetchError;
 
@@ -227,13 +241,23 @@ export function FailedImportsDataView(): JSX.Element {
 					</p>
 				</div>
 			) }
+			{ showRefetch && (
+				<div
+					className="safe-publish-refetch-indicator"
+					role="status"
+					aria-live="polite"
+				>
+					<Spinner />
+					<span>{ __( 'Updating…', 'safe-publish' ) }</span>
+				</div>
+			) }
 			{ hasFetchedOnce && ( pageItems.length > 0 || null !== fetchError ) && (
 				<DataViews
 					getItemId={ ( item: FailedImport ) => item.id.toString() }
 					data={ pageItems }
 					fields={ fields }
 					view={ view }
-					onChangeView={ setView }
+					onChangeView={ handleViewChange }
 					paginationInfo={ paginationInfo }
 					defaultLayouts={ defaultLayouts }
 					actions={ [] }
