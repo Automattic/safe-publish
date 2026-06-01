@@ -92,6 +92,7 @@ final class Admin_Page {
 				'nonce'         => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 				'restNonce'     => wp_create_nonce( 'wp_rest' ),
 				'sourceSiteUrl' => $source_site_url,
+				'importsUrl'    => admin_url( 'admin.php?page=safe-publish-imports' ),
 				'containerId'   => 'safe-publish-dataviews-container',
 			)
 		);

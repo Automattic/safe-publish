@@ -1,7 +1,7 @@
 /**
  * Tests for action modal components and bulk operations
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createActions, createImportedActions } from '@/actions';
 import BulkRollbackPostModal from '@/components/BulkRollbackPostModal';
 import RollbackPostModal from '@/components/RollbackPostModal';
@@ -70,116 +70,113 @@ describe( 'Actions configuration', () => {
 		expect( Array.isArray( actions ) ).toBe( true );
 	} );
 
-	it( 'should have bulk-import action', () => {
-		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
+	it( 'should have import action', () => {
+		const bulkAction = actions.find( ( a ) => a.id === 'import' );
 		expect( bulkAction ).toBeDefined();
-		expect( typeof bulkAction?.label ).toBe( 'function' );
+		expect( bulkAction?.label ).toBe( 'Import' );
 		expect( bulkAction?.isPrimary ).toBe( true );
 		expect( bulkAction?.supportsBulk ).toBe( true );
 	} );
 
-	it( 'bulk-import label returns "Import" for a single non-imported item', () => {
-		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
-		const label = typeof bulkAction?.label === 'function'
-			? bulkAction.label( [ buildPost( { is_imported: false } ) ] )
-			: bulkAction?.label;
-		expect( label ).toBe( 'Import' );
-	} );
-
-	it( 'bulk-import label returns "Update" for a single imported item with an update', () => {
-		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
-		const label = typeof bulkAction?.label === 'function'
-			? bulkAction.label( [ buildPost( { is_imported: true, has_update: true } ) ] )
-			: bulkAction?.label;
-		expect( label ).toBe( 'Update' );
-	} );
-
-	it( 'bulk-import label returns "Import / Update" for multiple items', () => {
-		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
-		const label = typeof bulkAction?.label === 'function'
-			? bulkAction.label( [
-				buildPost( { id: 1, title: 'A', is_imported: false } ),
-				buildPost( { id: 2, title: 'B', is_imported: true, has_update: true } ),
-			] )
-			: bulkAction?.label;
-		expect( label ).toBe( 'Import / Update' );
-	} );
-
-	it( 'bulk-import action isEligible covers posts that can be imported or updated', () => {
-		const bulkAction = actions.find( ( a ) => a.id === 'bulk-import' );
+	it( 'import isEligible only allows non-imported items (Update lives on the Imports tab)', () => {
+		const bulkAction = actions.find( ( a ) => a.id === 'import' );
 		expect( bulkAction?.isEligible?.( buildPost( { is_imported: false } ) ) ).toBe( true );
-		expect( bulkAction?.isEligible?.( buildPost( { is_imported: true, has_update: true } ) ) ).toBe( true );
+		expect( bulkAction?.isEligible?.( buildPost( { is_imported: true, has_update: true } ) ) ).toBe( false );
 		expect( bulkAction?.isEligible?.( buildPost( { is_imported: true, has_update: false } ) ) ).toBe( false );
 	} );
 
-	it( 'bulk-import isEligible returns false when not authorized', () => {
+	it( 'import isEligible returns false when not authorized', () => {
 		const unauthorized = createActions( undefined, false );
-		const bulkAction = unauthorized.find( ( a ) => a.id === 'bulk-import' );
-		const importable = buildPost( { is_imported: false } );
-		const updatable = buildPost( { is_imported: true, has_update: true } );
-		expect( bulkAction?.isEligible?.( importable ) ).toBe( false );
-		expect( bulkAction?.isEligible?.( updatable ) ).toBe( false );
-	} );
-
-
-
-	it( 'should have post diff action', () => {
-		const diffAction = getModalAction( 'post-diff' );
-		expect( diffAction.label ).toBe( 'Post Diff' );
-		expect( diffAction.supportsBulk ).toBe( false );
-		expect( diffAction.modalSize ).toBe( 'fill' );
+		const bulkAction = unauthorized.find( ( a ) => a.id === 'import' );
+		expect( bulkAction?.isEligible?.( buildPost( { is_imported: false } ) ) ).toBe( false );
 	} );
 } );
 
-describe( 'Bulk import action', () => {
+describe( 'Import action', () => {
 	it( 'should have RenderModal component', () => {
-		const bulkAction = getModalAction( 'bulk-import' );
+		const bulkAction = getModalAction( 'import' );
 		expect( typeof bulkAction.RenderModal ).toBe( 'function' );
 	} );
 
 	it( 'should hide modal header', () => {
-		const bulkAction = getModalAction( 'bulk-import' );
+		const bulkAction = getModalAction( 'import' );
 		expect( bulkAction.hideModalHeader ).toBe( true );
 	} );
 
 	it( 'should focus on first content element', () => {
-		const bulkAction = getModalAction( 'bulk-import' );
+		const bulkAction = getModalAction( 'import' );
 		expect( bulkAction.modalFocusOnMount ).toBe( 'firstContentElement' );
 	} );
 } );
 
-describe( 'Post diff action', () => {
-	it( 'should have RenderModal component', () => {
-		const diffAction = getModalAction( 'post-diff' );
-		expect( typeof diffAction.RenderModal ).toBe( 'function' );
+describe( 'View in Imports action', () => {
+	const viewAction = actions.find( ( a ) => a.id === 'view-in-imports' );
+
+	it( 'is hidden for non-imported rows', () => {
+		// ARRANGE + ACT + ASSERT: non-imported rows have no Imports counterpart to focus.
+		expect( viewAction?.isEligible?.( buildPost( { is_imported: false } ) ) ).toBe( false );
 	} );
 
-	it( 'should have fill modal size', () => {
-		const diffAction = getModalAction( 'post-diff' );
-		expect( diffAction.modalSize ).toBe( 'fill' );
+	it( 'is eligible for imported rows', () => {
+		// ARRANGE + ACT + ASSERT: imported rows surface the deep link.
+		expect( viewAction?.isEligible?.( buildPost( { is_imported: true } ) ) ).toBe( true );
 	} );
 
-	it( 'isEligible only allows imported posts (avoids 404 from non-mapped source posts)', () => {
-		// ARRANGE: get the action under test.
-		const diffAction = getModalAction( 'post-diff' );
+	it( 'is a primary action so it sits in the row toolbar, not the kebab menu', () => {
+		// ARRANGE + ACT + ASSERT: primary so the imported-row toolbar shows it inline.
+		expect( viewAction?.isPrimary ).toBe( true );
+	} );
 
-		// ACT + ASSERT: imported posts have a local mapping to diff against.
-		expect(
-			diffAction?.isEligible?.( {
-				id: 1, link: '', title: 'Test', modified_gmt: '',
-				date_gmt: '', post_type: 'post', status: 'publish',
-				is_imported: true,
-			} )
-		).toBe( true );
+	it( 'is not exposed on the Imports → Posts tab itself', () => {
+		// ARRANGE: the Imports → Posts action set.
+		const importedActions = createImportedActions();
+		// ACT + ASSERT: View in Imports doesn't loop the user back to the same tab.
+		expect( importedActions.find( ( a ) => a.id === 'view-in-imports' ) ).toBeUndefined();
+	} );
 
-		// ACT + ASSERT: source-only posts cannot be diffed — no local copy exists.
-		expect(
-			diffAction?.isEligible?.( {
-				id: 1, link: '', title: 'Test', modified_gmt: '',
-				date_gmt: '', post_type: 'post', status: 'publish',
-				is_imported: false,
-			} )
-		).toBe( false );
+	it( 'navigates to the Imports page with focus_source set to the row id', () => {
+		// ARRANGE: stub window.location + the admin-data global the callback reads.
+		const originalLocation = window.location;
+		const originalData = window.safePublishAdminData;
+		const hrefSpy = vi.fn();
+		Object.defineProperty( window, 'location', {
+			configurable: true,
+			value: {
+				get href() { return ''; },
+				set href( value: string ) { hrefSpy( value ); },
+			},
+		} );
+		window.safePublishAdminData = {
+			ajaxurl: 'http://test.local/wp-admin/admin-ajax.php',
+			nonce: 'n',
+			restNonce: 'rn',
+			settingsUrl: 'http://test.local/wp-admin/admin.php?page=safe-publish-settings',
+			importsUrl: 'http://test.local/wp-admin/admin.php?page=safe-publish-imports',
+			containerId: 'test-container',
+		};
+
+		try {
+			// ACT: callback runs for an imported row whose source id is 42.
+			if ( ! viewAction || ! ( 'callback' in viewAction ) ) {
+				throw new Error( 'Expected view-in-imports to be a button action with a callback' );
+			}
+			viewAction.callback(
+				[ buildPost( { id: 42, is_imported: true } ) ],
+				{} as never
+			);
+
+			// ASSERT: navigation hit importsUrl with focus_source=42 appended.
+			expect( hrefSpy ).toHaveBeenCalledTimes( 1 );
+			const navigatedTo = hrefSpy.mock.calls[ 0 ][ 0 ] as string;
+			expect( navigatedTo ).toContain( 'page=safe-publish-imports' );
+			expect( navigatedTo ).toContain( 'focus_source=42' );
+		} finally {
+			Object.defineProperty( window, 'location', {
+				configurable: true,
+				value: originalLocation,
+			} );
+			window.safePublishAdminData = originalData;
+		}
 	} );
 } );
 

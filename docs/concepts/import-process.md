@@ -248,9 +248,7 @@ Errors are reported in multiple places:
 ### Before Importing
 
 1. **Test connection** to verify authentication.
-2. **Preview content** using Post Diff.
-3. **Check image accessibility** in preview.
-4. **Verify post type** is correct.
+2. **Verify post type** is correct.
 
 ### During Import
 
