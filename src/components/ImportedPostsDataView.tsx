@@ -323,13 +323,24 @@ export function ImportedPostsDataView(): JSX.Element {
 						PUBLISH_STATUS_LABELS[ item.local_status ] ?? item.local_status;
 					const modifierClass = `safe-publish-status-badge--${ item.local_status }`;
 					return (
-						<span className={ `safe-publish-status-badge ${ modifierClass }` }>
-							<span
-								className="safe-publish-status-badge__dot"
-								aria-hidden="true"
-							/>
-							{ label }
-						</span>
+						<>
+							<span className={ `safe-publish-status-badge ${ modifierClass }` }>
+								<span
+									className="safe-publish-status-badge__dot"
+									aria-hidden="true"
+								/>
+								{ label }
+							</span>
+							{ item.rolled_back && (
+								<span className="safe-publish-status-badge safe-publish-status-badge--rolled-back">
+									<span
+										className="safe-publish-status-badge__dot"
+										aria-hidden="true"
+									/>
+									{ __( 'Rolled back', 'safe-publish' ) }
+								</span>
+							) }
+						</>
 					);
 				},
 			},
