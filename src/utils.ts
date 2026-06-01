@@ -79,12 +79,16 @@ export function formatDateTime( dateString: string ): string {
 }
 
 /**
- * Display labels for sync statuses.
+ * Display labels for sync statuses. `available` is source-side only; the
+ * rest cover the Imports → Posts column's verdicts plus its loading state.
  */
 export const SYNC_STATUS_LABELS = {
-	outdated: __( 'Outdated', 'safe-publish' ),
-	upToDate: __( 'Up to date', 'safe-publish' ),
-	available: __( 'Available', 'safe-publish' ),
+	outdated:    __( 'Outdated', 'safe-publish' ),
+	upToDate:    __( 'Up to date', 'safe-publish' ),
+	available:   __( 'Available', 'safe-publish' ),
+	missing:     __( 'Missing on source', 'safe-publish' ),
+	unreachable: __( 'Cannot check', 'safe-publish' ),
+	loading:     __( 'Checking…', 'safe-publish' ),
 } as const;
 
 /**

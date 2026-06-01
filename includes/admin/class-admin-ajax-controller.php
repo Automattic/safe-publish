@@ -18,6 +18,8 @@ use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Topological_Sorter;
+use DateTimeImmutable;
+use DateTimeZone;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -47,6 +49,15 @@ final class Admin_Ajax_Controller {
 	 * @var int
 	 */
 	const AUTH_STATUS_TTL = 5 * MINUTE_IN_SECONDS;
+
+	/**
+	 * Maximum number of source IDs accepted by ajax_sync_status_batch in a
+	 * single call. Mirrors the catalog endpoint's MAX_PER_PAGE so one batch
+	 * can't outgrow what the source serves for a regular page.
+	 *
+	 * @var int
+	 */
+	const SYNC_STATUS_BATCH_MAX = 100;
 
 	/**
 	 * Source Posts API instance.
@@ -119,6 +130,7 @@ final class Admin_Ajax_Controller {
 		add_action( 'wp_ajax_safe_publish_create_draft', array( $this, 'ajax_create_draft' ) );
 		add_action( 'wp_ajax_safe_publish_bulk_import', array( $this, 'ajax_bulk_import' ) );
 		add_action( 'wp_ajax_safe_publish_delete_post', array( $this, 'ajax_delete_post' ) );
+		add_action( 'wp_ajax_safe_publish_sync_status_batch', array( $this, 'ajax_sync_status_batch' ) );
 
 		$this->register_auth_status_invalidation();
 	}
@@ -903,6 +915,157 @@ final class Admin_Ajax_Controller {
 		}
 
 		wp_send_json_success( array( 'message' => __( 'Post moved to trash.', 'safe-publish' ) ) );
+	}
+
+	/**
+	 * Handles AJAX request for the Imports → Posts tab sync-status column.
+	 *
+	 * Takes a batch of source post IDs and returns per-ID one of
+	 * `up-to-date | outdated | missing | unreachable` by comparing the source
+	 * post's `modified_gmt` against the destination's most recent
+	 * `import_date_gmt`. Posts are batched by type so each post-type group
+	 * costs one signed catalog call.
+	 */
+	public function ajax_sync_status_batch(): void {
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		$this->verify_ajax_capability( 'edit_posts' );
+
+		$this->validate_auth_or_fail();
+
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- caller already verified via check_ajax_referer.
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- each element is downstream-sanitized via absint().
+		$raw_ids = (array) wp_unslash( $_POST['source_ids'] ?? array() );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		$source_ids = array_values(
+			array_unique(
+				array_filter(
+					array_map(
+						static fn( mixed $v ): int => absint( $v ),
+						$raw_ids
+					),
+					static fn( int $id ): bool => $id > 0
+				)
+			)
+		);
+
+		if ( count( $source_ids ) > self::SYNC_STATUS_BATCH_MAX ) {
+			wp_send_json_error(
+				sprintf(
+					/* translators: %d: maximum number of posts per batch */
+					__(
+						'Sync status check is limited to %d posts at a time.',
+						'safe-publish'
+					),
+					self::SYNC_STATUS_BATCH_MAX
+				)
+			);
+		}
+
+		if ( 0 === count( $source_ids ) ) {
+			wp_send_json_success( array( 'statuses' => (object) array() ) );
+		}
+
+		$by_post_type = array();
+		$context      = array();
+
+		foreach ( $source_ids as $source_id ) {
+			$local_post = $this->post_import_service->find_imported_post( $source_id );
+			if ( null === $local_post ) {
+				continue;
+			}
+
+			$item = $this->repository->get_item_for_post( $local_post->ID );
+			if ( null === $item || ! isset( $item['import_date_gmt'] ) ) {
+				continue;
+			}
+
+			$context[ $source_id ] = (string) $item['import_date_gmt'];
+
+			$post_type                    = (string) $local_post->post_type;
+			$by_post_type[ $post_type ][] = $source_id;
+		}
+
+		if ( 0 === count( $context ) ) {
+			wp_send_json_success( array( 'statuses' => (object) array() ) );
+		}
+
+		$source_site_url  = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$auth_credentials = Auth_Credential_Provider::get_credentials();
+
+		$statuses = array();
+		foreach ( $by_post_type as $post_type => $ids ) {
+			$response = $this->api->fetch_posts(
+				$source_site_url,
+				$auth_credentials,
+				array(
+					'post_type' => $post_type,
+					'include'   => $ids,
+				)
+			);
+
+			if ( is_wp_error( $response ) ) {
+				foreach ( $ids as $id ) {
+					$statuses[ $id ] = 'unreachable';
+				}
+				continue;
+			}
+
+			$source_modified_by_id = array();
+			foreach ( $response['items'] as $item ) {
+				$source_modified_by_id[ (int) $item['id'] ] = (string) $item['modified_gmt'];
+			}
+
+			foreach ( $ids as $id ) {
+				if ( ! isset( $source_modified_by_id[ $id ] ) ) {
+					$statuses[ $id ] = 'missing';
+					continue;
+				}
+
+				$statuses[ $id ] = self::compare_sync_state(
+					$source_modified_by_id[ $id ],
+					$context[ $id ]
+				);
+			}
+		}
+
+		wp_send_json_success( array( 'statuses' => $statuses ) );
+	}
+
+	/**
+	 * Compares source modified_gmt against import_date_gmt and returns the
+	 * verdict.
+	 *
+	 * Both are parsed with an explicit UTC timezone so the comparison doesn't
+	 * depend on the request's PHP timezone. Equal timestamps resolve to
+	 * `up-to-date`: import_date_gmt is stamped after the source fetch, so any
+	 * later edit compares strictly greater.
+	 *
+	 * @param string $source_modified_gmt ISO 8601 modified_gmt from the source.
+	 * @param string $import_date_gmt     MySQL datetime from the items table.
+	 * @return string Verdict: 'up-to-date', 'outdated', or 'unreachable' on parse failure.
+	 */
+	private static function compare_sync_state(
+		string $source_modified_gmt,
+		string $import_date_gmt
+	): string {
+		$utc       = new DateTimeZone( 'UTC' );
+		$source_dt = DateTimeImmutable::createFromFormat(
+			'Y-m-d\TH:i:s\Z',
+			$source_modified_gmt,
+			$utc
+		);
+		$import_dt = DateTimeImmutable::createFromFormat(
+			'Y-m-d H:i:s',
+			$import_date_gmt,
+			$utc
+		);
+
+		if ( false === $source_dt || false === $import_dt ) {
+			return 'unreachable';
+		}
+
+		return $source_dt > $import_dt ? 'outdated' : 'up-to-date';
 	}
 
 	/**

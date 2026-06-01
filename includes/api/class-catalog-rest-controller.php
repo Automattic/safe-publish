@@ -164,6 +164,13 @@ final class Catalog_REST_Controller {
 			return $post_type;
 		}
 
+		$statuses = $this->resolve_statuses( $request->get_param( 'status' ) );
+
+		$include = self::resolve_include( $request->get_param( 'include' ) );
+		if ( count( $include ) > 0 ) {
+			return $this->handle_include_request( $post_type, $statuses, $include );
+		}
+
 		$published_after  = self::sanitize_iso_datetime(
 			$request->get_param( 'published_after' ),
 			false
@@ -193,8 +200,6 @@ final class Catalog_REST_Controller {
 			: max( 1, min( self::MAX_PER_PAGE, (int) $per_page_raw ) );
 
 		$page = max( 1, (int) $request->get_param( 'page' ) );
-
-		$statuses = $this->resolve_statuses( $request->get_param( 'status' ) );
 
 		$orderby_raw = (string) $request->get_param( 'orderby' );
 		$orderby     = in_array( $orderby_raw, self::ALLOWED_ORDERBY, true )
@@ -249,6 +254,47 @@ final class Catalog_REST_Controller {
 			array(
 				'items'    => $items,
 				'has_more' => $has_more,
+			),
+			200
+		);
+	}
+
+	/**
+	 * Returns the listing payload for an include-by-ID lookup.
+	 *
+	 * Backs the destination's sync-status batch check. Search, date, ordering,
+	 * and pagination inputs don't apply (the caller names the exact set of
+	 * IDs); `has_more` is always false.
+	 *
+	 * @param string   $post_type Resolved post type slug.
+	 * @param string[] $statuses  Resolved status allowlist.
+	 * @param int[]    $ids       Source post IDs to look up (already sanitized).
+	 * @return WP_REST_Response Catalog envelope.
+	 */
+	private function handle_include_request(
+		string $post_type,
+		array $statuses,
+		array $ids
+	): WP_REST_Response {
+		$args = array(
+			'post_type'           => $post_type,
+			'post_status'         => $statuses,
+			'post__in'            => $ids,
+			'orderby'             => 'post__in',
+			'no_found_rows'       => true,
+			'posts_per_page'      => count( $ids ),
+			'ignore_sticky_posts' => true,
+		);
+
+		$items = array();
+		foreach ( $this->run_query( $args, false ) as $post ) {
+			$items[] = Source_Posts_API::prepare_listing_payload_from_post( $post );
+		}
+
+		return new WP_REST_Response(
+			array(
+				'items'    => $items,
+				'has_more' => false,
 			),
 			200
 		);
@@ -422,6 +468,39 @@ final class Catalog_REST_Controller {
 	}
 
 	/**
+	 * Normalizes the include param to a deduped, capped list of positive IDs.
+	 *
+	 * Accepts an array or a comma-separated string. The cap matches MAX_PER_PAGE
+	 * so a single batch can't outgrow what the endpoint serves for a regular page.
+	 *
+	 * @param mixed $raw Raw include param.
+	 * @return int[] Sanitized include list.
+	 */
+	private static function resolve_include( mixed $raw ): array {
+		if ( is_string( $raw ) && '' !== $raw ) {
+			$raw = explode( ',', $raw );
+		}
+
+		if ( ! is_array( $raw ) ) {
+			return array();
+		}
+
+		$ids = array_values(
+			array_unique(
+				array_filter(
+					array_map(
+						static fn( mixed $v ): int => absint( $v ),
+						$raw
+					),
+					static fn( int $id ): bool => $id > 0
+				)
+			)
+		);
+
+		return array_slice( $ids, 0, self::MAX_PER_PAGE );
+	}
+
+	/**
 	 * Resolves and validates the status list against the allowlist.
 	 *
 	 * No status param (or one with no allowlisted entries) means "no
@@ -555,6 +634,10 @@ final class Catalog_REST_Controller {
 			'orderby'          => array( 'type' => 'string' ),
 			'order'            => array( 'type' => 'string' ),
 			'post_type'        => array( 'type' => 'string' ),
+			'include'          => array(
+				'type'  => 'array',
+				'items' => array( 'type' => 'integer' ),
+			),
 		);
 	}
 }
