@@ -2,13 +2,28 @@
  * Tests for action modal components and bulk operations
  */
 import { describe, expect, it, vi } from 'vitest';
-import { createActions, createImportedActions } from '@/actions';
+import {
+	createActions,
+	createImportedActions,
+	type ImportedActionsContext,
+	type SourceActionsContext,
+} from '@/actions';
 import BulkRollbackPostModal from '@/components/BulkRollbackPostModal';
 import RollbackPostModal from '@/components/RollbackPostModal';
 import type { ImportedPost, Post } from '@/types';
 import type { Action, ActionModal } from '@wordpress/dataviews/build-types';
 
-const actions = createActions();
+const SOURCE_CONTEXT: SourceActionsContext = {
+	ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+	nonce: 'test-nonce',
+};
+
+const IMPORTED_CONTEXT: ImportedActionsContext = {
+	...SOURCE_CONTEXT,
+	restNonce: 'test-rest-nonce',
+};
+
+const actions = createActions( undefined, true, SOURCE_CONTEXT );
 
 /**
  * Builds a Post fixture with sensible listing-shape defaults. Tests can
@@ -40,7 +55,6 @@ function buildImportedPost(
 		title: 'Test',
 		post_type: 'post',
 		local_status: 'publish',
-		modified_gmt: '',
 		edit_url: '',
 		source_link: '',
 		item_id: 100,
@@ -86,7 +100,7 @@ describe( 'Actions configuration', () => {
 	} );
 
 	it( 'import isEligible returns false when not authorized', () => {
-		const unauthorized = createActions( undefined, false );
+		const unauthorized = createActions( undefined, false, SOURCE_CONTEXT );
 		const bulkAction = unauthorized.find( ( a ) => a.id === 'import' );
 		expect( bulkAction?.isEligible?.( buildPost( { is_imported: false } ) ) ).toBe( false );
 	} );
@@ -129,7 +143,7 @@ describe( 'View in Imports action', () => {
 
 	it( 'is not exposed on the Imports → Posts tab itself', () => {
 		// ARRANGE: the Imports → Posts action set.
-		const importedActions = createImportedActions();
+		const importedActions = createImportedActions( undefined, IMPORTED_CONTEXT );
 		// ACT + ASSERT: View in Imports doesn't loop the user back to the same tab.
 		expect( importedActions.find( ( a ) => a.id === 'view-in-imports' ) ).toBeUndefined();
 	} );
@@ -181,7 +195,7 @@ describe( 'View in Imports action', () => {
 } );
 
 describe( 'createImportedActions rollback action', () => {
-	const importedActions = createImportedActions();
+	const importedActions = createImportedActions( undefined, IMPORTED_CONTEXT );
 
 	/**
 	 * Returns the rollback modal action, throwing if absent or not modal.

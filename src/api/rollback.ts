@@ -73,20 +73,24 @@ export const isRollbackRestore = ( item: ImportedPost ): boolean =>
 /**
  * Rolls back a single import event via the admin-ajax endpoint.
  *
- * @param {number} itemId Items-table row ID to roll back.
+ * @param {number} itemId  Items-table row ID to roll back.
+ * @param {string} ajaxurl WordPress admin-ajax URL.
+ * @param {string} nonce   AJAX nonce for the rollback endpoint.
  *
  * @return {Promise<RollbackItemOutcome>} The endpoint outcome.
  */
 export const rollbackItem = async (
-	itemId: number
+	itemId: number,
+	ajaxurl: string,
+	nonce: string
 ): Promise< RollbackItemOutcome > => {
 	const formData = new FormData();
 	formData.append( 'action', 'safe_publish_rollback_item' );
-	formData.append( 'nonce', window.safePublishAdminData.nonce );
+	formData.append( 'nonce', nonce );
 	formData.append( 'item_id', itemId.toString() );
 
 	try {
-		const response = await fetch( window.safePublishAdminData.ajaxurl, {
+		const response = await fetch( ajaxurl, {
 			method: 'POST',
 			body: formData,
 			headers: { Accept: 'application/json; charset=utf-8' },
@@ -127,12 +131,16 @@ export const rollbackItem = async (
  * from interleaving and yields deterministic progress.
  *
  * @param {ImportedPost[]} items        Eligible rows to roll back.
+ * @param {string}         ajaxurl      WordPress admin-ajax URL.
+ * @param {string}         nonce        AJAX nonce for the rollback endpoint.
  * @param {Function}       [onProgress] Called with (completed, total) per item.
  *
  * @return {Promise<BulkRollbackResult>} Aggregated per-item outcomes.
  */
 export const rollbackItems = async (
 	items: ImportedPost[],
+	ajaxurl: string,
+	nonce: string,
 	onProgress?: ( completed: number, total: number ) => void
 ): Promise< BulkRollbackResult > => {
 	const total = items.length;
@@ -156,7 +164,7 @@ export const rollbackItems = async (
 			// server-side post hooks from interleaving and yields
 			// deterministic progress.
 			// eslint-disable-next-line no-await-in-loop
-			outcome = await rollbackItem( item.item_id );
+			outcome = await rollbackItem( item.item_id, ajaxurl, nonce );
 		}
 
 		if ( outcome.success ) {

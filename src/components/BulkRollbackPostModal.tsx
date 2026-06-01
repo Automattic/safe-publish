@@ -30,12 +30,16 @@ import type { ImportedPost } from '../types';
 /**
  * Props for the BulkRollbackPostModal component.
  *
- * @property {ImportedPost[]} items        Eligible rows to roll back (length > 1).
- * @property {Function}       [closeModal] Callback to close the modal.
- * @property {Function}       [onRefresh]  Callback to refresh the listing.
+ * @property {ImportedPost[]} items      Eligible rows to roll back (length > 1).
+ * @property {string}         ajaxurl    WordPress admin-ajax URL.
+ * @property {string}         nonce      AJAX nonce for the rollback endpoint.
+ * @property {Function}       closeModal Callback to close the modal.
+ * @property {Function}       onRefresh  Callback to refresh the listing.
  */
 interface BulkRollbackPostModalProps {
 	items: ImportedPost[];
+	ajaxurl: string;
+	nonce: string;
 	closeModal?: () => void;
 	onRefresh?: () => void;
 }
@@ -47,6 +51,8 @@ interface BulkRollbackPostModalProps {
  */
 const BulkRollbackPostModal = ( {
 	items,
+	ajaxurl,
+	nonce,
 	closeModal,
 	onRefresh,
 }: BulkRollbackPostModalProps ) => {
@@ -62,12 +68,15 @@ const BulkRollbackPostModal = ( {
 		setIsLoading( true );
 		setCompleted( 0 );
 
-		void rollbackItems( items, done => setCompleted( done ) ).then(
-			bulkResult => {
-				setResult( bulkResult );
-				setIsLoading( false );
-			}
-		);
+		void rollbackItems(
+			items,
+			ajaxurl,
+			nonce,
+			done => setCompleted( done )
+		).then( bulkResult => {
+			setResult( bulkResult );
+			setIsLoading( false );
+		} );
 	};
 
 	const handleClose = () => {

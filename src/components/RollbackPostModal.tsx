@@ -24,12 +24,16 @@ import type { ImportedPost } from '../types';
 /**
  * Props for the RollbackPostModal component.
  *
- * @property {ImportedPost[]} items        Array containing the single row to roll back.
- * @property {Function}       [closeModal] Callback to close the modal.
- * @property {Function}       [onRefresh]  Callback to refresh the listing after a rollback.
+ * @property {ImportedPost[]} items      Array containing the single row to roll back.
+ * @property {string}         ajaxurl    WordPress admin-ajax URL.
+ * @property {string}         nonce      AJAX nonce for the rollback endpoint.
+ * @property {Function}       closeModal Callback to close the modal.
+ * @property {Function}       onRefresh  Callback to refresh the listing.
  */
 interface RollbackPostModalProps {
 	items: ImportedPost[];
+	ajaxurl: string;
+	nonce: string;
 	closeModal?: () => void;
 	onRefresh?: () => void;
 }
@@ -39,7 +43,13 @@ interface RollbackPostModalProps {
  *
  * @param {RollbackPostModalProps} props Component props.
  */
-const RollbackPostModal = ( { items, closeModal, onRefresh }: RollbackPostModalProps ) => {
+const RollbackPostModal = ( {
+	items,
+	ajaxurl,
+	nonce,
+	closeModal,
+	onRefresh,
+}: RollbackPostModalProps ) => {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
 
@@ -64,7 +74,7 @@ const RollbackPostModal = ( { items, closeModal, onRefresh }: RollbackPostModalP
 		setIsLoading( true );
 		setError( null );
 
-		void rollbackItem( post.item_id ).then( outcome => {
+		void rollbackItem( post.item_id, ajaxurl, nonce ).then( outcome => {
 			if ( ! outcome.success ) {
 				setError( outcome.error );
 				setIsLoading( false );
