@@ -1,5 +1,5 @@
 /**
- * Rollback API helpers for the Imported Posts admin page.
+ * Rollback API helpers for the Imports → Posts tab.
  *
  * Wraps the `safe_publish_rollback_item` admin-ajax endpoint and provides the
  * shared delete-vs-restore prediction used by the single and bulk rollback
@@ -60,10 +60,10 @@ export interface BulkRollbackResult {
 /**
  * Predicts whether rolling back an item restores its previous version (true)
  * or permanently deletes a newly created post (false). Mirrors the server's
- * Session_Formatter::determine_rollback_action(): only `success` rows are
- * fresh creations that get deleted; every other eligible status restores.
+ * Session_Rollback_Service: only `success` rows are fresh creations that get
+ * deleted; every other eligible status restores.
  *
- * @param {ImportedPost} item Imported Posts listing row.
+ * @param {ImportedPost} item Imports → Posts tab row.
  *
  * @return {boolean} True when the rollback restores a previous version.
  */

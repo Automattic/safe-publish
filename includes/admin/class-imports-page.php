@@ -1,6 +1,6 @@
 <?php
 /**
- * Imported Posts Page class
+ * Imports Page class
  *
  * @package Safe_Publish
  */
@@ -15,27 +15,29 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Renders the Imported Posts admin page and enqueues its bundle.
+ * Renders the Imports admin page and enqueues its bundle.
  *
- * The listing is driven by the import_items table — one row per post_id at its
- * most recent import event, not by post meta. Pure local query — no source
- * roundtrip on listing.
+ * Two tabs share the same admin page:
+ * - Posts: the imported posts listing, driven by the import_items table joined
+ *   with wp_posts.
+ * - Failures: items whose import errored — no local post exists, recovery is
+ *   re-importing from Source Posts.
  */
-final class Imported_Posts_Page {
+final class Imports_Page {
 
 	/**
 	 * Renders the admin page.
 	 */
 	public function render(): void {
 		?>
-		<div class="wrap" id="safe-publish-imported-page">
-			<h1><?php esc_html_e( 'Imported Posts', 'safe-publish' ); ?></h1>
+		<div class="wrap" id="safe-publish-imports-page">
+			<h1><?php esc_html_e( 'Imports', 'safe-publish' ); ?></h1>
 
 			<div class="safe-publish-admin-container">
 				<div class="safe-publish-dataviews-section">
-					<div id="safe-publish-imported-container">
+					<div id="safe-publish-imports-container">
 						<div class="safe-publish-loading">
-							<p><?php esc_html_e( 'Loading imported posts…', 'safe-publish' ); ?></p>
+							<p><?php esc_html_e( 'Loading imports…', 'safe-publish' ); ?></p>
 						</div>
 					</div>
 				</div>
@@ -45,22 +47,21 @@ final class Imported_Posts_Page {
 	}
 
 	/**
-	 * Enqueues the Imported Posts page assets.
+	 * Enqueues the Imports page assets.
 	 */
 	public function enqueue_assets(): void {
 		if ( ! is_admin() ) {
 			return;
 		}
 
-		$asset_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/imported.asset.php';
-		$script_url      = plugin_dir_url( dirname( __DIR__ ) ) . 'build/imported.js';
-		$script_path     = plugin_dir_path( dirname( __DIR__ ) ) . 'build/imported.js';
+		$asset_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/imports.asset.php';
+		$script_url      = plugin_dir_url( dirname( __DIR__ ) ) . 'build/imports.js';
+		$script_path     = plugin_dir_path( dirname( __DIR__ ) ) . 'build/imports.js';
 
 		if ( ! file_exists( $script_path ) || ! file_exists( $asset_file_path ) ) {
 			add_action(
 				'admin_notices',
 				function () {
-					// Skip during REST/AJAX so the notice only renders on real admin pageviews.
 					if ( ! is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && constant( 'REST_REQUEST' ) ) ) {
 						return;
 					}
@@ -87,14 +88,13 @@ final class Imported_Posts_Page {
 		$script_version = $asset_file['version'];
 
 		wp_enqueue_script(
-			'safe-publish-imported-script',
+			'safe-publish-imports-script',
 			$script_url,
 			$asset_file['dependencies'],
 			$script_version,
 			true
 		);
 
-		// Reuse the shared design tokens enqueued by the Source Posts page.
 		wp_enqueue_style(
 			'safe-publish-tokens',
 			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/tokens.css',
@@ -103,14 +103,13 @@ final class Imported_Posts_Page {
 		);
 
 		// @wordpress/scripts merges the SCSS imports from every entry into a
-		// single style-index.css via splitChunks, so the Imported Posts page
-		// enqueues the same shared bundle as the Source Posts page.
+		// single style-index.css via splitChunks.
 		$style_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/style-index.css';
 		$style_file_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'build/style-index.css';
 
 		if ( file_exists( $style_file_path ) ) {
 			wp_enqueue_style(
-				'safe-publish-imported-style',
+				'safe-publish-imports-style',
 				$style_file_url,
 				array( 'wp-components', 'safe-publish-tokens' ),
 				$script_version
@@ -131,13 +130,24 @@ final class Imported_Posts_Page {
 			$script_version
 		);
 
+		// Read ?tab=... from the URL so React can pre-apply it without an
+		// extra roundtrip. ?batch=N is read directly client-side so a
+		// tab-switch re-mount picks up an in-page Clear that updated the URL
+		// but not this inline global.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$initial_tab_raw = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : '';
+		$initial_tab     = in_array( $initial_tab_raw, array( 'posts', 'failures' ), true )
+			? $initial_tab_raw
+			: 'posts';
+
 		$json_data = wp_json_encode(
 			array(
 				'ajaxurl'     => admin_url( 'admin-ajax.php' ),
 				'settingsUrl' => admin_url( 'admin.php?page=safe-publish-settings' ),
 				'nonce'       => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 				'restNonce'   => wp_create_nonce( 'wp_rest' ),
-				'containerId' => 'safe-publish-imported-container',
+				'containerId' => 'safe-publish-imports-container',
+				'initialTab'  => $initial_tab,
 			)
 		);
 
@@ -148,7 +158,7 @@ final class Imported_Posts_Page {
 		// Same global the Source Posts page and the shared modals/diff hooks
 		// read, so Update/Diff/Delete work here without page-specific wiring.
 		wp_add_inline_script(
-			'safe-publish-imported-script',
+			'safe-publish-imports-script',
 			sprintf( 'window.safePublishAdminData = %s;', $json_data ),
 			'before'
 		);

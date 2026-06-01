@@ -525,11 +525,11 @@ export const createActions = (
 ];
 
 /**
- * Maps an Imported Posts row to the Post shape the shared modals expect:
- * they key off `id` as the source post ID (e.g. DeletePostModal sends it as
- * source_post_id), so source_post_id -> id and source_link -> link.
+ * Maps an Imports → Posts tab row to the Post shape the shared modals
+ * expect: they key off `id` as the source post ID (e.g. DeletePostModal sends
+ * it as source_post_id), so source_post_id -> id and source_link -> link.
  *
- * @param {ImportedPost} item Imported Posts listing row.
+ * @param {ImportedPost} item Imports → Posts tab row.
  *
  * @return {Post} Post-shaped object for the shared modals.
  */
@@ -545,7 +545,7 @@ const toSourcePost = ( item: ImportedPost ): Post => ( {
 } );
 
 /**
- * Creates DataViews actions for the Imported Posts page.
+ * Creates DataViews actions for the Imports → Posts tab.
  *
  * Reuses the shared modals — Update (ImportModal with force_update), Post
  * Diff, and Delete — via toSourcePost, plus an Edit action that opens the

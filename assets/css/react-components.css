@@ -118,3 +118,23 @@
 	margin-left: 48px;
 	margin-top: 16px;
 }
+
+.safe-publish-batch-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 12px;
+	margin: 0 0 12px 0;
+	background: var(--safe-publish-surface-bg, #f0f6fc);
+	border: 1px solid var(--safe-publish-border, #c3c4c7);
+	border-radius: 16px;
+	font-size: 13px;
+}
+
+.safe-publish-imports-tabs .components-tab-panel__tabs {
+	margin-bottom: 12px;
+}
+
+.safe-publish-failed-error {
+	color: #b32d2e;
+}

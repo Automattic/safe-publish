@@ -70,7 +70,7 @@ export interface CatalogResponse {
 }
 
 /**
- * Represents a row in the Imported Posts listing.
+ * Represents a row in the Imports → Posts tab listing.
  *
  * Joins the local post (title, status, edit url) with the most recent
  * items-table row for the same post (session id, rollback status, import
@@ -117,12 +117,11 @@ export interface FilterOption {
 }
 
 /**
- * Filter facets for the Imported Posts listing, computed over the full
+ * Filter facets for the Imports → Posts listing, computed over the full
  * imported set so the dropdowns stay complete as results are narrowed.
  */
 export interface ImportedPostsFacets {
 	post_types: FilterOption[];
-	sessions: FilterOption[];
 }
 
 /**
@@ -133,6 +132,39 @@ export interface ImportedPostsResponse {
 	items: ImportedPost[];
 	has_more: boolean;
 	facets?: ImportedPostsFacets;
+}
+
+/**
+ * Represents a failed import item shown on the Imports → Failures tab.
+ *
+ * Failed items have no local post (the import errored before insert) — so the
+ * row carries only what the items table recorded plus the source site URL from
+ * the parent session.
+ *
+ * @property {number}      id              Items-table row id.
+ * @property {number}      session_id      Parent session id.
+ * @property {string}      title           Post title attempted.
+ * @property {number|null} source_post_id  Source post id, or null when missing.
+ * @property {string}      source_site_url Source site URL from the session.
+ * @property {string}      error_message   Failure reason recorded by the import.
+ * @property {string}      import_date_gmt MySQL datetime (UTC) of the attempt.
+ */
+export interface FailedImport {
+	id: number;
+	session_id: number;
+	title: string;
+	source_post_id: number | null;
+	source_site_url: string;
+	error_message: string;
+	import_date_gmt: string;
+}
+
+/**
+ * Envelope returned by the destination-side failed-imports listing endpoint.
+ */
+export interface FailedImportsResponse {
+	items: FailedImport[];
+	has_more: boolean;
 }
 
 /**
@@ -293,46 +325,6 @@ export interface DiffHtmlData {
 }
 
 /**
- * Rollback session response data.
- *
- * @property {number} deleted_count  Number of posts deleted.
- * @property {number} restored_count Number of posts restored.
- * @property {number} failed_count   Number of items that failed.
- */
-export interface RollbackSessionData {
-	deleted_count: number;
-	restored_count: number;
-	failed_count: number;
-}
-
-/**
- * Delete session response data.
- *
- * @property {string} message Success message.
- */
-export interface DeleteSessionData {
-	message: string;
-}
-
-/**
- * Session details response data.
- *
- * @property {ImportItem[]} items Array of import items.
- */
-export interface SessionDetailsData {
-	items: ImportItem[];
-}
-
-/**
- * Rollback item response data.
- *
- * @property {string} action Action performed ('restored' or 'deleted').
- */
-export interface RollbackItemData {
-	action: 'restored' | 'deleted';
-}
-
-/**
  * Props for the SourcePostsDataView component.
  *
  * @property {string} sourceSiteUrl Source site URL; component fetches the
@@ -344,7 +336,8 @@ export interface SourcePostsDataViewProps {
 
 /**
  * Admin data passed from PHP via wp_add_inline_script. Shared by the Source
- * Posts and Imported Posts pages; `sourceSiteUrl` is only set by Source Posts.
+ * Posts and Imports pages; `sourceSiteUrl` is only set by Source Posts;
+ * `initialTab` is only set by the Imports page.
  *
  * @property {string} ajaxurl         WordPress AJAX URL.
  * @property {string} nonce           Security nonce for AJAX requests.
@@ -352,6 +345,7 @@ export interface SourcePostsDataViewProps {
  * @property {string} [sourceSiteUrl] Source site URL (Source Posts only).
  * @property {string} settingsUrl     URL to the plugin settings page.
  * @property {string} containerId     Container element ID.
+ * @property {string} [initialTab]    Imports: 'posts' or 'failures' from ?tab=...
  */
 export interface AdminData {
 	ajaxurl: string;
@@ -360,8 +354,7 @@ export interface AdminData {
 	sourceSiteUrl?: string;
 	settingsUrl: string;
 	containerId: string;
-	showImportHistory?: boolean;
-	showExportHistory?: boolean;
+	initialTab?: 'posts' | 'failures';
 }
 
 /**
@@ -422,66 +415,6 @@ export interface DataViewsState {
 	titleField?: string;
 	descriptionField?: string;
 	mediaField?: string;
-}
-
-/**
- * Represents an import session record.
- *
- * @property {number}  id              Unique session ID.
- * @property {string}  date            Date of the import.
- * @property {string}  user            User who performed the import.
- * @property {number}  total_items     Total items in the session.
- * @property {number}  successful      Number of successful imports.
- * @property {number}  failed          Number of failed imports.
- * @property {number}  updated         Number of updated posts.
- * @property {string}  status          Session status.
- * @property {string}  status_label    Human-readable status label.
- * @property {string}  source_site_url URL of the source site.
- * @property {boolean} can_rollback    Whether the session can be rolled back.
- */
-export interface ImportSession {
-	id: number;
-	date: string;
-	user: string;
-	total_items: number;
-	successful: number;
-	failed: number;
-	updated: number;
-	status: 'in_progress' | 'completed' | 'failed' | 'rolled_back';
-	status_label: string;
-	source_site_url: string;
-	can_rollback: boolean;
-}
-
-/**
- * Represents an individual import item.
- *
- * @property {number}      id              Unique item ID.
- * @property {string}      title           Title of the imported post.
- * @property {string}      status          Import status.
- * @property {string}      status_label    Human-readable status label.
- * @property {number|null} source_post_id  Source post ID, or null if not provided.
- * @property {number}      [post_id]       Local WordPress post ID.
- * @property {string}      [error]         Error message if failed.
- * @property {boolean}     has_changes     Whether changes were detected.
- * @property {string}      [edit_url]      URL to edit the post.
- * @property {boolean}     can_rollback    Whether the item can be rolled back.
- * @property {boolean}     is_rolled_back  Whether the item has been rolled back.
- * @property {string}      rollback_action Type of rollback action.
- */
-export interface ImportItem {
-	id: number;
-	title: string;
-	status: 'success' | 'updated' | 'error';
-	status_label: string;
-	source_post_id: number | null;
-	post_id?: number;
-	error?: string;
-	has_changes: boolean;
-	edit_url?: string;
-	can_rollback: boolean;
-	is_rolled_back: boolean;
-	rollback_action: 'delete' | 'restore';
 }
 
 /**
