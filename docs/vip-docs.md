@@ -80,11 +80,11 @@ With the integration enabled and the shared secret in place, pair the source and
 - **Connected site URL** — the URL of the other site. On the destination, this is the source's URL.
 - **Sync mode** — the role this site plays:
 
-| Sync mode | Behavior |
-|---|---|
-| `export` | The site acts as a source only. It exposes its catalog endpoints but provides no import interface. |
-| `import` | The site acts as a destination only. It provides the full import interface but does not expose its catalog. |
-| `bidirectional` | The site acts as both source and destination. |
+| Sync mode       | Behavior                                                                                                    |
+| --------------- | ----------------------------------------------------------------------------------------------------------- |
+| `export`        | The site acts as a source only. It exposes its catalog endpoints but provides no import interface.          |
+| `import`        | The site acts as a destination only. It provides the full import interface but does not expose its catalog. |
+| `bidirectional` | The site acts as both source and destination.                                                               |
 
 - **Basic authentication username and password** (optional) — credentials for HTTP Basic authentication, if the source site is protected by it. These are sent with requests to the source in addition to the signed shared secret.
 
@@ -107,7 +107,6 @@ Safe Publish supports importing a single post or many posts at once. Both paths 
 If a post with the same source post ID already exists on the destination, Safe Publish updates that post rather than creating a duplicate. If no matching post exists, it creates a new one.
 
 By default, a child post is skipped if its parent is not present on the destination, to avoid creating orphaned content. Developers can change this with the `safe_publish_import_allow_orphans` filter (see [Filters](#filters)).
-
 
 ### Import multiple posts (bulk import)
 
@@ -182,16 +181,16 @@ A post type must be registered on the destination for its content to import clea
 
 Safe Publish exposes the following filters for developers. Add them in a theme or a small companion plugin.
 
-| Filter | Default | Purpose |
-|---|---|---|
-| `safe_publish_import_kses` | `false` | Enable `wp_kses` sanitization of imported content. |
-| `safe_publish_import_kses_allowed_html` | `wp_kses_allowed_html( 'post' )` | Customize the allowed HTML used when `safe_publish_import_kses` sanitization is enabled. Receives the allowed-tags array and the name of the field being sanitized. |
-| `safe_publish_import_allow_orphans` | `false` | Allow importing a child post when its parent is not present on the destination. |
-| `safe_publish_import_allow_author_fallback` | `false` | When the source author cannot be matched on the destination, attribute new posts to the importing user and keep the existing author on updates, instead of aborting the import. |
-| `safe_publish_auth_max_time_diff` | `300` | Maximum allowed difference, in seconds, between a signed request's timestamp and the current time. |
-| `safe_publish_request_timeout` | `10` | Timeout, in seconds, for HTTP requests to the source site. |
-| `safe_publish_request_args` | — | Customize the arguments passed to the HTTP request made to the source site. |
-| `safe_publish_dev_ssl_verify` | `false` | Development only: skip SSL verification for requests to non-localhost hosts. Leave disabled in production. |
+| Filter                                      | Default                          | Purpose                                                                                                                                                                         |
+| ------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `safe_publish_import_kses`                  | `false`                          | Enable `wp_kses` sanitization of imported content.                                                                                                                              |
+| `safe_publish_import_kses_allowed_html`     | `wp_kses_allowed_html( 'post' )` | Customize the allowed HTML used when `safe_publish_import_kses` sanitization is enabled. Receives the allowed-tags array and the name of the field being sanitized.             |
+| `safe_publish_import_allow_orphans`         | `false`                          | Allow importing a child post when its parent is not present on the destination.                                                                                                 |
+| `safe_publish_import_allow_author_fallback` | `false`                          | When the source author cannot be matched on the destination, attribute new posts to the importing user and keep the existing author on updates, instead of aborting the import. |
+| `safe_publish_auth_max_time_diff`           | `300`                            | Maximum allowed difference, in seconds, between a signed request's timestamp and the current time.                                                                              |
+| `safe_publish_request_timeout`              | `10`                             | Timeout, in seconds, for HTTP requests to the source site.                                                                                                                      |
+| `safe_publish_request_args`                 | —                                | Customize the arguments passed to the HTTP request made to the source site.                                                                                                     |
+| `safe_publish_dev_ssl_verify`               | `false`                          | Development only: skip SSL verification for requests to non-localhost hosts. Leave disabled in production.                                                                      |
 
 The `safe_publish_event_logged` action fires each time an audit event is recorded, receiving the channel, event type, and event data. Use it to forward audit events to external monitoring.
 

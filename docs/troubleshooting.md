@@ -175,6 +175,34 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 2. **Check for database errors**: Enable `WP_DEBUG_LOG` and review `wp-content/debug.log` for insert failures.
 3. **Verify post type is registered** on the destination site — custom post types must exist on both sites.
 
+#### ACF or SCF fields do not appear in the destination editor
+
+**Symptoms**: ACF or Secure Custom Fields (SCF) values were imported as post
+meta, but the destination editor does not show the matching field controls.
+
+**Solutions**:
+
+1. **Verify the source REST response**:
+   - Fetch the source post with `context=edit`.
+   - Confirm the expected keys appear under the core `meta` object.
+   - Keys exposed only under a top-level `acf` object are not imported.
+
+2. **Check the imported destination meta**:
+   - Confirm the destination post has the value key, such as `hero_title`.
+   - Confirm it also has the companion reference key, such as `_hero_title`,
+     when editor rendering is required.
+
+3. **Check the destination field definitions**:
+   - ACF or SCF must be active on the destination.
+   - The destination must have matching field groups and field keys.
+   - Safe Publish stores the meta values but does not currently create or sync
+     ACF/SCF field groups.
+
+4. **Resolve the mismatch**:
+   - Add or sync the matching field group definitions on the destination.
+   - If editor rendering is not needed, no action is required; the values are
+     already stored as post meta.
+
 #### Duplicate content imported
 
 **Symptoms**: Same post imported multiple times
