@@ -155,7 +155,9 @@ class Permission_Manager {
 		WP_REST_Server $_server,
 		WP_REST_Request $_request
 	): WP_REST_Response|WP_HTTP_Response|WP_Error {
-		if ( ! $this->authenticated ) {
+		// Skip during the inner rest_forbidden_context re-dispatch — otherwise
+		// teardown fires before log_dispatch_event writes the outer audit row.
+		if ( ! $this->authenticated || $this->context_override ) {
 			return $result;
 		}
 
