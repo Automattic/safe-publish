@@ -9,6 +9,9 @@ import {
 } from '@/api/rollback';
 import type { ImportedPost } from '@/types';
 
+const AJAX_URL = 'https://example.com/wp-admin/admin-ajax.php';
+const NONCE = 'test-nonce';
+
 /**
  * Builds an ImportedPost fixture with eligible-rollback defaults. Tests
  * override the fields that matter for the case at hand.
@@ -22,7 +25,6 @@ function buildImportedPost(
 		title: 'Test',
 		post_type: 'post',
 		local_status: 'publish',
-		modified_gmt: '',
 		edit_url: '',
 		source_link: '',
 		item_id: 100,
@@ -67,14 +69,14 @@ describe( 'rollbackItem', () => {
 		} );
 
 		// ACT: roll back a single item.
-		await rollbackItem( 100 );
+		await rollbackItem( 100, AJAX_URL, NONCE );
 
 		// ASSERT: the request mirrors the single-item endpoint contract.
 		const [ url, options ] = ( global.fetch as any ).mock.calls[ 0 ];
-		expect( url ).toBe( 'https://example.com/wp-admin/admin-ajax.php' );
+		expect( url ).toBe( AJAX_URL );
 		const body = options.body as FormData;
 		expect( body.get( 'action' ) ).toBe( 'safe_publish_rollback_item' );
-		expect( body.get( 'nonce' ) ).toBe( 'test-nonce' );
+		expect( body.get( 'nonce' ) ).toBe( NONCE );
 		expect( body.get( 'item_id' ) ).toBe( '100' );
 	} );
 
@@ -85,7 +87,7 @@ describe( 'rollbackItem', () => {
 		} );
 
 		// ACT: roll back the item.
-		const outcome = await rollbackItem( 100 );
+		const outcome = await rollbackItem( 100, AJAX_URL, NONCE );
 
 		// ASSERT: the outcome carries the server-reported action.
 		expect( outcome ).toEqual( { success: true, action: 'restored' } );
@@ -98,7 +100,7 @@ describe( 'rollbackItem', () => {
 		} );
 
 		// ACT: attempt the rollback.
-		const outcome = await rollbackItem( 0 );
+		const outcome = await rollbackItem( 0, AJAX_URL, NONCE );
 
 		// ASSERT: the failure carries the server message.
 		expect( outcome ).toEqual( { success: false, error: 'Invalid item ID' } );
@@ -109,7 +111,7 @@ describe( 'rollbackItem', () => {
 		( global.fetch as any ).mockRejectedValue( new Error( 'Network down' ) );
 
 		// ACT: attempt the rollback.
-		const outcome = await rollbackItem( 100 );
+		const outcome = await rollbackItem( 100, AJAX_URL, NONCE );
 
 		// ASSERT: the rejection becomes a failure outcome, not a throw.
 		expect( outcome ).toEqual( { success: false, error: 'Network down' } );
@@ -139,6 +141,8 @@ describe( 'rollbackItems', () => {
 				buildImportedPost( { item_id: 2 } ),
 				buildImportedPost( { item_id: 3 } ),
 			],
+			AJAX_URL,
+			NONCE,
 			( done, total ) => progress.push( [ done, total ] )
 		);
 
@@ -171,11 +175,15 @@ describe( 'rollbackItems', () => {
 			} );
 
 		// ACT: roll back three items.
-		const result = await rollbackItems( [
-			buildImportedPost( { item_id: 1, title: 'A' } ),
-			buildImportedPost( { item_id: 2, title: 'B' } ),
-			buildImportedPost( { item_id: 3, title: 'C' } ),
-		] );
+		const result = await rollbackItems(
+			[
+				buildImportedPost( { item_id: 1, title: 'A' } ),
+				buildImportedPost( { item_id: 2, title: 'B' } ),
+				buildImportedPost( { item_id: 3, title: 'C' } ),
+			],
+			AJAX_URL,
+			NONCE
+		);
 
 		// ASSERT: two succeeded, one failed, and the failure names its row.
 		expect( result.successful ).toBe( 2 );
@@ -192,9 +200,11 @@ describe( 'rollbackItems', () => {
 		// ARRANGE: a row whose import record is gone.
 
 		// ACT: attempt to roll it back.
-		const result = await rollbackItems( [
-			buildImportedPost( { item_id: null, title: 'Orphan' } ),
-		] );
+		const result = await rollbackItems(
+			[ buildImportedPost( { item_id: null, title: 'Orphan' } ) ],
+			AJAX_URL,
+			NONCE
+		);
 
 		// ASSERT: no request was made and the row is reported as failed.
 		expect( global.fetch ).not.toHaveBeenCalled();

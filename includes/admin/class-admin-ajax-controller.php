@@ -488,7 +488,6 @@ final class Admin_Ajax_Controller {
 			'title'                => $post->post_title,
 			'post_type'            => $post->post_type,
 			'local_status'         => $post->post_status,
-			'modified_gmt'         => $post->post_modified_gmt,
 			'edit_url'             => is_string( $edit_url_or_null ) ? $edit_url_or_null : '',
 			'source_link'          => $source_link,
 			'item_id'              => null !== $item ? (int) $item['id'] : null,
@@ -952,29 +951,42 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Handles AJAX request for deleting a locally imported post.
 	 *
-	 * Moves the post to trash by its source post ID.
+	 * Moves the local post to trash by its WordPress post ID. The Imports →
+	 * Posts tab is the only caller and already has the local ID in hand, so
+	 * no source-side lookup is needed; the imported-post meta is still
+	 * required so this endpoint can't be repurposed to trash arbitrary posts.
 	 */
 	public function ajax_delete_post(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability( 'delete_posts' );
 
-		$source_post_id = absint( $_POST['source_post_id'] ?? 0 );
+		$post_id = absint( $_POST['post_id'] ?? 0 );
 
-		if ( ! $source_post_id ) {
-			wp_send_json_error( __( 'Source post ID is required.', 'safe-publish' ) );
+		if ( ! $post_id ) {
+			wp_send_json_error( __( 'Post ID is required.', 'safe-publish' ) );
 		}
 
-		$imported_post = $this->post_import_service->find_imported_post( $source_post_id );
+		$post = get_post( $post_id );
 
-		if ( ! $imported_post ) {
+		if ( ! $post ) {
 			wp_send_json_error( __( 'Post not found.', 'safe-publish' ) );
 		}
 
-		if ( ! current_user_can( 'delete_post', $imported_post->ID ) ) {
+		$source_id = (string) get_post_meta(
+			$post->ID,
+			Options::META_SOURCE_POST_ID,
+			true
+		);
+
+		if ( '' === $source_id ) {
+			wp_send_json_error( __( 'Post not found.', 'safe-publish' ) );
+		}
+
+		if ( ! current_user_can( 'delete_post', $post->ID ) ) {
 			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
 		}
 
-		$result = wp_trash_post( $imported_post->ID );
+		$result = wp_trash_post( $post->ID );
 
 		if ( ! $result ) {
 			wp_send_json_error( __( 'Failed to delete the post.', 'safe-publish' ) );

@@ -102,18 +102,19 @@ export interface DiffPreviewResult {
  * Compares the current post content with incoming content and returns the
  * differences in various formats.
  *
- * @param {DiffPreviewPayload} payload Payload containing post ID and content.
+ * @param {DiffPreviewPayload} payload   Payload containing post ID and content.
+ * @param {string}             restNonce REST API nonce for the X-WP-Nonce header.
  *
  * @return {Promise<DiffPreviewResult>} Diff preview result.
  */
 export async function fetchDiffPreview(
-	payload: DiffPreviewPayload
+	payload: DiffPreviewPayload,
+	restNonce: string
 ): Promise< DiffPreviewResult > {
-	const headers: Record< string, string > = { 'Content-Type': 'application/json' };
-	const wpNonce = window.safePublishAdminData?.restNonce;
-	if ( wpNonce ) {
-		headers[ 'X-WP-Nonce' ] = wpNonce;
-	}
+	const headers: Record< string, string > = {
+		'Content-Type': 'application/json',
+		'X-WP-Nonce': restNonce,
+	};
 
 	const res = await fetch( '/wp-json/safe-publish/v1/diff-preview', {
 		method: 'POST',
@@ -146,7 +147,7 @@ export type UpdatePostResult =
  *
  * @param {number}                   postId            Post ID to update.
  * @param {string}                   content           New post content.
- * @param {string}                   [nonce]           REST API nonce.
+ * @param {string}                   restNonce         REST API nonce for the X-WP-Nonce header.
  * @param {JsonObject}               [meta]            Meta fields to update.
  * @param {Record<string, string[]>} [terms]           Taxonomy terms to update.
  * @param {string}                   [title]           New post title.
@@ -158,18 +159,17 @@ export type UpdatePostResult =
 export async function updatePostContent(
 	postId: number,
 	content: string,
-	nonce?: string,
+	restNonce: string,
 	meta?: JsonObject,
 	terms?: Record< string, string[] >,
 	title?: string,
 	excerpt?: string,
 	featuredMediaId?: number
 ): Promise< UpdatePostResult > {
-	const headers: Record< string, string > = { 'Content-Type': 'application/json' };
-	const wpNonce = nonce || window.safePublishAdminData?.restNonce;
-	if ( wpNonce ) {
-		headers[ 'X-WP-Nonce' ] = wpNonce;
-	}
+	const headers: Record< string, string > = {
+		'Content-Type': 'application/json',
+		'X-WP-Nonce': restNonce,
+	};
 
 	const body: Record< string, JsonValue > = {
 		postId,

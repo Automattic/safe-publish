@@ -41,6 +41,25 @@ import { __, sprintf } from '@wordpress/i18n';
 const MAX_VISIBLE_WARNING_TITLES = 10;
 
 /**
+ * Auth context shared by the Source Posts action set. Threaded as a prop so
+ * the modals and bulk-import helper don't reach into the admin-data global.
+ */
+export interface SourceActionsContext {
+	ajaxurl: string;
+	nonce: string;
+}
+
+/**
+ * Auth context shared by the Imports → Posts tab action set. Adds restNonce
+ * for the diff/update REST endpoints used by PostDiffModal.
+ */
+export interface ImportedActionsContext {
+	ajaxurl: string;
+	nonce: string;
+	restNonce: string;
+}
+
+/**
  * Returns true when the result is a successful import that carries warnings.
  *
  * @param {BulkImportResult} result Per-post result entry.
@@ -56,19 +75,21 @@ const hasWarnings = ( result: BulkImportResult ): boolean =>
  * Sends all selected posts to the bulk import endpoint and tracks the progress
  * of the import operation.
  *
- * @param {Post[]}   posts        Posts to import.
- * @param {Function} [onProgress] Progress callback (current, total) => void.
+ * @param {Post[]}               posts        Posts to import.
+ * @param {SourceActionsContext} context      Admin-ajax URL + nonce.
+ * @param {Function}             [onProgress] Progress callback (current, total) => void.
  *
  * @return {Promise<BulkImportResponse>} Bulk import results.
  */
 const bulkImportPosts = async (
 	posts: Post[],
+	context: SourceActionsContext,
 	onProgress?: ( current: number, total: number ) => void
 ): Promise< BulkImportResponse > => {
 	// Use the proper bulk import endpoint instead of individual calls.
 	const formData = new FormData();
 	formData.append( 'action', 'safe_publish_bulk_import' );
-	formData.append( 'nonce', window.safePublishAdminData.nonce );
+	formData.append( 'nonce', context.nonce );
 	formData.append( 'posts_data', JSON.stringify( posts ) );
 
 	// Show initial progress.
@@ -77,7 +98,7 @@ const bulkImportPosts = async (
 	}
 
 	try {
-		const response = await fetch( window.safePublishAdminData.ajaxurl, {
+		const response = await fetch( context.ajaxurl, {
 			method: 'POST',
 			body: formData,
 			headers: {
@@ -122,14 +143,16 @@ const bulkImportPosts = async (
  * View in Imports action for already-imported items, which deep-links to the
  * Imports → Posts tab with the row pinned via focus_source.
  *
- * @param {Function} [onRefresh]    Callback to refresh the posts list.
- * @param {boolean}  [isAuthorized] Whether the source site authorizes imports.
+ * @param {Function}             onRefresh    Callback to refresh the posts list.
+ * @param {boolean}              isAuthorized Whether the source site authorizes imports.
+ * @param {SourceActionsContext} context      Admin-ajax URL + nonce.
  *
  * @return {Action<Post>[]} Array of DataViews actions.
  */
 export const createActions = (
-	onRefresh?: () => void,
-	isAuthorized: boolean = true
+	onRefresh: ( () => void ) | undefined,
+	isAuthorized: boolean,
+	context: SourceActionsContext
 ): Action< Post >[] => [
 	/**
 	 * Import action.
@@ -155,7 +178,20 @@ export const createActions = (
 
 			// For a single item, delegate to the simpler confirmation modal.
 			if ( items.length === 1 ) {
-				return <ImportModal items={ items } closeModal={ closeModal } onRefresh={ onRefresh } />;
+				const item = items[ 0 ];
+				return (
+					<ImportModal
+						sourcePostId={ item.id }
+						title={ item.title }
+						sourceLink={ item.link }
+						postType={ item.post_type }
+						isUpdate={ false }
+						ajaxurl={ context.ajaxurl }
+						nonce={ context.nonce }
+						closeModal={ closeModal }
+						onRefresh={ onRefresh }
+					/>
+				);
 			}
 
 			/**
@@ -185,6 +221,7 @@ export const createActions = (
 
 					const result = await bulkImportPosts(
 						items,
+						context,
 						( current, total ) => {
 							// This won't be called much since it's a single request,
 							// but we'll use it for final completion.
@@ -482,38 +519,21 @@ export const createActions = (
 ];
 
 /**
- * Maps an Imports → Posts tab row to the Post shape the shared modals
- * expect: they key off `id` as the source post ID (e.g. DeletePostModal sends
- * it as source_post_id), so source_post_id -> id and source_link -> link.
- *
- * @param {ImportedPost} item Imports → Posts tab row.
- *
- * @return {Post} Post-shaped object for the shared modals.
- */
-const toSourcePost = ( item: ImportedPost ): Post => ( {
-	id: item.source_post_id,
-	link: item.source_link,
-	title: item.title,
-	date_gmt: '',
-	modified_gmt: item.modified_gmt,
-	post_type: item.post_type,
-	status: item.local_status,
-	is_imported: true,
-} );
-
-/**
  * Creates DataViews actions for the Imports → Posts tab.
  *
- * Reuses the shared modals — Update (ImportModal with force_update), Post
- * Diff, and Delete — via toSourcePost, plus an Edit action that opens the
- * local editor and a Roll back action that undoes the most recent import.
+ * Every modal-backed action — Update, Diff, Delete, Rollback (single + bulk) —
+ * takes the row's explicit identity (source_post_id for Update/Diff, local id
+ * for Delete, item_id for Rollback) plus the admin-ajax/REST auth tokens from
+ * `context`. Edit opens the local editor.
  *
- * @param {Function} [onRefresh] Callback to refresh the listing after a change.
+ * @param {Function}               onRefresh Callback to refresh the listing after a change.
+ * @param {ImportedActionsContext} context   Admin-ajax URL + nonce + REST nonce.
  *
  * @return {Action<ImportedPost>[]} Array of DataViews actions.
  */
 export const createImportedActions = (
-	onRefresh?: () => void
+	onRefresh: ( () => void ) | undefined,
+	context: ImportedActionsContext
 ): Action< ImportedPost >[] => [
 	{
 		id: 'edit-post',
@@ -535,13 +555,22 @@ export const createImportedActions = (
 		isPrimary: true,
 		hideModalHeader: true,
 		modalFocusOnMount: 'firstContentElement',
-		RenderModal: ( { items, closeModal } ) => (
-			<ImportModal
-				items={ items.map( toSourcePost ) }
-				closeModal={ closeModal }
-				onRefresh={ onRefresh }
-			/>
-		),
+		RenderModal: ( { items, closeModal } ) => {
+			const item = items[ 0 ];
+			return (
+				<ImportModal
+					sourcePostId={ item.source_post_id }
+					title={ item.title }
+					sourceLink={ item.source_link }
+					postType={ item.post_type }
+					isUpdate={ true }
+					ajaxurl={ context.ajaxurl }
+					nonce={ context.nonce }
+					closeModal={ closeModal }
+					onRefresh={ onRefresh }
+				/>
+			);
+		},
 	},
 	{
 		id: 'post-diff',
@@ -552,7 +581,8 @@ export const createImportedActions = (
 		modalSize: 'fill',
 		RenderModal: ( { items, closeModal } ) => (
 			<PostDiffModal
-				items={ items.map( toSourcePost ) }
+				items={ items }
+				restNonce={ context.restNonce }
 				closeModal={ closeModal }
 			/>
 		),
@@ -567,7 +597,9 @@ export const createImportedActions = (
 		modalFocusOnMount: 'firstContentElement',
 		RenderModal: ( { items, closeModal } ) => (
 			<DeletePostModal
-				items={ items.map( toSourcePost ) }
+				items={ items }
+				ajaxurl={ context.ajaxurl }
+				nonce={ context.nonce }
 				closeModal={ closeModal }
 				onRefresh={ onRefresh }
 			/>
@@ -590,12 +622,16 @@ export const createImportedActions = (
 			1 === items.length ? (
 				<RollbackPostModal
 					items={ items }
+					ajaxurl={ context.ajaxurl }
+					nonce={ context.nonce }
 					closeModal={ closeModal }
 					onRefresh={ onRefresh }
 				/>
 			) : (
 				<BulkRollbackPostModal
 					items={ items }
+					ajaxurl={ context.ajaxurl }
+					nonce={ context.nonce }
 					closeModal={ closeModal }
 					onRefresh={ onRefresh }
 				/>

@@ -81,7 +81,6 @@ export interface CatalogResponse {
  * @property {string}      title                Local post title.
  * @property {string}      post_type            Local post type slug.
  * @property {string}      local_status         Local post_status.
- * @property {string}      modified_gmt         Local post_modified_gmt.
  * @property {string}      edit_url             Local wp-admin edit URL.
  * @property {string}      source_link          Source post permalink (from META_SOURCE_LINK).
  * @property {number|null} item_id              Most recent import's items-table row ID, or null.
@@ -97,7 +96,6 @@ export interface ImportedPost {
 	title: string;
 	post_type: string;
 	local_status: string;
-	modified_gmt: string;
 	edit_url: string;
 	source_link: string;
 	item_id: number | null;

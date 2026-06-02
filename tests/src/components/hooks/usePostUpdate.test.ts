@@ -29,7 +29,11 @@ describe( 'usePostUpdate', () => {
 	it( 'refuses to submit and surfaces an error when incoming is undefined', async () => {
 		// ARRANGE: No diff payload at all.
 		const { result } = renderHook( () =>
-			usePostUpdate( { localPostId: 99, incoming: undefined } )
+			usePostUpdate( {
+				localPostId: 99,
+				incoming: undefined,
+				restNonce: 'test-rest-nonce',
+			} )
 		);
 
 		// ACT: Attempt the update.
@@ -49,6 +53,7 @@ describe( 'usePostUpdate', () => {
 			usePostUpdate( {
 				localPostId: 99,
 				incoming: { title: 'T', content: '', excerpt: '' },
+				restNonce: 'test-rest-nonce',
 			} )
 		);
 
@@ -75,6 +80,7 @@ describe( 'usePostUpdate', () => {
 					excerpt: 'Summary',
 					featuredMedia: 7,
 				},
+				restNonce: 'test-rest-nonce',
 			} )
 		);
 
@@ -83,12 +89,13 @@ describe( 'usePostUpdate', () => {
 			await result.current.handleUpdatePost();
 		} );
 
-		// ASSERT: The mock was invoked with the incoming content and the
-		// featuredMedia id forwarded through.
+		// ASSERT: The mock was invoked with the incoming content, the
+		// supplied REST nonce, and the featuredMedia id forwarded through.
 		expect( updatePostContent ).toHaveBeenCalledTimes( 1 );
 		const args = vi.mocked( updatePostContent ).mock.calls[ 0 ];
 		expect( args[ 0 ] ).toBe( 42 );
 		expect( args[ 1 ] ).toBe( '<p>Body</p>' );
+		expect( args[ 2 ] ).toBe( 'test-rest-nonce' );
 		expect( args[ 5 ] ).toBe( 'Hello' );
 		expect( args[ 6 ] ).toBe( 'Summary' );
 		expect( args[ 7 ] ).toBe( 7 );

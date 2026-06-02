@@ -1,14 +1,14 @@
 /**
  * Import Modal component.
  *
- * Shared confirmation modal for both the Import Post and Update Post actions.
- * Detects whether the post is already imported via `is_imported` and adjusts
- * labels and the `force_update` flag accordingly.
+ * Shared confirmation modal for both the Import Post action (Source Posts) and
+ * the Update Post action (Imports → Posts tab). The `isUpdate` flag adjusts
+ * labels and toggles the `force_update` flag on the create-draft request.
  *
  * @file This file defines the ImportModal component.
  */
 
-import { ApiResponse, CreateDraftResponse, Post, Warning } from '../types';
+import { ApiResponse, CreateDraftResponse, Warning } from '../types';
 import { getErrorMessage, renderWarningMessage } from '../utils';
 import {
 	Button,
@@ -23,12 +23,24 @@ import { __, sprintf } from '@wordpress/i18n';
 /**
  * Props for the ImportModal component.
  *
- * @property {Post[]}   items        Array containing the single post to import or update.
- * @property {Function} [closeModal] Callback to close the modal.
- * @property {Function} [onRefresh]  Callback to refresh the posts list after a successful operation.
+ * @property {number}   sourcePostId Source post ID to import or update.
+ * @property {string}   title        Post title.
+ * @property {string}   sourceLink   Source post permalink.
+ * @property {string}   postType     Source post type slug.
+ * @property {boolean}  isUpdate     True for the "Update" flow, false for "Import"; controls force_update + labels.
+ * @property {string}   ajaxurl      WordPress admin-ajax URL.
+ * @property {string}   nonce        AJAX nonce for the create-draft endpoint.
+ * @property {Function} closeModal   Callback to close the modal.
+ * @property {Function} onRefresh    Callback to refresh the posts list.
  */
 interface ImportModalProps {
-	items: Post[];
+	sourcePostId: number;
+	title: string;
+	sourceLink: string;
+	postType: string;
+	isUpdate: boolean;
+	ajaxurl: string;
+	nonce: string;
 	closeModal?: () => void;
 	onRefresh?: () => void;
 }
@@ -38,14 +50,22 @@ interface ImportModalProps {
  *
  * @param {ImportModalProps} props Component props.
  */
-const ImportModal = ( { items, closeModal, onRefresh }: ImportModalProps ) => {
+const ImportModal = ( {
+	sourcePostId,
+	title,
+	sourceLink,
+	postType,
+	isUpdate,
+	ajaxurl,
+	nonce,
+	closeModal,
+	onRefresh,
+}: ImportModalProps ) => {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
 	const [ editUrl, setEditUrl ] = useState< string | null >( null );
 	const [ warnings, setWarnings ] = useState< Warning[] >( [] );
 
-	const post = items[ 0 ];
-	const isUpdate = Boolean( post?.is_imported );
 	const submitLabel = isUpdate ? __( 'Update', 'safe-publish' ) : __( 'Import', 'safe-publish' );
 	const loadingLabel = isUpdate ? __( 'Updating…', 'safe-publish' ) : __( 'Importing…', 'safe-publish' );
 
@@ -62,17 +82,17 @@ const ImportModal = ( { items, closeModal, onRefresh }: ImportModalProps ) => {
 		// ajax_create_draft re-fetches via fetch_fresh_post; only ID/title needed.
 		const formData = new FormData();
 		formData.append( 'action', 'safe_publish_create_draft' );
-		formData.append( 'nonce', window.safePublishAdminData.nonce );
-		formData.append( 'source_post_id', post.id.toString() );
-		formData.append( 'title', post.title );
-		formData.append( 'source_link', post.link );
-		formData.append( 'post_type', post.post_type || 'post' );
+		formData.append( 'nonce', nonce );
+		formData.append( 'source_post_id', sourcePostId.toString() );
+		formData.append( 'title', title );
+		formData.append( 'source_link', sourceLink );
+		formData.append( 'post_type', postType || 'post' );
 
 		if ( isUpdate ) {
 			formData.append( 'force_update', 'true' );
 		}
 
-		fetch( window.safePublishAdminData.ajaxurl, {
+		fetch( ajaxurl, {
 			method: 'POST',
 			body: formData,
 			headers: {
@@ -109,10 +129,10 @@ const ImportModal = ( { items, closeModal, onRefresh }: ImportModalProps ) => {
 	if ( editUrl ) {
 		const successMessage = isUpdate
 			? sprintf( /* translators: %s is the post title */
-				__( '"%s" has been updated.', 'safe-publish' ), post.title
+				__( '"%s" has been updated.', 'safe-publish' ), title
 			)
 			: sprintf( /* translators: %s is the post title */
-				__( '"%s" has been imported as a draft.', 'safe-publish' ), post.title
+				__( '"%s" has been imported as a draft.', 'safe-publish' ), title
 			);
 
 		return (
@@ -159,10 +179,10 @@ const ImportModal = ( { items, closeModal, onRefresh }: ImportModalProps ) => {
 			<Text>{ isUpdate
 				? sprintf( /* translators: %s is the post title */
 					__( 'Update "%s" with the latest content from the source site?', 'safe-publish' ),
-					post.title
+					title
 				)
 				: sprintf( /* translators: %s is the post title */
-					__( 'Import "%s" as a draft?', 'safe-publish' ), post.title
+					__( 'Import "%s" as a draft?', 'safe-publish' ), title
 				)
 			}</Text>
 			{ ! isUpdate && (

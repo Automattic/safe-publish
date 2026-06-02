@@ -878,9 +878,16 @@ export function SourcePostsDataView( {
 					onChangeView={ handleViewChange }
 					paginationInfo={ paginationInfo }
 					defaultLayouts={ defaultLayouts }
-					actions={ createActions( () => {
-						setRefreshNonce( ( nonce ) => nonce + 1 );
-					}, isAuthorized ) }
+					actions={ createActions(
+						() => {
+							setRefreshNonce( ( nonce ) => nonce + 1 );
+						},
+						isAuthorized,
+						{
+							ajaxurl: window.safePublishAdminData.ajaxurl,
+							nonce: window.safePublishAdminData.nonce,
+						}
+					) }
 				/>
 			) }
 		</div>
