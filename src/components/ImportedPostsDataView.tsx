@@ -292,22 +292,32 @@ export function ImportedPostsDataView(): JSX.Element {
 		refreshNonce,
 	] );
 
+	// Sorted-join of the page's unique source_post_ids — stable across
+	// content-equal pageItems replacements so the sync-status effect below
+	// doesn't re-request on every render.
+	const sourceIdsKey = useMemo(
+		() =>
+			Array.from(
+				new Set(
+					pageItems
+						.map( ( item ) => item.source_post_id )
+						.filter( ( id ): id is number => id > 0 )
+				)
+			)
+				.sort( ( left, right ) => left - right )
+				.join( ',' ),
+		[ pageItems ]
+	);
+
 	// Refill the Sync Status column after every listing refresh by asking the
 	// destination's sync-status endpoint to compare each row's source
 	// modified_gmt against its import_date_gmt.
 	useEffect( () => {
-		const sourceIds = Array.from(
-			new Set(
-				pageItems
-					.map( ( item ) => item.source_post_id )
-					.filter( ( id ): id is number => id > 0 )
-			)
-		);
-
-		if ( 0 === sourceIds.length ) {
+		if ( '' === sourceIdsKey ) {
 			return;
 		}
 
+		const sourceIds = sourceIdsKey.split( ',' ).map( Number );
 		const controller = new AbortController();
 
 		setSyncStatuses( ( current ) => {
@@ -377,7 +387,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		return () => {
 			controller.abort();
 		};
-	}, [ pageItems ] );
+	}, [ sourceIdsKey ] );
 
 	const fields: DataViewsField< ImportedPost >[] = useMemo(
 		() => [

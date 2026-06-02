@@ -499,6 +499,77 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that a parseable destination row paired with an unparseable
+	 * source modified_gmt resolves to `invalid` — a distinct sentinel from
+	 * `unreachable`, so the UI can surface "data bug" vs "network blip".
+	 */
+	public function test_reports_invalid_when_source_modified_gmt_unparseable(): void {
+		// ARRANGE: Destination row is fine; source mock returns a string that
+		// DateTimeImmutable::createFromFormat cannot parse.
+		$source_id = 4006;
+		$this->seed_imported_post( $source_id, '2024-01-01 12:00:00' );
+		$this->source_modified_gmt[ $source_id ] = 'not-a-timestamp';
+
+		$this->authenticate_request(
+			array( 'source_ids' => array( (string) $source_id ) )
+		);
+
+		// ACT: Dispatch.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
+
+		// ASSERT: Verdict is invalid (not unreachable).
+		$response = $this->decode_response();
+		$this->assertTrue( $response['success'] );
+		$this->assertSame(
+			'invalid',
+			$response['data']['statuses'][ $source_id ]
+		);
+	}
+
+	/**
+	 * Verifies that the handler resolves local posts and items-table rows
+	 * via bulk helpers rather than a per-row meta_query + SELECT — i.e.
+	 * total DB query growth stays well below the N+1 baseline as the batch
+	 * size grows.
+	 */
+	public function test_resolves_local_posts_in_bulk(): void {
+		// ARRANGE: Ten imported posts, all up-to-date.
+		$source_ids = range( 5001, 5010 );
+		foreach ( $source_ids as $source_id ) {
+			$this->seed_imported_post( $source_id, '2024-01-01 12:00:00' );
+			$this->source_modified_gmt[ $source_id ] = '2024-01-01T11:00:00Z';
+		}
+
+		$this->authenticate_request(
+			array(
+				'source_ids' => array_map( 'strval', $source_ids ),
+			)
+		);
+
+		// ACT: Dispatch and capture the DB query delta.
+		global $wpdb;
+		$queries_before = $wpdb->num_queries;
+		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
+		$queries_delta = $wpdb->num_queries - $queries_before;
+
+		// ASSERT: The N+1 baseline for 10 IDs would be ≥20 queries (one
+		// meta_query lookup + one items-table SELECT per row); the bulk
+		// path replaces that pair with two queries plus a small fixed
+		// overhead.
+		$this->assertLessThan( 10, $queries_delta );
+
+		// ASSERT: Every verdict came through correctly.
+		$response = $this->decode_response();
+		$this->assertTrue( $response['success'] );
+		foreach ( $source_ids as $source_id ) {
+			$this->assertSame(
+				'up-to-date',
+				$response['data']['statuses'][ $source_id ]
+			);
+		}
+	}
+
+	/**
 	 * Verifies that the handler returns an empty statuses object when no
 	 * valid source IDs are present, instead of issuing a pointless source
 	 * roundtrip.

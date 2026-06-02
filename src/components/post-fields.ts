@@ -65,6 +65,8 @@ export function getImportedSyncStatusLabel(
 			return SYNC_STATUS_LABELS.missing;
 		case 'unreachable':
 			return SYNC_STATUS_LABELS.unreachable;
+		case 'invalid':
+			return SYNC_STATUS_LABELS.invalid;
 		default:
 			return SYNC_STATUS_LABELS.loading;
 	}

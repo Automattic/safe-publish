@@ -186,7 +186,8 @@
 		color: var(--safe-publish-status-warning);
 	}
 
-	&--missing {
+	&--missing,
+	&--invalid {
 		color: var(--safe-publish-status-error);
 	}
 
