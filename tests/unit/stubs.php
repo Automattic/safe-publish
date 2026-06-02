@@ -115,6 +115,11 @@ function wp_remote_get( string $url, array $args = array() ): array|WP_Error {
 	return $GLOBALS['_test_http_response'] ?? $default;
 }
 
+function wp_safe_remote_get( string $url, array $args = array() ): array|WP_Error {
+	// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.wp_remote_get_wp_remote_get -- Test stub delegating to the existing wp_remote_get stub.
+	return wp_remote_get( $url, $args );
+}
+
 function wp_remote_retrieve_response_code( array|WP_Error $response ): int {
 	if ( $response instanceof WP_Error ) {
 		return 0;
