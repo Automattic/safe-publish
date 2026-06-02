@@ -258,6 +258,7 @@ final class Admin_Ajax_Controller {
 				'modified_gmt'         => $post->post_modified_gmt,
 				'edit_url'             => is_string( $edit_url_or_null ) ? $edit_url_or_null : '',
 				'source_link'          => $source_link,
+				'item_id'              => null !== $item ? (int) $item['id'] : null,
 				'session_id'           => null !== $item ? (int) $item['session_id'] : null,
 				'rollback_status'      => null !== $item ? (string) $item['status'] : null,
 				'has_previous_content' => null !== $item ? (bool) $item['has_previous_content'] : false,

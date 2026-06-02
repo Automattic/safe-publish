@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration\Import_Mode_Admin_Handler;
 
 use Safe_Publish\Admin\Admin_Ajax_Controller;
+use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Tests\Integration\Ajax_Die_Continue_Trait;
 use Safe_Publish\Tests\Integration\Mock_Media_HTTP_Trait;
@@ -1429,6 +1430,108 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			$response['data']['warnings'],
 			json_decode( (string) $row['warnings'], true )
 		);
+	}
+
+	/**
+	 * Verifies that the Imported Posts listing endpoint serializes the most
+	 * recent items-table row ID as item_id, which the per-row Roll back action
+	 * targets when undoing an import.
+	 */
+	public function test_ajax_list_imported_posts_includes_item_id(): void {
+		// ARRANGE: A real imported post plus an items-table row recording its
+		// most recent import event.
+		wp_set_current_user( $this->admin_user_id );
+
+		$post_id = $this->factory()->post->create(
+			array(
+				'post_title'  => 'Imported Listing Row',
+				'post_status' => 'publish',
+				'post_type'   => 'post',
+			)
+		);
+		update_post_meta( $post_id, Options::META_SOURCE_POST_ID, '4242' );
+		update_post_meta(
+			$post_id,
+			Options::META_SOURCE_LINK,
+			'https://source.example.com/imported-listing-row'
+		);
+
+		$repository = new History_Repository();
+		$session_id = $repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		if ( is_wp_error( $session_id ) ) {
+			$this->fail( 'Failed to create the test import session.' );
+		}
+
+		$item_id = $this->insert_import_item( $session_id, $post_id );
+
+		$_POST = array(
+			'nonce'    => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'page'     => '1',
+			'per_page' => '20',
+		);
+
+		// ACT: Trigger the imported-posts listing handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_list_imported_posts' );
+
+		// ASSERT: The single row carries the post ID and the items-table row ID
+		// needed to roll back its most recent import.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertTrue( $response['success'], 'Listing should return success' );
+		$this->assertCount(
+			1,
+			$response['data']['items'],
+			'Exactly one row should be listed'
+		);
+
+		$row = $response['data']['items'][0];
+		$this->assertSame(
+			$post_id,
+			$row['id'],
+			'Row id should be the local post ID'
+		);
+		$this->assertSame(
+			$item_id,
+			$row['item_id'],
+			'Row item_id should be the items-table row ID'
+		);
+		$this->assertSame(
+			$session_id,
+			$row['session_id'],
+			'Row session_id should match the import session'
+		);
+	}
+
+	/**
+	 * Inserts an import item row for the given session and post.
+	 *
+	 * @param int $session_id Owning session ID.
+	 * @param int $post_id    Local post ID.
+	 * @return int Inserted item ID.
+	 */
+	private function insert_import_item( int $session_id, int $post_id ): int {
+		global $wpdb;
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->insert(
+			Import_Items_Table::table_name(),
+			array(
+				'session_id'           => $session_id,
+				'title'                => 'Imported Listing Row',
+				'status'               => 'success',
+				'post_id'              => $post_id,
+				'has_previous_content' => 0,
+				'rolled_back'          => 0,
+				'import_date_gmt'      => '2024-01-01 00:00:00',
+			),
+			array( '%d', '%s', '%s', '%d', '%d', '%d', '%s' )
+		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return (int) $wpdb->insert_id;
 	}
 
 	/**

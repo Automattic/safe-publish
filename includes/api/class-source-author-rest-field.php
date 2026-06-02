@@ -11,6 +11,7 @@ namespace Safe_Publish\API;
 
 use Safe_Publish\Auth\HMAC_Authenticator;
 use WP_Post;
+use WP_REST_Request;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -87,18 +88,31 @@ class Source_Author_REST_Field {
 	}
 
 	/**
-	 * Returns the source author payload for HMAC-authenticated requests.
+	 * Returns the source author payload for HMAC-authenticated single-item
+	 * requests.
 	 *
-	 * Returns null for any non-HMAC request so the field value carries no
-	 * source author PII for public, cookie-authenticated, or third-party
-	 * consumers.
+	 * Returns null for non-HMAC requests, so the field carries no source author
+	 * PII for public, cookie-authenticated, or third-party consumers, and for
+	 * collection requests, to keep author PII off list responses.
 	 *
-	 * @param array $post_array Post data array as built by WP_REST_Posts_Controller.
+	 * @param array           $post_array Post data as built by WP_REST_Posts_Controller.
+	 * @param string          $_attribute Field name (unused).
+	 * @param WP_REST_Request $request    Current REST request.
 	 * @return array{email: string, login: string, display_name: string}|null
-	 *         Author payload, or null when the request is not HMAC-authenticated.
+	 *         Author payload, or null when not HMAC-authenticated or not a
+	 *         single-item request.
 	 */
-	public function get_callback( array $post_array ): ?array {
+	public function get_callback(
+		array $post_array,
+		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		string $_attribute,
+		WP_REST_Request $request
+	): ?array {
 		if ( ! $this->authenticator->is_authenticated() ) {
+			return null;
+		}
+
+		if ( ! $this->is_single_item_request( $request ) ) {
 			return null;
 		}
 
@@ -138,5 +152,22 @@ class Source_Author_REST_Field {
 			'login'        => '',
 			'display_name' => '',
 		);
+	}
+
+	/**
+	 * Detects whether the request resolves a single post via its `id` route
+	 * parameter (e.g. `/wp/v2/{post_type}/{id}`).
+	 *
+	 * Reads the matched URL parameter rather than get_param() so a query string
+	 * such as `?id=5` on a collection route is not mistaken for a single-item
+	 * request.
+	 *
+	 * @param WP_REST_Request $request Current REST request.
+	 * @return bool True when the route bound a positive numeric `id`.
+	 */
+	private function is_single_item_request( WP_REST_Request $request ): bool {
+		$request_id = $request->get_url_params()['id'] ?? null;
+
+		return is_numeric( $request_id ) && (int) $request_id > 0;
 	}
 }

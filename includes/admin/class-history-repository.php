@@ -474,11 +474,14 @@ final class History_Repository {
 	}
 
 	/**
-	 * Marks a session as rolled back and emits an audit log event.
+	 * Marks a session as rolled back and emits audit log events.
 	 *
 	 * Bulk-flips the per-item `rolled_back` flag on the success/updated items
 	 * the session-level rollback acted on so the items table stays consistent
-	 * with the item-level rollback path.
+	 * with the item-level rollback path. Emits a per-item audit event for each
+	 * flagged item (`item_rolled_back`, or `item_already_rolled_back` when a
+	 * prior rollback already flagged it), so the audit log can reconstruct
+	 * which items a session rollback touched without joining the items table.
 	 *
 	 * @param int $session_id Session ID.
 	 */
@@ -486,6 +489,21 @@ final class History_Repository {
 		global $wpdb;
 
 		$items_table = Import_Items_Table::table_name();
+
+		// Snapshot the success/updated items and their pre-UPDATE rolled_back
+		// state so the per-item events below can distinguish a newly flagged
+		// row from one a prior rollback already flagged, matching the
+		// item-level path.
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$items = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT id, post_id, rolled_back FROM `{$items_table}`"
+					. " WHERE session_id = %d AND status IN ( 'success', 'updated' )",
+				$session_id
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$items_updated = $wpdb->query(
@@ -518,10 +536,39 @@ final class History_Repository {
 			return;
 		}
 
+		// Record the per-item events only once the rollback is durably
+		// complete, so a mid-operation failure logs just the session event.
+		$snapshot = is_array( $items ) ? $items : array();
+		foreach ( $snapshot as $item ) {
+			$this->log_item_rollback_event( $session_id, $item );
+		}
+
 		if ( 0 === $updated ) {
 			$this->logger->session_already_rolled_back( $session_id );
 		} else {
 			$this->logger->session_rolled_back( $session_id );
+		}
+	}
+
+	/**
+	 * Emits the per-item rollback audit event for one item flagged by a
+	 * session-level rollback, matching the events the item-level path records.
+	 *
+	 * @param int   $session_id Parent session of the item.
+	 * @param array $item       Snapshot row with id, post_id, and the
+	 *                          pre-UPDATE rolled_back value.
+	 */
+	private function log_item_rollback_event(
+		int $session_id,
+		array $item
+	): void {
+		$item_id = (int) $item['id'];
+		$post_id = isset( $item['post_id'] ) ? (int) $item['post_id'] : 0;
+
+		if ( 0 === (int) $item['rolled_back'] ) {
+			$this->logger->item_rolled_back( $item_id, $session_id, $post_id );
+		} else {
+			$this->logger->item_already_rolled_back( $item_id, $session_id, $post_id );
 		}
 	}
 
