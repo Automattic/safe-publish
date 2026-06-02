@@ -218,6 +218,16 @@ class Options {
 	}
 
 	/**
+	 * Returns whether an option is configured by a deployment-defined constant.
+	 *
+	 * @param string $option Option name.
+	 * @return bool True when a constant is configured for the option.
+	 */
+	public static function is_constant_configured( string $option ): bool {
+		return null !== self::get_constant_value_for_option( $option );
+	}
+
+	/**
 	 * Filters a WordPress option preflight value.
 	 *
 	 * @param mixed  $pre_option Existing preflight option value.

@@ -19,6 +19,48 @@ function __( string $text ): string {
 	return $text;
 }
 
+function esc_html_e( string $text ): void {
+	echo esc_html( $text );
+}
+
+function esc_attr( mixed $text ): string {
+	return htmlspecialchars( (string) $text, ENT_QUOTES );
+}
+
+function esc_attr__( string $text ): string {
+	return esc_attr( $text );
+}
+
+function esc_js( string $text ): string {
+	return addslashes( $text );
+}
+
+function settings_errors(): void {}
+
+function settings_fields( string $option_group ): void {
+	echo '<input type="hidden" name="option_page" value="' . esc_attr( $option_group ) . '" />';
+}
+
+function do_settings_sections(): void {}
+
+function checked( mixed $checked, mixed $current = true ): void {
+	if ( $checked === $current ) {
+		echo 'checked="checked"';
+	}
+}
+
+function submit_button(): void {
+	echo '<input type="submit" class="button button-primary" value="Save Changes" />';
+}
+
+function wp_create_nonce(): string {
+	return 'test-nonce';
+}
+
+function admin_url( string $path = '' ): string {
+	return 'http://localhost/wp-admin/' . ltrim( $path, '/' );
+}
+
 function is_wp_error( mixed $thing ): bool {
 	return $thing instanceof WP_Error;
 }

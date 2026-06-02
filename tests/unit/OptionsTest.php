@@ -72,6 +72,39 @@ class OptionsTest extends TestCase {
 	}
 
 	/**
+	 * Verifies that constant-backed options report external configuration.
+	 *
+	 * @runInSeparateProcess
+	 * @preserveGlobalState disabled
+	 */
+	public function test_is_constant_configured_returns_true_for_defined_constant(): void {
+		// ARRANGE: define a Basic Auth password constant.
+		define( 'SAFE_PUBLISH_BASIC_AUTH_PASSWORD', 'constant-password' );
+
+		// ACT: check whether the password option is externally configured.
+		$is_configured = Options::is_constant_configured(
+			Options::OPTION_BASIC_AUTH_PASSWORD
+		);
+
+		// ASSERT: the option reports that a constant is configured.
+		$this->assertTrue( $is_configured );
+	}
+
+	/**
+	 * Verifies that options without constants do not report external
+	 * configuration.
+	 */
+	public function test_is_constant_configured_returns_false_without_constant(): void {
+		// ACT: check whether the password option is externally configured.
+		$is_configured = Options::is_constant_configured(
+			Options::OPTION_BASIC_AUTH_PASSWORD
+		);
+
+		// ASSERT: the option reports no configured constant.
+		$this->assertFalse( $is_configured );
+	}
+
+	/**
 	 * Verifies that pre-option filtering returns a configured constant value.
 	 *
 	 * @runInSeparateProcess
