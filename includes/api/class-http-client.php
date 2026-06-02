@@ -105,7 +105,7 @@ final class HTTP_Client {
 	 * @return string User agent string.
 	 */
 	public function get_user_agent(): string {
-		$plugin_version = defined( 'SAFE_PUBLISH_VERSION' ) ? SAFE_PUBLISH_VERSION : '1.1.0';
+		$plugin_version = defined( 'SAFE_PUBLISH_VERSION' ) ? SAFE_PUBLISH_VERSION : '0.0.1';
 		$site_url       = get_bloginfo( 'url' );
 
 		return sprintf(
