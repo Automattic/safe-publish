@@ -1,12 +1,13 @@
 /**
  * Action definitions for the DataViews component.
  *
- * Defines the available actions for source posts including creating drafts,
- * bulk importing, updating posts, and viewing post diffs.
+ * Defines actions for Source Posts (Import single + bulk, View in Imports for
+ * already-imported items) and for the Imports → Posts tab (Edit, Update, Diff,
+ * Delete, Rollback).
  *
  * @file This file defines DataViews actions for the Safe Publish plugin.
  */
-import { drafts, download, pencil, rotateLeft, trash } from '@wordpress/icons';
+import { drafts, download, pencil, rotateLeft, seen, trash } from '@wordpress/icons';
 
 import BulkRollbackPostModal from './components/BulkRollbackPostModal';
 import DeletePostModal from './components/DeletePostModal';
@@ -117,9 +118,9 @@ const bulkImportPosts = async (
 /**
  * Creates DataViews actions for source posts.
  *
- * Defines the available actions that can be performed on posts in the DataViews
- * component, including creating drafts, bulk importing, updating, and viewing
- * diffs.
+ * Returns the Import action (single + bulk) for non-imported items and the
+ * View in Imports action for already-imported items, which deep-links to the
+ * Imports → Posts tab with the row pinned via focus_source.
  *
  * @param {Function} [onRefresh]    Callback to refresh the posts list.
  * @param {boolean}  [isAuthorized] Whether the source site authorizes imports.
@@ -131,26 +132,18 @@ export const createActions = (
 	isAuthorized: boolean = true
 ): Action< Post >[] => [
 	/**
-	 * Combined import and update action.
+	 * Import action.
 	 *
-	 * For a single item: shows a simple confirmation modal that imports or
-	 * updates the post depending on its current state. For multiple selected
-	 * items: runs a batch operation with progress tracking.
+	 * Single item: confirmation modal. Multiple items: batch import with
+	 * progress tracking. Excludes already-imported posts — Update/Diff/Delete
+	 * live on the Imports → Posts tab.
 	 */
 	{
-		id: 'bulk-import',
-		label: ( items: Post[] ) => {
-			if ( items.length === 1 ) {
-				return items[ 0 ].is_imported
-					? __( 'Update', 'safe-publish' )
-					: __( 'Import', 'safe-publish' );
-			}
-			return __( 'Import / Update', 'safe-publish' );
-		},
-		isEligible: ( item: Post ) =>
-			isAuthorized && ( ! item.is_imported || Boolean( item.has_update ) ),
-		isPrimary: true,
+		id: 'import',
+		label: __( 'Import', 'safe-publish' ),
 		icon: download,
+		isPrimary: true,
+		isEligible: ( item: Post ) => isAuthorized && ! item.is_imported,
 		hideModalHeader: true,
 		modalFocusOnMount: 'firstContentElement',
 		supportsBulk: true,
@@ -251,14 +244,9 @@ export const createActions = (
 								{ /* translators: %d is the number of posts */
 								__( 'Import %d selected posts as drafts?', 'safe-publish' ).replace( '%d', items.length.toString() ) }
 							</Text>
-							<VStack spacing="2">
-								<Text style={ { fontSize: '0.9em', color: '#666' } }>
-									{ __( 'This will import all selected posts including their content, images, links, and formatting.', 'safe-publish' ) }
-								</Text>
-								<Text style={ { fontSize: '0.8em', color: '#d63638', fontWeight: 'bold' } }>
-									{ __( '⚠️ Note: Posts that already exist will be automatically updated with the latest content from the source site.', 'safe-publish' ) }
-								</Text>
-							</VStack>
+							<Text style={ { fontSize: '0.9em', color: '#666' } }>
+								{ __( 'This will import all selected posts including their content, images, links, and formatting.', 'safe-publish' ) }
+							</Text>
 						</>
 					) }
 
@@ -447,7 +435,7 @@ export const createActions = (
 								variant="primary"
 								onClick={ () => void handleBulkImport() }
 								disabled={ isLoading }
-								data-action-id="bulk-import"
+								data-action-id="import"
 							>
 								{ isLoading ? (
 									<>
@@ -466,60 +454,29 @@ export const createActions = (
 		},
 	},
 	/**
-	 * Edit Post action.
+	 * View in Imports action.
 	 *
-	 * Opens the local WordPress post editor in a new tab. Only available for
-	 * posts that have already been imported.
+	 * Deep-links an already-imported source row to the Imports → Posts tab
+	 * with the matching imported post pinned via `?focus_source=<source_post_id>`,
+	 * so Update / Diff / Delete / Rollback are one click away.
 	 */
 	{
-		id: 'edit-post',
-		label: __( 'Edit', 'safe-publish' ),
-		icon: pencil,
+		id: 'view-in-imports',
+		label: __( 'View in Imports', 'safe-publish' ),
+		icon: seen,
 		isPrimary: true,
-		isEligible: ( item: Post ) => Boolean( item.is_imported && item.local_edit_url ),
+		isEligible: ( item: Post ) => Boolean( item.is_imported ),
 		callback: ( items: Post[] ) => {
-			const url = items[ 0 ]?.local_edit_url;
+			const baseUrl = window.safePublishAdminData?.importsUrl;
+			const item = items[ 0 ];
 
-			if ( url ) {
-				window.open( url, '_blank', 'noreferrer' );
+			if ( ! baseUrl || ! item ) {
+				return;
 			}
-		},
-	},
-	/**
-	 * Delete Post action.
-	 *
-	 * Moves the locally imported post to trash after confirmation. Only
-	 * available for posts that have already been imported.
-	 */
-	{
-		id: 'delete-post',
-		label: __( 'Delete', 'safe-publish' ),
-		icon: trash,
-		isDestructive: true,
-		isPrimary: true,
-		isEligible: ( item: Post ) => Boolean( item.is_imported ),
-		hideModalHeader: true,
-		modalFocusOnMount: 'firstContentElement',
-		RenderModal: ( { items, closeModal } ) => (
-			<DeletePostModal items={ items } closeModal={ closeModal } onRefresh={ onRefresh } />
-		),
-	},
-	/**
-	 * Post Diff action.
-	 *
-	 * Displays a visual comparison between the local post content and the
-	 * incoming source content.
-	 */
-	{
-		id: 'post-diff',
-		label: __( 'Post Diff', 'safe-publish' ),
-		icon: drafts,
-		isEligible: ( item: Post ) => Boolean( item.is_imported ),
-		hideModalHeader: false,
-		supportsBulk: false,
-		modalSize: 'fill',
-		RenderModal: ( { items, closeModal } ) => {
-			return <PostDiffModal items={ items } closeModal={ closeModal } />;
+
+			const url = new URL( baseUrl );
+			url.searchParams.set( 'focus_source', String( item.id ) );
+			window.location.href = url.toString();
 		},
 	},
 ];

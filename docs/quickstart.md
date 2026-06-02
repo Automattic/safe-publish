@@ -70,14 +70,15 @@ You have three ways to import content:
 **2. Bulk Import**
 
 - Select multiple posts using checkboxes.
-- Click **Import / Update** in the bulk actions menu.
+- Click **Import** in the bulk actions menu.
 - All selected posts will be imported as drafts.
 
-**3. Preview Before Import**
+**3. Manage Already-Imported Posts**
 
-- Click **Post Diff** to see a side-by-side comparison.
-- Review the content before importing.
-- Useful for verifying changes or troubleshooting
+- Click **View in Imports** on any imported post to jump to the Imports →
+  Posts tab with that post focused.
+- From there: update with the latest source content, view a content diff,
+  delete the local post, or roll back the most recent import.
 
 ## Step 6: Review Imported Content
 
