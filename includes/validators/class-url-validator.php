@@ -24,9 +24,7 @@ class URL_Validator {
 	 *
 	 * Rejects URLs that resolve to loopback, link-local, and RFC1918/ULA
 	 * ranges so the value cannot redirect plugin HTTP traffic onto an
-	 * internal address. The check is filterable via
-	 * `safe_publish_url_validator_allow_private_hosts` for legitimate
-	 * intranet deployments.
+	 * internal address.
 	 *
 	 * @param string $url URL to validate.
 	 * @return bool True if valid, false otherwise.
@@ -46,25 +44,7 @@ class URL_Validator {
 			return false;
 		}
 
-		$is_dev = function_exists( 'wp_get_environment_type' )
-			&& 'development' === wp_get_environment_type();
-
-		/**
-		 * Filters whether private/loopback hosts pass URL validation.
-		 *
-		 * @param bool   $allow Whether to allow private/loopback hosts.
-		 *                     Default `WP_ENVIRONMENT_TYPE === 'development'`.
-		 * @param string $host  Host being checked.
-		 * @param string $url   Full URL.
-		 */
-		$allow_private = apply_filters(
-			'safe_publish_url_validator_allow_private_hosts',
-			$is_dev,
-			$host,
-			$url
-		);
-
-		if ( ! $allow_private && self::host_is_private( $host ) ) {
+		if ( self::host_is_private( $host ) ) {
 			return false;
 		}
 
