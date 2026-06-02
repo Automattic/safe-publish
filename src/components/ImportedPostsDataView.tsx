@@ -2,26 +2,118 @@
  * DataViews component for the Imported Posts admin page.
  *
  * Lists locally-imported posts via the destination-side
- * `safe_publish_list_imported_posts` AJAX action — purely local query, no
- * source roundtrip. Rows support Edit, Update, Diff, Delete, and Rollback
- * (single or bulk); sync status lands in a follow-up PR.
+ * `safe_publish_list_imported_posts` AJAX action — a purely local query, no
+ * source roundtrip. Supports server-side search, filtering (Local Status,
+ * Type, Session), and sorting across the full dataset, plus row actions
+ * (Edit, Update, Diff, Delete, and Rollback — single or bulk).
  *
  * @file This file defines the ImportedPostsDataView component.
  */
 import { createImportedActions } from '../actions';
-import { DEFAULT_ITEMS_PER_PAGE, LAYOUT_GRID, LAYOUT_LIST, LAYOUT_TABLE } from '../constants';
+import {
+	DEFAULT_ITEMS_PER_PAGE,
+	LAYOUT_GRID,
+	LAYOUT_LIST,
+	LAYOUT_TABLE,
+	SEARCH_DEBOUNCE_MS,
+} from '../constants';
 import { extractUrlPath, formatDateTime, getErrorMessage, PUBLISH_STATUS_LABELS } from '../utils';
 import { Notice, Spinner } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
-import { useState, useEffect, useMemo, useCallback } from '@wordpress/element';
+import { useState, useEffect, useMemo, useCallback, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
 import type {
 	ApiResponse,
 	DataViewsField,
 	ImportedPost,
+	ImportedPostsFacets,
 	ImportedPostsResponse,
 } from '../types';
+
+/**
+ * Local Status filter options, derived from the shared status labels.
+ */
+const STATUS_FILTER_ELEMENTS = Object.entries( PUBLISH_STATUS_LABELS ).map(
+	( [ value, label ] ) => ( { value, label } )
+);
+
+/**
+ * Reads a multi-select filter's values from the view by field id.
+ *
+ * @param {View['filters']} filters Active view filters.
+ * @param {string}          field   Field id to read.
+ *
+ * @return {string[]} Selected values, or an empty array.
+ */
+const getMultiFilterValues = (
+	filters: View[ 'filters' ],
+	field: string
+): string[] => {
+	const filter = filters?.find( ( entry ) => entry.field === field );
+	if ( ! filter || ! Array.isArray( filter.value ) ) {
+		return [];
+	}
+	return filter.value.map( String );
+};
+
+/**
+ * Reads a single-select filter's value from the view by field id.
+ *
+ * @param {View['filters']} filters Active view filters.
+ * @param {string}          field   Field id to read.
+ *
+ * @return {string} Selected value, or an empty string.
+ */
+const getSingleFilterValue = (
+	filters: View[ 'filters' ],
+	field: string
+): string => {
+	const filter = filters?.find( ( entry ) => entry.field === field );
+	if ( ! filter || Array.isArray( filter.value ) ) {
+		return '';
+	}
+	const value = filter.value as unknown;
+	return null === value || undefined === value ? '' : String( value );
+};
+
+/**
+ * Derives which of the listing's mutually-exclusive display states to show.
+ *
+ * `showGrid` latches via hasRenderedGrid so a refetch that briefly empties the
+ * results can't unmount DataViews mid-interaction.
+ *
+ * @param {Object}  flags                  Current fetch/filter flags.
+ * @param {boolean} flags.hasFetchedOnce   Whether the first fetch completed.
+ * @param {boolean} flags.hasRenderedGrid  Whether the grid has been shown.
+ * @param {boolean} flags.hasError         Whether a fetch error is showing.
+ * @param {boolean} flags.isEmpty          Whether the current page has no rows.
+ * @param {boolean} flags.isLoading        Whether a fetch is in flight.
+ * @param {boolean} flags.hasActiveFilters Whether search/filters are active.
+ *
+ * @return {{ showLoading: boolean, showEmptyState: boolean, showGrid: boolean }}
+ *         The display state to render.
+ */
+const getDisplayState = ( flags: {
+	hasFetchedOnce: boolean;
+	hasRenderedGrid: boolean;
+	hasError: boolean;
+	isEmpty: boolean;
+	isLoading: boolean;
+	hasActiveFilters: boolean;
+} ): { showLoading: boolean; showEmptyState: boolean; showGrid: boolean } => ( {
+	showLoading: flags.isLoading && ! flags.hasFetchedOnce,
+	showEmptyState:
+		flags.hasFetchedOnce &&
+		! flags.hasRenderedGrid &&
+		! flags.hasError &&
+		flags.isEmpty &&
+		! flags.isLoading &&
+		! flags.hasActiveFilters,
+	showGrid:
+		flags.hasFetchedOnce &&
+		( flags.hasRenderedGrid || ! flags.isEmpty || flags.hasActiveFilters ),
+} );
 
 /**
  * ImportedPostsDataView component.
@@ -33,6 +125,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		type: 'table',
 		perPage: DEFAULT_ITEMS_PER_PAGE,
 		page: 1,
+		sort: { field: 'import_date_gmt', direction: 'desc' },
 		fields: [ 'permalink', 'local_status', 'import_date_gmt' ],
 		titleField: 'title',
 	} );
@@ -52,6 +145,60 @@ export function ImportedPostsDataView(): JSX.Element {
 	const [ hasFetchedOnce, setHasFetchedOnce ] = useState( false );
 	const [ fetchError, setFetchError ] = useState< string | null >( null );
 	const [ refreshNonce, setRefreshNonce ] = useState( 0 );
+	const [ facets, setFacets ] = useState< ImportedPostsFacets >( {
+		post_types: [],
+		sessions: [],
+	} );
+	const [ debouncedSearch, setDebouncedSearch ] = useState( '' );
+	const [ hasRenderedGrid, setHasRenderedGrid ] = useState( false );
+
+	const facetsLoadedRef = useRef( false );
+
+	const search = view.search ?? '';
+	const statuses = useMemo(
+		() => getMultiFilterValues( view.filters, 'local_status' ),
+		[ view.filters ]
+	);
+	const postTypes = useMemo(
+		() => getMultiFilterValues( view.filters, 'post_type' ),
+		[ view.filters ]
+	);
+	// The selected session lives in view.filters under 'session_id'; a future
+	// "roll back entire session" toolbar reads it the same way.
+	const sessionId = useMemo(
+		() => getSingleFilterValue( view.filters, 'session_id' ),
+		[ view.filters ]
+	);
+	const orderby = 'title' === view.sort?.field ? 'title' : 'import_date';
+	const order = 'asc' === view.sort?.direction ? 'asc' : 'desc';
+
+	const hasActiveFilters =
+		'' !== debouncedSearch ||
+		statuses.length > 0 ||
+		postTypes.length > 0 ||
+		'' !== sessionId;
+
+	// Debounce the search box so a fast typist doesn't fire a request per
+	// keystroke.
+	useEffect( () => {
+		const timer = setTimeout( () => {
+			setDebouncedSearch( search.trim() );
+		}, SEARCH_DEBOUNCE_MS );
+
+		return () => clearTimeout( timer );
+	}, [ search ] );
+
+	// Latch DataViews mounted once it first appears, so a refetch that briefly
+	// empties the result set (e.g. clearing a search) can't unmount it and pull
+	// focus out of the search box.
+	useEffect( () => {
+		if ( pageItems.length > 0 || hasActiveFilters ) {
+			setHasRenderedGrid( true );
+		}
+	}, [ pageItems.length, hasActiveFilters ] );
+
+	const statusesKey = statuses.join( '|' );
+	const postTypesKey = postTypes.join( '|' );
 
 	useEffect( () => {
 		const controller = new AbortController();
@@ -61,6 +208,20 @@ export function ImportedPostsDataView(): JSX.Element {
 		formData.append( 'nonce', window.safePublishAdminData.nonce );
 		formData.append( 'page', String( view.page ?? 1 ) );
 		formData.append( 'per_page', String( view.perPage ?? DEFAULT_ITEMS_PER_PAGE ) );
+		formData.append( 'orderby', orderby );
+		formData.append( 'order', order );
+
+		if ( '' !== debouncedSearch ) {
+			formData.append( 'search', debouncedSearch );
+		}
+		statuses.forEach( ( status ) => formData.append( 'statuses[]', status ) );
+		postTypes.forEach( ( type ) => formData.append( 'post_types[]', type ) );
+		if ( '' !== sessionId ) {
+			formData.append( 'session_id', sessionId );
+		}
+		if ( ! facetsLoadedRef.current ) {
+			formData.append( 'with_facets', '1' );
+		}
 
 		setIsLoading( true );
 		setFetchError( null );
@@ -80,6 +241,10 @@ export function ImportedPostsDataView(): JSX.Element {
 				if ( result.success ) {
 					setPageItems( result.data.items );
 					setHasMore( Boolean( result.data.has_more ) );
+					if ( result.data.facets ) {
+						setFacets( result.data.facets );
+						facetsLoadedRef.current = true;
+					}
 				} else {
 					setFetchError(
 						getErrorMessage(
@@ -115,14 +280,27 @@ export function ImportedPostsDataView(): JSX.Element {
 		return () => {
 			controller.abort();
 		};
-	}, [ view.page, view.perPage, refreshNonce ] );
+		// Keyed on the value-based statusesKey/postTypesKey rather than the
+		// memoized arrays, whose identity changes on every view update.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [
+		view.page,
+		view.perPage,
+		orderby,
+		order,
+		debouncedSearch,
+		statusesKey,
+		postTypesKey,
+		sessionId,
+		refreshNonce,
+	] );
 
 	const fields: DataViewsField< ImportedPost >[] = useMemo(
 		() => [
 			{
 				id: 'title',
 				label: __( 'Title', 'safe-publish' ),
-				enableSorting: false,
+				enableSorting: true,
 				render: ( { item }: { item: ImportedPost } ): JSX.Element => {
 					if ( '' !== item.edit_url ) {
 						return (
@@ -146,6 +324,8 @@ export function ImportedPostsDataView(): JSX.Element {
 				id: 'local_status',
 				label: __( 'Local Status', 'safe-publish' ),
 				enableSorting: false,
+				elements: STATUS_FILTER_ELEMENTS,
+				filterBy: { operators: [ 'isAny' ] },
 				getValue: ( { item }: { item: ImportedPost } ): string =>
 					PUBLISH_STATUS_LABELS[ item.local_status ] ?? item.local_status,
 				render: ( { item }: { item: ImportedPost } ): JSX.Element => {
@@ -164,9 +344,39 @@ export function ImportedPostsDataView(): JSX.Element {
 				},
 			},
 			{
+				id: 'post_type',
+				label: __( 'Type', 'safe-publish' ),
+				enableSorting: false,
+				elements: facets.post_types,
+				filterBy: { operators: [ 'isAny' ] },
+				getValue: ( { item }: { item: ImportedPost } ): string => {
+					const match = facets.post_types.find(
+						( option ) => option.value === item.post_type
+					);
+					return match ? match.label : item.post_type;
+				},
+			},
+			{
+				id: 'session_id',
+				label: __( 'Session', 'safe-publish' ),
+				enableSorting: false,
+				elements: facets.sessions,
+				filterBy: { operators: [ 'is' ] },
+				getValue: ( { item }: { item: ImportedPost } ): string => {
+					if ( null === item.session_id ) {
+						return '';
+					}
+					const id = String( item.session_id );
+					const match = facets.sessions.find(
+						( option ) => option.value === id
+					);
+					return match ? match.label : id;
+				},
+			},
+			{
 				id: 'import_date_gmt',
 				label: __( 'Last Imported', 'safe-publish' ),
-				enableSorting: false,
+				enableSorting: true,
 				getValue: ( { item }: { item: ImportedPost } ): string =>
 					item.import_date_gmt ?? '',
 				render: ( { item }: { item: ImportedPost } ): JSX.Element => {
@@ -204,7 +414,7 @@ export function ImportedPostsDataView(): JSX.Element {
 				},
 			},
 		],
-		[]
+		[ facets ]
 	);
 
 	const refresh = useCallback(
@@ -215,6 +425,29 @@ export function ImportedPostsDataView(): JSX.Element {
 		() => createImportedActions( refresh ),
 		[ refresh ]
 	);
+
+	const handleViewChange = useCallback( ( next: View ): void => {
+		setView( ( current ) => {
+			const sortChanged =
+				next.sort?.field !== current.sort?.field ||
+				next.sort?.direction !== current.sort?.direction;
+			const perPageChanged = next.perPage !== current.perPage;
+			const searchChanged = ( next.search ?? '' ) !== ( current.search ?? '' );
+			const filtersChanged =
+				JSON.stringify( next.filters ?? [] ) !==
+				JSON.stringify( current.filters ?? [] );
+
+			// Search/filter/sort/perPage changes reset to page 1; layout-only
+			// changes keep the current page.
+			return {
+				...next,
+				page:
+					sortChanged || perPageChanged || searchChanged || filtersChanged
+						? 1
+						: ( next.page ?? current.page ?? 1 ),
+			};
+		} );
+	}, [] );
 
 	const currentPage = view.page ?? 1;
 	const currentPerPage = view.perPage ?? DEFAULT_ITEMS_PER_PAGE;
@@ -238,9 +471,18 @@ export function ImportedPostsDataView(): JSX.Element {
 		currentPage
 	);
 
+	const { showLoading, showEmptyState, showGrid } = getDisplayState( {
+		hasFetchedOnce,
+		hasRenderedGrid,
+		hasError: null !== fetchError,
+		isEmpty: 0 === pageItems.length,
+		isLoading,
+		hasActiveFilters,
+	} );
+
 	return (
 		<div
-			className="safe-publish-dataviews-wrapper"
+			className="safe-publish-dataviews-wrapper safe-publish-dataviews-wrapper--with-builtins"
 			style={
 				{
 					'--safe-publish-page-text': `"${ pageStatusText }"`,
@@ -256,13 +498,13 @@ export function ImportedPostsDataView(): JSX.Element {
 					{ fetchError }
 				</Notice>
 			) }
-			{ isLoading && ! hasFetchedOnce && (
+			{ showLoading && (
 				<div className="safe-publish-loading" role="status" aria-live="polite">
 					<Spinner />
 					<p>{ __( 'Loading imported posts…', 'safe-publish' ) }</p>
 				</div>
 			) }
-			{ hasFetchedOnce && ! fetchError && 0 === pageItems.length && ! isLoading && (
+			{ showEmptyState && (
 				<div className="safe-publish-no-data" role="status" aria-live="polite">
 					<p>
 						{ __(
@@ -272,16 +514,17 @@ export function ImportedPostsDataView(): JSX.Element {
 					</p>
 				</div>
 			) }
-			{ hasFetchedOnce && pageItems.length > 0 && (
+			{ showGrid && (
 				<DataViews
 					getItemId={ ( item: ImportedPost ) => item.id.toString() }
 					data={ pageItems }
 					fields={ fields }
 					view={ view }
-					onChangeView={ setView }
+					onChangeView={ handleViewChange }
 					paginationInfo={ paginationInfo }
 					defaultLayouts={ defaultLayouts }
 					actions={ actions }
+					searchLabel={ __( 'Search by title', 'safe-publish' ) }
 				/>
 			) }
 		</div>

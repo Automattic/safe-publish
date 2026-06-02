@@ -1506,6 +1506,116 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the listing endpoint applies the title search to the full
+	 * dataset and attaches filter facets when they are requested.
+	 */
+	public function test_ajax_list_imported_posts_filters_by_search_and_returns_facets(): void {
+		// ARRANGE: Two imported posts with distinct titles.
+		wp_set_current_user( $this->admin_user_id );
+
+		$match_id = $this->factory()->post->create(
+			array(
+				'post_title'  => 'Annual Budget',
+				'post_status' => 'publish',
+				'post_type'   => 'post',
+			)
+		);
+		$other_id = $this->factory()->post->create(
+			array(
+				'post_title'  => 'Team Offsite',
+				'post_status' => 'publish',
+				'post_type'   => 'post',
+			)
+		);
+
+		$repository = new History_Repository();
+		$session_id = $repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		if ( is_wp_error( $session_id ) ) {
+			$this->fail( 'Failed to create the test import session.' );
+		}
+		$this->insert_import_item( $session_id, $match_id );
+		$this->insert_import_item( $session_id, $other_id );
+
+		$_POST = array(
+			'nonce'       => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'page'        => '1',
+			'per_page'    => '20',
+			'search'      => 'budget',
+			'with_facets' => '1',
+		);
+
+		// ACT: Trigger the listing handler with a title search.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_list_imported_posts' );
+
+		// ASSERT: Only the matching post is returned, across the whole dataset.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertTrue( $response['success'], 'Listing should return success' );
+		$this->assertCount(
+			1,
+			$response['data']['items'],
+			'Only the title match should be listed'
+		);
+		$this->assertSame(
+			$match_id,
+			$response['data']['items'][0]['id'],
+			'The listed row should be the title match'
+		);
+
+		// ASSERT: Facets are attached and include the session that ran.
+		$this->assertArrayHasKey( 'facets', $response['data'] );
+		$this->assertArrayHasKey( 'post_types', $response['data']['facets'] );
+		$session_values = array_column(
+			$response['data']['facets']['sessions'],
+			'value'
+		);
+		$this->assertContains( (string) $session_id, $session_values );
+	}
+
+	/**
+	 * Verifies that the listing endpoint omits facets when they are not
+	 * requested, so paging doesn't recompute them.
+	 */
+	public function test_ajax_list_imported_posts_omits_facets_without_flag(): void {
+		// ARRANGE: A single imported post and item.
+		wp_set_current_user( $this->admin_user_id );
+
+		$post_id = $this->factory()->post->create(
+			array(
+				'post_status' => 'publish',
+				'post_type'   => 'post',
+			)
+		);
+
+		$repository = new History_Repository();
+		$session_id = $repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		if ( is_wp_error( $session_id ) ) {
+			$this->fail( 'Failed to create the test import session.' );
+		}
+		$this->insert_import_item( $session_id, $post_id );
+
+		$_POST = array(
+			'nonce'    => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'page'     => '1',
+			'per_page' => '20',
+		);
+
+		// ACT: Trigger the listing handler without the facets flag.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_list_imported_posts' );
+
+		// ASSERT: The response carries no facets payload.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertTrue( $response['success'], 'Listing should return success' );
+		$this->assertArrayNotHasKey( 'facets', $response['data'] );
+	}
+
+	/**
 	 * Inserts an import item row for the given session and post.
 	 *
 	 * @param int $session_id Owning session ID.

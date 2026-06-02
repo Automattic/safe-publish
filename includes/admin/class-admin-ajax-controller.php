@@ -207,11 +207,13 @@ final class Admin_Ajax_Controller {
 		$this->verify_ajax_capability();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing
-		$page     = max( 1, absint( $_POST['page'] ?? 1 ) );
-		$per_page = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
+		$page        = max( 1, absint( $_POST['page'] ?? 1 ) );
+		$per_page    = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
+		$with_facets = 1 === absint( $_POST['with_facets'] ?? 0 );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$post_ids = $this->repository->list_imported_post_ids( $page, $per_page );
+		$args     = $this->build_imported_listing_args();
+		$post_ids = $this->repository->list_imported_post_ids( $page, $per_page, $args );
 
 		$has_more = count( $post_ids ) > $per_page;
 		if ( $has_more ) {
@@ -220,9 +222,12 @@ final class Admin_Ajax_Controller {
 
 		if ( 0 === count( $post_ids ) ) {
 			wp_send_json_success(
-				array(
-					'items'    => array(),
-					'has_more' => false,
+				$this->with_imported_facets(
+					array(
+						'items'    => array(),
+						'has_more' => false,
+					),
+					$with_facets
 				)
 			);
 		}
@@ -268,11 +273,108 @@ final class Admin_Ajax_Controller {
 		}
 
 		wp_send_json_success(
-			array(
-				'items'    => $rows,
-				'has_more' => $has_more,
+			$this->with_imported_facets(
+				array(
+					'items'    => $rows,
+					'has_more' => $has_more,
+				),
+				$with_facets
 			)
 		);
+	}
+
+	/**
+	 * Validates and normalizes the Imported Posts listing's search/filter/sort
+	 * params from the request.
+	 *
+	 * @return array{search?: string, statuses: list<string>, post_types: list<string>, session_id: int, orderby: string, order: string} Listing args.
+	 */
+	private function build_imported_listing_args(): array {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- caller verified the nonce.
+		$search = trim(
+			sanitize_text_field( wp_unslash( $_POST['search'] ?? '' ) )
+		);
+
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitize_key_list() sanitizes each element.
+		$raw_statuses     = (array) wp_unslash( $_POST['statuses'] ?? array() );
+		$allowed_statuses = array( 'publish', 'draft', 'pending', 'private', 'future' );
+		$statuses         = array_values(
+			array_intersect(
+				$this->sanitize_key_list( $raw_statuses ),
+				$allowed_statuses
+			)
+		);
+
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitize_key_list() sanitizes each element.
+		$raw_post_types = (array) wp_unslash( $_POST['post_types'] ?? array() );
+		$post_types     = array_values(
+			array_filter(
+				$this->sanitize_key_list( $raw_post_types ),
+				'post_type_exists'
+			)
+		);
+
+		$session_id = absint( $_POST['session_id'] ?? 0 );
+
+		$orderby = 'title' === sanitize_key( wp_unslash( $_POST['orderby'] ?? '' ) )
+			? 'title'
+			: 'import_date';
+
+		$order = 'asc' === sanitize_key( wp_unslash( $_POST['order'] ?? '' ) )
+			? 'asc'
+			: 'desc';
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		$args = array(
+			'statuses'   => $statuses,
+			'post_types' => $post_types,
+			'session_id' => $session_id,
+			'orderby'    => $orderby,
+			'order'      => $order,
+		);
+
+		if ( '' !== $search ) {
+			$args['search'] = $search;
+		}
+
+		return $args;
+	}
+
+	/**
+	 * Reduces request input to a list of sanitized, non-empty key strings,
+	 * ignoring any non-scalar entries.
+	 *
+	 * @param mixed $raw Raw request value (array or scalar).
+	 * @return list<string> Sanitized keys.
+	 */
+	private function sanitize_key_list( $raw ): array {
+		return array_values(
+			array_filter(
+				array_map(
+					static fn( $value ): string =>
+						is_scalar( $value ) ? sanitize_key( (string) $value ) : '',
+					(array) $raw
+				)
+			)
+		);
+	}
+
+	/**
+	 * Appends the listing filter facets to a response when requested.
+	 *
+	 * Facets are computed over the full imported set, so the client fetches
+	 * them once (on first load) rather than on every page/filter change.
+	 *
+	 * @param array $response    Response payload to augment.
+	 * @param bool  $with_facets Whether to attach the facets.
+	 * @return array Response, with a 'facets' key when $with_facets is true.
+	 */
+	private function with_imported_facets( array $response, bool $with_facets ): array {
+		if ( $with_facets ) {
+			$response['facets'] = $this->repository->get_imported_filter_facets();
+		}
+
+		return $response;
 	}
 
 	/**
