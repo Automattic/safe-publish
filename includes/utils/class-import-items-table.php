@@ -66,6 +66,11 @@ final class Import_Items_Table {
 		$table   = self::table_name();
 		$charset = $wpdb->get_charset_collate();
 
+		// status_import_date powers both the Failures listing (status='error'
+		// ordered by import_date_gmt DESC) and the count_failed_items probe
+		// used by the Imports → Posts empty-state nudge. The existing
+		// session_id_status composite leads with session_id, so neither query
+		// can index-seek on status alone without this one.
 		$sql = "CREATE TABLE {$table} (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			session_id BIGINT UNSIGNED NOT NULL,
@@ -81,7 +86,8 @@ final class Import_Items_Table {
 			import_date_gmt DATETIME NOT NULL,
 			PRIMARY KEY  (id),
 			KEY session_id_status (session_id, status),
-			KEY post_id_import_date (post_id, import_date_gmt)
+			KEY post_id_import_date (post_id, import_date_gmt),
+			KEY status_import_date (status, import_date_gmt)
 		) {$charset};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
