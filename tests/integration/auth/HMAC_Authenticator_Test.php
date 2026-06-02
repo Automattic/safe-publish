@@ -67,8 +67,10 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 	 * Verifies that a request with a valid HMAC signature passes authentication.
 	 */
 	public function test_valid_hmac_request_succeeds(): void {
-		// ARRANGE: Valid signed POST request.
-		$request = $this->build_signed_request( 'POST', '/wp/v2/posts', 'body content' );
+		// ARRANGE: Valid signed GET request — POST on /wp/v2/* is short-circuited
+		// before signature verification, so the read methods exercise the
+		// full HMAC validation path.
+		$request = $this->build_signed_request( 'GET', '/wp/v2/posts', '' );
 
 		// ACT: Authenticate the request.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
@@ -88,7 +90,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$content_hash  = hash( 'sha256', $body );
 		$this_site_url = home_url();
 
-		$request = new WP_REST_Request( 'POST', '/wp/v2/posts' );
+		$request = new WP_REST_Request( 'GET', '/wp/v2/posts' );
 		$request->set_body( $body );
 		$request->set_header( 'X-Safe-Publish-Timestamp', (string) $timestamp );
 		$request->set_header( 'X-Safe-Publish-Content-Hash', $content_hash );
@@ -152,12 +154,12 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$timestamp = time();
 		$body      = 'some body';
 
-		$request = new WP_REST_Request( 'POST', '/wp/v2/posts' );
+		$request = new WP_REST_Request( 'GET', '/wp/v2/posts' );
 		$request->set_body( $body );
 		$request->set_header( 'X-Safe-Publish-Timestamp', (string) $timestamp );
 
 		// Build a valid signature (without content hash in the string).
-		$string_to_sign = 'POST|/wp/v2/posts|' . $timestamp . '|' . hash( 'sha256', $body );
+		$string_to_sign = 'GET|/wp/v2/posts|' . $timestamp . '|' . hash( 'sha256', $body );
 		$signature      = hash_hmac( 'sha256', $string_to_sign, self::FALLBACK_SECRET );
 		$request->set_header( 'X-Safe-Publish-Signature', $signature );
 		// Intentionally omit X-Safe-Publish-Content-Hash.
@@ -181,10 +183,10 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$timestamp      = time();
 		$body           = 'actual body content';
 		$wrong_hash     = hash( 'sha256', 'different content' );
-		$string_to_sign = 'POST|/wp/v2/posts|' . $timestamp . '|' . $wrong_hash;
+		$string_to_sign = 'GET|/wp/v2/posts|' . $timestamp . '|' . $wrong_hash;
 		$signature      = hash_hmac( 'sha256', $string_to_sign, self::FALLBACK_SECRET );
 
-		$request = new WP_REST_Request( 'POST', '/wp/v2/posts' );
+		$request = new WP_REST_Request( 'GET', '/wp/v2/posts' );
 		$request->set_body( $body );
 		$request->set_header( 'X-Safe-Publish-Timestamp', (string) $timestamp );
 		$request->set_header( 'X-Safe-Publish-Content-Hash', $wrong_hash );
@@ -211,6 +213,43 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: Authenticated — must prove knowledge of the shared secret.
+		$this->assertNull( $result );
+		$this->assertTrue( $this->authenticator->is_authenticated() );
+	}
+
+	/**
+	 * Verifies that a signed non-GET request on `/wp/v2/*` short-circuits
+	 * before HMAC validation and falls through to WordPress' standard auth.
+	 * The destination only ever issues reads against source `/wp/v2/*`, so
+	 * write methods on that namespace should never enter the elevated
+	 * context even when properly signed.
+	 */
+	public function test_post_on_wp_v2_routes_is_not_authenticated(): void {
+		// ARRANGE: A signed POST on /wp/v2/* — the new method check returns
+		// early before signature work.
+		$request = $this->build_signed_request( 'POST', '/wp/v2/posts', 'body content' );
+
+		// ACT: Authenticate the request.
+		$result = $this->authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT: Pass-through; no elevated context installed.
+		$this->assertNull( $result );
+		$this->assertFalse( $this->authenticator->is_authenticated() );
+	}
+
+	/**
+	 * Verifies that a signed POST on `/safe-publish/v1/*` still authenticates
+	 * — the method check is scoped to `/wp/v2/*` so destination-side admin
+	 * flows that POST to source routes continue to work.
+	 */
+	public function test_post_on_safe_publish_routes_still_authenticated(): void {
+		// ARRANGE: A signed POST on /safe-publish/v1/*.
+		$request = $this->build_signed_request( 'POST', '/safe-publish/v1/diff-preview', 'payload' );
+
+		// ACT: Authenticate the request.
+		$result = $this->authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT: Authenticated; null returned and authenticator state set.
 		$this->assertNull( $result );
 		$this->assertTrue( $this->authenticator->is_authenticated() );
 	}

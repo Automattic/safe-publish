@@ -431,7 +431,12 @@ class Source_Posts_API {
 		}
 
 		// Build API URL for single post.
-		$endpoint     = Post_Type_Map::to_rest_endpoint( $post_type );
+		$endpoint     = Source_Post_Type_Resolver::resolve_rest_base(
+			$post_type,
+			$source_site_url,
+			array( $this->http_client, 'make_request' ),
+			$auth_credentials
+		);
 		$api_endpoint = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/' . $endpoint . '/' . $source_post_id;
 
 		$query_args = array(

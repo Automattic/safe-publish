@@ -35,6 +35,21 @@ class Post_Type_Map {
 	);
 
 	/**
+	 * Determines whether a post type is a known WordPress built-in.
+	 *
+	 * Accepts either the slug or endpoint form. Built-ins have a core-fixed
+	 * REST base, so callers can resolve them without consulting the source
+	 * site.
+	 *
+	 * @param string $post_type Post type slug or REST endpoint.
+	 * @return bool True when the type is a known built-in.
+	 */
+	public static function is_builtin( string $post_type ): bool {
+		return isset( self::ENDPOINT_TO_SLUG[ $post_type ] )
+			|| in_array( $post_type, self::ENDPOINT_TO_SLUG, true );
+	}
+
+	/**
 	 * Converts a post type to its REST API endpoint form.
 	 *
 	 * Accepts either form — if already an endpoint, returns as-is.

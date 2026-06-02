@@ -17,10 +17,21 @@ use Safe_Publish\Utils\Options;
  * Auth Credential Provider Test.
  *
  * Tests that Auth_Credential_Provider assembles credentials correctly.
- * Shared Secret is read from the SAFE_PUBLISH_SHARED_SECRET constant;
- * Basic Auth credentials are read from WordPress options.
+ * Shared Secret is read from the SAFE_PUBLISH_SHARED_SECRET constant or the
+ * matching environment variable; Basic Auth credentials are read from
+ * WordPress options.
  */
 class AuthCredentialProviderTest extends TestCase {
+
+	/**
+	 * Clears the shared-secret environment variable before each test so a
+	 * value exported in the surrounding shell cannot leak into assertions.
+	 */
+	#[\Override]
+	protected function setUp(): void {
+		parent::setUp();
+		set_test_env( 'SAFE_PUBLISH_SHARED_SECRET', null );
+	}
 
 	/**
 	 * Resets test option overrides after each test.
@@ -130,5 +141,45 @@ class AuthCredentialProviderTest extends TestCase {
 		$this->assertArrayHasKey( 'shared_secret', $credentials );
 		$this->assertArrayHasKey( 'username', $credentials );
 		$this->assertArrayHasKey( 'password', $credentials );
+	}
+
+	/**
+	 * Verifies that the shared secret is read from the environment variable
+	 * when the constant is not defined.
+	 *
+	 * @runInSeparateProcess
+	 * @preserveGlobalState disabled
+	 */
+	public function test_reads_shared_secret_from_env_var(): void {
+		// ARRANGE: provide the secret only through the environment variable.
+		set_test_env( 'SAFE_PUBLISH_SHARED_SECRET', 'env-shared-secret-value-1234' );
+
+		// ACT: assemble the credentials.
+		$credentials = Auth_Credential_Provider::get_credentials();
+
+		// ASSERT: the environment value is used as the shared secret.
+		$this->assertArrayHasKey( 'shared_secret', $credentials );
+		$this->assertSame( 'env-shared-secret-value-1234', $credentials['shared_secret'] );
+	}
+
+	/**
+	 * Verifies that the constant takes precedence over the environment variable
+	 * when both are set.
+	 *
+	 * @runInSeparateProcess
+	 * @preserveGlobalState disabled
+	 */
+	public function test_constant_takes_precedence_over_env_var(): void {
+		// ARRANGE: set the constant and environment variable to different values.
+		set_test_env( 'SAFE_PUBLISH_SHARED_SECRET', 'env-shared-secret-value-1234' );
+		if ( ! defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ) {
+			define( 'SAFE_PUBLISH_SHARED_SECRET', 'constant-shared-secret-value' );
+		}
+
+		// ACT: assemble the credentials.
+		$credentials = Auth_Credential_Provider::get_credentials();
+
+		// ASSERT: the constant wins over the environment variable.
+		$this->assertSame( 'constant-shared-secret-value', $credentials['shared_secret'] );
 	}
 }
