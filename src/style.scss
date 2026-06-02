@@ -186,6 +186,16 @@
 		color: var(--safe-publish-status-warning);
 	}
 
+	&--missing,
+	&--invalid {
+		color: var(--safe-publish-status-error);
+	}
+
+	&--unreachable,
+	&--loading {
+		color: var(--safe-publish-text-muted);
+	}
+
 	&--publish {
 		color: var(--safe-publish-status-success);
 	}

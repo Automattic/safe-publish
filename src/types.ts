@@ -135,6 +135,32 @@ export interface ImportedPostsResponse {
 }
 
 /**
+ * Per-row verdicts returned by safe_publish_sync_status_batch.
+ *
+ * `invalid` flags a destination-side timestamp that didn't parse — a local
+ * data bug, distinct from the network-level `unreachable`. `loading` is a
+ * client-only placeholder shown while the batch request is in flight; it
+ * is never returned by the server.
+ */
+export type ImportSyncStatus =
+	| 'up-to-date'
+	| 'outdated'
+	| 'missing'
+	| 'unreachable'
+	| 'invalid'
+	| 'loading';
+
+/**
+ * Envelope returned by safe_publish_sync_status_batch.
+ *
+ * Keys are source post IDs; absent IDs (e.g. the destination has no matching
+ * local post for a requested ID) are simply omitted.
+ */
+export interface SyncStatusBatchResponse {
+	statuses: Record< number, Exclude< ImportSyncStatus, 'loading' > >;
+}
+
+/**
  * Represents a failed import item shown on the Imports → Failures tab.
  *
  * Failed items have no local post (the import errored before insert) — so the

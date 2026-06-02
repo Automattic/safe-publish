@@ -2,10 +2,11 @@
  * DataViews component for the Imports → Posts tab.
  *
  * Lists locally-imported posts via the destination-side
- * `safe_publish_list_imported_posts` AJAX action — a purely local query, no
- * source roundtrip. Supports server-side search, filtering (Local Status,
- * Type), and sorting across the full dataset, plus row actions (Edit, Update,
- * Diff, Delete, and Rollback — single or bulk).
+ * `safe_publish_list_imported_posts` AJAX action (a purely local query) and
+ * then issues a second `safe_publish_sync_status_batch` call per page to fill
+ * the Sync Status column from the source's modified_gmt. Supports server-side
+ * search, filtering (Local Status, Type), and sorting across the full dataset,
+ * plus row actions (Edit, Update, Diff, Delete, and Rollback — single or bulk).
  *
  * When invoked via the post-import notice's `?batch=N` deep-link, the
  * accompanying session id is applied as a hidden filter and surfaced as a
@@ -13,6 +14,7 @@
  *
  * @file This file defines the ImportedPostsDataView component.
  */
+import { getImportedSyncStatusLabel } from './post-fields';
 import { createImportedActions } from '../actions';
 import {
 	DEFAULT_ITEMS_PER_PAGE,
@@ -33,6 +35,8 @@ import type {
 	ImportedPost,
 	ImportedPostsFacets,
 	ImportedPostsResponse,
+	ImportSyncStatus,
+	SyncStatusBatchResponse,
 } from '../types';
 
 /**
@@ -110,7 +114,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		perPage: DEFAULT_ITEMS_PER_PAGE,
 		page: 1,
 		sort: { field: 'import_date_gmt', direction: 'desc' },
-		fields: [ 'permalink', 'local_status', 'rolled_back', 'import_date_gmt' ],
+		fields: [ 'permalink', 'sync_status', 'local_status', 'rolled_back', 'import_date_gmt' ],
 		titleField: 'title',
 	} );
 
@@ -134,6 +138,9 @@ export function ImportedPostsDataView(): JSX.Element {
 	} );
 	const [ debouncedSearch, setDebouncedSearch ] = useState( '' );
 	const [ hasRenderedGrid, setHasRenderedGrid ] = useState( false );
+	const [ syncStatuses, setSyncStatuses ] = useState<
+		Record< number, ImportSyncStatus >
+	>( {} );
 
 	// Batch is set from `?batch=N` on mount and clears via the contextual pill
 	// below; it isn't surfaced as a user filter (sessions aren't a UI noun)
@@ -285,6 +292,103 @@ export function ImportedPostsDataView(): JSX.Element {
 		refreshNonce,
 	] );
 
+	// Sorted-join of the page's unique source_post_ids — stable across
+	// content-equal pageItems replacements so the sync-status effect below
+	// doesn't re-request on every render.
+	const sourceIdsKey = useMemo(
+		() =>
+			Array.from(
+				new Set(
+					pageItems
+						.map( ( item ) => item.source_post_id )
+						.filter( ( id ): id is number => id > 0 )
+				)
+			)
+				.sort( ( left, right ) => left - right )
+				.join( ',' ),
+		[ pageItems ]
+	);
+
+	// Refill the Sync Status column after every listing refresh by asking the
+	// destination's sync-status endpoint to compare each row's source
+	// modified_gmt against its import_date_gmt.
+	useEffect( () => {
+		if ( '' === sourceIdsKey ) {
+			return;
+		}
+
+		const sourceIds = sourceIdsKey.split( ',' ).map( Number );
+		const controller = new AbortController();
+
+		setSyncStatuses( ( current ) => {
+			const next = { ...current };
+			// id is a server-supplied numeric key from pageItems.
+			// eslint-disable-next-line security/detect-object-injection
+			sourceIds.forEach( ( id ) => { next[ id ] = 'loading'; } );
+			return next;
+		} );
+
+		const markAll = ( verdict: ImportSyncStatus ): void => {
+			setSyncStatuses( ( current ) => {
+				const next = { ...current };
+				// id is a server-supplied numeric key from pageItems.
+				// eslint-disable-next-line security/detect-object-injection
+				sourceIds.forEach( ( id ) => { next[ id ] = verdict; } );
+				return next;
+			} );
+		};
+
+		const formData = new FormData();
+		formData.append( 'action', 'safe_publish_sync_status_batch' );
+		formData.append( 'nonce', window.safePublishAdminData.nonce );
+		sourceIds.forEach( ( id ) =>
+			formData.append( 'source_ids[]', String( id ) )
+		);
+
+		fetch( window.safePublishAdminData.ajaxurl, {
+			method: 'POST',
+			body: formData,
+			signal: controller.signal,
+		} )
+			.then(
+				( response ) =>
+					response.json() as Promise<
+						ApiResponse< SyncStatusBatchResponse >
+					>
+			)
+			.then( ( result ) => {
+				if ( controller.signal.aborted ) {
+					return;
+				}
+				if ( ! result.success ) {
+					markAll( 'unreachable' );
+					return;
+				}
+				setSyncStatuses( ( current ) => {
+					const next = { ...current };
+					sourceIds.forEach( ( id ) => {
+						// id is a server-supplied numeric key from pageItems.
+						// eslint-disable-next-line security/detect-object-injection
+						next[ id ] = result.data.statuses[ id ] ?? 'unreachable';
+					} );
+					return next;
+				} );
+			} )
+			.catch( ( error: unknown ) => {
+				if ( controller.signal.aborted ) {
+					return;
+				}
+				if ( error instanceof DOMException && 'AbortError' === error.name ) {
+					return;
+				}
+				markAll( 'unreachable' );
+			} );
+
+		return () => {
+			controller.abort();
+		};
+	}, [ sourceIdsKey ] );
+
 	const fields: DataViewsField< ImportedPost >[] = useMemo(
 		() => [
 			{
@@ -308,6 +412,29 @@ export function ImportedPostsDataView(): JSX.Element {
 						);
 					}
 					return <span>{ item.title }</span>;
+				},
+			},
+			{
+				id: 'sync_status',
+				label: __( 'Sync Status', 'safe-publish' ),
+				enableSorting: false,
+				getValue: ( { item }: { item: ImportedPost } ): string =>
+					getImportedSyncStatusLabel(
+						syncStatuses[ item.source_post_id ] ?? null
+					),
+				render: ( { item }: { item: ImportedPost } ): JSX.Element => {
+					const status = syncStatuses[ item.source_post_id ] ?? 'loading';
+					return (
+						<span
+							className={ `safe-publish-status-badge safe-publish-status-badge--${ status }` }
+						>
+							<span
+								className="safe-publish-status-badge__dot"
+								aria-hidden="true"
+							/>
+							{ getImportedSyncStatusLabel( status ) }
+						</span>
+					);
 				},
 			},
 			{
@@ -408,7 +535,7 @@ export function ImportedPostsDataView(): JSX.Element {
 				},
 			},
 		],
-		[ facets ]
+		[ facets, syncStatuses ]
 	);
 
 	const refresh = useCallback(

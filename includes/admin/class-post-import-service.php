@@ -737,7 +737,7 @@ class Post_Import_Service {
 	 * @param int[] $source_ids Source post IDs to look up.
 	 * @return array<int, WP_Post> Map keyed by source post ID.
 	 */
-	private function fetch_imported_posts_by_source_ids(
+	public function fetch_imported_posts_by_source_ids(
 		array $source_ids
 	): array {
 		if ( 0 === count( $source_ids ) ) {
