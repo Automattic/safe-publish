@@ -110,7 +110,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		perPage: DEFAULT_ITEMS_PER_PAGE,
 		page: 1,
 		sort: { field: 'import_date_gmt', direction: 'desc' },
-		fields: [ 'permalink', 'local_status', 'import_date_gmt' ],
+		fields: [ 'permalink', 'local_status', 'rolled_back', 'import_date_gmt' ],
 		titleField: 'title',
 	} );
 
@@ -323,24 +323,34 @@ export function ImportedPostsDataView(): JSX.Element {
 						PUBLISH_STATUS_LABELS[ item.local_status ] ?? item.local_status;
 					const modifierClass = `safe-publish-status-badge--${ item.local_status }`;
 					return (
-						<>
-							<span className={ `safe-publish-status-badge ${ modifierClass }` }>
-								<span
-									className="safe-publish-status-badge__dot"
-									aria-hidden="true"
-								/>
-								{ label }
-							</span>
-							{ item.rolled_back && (
-								<span className="safe-publish-status-badge safe-publish-status-badge--rolled-back">
-									<span
-										className="safe-publish-status-badge__dot"
-										aria-hidden="true"
-									/>
-									{ __( 'Rolled back', 'safe-publish' ) }
-								</span>
-							) }
-						</>
+						<span className={ `safe-publish-status-badge ${ modifierClass }` }>
+							<span
+								className="safe-publish-status-badge__dot"
+								aria-hidden="true"
+							/>
+							{ label }
+						</span>
+					);
+				},
+			},
+			{
+				id: 'rolled_back',
+				label: __( 'Rollback', 'safe-publish' ),
+				enableSorting: false,
+				getValue: ( { item }: { item: ImportedPost } ): string =>
+					item.rolled_back ? __( 'Rolled back', 'safe-publish' ) : '',
+				render: ( { item }: { item: ImportedPost } ): JSX.Element => {
+					if ( ! item.rolled_back ) {
+						return <span>—</span>;
+					}
+					return (
+						<span className="safe-publish-status-badge safe-publish-status-badge--rolled-back">
+							<span
+								className="safe-publish-status-badge__dot"
+								aria-hidden="true"
+							/>
+							{ __( 'Rolled back', 'safe-publish' ) }
+						</span>
 					);
 				},
 			},
