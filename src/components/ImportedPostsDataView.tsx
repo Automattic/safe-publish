@@ -376,7 +376,7 @@ export function ImportedPostsDataView(): JSX.Element {
 
 		setSyncStatuses( ( current ) => {
 			const next = { ...current };
-			// id is a server-supplied numeric key from pageItems.
+			// id is a server-supplied numeric key.
 			// eslint-disable-next-line security/detect-object-injection
 			sourceIds.forEach( ( id ) => { next[ id ] = 'loading'; } );
 			return next;
@@ -385,7 +385,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		const markAll = ( verdict: ImportSyncStatus ): void => {
 			setSyncStatuses( ( current ) => {
 				const next = { ...current };
-				// id is a server-supplied numeric key from pageItems.
+				// id is a server-supplied numeric key.
 				// eslint-disable-next-line security/detect-object-injection
 				sourceIds.forEach( ( id ) => { next[ id ] = verdict; } );
 				return next;
@@ -421,7 +421,7 @@ export function ImportedPostsDataView(): JSX.Element {
 				setSyncStatuses( ( current ) => {
 					const next = { ...current };
 					sourceIds.forEach( ( id ) => {
-						// id is a server-supplied numeric key from pageItems.
+						// id is a server-supplied numeric key.
 						// eslint-disable-next-line security/detect-object-injection
 						next[ id ] = result.data.statuses[ id ] ?? 'unreachable';
 					} );
