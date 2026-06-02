@@ -1685,11 +1685,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that the listing endpoint resolves focus_source_id to the
-	 * matching imported row and returns it as focused_item, so deep links can
-	 * pin a specific post regardless of pagination.
+	 * Verifies that the listing endpoint narrows the response to the matching
+	 * imported row when focus_source_id is sent, so deep links from Source
+	 * Posts surface only the post the user wants to act on.
 	 */
-	public function test_ajax_list_imported_posts_resolves_focus_source_to_focused_item(): void {
+	public function test_ajax_list_imported_posts_filters_to_focused_source(): void {
 		// ARRANGE: Two imported posts; the second carries the source ID the
 		// deep link will request.
 		wp_set_current_user( $this->admin_user_id );
@@ -1738,39 +1738,37 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Trigger the listing handler with a focus source ID.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_list_imported_posts' );
 
-		// ASSERT: The response carries focused_item populated with the same
-		// row shape used by the main listing, pointing at the focused post.
+		// ASSERT: items is a single-row array containing the focused post,
+		// and the other imported row is excluded — focus narrows the listing.
 		$response = json_decode( $this->_last_response, true );
 		$this->assertIsArray( $response, 'Response should be a JSON object' );
 		$this->assertTrue( $response['success'], 'Listing should return success' );
-		$this->assertArrayHasKey( 'focused_item', $response['data'] );
+		$this->assertCount( 1, $response['data']['items'] );
+		$this->assertFalse( $response['data']['has_more'] );
 
-		$focused = $response['data']['focused_item'];
-		$this->assertIsArray(
-			$focused,
-			'focused_item should be the resolved row, not null'
-		);
-		$this->assertSame( $focus_post_id, $focused['id'] );
-		$this->assertSame( 7777, $focused['source_post_id'] );
-		$this->assertSame( 'Focused Imported', $focused['title'] );
+		$row = $response['data']['items'][0];
+		$this->assertSame( $focus_post_id, $row['id'] );
+		$this->assertSame( 7777, $row['source_post_id'] );
+		$this->assertSame( 'Focused Imported', $row['title'] );
 		$this->assertSame(
 			'https://source.example.com/focused-post',
-			$focused['source_link']
+			$row['source_link']
 		);
 		$this->assertSame(
 			$focus_item_id,
-			$focused['item_id'],
-			'focused_item should carry the most-recent items-table row id'
+			$row['item_id'],
+			'Row should carry the most-recent items-table row id'
 		);
-		$this->assertSame( $session_id, $focused['session_id'] );
+		$this->assertSame( $session_id, $row['session_id'] );
 	}
 
 	/**
-	 * Verifies that the listing endpoint returns focused_item as null when the
-	 * requested source ID has no imported post, so the client can surface a
-	 * broken-deep-link message rather than silently dropping the affordance.
+	 * Verifies that the listing endpoint returns an empty items array when
+	 * the requested focus_source_id has no imported post, so the client can
+	 * surface a broken-deep-link message instead of falling back to the
+	 * unfiltered listing.
 	 */
-	public function test_ajax_list_imported_posts_returns_null_focused_item_when_source_unknown(): void {
+	public function test_ajax_list_imported_posts_returns_empty_when_focus_source_unknown(): void {
 		// ARRANGE: One unrelated imported post and a focus_source_id that
 		// matches nothing.
 		wp_set_current_user( $this->admin_user_id );
@@ -1803,65 +1801,20 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Trigger the listing handler with an unmatched focus source ID.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_list_imported_posts' );
 
-		// ASSERT: focused_item is present but null; the listing rows are
-		// returned as usual.
+		// ASSERT: items is empty — focus mode never falls back to the wider
+		// listing, so the unrelated imported post is not returned.
 		$response = json_decode( $this->_last_response, true );
 		$this->assertTrue( $response['success'], 'Listing should return success' );
-		$this->assertArrayHasKey( 'focused_item', $response['data'] );
-		$this->assertNull(
-			$response['data']['focused_item'],
-			'focused_item should be null when the source has no imported post'
-		);
-		$this->assertCount( 1, $response['data']['items'] );
+		$this->assertSame( array(), $response['data']['items'] );
+		$this->assertFalse( $response['data']['has_more'] );
 	}
 
 	/**
-	 * Verifies that the listing endpoint omits the focused_item key entirely
-	 * when no focus_source_id is sent, so the client can distinguish "not
-	 * requested" from "requested but not found".
+	 * Verifies that focus mode overrides the batch filter, so a deep link to
+	 * a specific post surfaces it even when the active session_id filter
+	 * would otherwise hide every row.
 	 */
-	public function test_ajax_list_imported_posts_omits_focused_item_without_param(): void {
-		// ARRANGE: A single imported post and no focus param on the request.
-		wp_set_current_user( $this->admin_user_id );
-
-		$post_id = $this->factory()->post->create(
-			array(
-				'post_status' => 'publish',
-				'post_type'   => 'post',
-			)
-		);
-
-		$repository = new History_Repository();
-		$session_id = $repository->create_session(
-			'https://source.example.com',
-			'bulk'
-		);
-		if ( is_wp_error( $session_id ) ) {
-			$this->fail( 'Failed to create the test import session.' );
-		}
-		$this->insert_import_item( $session_id, $post_id );
-
-		$_POST = array(
-			'nonce'    => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-			'page'     => '1',
-			'per_page' => '20',
-		);
-
-		// ACT: Trigger the listing handler without focus_source_id.
-		$this->dispatch_ajax_expecting_die( 'safe_publish_list_imported_posts' );
-
-		// ASSERT: The response carries no focused_item key.
-		$response = json_decode( $this->_last_response, true );
-		$this->assertTrue( $response['success'], 'Listing should return success' );
-		$this->assertArrayNotHasKey( 'focused_item', $response['data'] );
-	}
-
-	/**
-	 * Verifies that the focused_item lookup ignores the batch filter, so a
-	 * deep link to a specific post still surfaces it even when the active
-	 * session_id filter would otherwise hide every row.
-	 */
-	public function test_ajax_list_imported_posts_focus_survives_batch_filter(): void {
+	public function test_ajax_list_imported_posts_focus_overrides_batch_filter(): void {
 		// ARRANGE: A post imported in session A; the request filters by an
 		// unrelated session B but focuses the session-A post by source ID.
 		wp_set_current_user( $this->admin_user_id );
@@ -1900,23 +1853,12 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		// and a focus source ID that points at a row outside the batch.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_list_imported_posts' );
 
-		// ASSERT: The main listing is empty (the batch filter excludes the
-		// only imported row) but focused_item still resolves to it.
+		// ASSERT: items resolves to the focused row even though the batch
+		// filter on its own would exclude it.
 		$response = json_decode( $this->_last_response, true );
 		$this->assertTrue( $response['success'], 'Listing should return success' );
-		$this->assertSame(
-			array(),
-			$response['data']['items'],
-			'Batch filter should exclude the imported row from the listing'
-		);
-		$this->assertIsArray(
-			$response['data']['focused_item'],
-			'focused_item should resolve regardless of the batch filter'
-		);
-		$this->assertSame(
-			$post_id,
-			$response['data']['focused_item']['id']
-		);
+		$this->assertCount( 1, $response['data']['items'] );
+		$this->assertSame( $post_id, $response['data']['items'][0]['id'] );
 	}
 
 	/**

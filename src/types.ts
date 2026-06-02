@@ -126,16 +126,12 @@ export interface ImportedPostsFacets {
  * Envelope returned by the destination-side imported-posts listing endpoint.
  * `facets` and `failed_count` are present only on the first load (requested
  * via with_facets); they cover the listing's full set, not the current page.
- * `focused_item` is present only when the request sends a focus_source_id —
- * the resolved row when one was found, or null when the source ID has no
- * imported post (a stale or broken deep link).
  */
 export interface ImportedPostsResponse {
 	items: ImportedPost[];
 	has_more: boolean;
 	facets?: ImportedPostsFacets;
 	failed_count?: number;
-	focused_item?: ImportedPost | null;
 }
 
 /**
