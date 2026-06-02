@@ -30,9 +30,9 @@ final class Admin_Assets {
 	 * Enqueues a built entry script, the shared stylesheets, and the page's
 	 * inline admin-data global.
 	 *
-	 * Returns early when the build output is missing — fresh checkouts that
-	 * haven't run `npm run build` would otherwise enqueue a 404. Surfaces a
-	 * one-time admin notice in `WP_DEBUG` so developers know what's missing.
+	 * Returns early when the build output is missing/malformed or when
+	 * `$inline_data` fails to JSON-encode — surfaces an admin notice in
+	 * `WP_DEBUG` so developers can diagnose.
 	 *
 	 * @param string               $entry         Bundle entry name (`index`/`imports`/`exports`),
 	 *                                            locating `build/{entry}.js` and
@@ -63,7 +63,16 @@ final class Admin_Assets {
 
 		// Path is built from plugin_dir_path() and a hardcoded filename.
 		// phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
-		$asset_file     = include $asset_file_path;
+		$asset_file = include $asset_file_path;
+
+		if (
+			! is_array( $asset_file )
+			|| ! isset( $asset_file['version'], $asset_file['dependencies'] )
+		) {
+			self::queue_missing_build_notice();
+			return;
+		}
+
 		$script_version = $asset_file['version'];
 
 		wp_enqueue_script(
@@ -113,7 +122,13 @@ final class Admin_Assets {
 		$json_data = wp_json_encode( $inline_data );
 
 		if ( false === $json_data || '' === $json_data ) {
-			$json_data = '{}';
+			self::queue_admin_build_error_notice(
+				esc_html__(
+					'Failed to encode admin data as JSON.',
+					'safe-publish'
+				)
+			);
+			return;
 		}
 
 		wp_add_inline_script(
@@ -124,17 +139,35 @@ final class Admin_Assets {
 	}
 
 	/**
-	 * Surfaces a "Build assets are missing" notice when WP_DEBUG is on.
-	 *
-	 * Skips REST/AJAX so the notice only renders on real admin pageviews.
+	 * Convenience wrapper around {@see self::queue_admin_build_error_notice()}
+	 * for the "Build assets are missing" case.
 	 */
 	private static function queue_missing_build_notice(): void {
+		self::queue_admin_build_error_notice(
+			sprintf(
+				/* translators: %s: the "npm run build" command. */
+				esc_html__(
+					'Build assets are missing. Run %s to generate them.',
+					'safe-publish'
+				),
+				'<code>npm run build</code>'
+			)
+		);
+	}
+
+	/**
+	 * Surfaces a localized admin error notice when WP_DEBUG is on.
+	 *
+	 * Skips REST/AJAX so the notice only renders on real admin pageviews.
+	 *
+	 * @param string $message Translated message body. May contain `<code>`.
+	 */
+	private static function queue_admin_build_error_notice( string $message ): void {
 		add_action(
 			'admin_notices',
-			static function (): void {
+			static function () use ( $message ): void {
 				if (
-					! is_admin()
-					|| wp_doing_ajax()
+					wp_doing_ajax()
 					|| ( defined( 'REST_REQUEST' ) && constant( 'REST_REQUEST' ) )
 				) {
 					return;
@@ -146,12 +179,7 @@ final class Admin_Assets {
 
 				echo '<div class="notice notice-error"><p>';
 				echo '<strong>' . esc_html__( 'Safe Publish:', 'safe-publish' ) . '</strong> ';
-				echo esc_html__( 'Build assets are missing. ', 'safe-publish' );
-				printf(
-					/* translators: %s: the "npm run build" command. */
-					esc_html__( 'Run %s to generate them.', 'safe-publish' ),
-					'<code>npm run build</code>'
-				);
+				echo wp_kses( $message, array( 'code' => array() ) );
 				echo '</p></div>';
 			}
 		);
