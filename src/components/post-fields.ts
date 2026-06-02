@@ -11,7 +11,7 @@
 
 import { PUBLISH_STATUS_LABELS, SYNC_STATUS_LABELS } from '../utils';
 
-import type { Post } from '../types';
+import type { ImportSyncStatus, Post } from '../types';
 
 /**
  * Returns the display label for the post type column.
@@ -40,6 +40,36 @@ export function getSyncStatusLabel( item: Post ): string {
 		return SYNC_STATUS_LABELS.upToDate;
 	}
 	return SYNC_STATUS_LABELS.available;
+}
+
+/**
+ * Returns the display label for an imported post's sync status verdict.
+ *
+ * Companion to getSyncStatusLabel: that helper derives a verdict from
+ * is_imported / has_update on the source-side Post, this one takes a
+ * verdict already returned by the backend.
+ *
+ * @param {ImportSyncStatus|null} status Verdict, or null while loading.
+ *
+ * @return {string} Localized sync status label.
+ */
+export function getImportedSyncStatusLabel(
+	status: ImportSyncStatus | null
+): string {
+	switch ( status ) {
+		case 'up-to-date':
+			return SYNC_STATUS_LABELS.upToDate;
+		case 'outdated':
+			return SYNC_STATUS_LABELS.outdated;
+		case 'missing':
+			return SYNC_STATUS_LABELS.missing;
+		case 'unreachable':
+			return SYNC_STATUS_LABELS.unreachable;
+		case 'invalid':
+			return SYNC_STATUS_LABELS.invalid;
+		default:
+			return SYNC_STATUS_LABELS.loading;
+	}
 }
 
 /**

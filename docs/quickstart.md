@@ -17,7 +17,7 @@ Add a matching shared secret to both sites' `wp-config.php`:
 define( 'SAFE_PUBLISH_SHARED_SECRET', 'your-secure-random-string-here' );
 ```
 
-You can generate a secure value with: `openssl rand -base64 32`. The secret must be at least 32 characters long. See the [Authentication guide](concepts/authentication.md) for full details.
+You can generate a secure value with: `openssl rand -base64 32`. The secret must be at least 16 characters long; 32 or more is recommended for security. See the [Authentication guide](concepts/authentication.md) for full details.
 
 ## Step 3: Activate and Configure the Plugin
 
@@ -26,17 +26,16 @@ Activate the plugin through the WordPress admin panel or [code](https://docs.wpv
 ### Source Site Configuration
 
 1. Navigate to **Safe Publish** in the WordPress admin sidebar.
-2. Set the **Sync Mode** to `Export`.
+2. Set the **Sync Mode** to **Source - Content will come from this site.**
 3. In **Connected Site URL**, enter the destination site's URL.
 4. Click **Save Settings**.
 
 ### Destination Site Configuration
 
 1. Navigate to **Safe Publish** in the WordPress admin sidebar.
-2. Set the **Sync Mode** to `Import`.
+2. Set the **Sync Mode** to **Destination - Content will be published to this site**.
 3. In **Connected Site URL**, enter the source site's URL.
-4. Optionally set the **number of posts** to another value.
-5. Click **Save Settings**.
+4. Click **Save Settings**.
 
 ### Optional: Basic Authentication
 
@@ -70,14 +69,15 @@ You have three ways to import content:
 **2. Bulk Import**
 
 - Select multiple posts using checkboxes.
-- Click **Import / Update** in the bulk actions menu.
+- Click **Import** in the bulk actions menu.
 - All selected posts will be imported as drafts.
 
-**3. Preview Before Import**
+**3. Manage Already-Imported Posts**
 
-- Click **Post Diff** to see a side-by-side comparison.
-- Review the content before importing.
-- Useful for verifying changes or troubleshooting
+- Click **View in Imports** on any imported post to jump to the Imports →
+  Posts tab with that post focused.
+- From there: update with the latest source content, view a content diff,
+  delete the local post, or roll back the most recent import.
 
 ## Step 6: Review Imported Content
 
@@ -86,9 +86,11 @@ You have three ways to import content:
 3. Review the content, make any necessary adjustments.
 4. Publish when ready.
 
-## History
+## Imports and exports
 
-Track all your imports and exports in the **History** page. See the [History guide](concepts/history.md) for details.
+The **Imports** page lists everything that came in from the source — see
+[Imports](concepts/imports.md). The **Exports** page lists events logged when
+your site serves posts to a destination — see [Exports](concepts/exports.md).
 
 ## Next Steps
 

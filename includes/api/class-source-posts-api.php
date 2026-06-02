@@ -98,7 +98,9 @@ class Source_Posts_API {
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
 	 * @param array  $args             Optional. Catalog query args (post_type, page, per_page,
 	 *                                 search, name, status[], published_after, published_before,
-	 *                                 orderby, order). Default empty.
+	 *                                 orderby, order, include). `include` (int[]) short-circuits
+	 *                                 the source-side query to a `post__in` lookup, skipping the
+	 *                                 search/date/order/pagination args. Default empty.
 	 * @return array|WP_Error Envelope { items, has_more } or WP_Error on failure.
 	 */
 	public function fetch_posts(
@@ -166,6 +168,16 @@ class Source_Posts_API {
 		) {
 			$query_args['status'] = array_values(
 				array_map( 'strval', $args['status'] )
+			);
+		}
+
+		if (
+			isset( $args['include'] )
+			&& is_array( $args['include'] )
+			&& array() !== $args['include']
+		) {
+			$query_args['include'] = array_values(
+				array_map( 'intval', $args['include'] )
 			);
 		}
 

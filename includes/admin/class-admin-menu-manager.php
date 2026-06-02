@@ -24,7 +24,7 @@ class Admin_Menu_Manager {
 	 */
 	public function register(): void {
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
-		add_action( 'admin_menu', array( $this, 'add_imported_posts_submenu' ), 15 );
+		add_action( 'admin_menu', array( $this, 'add_imports_submenu' ), 15 );
 		add_action( 'admin_menu', array( $this, 'add_settings_submenu' ), 20 );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 	}
@@ -55,20 +55,20 @@ class Admin_Menu_Manager {
 	}
 
 	/**
-	 * Adds the Imported Posts submenu page.
+	 * Adds the Imports submenu page.
 	 *
 	 * Registered at priority 15 so it lands between Source Posts (default
-	 * priority) and Settings (priority 20), giving the menu order
-	 * Source Posts · Imported Posts · Settings.
+	 * priority) and the Exports submenu (Exports_Page registers at 18),
+	 * giving the menu order Source Posts · Imports · Exports · Settings.
 	 */
-	public function add_imported_posts_submenu(): void {
+	public function add_imports_submenu(): void {
 		add_submenu_page(
 			'safe-publish',
-			__( 'Imported Posts', 'safe-publish' ),
-			__( 'Imported Posts', 'safe-publish' ),
+			__( 'Imports', 'safe-publish' ),
+			__( 'Imports', 'safe-publish' ),
 			'manage_options',
-			'safe-publish-imported',
-			array( $this, 'render_imported_posts_page' )
+			'safe-publish-imports',
+			array( $this, 'render_imports_page' )
 		);
 	}
 
@@ -106,9 +106,9 @@ class Admin_Menu_Manager {
 	}
 
 	/**
-	 * Renders the Imported Posts admin page.
+	 * Renders the Imports admin page.
 	 */
-	public function render_imported_posts_page(): void {
+	public function render_imports_page(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die(
 				esc_html__(
@@ -118,8 +118,8 @@ class Admin_Menu_Manager {
 			);
 		}
 
-		$imported_posts_page = new Imported_Posts_Page();
-		$imported_posts_page->render();
+		$imports_page = new Imports_Page();
+		$imports_page->render();
 	}
 
 	/**
@@ -151,9 +151,9 @@ class Admin_Menu_Manager {
 			return;
 		}
 
-		if ( 'safe-publish_page_safe-publish-imported' === $hook_suffix ) {
-			$imported_posts_page = new Imported_Posts_Page();
-			$imported_posts_page->enqueue_assets();
+		if ( 'safe-publish_page_safe-publish-imports' === $hook_suffix ) {
+			$imports_page = new Imports_Page();
+			$imports_page->enqueue_assets();
 			return;
 		}
 	}

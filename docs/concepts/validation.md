@@ -114,5 +114,5 @@ For a list of validation error codes and solutions, see the [Troubleshooting gui
 ## Next Steps
 
 - [Import Process](import-process.md) - Learn how content is imported
-- [History](history.md) - Track your imports
+- [Imports](imports.md) - Manage and review your imports
 - [Troubleshooting](../troubleshooting.md) - Solve common issues

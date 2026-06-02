@@ -11,6 +11,7 @@
 import { chevronDown, update } from '@wordpress/icons';
 
 import AuthStatusNotice from './AuthStatusNotice';
+import { useAuthStatus } from './hooks/useAuthStatus';
 import {
 	getPostTypeLabel,
 	getPublishStatusLabel,
@@ -19,8 +20,6 @@ import {
 import { createActions } from '../actions';
 import {
 	DEFAULT_ITEMS_PER_PAGE,
-	LAYOUT_GRID,
-	LAYOUT_LIST,
 	LAYOUT_TABLE,
 	SEARCH_DEBOUNCE_MS,
 } from '../constants';
@@ -49,8 +48,6 @@ import { __, _x, sprintf } from '@wordpress/i18n';
 
 import type {
 	ApiResponse,
-	AuthStatus,
-	AuthStatusData,
 	CatalogResponse,
 	DataViewsField,
 	SourcePostsDataViewProps,
@@ -274,11 +271,7 @@ export function SourcePostsDataView( {
 		titleField: 'title',
 	} );
 
-	const defaultLayouts = {
-		[ LAYOUT_TABLE ]: {},
-		[ LAYOUT_GRID ]: {},
-		[ LAYOUT_LIST ]: {},
-	};
+	const defaultLayouts = { [ LAYOUT_TABLE ]: {} };
 
 	const [ pagePosts, setPagePosts ] = useState< Post[] >( [] );
 	const [ hasMore, setHasMore ] = useState( false );
@@ -293,53 +286,17 @@ export function SourcePostsDataView( {
 	const [ hasFetchedOnce, setHasFetchedOnce ] = useState( false );
 	const [ postTypeError, setPostTypeError ] = useState< string | null >( null );
 	const [ fetchError, setFetchError ] = useState< string | null >( null );
-	const [ authStatus, setAuthStatus ] = useState< AuthStatus | null >( null );
 	const [ refreshNonce, setRefreshNonce ] = useState( 0 );
 
 	const searchDebounceRef = useRef< ReturnType< typeof setTimeout > | null >( null );
 	const abortRef = useRef< AbortController | null >( null );
 
+	const authStatus = useAuthStatus();
 	const isAuthorized = 'authorized' === authStatus;
 	// Don't lock Refresh on transient probe failures — a network blip
 	// shouldn't force the user to full-reload. Only a confirmed credential
 	// rejection blocks retry.
 	const refreshBlocked = 'unauthorized' === authStatus;
-
-	// Probe live auth state so the banner and import buttons reflect whether
-	// the source site will accept signed requests before any user action.
-	useEffect( () => {
-		const controller = new AbortController();
-
-		const formData = new FormData();
-		formData.append( 'action', 'safe_publish_auth_status' );
-		formData.append( 'nonce', window.safePublishAdminData.nonce );
-
-		fetch( window.safePublishAdminData.ajaxurl, {
-			method: 'POST',
-			body: formData,
-			signal: controller.signal,
-		} )
-			.then(
-				( response ) =>
-					response.json() as Promise< ApiResponse< AuthStatusData > >
-			)
-			.then( ( result ) => {
-				if ( controller.signal.aborted ) {
-					return;
-				}
-				setAuthStatus( result.success ? result.data.status : 'unreachable' );
-			} )
-			.catch( () => {
-				if ( controller.signal.aborted ) {
-					return;
-				}
-				setAuthStatus( 'unreachable' );
-			} );
-
-		return () => {
-			controller.abort();
-		};
-	}, [] );
 
 	// Statuses join into a stable key so the effect re-fires on add/remove
 	// without re-firing on identical lists wrapped in a fresh array.
@@ -915,9 +872,16 @@ export function SourcePostsDataView( {
 					onChangeView={ handleViewChange }
 					paginationInfo={ paginationInfo }
 					defaultLayouts={ defaultLayouts }
-					actions={ createActions( () => {
-						setRefreshNonce( ( nonce ) => nonce + 1 );
-					}, isAuthorized ) }
+					actions={ createActions(
+						() => {
+							setRefreshNonce( ( nonce ) => nonce + 1 );
+						},
+						isAuthorized,
+						{
+							ajaxurl: window.safePublishAdminData.ajaxurl,
+							nonce: window.safePublishAdminData.nonce,
+						}
+					) }
 				/>
 			) }
 		</div>

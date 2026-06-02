@@ -1,13 +1,15 @@
 /**
  * Action definitions for the DataViews component.
  *
- * Defines the available actions for source posts including creating drafts,
- * bulk importing, updating posts, and viewing post diffs.
+ * Defines actions for Source Posts (Import single + bulk, View in Imports for
+ * already-imported items) and for the Imports → Posts tab (Edit, Update, Diff,
+ * Delete, Rollback).
  *
  * @file This file defines DataViews actions for the Safe Publish plugin.
  */
-import { drafts, download, pencil, rotateLeft, trash } from '@wordpress/icons';
+import { drafts, download, pencil, rotateLeft, seen, trash } from '@wordpress/icons';
 
+import BulkRollbackPostModal from './components/BulkRollbackPostModal';
 import DeletePostModal from './components/DeletePostModal';
 import ImportModal from './components/ImportModal';
 import PostDiffModal from './components/PostDiffModal';
@@ -39,6 +41,25 @@ import { __, sprintf } from '@wordpress/i18n';
 const MAX_VISIBLE_WARNING_TITLES = 10;
 
 /**
+ * Auth context shared by the Source Posts action set. Threaded as a prop so
+ * the modals and bulk-import helper don't reach into the admin-data global.
+ */
+export interface SourceActionsContext {
+	ajaxurl: string;
+	nonce: string;
+}
+
+/**
+ * Auth context shared by the Imports → Posts tab action set. Adds restNonce
+ * for the diff/update REST endpoints used by PostDiffModal.
+ */
+export interface ImportedActionsContext {
+	ajaxurl: string;
+	nonce: string;
+	restNonce: string;
+}
+
+/**
  * Returns true when the result is a successful import that carries warnings.
  *
  * @param {BulkImportResult} result Per-post result entry.
@@ -54,19 +75,21 @@ const hasWarnings = ( result: BulkImportResult ): boolean =>
  * Sends all selected posts to the bulk import endpoint and tracks the progress
  * of the import operation.
  *
- * @param {Post[]}   posts        Posts to import.
- * @param {Function} [onProgress] Progress callback (current, total) => void.
+ * @param {Post[]}               posts        Posts to import.
+ * @param {SourceActionsContext} context      Admin-ajax URL + nonce.
+ * @param {Function}             [onProgress] Progress callback (current, total) => void.
  *
  * @return {Promise<BulkImportResponse>} Bulk import results.
  */
 const bulkImportPosts = async (
 	posts: Post[],
+	context: SourceActionsContext,
 	onProgress?: ( current: number, total: number ) => void
 ): Promise< BulkImportResponse > => {
 	// Use the proper bulk import endpoint instead of individual calls.
 	const formData = new FormData();
 	formData.append( 'action', 'safe_publish_bulk_import' );
-	formData.append( 'nonce', window.safePublishAdminData.nonce );
+	formData.append( 'nonce', context.nonce );
 	formData.append( 'posts_data', JSON.stringify( posts ) );
 
 	// Show initial progress.
@@ -75,7 +98,7 @@ const bulkImportPosts = async (
 	}
 
 	try {
-		const response = await fetch( window.safePublishAdminData.ajaxurl, {
+		const response = await fetch( context.ajaxurl, {
 			method: 'POST',
 			body: formData,
 			headers: {
@@ -116,40 +139,34 @@ const bulkImportPosts = async (
 /**
  * Creates DataViews actions for source posts.
  *
- * Defines the available actions that can be performed on posts in the DataViews
- * component, including creating drafts, bulk importing, updating, and viewing
- * diffs.
+ * Returns the Import action (single + bulk) for non-imported items and the
+ * View in Imports action for already-imported items, which deep-links to the
+ * Imports → Posts tab narrowed to the matching row via focus_source.
  *
- * @param {Function} [onRefresh]    Callback to refresh the posts list.
- * @param {boolean}  [isAuthorized] Whether the source site authorizes imports.
+ * @param {Function}             onRefresh    Callback to refresh the posts list.
+ * @param {boolean}              isAuthorized Whether the source site authorizes imports.
+ * @param {SourceActionsContext} context      Admin-ajax URL + nonce.
  *
  * @return {Action<Post>[]} Array of DataViews actions.
  */
 export const createActions = (
-	onRefresh?: () => void,
-	isAuthorized: boolean = true
+	onRefresh: ( () => void ) | undefined,
+	isAuthorized: boolean,
+	context: SourceActionsContext
 ): Action< Post >[] => [
 	/**
-	 * Combined import and update action.
+	 * Import action.
 	 *
-	 * For a single item: shows a simple confirmation modal that imports or
-	 * updates the post depending on its current state. For multiple selected
-	 * items: runs a batch operation with progress tracking.
+	 * Single item: confirmation modal. Multiple items: batch import with
+	 * progress tracking. Excludes already-imported posts — Update/Diff/Delete
+	 * live on the Imports → Posts tab.
 	 */
 	{
-		id: 'bulk-import',
-		label: ( items: Post[] ) => {
-			if ( items.length === 1 ) {
-				return items[ 0 ].is_imported
-					? __( 'Update', 'safe-publish' )
-					: __( 'Import', 'safe-publish' );
-			}
-			return __( 'Import / Update', 'safe-publish' );
-		},
-		isEligible: ( item: Post ) =>
-			isAuthorized && ( ! item.is_imported || Boolean( item.has_update ) ),
-		isPrimary: true,
+		id: 'import',
+		label: __( 'Import', 'safe-publish' ),
 		icon: download,
+		isPrimary: true,
+		isEligible: ( item: Post ) => isAuthorized && ! item.is_imported,
 		hideModalHeader: true,
 		modalFocusOnMount: 'firstContentElement',
 		supportsBulk: true,
@@ -161,7 +178,20 @@ export const createActions = (
 
 			// For a single item, delegate to the simpler confirmation modal.
 			if ( items.length === 1 ) {
-				return <ImportModal items={ items } closeModal={ closeModal } onRefresh={ onRefresh } />;
+				const item = items[ 0 ];
+				return (
+					<ImportModal
+						sourcePostId={ item.id }
+						title={ item.title }
+						sourceLink={ item.link }
+						postType={ item.post_type }
+						isUpdate={ false }
+						ajaxurl={ context.ajaxurl }
+						nonce={ context.nonce }
+						closeModal={ closeModal }
+						onRefresh={ onRefresh }
+					/>
+				);
 			}
 
 			/**
@@ -191,6 +221,7 @@ export const createActions = (
 
 					const result = await bulkImportPosts(
 						items,
+						context,
 						( current, total ) => {
 							// This won't be called much since it's a single request,
 							// but we'll use it for final completion.
@@ -250,14 +281,9 @@ export const createActions = (
 								{ /* translators: %d is the number of posts */
 								__( 'Import %d selected posts as drafts?', 'safe-publish' ).replace( '%d', items.length.toString() ) }
 							</Text>
-							<VStack spacing="2">
-								<Text style={ { fontSize: '0.9em', color: '#666' } }>
-									{ __( 'This will import all selected posts including their content, images, links, and formatting.', 'safe-publish' ) }
-								</Text>
-								<Text style={ { fontSize: '0.8em', color: '#d63638', fontWeight: 'bold' } }>
-									{ __( '⚠️ Note: Posts that already exist will be automatically updated with the latest content from the source site.', 'safe-publish' ) }
-								</Text>
-							</VStack>
+							<Text style={ { fontSize: '0.9em', color: '#666' } }>
+								{ __( 'This will import all selected posts including their content, images, links, and formatting.', 'safe-publish' ) }
+							</Text>
 						</>
 					) }
 
@@ -446,7 +472,7 @@ export const createActions = (
 								variant="primary"
 								onClick={ () => void handleBulkImport() }
 								disabled={ isLoading }
-								data-action-id="bulk-import"
+								data-action-id="import"
 							>
 								{ isLoading ? (
 									<>
@@ -465,97 +491,50 @@ export const createActions = (
 		},
 	},
 	/**
-	 * Edit Post action.
+	 * View in Imports action.
 	 *
-	 * Opens the local WordPress post editor in a new tab. Only available for
-	 * posts that have already been imported.
+	 * Deep-links an already-imported source row to the Imports → Posts tab
+	 * narrowed to the matching imported post via
+	 * `?focus_source=<source_post_id>`, so Update / Diff / Delete / Rollback
+	 * are one click away.
 	 */
 	{
-		id: 'edit-post',
-		label: __( 'Edit', 'safe-publish' ),
-		icon: pencil,
+		id: 'view-in-imports',
+		label: __( 'View in Imports', 'safe-publish' ),
+		icon: seen,
 		isPrimary: true,
-		isEligible: ( item: Post ) => Boolean( item.is_imported && item.local_edit_url ),
+		isEligible: ( item: Post ) => Boolean( item.is_imported ),
 		callback: ( items: Post[] ) => {
-			const url = items[ 0 ]?.local_edit_url;
+			const baseUrl = window.safePublishAdminData?.importsUrl;
+			const item = items[ 0 ];
 
-			if ( url ) {
-				window.open( url, '_blank', 'noreferrer' );
+			if ( ! baseUrl || ! item ) {
+				return;
 			}
-		},
-	},
-	/**
-	 * Delete Post action.
-	 *
-	 * Moves the locally imported post to trash after confirmation. Only
-	 * available for posts that have already been imported.
-	 */
-	{
-		id: 'delete-post',
-		label: __( 'Delete', 'safe-publish' ),
-		icon: trash,
-		isDestructive: true,
-		isPrimary: true,
-		isEligible: ( item: Post ) => Boolean( item.is_imported ),
-		hideModalHeader: true,
-		modalFocusOnMount: 'firstContentElement',
-		RenderModal: ( { items, closeModal } ) => (
-			<DeletePostModal items={ items } closeModal={ closeModal } onRefresh={ onRefresh } />
-		),
-	},
-	/**
-	 * Post Diff action.
-	 *
-	 * Displays a visual comparison between the local post content and the
-	 * incoming source content.
-	 */
-	{
-		id: 'post-diff',
-		label: __( 'Post Diff', 'safe-publish' ),
-		icon: drafts,
-		isEligible: ( item: Post ) => Boolean( item.is_imported ),
-		hideModalHeader: false,
-		supportsBulk: false,
-		modalSize: 'fill',
-		RenderModal: ( { items, closeModal } ) => {
-			return <PostDiffModal items={ items } closeModal={ closeModal } />;
+
+			const url = new URL( baseUrl );
+			url.searchParams.set( 'focus_source', String( item.id ) );
+			window.location.href = url.toString();
 		},
 	},
 ];
 
 /**
- * Maps an Imported Posts row to the Post shape the shared modals expect:
- * they key off `id` as the source post ID (e.g. DeletePostModal sends it as
- * source_post_id), so source_post_id -> id and source_link -> link.
+ * Creates DataViews actions for the Imports → Posts tab.
  *
- * @param {ImportedPost} item Imported Posts listing row.
+ * Every modal-backed action — Update, Diff, Delete, Rollback (single + bulk) —
+ * takes the row's explicit identity (source_post_id for Update/Diff, local id
+ * for Delete, item_id for Rollback) plus the admin-ajax/REST auth tokens from
+ * `context`. Edit opens the local editor.
  *
- * @return {Post} Post-shaped object for the shared modals.
- */
-const toSourcePost = ( item: ImportedPost ): Post => ( {
-	id: item.source_post_id,
-	link: item.source_link,
-	title: item.title,
-	date_gmt: '',
-	modified_gmt: item.modified_gmt,
-	post_type: item.post_type,
-	status: item.local_status,
-	is_imported: true,
-} );
-
-/**
- * Creates DataViews actions for the Imported Posts page.
- *
- * Reuses the shared modals — Update (ImportModal with force_update), Post
- * Diff, and Delete — via toSourcePost, plus an Edit action that opens the
- * local editor and a Roll back action that undoes the most recent import.
- *
- * @param {Function} [onRefresh] Callback to refresh the listing after a change.
+ * @param {Function}               onRefresh Callback to refresh the listing after a change.
+ * @param {ImportedActionsContext} context   Admin-ajax URL + nonce + REST nonce.
  *
  * @return {Action<ImportedPost>[]} Array of DataViews actions.
  */
 export const createImportedActions = (
-	onRefresh?: () => void
+	onRefresh: ( () => void ) | undefined,
+	context: ImportedActionsContext
 ): Action< ImportedPost >[] => [
 	{
 		id: 'edit-post',
@@ -577,13 +556,22 @@ export const createImportedActions = (
 		isPrimary: true,
 		hideModalHeader: true,
 		modalFocusOnMount: 'firstContentElement',
-		RenderModal: ( { items, closeModal } ) => (
-			<ImportModal
-				items={ items.map( toSourcePost ) }
-				closeModal={ closeModal }
-				onRefresh={ onRefresh }
-			/>
-		),
+		RenderModal: ( { items, closeModal } ) => {
+			const item = items[ 0 ];
+			return (
+				<ImportModal
+					sourcePostId={ item.source_post_id }
+					title={ item.title }
+					sourceLink={ item.source_link }
+					postType={ item.post_type }
+					isUpdate={ true }
+					ajaxurl={ context.ajaxurl }
+					nonce={ context.nonce }
+					closeModal={ closeModal }
+					onRefresh={ onRefresh }
+				/>
+			);
+		},
 	},
 	{
 		id: 'post-diff',
@@ -594,7 +582,8 @@ export const createImportedActions = (
 		modalSize: 'fill',
 		RenderModal: ( { items, closeModal } ) => (
 			<PostDiffModal
-				items={ items.map( toSourcePost ) }
+				items={ items }
+				restNonce={ context.restNonce }
 				closeModal={ closeModal }
 			/>
 		),
@@ -609,7 +598,9 @@ export const createImportedActions = (
 		modalFocusOnMount: 'firstContentElement',
 		RenderModal: ( { items, closeModal } ) => (
 			<DeletePostModal
-				items={ items.map( toSourcePost ) }
+				items={ items }
+				ajaxurl={ context.ajaxurl }
+				nonce={ context.nonce }
 				closeModal={ closeModal }
 				onRefresh={ onRefresh }
 			/>
@@ -622,18 +613,29 @@ export const createImportedActions = (
 		isDestructive: true,
 		hideModalHeader: true,
 		modalFocusOnMount: 'firstContentElement',
-		supportsBulk: false,
+		supportsBulk: true,
 		isEligible: ( item: ImportedPost ) =>
 			null !== item.item_id &&
 			! item.rolled_back &&
 			( 'success' === item.rollback_status ||
 				'updated' === item.rollback_status ),
-		RenderModal: ( { items, closeModal } ) => (
-			<RollbackPostModal
-				items={ items }
-				closeModal={ closeModal }
-				onRefresh={ onRefresh }
-			/>
-		),
+		RenderModal: ( { items, closeModal } ) =>
+			1 === items.length ? (
+				<RollbackPostModal
+					items={ items }
+					ajaxurl={ context.ajaxurl }
+					nonce={ context.nonce }
+					closeModal={ closeModal }
+					onRefresh={ onRefresh }
+				/>
+			) : (
+				<BulkRollbackPostModal
+					items={ items }
+					ajaxurl={ context.ajaxurl }
+					nonce={ context.nonce }
+					closeModal={ closeModal }
+					onRefresh={ onRefresh }
+				/>
+			),
 	},
 ];

@@ -84,13 +84,9 @@ The test suite covers:
 - Sort arrows and values
 - Sort labels and icons
 
-### ✅ TypeScript Types (`types.test.ts` - 15+ tests)
+### ✅ TypeScript Types (`types.test.ts`)
 
 - `Post` interface validation
-- `ImportSession` interface validation
-- `ImportItem` interface validation
-- `PaginationInfo` interface validation
-- Type safety checks
 
 ### ✅ Actions (`actions.test.tsx` - 15+ tests)
 
@@ -220,7 +216,7 @@ Target coverage metrics:
 
 ### Excluded from Coverage
 
-- Entry point files (`index.tsx`, `history.tsx`, `admin-tools.tsx`)
+- Entry point files (`index.tsx`, `imports.tsx`, `exports.tsx`)
 - Test files
 - Build artifacts
 

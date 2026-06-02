@@ -3144,4 +3144,148 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			get_post_field( 'post_excerpt', $post_id )
 		);
 	}
+
+	/**
+	 * Verifies that import_post() bails with a concurrent-import error when
+	 * the per-source-post lock is already held by another request, and that
+	 * no destination post is created.
+	 */
+	public function test_import_post_blocks_when_lock_already_held(): void {
+		// ARRANGE: Pre-acquire the per-source-post import lock to simulate
+		// another concurrent import mid-flight.
+		$source_id = 9100;
+		wp_cache_add(
+			Post_Import_Service::IMPORT_LOCK_KEY_PREFIX . $source_id,
+			1,
+			Post_Import_Service::IMPORT_LOCK_GROUP,
+			// IMPORT_LOCK_TTL is 300 seconds.
+			// phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined
+			Post_Import_Service::IMPORT_LOCK_TTL
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+
+		$post_data = array(
+			'id'        => $source_id,
+			'title'     => 'Locked Post',
+			'link'      => 'https://source.example.com/locked-post',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Attempt to import while the lock is held.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import is rejected with the concurrent-import message and
+		// no destination post is created.
+		$this->assertFalse(
+			$result['success'],
+			'Import should be rejected when the lock is held.'
+		);
+		$this->assertStringContainsString(
+			'currently being imported',
+			$result['error']
+		);
+
+		$this->assertSame(
+			array(),
+			get_posts(
+				array(
+					'post_type'        => 'any',
+					'post_status'      => 'any',
+					'posts_per_page'   => 1,
+					'suppress_filters' => false,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => (string) $source_id,
+				)
+			),
+			'No post should be created when the lock blocks the import.'
+		);
+	}
+
+	/**
+	 * Verifies that persist_new_post() detects a sibling created concurrently
+	 * with the same source post ID, force-deletes its own insert, and returns
+	 * a duplicate_import error so subsequent find_imported_post() lookups stay
+	 * deterministic.
+	 *
+	 * Calls persist_new_post() directly to exercise the safety net that
+	 * activates when the wp_cache_add lock degrades (no persistent object
+	 * cache, TTL expiry).
+	 */
+	public function test_persist_new_post_discards_concurrent_duplicate(): void {
+		// ARRANGE: A sibling post already exists for this source post ID,
+		// standing in for the winner of a concurrent race.
+		$source_id = 9101;
+		$winner_id = self::factory()->post->create(
+			array(
+				'post_title'  => 'Concurrent winner',
+				'post_status' => 'draft',
+				'meta_input'  => array(
+					Options::META_SOURCE_POST_ID => $source_id,
+				),
+			)
+		);
+
+		// ACT: Persist a new post for the same source post ID. The new insert
+		// gets a higher post ID than the winner, so the verification routes
+		// it to cleanup.
+		$result = $this->import_service->persist_new_post(
+			array(
+				'post_title'   => 'Concurrent loser',
+				'post_content' => '',
+				'post_status'  => 'draft',
+				'post_type'    => 'post',
+				'meta_input'   => array(
+					Options::META_SOURCE_POST_ID => $source_id,
+					Options::META_SOURCE_LINK    => 'https://source.example.com/loser',
+					Options::META_IMPORTED_FROM  => Options::META_IMPORTED_FROM_VALUE,
+				),
+			),
+			0,
+			array(),
+			array(),
+			array(),
+			0
+		);
+
+		// ASSERT: persist_new_post returns the duplicate_import WP_Error and
+		// surfaces the winner's ID in the error data.
+		$this->assertWPError(
+			$result,
+			'Expected a WP_Error when a lower-ID sibling already exists.'
+		);
+		$this->assertSame( 'duplicate_import', $result->get_error_code() );
+
+		$error_data = $result->get_error_data();
+		$this->assertIsArray( $error_data );
+		$this->assertSame( $winner_id, (int) $error_data['winning_post_id'] );
+
+		// ASSERT: Winner survives and is the sole post for this source ID.
+		$this->assertNotNull(
+			get_post( $winner_id ),
+			'Winner post should not be affected.'
+		);
+
+		$siblings = get_posts(
+			array(
+				'meta_key'         => Options::META_SOURCE_POST_ID,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'meta_value'       => (string) $source_id,
+				'post_type'        => 'any',
+				'post_status'      => 'any',
+				'posts_per_page'   => 2,
+				'suppress_filters' => false,
+			)
+		);
+		$this->assertCount(
+			1,
+			$siblings,
+			'Loser must be force-deleted, leaving only the winner.'
+		);
+		$this->assertSame( $winner_id, $siblings[0]->ID );
+	}
 }

@@ -1,15 +1,14 @@
 /**
  * Rollback Post Modal component.
  *
- * Confirms rolling back the most recent import event for an Imported Posts
- * row: a created post is permanently deleted, an updated post is restored to
- * its previous version.
+ * Confirms rolling back the most recent import event for an Imports → Posts
+ * tab row: a created post is permanently deleted, an updated post is restored
+ * to its previous version.
  *
  * @file This file defines the RollbackPostModal component.
  */
 
-import { ApiResponse, ImportedPost } from '../types';
-import { getErrorMessage } from '../utils';
+import { isRollbackRestore, rollbackItem } from '../api/rollback';
 import {
 	Button,
 	__experimentalText as Text,
@@ -20,15 +19,21 @@ import {
 import { useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
+import type { ImportedPost } from '../types';
+
 /**
  * Props for the RollbackPostModal component.
  *
- * @property {ImportedPost[]} items        Array containing the single row to roll back.
- * @property {Function}       [closeModal] Callback to close the modal.
- * @property {Function}       [onRefresh]  Callback to refresh the listing after a rollback.
+ * @property {ImportedPost[]} items      Array containing the single row to roll back.
+ * @property {string}         ajaxurl    WordPress admin-ajax URL.
+ * @property {string}         nonce      AJAX nonce for the rollback endpoint.
+ * @property {Function}       closeModal Callback to close the modal.
+ * @property {Function}       onRefresh  Callback to refresh the listing.
  */
 interface RollbackPostModalProps {
 	items: ImportedPost[];
+	ajaxurl: string;
+	nonce: string;
 	closeModal?: () => void;
 	onRefresh?: () => void;
 }
@@ -38,16 +43,19 @@ interface RollbackPostModalProps {
  *
  * @param {RollbackPostModalProps} props Component props.
  */
-const RollbackPostModal = ( { items, closeModal, onRefresh }: RollbackPostModalProps ) => {
+const RollbackPostModal = ( {
+	items,
+	ajaxurl,
+	nonce,
+	closeModal,
+	onRefresh,
+}: RollbackPostModalProps ) => {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
 
 	const post = items[ 0 ];
 
-	// `success` rows are newly created posts (deleted on rollback); every other
-	// eligible status restores the pre-update snapshot. Mirrors the server's
-	// Session_Formatter::determine_rollback_action().
-	const isRestore = 'success' !== post.rollback_status;
+	const isRestore = isRollbackRestore( post );
 
 	const actionLabel = isRestore
 		? __( 'Restore', 'safe-publish' )
@@ -66,32 +74,17 @@ const RollbackPostModal = ( { items, closeModal, onRefresh }: RollbackPostModalP
 		setIsLoading( true );
 		setError( null );
 
-		const formData = new FormData();
-		formData.append( 'action', 'safe_publish_rollback_item' );
-		formData.append( 'nonce', window.safePublishAdminData.nonce );
-		formData.append( 'item_id', post.item_id.toString() );
-
-		fetch( window.safePublishAdminData.ajaxurl, {
-			method: 'POST',
-			body: formData,
-			headers: { Accept: 'application/json; charset=utf-8' },
-		} )
-			.then( response => response.json() as Promise< ApiResponse > )
-			.then( result => {
-				if ( ! result.success ) {
-					setError( getErrorMessage( result, __( 'Failed to roll back', 'safe-publish' ) ) );
-					setIsLoading( false );
-					return;
-				}
-
-				onRefresh?.();
+		void rollbackItem( post.item_id, ajaxurl, nonce ).then( outcome => {
+			if ( ! outcome.success ) {
+				setError( outcome.error );
 				setIsLoading( false );
-				closeModal?.();
-			} )
-			.catch( err => {
-				setError( err instanceof Error ? err.message : __( 'Unknown error occurred', 'safe-publish' ) );
-				setIsLoading( false );
-			} );
+				return;
+			}
+
+			onRefresh?.();
+			setIsLoading( false );
+			closeModal?.();
+		} );
 	};
 
 	return (

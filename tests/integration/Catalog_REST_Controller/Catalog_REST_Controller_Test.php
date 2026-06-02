@@ -723,6 +723,130 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that include[] short-circuits to a post__in lookup and returns
+	 * the matched posts in include order.
+	 */
+	public function test_include_returns_only_named_ids_in_request_order(): void {
+		// ARRANGE: Three posts; we'll ask for the first and third in reversed
+		// publish order to prove include order trumps the default date sort.
+		$first  = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$second = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$third  = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Ask for first and third, in that order.
+		$items = $this->dispatch_items( array( 'include' => array( $first, $third ) ) );
+
+		// ASSERT: Two items returned, in the order specified by include.
+		$this->assertSame( array( $first, $third ), array_column( $items, 'id' ) );
+		// ASSERT: Untargeted post stays out of the response.
+		$this->assertNotContains(
+			$second,
+			array_column( $items, 'id' )
+		);
+	}
+
+	/**
+	 * Verifies that include[] omits any requested ID that doesn't exist on
+	 * the source, so the destination can interpret "no row" as "missing".
+	 */
+	public function test_include_omits_unknown_ids(): void {
+		// ARRANGE: One real post; ask for it alongside a non-existent ID.
+		$real = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Include the real ID and a bogus one.
+		$items = $this->dispatch_items( array( 'include' => array( $real, 999999 ) ) );
+
+		// ASSERT: Only the real ID comes back.
+		$this->assertSame( array( $real ), array_column( $items, 'id' ) );
+	}
+
+	/**
+	 * Verifies that include[] honors the post_type filter — a request for
+	 * post_type=page does not return a post even if its ID is in include[].
+	 */
+	public function test_include_honors_post_type_filter(): void {
+		// ARRANGE: A post and a page sharing the same id space.
+		$post_id = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$page_id = self::factory()->post->create(
+			array(
+				'post_status' => 'publish',
+				'post_type'   => 'page',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Ask for both, but constrain to post_type=page.
+		$items = $this->dispatch_items(
+			array(
+				'post_type' => 'page',
+				'include'   => array( $post_id, $page_id ),
+			)
+		);
+
+		// ASSERT: Only the page comes back.
+		$this->assertSame( array( $page_id ), array_column( $items, 'id' ) );
+	}
+
+	/**
+	 * Verifies that include[] returns drafts/private statuses alongside
+	 * published posts when no status filter is set, so the destination can
+	 * still sync-check posts that have moved into a non-public status.
+	 */
+	public function test_include_returns_drafts_when_no_status_filter(): void {
+		// ARRANGE: Posts in two statuses the destination might still sync.
+		$publish = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$draft   = self::factory()->post->create( array( 'post_status' => 'draft' ) );
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Include both without specifying a status filter.
+		$items = $this->dispatch_items( array( 'include' => array( $publish, $draft ) ) );
+
+		// ASSERT: Both come back.
+		$ids = array_column( $items, 'id' );
+		sort( $ids );
+		$expected = array( $publish, $draft );
+		sort( $expected );
+		$this->assertSame( $expected, $ids );
+	}
+
+	/**
+	 * Verifies that has_more is always false on include[] responses, since
+	 * the caller already names every ID they want.
+	 */
+	public function test_include_response_never_has_more(): void {
+		// ARRANGE: A single post we'll include.
+		$post_id = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Dispatch with include.
+		$data = $this->dispatch( array( 'include' => array( $post_id ) ) )->get_data();
+
+		// ASSERT: has_more is false.
+		$this->assertFalse( $data['has_more'] );
+	}
+
+	/**
+	 * Verifies that include[] is capped at MAX_PER_PAGE so a single batch
+	 * can't outgrow what a regular page would serve.
+	 */
+	public function test_include_caps_at_max_per_page(): void {
+		// ARRANGE: 110 posts; ask for all of them by id.
+		$ids = array();
+		for ( $i = 0; $i < 110; $i++ ) {
+			$ids[] = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		}
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Request 110 by include.
+		$items = $this->dispatch_items( array( 'include' => $ids ) );
+
+		// ASSERT: Capped at 100 (MAX_PER_PAGE).
+		$this->assertCount( 100, $items );
+	}
+
+	/**
 	 * Verifies that the post-types endpoint returns the WP built-in
 	 * content types (post, page) and excludes back-office types that
 	 * pass the public+show_in_rest filter but aren't catalog-servable

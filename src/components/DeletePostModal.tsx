@@ -6,7 +6,7 @@
  * @file This file defines the DeletePostModal component.
  */
 
-import { ApiResponse, Post } from '../types';
+import { ApiResponse, ImportedPost } from '../types';
 import { getErrorMessage } from '../utils';
 import {
 	Button,
@@ -21,12 +21,16 @@ import { __, sprintf } from '@wordpress/i18n';
 /**
  * Props for the DeletePostModal component.
  *
- * @property {Post[]}   items        Array containing the single post to delete.
- * @property {Function} [closeModal] Callback to close the modal.
- * @property {Function} [onRefresh]  Callback to refresh the posts list after a successful deletion.
+ * @property {ImportedPost[]} items      Array containing the single row to delete.
+ * @property {string}         ajaxurl    WordPress admin-ajax URL.
+ * @property {string}         nonce      AJAX nonce for the delete endpoint.
+ * @property {Function}       closeModal Callback to close the modal.
+ * @property {Function}       onRefresh  Callback to refresh the listing.
  */
 interface DeletePostModalProps {
-	items: Post[];
+	items: ImportedPost[];
+	ajaxurl: string;
+	nonce: string;
 	closeModal?: () => void;
 	onRefresh?: () => void;
 }
@@ -36,7 +40,13 @@ interface DeletePostModalProps {
  *
  * @param {DeletePostModalProps} props Component props.
  */
-const DeletePostModal = ( { items, closeModal, onRefresh }: DeletePostModalProps ) => {
+const DeletePostModal = ( {
+	items,
+	ajaxurl,
+	nonce,
+	closeModal,
+	onRefresh,
+}: DeletePostModalProps ) => {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
 
@@ -48,10 +58,10 @@ const DeletePostModal = ( { items, closeModal, onRefresh }: DeletePostModalProps
 
 		const formData = new FormData();
 		formData.append( 'action', 'safe_publish_delete_post' );
-		formData.append( 'nonce', window.safePublishAdminData.nonce );
-		formData.append( 'source_post_id', post.id.toString() );
+		formData.append( 'nonce', nonce );
+		formData.append( 'post_id', post.id.toString() );
 
-		fetch( window.safePublishAdminData.ajaxurl, {
+		fetch( ajaxurl, {
 			method: 'POST',
 			body: formData,
 			headers: { Accept: 'application/json; charset=utf-8' },

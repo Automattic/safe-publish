@@ -20,7 +20,7 @@ if ( ! defined( 'SAFE_PUBLISH__UNIT_TEST' ) ) {
 }
 
 if ( ! defined( 'SAFE_PUBLISH_VERSION' ) ) {
-	define( 'SAFE_PUBLISH_VERSION', '1.1.0' );
+	define( 'SAFE_PUBLISH_VERSION', '0.0.1' );
 }
 
 if ( ! defined( 'SAFE_PUBLISH_PLUGIN_FILE' ) ) {
@@ -37,6 +37,10 @@ if ( ! defined( 'SAFE_PUBLISH_PLUGIN_URL' ) ) {
 
 if ( ! defined( 'MINUTE_IN_SECONDS' ) ) {
 	define( 'MINUTE_IN_SECONDS', 60 );
+}
+
+if ( ! defined( 'HOUR_IN_SECONDS' ) ) {
+	define( 'HOUR_IN_SECONDS', 60 * MINUTE_IN_SECONDS );
 }
 
 // Load Composer autoloader.

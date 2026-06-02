@@ -4,8 +4,6 @@
 import { describe, expect, it } from 'vitest';
 import {
 	LAYOUT_TABLE,
-	LAYOUT_GRID,
-	LAYOUT_LIST,
 	SORTING_DIRECTIONS,
 	sortArrows,
 	sortValues,
@@ -16,8 +14,6 @@ import {
 describe( 'Layout constants', () => {
 	it( 'should define layout types', () => {
 		expect( LAYOUT_TABLE ).toBe( 'table' );
-		expect( LAYOUT_GRID ).toBe( 'grid' );
-		expect( LAYOUT_LIST ).toBe( 'list' );
 	} );
 } );
 

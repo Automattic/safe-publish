@@ -44,11 +44,11 @@ The import process consists of several stages:
 3. **Transform**: Process Gutenberg blocks and extract media references.
 4. **Import Media**: Download and import featured images and inline images.
 5. **Create Post**: Create draft post with all content, metadata, and terms.
-6. **Track History**: Log the import for auditing.
+6. **Track**: Log the import for auditing.
 
 See the [Import Process guide](import-process.md) for a detailed breakdown.
 
-### History
+### Imports and exports
 
 Every import action is tracked and logged:
 
@@ -58,7 +58,9 @@ Every import action is tracked and logged:
 - Import status (success/failure)
 - Error messages (if applicable)
 
-View and manage your import and export history in the [History](history.md) page.
+Manage your imported content and review failed imports on the
+[Imports](imports.md) page. Review outbound events on the
+[Exports](exports.md) page.
 
 ## Technical concepts
 

@@ -89,6 +89,5 @@ class Sync_Export_Test extends WP_UnitTestCase {
 		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_test_connection' ) );
 		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_create_draft' ) );
 		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_bulk_import' ) );
-		$this->assertFalse( (bool) has_action( 'wp_ajax_safe_publish_debug_auth' ) );
 	}
 }

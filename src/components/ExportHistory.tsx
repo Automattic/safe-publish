@@ -196,13 +196,10 @@ export function ExportHistory(): JSX.Element {
 	}
 
 	return (
-		<div className="safe-publish-history">
+		<div className="safe-publish-exports">
 			<VStack spacing={ 4 }>
-				<Text as="h2">
-					{ __( 'Export History', 'safe-publish' ) }
-				</Text>
 				<Text>
-					{ __( 'View content export events logged when posts are served to destination sites.', 'safe-publish' ) }
+					{ __( 'Events logged when posts are served to destination sites.', 'safe-publish' ) }
 				</Text>
 
 				{ events.length === 0 ? (

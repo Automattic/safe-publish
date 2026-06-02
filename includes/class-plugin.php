@@ -13,11 +13,12 @@ use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Admin\Import_Mode_Admin_Handler;
 use Safe_Publish\Admin\Admin_Menu_Manager;
 use Safe_Publish\Admin\Content_Processor;
-use Safe_Publish\Admin\History_Renderer;
+use Safe_Publish\Admin\Diff_Renderer;
+use Safe_Publish\Admin\Exports_Page;
 use Safe_Publish\Admin\History_Repository;
-use Safe_Publish\Admin\Import_History;
+use Safe_Publish\Admin\Import_Actions_Ajax_Handler;
+use Safe_Publish\Admin\Post_Import_Notice;
 use Safe_Publish\Admin\Post_Import_Service;
-use Safe_Publish\Admin\Session_Formatter;
 use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\Admin\Settings_Logger;
 use Safe_Publish\Admin\Settings_Page;
@@ -209,15 +210,15 @@ final class Plugin {
 		HTTP_Client $http_client
 	): Import_Mode_Admin_Handler {
 		$repository       = new History_Repository();
-		$renderer         = new History_Renderer();
-		$formatter        = new Session_Formatter();
 		$rollback_service = new Session_Rollback_Service( $repository );
+		$diff_renderer    = new Diff_Renderer();
 
-		$import_history = new Import_History(
+		$exports_page = new Exports_Page();
+
+		$import_actions = new Import_Actions_Ajax_Handler(
 			$repository,
-			$renderer,
-			$formatter,
-			$rollback_service
+			$rollback_service,
+			$diff_renderer
 		);
 
 		$post_import_service = new Post_Import_Service(
@@ -240,8 +241,10 @@ final class Plugin {
 
 		return new Import_Mode_Admin_Handler(
 			$menu_manager,
-			$import_history,
-			$ajax_controller
+			$exports_page,
+			$import_actions,
+			$ajax_controller,
+			new Post_Import_Notice()
 		);
 	}
 
@@ -255,16 +258,7 @@ final class Plugin {
 		add_action( 'admin_menu', array( $this, 'add_settings_only_admin_menu' ) );
 
 		if ( $can_export ) {
-			$repository       = new History_Repository();
-			$rollback_service = new Session_Rollback_Service( $repository );
-			$import_history   = new Import_History(
-				$repository,
-				new History_Renderer(),
-				new Session_Formatter(),
-				$rollback_service
-			);
-
-			$import_history->init_export_only();
+			( new Exports_Page() )->init_export_only();
 		}
 	}
 

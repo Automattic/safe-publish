@@ -12,6 +12,7 @@ import { afterEach } from 'vitest';
 	restNonce: 'test-rest-nonce',
 	sourceSiteUrl: 'https://example.com',
 	settingsUrl: 'https://example.com/wp-admin/admin.php?page=safe-publish-settings',
+	importsUrl: 'https://example.com/wp-admin/admin.php?page=safe-publish-imports',
 	containerId: 'safe-publish-admin-posts',
 };
 

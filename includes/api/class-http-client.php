@@ -118,7 +118,7 @@ final class HTTP_Client {
 	 * @return string User agent string.
 	 */
 	public function get_user_agent(): string {
-		$plugin_version = defined( 'SAFE_PUBLISH_VERSION' ) ? SAFE_PUBLISH_VERSION : '1.1.0';
+		$plugin_version = defined( 'SAFE_PUBLISH_VERSION' ) ? SAFE_PUBLISH_VERSION : '0.0.1';
 		$site_url       = get_bloginfo( 'url' );
 
 		return sprintf(
@@ -131,6 +131,11 @@ final class HTTP_Client {
 	/**
 	 * Makes a safe remote GET request.
 	 *
+	 * Non-VIP environments are routed through `wp_safe_remote_get` so the
+	 * core `http_request_host_is_external` chain rejects loopback,
+	 * link-local, and unique-local addresses unless an integration
+	 * explicitly opts in.
+	 *
 	 * @param string $url  Request URL.
 	 * @param array  $args Optional. Request arguments. Default empty array.
 	 * @return array|WP_Error Response or error.
@@ -141,8 +146,7 @@ final class HTTP_Client {
 			return vip_safe_wp_remote_get( $url, '', 3, 5, 20, $args );
 		}
 
-		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.wp_remote_get_wp_remote_get -- Fallback for non-VIP environments
-		return wp_remote_get( $url, $args );
+		return wp_safe_remote_get( $url, $args );
 	}
 
 	/**

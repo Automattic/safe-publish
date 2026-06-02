@@ -175,6 +175,34 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 2. **Check for database errors**: Enable `WP_DEBUG_LOG` and review `wp-content/debug.log` for insert failures.
 3. **Verify post type is registered** on the destination site — custom post types must exist on both sites.
 
+#### ACF or SCF fields do not appear in the destination editor
+
+**Symptoms**: ACF or Secure Custom Fields (SCF) values were imported as post
+meta, but the destination editor does not show the matching field controls.
+
+**Solutions**:
+
+1. **Verify the source REST response**:
+   - Fetch the source post with `context=edit`.
+   - Confirm the expected keys appear under the core `meta` object.
+   - Keys exposed only under a top-level `acf` object are not imported.
+
+2. **Check the imported destination meta**:
+   - Confirm the destination post has the value key, such as `hero_title`.
+   - Confirm it also has the companion reference key, such as `_hero_title`,
+     when editor rendering is required.
+
+3. **Check the destination field definitions**:
+   - ACF or SCF must be active on the destination.
+   - The destination must have matching field groups and field keys.
+   - Safe Publish stores the meta values but does not currently create or sync
+     ACF/SCF field groups.
+
+4. **Resolve the mismatch**:
+   - Add or sync the matching field group definitions on the destination.
+   - If editor rendering is not needed, no action is required; the values are
+     already stored as post meta.
+
 #### Duplicate content imported
 
 **Symptoms**: Same post imported multiple times
@@ -185,7 +213,7 @@ Safe Publish tracks imported posts using the `safe_publish_source_post_id` meta 
 
 If duplicates still occur:
 
-1. **Check History** to see if the post was imported from different sessions.
+1. **Check the Imports → Posts tab** to see whether the post was imported from different sessions.
 2. Delete duplicate drafts manually.
 
 #### Embedded posts display as plain links
@@ -331,20 +359,22 @@ Install [Query Monitor](https://wordpress.org/plugins/query-monitor/) for advanc
 
 Use the **Test Connection** button in settings to test authentication independently of imports.
 
-### Import History
+### Imports → Failures Tab
 
-Check the **History** page for:
+Check the **Imports → Failures** tab for:
 
-- Detailed error messages
-- Failed import attempts
-- Success rates
-- Pattern analysis
+- Error messages recorded at import time
+- Source URL of each failed attempt
+- Timestamp of the attempt
+
+The tab is read-only; recovery is fixing the underlying issue and re-importing
+from Source Posts.
 
 ## Getting Help
 
 If you still can't resolve the issue:
 
-1. **Check History** for detailed error messages.
+1. **Check the Imports → Failures tab** for detailed error messages.
 2. **Enable debug mode** and collect error logs.
 3. **Reproduce the issue** in a clean environment if possible.
 4. **Report the issue** via GitHub Issues with:
@@ -370,14 +400,16 @@ If you need to start fresh:
 // Using WP-CLI
 wp option delete safe_publish_connected_site_url
 wp option delete safe_publish_sync_mode
-wp option delete safe_publish_number_of_posts
 wp option delete safe_publish_basic_auth_username
 wp option delete safe_publish_basic_auth_password
 ```
 
 ### Clear Import History
 
-Import history is stored in custom database tables and can be managed through the **History** page.
+Import history is stored in two custom tables (`safe_publish_imports` and
+`safe_publish_import_items`). Individual rows can be rolled back from the
+**Imports → Posts** tab (per-row or bulk). To clear history entirely, use
+the Complete Reset below.
 
 ### Complete Reset
 

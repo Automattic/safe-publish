@@ -34,6 +34,28 @@ class Post_Import_Service {
 	use Sanitizes_Content;
 
 	/**
+	 * Object-cache group for per-source-post import locks.
+	 *
+	 * @var string
+	 */
+	public const IMPORT_LOCK_GROUP = 'safe_publish_import_locks';
+
+	/**
+	 * Object-cache key prefix for per-source-post import locks.
+	 *
+	 * @var string
+	 */
+	public const IMPORT_LOCK_KEY_PREFIX = 'importing_';
+
+	/**
+	 * TTL for a per-source-post import lock, in seconds. Generous enough for
+	 * media-heavy posts; a crashed import leaves the lock until expiry.
+	 *
+	 * @var int
+	 */
+	public const IMPORT_LOCK_TTL = 300;
+
+	/**
 	 * Source Posts API instance.
 	 *
 	 * @var Source_Posts_API
@@ -169,23 +191,83 @@ class Post_Import_Service {
 			);
 		}
 
-		$imported_post = $this->find_imported_post( $fields['source_post_id'] );
+		$lock_acquired = $this->acquire_import_lock( $fields['source_post_id'] );
 
-		if ( $imported_post ) {
-			return $this->handle_imported_post(
-				$imported_post,
+		if ( ! $lock_acquired ) {
+			$error_message = __(
+				'This post is currently being imported by another request. Please try again in a moment.',
+				'safe-publish'
+			);
+
+			$this->log_import_if_session(
+				$session_id,
+				$fields['source_post_id'],
+				$fields['title'],
+				'error',
+				null,
+				$error_message,
+				array( 'action' => 'concurrent_import_blocked' )
+			);
+
+			return $this->build_error_result( $fields, $error_message );
+		}
+
+		try {
+			$imported_post = $this->find_imported_post( $fields['source_post_id'] );
+
+			if ( $imported_post ) {
+				return $this->handle_imported_post(
+					$imported_post,
+					$fields,
+					$post_type,
+					$session_id,
+					$options
+				);
+			}
+
+			return $this->handle_new_post(
 				$fields,
 				$post_type,
 				$session_id,
 				$options
 			);
+		} finally {
+			$this->release_import_lock( $fields['source_post_id'] );
 		}
+	}
 
-		return $this->handle_new_post(
-			$fields,
-			$post_type,
-			$session_id,
-			$options
+	/**
+	 * Attempts to acquire the per-source-post import lock.
+	 *
+	 * Backed by wp_cache_add, which is atomic across requests only when a
+	 * persistent object cache is configured (memcached/Redis). Without one,
+	 * the lock degrades to a per-request no-op and the post-insert duplicate
+	 * check in persist_new_post() is the safety net.
+	 *
+	 * @param int $source_post_id Source post ID.
+	 * @return bool True when the lock was acquired, false when another
+	 *              concurrent import already holds it.
+	 */
+	private function acquire_import_lock( int $source_post_id ): bool {
+		return wp_cache_add(
+			self::IMPORT_LOCK_KEY_PREFIX . $source_post_id,
+			1,
+			self::IMPORT_LOCK_GROUP,
+			// IMPORT_LOCK_TTL is 300 seconds.
+			// phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined
+			self::IMPORT_LOCK_TTL
+		);
+	}
+
+	/**
+	 * Releases the per-source-post import lock.
+	 *
+	 * @param int $source_post_id Source post ID.
+	 */
+	private function release_import_lock( int $source_post_id ): void {
+		wp_cache_delete(
+			self::IMPORT_LOCK_KEY_PREFIX . $source_post_id,
+			self::IMPORT_LOCK_GROUP
 		);
 	}
 
@@ -737,7 +819,7 @@ class Post_Import_Service {
 	 * @param int[] $source_ids Source post IDs to look up.
 	 * @return array<int, WP_Post> Map keyed by source post ID.
 	 */
-	private function fetch_imported_posts_by_source_ids(
+	public function fetch_imported_posts_by_source_ids(
 		array $source_ids
 	): array {
 		if ( 0 === count( $source_ids ) ) {
@@ -781,6 +863,49 @@ class Post_Import_Service {
 		}
 
 		return $imported_by_source_id;
+	}
+
+	/**
+	 * Detects whether a concurrent import has created a sibling post with the
+	 * same source post ID. The winner is the post with the lowest ID (the one
+	 * inserted first); when this returns non-null, the just-inserted post is
+	 * the loser and should be discarded.
+	 *
+	 * Bypasses the WP_Query result cache so this lookup sees INSERTs
+	 * committed by parallel requests.
+	 *
+	 * @param int $source_post_id   Source post ID stored in postmeta.
+	 * @param int $just_inserted_id Post ID returned by wp_insert_post().
+	 * @return WP_Post|null Winning sibling, or null when the just-inserted
+	 *                      post wins (lowest ID) or no sibling exists.
+	 */
+	private function detect_concurrent_duplicate(
+		int $source_post_id,
+		int $just_inserted_id
+	): ?WP_Post {
+		$oldest = get_posts(
+			array(
+				'meta_key'               => Options::META_SOURCE_POST_ID,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'meta_value'             => $source_post_id,
+				'post_type'              => 'any',
+				'post_status'            => 'any',
+				'posts_per_page'         => 1,
+				'orderby'                => 'ID',
+				'order'                  => 'ASC',
+				'suppress_filters'       => false,
+				'no_found_rows'          => true,
+				'cache_results'          => false,
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+			)
+		);
+
+		if ( empty( $oldest ) || $oldest[0]->ID === $just_inserted_id ) {
+			return null;
+		}
+
+		return $oldest[0];
 	}
 
 	/**
@@ -1559,6 +1684,36 @@ class Post_Import_Service {
 
 		if ( is_wp_error( $post_id ) ) {
 			return $post_id;
+		}
+
+		$source_post_id = absint(
+			$post_args['meta_input'][ Options::META_SOURCE_POST_ID ] ?? 0
+		);
+
+		if ( $source_post_id > 0 ) {
+			$winner = $this->detect_concurrent_duplicate( $source_post_id, $post_id );
+
+			if ( null !== $winner ) {
+				wp_delete_post( $post_id, true );
+
+				if ( $featured_attachment_id > 0 ) {
+					wp_delete_attachment( $featured_attachment_id, true );
+				}
+
+				$this->content_processor->delete_newly_created_media();
+
+				return new WP_Error(
+					'duplicate_import',
+					__(
+						'Another import for this source post completed first; this duplicate was discarded.',
+						'safe-publish'
+					),
+					array(
+						'action'          => 'concurrent_import_lost_race',
+						'winning_post_id' => $winner->ID,
+					)
+				);
+			}
 		}
 
 		if ( $featured_attachment_id > 0 ) {

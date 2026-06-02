@@ -9,7 +9,8 @@
   - [Authentication](concepts/authentication.md) - Connecting to source WordPress sites
   - [Content Validation](concepts/validation.md) - How content is validated before import
   - [Import Process](concepts/import-process.md) - Understanding the content import workflow
-  - [History](concepts/history.md) - Tracking and managing imported content
+  - [Imports](concepts/imports.md) - Managing imported content and failed imports
+  - [Exports](concepts/exports.md) - Reviewing outbound export events
 
 - [Extending](extending/index.md)
   - [Hooks and Filters](extending/hooks.md) - Available WordPress hooks

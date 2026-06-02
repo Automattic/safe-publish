@@ -75,12 +75,21 @@
 }
 
 /*
- * DataViews exposes a built-in search box and faceted-filter UI that we
- * replace with the custom toolbar above. Hiding here keeps the same fields
- * config without forking DataViews itself.
+ * admin.css gives every .dataviews-search a bottom margin (from before the
+ * built-in toolbar was shown). Here the search shares a flex row with the
+ * Add-filter button, where that margin offsets it — drop it so they align.
  */
-.safe-publish-dataviews-wrapper .dataviews-search,
-.safe-publish-dataviews-wrapper .dataviews-filters {
+.safe-publish-dataviews-wrapper--with-builtins .dataviews-search {
+	margin-bottom: 0;
+}
+
+/*
+ * Source Posts replaces DataViews' built-in search box and faceted-filter UI
+ * with its own toolbar, so they're hidden there. Imported Posts opts back in
+ * via the --with-builtins modifier and drives them server-side.
+ */
+.safe-publish-dataviews-wrapper:not(.safe-publish-dataviews-wrapper--with-builtins) .dataviews-search,
+.safe-publish-dataviews-wrapper:not(.safe-publish-dataviews-wrapper--with-builtins) .dataviews-filters {
 	display: none;
 }
 
@@ -108,4 +117,24 @@
 	max-width: 480px;
 	margin-left: 48px;
 	margin-top: 16px;
+}
+
+.safe-publish-dismissible-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 12px;
+	margin: 0 0 12px 0;
+	background: var(--safe-publish-surface-bg, #f0f6fc);
+	border: 1px solid var(--safe-publish-border, #c3c4c7);
+	border-radius: 16px;
+	font-size: 13px;
+}
+
+.safe-publish-imports-tabs .components-tab-panel__tabs {
+	margin-bottom: 12px;
+}
+
+.safe-publish-failed-error {
+	color: var(--safe-publish-status-error);
 }
