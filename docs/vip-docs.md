@@ -64,12 +64,12 @@ The integration handles creating and setting the shared secret — provided to t
 
 ## Roles and permissions
 
-Access to every Safe Publish admin screen — browsing source content, importing, viewing history, and rolling back — requires the `manage_options` capability. In a default WordPress installation, only administrators have this capability.
+Access to every Safe Publish admin screen — browsing source content, importing, reviewing imports and exports, and rolling back — requires the `manage_options` capability. In a default WordPress installation, only administrators have this capability.
 
 Two further checks apply during an import:
 
 - Updating an existing post requires the `edit_post` capability for that specific post.
-- Previewing a diff against an existing post requires the `edit_post` or `edit_others_posts` capability for that post.
+- Previewing a diff against an existing post requires the `edit_post` capability for that post.
 
 Requests from the destination to the source site are not authorized by user capabilities. Instead, each cross-site request is authenticated with the shared secret.
 
@@ -101,8 +101,7 @@ Safe Publish supports importing a single post or many posts at once. Both paths 
 ### Import a single post
 
 1. In the source catalog, select the post to import.
-2. Review the diff preview to confirm what will be created or changed on the destination. See [Previewing changes with a diff](#previewing-changes-with-a-diff).
-3. Confirm the import.
+2. Confirm the import in the dialog that appears.
 
 If a post with the same source post ID already exists on the destination, Safe Publish updates that post rather than creating a duplicate. If no matching post exists, it creates a new one.
 
@@ -115,34 +114,29 @@ By default, a child post is skipped if its parent is not present on the destinat
 
 Safe Publish imports the selected posts as a single unit and records the result of each import. When the selection includes posts with parent–child relationships, the plugin orders the import so that parents are created before their children.
 
-## Previewing changes with a diff
+## Reviewing and updating imported content
 
-Before importing, you can see a diff between the incoming source content and the current content on the destination. The diff covers the title, content, excerpt, featured image, metadata, and taxonomy terms, and can be viewed inline or side by side.
+The **Imports** admin page is the operator surface for everything that came in from the source. It has two tabs:
 
-For content built with the block editor, the diff is computed block by block, so editors can see exactly which blocks were added, removed, or changed.
+- **Posts** — local posts that resulted from successful imports. Each row offers Edit, Update (re-import from source), Diff (compare current local content with current source content), Delete, and Rollback.
+- **Failures** — items whose import errored before a local post was created. Read-only; recovery is fixing the underlying issue and re-importing from the source catalog.
 
-## Reviewing and rolling back imports
+### Previewing changes with a diff
 
-Safe Publish records every import so it can be reviewed and reversed. Two screens support this: an imported-posts list and an import history.
+The Diff action on the Imports → Posts tab compares the current local post with the current source content, covering the title, content, excerpt, featured image, metadata, and taxonomy terms. It can be viewed inline or side by side, and for block-editor content the diff is computed block by block so editors can see exactly which blocks were added, removed, or changed. The modal also offers an Update button that re-imports the post from the source.
 
-### Imported posts
+### Rolling back imports
 
-The imported-posts screen lists every post on the destination that Safe Publish has created or updated. From here, an editor can view the diff of a previous import and roll back an individual post.
+Rollback reverses a single imported post:
 
-### Import history
+- If the post was newly created by the import, the post is deleted.
+- If the post was an update of an existing post, the previous content — captured at import time — is restored.
 
-The history screen lists imports in reverse chronological order. Each import records who ran it, the source site, whether it moved a single post or many, its status, and when it ran. Opening an import shows its items and the changes each one made.
-
-### Rolling back
-
-Rollback reverses an import. It can be performed for a single item or for an entire import:
-
-- **Item rollback** reverses one item. If the item created a post, the post is deleted. If the item updated a post, the post's previous content — captured at import time — is restored.
-- **Import rollback** reverses every item in one import in a single action and marks that import as rolled back.
+Multiple rows can be selected on the Posts tab and rolled back in a single action. Only rows whose status is `success` or `updated`, and that have not already been rolled back, are eligible.
 
 Rollback relies on the content snapshot captured when the post was updated. Because Safe Publish stores the pre-update content as part of the import record, it can restore an updated post to its earlier state without contacting the source site again.
 
-Note: Rolling back a created post deletes that post on the destination. Confirm the diff and the affected posts before rolling back an import, since the action applies to every item that import touched.
+Note: Rolling back a created post deletes that post on the destination. Confirm the affected posts before rolling back, since the action is irreversible for created posts.
 
 ## How media and content are processed
 
@@ -173,9 +167,9 @@ Each event records a channel (such as authentication, content, export, import, o
 
 Safe Publish imports any registered post type, not only posts and pages. The source catalog can be filtered by post type, and custom post types are imported the same way as standard ones.
 
-Because a custom post type's REST API base can differ from its registered slug, Safe Publish resolves the correct REST base for each post type on the source site before fetching its content. Where a source post type slug differs from the destination's, the plugin maps the source slug to the destination equivalent during import.
+Because a custom post type's REST API base can differ from its registered slug, Safe Publish resolves the correct REST base for each post type on the source site before fetching its content.
 
-A post type must be registered on the destination for its content to import cleanly. If a source post type is not registered on the destination, its posts may not appear or behave as expected.
+A custom post type must be registered with the same slug on the destination for its content to import cleanly. Safe Publish does not remap a source post type slug to a different slug on the destination; if the slugs differ, the import will not place the content under the destination's post type.
 
 ## Filters
 
