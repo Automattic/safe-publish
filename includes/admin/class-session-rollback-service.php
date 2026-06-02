@@ -167,12 +167,24 @@ final class Session_Rollback_Service {
 	/**
 	 * Deletes a newly created post.
 	 *
+	 * The rollback handler runs with `manage_options` on the session, but
+	 * individual posts may belong to a post type whose `delete_post` cap is
+	 * mapped away from administrators by a role plugin. Honour that mapping
+	 * and route through the trash so the action stays reversible.
+	 *
 	 * @param int    $post_id    Post ID to delete.
 	 * @param string $post_title Post title for response.
 	 * @return array{action: string, post_id: int, post_title: string}|WP_Error Result or error.
 	 */
 	private function delete_new_post( int $post_id, string $post_title ): array|WP_Error {
-		if ( ! wp_delete_post( $post_id, true ) ) {
+		if ( ! current_user_can( 'delete_post', $post_id ) ) {
+			return new WP_Error(
+				'delete_forbidden',
+				__( 'You do not have permission to delete this post', 'safe-publish' )
+			);
+		}
+
+		if ( ! wp_delete_post( $post_id, false ) ) {
 			return new WP_Error(
 				'delete_failed',
 				__( 'Failed to delete the post', 'safe-publish' )
@@ -257,6 +269,23 @@ final class Session_Rollback_Service {
 	}
 
 	/**
+	 * Allowlist of meta keys the rollback path is willing to restore.
+	 *
+	 * Mirrors the keys that `Post_Import_Service::capture_previous_content`
+	 * records on update. Restricting the rollback writer to the same list
+	 * keeps the rollback flow symmetric with capture and avoids touching
+	 * any meta key that snuck into the session blob from another source.
+	 *
+	 * @var string[]
+	 */
+	private const RESTORABLE_META_KEYS = array(
+		'_edit_last',
+		'_edit_lock',
+		// `safe_publish_source_link` per Options::META_SOURCE_LINK.
+		'safe_publish_source_link',
+	);
+
+	/**
 	 * Restores post metadata.
 	 *
 	 * @param int   $post_id Post ID.
@@ -268,6 +297,10 @@ final class Session_Rollback_Service {
 		}
 
 		foreach ( $changes['previous_meta'] as $meta_key => $meta_value ) {
+			if ( ! in_array( (string) $meta_key, self::RESTORABLE_META_KEYS, true ) ) {
+				continue;
+			}
+
 			update_post_meta( $post_id, $meta_key, $meta_value );
 		}
 	}
