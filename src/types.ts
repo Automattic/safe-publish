@@ -84,6 +84,7 @@ export interface CatalogResponse {
  * @property {string}      modified_gmt         Local post_modified_gmt.
  * @property {string}      edit_url             Local wp-admin edit URL.
  * @property {string}      source_link          Source post permalink (from META_SOURCE_LINK).
+ * @property {number|null} item_id              Most recent import's items-table row ID, or null.
  * @property {number|null} session_id           Session ID of the most recent import event, or null.
  * @property {string|null} rollback_status      Items-table status (success/updated/error), or null.
  * @property {boolean}     has_previous_content Whether the row has a pre-update snapshot for rollback restore.
@@ -99,6 +100,7 @@ export interface ImportedPost {
 	modified_gmt: string;
 	edit_url: string;
 	source_link: string;
+	item_id: number | null;
 	session_id: number | null;
 	rollback_status: string | null;
 	has_previous_content: boolean;

@@ -200,6 +200,119 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the capability-based default applies wp_kses for a caller
+	 * that does not hold `unfiltered_html`, aborting the import when the
+	 * source content contains HTML kses strips.
+	 */
+	public function test_kses_runs_by_default_for_caller_without_unfiltered_html(): void {
+		// ARRANGE: An author (no `unfiltered_html` by default on single-site)
+		// imports content containing a script tag. The base test case sets up
+		// an administrator by default; switch to a user without the capability.
+		$author_id = self::factory()->user->create(
+			array( 'role' => 'author' )
+		);
+		wp_set_current_user( $author_id );
+
+		$content = '<p>Safe content.</p>'
+			. '<script>alert("xss")</script>';
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'             => 8060,
+			'title'          => 'Default Kses Without Capability',
+			'content'        => $content,
+			'link'           => 'https://source.example.com/default-kses-no-cap',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '',
+			'meta'           => array(),
+			'terms'          => array(),
+		);
+
+		$this->mock_post_overrides = array(
+			'content' => $content,
+		);
+
+		// ACT: Import without setting the safe_publish_import_kses filter so
+		// the capability-based default decides.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: kses ran and aborted the import with a descriptive error.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString(
+			'modified by sanitization',
+			$result['error']
+		);
+		$this->assertStringContainsString(
+			'<script>',
+			$result['error']
+		);
+	}
+
+	/**
+	 * Verifies that the capability-based default skips wp_kses for any caller
+	 * that holds `unfiltered_html`, regardless of role, so source HTML kses
+	 * would otherwise strip imports verbatim.
+	 */
+	public function test_kses_skipped_by_default_for_caller_with_unfiltered_html(): void {
+		// ARRANGE: A non-administrator role (author, which does not normally
+		// hold `unfiltered_html`) is granted the capability explicitly. The
+		// capability — not the role — must decide.
+		$author_id = self::factory()->user->create(
+			array( 'role' => 'author' )
+		);
+		$author    = get_user_by( 'id', $author_id );
+		$author->add_cap( 'unfiltered_html' );
+		wp_set_current_user( $author_id );
+
+		$content = '<p>Safe content.</p>'
+			. '<script>alert("trusted")</script>';
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		$post_data = array(
+			'id'             => 8061,
+			'title'          => 'Default Kses With Capability',
+			'content'        => $content,
+			'link'           => 'https://source.example.com/default-kses-with-cap',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '',
+			'meta'           => array(),
+			'terms'          => array(),
+		);
+
+		$this->mock_post_overrides = array(
+			'content' => $content,
+		);
+
+		// ACT: Import without setting the safe_publish_import_kses filter so
+		// the capability-based default decides.
+		$result = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: kses did not run; the script tag survived in storage.
+		$this->assertTrue( $result['success'] );
+		$post = get_post( $result['post_id'] );
+		$this->assertStringContainsString(
+			'<script>',
+			$post->post_content
+		);
+	}
+
+	/**
 	 * Provides stripping scenarios with content and expected error substrings.
 	 *
 	 * @return array[] Test cases keyed by label.
