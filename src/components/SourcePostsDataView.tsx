@@ -20,8 +20,6 @@ import {
 import { createActions } from '../actions';
 import {
 	DEFAULT_ITEMS_PER_PAGE,
-	LAYOUT_GRID,
-	LAYOUT_LIST,
 	LAYOUT_TABLE,
 	SEARCH_DEBOUNCE_MS,
 } from '../constants';
@@ -273,11 +271,7 @@ export function SourcePostsDataView( {
 		titleField: 'title',
 	} );
 
-	const defaultLayouts = {
-		[ LAYOUT_TABLE ]: {},
-		[ LAYOUT_GRID ]: {},
-		[ LAYOUT_LIST ]: {},
-	};
+	const defaultLayouts = { [ LAYOUT_TABLE ]: {} };
 
 	const [ pagePosts, setPagePosts ] = useState< Post[] >( [] );
 	const [ hasMore, setHasMore ] = useState( false );
