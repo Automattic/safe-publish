@@ -134,6 +134,59 @@ class Permission_Manager {
 		add_filter( 'map_meta_cap', array( $this, 'override_meta_capabilities' ), 10, 4 );
 		add_filter( 'rest_post_dispatch', array( $this, 'override_context_permissions' ), 5, 3 );
 		add_filter( 'rest_post_dispatch', array( $this, 'log_dispatch_event' ), 20, 3 );
+
+		// Drop the elevation when the dispatch finishes so a subsequent REST
+		// request handled by the same PHP process does not inherit the
+		// authenticated context. Runs after log_dispatch_event so the audit
+		// log still sees the authenticated flag.
+		add_filter( 'rest_post_dispatch', array( $this, 'tear_down_authenticated_context' ), PHP_INT_MAX, 3 );
+	}
+
+	/**
+	 * Removes the filters installed by setup_authenticated_context.
+	 *
+	 * @param WP_REST_Response|WP_HTTP_Response|WP_Error $result   Response.
+	 * @param WP_REST_Server                             $_server  Server instance.
+	 * @param WP_REST_Request                            $_request Request object.
+	 * @return WP_REST_Response|WP_HTTP_Response|WP_Error Response, unchanged.
+	 */
+	public function tear_down_authenticated_context( // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		WP_REST_Response|WP_HTTP_Response|WP_Error $result,
+		WP_REST_Server $_server,
+		WP_REST_Request $_request
+	): WP_REST_Response|WP_HTTP_Response|WP_Error {
+		// Skip during the inner rest_forbidden_context re-dispatch — otherwise
+		// teardown fires before log_dispatch_event writes the outer audit row.
+		if ( ! $this->authenticated || $this->context_override ) {
+			return $result;
+		}
+
+		remove_filter( 'user_has_cap', array( $this, 'grant_api_capabilities' ), 10 );
+		remove_filter( 'user_has_cap', array( $this, 'apply_request_caps' ), 5 );
+		remove_filter( 'user_has_cap', array( $this, 'apply_context_caps' ), 999 );
+		remove_filter( 'user_has_cap', array( $this, 'apply_edit_context_caps' ), 999 );
+
+		remove_filter( 'rest_pre_dispatch', array( $this, 'bypass_permission_checks' ), 11 );
+		remove_filter( 'rest_post_collection_params', array( $this, 'override_collection_params' ), 10 );
+		remove_filter( 'rest_prepare_post', array( $this, 'ensure_edit_context_access' ), 10 );
+		remove_filter( 'rest_prepare_page', array( $this, 'ensure_edit_context_access' ), 10 );
+		remove_filter( 'rest_endpoints', array( $this, 'override_endpoint_permissions' ) );
+		remove_filter( 'map_meta_cap', array( $this, 'override_meta_capabilities' ), 10 );
+		remove_filter( 'rest_post_dispatch', array( $this, 'override_context_permissions' ), 5 );
+		remove_filter( 'rest_post_dispatch', array( $this, 'log_dispatch_event' ), 20 );
+
+		remove_filter( 'rest_allow_anonymous_comments', '__return_true' );
+		remove_filter( 'rest_prepare_post', array( $this, 'prepare_post_for_edit_context' ), 10 );
+		remove_filter( 'rest_prepare_page', array( $this, 'prepare_post_for_edit_context' ), 10 );
+		remove_filter( 'rest_post_dispatch', array( $this, 'ensure_response_success' ), 10 );
+
+		remove_filter( 'rest_post_dispatch', array( $this, 'tear_down_authenticated_context' ), PHP_INT_MAX );
+
+		$this->authenticated    = false;
+		$this->context_override = false;
+		$this->dispatch_logged  = false;
+
+		return $result;
 	}
 
 	/**
@@ -161,48 +214,7 @@ class Permission_Manager {
 			return $response;
 		}
 
-		add_filter(
-			'user_has_cap',
-			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-			function ( $allcaps, $_caps, $_args, $_user ): array {
-				$safe_publish_caps = array(
-					'read',
-					'edit_posts',
-					'edit_others_posts',
-					'edit_private_posts',
-					'edit_published_posts',
-					'publish_posts',
-					'delete_posts',
-					'delete_others_posts',
-					'delete_private_posts',
-					'delete_published_posts',
-					'read_private_posts',
-					'edit_pages',
-					'edit_others_pages',
-					'edit_private_pages',
-					'edit_published_pages',
-					'publish_pages',
-					'delete_pages',
-					'delete_others_pages',
-					'delete_private_pages',
-					'delete_published_pages',
-					'read_private_pages',
-					'manage_categories',
-					'manage_options',
-					'upload_files',
-					'edit_files',
-					'unfiltered_html',
-				);
-
-				foreach ( $safe_publish_caps as $cap ) {
-					$allcaps[ $cap ] = true;
-				}
-
-				return $allcaps;
-			},
-			5,
-			4
-		);
+		add_filter( 'user_has_cap', array( $this, 'apply_request_caps' ), 5, 4 );
 
 		$this->logger->permission_check_intercepted(
 			$route,
@@ -258,6 +270,99 @@ class Permission_Manager {
 
 		// Grant the capability by returning 'exist' (always granted).
 		return array( 'exist' );
+	}
+
+	/**
+	 * `user_has_cap` callback used by handle_permission_check to grant the
+	 * full request-level capability bag once HMAC has authenticated.
+	 *
+	 * @param array $allcaps Existing caps.
+	 * @return array Modified caps.
+	 */
+	public function apply_request_caps( array $allcaps ): array {
+		if ( ! $this->authenticated ) {
+			return $allcaps;
+		}
+
+		$caps = array(
+			'read',
+			'edit_posts',
+			'edit_others_posts',
+			'edit_private_posts',
+			'edit_published_posts',
+			'publish_posts',
+			'delete_posts',
+			'delete_others_posts',
+			'delete_private_posts',
+			'delete_published_posts',
+			'read_private_posts',
+			'edit_pages',
+			'edit_others_pages',
+			'edit_private_pages',
+			'edit_published_pages',
+			'publish_pages',
+			'delete_pages',
+			'delete_others_pages',
+			'delete_private_pages',
+			'delete_published_pages',
+			'read_private_pages',
+			'manage_categories',
+			'manage_options',
+			'upload_files',
+			'edit_files',
+			'unfiltered_html',
+		);
+
+		foreach ( $caps as $cap ) {
+			$allcaps[ $cap ] = true;
+		}
+
+		return $allcaps;
+	}
+
+	/**
+	 * `user_has_cap` callback used by override_context_permissions during the
+	 * re-dispatch of a forbidden-context error. Removed immediately after the
+	 * inner dispatch completes.
+	 *
+	 * @param array $allcaps Existing caps.
+	 * @return array Modified caps.
+	 */
+	public function apply_context_caps( array $allcaps ): array {
+		if ( ! $this->authenticated ) {
+			return $allcaps;
+		}
+
+		$allcaps['edit_posts']         = true;
+		$allcaps['edit_others_posts']  = true;
+		$allcaps['edit_private_posts'] = true;
+		$allcaps['read_private_posts'] = true;
+		$allcaps['edit_pages']         = true;
+		$allcaps['edit_others_pages']  = true;
+		$allcaps['edit_private_pages'] = true;
+		$allcaps['read_private_pages'] = true;
+
+		return $allcaps;
+	}
+
+	/**
+	 * `user_has_cap` callback used by ensure_edit_context_access during the
+	 * per-row rest_prepare_* preparation step.
+	 *
+	 * @param array $allcaps Existing caps.
+	 * @return array Modified caps.
+	 */
+	public function apply_edit_context_caps( array $allcaps ): array {
+		if ( ! $this->authenticated ) {
+			return $allcaps;
+		}
+
+		$allcaps['edit_posts']         = true;
+		$allcaps['edit_others_posts']  = true;
+		$allcaps['edit_private_posts'] = true;
+		$allcaps['read_private_posts'] = true;
+
+		return $allcaps;
 	}
 
 	/**
@@ -413,24 +518,11 @@ class Permission_Manager {
 
 		$this->context_override = true;
 
-		// Temporarily grant all capabilities and re-dispatch.
-		add_filter(
-			'user_has_cap',
-			function ( $allcaps ): array {
-				$allcaps['edit_posts']         = true;
-				$allcaps['edit_others_posts']  = true;
-				$allcaps['edit_private_posts'] = true;
-				$allcaps['read_private_posts'] = true;
-				$allcaps['edit_pages']         = true;
-				$allcaps['edit_others_pages']  = true;
-				$allcaps['edit_private_pages'] = true;
-				$allcaps['read_private_pages'] = true;
-				return $allcaps;
-			},
-			999
-		);
+		add_filter( 'user_has_cap', array( $this, 'apply_context_caps' ), 999, 4 );
 
 		$new_result = $server->dispatch( $request );
+
+		remove_filter( 'user_has_cap', array( $this, 'apply_context_caps' ), 999 );
 
 		$this->context_override = false;
 
@@ -454,19 +546,11 @@ class Permission_Manager {
 			return $response;
 		}
 
-		add_filter(
-			'user_has_cap',
-			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-			function ( $allcaps, $_caps, $_args, $_user ): array {
-				$allcaps['edit_posts']         = true;
-				$allcaps['edit_others_posts']  = true;
-				$allcaps['edit_private_posts'] = true;
-				$allcaps['read_private_posts'] = true;
-				return $allcaps;
-			},
-			999,
-			4
-		);
+		// Stable named-method registration; idempotent across the per-row
+		// rest_prepare_* firings in a list response.
+		if ( ! has_filter( 'user_has_cap', array( $this, 'apply_edit_context_caps' ) ) ) {
+			add_filter( 'user_has_cap', array( $this, 'apply_edit_context_caps' ), 999, 4 );
+		}
 
 		return $response;
 	}
