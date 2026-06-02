@@ -119,7 +119,7 @@
 	margin-top: 16px;
 }
 
-.safe-publish-batch-pill {
+.safe-publish-dismissible-pill {
 	display: inline-flex;
 	align-items: center;
 	gap: 8px;
