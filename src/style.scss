@@ -205,6 +205,10 @@
 	&--future {
 		color: #9b59b6;
 	}
+
+	&--rolled-back {
+		color: var(--safe-publish-status-warning);
+	}
 }
 
 .dataviews-action-modal__tertiary {
