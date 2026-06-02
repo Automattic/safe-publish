@@ -1,0 +1,82 @@
+<?php
+/**
+ * Settings Page Test.
+ *
+ * @package Safe_Publish
+ */
+
+declare(strict_types=1);
+
+namespace Safe_Publish\Tests;
+
+use PHPUnit\Framework\TestCase;
+use Safe_Publish\Admin\Settings_Page;
+use Safe_Publish\Utils\Options;
+
+/**
+ * Settings Page Test.
+ *
+ * Tests settings page rendering behavior.
+ */
+class SettingsPageTest extends TestCase {
+
+	/**
+	 * Resets test option overrides after each test.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		parent::tearDown();
+		reset_test_options();
+	}
+
+	/**
+	 * Verifies that externally configured passwords are not rendered into HTML.
+	 *
+	 * @runInSeparateProcess
+	 * @preserveGlobalState disabled
+	 */
+	public function test_render_hides_externally_configured_password(): void {
+		// ARRANGE: define the password constant and import-mode settings.
+		define( 'SAFE_PUBLISH_BASIC_AUTH_PASSWORD', 'constant-password' );
+		set_test_option( Options::OPTION_CONNECTED_SITE_URL, 'https://source.example.com' );
+		set_test_option( Options::OPTION_SYNC_MODE, Options::SYNC_MODE_IMPORT );
+		set_test_option( Options::OPTION_BASIC_AUTH_USERNAME, 'editor' );
+
+		// ACT: render the settings page markup.
+		ob_start();
+		( new Settings_Page() )->render();
+		$output = (string) ob_get_clean();
+
+		// ASSERT: the constant value is replaced with an external placeholder.
+		$this->assertStringContainsString( 'Configured externally', $output );
+		$this->assertStringContainsString( 'data-configured-externally="1"', $output );
+		$this->assertStringNotContainsString( 'constant-password', $output );
+		$this->assertStringNotContainsString(
+			'name="safe_publish_basic_auth_password"',
+			$output
+		);
+	}
+
+	/**
+	 * Verifies that stored user-entered passwords still render into the form.
+	 */
+	public function test_render_keeps_user_entered_password_editable(): void {
+		// ARRANGE: store import-mode settings and a saved Basic Auth password.
+		set_test_option( Options::OPTION_CONNECTED_SITE_URL, 'https://source.example.com' );
+		set_test_option( Options::OPTION_SYNC_MODE, Options::SYNC_MODE_IMPORT );
+		set_test_option( Options::OPTION_BASIC_AUTH_PASSWORD, 'user-password' );
+
+		// ACT: render the settings page markup.
+		ob_start();
+		( new Settings_Page() )->render();
+		$output = (string) ob_get_clean();
+
+		// ASSERT: the stored password remains editable in the settings form.
+		$this->assertStringContainsString(
+			'name="safe_publish_basic_auth_password"',
+			$output
+		);
+		$this->assertStringContainsString( 'value="user-password"', $output );
+		$this->assertStringNotContainsString( 'Configured externally', $output );
+	}
+}

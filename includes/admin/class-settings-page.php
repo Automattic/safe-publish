@@ -29,8 +29,13 @@ final class Settings_Page {
 		$sync_mode          = get_option( Options::OPTION_SYNC_MODE, '' );
 
 		// Basic auth credentials (development only).
-		$username = get_option( Options::OPTION_BASIC_AUTH_USERNAME, '' );
-		$password = get_option( Options::OPTION_BASIC_AUTH_PASSWORD, '' );
+		$username             = get_option( Options::OPTION_BASIC_AUTH_USERNAME, '' );
+		$password_is_external = Options::is_constant_configured(
+			Options::OPTION_BASIC_AUTH_PASSWORD
+		);
+		$password             = $password_is_external
+			? ''
+			: get_option( Options::OPTION_BASIC_AUTH_PASSWORD, '' );
 
 		$show_import_fields = in_array(
 			$sync_mode,
@@ -153,16 +158,30 @@ final class Settings_Page {
 									<label for="safe_publish_basic_auth_password" class="screen-reader-text">
 										<?php esc_html_e( 'Basic Auth Password', 'safe-publish' ); ?>
 									</label>
-									<input
-										type="password"
-										id="safe_publish_basic_auth_password"
-										name="safe_publish_basic_auth_password"
-										value="<?php echo esc_attr( $password ); ?>"
-										class="regular-text"
-										placeholder="<?php echo esc_attr__( 'Password', 'safe-publish' ); ?>"
-										autocomplete="current-password"
-										style="margin-top: 4px;"
-									/>
+									<?php if ( $password_is_external ) : ?>
+										<input
+											type="text"
+											id="safe_publish_basic_auth_password"
+											value="<?php echo esc_attr__( 'Configured externally', 'safe-publish' ); ?>"
+											class="regular-text"
+											readonly
+											aria-readonly="true"
+											data-configured-externally="1"
+											autocomplete="off"
+											style="margin-top: 4px;"
+										/>
+									<?php else : ?>
+										<input
+											type="password"
+											id="safe_publish_basic_auth_password"
+											name="safe_publish_basic_auth_password"
+											value="<?php echo esc_attr( $password ); ?>"
+											class="regular-text"
+											placeholder="<?php echo esc_attr__( 'Password', 'safe-publish' ); ?>"
+											autocomplete="current-password"
+											style="margin-top: 4px;"
+										/>
+									<?php endif; ?>
 									
 								</td>
 							</tr>
@@ -236,8 +255,12 @@ final class Settings_Page {
 						formData.append( 'action', 'safe_publish_test_connection' );
 						formData.append( 'nonce', nonce );
 						formData.append( 'connected_site_url', connectedSiteUrl );
-						if ( usernameEl ) formData.append( 'username', usernameEl.value );
-						if ( passwordEl ) formData.append( 'password', passwordEl.value );
+						if ( usernameEl && ! usernameEl.dataset.configuredExternally ) {
+							formData.append( 'username', usernameEl.value );
+						}
+						if ( passwordEl && ! passwordEl.dataset.configuredExternally ) {
+							formData.append( 'password', passwordEl.value );
+						}
 
 						fetch( ajaxUrl, { method: 'POST', body: formData } )
 							.then( function ( r ) { return r.json(); } )
