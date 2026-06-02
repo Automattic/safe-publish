@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 function add_action(): void {}
 
+function add_filter(): void {}
+
 function apply_filters( string $filter, mixed $thing, mixed ...$args ): mixed {
 	return $thing;
 }
