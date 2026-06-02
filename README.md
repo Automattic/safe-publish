@@ -12,7 +12,7 @@
 - **Bulk Import**: Import multiple posts at once with progress tracking
 - **Media Handling**: Automatically imports featured images and inline images
 - **Block Preservation**: Maintains Gutenberg block formatting and structure
-- **Import History**: Complete audit trail of all import actions
+- **Imports page**: Manage imported posts, review failures, and roll back batches
 - **Post Type Support**: Works with posts, pages, and custom post types
 - **VIP-Safe**: Built with WordPress VIP best practices and coding standards
 
@@ -44,7 +44,8 @@ See the [Quickstart Guide](docs/quickstart.md) for detailed instructions.
   - [Authentication](docs/concepts/authentication.md) - Setting up secure connections
   - [Content Validation](docs/concepts/validation.md) - Understanding validation checks
   - [Import Process](docs/concepts/import-process.md) - How imports work step-by-step
-  - [History](docs/concepts/history.md) - Tracking and auditing imports and exports
+  - [Imports](docs/concepts/imports.md) - Managing imported content and failed imports
+  - [Exports](docs/concepts/exports.md) - Reviewing outbound export events
 - **[Extending](docs/extending/index.md)** - Customize the plugin
   - [Hooks and Filters](docs/extending/hooks.md) - Available WordPress hooks
   - [Custom Post Types](docs/extending/post-types.md) - Supporting custom post types

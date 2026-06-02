@@ -1,11 +1,15 @@
 /**
- * DataViews component for the Imported Posts admin page.
+ * DataViews component for the Imports → Posts tab.
  *
  * Lists locally-imported posts via the destination-side
  * `safe_publish_list_imported_posts` AJAX action — a purely local query, no
  * source roundtrip. Supports server-side search, filtering (Local Status,
- * Type, Session), and sorting across the full dataset, plus row actions
- * (Edit, Update, Diff, Delete, and Rollback — single or bulk).
+ * Type), and sorting across the full dataset, plus row actions (Edit, Update,
+ * Diff, Delete, and Rollback — single or bulk).
+ *
+ * When invoked via the post-import notice's `?batch=N` deep-link, the
+ * accompanying session id is applied as a hidden filter and surfaced as a
+ * contextual pill the user can clear.
  *
  * @file This file defines the ImportedPostsDataView component.
  */
@@ -18,7 +22,7 @@ import {
 	SEARCH_DEBOUNCE_MS,
 } from '../constants';
 import { extractUrlPath, formatDateTime, getErrorMessage, PUBLISH_STATUS_LABELS } from '../utils';
-import { Notice, Spinner } from '@wordpress/components';
+import { Button, Notice, Spinner } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
 import { useState, useEffect, useMemo, useCallback, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
@@ -55,26 +59,6 @@ const getMultiFilterValues = (
 		return [];
 	}
 	return filter.value.map( String );
-};
-
-/**
- * Reads a single-select filter's value from the view by field id.
- *
- * @param {View['filters']} filters Active view filters.
- * @param {string}          field   Field id to read.
- *
- * @return {string} Selected value, or an empty string.
- */
-const getSingleFilterValue = (
-	filters: View[ 'filters' ],
-	field: string
-): string => {
-	const filter = filters?.find( ( entry ) => entry.field === field );
-	if ( ! filter || Array.isArray( filter.value ) ) {
-		return '';
-	}
-	const value = filter.value as unknown;
-	return null === value || undefined === value ? '' : String( value );
 };
 
 /**
@@ -147,10 +131,22 @@ export function ImportedPostsDataView(): JSX.Element {
 	const [ refreshNonce, setRefreshNonce ] = useState( 0 );
 	const [ facets, setFacets ] = useState< ImportedPostsFacets >( {
 		post_types: [],
-		sessions: [],
 	} );
 	const [ debouncedSearch, setDebouncedSearch ] = useState( '' );
 	const [ hasRenderedGrid, setHasRenderedGrid ] = useState( false );
+
+	// Batch is set from `?batch=N` on mount and clears via the contextual pill
+	// below; it isn't surfaced as a user filter (sessions aren't a UI noun)
+	// but is forwarded to the listing endpoint as `session_id`.
+	//
+	// Read directly from the URL on mount rather than from the PHP-passed
+	// initial value, so a tab switch that re-mounts this component picks up
+	// a previous Clear that updated the URL but not the inline global.
+	const [ batchSessionId, setBatchSessionId ] = useState< number >( () => {
+		const batchParam = new URLSearchParams( window.location.search ).get( 'batch' );
+		const parsed = batchParam ? parseInt( batchParam, 10 ) : 0;
+		return Number.isFinite( parsed ) && parsed > 0 ? parsed : 0;
+	} );
 
 	const facetsLoadedRef = useRef( false );
 
@@ -163,12 +159,6 @@ export function ImportedPostsDataView(): JSX.Element {
 		() => getMultiFilterValues( view.filters, 'post_type' ),
 		[ view.filters ]
 	);
-	// The selected session lives in view.filters under 'session_id'; a future
-	// "roll back entire session" toolbar reads it the same way.
-	const sessionId = useMemo(
-		() => getSingleFilterValue( view.filters, 'session_id' ),
-		[ view.filters ]
-	);
 	const orderby = 'title' === view.sort?.field ? 'title' : 'import_date';
 	const order = 'asc' === view.sort?.direction ? 'asc' : 'desc';
 
@@ -176,7 +166,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		'' !== debouncedSearch ||
 		statuses.length > 0 ||
 		postTypes.length > 0 ||
-		'' !== sessionId;
+		batchSessionId > 0;
 
 	// Debounce the search box so a fast typist doesn't fire a request per
 	// keystroke.
@@ -216,8 +206,8 @@ export function ImportedPostsDataView(): JSX.Element {
 		}
 		statuses.forEach( ( status ) => formData.append( 'statuses[]', status ) );
 		postTypes.forEach( ( type ) => formData.append( 'post_types[]', type ) );
-		if ( '' !== sessionId ) {
-			formData.append( 'session_id', sessionId );
+		if ( batchSessionId > 0 ) {
+			formData.append( 'session_id', String( batchSessionId ) );
 		}
 		if ( ! facetsLoadedRef.current ) {
 			formData.append( 'with_facets', '1' );
@@ -291,7 +281,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		debouncedSearch,
 		statusesKey,
 		postTypesKey,
-		sessionId,
+		batchSessionId,
 		refreshNonce,
 	] );
 
@@ -354,23 +344,6 @@ export function ImportedPostsDataView(): JSX.Element {
 						( option ) => option.value === item.post_type
 					);
 					return match ? match.label : item.post_type;
-				},
-			},
-			{
-				id: 'session_id',
-				label: __( 'Session', 'safe-publish' ),
-				enableSorting: false,
-				elements: facets.sessions,
-				filterBy: { operators: [ 'is' ] },
-				getValue: ( { item }: { item: ImportedPost } ): string => {
-					if ( null === item.session_id ) {
-						return '';
-					}
-					const id = String( item.session_id );
-					const match = facets.sessions.find(
-						( option ) => option.value === id
-					);
-					return match ? match.label : id;
 				},
 			},
 			{
@@ -480,6 +453,19 @@ export function ImportedPostsDataView(): JSX.Element {
 		hasActiveFilters,
 	} );
 
+	const clearBatch = useCallback( (): void => {
+		setBatchSessionId( 0 );
+		// Match handleViewChange's filter-change behavior so the listing lands
+		// on page 1 of the unfiltered set rather than mid-pagination.
+		setView( ( current ) => ( { ...current, page: 1 } ) );
+		// Strip ?batch=N so a reload or share doesn't reapply the filter.
+		const url = new URL( window.location.href );
+		if ( url.searchParams.has( 'batch' ) ) {
+			url.searchParams.delete( 'batch' );
+			window.history.replaceState( null, '', url.toString() );
+		}
+	}, [] );
+
 	return (
 		<div
 			className="safe-publish-dataviews-wrapper safe-publish-dataviews-wrapper--with-builtins"
@@ -489,6 +475,24 @@ export function ImportedPostsDataView(): JSX.Element {
 				} as React.CSSProperties
 			}
 		>
+			{ batchSessionId > 0 && (
+				<div
+					className="safe-publish-batch-pill"
+					role="status"
+					aria-live="polite"
+				>
+					<span>
+						{ sprintf(
+							/* translators: %d: import batch number */
+							__( 'Showing imports from batch #%d', 'safe-publish' ),
+							batchSessionId
+						) }
+					</span>
+					<Button variant="tertiary" onClick={ clearBatch }>
+						{ __( 'Clear', 'safe-publish' ) }
+					</Button>
+				</div>
+			) }
 			{ fetchError && (
 				<Notice
 					className="safe-publish-post-type-error"

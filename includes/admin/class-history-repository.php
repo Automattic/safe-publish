@@ -372,7 +372,7 @@ final class History_Repository {
 	}
 
 	/**
-	 * Returns a page of imported post IDs for the Imported Posts listing,
+	 * Returns a page of imported post IDs for the Imports → Posts tab listing,
 	 * with search/filter/sort applied across the full dataset.
 	 *
 	 * Aggregates the items table to one row per post (the most recent import
@@ -495,7 +495,7 @@ final class History_Repository {
 	 * Bulk variant of get_item_for_post(): returns the most recent item row
 	 * for each provided post ID, keyed by post_id.
 	 *
-	 * Drives the Imported Posts listing — one query for the whole page
+	 * Drives the Imports → Posts tab listing — one query for the whole page
 	 * instead of N. Relies on the (post_id, import_date_gmt) composite
 	 * index for the inner aggregation. Ties on import_date_gmt resolve to
 	 * the highest id.
@@ -546,18 +546,17 @@ final class History_Repository {
 	}
 
 	/**
-	 * Returns the filter options for the Imported Posts listing.
+	 * Returns the filter options for the Imports → Posts tab listing.
 	 *
 	 * Computed over the full imported set (not the current page) so the filter
 	 * dropdowns stay complete as the user narrows results.
 	 *
 	 * @return array<string, list<array{value: string, label: string}>> Options
-	 *               keyed by 'post_types' and 'sessions'.
+	 *               keyed by 'post_types'.
 	 */
 	public function get_imported_filter_facets(): array {
 		return array(
 			'post_types' => $this->get_imported_post_type_facets(),
-			'sessions'   => $this->get_imported_session_facets(),
 		);
 	}
 
@@ -597,75 +596,43 @@ final class History_Repository {
 	}
 
 	/**
-	 * Returns the import sessions that produced at least one existing post.
+	 * Returns a page of failed import items for the Failures tab listing.
 	 *
-	 * @return list<array{value: string, label: string}> Session options, newest
-	 *               first.
+	 * Joins the session row so the response can show the source site URL and
+	 * import date without a second query. Returns up to per_page+1 rows so the
+	 * caller can derive has_more without a separate count.
+	 *
+	 * @param int $page     1-indexed page number.
+	 * @param int $per_page Items per page.
+	 * @return array[] Item rows including session source_site_url and date.
 	 */
-	private function get_imported_session_facets(): array {
+	public function list_failed_items( int $page = 1, int $per_page = 20 ): array {
 		global $wpdb;
 
 		$items_table   = Import_Items_Table::table_name();
 		$imports_table = Imports_Table::table_name();
+		$offset        = max( 0, ( $page - 1 ) * $per_page );
+		$limit         = $per_page + 1;
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
-			"SELECT s.id, s.created_at_gmt FROM `{$imports_table}` s"
-				. " WHERE EXISTS ( SELECT 1 FROM `{$items_table}` it"
-				. ' WHERE it.session_id = s.id AND it.post_id IS NOT NULL )'
-				. ' ORDER BY s.created_at_gmt DESC, s.id DESC',
+			$wpdb->prepare(
+				'SELECT it.id, it.session_id, it.title, it.source_post_id,'
+					. ' it.error_message, it.import_date_gmt,'
+					. ' s.source_site_url'
+					. " FROM `{$items_table}` it"
+					. " INNER JOIN `{$imports_table}` s ON s.id = it.session_id"
+					. " WHERE it.status = 'error'"
+					. ' ORDER BY it.import_date_gmt DESC, it.id DESC'
+					. ' LIMIT %d OFFSET %d',
+				$limit,
+				$offset
+			),
 			ARRAY_A
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
-		if ( ! is_array( $rows ) ) {
-			return array();
-		}
-
-		$facets = array();
-		foreach ( $rows as $row ) {
-			$id       = (int) $row['id'];
-			$facets[] = array(
-				'value' => (string) $id,
-				'label' => $this->format_session_facet_label(
-					$id,
-					(string) $row['created_at_gmt']
-				),
-			);
-		}
-
-		return $facets;
-	}
-
-	/**
-	 * Builds a human-readable label for a session filter option.
-	 *
-	 * @param int    $id             Session ID.
-	 * @param string $created_at_gmt Session creation datetime (UTC).
-	 * @return string Localized "date (#id)" label.
-	 */
-	private function format_session_facet_label(
-		int $id,
-		string $created_at_gmt
-	): string {
-		$timestamp = strtotime( $created_at_gmt . ' UTC' );
-
-		if ( false === $timestamp ) {
-			/* translators: %d: import session ID. */
-			return sprintf( __( 'Session #%d', 'safe-publish' ), $id );
-		}
-
-		$formatted = wp_date(
-			get_option( 'date_format' ) . ' ' . get_option( 'time_format' ),
-			$timestamp
-		);
-
-		return sprintf(
-			/* translators: 1: formatted session date, 2: import session ID. */
-			__( '%1$s (#%2$d)', 'safe-publish' ),
-			$formatted,
-			$id
-		);
+		return is_array( $rows ) ? $rows : array();
 	}
 
 	/**

@@ -1,6 +1,6 @@
 <?php
 /**
- * History Renderer class for import history display logic
+ * Diff Renderer class
  *
  * @package Safe_Publish
  */
@@ -9,151 +9,18 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
-use Safe_Publish\Utils\Audit_Log_Table;
-use Safe_Publish\Utils\Imports_Table;
-use Safe_Publish\Utils\Options;
-
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
 /**
- * History Renderer Class.
+ * Generates HTML diffs between previous (pre-import) and current post fields.
  *
- * Handles all display and rendering operations for import history.
+ * Consumed by the Imports → Posts tab's Post Diff action via the
+ * `safe_publish_get_post_diff` AJAX endpoint.
  */
-final class History_Renderer {
-
-	/**
-	 * Renders the import history page.
-	 */
-	public function render_history_page(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'safe-publish' ) );
-		}
-
-		// Enqueue necessary scripts and styles for React.
-		wp_enqueue_script( 'wp-element' );
-		wp_enqueue_script( 'wp-components' );
-		wp_enqueue_script( 'wp-i18n' );
-
-		// Try to enqueue wp-dataviews if available.
-		if ( wp_script_is( 'wp-dataviews', 'registered' ) ) {
-			wp_enqueue_script( 'wp-dataviews' );
-		}
-
-		// Enqueue shared design tokens before any plugin stylesheet.
-		$tokens_css_url = plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/tokens.css';
-		wp_enqueue_style( 'safe-publish-tokens', $tokens_css_url, array(), '1.0.0' );
-
-		// Enqueue custom CSS.
-		$css_file = plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/history.css';
-		wp_enqueue_style( 'safe-publish-history', $css_file, array( 'safe-publish-tokens' ), '1.0.0' );
-
-		// Enqueue DataViews styles.
-		$style_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/style-index.css';
-		$style_file_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'build/style-index.css';
-
-		if ( file_exists( $style_file_path ) ) {
-			wp_enqueue_style(
-				'safe-publish-admin-dataviews-style',
-				$style_file_url,
-				array( 'wp-components', 'safe-publish-tokens' ),
-				filemtime( $style_file_path )
-			);
-		}
-
-		// Enqueue the compiled history JavaScript.
-		$js_file       = plugin_dir_url( dirname( __DIR__ ) ) . 'build/history.js';
-		$js_asset_file = dirname( __DIR__ ) . '/build/history.asset.php';
-
-		$asset_data = array(
-			'dependencies' => array( 'wp-element', 'wp-components', 'wp-i18n' ),
-			'version'      => '1.0.0',
-		);
-
-		if ( file_exists( $js_asset_file ) ) {
-			$asset_data = require $js_asset_file;
-		}
-
-		wp_enqueue_script(
-			'safe-publish-history',
-			$js_file,
-			$asset_data['dependencies'],
-			$asset_data['version'],
-			true
-		);
-
-		$json_data = wp_json_encode(
-			array(
-				'ajaxurl'           => admin_url( 'admin-ajax.php' ),
-				'nonce'             => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-				'restNonce'         => wp_create_nonce( 'wp_rest' ),
-				'showImportHistory' => $this->should_show_import_history(),
-				'showExportHistory' => $this->should_show_export_history(),
-			)
-		);
-
-		if ( false === $json_data || '' === $json_data ) {
-			$json_data = '{}';
-		}
-
-		wp_add_inline_script(
-			'safe-publish-history',
-			sprintf( 'window.safePublishAdminData = %s;', $json_data ),
-			'before'
-		);
-
-		?>
-		<div class="wrap" id="safe-publish-history">
-			<h1><?php esc_html_e( 'History', 'safe-publish' ); ?></h1>
-
-			<!-- React component will be rendered here -->
-			<div id="safe-publish-history-container">
-				<div class="safe-publish-loading">
-					<p><?php esc_html_e( 'Loading history…', 'safe-publish' ); ?></p>
-				</div>
-			</div>
-		</div>
-		<?php
-	}
-
-	/**
-	 * Whether to show the import history tab.
-	 *
-	 * True when the site is configured to import content, or when there are
-	 * existing import session records (e.g. the site was previously bidirectional).
-	 *
-	 * @return bool Whether import history should be shown.
-	 */
-	private function should_show_import_history(): bool {
-		$sync_mode = get_option( Options::OPTION_SYNC_MODE, '' );
-
-		if ( in_array( $sync_mode, array( Options::SYNC_MODE_IMPORT, Options::SYNC_MODE_BIDIRECTIONAL ), true ) ) {
-			return true;
-		}
-
-		return Imports_Table::count() > 0;
-	}
-
-	/**
-	 * Whether to show the export history tab.
-	 *
-	 * True when the site is configured to export content, or when there are
-	 * existing export event records (e.g. the site was previously bidirectional).
-	 *
-	 * @return bool Whether export history should be shown.
-	 */
-	private function should_show_export_history(): bool {
-		$sync_mode = get_option( Options::OPTION_SYNC_MODE, '' );
-
-		if ( in_array( $sync_mode, array( Options::SYNC_MODE_EXPORT, Options::SYNC_MODE_BIDIRECTIONAL ), true ) ) {
-			return true;
-		}
-
-		return Audit_Log_Table::count( array( 'channel' => 'export' ) ) > 0;
-	}
+final class Diff_Renderer {
 
 	/**
 	 * Generates comprehensive HTML diff between old and new content.

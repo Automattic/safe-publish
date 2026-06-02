@@ -1,8 +1,8 @@
 /**
  * Bulk Rollback Post Modal component.
  *
- * Confirms and runs a rollback across multiple Imported Posts rows. A mixed
- * selection may both permanently delete newly created posts and restore
+ * Confirms and runs a rollback across multiple Imports → Posts tab rows. A
+ * mixed selection may both permanently delete newly created posts and restore
  * updated ones, so the confirmation summarizes the counts. Each row is rolled
  * back with its own request and the result reports which titles failed.
  *

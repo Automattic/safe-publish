@@ -1433,7 +1433,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that the Imported Posts listing endpoint serializes the most
+	 * Verifies that the Imports → Posts tab listing endpoint serializes the most
 	 * recent items-table row ID as item_id, which the per-row Roll back action
 	 * targets when undoing an import.
 	 */
@@ -1565,14 +1565,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			'The listed row should be the title match'
 		);
 
-		// ASSERT: Facets are attached and include the session that ran.
+		// ASSERT: Facets are attached and only carry post-type options;
+		// sessions are an internal grouping concept, not a UI facet.
 		$this->assertArrayHasKey( 'facets', $response['data'] );
 		$this->assertArrayHasKey( 'post_types', $response['data']['facets'] );
-		$session_values = array_column(
-			$response['data']['facets']['sessions'],
-			'value'
-		);
-		$this->assertContains( (string) $session_id, $session_values );
+		$this->assertArrayNotHasKey( 'sessions', $response['data']['facets'] );
 	}
 
 	/**
@@ -1613,6 +1610,76 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		$response = json_decode( $this->_last_response, true );
 		$this->assertTrue( $response['success'], 'Listing should return success' );
 		$this->assertArrayNotHasKey( 'facets', $response['data'] );
+	}
+
+	/**
+	 * Verifies that the Failures endpoint lists items with status 'error'
+	 * across sessions, surfacing the source URL from the parent session.
+	 */
+	public function test_ajax_list_failed_imports_lists_error_items(): void {
+		// ARRANGE: One session with a successful item and one failed item.
+		wp_set_current_user( $this->admin_user_id );
+
+		$post_id = $this->factory()->post->create();
+
+		$repository = new History_Repository();
+		$session_id = $repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		if ( is_wp_error( $session_id ) ) {
+			$this->fail( 'Failed to create the test import session.' );
+		}
+
+		$this->insert_import_item( $session_id, $post_id );
+
+		$failed_id = $repository->log_import_action(
+			$session_id,
+			98765,
+			'Doomed Post',
+			'error',
+			null,
+			'Source author missing'
+		);
+		if ( is_wp_error( $failed_id ) ) {
+			$this->fail( 'Failed to log the test error item.' );
+		}
+
+		$_POST = array(
+			'nonce'    => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'page'     => '1',
+			'per_page' => '20',
+		);
+
+		// ACT: Trigger the failed-imports listing handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_list_failed_imports' );
+
+		// ASSERT: Only the error item is returned, with its parent session's
+		// source URL projected onto the row.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertTrue( $response['success'], 'Listing should return success' );
+		$this->assertCount(
+			1,
+			$response['data']['items'],
+			'Only the failed item should be listed'
+		);
+		$this->assertFalse(
+			$response['data']['has_more'],
+			'has_more should be false with a single page'
+		);
+
+		$row = $response['data']['items'][0];
+		$this->assertSame( $failed_id, $row['id'] );
+		$this->assertSame( $session_id, $row['session_id'] );
+		$this->assertSame( 'Doomed Post', $row['title'] );
+		$this->assertSame( 98765, $row['source_post_id'] );
+		$this->assertSame( 'https://source.example.com', $row['source_site_url'] );
+		$this->assertSame( 'Source author missing', $row['error_message'] );
+		$this->assertMatchesRegularExpression(
+			'/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/',
+			$row['import_date_gmt']
+		);
 	}
 
 	/**

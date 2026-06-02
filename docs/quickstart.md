@@ -86,9 +86,11 @@ You have three ways to import content:
 3. Review the content, make any necessary adjustments.
 4. Publish when ready.
 
-## History
+## Imports and exports
 
-Track all your imports and exports in the **History** page. See the [History guide](concepts/history.md) for details.
+The **Imports** page lists everything that came in from the source — see
+[Imports](concepts/imports.md). The **Exports** page lists events logged when
+your site serves posts to a destination — see [Exports](concepts/exports.md).
 
 ## Next Steps
 
