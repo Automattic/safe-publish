@@ -32,13 +32,13 @@ class OptionsTest extends TestCase {
 	 * Verifies that stored options are used when no constant is configured.
 	 */
 	public function test_get_value_returns_option_when_constant_is_not_configured(): void {
-		// ARRANGE.
+		// ARRANGE: store a connected-site URL without defining a constant.
 		set_test_option( Options::OPTION_CONNECTED_SITE_URL, 'https://source.example.com' );
 
-		// ACT.
+		// ACT: read the connected-site URL through the option helper.
 		$value = Options::get_value( Options::OPTION_CONNECTED_SITE_URL, '' );
 
-		// ASSERT.
+		// ASSERT: the stored option value is returned.
 		$this->assertSame( 'https://source.example.com', $value );
 	}
 
@@ -46,10 +46,10 @@ class OptionsTest extends TestCase {
 	 * Verifies that the default value is used when no option or constant exists.
 	 */
 	public function test_get_value_returns_default_when_option_is_not_configured(): void {
-		// ACT.
+		// ACT: read the connected-site URL with only a default available.
 		$value = Options::get_value( Options::OPTION_CONNECTED_SITE_URL, 'https://default.example.com' );
 
-		// ASSERT.
+		// ASSERT: the supplied default value is returned.
 		$this->assertSame( 'https://default.example.com', $value );
 	}
 
@@ -60,14 +60,14 @@ class OptionsTest extends TestCase {
 	 * @preserveGlobalState disabled
 	 */
 	public function test_get_value_prefers_constant_over_option(): void {
-		// ARRANGE.
+		// ARRANGE: define a constant and a different stored option value.
 		define( 'SAFE_PUBLISH_CONNECTED_SITE_URL', 'https://constant.example.com' );
 		set_test_option( Options::OPTION_CONNECTED_SITE_URL, 'https://option.example.com' );
 
-		// ACT.
+		// ACT: read the connected-site URL through the option helper.
 		$value = Options::get_value( Options::OPTION_CONNECTED_SITE_URL, '' );
 
-		// ASSERT.
+		// ASSERT: the constant value wins over the stored option.
 		$this->assertSame( 'https://constant.example.com', $value );
 	}
 
@@ -78,13 +78,13 @@ class OptionsTest extends TestCase {
 	 * @preserveGlobalState disabled
 	 */
 	public function test_pre_option_value_returns_constant_when_configured(): void {
-		// ARRANGE.
+		// ARRANGE: define a sync-mode constant.
 		define( 'SAFE_PUBLISH_SYNC_MODE', Options::SYNC_MODE_IMPORT );
 
-		// ACT.
+		// ACT: filter the sync-mode pre-option value.
 		$value = Options::pre_option_value( false, Options::OPTION_SYNC_MODE );
 
-		// ASSERT.
+		// ASSERT: the constant value replaces the original pre-option value.
 		$this->assertSame( Options::SYNC_MODE_IMPORT, $value );
 	}
 
@@ -93,10 +93,10 @@ class OptionsTest extends TestCase {
 	 * constant is configured.
 	 */
 	public function test_pre_option_value_returns_original_value_without_constant(): void {
-		// ACT.
+		// ACT: filter the sync-mode pre-option value without a constant.
 		$value = Options::pre_option_value( false, Options::OPTION_SYNC_MODE );
 
-		// ASSERT.
+		// ASSERT: the original pre-option value passes through unchanged.
 		$this->assertFalse( $value );
 	}
 }
