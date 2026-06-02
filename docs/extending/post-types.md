@@ -53,31 +53,34 @@ register_post_type( 'book', [
 ] );
 ```
 
-### Custom REST Fields
+### Custom Post Meta
 
-Add custom fields to REST API response:
+Safe Publish imports the core REST API `meta` object. It does not import
+arbitrary top-level REST fields added with `register_rest_field()`.
+For custom post types, the post type must also support `custom-fields`.
+
+Register each meta key that should migrate:
 
 ```php
-register_rest_field( 'book', 'isbn', [
-    'get_callback' => function( $post ) {
-        return get_post_meta( $post['id'], 'isbn', true );
-    },
-    'schema' => [
-        'description' => 'Book ISBN',
-        'type' => 'string',
-    ],
-] );
+add_action( 'init', function() {
+    register_post_meta( 'book', 'isbn', [
+        'single'       => true,
+        'type'         => 'string',
+        'show_in_rest' => true,
+    ] );
 
-register_rest_field( 'book', 'author_name', [
-    'get_callback' => function( $post ) {
-        return get_post_meta( $post['id'], 'author_name', true );
-    },
-    'schema' => [
-        'description' => 'Book Author',
-        'type' => 'string',
-    ],
-] );
+    register_post_meta( 'book', 'author_name', [
+        'single'       => true,
+        'type'         => 'string',
+        'show_in_rest' => true,
+    ] );
+} );
 ```
+
+For private or sensitive meta, add an `auth_callback` that requires edit
+access to the post. Safe Publish requests authenticated with the shared secret
+use `context=edit`, so edit-only meta remains available to the importer without
+making it public in unauthenticated REST responses.
 
 ## Custom Taxonomies
 
@@ -107,9 +110,44 @@ register_post_type( 'documentation', [
 ] );
 ```
 
-## ACF (Advanced Custom Fields) Support
+## ACF and Secure Custom Fields Support
 
-ACF fields are not exposed via the REST API by default. Once exposed (e.g. via ACF's built-in REST API setting or `register_rest_field()`), they are imported automatically like any other post meta.
+ACF and Secure Custom Fields (SCF) store field values in regular post meta, but
+Safe Publish reads only the core REST API `meta` object. ACF's built-in
+**Show in REST API** setting exposes fields under a separate top-level `acf`
+object, which Safe Publish does not import.
+
+To migrate ACF or SCF values, register the field value keys with
+`register_post_meta()` and `show_in_rest => true` on the source site. Prefer
+registering only the field keys that should migrate, with the correct REST type
+and schema for each field. Registering every ACF/SCF or underscored meta key can
+expose internal or sensitive values in REST responses.
+
+ACF and SCF also store a companion reference key for each field, such as
+`_hero_title` for `hero_title`. Migrate the companion key when the destination
+editor needs ACF/SCF to recognize the imported value.
+
+```php
+add_action( 'init', function() {
+    register_post_meta( 'post', 'hero_title', [
+        'single'       => true,
+        'type'         => 'string',
+        'show_in_rest' => true,
+    ] );
+
+    register_post_meta( 'post', '_hero_title', [
+        'single'       => true,
+        'type'         => 'string',
+        'show_in_rest' => true,
+    ] );
+} );
+```
+
+The destination does not need field registration to store the imported meta.
+However, the editor only renders the values as ACF/SCF controls when ACF or SCF
+is active on the destination and the destination has matching field definitions
+with the same field keys. Safe Publish does not currently create or sync field
+groups.
 
 ## Troubleshooting
 
@@ -130,14 +168,14 @@ curl https://your-staging-site.com/wp-json/wp/v2/your-post-type
 
 ### Custom Fields Not Importing
 
-**Expose fields in REST API:**
+**Expose fields through the REST API `meta` object:**
 
 ```php
-add_action( 'rest_api_init', function() {
-    register_rest_field( 'your_post_type', 'your_field', [
-        'get_callback' => function( $post ) {
-            return get_post_meta( $post['id'], 'your_field', true );
-        },
+add_action( 'init', function() {
+    register_post_meta( 'your_post_type', 'your_field', [
+        'single'       => true,
+        'type'         => 'string',
+        'show_in_rest' => true,
     ] );
 } );
 ```
@@ -179,19 +217,21 @@ function register_book_post_type() {
 }
 add_action( 'init', 'register_book_post_type' );
 
-// Add custom fields to REST API
+// Add custom fields to the REST API meta object.
 function expose_book_fields() {
-    register_rest_field( 'book', 'isbn', [
-        'get_callback' => fn( $post ) => get_post_meta( $post['id'], 'isbn', true ),
-        'schema' => [ 'type' => 'string' ],
+    register_post_meta( 'book', 'isbn', [
+        'single'       => true,
+        'type'         => 'string',
+        'show_in_rest' => true,
     ] );
 
-    register_rest_field( 'book', 'author_name', [
-        'get_callback' => fn( $post ) => get_post_meta( $post['id'], 'author_name', true ),
-        'schema' => [ 'type' => 'string' ],
+    register_post_meta( 'book', 'author_name', [
+        'single'       => true,
+        'type'         => 'string',
+        'show_in_rest' => true,
     ] );
 }
-add_action( 'rest_api_init', 'expose_book_fields' );
+add_action( 'init', 'expose_book_fields' );
 ```
 
 ## Next Steps
