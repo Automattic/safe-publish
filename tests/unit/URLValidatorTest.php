@@ -92,4 +92,92 @@ class URLValidatorTest extends TestCase {
 		$sanitized = URL_Validator::sanitize_external_url( $url );
 		$this->assertFalse( $sanitized );
 	}
+
+	/**
+	 * Verifies that URLs whose scheme isn't `http`/`https` are rejected so
+	 * the validator can't accidentally pass through `ftp://`, `file://`,
+	 * `gopher://`, or similar schemes the plugin has no business fetching.
+	 *
+	 * @dataProvider non_http_scheme_provider
+	 *
+	 * @param string $url URL expected to be rejected.
+	 */
+	public function test_non_http_scheme_fails_validation( string $url ): void {
+		$this->assertFalse( URL_Validator::is_valid_external_url( $url ) );
+	}
+
+	/**
+	 * Data provider for non-http(s) schemes that must be rejected.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function non_http_scheme_provider(): array {
+		return array(
+			'ftp'    => array( 'ftp://example.com' ),
+			'file'   => array( 'file:///etc/passwd' ),
+			'gopher' => array( 'gopher://example.com' ),
+		);
+	}
+
+	/**
+	 * Verifies that schemes are matched case-insensitively per RFC 3986 —
+	 * `HTTP://` and `HTTPS://` are equivalent to the lowercase forms and
+	 * must pass validation.
+	 *
+	 * @dataProvider uppercase_scheme_provider
+	 *
+	 * @param string $url URL expected to pass validation.
+	 */
+	public function test_uppercase_scheme_passes_validation( string $url ): void {
+		$this->assertTrue( URL_Validator::is_valid_external_url( $url ) );
+	}
+
+	/**
+	 * Data provider for uppercase http/https schemes.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function uppercase_scheme_provider(): array {
+		return array(
+			'HTTP'  => array( 'HTTP://example.com' ),
+			'HTTPS' => array( 'HTTPS://example.com' ),
+		);
+	}
+
+	/**
+	 * Verifies that hosts that resolve into reserved address space — by
+	 * literal loopback name or by IP literal in the loopback, RFC1918,
+	 * link-local, or ULA ranges — are rejected so an admin-supplied URL
+	 * cannot redirect plugin HTTP traffic at an internal address.
+	 *
+	 * @dataProvider private_host_provider
+	 *
+	 * @param string $url URL expected to be rejected.
+	 */
+	public function test_private_or_reserved_host_fails_validation( string $url ): void {
+		$this->assertFalse( URL_Validator::is_valid_external_url( $url ) );
+	}
+
+	/**
+	 * Data provider for hosts that must be rejected as private/reserved.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function private_host_provider(): array {
+		return array(
+			'localhost name'       => array( 'http://localhost' ),
+			'localhost with port'  => array( 'http://localhost:8888' ),
+			'ip6-localhost name'   => array( 'http://ip6-localhost' ),
+			'ip6-loopback name'    => array( 'http://ip6-loopback' ),
+			'IPv4 loopback'        => array( 'http://127.0.0.1' ),
+			'IPv4 RFC1918 class A' => array( 'http://10.0.0.5' ),
+			'IPv4 RFC1918 class B' => array( 'http://172.16.0.1' ),
+			'IPv4 RFC1918 class C' => array( 'http://192.168.1.1' ),
+			'IPv4 link-local'      => array( 'http://169.254.169.254' ),
+			'IPv4 zero network'    => array( 'http://0.0.0.0' ),
+			'IPv6 loopback'        => array( 'http://[::1]' ),
+			'IPv6 ULA'             => array( 'http://[fd00::1]' ),
+			'IPv6 link-local'      => array( 'http://[fe80::1]' ),
+		);
+	}
 }

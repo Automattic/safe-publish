@@ -119,7 +119,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		perPage: DEFAULT_ITEMS_PER_PAGE,
 		page: 1,
 		sort: { field: 'import_date_gmt', direction: 'desc' },
-		fields: [ 'permalink', 'sync_status', 'local_status', 'import_date_gmt' ],
+		fields: [ 'permalink', 'sync_status', 'local_status', 'rolled_back', 'import_date_gmt' ],
 		titleField: 'title',
 	} );
 
@@ -345,22 +345,33 @@ export function ImportedPostsDataView(): JSX.Element {
 		refreshNonce,
 	] );
 
+	// Sorted-join of displayItems' unique source_post_ids — stable across
+	// content-equal replacements so the sync-status effect below doesn't
+	// re-request on every render, and inclusive of any focused row hoisted
+	// in from outside the current page.
+	const sourceIdsKey = useMemo(
+		() =>
+			Array.from(
+				new Set(
+					displayItems
+						.map( ( item ) => item.source_post_id )
+						.filter( ( id ): id is number => id > 0 )
+				)
+			)
+				.sort( ( left, right ) => left - right )
+				.join( ',' ),
+		[ displayItems ]
+	);
+
 	// Refill the Sync Status column after every listing refresh by asking the
 	// destination's sync-status endpoint to compare each row's source
 	// modified_gmt against its import_date_gmt.
 	useEffect( () => {
-		const sourceIds = Array.from(
-			new Set(
-				displayItems
-					.map( ( item ) => item.source_post_id )
-					.filter( ( id ): id is number => id > 0 )
-			)
-		);
-
-		if ( 0 === sourceIds.length ) {
+		if ( '' === sourceIdsKey ) {
 			return;
 		}
 
+		const sourceIds = sourceIdsKey.split( ',' ).map( Number );
 		const controller = new AbortController();
 
 		setSyncStatuses( ( current ) => {
@@ -430,7 +441,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		return () => {
 			controller.abort();
 		};
-	}, [ displayItems ] );
+	}, [ sourceIdsKey ] );
 
 	const fields: DataViewsField< ImportedPost >[] = useMemo(
 		() => [
@@ -493,24 +504,34 @@ export function ImportedPostsDataView(): JSX.Element {
 						PUBLISH_STATUS_LABELS[ item.local_status ] ?? item.local_status;
 					const modifierClass = `safe-publish-status-badge--${ item.local_status }`;
 					return (
-						<>
-							<span className={ `safe-publish-status-badge ${ modifierClass }` }>
-								<span
-									className="safe-publish-status-badge__dot"
-									aria-hidden="true"
-								/>
-								{ label }
-							</span>
-							{ item.rolled_back && (
-								<span className="safe-publish-status-badge safe-publish-status-badge--rolled-back">
-									<span
-										className="safe-publish-status-badge__dot"
-										aria-hidden="true"
-									/>
-									{ __( 'Rolled back', 'safe-publish' ) }
-								</span>
-							) }
-						</>
+						<span className={ `safe-publish-status-badge ${ modifierClass }` }>
+							<span
+								className="safe-publish-status-badge__dot"
+								aria-hidden="true"
+							/>
+							{ label }
+						</span>
+					);
+				},
+			},
+			{
+				id: 'rolled_back',
+				label: __( 'Rollback', 'safe-publish' ),
+				enableSorting: false,
+				getValue: ( { item }: { item: ImportedPost } ): string =>
+					item.rolled_back ? __( 'Rolled back', 'safe-publish' ) : '',
+				render: ( { item }: { item: ImportedPost } ): JSX.Element => {
+					if ( ! item.rolled_back ) {
+						return <span>—</span>;
+					}
+					return (
+						<span className="safe-publish-status-badge safe-publish-status-badge--rolled-back">
+							<span
+								className="safe-publish-status-badge__dot"
+								aria-hidden="true"
+							/>
+							{ __( 'Rolled back', 'safe-publish' ) }
+						</span>
 					);
 				},
 			},

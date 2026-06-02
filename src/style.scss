@@ -211,7 +211,8 @@
 		color: var(--safe-publish-status-warning);
 	}
 
-	&--missing {
+	&--missing,
+	&--invalid {
 		color: var(--safe-publish-status-error);
 	}
 
@@ -242,7 +243,6 @@
 
 	&--rolled-back {
 		color: var(--safe-publish-status-warning);
-		margin-left: 8px;
 	}
 }
 

@@ -88,6 +88,7 @@ export const SYNC_STATUS_LABELS = {
 	available:   __( 'Available', 'safe-publish' ),
 	missing:     __( 'Missing on source', 'safe-publish' ),
 	unreachable: __( 'Cannot check', 'safe-publish' ),
+	invalid:     __( 'Invalid timestamp', 'safe-publish' ),
 	loading:     __( 'Checking…', 'safe-publish' ),
 } as const;
 

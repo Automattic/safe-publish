@@ -440,6 +440,92 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that tear_down_authenticated_context short-circuits while the
+	 * rest_forbidden_context re-dispatch is in flight, so the outer dispatch
+	 * keeps the filters it needs to log and clean up.
+	 */
+	public function test_teardown_skips_during_context_override_redispatch(): void {
+		// ARRANGE: Authenticated context plus a subscriber session, then
+		// simulate the mid-redispatch state override_context_permissions sets
+		// before its inner $server->dispatch() call.
+		$user_id = $this->factory()->user->create( array( 'role' => 'subscriber' ) );
+		wp_set_current_user( $user_id );
+
+		$request = new WP_REST_Request( 'GET', '/wp/v2/posts/42' );
+		$this->permission_manager->setup_authenticated_context( $request );
+		$this->set_context_override( true );
+
+		$response = new WP_REST_Response( array( 'id' => 42 ), 200 );
+
+		// ACT: Fire rest_post_dispatch as the inner re-dispatch would.
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
+		apply_filters( 'rest_post_dispatch', $response, rest_get_server(), $request );
+
+		// ASSERT: Filters and state survive — the outer dispatch's
+		// log_dispatch_event still needs them to record its audit row.
+		$this->assertTrue( $this->permission_manager->is_authenticated() );
+		$this->assertTrue( current_user_can( 'edit_posts' ) );
+		$this->assertNotFalse(
+			has_filter(
+				'rest_post_dispatch',
+				array( $this->permission_manager, 'log_dispatch_event' )
+			)
+		);
+		$this->assertNotFalse(
+			has_filter(
+				'rest_post_dispatch',
+				array( $this->permission_manager, 'tear_down_authenticated_context' )
+			)
+		);
+	}
+
+	/**
+	 * Verifies that two sequential authenticated dispatches do not share
+	 * capability state — teardown returns the user to baseline before a
+	 * second setup elevates again.
+	 */
+	public function test_sequential_authenticated_contexts_do_not_leak_capabilities(): void {
+		// ARRANGE: A subscriber baseline with no edit capabilities.
+		$user_id = $this->factory()->user->create( array( 'role' => 'subscriber' ) );
+		wp_set_current_user( $user_id );
+
+		$request  = new WP_REST_Request( 'GET', '/wp/v2/posts/42' );
+		$response = new WP_REST_Response( array( 'id' => 42 ), 200 );
+
+		// ACT 1: First authenticated dispatch — teardown fires at the end of
+		// the rest_post_dispatch chain.
+		$this->permission_manager->setup_authenticated_context( $request );
+		$this->assertTrue( current_user_can( 'edit_posts' ) );
+
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
+		apply_filters( 'rest_post_dispatch', $response, rest_get_server(), $request );
+
+		// ASSERT: Between dispatches, the subscriber is back to baseline.
+		$this->assertFalse( $this->permission_manager->is_authenticated() );
+		$this->assertFalse( current_user_can( 'edit_posts' ) );
+
+		// ACT 2: A second context on the same instance must elevate again
+		// without residue from the prior teardown.
+		$this->permission_manager->setup_authenticated_context( $request );
+
+		// ASSERT: Caps fully restored — re-registration of the cleared
+		// filters works the second time around.
+		$this->assertTrue( $this->permission_manager->is_authenticated() );
+		$this->assertTrue( current_user_can( 'edit_posts' ) );
+	}
+
+	/**
+	 * Sets the private $context_override property via reflection, mirroring
+	 * what override_context_permissions does before its inner $server->dispatch().
+	 *
+	 * @param bool $value New value for $context_override.
+	 */
+	private function set_context_override( bool $value ): void {
+		$property = new \ReflectionProperty( $this->permission_manager, 'context_override' );
+		$property->setValue( $this->permission_manager, $value );
+	}
+
+	/**
 	 * Sets the User-Agent and (optionally) the X-Safe-Publish-Action server
 	 * variables for a simulated REST request. Pass null for $action to omit
 	 * the header.

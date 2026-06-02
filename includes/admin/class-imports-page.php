@@ -17,11 +17,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Renders the Imports admin page and enqueues its bundle.
  *
- * Two tabs share the same admin page:
- * - Posts: the imported posts listing, driven by the import_items table joined
- *   with wp_posts.
- * - Failures: items whose import errored — no local post exists, recovery is
- *   re-importing from Source Posts.
+ * The PHP side only outputs the wrapper + mount container and seeds initial
+ * state (ajaxurl, nonces, initial tab) via the inline `safePublishAdminData`
+ * global. The tab UI, data fetching, and listing live entirely in React
+ * (see `ImportsApp.tsx`).
  */
 final class Imports_Page {
 

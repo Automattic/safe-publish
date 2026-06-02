@@ -20,6 +20,7 @@ use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Topological_Sorter;
 use DateTimeImmutable;
 use DateTimeZone;
+use WP_Post;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -986,10 +987,14 @@ final class Admin_Ajax_Controller {
 	 * Handles AJAX request for the Imports → Posts tab sync-status column.
 	 *
 	 * Takes a batch of source post IDs and returns per-ID one of
-	 * `up-to-date | outdated | missing | unreachable` by comparing the source
-	 * post's `modified_gmt` against the destination's most recent
+	 * `up-to-date | outdated | missing | unreachable | invalid` by comparing
+	 * the source post's `modified_gmt` against the destination's most recent
 	 * `import_date_gmt`. Posts are batched by type so each post-type group
 	 * costs one signed catalog call.
+	 *
+	 * Catalog_REST_Controller::ALLOWED_STATUSES excludes 'trash', so a
+	 * trashed source post reads as `missing` here. Deliberate — trashed
+	 * posts have no public surface, so sync-status treats them as deleted.
 	 */
 	public function ajax_sync_status_batch(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
@@ -1031,16 +1036,26 @@ final class Admin_Ajax_Controller {
 			wp_send_json_success( array( 'statuses' => (object) array() ) );
 		}
 
+		// Two bulk queries instead of N per-row meta_query + items-table reads.
+		$imported_by_source_id = $this->post_import_service
+			->fetch_imported_posts_by_source_ids( $source_ids );
+
+		if ( 0 === count( $imported_by_source_id ) ) {
+			wp_send_json_success( array( 'statuses' => (object) array() ) );
+		}
+
+		$post_ids = array_map(
+			static fn( WP_Post $p ): int => (int) $p->ID,
+			$imported_by_source_id
+		);
+
+		$items_by_post_id = $this->repository->get_items_for_posts( $post_ids );
+
 		$by_post_type = array();
 		$context      = array();
 
-		foreach ( $source_ids as $source_id ) {
-			$local_post = $this->post_import_service->find_imported_post( $source_id );
-			if ( null === $local_post ) {
-				continue;
-			}
-
-			$item = $this->repository->get_item_for_post( $local_post->ID );
+		foreach ( $imported_by_source_id as $source_id => $local_post ) {
+			$item = $items_by_post_id[ $local_post->ID ] ?? null;
 			if ( null === $item || ! isset( $item['import_date_gmt'] ) ) {
 				continue;
 			}
@@ -1106,9 +1121,14 @@ final class Admin_Ajax_Controller {
 	 * `up-to-date`: import_date_gmt is stamped after the source fetch, so any
 	 * later edit compares strictly greater.
 	 *
+	 * `invalid` flags a parse failure on either side. import_date_gmt is
+	 * locally-owned and NOT NULL, so a parse failure is a data bug — not
+	 * a network problem — and gets its own sentinel rather than
+	 * masquerading as `unreachable`. `missing` is set by the caller.
+	 *
 	 * @param string $source_modified_gmt ISO 8601 modified_gmt from the source.
 	 * @param string $import_date_gmt     MySQL datetime from the items table.
-	 * @return string Verdict: 'up-to-date', 'outdated', or 'unreachable' on parse failure.
+	 * @return string Verdict: 'up-to-date', 'outdated', or 'invalid'.
 	 */
 	private static function compare_sync_state(
 		string $source_modified_gmt,
@@ -1127,7 +1147,7 @@ final class Admin_Ajax_Controller {
 		);
 
 		if ( false === $source_dt || false === $import_dt ) {
-			return 'unreachable';
+			return 'invalid';
 		}
 
 		return $source_dt > $import_dt ? 'outdated' : 'up-to-date';
