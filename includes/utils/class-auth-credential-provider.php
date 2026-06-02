@@ -26,17 +26,18 @@ class Auth_Credential_Provider {
 	/**
 	 * Returns authentication credentials from plugin settings.
 	 *
-	 * Shared Secret is always included when the SAFE_PUBLISH_SHARED_SECRET
-	 * constant is defined. Basic Auth credentials are included when configured.
+	 * Shared Secret is resolved via get_shared_secret() (constant or
+	 * environment variable) and included when set. Basic Auth credentials are
+	 * included when configured.
 	 *
 	 * @return array Authentication credentials array with appropriate keys.
 	 */
 	public static function get_credentials(): array {
 		$credentials = array();
 
-		// Shared secret is required - read from constant defined in wp-config.php.
-		if ( defined( 'SAFE_PUBLISH_SHARED_SECRET' ) && ! empty( constant( 'SAFE_PUBLISH_SHARED_SECRET' ) ) ) {
-			$credentials['shared_secret'] = constant( 'SAFE_PUBLISH_SHARED_SECRET' );
+		$shared_secret = self::get_shared_secret();
+		if ( '' !== $shared_secret ) {
+			$credentials['shared_secret'] = $shared_secret;
 		}
 
 		// Basic auth is optional and can be layered on top of shared secret auth.
@@ -49,5 +50,28 @@ class Auth_Credential_Provider {
 		}
 
 		return $credentials;
+	}
+
+	/**
+	 * Resolves the shared secret from the SAFE_PUBLISH_SHARED_SECRET constant
+	 * or the matching environment variable, with the constant taking
+	 * precedence.
+	 *
+	 * @return string Shared secret, or empty string if not configured.
+	 */
+	public static function get_shared_secret(): string {
+		if ( defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ) {
+			$constant_secret = (string) constant( 'SAFE_PUBLISH_SHARED_SECRET' );
+			if ( '' !== $constant_secret ) {
+				return $constant_secret;
+			}
+		}
+
+		$env_secret = getenv( 'SAFE_PUBLISH_SHARED_SECRET' );
+		if ( is_string( $env_secret ) && '' !== $env_secret ) {
+			return $env_secret;
+		}
+
+		return '';
 	}
 }

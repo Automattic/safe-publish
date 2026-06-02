@@ -11,6 +11,7 @@ namespace Safe_Publish\Auth;
 
 use Safe_Publish\API\Dispatch_Logger;
 use Safe_Publish\API\Export_Logger;
+use Safe_Publish\Utils\Auth_Credential_Provider;
 
 /**
  * Coordinates authentication system initialization.
@@ -47,13 +48,14 @@ class Auth_Manager {
 			new Export_Logger(),
 			new Dispatch_Logger()
 		);
+		$shared_secret            = Auth_Credential_Provider::get_shared_secret();
 		$this->authenticator      = new HMAC_Authenticator(
 			$logger,
 			$this->permission_manager,
-			$this->get_shared_secret(),
+			$shared_secret,
 			get_option( 'safe_publish_connected_site_url', '' )
 		);
-		new Auth_Admin_UI( $this->get_shared_secret() );
+		new Auth_Admin_UI( $shared_secret );
 	}
 
 	/**
@@ -79,25 +81,5 @@ class Auth_Manager {
 	public function init_auth_handler(): void {
 		add_filter( 'rest_pre_dispatch', array( $this->authenticator, 'authenticate_request' ), 10, 3 );
 		add_filter( 'rest_request_before_callbacks', array( $this->permission_manager, 'handle_permission_check' ), 10, 3 );
-	}
-
-	/**
-	 * Gets the shared secret from a constant or environment variable.
-	 *
-	 * Does NOT read from wp_options — secret must come from the server environment.
-	 *
-	 * @return string Shared secret, or empty string if not configured.
-	 */
-	private function get_shared_secret(): string {
-		if ( defined( 'SAFE_PUBLISH_SHARED_SECRET' ) && ! empty( SAFE_PUBLISH_SHARED_SECRET ) ) {
-			return SAFE_PUBLISH_SHARED_SECRET;
-		}
-
-		$env_secret = getenv( 'SAFE_PUBLISH_SHARED_SECRET' );
-		if ( ! empty( $env_secret ) ) {
-			return $env_secret;
-		}
-
-		return '';
 	}
 }
