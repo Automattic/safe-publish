@@ -141,7 +141,7 @@ const bulkImportPosts = async (
  *
  * Returns the Import action (single + bulk) for non-imported items and the
  * View in Imports action for already-imported items, which deep-links to the
- * Imports → Posts tab with the row pinned via focus_source.
+ * Imports → Posts tab narrowed to the matching row via focus_source.
  *
  * @param {Function}             onRefresh    Callback to refresh the posts list.
  * @param {boolean}              isAuthorized Whether the source site authorizes imports.
@@ -494,8 +494,9 @@ export const createActions = (
 	 * View in Imports action.
 	 *
 	 * Deep-links an already-imported source row to the Imports → Posts tab
-	 * with the matching imported post pinned via `?focus_source=<source_post_id>`,
-	 * so Update / Diff / Delete / Rollback are one click away.
+	 * narrowed to the matching imported post via
+	 * `?focus_source=<source_post_id>`, so Update / Diff / Delete / Rollback
+	 * are one click away.
 	 */
 	{
 		id: 'view-in-imports',

@@ -214,9 +214,11 @@ final class Admin_Ajax_Controller {
 	 * table), joined with each post's most recent items row for session and
 	 * rollback eligibility metadata.
 	 *
-	 * When `focus_source_id` is sent, also attaches `focused_item` — the
-	 * matching row (or null when no match) — so the client can pin it
-	 * regardless of the page's filters or pagination.
+	 * When `focus_source_id` is sent, the response is narrowed to just the
+	 * matching imported post — search, filters, sort and pagination are
+	 * skipped — so the deep link's target is the only row shown. The client
+	 * surfaces the focus via a dismissible pill that returns to the full
+	 * listing on Clear.
 	 */
 	public function ajax_list_imported_posts(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
@@ -229,6 +231,32 @@ final class Admin_Ajax_Controller {
 		$focus_source_id = absint( $_POST['focus_source_id'] ?? 0 );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
+		if ( $focus_source_id > 0 ) {
+			$focused_post = $this->post_import_service->find_imported_post(
+				$focus_source_id
+			);
+			$items        = null === $focused_post
+				? array()
+				: array(
+					$this->build_imported_listing_row(
+						$focused_post,
+						$this->repository->get_item_for_post(
+							$focused_post->ID
+						)
+					),
+				);
+
+			wp_send_json_success(
+				$this->with_imported_listing_extras(
+					array(
+						'items'    => $items,
+						'has_more' => false,
+					),
+					$with_facets
+				)
+			);
+		}
+
 		$args     = $this->build_imported_listing_args();
 		$post_ids = $this->repository->list_imported_post_ids( $page, $per_page, $args );
 
@@ -240,12 +268,9 @@ final class Admin_Ajax_Controller {
 		if ( 0 === count( $post_ids ) ) {
 			wp_send_json_success(
 				$this->with_imported_listing_extras(
-					$this->with_focused_item(
-						array(
-							'items'    => array(),
-							'has_more' => false,
-						),
-						$focus_source_id
+					array(
+						'items'    => array(),
+						'has_more' => false,
 					),
 					$with_facets
 				)
@@ -277,12 +302,9 @@ final class Admin_Ajax_Controller {
 
 		wp_send_json_success(
 			$this->with_imported_listing_extras(
-				$this->with_focused_item(
-					array(
-						'items'    => $rows,
-						'has_more' => $has_more,
-					),
-					$focus_source_id
+				array(
+					'items'    => $rows,
+					'has_more' => $has_more,
 				),
 				$with_facets
 			)
@@ -431,40 +453,6 @@ final class Admin_Ajax_Controller {
 			$response['facets']       = $this->repository->get_imported_filter_facets();
 			$response['failed_count'] = $this->repository->count_failed_items();
 		}
-
-		return $response;
-	}
-
-	/**
-	 * Resolves the focused source ID to its imported row and attaches it.
-	 *
-	 * The lookup ignores the listing's filters and pagination on purpose: a
-	 * deep link's target is the post itself, so the client can pin it even
-	 * when the active batch filter would otherwise hide it.
-	 *
-	 * @param array $response        Response payload to augment.
-	 * @param int   $focus_source_id Source post ID to resolve, or 0 to skip.
-	 * @return array Response, with a `focused_item` key (row array or null)
-	 *               when `$focus_source_id` is greater than zero.
-	 */
-	private function with_focused_item(
-		array $response,
-		int $focus_source_id
-	): array {
-		if ( $focus_source_id <= 0 ) {
-			return $response;
-		}
-
-		$focused_post = $this->post_import_service->find_imported_post( $focus_source_id );
-		if ( null === $focused_post ) {
-			$response['focused_item'] = null;
-			return $response;
-		}
-
-		$response['focused_item'] = $this->build_imported_listing_row(
-			$focused_post,
-			$this->repository->get_item_for_post( $focused_post->ID )
-		);
 
 		return $response;
 	}

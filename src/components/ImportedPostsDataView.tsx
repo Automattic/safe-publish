@@ -10,9 +10,9 @@
  *
  * When invoked via the post-import notice's `?batch=N` deep-link, the
  * accompanying session id is applied as a hidden filter and surfaced as a
- * contextual pill the user can clear. A `?focus_source=N` deep-link pins the
- * imported row matching that source ID at the top of the view (resolved
- * server-side so it appears even when off the current page or filtered out).
+ * contextual pill the user can clear. A `?focus_source=N` deep-link narrows
+ * the listing to the single imported row matching that source ID (server-side
+ * filter), surfaced as a pill that returns to the full listing on Clear.
  *
  * @file This file defines the ImportedPostsDataView component.
  */
@@ -224,32 +224,13 @@ export function ImportedPostsDataView(): JSX.Element {
 		readPositiveIntParam( 'batch' )
 	);
 
-	// Focus is set from `?focus_source=N` on mount and resolved by the listing
-	// endpoint (so the row appears even when the active batch filter or
-	// pagination would otherwise hide it). It composes with the batch filter
-	// rather than overriding it: batch narrows the list, focus pins one row.
+	// Focus is set from `?focus_source=N` on mount and applied server-side as
+	// a filter: the listing returns just the matching imported row, or none
+	// when no import exists for that source ID. Overrides search/filters/sort
+	// for the duration; Clear strips the URL param and restores the full list.
 	const [ focusSourceId, setFocusSourceId ] = useState< number >( () =>
 		readPositiveIntParam( 'focus_source' )
 	);
-	// `undefined` = no lookup yet (e.g. while the first fetch is in flight),
-	// `null` = the server confirmed no imported post for the requested source,
-	// row = resolved imported post.
-	const [ focusedItem, setFocusedItem ] = useState<
-		ImportedPost | null | undefined
-	>( undefined );
-
-	// Hoist the focused row to the top of the visible list. Server returned
-	// it via a separate lookup, so it may or may not also be in pageItems —
-	// dedup by id (DataViews' row identity) to avoid rendering it twice.
-	const displayItems = useMemo< ImportedPost[] >( () => {
-		if ( ! focusedItem ) {
-			return pageItems;
-		}
-		const others = pageItems.filter(
-			( item ) => item.id !== focusedItem.id
-		);
-		return [ focusedItem, ...others ];
-	}, [ pageItems, focusedItem ] );
 
 	const facetsLoadedRef = useRef( false );
 
@@ -269,7 +250,8 @@ export function ImportedPostsDataView(): JSX.Element {
 		'' !== debouncedSearch ||
 		statuses.length > 0 ||
 		postTypes.length > 0 ||
-		batchSessionId > 0;
+		batchSessionId > 0 ||
+		focusSourceId > 0;
 
 	// Debounce the search box so a fast typist doesn't fire a request per
 	// keystroke.
@@ -283,14 +265,12 @@ export function ImportedPostsDataView(): JSX.Element {
 
 	// Latch DataViews mounted once it first appears, so a refetch that briefly
 	// empties the result set (e.g. clearing a search) can't unmount it and pull
-	// focus out of the search box. Keyed off displayItems so a focused-only
-	// view (server returned no page rows, just the pinned focus row) still
-	// counts as rendered.
+	// focus out of the search box.
 	useEffect( () => {
-		if ( displayItems.length > 0 || hasActiveFilters ) {
+		if ( pageItems.length > 0 || hasActiveFilters ) {
 			setHasRenderedGrid( true );
 		}
-	}, [ displayItems.length, hasActiveFilters ] );
+	}, [ pageItems.length, hasActiveFilters ] );
 
 	const statusesKey = statuses.join( '|' );
 	const postTypesKey = postTypes.join( '|' );
@@ -346,11 +326,6 @@ export function ImportedPostsDataView(): JSX.Element {
 					if ( 'number' === typeof result.data.failed_count ) {
 						setFailedCount( result.data.failed_count );
 					}
-					// `focused_item` is present (item or null) only when
-					// focus_source_id was requested; absent otherwise.
-					if ( 'focused_item' in result.data ) {
-						setFocusedItem( result.data.focused_item ?? null );
-					}
 				} else {
 					setFetchError(
 						getErrorMessage(
@@ -402,22 +377,21 @@ export function ImportedPostsDataView(): JSX.Element {
 		refreshNonce,
 	] );
 
-	// Sorted-join of displayItems' unique source_post_ids — stable across
+	// Sorted-join of pageItems' unique source_post_ids — stable across
 	// content-equal replacements so the sync-status effect below doesn't
-	// re-request on every render, and inclusive of any focused row hoisted
-	// in from outside the current page.
+	// re-request on every render.
 	const sourceIdsKey = useMemo(
 		() =>
 			Array.from(
 				new Set(
-					displayItems
+					pageItems
 						.map( ( item ) => item.source_post_id )
 						.filter( ( id ): id is number => id > 0 )
 				)
 			)
 				.sort( ( left, right ) => left - right )
 				.join( ',' ),
-		[ displayItems ]
+		[ pageItems ]
 	);
 
 	// Refill the Sync Status column after every listing refresh by asking the
@@ -663,28 +637,48 @@ export function ImportedPostsDataView(): JSX.Element {
 		[ refresh ]
 	);
 
-	const handleViewChange = useCallback( ( next: View ): void => {
-		setView( ( current ) => {
-			const sortChanged =
-				next.sort?.field !== current.sort?.field ||
-				next.sort?.direction !== current.sort?.direction;
-			const perPageChanged = next.perPage !== current.perPage;
-			const searchChanged = ( next.search ?? '' ) !== ( current.search ?? '' );
-			const filtersChanged =
-				JSON.stringify( next.filters ?? [] ) !==
-				JSON.stringify( current.filters ?? [] );
-
-			// Search/filter/sort/perPage changes reset to page 1; layout-only
-			// changes keep the current page.
-			return {
-				...next,
-				page:
-					sortChanged || perPageChanged || searchChanged || filtersChanged
-						? 1
-						: ( next.page ?? current.page ?? 1 ),
-			};
-		} );
+	const clearBatch = useCallback( (): void => {
+		setBatchSessionId( 0 );
+		// Match handleViewChange's filter-change behavior so the listing lands
+		// on page 1 of the unfiltered set rather than mid-pagination.
+		setView( ( current ) => ( { ...current, page: 1 } ) );
+		stripUrlParam( 'batch' );
 	}, [] );
+
+	const clearFocus = useCallback( (): void => {
+		setFocusSourceId( 0 );
+		// Match handleViewChange's filter-change behavior so the listing lands
+		// on page 1 of the unfiltered set rather than mid-pagination.
+		setView( ( current ) => ( { ...current, page: 1 } ) );
+		stripUrlParam( 'focus_source' );
+	}, [] );
+
+	const handleViewChange = useCallback( ( next: View ): void => {
+		const sortChanged =
+			next.sort?.field !== view.sort?.field ||
+			next.sort?.direction !== view.sort?.direction;
+		const perPageChanged = next.perPage !== view.perPage;
+		const searchChanged = ( next.search ?? '' ) !== ( view.search ?? '' );
+		const filtersChanged =
+			JSON.stringify( next.filters ?? [] ) !==
+			JSON.stringify( view.filters ?? [] );
+		const browseGesture =
+			sortChanged || perPageChanged || searchChanged || filtersChanged;
+
+		// Search/filter/sort/perPage expresses intent to browse — if a deep
+		// link is still narrowing the listing via focus, dismiss it so the
+		// gesture applies to the full set rather than a single-row view.
+		if ( browseGesture && focusSourceId > 0 ) {
+			clearFocus();
+		}
+
+		// Search/filter/sort/perPage changes reset to page 1; layout-only
+		// changes keep the current page.
+		setView( {
+			...next,
+			page: browseGesture ? 1 : ( next.page ?? view.page ?? 1 ),
+		} );
+	}, [ view, focusSourceId, clearFocus ] );
 
 	const currentPage = view.page ?? 1;
 	const currentPerPage = view.perPage ?? DEFAULT_ITEMS_PER_PAGE;
@@ -712,7 +706,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		hasFetchedOnce,
 		hasRenderedGrid,
 		hasError: null !== fetchError,
-		isEmpty: 0 === displayItems.length,
+		isEmpty: 0 === pageItems.length,
 		isLoading,
 		hasActiveFilters,
 	} );
@@ -731,32 +725,18 @@ export function ImportedPostsDataView(): JSX.Element {
 		return url.toString();
 	}, [] );
 
-	const clearBatch = useCallback( (): void => {
-		setBatchSessionId( 0 );
-		// Match handleViewChange's filter-change behavior so the listing lands
-		// on page 1 of the unfiltered set rather than mid-pagination.
-		setView( ( current ) => ( { ...current, page: 1 } ) );
-		stripUrlParam( 'batch' );
-	}, [] );
-
-	const clearFocus = useCallback( (): void => {
-		setFocusSourceId( 0 );
-		// Reset to undefined so the stale resolved row doesn't linger in
-		// displayItems until the next fetch completes.
-		setFocusedItem( undefined );
-		stripUrlParam( 'focus_source' );
-	}, [] );
-
 	// Three-state pill text so the deep link's user doesn't see a confident
-	// "Focused on …" claim before the lookup actually confirms one.
+	// "Viewing …" claim before the server confirms a match. In focus mode the
+	// server returns just the resolved row (or none), so pageItems[0] carries
+	// the title we surface to anchor the pill to a visible row.
 	let focusPillText;
-	if ( undefined === focusedItem ) {
+	if ( ! hasFetchedOnce ) {
 		focusPillText = sprintf(
 			/* translators: %d: source post id */
 			__( 'Looking up source #%d…', 'safe-publish' ),
 			focusSourceId
 		);
-	} else if ( null === focusedItem ) {
+	} else if ( 0 === pageItems.length ) {
 		focusPillText = sprintf(
 			/* translators: %d: source post id */
 			__( 'No imported post for source #%d', 'safe-publish' ),
@@ -764,9 +744,9 @@ export function ImportedPostsDataView(): JSX.Element {
 		);
 	} else {
 		focusPillText = sprintf(
-			/* translators: %d: source post id */
-			__( 'Focused on source #%d', 'safe-publish' ),
-			focusSourceId
+			/* translators: %s: imported post title */
+			__( 'Viewing import for: %s', 'safe-publish' ),
+			pageItems[ 0 ].title
 		);
 	}
 
@@ -831,7 +811,7 @@ export function ImportedPostsDataView(): JSX.Element {
 			{ showGrid && (
 				<DataViews
 					getItemId={ ( item: ImportedPost ) => item.id.toString() }
-					data={ displayItems }
+					data={ pageItems }
 					fields={ fields }
 					view={ view }
 					onChangeView={ handleViewChange }
