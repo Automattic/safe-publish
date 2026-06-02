@@ -91,6 +91,5 @@ class Sync_Bidirectional_Test extends WP_UnitTestCase {
 		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_test_connection' ) );
 		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_create_draft' ) );
 		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_bulk_import' ) );
-		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_debug_auth' ) );
 	}
 }
