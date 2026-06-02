@@ -119,7 +119,8 @@ By default, no sanitization is applied to the post content or excerpt; both fiel
   - `safe_publish_source_post_id` — post ID on the source site
   - `safe_publish_source_link` — URL of the source post
   - `safe_publish_imported_from` — plugin identifier (`safe-publish`)
-  - `safe_publish_import_date_gmt` — GMT timestamp of the import (`Y-m-d H:i:s`)
+
+  The import timestamp is not stored as post meta; it is recorded in the import history table (the `import_date_gmt` column of `safe_publish_import_items`).
 
 ### Post Status
 
@@ -181,9 +182,26 @@ The source Custom Post Type (CPT) must be registered with `'show_in_rest' => tru
 
 ### Post Meta
 
-Source post meta exposed via the REST API is imported automatically. Custom fields must be registered with `'show_in_rest' => true` (or exposed via `register_rest_field()`) on the source site to be included in the API response.
+Source post meta exposed through the core REST API `meta` object is imported
+automatically. Custom fields must be registered with `register_post_meta()` and
+`'show_in_rest' => true` on the source site to be included in that object. For
+custom post types, the post type must also support `custom-fields`.
 
-ACF fields are not exposed by default; they require ACF's REST API setting to be enabled. No field registration is needed on the destination — any meta key can be stored.
+Safe Publish does not import arbitrary top-level REST fields. Fields exposed
+with `register_rest_field()` or ACF's top-level `acf` REST object are ignored
+unless the same values are also present in the core `meta` object.
+
+ACF and Secure Custom Fields (SCF) values are regular post meta. To migrate
+them, register the source field value keys with `register_post_meta()` and
+`show_in_rest => true`, preferably only for the fields that should migrate.
+Register companion reference keys, such as `_hero_title` for `hero_title`, when
+the destination editor needs ACF/SCF to recognize the value.
+
+No field registration is required on the destination to store the meta values.
+However, Safe Publish does not currently create or sync ACF/SCF field groups.
+The destination editor only renders those values as ACF/SCF controls when the
+destination has ACF or SCF active and has matching field definitions with the
+same field keys.
 
 ### Terms
 
