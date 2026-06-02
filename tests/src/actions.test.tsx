@@ -2,8 +2,10 @@
  * Tests for action modal components and bulk operations
  */
 import { describe, expect, it } from 'vitest';
-import { createActions } from '@/actions';
-import type { Post } from '@/types';
+import { createActions, createImportedActions } from '@/actions';
+import BulkRollbackPostModal from '@/components/BulkRollbackPostModal';
+import RollbackPostModal from '@/components/RollbackPostModal';
+import type { ImportedPost, Post } from '@/types';
 import type { Action, ActionModal } from '@wordpress/dataviews/build-types';
 
 const actions = createActions();
@@ -21,6 +23,32 @@ function buildPost( overrides: Partial< Post > = {} ): Post {
 		modified_gmt: '',
 		post_type: 'post',
 		status: 'publish',
+		...overrides,
+	};
+}
+
+/**
+ * Builds an ImportedPost fixture with eligible-rollback defaults. Tests
+ * override any field that matters for the case at hand.
+ */
+function buildImportedPost(
+	overrides: Partial< ImportedPost > = {}
+): ImportedPost {
+	return {
+		id: 1,
+		source_post_id: 10,
+		title: 'Test',
+		post_type: 'post',
+		local_status: 'publish',
+		modified_gmt: '',
+		edit_url: '',
+		source_link: '',
+		item_id: 100,
+		session_id: 5,
+		rollback_status: 'success',
+		has_previous_content: false,
+		rolled_back: false,
+		import_date_gmt: null,
 		...overrides,
 	};
 }
@@ -152,5 +180,70 @@ describe( 'Post diff action', () => {
 				is_imported: false,
 			} )
 		).toBe( false );
+	} );
+} );
+
+describe( 'createImportedActions rollback action', () => {
+	const importedActions = createImportedActions();
+
+	/**
+	 * Returns the rollback modal action, throwing if absent or not modal.
+	 */
+	function getRollbackAction(): ActionModal< ImportedPost > {
+		const action = importedActions.find(
+			( a: Action< ImportedPost > ) => a.id === 'rollback'
+		);
+		if ( ! action || ! ( 'RenderModal' in action ) ) {
+			throw new Error( 'Expected modal action with id "rollback"' );
+		}
+		return action;
+	}
+
+	it( 'supports bulk selection and stays destructive', () => {
+		// ARRANGE + ACT + ASSERT: rollback opts into the bulk toolbar.
+		const rollback = getRollbackAction();
+		expect( rollback.supportsBulk ).toBe( true );
+		expect( rollback.isDestructive ).toBe( true );
+	} );
+
+	it( 'is eligible only for non-rolled-back success/updated rows with an item_id', () => {
+		// ARRANGE: the rollback action under test.
+		const rollback = getRollbackAction();
+
+		// ACT + ASSERT: created and updated rows can be rolled back.
+		expect(
+			rollback.isEligible?.( buildImportedPost( { rollback_status: 'success' } ) )
+		).toBe( true );
+		expect(
+			rollback.isEligible?.( buildImportedPost( { rollback_status: 'updated' } ) )
+		).toBe( true );
+
+		// ACT + ASSERT: already-rolled-back, record-less, and error rows cannot.
+		expect(
+			rollback.isEligible?.( buildImportedPost( { rolled_back: true } ) )
+		).toBe( false );
+		expect(
+			rollback.isEligible?.( buildImportedPost( { item_id: null } ) )
+		).toBe( false );
+		expect(
+			rollback.isEligible?.( buildImportedPost( { rollback_status: 'error' } ) )
+		).toBe( false );
+	} );
+
+	it( 'delegates to the single modal for one item and the bulk modal for many', () => {
+		// ARRANGE: the rollback action under test.
+		const rollback = getRollbackAction();
+
+		// ACT + ASSERT: a single selection keeps the original single-row modal.
+		const single = rollback.RenderModal( {
+			items: [ buildImportedPost() ],
+		} );
+		expect( single.type ).toBe( RollbackPostModal );
+
+		// ACT + ASSERT: a multi selection routes to the bulk modal.
+		const bulk = rollback.RenderModal( {
+			items: [ buildImportedPost( { id: 1 } ), buildImportedPost( { id: 2 } ) ],
+		} );
+		expect( bulk.type ).toBe( BulkRollbackPostModal );
 	} );
 } );
