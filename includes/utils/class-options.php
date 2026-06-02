@@ -253,11 +253,40 @@ class Options {
 	private static function get_constant_value_for_option( string $option ): ?string {
 		$map = self::get_constant_option_map();
 
-		if ( empty( $map[ $option ] ) || ! defined( $map[ $option ] ) ) {
+		if ( ! array_key_exists( $option, $map ) || ! defined( $map[ $option ] ) ) {
 			return null;
 		}
 
-		return (string) constant( $map[ $option ] );
+		$constant_name  = $map[ $option ];
+		$constant_value = constant( $constant_name );
+
+		if ( ! is_string( $constant_value ) ) {
+			self::report_invalid_constant(
+				$constant_name,
+				__( 'Safe Publish configuration constants must be strings.', 'safe-publish' )
+			);
+			return null;
+		}
+
+		if ( self::OPTION_SYNC_MODE === $option
+			&& ! self::is_valid_sync_mode( $constant_value )
+		) {
+			self::report_invalid_constant(
+				$constant_name,
+				sprintf(
+					/* translators: 1: constant name, 2: comma-separated values */
+					__(
+						'%1$s must be one of the following values: %2$s.',
+						'safe-publish'
+					),
+					$constant_name,
+					implode( ', ', self::get_sync_modes() )
+				)
+			);
+			return null;
+		}
+
+		return $constant_value;
 	}
 
 	/**
@@ -271,6 +300,46 @@ class Options {
 			self::OPTION_BASIC_AUTH_USERNAME => self::CONSTANT_BASIC_AUTH_USERNAME,
 			self::OPTION_BASIC_AUTH_PASSWORD => self::CONSTANT_BASIC_AUTH_PASSWORD,
 			self::OPTION_SYNC_MODE           => self::CONSTANT_SYNC_MODE,
+		);
+	}
+
+	/**
+	 * Returns valid deployment-defined sync mode values.
+	 *
+	 * @return string[] Sync mode values.
+	 */
+	private static function get_sync_modes(): array {
+		return array(
+			self::SYNC_MODE_EXPORT,
+			self::SYNC_MODE_IMPORT,
+			self::SYNC_MODE_BIDIRECTIONAL,
+		);
+	}
+
+	/**
+	 * Returns whether a sync mode value is valid for constant configuration.
+	 *
+	 * @param string $sync_mode Sync mode value.
+	 * @return bool True when the sync mode is valid.
+	 */
+	private static function is_valid_sync_mode( string $sync_mode ): bool {
+		return in_array( $sync_mode, self::get_sync_modes(), true );
+	}
+
+	/**
+	 * Reports an invalid deployment-defined constant.
+	 *
+	 * @param string $constant_name Constant name.
+	 * @param string $message       Error message.
+	 */
+	private static function report_invalid_constant(
+		string $constant_name,
+		string $message
+	): void {
+		_doing_it_wrong(
+			esc_html( $constant_name ),
+			esc_html( $message ),
+			esc_html( SAFE_PUBLISH_VERSION )
 		);
 	}
 }

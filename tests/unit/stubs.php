@@ -61,6 +61,14 @@ function admin_url( string $path = '' ): string {
 	return 'http://localhost/wp-admin/' . ltrim( $path, '/' );
 }
 
+function _doing_it_wrong( string $function_name, string $message, string $version ): void {
+	$GLOBALS['_test_doing_it_wrong_calls'][] = array(
+		'function_name' => $function_name,
+		'message'       => $message,
+		'version'       => $version,
+	);
+}
+
 function is_wp_error( mixed $thing ): bool {
 	return $thing instanceof WP_Error;
 }
@@ -112,7 +120,12 @@ function set_test_option( string $option, mixed $value ): void {
 }
 
 function reset_test_options(): void {
-	$GLOBALS['_test_options'] = array();
+	$GLOBALS['_test_options']              = array();
+	$GLOBALS['_test_doing_it_wrong_calls'] = array();
+}
+
+function get_test_doing_it_wrong_calls(): array {
+	return $GLOBALS['_test_doing_it_wrong_calls'] ?? array();
 }
 
 /**
