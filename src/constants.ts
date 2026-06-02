@@ -16,8 +16,6 @@ import { __ } from '@wordpress/i18n';
 
 // View layouts.
 export const LAYOUT_TABLE = 'table';
-export const LAYOUT_GRID = 'grid';
-export const LAYOUT_LIST = 'list';
 
 // Catalog page size; matches the source controller's default.
 export const DEFAULT_ITEMS_PER_PAGE = 20;

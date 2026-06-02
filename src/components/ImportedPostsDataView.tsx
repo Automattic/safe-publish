@@ -23,8 +23,6 @@ import { getImportedSyncStatusLabel } from './post-fields';
 import { createImportedActions } from '../actions';
 import {
 	DEFAULT_ITEMS_PER_PAGE,
-	LAYOUT_GRID,
-	LAYOUT_LIST,
 	LAYOUT_TABLE,
 	SEARCH_DEBOUNCE_MS,
 } from '../constants';
@@ -191,11 +189,7 @@ export function ImportedPostsDataView(): JSX.Element {
 	} );
 
 	const defaultLayouts = useMemo(
-		() => ( {
-			[ LAYOUT_TABLE ]: {},
-			[ LAYOUT_GRID ]: {},
-			[ LAYOUT_LIST ]: {},
-		} ),
+		() => ( { [ LAYOUT_TABLE ]: {} } ),
 		[]
 	);
 
