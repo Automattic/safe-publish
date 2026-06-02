@@ -612,6 +612,10 @@ export function ImportedPostsDataView(): JSX.Element {
 		hasActiveFilters,
 	} );
 
+	// Refetch fires alongside the grid (unlike showLoading, which replaces
+	// it on first load) so filter/page/sort changes feel responsive.
+	const showRefetch = isLoading && hasFetchedOnce;
+
 	// Stable for the lifetime of the mount — derived from the URL the page
 	// was loaded with, so the empty-state link routes through ImportsApp's
 	// own ?tab=... handling.
@@ -687,6 +691,16 @@ export function ImportedPostsDataView(): JSX.Element {
 					failedCount={ failedCount }
 					failuresHref={ failuresHref }
 				/>
+			) }
+			{ showRefetch && (
+				<div
+					className="safe-publish-refetch-indicator"
+					role="status"
+					aria-live="polite"
+				>
+					<Spinner />
+					<span>{ __( 'Updating…', 'safe-publish' ) }</span>
+				</div>
 			) }
 			{ showGrid && (
 				<DataViews

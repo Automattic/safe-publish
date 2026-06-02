@@ -80,88 +80,12 @@ final class Admin_Page {
 			return;
 		}
 
-		$asset_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/index.asset.php';
-		$script_url      = plugin_dir_url( dirname( __DIR__ ) ) . 'build/index.js';
-		$script_path     = plugin_dir_path( dirname( __DIR__ ) ) . 'build/index.js';
-
-		if ( ! file_exists( $script_path ) || ! file_exists( $asset_file_path ) ) {
-			add_action(
-				'admin_notices',
-				function () {
-					// Skip during REST/AJAX so the notice only renders on real admin pageviews.
-					if ( ! is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && constant( 'REST_REQUEST' ) ) ) {
-						return;
-					}
-
-					if ( defined( 'WP_DEBUG' ) && constant( 'WP_DEBUG' ) ) {
-						echo '<div class="notice notice-error"><p>';
-						echo '<strong>' . esc_html__( 'Safe Publish:', 'safe-publish' ) . '</strong> ';
-						echo esc_html__( 'Build assets are missing. ', 'safe-publish' );
-						printf(
-							/* translators: %s: the "npm run build" command. */
-							esc_html__( 'Run %s to generate them.', 'safe-publish' ),
-							'<code>npm run build</code>'
-						);
-						echo '</p></div>';
-					}
-				}
-			);
-
-			return;
-		}
-
 		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
-		// phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable -- Path is built from plugin_dir_path() and a hardcoded filename.
-		$asset_file     = include $asset_file_path;
-		$script_version = $asset_file['version'];
-
-		wp_enqueue_script(
+		Admin_Assets::enqueue_bundle(
+			'index',
 			'safe-publish-admin-dataviews-script',
-			$script_url,
-			$asset_file['dependencies'],
-			$script_version,
-			true
-		);
-
-		// Enqueue shared design tokens before any plugin stylesheet.
-		wp_enqueue_style(
-			'safe-publish-tokens',
-			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/tokens.css',
-			array(),
-			$script_version
-		);
-
-		// Enqueue DataViews styles.
-		$style_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/style-index.css';
-		$style_file_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'build/style-index.css';
-
-		if ( file_exists( $style_file_path ) ) {
-			wp_enqueue_style(
-				'safe-publish-admin-dataviews-style',
-				$style_file_url,
-				array( 'wp-components', 'safe-publish-tokens' ),
-				$script_version
-			);
-		}
-
-		// Enqueue admin styles.
-		wp_enqueue_style(
-			'safe-publish-admin-style',
-			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/admin.css',
-			array( 'safe-publish-tokens' ),
-			$script_version
-		);
-
-		// Enqueue React components styles.
-		wp_enqueue_style(
-			'safe-publish-react-components-style',
-			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/react-components.css',
-			array( 'wp-components', 'safe-publish-tokens' ),
-			$script_version
-		);
-
-		$json_data = wp_json_encode(
+			'safe-publish-admin-dataviews-style',
 			array(
 				'ajaxurl'       => admin_url( 'admin-ajax.php' ),
 				'settingsUrl'   => admin_url( 'admin.php?page=safe-publish-settings' ),
@@ -170,16 +94,6 @@ final class Admin_Page {
 				'sourceSiteUrl' => $source_site_url,
 				'containerId'   => 'safe-publish-dataviews-container',
 			)
-		);
-
-		if ( false === $json_data || '' === $json_data ) {
-			$json_data = '{}';
-		}
-
-		wp_add_inline_script(
-			'safe-publish-admin-dataviews-script',
-			sprintf( 'window.safePublishAdminData = %s;', $json_data ),
-			'before'
 		);
 	}
 }

@@ -53,82 +53,6 @@ final class Imports_Page {
 			return;
 		}
 
-		$asset_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/imports.asset.php';
-		$script_url      = plugin_dir_url( dirname( __DIR__ ) ) . 'build/imports.js';
-		$script_path     = plugin_dir_path( dirname( __DIR__ ) ) . 'build/imports.js';
-
-		if ( ! file_exists( $script_path ) || ! file_exists( $asset_file_path ) ) {
-			add_action(
-				'admin_notices',
-				function () {
-					if ( ! is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && constant( 'REST_REQUEST' ) ) ) {
-						return;
-					}
-
-					if ( defined( 'WP_DEBUG' ) && constant( 'WP_DEBUG' ) ) {
-						echo '<div class="notice notice-error"><p>';
-						echo '<strong>' . esc_html__( 'Safe Publish:', 'safe-publish' ) . '</strong> ';
-						echo esc_html__( 'Build assets are missing. ', 'safe-publish' );
-						printf(
-							/* translators: %s: the "npm run build" command. */
-							esc_html__( 'Run %s to generate them.', 'safe-publish' ),
-							'<code>npm run build</code>'
-						);
-						echo '</p></div>';
-					}
-				}
-			);
-
-			return;
-		}
-
-		// phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable -- Path is built from plugin_dir_path() and a hardcoded filename.
-		$asset_file     = include $asset_file_path;
-		$script_version = $asset_file['version'];
-
-		wp_enqueue_script(
-			'safe-publish-imports-script',
-			$script_url,
-			$asset_file['dependencies'],
-			$script_version,
-			true
-		);
-
-		wp_enqueue_style(
-			'safe-publish-tokens',
-			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/tokens.css',
-			array(),
-			$script_version
-		);
-
-		// @wordpress/scripts merges the SCSS imports from every entry into a
-		// single style-index.css via splitChunks.
-		$style_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/style-index.css';
-		$style_file_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'build/style-index.css';
-
-		if ( file_exists( $style_file_path ) ) {
-			wp_enqueue_style(
-				'safe-publish-imports-style',
-				$style_file_url,
-				array( 'wp-components', 'safe-publish-tokens' ),
-				$script_version
-			);
-		}
-
-		wp_enqueue_style(
-			'safe-publish-admin-style',
-			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/admin.css',
-			array( 'safe-publish-tokens' ),
-			$script_version
-		);
-
-		wp_enqueue_style(
-			'safe-publish-react-components-style',
-			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/react-components.css',
-			array( 'wp-components', 'safe-publish-tokens' ),
-			$script_version
-		);
-
 		// Read ?tab=... from the URL so React can pre-apply it without an
 		// extra roundtrip. ?batch=N is read directly client-side so a
 		// tab-switch re-mount picks up an in-page Clear that updated the URL
@@ -139,7 +63,12 @@ final class Imports_Page {
 			? $initial_tab_raw
 			: 'posts';
 
-		$json_data = wp_json_encode(
+		// Same global the Source Posts page and the shared modals/diff hooks
+		// read, so Update/Diff/Delete work here without page-specific wiring.
+		Admin_Assets::enqueue_bundle(
+			'imports',
+			'safe-publish-imports-script',
+			'safe-publish-imports-style',
 			array(
 				'ajaxurl'        => admin_url( 'admin-ajax.php' ),
 				'settingsUrl'    => admin_url( 'admin.php?page=safe-publish-settings' ),
@@ -149,18 +78,6 @@ final class Imports_Page {
 				'containerId'    => 'safe-publish-imports-container',
 				'initialTab'     => $initial_tab,
 			)
-		);
-
-		if ( false === $json_data || '' === $json_data ) {
-			$json_data = '{}';
-		}
-
-		// Same global the Source Posts page and the shared modals/diff hooks
-		// read, so Update/Diff/Delete work here without page-specific wiring.
-		wp_add_inline_script(
-			'safe-publish-imports-script',
-			sprintf( 'window.safePublishAdminData = %s;', $json_data ),
-			'before'
 		);
 	}
 }

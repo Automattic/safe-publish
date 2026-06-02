@@ -129,60 +129,10 @@ final class Exports_Page {
 	 * Enqueues the Exports page assets.
 	 */
 	private function enqueue_assets(): void {
-		$asset_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/exports.asset.php';
-		$script_url      = plugin_dir_url( dirname( __DIR__ ) ) . 'build/exports.js';
-		$script_path     = plugin_dir_path( dirname( __DIR__ ) ) . 'build/exports.js';
-
-		if ( ! file_exists( $script_path ) || ! file_exists( $asset_file_path ) ) {
-			return;
-		}
-
-		// phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable -- Path is built from plugin_dir_path() and a hardcoded filename.
-		$asset_file     = include $asset_file_path;
-		$script_version = $asset_file['version'];
-
-		wp_enqueue_script(
+		Admin_Assets::enqueue_bundle(
+			'exports',
 			'safe-publish-exports-script',
-			$script_url,
-			$asset_file['dependencies'],
-			$script_version,
-			true
-		);
-
-		wp_enqueue_style(
-			'safe-publish-tokens',
-			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/tokens.css',
-			array(),
-			$script_version
-		);
-
-		$style_file_path = plugin_dir_path( dirname( __DIR__ ) ) . 'build/style-index.css';
-		$style_file_url  = plugin_dir_url( dirname( __DIR__ ) ) . 'build/style-index.css';
-
-		if ( file_exists( $style_file_path ) ) {
-			wp_enqueue_style(
-				'safe-publish-exports-style',
-				$style_file_url,
-				array( 'wp-components', 'safe-publish-tokens' ),
-				$script_version
-			);
-		}
-
-		wp_enqueue_style(
-			'safe-publish-admin-style',
-			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/admin.css',
-			array( 'safe-publish-tokens' ),
-			$script_version
-		);
-
-		wp_enqueue_style(
-			'safe-publish-react-components-style',
-			plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/react-components.css',
-			array( 'wp-components', 'safe-publish-tokens' ),
-			$script_version
-		);
-
-		$json_data = wp_json_encode(
+			'safe-publish-exports-style',
 			array(
 				'ajaxurl'     => admin_url( 'admin-ajax.php' ),
 				'nonce'       => wp_create_nonce( 'safe_publish_ajax_nonce' ),
@@ -190,16 +140,6 @@ final class Exports_Page {
 				'containerId' => 'safe-publish-exports-container',
 				'settingsUrl' => admin_url( 'admin.php?page=safe-publish-settings' ),
 			)
-		);
-
-		if ( false === $json_data || '' === $json_data ) {
-			$json_data = '{}';
-		}
-
-		wp_add_inline_script(
-			'safe-publish-exports-script',
-			sprintf( 'window.safePublishAdminData = %s;', $json_data ),
-			'before'
 		);
 	}
 
