@@ -81,8 +81,10 @@ class HMAC_Authenticator {
 	/**
 	 * Authenticates a REST API request.
 	 *
-	 * Covers all /wp/v2/ and /safe-publish/v1/ routes. Requests without Safe
-	 * Publish headers pass through.
+	 * Covers read methods on `/wp/v2/` (GET/HEAD) and all methods on
+	 * `/safe-publish/v1/`. Requests on `/wp/v2/` with any other method are
+	 * left untouched so WordPress' standard capability checks decide them.
+	 * Requests without Safe Publish headers pass through.
 	 *
 	 * @param WP_REST_Response|WP_Error|null $result  Response to return instead of continuing.
 	 * @param WP_REST_Server|null            $_server Server instance.
@@ -101,6 +103,13 @@ class HMAC_Authenticator {
 
 		if ( ! $is_wp_route && ! $is_safe_publish_route ) {
 			return $result;
+		}
+
+		if ( $is_wp_route ) {
+			$method = strtoupper( (string) $request->get_method() );
+			if ( 'GET' !== $method && 'HEAD' !== $method ) {
+				return $result;
+			}
 		}
 
 		$headers = $request->get_headers();

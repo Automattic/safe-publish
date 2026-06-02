@@ -41,3 +41,11 @@ coverage
 # Claude Code
 .claude/*
 !.claude/settings.json
+
+# Playwright MCP scratch output
+/.playwright-mcp/
+
+# Scratch directories and ad-hoc diff files at repo root.
+/*.diff
+/scratch/
+/.scratch/
