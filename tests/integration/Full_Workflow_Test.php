@@ -145,8 +145,10 @@ class Full_Workflow_Test extends Integration_Test_Case {
 	 * Verifies that the complete auth → import → history workflow succeeds.
 	 */
 	public function test_complete_auth_import_history_workflow_succeeds(): void {
-		// STEP 1 — AUTH: Authenticate a valid inbound REST request.
-		$request     = $this->build_signed_request( 'POST', '/wp/v2/posts', 'request body' );
+		// STEP 1 — AUTH: Authenticate a valid inbound REST request. GET on
+		// /wp/v2/* exercises the full HMAC path; non-GET methods on that
+		// namespace are short-circuited before signature verification.
+		$request     = $this->build_signed_request( 'GET', '/wp/v2/posts', '' );
 		$auth_result = $this->authenticator->authenticate_request( null, null, $request );
 
 		$this->assertNull( $auth_result, 'Valid HMAC request should pass authentication.' );
@@ -462,7 +464,7 @@ class Full_Workflow_Test extends Integration_Test_Case {
 	 */
 	public function test_invalid_auth_is_rejected_before_import(): void {
 		// ARRANGE: A request with a tampered signature.
-		$request = new WP_REST_Request( 'POST', '/wp/v2/posts' );
+		$request = new WP_REST_Request( 'GET', '/wp/v2/posts' );
 		$request->set_body( 'some body' );
 		$request->set_header( 'X-Safe-Publish-Timestamp', (string) time() );
 		$request->set_header( 'X-Safe-Publish-Content-Hash', hash( 'sha256', 'some body' ) );
