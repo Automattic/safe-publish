@@ -209,7 +209,7 @@ Playgrounds do not closely mirror production environments and are missing persis
 1. **Use two browser windows** - one for source site, one for destination.
 2. **Test with different post types** - posts, pages, custom types.
 3. **Test media import** - posts with multiple images.
-4. **Check History** - verify logging is working.
+4. **Check the Imports page** - verify the Posts and Failures tabs reflect each attempt.
 5. **Monitor network requests** - use browser DevTools.
 6. **Test error conditions** - invalid URLs, auth failures, etc.
 
