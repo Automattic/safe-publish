@@ -43,6 +43,7 @@ import type {
 	ImportSyncStatus,
 	SyncStatusBatchResponse,
 } from '../types';
+import type { ReactNode } from 'react';
 
 /**
  * Local Status filter options, derived from the shared status labels.
@@ -109,6 +110,72 @@ const getDisplayState = ( flags: {
 } );
 
 /**
+ * Reads a URL search parameter as a positive integer.
+ *
+ * Used by mount-time `useState` initializers that hydrate state from a
+ * deep-link query string (`?batch=N`, `?focus_source=N`).
+ *
+ * @param {string} name Parameter name to read.
+ *
+ * @return {number} The parsed positive integer, or 0 if absent/invalid.
+ */
+const readPositiveIntParam = ( name: string ): number => {
+	const param = new URLSearchParams( window.location.search ).get( name );
+	const parsed = param ? parseInt( param, 10 ) : 0;
+	return Number.isFinite( parsed ) && parsed > 0 ? parsed : 0;
+};
+
+/**
+ * Removes a URL search parameter without reloading the page.
+ *
+ * Pairs with `readPositiveIntParam` so a Clear action removes the deep-link
+ * param it consumed, preventing a reload or share from reapplying it.
+ *
+ * @param {string} name Parameter name to remove.
+ */
+const stripUrlParam = ( name: string ): void => {
+	const url = new URL( window.location.href );
+	if ( url.searchParams.has( name ) ) {
+		url.searchParams.delete( name );
+		window.history.replaceState( null, '', url.toString() );
+	}
+};
+
+/**
+ * Contextual pill with a tertiary Clear button.
+ *
+ * Used to surface deep-link state (batch session, focused source) that the
+ * user can dismiss; both consumers share styling via the
+ * `safe-publish-dismissible-pill` class.
+ *
+ * @param {Object}     props         Component props.
+ * @param {ReactNode}  props.text    Text to display.
+ * @param {() => void} props.onClear Handler for the Clear button.
+ *
+ * @return {JSX.Element} Rendered dismissible pill.
+ */
+function DismissiblePill( {
+	text,
+	onClear,
+}: {
+	text: ReactNode;
+	onClear: () => void;
+} ): JSX.Element {
+	return (
+		<div
+			className="safe-publish-dismissible-pill"
+			role="status"
+			aria-live="polite"
+		>
+			<span>{ text }</span>
+			<Button variant="tertiary" onClick={ onClear }>
+				{ __( 'Clear', 'safe-publish' ) }
+			</Button>
+		</div>
+	);
+}
+
+/**
  * ImportedPostsDataView component.
  *
  * @return {JSX.Element} Rendered DataViews component for imported posts.
@@ -159,21 +226,17 @@ export function ImportedPostsDataView(): JSX.Element {
 	// Read directly from the URL on mount rather than from the PHP-passed
 	// initial value, so a tab switch that re-mounts this component picks up
 	// a previous Clear that updated the URL but not the inline global.
-	const [ batchSessionId, setBatchSessionId ] = useState< number >( () => {
-		const batchParam = new URLSearchParams( window.location.search ).get( 'batch' );
-		const parsed = batchParam ? parseInt( batchParam, 10 ) : 0;
-		return Number.isFinite( parsed ) && parsed > 0 ? parsed : 0;
-	} );
+	const [ batchSessionId, setBatchSessionId ] = useState< number >( () =>
+		readPositiveIntParam( 'batch' )
+	);
 
 	// Focus is set from `?focus_source=N` on mount and resolved by the listing
 	// endpoint (so the row appears even when the active batch filter or
 	// pagination would otherwise hide it). It composes with the batch filter
 	// rather than overriding it: batch narrows the list, focus pins one row.
-	const [ focusSourceId, setFocusSourceId ] = useState< number >( () => {
-		const focusParam = new URLSearchParams( window.location.search ).get( 'focus_source' );
-		const parsed = focusParam ? parseInt( focusParam, 10 ) : 0;
-		return Number.isFinite( parsed ) && parsed > 0 ? parsed : 0;
-	} );
+	const [ focusSourceId, setFocusSourceId ] = useState< number >( () =>
+		readPositiveIntParam( 'focus_source' )
+	);
 	// `undefined` = no lookup yet (e.g. while the first fetch is in flight),
 	// `null` = the server confirmed no imported post for the requested source,
 	// row = resolved imported post.
@@ -679,12 +742,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		// Match handleViewChange's filter-change behavior so the listing lands
 		// on page 1 of the unfiltered set rather than mid-pagination.
 		setView( ( current ) => ( { ...current, page: 1 } ) );
-		// Strip ?batch=N so a reload or share doesn't reapply the filter.
-		const url = new URL( window.location.href );
-		if ( url.searchParams.has( 'batch' ) ) {
-			url.searchParams.delete( 'batch' );
-			window.history.replaceState( null, '', url.toString() );
-		}
+		stripUrlParam( 'batch' );
 	}, [] );
 
 	const clearFocus = useCallback( (): void => {
@@ -692,11 +750,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		// Reset to undefined so the stale resolved row doesn't linger in
 		// displayItems until the next fetch completes.
 		setFocusedItem( undefined );
-		const url = new URL( window.location.href );
-		if ( url.searchParams.has( 'focus_source' ) ) {
-			url.searchParams.delete( 'focus_source' );
-			window.history.replaceState( null, '', url.toString() );
-		}
+		stripUrlParam( 'focus_source' );
 	}, [] );
 
 	// Three-state pill text so the deep link's user doesn't see a confident
@@ -736,34 +790,17 @@ export function ImportedPostsDataView(): JSX.Element {
 				settingsUrl={ window.safePublishAdminData?.settingsUrl }
 			/>
 			{ batchSessionId > 0 && (
-				<div
-					className="safe-publish-batch-pill"
-					role="status"
-					aria-live="polite"
-				>
-					<span>
-						{ sprintf(
-							/* translators: %d: import batch number */
-							__( 'Showing imports from batch #%d', 'safe-publish' ),
-							batchSessionId
-						) }
-					</span>
-					<Button variant="tertiary" onClick={ clearBatch }>
-						{ __( 'Clear', 'safe-publish' ) }
-					</Button>
-				</div>
+				<DismissiblePill
+					text={ sprintf(
+						/* translators: %d: import batch number */
+						__( 'Showing imports from batch #%d', 'safe-publish' ),
+						batchSessionId
+					) }
+					onClear={ clearBatch }
+				/>
 			) }
 			{ focusSourceId > 0 && (
-				<div
-					className="safe-publish-batch-pill"
-					role="status"
-					aria-live="polite"
-				>
-					<span>{ focusPillText }</span>
-					<Button variant="tertiary" onClick={ clearFocus }>
-						{ __( 'Clear', 'safe-publish' ) }
-					</Button>
-				</div>
+				<DismissiblePill text={ focusPillText } onClear={ clearFocus } />
 			) }
 			{ fetchError && (
 				<Notice
