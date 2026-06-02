@@ -148,6 +148,10 @@ final class Import_Actions_Ajax_Handler {
 			wp_send_json_error( __( 'Post not found', 'safe-publish' ) );
 		}
 
+		if ( ! current_user_can( 'read_post', $post_id ) ) {
+			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
+		}
+
 		$item = $this->repository->get_item_for_post( $post_id );
 
 		if ( null === $item ) {

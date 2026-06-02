@@ -327,6 +327,73 @@ class Source_Author_REST_Field_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that every row of an HMAC-authenticated collection response
+	 * carries a null author, so list endpoints expose no source author PII.
+	 */
+	public function test_field_is_null_for_collection_request(): void {
+		// ARRANGE: Two authored posts and an authenticated request.
+		$author_id = self::factory()->user->create(
+			array(
+				'role'       => 'editor',
+				'user_email' => 'list@source.example',
+				'user_login' => 'listauthor',
+			)
+		);
+		$post_ids  = array(
+			self::factory()->post->create( array( 'post_author' => $author_id ) ),
+			self::factory()->post->create( array( 'post_author' => $author_id ) ),
+		);
+
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Dispatch the collection request.
+		$response = $this->server->dispatch( new WP_REST_Request( 'GET', '/wp/v2/posts' ) );
+
+		// ASSERT: Both created posts are present and each carries a null author.
+		$this->assertSame( 200, $response->get_status() );
+		$authors = array();
+		foreach ( $response->get_data() as $row ) {
+			$authors[ $row['id'] ] = $row['safe_publish_author'];
+		}
+		foreach ( $post_ids as $post_id ) {
+			$this->assertArrayHasKey( $post_id, $authors );
+			$this->assertNull( $authors[ $post_id ] );
+		}
+	}
+
+	/**
+	 * Verifies that an `id` query parameter on a collection route does not
+	 * promote the request to single-item handling, keeping author PII out of
+	 * list responses regardless of the query string.
+	 */
+	public function test_field_is_null_for_collection_request_with_id_query_param(): void {
+		// ARRANGE: An authored post and an authenticated request.
+		$author_id = self::factory()->user->create(
+			array(
+				'user_email' => 'query@source.example',
+				'user_login' => 'queryauthor',
+			)
+		);
+		$post_id   = self::factory()->post->create( array( 'post_author' => $author_id ) );
+
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Dispatch a collection request carrying ?id=<post_id>.
+		$request = new WP_REST_Request( 'GET', '/wp/v2/posts' );
+		$request->set_query_params( array( 'id' => (string) $post_id ) );
+		$response = $this->server->dispatch( $request );
+
+		// ASSERT: The matching row is present and its author is still null.
+		$this->assertSame( 200, $response->get_status() );
+		$authors = array();
+		foreach ( $response->get_data() as $row ) {
+			$authors[ $row['id'] ] = $row['safe_publish_author'];
+		}
+		$this->assertArrayHasKey( $post_id, $authors );
+		$this->assertNull( $authors[ $post_id ] );
+	}
+
+	/**
 	 * Forces the HMAC authenticator's authenticated flag for tests that do not
 	 * need a fully signed request.
 	 *

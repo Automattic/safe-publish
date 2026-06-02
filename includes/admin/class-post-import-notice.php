@@ -77,11 +77,28 @@ final class Post_Import_Notice {
 	}
 
 	/**
+	 * Plugin screens on which the notice (and its inline dismiss script) is
+	 * allowed to render. `admin_notices` fires on every admin page, so we
+	 * gate to avoid leaking the script onto unrelated screens.
+	 */
+	private const PLUGIN_SCREEN_IDS = array(
+		'toplevel_page_safe-publish',
+		'safe-publish_page_safe-publish-imports',
+		'safe-publish_page_safe-publish-exports',
+		'safe-publish_page_safe-publish-settings',
+	);
+
+	/**
 	 * Renders the notice when a recorded batch exists for the current user.
 	 */
 	public function render_notice(): void {
 		$user_id = get_current_user_id();
 		if ( 0 === $user_id || ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		$screen = get_current_screen();
+		if ( ! $screen || ! in_array( $screen->id, self::PLUGIN_SCREEN_IDS, true ) ) {
 			return;
 		}
 
