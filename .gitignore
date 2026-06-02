@@ -45,14 +45,7 @@ coverage
 # Playwright MCP scratch output
 /.playwright-mcp/
 
-# Local design / scratch notes — kept out of the repo by convention.
+# Scratch directories and ad-hoc diff files at repo root.
 /*.diff
-/PATCH_*.md
-/RECOMMENDED_*
-/ROUTE_EXTRACTION_*
-/SECURITY_*.md
-/SIMPLE_ROUTE_*.md
-/WP_METHOD_ROUTE_*.md
-/rest-route-*.php
 /scratch/
 /.scratch/
