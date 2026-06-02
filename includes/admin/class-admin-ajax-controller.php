@@ -213,15 +213,20 @@ final class Admin_Ajax_Controller {
 	 * imported posts ordered by most-recent import_date_gmt (from the items
 	 * table), joined with each post's most recent items row for session and
 	 * rollback eligibility metadata.
+	 *
+	 * When `focus_source_id` is sent, also attaches `focused_item` — the
+	 * matching row (or null when no match) — so the client can pin it
+	 * regardless of the page's filters or pagination.
 	 */
 	public function ajax_list_imported_posts(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing
-		$page        = max( 1, absint( $_POST['page'] ?? 1 ) );
-		$per_page    = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
-		$with_facets = 1 === absint( $_POST['with_facets'] ?? 0 );
+		$page            = max( 1, absint( $_POST['page'] ?? 1 ) );
+		$per_page        = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
+		$with_facets     = 1 === absint( $_POST['with_facets'] ?? 0 );
+		$focus_source_id = absint( $_POST['focus_source_id'] ?? 0 );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		$args     = $this->build_imported_listing_args();
@@ -235,9 +240,12 @@ final class Admin_Ajax_Controller {
 		if ( 0 === count( $post_ids ) ) {
 			wp_send_json_success(
 				$this->with_imported_listing_extras(
-					array(
-						'items'    => array(),
-						'has_more' => false,
+					$this->with_focused_item(
+						array(
+							'items'    => array(),
+							'has_more' => false,
+						),
+						$focus_source_id
 					),
 					$with_facets
 				)
@@ -261,34 +269,20 @@ final class Admin_Ajax_Controller {
 
 		$rows = array();
 		foreach ( $posts as $post ) {
-			$item             = $items_by_post_id[ $post->ID ] ?? null;
-			$source_post_id   = (int) get_post_meta( $post->ID, Options::META_SOURCE_POST_ID, true );
-			$source_link      = (string) get_post_meta( $post->ID, Options::META_SOURCE_LINK, true );
-			$edit_url_or_null = get_edit_post_link( $post->ID, 'raw' );
-
-			$rows[] = array(
-				'id'                   => $post->ID,
-				'source_post_id'       => $source_post_id,
-				'title'                => $post->post_title,
-				'post_type'            => $post->post_type,
-				'local_status'         => $post->post_status,
-				'modified_gmt'         => $post->post_modified_gmt,
-				'edit_url'             => is_string( $edit_url_or_null ) ? $edit_url_or_null : '',
-				'source_link'          => $source_link,
-				'item_id'              => null !== $item ? (int) $item['id'] : null,
-				'session_id'           => null !== $item ? (int) $item['session_id'] : null,
-				'rollback_status'      => null !== $item ? (string) $item['status'] : null,
-				'has_previous_content' => null !== $item ? (bool) $item['has_previous_content'] : false,
-				'rolled_back'          => null !== $item ? (bool) $item['rolled_back'] : false,
-				'import_date_gmt'      => null !== $item ? (string) $item['import_date_gmt'] : null,
+			$rows[] = $this->build_imported_listing_row(
+				$post,
+				$items_by_post_id[ $post->ID ] ?? null
 			);
 		}
 
 		wp_send_json_success(
 			$this->with_imported_listing_extras(
-				array(
-					'items'    => $rows,
-					'has_more' => $has_more,
+				$this->with_focused_item(
+					array(
+						'items'    => $rows,
+						'has_more' => $has_more,
+					),
+					$focus_source_id
 				),
 				$with_facets
 			)
@@ -439,6 +433,71 @@ final class Admin_Ajax_Controller {
 		}
 
 		return $response;
+	}
+
+	/**
+	 * Resolves the focused source ID to its imported row and attaches it.
+	 *
+	 * The lookup ignores the listing's filters and pagination on purpose: a
+	 * deep link's target is the post itself, so the client can pin it even
+	 * when the active batch filter would otherwise hide it.
+	 *
+	 * @param array $response        Response payload to augment.
+	 * @param int   $focus_source_id Source post ID to resolve, or 0 to skip.
+	 * @return array Response, with a `focused_item` key (row array or null)
+	 *               when `$focus_source_id` is greater than zero.
+	 */
+	private function with_focused_item(
+		array $response,
+		int $focus_source_id
+	): array {
+		if ( $focus_source_id <= 0 ) {
+			return $response;
+		}
+
+		$focused_post = $this->post_import_service->find_imported_post( $focus_source_id );
+		if ( null === $focused_post ) {
+			$response['focused_item'] = null;
+			return $response;
+		}
+
+		$response['focused_item'] = $this->build_imported_listing_row(
+			$focused_post,
+			$this->repository->get_item_for_post( $focused_post->ID )
+		);
+
+		return $response;
+	}
+
+	/**
+	 * Serializes an imported post + its most-recent items-table row into the
+	 * row shape consumed by the Imports → Posts tab DataView.
+	 *
+	 * @param \WP_Post   $post Imported WordPress post.
+	 * @param array|null $item Most recent items-table row, or null if absent.
+	 * @return array Row payload matching the listing's item shape.
+	 */
+	private function build_imported_listing_row( \WP_Post $post, ?array $item ): array {
+		$source_post_id   = (int) get_post_meta( $post->ID, Options::META_SOURCE_POST_ID, true );
+		$source_link      = (string) get_post_meta( $post->ID, Options::META_SOURCE_LINK, true );
+		$edit_url_or_null = get_edit_post_link( $post->ID, 'raw' );
+
+		return array(
+			'id'                   => $post->ID,
+			'source_post_id'       => $source_post_id,
+			'title'                => $post->post_title,
+			'post_type'            => $post->post_type,
+			'local_status'         => $post->post_status,
+			'modified_gmt'         => $post->post_modified_gmt,
+			'edit_url'             => is_string( $edit_url_or_null ) ? $edit_url_or_null : '',
+			'source_link'          => $source_link,
+			'item_id'              => null !== $item ? (int) $item['id'] : null,
+			'session_id'           => null !== $item ? (int) $item['session_id'] : null,
+			'rollback_status'      => null !== $item ? (string) $item['status'] : null,
+			'has_previous_content' => null !== $item ? (bool) $item['has_previous_content'] : false,
+			'rolled_back'          => null !== $item ? (bool) $item['rolled_back'] : false,
+			'import_date_gmt'      => null !== $item ? (string) $item['import_date_gmt'] : null,
+		);
 	}
 
 	/**
