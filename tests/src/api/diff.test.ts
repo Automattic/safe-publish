@@ -9,6 +9,8 @@ import {
 	type DiffPreviewResult,
 } from '@/api/diff';
 
+const REST_NONCE = 'test-rest-nonce';
+
 describe( 'fetchDiffPreview', () => {
 	beforeEach( () => {
 		global.fetch = vi.fn();
@@ -33,7 +35,7 @@ describe( 'fetchDiffPreview', () => {
 			postId: 123,
 		};
 
-		const result = await fetchDiffPreview( payload );
+		const result = await fetchDiffPreview( payload, REST_NONCE );
 		expect( result ).toEqual( mockResponse );
 		expect( global.fetch ).toHaveBeenCalledWith(
 			'/wp-json/safe-publish/v1/diff-preview',
@@ -57,7 +59,7 @@ describe( 'fetchDiffPreview', () => {
 			postId: 123,
 		};
 
-		const result = await fetchDiffPreview( payload );
+		const result = await fetchDiffPreview( payload, REST_NONCE );
 		expect( result.error ).toBe( 'Error message' );
 	} );
 
@@ -73,7 +75,7 @@ describe( 'fetchDiffPreview', () => {
 			postId: 123,
 		};
 
-		const result = await fetchDiffPreview( payload );
+		const result = await fetchDiffPreview( payload, REST_NONCE );
 		expect( result.error ).toBe( 'Failed to fetch diff' );
 	} );
 
@@ -90,7 +92,7 @@ describe( 'fetchDiffPreview', () => {
 			cleanup: true,
 		};
 
-		await fetchDiffPreview( payload );
+		await fetchDiffPreview( payload, REST_NONCE );
 		expect( global.fetch ).toHaveBeenCalledWith(
 			'/wp-json/safe-publish/v1/diff-preview',
 			expect.objectContaining( {
@@ -100,25 +102,23 @@ describe( 'fetchDiffPreview', () => {
 	} );
 
 	it( 'should include X-WP-Nonce header so WP can authenticate the request', async () => {
-		// ARRANGE: vitest.setup.ts provides restNonce on window. This pins
-		// the contract — if a nonce is exposed on window, it is sent as
-		// X-WP-Nonce — rather than the prod scenario where the page exposed
-		// a nonce but the request was not reading it.
+		// ARRANGE: the caller passes a nonce in. Pins the contract — nonce
+		// must reach the wire as X-WP-Nonce so current_user_can() works.
 		( global.fetch as any ).mockResolvedValue( {
 			ok: true,
 			json: async () => ( {} ),
 		} );
 
 		// ACT: trigger a diff preview request.
-		await fetchDiffPreview( { postId: 123 } );
+		await fetchDiffPreview( { postId: 123 }, REST_NONCE );
 
-		// ASSERT: the request carried the nonce so current_user_can() works.
+		// ASSERT: the request carried the nonce.
 		expect( global.fetch ).toHaveBeenCalledWith(
 			'/wp-json/safe-publish/v1/diff-preview',
 			expect.objectContaining( {
 				headers: expect.objectContaining( {
 					'Content-Type': 'application/json',
-					'X-WP-Nonce': 'test-rest-nonce',
+					'X-WP-Nonce': REST_NONCE,
 				} ),
 			} )
 		);
@@ -128,16 +128,10 @@ describe( 'fetchDiffPreview', () => {
 describe( 'updatePostContent', () => {
 	beforeEach( () => {
 		global.fetch = vi.fn();
-		( global as any ).window = {
-			safePublishAdminData: {
-				restNonce: 'test-nonce',
-			},
-		};
 	} );
 
 	afterEach( () => {
 		vi.restoreAllMocks();
-		delete ( global as any ).window;
 	} );
 
 	it( 'should update post content successfully', async () => {
@@ -146,7 +140,7 @@ describe( 'updatePostContent', () => {
 			json: async () => ( { success: true } ),
 		} );
 
-		const result = await updatePostContent( 123, 'New content' );
+		const result = await updatePostContent( 123, 'New content', REST_NONCE );
 		expect( result.success ).toBe( true );
 		expect( global.fetch ).toHaveBeenCalledWith(
 			'/wp-json/safe-publish/v1/update-post',
@@ -154,7 +148,7 @@ describe( 'updatePostContent', () => {
 				method: 'POST',
 				headers: expect.objectContaining( {
 					'Content-Type': 'application/json',
-					'X-WP-Nonce': 'test-nonce',
+					'X-WP-Nonce': REST_NONCE,
 				} ),
 			} )
 		);
@@ -189,7 +183,7 @@ describe( 'updatePostContent', () => {
 		expect( body.featuredMediaId ).toBe( 456 );
 	} );
 
-	it( 'should use custom nonce when provided', async () => {
+	it( 'should send the supplied nonce as X-WP-Nonce', async () => {
 		( global.fetch as any ).mockResolvedValue( {
 			ok: true,
 			json: async () => ( { success: true } ),
@@ -208,7 +202,7 @@ describe( 'updatePostContent', () => {
 			text: async () => 'Forbidden',
 		} );
 
-		const result = await updatePostContent( 123, 'Content' );
+		const result = await updatePostContent( 123, 'Content', REST_NONCE );
 		if ( result.success ) {
 			throw new Error( 'Expected failure result' );
 		}
@@ -224,7 +218,7 @@ describe( 'updatePostContent', () => {
 			},
 		} );
 
-		const result = await updatePostContent( 123, 'Content' );
+		const result = await updatePostContent( 123, 'Content', REST_NONCE );
 		if ( result.success ) {
 			throw new Error( 'Expected failure result' );
 		}
@@ -239,7 +233,7 @@ describe( 'updatePostContent', () => {
 			},
 		} );
 
-		const result = await updatePostContent( 123, 'Content' );
+		const result = await updatePostContent( 123, 'Content', REST_NONCE );
 		if ( result.success ) {
 			throw new Error( 'Expected failure result' );
 		}
@@ -252,30 +246,11 @@ describe( 'updatePostContent', () => {
 			json: async () => ( { success: false, error: 'Custom error' } ),
 		} );
 
-		const result = await updatePostContent( 123, 'Content' );
+		const result = await updatePostContent( 123, 'Content', REST_NONCE );
 		if ( result.success ) {
 			throw new Error( 'Expected failure result' );
 		}
 		expect( result.error ).toBe( 'Custom error' );
-	} );
-
-	it( 'should work without window.safePublishAdminData', async () => {
-		// Save original window.
-		const originalWindow = ( global as any ).window;
-
-		// Set window to undefined.
-		( global as any ).window = undefined;
-
-		( global.fetch as any ).mockResolvedValue( {
-			ok: true,
-			json: async () => ( { success: true } ),
-		} );
-
-		const result = await updatePostContent( 123, 'Content', 'explicit-nonce' );
-		expect( result.success ).toBe( true );
-
-		// Restore original window.
-		( global as any ).window = originalWindow;
 	} );
 
 	it( 'should not include undefined optional properties in body', async () => {
@@ -284,7 +259,7 @@ describe( 'updatePostContent', () => {
 			json: async () => ( { success: true } ),
 		} );
 
-		await updatePostContent( 123, 'Content' );
+		await updatePostContent( 123, 'Content', REST_NONCE );
 
 		const callArgs = ( global.fetch as any ).mock.calls[ 0 ];
 		const body = JSON.parse( callArgs[ 1 ].body );

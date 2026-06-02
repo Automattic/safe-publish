@@ -213,7 +213,7 @@ Safe Publish tracks imported posts using the `safe_publish_source_post_id` meta 
 
 If duplicates still occur:
 
-1. **Check History** to see if the post was imported from different sessions.
+1. **Check the Imports → Posts tab** to see whether the post was imported from different sessions.
 2. Delete duplicate drafts manually.
 
 #### Embedded posts display as plain links
@@ -359,20 +359,22 @@ Install [Query Monitor](https://wordpress.org/plugins/query-monitor/) for advanc
 
 Use the **Test Connection** button in settings to test authentication independently of imports.
 
-### Import History
+### Imports → Failures Tab
 
-Check the **History** page for:
+Check the **Imports → Failures** tab for:
 
-- Detailed error messages
-- Failed import attempts
-- Success rates
-- Pattern analysis
+- Error messages recorded at import time
+- Source URL of each failed attempt
+- Timestamp of the attempt
+
+The tab is read-only; recovery is fixing the underlying issue and re-importing
+from Source Posts.
 
 ## Getting Help
 
 If you still can't resolve the issue:
 
-1. **Check History** for detailed error messages.
+1. **Check the Imports → Failures tab** for detailed error messages.
 2. **Enable debug mode** and collect error logs.
 3. **Reproduce the issue** in a clean environment if possible.
 4. **Report the issue** via GitHub Issues with:
@@ -404,7 +406,10 @@ wp option delete safe_publish_basic_auth_password
 
 ### Clear Import History
 
-Import history is stored in custom database tables and can be managed through the **History** page.
+Import history is stored in two custom tables (`safe_publish_imports` and
+`safe_publish_import_items`). Individual rows can be rolled back from the
+**Imports → Posts** tab (per-row or bulk). To clear history entirely, use
+the Complete Reset below.
 
 ### Complete Reset
 

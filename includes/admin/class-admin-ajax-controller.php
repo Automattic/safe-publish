@@ -18,7 +18,9 @@ use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Topological_Sorter;
-use Exception;
+use DateTimeImmutable;
+use DateTimeZone;
+use WP_Post;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -48,6 +50,15 @@ final class Admin_Ajax_Controller {
 	 * @var int
 	 */
 	const AUTH_STATUS_TTL = 5 * MINUTE_IN_SECONDS;
+
+	/**
+	 * Maximum number of source IDs accepted by ajax_sync_status_batch in a
+	 * single call. Mirrors the catalog endpoint's MAX_PER_PAGE so one batch
+	 * can't outgrow what the source serves for a regular page.
+	 *
+	 * @var int
+	 */
+	const SYNC_STATUS_BATCH_MAX = 100;
 
 	/**
 	 * Source Posts API instance.
@@ -113,13 +124,14 @@ final class Admin_Ajax_Controller {
 	public function register_handlers(): void {
 		add_action( 'wp_ajax_safe_publish_fetch_posts', array( $this, 'ajax_fetch_posts' ) );
 		add_action( 'wp_ajax_safe_publish_list_imported_posts', array( $this, 'ajax_list_imported_posts' ) );
+		add_action( 'wp_ajax_safe_publish_list_failed_imports', array( $this, 'ajax_list_failed_imports' ) );
 		add_action( 'wp_ajax_safe_publish_fetch_post_types', array( $this, 'ajax_fetch_post_types' ) );
 		add_action( 'wp_ajax_safe_publish_test_connection', array( $this, 'ajax_test_connection' ) );
 		add_action( 'wp_ajax_safe_publish_auth_status', array( $this, 'ajax_auth_status' ) );
 		add_action( 'wp_ajax_safe_publish_create_draft', array( $this, 'ajax_create_draft' ) );
 		add_action( 'wp_ajax_safe_publish_bulk_import', array( $this, 'ajax_bulk_import' ) );
 		add_action( 'wp_ajax_safe_publish_delete_post', array( $this, 'ajax_delete_post' ) );
-		add_action( 'wp_ajax_safe_publish_debug_auth', array( $this, 'ajax_debug_auth' ) );
+		add_action( 'wp_ajax_safe_publish_sync_status_batch', array( $this, 'ajax_sync_status_batch' ) );
 
 		$this->register_auth_status_invalidation();
 	}
@@ -195,23 +207,30 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Handles AJAX request for the Imported Posts listing.
+	 * Handles AJAX request for the Imports → Posts tab listing.
 	 *
 	 * Pure local query — no source roundtrip. Returns the paginated set of
 	 * imported posts ordered by most-recent import_date_gmt (from the items
 	 * table), joined with each post's most recent items row for session and
 	 * rollback eligibility metadata.
+	 *
+	 * When `focus_source_id` is sent, also attaches `focused_item` — the
+	 * matching row (or null when no match) — so the client can pin it
+	 * regardless of the page's filters or pagination.
 	 */
 	public function ajax_list_imported_posts(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing
-		$page     = max( 1, absint( $_POST['page'] ?? 1 ) );
-		$per_page = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
+		$page            = max( 1, absint( $_POST['page'] ?? 1 ) );
+		$per_page        = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
+		$with_facets     = 1 === absint( $_POST['with_facets'] ?? 0 );
+		$focus_source_id = absint( $_POST['focus_source_id'] ?? 0 );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$post_ids = $this->repository->list_imported_post_ids( $page, $per_page );
+		$args     = $this->build_imported_listing_args();
+		$post_ids = $this->repository->list_imported_post_ids( $page, $per_page, $args );
 
 		$has_more = count( $post_ids ) > $per_page;
 		if ( $has_more ) {
@@ -220,9 +239,15 @@ final class Admin_Ajax_Controller {
 
 		if ( 0 === count( $post_ids ) ) {
 			wp_send_json_success(
-				array(
-					'items'    => array(),
-					'has_more' => false,
+				$this->with_imported_listing_extras(
+					$this->with_focused_item(
+						array(
+							'items'    => array(),
+							'has_more' => false,
+						),
+						$focus_source_id
+					),
+					$with_facets
 				)
 			);
 		}
@@ -244,34 +269,233 @@ final class Admin_Ajax_Controller {
 
 		$rows = array();
 		foreach ( $posts as $post ) {
-			$item             = $items_by_post_id[ $post->ID ] ?? null;
-			$source_post_id   = (int) get_post_meta( $post->ID, Options::META_SOURCE_POST_ID, true );
-			$source_link      = (string) get_post_meta( $post->ID, Options::META_SOURCE_LINK, true );
-			$edit_url_or_null = get_edit_post_link( $post->ID, 'raw' );
-
-			$rows[] = array(
-				'id'                   => $post->ID,
-				'source_post_id'       => $source_post_id,
-				'title'                => $post->post_title,
-				'post_type'            => $post->post_type,
-				'local_status'         => $post->post_status,
-				'modified_gmt'         => $post->post_modified_gmt,
-				'edit_url'             => is_string( $edit_url_or_null ) ? $edit_url_or_null : '',
-				'source_link'          => $source_link,
-				'item_id'              => null !== $item ? (int) $item['id'] : null,
-				'session_id'           => null !== $item ? (int) $item['session_id'] : null,
-				'rollback_status'      => null !== $item ? (string) $item['status'] : null,
-				'has_previous_content' => null !== $item ? (bool) $item['has_previous_content'] : false,
-				'rolled_back'          => null !== $item ? (bool) $item['rolled_back'] : false,
-				'import_date_gmt'      => null !== $item ? (string) $item['import_date_gmt'] : null,
+			$rows[] = $this->build_imported_listing_row(
+				$post,
+				$items_by_post_id[ $post->ID ] ?? null
 			);
 		}
 
 		wp_send_json_success(
+			$this->with_imported_listing_extras(
+				$this->with_focused_item(
+					array(
+						'items'    => $rows,
+						'has_more' => $has_more,
+					),
+					$focus_source_id
+				),
+				$with_facets
+			)
+		);
+	}
+
+	/**
+	 * Handles AJAX request for the Failures tab listing.
+	 *
+	 * Returns a page of items with status 'error' — failed imports that have no
+	 * local post — most recent first. Read-only; recovery happens by fixing the
+	 * source and re-importing from Source Posts.
+	 */
+	public function ajax_list_failed_imports(): void {
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		$this->verify_ajax_capability();
+
+		// phpcs:disable WordPress.Security.NonceVerification.Missing
+		$page     = max( 1, absint( $_POST['page'] ?? 1 ) );
+		$per_page = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		$rows = $this->repository->list_failed_items( $page, $per_page );
+
+		$has_more = count( $rows ) > $per_page;
+		if ( $has_more ) {
+			$rows = array_slice( $rows, 0, $per_page );
+		}
+
+		$items = array_map(
+			static fn( array $row ): array => array(
+				'id'              => (int) $row['id'],
+				'session_id'      => (int) $row['session_id'],
+				'title'           => (string) $row['title'],
+				'source_post_id'  => null !== $row['source_post_id']
+					? (int) $row['source_post_id']
+					: null,
+				'source_site_url' => (string) $row['source_site_url'],
+				'error_message'   => (string) ( $row['error_message'] ?? '' ),
+				'import_date_gmt' => (string) $row['import_date_gmt'],
+			),
+			$rows
+		);
+
+		wp_send_json_success(
 			array(
-				'items'    => $rows,
+				'items'    => $items,
 				'has_more' => $has_more,
 			)
+		);
+	}
+
+	/**
+	 * Validates and normalizes the Imports listing's search/filter/sort
+	 * params from the request.
+	 *
+	 * @return array{search?: string, statuses: list<string>, post_types: list<string>, session_id: int, orderby: string, order: string} Listing args.
+	 */
+	private function build_imported_listing_args(): array {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- caller verified the nonce.
+		$search = trim(
+			sanitize_text_field( wp_unslash( $_POST['search'] ?? '' ) )
+		);
+
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitize_key_list() sanitizes each element.
+		$raw_statuses     = (array) wp_unslash( $_POST['statuses'] ?? array() );
+		$allowed_statuses = array( 'publish', 'draft', 'pending', 'private', 'future' );
+		$statuses         = array_values(
+			array_intersect(
+				$this->sanitize_key_list( $raw_statuses ),
+				$allowed_statuses
+			)
+		);
+
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitize_key_list() sanitizes each element.
+		$raw_post_types = (array) wp_unslash( $_POST['post_types'] ?? array() );
+		$post_types     = array_values(
+			array_filter(
+				$this->sanitize_key_list( $raw_post_types ),
+				'post_type_exists'
+			)
+		);
+
+		$session_id = absint( $_POST['session_id'] ?? 0 );
+
+		$orderby = 'title' === sanitize_key( wp_unslash( $_POST['orderby'] ?? '' ) )
+			? 'title'
+			: 'import_date';
+
+		$order = 'asc' === sanitize_key( wp_unslash( $_POST['order'] ?? '' ) )
+			? 'asc'
+			: 'desc';
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		$args = array(
+			'statuses'   => $statuses,
+			'post_types' => $post_types,
+			'session_id' => $session_id,
+			'orderby'    => $orderby,
+			'order'      => $order,
+		);
+
+		if ( '' !== $search ) {
+			$args['search'] = $search;
+		}
+
+		return $args;
+	}
+
+	/**
+	 * Reduces request input to a list of sanitized, non-empty key strings,
+	 * ignoring any non-scalar entries.
+	 *
+	 * @param mixed $raw Raw request value (array or scalar).
+	 * @return list<string> Sanitized keys.
+	 */
+	private function sanitize_key_list( $raw ): array {
+		return array_values(
+			array_filter(
+				array_map(
+					static fn( $value ): string =>
+						is_scalar( $value ) ? sanitize_key( (string) $value ) : '',
+					(array) $raw
+				)
+			)
+		);
+	}
+
+	/**
+	 * Appends the listing's first-load extras to a response when requested.
+	 *
+	 * Computes the filter facets and the count of failed imports over the
+	 * full set, so the client fetches them once (on first load) rather than
+	 * on every page/filter change.
+	 *
+	 * @param array $response    Response payload to augment.
+	 * @param bool  $with_facets Whether to attach the first-load extras.
+	 * @return array Response, with `facets` and `failed_count` keys when
+	 *               `$with_facets` is true.
+	 */
+	private function with_imported_listing_extras(
+		array $response,
+		bool $with_facets
+	): array {
+		if ( $with_facets ) {
+			$response['facets']       = $this->repository->get_imported_filter_facets();
+			$response['failed_count'] = $this->repository->count_failed_items();
+		}
+
+		return $response;
+	}
+
+	/**
+	 * Resolves the focused source ID to its imported row and attaches it.
+	 *
+	 * The lookup ignores the listing's filters and pagination on purpose: a
+	 * deep link's target is the post itself, so the client can pin it even
+	 * when the active batch filter would otherwise hide it.
+	 *
+	 * @param array $response        Response payload to augment.
+	 * @param int   $focus_source_id Source post ID to resolve, or 0 to skip.
+	 * @return array Response, with a `focused_item` key (row array or null)
+	 *               when `$focus_source_id` is greater than zero.
+	 */
+	private function with_focused_item(
+		array $response,
+		int $focus_source_id
+	): array {
+		if ( $focus_source_id <= 0 ) {
+			return $response;
+		}
+
+		$focused_post = $this->post_import_service->find_imported_post( $focus_source_id );
+		if ( null === $focused_post ) {
+			$response['focused_item'] = null;
+			return $response;
+		}
+
+		$response['focused_item'] = $this->build_imported_listing_row(
+			$focused_post,
+			$this->repository->get_item_for_post( $focused_post->ID )
+		);
+
+		return $response;
+	}
+
+	/**
+	 * Serializes an imported post + its most-recent items-table row into the
+	 * row shape consumed by the Imports → Posts tab DataView.
+	 *
+	 * @param \WP_Post   $post Imported WordPress post.
+	 * @param array|null $item Most recent items-table row, or null if absent.
+	 * @return array Row payload matching the listing's item shape.
+	 */
+	private function build_imported_listing_row( \WP_Post $post, ?array $item ): array {
+		$source_post_id   = (int) get_post_meta( $post->ID, Options::META_SOURCE_POST_ID, true );
+		$source_link      = (string) get_post_meta( $post->ID, Options::META_SOURCE_LINK, true );
+		$edit_url_or_null = get_edit_post_link( $post->ID, 'raw' );
+
+		return array(
+			'id'                   => $post->ID,
+			'source_post_id'       => $source_post_id,
+			'title'                => $post->post_title,
+			'post_type'            => $post->post_type,
+			'local_status'         => $post->post_status,
+			'edit_url'             => is_string( $edit_url_or_null ) ? $edit_url_or_null : '',
+			'source_link'          => $source_link,
+			'item_id'              => null !== $item ? (int) $item['id'] : null,
+			'session_id'           => null !== $item ? (int) $item['session_id'] : null,
+			'rollback_status'      => null !== $item ? (string) $item['status'] : null,
+			'has_previous_content' => null !== $item ? (bool) $item['has_previous_content'] : false,
+			'rolled_back'          => null !== $item ? (bool) $item['rolled_back'] : false,
+			'import_date_gmt'      => null !== $item ? (string) $item['import_date_gmt'] : null,
 		);
 	}
 
@@ -706,6 +930,13 @@ final class Admin_Ajax_Controller {
 
 		$this->repository->complete_session( $session_id );
 
+		Post_Import_Notice::record(
+			$session_id,
+			count( $results ),
+			$successful,
+			$failed
+		);
+
 		wp_send_json_success(
 			array(
 				'total'      => count( $results ),
@@ -718,103 +949,220 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Handles debug authentication AJAX request.
-	 */
-	public function ajax_debug_auth(): void {
-		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
-		$this->verify_ajax_capability();
-
-		$connected_site_url = sanitize_text_field( wp_unslash( $_POST['connected_site_url'] ?? '' ) );
-
-		if ( empty( $connected_site_url ) ) {
-			wp_send_json_error( __( 'Connected site URL is required.', 'safe-publish' ) );
-		}
-
-		$auth_credentials = Auth_Credential_Provider::get_credentials();
-
-		$api_url = trailingslashit( $connected_site_url ) . 'wp-json/wp/v2/types';
-
-		$auth_params = \Safe_Publish\Auth\VIP_Safe_Auth::get_auth_params(
-			$api_url,
-			Request_Actions::PROBE,
-			$auth_credentials,
-			'GET'
-		);
-
-		$auth_type = 'none';
-		if ( ! empty( $auth_credentials['shared_secret'] ) ) {
-			$auth_type = ! empty( $auth_credentials['username'] ) ? 'shared_secret+basic_auth' : 'shared_secret';
-		}
-
-		$debug_info = array(
-			'connected_site_url'         => $connected_site_url,
-			'api_url'                    => $api_url,
-			'auth_credentials_available' => ! empty( $auth_credentials['shared_secret'] ),
-			'auth_credentials_type'      => $auth_type,
-			'auth_params'                => $auth_params,
-		);
-
-		try {
-			$response = $this->http_client->make_request(
-				$api_url,
-				Request_Actions::PROBE,
-				$auth_credentials
-			);
-
-			if ( is_wp_error( $response ) ) {
-				$debug_info['request_error'] = $response->get_error_message();
-			} else {
-				$response_body                       = wp_remote_retrieve_body( $response );
-				$debug_info['response_code']         = wp_remote_retrieve_response_code( $response );
-				$debug_info['response_headers']      = wp_remote_retrieve_headers( $response );
-				$debug_info['response_body_length']  = strlen( $response_body );
-				$debug_info['response_body_preview'] = substr( $response_body, 0, 200 );
-
-				$json_data = json_decode( $response_body, true );
-				if ( $json_data ) {
-					$debug_info['response_json_keys'] = array_keys( $json_data );
-					$debug_info['post_types_count']   = count( $json_data );
-				}
-			}
-		} catch ( Exception $e ) {
-			$debug_info['exception'] = $e->getMessage();
-		}
-
-		wp_send_json_success( $debug_info );
-	}
-
-	/**
 	 * Handles AJAX request for deleting a locally imported post.
 	 *
-	 * Moves the post to trash by its source post ID.
+	 * Moves the local post to trash by its WordPress post ID. The Imports →
+	 * Posts tab is the only caller and already has the local ID in hand, so
+	 * no source-side lookup is needed; the imported-post meta is still
+	 * required so this endpoint can't be repurposed to trash arbitrary posts.
 	 */
 	public function ajax_delete_post(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability( 'delete_posts' );
 
-		$source_post_id = absint( $_POST['source_post_id'] ?? 0 );
+		$post_id = absint( $_POST['post_id'] ?? 0 );
 
-		if ( ! $source_post_id ) {
-			wp_send_json_error( __( 'Source post ID is required.', 'safe-publish' ) );
+		if ( ! $post_id ) {
+			wp_send_json_error( __( 'Post ID is required.', 'safe-publish' ) );
 		}
 
-		$imported_post = $this->post_import_service->find_imported_post( $source_post_id );
+		$post = get_post( $post_id );
 
-		if ( ! $imported_post ) {
+		if ( ! $post ) {
 			wp_send_json_error( __( 'Post not found.', 'safe-publish' ) );
 		}
 
-		if ( ! current_user_can( 'delete_post', $imported_post->ID ) ) {
+		$source_id = (string) get_post_meta(
+			$post->ID,
+			Options::META_SOURCE_POST_ID,
+			true
+		);
+
+		if ( '' === $source_id ) {
+			wp_send_json_error( __( 'Post not found.', 'safe-publish' ) );
+		}
+
+		if ( ! current_user_can( 'delete_post', $post->ID ) ) {
 			wp_send_json_error( __( 'Forbidden', 'safe-publish' ), 403 );
 		}
 
-		$result = wp_trash_post( $imported_post->ID );
+		$result = wp_trash_post( $post->ID );
 
 		if ( ! $result ) {
 			wp_send_json_error( __( 'Failed to delete the post.', 'safe-publish' ) );
 		}
 
 		wp_send_json_success( array( 'message' => __( 'Post moved to trash.', 'safe-publish' ) ) );
+	}
+
+	/**
+	 * Handles AJAX request for the Imports → Posts tab sync-status column.
+	 *
+	 * Takes a batch of source post IDs and returns per-ID one of
+	 * `up-to-date | outdated | missing | unreachable | invalid` by comparing
+	 * the source post's `modified_gmt` against the destination's most recent
+	 * `import_date_gmt`. Posts are batched by type so each post-type group
+	 * costs one signed catalog call.
+	 *
+	 * Catalog_REST_Controller::ALLOWED_STATUSES excludes 'trash', so a
+	 * trashed source post reads as `missing` here. Deliberate — trashed
+	 * posts have no public surface, so sync-status treats them as deleted.
+	 */
+	public function ajax_sync_status_batch(): void {
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		$this->verify_ajax_capability( 'edit_posts' );
+
+		$this->validate_auth_or_fail();
+
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- caller already verified via check_ajax_referer.
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- each element is downstream-sanitized via absint().
+		$raw_ids = (array) wp_unslash( $_POST['source_ids'] ?? array() );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		$source_ids = array_values(
+			array_unique(
+				array_filter(
+					array_map(
+						static fn( mixed $v ): int => absint( $v ),
+						$raw_ids
+					),
+					static fn( int $id ): bool => $id > 0
+				)
+			)
+		);
+
+		if ( count( $source_ids ) > self::SYNC_STATUS_BATCH_MAX ) {
+			wp_send_json_error(
+				sprintf(
+					/* translators: %d: maximum number of posts per batch */
+					__(
+						'Sync status check is limited to %d posts at a time.',
+						'safe-publish'
+					),
+					self::SYNC_STATUS_BATCH_MAX
+				)
+			);
+		}
+
+		if ( 0 === count( $source_ids ) ) {
+			wp_send_json_success( array( 'statuses' => (object) array() ) );
+		}
+
+		// Two bulk queries instead of N per-row meta_query + items-table reads.
+		$imported_by_source_id = $this->post_import_service
+			->fetch_imported_posts_by_source_ids( $source_ids );
+
+		if ( 0 === count( $imported_by_source_id ) ) {
+			wp_send_json_success( array( 'statuses' => (object) array() ) );
+		}
+
+		$post_ids = array_map(
+			static fn( WP_Post $p ): int => (int) $p->ID,
+			$imported_by_source_id
+		);
+
+		$items_by_post_id = $this->repository->get_items_for_posts( $post_ids );
+
+		$by_post_type = array();
+		$context      = array();
+
+		foreach ( $imported_by_source_id as $source_id => $local_post ) {
+			$item = $items_by_post_id[ $local_post->ID ] ?? null;
+			if ( null === $item || ! isset( $item['import_date_gmt'] ) ) {
+				continue;
+			}
+
+			$context[ $source_id ] = (string) $item['import_date_gmt'];
+
+			$post_type                    = (string) $local_post->post_type;
+			$by_post_type[ $post_type ][] = $source_id;
+		}
+
+		if ( 0 === count( $context ) ) {
+			wp_send_json_success( array( 'statuses' => (object) array() ) );
+		}
+
+		$source_site_url  = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
+		$auth_credentials = Auth_Credential_Provider::get_credentials();
+
+		$statuses = array();
+		foreach ( $by_post_type as $post_type => $ids ) {
+			$response = $this->api->fetch_posts(
+				$source_site_url,
+				$auth_credentials,
+				array(
+					'post_type' => $post_type,
+					'include'   => $ids,
+				)
+			);
+
+			if ( is_wp_error( $response ) ) {
+				foreach ( $ids as $id ) {
+					$statuses[ $id ] = 'unreachable';
+				}
+				continue;
+			}
+
+			$source_modified_by_id = array();
+			foreach ( $response['items'] as $item ) {
+				$source_modified_by_id[ (int) $item['id'] ] = (string) $item['modified_gmt'];
+			}
+
+			foreach ( $ids as $id ) {
+				if ( ! isset( $source_modified_by_id[ $id ] ) ) {
+					$statuses[ $id ] = 'missing';
+					continue;
+				}
+
+				$statuses[ $id ] = self::compare_sync_state(
+					$source_modified_by_id[ $id ],
+					$context[ $id ]
+				);
+			}
+		}
+
+		wp_send_json_success( array( 'statuses' => $statuses ) );
+	}
+
+	/**
+	 * Compares source modified_gmt against import_date_gmt and returns the
+	 * verdict.
+	 *
+	 * Both are parsed with an explicit UTC timezone so the comparison doesn't
+	 * depend on the request's PHP timezone. Equal timestamps resolve to
+	 * `up-to-date`: import_date_gmt is stamped after the source fetch, so any
+	 * later edit compares strictly greater.
+	 *
+	 * `invalid` flags a parse failure on either side. import_date_gmt is
+	 * locally-owned and NOT NULL, so a parse failure is a data bug — not
+	 * a network problem — and gets its own sentinel rather than
+	 * masquerading as `unreachable`. `missing` is set by the caller.
+	 *
+	 * @param string $source_modified_gmt ISO 8601 modified_gmt from the source.
+	 * @param string $import_date_gmt     MySQL datetime from the items table.
+	 * @return string Verdict: 'up-to-date', 'outdated', or 'invalid'.
+	 */
+	private static function compare_sync_state(
+		string $source_modified_gmt,
+		string $import_date_gmt
+	): string {
+		$utc       = new DateTimeZone( 'UTC' );
+		$source_dt = DateTimeImmutable::createFromFormat(
+			'Y-m-d\TH:i:s\Z',
+			$source_modified_gmt,
+			$utc
+		);
+		$import_dt = DateTimeImmutable::createFromFormat(
+			'Y-m-d H:i:s',
+			$import_date_gmt,
+			$utc
+		);
+
+		if ( false === $source_dt || false === $import_dt ) {
+			return 'invalid';
+		}
+
+		return $source_dt > $import_dt ? 'outdated' : 'up-to-date';
 	}
 
 	/**

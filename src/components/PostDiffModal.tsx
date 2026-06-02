@@ -12,7 +12,7 @@ import DiffViewSelector from './DiffViewSelector';
 import NonContentDiffSections from './NonContentDiffSections';
 import { useDiffPreview } from './hooks/useDiffPreview';
 import { usePostUpdate } from './hooks/usePostUpdate';
-import { Post } from '../types';
+import { ImportedPost } from '../types';
 import {
 	Button,
 	__experimentalText as Text,
@@ -26,11 +26,13 @@ import { __ } from '@wordpress/i18n';
 /**
  * Props for the PostDiffModal component.
  *
- * @property {Post[]}   items      Array containing the post to diff.
- * @property {Function} closeModal Callback to close the modal.
+ * @property {ImportedPost[]} items      Array containing the single row to diff.
+ * @property {string}         restNonce  REST API nonce for the diff and update endpoints.
+ * @property {Function}       closeModal Callback to close the modal.
  */
 interface PostDiffModalProps {
-	items: Post[];
+	items: ImportedPost[];
+	restNonce: string;
 	closeModal?: () => void;
 }
 
@@ -40,12 +42,15 @@ interface PostDiffModalProps {
  * Fetches and displays a diff preview for the selected post, showing content
  * changes, block-level diffs, and non-content field changes.
  *
- * @param {Object}   props            Component props.
- * @param {Post[]}   props.items      Array containing the post to diff.
- * @param {Function} props.closeModal Callback to close the modal.
+ * @param {PostDiffModalProps} props Component props.
+ *
  * @return {JSX.Element} Rendered modal content.
  */
-export default function PostDiffModal( { items, closeModal }: PostDiffModalProps ): JSX.Element {
+export default function PostDiffModal( {
+	items,
+	restNonce,
+	closeModal,
+}: PostDiffModalProps ): JSX.Element {
 	const firstItem = items[ 0 ];
 
 	const {
@@ -58,8 +63,9 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 		isLoading,
 		error,
 	} = useDiffPreview( {
-		postId: firstItem.id,
+		postId: firstItem.source_post_id,
 		postType: firstItem.post_type,
+		restNonce,
 	} );
 
 	const {
@@ -70,6 +76,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 	} = usePostUpdate( {
 		localPostId,
 		incoming,
+		restNonce,
 	} );
 
 	const [ showBlockView, setShowBlockView ] = useState( true );
@@ -86,7 +93,7 @@ export default function PostDiffModal( { items, closeModal }: PostDiffModalProps
 
 	return (
 		<VStack>
-			<Text>{ `Diff for "${ items[ 0 ].title }"` }</Text>
+			<Text>{ `Diff for "${ firstItem.title }"` }</Text>
 
 			{ isLoading && (
 				<HStack>

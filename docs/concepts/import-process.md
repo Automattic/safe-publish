@@ -151,7 +151,7 @@ Author resolution can be relaxed via the [`safe_publish_import_allow_author_fall
 
 For updates with an unmatched author, the destination's existing `post_author` is preserved unchanged.
 
-Whenever the fallback is applied, a warning is recorded on the import History item row and surfaced in the import results UI.
+Whenever the fallback is applied, a warning is recorded on the items table row and surfaced in the import results UI.
 
 The import still aborts when the source post has no resolvable author (e.g., the author was deleted on the source).
 
@@ -174,7 +174,7 @@ On updates, the meta is refreshed to reflect the current source state. The audit
 
 #### Orphan Fallback
 
-Parent resolution can be relaxed via the [`safe_publish_import_allow_orphans`](../extending/hooks.md#safe_publish_import_allow_orphans) filter. With the fallback enabled, posts whose parent cannot be resolved are imported with `post_parent = 0` (top-level), and a warning is recorded on the import History item row and surfaced in the import results UI.
+Parent resolution can be relaxed via the [`safe_publish_import_allow_orphans`](../extending/hooks.md#safe_publish_import_allow_orphans) filter. With the fallback enabled, posts whose parent cannot be resolved are imported with `post_parent = 0` (top-level), and a warning is recorded on the items table row and surfaced in the import results UI.
 
 ### Custom Post Types
 
@@ -221,9 +221,12 @@ Custom taxonomies must be registered with `'show_in_rest' => true` on the source
   - User who performed import
   - Import status (success, updated, or error)
   - Error message (if failed)
-- Import logged to History (session and per-item log entries).
+- Import recorded in the imports and import items tables (one session row,
+  one item per processed post). The Imports page surfaces this data; the
+  imported posts list on its Posts tab and the failed items on its Failures
+  tab.
 
-See [History](history.md) for more details.
+See [Imports](imports.md) for more details.
 
 ## Bulk Import
 
@@ -232,7 +235,8 @@ Bulk imports process multiple posts sequentially:
 1. Each post goes through all stages individually.
 2. Failures in one post don't stop others.
 3. Results aggregated and reported.
-4. Import history updated for each post.
+4. Imports table updated for each post; failed items appear on the Imports
+   page Failures tab.
 
 ### Performance
 
@@ -253,7 +257,7 @@ Bulk imports process multiple posts sequentially:
 Errors are reported in multiple places:
 
 1. **Admin notice**: Immediate feedback in UI
-2. **History**: Logged for later review
+2. **Imports → Failures tab**: Logged for later review
 3. **JavaScript console**: Detailed debugging info
 4. **PHP error log**: Server-side errors
 
@@ -262,15 +266,13 @@ Errors are reported in multiple places:
 ### Before Importing
 
 1. **Test connection** to verify authentication.
-2. **Preview content** using Post Diff.
-3. **Check image accessibility** in preview.
-4. **Verify post type** is correct.
+2. **Verify post type** is correct.
 
 ### During Import
 
 1. **Monitor progress** for errors.
 2. **Don't close the browser** during bulk imports.
-3. **Check History** periodically.
+3. **Check the Imports page** periodically.
 
 ### After Import
 
@@ -298,6 +300,6 @@ wp post meta list <post-id> --fields=meta_key --format=csv \
 ## Next Steps
 
 - [Content Validation](validation.md) - Understanding validation
-- [History](history.md) - Tracking imports
+- [Imports](imports.md) - Managing imported content and failed imports
 - [Troubleshooting](../troubleshooting.md) - Common issues
 - [Hooks and Filters](../extending/hooks.md) - Customization options

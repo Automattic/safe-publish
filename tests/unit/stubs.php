@@ -71,6 +71,18 @@ function reset_test_options(): void {
 	$GLOBALS['_test_options'] = array();
 }
 
+/**
+ * Sets or clears an environment variable for a test.
+ *
+ * @param string      $name  Environment variable name.
+ * @param string|null $value Value to set, or null to unset the variable.
+ */
+function set_test_env( string $name, ?string $value ): void {
+	$assignment = null === $value ? $name : "{$name}={$value}";
+	// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.runtime_configuration_putenv
+	putenv( $assignment );
+}
+
 function get_bloginfo( string $key ): string {
 	return 'http://localhost';
 }
@@ -101,6 +113,11 @@ function wp_remote_get( string $url, array $args = array() ): array|WP_Error {
 
 	$default = array( 'response' => array( 'code' => 200 ) );
 	return $GLOBALS['_test_http_response'] ?? $default;
+}
+
+function wp_safe_remote_get( string $url, array $args = array() ): array|WP_Error {
+	// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.wp_remote_get_wp_remote_get -- Test stub delegating to the existing wp_remote_get stub.
+	return wp_remote_get( $url, $args );
 }
 
 function wp_remote_retrieve_response_code( array|WP_Error $response ): int {

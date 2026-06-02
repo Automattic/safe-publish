@@ -15,17 +15,15 @@ import type { DiffPreviewResult } from '../../api/diff';
  * Parameters for the usePostUpdate hook.
  *
  * @property {number}                        localPostId Local post ID.
- * @property {DiffPreviewResult['incoming']} incoming    Source-side payload
- *                                                       captured by the diff
- *                                                       request; carries
- *                                                       fresh content,
- *                                                       title, excerpt,
- *                                                       meta, terms, and
- *                                                       featuredMedia.
+ * @property {DiffPreviewResult['incoming']} incoming    Source-side payload captured by the diff
+ *                                                       request; carries fresh content, title,
+ *                                                       excerpt, meta, terms, and featuredMedia.
+ * @property {string}                        restNonce   REST API nonce for the update endpoint.
  */
 interface UsePostUpdateParams {
 	localPostId: number;
 	incoming: DiffPreviewResult['incoming'];
+	restNonce: string;
 }
 
 /**
@@ -53,6 +51,7 @@ interface UsePostUpdateResult {
 export function usePostUpdate( {
 	localPostId,
 	incoming,
+	restNonce,
 }: UsePostUpdateParams ): UsePostUpdateResult {
 	const [ isUpdating, setIsUpdating ] = useState( false );
 	const [ updateError, setUpdateError ] = useState< string | null >( null );
@@ -99,7 +98,7 @@ export function usePostUpdate( {
 		const result = await updatePostContent(
 			localPostId,
 			incoming.content,
-			window?.safePublishAdminData?.restNonce,
+			restNonce,
 			metaToSend,
 			incoming?.terms,
 			incoming?.title,

@@ -23,7 +23,7 @@
 	}
 
 	// Style bulk action buttons
-	.dataviews-bulk-actions button[data-action-id="bulk-import"] {
+	.dataviews-bulk-actions button[data-action-id="import"] {
 		background: var(--safe-publish-primary);
 		color: var(--safe-publish-text-on-fill);
 		font-weight: 600;
@@ -151,10 +151,35 @@
 	color: var(--safe-publish-text-muted);
 }
 
+// Background-refetch banner — shown above the grid while it stays mounted
+// so the operator sees that a filter/page/sort change is in flight.
+.safe-publish-refetch-indicator {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 12px;
+	color: var(--safe-publish-text-muted);
+	font-size: 12px;
+}
+
 .safe-publish-no-data {
 	padding: 16px 20px 40px 48px;
 	color: var(--safe-publish-text-muted);
 	font-style: italic;
+
+	&--cta {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 12px;
+		font-style: normal;
+	}
+
+	&__hint {
+		color: var(--safe-publish-text-muted);
+		font-style: italic;
+		margin: 0;
+	}
 }
 
 .safe-publish-status-badge {
@@ -186,6 +211,16 @@
 		color: var(--safe-publish-status-warning);
 	}
 
+	&--missing,
+	&--invalid {
+		color: var(--safe-publish-status-error);
+	}
+
+	&--unreachable,
+	&--loading {
+		color: var(--safe-publish-text-muted);
+	}
+
 	&--publish {
 		color: var(--safe-publish-status-success);
 	}
@@ -204,6 +239,10 @@
 
 	&--future {
 		color: #9b59b6;
+	}
+
+	&--rolled-back {
+		color: var(--safe-publish-status-warning);
 	}
 }
 
