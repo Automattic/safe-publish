@@ -215,6 +215,17 @@
 		color: var(--safe-publish-text-muted);
 	}
 
+	&--unknown {
+		color: var(--safe-publish-text-muted);
+		cursor: help;
+
+		&:focus-visible {
+			outline: 2px solid var(--safe-publish-primary);
+			outline-offset: 2px;
+			border-radius: 2px;
+		}
+	}
+
 	&--publish {
 		color: var(--safe-publish-status-success);
 	}

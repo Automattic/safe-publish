@@ -33,21 +33,24 @@ export function getPostTypeLabel( item: Post ): string {
  * @return {string} Localized sync status label.
  */
 export function getSyncStatusLabel( item: Post ): string {
-	if ( item.is_imported && item.has_update ) {
-		return SYNC_STATUS_LABELS.outdated;
+	switch ( item.sync_status ) {
+		case 'outdated':
+			return SYNC_STATUS_LABELS.outdated;
+		case 'up-to-date':
+			return SYNC_STATUS_LABELS.upToDate;
+		case 'unknown':
+			return SYNC_STATUS_LABELS.unknown;
+		default:
+			return SYNC_STATUS_LABELS.available;
 	}
-	if ( item.is_imported ) {
-		return SYNC_STATUS_LABELS.upToDate;
-	}
-	return SYNC_STATUS_LABELS.available;
 }
 
 /**
  * Returns the display label for an imported post's sync status verdict.
  *
  * Companion to getSyncStatusLabel: that helper derives a verdict from
- * is_imported / has_update on the source-side Post, this one takes a
- * verdict already returned by the backend.
+ * the backend's annotated `sync_status`, this one takes a verdict
+ * already returned by the sync-status batch endpoint.
  *
  * @param {ImportSyncStatus|null} status Verdict, or null while loading.
  *

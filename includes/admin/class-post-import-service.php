@@ -763,11 +763,13 @@ class Post_Import_Service {
 	/**
 	 * Annotates each post in an array with its local import status.
 	 *
-	 * Adds `is_imported`, `has_update`, `local_status`, and `local_edit_url`
-	 * keys to every element. `has_update` compares the source's
-	 * `modified_gmt` to the items table's most recent `import_date_gmt`
-	 * via Sync_State_Comparator. The whole page's lookups are batched into
-	 * two queries.
+	 * Adds `is_imported`, `sync_status`, `local_status`, and `local_edit_url`
+	 * keys to every element. `sync_status` is one of `available` (not
+	 * imported), `up-to-date`, `outdated`, or `unknown` — derived from
+	 * Sync_State_Comparator comparing the source's `modified_gmt` to the
+	 * items table's most recent `import_date_gmt`. `unknown` fires when
+	 * either timestamp can't be parsed (missing items row, malformed
+	 * source date). The whole page's lookups are batched into two queries.
 	 *
 	 * @param array $posts Posts array fetched from the source API, passed by reference.
 	 */
@@ -808,11 +810,15 @@ class Post_Import_Service {
 					(string) ( $item['import_date_gmt'] ?? '' )
 				);
 
-				$post['has_update']     = true === $is_newer;
+				$post['sync_status'] = match ( $is_newer ) {
+					true  => 'outdated',
+					false => 'up-to-date',
+					null  => 'unknown',
+				};
 				$post['local_status']   = $imported->post_status;
 				$post['local_edit_url'] = get_edit_post_link( $imported->ID, 'raw' );
 			} else {
-				$post['has_update']     = false;
+				$post['sync_status']    = 'available';
 				$post['local_status']   = null;
 				$post['local_edit_url'] = null;
 			}

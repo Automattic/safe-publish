@@ -86,11 +86,21 @@ export const SYNC_STATUS_LABELS = {
 	outdated:    __( 'Outdated', 'safe-publish' ),
 	upToDate:    __( 'Up to date', 'safe-publish' ),
 	available:   __( 'Available', 'safe-publish' ),
+	unknown:     __( 'Unknown', 'safe-publish' ),
 	missing:     __( 'Missing on source', 'safe-publish' ),
 	unreachable: __( 'Cannot check', 'safe-publish' ),
 	invalid:     __( 'Invalid timestamp', 'safe-publish' ),
 	loading:     __( 'Checking…', 'safe-publish' ),
 } as const;
+
+/**
+ * Tooltip copy for the Unknown sync status badge on the Source Posts page.
+ * Surfaced when either timestamp the comparator needs can't be parsed.
+ */
+export const UNKNOWN_SYNC_STATUS_TOOLTIP = __(
+	'This post is imported, but we can\'t tell whether the source has changed since. Re-import to refresh.',
+	'safe-publish'
+);
 
 /**
  * Display labels for publish statuses.
