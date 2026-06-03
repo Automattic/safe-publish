@@ -11,15 +11,12 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\Catalog_REST_Controller;
 use Safe_Publish\API\Source_Posts_API;
-use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Post_Type_Fetcher;
-use Safe_Publish\API\Request_Actions;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Sync_State_Comparator;
 use Safe_Publish\Utils\Topological_Sorter;
-use DateTimeImmutable;
-use DateTimeZone;
 use WP_Post;
 
 // Prevent direct access.
@@ -98,33 +95,23 @@ final class Admin_Ajax_Controller {
 	private Post_Type_Fetcher $post_type_fetcher;
 
 	/**
-	 * HTTP Client instance.
-	 *
-	 * @var HTTP_Client
-	 */
-	private HTTP_Client $http_client;
-
-	/**
 	 * Constructs the Admin_Ajax_Controller instance.
 	 *
 	 * @param Source_Posts_API    $api                 Source Posts API instance.
 	 * @param History_Repository  $repository          History repository instance.
 	 * @param Post_Import_Service $post_import_service Post Import Service instance.
 	 * @param Post_Type_Fetcher   $post_type_fetcher   Post Type Fetcher instance.
-	 * @param HTTP_Client         $http_client         HTTP Client instance.
 	 */
 	public function __construct(
 		Source_Posts_API $api,
 		History_Repository $repository,
 		Post_Import_Service $post_import_service,
-		Post_Type_Fetcher $post_type_fetcher,
-		HTTP_Client $http_client
+		Post_Type_Fetcher $post_type_fetcher
 	) {
 		$this->api                 = $api;
 		$this->repository          = $repository;
 		$this->post_import_service = $post_import_service;
 		$this->post_type_fetcher   = $post_type_fetcher;
-		$this->http_client         = $http_client;
 	}
 
 	/**
@@ -485,22 +472,19 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Appends the listing's first-load extras to a response when requested.
 	 *
-	 * Computes the filter facets and the count of failed imports over the
-	 * full set, so the client fetches them once (on first load) rather than
-	 * on every page/filter change.
+	 * Computes the filter facets over the full set so the client fetches them
+	 * once (on first load) rather than on every page/filter change.
 	 *
 	 * @param array $response    Response payload to augment.
 	 * @param bool  $with_facets Whether to attach the first-load extras.
-	 * @return array Response, with `facets` and `failed_count` keys when
-	 *               `$with_facets` is true.
+	 * @return array Response, with the `facets` key when `$with_facets` is true.
 	 */
 	private function with_imported_listing_extras(
 		array $response,
 		bool $with_facets
 	): array {
 		if ( $with_facets ) {
-			$response['facets']       = $this->repository->get_imported_filter_facets();
-			$response['failed_count'] = $this->repository->count_failed_items();
+			$response['facets'] = $this->repository->get_imported_filter_facets();
 		}
 
 		return $response;
@@ -1162,18 +1146,9 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Compares source modified_gmt against import_date_gmt and returns the
-	 * verdict.
-	 *
-	 * Both are parsed with an explicit UTC timezone so the comparison doesn't
-	 * depend on the request's PHP timezone. Equal timestamps resolve to
-	 * `up-to-date`: import_date_gmt is stamped after the source fetch, so any
-	 * later edit compares strictly greater.
-	 *
-	 * `invalid` flags a parse failure on either side. import_date_gmt is
-	 * locally-owned and NOT NULL, so a parse failure is a data bug — not
-	 * a network problem — and gets its own sentinel rather than
-	 * masquerading as `unreachable`. `missing` is set by the caller.
+	 * Maps Sync_State_Comparator's verdict to the Imports tab's status
+	 * string. `invalid` flags a local parse failure (a data bug), distinct
+	 * from `unreachable` (network) and `missing` (caller-set).
 	 *
 	 * @param string $source_modified_gmt ISO 8601 modified_gmt from the source.
 	 * @param string $import_date_gmt     MySQL datetime from the items table.
@@ -1183,23 +1158,16 @@ final class Admin_Ajax_Controller {
 		string $source_modified_gmt,
 		string $import_date_gmt
 	): string {
-		$utc       = new DateTimeZone( 'UTC' );
-		$source_dt = DateTimeImmutable::createFromFormat(
-			'Y-m-d\TH:i:s\Z',
+		$is_newer = Sync_State_Comparator::source_is_newer(
 			$source_modified_gmt,
-			$utc
-		);
-		$import_dt = DateTimeImmutable::createFromFormat(
-			'Y-m-d H:i:s',
-			$import_date_gmt,
-			$utc
+			$import_date_gmt
 		);
 
-		if ( false === $source_dt || false === $import_dt ) {
+		if ( null === $is_newer ) {
 			return 'invalid';
 		}
 
-		return $source_dt > $import_dt ? 'outdated' : 'up-to-date';
+		return $is_newer ? 'outdated' : 'up-to-date';
 	}
 
 	/**

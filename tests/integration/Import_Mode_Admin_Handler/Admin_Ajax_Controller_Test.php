@@ -1570,73 +1570,6 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		$this->assertArrayHasKey( 'facets', $response['data'] );
 		$this->assertArrayHasKey( 'post_types', $response['data']['facets'] );
 		$this->assertArrayNotHasKey( 'sessions', $response['data']['facets'] );
-
-		// ASSERT: failed_count rides along on the same first-load payload so
-		// the empty-state can nudge operators toward the Failures tab without
-		// a second roundtrip.
-		$this->assertArrayHasKey( 'failed_count', $response['data'] );
-		$this->assertSame(
-			0,
-			$response['data']['failed_count'],
-			'No failed items inserted, so the count should be zero'
-		);
-	}
-
-	/**
-	 * Verifies that the listing endpoint reports the count of failed import
-	 * items across all sessions when first-load extras are requested.
-	 */
-	public function test_ajax_list_imported_posts_reports_failed_count(): void {
-		// ARRANGE: A session with one successful and two failed items, plus
-		// an unrelated session whose failure should also be counted.
-		wp_set_current_user( $this->admin_user_id );
-
-		$ok_post_id = $this->factory()->post->create();
-
-		$repository = new History_Repository();
-
-		$session_id = $repository->create_session(
-			'https://source.example.com',
-			'bulk'
-		);
-		if ( is_wp_error( $session_id ) ) {
-			$this->fail( 'Failed to create the test import session.' );
-		}
-		$this->insert_import_item( $session_id, $ok_post_id );
-		$this->insert_failed_import_item( $session_id, 'First failure' );
-		$this->insert_failed_import_item( $session_id, 'Second failure' );
-
-		$other_session_id = $repository->create_session(
-			'https://source.example.com',
-			'bulk'
-		);
-		if ( is_wp_error( $other_session_id ) ) {
-			$this->fail( 'Failed to create the second test import session.' );
-		}
-		$this->insert_failed_import_item(
-			$other_session_id,
-			'Cross-session failure'
-		);
-
-		$_POST = array(
-			'nonce'       => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-			'page'        => '1',
-			'per_page'    => '20',
-			'with_facets' => '1',
-		);
-
-		// ACT: Trigger the listing handler with the first-load flag set.
-		$this->dispatch_ajax_expecting_die( 'safe_publish_list_imported_posts' );
-
-		// ASSERT: The endpoint counts all 'error' items across sessions,
-		// regardless of which session inserted them.
-		$response = json_decode( $this->_last_response, true );
-		$this->assertTrue( $response['success'], 'Listing should return success' );
-		$this->assertSame(
-			3,
-			$response['data']['failed_count'],
-			'failed_count should aggregate failures across every session'
-		);
 	}
 
 	/**
@@ -1677,11 +1610,6 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		$response = json_decode( $this->_last_response, true );
 		$this->assertTrue( $response['success'], 'Listing should return success' );
 		$this->assertArrayNotHasKey( 'facets', $response['data'] );
-		$this->assertArrayNotHasKey(
-			'failed_count',
-			$response['data'],
-			'failed_count rides with facets and must be omitted when they are'
-		);
 	}
 
 	/**

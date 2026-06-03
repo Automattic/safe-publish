@@ -18,6 +18,7 @@ use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Options;
 
 /**
@@ -43,13 +44,21 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 	private Post_Import_Service $import_service;
 
 	/**
+	 * History repository instance.
+	 *
+	 * @var History_Repository
+	 */
+	private History_Repository $repository;
+
+	/**
 	 * Sets up service instances reused by the timezone-divergence cases.
 	 */
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
 
-		$this->api = new Source_Posts_API( new HTTP_Client() );
+		$this->api        = new Source_Posts_API( new HTTP_Client() );
+		$this->repository = new History_Repository();
 
 		$media_importer    = new Media_Importer( new HTTP_Client() );
 		$content_processor = new Content_Processor(
@@ -61,7 +70,7 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 			$this->api,
 			$media_importer,
 			$content_processor,
-			new History_Repository(),
+			$this->repository,
 			new Meta_Terms_Manager()
 		);
 	}
@@ -152,25 +161,20 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that has_update is true when the source post is genuinely
-	 * newer in UTC, even though the source's site-local modified string
-	 * compares as earlier than the destination's site-local post_modified.
+	 * Verifies that has_update is true when the source is newer in UTC,
+	 * even when site-local strings would suggest otherwise.
 	 *
-	 * This is the exact failure shape of the pre-fix comparison: source
-	 * site in NY (UTC-4), destination site in Madrid (UTC+2), source
-	 * modified at 15:00 UTC (= 11:00 NY), destination modified at 14:00
-	 * UTC (= 16:00 Madrid). Raw site-local strings — "11:00" vs "16:00" —
-	 * suggest the local copy is newer; UTC moments — 15:00 vs 14:00 —
-	 * say the source is newer.
+	 * Source in NY (UTC-4) modified at 15:00 UTC; destination Madrid
+	 * (UTC+2) imported at 14:00 UTC. Site-local "11:00" vs "16:00"
+	 * misleads; UTC says source is newer.
 	 */
 	public function test_has_update_correct_across_divergent_timezones(): void {
-		global $wpdb;
-
 		// ARRANGE: Pin the destination to Madrid so the scenario is concrete.
 		update_option( 'timezone_string', 'Europe/Madrid' );
 
 		try {
-			// ARRANGE: Local post modified at 14:00 UTC (= 16:00 Madrid).
+			// ARRANGE: Imported post with an items row anchoring the snapshot
+			// at 14:00 UTC.
 			$local_post_id = self::factory()->post->create(
 				array(
 					'post_status' => 'publish',
@@ -180,20 +184,9 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 					),
 				)
 			);
+			$this->seed_items_row( $local_post_id, 999, '2024-07-15 14:00:00' );
 
-			// phpcs:disable WordPress.DB.DirectDatabaseQuery
-			$wpdb->update(
-				$wpdb->posts,
-				array(
-					'post_modified'     => '2024-07-15 16:00:00',
-					'post_modified_gmt' => '2024-07-15 14:00:00',
-				),
-				array( 'ID' => $local_post_id )
-			);
-			// phpcs:enable WordPress.DB.DirectDatabaseQuery
-			clean_post_cache( $local_post_id );
-
-			// ARRANGE: Source post payload as emitted by
+			// ARRANGE: Source payload as emitted by
 			// prepare_listing_payload_from_post — modified_gmt is Z-marked GMT.
 			// 15:00 UTC > 14:00 UTC, so the source is genuinely newer.
 			$posts = array(
@@ -222,22 +215,19 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that has_update is false when the destination post is
-	 * genuinely newer in UTC, even though the source's site-local modified
-	 * string compares as later than the destination's site-local
-	 * post_modified.
+	 * Verifies that has_update is false when the import snapshot is newer
+	 * in UTC than the source.
 	 *
-	 * Mirror of the previous case — same TZ divergence, opposite verdict —
-	 * to guard against an off-by-direction regression.
+	 * Mirror of the previous case — opposite verdict — to guard against
+	 * an off-by-direction regression.
 	 */
 	public function test_has_update_false_across_divergent_timezones(): void {
-		global $wpdb;
-
 		// ARRANGE: Destination = Madrid (UTC+2 in July).
 		update_option( 'timezone_string', 'Europe/Madrid' );
 
 		try {
-			// ARRANGE: Local post modified at 16:00 UTC (= 18:00 Madrid).
+			// ARRANGE: Imported post with an items row anchoring the snapshot
+			// at 16:00 UTC.
 			$local_post_id = self::factory()->post->create(
 				array(
 					'post_status' => 'publish',
@@ -247,21 +237,14 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 					),
 				)
 			);
-
-			// phpcs:disable WordPress.DB.DirectDatabaseQuery
-			$wpdb->update(
-				$wpdb->posts,
-				array(
-					'post_modified'     => '2024-07-15 18:00:00',
-					'post_modified_gmt' => '2024-07-15 16:00:00',
-				),
-				array( 'ID' => $local_post_id )
+			$this->seed_items_row(
+				$local_post_id,
+				1001,
+				'2024-07-15 16:00:00'
 			);
-			// phpcs:enable WordPress.DB.DirectDatabaseQuery
-			clean_post_cache( $local_post_id );
 
-			// ARRANGE: Source modified at 15:00 UTC (= 11:00 NY).
-			// 15:00 UTC < 16:00 UTC, so the local copy is genuinely newer.
+			// ARRANGE: Source modified at 15:00 UTC.
+			// 15:00 UTC < 16:00 UTC, so the local snapshot is genuinely newer.
 			$posts = array(
 				array(
 					'id'           => 1001,
@@ -274,14 +257,147 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 			// ACT: Annotate.
 			$this->import_service->annotate_posts_with_import_status( $posts );
 
-			// ASSERT: has_update is false; the local UTC moment is later.
+			// ASSERT: has_update is false; the import snapshot is later.
 			$this->assertTrue( $posts[0]['is_imported'] );
 			$this->assertFalse(
 				$posts[0]['has_update'],
-				'has_update must be false when the local copy is newer in UTC.'
+				'has_update must be false when import snapshot is newer in UTC.'
 			);
 		} finally {
 			delete_option( 'timezone_string' );
 		}
+	}
+
+	/**
+	 * Verifies that has_update is false for a freshly imported draft, whose
+	 * post_modified_gmt is the MySQL zero-date sentinel.
+	 *
+	 * Old code anchored on post_modified_gmt; strtotime reads the zero-date
+	 * as year 0000 (not false), so fresh imports surfaced as "Outdated".
+	 * Anchoring on import_date_gmt closes the hole.
+	 */
+	public function test_has_update_false_for_fresh_draft(): void {
+		// ARRANGE: A draft mirrors what wp_insert_post produces for a fresh
+		// import — date-floating drafts leave post_modified_gmt at the
+		// zero-date sentinel.
+		$local_post_id = wp_insert_post(
+			array(
+				'post_status' => 'draft',
+				'post_title'  => 'Fresh Draft',
+				'meta_input'  => array(
+					Options::META_SOURCE_POST_ID => 2002,
+				),
+			)
+		);
+		$this->assertIsInt( $local_post_id );
+		$this->assertGreaterThan( 0, $local_post_id );
+
+		$local_post = get_post( $local_post_id );
+		$this->assertNotNull( $local_post );
+		$this->assertSame(
+			'0000-00-00 00:00:00',
+			$local_post->post_modified_gmt,
+			'Pre-condition: fresh draft has the MySQL zero-date sentinel.'
+		);
+
+		// ARRANGE: Items row stamped after the source was modified, mirroring
+		// a normal import flow.
+		$this->seed_items_row( $local_post_id, 2002, '2024-07-15 14:00:01' );
+
+		$posts = array(
+			array(
+				'id'           => 2002,
+				'link'         => 'https://source.example.com/fresh-draft',
+				'title'        => 'Fresh Draft',
+				'modified_gmt' => '2024-07-15T14:00:00Z',
+			),
+		);
+
+		// ACT: Annotate.
+		$this->import_service->annotate_posts_with_import_status( $posts );
+
+		// ASSERT: Fresh imports must read as up-to-date, not outdated.
+		$this->assertTrue( $posts[0]['is_imported'] );
+		$this->assertFalse(
+			$posts[0]['has_update'],
+			'has_update must be false for a freshly imported draft.'
+		);
+	}
+
+	/**
+	 * Verifies that has_update is false when the items row is missing.
+	 *
+	 * The row is still surfaced as imported (the meta marker is the truth)
+	 * but lacks the anchor needed to claim staleness — the best-effort
+	 * default for legacy imports or pruned tables.
+	 */
+	public function test_has_update_false_when_items_row_missing(): void {
+		// ARRANGE: Imported post with no items row at all.
+		$local_post_id = self::factory()->post->create(
+			array(
+				'post_status' => 'publish',
+				'post_title'  => 'Orphaned Import',
+				'meta_input'  => array(
+					Options::META_SOURCE_POST_ID => 3003,
+				),
+			)
+		);
+		$this->assertIsInt( $local_post_id );
+
+		$posts = array(
+			array(
+				'id'           => 3003,
+				'link'         => 'https://source.example.com/orphaned-import',
+				'title'        => 'Orphaned Import',
+				'modified_gmt' => '2024-07-15T15:00:00Z',
+			),
+		);
+
+		// ACT: Annotate.
+		$this->import_service->annotate_posts_with_import_status( $posts );
+
+		// ASSERT: Imported is true (meta is present), has_update is false
+		// (no anchor to compare against).
+		$this->assertTrue( $posts[0]['is_imported'] );
+		$this->assertFalse(
+			$posts[0]['has_update'],
+			'has_update must be false when no items row anchors the comparison.'
+		);
+	}
+
+	/**
+	 * Inserts an items row anchoring an import snapshot at a specific GMT
+	 * datetime. The repository's log_import_action always stamps NOW, so
+	 * timezone-divergence tests need to bypass it and write the row directly.
+	 *
+	 * @param int    $post_id         Local post ID the items row points at.
+	 * @param int    $source_post_id  Source post ID the items row records.
+	 * @param string $import_date_gmt MySQL datetime (`Y-m-d H:i:s`) in GMT.
+	 */
+	private function seed_items_row(
+		int $post_id,
+		int $source_post_id,
+		string $import_date_gmt
+	): void {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$wpdb->insert(
+			Import_Items_Table::table_name(),
+			array(
+				'session_id'           => 1,
+				'title'                => 'Seeded',
+				'source_post_id'       => $source_post_id,
+				'status'               => 'success',
+				'post_id'              => $post_id,
+				'error_message'        => null,
+				'content_changes'      => null,
+				'warnings'             => null,
+				'has_previous_content' => 0,
+				'rolled_back'          => 0,
+				'import_date_gmt'      => $import_date_gmt,
+			),
+			array( '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%s', '%d', '%d', '%s' )
+		);
 	}
 }
