@@ -180,43 +180,40 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
+	color: var(--safe-publish-badge-color);
 
 	&__dot {
 		width: 8px;
 		height: 8px;
 		border-radius: 50%;
-		background: currentcolor;
+		background: var(--safe-publish-badge-color, currentcolor);
 		flex-shrink: 0;
 	}
 
-	&--empty {
-		color: var(--safe-publish-text-muted);
-	}
-
 	&--available {
-		color: var(--safe-publish-primary);
+		--safe-publish-badge-color: var(--safe-publish-primary);
 	}
 
 	&--up-to-date {
-		color: var(--safe-publish-status-success);
+		--safe-publish-badge-color: var(--safe-publish-text-muted);
 	}
 
 	&--outdated {
-		color: var(--safe-publish-status-warning);
+		--safe-publish-badge-color: var(--safe-publish-status-warning);
 	}
 
 	&--missing,
 	&--invalid {
-		color: var(--safe-publish-status-error);
+		--safe-publish-badge-color: var(--safe-publish-status-error);
 	}
 
 	&--unreachable,
 	&--loading {
-		color: var(--safe-publish-text-muted);
+		--safe-publish-badge-color: var(--safe-publish-text-muted);
 	}
 
 	&--unknown {
-		color: var(--safe-publish-text-muted);
+		--safe-publish-badge-color: var(--safe-publish-text-muted);
 		cursor: help;
 
 		&:focus-visible {
@@ -227,27 +224,33 @@
 	}
 
 	&--publish {
-		color: var(--safe-publish-status-success);
+		--safe-publish-badge-color: var(--safe-publish-status-success);
 	}
 
 	&--draft {
-		color: var(--safe-publish-text-muted);
+		--safe-publish-badge-color: var(--safe-publish-text-muted);
 	}
 
 	&--pending {
-		color: var(--safe-publish-status-warning);
+		--safe-publish-badge-color: var(--safe-publish-status-warning);
 	}
 
 	&--private {
-		color: var(--safe-publish-primary);
+		--safe-publish-badge-color: var(--safe-publish-primary);
 	}
 
 	&--future {
-		color: #9b59b6;
+		--safe-publish-badge-color: #9b59b6;
 	}
 
 	&--rolled-back {
-		color: var(--safe-publish-status-warning);
+		--safe-publish-badge-color: var(--safe-publish-status-warning);
+	}
+
+	// Colored dot with neutral text — for reference columns, not the
+	// row's action signal.
+	&--quiet {
+		color: inherit;
 	}
 }
 
@@ -355,4 +358,10 @@
 		height: auto;
 		display: block;
 	}
+}
+
+// DataViews' hover-only color shift isn't a discoverable affordance;
+// add an underline.
+.safe-publish-dataviews-wrapper .dataviews-title-field a:hover {
+	text-decoration: underline;
 }

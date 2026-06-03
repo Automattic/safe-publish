@@ -46,6 +46,7 @@ export function ExportHistory(): JSX.Element {
 		search: '',
 		filters: [],
 		fields: [ 'date', 'user', 'destination', 'status', 'posts' ],
+		layout: { density: 'compact' },
 	} );
 
 	useEffect( () => {

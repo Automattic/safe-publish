@@ -36,6 +36,7 @@ export function FailedImportsDataView(): JSX.Element {
 		page: 1,
 		fields: [ 'source', 'error_message', 'import_date_gmt' ],
 		titleField: 'title',
+		layout: { density: 'compact' },
 	} );
 
 	const defaultLayouts = useMemo(

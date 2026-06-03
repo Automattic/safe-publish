@@ -13,11 +13,7 @@ import { chevronDown, update } from '@wordpress/icons';
 import AuthStatusNotice from './AuthStatusNotice';
 import { useAuthStatus } from './hooks/useAuthStatus';
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
-import {
-	getPostTypeLabel,
-	getPublishStatusLabel,
-	getSyncStatusLabel,
-} from './post-fields';
+import { getSyncStatusLabel } from './post-fields';
 import { createActions } from '../actions';
 import {
 	DEFAULT_ITEMS_PER_PAGE,
@@ -40,7 +36,6 @@ import {
 	Dropdown,
 	FormTokenField,
 	Notice,
-	Spinner,
 	TextControl,
 	Tooltip,
 } from '@wordpress/components';
@@ -265,13 +260,12 @@ export function SourcePostsDataView( {
 			direction: 'desc',
 		},
 		fields: [
-			'permalink',
-			'sync_status',
-			'source_status',
-			'publish_status',
 			'date_gmt',
+			'source_status',
+			'sync_status',
 		],
 		titleField: 'title',
+		layout: { density: 'compact' },
 	} );
 
 	const defaultLayouts = { [ LAYOUT_TABLE ]: {} };
@@ -290,6 +284,11 @@ export function SourcePostsDataView( {
 	const [ postTypeError, setPostTypeError ] = useState< string | null >( null );
 	const [ fetchError, setFetchError ] = useState< string | null >( null );
 	const [ refreshNonce, setRefreshNonce ] = useState( 0 );
+
+	const refresh = useCallback(
+		() => setRefreshNonce( ( nonce ) => nonce + 1 ),
+		[]
+	);
 
 	const searchDebounceRef = useRef< ReturnType< typeof setTimeout > | null >( null );
 	const abortRef = useRef< AbortController | null >( null );
@@ -546,46 +545,11 @@ export function SourcePostsDataView( {
 			label: __( 'Title', 'safe-publish' ),
 			enableSorting: true,
 			render: ( { item }: { item: Post } ): JSX.Element => {
-				if ( item.local_edit_url ) {
-					return (
-						<a
-							href={ item.local_edit_url }
-							target="_blank"
-							rel="noreferrer"
-							aria-label={
-								/* translators: %s: post title */
-								sprintf( __( '%s (opens in new tab)', 'safe-publish' ), item.title )
-							}
-						>
-							{ item.title }
-						</a>
-					);
-				}
-				return <span>{ item.title }</span>;
-			},
-		},
-		{
-			id: 'post_type',
-			label: __( 'Type', 'safe-publish' ),
-			enableSorting: false,
-			getValue: ( { item }: { item: Post } ): string =>
-				getPostTypeLabel( item ),
-			render: ( { item }: { item: Post } ): JSX.Element => (
-				<span>{ getPostTypeLabel( item ) }</span>
-			),
-		},
-		{
-			id: 'permalink',
-			label: __( 'Permalink', 'safe-publish' ),
-			enableSorting: false,
-			getValue: ( { item }: { item: Post } ): string => item.link,
-			render: ( { item }: { item: Post } ): JSX.Element => {
-				// Drafts/private posts have no public URL — get_permalink() on
-				// the source returns the home URL, which extractUrlPath reduces
-				// to '/'. Render an em-dash so it doesn't look like a real link.
+				// Drafts return the source home URL — show plain text
+				// rather than a misleading link.
 				const path = extractUrlPath( item.link );
 				if ( '' === item.link || '/' === path ) {
-					return <span>—</span>;
+					return <span>{ item.title }</span>;
 				}
 				return (
 					<a
@@ -593,8 +557,12 @@ export function SourcePostsDataView( {
 						target="_blank"
 						rel="noopener noreferrer"
 						title={ item.link }
+						aria-label={
+							/* translators: %s: post title */
+							sprintf( __( '%s (opens in new tab)', 'safe-publish' ), item.title )
+						}
 					>
-						{ path }
+						{ item.title }
 					</a>
 				);
 			},
@@ -661,31 +629,7 @@ export function SourcePostsDataView( {
 				const label = PUBLISH_STATUS_LABELS[ item.status ] ?? item.status;
 				const modifierClass = `safe-publish-status-badge--${ item.status }`;
 				return (
-					<span className={ `safe-publish-status-badge ${ modifierClass }` }>
-						<span className="safe-publish-status-badge__dot" aria-hidden="true" />
-						{ label }
-					</span>
-				);
-			},
-		},
-		{
-			id: 'publish_status',
-			label: __( 'Local Status', 'safe-publish' ),
-			enableSorting: false,
-			getValue: ( { item }: { item: Post } ): string =>
-				getPublishStatusLabel( item ),
-			render: ( { item }: { item: Post } ): JSX.Element => {
-				if ( ! item.is_imported || ! item.local_status ) {
-					return (
-						<span className="safe-publish-status-badge safe-publish-status-badge--empty">
-							—
-						</span>
-					);
-				}
-				const label = PUBLISH_STATUS_LABELS[ item.local_status ] ?? item.local_status;
-				const modifierClass = `safe-publish-status-badge--${ item.local_status }`;
-				return (
-					<span className={ `safe-publish-status-badge ${ modifierClass }` }>
+					<span className={ `safe-publish-status-badge safe-publish-status-badge--quiet ${ modifierClass }` }>
 						<span className="safe-publish-status-badge__dot" aria-hidden="true" />
 						{ label }
 					</span>
@@ -779,19 +723,6 @@ export function SourcePostsDataView( {
 						/>
 					</BaseControl>
 				</div>
-				<div className="safe-publish-control safe-publish-control--statuses">
-					<FormTokenField
-						__next40pxDefaultSize
-						__nextHasNoMarginBottom
-						__experimentalExpandOnFocus
-						__experimentalShowHowTo={ false }
-						label={ __( 'Source Status', 'safe-publish' ) }
-						placeholder={ __( 'All statuses', 'safe-publish' ) }
-						value={ tokenValues }
-						suggestions={ STATUS_LABEL_SUGGESTIONS }
-						onChange={ handleStatusesChange }
-					/>
-				</div>
 				<div className="safe-publish-control safe-publish-control--dates">
 					<BaseControl
 						__nextHasNoMarginBottom
@@ -846,6 +777,19 @@ export function SourcePostsDataView( {
 					/>
 					</BaseControl>
 				</div>
+				<div className="safe-publish-control safe-publish-control--statuses">
+					<FormTokenField
+						__next40pxDefaultSize
+						__nextHasNoMarginBottom
+						__experimentalExpandOnFocus
+						__experimentalShowHowTo={ false }
+						label={ __( 'Source Status', 'safe-publish' ) }
+						placeholder={ __( 'All statuses', 'safe-publish' ) }
+						value={ tokenValues }
+						suggestions={ STATUS_LABEL_SUGGESTIONS }
+						onChange={ handleStatusesChange }
+					/>
+				</div>
 				{ hasActiveFilters && (
 					<Button
 						variant="tertiary"
@@ -853,19 +797,6 @@ export function SourcePostsDataView( {
 					>
 						{ __( 'Clear filters', 'safe-publish' ) }
 					</Button>
-				) }
-				<Button
-					variant="tertiary"
-					isBusy={ isLoadingPosts }
-					disabled={ isLoadingPosts || refreshBlocked }
-					icon={ update }
-					label={ __( 'Refresh', 'safe-publish' ) }
-					onClick={ () => setRefreshNonce( ( nonce ) => nonce + 1 ) }
-				/>
-				{ isLoadingPosts && hasFetchedOnce && (
-					<div className="safe-publish-control safe-publish-control--spinner">
-						<Spinner />
-					</div>
 				) }
 			</div>
 			{ postTypeError && (
@@ -905,16 +836,20 @@ export function SourcePostsDataView( {
 					onChangeView={ handleViewChange }
 					paginationInfo={ paginationInfo }
 					defaultLayouts={ defaultLayouts }
-					actions={ createActions(
-						() => {
-							setRefreshNonce( ( nonce ) => nonce + 1 );
-						},
-						isAuthorized,
-						{
-							ajaxurl: window.safePublishAdminData.ajaxurl,
-							nonce: window.safePublishAdminData.nonce,
-						}
-					) }
+					actions={ createActions( refresh, isAuthorized, {
+						ajaxurl: window.safePublishAdminData.ajaxurl,
+						nonce: window.safePublishAdminData.nonce,
+					} ) }
+					header={
+						<Button
+							variant="tertiary"
+							isBusy={ isLoadingPosts }
+							disabled={ isLoadingPosts || refreshBlocked }
+							icon={ update }
+							label={ __( 'Refresh', 'safe-publish' ) }
+							onClick={ refresh }
+						/>
+					}
 				/>
 			) }
 		</div>

@@ -55,7 +55,6 @@ export interface Post {
 	is_imported?: boolean;
 	sync_status?: SourcePostsSyncStatus;
 	local_status?: string | null;
-	local_edit_url?: string | null;
 }
 
 /**
