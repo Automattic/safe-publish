@@ -20,6 +20,7 @@ import AuthStatusNotice from './AuthStatusNotice';
 import { ImportedPostsEmptyState } from './ImportedPostsEmptyState';
 import { useAuthStatus } from './hooks/useAuthStatus';
 import { useDelayedFlag } from './hooks/useDelayedFlag';
+import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 import { getImportedSyncStatusLabel } from './post-fields';
 import { createImportedActions } from '../actions';
 import {
@@ -622,6 +623,23 @@ export function ImportedPostsDataView(): JSX.Element {
 		() => setRefreshNonce( ( nonce ) => nonce + 1 ),
 		[]
 	);
+
+	const setPage = useCallback(
+		( next: number ): void =>
+			setView( ( current ) => ( { ...current, page: next } ) ),
+		[]
+	);
+
+	// Delete can shrink the listing past the current page.
+	useStepBackWhenPageEmpties( {
+		hasFetchedOnce,
+		isLoading,
+		fetchError,
+		isEmpty: 0 === pageItems.length,
+		page: view.page,
+		setPage,
+	} );
+
 	const actions = useMemo(
 		() =>
 			createImportedActions( refresh, {

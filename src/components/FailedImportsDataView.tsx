@@ -8,6 +8,7 @@
  * @file This file defines the FailedImportsDataView component.
  */
 import { useDelayedFlag } from './hooks/useDelayedFlag';
+import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 import { createFailedImportsActions } from '../actions';
 import { DEFAULT_ITEMS_PER_PAGE, LAYOUT_TABLE } from '../constants';
 import { formatDateTime, getErrorMessage } from '../utils';
@@ -113,22 +114,21 @@ export function FailedImportsDataView(): JSX.Element {
 		};
 	}, [ view.page, view.perPage, refreshNonce ] );
 
-	// Step back when a refresh empties a page past 1 — otherwise the grid
-	// unmounts on the empty page and pagination goes with it.
-	useEffect( () => {
-		if (
-			hasFetchedOnce &&
-			! isLoading &&
-			null === fetchError &&
-			0 === pageItems.length &&
-			( view.page ?? 1 ) > 1
-		) {
-			setView( ( current ) => ( {
-				...current,
-				page: Math.max( 1, ( current.page ?? 1 ) - 1 ),
-			} ) );
-		}
-	}, [ hasFetchedOnce, isLoading, fetchError, pageItems.length, view.page ] );
+	const setPage = useCallback(
+		( next: number ): void =>
+			setView( ( current ) => ( { ...current, page: next } ) ),
+		[]
+	);
+
+	// Remove can shrink the listing past the current page.
+	useStepBackWhenPageEmpties( {
+		hasFetchedOnce,
+		isLoading,
+		fetchError,
+		isEmpty: 0 === pageItems.length,
+		page: view.page,
+		setPage,
+	} );
 
 	const fields: DataViewsField< FailedImport >[] = useMemo(
 		() => [
