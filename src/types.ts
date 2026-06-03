@@ -53,10 +53,22 @@ export interface Post {
 	post_type: string;
 	status: string;
 	is_imported?: boolean;
-	has_update?: boolean;
+	sync_status?: SourcePostsSyncStatus;
 	local_status?: string | null;
 	local_edit_url?: string | null;
 }
+
+/**
+ * Sync-status verdict surfaced by annotate_posts_with_import_status.
+ *
+ * `unknown` covers cases where either timestamp can't be parsed — typically a
+ * missing items row (pruned history, legacy data) or a malformed source date.
+ */
+export type SourcePostsSyncStatus =
+	| 'available'
+	| 'up-to-date'
+	| 'outdated'
+	| 'unknown';
 
 /**
  * Envelope returned by the source catalog endpoint.

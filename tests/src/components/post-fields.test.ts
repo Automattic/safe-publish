@@ -57,9 +57,9 @@ describe( 'getPostTypeLabel', () => {
 } );
 
 describe( 'getSyncStatusLabel', () => {
-	it( 'should return the outdated label when imported with an update', () => {
+	it( 'should return the outdated label when sync_status is outdated', () => {
 		// ARRANGE: imported post that has an update upstream.
-		const post: Post = { ...basePost, is_imported: true, has_update: true };
+		const post: Post = { ...basePost, is_imported: true, sync_status: 'outdated' };
 
 		// ACT: derive the sync status label.
 		const result = getSyncStatusLabel( post );
@@ -68,9 +68,9 @@ describe( 'getSyncStatusLabel', () => {
 		expect( result ).toBe( SYNC_STATUS_LABELS.outdated );
 	} );
 
-	it( 'should return the up-to-date label when imported with no update', () => {
+	it( 'should return the up-to-date label when sync_status is up-to-date', () => {
 		// ARRANGE: imported post without an update.
-		const post: Post = { ...basePost, is_imported: true, has_update: false };
+		const post: Post = { ...basePost, is_imported: true, sync_status: 'up-to-date' };
 
 		// ACT: derive the sync status label.
 		const result = getSyncStatusLabel( post );
@@ -79,9 +79,20 @@ describe( 'getSyncStatusLabel', () => {
 		expect( result ).toBe( SYNC_STATUS_LABELS.upToDate );
 	} );
 
-	it( 'should return the available label when not imported', () => {
+	it( 'should return the unknown label when sync_status is unknown', () => {
+		// ARRANGE: imported post whose verdict can't be computed.
+		const post: Post = { ...basePost, is_imported: true, sync_status: 'unknown' };
+
+		// ACT: derive the sync status label.
+		const result = getSyncStatusLabel( post );
+
+		// ASSERT: returns the localized "Unknown" label.
+		expect( result ).toBe( SYNC_STATUS_LABELS.unknown );
+	} );
+
+	it( 'should return the available label when sync_status is available', () => {
 		// ARRANGE: post not yet imported.
-		const post: Post = { ...basePost, is_imported: false };
+		const post: Post = { ...basePost, is_imported: false, sync_status: 'available' };
 
 		// ACT: derive the sync status label.
 		const result = getSyncStatusLabel( post );

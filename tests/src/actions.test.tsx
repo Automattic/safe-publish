@@ -95,8 +95,9 @@ describe( 'Actions configuration', () => {
 	it( 'import isEligible only allows non-imported items (Update lives on the Imports tab)', () => {
 		const bulkAction = actions.find( ( a ) => a.id === 'import' );
 		expect( bulkAction?.isEligible?.( buildPost( { is_imported: false } ) ) ).toBe( true );
-		expect( bulkAction?.isEligible?.( buildPost( { is_imported: true, has_update: true } ) ) ).toBe( false );
-		expect( bulkAction?.isEligible?.( buildPost( { is_imported: true, has_update: false } ) ) ).toBe( false );
+		expect( bulkAction?.isEligible?.( buildPost( { is_imported: true, sync_status: 'outdated' } ) ) ).toBe( false );
+		expect( bulkAction?.isEligible?.( buildPost( { is_imported: true, sync_status: 'up-to-date' } ) ) ).toBe( false );
+		expect( bulkAction?.isEligible?.( buildPost( { is_imported: true, sync_status: 'unknown' } ) ) ).toBe( false );
 	} );
 
 	it( 'import isEligible returns false when not authorized', () => {

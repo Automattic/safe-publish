@@ -36,13 +36,13 @@ describe( 'Type validation', () => {
 				post_type: 'post',
 				status: 'publish',
 				is_imported: true,
-				has_update: true,
+				sync_status: 'outdated',
 				local_status: 'draft',
 				local_edit_url: 'https://destination.example/wp-admin/post.php?post=99',
 			};
 
 			expect( post.is_imported ).toBe( true );
-			expect( post.has_update ).toBe( true );
+			expect( post.sync_status ).toBe( 'outdated' );
 			expect( post.local_status ).toBe( 'draft' );
 			expect( post.local_edit_url ).toBe(
 				'https://destination.example/wp-admin/post.php?post=99'

@@ -30,6 +30,7 @@ import {
 	getErrorMessage,
 	PUBLISH_STATUS_LABELS,
 	SYNC_STATUS_LABELS,
+	UNKNOWN_SYNC_STATUS_TOOLTIP,
 } from '../utils';
 import {
 	BaseControl,
@@ -40,6 +41,7 @@ import {
 	Notice,
 	Spinner,
 	TextControl,
+	Tooltip,
 } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
 import { dateI18n, getSettings } from '@wordpress/date';
@@ -587,35 +589,49 @@ export function SourcePostsDataView( {
 			getValue: ( { item }: { item: Post } ): string =>
 				getSyncStatusLabel( item ),
 			render: ( { item }: { item: Post } ): JSX.Element => {
-				if ( item.is_imported && item.has_update ) {
-					const label = '' === item.modified_gmt
-						? __( 'Outdated', 'safe-publish' )
-						: sprintf(
-							/* translators: %s: localized date when source was modified */
-							__( 'Outdated · Modified %s', 'safe-publish' ),
-							formatDateTime( item.modified_gmt )
+				switch ( item.sync_status ) {
+					case 'outdated': {
+						const label = '' === item.modified_gmt
+							? __( 'Outdated', 'safe-publish' )
+							: sprintf(
+								/* translators: %s: localized date when source was modified */
+								__( 'Outdated · Modified %s', 'safe-publish' ),
+								formatDateTime( item.modified_gmt )
+							);
+						return (
+							<span className="safe-publish-status-badge safe-publish-status-badge--outdated">
+								<span className="safe-publish-status-badge__dot" aria-hidden="true" />
+								{ label }
+							</span>
 						);
-					return (
-						<span className="safe-publish-status-badge safe-publish-status-badge--outdated">
-							<span className="safe-publish-status-badge__dot" aria-hidden="true" />
-							{ label }
-						</span>
-					);
+					}
+					case 'up-to-date':
+						return (
+							<span className="safe-publish-status-badge safe-publish-status-badge--up-to-date">
+								<span className="safe-publish-status-badge__dot" aria-hidden="true" />
+								{ SYNC_STATUS_LABELS.upToDate }
+							</span>
+						);
+					case 'unknown':
+						return (
+							<Tooltip text={ UNKNOWN_SYNC_STATUS_TOOLTIP }>
+								<span
+									className="safe-publish-status-badge safe-publish-status-badge--unknown"
+									tabIndex={ 0 }
+								>
+									<span className="safe-publish-status-badge__dot" aria-hidden="true" />
+									{ SYNC_STATUS_LABELS.unknown }
+								</span>
+							</Tooltip>
+						);
+					default:
+						return (
+							<span className="safe-publish-status-badge safe-publish-status-badge--available">
+								<span className="safe-publish-status-badge__dot" aria-hidden="true" />
+								{ SYNC_STATUS_LABELS.available }
+							</span>
+						);
 				}
-				if ( item.is_imported ) {
-					return (
-						<span className="safe-publish-status-badge safe-publish-status-badge--up-to-date">
-							<span className="safe-publish-status-badge__dot" aria-hidden="true" />
-							{ SYNC_STATUS_LABELS.upToDate }
-						</span>
-					);
-				}
-				return (
-					<span className="safe-publish-status-badge safe-publish-status-badge--available">
-						<span className="safe-publish-status-badge__dot" aria-hidden="true" />
-						{ SYNC_STATUS_LABELS.available }
-					</span>
-				);
 			},
 		},
 		{
