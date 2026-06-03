@@ -11,9 +11,7 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\Catalog_REST_Controller;
 use Safe_Publish\API\Source_Posts_API;
-use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Post_Type_Fetcher;
-use Safe_Publish\API\Request_Actions;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
@@ -89,33 +87,23 @@ final class Admin_Ajax_Controller {
 	private Post_Type_Fetcher $post_type_fetcher;
 
 	/**
-	 * HTTP Client instance.
-	 *
-	 * @var HTTP_Client
-	 */
-	private HTTP_Client $http_client;
-
-	/**
 	 * Constructs the Admin_Ajax_Controller instance.
 	 *
 	 * @param Source_Posts_API    $api                 Source Posts API instance.
 	 * @param History_Repository  $repository          History repository instance.
 	 * @param Post_Import_Service $post_import_service Post Import Service instance.
 	 * @param Post_Type_Fetcher   $post_type_fetcher   Post Type Fetcher instance.
-	 * @param HTTP_Client         $http_client         HTTP Client instance.
 	 */
 	public function __construct(
 		Source_Posts_API $api,
 		History_Repository $repository,
 		Post_Import_Service $post_import_service,
-		Post_Type_Fetcher $post_type_fetcher,
-		HTTP_Client $http_client
+		Post_Type_Fetcher $post_type_fetcher
 	) {
 		$this->api                 = $api;
 		$this->repository          = $repository;
 		$this->post_import_service = $post_import_service;
 		$this->post_type_fetcher   = $post_type_fetcher;
-		$this->http_client         = $http_client;
 	}
 
 	/**
