@@ -763,9 +763,9 @@ class Post_Import_Service {
 	/**
 	 * Annotates each post in an array with its local import status.
 	 *
-	 * Adds `is_imported`, `sync_status`, `local_status`, and `local_edit_url`
-	 * keys to every element. `sync_status` is one of `available` (not
-	 * imported), `up-to-date`, `outdated`, or `unknown` — derived from
+	 * Adds `is_imported`, `sync_status`, and `local_status` keys to every
+	 * element. `sync_status` is one of `available` (not imported),
+	 * `up-to-date`, `outdated`, or `unknown` — derived from
 	 * Sync_State_Comparator comparing the source's `modified_gmt` to the
 	 * items table's most recent `import_date_gmt`. `unknown` fires when
 	 * either timestamp can't be parsed (missing items row, malformed
@@ -815,12 +815,10 @@ class Post_Import_Service {
 					false => 'up-to-date',
 					null  => 'unknown',
 				};
-				$post['local_status']   = $imported->post_status;
-				$post['local_edit_url'] = get_edit_post_link( $imported->ID, 'raw' );
+				$post['local_status'] = $imported->post_status;
 			} else {
-				$post['sync_status']    = 'available';
-				$post['local_status']   = null;
-				$post['local_edit_url'] = null;
+				$post['sync_status']  = 'available';
+				$post['local_status'] = null;
 			}
 		}
 
