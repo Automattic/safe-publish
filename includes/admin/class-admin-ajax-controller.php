@@ -424,22 +424,19 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Appends the listing's first-load extras to a response when requested.
 	 *
-	 * Computes the filter facets and the count of failed imports over the
-	 * full set, so the client fetches them once (on first load) rather than
-	 * on every page/filter change.
+	 * Computes the filter facets over the full set so the client fetches them
+	 * once (on first load) rather than on every page/filter change.
 	 *
 	 * @param array $response    Response payload to augment.
 	 * @param bool  $with_facets Whether to attach the first-load extras.
-	 * @return array Response, with `facets` and `failed_count` keys when
-	 *               `$with_facets` is true.
+	 * @return array Response, with the `facets` key when `$with_facets` is true.
 	 */
 	private function with_imported_listing_extras(
 		array $response,
 		bool $with_facets
 	): array {
 		if ( $with_facets ) {
-			$response['facets']       = $this->repository->get_imported_filter_facets();
-			$response['failed_count'] = $this->repository->count_failed_items();
+			$response['facets'] = $this->repository->get_imported_filter_facets();
 		}
 
 		return $response;

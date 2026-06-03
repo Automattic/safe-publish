@@ -124,14 +124,13 @@ export interface ImportedPostsFacets {
 
 /**
  * Envelope returned by the destination-side imported-posts listing endpoint.
- * `facets` and `failed_count` are present only on the first load (requested
- * via with_facets); they cover the listing's full set, not the current page.
+ * `facets` is present only on the first load (requested via with_facets);
+ * they cover the listing's full set, not the current page.
  */
 export interface ImportedPostsResponse {
 	items: ImportedPost[];
 	has_more: boolean;
 	facets?: ImportedPostsFacets;
-	failed_count?: number;
 }
 
 /**

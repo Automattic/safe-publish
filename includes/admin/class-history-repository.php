@@ -636,30 +636,6 @@ final class History_Repository {
 	}
 
 	/**
-	 * Counts failed import items across all sessions.
-	 *
-	 * Lets the Imports → Posts tab nudge operators toward the Failures tab
-	 * when their empty state hides a backlog of errored attempts. Backed by
-	 * the `status_import_date` index, which also covers
-	 * {@see self::list_failed_items()}.
-	 *
-	 * @return int Number of items currently flagged as 'error'.
-	 */
-	public function count_failed_items(): int {
-		global $wpdb;
-
-		$items_table = Import_Items_Table::table_name();
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$count = $wpdb->get_var(
-			"SELECT COUNT(*) FROM `{$items_table}` WHERE status = 'error'"
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-
-		return null !== $count ? (int) $count : 0;
-	}
-
-	/**
 	 * Marks a session as rolled back and emits audit log events.
 	 *
 	 * Bulk-flips the per-item `rolled_back` flag on the success/updated items
