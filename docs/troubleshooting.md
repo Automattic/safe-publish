@@ -367,8 +367,10 @@ Check the **Imports → Failures** tab for:
 - Source URL of each failed attempt
 - Timestamp of the attempt
 
-The tab is read-only; recovery is fixing the underlying issue and re-importing
-from Source Posts.
+Recovery is fixing the underlying issue and re-importing from Source Posts.
+Once an item is no longer needed, use the **Remove** action (per-row or bulk)
+to clear it from the tab; this only deletes the record and does not affect
+the source.
 
 ## Getting Help
 

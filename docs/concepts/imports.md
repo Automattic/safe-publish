@@ -20,7 +20,14 @@ rollback eligibility).
 | Local Status  | Local `post_status` (draft, publish, etc.).               |
 | Type          | Local `post_type`.                                        |
 | Last Imported | Most recent `import_date_gmt` for this post.              |
+| Sync Status   | How this post compares to the current source content.     |
 | Permalink     | Source permalink (opens the source post in a new tab).    |
+
+The **Sync Status** column compares each imported post against the current
+source content and reports one of: _Up to date_, _Outdated_, _Missing on
+source_, _Cannot check_, or _Invalid timestamp_. _Cannot check_ means the
+source request failed; _Invalid timestamp_ means a source or import timestamp
+could not be parsed. The column refills after every listing refresh.
 
 ### Actions
 
@@ -32,9 +39,9 @@ rollback eligibility).
 | Delete   | Moves the local post to trash.                                             |
 | Rollback | Reverts the most recent import — restores updates, deletes new creations.  |
 
-Rollback supports bulk selection. Eligibility tracks the items-table status:
-only `success` and `updated` rows that have not already been rolled back can
-be reverted.
+Update, Delete, and Rollback support bulk selection; Diff is single-row only.
+Rollback eligibility tracks the items-table status: only `success` and
+`updated` rows that have not already been rolled back can be reverted.
 
 ### Filtering
 
@@ -63,9 +70,16 @@ recorded plus the source URL from the parent session.
 | Error     | Error message recorded at import time.             |
 | Attempted | When the import was attempted (`import_date_gmt`). |
 
-The tab is read-only. Recovery is fixing the underlying issue (for example,
-creating a missing author on the destination) and re-importing the post
-from the Source Posts page.
+### Actions
+
+| Action | Description                                                   |
+| ------ | ------------------------------------------------------------- |
+| Remove | Clears the failed item from the tab. Supports bulk selection. |
+
+Removing a failed item only deletes its record; it has no effect on the
+source. Recovery is fixing the underlying issue (for example, creating a
+missing author on the destination) and re-importing the post from the
+Source Posts page.
 
 ## Post-import notice
 

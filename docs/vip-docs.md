@@ -21,6 +21,16 @@
   - Exact button/notice wording in the import, diff, and rollback modals
 -->
 
+<!--
+  Documentation update (2026-06-03): Added the Sync Status column on both
+  the Source Posts and Imports → Posts screens, noted that Update, Delete,
+  and Rollback support bulk selection, recorded that failed imports can now
+  be removed from the Failures tab, and added the Test Connection button.
+  Constant-backed connection settings are intentionally omitted from this
+  VIP-facing draft; docs/concepts/authentication.md covers that implementation
+  detail for non-VIP and local configuration.
+-->
+
 # Safe Publish
 
 Safe Publish moves editorial content from a source WordPress site to a destination site over an authenticated connection, preserving the content's structure and format as closely as possible. It is built for teams that draft, stage, or review content on one environment and need to publish that content to another without exporting databases or copying files by hand.
@@ -90,9 +100,18 @@ With the integration enabled and the shared secret in place, pair the source and
 
 A typical setup pairs a staging site in `export` mode with a production site in `import` mode. Use `bidirectional` only when content genuinely needs to move both ways.
 
+After saving, use the **Test Connection** button on the settings screen to confirm the destination can reach and authenticate with the source before importing. The button is available in `import` and `bidirectional` modes and reports the result inline.
+
 ## Browsing the source catalog
 
-With the connection configured, the destination's main Safe Publish screen lists the posts, pages, and custom post types available on the source site. The catalog is presented as a sortable, filterable table.
+With the connection configured, the **Source Posts** screen — the default page under the Safe Publish menu on the destination — lists the posts, pages, and custom post types available on the source site. The catalog is presented as a sortable, filterable table.
+
+A **Sync Status** column shows how each source post relates to the destination:
+
+- **Available** — the post has not been imported to the destination yet.
+- **Up to date** — the post has been imported and the source has not changed since.
+- **Outdated** — the post has been imported, but the source has changed since the last import. Re-import to bring the destination copy up to date.
+- **Unknown** — the post has been imported, but Safe Publish cannot tell whether the source has changed since. Re-import to refresh.
 
 ## Importing content
 
@@ -118,8 +137,8 @@ Safe Publish imports the selected posts as a single unit and records the result 
 
 The **Imports** admin page is the operator surface for everything that came in from the source. It has two tabs:
 
-- **Posts** — local posts that resulted from successful imports. Each row offers Edit, Update (re-import from source), Diff (compare current local content with current source content), Delete, and Rollback.
-- **Failures** — items whose import errored before a local post was created. Read-only; recovery is fixing the underlying issue and re-importing from the source catalog.
+- **Posts** — local posts that resulted from successful imports. Each row offers Edit, Update (re-import from source), Diff (compare current local content with current source content), Delete, and Rollback. Update, Delete, and Rollback can also be applied to several selected rows at once; Diff is available per row only. A **Sync Status** column compares each row against the current source content and reports whether it is up to date, outdated, missing on the source, cannot be checked because the source request failed, or has an invalid timestamp.
+- **Failures** — items whose import errored before a local post was created. Each failed item can be removed from the tab once it is no longer needed; recovery is fixing the underlying issue and re-importing from the source catalog.
 
 ### Previewing changes with a diff
 
@@ -213,7 +232,7 @@ Safe Publish is scoped to publishing content between two paired sites. The follo
 
 ### Check the authentication status
 
-Safe Publish registers a "Safe Publish Authentication Configuration" test under **Tools → Site Health**. The test reports whether the shared secret is configured, too short (it recommends at least 32 characters), or set up correctly. Check it first when cross-site requests fail, before investigating other causes.
+Safe Publish registers a "Safe Publish Authentication Configuration" test under **Tools → Site Health**. The test reports whether the shared secret is configured, too short (it recommends at least 32 characters), or set up correctly. Check it first when cross-site requests fail, before investigating other causes. On the destination, the **Test Connection** button on the Safe Publish settings screen performs a live check against the configured source and reports the result inline.
 
 ### Requests fail with a timestamp error
 

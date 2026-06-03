@@ -56,6 +56,7 @@ Activate the plugin through the WordPress admin panel or [code](https://docs.wpv
 - After saving settings, the DataViews interface will display posts from your source site.
 - Use the **Post Type** dropdown to switch between Posts, Pages, and custom post types.
 - Search, sort, and filter posts using the built-in controls.
+- The **Sync Status** column flags whether each post is new (_Available_), already imported and current (_Up to date_), changed on the source since it was imported (_Outdated_), or imported but not comparable (_Unknown_).
 
 ### Import Options
 
