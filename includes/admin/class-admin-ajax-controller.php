@@ -67,6 +67,15 @@ final class Admin_Ajax_Controller {
 	const DELETE_FAILED_IMPORTS_BATCH_MAX = 100;
 
 	/**
+	 * Maximum number of post ids accepted by ajax_bulk_delete_posts in a
+	 * single call. Each trash op runs in PHP — keep the batch small enough
+	 * that the request finishes within a typical admin-ajax timeout.
+	 *
+	 * @var int
+	 */
+	const BULK_DELETE_POSTS_BATCH_MAX = 50;
+
+	/**
 	 * Source Posts API instance.
 	 *
 	 * @var Source_Posts_API
@@ -128,6 +137,7 @@ final class Admin_Ajax_Controller {
 		add_action( 'wp_ajax_safe_publish_create_draft', array( $this, 'ajax_create_draft' ) );
 		add_action( 'wp_ajax_safe_publish_bulk_import', array( $this, 'ajax_bulk_import' ) );
 		add_action( 'wp_ajax_safe_publish_delete_post', array( $this, 'ajax_delete_post' ) );
+		add_action( 'wp_ajax_safe_publish_bulk_delete_posts', array( $this, 'ajax_bulk_delete_posts' ) );
 		add_action( 'wp_ajax_safe_publish_sync_status_batch', array( $this, 'ajax_sync_status_batch' ) );
 
 		$this->register_auth_status_invalidation();
@@ -1014,6 +1024,90 @@ final class Admin_Ajax_Controller {
 		}
 
 		wp_send_json_success( array( 'message' => __( 'Post moved to trash.', 'safe-publish' ) ) );
+	}
+
+	/**
+	 * Handles AJAX request for bulk-trashing imported posts from the
+	 * Imports → Posts tab.
+	 *
+	 * Each id is verified to map to a real post that this plugin imported
+	 * (META_SOURCE_POST_ID present) and that the caller can delete; rows
+	 * that fail either check are skipped, not aborted. The endpoint moves
+	 * matched posts to the trash via wp_trash_post — same disposition as
+	 * the single-delete path.
+	 */
+	public function ajax_bulk_delete_posts(): void {
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		$this->verify_ajax_capability( 'delete_posts' );
+
+		// Each element is downstream-sanitized via absint().
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$raw_ids = (array) wp_unslash( $_POST['post_ids'] ?? array() );
+
+		$post_ids = array_values(
+			array_unique(
+				array_filter(
+					array_map( 'absint', $raw_ids ),
+					static fn( int $id ): bool => $id > 0
+				)
+			)
+		);
+
+		if ( 0 === count( $post_ids ) ) {
+			wp_send_json_error( __( 'No posts provided.', 'safe-publish' ) );
+		}
+
+		if ( count( $post_ids ) > self::BULK_DELETE_POSTS_BATCH_MAX ) {
+			wp_send_json_error(
+				sprintf(
+					/* translators: %d: maximum number of posts per batch */
+					__(
+						'Bulk delete is limited to %d posts at a time.',
+						'safe-publish'
+					),
+					self::BULK_DELETE_POSTS_BATCH_MAX
+				)
+			);
+		}
+
+		$deleted = 0;
+		$skipped = 0;
+
+		foreach ( $post_ids as $post_id ) {
+			$post = get_post( $post_id );
+			if ( ! $post ) {
+				++$skipped;
+				continue;
+			}
+
+			$source_id = (string) get_post_meta(
+				$post->ID,
+				Options::META_SOURCE_POST_ID,
+				true
+			);
+			if ( '' === $source_id ) {
+				++$skipped;
+				continue;
+			}
+
+			if ( ! current_user_can( 'delete_post', $post->ID ) ) {
+				++$skipped;
+				continue;
+			}
+
+			if ( wp_trash_post( $post->ID ) ) {
+				++$deleted;
+			} else {
+				++$skipped;
+			}
+		}
+
+		wp_send_json_success(
+			array(
+				'deleted' => $deleted,
+				'skipped' => $skipped,
+			)
+		);
 	}
 
 	/**

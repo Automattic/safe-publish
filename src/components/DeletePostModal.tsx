@@ -1,7 +1,9 @@
 /**
  * Delete Post Modal component.
  *
- * Displays a confirmation modal before moving an imported post to trash.
+ * Confirmation modal for trashing one or many imported posts. Branches
+ * on items.length: the single path hits safe_publish_delete_post; the
+ * bulk path hits safe_publish_bulk_delete_posts with the full id list.
  *
  * @file This file defines the DeletePostModal component.
  */
@@ -21,9 +23,9 @@ import { __, sprintf } from '@wordpress/i18n';
 /**
  * Props for the DeletePostModal component.
  *
- * @property {ImportedPost[]} items      Array containing the single row to delete.
+ * @property {ImportedPost[]} items      Rows to trash; bulk path runs when length > 1.
  * @property {string}         ajaxurl    WordPress admin-ajax URL.
- * @property {string}         nonce      AJAX nonce for the delete endpoint.
+ * @property {string}         nonce      AJAX nonce for the delete endpoints.
  * @property {Function}       closeModal Callback to close the modal.
  * @property {Function}       onRefresh  Callback to refresh the listing.
  */
@@ -36,7 +38,15 @@ interface DeletePostModalProps {
 }
 
 /**
- * Confirmation modal for moving an imported post to trash.
+ * Response payload from safe_publish_bulk_delete_posts.
+ */
+interface BulkDeleteResponse {
+	deleted: number;
+	skipped: number;
+}
+
+/**
+ * Confirmation modal for moving one or many imported posts to trash.
  *
  * @param {DeletePostModalProps} props Component props.
  */
@@ -50,26 +60,42 @@ const DeletePostModal = ( {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
 
-	const post = items[ 0 ];
+	const isBulk = items.length > 1;
 
-	const handleDelete = () => {
+	const handleDelete = (): void => {
 		setIsLoading( true );
 		setError( null );
 
 		const formData = new FormData();
-		formData.append( 'action', 'safe_publish_delete_post' );
 		formData.append( 'nonce', nonce );
-		formData.append( 'post_id', post.id.toString() );
+
+		if ( isBulk ) {
+			formData.append( 'action', 'safe_publish_bulk_delete_posts' );
+			items.forEach( ( item ) =>
+				formData.append( 'post_ids[]', item.id.toString() )
+			);
+		} else {
+			formData.append( 'action', 'safe_publish_delete_post' );
+			formData.append( 'post_id', items[ 0 ].id.toString() );
+		}
 
 		fetch( ajaxurl, {
 			method: 'POST',
 			body: formData,
 			headers: { Accept: 'application/json; charset=utf-8' },
 		} )
-			.then( response => response.json() as Promise< ApiResponse > )
-			.then( result => {
+			.then(
+				( response ) =>
+					response.json() as Promise< ApiResponse< BulkDeleteResponse > >
+			)
+			.then( ( result ) => {
 				if ( ! result.success ) {
-					setError( getErrorMessage( result, __( 'Failed to delete', 'safe-publish' ) ) );
+					setError(
+						getErrorMessage(
+							result,
+							__( 'Failed to delete', 'safe-publish' )
+						)
+					);
 					setIsLoading( false );
 					return;
 				}
@@ -78,20 +104,36 @@ const DeletePostModal = ( {
 				setIsLoading( false );
 				closeModal?.();
 			} )
-			.catch( err => {
-				setError( err instanceof Error ? err.message : __( 'Unknown error occurred', 'safe-publish' ) );
+			.catch( ( err ) => {
+				setError(
+					err instanceof Error
+						? err.message
+						: __( 'Unknown error occurred', 'safe-publish' )
+				);
 				setIsLoading( false );
 			} );
 	};
 
+	const confirmationText = isBulk
+		? sprintf(
+				/* translators: %d is the number of selected posts */
+				__( 'Move %d selected posts to trash?', 'safe-publish' ),
+				items.length
+		  )
+		: sprintf(
+				/* translators: %s is the post title */
+				__( 'Move "%s" to trash?', 'safe-publish' ),
+				items[ 0 ].title
+		  );
+
 	return (
 		<VStack spacing="5">
-			<Text>
-				{ sprintf( /* translators: %s is the post title */
-					__( 'Move "%s" to trash?', 'safe-publish' ), post.title
-				) }
-			</Text>
-			{ error && <Text role="alert" style={ { color: '#d63638' } }>{ error }</Text> }
+			<Text>{ confirmationText }</Text>
+			{ error && (
+				<Text role="alert" style={ { color: '#d63638' } }>
+					{ error }
+				</Text>
+			) }
 			<HStack justify="right">
 				<Button
 					__next40pxDefaultSize
@@ -113,7 +155,9 @@ const DeletePostModal = ( {
 							<Spinner />
 							{ __( 'Deleting…', 'safe-publish' ) }
 						</>
-					) : __( 'Move to Trash', 'safe-publish' ) }
+					) : (
+						__( 'Move to Trash', 'safe-publish' )
+					) }
 				</Button>
 			</HStack>
 		</VStack>
