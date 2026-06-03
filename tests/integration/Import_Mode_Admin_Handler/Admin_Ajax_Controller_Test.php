@@ -1983,6 +1983,121 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the bulk-delete-posts endpoint trashes only the
+	 * requested imported posts and reports the count.
+	 */
+	public function test_ajax_bulk_delete_posts_trashes_requested_imports(): void {
+		// ARRANGE: Two imported posts; only one is targeted.
+		wp_set_current_user( $this->admin_user_id );
+
+		$target_id = $this->factory()->post->create();
+		update_post_meta( $target_id, Options::META_SOURCE_POST_ID, '101' );
+
+		$keeper_id = $this->factory()->post->create();
+		update_post_meta( $keeper_id, Options::META_SOURCE_POST_ID, '202' );
+
+		$_POST = array(
+			'nonce'    => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'post_ids' => array( (string) $target_id ),
+		);
+
+		// ACT: Trigger the bulk-delete handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_delete_posts' );
+
+		// ASSERT: Reported counts reflect the trash op.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 1, $response['data']['deleted'] );
+		$this->assertSame( 0, $response['data']['skipped'] );
+
+		// ASSERT: Targeted post is trashed; the other stays published.
+		$this->assertSame( 'trash', get_post_status( $target_id ) );
+		$this->assertSame( 'publish', get_post_status( $keeper_id ) );
+	}
+
+	/**
+	 * Verifies that the bulk-delete-posts endpoint skips posts that
+	 * aren't imported (no META_SOURCE_POST_ID), so it can't be coerced
+	 * into trashing native local content.
+	 */
+	public function test_ajax_bulk_delete_posts_skips_non_imported_posts(): void {
+		// ARRANGE: One imported post and one native post.
+		wp_set_current_user( $this->admin_user_id );
+
+		$imported_id = $this->factory()->post->create();
+		update_post_meta( $imported_id, Options::META_SOURCE_POST_ID, '303' );
+
+		$native_id = $this->factory()->post->create();
+
+		$_POST = array(
+			'nonce'    => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'post_ids' => array(
+				(string) $imported_id,
+				(string) $native_id,
+			),
+		);
+
+		// ACT: Trigger the bulk-delete handler with both ids.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_delete_posts' );
+
+		// ASSERT: Only the imported row counts as deleted; native is skipped.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 1, $response['data']['deleted'] );
+		$this->assertSame( 1, $response['data']['skipped'] );
+
+		// ASSERT: Native post is preserved; imported is trashed.
+		$this->assertSame( 'trash', get_post_status( $imported_id ) );
+		$this->assertSame( 'publish', get_post_status( $native_id ) );
+	}
+
+	/**
+	 * Verifies that the bulk-delete-posts endpoint refuses oversized
+	 * batches so a stray script can't enqueue thousands of trash ops.
+	 */
+	public function test_ajax_bulk_delete_posts_rejects_oversized_batch(): void {
+		// ARRANGE: A payload one over the documented cap.
+		wp_set_current_user( $this->admin_user_id );
+
+		$post_ids = range(
+			1,
+			Admin_Ajax_Controller::BULK_DELETE_POSTS_BATCH_MAX + 1
+		);
+
+		$_POST = array(
+			'nonce'    => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'post_ids' => array_map( 'strval', $post_ids ),
+		);
+
+		// ACT: Trigger the bulk-delete handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_delete_posts' );
+
+		// ASSERT: The response is an error mentioning the limit.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertFalse( $response['success'] );
+	}
+
+	/**
+	 * Verifies that the bulk-delete-posts endpoint rejects an empty
+	 * payload so a stray click can't trigger a no-op success.
+	 */
+	public function test_ajax_bulk_delete_posts_rejects_empty_payload(): void {
+		// ARRANGE: Authenticated request with no post_ids provided.
+		wp_set_current_user( $this->admin_user_id );
+
+		$_POST = array(
+			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+		);
+
+		// ACT: Trigger the bulk-delete handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_delete_posts' );
+
+		// ASSERT: The response is an error.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertFalse( $response['success'] );
+	}
+
+	/**
 	 * Counts items-table rows for a given id (0 or 1 in practice).
 	 *
 	 * @param int $item_id Items-table row id.
