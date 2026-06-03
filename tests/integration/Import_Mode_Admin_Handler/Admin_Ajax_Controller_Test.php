@@ -1860,6 +1860,152 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the delete-failures endpoint removes only the requested
+	 * rows, returning the deleted count so the client can refresh.
+	 */
+	public function test_ajax_delete_failed_imports_removes_selected_rows(): void {
+		// ARRANGE: A session with two failed items; only one is targeted.
+		wp_set_current_user( $this->admin_user_id );
+
+		$repository = new History_Repository();
+		$session_id = $repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		if ( is_wp_error( $session_id ) ) {
+			$this->fail( 'Failed to create the test import session.' );
+		}
+
+		$target_id = $this->insert_failed_import_item( $session_id, 'Targeted' );
+		$keeper_id = $this->insert_failed_import_item( $session_id, 'Untouched' );
+
+		$_POST = array(
+			'nonce'    => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'item_ids' => array( (string) $target_id ),
+		);
+
+		// ACT: Trigger the delete handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_delete_failed_imports' );
+
+		// ASSERT: Reported count matches what was removed.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertTrue( $response['success'], 'Delete should return success' );
+		$this->assertSame( 1, $response['data']['deleted'] );
+
+		// ASSERT: The targeted row is gone and the other failed row survives.
+		$this->assertSame( 0, $this->count_items_with_id( $target_id ) );
+		$this->assertSame( 1, $this->count_items_with_id( $keeper_id ) );
+	}
+
+	/**
+	 * Verifies that the delete-failures endpoint refuses to delete rows whose
+	 * status is anything other than 'error', even when their id is requested.
+	 */
+	public function test_ajax_delete_failed_imports_scopes_to_error_status(): void {
+		// ARRANGE: A successful (status='success') row and a failed one.
+		wp_set_current_user( $this->admin_user_id );
+
+		$post_id    = $this->factory()->post->create();
+		$repository = new History_Repository();
+		$session_id = $repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		if ( is_wp_error( $session_id ) ) {
+			$this->fail( 'Failed to create the test import session.' );
+		}
+
+		$success_id = $this->insert_import_item( $session_id, $post_id );
+		$failed_id  = $this->insert_failed_import_item( $session_id, 'Failed row' );
+
+		$_POST = array(
+			'nonce'    => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'item_ids' => array( (string) $success_id, (string) $failed_id ),
+		);
+
+		// ACT: Trigger the delete handler with both ids.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_delete_failed_imports' );
+
+		// ASSERT: Only the failed row counts as deleted.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertTrue( $response['success'], 'Delete should return success' );
+		$this->assertSame( 1, $response['data']['deleted'] );
+
+		// ASSERT: The success row is preserved despite being in the payload.
+		$this->assertSame( 1, $this->count_items_with_id( $success_id ) );
+		$this->assertSame( 0, $this->count_items_with_id( $failed_id ) );
+	}
+
+	/**
+	 * Verifies that the delete-failures endpoint refuses oversized batches so
+	 * a stray script can't produce a million-placeholder DELETE.
+	 */
+	public function test_ajax_delete_failed_imports_rejects_oversized_batch(): void {
+		// ARRANGE: A payload one over the documented cap.
+		wp_set_current_user( $this->admin_user_id );
+
+		$item_ids = range(
+			1,
+			Admin_Ajax_Controller::DELETE_FAILED_IMPORTS_BATCH_MAX + 1
+		);
+
+		$_POST = array(
+			'nonce'    => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'item_ids' => array_map( 'strval', $item_ids ),
+		);
+
+		// ACT: Trigger the delete handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_delete_failed_imports' );
+
+		// ASSERT: The response is an error mentioning the limit.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertFalse( $response['success'], 'Oversized batch should fail' );
+	}
+
+	/**
+	 * Verifies that the delete-failures endpoint rejects an empty payload so a
+	 * stray click can't trigger a no-op success.
+	 */
+	public function test_ajax_delete_failed_imports_rejects_empty_payload(): void {
+		// ARRANGE: Authenticated request with no item_ids provided.
+		wp_set_current_user( $this->admin_user_id );
+
+		$_POST = array(
+			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+		);
+
+		// ACT: Trigger the delete handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_delete_failed_imports' );
+
+		// ASSERT: The response is an error.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertFalse( $response['success'], 'Empty payload should fail' );
+	}
+
+	/**
+	 * Counts items-table rows for a given id (0 or 1 in practice).
+	 *
+	 * @param int $item_id Items-table row id.
+	 * @return int Number of matching rows.
+	 */
+	private function count_items_with_id( int $item_id ): int {
+		global $wpdb;
+
+		$table = Import_Items_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$count = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM `{$table}` WHERE id = %d",
+				$item_id
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return null !== $count ? (int) $count : 0;
+	}
+
+	/**
 	 * Inserts an import item row for the given session and post.
 	 *
 	 * @param int $session_id Owning session ID.

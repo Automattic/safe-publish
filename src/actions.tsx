@@ -10,6 +10,7 @@
 import { drafts, download, pencil, rotateLeft, seen, trash } from '@wordpress/icons';
 
 import BulkRollbackPostModal from './components/BulkRollbackPostModal';
+import DeleteFailedImportsModal from './components/DeleteFailedImportsModal';
 import DeletePostModal from './components/DeletePostModal';
 import ImportModal from './components/ImportModal';
 import PostDiffModal from './components/PostDiffModal';
@@ -18,6 +19,7 @@ import {
 	ApiResponse,
 	BulkImportResponse,
 	BulkImportResult,
+	FailedImport,
 	ImportedPost,
 	Post,
 } from './types';
@@ -57,6 +59,14 @@ export interface ImportedActionsContext {
 	ajaxurl: string;
 	nonce: string;
 	restNonce: string;
+}
+
+/**
+ * Auth context for the Imports → Failures tab action set.
+ */
+export interface FailedImportsActionsContext {
+	ajaxurl: string;
+	nonce: string;
 }
 
 /**
@@ -637,5 +647,42 @@ export const createImportedActions = (
 					onRefresh={ onRefresh }
 				/>
 			),
+	},
+];
+
+/**
+ * Creates DataViews actions for the Imports → Failures tab.
+ *
+ * Remove is the only action — a confirmation modal that hard-deletes the
+ * selected failed-import rows from the items table. Supports single and bulk
+ * via the same modal.
+ *
+ * @param {Function}                    onRefresh Callback to refresh the listing after a change.
+ * @param {FailedImportsActionsContext} context   Admin-ajax URL + nonce.
+ *
+ * @return {Action<FailedImport>[]} Array of DataViews actions.
+ */
+export const createFailedImportsActions = (
+	onRefresh: ( () => void ) | undefined,
+	context: FailedImportsActionsContext
+): Action< FailedImport >[] => [
+	{
+		id: 'remove-failed-import',
+		label: __( 'Remove', 'safe-publish' ),
+		icon: trash,
+		isDestructive: true,
+		isPrimary: true,
+		hideModalHeader: true,
+		modalFocusOnMount: 'firstContentElement',
+		supportsBulk: true,
+		RenderModal: ( { items, closeModal } ) => (
+			<DeleteFailedImportsModal
+				items={ items }
+				ajaxurl={ context.ajaxurl }
+				nonce={ context.nonce }
+				closeModal={ closeModal }
+				onRefresh={ onRefresh }
+			/>
+		),
 	},
 ];

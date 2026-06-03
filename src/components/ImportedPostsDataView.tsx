@@ -19,6 +19,7 @@
 import AuthStatusNotice from './AuthStatusNotice';
 import { ImportedPostsEmptyState } from './ImportedPostsEmptyState';
 import { useAuthStatus } from './hooks/useAuthStatus';
+import { useDelayedFlag } from './hooks/useDelayedFlag';
 import { getImportedSyncStatusLabel } from './post-fields';
 import { createImportedActions } from '../actions';
 import {
@@ -705,9 +706,8 @@ export function ImportedPostsDataView(): JSX.Element {
 		hasActiveFilters,
 	} );
 
-	// Refetch fires alongside the grid (unlike showLoading, which replaces
-	// it on first load) so filter/page/sort changes feel responsive.
-	const showRefetch = isLoading && hasFetchedOnce;
+	// Suppress "Updating…" when the refetch completes within a frame or two.
+	const showRefetch = useDelayedFlag( isLoading && hasFetchedOnce, 200 );
 
 	// Three-state pill text so the deep link's user doesn't see a confident
 	// "Viewing …" claim before the server confirms a match. In focus mode the
