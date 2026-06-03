@@ -113,6 +113,23 @@ export function FailedImportsDataView(): JSX.Element {
 		};
 	}, [ view.page, view.perPage, refreshNonce ] );
 
+	// Step back when a refresh empties a page past 1 — otherwise the grid
+	// unmounts on the empty page and pagination goes with it.
+	useEffect( () => {
+		if (
+			hasFetchedOnce &&
+			! isLoading &&
+			null === fetchError &&
+			0 === pageItems.length &&
+			( view.page ?? 1 ) > 1
+		) {
+			setView( ( current ) => ( {
+				...current,
+				page: Math.max( 1, ( current.page ?? 1 ) - 1 ),
+			} ) );
+		}
+	}, [ hasFetchedOnce, isLoading, fetchError, pageItems.length, view.page ] );
+
 	const fields: DataViewsField< FailedImport >[] = useMemo(
 		() => [
 			{
