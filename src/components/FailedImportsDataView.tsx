@@ -2,11 +2,13 @@
  * DataViews component for the Imports → Failures tab.
  *
  * Lists items with status 'error' from `safe_publish_list_failed_imports`.
- * Read-only — there's no local post to act on, and recovery is fixing the
- * source then re-importing from Source Posts.
+ * Recovery happens by fixing the source and re-importing from Source Posts;
+ * acknowledged failures can also be removed inline via the Remove action.
  *
  * @file This file defines the FailedImportsDataView component.
  */
+import { useDelayedFlag } from './hooks/useDelayedFlag';
+import { createFailedImportsActions } from '../actions';
 import { DEFAULT_ITEMS_PER_PAGE, LAYOUT_TABLE } from '../constants';
 import { formatDateTime, getErrorMessage } from '../utils';
 import { Notice, Spinner } from '@wordpress/components';
@@ -45,6 +47,7 @@ export function FailedImportsDataView(): JSX.Element {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ hasFetchedOnce, setHasFetchedOnce ] = useState( false );
 	const [ fetchError, setFetchError ] = useState< string | null >( null );
+	const [ refreshNonce, setRefreshNonce ] = useState( 0 );
 
 	useEffect( () => {
 		const controller = new AbortController();
@@ -108,7 +111,7 @@ export function FailedImportsDataView(): JSX.Element {
 		return () => {
 			controller.abort();
 		};
-	}, [ view.page, view.perPage ] );
+	}, [ view.page, view.perPage, refreshNonce ] );
 
 	const fields: DataViewsField< FailedImport >[] = useMemo(
 		() => [
@@ -202,10 +205,25 @@ export function FailedImportsDataView(): JSX.Element {
 		} );
 	}, [] );
 
+	const refresh = useCallback(
+		() => setRefreshNonce( ( nonce ) => nonce + 1 ),
+		[]
+	);
+	const actions = useMemo(
+		() =>
+			createFailedImportsActions( refresh, {
+				ajaxurl: window.safePublishAdminData.ajaxurl,
+				nonce: window.safePublishAdminData.nonce,
+			} ),
+		[ refresh ]
+	);
+
 	const showLoading = isLoading && ! hasFetchedOnce;
-	const showRefetch = isLoading && hasFetchedOnce;
 	const showEmptyState =
 		hasFetchedOnce && ! isLoading && 0 === pageItems.length && null === fetchError;
+
+	// Suppress "Updating…" when the refetch completes within a frame or two.
+	const showRefetch = useDelayedFlag( isLoading && hasFetchedOnce, 200 );
 
 	return (
 		<div
@@ -233,12 +251,7 @@ export function FailedImportsDataView(): JSX.Element {
 			) }
 			{ showEmptyState && (
 				<div className="safe-publish-no-data" role="status" aria-live="polite">
-					<p>
-						{ __(
-							'No failed imports. Errors from past imports appear here for reference.',
-							'safe-publish'
-						) }
-					</p>
+					<p>{ __( 'No failed imports.', 'safe-publish' ) }</p>
 				</div>
 			) }
 			{ showRefetch && (
@@ -260,7 +273,7 @@ export function FailedImportsDataView(): JSX.Element {
 					onChangeView={ handleViewChange }
 					paginationInfo={ paginationInfo }
 					defaultLayouts={ defaultLayouts }
-					actions={ [] }
+					actions={ actions }
 				/>
 			) }
 		</div>

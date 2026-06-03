@@ -61,6 +61,15 @@ final class Admin_Ajax_Controller {
 	const SYNC_STATUS_BATCH_MAX = 100;
 
 	/**
+	 * Maximum number of items accepted by ajax_delete_failed_imports in a
+	 * single call. Bounds the prepared statement so a stray script can't
+	 * produce a DELETE with a million placeholders.
+	 *
+	 * @var int
+	 */
+	const DELETE_FAILED_IMPORTS_BATCH_MAX = 100;
+
+	/**
 	 * Source Posts API instance.
 	 *
 	 * @var Source_Posts_API
@@ -125,6 +134,7 @@ final class Admin_Ajax_Controller {
 		add_action( 'wp_ajax_safe_publish_fetch_posts', array( $this, 'ajax_fetch_posts' ) );
 		add_action( 'wp_ajax_safe_publish_list_imported_posts', array( $this, 'ajax_list_imported_posts' ) );
 		add_action( 'wp_ajax_safe_publish_list_failed_imports', array( $this, 'ajax_list_failed_imports' ) );
+		add_action( 'wp_ajax_safe_publish_delete_failed_imports', array( $this, 'ajax_delete_failed_imports' ) );
 		add_action( 'wp_ajax_safe_publish_fetch_post_types', array( $this, 'ajax_fetch_post_types' ) );
 		add_action( 'wp_ajax_safe_publish_test_connection', array( $this, 'ajax_test_connection' ) );
 		add_action( 'wp_ajax_safe_publish_auth_status', array( $this, 'ajax_auth_status' ) );
@@ -315,8 +325,8 @@ final class Admin_Ajax_Controller {
 	 * Handles AJAX request for the Failures tab listing.
 	 *
 	 * Returns a page of items with status 'error' — failed imports that have no
-	 * local post — most recent first. Read-only; recovery happens by fixing the
-	 * source and re-importing from Source Posts.
+	 * local post — most recent first. Rows can be cleared from the tab via
+	 * {@see self::ajax_delete_failed_imports()}.
 	 */
 	public function ajax_list_failed_imports(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
@@ -355,6 +365,45 @@ final class Admin_Ajax_Controller {
 				'has_more' => $has_more,
 			)
 		);
+	}
+
+	/**
+	 * Handles AJAX request for removing failed imports.
+	 *
+	 * Takes a list of item ids and hard-deletes the matching rows scoped to
+	 * `status = 'error'` so the endpoint can't be coerced into removing success
+	 * or updated rows.
+	 */
+	public function ajax_delete_failed_imports(): void {
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		$this->verify_ajax_capability();
+
+		// Each element is downstream-sanitized via absint().
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$raw_ids = (array) wp_unslash( $_POST['item_ids'] ?? array() );
+
+		$item_ids = array_map( 'absint', $raw_ids );
+
+		if ( 0 === count( $item_ids ) ) {
+			wp_send_json_error( __( 'No items provided.', 'safe-publish' ) );
+		}
+
+		if ( count( $item_ids ) > self::DELETE_FAILED_IMPORTS_BATCH_MAX ) {
+			wp_send_json_error(
+				sprintf(
+					/* translators: %d: maximum number of items per batch */
+					__(
+						'Failed-import removal is limited to %d items at a time.',
+						'safe-publish'
+					),
+					self::DELETE_FAILED_IMPORTS_BATCH_MAX
+				)
+			);
+		}
+
+		$deleted = $this->repository->delete_failed_items( $item_ids );
+
+		wp_send_json_success( array( 'deleted' => $deleted ) );
 	}
 
 	/**
