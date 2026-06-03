@@ -28,6 +28,10 @@
 
 set -e
 
+# wp-env mounts the plugin under wp-content/plugins/<checkout dir name>,
+# which differs from the canonical slug in worktrees.
+PLUGIN_DIR="$(basename "$(git rev-parse --show-toplevel)")"
+
 SITE="source"
 PRESET=""
 FRESH_ARG=""
@@ -60,7 +64,7 @@ run_seeder() {
 	echo "Seeding $label site: $args"
 	# --use-include runs the file via include() instead of eval(), which is required
 	# for declare(strict_types=1) to be permitted (PHP disallows declare inside eval).
-	wp-env run "$container" --env-cwd=wp-content/plugins/compliant-content-publisher wp eval-file --use-include ./bin/seed-content.php $args
+	wp-env run "$container" --env-cwd="wp-content/plugins/$PLUGIN_DIR" wp eval-file --use-include ./bin/seed-content.php $args
 }
 
 run_preset_full() {
