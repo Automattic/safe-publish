@@ -21,6 +21,7 @@ import {
 	BulkImportResult,
 	FailedImport,
 	ImportedPost,
+	ImportSyncStatus,
 	Post,
 } from './types';
 import { getErrorMessage, renderWarningShortLabel } from './utils';
@@ -532,19 +533,22 @@ export const createActions = (
 /**
  * Creates DataViews actions for the Imports → Posts tab.
  *
- * Every modal-backed action — Update, Diff, Delete, Rollback (single + bulk) —
- * takes the row's explicit identity (source_post_id for Update/Diff, local id
- * for Delete, item_id for Rollback) plus the admin-ajax/REST auth tokens from
- * `context`. Edit opens the local editor.
+ * Edit opens the local editor. Rollback supports single and bulk paths;
+ * Update, Diff, and Delete are single-only modals. Each modal-backed
+ * action takes the row's explicit identity (source_post_id for
+ * Update/Diff, local id for Delete, item_id for Rollback) plus the
+ * admin-ajax/REST auth tokens from `context`.
  *
- * @param {Function}               onRefresh Callback to refresh the listing after a change.
- * @param {ImportedActionsContext} context   Admin-ajax URL + nonce + REST nonce.
+ * @param {Function}                        onRefresh    Callback to refresh the listing after a change.
+ * @param {ImportedActionsContext}          context      Admin-ajax URL + nonce + REST nonce.
+ * @param {Record<number,ImportSyncStatus>} syncStatuses Per-row sync verdict keyed by source post id.
  *
  * @return {Action<ImportedPost>[]} Array of DataViews actions.
  */
 export const createImportedActions = (
 	onRefresh: ( () => void ) | undefined,
-	context: ImportedActionsContext
+	context: ImportedActionsContext,
+	syncStatuses: Record< number, ImportSyncStatus >
 ): Action< ImportedPost >[] => [
 	{
 		id: 'edit-post',
@@ -566,6 +570,10 @@ export const createImportedActions = (
 		isPrimary: true,
 		hideModalHeader: true,
 		modalFocusOnMount: 'firstContentElement',
+		// Only hide Update when we know the row is up-to-date; loading and
+		// unreachable states still show it so the user can act on partial info.
+		isEligible: ( item: ImportedPost ) =>
+			'up-to-date' !== syncStatuses[ item.source_post_id ],
 		RenderModal: ( { items, closeModal } ) => {
 			const item = items[ 0 ];
 			return (

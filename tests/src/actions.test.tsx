@@ -144,7 +144,7 @@ describe( 'View in Imports action', () => {
 
 	it( 'is not exposed on the Imports → Posts tab itself', () => {
 		// ARRANGE: the Imports → Posts action set.
-		const importedActions = createImportedActions( undefined, IMPORTED_CONTEXT );
+		const importedActions = createImportedActions( undefined, IMPORTED_CONTEXT, {} );
 		// ACT + ASSERT: View in Imports doesn't loop the user back to the same tab.
 		expect( importedActions.find( ( a ) => a.id === 'view-in-imports' ) ).toBeUndefined();
 	} );
@@ -196,7 +196,7 @@ describe( 'View in Imports action', () => {
 } );
 
 describe( 'createImportedActions rollback action', () => {
-	const importedActions = createImportedActions( undefined, IMPORTED_CONTEXT );
+	const importedActions = createImportedActions( undefined, IMPORTED_CONTEXT, {} );
 
 	/**
 	 * Returns the rollback modal action, throwing if absent or not modal.

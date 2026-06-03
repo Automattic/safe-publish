@@ -16,6 +16,8 @@
  *
  * @file This file defines the ImportedPostsDataView component.
  */
+import { update } from '@wordpress/icons';
+
 import AuthStatusNotice from './AuthStatusNotice';
 import { ImportedPostsEmptyState } from './ImportedPostsEmptyState';
 import { useAuthStatus } from './hooks/useAuthStatus';
@@ -186,8 +188,9 @@ export function ImportedPostsDataView(): JSX.Element {
 		perPage: DEFAULT_ITEMS_PER_PAGE,
 		page: 1,
 		sort: { field: 'import_date_gmt', direction: 'desc' },
-		fields: [ 'permalink', 'sync_status', 'local_status', 'rolled_back', 'import_date_gmt' ],
+		fields: [ 'post_type', 'import_date_gmt', 'local_status', 'sync_status' ],
 		titleField: 'title',
+		layout: { density: 'compact' },
 	} );
 
 	const defaultLayouts = useMemo(
@@ -477,22 +480,26 @@ export function ImportedPostsDataView(): JSX.Element {
 				label: __( 'Title', 'safe-publish' ),
 				enableSorting: true,
 				render: ( { item }: { item: ImportedPost } ): JSX.Element => {
-					if ( '' !== item.edit_url ) {
-						return (
-							<a
-								href={ item.edit_url }
-								target="_blank"
-								rel="noreferrer"
-								aria-label={
-									/* translators: %s: post title */
-									sprintf( __( '%s (opens in new tab)', 'safe-publish' ), item.title )
-								}
-							>
-								{ item.title }
-							</a>
-						);
+					// Drafts return the source home URL — show plain text
+					// rather than a misleading link.
+					const path = extractUrlPath( item.source_link );
+					if ( '' === item.source_link || '/' === path ) {
+						return <span>{ item.title }</span>;
 					}
-					return <span>{ item.title }</span>;
+					return (
+						<a
+							href={ item.source_link }
+							target="_blank"
+							rel="noopener noreferrer"
+							title={ item.source_link }
+							aria-label={
+								/* translators: %s: post title */
+								sprintf( __( '%s (opens in new tab)', 'safe-publish' ), item.title )
+							}
+						>
+							{ item.title }
+						</a>
+					);
 				},
 			},
 			{
@@ -523,7 +530,7 @@ export function ImportedPostsDataView(): JSX.Element {
 				label: __( 'Local Status', 'safe-publish' ),
 				enableSorting: false,
 				elements: STATUS_FILTER_ELEMENTS,
-				filterBy: { operators: [ 'isAny' ] },
+				filterBy: { operators: [ 'isAny' ], isPrimary: true },
 				getValue: ( { item }: { item: ImportedPost } ): string =>
 					PUBLISH_STATUS_LABELS[ item.local_status ] ?? item.local_status,
 				render: ( { item }: { item: ImportedPost } ): JSX.Element => {
@@ -531,7 +538,7 @@ export function ImportedPostsDataView(): JSX.Element {
 						PUBLISH_STATUS_LABELS[ item.local_status ] ?? item.local_status;
 					const modifierClass = `safe-publish-status-badge--${ item.local_status }`;
 					return (
-						<span className={ `safe-publish-status-badge ${ modifierClass }` }>
+						<span className={ `safe-publish-status-badge safe-publish-status-badge--quiet ${ modifierClass }` }>
 							<span
 								className="safe-publish-status-badge__dot"
 								aria-hidden="true"
@@ -591,30 +598,6 @@ export function ImportedPostsDataView(): JSX.Element {
 					return <span>{ formatDateTime( `${ value.replace( ' ', 'T' ) }Z` ) }</span>;
 				},
 			},
-			{
-				id: 'permalink',
-				label: __( 'Permalink', 'safe-publish' ),
-				enableSorting: false,
-				getValue: ( { item }: { item: ImportedPost } ): string => item.source_link,
-				render: ( { item }: { item: ImportedPost } ): JSX.Element => {
-					// Drafts capture the source home URL (path '/'); show an
-					// em-dash rather than a misleading link.
-					const path = extractUrlPath( item.source_link );
-					if ( '' === item.source_link || '/' === path ) {
-						return <span>—</span>;
-					}
-					return (
-						<a
-							href={ item.source_link }
-							target="_blank"
-							rel="noopener noreferrer"
-							title={ item.source_link }
-						>
-							{ path }
-						</a>
-					);
-				},
-			},
 		],
 		[ facets, syncStatuses ]
 	);
@@ -642,12 +625,16 @@ export function ImportedPostsDataView(): JSX.Element {
 
 	const actions = useMemo(
 		() =>
-			createImportedActions( refresh, {
-				ajaxurl: window.safePublishAdminData.ajaxurl,
-				nonce: window.safePublishAdminData.nonce,
-				restNonce: window.safePublishAdminData.restNonce,
-			} ),
-		[ refresh ]
+			createImportedActions(
+				refresh,
+				{
+					ajaxurl: window.safePublishAdminData.ajaxurl,
+					nonce: window.safePublishAdminData.nonce,
+					restNonce: window.safePublishAdminData.restNonce,
+				},
+				syncStatuses
+			),
+		[ refresh, syncStatuses ]
 	);
 
 	const clearBatch = useCallback( (): void => {
@@ -819,6 +806,16 @@ export function ImportedPostsDataView(): JSX.Element {
 					defaultLayouts={ defaultLayouts }
 					actions={ actions }
 					searchLabel={ __( 'Search by title', 'safe-publish' ) }
+					header={
+						<Button
+							variant="tertiary"
+							isBusy={ isLoading }
+							disabled={ isLoading }
+							icon={ update }
+							label={ __( 'Refresh', 'safe-publish' ) }
+							onClick={ refresh }
+						/>
+					}
 				/>
 			) }
 		</div>
