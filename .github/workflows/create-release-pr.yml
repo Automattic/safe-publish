@@ -1,0 +1,71 @@
+name: Create release PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: Version bump to release
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  create_release_pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Run release script
+        id: release
+        run: |
+          npm run release -- "${{ inputs.release_type }}"
+
+          VERSION=$(node -p "require('./package.json').version")
+          BRANCH="release/v${VERSION}"
+
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Push release branch
+        run: >
+          git push --set-upstream origin
+          "${{ steps.release.outputs.branch }}"
+
+      - name: Create pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BODY: >
+            Automates the release version bump for
+            v${{ steps.release.outputs.version }}.
+        run: |
+          gh pr create \
+            --base trunk \
+            --head "${{ steps.release.outputs.branch }}" \
+            --title "v${{ steps.release.outputs.version }}" \
+            --body "$PR_BODY"
