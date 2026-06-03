@@ -112,12 +112,45 @@ final class Plugin {
 		);
 
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
+		add_filter(
+			'vip_pendo_allowed_screens',
+			array( $this, 'register_pendo_screens' )
+		);
 
 		if ( $can_import ) {
 			$this->init_full_admin();
 		} else {
 			$this->init_settings_only_admin( $can_export );
 		}
+	}
+
+	/**
+	 * Registers the plugin's admin screens with VIP Pendo telemetry.
+	 *
+	 * Registered here rather than in a menu class because the screens span
+	 * both admin modes: the import-mode menu lives in Admin_Menu_Manager while
+	 * the export-only top-level page lives in this class, so neither owns the
+	 * full list. The "Source Posts" submenu reuses the `safe-publish` slug, so
+	 * it shares the top-level hook suffix and needs no separate entry. The
+	 * Exports submenu resolves to `safe-publish_page_safe-publish-exports` in
+	 * both modes because WordPress builds the suffix from the sanitized parent
+	 * menu title ("Safe Publish"), not the parent slug. Screens absent in the
+	 * active mode simply never match the current hook suffix.
+	 *
+	 * @param string[] $allowed_screens Hook suffixes where Pendo is enabled.
+	 * @return string[] Filtered list including the plugin's admin screens.
+	 */
+	public function register_pendo_screens( array $allowed_screens ): array {
+		return array_merge(
+			$allowed_screens,
+			array(
+				'toplevel_page_safe-publish',
+				'toplevel_page_safe-publish-settings',
+				'safe-publish_page_safe-publish-imports',
+				'safe-publish_page_safe-publish-settings',
+				'safe-publish_page_safe-publish-exports',
+			)
+		);
 	}
 
 	/**

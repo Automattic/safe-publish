@@ -73,4 +73,29 @@ class PluginTest extends TestCase {
 		$safe_publish_api = $this->plugin->get_safe_publish_api();
 		$this->assertInstanceOf( \Safe_Publish\API\Safe_Publish_API::class, $safe_publish_api );
 	}
+
+	/**
+	 * Verifies that the plugin's admin screens are appended to the Pendo
+	 * allowed-screens list, preserving any screens registered by other sources.
+	 */
+	public function test_register_pendo_screens_appends_plugin_screens(): void {
+		// ARRANGE: an existing allow-list from another telemetry consumer.
+		$existing = array( 'plugins.php' );
+
+		// ACT: register the plugin's admin screens.
+		$result = $this->plugin->register_pendo_screens( $existing );
+
+		// ASSERT: the original screen is kept and every plugin screen is added.
+		$this->assertSame(
+			array(
+				'plugins.php',
+				'toplevel_page_safe-publish',
+				'toplevel_page_safe-publish-settings',
+				'safe-publish_page_safe-publish-imports',
+				'safe-publish_page_safe-publish-settings',
+				'safe-publish_page_safe-publish-exports',
+			),
+			$result
+		);
+	}
 }
