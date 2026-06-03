@@ -12,6 +12,7 @@ import { chevronDown, update } from '@wordpress/icons';
 
 import AuthStatusNotice from './AuthStatusNotice';
 import { useAuthStatus } from './hooks/useAuthStatus';
+import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 import {
 	getPostTypeLabel,
 	getPublishStatusLabel,
@@ -424,6 +425,22 @@ export function SourcePostsDataView( {
 		// is safe.
 		setView( ( current ) => ( { ...current, ...next, page: 1 } as View ) );
 	}, [] );
+
+	const setPage = useCallback(
+		( next: number ): void =>
+			setView( ( current ) => ( { ...current, page: next } ) ),
+		[]
+	);
+
+	// Upstream deletions can shrink the listing past the current page.
+	useStepBackWhenPageEmpties( {
+		hasFetchedOnce,
+		isLoading: isLoadingPosts,
+		fetchError,
+		isEmpty: 0 === pagePosts.length,
+		page: view.page,
+		setPage,
+	} );
 
 	const handleSearchChange = ( raw: string ): void => {
 		setSearchTerm( raw );
