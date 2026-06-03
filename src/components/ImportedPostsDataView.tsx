@@ -202,9 +202,6 @@ export function ImportedPostsDataView(): JSX.Element {
 	const [ facets, setFacets ] = useState< ImportedPostsFacets >( {
 		post_types: [],
 	} );
-	// Sent by the listing endpoint on first load alongside facets, so the
-	// empty state can surface "see Failures" without a separate roundtrip.
-	const [ failedCount, setFailedCount ] = useState< number | null >( null );
 	const [ debouncedSearch, setDebouncedSearch ] = useState( '' );
 	const [ hasRenderedGrid, setHasRenderedGrid ] = useState( false );
 	const [ syncStatuses, setSyncStatuses ] = useState<
@@ -322,9 +319,6 @@ export function ImportedPostsDataView(): JSX.Element {
 					if ( result.data.facets ) {
 						setFacets( result.data.facets );
 						facetsLoadedRef.current = true;
-					}
-					if ( 'number' === typeof result.data.failed_count ) {
-						setFailedCount( result.data.failed_count );
 					}
 				} else {
 					setFetchError(
@@ -715,16 +709,6 @@ export function ImportedPostsDataView(): JSX.Element {
 	// it on first load) so filter/page/sort changes feel responsive.
 	const showRefetch = isLoading && hasFetchedOnce;
 
-	// Stable for the lifetime of the mount — derived from the URL the page
-	// was loaded with, so the empty-state link routes through ImportsApp's
-	// own ?tab=... handling.
-	const failuresHref = useMemo( (): string => {
-		const url = new URL( window.location.href );
-		url.searchParams.set( 'tab', 'failures' );
-		url.searchParams.delete( 'batch' );
-		return url.toString();
-	}, [] );
-
 	// Three-state pill text so the deep link's user doesn't see a confident
 	// "Viewing …" claim before the server confirms a match. In focus mode the
 	// server returns just the resolved row (or none), so pageItems[0] carries
@@ -794,8 +778,6 @@ export function ImportedPostsDataView(): JSX.Element {
 			{ showEmptyState && (
 				<ImportedPostsEmptyState
 					sourcePostsUrl={ window.safePublishAdminData?.sourcePostsUrl }
-					failedCount={ failedCount }
-					failuresHref={ failuresHref }
 				/>
 			) }
 			{ showRefetch && (
