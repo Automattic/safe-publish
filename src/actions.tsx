@@ -2,8 +2,8 @@
  * Action definitions for the DataViews component.
  *
  * Defines actions for Source Posts (Import single + bulk, View in Imports for
- * already-imported items) and for the Imports → Posts tab (Edit, Update, Diff,
- * Delete, Rollback).
+ * already-imported items) and for the Imports → Posts tab (Edit, Update,
+ * Compare, Delete, Rollback).
  *
  * @file This file defines DataViews actions for the Safe Publish plugin.
  */
@@ -152,9 +152,9 @@ export const createActions = (
  * Creates DataViews actions for the Imports → Posts tab.
  *
  * Edit opens the local editor. Update / Delete / Rollback all support
- * single and bulk paths; Diff is single-only because a diff is
+ * single and bulk paths; Compare is single-only because a diff is
  * intrinsically per-row. Each modal-backed action takes the row's
- * explicit identity (source_post_id for Update/Diff, local id for
+ * explicit identity (source_post_id for Update/Compare, local id for
  * Delete, item_id for Rollback) plus the admin-ajax/REST auth tokens
  * from `context`.
  *
@@ -260,7 +260,7 @@ export const createImportedActions = (
 	},
 	{
 		id: 'post-diff',
-		label: __( 'Post Diff', 'safe-publish' ),
+		label: __( 'Compare', 'safe-publish' ),
 		icon: drafts,
 		hideModalHeader: false,
 		supportsBulk: false,

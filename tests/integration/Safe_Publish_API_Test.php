@@ -436,6 +436,61 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that diff-preview resolves a private local post. Regression:
+	 * the source-ID lookup hard-coded draft/publish/pending and 404'd on any
+	 * other status. Asserting private alone is sufficient now that the
+	 * query uses 'any'.
+	 */
+	public function test_diff_preview_resolves_private_post(): void {
+		// ARRANGE: Switch the fixture to private, stub the source fetch,
+		// and authenticate as admin.
+		wp_update_post(
+			array(
+				'ID'          => $this->post_id,
+				'post_status' => 'private',
+			)
+		);
+		$this->assertSame(
+			'private',
+			get_post_status( $this->post_id ),
+			'Fixture should be private before exercising the endpoint'
+		);
+		wp_set_current_user( $this->admin_user_id );
+		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
+
+		$stub_source_fetch = static fn() => array(
+			'response' => array( 'code' => 200 ),
+			'body'     => wp_json_encode(
+				array(
+					'title'   => array( 'raw' => 'Source Title' ),
+					'content' => array( 'raw' => '<p>Source content.</p>' ),
+					'excerpt' => array( 'raw' => 'Source excerpt.' ),
+				)
+			),
+		);
+		add_filter( 'pre_http_request', $stub_source_fetch );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+
+		try {
+			// ACT: Dispatch through the REST server.
+			$response = $this->server->dispatch( $request );
+
+			// ASSERT: The status filter no longer hides private posts.
+			$this->assertInstanceOf( WP_REST_Response::class, $response );
+			$this->assertSame(
+				200,
+				$response->get_status(),
+				'Should return 200 for private post'
+			);
+		} finally {
+			remove_filter( 'pre_http_request', $stub_source_fetch );
+		}
+	}
+
+	/**
 	 * Verifies that diff-preview returns 400 when postId is not a positive
 	 * integer.
 	 *

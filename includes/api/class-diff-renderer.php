@@ -174,7 +174,7 @@ final class Diff_Renderer {
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'     => $source_post_id,
 				'post_type'      => $post_type,
-				'post_status'    => array( 'draft', 'publish', 'pending' ),
+				'post_status'    => 'any',
 				'posts_per_page' => 1,
 				'fields'         => 'all',
 			)
