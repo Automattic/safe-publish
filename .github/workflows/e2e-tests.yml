@@ -14,7 +14,7 @@ jobs:
   e2e-tests:
     runs-on: ubuntu-22.04
     env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+      PLAYWRIGHT_BROWSERS_PATH: /tmp/ms-playwright
     steps:
       - uses: actions/checkout@v4
 
