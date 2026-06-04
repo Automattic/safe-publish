@@ -40,15 +40,11 @@ Optionally, it's possible to use [VIP Basic Authentication](https://docs.wpvip.c
 
 ## Configuration Constants
 
-Each connection setting can be defined as a PHP constant in `wp-config.php`
-instead of being saved through the settings screen. When a constant is
-defined it overrides the stored value at runtime.
+On WordPress VIP, you do not normally set these by hand — the Integration Center manages Safe Publish configuration for the environment. The constants below apply when running the plugin outside that managed configuration, such as a self-hosted or local install.
 
-The settings screen shows the resolved values for the URL, sync mode, and
-Basic Auth username, but those fields remain editable. The Basic Auth
-password is handled differently: when `SAFE_PUBLISH_BASIC_AUTH_PASSWORD` is
-defined, the password field shows "Configured externally" and becomes
-read-only so the secret is not rendered into the page.
+Each connection setting can be defined as a PHP constant in `wp-config.php` instead of being saved through the settings screen. When a constant is defined it overrides the stored value at runtime.
+
+The settings screen shows the resolved values for the URL, sync mode, and Basic Auth username, but those fields remain editable. The Basic Auth password is handled differently: when `SAFE_PUBLISH_BASIC_AUTH_PASSWORD` is defined, the password field shows "Configured externally" and becomes read-only so the secret is not rendered into the page.
 
 | Constant                           | Setting                                     |
 | ---------------------------------- | ------------------------------------------- |
@@ -57,16 +53,9 @@ read-only so the secret is not rendered into the page.
 | `SAFE_PUBLISH_BASIC_AUTH_USERNAME` | Basic Auth username for the source site.    |
 | `SAFE_PUBLISH_BASIC_AUTH_PASSWORD` | Basic Auth password for the source site.    |
 
-All connection-setting constants must be strings. `SAFE_PUBLISH_SYNC_MODE`
-must also be one of the three valid modes. Invalid constants are ignored and
-reported via `_doing_it_wrong()`.
+All connection-setting constants must be strings. `SAFE_PUBLISH_SYNC_MODE` must also be one of the three valid modes. Invalid constants are ignored and reported via `_doing_it_wrong()`.
 
-The shared secret is configured separately with
-`SAFE_PUBLISH_SHARED_SECRET`, which can be defined as a constant or provided
-as an environment variable.
-
-On WordPress VIP, follow the Integration Center-managed configuration for the
-environment when it is available instead of hand-defining these constants.
+The shared secret is configured separately with `SAFE_PUBLISH_SHARED_SECRET`, which can be defined as a constant or provided as an environment variable.
 
 ## Troubleshooting
 
