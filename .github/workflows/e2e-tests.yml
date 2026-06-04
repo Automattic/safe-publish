@@ -37,6 +37,9 @@ jobs:
         run: npm run build
 
       - name: Install Playwright browser
+        timeout-minutes: 5
+        env:
+          DEBUG: pw:install
         run: npx playwright install chromium
 
       - name: Start WordPress environment
