@@ -12,9 +12,7 @@ concurrency:
 
 jobs:
   e2e-tests:
-    runs-on: ubuntu-22.04
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: /tmp/ms-playwright
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -42,10 +40,7 @@ jobs:
         run: npm run build
 
       - name: Install Playwright browser
-        timeout-minutes: 2
-        env:
-          DEBUG: pw:install
-        run: npx playwright install chromium
+        run: npx playwright install chromium --with-deps
 
       - name: End-to-end tests
         env:
