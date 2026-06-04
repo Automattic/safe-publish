@@ -161,13 +161,27 @@ export type ImportSyncStatus =
 	| 'loading';
 
 /**
+ * Per-row entry in the sync-status batch response.
+ *
+ * `modified_gmt` is set only for `outdated` and `up-to-date` — i.e., when
+ * the source returned a parseable timestamp.
+ *
+ * @property {string} status         One of up-to-date, outdated, missing, unreachable, invalid.
+ * @property {string} [modified_gmt] Source post's last modification time in ISO 8601 UTC.
+ */
+export interface SyncStatusEntry {
+	status: Exclude< ImportSyncStatus, 'loading' >;
+	modified_gmt?: string;
+}
+
+/**
  * Envelope returned by safe_publish_sync_status_batch.
  *
  * Keys are source post IDs; absent IDs (e.g. the destination has no matching
  * local post for a requested ID) are simply omitted.
  */
 export interface SyncStatusBatchResponse {
-	statuses: Record< number, Exclude< ImportSyncStatus, 'loading' > >;
+	statuses: Record< number, SyncStatusEntry >;
 }
 
 /**

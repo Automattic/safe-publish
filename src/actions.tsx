@@ -2,8 +2,8 @@
  * Action definitions for the DataViews component.
  *
  * Defines actions for Source Posts (Import single + bulk, View in Imports for
- * already-imported items) and for the Imports → Posts tab (Edit, Update, Diff,
- * Delete, Rollback).
+ * already-imported items) and for the Imports → Posts tab (Edit, Update,
+ * Compare, Delete, Rollback).
  *
  * @file This file defines DataViews actions for the Safe Publish plugin.
  */
@@ -152,22 +152,22 @@ export const createActions = (
  * Creates DataViews actions for the Imports → Posts tab.
  *
  * Edit opens the local editor. Update / Delete / Rollback all support
- * single and bulk paths; Diff is single-only because a diff is
+ * single and bulk paths; Compare is single-only because a diff is
  * intrinsically per-row. Each modal-backed action takes the row's
- * explicit identity (source_post_id for Update/Diff, local id for
+ * explicit identity (source_post_id for Update/Compare, local id for
  * Delete, item_id for Rollback) plus the admin-ajax/REST auth tokens
  * from `context`.
  *
- * @param {Function}                        onRefresh    Callback to refresh the listing after a change.
- * @param {ImportedActionsContext}          context      Admin-ajax URL + nonce + REST nonce.
- * @param {Record<number,ImportSyncStatus>} syncStatuses Per-row sync verdict keyed by source post id.
+ * @param {Function}               onRefresh    Callback to refresh the listing after a change.
+ * @param {ImportedActionsContext} context      Admin-ajax URL + nonce + REST nonce.
+ * @param {Object}                 syncStatuses Per-row sync entries keyed by source post id.
  *
  * @return {Action<ImportedPost>[]} Array of DataViews actions.
  */
 export const createImportedActions = (
 	onRefresh: ( () => void ) | undefined,
 	context: ImportedActionsContext,
-	syncStatuses: Record< number, ImportSyncStatus >
+	syncStatuses: Record< number, { status: ImportSyncStatus } >
 ): Action< ImportedPost >[] => [
 	{
 		id: 'edit-post',
@@ -193,7 +193,7 @@ export const createImportedActions = (
 		// Only hide Update when we know the row is up-to-date; loading and
 		// unreachable states still show it so the user can act on partial info.
 		isEligible: ( item: ImportedPost ) =>
-			'up-to-date' !== syncStatuses[ item.source_post_id ],
+			'up-to-date' !== syncStatuses[ item.source_post_id ]?.status,
 		RenderModal: ( { items, closeModal } ) => {
 			if ( 1 === items.length ) {
 				const item = items[ 0 ];
@@ -260,7 +260,7 @@ export const createImportedActions = (
 	},
 	{
 		id: 'post-diff',
-		label: __( 'Post Diff', 'safe-publish' ),
+		label: __( 'Compare', 'safe-publish' ),
 		icon: drafts,
 		hideModalHeader: false,
 		supportsBulk: false,
