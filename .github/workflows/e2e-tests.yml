@@ -13,6 +13,8 @@ concurrency:
 jobs:
   e2e-tests:
     runs-on: ubuntu-22.04
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
     steps:
       - uses: actions/checkout@v4
 
@@ -37,7 +39,7 @@ jobs:
         run: npm run build
 
       - name: Install Playwright browser
-        timeout-minutes: 5
+        timeout-minutes: 2
         env:
           DEBUG: pw:install
         run: npx playwright install chromium
