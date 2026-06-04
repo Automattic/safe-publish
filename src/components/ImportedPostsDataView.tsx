@@ -30,7 +30,13 @@ import {
 	LAYOUT_TABLE,
 	SEARCH_DEBOUNCE_MS,
 } from '../constants';
-import { extractUrlPath, formatDateTime, getErrorMessage, PUBLISH_STATUS_LABELS } from '../utils';
+import {
+	composeOutdatedLabel,
+	extractUrlPath,
+	formatDateTime,
+	getErrorMessage,
+	PUBLISH_STATUS_LABELS,
+} from '../utils';
 import { Button, Notice, Spinner } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
 import { useState, useEffect, useMemo, useCallback, useRef } from '@wordpress/element';
@@ -210,7 +216,7 @@ export function ImportedPostsDataView(): JSX.Element {
 	const [ debouncedSearch, setDebouncedSearch ] = useState( '' );
 	const [ hasRenderedGrid, setHasRenderedGrid ] = useState( false );
 	const [ syncStatuses, setSyncStatuses ] = useState<
-		Record< number, ImportSyncStatus >
+		Record< number, { status: ImportSyncStatus; modified_gmt?: string } >
 	>( {} );
 
 	const authStatus = useAuthStatus();
@@ -408,7 +414,7 @@ export function ImportedPostsDataView(): JSX.Element {
 			const next = { ...current };
 			// id is a server-supplied numeric key.
 			// eslint-disable-next-line security/detect-object-injection
-			sourceIds.forEach( ( id ) => { next[ id ] = 'loading'; } );
+			sourceIds.forEach( ( id ) => { next[ id ] = { status: 'loading' }; } );
 			return next;
 		} );
 
@@ -417,7 +423,7 @@ export function ImportedPostsDataView(): JSX.Element {
 				const next = { ...current };
 				// id is a server-supplied numeric key.
 				// eslint-disable-next-line security/detect-object-injection
-				sourceIds.forEach( ( id ) => { next[ id ] = verdict; } );
+				sourceIds.forEach( ( id ) => { next[ id ] = { status: verdict }; } );
 				return next;
 			} );
 		};
@@ -453,7 +459,7 @@ export function ImportedPostsDataView(): JSX.Element {
 					sourceIds.forEach( ( id ) => {
 						// id is a server-supplied numeric key.
 						// eslint-disable-next-line security/detect-object-injection
-						next[ id ] = result.data.statuses[ id ] ?? 'unreachable';
+						next[ id ] = result.data.statuses[ id ] ?? { status: 'unreachable' };
 					} );
 					return next;
 				} );
@@ -508,10 +514,14 @@ export function ImportedPostsDataView(): JSX.Element {
 				enableSorting: false,
 				getValue: ( { item }: { item: ImportedPost } ): string =>
 					getImportedSyncStatusLabel(
-						syncStatuses[ item.source_post_id ] ?? null
+						syncStatuses[ item.source_post_id ]?.status ?? null
 					),
 				render: ( { item }: { item: ImportedPost } ): JSX.Element => {
-					const status = syncStatuses[ item.source_post_id ] ?? 'loading';
+					const entry = syncStatuses[ item.source_post_id ];
+					const status = entry?.status ?? 'loading';
+					const label = 'outdated' === status && entry?.modified_gmt
+						? composeOutdatedLabel( entry.modified_gmt )
+						: getImportedSyncStatusLabel( status );
 					return (
 						<span
 							className={ `safe-publish-status-badge safe-publish-status-badge--${ status }` }
@@ -520,7 +530,7 @@ export function ImportedPostsDataView(): JSX.Element {
 								className="safe-publish-status-badge__dot"
 								aria-hidden="true"
 							/>
-							{ getImportedSyncStatusLabel( status ) }
+							{ label }
 						</span>
 					);
 				},

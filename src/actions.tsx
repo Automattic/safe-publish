@@ -158,16 +158,16 @@ export const createActions = (
  * Delete, item_id for Rollback) plus the admin-ajax/REST auth tokens
  * from `context`.
  *
- * @param {Function}                        onRefresh    Callback to refresh the listing after a change.
- * @param {ImportedActionsContext}          context      Admin-ajax URL + nonce + REST nonce.
- * @param {Record<number,ImportSyncStatus>} syncStatuses Per-row sync verdict keyed by source post id.
+ * @param {Function}               onRefresh    Callback to refresh the listing after a change.
+ * @param {ImportedActionsContext} context      Admin-ajax URL + nonce + REST nonce.
+ * @param {Object}                 syncStatuses Per-row sync entries keyed by source post id.
  *
  * @return {Action<ImportedPost>[]} Array of DataViews actions.
  */
 export const createImportedActions = (
 	onRefresh: ( () => void ) | undefined,
 	context: ImportedActionsContext,
-	syncStatuses: Record< number, ImportSyncStatus >
+	syncStatuses: Record< number, { status: ImportSyncStatus } >
 ): Action< ImportedPost >[] => [
 	{
 		id: 'edit-post',
@@ -193,7 +193,7 @@ export const createImportedActions = (
 		// Only hide Update when we know the row is up-to-date; loading and
 		// unreachable states still show it so the user can act on partial info.
 		isEligible: ( item: ImportedPost ) =>
-			'up-to-date' !== syncStatuses[ item.source_post_id ],
+			'up-to-date' !== syncStatuses[ item.source_post_id ]?.status,
 		RenderModal: ( { items, closeModal } ) => {
 			if ( 1 === items.length ) {
 				const item = items[ 0 ];
