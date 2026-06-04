@@ -271,6 +271,9 @@ export const createImportedActions = (
 				restNonce={ context.restNonce }
 				ajaxurl={ context.ajaxurl }
 				nonce={ context.nonce }
+				syncStatus={
+					syncStatuses[ items[ 0 ].source_post_id ]?.status
+				}
 				closeModal={ closeModal }
 				onRefresh={ onRefresh }
 			/>

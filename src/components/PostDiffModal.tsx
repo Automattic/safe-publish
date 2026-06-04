@@ -12,7 +12,7 @@ import DiffViewSelector from './DiffViewSelector';
 import NonContentDiffSections from './NonContentDiffSections';
 import { useDiffPreview } from './hooks/useDiffPreview';
 import { useImportPost } from './hooks/useImportPost';
-import { ImportedPost } from '../types';
+import { ImportedPost, ImportSyncStatus } from '../types';
 import { renderWarningMessage } from '../utils';
 import {
 	Button,
@@ -27,18 +27,20 @@ import { __, sprintf } from '@wordpress/i18n';
 /**
  * Props for the PostDiffModal component.
  *
- * @property {ImportedPost[]} items      Array containing the single row to diff.
- * @property {string}         restNonce  REST API nonce for the diff endpoint.
- * @property {string}         ajaxurl    WordPress admin-ajax URL (for Update Post).
- * @property {string}         nonce      AJAX nonce for the create-draft endpoint.
- * @property {Function}       closeModal Callback to close the modal.
- * @property {Function}       onRefresh  Callback to refresh the listing after an update.
+ * @property {ImportedPost[]}               items      Array containing the single row to diff.
+ * @property {string}                       restNonce  REST API nonce for the diff endpoint.
+ * @property {string}                       ajaxurl    WordPress admin-ajax URL (for Update Post).
+ * @property {string}                       nonce      AJAX nonce for the create-draft endpoint.
+ * @property {ImportSyncStatus | undefined} syncStatus Row's sync verdict; gates the Update Post button.
+ * @property {Function}                     closeModal Callback to close the modal.
+ * @property {Function}                     onRefresh  Callback to refresh the listing after an update.
  */
 interface PostDiffModalProps {
 	items: ImportedPost[];
 	restNonce: string;
 	ajaxurl: string;
 	nonce: string;
+	syncStatus: ImportSyncStatus | undefined;
 	closeModal?: () => void;
 	onRefresh?: () => void;
 }
@@ -58,6 +60,7 @@ export default function PostDiffModal( {
 	restNonce,
 	ajaxurl,
 	nonce,
+	syncStatus,
 	closeModal,
 	onRefresh,
 }: PostDiffModalProps ): JSX.Element {
@@ -96,6 +99,8 @@ export default function PostDiffModal( {
 	const [ showRenderedDiff, setShowRenderedDiff ] = useState( true );
 
 	const updateSucceeded = null !== editUrl;
+	// Mirror the Update menu item's gating in actions.tsx.
+	const isUpToDate = 'up-to-date' === syncStatus;
 
 	return (
 		<VStack>
@@ -185,7 +190,7 @@ export default function PostDiffModal( {
 
 			<HStack justify="right">
 				{ updateError && <Text style={ { color: '#d63638' } }>{ updateError }</Text> }
-				{ ! error && ! updateSucceeded && (
+				{ ! error && ! updateSucceeded && ! isUpToDate && (
 					<Button
 						__next40pxDefaultSize
 						variant="primary"
