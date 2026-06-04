@@ -33,14 +33,14 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Start WordPress environment
-        run: npx wp-env start
-
       - name: Build plugin
         run: npm run build
 
       - name: Install Playwright browser
         run: npx playwright install chromium
+
+      - name: Start WordPress environment
+        run: npx wp-env start
 
       - name: End-to-end tests
         env:
