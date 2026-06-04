@@ -13,7 +13,6 @@ Require a WordPress user with `edit_post` capability for the target post.
 | Method | Endpoint                                | Description                      |
 | ------ | --------------------------------------- | -------------------------------- |
 | `POST` | `/wp-json/safe-publish/v1/diff-preview` | Render a diff preview for a post |
-| `POST` | `/wp-json/safe-publish/v1/update-post`  | Apply imported content to a post |
 
 ### Source Endpoints
 
@@ -31,14 +30,14 @@ Registered only on source-mode installs. HMAC-authenticated; called by the desti
 Content endpoints are called from the WordPress admin UI and use **cookie authentication** with a nonce — no additional setup needed.
 
 ```javascript
-fetch('/wp-json/safe-publish/v1/update-post', {
+fetch('/wp-json/safe-publish/v1/diff-preview', {
   method: 'POST',
   credentials: 'include',
   headers: {
     'Content-Type': 'application/json',
     'X-WP-Nonce': wpApiSettings.nonce
   },
-  body: JSON.stringify({ postId: 123, content: '...' })
+  body: JSON.stringify({ postId: 123, postType: 'post' })
 });
 ```
 

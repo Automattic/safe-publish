@@ -33,8 +33,6 @@ interface UseDiffPreviewParams {
  * @property {string | null}                        renderedDiffHtml Rendered diff HTML.
  * @property {BlockDiff[]}                          blockDiffs       Block-level diffs.
  * @property {DiffPreviewResult['nonContentDiffs']} nonContentDiffs  Non-content field diffs.
- * @property {DiffPreviewResult['incoming']}        incoming         Incoming post data.
- * @property {number}                               localPostId      Local post ID.
  * @property {boolean}                              isLoading        Whether diff is loading.
  * @property {string | null}                        error            Error message if fetch failed.
  */
@@ -43,8 +41,6 @@ interface UseDiffPreviewResult {
 	renderedDiffHtml: string | null;
 	blockDiffs: BlockDiff[];
 	nonContentDiffs: DiffPreviewResult['nonContentDiffs'];
-	incoming: DiffPreviewResult['incoming'];
-	localPostId: number;
 	isLoading: boolean;
 	error: string | null;
 }
@@ -65,8 +61,6 @@ export function useDiffPreview( {
 	const [ renderedDiffHtml, setRenderedDiffHtml ] = useState< string | null >( null );
 	const [ blockDiffs, setBlockDiffs ] = useState< BlockDiff[] >( [] );
 	const [ nonContentDiffs, setNonContentDiffs ] = useState< DiffPreviewResult['nonContentDiffs'] >( undefined );
-	const [ incoming, setIncoming ] = useState< DiffPreviewResult['incoming'] >( undefined );
-	const [ localPostId, setLocalPostId ] = useState< number >( 0 );
 	const [ isLoading, setIsLoading ] = useState( true );
 	const [ error, setError ] = useState< string | null >( null );
 
@@ -100,10 +94,8 @@ export function useDiffPreview( {
 
 			if ( result.error ) {
 				setError( result.error );
-			} else if ( ( result.contentDiffHtml || result.html ) && result.localPostId ) {
+			} else if ( result.contentDiffHtml || result.html ) {
 				setDiffHtml( result.contentDiffHtml ?? result.html ?? null );
-				setLocalPostId( result.localPostId ?? 0 );
-				setIncoming( result.incoming ?? undefined );
 				setNonContentDiffs( result.nonContentDiffs ?? undefined );
 				setRenderedDiffHtml( result.renderedContentDiffHtml ?? null );
 				setBlockDiffs( result.blockDiffs || [] );
@@ -128,8 +120,6 @@ export function useDiffPreview( {
 		renderedDiffHtml,
 		blockDiffs,
 		nonContentDiffs,
-		incoming,
-		localPostId,
 		isLoading,
 		error,
 	};

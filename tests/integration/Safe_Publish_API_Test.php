@@ -11,11 +11,9 @@ namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\API\Diff_Renderer;
 use Safe_Publish\API\Source_Post_Type_Resolver;
-use WP_Post;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
-use WP_Term;
 
 /**
  * Safe Publish API Test Class.
@@ -54,11 +52,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	 * Non-existent source post ID for error tests.
 	 */
 	private const NON_EXISTENT_SOURCE_POST_ID = 555;
-
-	/**
-	 * Non-existent local post ID for error tests.
-	 */
-	private const NON_EXISTENT_POST_ID = 999999;
 
 	/**
 	 * Sets up test fixtures.
@@ -148,15 +141,10 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$this->assertIsArray( $result, 'Should return array on success' );
 		$this->assertArrayHasKey( 'contentDiffHtml', $result, 'Should have content diff' );
 		$this->assertArrayHasKey( 'nonContentDiffs', $result, 'Should have non-content diffs' );
-		$this->assertArrayHasKey( 'incoming', $result, 'Should have incoming data' );
 		$this->assertArrayHasKey( 'current', $result, 'Should have current data' );
-		$this->assertArrayHasKey( 'localPostId', $result, 'Should have local post ID' );
 		$this->assertArrayHasKey( 'blockDiffs', $result, 'Should have block diffs' );
 		$this->assertArrayHasKey( 'incomingRenderedHtml', $result, 'Should have incoming rendered HTML' );
 		$this->assertArrayHasKey( 'currentRenderedHtml', $result, 'Should have current rendered HTML' );
-
-		// ASSERT: Verify local post ID matches.
-		$this->assertSame( $this->post_id, $result['localPostId'] );
 
 		// ASSERT: Verify diff was generated.
 		$this->assertIsString( $result['contentDiffHtml'] );
@@ -166,17 +154,9 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			'Content diff should not be empty'
 		);
 
-		// ASSERT: Verify incoming data extracted correctly from mock response.
-		$this->assertSame( 'Updated External Title', $result['incoming']['title'] );
-		$this->assertSame( 'Updated source excerpt.', $result['incoming']['excerpt'] );
-
 		// ASSERT: Verify current data extracted from local post.
 		$this->assertSame( 'Original Title', $result['current']['title'] );
 		$this->assertSame( 'Original excerpt.', $result['current']['excerpt'] );
-
-		// ASSERT: Verify incoming meta and terms extracted from mock response.
-		$this->assertSame( array( 'custom_meta' => 'meta_value' ), $result['incoming']['meta'] );
-		$this->assertSame( array( 'category' => array( 'External Category' ) ), $result['incoming']['terms'] );
 
 		// ASSERT: Verify non-content diff keys exist.
 		$this->assertIsArray( $result['nonContentDiffs'] );
@@ -185,6 +165,30 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$this->assertArrayHasKey( 'taxonomies', $result['nonContentDiffs'] );
 		$this->assertArrayHasKey( 'meta', $result['nonContentDiffs'] );
 		$this->assertArrayHasKey( 'featuredMedia', $result['nonContentDiffs'] );
+
+		// ASSERT: Source-side fields (title, excerpt, meta, embedded terms)
+		// flowed through extract_incoming_data and reached the rendered diffs.
+		// Distinctive substrings survive wp_text_diff's per-word HTML markup.
+		$this->assertStringContainsString(
+			'Updated External',
+			$result['nonContentDiffs']['title'],
+			'Source title should appear in the title diff.'
+		);
+		$this->assertStringContainsString(
+			'Updated source',
+			$result['nonContentDiffs']['excerpt'],
+			'Source excerpt should appear in the excerpt diff.'
+		);
+		$this->assertStringContainsString(
+			'custom_meta',
+			$result['nonContentDiffs']['meta'],
+			'Source meta keys should appear in the meta diff.'
+		);
+		$this->assertStringContainsString(
+			'External Category',
+			$result['nonContentDiffs']['taxonomies'],
+			'Embedded source terms should appear in the taxonomies diff.'
+		);
 	}
 
 	/**
@@ -285,13 +289,17 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$renderer = new Diff_Renderer();
 		$result   = $renderer->render_diff( $request, $make_request, array() );
 
-		// ASSERT: The diff resolved against the rest_base endpoint and
-		// succeeded.
+		// ASSERT: The diff resolved against the rest_base endpoint, succeeded,
+		// and surfaced the source-side title in the rendered diff.
 		$this->assertIsArray(
 			$result,
 			'Diff should succeed for a custom CPT.'
 		);
-		$this->assertSame( 'Source Movie', $result['incoming']['title'] );
+		$this->assertStringContainsString(
+			'Source',
+			$result['nonContentDiffs']['title'] ?? '',
+			'Source title should appear in the title diff for a custom CPT.'
+		);
 
 		// ASSERT: The source post was fetched via rest_base, never via the
 		// slug.
@@ -513,228 +521,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$this->assertInstanceOf( WP_REST_Response::class, $response );
 		$this->assertSame( 400, $response->get_status(), 'Should return 400 for non-positive post ID' );
 		$this->assertSame( 'rest_invalid_param', $response->get_data()['code'] ?? null );
-	}
-
-	/**
-	 * Verifies that the update-post endpoint updates post content successfully,
-	 * storing the exact title, content, and excerpt in the database.
-	 */
-	public function test_update_post_endpoint_updates_content_successfully(): void {
-		// ARRANGE: Create request with updated content.
-		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/update-post' );
-		$request->set_param( 'postId', $this->post_id );
-		$request->set_param( 'title', 'Updated Title' );
-		$request->set_param( 'content', '<p>Updated content.</p>' );
-		$request->set_param( 'excerpt', 'Updated excerpt.' );
-
-		wp_set_current_user( $this->admin_user_id );
-
-		// ACT: Dispatch through REST server.
-		$response = $this->server->dispatch( $request );
-
-		// ASSERT: Verify response.
-		$this->assertInstanceOf( WP_REST_Response::class, $response, 'Should return WP_REST_Response' );
-		$data = $response->get_data();
-		$this->assertIsArray( $data, 'Response should have data array' );
-		$this->assertArrayHasKey( 'success', $data, 'Response should have success key' );
-		$this->assertTrue( $data['success'] );
-		$this->assertSame( $this->post_id, $data['post_id'] );
-		$this->assertSame( 200, $response->get_status() );
-
-		// ASSERT: Verify post was updated.
-		$updated_post = get_post( $this->post_id );
-		$this->assertInstanceOf( WP_Post::class, $updated_post, 'Post should exist after update' );
-		$this->assertSame( 'Updated Title', $updated_post->post_title );
-		$this->assertSame( '<p>Updated content.</p>', $updated_post->post_content );
-		$this->assertSame( 'Updated excerpt.', $updated_post->post_excerpt );
-	}
-
-	/**
-	 * Verifies that the update-post endpoint preserves HTML in excerpts.
-	 *
-	 * Excerpts can contain inline HTML (em, strong, links, etc.). The endpoint
-	 * must use wp_kses_post (not sanitize_text_field) so that allowed HTML is
-	 * retained.
-	 */
-	public function test_update_post_endpoint_preserves_excerpt_html(): void {
-		// ARRANGE: Create request with HTML excerpt.
-		$request = new WP_REST_Request(
-			'POST',
-			'/safe-publish/v1/update-post'
-		);
-		$request->set_param( 'postId', $this->post_id );
-		$request->set_param( 'content', '<p>Content.</p>' );
-		$request->set_param(
-			'excerpt',
-			'Excerpt with <em>emphasis</em> and <strong>bold</strong>.'
-		);
-
-		wp_set_current_user( $this->admin_user_id );
-
-		// ACT: Dispatch the request.
-		$response = $this->server->dispatch( $request );
-
-		// ASSERT: Request succeeds.
-		$data = $response->get_data();
-		$this->assertTrue( $data['success'] );
-
-		// ASSERT: HTML tags are preserved in the stored excerpt.
-		$updated_post = get_post( $this->post_id );
-		$this->assertSame(
-			'Excerpt with <em>emphasis</em> and <strong>bold</strong>.',
-			$updated_post->post_excerpt,
-			'Allowed HTML must be preserved in excerpts.'
-		);
-	}
-
-	/**
-	 * Verifies that the update-post endpoint updates meta successfully and
-	 * returns the correct post ID in the response.
-	 */
-	public function test_update_post_endpoint_updates_meta_successfully(): void {
-		// ARRANGE: Create request with meta.
-		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/update-post' );
-		$request->set_param( 'postId', $this->post_id );
-		$request->set_param( 'content', '<p>Content.</p>' );
-		$request->set_param(
-			'meta',
-			array(
-				'custom_field_1' => 'value1',
-				'custom_field_2' => 'value2',
-			)
-		);
-
-		wp_set_current_user( $this->admin_user_id );
-
-		// ACT: Dispatch through REST server.
-		$response = $this->server->dispatch( $request );
-
-		// ASSERT: Verify response and meta were updated.
-		$data = $response->get_data();
-		$this->assertTrue( $data['success'] );
-		$this->assertSame( $this->post_id, $data['post_id'] );
-		$this->assertSame( 200, $response->get_status() );
-		$this->assertSame( 'value1', get_post_meta( $this->post_id, 'custom_field_1', true ) );
-		$this->assertSame( 'value2', get_post_meta( $this->post_id, 'custom_field_2', true ) );
-	}
-
-	/**
-	 * Verifies that the update-post endpoint updates terms successfully and
-	 * returns the correct post ID in the response.
-	 */
-	public function test_update_post_endpoint_updates_terms_successfully(): void {
-		// ARRANGE: Create test category for this test.
-		$category_id = $this->factory()->term->create(
-			array(
-				'name'     => 'Test Category',
-				'taxonomy' => 'category',
-			)
-		);
-		$category    = get_term( $category_id );
-		$this->assertInstanceOf( WP_Term::class, $category, 'Category should be a WP_Term object' );
-
-		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/update-post' );
-		$request->set_param( 'postId', $this->post_id );
-		$request->set_param( 'content', '<p>Content.</p>' );
-		$request->set_param(
-			'terms',
-			array(
-				'category' => array( $category->term_id ),
-			)
-		);
-
-		wp_set_current_user( $this->admin_user_id );
-
-		// ACT: Dispatch through REST server.
-		$response = $this->server->dispatch( $request );
-
-		// ASSERT: Verify response and terms were updated.
-		$data = $response->get_data();
-		$this->assertTrue( $data['success'] );
-		$this->assertSame( $this->post_id, $data['post_id'] );
-		$this->assertSame( 200, $response->get_status() );
-
-		// ASSERT: Verify term assignment.
-		$post_categories = wp_get_post_categories( $this->post_id );
-		$this->assertContains( $category->term_id, $post_categories, 'Post should have the test category assigned' );
-	}
-
-	/**
-	 * Verifies that the update-post endpoint returns 403 for users without the
-	 * edit_posts capability.
-	 */
-	public function test_update_post_endpoint_returns_403_without_edit_posts_capability(): void {
-		// ARRANGE: Create user without edit_posts capability.
-		$this->create_user_and_authenticate( 'subscriber' );
-
-		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/update-post' );
-		$request->set_param( 'postId', $this->post_id );
-		$request->set_param( 'content', '<p>Content.</p>' );
-
-		// ACT: Dispatch through REST server.
-		$response = $this->server->dispatch( $request );
-
-		// ASSERT: Verify permission callback denies access.
-		$this->assert_403_response( $response, 'Should return 403 without edit_posts capability' );
-	}
-
-	/**
-	 * Verifies that the update-post endpoint returns 403 for users with the
-	 * edit_posts capability but without the edit_others_posts capability for
-	 * posts they don't own.
-	 */
-	public function test_update_post_endpoint_returns_403_without_edit_others_posts_capability(): void {
-		// ARRANGE: Create user without edit_others_posts capability, attempting
-		// to edit another user's post.
-		$this->create_user_and_authenticate( 'author' );
-
-		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/update-post' );
-		$request->set_param( 'postId', $this->post_id ); // This post is owned by a different user.
-		$request->set_param( 'content', '<p>Content.</p>' );
-
-		// ACT: Dispatch through REST server.
-		$response = $this->server->dispatch( $request );
-
-		// ASSERT: Verify permission callback denies access to post they don't own.
-		$this->assert_403_response( $response, 'Should return 403 without edit_others_posts capability' );
-	}
-
-	/**
-	 * Verifies that the update-post endpoint returns 404 for non-existent post
-	 * IDs when the user has the edit_others_posts capability.
-	 */
-	public function test_update_post_endpoint_returns_404_for_nonexistent_post_id_with_edit_others_posts_capability(): void {
-		// ARRANGE: Authenticate as user with edit_others_posts capability.
-		wp_set_current_user( $this->admin_user_id );
-
-		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/update-post' );
-		$request->set_param( 'postId', self::NON_EXISTENT_POST_ID );
-		$request->set_param( 'content', '<p>Content.</p>' );
-
-		// ACT: Dispatch through REST server.
-		$response = $this->server->dispatch( $request );
-
-		// ASSERT: Users with edit_others_posts get 404 for non-existent posts.
-		$this->assert_404_response( $response, 'Should return 404 for non-existent post' );
-	}
-
-	/**
-	 * Verifies that the update-post endpoint returns 403 for non-existent post
-	 * IDs when the user lacks the edit_others_posts capability.
-	 */
-	public function test_update_post_endpoint_returns_403_for_nonexistent_post_id_without_edit_others_posts_capability(): void {
-		// ARRANGE: Create user without edit_others_posts capability.
-		$this->create_user_and_authenticate( 'author' );
-
-		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/update-post' );
-		$request->set_param( 'postId', self::NON_EXISTENT_POST_ID );
-		$request->set_param( 'content', '<p>Content.</p>' );
-
-		// ACT: Dispatch through REST server.
-		$response = $this->server->dispatch( $request );
-
-		// ASSERT: Users without capability get 403 (not 404).
-		$this->assert_403_response( $response, 'Should return 403 for non-existent post without edit_others_posts capability' );
 	}
 
 	/**

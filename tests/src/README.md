@@ -63,19 +63,13 @@ The test suite covers:
 - `getPaginationInfo()` - Pagination metadata
 - `extractUrlPath()` - URL path extraction
 
-### ✅ API Functions (`api/diff.test.ts` - 25+ tests)
+### ✅ API Functions (`api/diff.test.ts`)
 
 - `fetchDiffPreview()` - Fetching diff previews
   - Successful requests
   - Error handling
   - Network errors
   - Payload validation
-- `updatePostContent()` - Updating post content
-  - Successful updates
-  - Error responses
-  - Nonce handling
-  - Optional parameters
-  - Invalid JSON handling
 
 ### ✅ Constants (`constants.test.ts` - 10+ tests)
 
