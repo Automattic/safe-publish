@@ -29,11 +29,14 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install Node dependencies
         run: npm ci
+
+      - name: Start WordPress environment
+        run: npx wp-env start
 
       - name: Build plugin
         run: npm run build
@@ -43,9 +46,6 @@ jobs:
         env:
           DEBUG: pw:install
         run: npx playwright install chromium
-
-      - name: Start WordPress environment
-        run: npx wp-env start
 
       - name: End-to-end tests
         env:
