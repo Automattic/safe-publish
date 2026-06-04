@@ -1,9 +1,11 @@
 /**
  * Tests for utility functions
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getSettings, setSettings } from '@wordpress/date';
 import {
+	composeOutdatedLabel,
+	formatBadgeTimestamp,
 	formatDateTime,
 	extractUrlPath,
 	renderWarningMessage,
@@ -64,6 +66,73 @@ describe( 'formatDateTime', () => {
 
 	it( 'should return "Invalid Date" for invalid date string', () => {
 		expect( formatDateTime( 'not-a-date' ) ).toBe( 'Invalid Date' );
+	} );
+} );
+
+describe( 'formatBadgeTimestamp', () => {
+	beforeEach( () => {
+		vi.useFakeTimers();
+		// Pin "now" to mid-2024 so the current-year branch is deterministic.
+		vi.setSystemTime( new Date( '2024-06-15T12:00:00Z' ) );
+	} );
+
+	afterEach( () => {
+		vi.useRealTimers();
+	} );
+
+	it( 'should omit the year when the timestamp is in the current year', () => {
+		// ARRANGE: pinned now = 2024-06-15; target also in 2024.
+		// ACT: format a same-year UTC timestamp.
+		const result = formatBadgeTimestamp( '2024-07-15T10:30:00Z' );
+		// ASSERT: abbreviated month + day + WP time, no year.
+		expect( result ).toBe( 'Jul 15 6:30 am' );
+	} );
+
+	it( 'should include the year when the timestamp is in a different year', () => {
+		// ARRANGE: pinned now = 2024-06-15; target in 2023 (also summer, so
+		// the same EDT offset applies as the current-year test above).
+		// ACT: format a previous-year UTC timestamp.
+		const result = formatBadgeTimestamp( '2023-07-15T22:30:00Z' );
+		// ASSERT: abbreviated month + day + year + WP time (EDT shift).
+		expect( result ).toBe( 'Jul 15, 2023 6:30 pm' );
+	} );
+
+	it( 'should respect a 24-hour WP time format', () => {
+		// ARRANGE: switch to 24-hour time format.
+		setSettings( {
+			...getSettings(),
+			formats: {
+				...getSettings().formats,
+				time: 'H:i',
+			},
+		} );
+		// ACT: format with 24-hour time active.
+		const result = formatBadgeTimestamp( '2024-07-15T22:30:00Z' );
+		// ASSERT: month + day + 24-hour time (EDT shift puts 22:30 UTC at 18:30).
+		expect( result ).toBe( 'Jul 15 18:30' );
+	} );
+
+	it( 'should return "Invalid Date" for invalid date string', () => {
+		expect( formatBadgeTimestamp( 'not-a-date' ) ).toBe( 'Invalid Date' );
+	} );
+} );
+
+describe( 'composeOutdatedLabel', () => {
+	beforeEach( () => {
+		vi.useFakeTimers();
+		vi.setSystemTime( new Date( '2024-06-15T12:00:00Z' ) );
+	} );
+
+	afterEach( () => {
+		vi.useRealTimers();
+	} );
+
+	it( 'should compose the "Outdated · Changed <date>" badge label', () => {
+		// ARRANGE: pinned now = 2024-06-15; target same year.
+		// ACT: compose the label for a same-year UTC timestamp.
+		const result = composeOutdatedLabel( '2024-07-15T10:30:00Z' );
+		// ASSERT: full composed label with abbreviated date and WP time.
+		expect( result ).toBe( 'Outdated · Changed Jul 15 6:30 am' );
 	} );
 } );
 

@@ -22,6 +22,7 @@ import {
 } from '../constants';
 import { PostTypeSelector } from '../post-type-selector';
 import {
+	composeOutdatedLabel,
 	extractUrlPath,
 	formatDateTime,
 	getErrorMessage,
@@ -578,11 +579,7 @@ export function SourcePostsDataView( {
 					case 'outdated': {
 						const label = '' === item.modified_gmt
 							? __( 'Outdated', 'safe-publish' )
-							: sprintf(
-								/* translators: %s: localized date when source was modified */
-								__( 'Outdated · Modified %s', 'safe-publish' ),
-								formatDateTime( item.modified_gmt )
-							);
+							: composeOutdatedLabel( item.modified_gmt );
 						return (
 							<span className="safe-publish-status-badge safe-publish-status-badge--outdated">
 								<span className="safe-publish-status-badge__dot" aria-hidden="true" />
