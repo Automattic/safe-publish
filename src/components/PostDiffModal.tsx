@@ -93,7 +93,7 @@ export default function PostDiffModal( {
 
 	return (
 		<VStack>
-			<Text>{ `Diff for "${ firstItem.title }"` }</Text>
+			<Text>{ `Comparing "${ firstItem.title }"` }</Text>
 
 			{ isLoading && (
 				<HStack>
