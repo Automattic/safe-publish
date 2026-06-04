@@ -100,7 +100,9 @@ const DeletePostModal = ( {
 					return;
 				}
 
-				onRefresh?.();
+				if ( ! isBulk || result.data.deleted > 0 ) {
+					onRefresh?.();
+				}
 				setIsLoading( false );
 				closeModal?.();
 			} )

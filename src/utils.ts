@@ -79,6 +79,49 @@ export function formatDateTime( dateString: string ): string {
 }
 
 /**
+ * Formats a timestamp for the compact "Outdated · Changed …" badge label.
+ *
+ * Uses an abbreviated month + day to keep the column tight, and omits the
+ * year when it matches the current year (compared in the site's timezone
+ * so the year shown and the year compared agree). Time uses the WP
+ * `time_format` setting.
+ *
+ * @param {string} dateString UTC ISO 8601 date string (trailing `Z`).
+ *
+ * @return {string} Formatted timestamp, or 'Invalid Date' on failure.
+ */
+export function formatBadgeTimestamp( dateString: string ): string {
+	const date = new Date( dateString );
+	if ( isNaN( date.getTime() ) ) {
+		return __( 'Invalid Date', 'safe-publish' );
+	}
+
+	const { formats } = getSettings();
+	const currentYear = dateI18n( 'Y', new Date().toISOString() );
+	const targetYear  = dateI18n( 'Y', dateString );
+	const dateFormat  = currentYear === targetYear ? 'M j' : 'M j, Y';
+
+	return dateI18n( `${ dateFormat } ${ formats.time }`, dateString );
+}
+
+/**
+ * Composes the "Outdated · Changed <date>" badge label shared by the
+ * Source Posts and Imports → Posts views, so both render the same string
+ * and the translator only sees one entry.
+ *
+ * @param {string} modifiedGmt UTC ISO 8601 source modification timestamp.
+ *
+ * @return {string} Localized composed label.
+ */
+export function composeOutdatedLabel( modifiedGmt: string ): string {
+	return sprintf(
+		/* translators: %s: localized date when source was changed */
+		__( 'Outdated · Changed %s', 'safe-publish' ),
+		formatBadgeTimestamp( modifiedGmt )
+	);
+}
+
+/**
  * Display labels for sync statuses. `available` is source-side only; the
  * rest cover the Imports → Posts column's verdicts plus its loading state.
  */
