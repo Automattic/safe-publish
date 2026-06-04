@@ -75,10 +75,8 @@ You have three ways to import content:
 
 **3. Manage Already-Imported Posts**
 
-- Click **View in Imports** on any imported post to jump to the Imports →
-  Posts tab with that post focused.
-- From there: update with the latest source content, view a content diff,
-  delete the local post, or roll back the most recent import.
+- Click **View in Imports** on any imported post to jump to the Imports → Posts tab with that post focused.
+- From there: update with the latest source content, view a content diff, delete the local post, or roll back the most recent import.
 
 ## Step 6: Review Imported Content
 
@@ -89,9 +87,7 @@ You have three ways to import content:
 
 ## Imports and exports
 
-The **Imports** page lists everything that came in from the source — see
-[Imports](concepts/imports.md). The **Exports** page lists events logged when
-your site serves posts to a destination — see [Exports](concepts/exports.md).
+The **Imports** page lists everything that came in from the source — see [Imports](concepts/imports.md). The **Exports** page lists events logged when your site serves posts to a destination — see [Exports](concepts/exports.md).
 
 ## Next Steps
 

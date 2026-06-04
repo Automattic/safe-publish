@@ -59,9 +59,7 @@ Every import action is tracked and logged:
 - Import status (success/failure)
 - Error messages (if applicable)
 
-Manage your imported content and review failed imports on the
-[Imports](imports.md) page. Review outbound events on the
-[Exports](exports.md) page.
+Manage your imported content and review failed imports on the [Imports](imports.md) page. Review outbound events on the [Exports](exports.md) page.
 
 ## Technical concepts
 
