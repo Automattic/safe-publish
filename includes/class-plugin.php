@@ -13,7 +13,6 @@ use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Admin\Import_Mode_Admin_Handler;
 use Safe_Publish\Admin\Admin_Menu_Manager;
 use Safe_Publish\Admin\Content_Processor;
-use Safe_Publish\Admin\Diff_Renderer;
 use Safe_Publish\Admin\Exports_Page;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Import_Actions_Ajax_Handler;
@@ -208,15 +207,10 @@ final class Plugin {
 	): Import_Mode_Admin_Handler {
 		$repository       = new History_Repository();
 		$rollback_service = new Session_Rollback_Service( $repository );
-		$diff_renderer    = new Diff_Renderer();
 
 		$exports_page = new Exports_Page();
 
-		$import_actions = new Import_Actions_Ajax_Handler(
-			$repository,
-			$rollback_service,
-			$diff_renderer
-		);
+		$import_actions = new Import_Actions_Ajax_Handler( $rollback_service );
 
 		$post_import_service = new Post_Import_Service(
 			$api,
