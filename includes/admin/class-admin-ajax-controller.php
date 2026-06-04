@@ -1113,11 +1113,14 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Handles AJAX request for the Imports → Posts tab sync-status column.
 	 *
-	 * Takes a batch of source post IDs and returns per-ID one of
-	 * `up-to-date | outdated | missing | unreachable | invalid` by comparing
-	 * the source post's `modified_gmt` against the destination's most recent
-	 * `import_date_gmt`. Posts are batched by type so each post-type group
-	 * costs one signed catalog call.
+	 * Takes a batch of source post IDs and returns per-ID a `{ status,
+	 * modified_gmt? }` entry, where status is one of `up-to-date | outdated
+	 * | missing | unreachable | invalid`, computed by comparing the source
+	 * post's `modified_gmt` against the destination's most recent
+	 * `import_date_gmt`. `modified_gmt` is set only for `outdated` and
+	 * `up-to-date` — i.e., when the source returned a parseable timestamp.
+	 * Posts are batched by type so each post-type group costs one signed
+	 * catalog call.
 	 *
 	 * Catalog_REST_Controller::ALLOWED_STATUSES excludes 'trash', so a
 	 * trashed source post reads as `missing` here. Deliberate — trashed
@@ -1213,7 +1216,7 @@ final class Admin_Ajax_Controller {
 
 			if ( is_wp_error( $response ) ) {
 				foreach ( $ids as $id ) {
-					$statuses[ $id ] = 'unreachable';
+					$statuses[ $id ] = array( 'status' => 'unreachable' );
 				}
 				continue;
 			}
@@ -1225,14 +1228,20 @@ final class Admin_Ajax_Controller {
 
 			foreach ( $ids as $id ) {
 				if ( ! isset( $source_modified_by_id[ $id ] ) ) {
-					$statuses[ $id ] = 'missing';
+					$statuses[ $id ] = array( 'status' => 'missing' );
 					continue;
 				}
 
-				$statuses[ $id ] = self::compare_sync_state(
+				$verdict = self::compare_sync_state(
 					$source_modified_by_id[ $id ],
 					$context[ $id ]
 				);
+
+				$entry = array( 'status' => $verdict );
+				if ( 'invalid' !== $verdict ) {
+					$entry['modified_gmt'] = $source_modified_by_id[ $id ];
+				}
+				$statuses[ $id ] = $entry;
 			}
 		}
 

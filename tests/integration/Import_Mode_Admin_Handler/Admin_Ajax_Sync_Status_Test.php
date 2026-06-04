@@ -302,18 +302,23 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Dispatch.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
 
-		// ASSERT: Verdict is up-to-date.
+		// ASSERT: Verdict is up-to-date and the entry carries modified_gmt.
 		$response = $this->decode_response();
 		$this->assertTrue( $response['success'] );
 		$this->assertSame(
 			'up-to-date',
-			$response['data']['statuses'][ $source_id ]
+			$response['data']['statuses'][ $source_id ]['status']
+		);
+		$this->assertSame(
+			'2024-01-01T11:00:00Z',
+			$response['data']['statuses'][ $source_id ]['modified_gmt']
 		);
 	}
 
 	/**
 	 * Verifies that a source post modified after the destination's last
-	 * import_date_gmt is reported as outdated.
+	 * import_date_gmt is reported as outdated and carries the source's
+	 * modified_gmt so the badge can render "Outdated · Changed …".
 	 */
 	public function test_reports_outdated_when_source_modified_after_import(): void {
 		// ARRANGE: Destination imported at 10:00; source then edited at 15:00.
@@ -328,12 +333,16 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Dispatch.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
 
-		// ASSERT: Verdict is outdated.
+		// ASSERT: Verdict is outdated and the entry carries modified_gmt.
 		$response = $this->decode_response();
 		$this->assertTrue( $response['success'] );
 		$this->assertSame(
 			'outdated',
-			$response['data']['statuses'][ $source_id ]
+			$response['data']['statuses'][ $source_id ]['status']
+		);
+		$this->assertSame(
+			'2024-01-01T15:00:00Z',
+			$response['data']['statuses'][ $source_id ]['modified_gmt']
 		);
 	}
 
@@ -355,11 +364,15 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Dispatch.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
 
-		// ASSERT: Verdict is missing.
+		// ASSERT: Verdict is missing and no modified_gmt is reported.
 		$response = $this->decode_response();
 		$this->assertTrue( $response['success'] );
 		$this->assertSame(
 			'missing',
+			$response['data']['statuses'][ $source_id ]['status']
+		);
+		$this->assertArrayNotHasKey(
+			'modified_gmt',
 			$response['data']['statuses'][ $source_id ]
 		);
 	}
@@ -388,16 +401,20 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Dispatch.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
 
-		// ASSERT: Both IDs come back as unreachable.
+		// ASSERT: Both IDs come back as unreachable with no modified_gmt.
 		$response = $this->decode_response();
 		$this->assertTrue( $response['success'] );
 		$this->assertSame(
 			'unreachable',
+			$response['data']['statuses'][ $first_id ]['status']
+		);
+		$this->assertArrayNotHasKey(
+			'modified_gmt',
 			$response['data']['statuses'][ $first_id ]
 		);
 		$this->assertSame(
 			'unreachable',
-			$response['data']['statuses'][ $second_id ]
+			$response['data']['statuses'][ $second_id ]['status']
 		);
 	}
 
@@ -434,11 +451,11 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		$this->assertTrue( $response['success'] );
 		$this->assertSame(
 			'up-to-date',
-			$response['data']['statuses'][ $post_id_source ]
+			$response['data']['statuses'][ $post_id_source ]['status']
 		);
 		$this->assertSame(
 			'up-to-date',
-			$response['data']['statuses'][ $page_id_source ]
+			$response['data']['statuses'][ $page_id_source ]['status']
 		);
 	}
 
@@ -517,11 +534,15 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Dispatch.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
 
-		// ASSERT: Verdict is invalid (not unreachable).
+		// ASSERT: Verdict is invalid (not unreachable) and modified_gmt is omitted.
 		$response = $this->decode_response();
 		$this->assertTrue( $response['success'] );
 		$this->assertSame(
 			'invalid',
+			$response['data']['statuses'][ $source_id ]['status']
+		);
+		$this->assertArrayNotHasKey(
+			'modified_gmt',
 			$response['data']['statuses'][ $source_id ]
 		);
 	}
@@ -564,7 +585,7 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		foreach ( $source_ids as $source_id ) {
 			$this->assertSame(
 				'up-to-date',
-				$response['data']['statuses'][ $source_id ]
+				$response['data']['statuses'][ $source_id ]['status']
 			);
 		}
 	}
