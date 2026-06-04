@@ -36,7 +36,7 @@ export interface SourceActionsContext {
 
 /**
  * Auth context shared by the Imports → Posts tab action set. Adds restNonce
- * for the diff/update REST endpoints used by PostDiffModal.
+ * for the diff-preview REST endpoint used by PostDiffModal.
  */
 export interface ImportedActionsContext {
 	ajaxurl: string;
@@ -269,7 +269,10 @@ export const createImportedActions = (
 			<PostDiffModal
 				items={ items }
 				restNonce={ context.restNonce }
+				ajaxurl={ context.ajaxurl }
+				nonce={ context.nonce }
 				closeModal={ closeModal }
+				onRefresh={ onRefresh }
 			/>
 		),
 	},
