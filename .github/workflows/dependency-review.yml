@@ -5,6 +5,7 @@ on:
     paths:
       - package*.json
       - composer.json
+      - composer.lock
 
 permissions:
   contents: read
