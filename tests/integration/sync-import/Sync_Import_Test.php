@@ -74,11 +74,6 @@ class Sync_Import_Test extends Integration_Test_Case {
 			new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' )
 		);
 		$this->assertNotSame( 404, $diff_response->get_status() );
-
-		$update_response = $this->server->dispatch(
-			new WP_REST_Request( 'POST', '/safe-publish/v1/update-post' )
-		);
-		$this->assertNotSame( 404, $update_response->get_status() );
 	}
 
 	/**

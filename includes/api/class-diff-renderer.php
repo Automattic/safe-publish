@@ -82,15 +82,6 @@ final class Diff_Renderer {
 		// Extract current local data.
 		$current = $this->extract_current_data( $local_post );
 
-		// Preserve the pre-cleanup incoming title, content, and excerpt for
-		// the update payload — apply_cleanup() reserializes Gutenberg blocks
-		// and collapses whitespace, which is fine for diff rendering but
-		// would silently rewrite the destination post if returned to the
-		// update path. The diff display uses the cleaned copy below.
-		$raw_incoming_title   = $incoming['title'] ?? null;
-		$raw_incoming_content = $incoming['content'] ?? null;
-		$raw_incoming_excerpt = $incoming['excerpt'] ?? null;
-
 		// Apply normalization if requested.
 		if ( $cleanup ) {
 			$current  = $this->apply_cleanup( $current );
@@ -123,27 +114,11 @@ final class Diff_Renderer {
 		$current_rendered  = $this->render_content( $current['content'] );
 		$incoming_rendered = $this->render_content( $incoming['content'] );
 
-		// `content`, `excerpt`, and `featuredMedia` ride along on `incoming`
-		// because the catalog listing payload no longer carries them, and the
-		// update path needs the fresh source values that this method already
-		// fetched. Title, content, and excerpt use the pre-cleanup raw values
-		// so an Update writes the source's actual content, not the diff-
-		// normalized version.
 		return array(
 			'contentDiffHtml'         => $content_diff_html,
 			'renderedContentDiffHtml' => null,
 			'blockDiffs'              => $block_diffs,
 			'nonContentDiffs'         => $non_content_diffs + array( 'featuredMedia' => $featured_media_html ),
-			'incoming'                => array(
-				'title'         => $raw_incoming_title,
-				'content'       => $raw_incoming_content,
-				'excerpt'       => $raw_incoming_excerpt,
-				'meta'          => $incoming['meta'] ?? null,
-				'terms'         => $incoming['terms'] ?? null,
-				'featuredMedia' => isset( $source_data['featured_media'] )
-					? (int) $source_data['featured_media']
-					: 0,
-			),
 			'current'                 => array(
 				'title'   => $current['title'] ?? null,
 				'excerpt' => $current['excerpt'] ?? null,
@@ -152,7 +127,6 @@ final class Diff_Renderer {
 			),
 			'incomingRenderedHtml'    => $incoming_rendered,
 			'currentRenderedHtml'     => $current_rendered,
-			'localPostId'             => $local_post->ID,
 		);
 	}
 

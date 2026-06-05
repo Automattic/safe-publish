@@ -211,7 +211,7 @@ final class Plugin {
 		// Build content processor with direct media service dependencies.
 		$content_processor = new Content_Processor( $media_importer, $content_media_processor );
 
-		$this->safe_publish_api = new Safe_Publish_API( null, null, $content_processor, $media_importer );
+		$this->safe_publish_api = new Safe_Publish_API();
 
 		// Build admin object graph and initialize.
 		$this->build_full_admin_handler(

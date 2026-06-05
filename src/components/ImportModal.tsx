@@ -8,8 +8,8 @@
  * @file This file defines the ImportModal component.
  */
 
-import { ApiResponse, CreateDraftResponse, Warning } from '../types';
-import { getErrorMessage, renderWarningMessage } from '../utils';
+import { useImportPost } from './hooks/useImportPost';
+import { renderWarningMessage } from '../utils';
 import {
 	Button,
 	__experimentalText as Text,
@@ -17,7 +17,6 @@ import {
 	__experimentalVStack as VStack,
 	Spinner,
 } from '@wordpress/components';
-import { useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
 /**
@@ -61,69 +60,18 @@ const ImportModal = ( {
 	closeModal,
 	onRefresh,
 }: ImportModalProps ) => {
-	const [ isLoading, setIsLoading ] = useState( false );
-	const [ error, setError ] = useState< string | null >( null );
-	const [ editUrl, setEditUrl ] = useState< string | null >( null );
-	const [ warnings, setWarnings ] = useState< Warning[] >( [] );
+	const { isLoading, error, editUrl, warnings, submit } = useImportPost( {
+		sourcePostId,
+		title,
+		sourceLink,
+		postType,
+		isUpdate,
+		ajaxurl,
+		nonce,
+	} );
 
 	const submitLabel = isUpdate ? __( 'Update', 'safe-publish' ) : __( 'Import', 'safe-publish' );
 	const loadingLabel = isUpdate ? __( 'Updating…', 'safe-publish' ) : __( 'Importing…', 'safe-publish' );
-
-	/**
-	 * Sends the post to the backend for import or update.
-	 *
-	 * When updating an already-imported post, `force_update` is set so
-	 * the backend skips its own existence-confirmation roundtrip.
-	 */
-	const handleSubmit = () => {
-		setIsLoading( true );
-		setError( null );
-
-		// ajax_create_draft re-fetches via fetch_fresh_post; only ID/title needed.
-		const formData = new FormData();
-		formData.append( 'action', 'safe_publish_create_draft' );
-		formData.append( 'nonce', nonce );
-		formData.append( 'source_post_id', sourcePostId.toString() );
-		formData.append( 'title', title );
-		formData.append( 'source_link', sourceLink );
-		formData.append( 'post_type', postType || 'post' );
-
-		if ( isUpdate ) {
-			formData.append( 'force_update', 'true' );
-		}
-
-		fetch( ajaxurl, {
-			method: 'POST',
-			body: formData,
-			headers: {
-				'Accept': 'application/json; charset=utf-8',
-			},
-		} )
-		.then( response => response.json() as Promise< ApiResponse< CreateDraftResponse > > )
-		.then( ( result ) => {
-			setIsLoading( false );
-
-			if ( ! result.success ) {
-				setError( getErrorMessage( result, __( 'Failed to import', 'safe-publish' ) ) );
-				return;
-			}
-
-			const data = result.data;
-
-			// Validate edit URL before using it.
-			if ( ! data.edit_url || typeof data.edit_url !== 'string' ) {
-				setError( __( 'Invalid response: missing edit URL', 'safe-publish' ) );
-				return;
-			}
-
-			setWarnings( Array.isArray( data.warnings ) ? data.warnings : [] );
-			setEditUrl( data.edit_url );
-		} )
-		.catch( err => {
-			setError( err instanceof Error ? err.message : __( 'Unknown error occurred', 'safe-publish' ) );
-			setIsLoading( false );
-		} );
-	};
 
 	// Success state. Show a modal with options to edit the post or close the modal.
 	if ( editUrl ) {
@@ -206,7 +154,7 @@ const ImportModal = ( {
 				<Button
 					__next40pxDefaultSize
 					variant="primary"
-					onClick={ handleSubmit }
+					onClick={ submit }
 					disabled={ isLoading }
 				>
 					{ isLoading ? (
