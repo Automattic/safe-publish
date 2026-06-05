@@ -348,7 +348,10 @@ final class History_Repository {
 	}
 
 	/**
-	 * Looks up the most recent item row for a given imported post.
+	 * Looks up the most recent active item row for a given imported post.
+	 *
+	 * Rolled-back rows are excluded so the result reflects the post's
+	 * current content.
 	 *
 	 * @param int $post_id WordPress post ID.
 	 * @return array|null Item row or null if no matching item exists.
@@ -361,7 +364,9 @@ final class History_Repository {
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$row = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT * FROM `{$table}` WHERE post_id = %d ORDER BY id DESC LIMIT 1",
+				"SELECT * FROM `{$table}` WHERE post_id = %d"
+					. ' AND rolled_back = 0'
+					. ' ORDER BY id DESC LIMIT 1',
 				$post_id
 			),
 			ARRAY_A
@@ -375,12 +380,13 @@ final class History_Repository {
 	 * Returns a page of imported post IDs for the Imports → Posts tab listing,
 	 * with search/filter/sort applied across the full dataset.
 	 *
-	 * Aggregates the items table to one row per post (the most recent import
-	 * event) and joins wp_posts so post-level search/filters/sort act on every
-	 * imported post, not just the current page. The inner join also drops items
-	 * whose post no longer exists, so the page never carries IDs that hydration
-	 * would discard. Returns up to per_page+1 IDs so the caller can derive
-	 * has_more without a separate count query.
+	 * Aggregates the items table to one row per post (the most recent active
+	 * import event — rolled-back rows are skipped) and joins wp_posts so
+	 * post-level search/filters/sort act on every imported post, not just the
+	 * current page. The inner join also drops items whose post no longer
+	 * exists, so the page never carries IDs that hydration would discard.
+	 * Returns up to per_page+1 IDs so the caller can derive has_more without
+	 * a separate count query.
 	 *
 	 * @param int   $page     1-indexed page number.
 	 * @param int   $per_page Items per page.
@@ -457,7 +463,8 @@ final class History_Repository {
 			$where[]  = "EXISTS ( SELECT 1 FROM `{$items_table}` mr"
 				. ' WHERE mr.post_id = agg.post_id'
 				. ' AND mr.import_date_gmt = agg.max_date'
-				. ' AND mr.session_id = %d )';
+				. ' AND mr.session_id = %d'
+				. ' AND mr.rolled_back = 0 )';
 			$params[] = $session_id;
 		}
 
@@ -470,7 +477,8 @@ final class History_Repository {
 			$wpdb->prepare(
 				'SELECT agg.post_id FROM ('
 					. "SELECT post_id, MAX(import_date_gmt) AS max_date FROM `{$items_table}`"
-					. ' WHERE post_id IS NOT NULL GROUP BY post_id'
+					. ' WHERE post_id IS NOT NULL AND rolled_back = 0'
+					. ' GROUP BY post_id'
 					. ") agg INNER JOIN `{$posts_table}` p ON p.ID = agg.post_id"
 					. " WHERE {$where_sql}"
 					. " ORDER BY {$orderby} {$order}, agg.post_id DESC"
@@ -492,13 +500,14 @@ final class History_Repository {
 	}
 
 	/**
-	 * Bulk variant of get_item_for_post(): returns the most recent item row
-	 * for each provided post ID, keyed by post_id.
+	 * Bulk variant of get_item_for_post(): returns the most recent active item
+	 * row for each provided post ID, keyed by post_id.
 	 *
 	 * Drives the Imports → Posts tab listing — one query for the whole page
 	 * instead of N. Relies on the (post_id, import_date_gmt) composite
-	 * index for the inner aggregation. Ties on import_date_gmt resolve to
-	 * the highest id.
+	 * index for the inner aggregation. Rolled-back rows are excluded so the
+	 * result reflects each post's current content. Ties on import_date_gmt
+	 * resolve to the highest id.
 	 *
 	 * @param int[] $post_ids Post IDs to look up.
 	 * @return array<int, array> Map of post_id → most recent item row.
@@ -520,9 +529,10 @@ final class History_Repository {
 				"SELECT t1.* FROM `{$table}` t1"
 					. ' INNER JOIN ( SELECT post_id, MAX(import_date_gmt) AS max_date'
 					. " FROM `{$table}` WHERE post_id IN ({$placeholders})"
-					. ' GROUP BY post_id ) t2'
+					. ' AND rolled_back = 0 GROUP BY post_id ) t2'
 					. ' ON t1.post_id = t2.post_id'
 					. ' AND t1.import_date_gmt = t2.max_date'
+					. ' WHERE t1.rolled_back = 0'
 					. ' ORDER BY t1.id DESC',
 				...$values
 			),
