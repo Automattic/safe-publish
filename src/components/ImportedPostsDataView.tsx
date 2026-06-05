@@ -6,7 +6,7 @@
  * then issues a second `safe_publish_sync_status_batch` call per page to fill
  * the Sync Status column from the source's modified_gmt. Supports server-side
  * search, filtering (Local Status, Type), and sorting across the full dataset,
- * plus row actions (Edit, Update, Diff, Delete, and Rollback — single or bulk).
+ * plus row actions (Edit, Compare, Update, Delete, and Roll back — single or bulk).
  *
  * When invoked via the post-import notice's `?batch=N` deep-link, the
  * accompanying session id is applied as a hidden filter and surfaced as a
