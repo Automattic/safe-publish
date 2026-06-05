@@ -465,27 +465,10 @@ export function SourcePostsDataView( {
 	};
 
 	const handlePostTypeChange = ( postType: string ): void => {
-		// Cancel any pending search-box debounce before resetting search
-		// state — otherwise the timer fires later with the pre-change `raw`
-		// closure and resurrects the search term we just cleared.
-		if ( searchDebounceRef.current ) {
-			clearTimeout( searchDebounceRef.current );
-			searchDebounceRef.current = null;
-		}
-
 		setSelectedPostType( postType );
-		setSearchTerm( '' );
-		setDebouncedSearch( '' );
-		setSlugFromUrl( null );
-		setSelectedStatuses( [] );
-		setPublishedAfter( null );
-		setPublishedBefore( null );
 		resetPage();
 	};
 
-	// Resets the search/status/date filters but keeps Post Type — that's
-	// scope, not a filter, and resetting it would feel like a different
-	// action than "clear what I've narrowed down to."
 	const handleClearFilters = (): void => {
 		if ( searchDebounceRef.current ) {
 			clearTimeout( searchDebounceRef.current );
