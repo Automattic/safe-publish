@@ -8,6 +8,7 @@
  * @file This file defines the BulkImportFlow component.
  */
 
+import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
 import { getErrorMessage, renderWarningShortLabel } from '../utils';
 import {
 	Button,
@@ -204,12 +205,10 @@ export default function BulkImportFlow( {
 		}
 	};
 
-	const handleClose = (): void => {
-		if ( results && results.successful > 0 ) {
-			onRefresh?.();
-		}
-		onClose();
-	};
+	useRefreshOnUnmount(
+		null !== results && results.successful > 0,
+		onRefresh
+	);
 
 	const allFailed =
 		null !== results && 0 === results.successful && results.failed > 0;
@@ -442,7 +441,7 @@ export default function BulkImportFlow( {
 				<Button
 					__next40pxDefaultSize
 					variant="tertiary"
-					onClick={ handleClose }
+					onClick={ onClose }
 					disabled={ isLoading }
 				>
 					{ results
