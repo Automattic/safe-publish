@@ -177,8 +177,7 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 
 #### ACF or SCF fields do not appear in the destination editor
 
-**Symptoms**: ACF or Secure Custom Fields (SCF) values were imported as post
-meta, but the destination editor does not show the matching field controls.
+**Symptoms**: ACF or Secure Custom Fields (SCF) values were imported as post meta, but the destination editor does not show the matching field controls.
 
 **Solutions**:
 
@@ -189,19 +188,16 @@ meta, but the destination editor does not show the matching field controls.
 
 2. **Check the imported destination meta**:
    - Confirm the destination post has the value key, such as `hero_title`.
-   - Confirm it also has the companion reference key, such as `_hero_title`,
-     when editor rendering is required.
+   - Confirm it also has the companion reference key, such as `_hero_title`, when editor rendering is required.
 
 3. **Check the destination field definitions**:
    - ACF or SCF must be active on the destination.
    - The destination must have matching field groups and field keys.
-   - Safe Publish stores the meta values but does not currently create or sync
-     ACF/SCF field groups.
+   - Safe Publish stores the meta values but does not currently create or sync ACF/SCF field groups.
 
 4. **Resolve the mismatch**:
    - Add or sync the matching field group definitions on the destination.
-   - If editor rendering is not needed, no action is required; the values are
-     already stored as post meta.
+   - If editor rendering is not needed, no action is required; the values are already stored as post meta.
 
 #### Duplicate content imported
 
@@ -367,8 +363,7 @@ Check the **Imports → Failures** tab for:
 - Source URL of each failed attempt
 - Timestamp of the attempt
 
-The tab is read-only; recovery is fixing the underlying issue and re-importing
-from Source Posts.
+Recovery is fixing the underlying issue and re-importing from Source Posts. Once an item is no longer needed, use the **Remove** action (per-row or bulk) to clear it from the tab; this only deletes the record and does not affect the source.
 
 ## Getting Help
 
@@ -406,10 +401,7 @@ wp option delete safe_publish_basic_auth_password
 
 ### Clear Import History
 
-Import history is stored in two custom tables (`safe_publish_imports` and
-`safe_publish_import_items`). Individual rows can be rolled back from the
-**Imports → Posts** tab (per-row or bulk). To clear history entirely, use
-the Complete Reset below.
+Import history is stored in two custom tables (`safe_publish_imports` and `safe_publish_import_items`). Individual rows can be rolled back from the **Imports → Posts** tab (per-row or bulk). To clear history entirely, use the Complete Reset below.
 
 ### Complete Reset
 
