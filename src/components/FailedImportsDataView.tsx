@@ -34,7 +34,7 @@ export function FailedImportsDataView(): JSX.Element {
 		type: 'table',
 		perPage: DEFAULT_ITEMS_PER_PAGE,
 		page: 1,
-		fields: [ 'source', 'error_message', 'import_date_gmt' ],
+		fields: [ 'error_message', 'import_date_gmt' ],
 		titleField: 'title',
 		layout: { density: 'compact' },
 	} );
