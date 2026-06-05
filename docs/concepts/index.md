@@ -9,6 +9,7 @@ Safe Publish is a WordPress plugin that allows editors to promote content from n
 - Browsing content from source WordPress sites via the WordPress REST API
 - Previewing and comparing content before importing
 - Importing posts, pages, and custom post types while preserving all formatting and media
+- Seeing at a glance whether imported content is still in sync with its source
 - Tracking import history for auditing and compliance purposes
 
 The plugin is designed with WordPress VIP best practices in mind, ensuring security, performance, and compatibility with enterprise WordPress environments.
@@ -58,9 +59,7 @@ Every import action is tracked and logged:
 - Import status (success/failure)
 - Error messages (if applicable)
 
-Manage your imported content and review failed imports on the
-[Imports](imports.md) page. Review outbound events on the
-[Exports](exports.md) page.
+Manage your imported content and review failed imports on the [Imports](imports.md) page. Review outbound events on the [Exports](exports.md) page.
 
 ## Technical concepts
 
