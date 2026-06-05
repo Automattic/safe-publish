@@ -477,7 +477,7 @@ export function ImportedPostsDataView(): JSX.Element {
 		return () => {
 			controller.abort();
 		};
-	}, [ sourceIdsKey ] );
+	}, [ sourceIdsKey, refreshNonce ] );
 
 	const fields: DataViewsField< ImportedPost >[] = useMemo(
 		() => [

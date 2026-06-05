@@ -12,6 +12,7 @@ import DiffViewSelector from './DiffViewSelector';
 import NonContentDiffSections from './NonContentDiffSections';
 import { useDiffPreview } from './hooks/useDiffPreview';
 import { useImportPost } from './hooks/useImportPost';
+import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
 import { ImportedPost, ImportSyncStatus } from '../types';
 import { renderWarningMessage } from '../utils';
 import {
@@ -101,6 +102,8 @@ export default function PostDiffModal( {
 	const updateSucceeded = null !== editUrl;
 	// Mirror the Update menu item's gating in actions.tsx.
 	const isUpToDate = 'up-to-date' === syncStatus;
+
+	useRefreshOnUnmount( updateSucceeded, onRefresh );
 
 	return (
 		<VStack>
@@ -204,12 +207,7 @@ export default function PostDiffModal( {
 				<Button
 					__next40pxDefaultSize
 					variant="tertiary"
-					onClick={ () => {
-						if ( updateSucceeded ) {
-							onRefresh?.();
-						}
-						closeModal?.();
-					} }
+					onClick={ closeModal }
 					disabled={ isUpdating }
 				>
 					{ __( 'Close', 'safe-publish' ) }

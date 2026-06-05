@@ -9,6 +9,7 @@
  */
 
 import { useImportPost } from './hooks/useImportPost';
+import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
 import { renderWarningMessage } from '../utils';
 import {
 	Button,
@@ -70,6 +71,8 @@ const ImportModal = ( {
 		nonce,
 	} );
 
+	useRefreshOnUnmount( null !== editUrl, onRefresh );
+
 	const submitLabel = isUpdate ? __( 'Update', 'safe-publish' ) : __( 'Import', 'safe-publish' );
 	const loadingLabel = isUpdate ? __( 'Updating…', 'safe-publish' ) : __( 'Importing…', 'safe-publish' );
 
@@ -99,10 +102,7 @@ const ImportModal = ( {
 					<Button
 						__next40pxDefaultSize
 						variant="tertiary"
-						onClick={ () => {
-							onRefresh?.();
-							closeModal?.();
-						} }
+						onClick={ closeModal }
 					>
 						{ __( 'Close', 'safe-publish' ) }
 					</Button>
@@ -111,7 +111,6 @@ const ImportModal = ( {
 						variant="primary"
 						onClick={ () => {
 							window.open( editUrl, '_blank', 'noreferrer' );
-							onRefresh?.();
 							closeModal?.();
 						} }
 					>
