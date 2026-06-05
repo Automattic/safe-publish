@@ -17,9 +17,9 @@ use Safe_Publish\Utils\Import_Items_Table;
  *
  * Covers History_Repository::list_imported_post_ids(), which joins wp_posts so
  * search/filter/sort act on every imported post, get_imported_filter_facets(),
- * and get_items_for_posts(). list_imported_post_ids() requires real posts (the
- * join drops missing ones); get_items_for_posts() is items-only and seeds
- * arbitrary post IDs.
+ * get_items_for_posts(), and get_item_for_post(). list_imported_post_ids()
+ * requires real posts (the join drops missing ones); the item-lookup helpers
+ * are items-only and seed arbitrary post IDs.
  */
 class Imported_Posts_Listing_Test extends Integration_Test_Case {
 
@@ -66,13 +66,15 @@ class Imported_Posts_Listing_Test extends Integration_Test_Case {
 	 * @param string   $import_date_gmt MySQL datetime to store.
 	 * @param string   $status          Item status.
 	 * @param int|null $session_id      Owning session, or null for the default.
+	 * @param bool     $rolled_back     Whether the item should be marked rolled back.
 	 * @return int Inserted item ID.
 	 */
 	private function insert_item(
 		?int $post_id,
 		string $import_date_gmt,
 		string $status = 'success',
-		?int $session_id = null
+		?int $session_id = null,
+		bool $rolled_back = false
 	): int {
 		global $wpdb;
 
@@ -85,7 +87,7 @@ class Imported_Posts_Listing_Test extends Integration_Test_Case {
 				'status'               => $status,
 				'post_id'              => $post_id,
 				'has_previous_content' => 0,
-				'rolled_back'          => 0,
+				'rolled_back'          => $rolled_back ? 1 : 0,
 				'import_date_gmt'      => $import_date_gmt,
 			),
 			array( '%d', '%s', '%s', '%d', '%d', '%d', '%s' )
@@ -194,6 +196,56 @@ class Imported_Posts_Listing_Test extends Integration_Test_Case {
 
 		// ASSERT: The orphaned item is dropped by the wp_posts join.
 		$this->assertSame( array( $live ), $result );
+	}
+
+	/**
+	 * Verifies that ordering anchors on a post's most recent active item,
+	 * ignoring rolled-back rows.
+	 */
+	public function test_list_anchors_on_most_recent_active_row(): void {
+		// ARRANGE: $rolled has an old active import and a newer rolled-back
+		// update; $plain sits between them by import date.
+		list( $rolled ) = $this->insert_post_item( '2024-01-01 00:00:00' );
+		$this->insert_item(
+			$rolled,
+			'2024-09-01 00:00:00',
+			'updated',
+			null,
+			true
+		);
+		list( $plain ) = $this->insert_post_item( '2024-05-01 00:00:00' );
+
+		// ACT: List the first page.
+		$result = $this->repository->list_imported_post_ids( 1, 20 );
+
+		// ASSERT: $plain (active 2024-05) outranks $rolled (active 2024-01);
+		// the rolled-back 2024-09 row is ignored.
+		$this->assertSame( array( $plain, $rolled ), $result );
+	}
+
+	/**
+	 * Verifies that a post whose every item is rolled back is excluded from
+	 * the listing.
+	 */
+	public function test_list_omits_posts_with_all_rows_rolled_back(): void {
+		// ARRANGE: One active post and one whose only item is rolled back.
+		list( $active ) = $this->insert_post_item( '2024-02-01 00:00:00' );
+		$rolled         = $this->factory()->post->create(
+			array( 'post_status' => 'publish' )
+		);
+		$this->insert_item(
+			$rolled,
+			'2024-01-01 00:00:00',
+			'success',
+			null,
+			true
+		);
+
+		// ACT: List the first page.
+		$result = $this->repository->list_imported_post_ids( 1, 20 );
+
+		// ASSERT: Only the post with an active item is listed.
+		$this->assertSame( array( $active ), $result );
 	}
 
 	/**
@@ -557,5 +609,97 @@ class Imported_Posts_Listing_Test extends Integration_Test_Case {
 		$keys = array_keys( $result );
 		sort( $keys );
 		$this->assertSame( array( 1101, 1103 ), $keys );
+	}
+
+	/**
+	 * Verifies that get_items_for_posts resolves each post to its most
+	 * recent active row, skipping rolled-back rows.
+	 */
+	public function test_get_items_returns_most_recent_active_row_per_post(): void {
+		// ARRANGE: Post 801 has an active success and a newer rolled-back
+		// update; 802 has only an active row.
+		$this->insert_item( 801, '2024-01-01 00:00:00', 'success' );
+		$this->insert_item( 801, '2024-05-01 00:00:00', 'updated', null, true );
+		$this->insert_item( 802, '2024-03-01 00:00:00', 'success' );
+
+		// ACT: Fetch the items for both posts.
+		$result = $this->repository->get_items_for_posts( array( 801, 802 ) );
+
+		// ASSERT: 801 resolves to its older active success; 802 to its only
+		// row.
+		$this->assertSame( 'success', $result[801]['status'] );
+		$this->assertSame(
+			'2024-01-01 00:00:00',
+			$result[801]['import_date_gmt']
+		);
+		$this->assertSame( 'success', $result[802]['status'] );
+	}
+
+	/**
+	 * Verifies that get_items_for_posts omits a post whose every row is
+	 * rolled back.
+	 */
+	public function test_get_items_omits_post_when_all_rows_rolled_back(): void {
+		// ARRANGE: Post 901 has an active row; post 902's only row is rolled
+		// back.
+		$this->insert_item( 901, '2024-01-01 00:00:00', 'success' );
+		$this->insert_item( 902, '2024-02-01 00:00:00', 'success', null, true );
+
+		// ACT: Fetch the items.
+		$result = $this->repository->get_items_for_posts( array( 901, 902 ) );
+
+		// ASSERT: Only 901 has an entry.
+		$this->assertArrayHasKey( 901, $result );
+		$this->assertArrayNotHasKey( 902, $result );
+	}
+
+	/**
+	 * Verifies that get_item_for_post returns the most recent active row,
+	 * skipping rolled-back rows.
+	 */
+	public function test_get_item_for_post_skips_rolled_back_rows(): void {
+		// ARRANGE: An active import and a newer rolled-back update for the
+		// same post.
+		list( $post_id, $active_id ) = $this->insert_post_item(
+			'2024-01-01 00:00:00'
+		);
+		$this->insert_item(
+			$post_id,
+			'2024-05-01 00:00:00',
+			'updated',
+			null,
+			true
+		);
+
+		// ACT: Look up the most recent active row.
+		$result = $this->repository->get_item_for_post( $post_id );
+
+		// ASSERT: The active row wins; the rolled-back row is skipped.
+		$this->assertNotNull( $result );
+		$this->assertSame( $active_id, (int) $result['id'] );
+	}
+
+	/**
+	 * Verifies that get_item_for_post returns null when every row for the
+	 * post is rolled back.
+	 */
+	public function test_get_item_for_post_returns_null_when_all_rolled_back(): void {
+		// ARRANGE: A post whose only row is rolled back.
+		$post_id = $this->factory()->post->create(
+			array( 'post_status' => 'publish' )
+		);
+		$this->insert_item(
+			$post_id,
+			'2024-01-01 00:00:00',
+			'success',
+			null,
+			true
+		);
+
+		// ACT: Look up the most recent active row.
+		$result = $this->repository->get_item_for_post( $post_id );
+
+		// ASSERT: No active row exists.
+		$this->assertNull( $result );
 	}
 }
