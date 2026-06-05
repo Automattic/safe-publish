@@ -10,7 +10,7 @@
 ## Writing instructions
 
 - Use US English spelling. Common pitfalls: "behavior" (not "behaviour"), "organize" (not "organise"), "color" (not "colour"), "center" (not "centre"), "license" (not "licence"), "authorization" (not "authorisation"), "recognize" (not "recognise").
-- The possessive form of WordPress is WordPress'
+- The possessive form of WordPress is WordPress'.
 - Finish your responses with a ✨.
 
 ## Files
@@ -19,18 +19,23 @@
 
 ## Code
 
+- Write concise code.
 - Don't offer over-engineered solutions, keep architecture as simple as possible.
-- Don't write unnecessarily verbose code/comments.
-- Adhere to WordPress inline documentation standards.
 - For accessibility, adhere to WCAG 2.2 Level AA standards or higher whenever possible.
 - Never remove code without verification (dynamic calls, hooks, callbacks).
-- When applying changes, carefully analyze if:
+- When applying changes, carefully analyze:
   - The change could be breaking desired functionality.
   - Any related documentation files need updating.
 - Verify PHP files use strict typing, and use type hinting everywhere possible.
 - Prefer using `_` instead of `@psalm-suppress PossiblyUnusedParam`.
 - Use explicit checks, don't use empty().
 - Wrap code, comments and docblocks at 80 characters; never wrap them unnecessarily early. `@param`/`@return` descriptions starting beyond column 40 can extend to 100 characters. Line length is measured in display characters, with tabs counting as 4.
+
+### Comments and docblocks
+
+- Write short and to the point comments; lengthy comments allowed only when they provide value.
+- Adhere to WordPress inline documentation standards.
+- Docblock summaries are plain prose; no backticks or Markdown.
 
 ## Tests
 
@@ -45,18 +50,25 @@
 - Keep PR descriptions short, focusing on decisions instead of small technical details; don't add any line wrapping.
 - Before creating a PR, ensure all tests pass by running `npm run test` and `npm run test:integration`.
 
+## Code-review skill
+
+While using `/code-review:code-review`:
+
+- Don't switch branches; ask explicitly if absolutely needed.
+- **IMPORTANT:** Always post every item worth fixing — this MUST override the skill's default rating-threshold filter. Filter findings only by validity, never by rating.
+
 # Project guidelines
 
 ## Plugin purpose
 
 The plugin's purpose is migrating data from a source to a destination site, keeping the data's integrity and format to the maximum extent possible. The only acceptable changes are the ones required to make the migrated data operational/correct on the destination site.
 
-## Guidelines
+## Workflow
 
 - This project is unreleased, so keeping backward-compatibility isn't needed.
 - If whitespace issues occur during replacement, use `npm run fix` before trying to manually fix.
 - After applying changes, run `npm run fix` and then `npm run check`. Fix and repeat as needed. Disregard issues unrelated to our changes.
-- Run integration tests with `npm run test:integration` and unit tests with `npm run test`.
+- Run unit tests with `npm run test` and integration tests with `npm run test:integration`.
 - When adjustments are made to the single import/update path, verify whether identical changes are needed to the bulk import/update path, and vice versa.
 
 ## Worktrees
