@@ -55,9 +55,7 @@ register_post_type( 'book', [
 
 ### Custom Post Meta
 
-Safe Publish imports the core REST API `meta` object. It does not import
-arbitrary top-level REST fields added with `register_rest_field()`.
-For custom post types, the post type must also support `custom-fields`.
+Safe Publish imports the core REST API `meta` object. It does not import arbitrary top-level REST fields added with `register_rest_field()`. For custom post types, the post type must also support `custom-fields`.
 
 Register each meta key that should migrate:
 
@@ -77,10 +75,7 @@ add_action( 'init', function() {
 } );
 ```
 
-For private or sensitive meta, add an `auth_callback` that requires edit
-access to the post. Safe Publish requests authenticated with the shared secret
-use `context=edit`, so edit-only meta remains available to the importer without
-making it public in unauthenticated REST responses.
+For private or sensitive meta, add an `auth_callback` that requires edit access to the post. Safe Publish requests authenticated with the shared secret use `context=edit`, so edit-only meta remains available to the importer without making it public in unauthenticated REST responses.
 
 ## Custom Taxonomies
 
@@ -112,20 +107,11 @@ register_post_type( 'documentation', [
 
 ## ACF and Secure Custom Fields Support
 
-ACF and Secure Custom Fields (SCF) store field values in regular post meta, but
-Safe Publish reads only the core REST API `meta` object. ACF's built-in
-**Show in REST API** setting exposes fields under a separate top-level `acf`
-object, which Safe Publish does not import.
+ACF and Secure Custom Fields (SCF) store field values in regular post meta, but Safe Publish reads only the core REST API `meta` object. ACF's built-in **Show in REST API** setting exposes fields under a separate top-level `acf` object, which Safe Publish does not import.
 
-To migrate ACF or SCF values, register the field value keys with
-`register_post_meta()` and `show_in_rest => true` on the source site. Prefer
-registering only the field keys that should migrate, with the correct REST type
-and schema for each field. Registering every ACF/SCF or underscored meta key can
-expose internal or sensitive values in REST responses.
+To migrate ACF or SCF values, register the field value keys with `register_post_meta()` and `show_in_rest => true` on the source site. Prefer registering only the field keys that should migrate, with the correct REST type and schema for each field. Registering every ACF/SCF or underscored meta key can expose internal or sensitive values in REST responses.
 
-ACF and SCF also store a companion reference key for each field, such as
-`_hero_title` for `hero_title`. Migrate the companion key when the destination
-editor needs ACF/SCF to recognize the imported value.
+ACF and SCF also store a companion reference key for each field, such as `_hero_title` for `hero_title`. Migrate the companion key when the destination editor needs ACF/SCF to recognize the imported value.
 
 ```php
 add_action( 'init', function() {
@@ -143,11 +129,7 @@ add_action( 'init', function() {
 } );
 ```
 
-The destination does not need field registration to store the imported meta.
-However, the editor only renders the values as ACF/SCF controls when ACF or SCF
-is active on the destination and the destination has matching field definitions
-with the same field keys. Safe Publish does not currently create or sync field
-groups.
+The destination does not need field registration to store the imported meta. However, the editor only renders the values as ACF/SCF controls when ACF or SCF is active on the destination and the destination has matching field definitions with the same field keys. Safe Publish does not currently create or sync field groups.
 
 ## Troubleshooting
 

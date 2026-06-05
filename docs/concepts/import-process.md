@@ -182,26 +182,13 @@ The source Custom Post Type (CPT) must be registered with `'show_in_rest' => tru
 
 ### Post Meta
 
-Source post meta exposed through the core REST API `meta` object is imported
-automatically. Custom fields must be registered with `register_post_meta()` and
-`'show_in_rest' => true` on the source site to be included in that object. For
-custom post types, the post type must also support `custom-fields`.
+Source post meta exposed through the core REST API `meta` object is imported automatically. Custom fields must be registered with `register_post_meta()` and `'show_in_rest' => true` on the source site to be included in that object. For custom post types, the post type must also support `custom-fields`.
 
-Safe Publish does not import arbitrary top-level REST fields. Fields exposed
-with `register_rest_field()` or ACF's top-level `acf` REST object are ignored
-unless the same values are also present in the core `meta` object.
+Safe Publish does not import arbitrary top-level REST fields. Fields exposed with `register_rest_field()` or ACF's top-level `acf` REST object are ignored unless the same values are also present in the core `meta` object.
 
-ACF and Secure Custom Fields (SCF) values are regular post meta. To migrate
-them, register the source field value keys with `register_post_meta()` and
-`show_in_rest => true`, preferably only for the fields that should migrate.
-Register companion reference keys, such as `_hero_title` for `hero_title`, when
-the destination editor needs ACF/SCF to recognize the value.
+ACF and Secure Custom Fields (SCF) values are regular post meta. To migrate them, register the source field value keys with `register_post_meta()` and `show_in_rest => true`, preferably only for the fields that should migrate. Register companion reference keys, such as `_hero_title` for `hero_title`, when the destination editor needs ACF/SCF to recognize the value.
 
-No field registration is required on the destination to store the meta values.
-However, Safe Publish does not currently create or sync ACF/SCF field groups.
-The destination editor only renders those values as ACF/SCF controls when the
-destination has ACF or SCF active and has matching field definitions with the
-same field keys.
+No field registration is required on the destination to store the meta values. However, Safe Publish does not currently create or sync ACF/SCF field groups. The destination editor only renders those values as ACF/SCF controls when the destination has ACF or SCF active and has matching field definitions with the same field keys.
 
 ### Terms
 
@@ -221,10 +208,7 @@ Custom taxonomies must be registered with `'show_in_rest' => true` on the source
   - User who performed import
   - Import status (success, updated, or error)
   - Error message (if failed)
-- Import recorded in the imports and import items tables (one session row,
-  one item per processed post). The Imports page surfaces this data; the
-  imported posts list on its Posts tab and the failed items on its Failures
-  tab.
+- Import recorded in the imports and import items tables (one session row, one item per processed post). The Imports page surfaces this data; the imported posts list on its Posts tab and the failed items on its Failures tab.
 
 See [Imports](imports.md) for more details.
 
@@ -235,8 +219,7 @@ Bulk imports process multiple posts sequentially:
 1. Each post goes through all stages individually.
 2. Failures in one post don't stop others.
 3. Results aggregated and reported.
-4. Imports table updated for each post; failed items appear on the Imports
-   page Failures tab.
+4. Imports table updated for each post; failed items appear on the Imports page Failures tab.
 
 ### Performance
 
