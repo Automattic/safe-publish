@@ -23,7 +23,7 @@
 - Don't offer over-engineered solutions, keep architecture as simple as possible.
 - For accessibility, adhere to WCAG 2.2 Level AA standards or higher whenever possible.
 - Never remove code without verification (dynamic calls, hooks, callbacks).
-- When applying changes, carefully analyze:
+- When applying changes, carefully analyze whether:
   - The change could be breaking desired functionality.
   - Any related documentation files need updating.
 - Verify PHP files use strict typing, and use type hinting everywhere possible.
