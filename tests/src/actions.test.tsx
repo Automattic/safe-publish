@@ -194,6 +194,85 @@ describe( 'View in Imports action', () => {
 	} );
 } );
 
+describe( 'createImportedActions primary-row icons', () => {
+	const importedActions = createImportedActions( undefined, IMPORTED_CONTEXT, {} );
+
+	it( 'puts Edit, Compare, and Update inline; Delete and Roll back in the kebab', () => {
+		// ARRANGE: the action set under test.
+		const byId = ( id: string ) =>
+			importedActions.find( ( a ) => a.id === id );
+
+		// ACT + ASSERT: inline trio for the primary row toolbar.
+		expect( byId( 'edit-post' )?.isPrimary ).toBe( true );
+		expect( byId( 'compare-post' )?.isPrimary ).toBe( true );
+		expect( byId( 'update-post' )?.isPrimary ).toBe( true );
+
+		// ACT + ASSERT: destructive / less-frequent actions live in the kebab.
+		expect( byId( 'delete-post' )?.isPrimary ).toBeFalsy();
+		expect( byId( 'rollback' )?.isPrimary ).toBeFalsy();
+	} );
+
+	it( 'orders Edit · Compare · Update so review precedes the action', () => {
+		// ARRANGE + ACT: positions of the inline actions.
+		const ids = importedActions.map( ( a ) => a.id );
+
+		// ASSERT: Compare sits between Edit and Update.
+		expect( ids.indexOf( 'edit-post' ) ).toBeLessThan(
+			ids.indexOf( 'compare-post' )
+		);
+		expect( ids.indexOf( 'compare-post' ) ).toBeLessThan(
+			ids.indexOf( 'update-post' )
+		);
+	} );
+} );
+
+describe( 'createImportedActions Compare action', () => {
+	/**
+	 * Returns the Compare modal action from an action set built with the given
+	 * sync statuses, throwing if it's absent.
+	 */
+	function getCompareAction(
+		syncStatuses: Parameters< typeof createImportedActions >[ 2 ]
+	): ActionModal< ImportedPost > {
+		const action = createImportedActions(
+			undefined,
+			IMPORTED_CONTEXT,
+			syncStatuses
+		).find( ( a: Action< ImportedPost > ) => a.id === 'compare-post' );
+		if ( ! action || ! ( 'RenderModal' in action ) ) {
+			throw new Error( 'Expected modal action with id "compare-post"' );
+		}
+		return action;
+	}
+
+	it( 'is hidden for up-to-date rows and visible otherwise', () => {
+		// ARRANGE: the row identifies the source via source_post_id 10.
+		const item = buildImportedPost();
+
+		// ACT + ASSERT: explicit up-to-date verdict hides Compare.
+		expect(
+			getCompareAction( { 10: { status: 'up-to-date' } } ).isEligible?.(
+				item
+			)
+		).toBe( false );
+
+		// ACT + ASSERT: ambiguous verdicts still surface Compare.
+		expect(
+			getCompareAction( { 10: { status: 'outdated' } } ).isEligible?.(
+				item
+			)
+		).toBe( true );
+		expect(
+			getCompareAction( { 10: { status: 'loading' } } ).isEligible?.(
+				item
+			)
+		).toBe( true );
+		expect(
+			getCompareAction( {} ).isEligible?.( item )
+		).toBe( true );
+	} );
+} );
+
 describe( 'createImportedActions rollback action', () => {
 	const importedActions = createImportedActions( undefined, IMPORTED_CONTEXT, {} );
 
@@ -217,24 +296,18 @@ describe( 'createImportedActions rollback action', () => {
 		expect( rollback.isDestructive ).toBe( true );
 	} );
 
-	it( 'is eligible only for success/updated rows with an item_id', () => {
+	it( 'is eligible only for rows with an active item_id', () => {
 		// ARRANGE: the rollback action under test.
 		const rollback = getRollbackAction();
 
-		// ACT + ASSERT: created and updated rows can be rolled back.
+		// ACT + ASSERT: rows with an active items-table row can be rolled back.
 		expect(
-			rollback.isEligible?.( buildImportedPost( { rollback_status: 'success' } ) )
-		).toBe( true );
-		expect(
-			rollback.isEligible?.( buildImportedPost( { rollback_status: 'updated' } ) )
+			rollback.isEligible?.( buildImportedPost() )
 		).toBe( true );
 
-		// ACT + ASSERT: record-less and error rows cannot.
+		// ACT + ASSERT: rows without an active items-table row cannot.
 		expect(
 			rollback.isEligible?.( buildImportedPost( { item_id: null } ) )
-		).toBe( false );
-		expect(
-			rollback.isEligible?.( buildImportedPost( { rollback_status: 'error' } ) )
 		).toBe( false );
 	} );
 
