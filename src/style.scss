@@ -243,10 +243,6 @@
 		--safe-publish-badge-color: #9b59b6;
 	}
 
-	&--rolled-back {
-		--safe-publish-badge-color: var(--safe-publish-status-warning);
-	}
-
 	// Colored dot with neutral text — for reference columns, not the
 	// row's action signal.
 	&--quiet {

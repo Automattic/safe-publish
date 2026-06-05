@@ -308,7 +308,6 @@ export const createImportedActions = (
 		supportsBulk: true,
 		isEligible: ( item: ImportedPost ) =>
 			null !== item.item_id &&
-			! item.rolled_back &&
 			( 'success' === item.rollback_status ||
 				'updated' === item.rollback_status ),
 		RenderModal: ( { items, closeModal } ) =>

@@ -61,7 +61,6 @@ function buildImportedPost(
 		session_id: 5,
 		rollback_status: 'success',
 		has_previous_content: false,
-		rolled_back: false,
 		import_date_gmt: null,
 		...overrides,
 	};
@@ -218,7 +217,7 @@ describe( 'createImportedActions rollback action', () => {
 		expect( rollback.isDestructive ).toBe( true );
 	} );
 
-	it( 'is eligible only for non-rolled-back success/updated rows with an item_id', () => {
+	it( 'is eligible only for success/updated rows with an item_id', () => {
 		// ARRANGE: the rollback action under test.
 		const rollback = getRollbackAction();
 
@@ -230,10 +229,7 @@ describe( 'createImportedActions rollback action', () => {
 			rollback.isEligible?.( buildImportedPost( { rollback_status: 'updated' } ) )
 		).toBe( true );
 
-		// ACT + ASSERT: already-rolled-back, record-less, and error rows cannot.
-		expect(
-			rollback.isEligible?.( buildImportedPost( { rolled_back: true } ) )
-		).toBe( false );
+		// ACT + ASSERT: record-less and error rows cannot.
 		expect(
 			rollback.isEligible?.( buildImportedPost( { item_id: null } ) )
 		).toBe( false );

@@ -525,7 +525,6 @@ final class Admin_Ajax_Controller {
 			'session_id'           => null !== $item ? (int) $item['session_id'] : null,
 			'rollback_status'      => null !== $item ? (string) $item['status'] : null,
 			'has_previous_content' => null !== $item ? (bool) $item['has_previous_content'] : false,
-			'rolled_back'          => null !== $item ? (bool) $item['rolled_back'] : false,
 			'import_date_gmt'      => null !== $item ? (string) $item['import_date_gmt'] : null,
 		);
 	}
