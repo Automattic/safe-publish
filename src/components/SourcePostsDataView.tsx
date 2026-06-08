@@ -8,9 +8,10 @@
  *
  * @file This file defines the SourcePostsDataView component.
  */
-import { chevronDown, update } from '@wordpress/icons';
+import { update } from '@wordpress/icons';
 
 import AuthStatusNotice from './AuthStatusNotice';
+import { DateRangeFilter, detectSlugFromInput } from './filter-controls';
 import { useAuthStatus } from './hooks/useAuthStatus';
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 import { getSyncStatusLabel } from './post-fields';
@@ -33,17 +34,14 @@ import {
 import {
 	BaseControl,
 	Button,
-	DatePicker,
-	Dropdown,
 	FormTokenField,
 	Notice,
 	TextControl,
 	Tooltip,
 } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
-import { dateI18n, getSettings } from '@wordpress/date';
 import { useState, useEffect, useRef, useCallback, useMemo } from '@wordpress/element';
-import { __, _x, sprintf } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
 import type {
 	ApiResponse,
@@ -73,173 +71,6 @@ const STATUS_LABEL_SUGGESTIONS = STATUS_VALUES.map(
 	// eslint-disable-next-line security/detect-object-injection -- value iterates STATUS_VALUES allowlist.
 	( value ) => PUBLISH_STATUS_LABELS[ value ] ?? value
 );
-
-/**
- * Regex matching pasted URLs or absolute paths. Catches the "I have this
- * post's link" workflow without needing to scope to the source's host.
- */
-const URL_OR_PATH_RE = /^(https?:\/\/[^\s]+|\/[^\s]+)/;
-
-/**
- * Extracts a slug from a pasted URL or path.
- *
- * Drops query/hash, strips trailing slashes, and returns the last
- * non-empty path segment. Returns null when the input isn't URL-shaped,
- * no slug can be recovered, or the URL host doesn't match the connected
- * source — pasting a URL from a different site would otherwise query the
- * source for a slug it doesn't have and silently return zero results.
- *
- * @param {string} raw       User input from the search box.
- * @param {string} sourceUrl Connected source site URL for host validation.
- *
- * @return {string|null} Slug suitable for `name=` lookup, or null.
- */
-function detectSlugFromInput( raw: string, sourceUrl: string ): string | null {
-	const trimmed = raw.trim();
-	if ( ! URL_OR_PATH_RE.test( trimmed ) ) {
-		return null;
-	}
-
-	const PLACEHOLDER_HOST = 'placeholder.example';
-	let path = trimmed;
-	try {
-		const url = new URL( trimmed, `https://${ PLACEHOLDER_HOST }` );
-		// Bare paths inherit the placeholder host; only validate when the
-		// input was a full URL with its own host.
-		if ( url.host !== PLACEHOLDER_HOST ) {
-			try {
-				const sourceHost = new URL( sourceUrl ).host;
-				if ( url.host !== sourceHost ) {
-					return null;
-				}
-			} catch {
-				// Source URL unparseable; skip validation rather than block.
-			}
-		}
-		path = url.pathname;
-	} catch {
-		// Already a bare path; fall through with `trimmed`.
-	}
-
-	const segments = path.split( '/' ).filter( ( seg ) => '' !== seg );
-	const last = segments.pop();
-	return last && '' !== last ? last : null;
-}
-
-/**
- * One side of the published-date range popover: a labeled DatePicker
- * with a Clear button that only renders when the bound is set.
- *
- * @param {Object}    props               Component props.
- * @param {string}    props.label         Heading shown above the picker.
- * @param {string?}   props.value         Currently selected ISO date, or null.
- * @param {Function}  props.onChange      Called with the new ISO date or null.
- * @param {Function?} props.isInvalidDate Optional predicate that disables
- *                                        dates the caller considers invalid.
- *
- * @return {JSX.Element} Labeled picker with conditional Clear button.
- */
-function DateRangeColumn( {
-	label,
-	value,
-	onChange,
-	isInvalidDate,
-}: {
-	label: string;
-	value: string | null;
-	onChange: ( next: string | null ) => void;
-	isInvalidDate?: ( date: Date ) => boolean;
-} ): JSX.Element {
-	// Honor WP's Settings → General → "Week Starts On" so the calendar
-	// matches the rest of the admin.
-	const startOfWeek = getSettings().l10n.startOfWeek;
-
-	return (
-		// role="group" with aria-label so screen readers can tell the two
-		// DatePickers apart — both render their own "Calendar" label that
-		// would otherwise read identically.
-		<div
-			className="safe-publish-date-picker-panel__group"
-			role="group"
-			aria-label={ label }
-		>
-			<p className="safe-publish-date-picker-panel__heading">{ label }</p>
-			<DatePicker
-				currentDate={ value ?? undefined }
-				onChange={ ( next: string ) =>
-					onChange( next ? next.slice( 0, 10 ) : null )
-				}
-				isInvalidDate={ isInvalidDate }
-				startOfWeek={ startOfWeek }
-			/>
-			{ null !== value && (
-				<Button variant="tertiary" onClick={ () => onChange( null ) }>
-					{ __( 'Clear', 'safe-publish' ) }
-				</Button>
-			) }
-		</div>
-	);
-}
-
-/**
- * Serializes a Date to its local calendar day ("YYYY-MM-DD") for
- * lexicographic comparison against ISO date strings the toolbar stores.
- * Uses local parts (not toISOString) so a user picking April 30 doesn't
- * get the previous day in negative-UTC-offset timezones.
- *
- * @param {Date} date Date instance to serialize.
- * @return {string} Calendar day in YYYY-MM-DD form.
- */
-function toCalendarDay( date: Date ): string {
-	return `${ date.getFullYear() }-${ String( date.getMonth() + 1 ).padStart( 2, '0' ) }-${ String( date.getDate() ).padStart( 2, '0' ) }`;
-}
-
-/**
- * Formats the published-date dropdown button label so the user can read
- * the active filter at a glance.
- *
- * @param {string|null} after  ISO date for the after bound, or null.
- * @param {string|null} before ISO date for the before bound, or null.
- *
- * @return {string} Translated label for the toggle button.
- */
-function formatDateRangeLabel(
-	after: string | null,
-	before: string | null
-): string {
-	if ( null === after && null === before ) {
-		return __( 'All dates', 'safe-publish' );
-	}
-
-	// Append `T00:00:00Z` so moment parses the calendar-day string as UTC
-	// midnight (bare date-only strings are parsed as *local* midnight).
-	// Combined with the `true` timezone arg (which formats in UTC), the
-	// label round-trips the picked calendar day in any browser timezone.
-	const fmt = ( iso: string ): string =>
-		dateI18n( getSettings().formats.date, `${ iso }T00:00:00Z`, true );
-
-	if ( null !== after && null !== before ) {
-		// Collapse a same-day range to the single date rather than the
-		// redundant "<date> – <date>".
-		if ( after === before ) {
-			return fmt( after );
-		}
-		return sprintf(
-			/* translators: 1: start date, 2: end date */
-			_x( '%1$s – %2$s', 'date range', 'safe-publish' ),
-			fmt( after ),
-			fmt( before )
-		);
-	}
-
-	if ( null !== after ) {
-		/* translators: %s: start date */
-		return sprintf( __( 'From %s', 'safe-publish' ), fmt( after ) );
-	}
-
-	/* translators: %s: end date */
-	return sprintf( __( 'To %s', 'safe-publish' ), fmt( before as string ) );
-}
 
 /**
  * SourcePostsDataView component.
@@ -645,10 +476,6 @@ export function SourcePostsDataView( {
 		[ currentPage, currentPerPage, hasMore, pagePosts.length ]
 	);
 
-	const dateLabel = useMemo(
-		() => formatDateRangeLabel( publishedAfter, publishedBefore ),
-		[ publishedAfter, publishedBefore ]
-	);
 	const tokenValues = useMemo(
 		() => selectedStatuses.map(
 			// status from STATUS_VALUES allowlist via handleStatusesChange,
@@ -703,60 +530,17 @@ export function SourcePostsDataView( {
 						/>
 					</BaseControl>
 				</div>
-				<div className="safe-publish-control safe-publish-control--dates">
-					<BaseControl
-						__nextHasNoMarginBottom
-						label={ __( 'Published Date', 'safe-publish' ) }
-						id="safe-publish-published-date"
-					>
-						<Dropdown
-							popoverProps={ { placement: 'bottom-start' } }
-							renderToggle={ ( { isOpen, onToggle } ) => (
-								<Button
-									id="safe-publish-published-date"
-									__next40pxDefaultSize
-									variant="secondary"
-									icon={ chevronDown }
-									iconPosition="right"
-									aria-expanded={ isOpen }
-									onClick={ onToggle }
-								>
-									{ dateLabel }
-								</Button>
-							) }
-						renderContent={ () => (
-							<div className="safe-publish-date-picker-panel">
-								<DateRangeColumn
-									label={ __( 'From', 'safe-publish' ) }
-									value={ publishedAfter }
-									isInvalidDate={
-										publishedBefore
-											? ( date ) => toCalendarDay( date ) > publishedBefore
-											: undefined
-									}
-									onChange={ ( next ) => {
-										setPublishedAfter( next );
-										resetPage();
-									} }
-								/>
-								<DateRangeColumn
-									label={ __( 'To', 'safe-publish' ) }
-									value={ publishedBefore }
-									isInvalidDate={
-										publishedAfter
-											? ( date ) => toCalendarDay( date ) < publishedAfter
-											: undefined
-									}
-									onChange={ ( next ) => {
-										setPublishedBefore( next );
-										resetPage();
-									} }
-								/>
-							</div>
-						) }
-					/>
-					</BaseControl>
-				</div>
+				<DateRangeFilter
+					label={ __( 'Published Date', 'safe-publish' ) }
+					id="safe-publish-published-date"
+					after={ publishedAfter }
+					before={ publishedBefore }
+					onChange={ ( next ) => {
+						setPublishedAfter( next.after );
+						setPublishedBefore( next.before );
+						resetPage();
+					} }
+				/>
 				<div className="safe-publish-control safe-publish-control--statuses">
 					<FormTokenField
 						__next40pxDefaultSize
