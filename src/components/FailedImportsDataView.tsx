@@ -1,20 +1,41 @@
 /**
  * DataViews component for the Imports → Failures tab.
  *
- * Lists items with status 'error' from `safe_publish_list_failed_imports`.
- * Recovery happens by fixing the source and re-importing from Source Posts;
+ * Lists items with status 'error' from `safe_publish_list_failed_imports`. A
+ * small custom toolbar drives the title search and Attempted date range;
+ * DataViews handles only the table render and Prev/Next pagination. Recovery
+ * happens by fixing the source and re-importing from Source Posts;
  * acknowledged failures can also be removed inline via the Remove action.
  *
  * @file This file defines the FailedImportsDataView component.
  */
+import { update } from '@wordpress/icons';
+
+import { DateRangeFilter } from './filter-controls';
 import { useDelayedFlag } from './hooks/useDelayedFlag';
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 import { createFailedImportsActions } from '../actions';
-import { DEFAULT_ITEMS_PER_PAGE, LAYOUT_TABLE } from '../constants';
+import {
+	DEFAULT_ITEMS_PER_PAGE,
+	LAYOUT_TABLE,
+	SEARCH_DEBOUNCE_MS,
+} from '../constants';
 import { formatDateTime, getErrorMessage } from '../utils';
-import { Notice, Spinner } from '@wordpress/components';
+import {
+	BaseControl,
+	Button,
+	Notice,
+	Spinner,
+	TextControl,
+} from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
-import { useState, useEffect, useMemo, useCallback } from '@wordpress/element';
+import {
+	useState,
+	useEffect,
+	useMemo,
+	useCallback,
+	useRef,
+} from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
 import type {
@@ -23,6 +44,84 @@ import type {
 	FailedImport,
 	FailedImportsResponse,
 } from '../types';
+
+/**
+ * Builds the FormData payload for the failed-imports listing request.
+ * Extracted from the fetch effect to keep the component body under the
+ * complexity budget.
+ *
+ * @param {Object}      params                 Request parameters.
+ * @param {string}      params.nonce           AJAX nonce.
+ * @param {number}      params.page            1-indexed page number.
+ * @param {number}      params.perPage         Items per page.
+ * @param {string}      params.debouncedSearch Debounced title search.
+ * @param {string|null} params.attemptedAfter  Lower bound on import_date_gmt.
+ * @param {string|null} params.attemptedBefore Upper bound on import_date_gmt.
+ *
+ * @return {FormData} Populated payload.
+ */
+function buildListingFormData( params: {
+	nonce: string;
+	page: number;
+	perPage: number;
+	debouncedSearch: string;
+	attemptedAfter: string | null;
+	attemptedBefore: string | null;
+} ): FormData {
+	const formData = new FormData();
+	formData.append( 'action', 'safe_publish_list_failed_imports' );
+	formData.append( 'nonce', params.nonce );
+	formData.append( 'page', String( params.page ) );
+	formData.append( 'per_page', String( params.perPage ) );
+	if ( '' !== params.debouncedSearch ) {
+		formData.append( 'search', params.debouncedSearch );
+	}
+	if ( null !== params.attemptedAfter ) {
+		formData.append( 'attempted_after', params.attemptedAfter );
+	}
+	if ( null !== params.attemptedBefore ) {
+		formData.append( 'attempted_before', params.attemptedBefore );
+	}
+	return formData;
+}
+
+/**
+ * Derives which of the listing's mutually-exclusive display states to show.
+ * Mirrors the Imports → Posts helper so the component body stays under the
+ * complexity budget.
+ *
+ * @param {Object}  flags                  Current fetch/filter flags.
+ * @param {boolean} flags.hasFetchedOnce   Whether the first fetch completed.
+ * @param {boolean} flags.isLoading        Whether a fetch is in flight.
+ * @param {boolean} flags.isEmpty          Whether the current page has no rows.
+ * @param {boolean} flags.hasError         Whether a fetch error is showing.
+ * @param {boolean} flags.hasActiveFilters Whether search/filters are active.
+ *
+ * @return {{ showLoading: boolean, showEmptyState: boolean, showNoMatches: boolean }}
+ *         The display state to render.
+ */
+function getDisplayState( flags: {
+	hasFetchedOnce: boolean;
+	isLoading: boolean;
+	isEmpty: boolean;
+	hasError: boolean;
+	hasActiveFilters: boolean;
+} ): {
+	showLoading: boolean;
+	showEmptyState: boolean;
+	showNoMatches: boolean;
+} {
+	const hasEmptyResult =
+		flags.hasFetchedOnce &&
+		! flags.isLoading &&
+		flags.isEmpty &&
+		! flags.hasError;
+	return {
+		showLoading: flags.isLoading && ! flags.hasFetchedOnce,
+		showEmptyState: hasEmptyResult && ! flags.hasActiveFilters,
+		showNoMatches: hasEmptyResult && flags.hasActiveFilters,
+	};
+}
 
 /**
  * FailedImportsDataView component.
@@ -50,15 +149,31 @@ export function FailedImportsDataView(): JSX.Element {
 	const [ hasFetchedOnce, setHasFetchedOnce ] = useState( false );
 	const [ fetchError, setFetchError ] = useState< string | null >( null );
 	const [ refreshNonce, setRefreshNonce ] = useState( 0 );
+	const [ searchTerm, setSearchTerm ] = useState( '' );
+	const [ debouncedSearch, setDebouncedSearch ] = useState( '' );
+	const [ attemptedAfter, setAttemptedAfter ] = useState< string | null >( null );
+	const [ attemptedBefore, setAttemptedBefore ] = useState< string | null >( null );
+
+	const searchDebounceRef = useRef< ReturnType< typeof setTimeout > | null >( null );
+
+	// Read live searchTerm so the Clear button and "no matches" message
+	// respond immediately rather than during the 400 ms debounce.
+	const hasActiveFilters =
+		'' !== searchTerm ||
+		null !== attemptedAfter ||
+		null !== attemptedBefore;
 
 	useEffect( () => {
 		const controller = new AbortController();
 
-		const formData = new FormData();
-		formData.append( 'action', 'safe_publish_list_failed_imports' );
-		formData.append( 'nonce', window.safePublishAdminData.nonce );
-		formData.append( 'page', String( view.page ?? 1 ) );
-		formData.append( 'per_page', String( view.perPage ?? DEFAULT_ITEMS_PER_PAGE ) );
+		const formData = buildListingFormData( {
+			nonce: window.safePublishAdminData.nonce,
+			page: view.page ?? 1,
+			perPage: view.perPage ?? DEFAULT_ITEMS_PER_PAGE,
+			debouncedSearch,
+			attemptedAfter,
+			attemptedBefore,
+		} );
 
 		setIsLoading( true );
 		setFetchError( null );
@@ -113,13 +228,30 @@ export function FailedImportsDataView(): JSX.Element {
 		return () => {
 			controller.abort();
 		};
-	}, [ view.page, view.perPage, refreshNonce ] );
+	}, [
+		view.page,
+		view.perPage,
+		debouncedSearch,
+		attemptedAfter,
+		attemptedBefore,
+		refreshNonce,
+	] );
+
+	useEffect( () => () => {
+		if ( searchDebounceRef.current ) {
+			clearTimeout( searchDebounceRef.current );
+		}
+	}, [] );
 
 	const setPage = useCallback(
 		( next: number ): void =>
 			setView( ( current ) => ( { ...current, page: next } ) ),
 		[]
 	);
+
+	const resetPage = useCallback( (): void => {
+		setView( ( current ) => ( { ...current, page: 1 } ) );
+	}, [] );
 
 	// Remove can shrink the listing past the current page.
 	useStepBackWhenPageEmpties( {
@@ -212,9 +344,8 @@ export function FailedImportsDataView(): JSX.Element {
 
 	const handleViewChange = useCallback( ( next: View ): void => {
 		setView( ( current ) => {
-			// The Failures tab has no sort/filter/search controls, so perPage
-			// is the only trigger that should reset pagination. Layout-only
-			// changes keep the current page.
+			// No sort/filter controls inside DataViews; perPage is the only
+			// trigger that should reset pagination from here.
 			const perPageChanged = next.perPage !== current.perPage;
 			return {
 				...next,
@@ -222,6 +353,44 @@ export function FailedImportsDataView(): JSX.Element {
 			};
 		} );
 	}, [] );
+
+	const handleSearchChange = useCallback(
+		( raw: string ): void => {
+			setSearchTerm( raw );
+
+			if ( searchDebounceRef.current ) {
+				clearTimeout( searchDebounceRef.current );
+			}
+
+			searchDebounceRef.current = setTimeout( () => {
+				setDebouncedSearch( raw.trim() );
+				resetPage();
+			}, SEARCH_DEBOUNCE_MS );
+		},
+		[ resetPage ]
+	);
+
+	const handleDateRangeChange = useCallback(
+		( next: { after: string | null; before: string | null } ): void => {
+			setAttemptedAfter( next.after );
+			setAttemptedBefore( next.before );
+			resetPage();
+		},
+		[ resetPage ]
+	);
+
+	const handleClearFilters = useCallback( (): void => {
+		if ( searchDebounceRef.current ) {
+			clearTimeout( searchDebounceRef.current );
+			searchDebounceRef.current = null;
+		}
+
+		setSearchTerm( '' );
+		setDebouncedSearch( '' );
+		setAttemptedAfter( null );
+		setAttemptedBefore( null );
+		resetPage();
+	}, [ resetPage ] );
 
 	const refresh = useCallback(
 		() => setRefreshNonce( ( nonce ) => nonce + 1 ),
@@ -236,9 +405,13 @@ export function FailedImportsDataView(): JSX.Element {
 		[ refresh ]
 	);
 
-	const showLoading = isLoading && ! hasFetchedOnce;
-	const showEmptyState =
-		hasFetchedOnce && ! isLoading && 0 === pageItems.length && null === fetchError;
+	const { showLoading, showEmptyState, showNoMatches } = getDisplayState( {
+		hasFetchedOnce,
+		isLoading,
+		isEmpty: 0 === pageItems.length,
+		hasError: null !== fetchError,
+		hasActiveFilters,
+	} );
 
 	// Suppress "Updating…" when the refetch completes within a frame or two.
 	const showRefetch = useDelayedFlag( isLoading && hasFetchedOnce, 200 );
@@ -252,6 +425,37 @@ export function FailedImportsDataView(): JSX.Element {
 				} as React.CSSProperties
 			}
 		>
+			<div className="safe-publish-controls-row">
+				<div className="safe-publish-control safe-publish-control--search">
+					<BaseControl
+						__nextHasNoMarginBottom
+						label={ __( 'Title', 'safe-publish' ) }
+						id="safe-publish-failures-search-input"
+					>
+						<TextControl
+							__nextHasNoMarginBottom
+							__next40pxDefaultSize
+							id="safe-publish-failures-search-input"
+							label={ __( 'Search titles', 'safe-publish' ) }
+							hideLabelFromVision
+							value={ searchTerm }
+							onChange={ handleSearchChange }
+						/>
+					</BaseControl>
+				</div>
+				<DateRangeFilter
+					label={ __( 'Attempted', 'safe-publish' ) }
+					id="safe-publish-failures-date"
+					after={ attemptedAfter }
+					before={ attemptedBefore }
+					onChange={ handleDateRangeChange }
+				/>
+				{ hasActiveFilters && (
+					<Button variant="tertiary" onClick={ handleClearFilters }>
+						{ __( 'Clear filters', 'safe-publish' ) }
+					</Button>
+				) }
+			</div>
 			{ fetchError && (
 				<Notice
 					className="safe-publish-post-type-error"
@@ -270,6 +474,11 @@ export function FailedImportsDataView(): JSX.Element {
 			{ showEmptyState && (
 				<div className="safe-publish-no-data" role="status" aria-live="polite">
 					<p>{ __( 'No failed imports.', 'safe-publish' ) }</p>
+				</div>
+			) }
+			{ showNoMatches && (
+				<div className="safe-publish-no-data" role="status" aria-live="polite">
+					<p>{ __( 'No failed imports matched these filters.', 'safe-publish' ) }</p>
 				</div>
 			) }
 			{ showRefetch && (
@@ -292,6 +501,16 @@ export function FailedImportsDataView(): JSX.Element {
 					paginationInfo={ paginationInfo }
 					defaultLayouts={ defaultLayouts }
 					actions={ actions }
+					header={
+						<Button
+							variant="tertiary"
+							isBusy={ isLoading }
+							disabled={ isLoading }
+							icon={ update }
+							label={ __( 'Refresh', 'safe-publish' ) }
+							onClick={ refresh }
+						/>
+					}
 				/>
 			) }
 		</div>
