@@ -330,11 +330,33 @@ final class Admin_Ajax_Controller {
 		$this->verify_ajax_capability();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing
-		$page     = max( 1, absint( $_POST['page'] ?? 1 ) );
-		$per_page = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
+		$page             = max( 1, absint( $_POST['page'] ?? 1 ) );
+		$per_page         = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
+		$search           = trim(
+			sanitize_text_field( wp_unslash( $_POST['search'] ?? '' ) )
+		);
+		$attempted_after  = self::sanitize_calendar_day(
+			sanitize_text_field( wp_unslash( $_POST['attempted_after'] ?? '' ) ),
+			false
+		);
+		$attempted_before = self::sanitize_calendar_day(
+			sanitize_text_field( wp_unslash( $_POST['attempted_before'] ?? '' ) ),
+			true
+		);
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$rows = $this->repository->list_failed_items( $page, $per_page );
+		$args = array();
+		if ( '' !== $search ) {
+			$args['search'] = $search;
+		}
+		if ( null !== $attempted_after ) {
+			$args['attempted_after'] = $attempted_after;
+		}
+		if ( null !== $attempted_before ) {
+			$args['attempted_before'] = $attempted_before;
+		}
+
+		$rows = $this->repository->list_failed_items( $page, $per_page, $args );
 
 		$has_more = count( $rows ) > $per_page;
 		if ( $has_more ) {
@@ -407,13 +429,15 @@ final class Admin_Ajax_Controller {
 	 * Validates and normalizes the Imports listing's search/filter/sort
 	 * params from the request.
 	 *
-	 * @return array{search?: string, statuses: list<string>, post_types: list<string>, session_id: int, orderby: string, order: string} Listing args.
+	 * @return array{search?: string, name?: string, imported_after?: string, imported_before?: string, statuses: list<string>, post_types: list<string>, session_id: int, orderby: string, order: string} Listing args.
 	 */
 	private function build_imported_listing_args(): array {
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- caller verified the nonce.
 		$search = trim(
 			sanitize_text_field( wp_unslash( $_POST['search'] ?? '' ) )
 		);
+
+		$name = sanitize_title( wp_unslash( $_POST['name'] ?? '' ) );
 
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitize_key_list() sanitizes each element.
 		$raw_statuses     = (array) wp_unslash( $_POST['statuses'] ?? array() );
@@ -443,6 +467,15 @@ final class Admin_Ajax_Controller {
 		$order = 'asc' === sanitize_key( wp_unslash( $_POST['order'] ?? '' ) )
 			? 'asc'
 			: 'desc';
+
+		$imported_after  = self::sanitize_calendar_day(
+			sanitize_text_field( wp_unslash( $_POST['imported_after'] ?? '' ) ),
+			false
+		);
+		$imported_before = self::sanitize_calendar_day(
+			sanitize_text_field( wp_unslash( $_POST['imported_before'] ?? '' ) ),
+			true
+		);
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		$args = array(
@@ -457,7 +490,50 @@ final class Admin_Ajax_Controller {
 			$args['search'] = $search;
 		}
 
+		if ( '' !== $name ) {
+			$args['name'] = $name;
+		}
+
+		if ( null !== $imported_after ) {
+			$args['imported_after'] = $imported_after;
+		}
+
+		if ( null !== $imported_before ) {
+			$args['imported_before'] = $imported_before;
+		}
+
 		return $args;
+	}
+
+	/**
+	 * Validates a `YYYY-MM-DD` calendar-day input and expands it to a MySQL
+	 * datetime boundary.
+	 *
+	 * @param mixed $value   Raw param value.
+	 * @param bool  $ceiling True when this is the upper bound of a range
+	 *                       (advances to end-of-day).
+	 * @return string|null Canonical `Y-m-d H:i:s`, or null when absent/invalid.
+	 */
+	private static function sanitize_calendar_day(
+		mixed $value,
+		bool $ceiling
+	): ?string {
+		if ( ! is_string( $value ) || '' === $value ) {
+			return null;
+		}
+
+		// createFromFormat normalizes overflow (month 13 → next year);
+		// round-trip the parsed value to reject those.
+		$dt = \DateTimeImmutable::createFromFormat( '!Y-m-d', $value );
+		if ( false === $dt || $dt->format( 'Y-m-d' ) !== $value ) {
+			return null;
+		}
+
+		if ( $ceiling ) {
+			$dt = $dt->setTime( 23, 59, 59 );
+		}
+
+		return $dt->format( 'Y-m-d H:i:s' );
 	}
 
 	/**

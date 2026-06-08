@@ -494,6 +494,106 @@ class Imported_Posts_Listing_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the name filter matches an imported post by its slug.
+	 */
+	public function test_filters_by_post_name(): void {
+		// ARRANGE: Two imported posts with distinct slugs.
+		list( $match ) = $this->insert_post_item(
+			'2024-01-01 00:00:00',
+			'success',
+			array( 'post_name' => 'quarterly-report' )
+		);
+		$this->insert_post_item(
+			'2024-02-01 00:00:00',
+			'success',
+			array( 'post_name' => 'unrelated-memo' )
+		);
+
+		// ACT: Filter by the first post's exact slug.
+		$result = $this->repository->list_imported_post_ids(
+			1,
+			20,
+			array( 'name' => 'quarterly-report' )
+		);
+
+		// ASSERT: Only the matching post is returned.
+		$this->assertSame( array( $match ), $result );
+	}
+
+	/**
+	 * Verifies that the imported_after bound is inclusive of timestamps
+	 * exactly matching it, and excludes earlier imports.
+	 */
+	public function test_filters_by_imported_after(): void {
+		// ARRANGE: Four imports — one before, one exactly at the bound,
+		// and two after.
+		$this->insert_post_item( '2024-01-15 12:00:00' );
+		list( $on_bound ) = $this->insert_post_item( '2024-02-01 00:00:00' );
+		list( $middle )   = $this->insert_post_item( '2024-02-15 12:00:00' );
+		list( $latest )   = $this->insert_post_item( '2024-03-15 12:00:00' );
+
+		// ACT: Filter to imports on or after Feb 1.
+		$result = $this->repository->list_imported_post_ids(
+			1,
+			20,
+			array( 'imported_after' => '2024-02-01 00:00:00' )
+		);
+
+		// ASSERT: The Jan import is excluded; the boundary row is included.
+		$this->assertSame( array( $latest, $middle, $on_bound ), $result );
+	}
+
+	/**
+	 * Verifies that the imported_before bound is inclusive of timestamps
+	 * exactly matching it, and excludes later imports.
+	 */
+	public function test_filters_by_imported_before(): void {
+		// ARRANGE: Four imports — one early, one in the middle, one exactly
+		// at the bound, and one after.
+		list( $earliest ) = $this->insert_post_item( '2024-01-15 12:00:00' );
+		list( $middle )   = $this->insert_post_item( '2024-02-15 12:00:00' );
+		list( $on_bound ) = $this->insert_post_item( '2024-02-29 23:59:59' );
+		$this->insert_post_item( '2024-03-15 12:00:00' );
+
+		// ACT: Filter to imports on or before Feb 29 end-of-day.
+		$result = $this->repository->list_imported_post_ids(
+			1,
+			20,
+			array( 'imported_before' => '2024-02-29 23:59:59' )
+		);
+
+		// ASSERT: The March import is excluded; the boundary row is included.
+		$this->assertSame(
+			array( $on_bound, $middle, $earliest ),
+			$result
+		);
+	}
+
+	/**
+	 * Verifies that combining imported_after and imported_before narrows to
+	 * the inclusive intersection of both bounds.
+	 */
+	public function test_filters_by_imported_date_range(): void {
+		// ARRANGE: Three imports — one before, one within, one after the range.
+		$this->insert_post_item( '2024-01-15 12:00:00' );
+		list( $middle ) = $this->insert_post_item( '2024-02-15 12:00:00' );
+		$this->insert_post_item( '2024-03-15 12:00:00' );
+
+		// ACT: Filter to imports between Feb 1 and Feb 29 (inclusive).
+		$result = $this->repository->list_imported_post_ids(
+			1,
+			20,
+			array(
+				'imported_after'  => '2024-02-01 00:00:00',
+				'imported_before' => '2024-02-29 23:59:59',
+			)
+		);
+
+		// ASSERT: Only the February import is returned.
+		$this->assertSame( array( $middle ), $result );
+	}
+
+	/**
 	 * Verifies that facets list the post types present among imported posts.
 	 *
 	 * Sessions are an internal grouping concept and not exposed as a facet.
