@@ -57,10 +57,6 @@ const RollbackPostModal = ( {
 
 	const isRestore = isRollbackRestore( post );
 
-	const actionLabel = isRestore
-		? __( 'Restore', 'safe-publish' )
-		: __( 'Delete permanently', 'safe-publish' );
-
 	const description = isRestore
 		? __( 'This restores the previous version.', 'safe-publish' )
 		: __( 'This permanently deletes the imported post.', 'safe-publish' );
@@ -116,7 +112,7 @@ const RollbackPostModal = ( {
 							<Spinner />
 							{ __( 'Rolling back…', 'safe-publish' ) }
 						</>
-					) : actionLabel }
+					) : __( 'Roll back', 'safe-publish' ) }
 				</Button>
 			</HStack>
 		</VStack>

@@ -98,7 +98,7 @@ const DEFAULT_LABELS: BulkImportFlowLabels = {
 	/* translators: 1: successful count, 2: total count */
 	totalSummary: __( 'Imported: %1$d of %2$d posts', 'safe-publish' ),
 	/* translators: %d is the number of selected posts */
-	primaryButton: __( 'Import %d Posts', 'safe-publish' ),
+	primaryButton: __( 'Import %d posts', 'safe-publish' ),
 	loadingButton: __( 'Importing…', 'safe-publish' ),
 	primaryActionId: 'import',
 };

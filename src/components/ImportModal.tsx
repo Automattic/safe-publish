@@ -1,9 +1,9 @@
 /**
  * Import Modal component.
  *
- * Shared confirmation modal for both the Import Post action (Source Posts) and
- * the Update Post action (Imports → Posts tab). The `isUpdate` flag adjusts
- * labels and toggles the `force_update` flag on the create-draft request.
+ * Shared confirmation modal for both the Import action (Source Posts) and the
+ * Update action (Imports → Posts tab). The `isUpdate` flag adjusts labels and
+ * toggles the `force_update` flag on the create-draft request.
  *
  * @file This file defines the ImportModal component.
  */

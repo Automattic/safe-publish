@@ -30,9 +30,9 @@ import { __, sprintf } from '@wordpress/i18n';
  *
  * @property {ImportedPost[]}               items      Array containing the single row to diff.
  * @property {string}                       restNonce  REST API nonce for the diff endpoint.
- * @property {string}                       ajaxurl    WordPress admin-ajax URL (for Update Post).
+ * @property {string}                       ajaxurl    WordPress admin-ajax URL (for the Update button).
  * @property {string}                       nonce      AJAX nonce for the create-draft endpoint.
- * @property {ImportSyncStatus | undefined} syncStatus Row's sync verdict; gates the Update Post button.
+ * @property {ImportSyncStatus | undefined} syncStatus Row's sync verdict; gates the Update button.
  * @property {Function}                     closeModal Callback to close the modal.
  * @property {Function}                     onRefresh  Callback to refresh the listing after an update.
  */
@@ -118,7 +118,7 @@ export default function PostDiffModal( {
 
 			{ error && <Text style={ { color: '#d63638' } }>{ error }</Text> }
 
-			<Text as="h2">{ __( 'Content Diff', 'safe-publish' ) }</Text>
+			<Text as="h2">{ __( 'Content Comparison', 'safe-publish' ) }</Text>
 
 			<DiffViewSelector
 				showBlockView={ showBlockView }
@@ -201,7 +201,7 @@ export default function PostDiffModal( {
 						disabled={ isUpdating || isLoading }
 						style={ { marginLeft: 8 } }
 					>
-						{ isUpdating ? <Spinner /> : __( 'Update Post', 'safe-publish' ) }
+						{ isUpdating ? <Spinner /> : __( 'Update', 'safe-publish' ) }
 					</Button>
 				) }
 				<Button

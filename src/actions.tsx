@@ -74,7 +74,7 @@ export const createActions = (
 	 * Import action.
 	 *
 	 * Single item: confirmation modal. Multiple items: batch import with
-	 * progress tracking. Excludes already-imported posts — Update/Diff/Delete
+	 * progress tracking. Excludes already-imported posts — Update/Compare/Delete
 	 * live on the Imports → Posts tab.
 	 */
 	{
@@ -124,7 +124,7 @@ export const createActions = (
 	 *
 	 * Deep-links an already-imported source row to the Imports → Posts tab
 	 * narrowed to the matching imported post via
-	 * `?focus_source=<source_post_id>`, so Update / Diff / Delete / Rollback
+	 * `?focus_source=<source_post_id>`, so Update / Compare / Delete / Rollback
 	 * are one click away.
 	 */
 	{
@@ -183,6 +183,33 @@ export const createImportedActions = (
 		},
 	},
 	{
+		id: 'compare-post',
+		label: __( 'Compare', 'safe-publish' ),
+		icon: drafts,
+		isPrimary: true,
+		hideModalHeader: false,
+		supportsBulk: false,
+		modalSize: 'fill',
+		// Hide Compare and Update only on a confirmed up-to-date verdict;
+		// loading and unreachable still surface so the user can act on
+		// partial info.
+		isEligible: ( item: ImportedPost ) =>
+			'up-to-date' !== syncStatuses[ item.source_post_id ]?.status,
+		RenderModal: ( { items, closeModal } ) => (
+			<PostDiffModal
+				items={ items }
+				restNonce={ context.restNonce }
+				ajaxurl={ context.ajaxurl }
+				nonce={ context.nonce }
+				syncStatus={
+					syncStatuses[ items[ 0 ].source_post_id ]?.status
+				}
+				closeModal={ closeModal }
+				onRefresh={ onRefresh }
+			/>
+		),
+	},
+	{
 		id: 'update-post',
 		label: __( 'Update', 'safe-publish' ),
 		icon: download,
@@ -190,8 +217,6 @@ export const createImportedActions = (
 		hideModalHeader: true,
 		modalFocusOnMount: 'firstContentElement',
 		supportsBulk: true,
-		// Only hide Update when we know the row is up-to-date; loading and
-		// unreachable states still show it so the user can act on partial info.
 		isEligible: ( item: ImportedPost ) =>
 			'up-to-date' !== syncStatuses[ item.source_post_id ]?.status,
 		RenderModal: ( { items, closeModal } ) => {
@@ -250,7 +275,7 @@ export const createImportedActions = (
 						/* translators: 1: successful count, 2: total count */
 						totalSummary: __( 'Updated: %1$d of %2$d posts', 'safe-publish' ),
 						/* translators: %d is the number of selected posts */
-						primaryButton: __( 'Update %d Posts', 'safe-publish' ),
+						primaryButton: __( 'Update %d posts', 'safe-publish' ),
 						loadingButton: __( 'Updating…', 'safe-publish' ),
 						primaryActionId: 'update',
 					} }
@@ -259,32 +284,10 @@ export const createImportedActions = (
 		},
 	},
 	{
-		id: 'post-diff',
-		label: __( 'Compare', 'safe-publish' ),
-		icon: drafts,
-		hideModalHeader: false,
-		supportsBulk: false,
-		modalSize: 'fill',
-		RenderModal: ( { items, closeModal } ) => (
-			<PostDiffModal
-				items={ items }
-				restNonce={ context.restNonce }
-				ajaxurl={ context.ajaxurl }
-				nonce={ context.nonce }
-				syncStatus={
-					syncStatuses[ items[ 0 ].source_post_id ]?.status
-				}
-				closeModal={ closeModal }
-				onRefresh={ onRefresh }
-			/>
-		),
-	},
-	{
 		id: 'delete-post',
 		label: __( 'Delete', 'safe-publish' ),
 		icon: trash,
 		isDestructive: true,
-		isPrimary: true,
 		hideModalHeader: true,
 		modalFocusOnMount: 'firstContentElement',
 		supportsBulk: true,
@@ -306,10 +309,7 @@ export const createImportedActions = (
 		hideModalHeader: true,
 		modalFocusOnMount: 'firstContentElement',
 		supportsBulk: true,
-		isEligible: ( item: ImportedPost ) =>
-			null !== item.item_id &&
-			( 'success' === item.rollback_status ||
-				'updated' === item.rollback_status ),
+		isEligible: ( item: ImportedPost ) => null !== item.item_id,
 		RenderModal: ( { items, closeModal } ) =>
 			1 === items.length ? (
 				<RollbackPostModal
