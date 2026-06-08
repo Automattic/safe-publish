@@ -559,27 +559,6 @@ export function ImportedPostsDataView(): JSX.Element {
 				},
 			},
 			{
-				id: 'rolled_back',
-				label: __( 'Rollback', 'safe-publish' ),
-				enableSorting: false,
-				getValue: ( { item }: { item: ImportedPost } ): string =>
-					item.rolled_back ? __( 'Rolled back', 'safe-publish' ) : '',
-				render: ( { item }: { item: ImportedPost } ): JSX.Element => {
-					if ( ! item.rolled_back ) {
-						return <span>—</span>;
-					}
-					return (
-						<span className="safe-publish-status-badge safe-publish-status-badge--rolled-back">
-							<span
-								className="safe-publish-status-badge__dot"
-								aria-hidden="true"
-							/>
-							{ __( 'Rolled back', 'safe-publish' ) }
-						</span>
-					);
-				},
-			},
-			{
 				id: 'post_type',
 				label: __( 'Type', 'safe-publish' ),
 				enableSorting: false,

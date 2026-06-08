@@ -98,7 +98,6 @@ export interface CatalogResponse {
  * @property {number|null} session_id           Session ID of the most recent import event, or null.
  * @property {string|null} rollback_status      Items-table status (success/updated/error), or null.
  * @property {boolean}     has_previous_content Whether the row has a pre-update snapshot for rollback restore.
- * @property {boolean}     rolled_back          Whether the most recent import event was rolled back.
  * @property {string|null} import_date_gmt      Most recent import_date_gmt from the items table, or null.
  */
 export interface ImportedPost {
@@ -113,7 +112,6 @@ export interface ImportedPost {
 	session_id: number | null;
 	rollback_status: string | null;
 	has_previous_content: boolean;
-	rolled_back: boolean;
 	import_date_gmt: string | null;
 }
 

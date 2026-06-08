@@ -31,7 +31,6 @@ function buildImportedPost(
 		session_id: 5,
 		rollback_status: 'success',
 		has_previous_content: false,
-		rolled_back: false,
 		import_date_gmt: null,
 		...overrides,
 	};
