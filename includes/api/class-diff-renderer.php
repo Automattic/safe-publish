@@ -280,7 +280,7 @@ final class Diff_Renderer {
 	 */
 	private function extract_current_data( WP_Post $post ): array {
 		$current = array(
-			'title'   => get_the_title( $post->ID ),
+			'title'   => $post->post_title,
 			'content' => $post->post_content,
 			'excerpt' => $post->post_excerpt,
 			'meta'    => get_post_meta( $post->ID ),

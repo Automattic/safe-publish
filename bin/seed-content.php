@@ -398,7 +398,6 @@ function safe_publish_seeder_generate_resized_image( int $source_id, int $index 
 	$new_w   = (int) round( imagesx( $img ) * 0.5 );
 	$new_h   = (int) round( imagesy( $img ) * 0.5 );
 	$resized = imagescale( $img, $new_w, $new_h );
-	imagedestroy( $img );
 
 	if ( false === $resized ) {
 		WP_CLI::warning( "Could not scale image for attachment {$source_id}." );
@@ -407,7 +406,6 @@ function safe_publish_seeder_generate_resized_image( int $source_id, int $index 
 
 	$tmpfile = wp_tempnam( 'seeder_resized_' );
 	imagejpeg( $resized, $tmpfile, 90 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_system_read -- imagejpeg() has no WP Filesystem equivalent.
-	imagedestroy( $resized );
 
 	$attachment_id = media_handle_sideload(
 		array(
@@ -460,7 +458,6 @@ function safe_publish_seeder_generate_image( string $label ): int {
 
 	$tmpfile = wp_tempnam( 'seeder_' );
 	imagejpeg( $img, $tmpfile, 90 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_system_read -- imagejpeg() has no WP Filesystem equivalent.
-	imagedestroy( $img );
 
 	$attachment_id = media_handle_sideload(
 		array(

@@ -192,6 +192,75 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that current-side title extraction returns the raw post_title,
+	 * not get_the_title()'s filtered form. Without this, wptexturize turns a
+	 * stored `--` into `&#8211;`, producing a spurious diff against title.raw.
+	 */
+	public function test_diff_renderer_extracts_current_title_raw(): void {
+		// ARRANGE: Destination stores literal `--`, the wptexturize trigger.
+		$post_id = $this->factory()->post->create(
+			array(
+				'post_status' => 'draft',
+				'post_title'  => 'Heading -- Subheading',
+			)
+		);
+		update_post_meta(
+			$post_id,
+			'safe_publish_source_post_id',
+			self::SOURCE_POST_ID + 1
+		);
+
+		// Source returns the same raw value.
+		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		$mock_http_callable = static function ( $_url, $_action, $_credentials ) {
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => wp_json_encode(
+					array(
+						'title'   => array( 'raw' => 'Heading -- Subheading' ),
+						'content' => array( 'raw' => 'Body' ),
+						'excerpt' => array( 'raw' => 'Excerpt' ),
+					)
+				),
+			);
+		};
+
+		update_option(
+			'safe_publish_connected_site_url',
+			'https://example.com'
+		);
+
+		$request = new WP_REST_Request(
+			'POST',
+			'/safe-publish/v1/diff-preview'
+		);
+		$request->set_param( 'postId', self::SOURCE_POST_ID + 1 );
+		$request->set_param( 'postType', 'post' );
+		$request->set_param( 'mode', 'split' );
+
+		// ACT: Render the diff.
+		$renderer = new Diff_Renderer();
+		$result   = $renderer->render_diff(
+			$request,
+			$mock_http_callable,
+			array()
+		);
+
+		// ASSERT: current.title is the raw post_title, untouched by wptexturize.
+		$this->assertIsArray( $result );
+		$this->assertSame(
+			'Heading -- Subheading',
+			$result['current']['title']
+		);
+
+		// ASSERT: Matching raw titles produce a no-change title diff.
+		$this->assertStringContainsString(
+			'No title changes detected.',
+			$result['nonContentDiffs']['title']
+		);
+	}
+
+	/**
 	 * Verifies that the diff renderer addresses a custom post type by its
 	 * source rest_base rather than its slug.
 	 */

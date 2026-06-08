@@ -15,23 +15,14 @@ declare(strict_types=1);
  */
 function get_private_property( string $class_name, string $property_name ): ReflectionProperty {
 	$reflector = new ReflectionClass( $class_name );
-	$property  = $reflector->getProperty( $property_name );
 
-	/**
-	 * @psalm-suppress UnusedMethodCall
-	 */
-	$property->setAccessible( true );
-
-	return $property;
+	return $reflector->getProperty( $property_name );
 }
 
 /**
  * Overrides the value of a private property on a given object.
  *
  * This is useful when mocking the internals of a class.
- *
- * Note that the property will no longer be private after setAccessible is
- * called.
  *
  * @param class-string $class_name The fully qualified class name, including namespace.
  * @param object       $object_instance The object instance on which to set the value.
@@ -56,12 +47,6 @@ function set_private_property(
  */
 function get_private_method( string $class_name, string $method ): ReflectionMethod {
 	$reflector = new ReflectionClass( $class_name );
-	$method    = $reflector->getMethod( $method );
 
-	/**
-	 * @psalm-suppress UnusedMethodCall
-	 */
-	$method->setAccessible( true );
-
-	return $method;
+	return $reflector->getMethod( $method );
 }
