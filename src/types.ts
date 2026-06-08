@@ -395,7 +395,7 @@ export interface SourcePostsDataViewProps {
  * @property {string} settingsUrl      URL to the plugin settings page.
  * @property {string} [sourcePostsUrl] URL to the Source Posts admin page (Imports only).
  * @property {string} [importsUrl]     URL to the Imports admin page (Source Posts only).
- * @property {string} [homeUrl]        Destination home URL for URL-paste slug detection (Imports only).
+ * @property {string} [homeUrl]        Destination home URL for slug detection (Imports only).
  * @property {string} containerId      Container element ID.
  * @property {string} [initialTab]     Imports: 'posts' or 'failures' from ?tab=...
  */

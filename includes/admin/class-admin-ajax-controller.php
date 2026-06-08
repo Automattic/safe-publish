@@ -506,7 +506,7 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Validates a `YYYY-MM-DD` calendar-day input and expands it to a MySQL
+	 * Validates a YYYY-MM-DD calendar-day input and expands it to a MySQL
 	 * datetime boundary.
 	 *
 	 * @param mixed $value   Raw param value.

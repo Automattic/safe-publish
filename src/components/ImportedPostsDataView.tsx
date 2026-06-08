@@ -269,7 +269,7 @@ function computeHasActiveFilters( state: {
 }
 
 /**
- * Composes the focus-pill text for the deep-link `?focus_source=N` flow.
+ * Composes the focus-pill text for the ?focus_source=N deep-link flow.
  * Three-state so the user doesn't see a confident "Viewing …" claim before
  * the server confirms a match.
  *
