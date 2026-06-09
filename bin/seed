@@ -6,18 +6,23 @@
 # correct wp-env container and delegates execution to bin/seed-content.php via
 # WP-CLI eval-file.
 #
-# Usage: bin/seed [site=source|destination|both] [preset=full] [count=N] [start=N] [type=post|page|slug] [editor=gutenberg|classic|mixed] [images=1|2|2-resized|auto] [fresh=1]
+# Usage: bin/seed [site=source|destination|both] [mode=create|update] [preset=full] [count=N] [start=N] [type=post|page|slug] [editor=gutenberg|classic|mixed] [images=1|2|2-resized|auto] [fresh=1] [revision=N]
 #
 # Arguments:
-#   site=   Which site to seed: source (default), destination, or both.
-#   preset= Run a curated set: full (10 Gutenberg posts, 10 classic posts, 5 pages).
-#           When preset is set, all other arguments except site= and fresh= are ignored.
-#   count=  Number of posts to create (default: 20).
-#   start=  Starting post number (default: 1). Use to avoid duplicate numbers across batches.
-#   type=   Post type slug to create (default: post).
-#   editor= Content format: gutenberg (default), classic, or mixed.
-#   images= Image mode: 1, 2, 2-resized, or auto (default, cycles through all three).
-#   fresh=  Set to 1 to delete all previously seeded content before seeding.
+#   site=     Which site to seed: source (default), destination, or both.
+#   mode=     create (default) inserts new posts; update bumps existing seeded
+#             posts to a new revision. mode=update doesn't support preset= or fresh=.
+#   preset=   Run a curated set: full (10 Gutenberg posts, 10 classic posts, 5 pages).
+#             When preset is set, all other arguments except site= and fresh= are ignored.
+#   count=    Number of posts to create (default: 20).
+#   start=    Starting post number (default: 1). Use to avoid duplicate numbers across batches.
+#   type=     Post type slug. In create mode, defaults to post. In update mode, omit
+#             to update every seeded post type; set to limit the update.
+#   editor=   Content format: gutenberg (default), classic, or mixed.
+#   images=   Image mode: 1, 2, 2-resized, or auto (default, cycles through all three).
+#   fresh=    Set to 1 to delete all previously seeded content before seeding.
+#   revision= Target revision number for mode=update. Omit to auto-bump each post's
+#             current revision by one.
 #
 # Examples:
 #   bin/seed
@@ -25,6 +30,8 @@
 #   bin/seed site=both editor=mixed fresh=1
 #   bin/seed preset=full
 #   bin/seed preset=full site=both fresh=1
+#   bin/seed mode=update
+#   bin/seed mode=update site=both revision=2
 
 set -e
 
@@ -35,6 +42,7 @@ PLUGIN_DIR="$(basename "$(git rev-parse --show-toplevel)")"
 SITE="source"
 PRESET=""
 FRESH_ARG=""
+MODE=""
 PHP_ARGS=""
 
 for arg in "$@"; do
@@ -48,6 +56,10 @@ for arg in "$@"; do
 		fresh=*)
 			FRESH_ARG="$arg"
 			;;
+		mode=*)
+			MODE="${arg#mode=}"
+			PHP_ARGS="$PHP_ARGS $arg"
+			;;
 		*)
 			PHP_ARGS="$PHP_ARGS $arg"
 			;;
@@ -55,6 +67,11 @@ for arg in "$@"; do
 done
 
 PHP_ARGS="${PHP_ARGS# }"
+
+if [ "$MODE" = "update" ] && [ -n "$PRESET" ]; then
+	echo "mode=update doesn't support preset=. Run without preset." >&2
+	exit 1
+fi
 
 # shellcheck disable=SC2086
 run_seeder() {
