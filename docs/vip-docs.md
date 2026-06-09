@@ -70,7 +70,7 @@ To use Safe Publish, the following must be in place:
 - PHP 8.2 or higher on both sites.
 - The Safe Publish integration enabled on both sites.
 
-The integration handles creating and setting the shared secret — provided to the plugin as the `SAFE_PUBLISH_SHARED_SECRET` environment variable — that secures the connection between the sites.
+The integration handles creating and setting the shared secret — provided to the plugin as the `SAFE_PUBLISH_SHARED_SECRET` environment variable — that secures the connection between the sites. The secret is generated and synchronized automatically when you set the connected site URL (see [Connecting two sites](#connecting-two-sites)); it is never entered by hand and is not exposed in the Integration Center, the VIP Dashboard, or the VIP-CLI.
 
 ## Roles and permissions
 
@@ -85,7 +85,9 @@ Requests from the destination to the source site are not authorized by user capa
 
 ## Connecting two sites
 
-With the integration enabled and the shared secret in place, pair the source and destination by configuring the connection and sync mode on each site. Open the Safe Publish settings screen in WP Admin and set:
+With the integration enabled, pair the source and destination by configuring the connection and sync mode on each site. The shared secret is handled for you: setting the connected site URL on one site provisions the shared secret and copies it to the connected site automatically, so both ends always hold the same value. You never enter, copy, or paste the secret yourself, and attempting to set it manually — for example as a config field in the VIP Dashboard or VIP-CLI — is rejected, because it is not a configurable input.
+
+Open the Safe Publish settings screen in WP Admin and set:
 
 - **Connected site URL** — the URL of the other site. On the destination, this is the source's URL.
 - **Sync mode** — the role this site plays:
