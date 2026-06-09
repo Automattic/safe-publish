@@ -114,10 +114,12 @@ final class Diff_Renderer {
 		$current_rendered  = $this->render_content( $current['content'] );
 		$incoming_rendered = $this->render_content( $incoming['content'] );
 
+		$non_content_diffs['featuredMedia'] = $featured_media_html;
+
 		return array(
 			'contentDiffHtml'      => $content_diff_html,
 			'blockDiffs'           => $block_diffs,
-			'nonContentDiffs'      => $non_content_diffs + array( 'featuredMedia' => $featured_media_html ),
+			'nonContentDiffs'      => $non_content_diffs,
 			'current'              => array(
 				'title'   => $current['title'] ?? null,
 				'excerpt' => $current['excerpt'] ?? null,

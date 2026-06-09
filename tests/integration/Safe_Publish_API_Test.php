@@ -611,7 +611,11 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		);
 
 		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-		$mock_http_callable = static function ( $_url, $_action, $_credentials ) use ( $content_with_padding ) {
+		$mock_http_callable = static function (
+			$_url,
+			$_action,
+			$_credentials
+		) use ( $content_with_padding ) {
 			return array(
 				'response' => array( 'code' => 200 ),
 				'body'     => wp_json_encode(

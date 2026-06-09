@@ -173,7 +173,9 @@ export default function BlockDiffViewer( {
                 const rawCurrentHtml = block.current?.rendered || '';
                 const rawIncomingHtml = block.incoming?.rendered || '';
 
-                const hasImage = /<img\s/i.test( rawCurrentHtml ) || /<img\s/i.test( rawIncomingHtml );
+                const hasImage =
+                    /<img\s/i.test( rawCurrentHtml ) ||
+                    /<img\s/i.test( rawIncomingHtml );
 
                 // Linkify after highlight — diffing linkified HTML would
                 // surface anchor wrappers as changes.

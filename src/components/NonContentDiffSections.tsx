@@ -17,7 +17,7 @@ import type { DiffPreviewResult } from '../api/diff';
  * Props for the NonContentDiffSections component.
  *
  * @property {DiffPreviewResult['nonContentDiffs']} nonContentDiffs Non-content field diffs.
- * @property {boolean}                              [showUnchanged] When true, render placeholders for empty sections.
+ * @property {boolean}                              [showUnchanged] Show empty-section placeholders.
  */
 interface NonContentDiffSectionsProps {
 	nonContentDiffs: DiffPreviewResult['nonContentDiffs'];
