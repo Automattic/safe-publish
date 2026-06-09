@@ -40,9 +40,9 @@ Optionally, it's possible to use [VIP Basic Authentication](https://docs.wpvip.c
 
 ## Shared secret on WordPress VIP
 
-On WordPress VIP the shared secret is fully managed by the Integration Center — you do not generate, set, or copy it. When the connected site URL is configured on either side, the Integration Center generates the shared secret (regenerating it only if the connected site URL changes or the two sides drift out of sync), stores it for that environment, and synchronizes the same value to the connected site. The secret is then injected into the plugin as the `SAFE_PUBLISH_SHARED_SECRET` environment variable on both sites.
+On WordPress VIP the shared secret is fully managed by the Integration Center — you do not generate, set, or copy it. When the connected site URL is configured on either side, the Integration Center generates the shared secret.
 
-Because it is generated rather than supplied, the shared secret is **not** an accepted configuration input: the VIP Dashboard form does not collect it, and passing `shared_secret` to the VIP-CLI (`vipgo integrations update safe-publish --config ...`) is rejected with `property shared_secret should not exist`. Only `connected_site_url`, `sync_mode`, `basic_auth_username`, and `basic_auth_password` are accepted; the secret follows automatically once the connection is configured. The secret is also never returned when reading configuration back, so it will not appear in `vipgo integrations get` output — use the **Test Connection** button on the destination to confirm the handshake instead.
+Only the connected site URL, sync mode, and optional Basic Authentication credentials are accepted; the secret follows automatically once the connection is configured. The secret is never displayed back after it is set — use the **Test Connection** button on the destination to confirm the handshake instead.
 
 ## Configuration Constants
 
