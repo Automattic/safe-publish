@@ -10,10 +10,14 @@
  * session with access to the target WordPress install.
  *
  * Arguments:
- *   count=   Number of posts to create (default: 20).
+ *   mode=    create (default) inserts new posts; update bumps existing
+ *            seeded posts to a new revision.
+ *   count=   Number of posts to create (default: 20). Ignored when
+ *            mode=update.
  *   start=   Starting post number (default: 1). Use to avoid duplicate numbers
- *            across batches.
- *   type=    Post type slug (default: post).
+ *            across batches. Ignored when mode=update.
+ *   type=    Post type slug (default: post). Filters which seeded posts to
+ *            touch in update mode.
  *   editor=  Content format: gutenberg (default), classic, or mixed (2/3
  *            Gutenberg, 1/3 classic).
  *   images=  Image mode: 1, 2, 2-resized, or auto (default).
@@ -22,10 +26,13 @@
  *            past (default: 0). Use in multi-batch presets so each batch
  *            occupies a distinct date range.
  *   purge=   Set to 1 to delete all previously seeded content and exit
- *            without inserting anything.
+ *            without inserting anything. Not allowed with mode=update.
  *   fresh=   Set to 1 to delete all previously seeded content before seeding.
+ *            Not allowed with mode=update.
  *   prefix=  Optional string prepended to every post title (e.g. prefix=Run2
  *            → "Run2 Post 1 - 1P").
+ *   revision= Target revision number for mode=update. Omit to auto-bump
+ *            each post's current revision by one.
  *
  * Seeded content is tagged with _seeder_generated=1 post meta, enabling
  * clean fresh runs.
@@ -49,17 +56,45 @@ if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
 function safe_publish_seeder_run( array $args ): void {
 	parse_str( implode( '&', $args ), $params );
 
-	$count  = max( 1, (int) ( $params['count'] ?? 20 ) );
-	$start  = max( 1, (int) ( $params['start'] ?? 1 ) );
-	$type   = sanitize_key( $params['type'] ?? 'post' );
-	$editor = $params['editor'] ?? 'gutenberg';
-	$images = $params['images'] ?? 'auto';
-	$fresh  = ! empty( $params['fresh'] );
-	$purge  = ! empty( $params['purge'] );
-	$prefix = isset( $params['prefix'] )
+	$mode     = $params['mode'] ?? 'create';
+	$count    = max( 1, (int) ( $params['count'] ?? 20 ) );
+	$start    = max( 1, (int) ( $params['start'] ?? 1 ) );
+	$type     = sanitize_key( $params['type'] ?? 'post' );
+	$editor   = $params['editor'] ?? 'gutenberg';
+	$images   = $params['images'] ?? 'auto';
+	$fresh    = ! empty( $params['fresh'] );
+	$purge    = ! empty( $params['purge'] );
+	$prefix   = isset( $params['prefix'] )
 		? sanitize_text_field( $params['prefix'] )
 		: '';
-	$offset = max( 0, (int) ( $params['date-offset'] ?? 0 ) );
+	$offset   = max( 0, (int) ( $params['date-offset'] ?? 0 ) );
+	$revision = max( 0, (int) ( $params['revision'] ?? 0 ) );
+
+	if ( ! in_array( $mode, array( 'create', 'update' ), true ) ) {
+		WP_CLI::error( "Invalid mode '{$mode}'. Use: create or update." );
+	}
+
+	if ( 'update' === $mode ) {
+		if ( $fresh || $purge ) {
+			WP_CLI::error(
+				'fresh=1 and purge=1 are not allowed with mode=update.'
+			);
+		}
+
+		$author_id = safe_publish_seeder_resolve_author();
+		if ( 0 === $author_id ) {
+			WP_CLI::error(
+				'No users available to attribute seeded updates to.'
+			);
+		}
+		wp_set_current_user( $author_id );
+
+		// Limit by type only when the caller passed it explicitly, so a
+		// bare mode=update touches everything the seeder has produced.
+		$update_filter = isset( $params['type'] ) ? $type : '';
+		safe_publish_seeder_update_content( $revision, $update_filter );
+		return;
+	}
 
 	if ( $purge ) {
 		safe_publish_seeder_delete_content();
@@ -280,6 +315,143 @@ function safe_publish_seeder_get_or_create_term_ids(
 	}
 
 	return $ids;
+}
+
+/**
+ * Bumps every seeded post to a new revision, applying deterministic
+ * mutations to title, excerpt, content, status, meta, and term assignments.
+ *
+ * Slug, date, and attachments are preserved so the migration's update path
+ * can be exercised without churning IDs or media.
+ *
+ * @param int    $revision_arg Explicit revision number; 0 means auto-bump
+ *                             each post's existing revision by one.
+ * @param string $type_filter  Post type to limit the update to; empty
+ *                             string means every seeded post type.
+ */
+function safe_publish_seeder_update_content(
+	int $revision_arg,
+	string $type_filter
+): void {
+	$post_ids = get_posts(
+		array(
+			'post_type'              => '' !== $type_filter ? $type_filter : 'any',
+			'post_status'            => 'any',
+			'posts_per_page'         => -1, // phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page -- development tool.
+			'meta_query'             => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- development tool.
+				array(
+					'key'   => Content_Generator::SEEDER_META_KEY,
+					'value' => '1',
+				),
+			),
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_term_cache' => false,
+			'update_post_meta_cache' => false,
+		)
+	);
+
+	if ( array() === $post_ids ) {
+		WP_CLI::log( 'No previously seeded content found to update.' );
+		return;
+	}
+
+	// One generator covers every post: the methods we call below don't read
+	// any of the configuration-bound state.
+	$generator = new Content_Generator(
+		'post',
+		'gutenberg',
+		'1',
+		1,
+		1,
+		0,
+		'',
+		time(),
+		home_url()
+	);
+
+	$updated = 0;
+	$skipped = 0;
+
+	foreach ( $post_ids as $post_id ) {
+		$post_id = (int) $post_id;
+		$post    = get_post( $post_id );
+
+		// Seeded attachments share the meta tag for cleanup but aren't
+		// updateable content; silently skip them without counting.
+		if ( ! $post instanceof WP_Post || 'attachment' === $post->post_type ) {
+			continue;
+		}
+
+		$index = Content_Generator::extract_index_from_slug( $post->post_name );
+		if ( null === $index ) {
+			WP_CLI::warning(
+				"Post {$post_id} is tagged as seeded but its slug "
+				. "'{$post->post_name}' doesn't match the seeder format; skipping."
+			);
+			++$skipped;
+			continue;
+		}
+
+		$current_rev = (int) get_post_meta(
+			$post_id,
+			Content_Generator::REVISION_META_KEY,
+			true
+		);
+		$new_rev     = $revision_arg > 0 ? $revision_arg : $current_rev + 1;
+
+		$result = wp_update_post(
+			array(
+				'ID'           => $post_id,
+				'post_title'   => Content_Generator::apply_revision_suffix(
+					$post->post_title,
+					$new_rev
+				),
+				'post_excerpt' => Content_Generator::apply_revision_suffix(
+					$post->post_excerpt,
+					$new_rev
+				),
+				'post_content' => Content_Generator::apply_revision_to_content(
+					$post->post_content,
+					$new_rev
+				),
+				'post_status'  => $generator->resolve_status( $index, $new_rev ),
+			),
+			true
+		);
+
+		if ( is_wp_error( $result ) ) {
+			WP_CLI::warning(
+				"Could not update post {$post_id}: "
+				. $result->get_error_message()
+			);
+			++$skipped;
+			continue;
+		}
+
+		foreach ( $generator->meta_values( $index, $new_rev ) as $key => $value ) {
+			update_post_meta( $post_id, $key, $value );
+		}
+
+		safe_publish_seeder_apply_term_assignments(
+			$post_id,
+			$generator->term_assignments( $index, $new_rev )
+		);
+
+		++$updated;
+	}
+
+	$summary = "Updated {$updated} post(s)";
+	if ( $skipped > 0 ) {
+		$summary .= " (skipped {$skipped})";
+	}
+	$summary .= '.';
+
+	if ( 0 === $updated ) {
+		WP_CLI::log( $summary );
+	} else {
+		WP_CLI::success( $summary );
+	}
 }
 
 /**

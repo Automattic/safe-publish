@@ -46,6 +46,8 @@
     "seed:destination": "./bin/seed site=destination",
     "seed:full": "./bin/seed preset=full",
     "seed:source": "./bin/seed site=source",
+    "seed:update": "./bin/seed mode=update",
+    "seed:update:destination": "./bin/seed mode=update site=destination",
     "start": "wp-scripts start --webpack-src-dir=src --output-path=build",
     "test": "npm run test:php && npm run test:js",
     "test:e2e": "wp-scripts test-playwright",

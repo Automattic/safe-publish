@@ -623,4 +623,197 @@ class SeederContentGeneratorTest extends TestCase {
 		// ASSERT: featured_media defaults to 0.
 		$this->assertSame( 0, $payload['featured_media'] );
 	}
+
+	/**
+	 * Verifies that a non-zero revision shifts the status rotation so a
+	 * post that's publish at rev 0 lands on a different status at rev 1.
+	 */
+	public function test_resolve_status_shifts_with_revision(): void {
+		// ARRANGE: any generator.
+		$generator = $this->build_generator();
+
+		// ACT + ASSERT: index 4 is publish at rev 0 but draft at rev 1
+		// because (4 + 1) is divisible by 5.
+		$this->assertSame( 'publish', $generator->resolve_status( 4 ) );
+		$this->assertSame( 'draft', $generator->resolve_status( 4, 1 ) );
+
+		// ACT + ASSERT: index 5 is draft at rev 0 but private at rev 1
+		// because (5 + 1) is divisible by 6.
+		$this->assertSame( 'draft', $generator->resolve_status( 5 ) );
+		$this->assertSame( 'private', $generator->resolve_status( 5, 1 ) );
+	}
+
+	/**
+	 * Verifies that meta_values records the revision number and rotates
+	 * color/priority by (index + revision) when revision is positive.
+	 */
+	public function test_meta_values_with_revision(): void {
+		// ARRANGE: any generator, plus the no-revision baseline at the
+		// matching post-revision index (5 = 3 + 2).
+		$generator = $this->build_generator();
+		$baseline  = $generator->meta_values( 5 );
+
+		// ACT: collect meta for index 3 at revision 2.
+		$meta = $generator->meta_values( 3, 2 );
+
+		// ASSERT: revision is recorded as a string.
+		$this->assertSame(
+			'2',
+			$meta[ Content_Generator::REVISION_META_KEY ]
+		);
+
+		// ASSERT: color/priority are rotated relative to (index + revision),
+		// matching what meta_values( 5, 0 ) returns.
+		$this->assertSame( $baseline['seeder_color'], $meta['seeder_color'] );
+		$this->assertSame(
+			$baseline['seeder_priority'],
+			$meta['seeder_priority']
+		);
+	}
+
+	/**
+	 * Verifies that meta_values at revision 0 produces identical output to
+	 * the no-revision call, preserving create-mode behavior.
+	 */
+	public function test_meta_values_zero_revision_matches_no_revision(): void {
+		// ARRANGE: any generator.
+		$generator = $this->build_generator();
+
+		// ACT: build with explicit revision 0 and without.
+		$with_zero = $generator->meta_values( 3, 0 );
+		$without   = $generator->meta_values( 3 );
+
+		// ASSERT: identical, and no revision meta key was added.
+		$this->assertSame( $without, $with_zero );
+		$this->assertArrayNotHasKey(
+			Content_Generator::REVISION_META_KEY,
+			$with_zero
+		);
+	}
+
+	/**
+	 * Verifies that term_assignments rotates by (index + revision) so a
+	 * non-zero revision picks a different pair of terms per taxonomy.
+	 */
+	public function test_term_assignments_shifts_with_revision(): void {
+		// ARRANGE: any generator.
+		$generator = $this->build_generator();
+
+		// ACT: collect assignments for index 1 at revision 2.
+		$at_rev_2 = $generator->term_assignments( 1, 2 );
+		$baseline = $generator->term_assignments( 3 );
+
+		// ASSERT: matches what index 3 (i.e. 1 + 2) would produce at rev 0.
+		$this->assertSame( $baseline, $at_rev_2 );
+	}
+
+	/**
+	 * Verifies that extract_index_from_slug returns the trailing integer
+	 * for well-formed seeder slugs.
+	 */
+	public function test_extract_index_from_slug_valid(): void {
+		// ARRANGE + ACT + ASSERT: standard seeder slugs round-trip.
+		$this->assertSame(
+			3,
+			Content_Generator::extract_index_from_slug( 'seeder-post-3' )
+		);
+		$this->assertSame(
+			12,
+			Content_Generator::extract_index_from_slug( 'seeder-page-12' )
+		);
+		$this->assertSame(
+			7,
+			Content_Generator::extract_index_from_slug( 'seeder-my-cpt-7' )
+		);
+	}
+
+	/**
+	 * Verifies that extract_index_from_slug returns null for slugs that
+	 * don't look like seeder output.
+	 */
+	public function test_extract_index_from_slug_invalid(): void {
+		// ARRANGE + ACT + ASSERT: missing prefix or trailing number.
+		$this->assertNull(
+			Content_Generator::extract_index_from_slug( 'hello-world' )
+		);
+		$this->assertNull(
+			Content_Generator::extract_index_from_slug( 'seeder-post' )
+		);
+		$this->assertNull(
+			Content_Generator::extract_index_from_slug( 'seeder-post-abc' )
+		);
+	}
+
+	/**
+	 * Verifies that apply_revision_suffix appends, replaces, and strips the
+	 * revision suffix idempotently for titles and excerpts.
+	 */
+	public function test_apply_revision_suffix(): void {
+		// ARRANGE: a title without an existing suffix.
+		$title = 'Run2 Post 1 - 1P';
+
+		// ACT + ASSERT: positive revision appends the suffix.
+		$this->assertSame(
+			'Run2 Post 1 - 1P (rev 1)',
+			Content_Generator::apply_revision_suffix( $title, 1 )
+		);
+
+		// ACT + ASSERT: re-applying replaces an existing suffix instead of
+		// stacking it.
+		$existing = 'Run2 Post 1 - 1P (rev 1)';
+		$this->assertSame(
+			'Run2 Post 1 - 1P (rev 5)',
+			Content_Generator::apply_revision_suffix( $existing, 5 )
+		);
+
+		// ACT + ASSERT: revision 0 strips any existing suffix.
+		$this->assertSame(
+			'Run2 Post 1 - 1P',
+			Content_Generator::apply_revision_suffix( $existing, 0 )
+		);
+	}
+
+	/**
+	 * Verifies that apply_revision_to_content adds, replaces, and strips
+	 * the revision note block idempotently.
+	 */
+	public function test_apply_revision_to_content(): void {
+		// ARRANGE: a small Gutenberg snippet.
+		$base = "<!-- wp:paragraph -->\n<p>Body.</p>\n<!-- /wp:paragraph -->";
+
+		// ACT: apply revision 1.
+		$first = Content_Generator::apply_revision_to_content( $base, 1 );
+
+		// ASSERT: the marker block and revision label appear once.
+		$this->assertStringContainsString( '<!-- seeder-rev-note -->', $first );
+		$this->assertStringContainsString( 'Revision 1 update notice.', $first );
+		$this->assertSame(
+			1,
+			substr_count( $first, '<!-- seeder-rev-note -->' )
+		);
+
+		// ACT: re-apply at revision 4.
+		$second = Content_Generator::apply_revision_to_content( $first, 4 );
+
+		// ASSERT: still one marker block, now labelled revision 4.
+		$this->assertStringContainsString( 'Revision 4 update notice.', $second );
+		$this->assertStringNotContainsString(
+			'Revision 1 update notice.',
+			$second
+		);
+		$this->assertSame(
+			1,
+			substr_count( $second, '<!-- seeder-rev-note -->' )
+		);
+
+		// ACT: strip with revision 0.
+		$stripped = Content_Generator::apply_revision_to_content( $second, 0 );
+
+		// ASSERT: no marker block remains and the original body is intact.
+		$this->assertStringNotContainsString(
+			'<!-- seeder-rev-note -->',
+			$stripped
+		);
+		$this->assertStringContainsString( '<p>Body.</p>', $stripped );
+	}
 }
