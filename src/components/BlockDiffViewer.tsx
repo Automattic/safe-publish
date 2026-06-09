@@ -16,12 +16,16 @@ import type { BlockDiff } from '../api/diff';
 /**
  * Props for the BlockDiffViewer component.
  *
- * @property {BlockDiff[]} [blocks]    Block diff objects to display.
- * @property {boolean}     [highlight] Enable inline word-level highlighting.
+ * @property {BlockDiff[]} [blocks]        Block diff objects to display.
+ * @property {boolean}     [highlight]     Enable inline word-level highlighting.
+ * @property {boolean}     [showUnchanged] When false, omit unchanged blocks.
+ * @property {boolean}     [showLabels]    When false, omit each card's block-name + status header.
  */
 interface Props {
 	blocks?: BlockDiff[];
 	highlight?: boolean;
+	showUnchanged?: boolean;
+	showLabels?: boolean;
 }
 
 /**
@@ -76,54 +80,125 @@ function normalizeHtml( html: string ): string {
 }
 
 /**
+ * Wraps each image in rendered HTML with a new-tab anchor pointing at its
+ * source URL. Images already nested inside an anchor are left alone.
+ *
+ * @param {string} html Rendered block HTML.
+ *
+ * @return {string} HTML with image links applied.
+ */
+function linkifyImages( html: string ): string {
+    if ( ! html || typeof DOMParser === 'undefined' ) { return html; }
+
+    const doc = new DOMParser().parseFromString( html, 'text/html' );
+    doc.querySelectorAll( 'img' ).forEach( ( img ) => {
+        const src = img.getAttribute( 'src' );
+        if ( ! src || img.parentElement?.tagName === 'A' ) { return; }
+
+        const link = doc.createElement( 'a' );
+        link.setAttribute( 'href', src );
+        link.setAttribute( 'target', '_blank' );
+        link.setAttribute( 'rel', 'noopener noreferrer' );
+        img.parentNode?.insertBefore( link, img );
+        link.appendChild( img );
+    } );
+
+    return doc.body.innerHTML;
+}
+
+/**
+ * Resolves the effective status for a block diff, downgrading false modified
+ * flags to unchanged when normalized HTML matches.
+ *
+ * @param {BlockDiff} block Block diff entry.
+ *
+ * @return {BlockDiff['status']} Effective status.
+ */
+export function resolveStatus( block: BlockDiff ): BlockDiff['status'] {
+    if ( block.status !== 'modified' ) {
+        return block.status;
+    }
+    const currentHtml = block.current?.rendered || '';
+    const incomingHtml = block.incoming?.rendered || '';
+    if ( normalizeHtml( currentHtml ) === normalizeHtml( incomingHtml ) ) {
+        return 'unchanged';
+    }
+    return 'modified';
+}
+
+/**
  * Block Diff Viewer component.
  *
- * Renders a visual comparison of Gutenberg blocks showing added, removed,
- * modified, and unchanged blocks with inline highlighting.
+ * Renders a visual comparison of Gutenberg blocks. By default, omits
+ * unchanged blocks so the diff scans cleanly; pass showUnchanged to reveal
+ * them. Pass showLabels=false to drop each card's block-name + status
+ * header and reclaim the vertical space for content.
  *
- * @param {Object}      props             Component props.
- * @param {BlockDiff[]} [props.blocks]    Block diff objects to display.
- * @param {boolean}     [props.highlight] Enable inline word-level highlighting.
+ * @param {Object}      props                 Component props.
+ * @param {BlockDiff[]} [props.blocks]        Block diff objects to display.
+ * @param {boolean}     [props.highlight]     Enable inline word-level highlighting.
+ * @param {boolean}     [props.showUnchanged] When false, omit unchanged blocks.
+ * @param {boolean}     [props.showLabels]    When false, omit each card's block-name + status header.
  *
  * @return {JSX.Element} Rendered block diff viewer.
  */
-export default function BlockDiffViewer( { blocks = [], highlight = true }: Props ): JSX.Element {
+export default function BlockDiffViewer( {
+    blocks = [],
+    highlight = true,
+    showUnchanged = false,
+    showLabels = true,
+}: Props ): JSX.Element {
+    const resolved = blocks.map( ( block ) => ( {
+        block,
+        status: resolveStatus( block ),
+    } ) );
+
+    const visible = showUnchanged
+        ? resolved
+        : resolved.filter( ( entry ) => entry.status !== 'unchanged' );
+
+    if ( visible.length === 0 ) {
+        return (
+            <div className="safe-publish-block-diff-viewer">
+                <Text>{ __( 'No block changes detected.', 'safe-publish' ) }</Text>
+            </div>
+        );
+    }
+
     return (
         <div className="safe-publish-block-diff-viewer">
-            { blocks.map( block => {
-                let status = block.status;
+            { visible.map( ( { block, status } ) => {
                 const key = `${ block.index }-${ block.status }`;
-                const title = block.incoming?.name || block.current?.name || __( 'unknown', 'safe-publish' );
-                const currentHtml = block.current?.rendered || '';
-                const incomingHtml = block.incoming?.rendered || '';
+                const title = block.incoming?.name || block.current?.name || __( 'Block', 'safe-publish' );
+                const rawCurrentHtml = block.current?.rendered || '';
+                const rawIncomingHtml = block.incoming?.rendered || '';
 
-                // Client-side recheck to avoid false modified flags (whitespace/attr noise).
-                if ( status === 'modified' ) {
-                    if ( normalizeHtml( currentHtml ) === normalizeHtml( incomingHtml ) ) {
-                        status = 'unchanged';
-                    }
-                }
+                const hasImage = /<img\s/i.test( rawCurrentHtml ) || /<img\s/i.test( rawIncomingHtml );
 
-                const hasImage = /<img\s/i.test( currentHtml ) || /<img\s/i.test( incomingHtml );
-
-                let modifiedIncoming = incomingHtml;
+                // Linkify after highlight — diffing linkified HTML would
+                // surface anchor wrappers as changes.
+                let modifiedIncoming = rawIncomingHtml;
                 if ( highlight && status === 'modified' && ! hasImage ) {
-                    modifiedIncoming = highlightHtml( currentHtml, incomingHtml );
+                    modifiedIncoming = highlightHtml( rawCurrentHtml, rawIncomingHtml );
                 }
+
+                const currentHtml = linkifyImages( rawCurrentHtml );
+                const incomingHtml = linkifyImages( rawIncomingHtml );
+                modifiedIncoming = linkifyImages( modifiedIncoming );
 
                 return (
                     <div key={ key } className="safe-publish-block-diff">
-                        <div className="safe-publish-block-diff__header">
-                            <Text>
-                                { title || __( 'Block', 'safe-publish' ) }
+                        { showLabels && (
+                            <div className="safe-publish-block-diff__header">
+                                <Text>{ title }</Text>
                                 <span className={ `safe-publish-badge safe-publish-${ status }` }>{ status }</span>
                                 { hasImage && block.status === 'modified' && status !== 'unchanged' && (
-                                    <span className="safe-publish-badge" style={ { background: '#6b7280', color: 'var(--safe-publish-text-on-fill)' } }>
+                                    <span className="safe-publish-badge safe-publish-badge--neutral">
                                         image (no inline diff)
                                     </span>
                                 ) }
-                            </Text>
-                        </div>
+                            </div>
+                        ) }
                         { status === 'removed' && (
                             <div className="safe-publish-block-diff__removed" dangerouslySetInnerHTML={ { __html: currentHtml } } />
                         ) }

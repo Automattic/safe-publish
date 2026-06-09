@@ -7,23 +7,26 @@
  * @file This file defines the PostDiffModal component.
  */
 
-import BlockDiffViewer from './BlockDiffViewer';
+import BlockDiffViewer, { resolveStatus } from './BlockDiffViewer';
 import DiffViewSelector from './DiffViewSelector';
 import NonContentDiffSections from './NonContentDiffSections';
 import { useDiffPreview } from './hooks/useDiffPreview';
 import { useImportPost } from './hooks/useImportPost';
 import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
-import { ImportedPost, ImportSyncStatus } from '../types';
+import { ImportedPost, ImportSyncStatus, Warning } from '../types';
 import { renderWarningMessage } from '../utils';
 import {
 	Button,
+	ToggleControl,
 	__experimentalText as Text,
 	__experimentalHStack as HStack,
 	__experimentalVStack as VStack,
 	Spinner,
 } from '@wordpress/components';
 import { useState } from '@wordpress/element';
-import { __, sprintf } from '@wordpress/i18n';
+import { __ } from '@wordpress/i18n';
+
+import type { BlockDiff, DiffPreviewResult } from '../api/diff';
 
 /**
  * Props for the PostDiffModal component.
@@ -33,7 +36,6 @@ import { __, sprintf } from '@wordpress/i18n';
  * @property {string}                       ajaxurl    WordPress admin-ajax URL (for the Update button).
  * @property {string}                       nonce      AJAX nonce for the create-draft endpoint.
  * @property {ImportSyncStatus | undefined} syncStatus Row's sync verdict; gates the Update button.
- * @property {Function}                     closeModal Callback to close the modal.
  * @property {Function}                     onRefresh  Callback to refresh the listing after an update.
  */
 interface PostDiffModalProps {
@@ -42,8 +44,299 @@ interface PostDiffModalProps {
 	ajaxurl: string;
 	nonce: string;
 	syncStatus: ImportSyncStatus | undefined;
-	closeModal?: () => void;
 	onRefresh?: () => void;
+}
+
+/**
+ * Props for the header bar subcomponent.
+ *
+ * @property {string | null} diffHtml         Source diff HTML.
+ * @property {boolean}       showBlockView    View selection state.
+ * @property {boolean}       showUnchanged    Whether unchanged content is revealed.
+ * @property {boolean}       showFullSize     Whether the image-height cap is dropped.
+ * @property {boolean}       showLabels       Whether block-card headers are visible.
+ * @property {boolean}       hasImages        Whether the diff contains any images.
+ * @property {boolean}       showViewOptions  Whether the view-option toggles should render.
+ * @property {boolean}       showUpdateButton Whether the Update button should render.
+ * @property {boolean}       isUpdating       Update submit in progress.
+ * @property {boolean}       isLoading        Diff fetch in progress.
+ * @property {boolean}       updateSucceeded  Update has completed successfully.
+ * @property {string | null} updateError      Error from the Update submit, if any.
+ * @property {Function}      onViewChange     Selector change callback.
+ * @property {Function}      onShowUnchanged  Toggle change callback.
+ * @property {Function}      onShowFullSize   Toggle change callback.
+ * @property {Function}      onShowLabels     Toggle change callback.
+ * @property {Function}      onSubmitUpdate   Update click handler.
+ */
+interface HeaderBarProps {
+	diffHtml: string | null;
+	showBlockView: boolean;
+	showUnchanged: boolean;
+	showFullSize: boolean;
+	showLabels: boolean;
+	hasImages: boolean;
+	showViewOptions: boolean;
+	showUpdateButton: boolean;
+	isUpdating: boolean;
+	isLoading: boolean;
+	updateSucceeded: boolean;
+	updateError: string | null;
+	onViewChange: ( showBlockView: boolean ) => void;
+	onShowUnchanged: ( value: boolean ) => void;
+	onShowFullSize: ( value: boolean ) => void;
+	onShowLabels: ( value: boolean ) => void;
+	onSubmitUpdate: () => void;
+}
+
+/**
+ * Single sticky header bar with view selector, view toggles, and the
+ * Update action with inline status text.
+ *
+ * @param {HeaderBarProps} props Component props.
+ *
+ * @return {JSX.Element} Rendered header bar.
+ */
+function HeaderBar( {
+	diffHtml,
+	showBlockView,
+	showUnchanged,
+	showFullSize,
+	showLabels,
+	hasImages,
+	showViewOptions,
+	showUpdateButton,
+	isUpdating,
+	isLoading,
+	updateSucceeded,
+	updateError,
+	onViewChange,
+	onShowUnchanged,
+	onShowFullSize,
+	onShowLabels,
+	onSubmitUpdate,
+}: HeaderBarProps ): JSX.Element {
+	const successMessage = showViewOptions
+		? __( 'Update applied. Some differences remain.', 'safe-publish' )
+		: __( 'Update applied.', 'safe-publish' );
+
+	return (
+		<HStack
+			className="safe-publish-compare-modal__toggles"
+			justify="flex-start"
+			alignment="center"
+			spacing={ 6 }
+			expanded={ false }
+		>
+			{ showViewOptions && (
+				<>
+					<DiffViewSelector
+						showBlockView={ showBlockView }
+						hasDiffHtml={ Boolean( diffHtml ) }
+						onViewChange={ onViewChange }
+					/>
+					{ showBlockView && (
+						<ToggleControl
+							__nextHasNoMarginBottom
+							label={
+								<span style={ { whiteSpace: 'nowrap' } }>
+									{ __( 'Show labels', 'safe-publish' ) }
+								</span>
+							}
+							checked={ showLabels }
+							onChange={ onShowLabels }
+						/>
+					) }
+					<ToggleControl
+						__nextHasNoMarginBottom
+						label={
+							<span style={ { whiteSpace: 'nowrap' } }>
+								{ __( 'Show unchanged', 'safe-publish' ) }
+							</span>
+						}
+						checked={ showUnchanged }
+						onChange={ onShowUnchanged }
+					/>
+					{ hasImages && (
+						<ToggleControl
+							__nextHasNoMarginBottom
+							label={
+								<span style={ { whiteSpace: 'nowrap' } }>
+									{ __( 'Larger images', 'safe-publish' ) }
+								</span>
+							}
+							checked={ showFullSize }
+							onChange={ onShowFullSize }
+						/>
+					) }
+				</>
+			) }
+			{ updateError && (
+				<Text style={ { color: '#d63638', whiteSpace: 'nowrap' } }>
+					{ updateError }
+				</Text>
+			) }
+			{ showUpdateButton && (
+				<Button
+					__next40pxDefaultSize
+					variant="primary"
+					onClick={ onSubmitUpdate }
+					disabled={ isUpdating || isLoading }
+				>
+					{ isUpdating ? (
+						<Spinner style={ { margin: 0 } } />
+					) : (
+						__( 'Update', 'safe-publish' )
+					) }
+				</Button>
+			) }
+			{ updateSucceeded && ! isUpdating && (
+				<Text style={ { color: '#008a20', whiteSpace: 'nowrap' } }>
+					{ successMessage }
+				</Text>
+			) }
+		</HStack>
+	);
+}
+
+/**
+ * Props for the diff body subcomponent.
+ *
+ * @property {string | null}                        diffHtml        Source diff HTML.
+ * @property {BlockDiff[]}                          blockDiffs      Block-level diffs.
+ * @property {DiffPreviewResult['nonContentDiffs']} nonContentDiffs Non-content field diffs.
+ * @property {boolean}                              showBlockView   View selection state.
+ * @property {boolean}                              showUnchanged   Whether unchanged content is revealed.
+ * @property {boolean}                              showLabels      Whether block-card headers are visible.
+ */
+interface DiffBodyProps {
+	diffHtml: string | null;
+	blockDiffs: BlockDiff[];
+	nonContentDiffs: DiffPreviewResult['nonContentDiffs'];
+	showBlockView: boolean;
+	showUnchanged: boolean;
+	showLabels: boolean;
+}
+
+/**
+ * Diff body — the active view plus non-content sections.
+ *
+ * @param {DiffBodyProps} props Component props.
+ *
+ * @return {JSX.Element} Rendered diff body.
+ */
+function DiffBody( {
+	diffHtml,
+	blockDiffs,
+	nonContentDiffs,
+	showBlockView,
+	showUnchanged,
+	showLabels,
+}: DiffBodyProps ): JSX.Element {
+	const blockHasChanges = blockDiffs.some(
+		( block ) => resolveStatus( block ) !== 'unchanged'
+	);
+	const showPostDetails =
+		hasAnyNonContentDiff( nonContentDiffs ) || showUnchanged;
+	const showContentSection = showBlockView
+		? blockHasChanges || showUnchanged
+		: Boolean( diffHtml );
+
+	return (
+		<>
+			{ showPostDetails && (
+				<section className="safe-publish-compare-modal__section safe-publish-compare-modal__section--details">
+					<Text as="h2">
+						{ __( 'Post Details', 'safe-publish' ) }
+					</Text>
+					<NonContentDiffSections
+						nonContentDiffs={ nonContentDiffs }
+						showUnchanged={ showUnchanged }
+					/>
+				</section>
+			) }
+
+			{ showContentSection && (
+				<section className="safe-publish-compare-modal__section safe-publish-compare-modal__section--content">
+					<Text as="h2">{ __( 'Post Content', 'safe-publish' ) }</Text>
+					{ showBlockView ? (
+						<BlockDiffViewer
+							blocks={ blockDiffs }
+							showUnchanged={ showUnchanged }
+							showLabels={ showLabels }
+						/>
+					) : (
+						diffHtml && (
+							<div
+								style={ {
+									background: '#fafafa',
+									border: '1px solid #eee',
+									padding: 16,
+								} }
+								dangerouslySetInnerHTML={ {
+									__html: diffHtml,
+								} }
+							/>
+						)
+					) }
+				</section>
+			) }
+		</>
+	);
+}
+
+/**
+ * Props for the warnings banner.
+ *
+ * @property {Warning[]} warnings Non-fatal warnings raised by the backend.
+ */
+interface WarningsBannerProps {
+	warnings: Warning[];
+}
+
+/**
+ * Renders the post-Update warnings list. Only rendered when warnings exist;
+ * the short success message itself lives in the sticky header.
+ *
+ * @param {WarningsBannerProps} props Component props.
+ *
+ * @return {JSX.Element} Rendered warnings list.
+ */
+function WarningsBanner( { warnings }: WarningsBannerProps ): JSX.Element {
+	return (
+		<VStack
+			spacing="2"
+			className="safe-publish-import-warnings"
+			role="status"
+		>
+			{ warnings.map( ( warning, index ) => (
+				<Text key={ index } className="safe-publish-import-warning">
+					{ renderWarningMessage( warning ) }
+				</Text>
+			) ) }
+		</VStack>
+	);
+}
+
+/**
+ * True when any non-content section carries diff HTML.
+ *
+ * @param {DiffPreviewResult['nonContentDiffs']} nonContentDiffs Diff data.
+ *
+ * @return {boolean} Whether at least one section has changes.
+ */
+function hasAnyNonContentDiff(
+	nonContentDiffs: DiffPreviewResult['nonContentDiffs']
+): boolean {
+	if ( ! nonContentDiffs ) {
+		return false;
+	}
+	return Boolean(
+		nonContentDiffs.title ||
+			nonContentDiffs.excerpt ||
+			nonContentDiffs.taxonomies ||
+			nonContentDiffs.meta ||
+			nonContentDiffs.featuredMedia
+	);
 }
 
 /**
@@ -62,18 +355,17 @@ export default function PostDiffModal( {
 	ajaxurl,
 	nonce,
 	syncStatus,
-	closeModal,
 	onRefresh,
 }: PostDiffModalProps ): JSX.Element {
 	const firstItem = items[ 0 ];
 
 	const {
 		diffHtml,
-		renderedDiffHtml,
 		blockDiffs,
 		nonContentDiffs,
 		isLoading,
 		error,
+		refetch,
 	} = useDiffPreview( {
 		postId: firstItem.source_post_id,
 		postType: firstItem.post_type,
@@ -94,10 +386,13 @@ export default function PostDiffModal( {
 		isUpdate: true,
 		ajaxurl,
 		nonce,
+		onSuccess: refetch,
 	} );
 
 	const [ showBlockView, setShowBlockView ] = useState( true );
-	const [ showRenderedDiff, setShowRenderedDiff ] = useState( true );
+	const [ showUnchanged, setShowUnchanged ] = useState( false );
+	const [ showFullSize, setShowFullSize ] = useState( false );
+	const [ showLabels, setShowLabels ] = useState( true );
 
 	const updateSucceeded = null !== editUrl;
 	// Mirror the Update menu item's gating in actions.tsx.
@@ -105,12 +400,57 @@ export default function PostDiffModal( {
 
 	useRefreshOnUnmount( updateSucceeded, onRefresh );
 
-	return (
-		<VStack>
-			<Text>{ `Comparing "${ firstItem.title }"` }</Text>
+	const hasAnyChanges =
+		Boolean( diffHtml ) ||
+		blockDiffs.some( ( block ) => resolveStatus( block ) !== 'unchanged' ) ||
+		hasAnyNonContentDiff( nonContentDiffs );
+	const hasImages =
+		Boolean( nonContentDiffs?.featuredMedia ) ||
+		blockDiffs.some(
+			( block ) =>
+				/<img\s/i.test( block.current?.rendered || '' ) ||
+				/<img\s/i.test( block.incoming?.rendered || '' )
+		);
+	// Keep the previous diff visible during refetch so the body doesn't
+	// flicker between updates.
+	const hasPreviousData =
+		blockDiffs.length > 0 ||
+		nonContentDiffs !== undefined ||
+		diffHtml !== null;
+	const ready = ! error && ( ! isLoading || hasPreviousData );
+	const showEmptyState = ready && ! hasAnyChanges;
+	const showDiffBody = ready && hasAnyChanges;
 
-			{ isLoading && (
-				<HStack>
+	const modalClassName = showFullSize
+		? 'safe-publish-compare-modal'
+		: 'safe-publish-compare-modal safe-publish-compare-modal--capped';
+
+	return (
+		<VStack className={ modalClassName }>
+			<HeaderBar
+				diffHtml={ diffHtml }
+				showBlockView={ showBlockView }
+				showUnchanged={ showUnchanged }
+				showFullSize={ showFullSize }
+				showLabels={ showLabels }
+				hasImages={ hasImages }
+				showViewOptions={ showDiffBody }
+				showUpdateButton={
+					! error && ! isUpToDate && hasAnyChanges
+				}
+				isUpdating={ isUpdating }
+				isLoading={ isLoading }
+				updateSucceeded={ updateSucceeded }
+				updateError={ updateError }
+				onViewChange={ setShowBlockView }
+				onShowUnchanged={ setShowUnchanged }
+				onShowFullSize={ setShowFullSize }
+				onShowLabels={ setShowLabels }
+				onSubmitUpdate={ submitUpdate }
+			/>
+
+			{ isLoading && ! hasPreviousData && (
+				<HStack justify="flex-start">
 					<Spinner />
 					<Text>{ __( 'Loading diff…', 'safe-publish' ) }</Text>
 				</HStack>
@@ -118,101 +458,26 @@ export default function PostDiffModal( {
 
 			{ error && <Text style={ { color: '#d63638' } }>{ error }</Text> }
 
-			<Text as="h2">{ __( 'Content Comparison', 'safe-publish' ) }</Text>
-
-			<DiffViewSelector
-				showBlockView={ showBlockView }
-				showRenderedDiff={ showRenderedDiff }
-				hasRenderedDiffHtml={ Boolean( renderedDiffHtml ) }
-				hasDiffHtml={ Boolean( diffHtml ) }
-				onViewChange={ ( blockView, renderedDiff ) => {
-					setShowBlockView( blockView );
-					setShowRenderedDiff( renderedDiff );
-				} }
-			/>
-
-			{ showBlockView && (
-				<div style={ { marginTop: 12, maxHeight: '55vh', overflowY: 'auto' } }>
-					<BlockDiffViewer blocks={ blockDiffs } />
-				</div>
-			) }
-
-			{ ! showBlockView && showRenderedDiff && renderedDiffHtml && (
-				<div
-					style={ {
-						marginTop: 12,
-						maxHeight: '50vh',
-						overflowY: 'auto',
-						background: '#f6faff',
-						border: '1px solid #c3d8ff',
-						padding: 16,
-					} }
-					dangerouslySetInnerHTML={ { __html: renderedDiffHtml } }
+			{ showDiffBody && (
+				<DiffBody
+					diffHtml={ diffHtml }
+					blockDiffs={ blockDiffs }
+					nonContentDiffs={ nonContentDiffs }
+					showBlockView={ showBlockView }
+					showUnchanged={ showUnchanged }
+					showLabels={ showLabels }
 				/>
 			) }
 
-			{ ! showBlockView && ! showRenderedDiff && diffHtml && (
-				<div
-					style={ {
-						marginTop: 12,
-						maxHeight: '50vh',
-						overflowY: 'auto',
-						background: '#fafafa',
-						border: '1px solid #eee',
-						padding: 16,
-					} }
-					dangerouslySetInnerHTML={ { __html: diffHtml } }
-				/>
+			{ showEmptyState && (
+				<Text>
+					{ __( 'No differences detected.', 'safe-publish' ) }
+				</Text>
 			) }
 
-			<NonContentDiffSections nonContentDiffs={ nonContentDiffs } />
-
-			{ updateSucceeded && (
-				<VStack spacing="2">
-					<Text style={ { color: '#008a20' } }>
-						{ sprintf(
-							/* translators: %s is the post title */
-							__(
-								'"%s" has been updated — the changes shown above are now live.',
-								'safe-publish'
-							),
-							firstItem.title
-						) }
-					</Text>
-					{ warnings.length > 0 && (
-						<VStack spacing="2" className="safe-publish-import-warnings" role="status">
-							{ warnings.map( ( warning, index ) => (
-								<Text key={ index } className="safe-publish-import-warning">
-									{ renderWarningMessage( warning ) }
-								</Text>
-							) ) }
-						</VStack>
-					) }
-				</VStack>
+			{ updateSucceeded && warnings.length > 0 && (
+				<WarningsBanner warnings={ warnings } />
 			) }
-
-			<HStack justify="right">
-				{ updateError && <Text style={ { color: '#d63638' } }>{ updateError }</Text> }
-				{ ! error && ! updateSucceeded && ! isUpToDate && (
-					<Button
-						__next40pxDefaultSize
-						variant="primary"
-						onClick={ submitUpdate }
-						disabled={ isUpdating || isLoading }
-						style={ { marginLeft: 8 } }
-					>
-						{ isUpdating ? <Spinner /> : __( 'Update', 'safe-publish' ) }
-					</Button>
-				) }
-				<Button
-					__next40pxDefaultSize
-					variant="tertiary"
-					onClick={ closeModal }
-					disabled={ isUpdating }
-				>
-					{ __( 'Close', 'safe-publish' ) }
-				</Button>
-			</HStack>
 		</VStack>
 	);
 }

@@ -5,7 +5,7 @@
  */
 
 import { fetchDiffPreview } from '../../api/diff';
-import { useEffect, useState } from '@wordpress/element';
+import { useCallback, useEffect, useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
 import type { BlockDiff, DiffPreviewResult } from '../../api/diff';
@@ -29,20 +29,20 @@ interface UseDiffPreviewParams {
 /**
  * Return value from the useDiffPreview hook.
  *
- * @property {string | null}                        diffHtml         Source diff HTML.
- * @property {string | null}                        renderedDiffHtml Rendered diff HTML.
- * @property {BlockDiff[]}                          blockDiffs       Block-level diffs.
- * @property {DiffPreviewResult['nonContentDiffs']} nonContentDiffs  Non-content field diffs.
- * @property {boolean}                              isLoading        Whether diff is loading.
- * @property {string | null}                        error            Error message if fetch failed.
+ * @property {string | null}                        diffHtml        Source diff HTML.
+ * @property {BlockDiff[]}                          blockDiffs      Block-level diffs.
+ * @property {DiffPreviewResult['nonContentDiffs']} nonContentDiffs Non-content field diffs.
+ * @property {boolean}                              isLoading       Whether diff is loading.
+ * @property {string | null}                        error           Error message if fetch failed.
+ * @property {() => void}                           refetch         Re-runs the diff fetch.
  */
 interface UseDiffPreviewResult {
 	diffHtml: string | null;
-	renderedDiffHtml: string | null;
 	blockDiffs: BlockDiff[];
 	nonContentDiffs: DiffPreviewResult['nonContentDiffs'];
 	isLoading: boolean;
 	error: string | null;
+	refetch: () => void;
 }
 
 /**
@@ -58,26 +58,19 @@ export function useDiffPreview( {
 	restNonce,
 }: UseDiffPreviewParams ): UseDiffPreviewResult {
 	const [ diffHtml, setDiffHtml ] = useState< string | null >( null );
-	const [ renderedDiffHtml, setRenderedDiffHtml ] = useState< string | null >( null );
 	const [ blockDiffs, setBlockDiffs ] = useState< BlockDiff[] >( [] );
 	const [ nonContentDiffs, setNonContentDiffs ] = useState< DiffPreviewResult['nonContentDiffs'] >( undefined );
 	const [ isLoading, setIsLoading ] = useState( true );
 	const [ error, setError ] = useState< string | null >( null );
+	const [ refetchCount, setRefetchCount ] = useState( 0 );
 
 	useEffect( () => {
-		let mounted = true;
+		let active = true;
 
-		/**
-		 * Fetches diff preview data from the API.
-		 *
-		 * Handles loading states, error conditions, and updates state
-		 * with the fetched diff data.
-		 *
-		 * @return {Promise<void>} Resolves when fetch is complete.
-		 */
-		const fetchDiff = async (): Promise< void > => {
+		void ( async () => {
 			setIsLoading( true );
 			setError( null );
+
 			const result = await fetchDiffPreview(
 				{
 					postId,
@@ -88,39 +81,43 @@ export function useDiffPreview( {
 				restNonce
 			);
 
-			if ( ! mounted ) {
+			if ( ! active ) {
 				return;
 			}
 
 			if ( result.error ) {
 				setError( result.error );
-			} else if ( result.contentDiffHtml || result.html ) {
+			} else if (
+				result.contentDiffHtml !== undefined ||
+				result.html !== undefined ||
+				result.blockDiffs !== undefined ||
+				result.nonContentDiffs !== undefined
+			) {
 				setDiffHtml( result.contentDiffHtml ?? result.html ?? null );
 				setNonContentDiffs( result.nonContentDiffs ?? undefined );
-				setRenderedDiffHtml( result.renderedContentDiffHtml ?? null );
-				setBlockDiffs( result.blockDiffs || [] );
+				setBlockDiffs( result.blockDiffs ?? [] );
 			} else {
 				setError( __( 'No diff available.', 'safe-publish' ) );
 			}
 
-			if ( mounted ) {
-				setIsLoading( false );
-			}
-		};
-
-		void fetchDiff();
+			setIsLoading( false );
+		} )();
 
 		return () => {
-			mounted = false;
+			active = false;
 		};
-	}, [ postId, postType, restNonce ] );
+	}, [ postId, postType, restNonce, refetchCount ] );
+
+	const refetch = useCallback( () => {
+		setRefetchCount( ( count ) => count + 1 );
+	}, [] );
 
 	return {
 		diffHtml,
-		renderedDiffHtml,
 		blockDiffs,
 		nonContentDiffs,
 		isLoading,
 		error,
+		refetch,
 	};
 }
