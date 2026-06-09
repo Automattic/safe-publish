@@ -195,7 +195,7 @@ export const createImportedActions = (
 		// partial info.
 		isEligible: ( item: ImportedPost ) =>
 			'up-to-date' !== syncStatuses[ item.source_post_id ]?.status,
-		RenderModal: ( { items, closeModal } ) => (
+		RenderModal: ( { items } ) => (
 			<PostDiffModal
 				items={ items }
 				restNonce={ context.restNonce }
@@ -204,7 +204,6 @@ export const createImportedActions = (
 				syncStatus={
 					syncStatuses[ items[ 0 ].source_post_id ]?.status
 				}
-				closeModal={ closeModal }
 				onRefresh={ onRefresh }
 			/>
 		),

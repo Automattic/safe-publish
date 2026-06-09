@@ -283,9 +283,7 @@
 
 			.safe-publish-block-diff__col {
 				flex: 1;
-				border: 1px solid var(--safe-publish-border-subtle);
 				padding: 8px;
-				background: var(--safe-publish-bg-muted);
 				max-width: 50%;
 				overflow-x: auto;
 			}
@@ -329,7 +327,8 @@
 			color: var(--safe-publish-text-on-fill);
 		}
 
-		&.safe-publish-unchanged {
+		&.safe-publish-unchanged,
+		&.safe-publish-badge--neutral {
 			background: var(--safe-publish-pill-bg-muted);
 			color: var(--safe-publish-text-on-fill);
 		}
@@ -354,6 +353,148 @@
 		height: auto;
 		display: block;
 	}
+
+	// Center image content within its column (or single-side container).
+	/* stylelint-disable no-descending-specificity */
+	.safe-publish-block-diff__col:has(img),
+	.safe-publish-block-diff__added:has(img),
+	.safe-publish-block-diff__removed:has(img),
+	.safe-publish-block-diff__unchanged:has(img) {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+	}
+	/* stylelint-enable no-descending-specificity */
+}
+
+// Cap image previews. The "Larger images" toggle removes this class.
+.safe-publish-compare-modal--capped {
+
+	.safe-publish-block-diff__col img,
+	.safe-publish-block-diff__added img,
+	.safe-publish-block-diff__removed img,
+	.safe-publish-block-diff__unchanged img,
+	.incoming-featured-media-preview img {
+		max-height: 300px;
+		max-width: 100%;
+		height: auto;
+		width: auto;
+	}
+}
+
+// Suppress the DataViews modal's scroll-conditional header separator.
+.components-modal__frame:has(.safe-publish-compare-modal) {
+
+	.components-modal__header {
+		border-bottom: none;
+		box-shadow: none;
+	}
+}
+
+.safe-publish-compare-modal {
+
+	// Strip default anchor underline and WP admin's a:focus box-shadow
+	// ring on mouse click; :focus-visible preserves keyboard focus.
+	/* stylelint-disable no-descending-specificity */
+	.safe-publish-block-diff a,
+	.incoming-featured-media-preview a {
+		text-decoration: none;
+
+		&:focus:not(:focus-visible) {
+			outline: none;
+			box-shadow: none;
+		}
+	}
+	/* stylelint-enable no-descending-specificity */
+
+	// Keep ToggleGroupControl option labels on one line.
+	.components-toggle-group-control button {
+		white-space: nowrap;
+	}
+
+	// Featured Image preview shares the block-diff card chrome.
+	.incoming-featured-media-preview {
+		margin-top: 8px;
+		display: flex;
+		gap: 10px;
+		padding: 10px 12px;
+		background: var(--safe-publish-surface-bg);
+		border: 1px solid var(--safe-publish-border);
+		border-radius: 4px;
+
+		> div {
+			flex: 1;
+			max-width: 50%;
+			padding: 8px;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+		}
+
+		img {
+			max-width: 100%;
+			height: auto;
+			display: block;
+		}
+	}
+
+	.safe-publish-compare-modal__section {
+		margin-top: 24px;
+		padding-left: 16px;
+		border-left: 2px solid var(--safe-publish-text-muted);
+
+		&:first-of-type {
+			margin-top: 0;
+		}
+
+		&--details {
+			border-left-color: var(--safe-publish-primary);
+		}
+
+		&--content {
+			border-left-color: var(--safe-publish-text-muted);
+
+			// wp_text_diff hardcodes column headers we can't suppress
+			// from PHP. The parent h2 already names what's being compared.
+			table.diff thead {
+				display: none;
+			}
+		}
+
+		h2 {
+			margin: 0 0 12px;
+			font-size: 1.3em;
+			font-weight: 600;
+		}
+
+		h3 {
+			margin: 0 0 8px;
+			font-size: 1.05em;
+			font-weight: 600;
+		}
+	}
+
+	// Sticky toggle row. ::before extends the bg into the modal padding
+	// so scrolled content doesn't peek through above.
+	.safe-publish-compare-modal__toggles {
+		position: sticky;
+		top: 0;
+		z-index: 2;
+		background: var(--safe-publish-surface-bg);
+		padding: 8px 0;
+
+		&::before {
+			content: "";
+			position: absolute;
+			left: 0;
+			right: 0;
+			bottom: 100%;
+			height: 32px;
+			background: var(--safe-publish-surface-bg);
+			pointer-events: none;
+		}
+	}
+
 }
 
 // DataViews' hover-only color shift isn't a discoverable affordance;

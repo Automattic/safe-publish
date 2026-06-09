@@ -14,14 +14,16 @@ import { __ } from '@wordpress/i18n';
 /**
  * Parameters for the useImportPost hook.
  *
- * @property {number}  sourcePostId Source post ID to import or update.
- * @property {string}  title        Post title (used for the AJAX payload).
- * @property {string}  sourceLink   Source post permalink.
- * @property {string}  postType     Source post type slug.
- * @property {boolean} isUpdate     True to set force_update so the backend
- *                                  skips its existence-confirmation roundtrip.
- * @property {string}  ajaxurl      WordPress admin-ajax URL.
- * @property {string}  nonce        AJAX nonce for the create-draft endpoint.
+ * @property {number}     sourcePostId Source post ID to import or update.
+ * @property {string}     title        Post title (used for the AJAX payload).
+ * @property {string}     sourceLink   Source post permalink.
+ * @property {string}     postType     Source post type slug.
+ * @property {boolean}    isUpdate     True to set force_update so the backend
+ *                                     skips its existence-confirmation roundtrip.
+ * @property {string}     ajaxurl      WordPress admin-ajax URL.
+ * @property {string}     nonce        AJAX nonce for the create-draft endpoint.
+ * @property {() => void} [onSuccess]  Fires after every successful submit
+ *                                     (not just the first).
  */
 interface UseImportPostParams {
 	sourcePostId: number;
@@ -31,6 +33,7 @@ interface UseImportPostParams {
 	isUpdate: boolean;
 	ajaxurl: string;
 	nonce: string;
+	onSuccess?: () => void;
 }
 
 /**
@@ -65,6 +68,7 @@ export function useImportPost( {
 	isUpdate,
 	ajaxurl,
 	nonce,
+	onSuccess,
 }: UseImportPostParams ): UseImportPostResult {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
@@ -131,6 +135,7 @@ export function useImportPost( {
 					Array.isArray( data.warnings ) ? data.warnings : []
 				);
 				setEditUrl( data.edit_url );
+				onSuccess?.();
 			} )
 			.catch( ( err ) => {
 				setError(
