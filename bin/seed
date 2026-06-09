@@ -73,6 +73,11 @@ if [ "$MODE" = "update" ] && [ -n "$PRESET" ]; then
 	exit 1
 fi
 
+if [ "$MODE" = "update" ] && [ -n "$FRESH_ARG" ]; then
+	echo "mode=update doesn't support fresh=. Run without fresh." >&2
+	exit 1
+fi
+
 # shellcheck disable=SC2086
 run_seeder() {
 	container="$1"

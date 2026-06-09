@@ -648,8 +648,10 @@ class SeederContentGeneratorTest extends TestCase {
 	 * color/priority by (index + revision) when revision is positive.
 	 */
 	public function test_meta_values_with_revision(): void {
-		// ARRANGE: any generator.
+		// ARRANGE: any generator, plus the no-revision baseline at the
+		// matching post-revision index (5 = 3 + 2).
 		$generator = $this->build_generator();
+		$baseline  = $generator->meta_values( 5 );
 
 		// ACT: collect meta for index 3 at revision 2.
 		$meta = $generator->meta_values( 3, 2 );
@@ -662,7 +664,6 @@ class SeederContentGeneratorTest extends TestCase {
 
 		// ASSERT: color/priority are rotated relative to (index + revision),
 		// matching what meta_values( 5, 0 ) returns.
-		$baseline = $generator->meta_values( 5 );
 		$this->assertSame( $baseline['seeder_color'], $meta['seeder_color'] );
 		$this->assertSame(
 			$baseline['seeder_priority'],
