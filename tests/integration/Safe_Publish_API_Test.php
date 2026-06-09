@@ -253,9 +253,10 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			$result['current']['title']
 		);
 
-		// ASSERT: Matching raw titles produce a no-change title diff.
-		$this->assertStringContainsString(
-			'No title changes detected.',
+		// ASSERT: Matching raw titles return an empty title diff so the client
+		// omits the section by default.
+		$this->assertSame(
+			'',
 			$result['nonContentDiffs']['title']
 		);
 	}
@@ -590,6 +591,72 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$this->assertInstanceOf( WP_REST_Response::class, $response );
 		$this->assertSame( 400, $response->get_status(), 'Should return 400 for non-positive post ID' );
 		$this->assertSame( 'rest_invalid_param', $response->get_data()['code'] ?? null );
+	}
+
+	/**
+	 * Verifies that block diffs skip empty freeform whitespace slots —
+	 * parse_blocks emits them between real blocks and they otherwise show as
+	 * empty cards in the modal.
+	 */
+	public function test_diff_renderer_skips_empty_freeform_blocks(): void {
+		// ARRANGE: Local and source content share the same single paragraph
+		// block surrounded by whitespace that parse_blocks treats as freeform
+		// nodes with blockName === null and empty rendered HTML.
+		$content_with_padding = "\n\n<!-- wp:paragraph -->\n<p>Same body.</p>\n<!-- /wp:paragraph -->\n\n";
+		wp_update_post(
+			array(
+				'ID'           => $this->post_id,
+				'post_content' => $content_with_padding,
+			)
+		);
+
+		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		$mock_http_callable = static function ( $_url, $_action, $_credentials ) use ( $content_with_padding ) {
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => wp_json_encode(
+					array(
+						'title'   => array( 'raw' => 'Original Title' ),
+						'content' => array( 'raw' => $content_with_padding ),
+						'excerpt' => array( 'raw' => 'Original excerpt.' ),
+					)
+				),
+			);
+		};
+
+		update_option(
+			'safe_publish_connected_site_url',
+			'https://example.com'
+		);
+
+		$request = new WP_REST_Request(
+			'POST',
+			'/safe-publish/v1/diff-preview'
+		);
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+		$request->set_param( 'mode', 'split' );
+
+		// ACT: Render the diff.
+		$renderer = new Diff_Renderer();
+		$result   = $renderer->render_diff(
+			$request,
+			$mock_http_callable,
+			array()
+		);
+
+		// ASSERT: Only the real paragraph block survives; the empty freeform
+		// nodes on either side of it are filtered out entirely.
+		$this->assertIsArray( $result );
+		$this->assertCount(
+			1,
+			$result['blockDiffs'],
+			'Empty freeform whitespace slots should be filtered out.'
+		);
+		$this->assertSame(
+			'core/paragraph',
+			$result['blockDiffs'][0]['current']['name'] ?? null
+		);
 	}
 
 	/**
