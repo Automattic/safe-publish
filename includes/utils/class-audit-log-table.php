@@ -124,7 +124,7 @@ final class Audit_Log_Table {
 	 *     @type string|string[] $level      Filter by level(s). String or array.
 	 *     @type string          $event_type Partial match on the event column.
 	 *     @type string          $after_gmt  MySQL GMT datetime; rows with created_at_gmt >= this.
-	 *     @type string          $before_gmt MySQL GMT datetime; rows with created_at_gmt < this.
+	 *     @type string          $before_gmt MySQL GMT datetime; rows with created_at_gmt <= this.
 	 *     @type int             $limit      Maximum rows to return. Default 50, max 100.
 	 *     @type int             $offset     Row offset for pagination. Default 0.
 	 * }
@@ -225,7 +225,7 @@ final class Audit_Log_Table {
 		}
 
 		if ( ! empty( $args['before_gmt'] ) ) {
-			$conditions[] = 'created_at_gmt < %s';
+			$conditions[] = 'created_at_gmt <= %s';
 			$values[]     = $args['before_gmt'];
 		}
 

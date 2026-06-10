@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\Utils\Audit_Log_Table;
+use Safe_Publish\Utils\Datetime_Sanitizer;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -191,8 +192,8 @@ final class Audit_Log_Page {
 	 *   - channels[]   string[]  Filter by channels. Unknown values match zero rows.
 	 *   - levels[]     string[]  'info' and/or 'error'.
 	 *   - event_search string    Partial match on the event column.
-	 *   - after        string    Calendar day (YYYY-MM-DD); rows on/after this day.
-	 *   - before       string    Calendar day (YYYY-MM-DD); rows on/before this day.
+	 *   - after        string    ISO 8601 datetime or YYYY-MM-DD; lower bound on created_at_gmt.
+	 *   - before       string    ISO 8601 datetime or YYYY-MM-DD; upper bound (end-of-day if date-only).
 	 *   - page         int       1-based page index.
 	 *   - per_page     int       Page size; capped at MAX_PER_PAGE.
 	 *
@@ -269,21 +270,22 @@ final class Audit_Log_Page {
 			$args['event_type'] = sanitize_text_field( wp_unslash( $input['event_search'] ) );
 		}
 
-		if ( ! empty( $input['after'] ) && is_string( $input['after'] ) ) {
-			$after = self::parse_calendar_day( sanitize_text_field( wp_unslash( $input['after'] ) ) );
-			if ( null !== $after ) {
-				$args['after_gmt'] = $after . ' 00:00:00';
-			}
+		$after_raw  = isset( $input['after'] )
+			? sanitize_text_field( wp_unslash( $input['after'] ) )
+			: '';
+		$before_raw = isset( $input['before'] )
+			? sanitize_text_field( wp_unslash( $input['before'] ) )
+			: '';
+
+		$after  = Datetime_Sanitizer::sanitize_iso_datetime( $after_raw, false );
+		$before = Datetime_Sanitizer::sanitize_iso_datetime( $before_raw, true );
+
+		if ( is_string( $after ) ) {
+			$args['after_gmt'] = $after;
 		}
 
-		if ( ! empty( $input['before'] ) && is_string( $input['before'] ) ) {
-			$before = self::parse_calendar_day( sanitize_text_field( wp_unslash( $input['before'] ) ) );
-			if ( null !== $before ) {
-				// Add one day so the bound is exclusive of the next midnight
-				// (i.e. inclusive of all events on the user-picked day).
-				$next_day           = gmdate( 'Y-m-d', strtotime( $before . ' +1 day' ) );
-				$args['before_gmt'] = $next_day . ' 00:00:00';
-			}
+		if ( is_string( $before ) ) {
+			$args['before_gmt'] = $before;
 		}
 
 		$per_page = isset( $input['per_page'] ) ? absint( $input['per_page'] ) : self::DEFAULT_PER_PAGE;
@@ -295,24 +297,5 @@ final class Audit_Log_Page {
 		$args['offset'] = ( $page - 1 ) * $per_page;
 
 		return $args;
-	}
-
-	/**
-	 * Validates a YYYY-MM-DD calendar day string.
-	 *
-	 * @param string $value Raw input.
-	 * @return string|null Validated YYYY-MM-DD string or null when invalid.
-	 */
-	private static function parse_calendar_day( string $value ): ?string {
-		if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $value ) ) {
-			return null;
-		}
-
-		$parts = explode( '-', $value );
-		if ( ! checkdate( (int) $parts[1], (int) $parts[2], (int) $parts[0] ) ) {
-			return null;
-		}
-
-		return $value;
 	}
 }
