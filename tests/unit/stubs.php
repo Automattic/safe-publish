@@ -160,6 +160,10 @@ function trailingslashit( string $path ): string {
 	return rtrim( $path, '/' ) . '/';
 }
 
+function wp_get_environment_type(): string {
+	return 'production';
+}
+
 function untrailingslashit( string $path ): string {
 	return rtrim( $path, '/\\' );
 }
