@@ -40,6 +40,7 @@ final class Exports_Page {
 	 */
 	public function init(): void {
 		add_action( 'admin_menu', array( $this, 'add_submenu_page' ), 18 );
+		add_action( 'admin_enqueue_scripts', array( $this, 'maybe_enqueue_assets' ) );
 		add_action( 'wp_ajax_safe_publish_get_export_events', array( $this, 'ajax_get_export_events' ) );
 	}
 
@@ -50,6 +51,7 @@ final class Exports_Page {
 	 */
 	public function init_export_only(): void {
 		add_action( 'admin_menu', array( $this, 'add_submenu_page_settings' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'maybe_enqueue_assets' ) );
 		add_action( 'wp_ajax_safe_publish_get_export_events', array( $this, 'ajax_get_export_events' ) );
 	}
 
@@ -106,8 +108,6 @@ final class Exports_Page {
 			);
 		}
 
-		$this->enqueue_assets();
-
 		?>
 		<div class="wrap" id="safe-publish-exports-page">
 			<h1><?php esc_html_e( 'Exports', 'safe-publish' ); ?></h1>
@@ -123,6 +123,21 @@ final class Exports_Page {
 			</div>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Enqueues the Exports page assets when the current admin screen is the
+	 * Exports submenu. Hooked on `admin_enqueue_scripts` so styles land in
+	 * `<head>` rather than being late-injected from `render()`.
+	 *
+	 * @param string $hook_suffix Current admin page hook suffix.
+	 */
+	public function maybe_enqueue_assets( string $hook_suffix ): void {
+		if ( 'safe-publish_page_' . self::PAGE_SLUG !== $hook_suffix ) {
+			return;
+		}
+
+		$this->enqueue_assets();
 	}
 
 	/**
