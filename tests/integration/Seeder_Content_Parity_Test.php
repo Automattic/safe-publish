@@ -433,6 +433,81 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Builds the source URL => dest URL sideload map for the imported batch.
+	 *
+	 * @return array<string, string>
+	 */
+	private function build_source_url_to_dest_url_map(): array {
+		$map = array();
+
+		foreach ( $this->image_refs_by_source_id as $refs ) {
+			foreach ( $refs as $ref ) {
+				$dest = $this->find_dest_attachment_by_source_url( $ref['url'] );
+				if ( null === $dest ) {
+					continue;
+				}
+
+				$dest_url = wp_get_attachment_url( $dest->ID );
+				if ( false === $dest_url ) {
+					continue;
+				}
+
+				$map[ $ref['url'] ] = $dest_url;
+			}
+		}
+
+		return $map;
+	}
+
+	/**
+	 * Builds the source ID => dest ID sideload map for the imported batch.
+	 *
+	 * @return array<int, int>
+	 */
+	private function build_source_id_to_dest_id_map(): array {
+		$map = array();
+
+		foreach ( $this->image_refs_by_source_id as $refs ) {
+			foreach ( $refs as $ref ) {
+				$dest = $this->find_dest_attachment_by_source_url( $ref['url'] );
+				if ( null === $dest ) {
+					continue;
+				}
+
+				$map[ $ref['id'] ] = $dest->ID;
+			}
+		}
+
+		return $map;
+	}
+
+	/**
+	 * Resolves the dest attachment whose META_ORIGINAL_URL equals the given
+	 * source URL, or null when missing.
+	 *
+	 * @param string $source_url Source URL.
+	 * @return \WP_Post|null
+	 */
+	private function find_dest_attachment_by_source_url(
+		string $source_url
+	): ?\WP_Post {
+		$attachments = get_posts(
+			array(
+				'post_type'        => 'attachment',
+				'post_status'      => 'any',
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+				'meta_key'         => Options::META_ORIGINAL_URL,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'meta_value'       => $source_url,
+				'posts_per_page'   => 1,
+				'suppress_filters' => false,
+			)
+		);
+
+		return $attachments[0] ?? null;
+	}
+
+	/**
 	 * Verifies that identity-style columns (post_type, post_name) match
 	 * source for every imported post.
 	 */
@@ -450,8 +525,8 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 
 	/**
 	 * Verifies that content-style columns (post_title, post_excerpt) match
-	 * source for every imported post. post_content is deferred to a later
-	 * phase that covers URL/ID rewriting.
+	 * source for every imported post. post_content lives in
+	 * CONTENT_BODY_COLUMNS and is exercised by test_content_body_parity().
 	 */
 	public function test_content_columns_parity(): void {
 		// ARRANGE + ACT: batch already imported in setUp.
@@ -463,6 +538,57 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 				$this
 			);
 		}
+	}
+
+	/**
+	 * Verifies post_content URL/ID rewrite parity and reverse-asserts no
+	 * source host leak or double-encoded entities on dest.
+	 */
+	public function test_content_body_parity(): void {
+		// ARRANGE: build URL/ID sideload maps from the imported attachments.
+		$url_map = $this->build_source_url_to_dest_url_map();
+		$id_map  = $this->build_source_id_to_dest_id_map();
+
+		// ACT + ASSERT: each dest post's content matches source after the
+		// importer's URL/ID rewriting.
+		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+			Post_Parity_Asserter::assert_content_body_parity(
+				$this->source_rest_bodies[ $source_id ],
+				get_post( $dest_id ),
+				$url_map,
+				$id_map,
+				self::SOURCE_BASE_URL,
+				$this
+			);
+		}
+	}
+
+	/**
+	 * Guards the comparator's coverage assumptions: the seeder must not emit
+	 * gallery blocks or `data-id` attributes, since neither is exercised by
+	 * the URL/ID parity checks today. Grow comparator coverage before
+	 * relaxing this.
+	 */
+	public function test_seeder_does_not_emit_unsupported_references(): void {
+		// ARRANGE + ACT: concatenate every seeded source content body.
+		$raw = '';
+		foreach ( $this->source_rest_bodies as $body ) {
+			$raw .= (string) ( $body['content']['raw'] ?? '' ) . "\n";
+		}
+
+		// ASSERT: no unsupported reference types appear in the batch.
+		$this->assertStringNotContainsString(
+			'<!-- wp:gallery',
+			$raw,
+			'Seeder must not emit gallery blocks until the comparator covers'
+			. ' gallery `attrs.ids` rewriting.'
+		);
+		$this->assertStringNotContainsString(
+			'data-id=',
+			$raw,
+			'Seeder must not emit data-id attributes until the comparator'
+			. ' covers data-id rewriting.'
+		);
 	}
 
 	/**
