@@ -588,6 +588,7 @@ final class Admin_Ajax_Controller {
 		$source_post_id   = (int) get_post_meta( $post->ID, Options::META_SOURCE_POST_ID, true );
 		$source_link      = (string) get_post_meta( $post->ID, Options::META_SOURCE_LINK, true );
 		$edit_url_or_null = get_edit_post_link( $post->ID, 'raw' );
+		$local_link       = get_permalink( $post->ID );
 
 		return array(
 			'id'                   => $post->ID,
@@ -596,6 +597,7 @@ final class Admin_Ajax_Controller {
 			'post_type'            => $post->post_type,
 			'local_status'         => $post->post_status,
 			'edit_url'             => is_string( $edit_url_or_null ) ? $edit_url_or_null : '',
+			'local_link'           => is_string( $local_link ) ? $local_link : '',
 			'source_link'          => $source_link,
 			'item_id'              => null !== $item ? (int) $item['id'] : null,
 			'session_id'           => null !== $item ? (int) $item['session_id'] : null,

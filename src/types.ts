@@ -93,6 +93,7 @@ export interface CatalogResponse {
  * @property {string}      post_type            Local post type slug.
  * @property {string}      local_status         Local post_status.
  * @property {string}      edit_url             Local wp-admin edit URL.
+ * @property {string}      local_link           Local post permalink on the destination.
  * @property {string}      source_link          Source post permalink (from META_SOURCE_LINK).
  * @property {number|null} item_id              Most recent import's items-table row ID, or null.
  * @property {number|null} session_id           Session ID of the most recent import event, or null.
@@ -107,6 +108,7 @@ export interface ImportedPost {
 	post_type: string;
 	local_status: string;
 	edit_url: string;
+	local_link: string;
 	source_link: string;
 	item_id: number | null;
 	session_id: number | null;
