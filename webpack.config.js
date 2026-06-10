@@ -5,6 +5,7 @@ module.exports = {
 	...defaultConfig,
 	entry: {
 		index: path.resolve( process.cwd(), 'src', 'index.tsx' ),
+		'audit-log': path.resolve( process.cwd(), 'src', 'audit-log.tsx' ),
 		'exports': path.resolve( process.cwd(), 'src', 'exports.tsx' ),
 		'imports': path.resolve( process.cwd(), 'src', 'imports.tsx' ),
 	},

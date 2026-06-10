@@ -11,18 +11,29 @@
 
 import { __, sprintf } from '@wordpress/i18n';
 
-import type { ExportEvent } from '../types';
+import type { ActorSource, ExportEvent } from '../types';
+
+/**
+ * Subset of fields any audit-derived event surfaces so callers can render
+ * a consistent actor label whether the source is an ExportEvent or a
+ * generic AuditEvent.
+ */
+interface ActorFields {
+	actor_user_id: number;
+	actor_display_name: string;
+	actor_source: ActorSource;
+}
 
 /**
  * Returns the display label for the user column.
  *
  * Used by both `getValue` and `render` so search matches displayed text.
  *
- * @param {ExportEvent} item Export event.
+ * @param {ActorFields} item Event carrying actor fields.
  *
  * @return {string} Human-readable actor label.
  */
-export function getUserLabel( item: ExportEvent ): string {
+export function getUserLabel( item: ActorFields ): string {
 	if ( item.actor_user_id > 0 ) {
 		return item.actor_display_name || sprintf(
 			/* translators: %d is the WordPress user ID. */
