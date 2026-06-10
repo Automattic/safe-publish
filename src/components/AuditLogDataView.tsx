@@ -9,7 +9,10 @@
  * @file This file defines the AuditLogDataView component.
  */
 import { getUserLabel } from './event-fields';
-import { DateRangeFilter } from './filter-controls';
+import {
+	calendarRangeToUtcBounds,
+	DateRangeFilter,
+} from './filter-controls';
 import { DEFAULT_ITEMS_PER_PAGE, SEARCH_DEBOUNCE_MS } from '../constants';
 import { formatDateTime, getErrorMessage } from '../utils';
 import {
@@ -201,11 +204,12 @@ export function AuditLogDataView(): JSX.Element {
 		if ( '' !== debouncedEventSearch ) {
 			formData.append( 'event_search', debouncedEventSearch );
 		}
-		if ( null !== after ) {
-			formData.append( 'after', after );
+		const { afterUtc, beforeUtc } = calendarRangeToUtcBounds( after, before );
+		if ( null !== afterUtc ) {
+			formData.append( 'after', afterUtc );
 		}
-		if ( null !== before ) {
-			formData.append( 'before', before );
+		if ( null !== beforeUtc ) {
+			formData.append( 'before', beforeUtc );
 		}
 
 		setIsLoading( true );

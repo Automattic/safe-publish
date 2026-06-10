@@ -11,7 +11,11 @@
 import { update } from '@wordpress/icons';
 
 import AuthStatusNotice from './AuthStatusNotice';
-import { DateRangeFilter, detectSlugFromInput } from './filter-controls';
+import {
+	calendarRangeToUtcBounds,
+	DateRangeFilter,
+	detectSlugFromInput,
+} from './filter-controls';
 import { useAuthStatus } from './hooks/useAuthStatus';
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 import { getSyncStatusLabel } from './post-fields';
@@ -167,11 +171,15 @@ export function SourcePostsDataView( {
 			formData.append( 'status[]', status );
 		} );
 
-		if ( null !== publishedAfter ) {
-			formData.append( 'published_after', publishedAfter );
+		const { afterUtc, beforeUtc } = calendarRangeToUtcBounds(
+			publishedAfter,
+			publishedBefore
+		);
+		if ( null !== afterUtc ) {
+			formData.append( 'published_after', afterUtc );
 		}
-		if ( null !== publishedBefore ) {
-			formData.append( 'published_before', publishedBefore );
+		if ( null !== beforeUtc ) {
+			formData.append( 'published_before', beforeUtc );
 		}
 
 		setIsLoadingPosts( true );

@@ -20,7 +20,11 @@ import { update } from '@wordpress/icons';
 
 import AuthStatusNotice from './AuthStatusNotice';
 import { ImportedPostsEmptyState } from './ImportedPostsEmptyState';
-import { DateRangeFilter, detectSlugFromInput } from './filter-controls';
+import {
+	calendarRangeToUtcBounds,
+	DateRangeFilter,
+	detectSlugFromInput,
+} from './filter-controls';
 import { useAuthStatus } from './hooks/useAuthStatus';
 import { useDelayedFlag } from './hooks/useDelayedFlag';
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
@@ -213,11 +217,15 @@ function buildListingFormData( params: {
 	params.postTypes.forEach( ( type ) =>
 		formData.append( 'post_types[]', type )
 	);
-	if ( null !== params.importedAfter ) {
-		formData.append( 'imported_after', params.importedAfter );
+	const { afterUtc, beforeUtc } = calendarRangeToUtcBounds(
+		params.importedAfter,
+		params.importedBefore
+	);
+	if ( null !== afterUtc ) {
+		formData.append( 'imported_after', afterUtc );
 	}
-	if ( null !== params.importedBefore ) {
-		formData.append( 'imported_before', params.importedBefore );
+	if ( null !== beforeUtc ) {
+		formData.append( 'imported_before', beforeUtc );
 	}
 	if ( params.batchSessionId > 0 ) {
 		formData.append( 'session_id', String( params.batchSessionId ) );

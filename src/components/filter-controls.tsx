@@ -88,6 +88,47 @@ export function toCalendarDay( date: Date ): string {
 }
 
 /**
+ * Converts a picker's calendar-day bounds ("YYYY-MM-DD" in browser-local
+ * time) to UTC ISO 8601 datetimes. The lower bound resolves to local
+ * midnight of the picked day; the upper bound resolves to local 23:59:59
+ * of the picked day. Server-side handlers store events as GMT, so without
+ * this translation a user outside UTC would miss events near their day
+ * boundary.
+ *
+ * @param {string|null} after  Lower-bound calendar day or null.
+ * @param {string|null} before Upper-bound calendar day or null.
+ * @return {Object} `{ afterUtc, beforeUtc }` with UTC ISO strings or null.
+ */
+export function calendarRangeToUtcBounds(
+	after: string | null,
+	before: string | null
+): { afterUtc: string | null; beforeUtc: string | null } {
+	return {
+		afterUtc: after ? localDayBoundaryToUtcIso( after, 'start' ) : null,
+		beforeUtc: before ? localDayBoundaryToUtcIso( before, 'end' ) : null,
+	};
+}
+
+/**
+ * Builds the UTC ISO string for either local midnight (start of day) or
+ * local 23:59:59 (end of day) of the given calendar day.
+ *
+ * @param {string}        calendarDay YYYY-MM-DD in browser-local time.
+ * @param {'start'|'end'} boundary    Which edge of the day to return.
+ * @return {string} UTC ISO 8601 datetime.
+ */
+function localDayBoundaryToUtcIso(
+	calendarDay: string,
+	boundary: 'start' | 'end'
+): string {
+	const [ year, month, day ] = calendarDay.split( '-' ).map( Number );
+	const date = 'start' === boundary
+		? new Date( year, month - 1, day, 0, 0, 0 )
+		: new Date( year, month - 1, day, 23, 59, 59 );
+	return date.toISOString();
+}
+
+/**
  * Formats a date-range toggle's label so the user can read the active
  * range at a glance.
  *
