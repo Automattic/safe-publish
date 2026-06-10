@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests\Integration\Import_Mode_Admin_Handler;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\Content\Content_Media_Processor;
+use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Integration_Test_Case;
 use Safe_Publish\Tests\Integration\Mock_Media_HTTP_Trait;
@@ -42,7 +43,11 @@ class Content_Processor_Test extends Integration_Test_Case {
 		$media_importer          = new Media_Importer( $http_client );
 		$content_media_processor = new Content_Media_Processor( $media_importer );
 
-		$this->processor = new Content_Processor( $media_importer, $content_media_processor );
+		$this->processor = new Content_Processor(
+			$media_importer,
+			$content_media_processor,
+			new Shortcode_ID_Rewriter()
+		);
 
 		add_filter( 'pre_http_request', array( $this, 'mock_http_request' ), 10, 3 );
 		add_filter( 'wp_handle_sideload_prefilter', array( $this, 'fix_empty_temp_files' ), 10, 1 );

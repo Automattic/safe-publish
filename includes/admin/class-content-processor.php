@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\Content\Content_Media_Processor;
+use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use WP_Error;
 
@@ -38,6 +39,13 @@ class Content_Processor {
 	private Content_Media_Processor $content_media_processor;
 
 	/**
+	 * Shortcode ID Rewriter instance.
+	 *
+	 * @var Shortcode_ID_Rewriter
+	 */
+	private Shortcode_ID_Rewriter $shortcode_id_rewriter;
+
+	/**
 	 * Stores temporarily disabled WordPress filters.
 	 *
 	 * @var array
@@ -64,13 +72,16 @@ class Content_Processor {
 	 *
 	 * @param Media_Importer          $media_importer          Media importer instance.
 	 * @param Content_Media_Processor $content_media_processor Content media processor instance.
+	 * @param Shortcode_ID_Rewriter   $shortcode_id_rewriter   Shortcode ID rewriter instance.
 	 */
 	public function __construct(
 		Media_Importer $media_importer,
-		Content_Media_Processor $content_media_processor
+		Content_Media_Processor $content_media_processor,
+		Shortcode_ID_Rewriter $shortcode_id_rewriter
 	) {
 		$this->media_importer          = $media_importer;
 		$this->content_media_processor = $content_media_processor;
+		$this->shortcode_id_rewriter   = $shortcode_id_rewriter;
 	}
 
 	/**
@@ -93,6 +104,10 @@ class Content_Processor {
 		} else {
 			$processed_content = $this->content_media_processor->process_content( $content, $source_site_url );
 		}
+
+		// Rewrite caption-family shortcode IDs after URL rewriting so the
+		// embedded img src points at the dest attachment for lookup.
+		$processed_content = $this->shortcode_id_rewriter->rewrite_caption_ids( $processed_content );
 
 		// Merge failures from content_media_processor (used in both the
 		// Gutenberg and non-Gutenberg paths).
