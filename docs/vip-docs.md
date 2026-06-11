@@ -148,16 +148,18 @@ The Diff action on the Imports → Posts tab compares the current local post wit
 
 ### Rolling back imports
 
-Rollback reverses a single imported post:
+Rollback reverses a single import:
 
 - If the post was newly created by the import, the post is deleted.
 - If the post was an update of an existing post, the previous content — captured at import time — is restored.
 
-Multiple rows can be selected on the Posts tab and rolled back in a single action. Only rows whose status is `success` or `updated`, and that have not already been rolled back, are eligible.
+It's important to note that the roll-back rolls back the specific changes from that single import. If a post has gone through a series of changes, each change can be rolled back sequentially.
+
+Multiple rows can be selected on the Posts tab and rolled back in a single action.
 
 Rollback relies on the content snapshot captured when the post was updated. Because Safe Publish stores the pre-update content as part of the import record, it can restore an updated post to its earlier state without contacting the source site again.
 
-Note: Rolling back a created post deletes that post on the destination. Confirm the affected posts before rolling back, since the action is irreversible for created posts.
+Note: Rolling back a newly created post deletes that post on the destination. Confirm the affected posts before rolling back, since the action is irreversible for newly created posts.
 
 ## How media and content are processed
 
