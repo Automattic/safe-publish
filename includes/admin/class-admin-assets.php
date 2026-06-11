@@ -17,12 +17,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Enqueues a built admin bundle plus the shared style/data wiring.
  *
- * The Source Posts, Imports, and Exports admin pages each enqueue the same
- * shape: one entry script, the design tokens, the bundle's split-out
- * style-index.css, the static admin/react-components stylesheets, and an
- * inline `window.safePublishAdminData = {...}` for the React side. This
- * helper centralizes that wiring so a new page can opt in by calling
- * {@see self::enqueue_bundle()} with its own entry name and inline data.
+ * The Source Posts, Imports, Exports, and Audit Log admin pages each
+ * enqueue the same shape: one entry script, the design tokens, the
+ * bundle's split-out style-index.css, the static admin/react-components
+ * stylesheets, and an inline `window.safePublishAdminData = {...}` for
+ * the React side. This helper centralizes that wiring so a new page can
+ * opt in by calling {@see self::enqueue_bundle()} with its own entry
+ * name and inline data.
  */
 final class Admin_Assets {
 
@@ -34,7 +35,7 @@ final class Admin_Assets {
 	 * `$inline_data` fails to JSON-encode — surfaces an admin notice in
 	 * `WP_DEBUG` so developers can diagnose.
 	 *
-	 * @param string               $entry         Bundle entry name (`index`/`imports`/`exports`),
+	 * @param string               $entry         Bundle entry name (`index`/`imports`/`exports`/`audit-log`),
 	 *                                            locating `build/{entry}.js` and
 	 *                                            `build/{entry}.asset.php`.
 	 * @param string               $script_handle Handle to register the entry script under.

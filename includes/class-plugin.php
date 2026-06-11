@@ -12,6 +12,7 @@ namespace Safe_Publish;
 use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Admin\Import_Mode_Admin_Handler;
 use Safe_Publish\Admin\Admin_Menu_Manager;
+use Safe_Publish\Admin\Audit_Log_Page;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\Exports_Page;
 use Safe_Publish\Admin\History_Repository;
@@ -149,6 +150,7 @@ final class Plugin {
 				'safe-publish_page_safe-publish-imports',
 				'safe-publish_page_safe-publish-settings',
 				'safe-publish_page_safe-publish-exports',
+				'safe-publish_page_safe-publish-audit-log',
 			)
 		);
 	}
@@ -247,7 +249,8 @@ final class Plugin {
 		$repository       = new History_Repository();
 		$rollback_service = new Session_Rollback_Service( $repository );
 
-		$exports_page = new Exports_Page();
+		$exports_page   = new Exports_Page();
+		$audit_log_page = new Audit_Log_Page();
 
 		$import_actions = new Import_Actions_Ajax_Handler( $rollback_service );
 
@@ -271,6 +274,7 @@ final class Plugin {
 		return new Import_Mode_Admin_Handler(
 			$menu_manager,
 			$exports_page,
+			$audit_log_page,
 			$import_actions,
 			$ajax_controller,
 			new Post_Import_Notice()
@@ -289,6 +293,8 @@ final class Plugin {
 		if ( $can_export ) {
 			( new Exports_Page() )->init_export_only();
 		}
+
+		( new Audit_Log_Page() )->init_settings_only();
 	}
 
 	/**

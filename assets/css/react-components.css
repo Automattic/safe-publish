@@ -88,18 +88,20 @@
 }
 
 /*
- * Replace DataViews' "Page X of Y" widget. The catalog endpoint sets
- * no_found_rows on its WP_Query and signals more pages via has_more, so
- * we don't know the true total — the SelectControl would list fake pages
- * and "of Y" would grow on every Next click. Hide the native widget and
- * render "Page N" via the wrapper's --safe-publish-page-text CSS variable.
- * Prev/Next live outside __page-select and stay untouched.
+ * Replace DataViews' "Page X of Y" widget for pages whose pagination is
+ * approximate. The catalog endpoint sets no_found_rows on its WP_Query
+ * and signals more pages via has_more, so we don't know the true total —
+ * the SelectControl would list fake pages and "of Y" would grow on every
+ * Next click. Hide the native widget and render "Page N" via the
+ * wrapper's --safe-publish-page-text CSS variable. Prev/Next live
+ * outside __page-select and stay untouched. Pages with exact totals
+ * (audit log, etc.) skip the modifier and keep DataViews' built-in.
  */
-.safe-publish-dataviews-wrapper .dataviews-pagination__page-select {
+.safe-publish-dataviews-wrapper--approx-pagination .dataviews-pagination__page-select {
 	display: none;
 }
 
-.safe-publish-dataviews-wrapper .dataviews-pagination::before {
+.safe-publish-dataviews-wrapper--approx-pagination .dataviews-pagination::before {
 	content: var(--safe-publish-page-text, "");
 	margin-right: auto;
 	font-size: 11px;
@@ -133,4 +135,40 @@
 
 .safe-publish-failed-error {
 	color: var(--safe-publish-status-error);
+}
+
+.safe-publish-audit-channel,
+.safe-publish-audit-event {
+	font-size: 12px;
+	background: var(--safe-publish-bg-muted);
+	padding: 2px 6px;
+	border-radius: 3px;
+	white-space: nowrap;
+}
+
+.safe-publish-audit-details {
+	max-width: 480px;
+}
+
+.safe-publish-audit-details__summary {
+	cursor: pointer;
+	font-size: 12px;
+	color: var(--safe-publish-text-muted);
+}
+
+.safe-publish-audit-details[open] .safe-publish-audit-details__summary {
+	margin-bottom: 6px;
+}
+
+.safe-publish-audit-details__json {
+	margin: 0;
+	padding: 8px 10px;
+	background: var(--safe-publish-bg-muted);
+	border: 1px solid var(--safe-publish-border);
+	border-radius: 3px;
+	font-size: 12px;
+	line-height: 1.5;
+	max-height: 240px;
+	overflow: auto;
+	white-space: pre;
 }

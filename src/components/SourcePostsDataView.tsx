@@ -499,7 +499,7 @@ export function SourcePostsDataView( {
 
 	return (
 		<div
-			className="safe-publish-dataviews-wrapper"
+			className="safe-publish-dataviews-wrapper safe-publish-dataviews-wrapper--approx-pagination"
 			style={ { '--safe-publish-page-text': `"${ pageStatusText }"` } as React.CSSProperties }
 		>
 			<AuthStatusNotice
