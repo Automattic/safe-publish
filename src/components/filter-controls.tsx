@@ -13,7 +13,7 @@ import {
 	DatePicker,
 	Dropdown,
 } from '@wordpress/components';
-import { dateI18n, getSettings } from '@wordpress/date';
+import { dateI18n, getDate, getSettings } from '@wordpress/date';
 import { useMemo } from '@wordpress/element';
 import { __, _x, sprintf } from '@wordpress/i18n';
 
@@ -88,12 +88,10 @@ export function toCalendarDay( date: Date ): string {
 }
 
 /**
- * Converts a picker's calendar-day bounds ("YYYY-MM-DD" in browser-local
- * time) to UTC ISO 8601 datetimes. The lower bound resolves to local
- * midnight of the picked day; the upper bound resolves to local 23:59:59
- * of the picked day. Server-side handlers store events as GMT, so without
- * this translation a user outside UTC would miss events near their day
- * boundary.
+ * Converts a picker's calendar-day bounds ("YYYY-MM-DD") to UTC ISO 8601
+ * datetimes anchored in the site timezone. The lower bound is site-local
+ * 00:00; the upper bound is site-local 23:59:59. Picking site time matches
+ * the admin columns, which already render in site time.
  *
  * @param {string|null} after  Lower-bound calendar day or null.
  * @param {string|null} before Upper-bound calendar day or null.
@@ -104,28 +102,27 @@ export function calendarRangeToUtcBounds(
 	before: string | null
 ): { afterUtc: string | null; beforeUtc: string | null } {
 	return {
-		afterUtc: after ? localDayBoundaryToUtcIso( after, 'start' ) : null,
-		beforeUtc: before ? localDayBoundaryToUtcIso( before, 'end' ) : null,
+		afterUtc: after ? siteDayBoundaryToUtcIso( after, 'start' ) : null,
+		beforeUtc: before ? siteDayBoundaryToUtcIso( before, 'end' ) : null,
 	};
 }
 
 /**
- * Builds the UTC ISO string for either local midnight (start of day) or
- * local 23:59:59 (end of day) of the given calendar day.
+ * Builds the UTC ISO string for either site-local midnight (start of day)
+ * or site-local 23:59:59 (end of day) of the given calendar day. Defers
+ * to @wordpress/date's site-zone-aware `getDate` so moment-timezone's
+ * named-zone data carries the DST adjustment for us.
  *
- * @param {string}        calendarDay YYYY-MM-DD in browser-local time.
+ * @param {string}        calendarDay YYYY-MM-DD picked from the calendar.
  * @param {'start'|'end'} boundary    Which edge of the day to return.
  * @return {string} UTC ISO 8601 datetime.
  */
-function localDayBoundaryToUtcIso(
+function siteDayBoundaryToUtcIso(
 	calendarDay: string,
 	boundary: 'start' | 'end'
 ): string {
-	const [ year, month, day ] = calendarDay.split( '-' ).map( Number );
-	const date = 'start' === boundary
-		? new Date( year, month - 1, day, 0, 0, 0 )
-		: new Date( year, month - 1, day, 23, 59, 59 );
-	return date.toISOString();
+	const time = 'start' === boundary ? '00:00:00' : '23:59:59';
+	return getDate( `${ calendarDay }T${ time }` ).toISOString();
 }
 
 /**
