@@ -1682,6 +1682,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			'https://source.example.com/focused-post',
 			$row['source_link']
 		);
+		$this->assertSame( get_permalink( $focus_post_id ), $row['local_link'] );
 		$this->assertSame(
 			$focus_item_id,
 			$row['item_id'],
