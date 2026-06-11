@@ -915,6 +915,16 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( $result['error'] );
 		}
 
+		$this->telemetry->record_event(
+			Telemetry_Events::SINGLE_IMPORT_COMPLETED,
+			array(
+				'outcome'       => $result['existing']
+					? Telemetry_Events::SINGLE_OUTCOME_UPDATED
+					: Telemetry_Events::SINGLE_OUTCOME_NEW,
+				'warning_count' => count( $result['warnings'] ?? array() ),
+			)
+		);
+
 		$result['message'] = $result['existing']
 			? __( 'Existing draft updated with latest content.', 'safe-publish' )
 			: __( 'Draft post created successfully.', 'safe-publish' );
