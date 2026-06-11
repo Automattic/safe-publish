@@ -155,7 +155,7 @@ Rollback reverses a single import:
 
 It's important to note that the roll-back rolls back the specific changes from that single import. If a post has gone through a series of changes, each change can be rolled back sequentially.
 
-Multiple rows can be selected on the Posts tab and rolled back in a single action. 
+Multiple rows can be selected on the Posts tab and rolled back in a single action.
 
 Rollback relies on the content snapshot captured when the post was updated. Because Safe Publish stores the pre-update content as part of the import record, it can restore an updated post to its earlier state without contacting the source site again.
 
