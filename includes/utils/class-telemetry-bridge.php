@@ -22,8 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Identity caveat: source-side auth failures may fire before any user is
  * authenticated, so the VIP telemetry library's visitor resolution falls
- * back to whatever it records for unauthenticated REST contexts. Tracked
- * in VIPCMS-1944.
+ * back to whatever it records for unauthenticated REST contexts.
  */
 final class Telemetry_Bridge {
 
@@ -63,15 +62,13 @@ final class Telemetry_Bridge {
 	 *
 	 * @param string               $channel Channel identifier (auth, import, etc.).
 	 * @param string               $event   Event code from Log_Events.
-	 * @param array<string, mixed> $data    Event payload (unused at this level).
+	 * @param array<string, mixed> $_data   Event payload (unused at this level).
 	 */
-	public function on_event_logged(
+	public function on_event_logged( // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		string $channel,
 		string $event,
-		array $data
+		array $_data
 	): void {
-		unset( $data );
-
 		if ( 'auth' === $channel ) {
 			$this->emit_inbound_auth_failed( $event );
 		}

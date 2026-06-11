@@ -96,7 +96,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 			$content_processor,
 			$this->repository,
 			new Meta_Terms_Manager(),
-			new Telemetry_Service( 'safe_publish_' )
+			new Telemetry_Service()
 		);
 
 		add_filter( 'pre_http_request', array( $this, 'intercept_http_request' ), 5, 3 );

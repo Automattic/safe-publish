@@ -103,7 +103,7 @@ class Full_Workflow_Test extends Integration_Test_Case {
 			$content_processor,
 			$this->repository,
 			new Meta_Terms_Manager(),
-			new Telemetry_Service( 'safe_publish_' )
+			new Telemetry_Service()
 		);
 
 		// Configure the connected site URL so fetch_fresh_post() can make requests.

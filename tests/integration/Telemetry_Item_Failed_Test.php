@@ -61,11 +61,7 @@ class Telemetry_Item_Failed_Test extends Integration_Test_Case {
 		parent::setUp();
 
 		$this->queue = new Telemetry_Event_Queue();
-		$telemetry   = new Telemetry_Service(
-			'safe_publish_',
-			array(),
-			$this->queue
-		);
+		$telemetry   = new Telemetry_Service( array(), $this->queue );
 
 		$http_client       = new HTTP_Client();
 		$media_importer    = new Media_Importer( $http_client );

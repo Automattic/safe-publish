@@ -94,7 +94,6 @@ final class Plugin {
 		$connected_site_url = Options::get_value( Options::OPTION_CONNECTED_SITE_URL, '' );
 
 		$this->telemetry = new Telemetry_Service(
-			'safe_publish_',
 			array(
 				'plugin_version' => SAFE_PUBLISH_VERSION,
 				'sync_mode'      => $sync_mode,
@@ -266,6 +265,10 @@ final class Plugin {
 		Media_Importer $media_importer,
 		Post_Type_Fetcher $post_type_fetcher
 	): Import_Mode_Admin_Handler {
+		// init() runs before this method and sets $this->telemetry; refine
+		// the type so psalm accepts passing it to non-nullable parameters.
+		assert( $this->telemetry instanceof Telemetry_Service );
+
 		$repository       = new History_Repository();
 		$rollback_service = new Session_Rollback_Service( $repository );
 
@@ -287,10 +290,6 @@ final class Plugin {
 		);
 
 		$menu_manager = new Admin_Menu_Manager();
-
-		// init() always runs before init_full_admin() and sets $this->telemetry,
-		// so the narrowing is safe; psalm needs the explicit refinement.
-		assert( $this->telemetry instanceof Telemetry_Service );
 
 		$ajax_controller = new Admin_Ajax_Controller(
 			$api,

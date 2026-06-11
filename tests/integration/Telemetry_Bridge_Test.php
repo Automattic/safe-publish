@@ -57,7 +57,7 @@ class Telemetry_Bridge_Test extends WP_UnitTestCase {
 		parent::setUp();
 
 		$this->queue       = new Telemetry_Event_Queue();
-		$telemetry         = new Telemetry_Service( 'safe_publish_', array(), $this->queue );
+		$telemetry         = new Telemetry_Service( array(), $this->queue );
 		$this->bridge      = new Telemetry_Bridge( $telemetry );
 		$this->auth_logger = new Auth_Logger();
 
@@ -134,8 +134,7 @@ class Telemetry_Bridge_Test extends WP_UnitTestCase {
 	public function test_non_auth_channel_does_not_fire_telemetry(): void {
 		// ARRANGE: bridge registered.
 
-		// ACT: fire an event on a different channel by going through the
-		// Settings_Logger, which uses the same Logger base.
+		// ACT: fire the audit-log action directly on a non-auth channel.
 		do_action( 'safe_publish_event_logged', 'settings', 'SYNC_MODE_CHANGED', array() );
 
 		// ASSERT: no telemetry recorded.

@@ -16,9 +16,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Thin wrapper around the VIP mu-plugins telemetry library
- * (Automattic\VIP\Telemetry\Telemetry). Lazily constructs the underlying
- * client and guards class_exists so non-VIP/local installs silently no-op
- * instead of fataling.
+ * (Automattic\VIP\Telemetry\Telemetry). Guards class_exists so non-VIP /
+ * local installs silently no-op when the class is missing.
  *
  * All Safe Publish telemetry call sites go through this service; the raw
  * VIP class is never referenced directly. Tests inject a
@@ -26,6 +25,11 @@ if ( ! defined( 'ABSPATH' ) ) {
  * without needing a live send path.
  */
 final class Telemetry_Service {
+
+	/**
+	 * Event-name prefix passed to the VIP client at construction time.
+	 */
+	public const EVENT_PREFIX = 'safe_publish_';
 
 	/**
 	 * Fully-qualified class name of the VIP mu-plugins telemetry client.
@@ -36,20 +40,6 @@ final class Telemetry_Service {
 	private const VIP_TELEMETRY_CLASS = '\\Automattic\\VIP\\Telemetry\\Telemetry';
 
 	/**
-	 * Event-name prefix applied by the underlying client.
-	 *
-	 * @var string
-	 */
-	private string $prefix;
-
-	/**
-	 * Global properties attached to every event by the underlying client.
-	 *
-	 * @var array<string, mixed>
-	 */
-	private array $global_properties;
-
-	/**
 	 * Test-only queue. When set, replaces the real send path and tests
 	 * assert on its contents.
 	 *
@@ -58,39 +48,30 @@ final class Telemetry_Service {
 	private ?Telemetry_Event_Queue $queue;
 
 	/**
-	 * Lazily-constructed VIP client instance. Typed as object so the wrapper
-	 * compiles without the VIP class being present.
+	 * Resolved VIP client instance, or null when the class is absent on
+	 * this install (non-VIP env, unit tests without a stub). Typed as
+	 * object so the wrapper compiles without the VIP class being present.
 	 *
 	 * @var object|null
 	 */
 	private ?object $client = null;
 
 	/**
-	 * Whether the lazy client init has already run. Used to distinguish
-	 * "haven't tried yet" from "tried and the class is absent" so the
-	 * class_exists check fires at most once per request.
-	 *
-	 * @var bool
-	 */
-	private bool $client_initialized = false;
-
-	/**
 	 * Constructs the service.
 	 *
-	 * @param string                     $prefix            Event-name prefix.
 	 * @param array<string, mixed>       $global_properties Global properties.
-	 * @param Telemetry_Event_Queue|null $queue       Optional test queue. When
-	 *                                                set, replaces the real
-	 *                                                send path.
+	 * @param Telemetry_Event_Queue|null $queue             Optional test queue.
 	 */
 	public function __construct(
-		string $prefix,
 		array $global_properties = array(),
 		?Telemetry_Event_Queue $queue = null
 	) {
-		$this->prefix            = $prefix;
-		$this->global_properties = $global_properties;
-		$this->queue             = $queue;
+		$this->queue = $queue;
+
+		if ( null === $queue && class_exists( self::VIP_TELEMETRY_CLASS ) ) {
+			$class        = self::VIP_TELEMETRY_CLASS;
+			$this->client = new $class( self::EVENT_PREFIX, $global_properties );
+		}
 	}
 
 	/**
@@ -109,38 +90,10 @@ final class Telemetry_Service {
 			return;
 		}
 
-		$client = $this->client();
-		if ( null === $client ) {
+		if ( null === $this->client ) {
 			return;
 		}
 
-		// The VIP client method is named record_event; the wrapper mirrors
-		// the signature so the call site is identical to the library API.
-		// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
-		$client->record_event( $event, $properties );
-	}
-
-	/**
-	 * Lazily constructs the underlying VIP client.
-	 *
-	 * Returns null and caches that result when the VIP telemetry class
-	 * isn't loaded — non-VIP installs (local dev, unit tests) hit this
-	 * path and the wrapper becomes a no-op.
-	 */
-	private function client(): ?object {
-		if ( $this->client_initialized ) {
-			return $this->client;
-		}
-
-		$this->client_initialized = true;
-
-		if ( ! class_exists( self::VIP_TELEMETRY_CLASS ) ) {
-			return null;
-		}
-
-		$class        = self::VIP_TELEMETRY_CLASS;
-		$this->client = new $class( $this->prefix, $this->global_properties );
-
-		return $this->client;
+		$this->client->record_event( $event, $properties );
 	}
 }

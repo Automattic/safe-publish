@@ -70,7 +70,7 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 			$content_processor,
 			$this->repository,
 			new Meta_Terms_Manager(),
-			new Telemetry_Service( 'safe_publish_' )
+			new Telemetry_Service()
 		);
 
 		update_option(

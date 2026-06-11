@@ -62,11 +62,7 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 		$this->queue      = new Telemetry_Event_Queue();
 		$this->repository = new History_Repository();
 
-		$telemetry = new Telemetry_Service(
-			'safe_publish_',
-			array(),
-			$this->queue
-		);
+		$telemetry = new Telemetry_Service( array(), $this->queue );
 
 		$handler = new Import_Actions_Ajax_Handler(
 			new Session_Rollback_Service( $this->repository ),

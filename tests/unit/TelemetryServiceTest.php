@@ -31,7 +31,6 @@ class TelemetryServiceTest extends TestCase {
 		// ARRANGE: a fresh queue and a service prefixed with safe_publish_.
 		$queue   = new Telemetry_Event_Queue();
 		$service = new Telemetry_Service(
-			'safe_publish_',
 			array( 'plugin_version' => '0.0.4' ),
 			$queue
 		);
@@ -67,7 +66,7 @@ class TelemetryServiceTest extends TestCase {
 	public function test_queue_preserves_insertion_order(): void {
 		// ARRANGE: a service with a queue.
 		$queue   = new Telemetry_Event_Queue();
-		$service = new Telemetry_Service( 'safe_publish_', array(), $queue );
+		$service = new Telemetry_Service( array(), $queue );
 
 		// ACT: record three events.
 		$service->record_event( 'first' );
@@ -90,7 +89,7 @@ class TelemetryServiceTest extends TestCase {
 	public function test_record_event_no_ops_without_queue_or_vip_class(): void {
 		// ARRANGE: a service with no queue. The VIP class is not loaded in
 		// unit tests, so the wrapper takes the no-op branch.
-		$service = new Telemetry_Service( 'safe_publish_' );
+		$service = new Telemetry_Service();
 
 		// ACT: record an event that has nowhere to go.
 		$service->record_event( 'bulk_import_completed', array( 'batch_size' => 1 ) );
@@ -106,7 +105,7 @@ class TelemetryServiceTest extends TestCase {
 	public function test_queue_clear_empties_recorded_events(): void {
 		// ARRANGE: a queue with a recorded event.
 		$queue   = new Telemetry_Event_Queue();
-		$service = new Telemetry_Service( 'safe_publish_', array(), $queue );
+		$service = new Telemetry_Service( array(), $queue );
 		$service->record_event( 'first' );
 
 		// ACT: clear the queue and record another event.

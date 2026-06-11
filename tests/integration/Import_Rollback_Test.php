@@ -79,7 +79,7 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 			$content_processor,
 			$this->repository,
 			new Meta_Terms_Manager(),
-			new Telemetry_Service( 'safe_publish_' )
+			new Telemetry_Service()
 		);
 	}
 

@@ -25,7 +25,6 @@ use Safe_Publish\Utils\Telemetry_Event_Queue;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
 use WP_Ajax_UnitTestCase;
-use WPAjaxDieContinueException;
 
 /**
  * Telemetry Bulk Import Test.
@@ -90,11 +89,7 @@ class Telemetry_Bulk_Import_Test extends WP_Ajax_UnitTestCase {
 		$this->add_per_source_id_post_api_mock();
 
 		$this->queue = new Telemetry_Event_Queue();
-		$telemetry   = new Telemetry_Service(
-			'safe_publish_',
-			array(),
-			$this->queue
-		);
+		$telemetry   = new Telemetry_Service( array(), $this->queue );
 
 		$http_client       = new HTTP_Client();
 		$media_importer    = new Media_Importer( $http_client );
