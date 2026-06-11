@@ -25,6 +25,7 @@ use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Source_Posts_API\Source_Posts_API_Test_Base;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Telemetry_Service;
 use WP_Error;
 
 /**
@@ -77,7 +78,8 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 			$media_importer,
 			$content_processor,
 			$this->repository,
-			new Meta_Terms_Manager()
+			new Meta_Terms_Manager(),
+			new Telemetry_Service( 'safe_publish_' )
 		);
 	}
 

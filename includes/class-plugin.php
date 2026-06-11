@@ -279,7 +279,8 @@ final class Plugin {
 			$media_importer,
 			$content_processor,
 			$repository,
-			new Meta_Terms_Manager()
+			new Meta_Terms_Manager(),
+			$this->telemetry
 		);
 
 		$menu_manager = new Admin_Menu_Manager();

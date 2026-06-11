@@ -21,6 +21,7 @@ use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Integration_Test_Case;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Telemetry_Service;
 use WP_Error;
 
 /**
@@ -94,7 +95,8 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 			$media_importer,
 			$content_processor,
 			$this->repository,
-			new Meta_Terms_Manager()
+			new Meta_Terms_Manager(),
+			new Telemetry_Service( 'safe_publish_' )
 		);
 
 		add_filter( 'pre_http_request', array( $this, 'intercept_http_request' ), 5, 3 );

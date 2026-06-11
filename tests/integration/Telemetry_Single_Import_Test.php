@@ -111,7 +111,8 @@ class Telemetry_Single_Import_Test extends WP_Ajax_UnitTestCase {
 				$media_importer,
 				$content_processor,
 				$repository,
-				new Meta_Terms_Manager()
+				new Meta_Terms_Manager(),
+				$telemetry
 			),
 			new Post_Type_Fetcher( $http_client ),
 			$telemetry

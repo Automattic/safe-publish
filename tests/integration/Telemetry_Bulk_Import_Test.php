@@ -112,7 +112,8 @@ class Telemetry_Bulk_Import_Test extends WP_Ajax_UnitTestCase {
 				$media_importer,
 				$content_processor,
 				$repository,
-				new Meta_Terms_Manager()
+				new Meta_Terms_Manager(),
+				$telemetry
 			),
 			new Post_Type_Fetcher( $http_client ),
 			$telemetry
@@ -253,12 +254,19 @@ class Telemetry_Bulk_Import_Test extends WP_Ajax_UnitTestCase {
 		// ACT: dispatch the bulk import.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_import' );
 
-		// ASSERT: the event reports the partial batch correctly.
-		$events = $this->queue->events();
-		$this->assertCount( 1, $events );
-		$this->assertSame( 2, $events[0]['properties']['batch_size'] );
-		$this->assertSame( 1, $events[0]['properties']['successful'] );
-		$this->assertSame( 1, $events[0]['properties']['failed'] );
-		$this->assertTrue( $events[0]['properties']['has_failures'] );
+		// ASSERT: the completion event reports the partial batch
+		// correctly. Per-item failures also fire on the same queue, so
+		// filter to the completion event before asserting.
+		$completion_events = array_values(
+			array_filter(
+				$this->queue->events(),
+				static fn ( array $e ): bool => Telemetry_Events::BULK_IMPORT_COMPLETED === $e['event']
+			)
+		);
+		$this->assertCount( 1, $completion_events );
+		$this->assertSame( 2, $completion_events[0]['properties']['batch_size'] );
+		$this->assertSame( 1, $completion_events[0]['properties']['successful'] );
+		$this->assertSame( 1, $completion_events[0]['properties']['failed'] );
+		$this->assertTrue( $completion_events[0]['properties']['has_failures'] );
 	}
 }
