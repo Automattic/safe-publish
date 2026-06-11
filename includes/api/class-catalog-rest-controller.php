@@ -10,7 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\API;
 
 use Safe_Publish\Auth\HMAC_Authenticator;
-use DateTimeImmutable;
+use Safe_Publish\Utils\Datetime_Sanitizer;
 use WP_Error;
 use WP_Post;
 use WP_Query;
@@ -171,11 +171,11 @@ final class Catalog_REST_Controller {
 			return $this->handle_include_request( $post_type, $statuses, $include );
 		}
 
-		$published_after  = self::sanitize_iso_datetime(
+		$published_after  = Datetime_Sanitizer::sanitize_iso_datetime(
 			$request->get_param( 'published_after' ),
 			false
 		);
-		$published_before = self::sanitize_iso_datetime(
+		$published_before = Datetime_Sanitizer::sanitize_iso_datetime(
 			$request->get_param( 'published_before' ),
 			true
 		);
@@ -568,48 +568,6 @@ final class Catalog_REST_Controller {
 		return array( $clause );
 	}
 
-	/**
-	 * Validates an incoming ISO 8601 datetime / date param.
-	 *
-	 * The `!` prefix on the formats resets unparsed fields to zero — without
-	 * it, a date-only input would inherit the current clock time. For a
-	 * date-only upper bound (`published_before`), $ceiling lifts the moment
-	 * to end-of-day so posts published on that calendar day are included.
-	 *
-	 * @param mixed $value   Raw param value.
-	 * @param bool  $ceiling True when this is the upper bound of a range.
-	 * @return string|null|false Canonical datetime, null when absent,
-	 *                           or false on parse failure.
-	 */
-	private static function sanitize_iso_datetime(
-		mixed $value,
-		bool $ceiling = false
-	): string|null|false {
-		if ( null === $value || '' === $value ) {
-			return null;
-		}
-
-		if ( ! is_string( $value ) ) {
-			return false;
-		}
-
-		foreach ( array( '!' . DATE_ATOM, '!Y-m-d\TH:i:s' ) as $format ) {
-			$dt = DateTimeImmutable::createFromFormat( $format, $value );
-			if ( false !== $dt ) {
-				return $dt->format( 'Y-m-d H:i:s' );
-			}
-		}
-
-		$dt = DateTimeImmutable::createFromFormat( '!Y-m-d', $value );
-		if ( false !== $dt ) {
-			if ( $ceiling ) {
-				$dt = $dt->setTime( 23, 59, 59 );
-			}
-			return $dt->format( 'Y-m-d H:i:s' );
-		}
-
-		return false;
-	}
 
 	/**
 	 * Type schema for the route, used by WP's REST discovery output.

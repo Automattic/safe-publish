@@ -13,7 +13,7 @@ import {
 	DatePicker,
 	Dropdown,
 } from '@wordpress/components';
-import { dateI18n, getSettings } from '@wordpress/date';
+import { dateI18n, getDate, getSettings } from '@wordpress/date';
 import { useMemo } from '@wordpress/element';
 import { __, _x, sprintf } from '@wordpress/i18n';
 
@@ -85,6 +85,44 @@ export function detectSlugFromInput(
  */
 export function toCalendarDay( date: Date ): string {
 	return `${ date.getFullYear() }-${ String( date.getMonth() + 1 ).padStart( 2, '0' ) }-${ String( date.getDate() ).padStart( 2, '0' ) }`;
+}
+
+/**
+ * Converts a picker's calendar-day bounds ("YYYY-MM-DD") to UTC ISO 8601
+ * datetimes anchored in the site timezone. The lower bound is site-local
+ * 00:00; the upper bound is site-local 23:59:59. Picking site time matches
+ * the admin columns, which already render in site time.
+ *
+ * @param {string|null} after  Lower-bound calendar day or null.
+ * @param {string|null} before Upper-bound calendar day or null.
+ * @return {Object} `{ afterUtc, beforeUtc }` with UTC ISO strings or null.
+ */
+export function calendarRangeToUtcBounds(
+	after: string | null,
+	before: string | null
+): { afterUtc: string | null; beforeUtc: string | null } {
+	return {
+		afterUtc: after ? siteDayBoundaryToUtcIso( after, 'start' ) : null,
+		beforeUtc: before ? siteDayBoundaryToUtcIso( before, 'end' ) : null,
+	};
+}
+
+/**
+ * Builds the UTC ISO string for either site-local midnight (start of day)
+ * or site-local 23:59:59 (end of day) of the given calendar day. Defers
+ * to @wordpress/date's site-zone-aware `getDate` so moment-timezone's
+ * named-zone data carries the DST adjustment for us.
+ *
+ * @param {string}        calendarDay YYYY-MM-DD picked from the calendar.
+ * @param {'start'|'end'} boundary    Which edge of the day to return.
+ * @return {string} UTC ISO 8601 datetime.
+ */
+function siteDayBoundaryToUtcIso(
+	calendarDay: string,
+	boundary: 'start' | 'end'
+): string {
+	const time = 'start' === boundary ? '00:00:00' : '23:59:59';
+	return getDate( `${ calendarDay }T${ time }` ).toISOString();
 }
 
 /**

@@ -14,6 +14,7 @@ use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
+use Safe_Publish\Utils\Datetime_Sanitizer;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Sync_State_Comparator;
 use Safe_Publish\Utils\Telemetry_Events;
@@ -347,11 +348,11 @@ final class Admin_Ajax_Controller {
 		$search           = trim(
 			sanitize_text_field( wp_unslash( $_POST['search'] ?? '' ) )
 		);
-		$attempted_after  = self::sanitize_calendar_day(
+		$attempted_after  = Datetime_Sanitizer::sanitize_iso_datetime(
 			sanitize_text_field( wp_unslash( $_POST['attempted_after'] ?? '' ) ),
 			false
 		);
-		$attempted_before = self::sanitize_calendar_day(
+		$attempted_before = Datetime_Sanitizer::sanitize_iso_datetime(
 			sanitize_text_field( wp_unslash( $_POST['attempted_before'] ?? '' ) ),
 			true
 		);
@@ -361,10 +362,10 @@ final class Admin_Ajax_Controller {
 		if ( '' !== $search ) {
 			$args['search'] = $search;
 		}
-		if ( null !== $attempted_after ) {
+		if ( is_string( $attempted_after ) ) {
 			$args['attempted_after'] = $attempted_after;
 		}
-		if ( null !== $attempted_before ) {
+		if ( is_string( $attempted_before ) ) {
 			$args['attempted_before'] = $attempted_before;
 		}
 
@@ -480,11 +481,11 @@ final class Admin_Ajax_Controller {
 			? 'asc'
 			: 'desc';
 
-		$imported_after  = self::sanitize_calendar_day(
+		$imported_after  = Datetime_Sanitizer::sanitize_iso_datetime(
 			sanitize_text_field( wp_unslash( $_POST['imported_after'] ?? '' ) ),
 			false
 		);
-		$imported_before = self::sanitize_calendar_day(
+		$imported_before = Datetime_Sanitizer::sanitize_iso_datetime(
 			sanitize_text_field( wp_unslash( $_POST['imported_before'] ?? '' ) ),
 			true
 		);
@@ -506,46 +507,15 @@ final class Admin_Ajax_Controller {
 			$args['name'] = $name;
 		}
 
-		if ( null !== $imported_after ) {
+		if ( is_string( $imported_after ) ) {
 			$args['imported_after'] = $imported_after;
 		}
 
-		if ( null !== $imported_before ) {
+		if ( is_string( $imported_before ) ) {
 			$args['imported_before'] = $imported_before;
 		}
 
 		return $args;
-	}
-
-	/**
-	 * Validates a YYYY-MM-DD calendar-day input and expands it to a MySQL
-	 * datetime boundary.
-	 *
-	 * @param mixed $value   Raw param value.
-	 * @param bool  $ceiling True when this is the upper bound of a range
-	 *                       (advances to end-of-day).
-	 * @return string|null Canonical `Y-m-d H:i:s`, or null when absent/invalid.
-	 */
-	private static function sanitize_calendar_day(
-		mixed $value,
-		bool $ceiling
-	): ?string {
-		if ( ! is_string( $value ) || '' === $value ) {
-			return null;
-		}
-
-		// createFromFormat normalizes overflow (month 13 → next year);
-		// round-trip the parsed value to reject those.
-		$dt = \DateTimeImmutable::createFromFormat( '!Y-m-d', $value );
-		if ( false === $dt || $dt->format( 'Y-m-d' ) !== $value ) {
-			return null;
-		}
-
-		if ( $ceiling ) {
-			$dt = $dt->setTime( 23, 59, 59 );
-		}
-
-		return $dt->format( 'Y-m-d H:i:s' );
 	}
 
 	/**
