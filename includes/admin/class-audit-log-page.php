@@ -78,6 +78,7 @@ final class Audit_Log_Page {
 		}
 
 		add_action( 'admin_menu', array( $this, 'add_submenu_page' ), 19 );
+		add_action( 'admin_enqueue_scripts', array( $this, 'maybe_enqueue_assets' ) );
 		add_action( 'wp_ajax_safe_publish_get_audit_events', array( $this, 'ajax_get_audit_events' ) );
 	}
 
@@ -91,6 +92,7 @@ final class Audit_Log_Page {
 		}
 
 		add_action( 'admin_menu', array( $this, 'add_submenu_page_settings' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'maybe_enqueue_assets' ) );
 		add_action( 'wp_ajax_safe_publish_get_audit_events', array( $this, 'ajax_get_audit_events' ) );
 	}
 
@@ -145,8 +147,6 @@ final class Audit_Log_Page {
 			);
 		}
 
-		$this->enqueue_assets();
-
 		?>
 		<div class="wrap" id="safe-publish-audit-log-page">
 			<h1><?php esc_html_e( 'Audit Log', 'safe-publish' ); ?></h1>
@@ -162,6 +162,21 @@ final class Audit_Log_Page {
 			</div>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Enqueues the Audit Log page assets when the current admin screen is
+	 * the Audit Log submenu. Hooked on `admin_enqueue_scripts` so styles
+	 * land in `<head>` rather than being late-injected from `render()`.
+	 *
+	 * @param string $hook_suffix Current admin page hook suffix.
+	 */
+	public function maybe_enqueue_assets( string $hook_suffix ): void {
+		if ( 'safe-publish_page_' . self::PAGE_SLUG !== $hook_suffix ) {
+			return;
+		}
+
+		$this->enqueue_assets();
 	}
 
 	/**
