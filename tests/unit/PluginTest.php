@@ -94,6 +94,7 @@ class PluginTest extends TestCase {
 				'safe-publish_page_safe-publish-imports',
 				'safe-publish_page_safe-publish-settings',
 				'safe-publish_page_safe-publish-exports',
+				'safe-publish_page_safe-publish-audit-log',
 			),
 			$result
 		);

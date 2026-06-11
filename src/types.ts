@@ -93,6 +93,7 @@ export interface CatalogResponse {
  * @property {string}      post_type            Local post type slug.
  * @property {string}      local_status         Local post_status.
  * @property {string}      edit_url             Local wp-admin edit URL.
+ * @property {string}      local_link           Local post permalink on the destination.
  * @property {string}      source_link          Source post permalink (from META_SOURCE_LINK).
  * @property {number|null} item_id              Most recent import's items-table row ID, or null.
  * @property {number|null} session_id           Session ID of the most recent import event, or null.
@@ -107,6 +108,7 @@ export interface ImportedPost {
 	post_type: string;
 	local_status: string;
 	edit_url: string;
+	local_link: string;
 	source_link: string;
 	item_id: number | null;
 	session_id: number | null;
@@ -410,6 +412,8 @@ export interface AdminData {
 	homeUrl?: string;
 	containerId: string;
 	initialTab?: 'posts' | 'failures';
+	knownChannels?: string[];
+	knownLevels?: string[];
 }
 
 /**
@@ -517,6 +521,45 @@ export interface ExportEvent {
 	destination_site_url: string;
 	post_ids: number[];
 	post_count: number;
+}
+
+/**
+ * Represents a single audit log event of any channel.
+ *
+ * The `data` payload shape varies per event type; consumers must not
+ * assume specific keys beyond the actor fields surfaced at the top level.
+ *
+ * @property {number}         id                 Unique event ID.
+ * @property {string}         channel            Logger channel (e.g. 'auth', 'import').
+ * @property {'info'|'error'} level              Event severity level.
+ * @property {string}         event              Event type code (e.g. 'CONTENT_EXPORTED').
+ * @property {string}         date               ISO 8601 UTC timestamp.
+ * @property {number}         actor_user_id      Acting user ID; 0 if system.
+ * @property {string}         actor_display_name Snapshotted display name at log time.
+ * @property {ActorSource}    actor_source       Invocation context.
+ * @property {JsonObject}     data               Full per-event payload as stored.
+ */
+export interface AuditEvent {
+	id: number;
+	channel: string;
+	level: 'info' | 'error';
+	event: string;
+	date: string;
+	actor_user_id: number;
+	actor_display_name: string;
+	actor_source: ActorSource;
+	data: JsonObject;
+}
+
+/**
+ * Envelope returned by the audit-events AJAX endpoint.
+ *
+ * `total` is the count of rows matching the filters across all pages so
+ * the table can render accurate pagination controls.
+ */
+export interface AuditEventsResponse {
+	items: AuditEvent[];
+	total: number;
 }
 
 declare global {

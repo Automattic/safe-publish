@@ -248,6 +248,14 @@
 	&--quiet {
 		color: inherit;
 	}
+
+	&--error {
+		--safe-publish-badge-color: var(--safe-publish-status-error);
+	}
+
+	&--info {
+		--safe-publish-badge-color: var(--safe-publish-text-muted);
+	}
 }
 
 .dataviews-action-modal__tertiary {

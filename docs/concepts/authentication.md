@@ -38,9 +38,15 @@ Optionally, it's possible to use [VIP Basic Authentication](https://docs.wpvip.c
 - **Credential dependency**: Rotating or removing VIP Basic Authentication credentials will break the connection until Safe Publish settings are updated.
 - Read about all other [VIP Basic Authentication limitations](https://docs.wpvip.com/security-controls/basic-authentication/#h-limitations).
 
+## Shared secret on WordPress VIP
+
+On WordPress VIP the shared secret is fully managed by the Integration Center — you do not generate, set, or copy it. When the connected site URL is configured on either side, the Integration Center generates the shared secret.
+
+Only the connected site URL, sync mode, and optional Basic Authentication credentials are accepted; the secret follows automatically once the connection is configured. The secret is never displayed back after it is set — use the **Test Connection** button on the destination to confirm the handshake instead.
+
 ## Configuration Constants
 
-On WordPress VIP, you do not normally set these by hand — the Integration Center manages Safe Publish configuration for the environment. The constants below apply when running the plugin outside that managed configuration, such as a self-hosted or local install.
+The constants below apply when running the plugin outside the VIP Integration Center's managed configuration, such as a self-hosted or local install.
 
 Each connection setting can be defined as a PHP constant in `wp-config.php` instead of being saved through the settings screen. When a constant is defined it overrides the stored value at runtime.
 

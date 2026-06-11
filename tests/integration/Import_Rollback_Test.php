@@ -21,6 +21,7 @@ use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Content\Content_Media_Processor;
+use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Source_Posts_API\Source_Posts_API_Test_Base;
 use Safe_Publish\Utils\Options;
@@ -67,7 +68,8 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 		$media_importer    = new Media_Importer( new HTTP_Client() );
 		$content_processor = new Content_Processor(
 			$media_importer,
-			new Content_Media_Processor( $media_importer )
+			new Content_Media_Processor( $media_importer ),
+			new Shortcode_ID_Rewriter()
 		);
 
 		$this->import_service = new Post_Import_Service(

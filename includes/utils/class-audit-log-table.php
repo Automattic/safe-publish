@@ -19,7 +19,7 @@ final class Audit_Log_Table {
 	/**
 	 * Table schema version.
 	 */
-	private const VERSION = '1.0';
+	private const VERSION = '1';
 
 	/**
 	 * Option key used to track the installed table schema version.
@@ -72,7 +72,8 @@ final class Audit_Log_Table {
 			created_at_gmt DATETIME NOT NULL,
 			data LONGTEXT NOT NULL,
 			PRIMARY KEY  (id),
-			KEY channel_created_gmt (channel, created_at_gmt)
+			KEY channel_created_gmt (channel, created_at_gmt),
+			KEY created_at_gmt (created_at_gmt)
 		) {$charset};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -119,11 +120,13 @@ final class Audit_Log_Table {
 	 * @param array $args {
 	 *     Optional query arguments.
 	 *
-	 *     @type string $channel    Filter by channel.
-	 *     @type string $level      Filter by level ('info' or 'error').
-	 *     @type string $event_type Partial match on the event column.
-	 *     @type int    $limit      Maximum rows to return. Default 50, max 100.
-	 *     @type int    $offset     Row offset for pagination. Default 0.
+	 *     @type string|string[] $channel    Filter by channel(s). String or array.
+	 *     @type string|string[] $level      Filter by level(s). String or array.
+	 *     @type string          $event_type Partial match on the event column.
+	 *     @type string          $after_gmt  MySQL GMT datetime; rows with created_at_gmt >= this.
+	 *     @type string          $before_gmt MySQL GMT datetime; rows with created_at_gmt < this.
+	 *     @type int             $limit      Maximum rows to return. Default 50, max 100.
+	 *     @type int             $offset     Row offset for pagination. Default 0.
 	 * }
 	 * @return array Rows with 'data' decoded from JSON to an array.
 	 */
@@ -134,31 +137,13 @@ final class Audit_Log_Table {
 		$limit  = min( absint( $args['limit'] ?? 50 ), 100 );
 		$offset = absint( $args['offset'] ?? 0 );
 
-		$conditions = array();
-		$values     = array();
-
-		if ( ! empty( $args['channel'] ) ) {
-			$conditions[] = 'channel = %s';
-			$values[]     = $args['channel'];
-		}
-
-		if ( ! empty( $args['level'] ) ) {
-			$conditions[] = 'level = %s';
-			$values[]     = $args['level'];
-		}
-
-		if ( ! empty( $args['event_type'] ) ) {
-			$conditions[] = 'event LIKE %s';
-			$values[]     = '%' . $wpdb->esc_like( $args['event_type'] ) . '%';
-		}
-
-		$where_sql = $conditions ? 'WHERE ' . implode( ' AND ', $conditions ) : '';
-		$values[]  = $limit;
-		$values[]  = $offset;
+		list( $where_sql, $values ) = self::build_where_clause( $args );
+		$values[]                   = $limit;
+		$values[]                   = $offset;
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
-			$wpdb->prepare( "SELECT * FROM `{$table}` {$where_sql} ORDER BY created_at_gmt DESC LIMIT %d OFFSET %d", ...$values ),
+			$wpdb->prepare( "SELECT * FROM `{$table}` {$where_sql} ORDER BY created_at_gmt DESC, id DESC LIMIT %d OFFSET %d", ...$values ),
 			ARRAY_A
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -187,25 +172,7 @@ final class Audit_Log_Table {
 
 		$table = self::table_name();
 
-		$conditions = array();
-		$values     = array();
-
-		if ( ! empty( $args['channel'] ) ) {
-			$conditions[] = 'channel = %s';
-			$values[]     = $args['channel'];
-		}
-
-		if ( ! empty( $args['level'] ) ) {
-			$conditions[] = 'level = %s';
-			$values[]     = $args['level'];
-		}
-
-		if ( ! empty( $args['event_type'] ) ) {
-			$conditions[] = 'event LIKE %s';
-			$values[]     = '%' . $wpdb->esc_like( $args['event_type'] ) . '%';
-		}
-
-		$where_sql = $conditions ? 'WHERE ' . implode( ' AND ', $conditions ) : '';
+		list( $where_sql, $values ) = self::build_where_clause( $args );
 
 		if ( $values ) {
 			// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -217,6 +184,54 @@ final class Audit_Log_Table {
 
 		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		return (int) $wpdb->get_var( "SELECT COUNT(*) FROM `{$table}`" );
+	}
+
+	/**
+	 * Builds the WHERE clause + ordered parameter list from the shared filter
+	 * args used by get_events() and count(). Pulling the logic up keeps the
+	 * two query methods in sync as filters evolve.
+	 *
+	 * @param array $args Filter args; see get_events() docblock for keys.
+	 * @return array Two-element list: [ string $where_sql, array $values ].
+	 */
+	private static function build_where_clause( array $args ): array {
+		global $wpdb;
+
+		$conditions = array();
+		$values     = array();
+
+		if ( ! empty( $args['channel'] ) ) {
+			$channels     = array_values( (array) $args['channel'] );
+			$placeholders = implode( ', ', array_fill( 0, count( $channels ), '%s' ) );
+			$conditions[] = "channel IN ({$placeholders})";
+			array_push( $values, ...$channels );
+		}
+
+		if ( ! empty( $args['level'] ) ) {
+			$levels       = array_values( (array) $args['level'] );
+			$placeholders = implode( ', ', array_fill( 0, count( $levels ), '%s' ) );
+			$conditions[] = "level IN ({$placeholders})";
+			array_push( $values, ...$levels );
+		}
+
+		if ( ! empty( $args['event_type'] ) ) {
+			$conditions[] = 'event LIKE %s';
+			$values[]     = '%' . $wpdb->esc_like( $args['event_type'] ) . '%';
+		}
+
+		if ( ! empty( $args['after_gmt'] ) ) {
+			$conditions[] = 'created_at_gmt >= %s';
+			$values[]     = $args['after_gmt'];
+		}
+
+		if ( ! empty( $args['before_gmt'] ) ) {
+			$conditions[] = 'created_at_gmt < %s';
+			$values[]     = $args['before_gmt'];
+		}
+
+		$where_sql = $conditions ? 'WHERE ' . implode( ' AND ', $conditions ) : '';
+
+		return array( $where_sql, $values );
 	}
 
 	/**

@@ -19,10 +19,11 @@ use WP_Post;
  *
  * Models every wp_posts column, every dest meta key, every term assignment,
  * and every sideloaded-attachment field explicitly: each is either checked
- * for parity, listed in a divergence / plugin-added registry with the
- * documented reason, or listed as deferred (covered in a later test phase).
- * The assert_no_unmodeled_* checks fail loudly if a column, meta key, or
- * term assignment ever appears outside these categories — so a future schema
+ * for parity, delegated to Content_Parity_Comparator for URL/ID-aware
+ * checks, listed in a divergence / plugin-added registry with the documented
+ * reason, or listed as deferred (covered in a later test phase). The
+ * assert_no_unmodeled_* checks fail loudly if a column, meta key, or term
+ * assignment ever appears outside these categories — so a future schema
  * change or import-pipeline tweak surfaces as a test failure rather than
  * silent skipping.
  */
@@ -32,8 +33,9 @@ final class Post_Parity_Asserter {
 	 * Canonical list of wp_posts columns the asserter classifies.
 	 *
 	 * Updated when WordPress changes the schema. Each column must appear in
-	 * exactly one of: identity / content / status / timing / misc rules, the
-	 * divergence registry, or the deferred registry.
+	 * exactly one of: identity / content / status / misc rules, the content
+	 * body comparator bucket, the divergence registry, or the deferred
+	 * registry.
 	 *
 	 * @var list<string>
 	 */
@@ -76,8 +78,8 @@ final class Post_Parity_Asserter {
 	);
 
 	/**
-	 * Content-style columns checked for parity. post_content is deferred —
-	 * see DEFERRED_REGISTRY.
+	 * Content-style columns checked for parity. post_content lives in
+	 * CONTENT_BODY_COLUMNS and is checked via Content_Parity_Comparator.
 	 *
 	 * Source REST field => wp_posts column. Title/excerpt come as
 	 * `[ 'raw' => string ]` and need .raw unwrapping (see lookup helper).
@@ -149,15 +151,24 @@ final class Post_Parity_Asserter {
 	);
 
 	/**
+	 * Columns delegated to Content_Parity_Comparator because direct equality
+	 * isn't meaningful after URL/ID rewriting.
+	 *
+	 * @var array<string, string>
+	 */
+	private const CONTENT_BODY_COLUMNS = array(
+		'post_content' => 'URL/ID rewritten; Content_Parity_Comparator checks parity',
+	);
+
+	/**
 	 * Columns whose parity check is deferred to a later test phase. Each
 	 * entry names the phase that will cover it.
 	 *
 	 * @var array<string, string>
 	 */
 	private const DEFERRED_REGISTRY = array(
-		'post_content' => 'deferred: URL/ID rewriting parity (later phase)',
-		'post_author'  => 'deferred: author resolution semantics (later phase)',
-		'post_parent'  => 'deferred: hierarchical post support not in seeder yet',
+		'post_author' => 'deferred: author resolution semantics (later phase)',
+		'post_parent' => 'deferred: hierarchical post support not in seeder yet',
 	);
 
 	/**
@@ -323,7 +334,7 @@ final class Post_Parity_Asserter {
 	 * Asserts parity for content-style columns (title, excerpt).
 	 *
 	 * Note: post_content is intentionally NOT checked here — see
-	 * DEFERRED_REGISTRY.
+	 * CONTENT_BODY_COLUMNS and assert_content_body_parity().
 	 *
 	 * @param array<string, mixed> $source_body Source REST response body.
 	 * @param WP_Post              $dest_post   Imported destination post.
@@ -338,6 +349,51 @@ final class Post_Parity_Asserter {
 			self::CONTENT_COLUMNS,
 			$source_body,
 			$dest_post,
+			$test
+		);
+	}
+
+	/**
+	 * Asserts post_content parity via Content_Parity_Comparator: URL multisets,
+	 * Gutenberg ID multisets, no source host leak, no double-encoded entities.
+	 *
+	 * @param array<string, mixed>  $source_body            Source REST response body.
+	 * @param WP_Post               $dest_post              Imported destination post.
+	 * @param array<string, string> $source_url_to_dest_url Source URL => dest URL sideload map.
+	 * @param array<int, int>       $source_id_to_dest_id   Source attachment ID => dest ID.
+	 * @param string                $source_base_url        Source site URL.
+	 * @param TestCase              $test                   Active test case.
+	 */
+	public static function assert_content_body_parity(
+		array $source_body,
+		WP_Post $dest_post,
+		array $source_url_to_dest_url,
+		array $source_id_to_dest_id,
+		string $source_base_url,
+		TestCase $test
+	): void {
+		$source = (string) self::source_value( $source_body, 'content' );
+		$dest   = (string) $dest_post->post_content;
+
+		Content_Parity_Comparator::assert_url_parity(
+			$source,
+			$dest,
+			$source_url_to_dest_url,
+			$test
+		);
+		Content_Parity_Comparator::assert_attachment_id_parity(
+			$source,
+			$dest,
+			$source_id_to_dest_id,
+			$test
+		);
+		Content_Parity_Comparator::assert_no_source_host_leak(
+			$dest,
+			$source_base_url,
+			$test
+		);
+		Content_Parity_Comparator::assert_no_double_encoded_entities(
+			$dest,
 			$test
 		);
 	}
@@ -395,9 +451,10 @@ final class Post_Parity_Asserter {
 
 	/**
 	 * Asserts that every wp_posts column is classified (parity rule,
-	 * divergence registry, or deferred registry). Fails loudly when a column
-	 * is unmodeled so adding columns or omitting them from the rules
-	 * surfaces visibly instead of being silently skipped.
+	 * content-body comparator bucket, divergence registry, or deferred
+	 * registry). Fails loudly when a column is unmodeled so adding columns
+	 * or omitting them from the rules surfaces visibly instead of being
+	 * silently skipped.
 	 *
 	 * @param TestCase $test Active test case.
 	 */
@@ -409,6 +466,7 @@ final class Post_Parity_Asserter {
 			array_values( self::MISC_COLUMNS ),
 			array_keys( self::DEFAULT_VALUE_COLUMNS ),
 			array_keys( self::DIVERGENCE_REGISTRY ),
+			array_keys( self::CONTENT_BODY_COLUMNS ),
 			array_keys( self::DEFERRED_REGISTRY )
 		);
 

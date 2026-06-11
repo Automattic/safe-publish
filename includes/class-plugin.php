@@ -12,6 +12,7 @@ namespace Safe_Publish;
 use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Admin\Import_Mode_Admin_Handler;
 use Safe_Publish\Admin\Admin_Menu_Manager;
+use Safe_Publish\Admin\Audit_Log_Page;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\Exports_Page;
 use Safe_Publish\Admin\History_Repository;
@@ -31,6 +32,7 @@ use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\API\Safe_Publish_API;
 use Safe_Publish\API\Source_Author_REST_Field;
 use Safe_Publish\Content\Content_Media_Processor;
+use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Import_Items_Table;
@@ -148,6 +150,7 @@ final class Plugin {
 				'safe-publish_page_safe-publish-imports',
 				'safe-publish_page_safe-publish-settings',
 				'safe-publish_page_safe-publish-exports',
+				'safe-publish_page_safe-publish-audit-log',
 			)
 		);
 	}
@@ -203,13 +206,18 @@ final class Plugin {
 		$http_client             = new HTTP_Client();
 		$media_importer          = new Media_Importer( $http_client );
 		$content_media_processor = new Content_Media_Processor( $media_importer );
+		$shortcode_id_rewriter   = new Shortcode_ID_Rewriter();
 		$post_type_fetcher       = new Post_Type_Fetcher( $http_client );
 
 		// Initialize Source Posts API with shared HTTP client.
 		$this->api = new Source_Posts_API( $http_client );
 
 		// Build content processor with direct media service dependencies.
-		$content_processor = new Content_Processor( $media_importer, $content_media_processor );
+		$content_processor = new Content_Processor(
+			$media_importer,
+			$content_media_processor,
+			$shortcode_id_rewriter
+		);
 
 		$this->safe_publish_api = new Safe_Publish_API();
 
@@ -241,7 +249,8 @@ final class Plugin {
 		$repository       = new History_Repository();
 		$rollback_service = new Session_Rollback_Service( $repository );
 
-		$exports_page = new Exports_Page();
+		$exports_page   = new Exports_Page();
+		$audit_log_page = new Audit_Log_Page();
 
 		$import_actions = new Import_Actions_Ajax_Handler( $rollback_service );
 
@@ -265,6 +274,7 @@ final class Plugin {
 		return new Import_Mode_Admin_Handler(
 			$menu_manager,
 			$exports_page,
+			$audit_log_page,
 			$import_actions,
 			$ajax_controller,
 			new Post_Import_Notice()
@@ -283,6 +293,8 @@ final class Plugin {
 		if ( $can_export ) {
 			( new Exports_Page() )->init_export_only();
 		}
+
+		( new Audit_Log_Page() )->init_settings_only();
 	}
 
 	/**

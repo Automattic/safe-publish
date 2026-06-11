@@ -37,6 +37,13 @@ final class Import_Mode_Admin_Handler {
 	private Exports_Page $exports_page;
 
 	/**
+	 * Audit Log page instance.
+	 *
+	 * @var Audit_Log_Page
+	 */
+	private Audit_Log_Page $audit_log_page;
+
+	/**
 	 * Import row-action AJAX handler instance.
 	 *
 	 * @var Import_Actions_Ajax_Handler
@@ -62,6 +69,7 @@ final class Import_Mode_Admin_Handler {
 	 *
 	 * @param Admin_Menu_Manager          $menu_manager       Admin Menu Manager instance.
 	 * @param Exports_Page                $exports_page       Exports page instance.
+	 * @param Audit_Log_Page              $audit_log_page     Audit Log page instance.
 	 * @param Import_Actions_Ajax_Handler $import_actions     Row-action AJAX handler.
 	 * @param Admin_Ajax_Controller       $ajax_controller    Admin AJAX Controller instance.
 	 * @param Post_Import_Notice          $post_import_notice Post-import admin notice instance.
@@ -69,12 +77,14 @@ final class Import_Mode_Admin_Handler {
 	public function __construct(
 		Admin_Menu_Manager $menu_manager,
 		Exports_Page $exports_page,
+		Audit_Log_Page $audit_log_page,
 		Import_Actions_Ajax_Handler $import_actions,
 		Admin_Ajax_Controller $ajax_controller,
 		Post_Import_Notice $post_import_notice
 	) {
 		$this->menu_manager       = $menu_manager;
 		$this->exports_page       = $exports_page;
+		$this->audit_log_page     = $audit_log_page;
 		$this->import_actions     = $import_actions;
 		$this->ajax_controller    = $ajax_controller;
 		$this->post_import_notice = $post_import_notice;
@@ -82,9 +92,7 @@ final class Import_Mode_Admin_Handler {
 
 	/**
 	 * Initializes admin functionality by registering all sub-service hooks.
-	 *
-	 * Exports_Page registers unconditionally — its menu callback gates on
-	 * `Exports_Page::is_visible()` at admin_menu time, when $wpdb is loaded.
+	 * Exports_Page and Audit_Log_Page guard their own visibility internally.
 	 */
 	public function init(): void {
 		$this->menu_manager->register();
@@ -92,5 +100,6 @@ final class Import_Mode_Admin_Handler {
 		$this->ajax_controller->register_handlers();
 		$this->post_import_notice->init();
 		$this->exports_page->init();
+		$this->audit_log_page->init();
 	}
 }
