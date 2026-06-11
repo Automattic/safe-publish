@@ -38,6 +38,8 @@ use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Telemetry_Bridge;
+use Safe_Publish\Utils\Telemetry_Service;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -64,6 +66,14 @@ final class Plugin {
 	private ?Safe_Publish_API $safe_publish_api = null;
 
 	/**
+	 * Telemetry service instance. Constructed in init() and shared across
+	 * the bridge and any direct emit call sites.
+	 *
+	 * @var Telemetry_Service|null
+	 */
+	private ?Telemetry_Service $telemetry = null;
+
+	/**
 	 * Constructs the Plugin instance.
 	 */
 	public function __construct() {
@@ -82,6 +92,16 @@ final class Plugin {
 
 		$sync_mode          = Options::get_value( Options::OPTION_SYNC_MODE, '' );
 		$connected_site_url = Options::get_value( Options::OPTION_CONNECTED_SITE_URL, '' );
+
+		$this->telemetry = new Telemetry_Service(
+			'safe_publish_',
+			array(
+				'plugin_version' => SAFE_PUBLISH_VERSION,
+				'sync_mode'      => $sync_mode,
+			)
+		);
+
+		( new Telemetry_Bridge( $this->telemetry ) )->register();
 
 		$can_export = in_array(
 			$sync_mode,
