@@ -272,7 +272,10 @@ final class Plugin {
 		$exports_page   = new Exports_Page();
 		$audit_log_page = new Audit_Log_Page();
 
-		$import_actions = new Import_Actions_Ajax_Handler( $rollback_service );
+		$import_actions = new Import_Actions_Ajax_Handler(
+			$rollback_service,
+			$this->telemetry
+		);
 
 		$post_import_service = new Post_Import_Service(
 			$api,
