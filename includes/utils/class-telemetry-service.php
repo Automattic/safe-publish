@@ -84,7 +84,10 @@ final class Telemetry_Service {
 	 * @param string               $event      Event name without prefix.
 	 * @param array<string, mixed> $properties Event properties.
 	 */
-	public function record_event( string $event, array $properties = array() ): void {
+	public function record_event(
+		string $event,
+		array $properties = array()
+	): void {
 		if ( null !== $this->queue ) {
 			$this->queue->record( $event, $properties );
 			return;

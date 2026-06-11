@@ -29,9 +29,9 @@ use WP_Ajax_UnitTestCase;
 /**
  * Telemetry Bulk Import Test.
  *
- * Verifies that the bulk-import AJAX path records a
- * `bulk_import_completed` event with batch_size, successful, failed, and
- * has_failures derived from the in-handler accumulators.
+ * Verifies that the bulk-import AJAX path records a bulk_import_completed
+ * event with batch_size, successful, failed, and has_failures derived from
+ * the in-handler accumulators.
  */
 class Telemetry_Bulk_Import_Test extends WP_Ajax_UnitTestCase {
 

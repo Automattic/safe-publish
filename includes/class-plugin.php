@@ -39,6 +39,7 @@ use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Telemetry_Bridge;
+use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
 
 // Prevent direct access.
@@ -96,7 +97,7 @@ final class Plugin {
 		$this->telemetry = new Telemetry_Service(
 			array(
 				'plugin_version' => SAFE_PUBLISH_VERSION,
-				'sync_mode'      => $sync_mode,
+				'sync_mode'      => Telemetry_Events::normalize_sync_mode( $sync_mode ),
 			)
 		);
 

@@ -23,7 +23,7 @@ use WP_Ajax_UnitTestCase;
  * Telemetry Rollback Test.
  *
  * Verifies that the session and item rollback AJAX handlers emit a
- * `rollback_performed` event with scope, counts, and derived outcome.
+ * rollback_performed event with scope, counts, and derived outcome.
  */
 class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 
@@ -128,6 +128,41 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 		$this->assertSame( 0, $events[0]['properties']['failed_count'] );
 		$this->assertSame(
 			Telemetry_Events::ROLLBACK_OUTCOME_SUCCESS,
+			$events[0]['properties']['outcome']
+		);
+	}
+
+	/**
+	 * Verifies that a session rollback for a non-existent session fires
+	 * rollback_performed with failed_count=1 and outcome=failed, mirroring
+	 * the item-level path's WP_Error handling instead of going silent.
+	 */
+	public function test_session_rollback_failure_fires_with_failed_outcome(): void {
+		// ARRANGE: a session_id that does not exist in the repository.
+		$_POST = array(
+			'nonce'      => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'session_id' => 999999,
+		);
+
+		// ACT: dispatch the session rollback against the missing session.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_rollback_session' );
+
+		// ASSERT: scope=session, failed_count=1, outcome=failed.
+		$events = $this->queue->events();
+		$this->assertCount( 1, $events );
+		$this->assertSame(
+			Telemetry_Events::ROLLBACK_PERFORMED,
+			$events[0]['event']
+		);
+		$this->assertSame(
+			Telemetry_Events::ROLLBACK_SCOPE_SESSION,
+			$events[0]['properties']['scope']
+		);
+		$this->assertSame( 0, $events[0]['properties']['deleted_count'] );
+		$this->assertSame( 0, $events[0]['properties']['restored_count'] );
+		$this->assertSame( 1, $events[0]['properties']['failed_count'] );
+		$this->assertSame(
+			Telemetry_Events::ROLLBACK_OUTCOME_FAILED,
 			$events[0]['properties']['outcome']
 		);
 	}

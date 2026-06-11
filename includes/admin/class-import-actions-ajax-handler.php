@@ -79,6 +79,17 @@ final class Import_Actions_Ajax_Handler {
 		$result = $this->rollback_service->rollback_session( $session_id );
 
 		if ( is_wp_error( $result ) ) {
+			$this->telemetry->record_event(
+				Telemetry_Events::ROLLBACK_PERFORMED,
+				array(
+					'scope'          => Telemetry_Events::ROLLBACK_SCOPE_SESSION,
+					'deleted_count'  => 0,
+					'restored_count' => 0,
+					'failed_count'   => 1,
+					'outcome'        => Telemetry_Events::ROLLBACK_OUTCOME_FAILED,
+				)
+			);
+
 			wp_send_json_error( $result->get_error_message() );
 		}
 
@@ -140,6 +151,11 @@ final class Import_Actions_Ajax_Handler {
 
 		$deleted  = 'deleted' === $result['action'] ? 1 : 0;
 		$restored = 'restored' === $result['action'] ? 1 : 0;
+		$outcome  = Telemetry_Events::rollback_outcome(
+			$deleted,
+			$restored,
+			0
+		);
 
 		$this->telemetry->record_event(
 			Telemetry_Events::ROLLBACK_PERFORMED,
@@ -148,7 +164,7 @@ final class Import_Actions_Ajax_Handler {
 				'deleted_count'  => $deleted,
 				'restored_count' => $restored,
 				'failed_count'   => 0,
-				'outcome'        => Telemetry_Events::rollback_outcome( $deleted, $restored, 0 ),
+				'outcome'        => $outcome,
 			)
 		);
 

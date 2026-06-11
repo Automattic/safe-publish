@@ -20,7 +20,7 @@ use WP_UnitTestCase;
  * Telemetry Bridge Test.
  *
  * Verifies that auth-channel failure events trigger an inbound_auth_failed
- * telemetry event with the mapped `reason` enum, and that success / unmapped
+ * telemetry event with the mapped reason enum, and that success / unmapped
  * events are silently ignored.
  */
 class Telemetry_Bridge_Test extends WP_UnitTestCase {

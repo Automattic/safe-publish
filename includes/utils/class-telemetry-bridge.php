@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Bridges the existing audit-log action (`safe_publish_event_logged`) to
+ * Bridges the existing audit-log action (safe_publish_event_logged) to
  * telemetry. Maps selected channel + event combinations to telemetry events
  * so that actions already audit-logged don't need a second emit at the
  * call site.

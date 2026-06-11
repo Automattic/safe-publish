@@ -53,8 +53,25 @@ class Telemetry_Events {
 	// code isn't in the allowlist below.
 	const ERROR_CODE_UNKNOWN = 'unknown';
 
+	// sync_mode global property fallback when the option is unset on a
+	// fresh install (Options::OPTION_SYNC_MODE defaults to '').
+	const SYNC_MODE_UNCONFIGURED = 'unconfigured';
+
 	/**
-	 * Allowed values for the import_item_failed `error_code` property.
+	 * Allowed values for the sync_mode global event property. Mirrors the
+	 * three configured modes from Options; anything else falls back to
+	 * SYNC_MODE_UNCONFIGURED so the property stays bounded.
+	 *
+	 * @var list<string>
+	 */
+	const SYNC_MODE_ALLOWED = array(
+		'import',
+		'export',
+		'bidirectional',
+	);
+
+	/**
+	 * Allowed values for the import_item_failed error_code property.
 	 * Anything not in this list is reported as ERROR_CODE_UNKNOWN so an
 	 * unbounded string can't leak into telemetry. Mirrors the per-item
 	 * error codes emitted by Post_Import_Service.
@@ -69,6 +86,7 @@ class Telemetry_Events {
 		'media_download_failed',
 		'malformed_media_markup',
 		'content_processing_failed',
+		'excerpt_sanitization_failed',
 		'source_author_not_found',
 		'source_author_unresolved',
 		'featured_image_import_failed',
@@ -93,7 +111,7 @@ class Telemetry_Events {
 
 	/**
 	 * Maps auth-channel Log_Events failure codes to the inbound_auth_failed
-	 * `reason` enum. Success codes and unrecognized-action are intentionally
+	 * reason enum. Success codes and unrecognized-action are intentionally
 	 * absent: success is too high-volume to be useful, and unrecognized-action
 	 * indicates a destination-side bug rather than handshake friction.
 	 *
@@ -123,10 +141,25 @@ class Telemetry_Events {
 	}
 
 	/**
+	 * Normalizes a raw sync_mode option value into the bounded enum so the
+	 * global event property never carries the empty string from a fresh
+	 * install.
+	 *
+	 * @param string $mode Raw sync mode value from Options.
+	 * @return string Allowed sync mode, or SYNC_MODE_UNCONFIGURED.
+	 */
+	public static function normalize_sync_mode( string $mode ): string {
+		return in_array( $mode, self::SYNC_MODE_ALLOWED, true )
+			? $mode
+			: self::SYNC_MODE_UNCONFIGURED;
+	}
+
+	/**
 	 * Returns whether an error code's per-item failure should carry a
 	 * media_failure_count property.
 	 *
 	 * @param string $code Normalized error code.
+	 * @return bool True when the code is media-related.
 	 */
 	public static function is_media_error_code( string $code ): bool {
 		return in_array( $code, self::MEDIA_ERROR_CODES, true );
@@ -134,14 +167,15 @@ class Telemetry_Events {
 
 	/**
 	 * Derives the rollback outcome from the deleted, restored, and failed
-	 * counts. `success` when no failures and at least one row changed;
-	 * `failed` when nothing changed and at least one row failed; `partial`
-	 * otherwise (mixed result or no-op rollback).
+	 * counts. Success when no failures and at least one row changed; failed
+	 * when nothing changed and at least one row failed; partial otherwise
+	 * (mixed result or no-op rollback).
 	 *
 	 * @param int $deleted_count  Number of new posts removed by the rollback.
 	 * @param int $restored_count Number of updated posts reverted to their
 	 *                            previous version.
 	 * @param int $failed_count   Number of items that couldn't be rolled back.
+	 * @return string One of the ROLLBACK_OUTCOME_* constants.
 	 */
 	public static function rollback_outcome(
 		int $deleted_count,

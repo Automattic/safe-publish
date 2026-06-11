@@ -1945,7 +1945,8 @@ class Post_Import_Service {
 		$error_code = Telemetry_Events::normalize_error_code( $raw_code );
 
 		$session      = $this->repository->get_session( $session_id );
-		$session_type = ( null !== $session && 'single' === ( $session['session_type'] ?? '' ) )
+		$raw_type     = (string) ( $session['session_type'] ?? '' );
+		$session_type = 'single' === $raw_type
 			? Telemetry_Events::SESSION_TYPE_SINGLE
 			: Telemetry_Events::SESSION_TYPE_BULK;
 

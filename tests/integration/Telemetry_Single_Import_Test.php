@@ -30,8 +30,8 @@ use WP_Ajax_UnitTestCase;
  * Telemetry Single Import Test.
  *
  * Verifies that the single-import AJAX path (ajax_create_draft) emits a
- * `single_import_completed` event with outcome derived from the existing
- * flag and warning_count from the result's warnings array.
+ * single_import_completed event with outcome derived from the existing flag
+ * and warning_count from the result's warnings array.
  */
 class Telemetry_Single_Import_Test extends WP_Ajax_UnitTestCase {
 

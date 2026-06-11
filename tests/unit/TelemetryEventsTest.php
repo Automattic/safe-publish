@@ -59,8 +59,37 @@ class TelemetryEventsTest extends TestCase {
 	 */
 	public function test_is_media_error_code_rejects_non_media_codes(): void {
 		// ARRANGE / ACT / ASSERT: a non-media code is not recognized.
-		$this->assertFalse( Telemetry_Events::is_media_error_code( 'post_create_failed' ) );
-		$this->assertFalse( Telemetry_Events::is_media_error_code( Telemetry_Events::ERROR_CODE_UNKNOWN ) );
+		$this->assertFalse(
+			Telemetry_Events::is_media_error_code( 'post_create_failed' )
+		);
+		$this->assertFalse(
+			Telemetry_Events::is_media_error_code( Telemetry_Events::ERROR_CODE_UNKNOWN )
+		);
+	}
+
+	/**
+	 * Verifies that the three configured sync modes pass through unchanged.
+	 */
+	public function test_normalize_sync_mode_allows_configured_modes(): void {
+		// ARRANGE / ACT / ASSERT: each documented mode normalizes to itself.
+		$this->assertSame( 'import', Telemetry_Events::normalize_sync_mode( 'import' ) );
+		$this->assertSame( 'export', Telemetry_Events::normalize_sync_mode( 'export' ) );
+		$this->assertSame(
+			'bidirectional',
+			Telemetry_Events::normalize_sync_mode( 'bidirectional' )
+		);
+	}
+
+	/**
+	 * Verifies that the empty-string default from a fresh install maps to
+	 * the bounded fallback so Pendo never receives the raw empty string.
+	 */
+	public function test_normalize_sync_mode_replaces_empty_with_fallback(): void {
+		// ARRANGE / ACT: pass the empty string that Options uses as default.
+		$result = Telemetry_Events::normalize_sync_mode( '' );
+
+		// ASSERT: bounded fallback.
+		$this->assertSame( Telemetry_Events::SYNC_MODE_UNCONFIGURED, $result );
 	}
 
 	/**
