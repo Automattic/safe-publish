@@ -122,6 +122,19 @@ final class Import_Actions_Ajax_Handler {
 		$result = $this->rollback_service->rollback_item( $item_id );
 
 		if ( is_wp_error( $result ) ) {
+			// Match the session-level path — a per-item WP_Error is a
+			// failed rollback, not a silently-dropped request.
+			$this->telemetry->record_event(
+				Telemetry_Events::ROLLBACK_PERFORMED,
+				array(
+					'scope'          => Telemetry_Events::ROLLBACK_SCOPE_ITEM,
+					'deleted_count'  => 0,
+					'restored_count' => 0,
+					'failed_count'   => 1,
+					'outcome'        => Telemetry_Events::ROLLBACK_OUTCOME_FAILED,
+				)
+			);
+
 			wp_send_json_error( $result->get_error_message() );
 		}
 

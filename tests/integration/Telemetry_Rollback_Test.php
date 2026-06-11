@@ -133,6 +133,41 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that a single-item rollback for a non-existent item fires
+	 * rollback_performed with failed_count=1 and outcome=failed, so a
+	 * broken undo doesn't go silent.
+	 */
+	public function test_item_rollback_failure_fires_with_failed_outcome(): void {
+		// ARRANGE: an item_id that does not exist in the repository.
+		$_POST = array(
+			'nonce'   => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'item_id' => 999999,
+		);
+
+		// ACT: dispatch the item rollback against the missing item.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_rollback_item' );
+
+		// ASSERT: scope=item, failed_count=1, outcome=failed.
+		$events = $this->queue->events();
+		$this->assertCount( 1, $events );
+		$this->assertSame(
+			Telemetry_Events::ROLLBACK_PERFORMED,
+			$events[0]['event']
+		);
+		$this->assertSame(
+			Telemetry_Events::ROLLBACK_SCOPE_ITEM,
+			$events[0]['properties']['scope']
+		);
+		$this->assertSame( 0, $events[0]['properties']['deleted_count'] );
+		$this->assertSame( 0, $events[0]['properties']['restored_count'] );
+		$this->assertSame( 1, $events[0]['properties']['failed_count'] );
+		$this->assertSame(
+			Telemetry_Events::ROLLBACK_OUTCOME_FAILED,
+			$events[0]['properties']['outcome']
+		);
+	}
+
+	/**
 	 * Verifies that a single-item rollback that deletes the post fires
 	 * rollback_performed with scope=item and deleted_count=1.
 	 */
