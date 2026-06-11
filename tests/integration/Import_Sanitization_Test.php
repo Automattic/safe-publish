@@ -20,6 +20,7 @@ use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Content\Content_Media_Processor;
+use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 use WP_Error;
@@ -58,7 +59,8 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 		$media_importer    = new Media_Importer( $http_client );
 		$content_processor = new Content_Processor(
 			$media_importer,
-			new Content_Media_Processor( $media_importer )
+			new Content_Media_Processor( $media_importer ),
+			new Shortcode_ID_Rewriter()
 		);
 
 		$this->import_service = new Post_Import_Service(

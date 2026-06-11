@@ -32,6 +32,7 @@ use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\API\Safe_Publish_API;
 use Safe_Publish\API\Source_Author_REST_Field;
 use Safe_Publish\Content\Content_Media_Processor;
+use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Import_Items_Table;
@@ -205,13 +206,18 @@ final class Plugin {
 		$http_client             = new HTTP_Client();
 		$media_importer          = new Media_Importer( $http_client );
 		$content_media_processor = new Content_Media_Processor( $media_importer );
+		$shortcode_id_rewriter   = new Shortcode_ID_Rewriter();
 		$post_type_fetcher       = new Post_Type_Fetcher( $http_client );
 
 		// Initialize Source Posts API with shared HTTP client.
 		$this->api = new Source_Posts_API( $http_client );
 
 		// Build content processor with direct media service dependencies.
-		$content_processor = new Content_Processor( $media_importer, $content_media_processor );
+		$content_processor = new Content_Processor(
+			$media_importer,
+			$content_media_processor,
+			$shortcode_id_rewriter
+		);
 
 		$this->safe_publish_api = new Safe_Publish_API();
 

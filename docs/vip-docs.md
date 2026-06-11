@@ -70,7 +70,7 @@ To use Safe Publish, the following must be in place:
 - PHP 8.2 or higher on both sites.
 - The Safe Publish integration enabled on both sites.
 
-The integration handles creating and setting the shared secret — provided to the plugin as the `SAFE_PUBLISH_SHARED_SECRET` environment variable — that secures the connection between the sites.
+The integration handles creating and setting the shared secret that secures the connection between the sites. The secret is generated and synchronized automatically when you set the connected site URL (see [Connecting two sites](#connecting-two-sites)); it is never entered by hand and is not exposed in the VIP Dashboard.
 
 ## Roles and permissions
 
@@ -85,7 +85,9 @@ Requests from the destination to the source site are not authorized by user capa
 
 ## Connecting two sites
 
-With the integration enabled and the shared secret in place, pair the source and destination by configuring the connection and sync mode on each site. Open the Safe Publish settings screen in WP Admin and set:
+With the integration enabled, pair the source and destination by configuring the connection and sync mode on each site. The shared secret is handled for you: setting the connected site URL on one site provisions the shared secret and copies it to the connected site automatically, so both ends always hold the same value. You never enter, copy, or paste the secret yourself; it is not a configurable input.
+
+Open the Safe Publish settings screen in WP Admin and set:
 
 - **Connected site URL** — the URL of the other site. On the destination, this is the source's URL.
 - **Sync mode** — the role this site plays:
@@ -146,16 +148,18 @@ The Diff action on the Imports → Posts tab compares the current local post wit
 
 ### Rolling back imports
 
-Rollback reverses a single imported post:
+Rollback reverses a single import:
 
 - If the post was newly created by the import, the post is deleted.
 - If the post was an update of an existing post, the previous content — captured at import time — is restored.
 
-Multiple rows can be selected on the Posts tab and rolled back in a single action. Only rows whose status is `success` or `updated`, and that have not already been rolled back, are eligible.
+It's important to note that the roll-back rolls back the specific changes from that single import. If a post has gone through a series of changes, each change can be rolled back sequentially.
+
+Multiple rows can be selected on the Posts tab and rolled back in a single action.
 
 Rollback relies on the content snapshot captured when the post was updated. Because Safe Publish stores the pre-update content as part of the import record, it can restore an updated post to its earlier state without contacting the source site again.
 
-Note: Rolling back a created post deletes that post on the destination. Confirm the affected posts before rolling back, since the action is irreversible for created posts.
+Note: Rolling back a newly created post deletes that post on the destination. Confirm the affected posts before rolling back, since the action is irreversible for newly created posts.
 
 ## How media and content are processed
 

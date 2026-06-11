@@ -26,6 +26,7 @@ function buildImportedPost(
 		post_type: 'post',
 		local_status: 'publish',
 		edit_url: '',
+		local_link: '',
 		source_link: '',
 		item_id: 100,
 		session_id: 5,
