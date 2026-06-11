@@ -33,7 +33,6 @@ import {
 } from '../constants';
 import {
 	composeOutdatedLabel,
-	extractUrlPath,
 	formatDateTime,
 	getErrorMessage,
 	PUBLISH_STATUS_LABELS,
@@ -673,18 +672,15 @@ export function ImportedPostsDataView(): JSX.Element {
 				label: __( 'Title', 'safe-publish' ),
 				enableSorting: true,
 				render: ( { item }: { item: ImportedPost } ): JSX.Element => {
-					// Drafts return the source home URL — show plain text
-					// rather than a misleading link.
-					const path = extractUrlPath( item.source_link );
-					if ( '' === item.source_link || '/' === path ) {
+					if ( '' === item.local_link ) {
 						return <span>{ item.title }</span>;
 					}
 					return (
 						<a
-							href={ item.source_link }
+							href={ item.local_link }
 							target="_blank"
 							rel="noopener noreferrer"
-							title={ item.source_link }
+							title={ item.local_link }
 							aria-label={
 								/* translators: %s: post title */
 								sprintf( __( '%s (opens in new tab)', 'safe-publish' ), item.title )
