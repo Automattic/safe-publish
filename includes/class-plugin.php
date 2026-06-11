@@ -284,11 +284,16 @@ final class Plugin {
 
 		$menu_manager = new Admin_Menu_Manager();
 
+		// init() always runs before init_full_admin() and sets $this->telemetry,
+		// so the narrowing is safe; psalm needs the explicit refinement.
+		assert( $this->telemetry instanceof Telemetry_Service );
+
 		$ajax_controller = new Admin_Ajax_Controller(
 			$api,
 			$repository,
 			$post_import_service,
-			$post_type_fetcher
+			$post_type_fetcher,
+			$this->telemetry
 		);
 
 		return new Import_Mode_Admin_Handler(

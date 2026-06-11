@@ -16,6 +16,8 @@ use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Sync_State_Comparator;
+use Safe_Publish\Utils\Telemetry_Events;
+use Safe_Publish\Utils\Telemetry_Service;
 use Safe_Publish\Utils\Topological_Sorter;
 use WP_Post;
 
@@ -104,23 +106,33 @@ final class Admin_Ajax_Controller {
 	private Post_Type_Fetcher $post_type_fetcher;
 
 	/**
+	 * Telemetry service used to emit import-completion events.
+	 *
+	 * @var Telemetry_Service
+	 */
+	private Telemetry_Service $telemetry;
+
+	/**
 	 * Constructs the Admin_Ajax_Controller instance.
 	 *
 	 * @param Source_Posts_API    $api                 Source Posts API instance.
 	 * @param History_Repository  $repository          History repository instance.
 	 * @param Post_Import_Service $post_import_service Post Import Service instance.
 	 * @param Post_Type_Fetcher   $post_type_fetcher   Post Type Fetcher instance.
+	 * @param Telemetry_Service   $telemetry           Telemetry service.
 	 */
 	public function __construct(
 		Source_Posts_API $api,
 		History_Repository $repository,
 		Post_Import_Service $post_import_service,
-		Post_Type_Fetcher $post_type_fetcher
+		Post_Type_Fetcher $post_type_fetcher,
+		Telemetry_Service $telemetry
 	) {
 		$this->api                 = $api;
 		$this->repository          = $repository;
 		$this->post_import_service = $post_import_service;
 		$this->post_type_fetcher   = $post_type_fetcher;
+		$this->telemetry           = $telemetry;
 	}
 
 	/**
@@ -1043,6 +1055,16 @@ final class Admin_Ajax_Controller {
 			count( $results ),
 			$successful,
 			$failed
+		);
+
+		$this->telemetry->record_event(
+			Telemetry_Events::BULK_IMPORT_COMPLETED,
+			array(
+				'batch_size'   => count( $results ),
+				'successful'   => $successful,
+				'failed'       => $failed,
+				'has_failures' => $failed > 0,
+			)
 		);
 
 		wp_send_json_success(
