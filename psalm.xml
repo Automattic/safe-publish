@@ -34,8 +34,14 @@
         <UnusedParam>
             <errorLevel type="suppress">
                 <file name="tests/unit/stubs.php" />
+                <directory name="tests/integration/stubs/" />
             </errorLevel>
         </UnusedParam>
+        <PossiblyUnusedParam>
+            <errorLevel type="suppress">
+                <directory name="tests/integration/stubs/" />
+            </errorLevel>
+        </PossiblyUnusedParam>
         <UnusedVariable>
             <errorLevel type="suppress">
                 <file name="tests/unit/stubs.php" />
