@@ -29,7 +29,6 @@ class Telemetry_Events {
 	const BULK_IMPORT_COMPLETED   = 'bulk_import_completed';
 	const SINGLE_IMPORT_COMPLETED = 'single_import_completed';
 	const IMPORT_ITEM_FAILED      = 'import_item_failed';
-	const INBOUND_AUTH_FAILED     = 'inbound_auth_failed';
 	const ROLLBACK_PERFORMED      = 'rollback_performed';
 
 	// single_import_completed -> outcome enum.
@@ -107,25 +106,6 @@ class Telemetry_Events {
 	const MEDIA_ERROR_CODES = array(
 		'media_download_failed',
 		'malformed_media_markup',
-	);
-
-	/**
-	 * Maps auth-channel Log_Events failure codes to the inbound_auth_failed
-	 * reason enum. Success codes and unrecognized-action are intentionally
-	 * absent: success is too high-volume to be useful, and unrecognized-action
-	 * indicates a destination-side bug rather than handshake friction.
-	 *
-	 * @var array<string, string>
-	 */
-	const AUTH_REASON_MAP = array(
-		Log_Events::SECRET_NOT_CONFIGURED        => 'secret_not_configured',
-		Log_Events::TIMESTAMP_EXPIRED            => 'timestamp_expired',
-		Log_Events::CONTENT_HASH_MISSING         => 'hash_missing',
-		Log_Events::CONTENT_HASH_MISMATCH        => 'hash_mismatch',
-		Log_Events::CONNECTED_URL_NOT_CONFIGURED => 'connected_url_not_configured',
-		Log_Events::SITE_URL_HEADER_MISSING      => 'site_url_header_missing',
-		Log_Events::SITE_URL_MISMATCH            => 'url_mismatch',
-		Log_Events::SIGNATURE_INVALID            => 'signature_invalid',
 	);
 
 	/**

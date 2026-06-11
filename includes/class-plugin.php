@@ -38,7 +38,6 @@ use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
-use Safe_Publish\Utils\Telemetry_Bridge;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
 
@@ -100,8 +99,6 @@ final class Plugin {
 				'sync_mode'      => Telemetry_Events::normalize_sync_mode( $sync_mode ),
 			)
 		);
-
-		( new Telemetry_Bridge( $this->telemetry ) )->register();
 
 		$can_export = in_array(
 			$sync_mode,
