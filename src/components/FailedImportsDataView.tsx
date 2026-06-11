@@ -11,7 +11,10 @@
  */
 import { update } from '@wordpress/icons';
 
-import { DateRangeFilter } from './filter-controls';
+import {
+	calendarRangeToUtcBounds,
+	DateRangeFilter,
+} from './filter-controls';
 import { useDelayedFlag } from './hooks/useDelayedFlag';
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 import { createFailedImportsActions } from '../actions';
@@ -76,11 +79,15 @@ function buildListingFormData( params: {
 	if ( '' !== params.debouncedSearch ) {
 		formData.append( 'search', params.debouncedSearch );
 	}
-	if ( null !== params.attemptedAfter ) {
-		formData.append( 'attempted_after', params.attemptedAfter );
+	const { afterUtc, beforeUtc } = calendarRangeToUtcBounds(
+		params.attemptedAfter,
+		params.attemptedBefore
+	);
+	if ( null !== afterUtc ) {
+		formData.append( 'attempted_after', afterUtc );
 	}
-	if ( null !== params.attemptedBefore ) {
-		formData.append( 'attempted_before', params.attemptedBefore );
+	if ( null !== beforeUtc ) {
+		formData.append( 'attempted_before', beforeUtc );
 	}
 	return formData;
 }

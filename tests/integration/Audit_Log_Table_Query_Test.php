@@ -119,20 +119,25 @@ class Audit_Log_Table_Query_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that before_gmt is exclusive — rows at exactly the bound
-	 * are excluded so callers can pass next-day midnight to mean "through
-	 * end of yesterday".
+	 * Verifies that before_gmt is inclusive — rows at exactly the bound
+	 * are captured so callers can pass end-of-day (23:59:59) to mean
+	 * "through this calendar day".
 	 */
-	public function test_get_events_before_gmt_filters_exclusively(): void {
-		// ACT: pass the start of 2026-01-12 to capture everything before.
+	public function test_get_events_before_gmt_filters_inclusively(): void {
+		// ARRANGE: insert an event at exactly the bound moment.
+		Audit_Log_Table::insert( 'auth', 'info', 'EDGE', '2026-01-12 23:59:59', array() );
+
+		// ACT: pass end-of-day 2026-01-12 to capture through that day.
 		$rows = Audit_Log_Table::get_events(
-			array( 'before_gmt' => '2026-01-12 00:00:00' )
+			array( 'before_gmt' => '2026-01-12 23:59:59' )
 		);
 
-		// ASSERT: only the 2026-01-10 and 2026-01-11 rows remain.
-		$this->assertCount( 2, $rows );
-		$dates = array_column( $rows, 'created_at_gmt' );
-		$this->assertNotContains( '2026-01-12 12:00:00', $dates );
+		// ASSERT: rows on/before 2026-01-12 are included, including the
+		// 12:00:00 event AND the bound-edge EDGE event; 2026-01-13 is not.
+		$events = array_column( $rows, 'event' );
+		$this->assertContains( 'EDGE', $events );
+		$this->assertContains( 'REQUEST_AUTHENTICATED', $events );
+		$this->assertNotContains( 'SESSION_ROLLBACK_FAILED', $events );
 	}
 
 	/**
