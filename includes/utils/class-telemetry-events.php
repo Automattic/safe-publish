@@ -135,6 +135,21 @@ class Telemetry_Events {
 	}
 
 	/**
+	 * Normalizes a raw session_type column value into the bounded enum.
+	 * Anything other than the single sentinel falls back to bulk, matching
+	 * the schema's default and the absent-session edge case.
+	 *
+	 * @param string $type Raw session_type column value, or empty when the
+	 *                     session row is missing.
+	 * @return string SESSION_TYPE_SINGLE or SESSION_TYPE_BULK.
+	 */
+	public static function normalize_session_type( string $type ): string {
+		return self::SESSION_TYPE_SINGLE === $type
+			? self::SESSION_TYPE_SINGLE
+			: self::SESSION_TYPE_BULK;
+	}
+
+	/**
 	 * Returns whether an error code's per-item failure should carry a
 	 * media_failure_count property.
 	 *

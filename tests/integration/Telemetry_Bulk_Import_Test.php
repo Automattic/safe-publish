@@ -255,7 +255,10 @@ class Telemetry_Bulk_Import_Test extends WP_Ajax_UnitTestCase {
 		$completion_events = array_values(
 			array_filter(
 				$this->queue->events(),
-				static fn ( array $e ): bool => Telemetry_Events::BULK_IMPORT_COMPLETED === $e['event']
+				static function ( array $event ): bool {
+					return Telemetry_Events::BULK_IMPORT_COMPLETED
+						=== $event['event'];
+				}
 			)
 		);
 		$this->assertCount( 1, $completion_events );

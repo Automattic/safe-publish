@@ -24,11 +24,14 @@ class TelemetryEventsTest extends TestCase {
 	 * Verifies that an allowed error code passes through unchanged.
 	 */
 	public function test_normalize_error_code_allows_known_codes(): void {
-		// ARRANGE / ACT: pass a known code through the normalizer.
-		$result = Telemetry_Events::normalize_error_code( 'media_download_failed' );
+		// ARRANGE: a documented per-item error code.
+		$code = 'media_download_failed';
+
+		// ACT: pass it through the normalizer.
+		$result = Telemetry_Events::normalize_error_code( $code );
 
 		// ASSERT: returned as-is.
-		$this->assertSame( 'media_download_failed', $result );
+		$this->assertSame( $code, $result );
 	}
 
 	/**
@@ -36,8 +39,11 @@ class TelemetryEventsTest extends TestCase {
 	 * so unbounded strings can't leak into Pendo.
 	 */
 	public function test_normalize_error_code_replaces_unknown_with_fallback(): void {
-		// ARRANGE / ACT: pass an unrecognized code.
-		$result = Telemetry_Events::normalize_error_code( 'something_unexpected' );
+		// ARRANGE: a code not in the allowlist.
+		$code = 'something_unexpected';
+
+		// ACT: pass it through the normalizer.
+		$result = Telemetry_Events::normalize_error_code( $code );
 
 		// ASSERT: replaced with the bounded fallback.
 		$this->assertSame( Telemetry_Events::ERROR_CODE_UNKNOWN, $result );
@@ -48,9 +54,17 @@ class TelemetryEventsTest extends TestCase {
 	 * failure carries a media_failure_count property.
 	 */
 	public function test_is_media_error_code_recognizes_media_codes(): void {
-		// ARRANGE / ACT / ASSERT: both documented media codes are recognized.
-		$this->assertTrue( Telemetry_Events::is_media_error_code( 'media_download_failed' ) );
-		$this->assertTrue( Telemetry_Events::is_media_error_code( 'malformed_media_markup' ) );
+		// ARRANGE: the two documented media error codes.
+		$download = 'media_download_failed';
+		$markup   = 'malformed_media_markup';
+
+		// ACT: check each.
+		$download_is_media = Telemetry_Events::is_media_error_code( $download );
+		$markup_is_media   = Telemetry_Events::is_media_error_code( $markup );
+
+		// ASSERT: both are recognized.
+		$this->assertTrue( $download_is_media );
+		$this->assertTrue( $markup_is_media );
 	}
 
 	/**
@@ -58,26 +72,37 @@ class TelemetryEventsTest extends TestCase {
 	 * failures don't carry an irrelevant property.
 	 */
 	public function test_is_media_error_code_rejects_non_media_codes(): void {
-		// ARRANGE / ACT / ASSERT: a non-media code is not recognized.
-		$this->assertFalse(
-			Telemetry_Events::is_media_error_code( 'post_create_failed' )
-		);
-		$this->assertFalse(
-			Telemetry_Events::is_media_error_code( Telemetry_Events::ERROR_CODE_UNKNOWN )
-		);
+		// ARRANGE: an unrelated error code and the bounded fallback.
+		$unrelated = 'post_create_failed';
+		$fallback  = Telemetry_Events::ERROR_CODE_UNKNOWN;
+
+		// ACT: check each.
+		$unrelated_is_media = Telemetry_Events::is_media_error_code( $unrelated );
+		$fallback_is_media  = Telemetry_Events::is_media_error_code( $fallback );
+
+		// ASSERT: neither is recognized.
+		$this->assertFalse( $unrelated_is_media );
+		$this->assertFalse( $fallback_is_media );
 	}
 
 	/**
 	 * Verifies that the three configured sync modes pass through unchanged.
 	 */
 	public function test_normalize_sync_mode_allows_configured_modes(): void {
-		// ARRANGE / ACT / ASSERT: each documented mode normalizes to itself.
-		$this->assertSame( 'import', Telemetry_Events::normalize_sync_mode( 'import' ) );
-		$this->assertSame( 'export', Telemetry_Events::normalize_sync_mode( 'export' ) );
-		$this->assertSame(
-			'bidirectional',
-			Telemetry_Events::normalize_sync_mode( 'bidirectional' )
-		);
+		// ARRANGE: the three documented modes.
+		$import        = 'import';
+		$export        = 'export';
+		$bidirectional = 'bidirectional';
+
+		// ACT: normalize each.
+		$import_result        = Telemetry_Events::normalize_sync_mode( $import );
+		$export_result        = Telemetry_Events::normalize_sync_mode( $export );
+		$bidirectional_result = Telemetry_Events::normalize_sync_mode( $bidirectional );
+
+		// ASSERT: each mode normalizes to itself.
+		$this->assertSame( $import, $import_result );
+		$this->assertSame( $export, $export_result );
+		$this->assertSame( $bidirectional, $bidirectional_result );
 	}
 
 	/**
@@ -85,11 +110,48 @@ class TelemetryEventsTest extends TestCase {
 	 * the bounded fallback so Pendo never receives the raw empty string.
 	 */
 	public function test_normalize_sync_mode_replaces_empty_with_fallback(): void {
-		// ARRANGE / ACT: pass the empty string that Options uses as default.
-		$result = Telemetry_Events::normalize_sync_mode( '' );
+		// ARRANGE: the empty default that Options uses.
+		$mode = '';
+
+		// ACT: normalize.
+		$result = Telemetry_Events::normalize_sync_mode( $mode );
 
 		// ASSERT: bounded fallback.
 		$this->assertSame( Telemetry_Events::SYNC_MODE_UNCONFIGURED, $result );
+	}
+
+	/**
+	 * Verifies that the single session_type sentinel passes through
+	 * unchanged.
+	 */
+	public function test_normalize_session_type_allows_single(): void {
+		// ARRANGE: the single sentinel.
+		$type = Telemetry_Events::SESSION_TYPE_SINGLE;
+
+		// ACT: normalize.
+		$result = Telemetry_Events::normalize_session_type( $type );
+
+		// ASSERT: returned as-is.
+		$this->assertSame( Telemetry_Events::SESSION_TYPE_SINGLE, $result );
+	}
+
+	/**
+	 * Verifies that any non-single value (including the empty string from
+	 * a missing session row) collapses to bulk, matching the schema's
+	 * default.
+	 */
+	public function test_normalize_session_type_collapses_other_values_to_bulk(): void {
+		// ARRANGE: the bulk sentinel and the empty-session sentinel.
+		$bulk    = Telemetry_Events::SESSION_TYPE_BULK;
+		$missing = '';
+
+		// ACT: normalize each.
+		$bulk_result    = Telemetry_Events::normalize_session_type( $bulk );
+		$missing_result = Telemetry_Events::normalize_session_type( $missing );
+
+		// ASSERT: both report as bulk.
+		$this->assertSame( Telemetry_Events::SESSION_TYPE_BULK, $bulk_result );
+		$this->assertSame( Telemetry_Events::SESSION_TYPE_BULK, $missing_result );
 	}
 
 	/**
@@ -97,8 +159,13 @@ class TelemetryEventsTest extends TestCase {
 	 * changed is reported as success.
 	 */
 	public function test_rollback_outcome_success_when_no_failures_and_rows_changed(): void {
-		// ARRANGE / ACT: derive outcome from non-zero changed counts and no failures.
-		$result = Telemetry_Events::rollback_outcome( 5, 2, 0 );
+		// ARRANGE: five new posts removed and two updates reverted, no failures.
+		$deleted  = 5;
+		$restored = 2;
+		$failed   = 0;
+
+		// ACT: derive the outcome.
+		$result = Telemetry_Events::rollback_outcome( $deleted, $restored, $failed );
 
 		// ASSERT: success.
 		$this->assertSame( Telemetry_Events::ROLLBACK_OUTCOME_SUCCESS, $result );
@@ -109,8 +176,13 @@ class TelemetryEventsTest extends TestCase {
 	 * is reported as failed.
 	 */
 	public function test_rollback_outcome_failed_when_only_failures(): void {
-		// ARRANGE / ACT: derive outcome from zero changed counts and failures.
-		$result = Telemetry_Events::rollback_outcome( 0, 0, 3 );
+		// ARRANGE: three items failed to roll back, nothing changed.
+		$deleted  = 0;
+		$restored = 0;
+		$failed   = 3;
+
+		// ACT: derive the outcome.
+		$result = Telemetry_Events::rollback_outcome( $deleted, $restored, $failed );
 
 		// ASSERT: failed.
 		$this->assertSame( Telemetry_Events::ROLLBACK_OUTCOME_FAILED, $result );
@@ -120,8 +192,13 @@ class TelemetryEventsTest extends TestCase {
 	 * Verifies that a mixed result is reported as partial.
 	 */
 	public function test_rollback_outcome_partial_when_mixed(): void {
-		// ARRANGE / ACT: derive outcome from some success and some failures.
-		$result = Telemetry_Events::rollback_outcome( 2, 1, 1 );
+		// ARRANGE: some success and some failures.
+		$deleted  = 2;
+		$restored = 1;
+		$failed   = 1;
+
+		// ACT: derive the outcome.
+		$result = Telemetry_Events::rollback_outcome( $deleted, $restored, $failed );
 
 		// ASSERT: partial.
 		$this->assertSame( Telemetry_Events::ROLLBACK_OUTCOME_PARTIAL, $result );
@@ -132,8 +209,13 @@ class TelemetryEventsTest extends TestCase {
 	 * as partial rather than success — there was nothing to undo.
 	 */
 	public function test_rollback_outcome_partial_when_all_zero(): void {
-		// ARRANGE / ACT: derive outcome from all-zero counts.
-		$result = Telemetry_Events::rollback_outcome( 0, 0, 0 );
+		// ARRANGE: all-zero counts.
+		$deleted  = 0;
+		$restored = 0;
+		$failed   = 0;
+
+		// ACT: derive the outcome.
+		$result = Telemetry_Events::rollback_outcome( $deleted, $restored, $failed );
 
 		// ASSERT: partial.
 		$this->assertSame( Telemetry_Events::ROLLBACK_OUTCOME_PARTIAL, $result );

@@ -13,13 +13,6 @@ define( 'WP_REDIS_DISABLED', true );
 // Require composer dependencies.
 require_once __DIR__ . '/../../vendor/autoload.php';
 
-// The plugin's Telemetry_Service guards on class_exists() of the VIP
-// mu-plugins telemetry client. That class isn't installed locally, so
-// integration tests would silently skip every emit. Load a minimal stub
-// so the wrapper takes its real send path and tests can assert via an
-// injected Telemetry_Event_Queue.
-require_once __DIR__ . '/stubs/automattic-vip-telemetry-stub.php';
-
 $_wp_tests_dir = getenv( 'WP_TESTS_DIR' );
 $_tests_dir    = $_wp_tests_dir ? $_wp_tests_dir : getenv( 'WP_PHPUNIT__DIR' );
 

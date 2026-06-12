@@ -69,7 +69,9 @@ final class Telemetry_Service {
 		$this->queue = $queue;
 
 		if ( null === $queue && class_exists( self::VIP_TELEMETRY_CLASS ) ) {
-			$class        = self::VIP_TELEMETRY_CLASS;
+			$class = self::VIP_TELEMETRY_CLASS;
+			// Class only resolves on VIP-hosted installs.
+			/** @psalm-suppress UndefinedClass */
 			$this->client = new $class( self::EVENT_PREFIX, $global_properties );
 		}
 	}

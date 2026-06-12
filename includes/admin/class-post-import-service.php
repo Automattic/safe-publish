@@ -1946,9 +1946,7 @@ class Post_Import_Service {
 
 		$session      = $this->repository->get_session( $session_id );
 		$raw_type     = (string) ( $session['session_type'] ?? '' );
-		$session_type = 'single' === $raw_type
-			? Telemetry_Events::SESSION_TYPE_SINGLE
-			: Telemetry_Events::SESSION_TYPE_BULK;
+		$session_type = Telemetry_Events::normalize_session_type( $raw_type );
 
 		$properties = array(
 			'error_code'   => $error_code,

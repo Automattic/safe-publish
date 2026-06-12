@@ -67,7 +67,7 @@ final class Plugin {
 
 	/**
 	 * Telemetry service instance. Constructed in init() and shared across
-	 * the bridge and any direct emit call sites.
+	 * the admin and AJAX services that emit events.
 	 *
 	 * @var Telemetry_Service|null
 	 */
