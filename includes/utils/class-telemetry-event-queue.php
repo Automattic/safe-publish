@@ -47,7 +47,7 @@ final class Telemetry_Event_Queue {
 	/**
 	 * Returns every recorded event in insertion order.
 	 *
-	 * @return list<array{event: string, properties: array<string, mixed>}> Recorded events, oldest first.
+	 * @return list<array{event: string, properties: array<string, mixed>}> Recorded events.
 	 */
 	public function events(): array {
 		return $this->events;

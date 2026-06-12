@@ -159,7 +159,8 @@ class TelemetryEventsTest extends TestCase {
 	 * changed is reported as success.
 	 */
 	public function test_rollback_outcome_success_when_no_failures_and_rows_changed(): void {
-		// ARRANGE: five new posts removed and two updates reverted, no failures.
+		// ARRANGE: five new posts removed and two updates reverted, no
+		// failures.
 		$deleted  = 5;
 		$restored = 2;
 		$failed   = 0;

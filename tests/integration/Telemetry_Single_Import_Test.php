@@ -170,7 +170,7 @@ class Telemetry_Single_Import_Test extends WP_Ajax_UnitTestCase {
 
 	/**
 	 * Verifies that a first-time import emits single_import_completed with
-	 * outcome `new` and no warnings.
+	 * outcome new and no warnings.
 	 */
 	public function test_new_import_emits_outcome_new(): void {
 		// ARRANGE: one mocked source post.
@@ -203,7 +203,7 @@ class Telemetry_Single_Import_Test extends WP_Ajax_UnitTestCase {
 
 	/**
 	 * Verifies that a re-import of an already-imported source emits
-	 * single_import_completed with outcome `updated`.
+	 * single_import_completed with outcome updated.
 	 */
 	public function test_repeat_import_emits_outcome_updated(): void {
 		// ARRANGE: import a post once, then re-import the same source ID
