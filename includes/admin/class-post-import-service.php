@@ -15,6 +15,8 @@ use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Utils\Sync_State_Comparator;
+use Safe_Publish\Utils\Telemetry_Events;
+use Safe_Publish\Utils\Telemetry_Service;
 use Exception;
 use WP_Error;
 use WP_Post;
@@ -92,6 +94,13 @@ class Post_Import_Service {
 	private Meta_Terms_Manager $meta_terms_manager;
 
 	/**
+	 * Telemetry service used to emit per-item failure events.
+	 *
+	 * @var Telemetry_Service
+	 */
+	private Telemetry_Service $telemetry;
+
+	/**
 	 * Constructs the Post_Import_Service instance.
 	 *
 	 * @param Source_Posts_API   $api                Source Posts API instance.
@@ -99,19 +108,22 @@ class Post_Import_Service {
 	 * @param Content_Processor  $content_processor  Content Processor instance.
 	 * @param History_Repository $repository         History repository instance.
 	 * @param Meta_Terms_Manager $meta_terms_manager Meta Terms Manager instance.
+	 * @param Telemetry_Service  $telemetry          Telemetry service.
 	 */
 	public function __construct(
 		Source_Posts_API $api,
 		Media_Importer $media_importer,
 		Content_Processor $content_processor,
 		History_Repository $repository,
-		Meta_Terms_Manager $meta_terms_manager
+		Meta_Terms_Manager $meta_terms_manager,
+		Telemetry_Service $telemetry
 	) {
 		$this->api                = $api;
 		$this->media_importer     = $media_importer;
 		$this->content_processor  = $content_processor;
 		$this->repository         = $repository;
 		$this->meta_terms_manager = $meta_terms_manager;
+		$this->telemetry          = $telemetry;
 	}
 
 	/**
@@ -1909,6 +1921,47 @@ class Post_Import_Service {
 			$error,
 			$changes,
 			$warnings
+		);
+
+		if ( 'error' === $status ) {
+			$this->emit_item_failed_telemetry( $session_id, $changes );
+		}
+	}
+
+	/**
+	 * Emits an import_item_failed telemetry event for a per-item failure.
+	 * Normalizes the raw action code into the bounded error_code enum and
+	 * attaches a media_failure_count when the failure is media-related.
+	 *
+	 * @param int                  $session_id Import session ID.
+	 * @param array<string, mixed> $changes    Per-item changes payload; expected
+	 *                                         to carry an `action` code.
+	 */
+	private function emit_item_failed_telemetry(
+		int $session_id,
+		array $changes
+	): void {
+		$raw_code   = (string) ( $changes['action'] ?? '' );
+		$error_code = Telemetry_Events::normalize_error_code( $raw_code );
+
+		$session      = $this->repository->get_session( $session_id );
+		$raw_type     = (string) ( $session['session_type'] ?? '' );
+		$session_type = Telemetry_Events::normalize_session_type( $raw_type );
+
+		$properties = array(
+			'error_code'   => $error_code,
+			'session_type' => $session_type,
+		);
+
+		if ( Telemetry_Events::is_media_error_code( $error_code ) ) {
+			$properties['media_failure_count'] = count(
+				$this->content_processor->get_failed_media()
+			);
+		}
+
+		$this->telemetry->record_event(
+			Telemetry_Events::IMPORT_ITEM_FAILED,
+			$properties
 		);
 	}
 

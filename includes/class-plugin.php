@@ -38,6 +38,8 @@ use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Telemetry_Events;
+use Safe_Publish\Utils\Telemetry_Service;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -64,6 +66,14 @@ final class Plugin {
 	private ?Safe_Publish_API $safe_publish_api = null;
 
 	/**
+	 * Telemetry service instance. Constructed in init() and shared across
+	 * the admin and AJAX services that emit events.
+	 *
+	 * @var Telemetry_Service|null
+	 */
+	private ?Telemetry_Service $telemetry = null;
+
+	/**
 	 * Constructs the Plugin instance.
 	 */
 	public function __construct() {
@@ -82,6 +92,13 @@ final class Plugin {
 
 		$sync_mode          = Options::get_value( Options::OPTION_SYNC_MODE, '' );
 		$connected_site_url = Options::get_value( Options::OPTION_CONNECTED_SITE_URL, '' );
+
+		$this->telemetry = new Telemetry_Service(
+			array(
+				'plugin_version' => SAFE_PUBLISH_VERSION,
+				'sync_mode'      => Telemetry_Events::normalize_sync_mode( $sync_mode ),
+			)
+		);
 
 		$can_export = in_array(
 			$sync_mode,
@@ -246,20 +263,28 @@ final class Plugin {
 		Media_Importer $media_importer,
 		Post_Type_Fetcher $post_type_fetcher
 	): Import_Mode_Admin_Handler {
+		// init() runs before this method and sets $this->telemetry; refine
+		// the type so psalm accepts passing it to non-nullable parameters.
+		assert( $this->telemetry instanceof Telemetry_Service );
+
 		$repository       = new History_Repository();
 		$rollback_service = new Session_Rollback_Service( $repository );
 
 		$exports_page   = new Exports_Page();
 		$audit_log_page = new Audit_Log_Page();
 
-		$import_actions = new Import_Actions_Ajax_Handler( $rollback_service );
+		$import_actions = new Import_Actions_Ajax_Handler(
+			$rollback_service,
+			$this->telemetry
+		);
 
 		$post_import_service = new Post_Import_Service(
 			$api,
 			$media_importer,
 			$content_processor,
 			$repository,
-			new Meta_Terms_Manager()
+			new Meta_Terms_Manager(),
+			$this->telemetry
 		);
 
 		$menu_manager = new Admin_Menu_Manager();
@@ -268,7 +293,8 @@ final class Plugin {
 			$api,
 			$repository,
 			$post_import_service,
-			$post_type_fetcher
+			$post_type_fetcher,
+			$this->telemetry
 		);
 
 		return new Import_Mode_Admin_Handler(

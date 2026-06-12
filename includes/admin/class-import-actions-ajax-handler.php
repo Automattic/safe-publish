@@ -9,6 +9,9 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
+use Safe_Publish\Utils\Telemetry_Events;
+use Safe_Publish\Utils\Telemetry_Service;
+
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -32,12 +35,24 @@ final class Import_Actions_Ajax_Handler {
 	private Session_Rollback_Service $rollback_service;
 
 	/**
+	 * Telemetry service used to emit rollback events.
+	 *
+	 * @var Telemetry_Service
+	 */
+	private Telemetry_Service $telemetry;
+
+	/**
 	 * Constructs the handler.
 	 *
 	 * @param Session_Rollback_Service $rollback_service Rollback service.
+	 * @param Telemetry_Service        $telemetry        Telemetry service.
 	 */
-	public function __construct( Session_Rollback_Service $rollback_service ) {
+	public function __construct(
+		Session_Rollback_Service $rollback_service,
+		Telemetry_Service $telemetry
+	) {
 		$this->rollback_service = $rollback_service;
+		$this->telemetry        = $telemetry;
 	}
 
 	/**
@@ -64,8 +79,34 @@ final class Import_Actions_Ajax_Handler {
 		$result = $this->rollback_service->rollback_session( $session_id );
 
 		if ( is_wp_error( $result ) ) {
+			$this->telemetry->record_event(
+				Telemetry_Events::ROLLBACK_PERFORMED,
+				array(
+					'scope'          => Telemetry_Events::ROLLBACK_SCOPE_SESSION,
+					'deleted_count'  => 0,
+					'restored_count' => 0,
+					'failed_count'   => 1,
+					'outcome'        => Telemetry_Events::ROLLBACK_OUTCOME_FAILED,
+				)
+			);
+
 			wp_send_json_error( $result->get_error_message() );
 		}
+
+		$this->telemetry->record_event(
+			Telemetry_Events::ROLLBACK_PERFORMED,
+			array(
+				'scope'          => Telemetry_Events::ROLLBACK_SCOPE_SESSION,
+				'deleted_count'  => $result['deleted_count'],
+				'restored_count' => $result['restored_count'],
+				'failed_count'   => $result['failed_count'],
+				'outcome'        => Telemetry_Events::rollback_outcome(
+					$result['deleted_count'],
+					$result['restored_count'],
+					$result['failed_count']
+				),
+			)
+		);
 
 		wp_send_json_success(
 			array(
@@ -92,8 +133,40 @@ final class Import_Actions_Ajax_Handler {
 		$result = $this->rollback_service->rollback_item( $item_id );
 
 		if ( is_wp_error( $result ) ) {
+			// Match the session-level path — a per-item WP_Error is a
+			// failed rollback, not a silently-dropped request.
+			$this->telemetry->record_event(
+				Telemetry_Events::ROLLBACK_PERFORMED,
+				array(
+					'scope'          => Telemetry_Events::ROLLBACK_SCOPE_ITEM,
+					'deleted_count'  => 0,
+					'restored_count' => 0,
+					'failed_count'   => 1,
+					'outcome'        => Telemetry_Events::ROLLBACK_OUTCOME_FAILED,
+				)
+			);
+
 			wp_send_json_error( $result->get_error_message() );
 		}
+
+		$deleted  = 'deleted' === $result['action'] ? 1 : 0;
+		$restored = 'restored' === $result['action'] ? 1 : 0;
+		$outcome  = Telemetry_Events::rollback_outcome(
+			$deleted,
+			$restored,
+			0
+		);
+
+		$this->telemetry->record_event(
+			Telemetry_Events::ROLLBACK_PERFORMED,
+			array(
+				'scope'          => Telemetry_Events::ROLLBACK_SCOPE_ITEM,
+				'deleted_count'  => $deleted,
+				'restored_count' => $restored,
+				'failed_count'   => 0,
+				'outcome'        => $outcome,
+			)
+		);
 
 		$messages = array(
 			'deleted'  => __( 'Post successfully deleted', 'safe-publish' ),

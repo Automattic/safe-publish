@@ -23,6 +23,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Telemetry_Service;
 use WP_Error;
 
 /**
@@ -68,7 +69,8 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 			$media_importer,
 			$content_processor,
 			$this->repository,
-			new Meta_Terms_Manager()
+			new Meta_Terms_Manager(),
+			new Telemetry_Service()
 		);
 
 		update_option(

@@ -25,6 +25,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Telemetry_Service;
 use Safe_Publish\Tests\Integration\Mock_Post_API_Trait;
 use WP_Error;
 use WP_REST_Request;
@@ -101,7 +102,8 @@ class Full_Workflow_Test extends Integration_Test_Case {
 			$media_importer,
 			$content_processor,
 			$this->repository,
-			new Meta_Terms_Manager()
+			new Meta_Terms_Manager(),
+			new Telemetry_Service()
 		);
 
 		// Configure the connected site URL so fetch_fresh_post() can make requests.
