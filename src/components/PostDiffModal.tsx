@@ -13,7 +13,7 @@ import NonContentDiffSections from './NonContentDiffSections';
 import { useDiffPreview } from './hooks/useDiffPreview';
 import { useImportPost } from './hooks/useImportPost';
 import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
-import { ImportedPost, ImportSyncStatus, Warning } from '../types';
+import { UnifiedPostRow, ImportSyncStatus, Warning } from '../types';
 import { renderWarningMessage } from '../utils';
 import {
 	Button,
@@ -31,7 +31,7 @@ import type { BlockDiff, DiffPreviewResult } from '../api/diff';
 /**
  * Props for the PostDiffModal component.
  *
- * @property {ImportedPost[]}               items      Array containing the single row to diff.
+ * @property {UnifiedPostRow[]}             items      Array containing the single row to diff.
  * @property {string}                       restNonce  REST API nonce for the diff endpoint.
  * @property {string}                       ajaxurl    WordPress admin-ajax URL (for the Update button).
  * @property {string}                       nonce      AJAX nonce for the create-draft endpoint.
@@ -39,7 +39,7 @@ import type { BlockDiff, DiffPreviewResult } from '../api/diff';
  * @property {Function}                     onRefresh  Callback to refresh the listing after an update.
  */
 interface PostDiffModalProps {
-	items: ImportedPost[];
+	items: UnifiedPostRow[];
 	restNonce: string;
 	ajaxurl: string;
 	nonce: string;
@@ -349,6 +349,8 @@ function hasAnyNonContentDiff(
  *
  * @return {JSX.Element} Rendered modal content.
  */
+// Modal aggregates many independent rendering branches.
+// eslint-disable-next-line complexity
 export default function PostDiffModal( {
 	items,
 	restNonce,
@@ -358,6 +360,10 @@ export default function PostDiffModal( {
 	onRefresh,
 }: PostDiffModalProps ): JSX.Element {
 	const firstItem = items[ 0 ];
+	// PostDiffModal is only opened for rows that resolved a source_post_id;
+	// the null fallback is unreachable but keeps the type aligned with the
+	// unified row's nullable column shape.
+	const sourcePostId = firstItem.source_post_id ?? 0;
 
 	const {
 		diffHtml,
@@ -367,7 +373,7 @@ export default function PostDiffModal( {
 		error,
 		refetch,
 	} = useDiffPreview( {
-		postId: firstItem.source_post_id,
+		postId: sourcePostId,
 		postType: firstItem.post_type,
 		restNonce,
 	} );
@@ -379,9 +385,9 @@ export default function PostDiffModal( {
 		warnings,
 		submit: submitUpdate,
 	} = useImportPost( {
-		sourcePostId: firstItem.source_post_id,
+		sourcePostId,
 		title: firstItem.title,
-		sourceLink: firstItem.source_link,
+		sourceLink: firstItem.link,
 		postType: firstItem.post_type,
 		isUpdate: true,
 		ajaxurl,

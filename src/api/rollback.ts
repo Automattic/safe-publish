@@ -1,5 +1,5 @@
 /**
- * Rollback API helpers for the Imports → Posts tab.
+ * Rollback API helpers for the Manage listing.
  *
  * Wraps the `safe_publish_rollback_item` admin-ajax endpoint and provides the
  * shared delete-vs-restore prediction used by the single and bulk rollback
@@ -11,7 +11,7 @@
 import { getErrorMessage } from '../utils';
 import { __ } from '@wordpress/i18n';
 
-import type { ApiResponse, ImportedPost } from '../types';
+import type { ApiResponse, UnifiedPostRow } from '../types';
 
 /**
  * Action the server performs when rolling back an item: a newly created post
@@ -33,12 +33,9 @@ export type RollbackItemOutcome =
 /**
  * Pairs a source row with its rollback outcome so callers can report which
  * titles succeeded or failed.
- *
- * @property {ImportedPost}        item    The row that was rolled back.
- * @property {RollbackItemOutcome} outcome The endpoint outcome for that row.
  */
 export interface BulkRollbackEntry {
-	item: ImportedPost;
+	item: UnifiedPostRow;
 	outcome: RollbackItemOutcome;
 }
 
@@ -60,15 +57,15 @@ export interface BulkRollbackResult {
 /**
  * Predicts whether rolling back an item restores its previous version (true)
  * or permanently deletes a newly created post (false). Mirrors the server's
- * Session_Rollback_Service: only `success` rows are fresh creations that get
- * deleted; every other eligible status restores.
+ * Session_Rollback_Service: only fresh creations (no captured previous
+ * content) get deleted; every other eligible row restores.
  *
- * @param {ImportedPost} item Imports → Posts tab row.
+ * @param {UnifiedPostRow} item Unified Posts listing row.
  *
  * @return {boolean} True when the rollback restores a previous version.
  */
-export const isRollbackRestore = ( item: ImportedPost ): boolean =>
-	'success' !== item.rollback_status;
+export const isRollbackRestore = ( item: UnifiedPostRow ): boolean =>
+	item.has_previous_content;
 
 /**
  * Rolls back a single import event via the admin-ajax endpoint.
@@ -130,15 +127,15 @@ export const rollbackItem = async (
  * the rest. Sequential (not parallel) execution keeps server-side post hooks
  * from interleaving and yields deterministic progress.
  *
- * @param {ImportedPost[]} items        Eligible rows to roll back.
- * @param {string}         ajaxurl      WordPress admin-ajax URL.
- * @param {string}         nonce        AJAX nonce for the rollback endpoint.
- * @param {Function}       [onProgress] Called with (completed, total) per item.
+ * @param {UnifiedPostRow[]} items        Eligible rows to roll back.
+ * @param {string}           ajaxurl      WordPress admin-ajax URL.
+ * @param {string}           nonce        AJAX nonce for the rollback endpoint.
+ * @param {Function}         [onProgress] Called with (completed, total) per item.
  *
  * @return {Promise<BulkRollbackResult>} Aggregated per-item outcomes.
  */
 export const rollbackItems = async (
-	items: ImportedPost[],
+	items: UnifiedPostRow[],
 	ajaxurl: string,
 	nonce: string,
 	onProgress?: ( completed: number, total: number ) => void

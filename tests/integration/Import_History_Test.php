@@ -336,60 +336,6 @@ class Import_History_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that get_sessions() projects counts independently per session,
-	 * including for sessions that have no items.
-	 */
-	public function test_get_sessions_projects_counts_per_session(): void {
-		// ARRANGE: Create three sessions with different item populations.
-		$session_a = $this->repository->create_session(
-			'https://a.example.com',
-			'bulk'
-		);
-		$session_b = $this->repository->create_session(
-			'https://b.example.com',
-			'bulk'
-		);
-		$this->repository->create_session( 'https://c.example.com', 'bulk' );
-
-		$this->repository->log_import_action( $session_a, 1, 'A1', 'success', 101 );
-		$this->repository->log_import_action( $session_a, 2, 'A2', 'updated', 102 );
-		$this->repository->log_import_action(
-			$session_b,
-			3,
-			'B1',
-			'error',
-			null,
-			'fail'
-		);
-
-		// ACT: Fetch all sessions.
-		$sessions = $this->repository->get_sessions( 50 );
-
-		// ASSERT: All three sessions returned with independent per-row counts.
-		$this->assertCount( 3, $sessions );
-
-		$by_url = array();
-		foreach ( $sessions as $row ) {
-			$by_url[ (string) $row['source_site_url'] ] = $row;
-		}
-
-		$this->assertSame( 2, (int) $by_url['https://a.example.com']['total_items'] );
-		$this->assertSame( 2, (int) $by_url['https://a.example.com']['successful'] );
-		$this->assertSame( 1, (int) $by_url['https://a.example.com']['updated'] );
-		$this->assertSame( 0, (int) $by_url['https://a.example.com']['failed'] );
-
-		$this->assertSame( 1, (int) $by_url['https://b.example.com']['total_items'] );
-		$this->assertSame( 0, (int) $by_url['https://b.example.com']['successful'] );
-		$this->assertSame( 0, (int) $by_url['https://b.example.com']['updated'] );
-		$this->assertSame( 1, (int) $by_url['https://b.example.com']['failed'] );
-
-		$this->assertSame( 0, (int) $by_url['https://c.example.com']['total_items'] );
-		$this->assertSame( 0, (int) $by_url['https://c.example.com']['successful'] );
-		$this->assertSame( 0, (int) $by_url['https://c.example.com']['updated'] );
-		$this->assertSame( 0, (int) $by_url['https://c.example.com']['failed'] );
-	}
-
-	/**
 	 * Verifies that Imports_Table::count() reflects the number of session rows.
 	 */
 	public function test_imports_table_count_reflects_session_rows(): void {

@@ -21,7 +21,7 @@ final class Import_Items_Table {
 	/**
 	 * Table schema version.
 	 */
-	private const VERSION = '1.0';
+	private const VERSION = '1.1';
 
 	/**
 	 * Option key used to track the installed table schema version.
@@ -66,10 +66,10 @@ final class Import_Items_Table {
 		$table   = self::table_name();
 		$charset = $wpdb->get_charset_collate();
 
-		// status_import_date powers the Failures listing (status='error'
-		// ordered by import_date_gmt DESC). The existing session_id_status
-		// composite leads with session_id, so that query can't index-seek on
-		// status alone without this one.
+		// status_import_date powers the Failures listing — session_id_status
+		// leads with session_id and can't index-seek on status alone.
+		// source_post_id_import_date powers the active-row aggregation per
+		// source_post_id.
 		$sql = "CREATE TABLE {$table} (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			session_id BIGINT UNSIGNED NOT NULL,
@@ -83,14 +83,25 @@ final class Import_Items_Table {
 			has_previous_content TINYINT(1) NOT NULL DEFAULT 0,
 			rolled_back TINYINT(1) NOT NULL DEFAULT 0,
 			import_date_gmt DATETIME NOT NULL,
+			source_modified_gmt DATETIME NULL DEFAULT NULL,
 			PRIMARY KEY  (id),
 			KEY session_id_status (session_id, status),
 			KEY post_id_import_date (post_id, import_date_gmt),
-			KEY status_import_date (status, import_date_gmt)
+			KEY status_import_date (status, import_date_gmt),
+			KEY source_post_id_import_date (source_post_id, import_date_gmt)
 		) {$charset};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		dbDelta( $sql );
+
+		// Seed existing rows so the Outdated SQL filter (column-to-column)
+		// defaults to "not outdated" until the next sync_status_batch cycle.
+		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
+		$wpdb->query(
+			"UPDATE `{$table}` SET source_modified_gmt = import_date_gmt"
+				. ' WHERE source_modified_gmt IS NULL'
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
 
 		update_option( self::VERSION_OPTION, self::VERSION, false );
 	}

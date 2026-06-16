@@ -1,14 +1,14 @@
 /**
  * Delete Failed Imports Modal component.
  *
- * Confirms removal of one or more failed import rows from the Failures tab.
- * The rows are deleted from the items table; no WordPress post is affected
- * (failed imports never produced one).
+ * Confirms removal of one or more failure rows from the items table. Used by
+ * both the orphan-failures drawer and the Failed-chip Dismiss action; no
+ * WordPress post is affected by either path.
  *
  * @file This file defines the DeleteFailedImportsModal component.
  */
 
-import { ApiResponse, FailedImport } from '../types';
+import { ApiResponse } from '../types';
 import { getErrorMessage } from '../utils';
 import {
 	Button,
@@ -21,18 +21,29 @@ import { useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
 /**
+ * Minimal row shape needed by the modal. `id` carries either an items-table
+ * row id or a source_post_id depending on the caller's `scope`.
+ */
+export interface DeleteFailedImportsItem {
+	id: number;
+	title: string;
+}
+
+/**
+ * Delete scope. `items` targets specific items-table rows (drawer / orphan
+ * failures). `sources` clears every failure attempt for the source_post_id,
+ * so the listing's deduped row doesn't re-surface a sibling on refresh.
+ */
+export type DeleteFailedImportsScope = 'items' | 'sources';
+
+/**
  * Props for the DeleteFailedImportsModal component.
- *
- * @property {FailedImport[]} items      Rows to remove (one or more).
- * @property {string}         ajaxurl    WordPress admin-ajax URL.
- * @property {string}         nonce      AJAX nonce for the delete endpoint.
- * @property {Function}       closeModal Callback to close the modal.
- * @property {Function}       onRefresh  Callback to refresh the listing.
  */
 interface DeleteFailedImportsModalProps {
-	items: FailedImport[];
+	items: DeleteFailedImportsItem[];
 	ajaxurl: string;
 	nonce: string;
+	scope?: DeleteFailedImportsScope;
 	closeModal?: () => void;
 	onRefresh?: () => void;
 }
@@ -46,6 +57,7 @@ const DeleteFailedImportsModal = ( {
 	items,
 	ajaxurl,
 	nonce,
+	scope = 'items',
 	closeModal,
 	onRefresh,
 }: DeleteFailedImportsModalProps ): JSX.Element => {
@@ -59,10 +71,12 @@ const DeleteFailedImportsModal = ( {
 		setError( null );
 
 		const formData = new FormData();
-		formData.append( 'action', 'safe_publish_delete_failed_imports' );
+		formData.append( 'action', 'safe_publish_delete_failed_items' );
 		formData.append( 'nonce', nonce );
+		const idField =
+			'sources' === scope ? 'source_post_ids[]' : 'item_ids[]';
 		items.forEach( ( item ) =>
-			formData.append( 'item_ids[]', String( item.id ) )
+			formData.append( idField, String( item.id ) )
 		);
 
 		fetch( ajaxurl, {

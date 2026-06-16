@@ -302,23 +302,18 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Dispatch.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
 
-		// ASSERT: Verdict is up-to-date and the entry carries modified_gmt.
+		// ASSERT: Verdict is up-to-date.
 		$response = $this->decode_response();
 		$this->assertTrue( $response['success'] );
 		$this->assertSame(
 			'up-to-date',
 			$response['data']['statuses'][ $source_id ]['status']
 		);
-		$this->assertSame(
-			'2024-01-01T11:00:00Z',
-			$response['data']['statuses'][ $source_id ]['modified_gmt']
-		);
 	}
 
 	/**
 	 * Verifies that a source post modified after the destination's last
-	 * import_date_gmt is reported as outdated and carries the source's
-	 * modified_gmt so the badge can render "Outdated · Changed …".
+	 * import_date_gmt is reported as outdated.
 	 */
 	public function test_reports_outdated_when_source_modified_after_import(): void {
 		// ARRANGE: Destination imported at 10:00; source then edited at 15:00.
@@ -333,16 +328,12 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Dispatch.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
 
-		// ASSERT: Verdict is outdated and the entry carries modified_gmt.
+		// ASSERT: Verdict is outdated.
 		$response = $this->decode_response();
 		$this->assertTrue( $response['success'] );
 		$this->assertSame(
 			'outdated',
 			$response['data']['statuses'][ $source_id ]['status']
-		);
-		$this->assertSame(
-			'2024-01-01T15:00:00Z',
-			$response['data']['statuses'][ $source_id ]['modified_gmt']
 		);
 	}
 
@@ -364,16 +355,12 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Dispatch.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
 
-		// ASSERT: Verdict is missing and no modified_gmt is reported.
+		// ASSERT: Verdict is missing.
 		$response = $this->decode_response();
 		$this->assertTrue( $response['success'] );
 		$this->assertSame(
 			'missing',
 			$response['data']['statuses'][ $source_id ]['status']
-		);
-		$this->assertArrayNotHasKey(
-			'modified_gmt',
-			$response['data']['statuses'][ $source_id ]
 		);
 	}
 
@@ -401,16 +388,12 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Dispatch.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
 
-		// ASSERT: Both IDs come back as unreachable with no modified_gmt.
+		// ASSERT: Both IDs come back as unreachable.
 		$response = $this->decode_response();
 		$this->assertTrue( $response['success'] );
 		$this->assertSame(
 			'unreachable',
 			$response['data']['statuses'][ $first_id ]['status']
-		);
-		$this->assertArrayNotHasKey(
-			'modified_gmt',
-			$response['data']['statuses'][ $first_id ]
 		);
 		$this->assertSame(
 			'unreachable',
@@ -534,16 +517,41 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Dispatch.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
 
-		// ASSERT: Verdict is invalid (not unreachable) and modified_gmt is omitted.
+		// ASSERT: Verdict is invalid (not unreachable).
 		$response = $this->decode_response();
 		$this->assertTrue( $response['success'] );
 		$this->assertSame(
 			'invalid',
 			$response['data']['statuses'][ $source_id ]['status']
 		);
-		$this->assertArrayNotHasKey(
-			'modified_gmt',
-			$response['data']['statuses'][ $source_id ]
+	}
+
+	/**
+	 * Verifies that an empty source modified_gmt resolves to `up-to-date`
+	 * instead of `invalid`. WordPress drafts that have never been saved
+	 * carry a `0000-00-00 00:00:00` timestamp the REST layer serializes as
+	 * empty — treating that as up-to-date avoids surfacing a phantom
+	 * "Sync check failed" the user can't act on.
+	 */
+	public function test_reports_up_to_date_when_source_modified_gmt_is_blank(): void {
+		// ARRANGE: imported row with a never-saved-draft style source timestamp.
+		$source_id = 4007;
+		$this->seed_imported_post( $source_id, '2024-01-01 12:00:00' );
+		$this->source_modified_gmt[ $source_id ] = '';
+
+		$this->authenticate_request(
+			array( 'source_ids' => array( (string) $source_id ) )
+		);
+
+		// ACT: dispatch the batch.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
+
+		// ASSERT: empty timestamp folds into up-to-date, not invalid.
+		$response = $this->decode_response();
+		$this->assertTrue( $response['success'] );
+		$this->assertSame(
+			'up-to-date',
+			$response['data']['statuses'][ $source_id ]['status']
 		);
 	}
 
@@ -576,8 +584,8 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		// ASSERT: The N+1 baseline for 10 IDs would be ≥20 queries (one
 		// meta_query lookup + one items-table SELECT per row); the bulk
 		// path replaces that pair with two queries plus a small fixed
-		// overhead.
-		$this->assertLessThan( 10, $queries_delta );
+		// overhead and the source_modified_gmt write-through.
+		$this->assertLessThan( 11, $queries_delta );
 
 		// ASSERT: Every verdict came through correctly.
 		$response = $this->decode_response();

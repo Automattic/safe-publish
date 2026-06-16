@@ -81,7 +81,7 @@ class Sync_Bidirectional_Test extends WP_UnitTestCase {
 	 * sync mode.
 	 */
 	public function test_import_ajax_handlers_are_registered(): void {
-		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_fetch_posts' ) );
+		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_list_posts' ) );
 		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_fetch_post_types' ) );
 		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_test_connection' ) );
 		$this->assertNotFalse( has_action( 'wp_ajax_safe_publish_create_draft' ) );

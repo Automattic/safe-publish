@@ -1,7 +1,6 @@
 <?php
 /**
- * Tests for the modified field's GMT contract across the listing payload and
- * the sync_status comparison.
+ * Tests for the modified field's GMT contract in the listing payload.
  *
  * @package Safe_Publish
  */
@@ -26,8 +25,9 @@ use Safe_Publish\Utils\Telemetry_Service;
 /**
  * Modified Field Test Class.
  *
- * Cross-system contract: modified_gmt comparisons happen in GMT so sync_status
- * is correct when source and destination sites live in different timezones.
+ * Cross-system contract: the source-side preparer emits modified_gmt as a
+ * Z-marked GMT timestamp so destination-side comparisons stay correct across
+ * timezones.
  */
 class Modified_Field_Test extends Source_Posts_API_Test_Base {
 
@@ -81,8 +81,8 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Verifies that the source-side listing preparer emits modified_gmt as
-	 * a Z-marked GMT timestamp built from post_modified_gmt, so the
-	 * destination's sync_status comparison stays correct across timezones.
+	 * a Z-marked GMT timestamp built from post_modified_gmt, so destination
+	 * comparisons stay correct across timezones.
 	 */
 	public function test_prepared_modified_gmt_is_zmarked(): void {
 		global $wpdb;
@@ -165,180 +165,14 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that sync_status is "outdated" when the source is newer in
-	 * UTC, even when site-local strings would suggest otherwise.
+	 * Verifies that a row with a META_SOURCE_POST_ID but no items row is
+	 * treated as Available under the active-row rule.
 	 *
-	 * Source in NY (UTC-4) modified at 15:00 UTC; destination Madrid
-	 * (UTC+2) imported at 14:00 UTC. Site-local "11:00" vs "16:00"
-	 * misleads; UTC says source is newer.
+	 * The items table is the source of truth for the unified listing's
+	 * routing label; a meta marker without history routes to Available.
 	 */
-	public function test_sync_status_outdated_across_divergent_timezones(): void {
-		// ARRANGE: Pin the destination to Madrid so the scenario is concrete.
-		update_option( 'timezone_string', 'Europe/Madrid' );
-
-		try {
-			// ARRANGE: Imported post with an items row anchoring the snapshot
-			// at 14:00 UTC.
-			$local_post_id = self::factory()->post->create(
-				array(
-					'post_status' => 'publish',
-					'post_title'  => 'Local Post',
-					'meta_input'  => array(
-						Options::META_SOURCE_POST_ID => 999,
-					),
-				)
-			);
-			$this->seed_items_row( $local_post_id, 999, '2024-07-15 14:00:00' );
-
-			// ARRANGE: Source payload as emitted by
-			// prepare_listing_payload_from_post — modified_gmt is Z-marked GMT.
-			// 15:00 UTC > 14:00 UTC, so the source is genuinely newer.
-			$posts = array(
-				array(
-					'id'           => 999,
-					'link'         => 'https://source.example.com/local-post',
-					'title'        => 'Local Post',
-					'modified_gmt' => '2024-07-15T15:00:00Z',
-				),
-			);
-
-			// ACT: Annotate.
-			$this->import_service->annotate_posts_with_import_status( $posts );
-
-			// ASSERT: The post is recognized as imported and flagged as
-			// outdated — proving both sides were compared in UTC.
-			$this->assertTrue( $posts[0]['is_imported'] );
-			$this->assertSame(
-				'outdated',
-				$posts[0]['sync_status'],
-				'sync_status must be "outdated" when the source is newer in UTC.'
-			);
-		} finally {
-			delete_option( 'timezone_string' );
-		}
-	}
-
-	/**
-	 * Verifies that sync_status is "up-to-date" when the import snapshot is
-	 * newer in UTC than the source.
-	 *
-	 * Mirror of the previous case — opposite verdict — to guard against
-	 * an off-by-direction regression.
-	 */
-	public function test_sync_status_up_to_date_across_divergent_timezones(): void {
-		// ARRANGE: Destination = Madrid (UTC+2 in July).
-		update_option( 'timezone_string', 'Europe/Madrid' );
-
-		try {
-			// ARRANGE: Imported post with an items row anchoring the snapshot
-			// at 16:00 UTC.
-			$local_post_id = self::factory()->post->create(
-				array(
-					'post_status' => 'publish',
-					'post_title'  => 'Local Post',
-					'meta_input'  => array(
-						Options::META_SOURCE_POST_ID => 1001,
-					),
-				)
-			);
-			$this->seed_items_row(
-				$local_post_id,
-				1001,
-				'2024-07-15 16:00:00'
-			);
-
-			// ARRANGE: Source modified at 15:00 UTC.
-			// 15:00 UTC < 16:00 UTC, so the local snapshot is genuinely newer.
-			$posts = array(
-				array(
-					'id'           => 1001,
-					'link'         => 'https://source.example.com/local-post',
-					'title'        => 'Local Post',
-					'modified_gmt' => '2024-07-15T15:00:00Z',
-				),
-			);
-
-			// ACT: Annotate.
-			$this->import_service->annotate_posts_with_import_status( $posts );
-
-			// ASSERT: sync_status is up-to-date; the import snapshot is later.
-			$this->assertTrue( $posts[0]['is_imported'] );
-			$this->assertSame(
-				'up-to-date',
-				$posts[0]['sync_status'],
-				'sync_status must be "up-to-date" when import snapshot is newer in UTC.'
-			);
-		} finally {
-			delete_option( 'timezone_string' );
-		}
-	}
-
-	/**
-	 * Verifies that sync_status is "up-to-date" for a freshly imported draft,
-	 * whose post_modified_gmt is the MySQL zero-date sentinel.
-	 *
-	 * Old code anchored on post_modified_gmt; strtotime reads the zero-date
-	 * as year 0000 (not false), so fresh imports surfaced as "Outdated".
-	 * Anchoring on import_date_gmt closes the hole.
-	 */
-	public function test_sync_status_up_to_date_for_fresh_draft(): void {
-		// ARRANGE: A draft mirrors what wp_insert_post produces for a fresh
-		// import — date-floating drafts leave post_modified_gmt at the
-		// zero-date sentinel.
-		$local_post_id = wp_insert_post(
-			array(
-				'post_status' => 'draft',
-				'post_title'  => 'Fresh Draft',
-				'meta_input'  => array(
-					Options::META_SOURCE_POST_ID => 2002,
-				),
-			)
-		);
-		$this->assertIsInt( $local_post_id );
-		$this->assertGreaterThan( 0, $local_post_id );
-
-		$local_post = get_post( $local_post_id );
-		$this->assertNotNull( $local_post );
-		$this->assertSame(
-			'0000-00-00 00:00:00',
-			$local_post->post_modified_gmt,
-			'Pre-condition: fresh draft has the MySQL zero-date sentinel.'
-		);
-
-		// ARRANGE: Items row stamped after the source was modified, mirroring
-		// a normal import flow.
-		$this->seed_items_row( $local_post_id, 2002, '2024-07-15 14:00:01' );
-
-		$posts = array(
-			array(
-				'id'           => 2002,
-				'link'         => 'https://source.example.com/fresh-draft',
-				'title'        => 'Fresh Draft',
-				'modified_gmt' => '2024-07-15T14:00:00Z',
-			),
-		);
-
-		// ACT: Annotate.
-		$this->import_service->annotate_posts_with_import_status( $posts );
-
-		// ASSERT: Fresh imports must read as up-to-date, not outdated.
-		$this->assertTrue( $posts[0]['is_imported'] );
-		$this->assertSame(
-			'up-to-date',
-			$posts[0]['sync_status'],
-			'sync_status must be "up-to-date" for a freshly imported draft.'
-		);
-	}
-
-	/**
-	 * Verifies that sync_status is "unknown" when the items row is missing.
-	 *
-	 * The row is still surfaced as imported (the meta marker is the truth)
-	 * but lacks the anchor needed to compute a verdict — the comparator
-	 * returns null, which maps to unknown.
-	 */
-	public function test_sync_status_unknown_when_items_row_missing(): void {
-		// ARRANGE: Imported post with no items row at all.
+	public function test_no_history_routes_to_available_when_items_row_missing(): void {
+		// ARRANGE: a local post with the meta marker but no items row.
 		$local_post_id = self::factory()->post->create(
 			array(
 				'post_status' => 'publish',
@@ -359,58 +193,13 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 			),
 		);
 
-		// ACT: Annotate.
+		// ACT: annotate the catalog row.
 		$this->import_service->annotate_posts_with_import_status( $posts );
 
-		// ASSERT: Imported is true (meta is present), sync_status is unknown
-		// (no anchor to compare against).
-		$this->assertTrue( $posts[0]['is_imported'] );
-		$this->assertSame(
-			'unknown',
-			$posts[0]['sync_status'],
-			'sync_status must be "unknown" when no items row anchors the comparison.'
-		);
-	}
-
-	/**
-	 * Verifies that sync_status is "unknown" when the source's modified_gmt
-	 * is empty — the listing payload emits empty strings for zero-date
-	 * sentinels, which the comparator can't parse.
-	 */
-	public function test_sync_status_unknown_when_source_modified_gmt_is_empty(): void {
-		// ARRANGE: Imported post with a valid items row.
-		$local_post_id = self::factory()->post->create(
-			array(
-				'post_status' => 'publish',
-				'post_title'  => 'Imported',
-				'meta_input'  => array(
-					Options::META_SOURCE_POST_ID => 4004,
-				),
-			)
-		);
-		$this->seed_items_row( $local_post_id, 4004, '2024-07-15 14:00:00' );
-
-		// ARRANGE: Source payload with empty modified_gmt — the shape the
-		// preparer emits when the source post carries the zero-date sentinel.
-		$posts = array(
-			array(
-				'id'           => 4004,
-				'link'         => 'https://source.example.com/imported',
-				'title'        => 'Imported',
-				'modified_gmt' => '',
-			),
-		);
-
-		// ACT: Annotate.
-		$this->import_service->annotate_posts_with_import_status( $posts );
-
-		// ASSERT: Imported but verdict can't be reached.
-		$this->assertTrue( $posts[0]['is_imported'] );
-		$this->assertSame(
-			'unknown',
-			$posts[0]['sync_status'],
-			'sync_status must be "unknown" when the source date can\'t be parsed.'
-		);
+		// ASSERT: the active-row rule folds the row into Available; no items
+		// row means no routing label and no history badge.
+		$this->assertFalse( $posts[0]['is_imported'] );
+		$this->assertSame( 'available', $posts[0]['local_state'] );
 	}
 
 	/**

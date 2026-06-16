@@ -164,7 +164,6 @@ final class Plugin {
 			array(
 				'toplevel_page_safe-publish',
 				'toplevel_page_safe-publish-settings',
-				'safe-publish_page_safe-publish-imports',
 				'safe-publish_page_safe-publish-settings',
 				'safe-publish_page_safe-publish-exports',
 				'safe-publish_page_safe-publish-audit-log',

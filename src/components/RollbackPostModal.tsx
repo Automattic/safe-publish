@@ -1,9 +1,9 @@
 /**
  * Rollback Post Modal component.
  *
- * Confirms rolling back the most recent import event for an Imports → Posts
- * tab row: a created post is permanently deleted, an updated post is restored
- * to its previous version.
+ * Confirms rolling back the most recent import event for a Manage listing
+ * row: a created post is permanently deleted, an updated post is restored to
+ * its previous version.
  *
  * @file This file defines the RollbackPostModal component.
  */
@@ -19,19 +19,13 @@ import {
 import { useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
-import type { ImportedPost } from '../types';
+import type { UnifiedPostRow } from '../types';
 
 /**
  * Props for the RollbackPostModal component.
- *
- * @property {ImportedPost[]} items      Array containing the single row to roll back.
- * @property {string}         ajaxurl    WordPress admin-ajax URL.
- * @property {string}         nonce      AJAX nonce for the rollback endpoint.
- * @property {Function}       closeModal Callback to close the modal.
- * @property {Function}       onRefresh  Callback to refresh the listing.
  */
 interface RollbackPostModalProps {
-	items: ImportedPost[];
+	items: UnifiedPostRow[];
 	ajaxurl: string;
 	nonce: string;
 	closeModal?: () => void;

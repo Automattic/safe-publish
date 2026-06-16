@@ -61,7 +61,7 @@ describe( 'calendarRangeToUtcBounds', () => {
 			const { afterUtc } = calendarRangeToUtcBounds( '2026-06-10', null );
 
 			// ASSERT: the picked day's 00:00 lands at the same UTC moment.
-			expect( afterUtc ).toBe( '2026-06-10T00:00:00.000Z' );
+			expect( afterUtc ).toBe( '2026-06-10T00:00:00Z' );
 		} );
 	} );
 
@@ -72,7 +72,7 @@ describe( 'calendarRangeToUtcBounds', () => {
 			const { beforeUtc } = calendarRangeToUtcBounds( null, '2026-06-10' );
 
 			// ASSERT: the picked day's 23:59:59 lands at the same UTC moment.
-			expect( beforeUtc ).toBe( '2026-06-10T23:59:59.000Z' );
+			expect( beforeUtc ).toBe( '2026-06-10T23:59:59Z' );
 		} );
 	} );
 
@@ -87,8 +87,8 @@ describe( 'calendarRangeToUtcBounds', () => {
 			);
 
 			// ASSERT: bounds straddle the full NY-local day, expressed in UTC.
-			expect( afterUtc ).toBe( '2026-06-10T04:00:00.000Z' );
-			expect( beforeUtc ).toBe( '2026-06-11T03:59:59.000Z' );
+			expect( afterUtc ).toBe( '2026-06-10T04:00:00Z' );
+			expect( beforeUtc ).toBe( '2026-06-11T03:59:59Z' );
 		} );
 	} );
 
@@ -101,8 +101,8 @@ describe( 'calendarRangeToUtcBounds', () => {
 			const summer = calendarRangeToUtcBounds( '2026-07-15', null );
 
 			// ASSERT: identical picker input resolves to different UTC offsets.
-			expect( winter.afterUtc ).toBe( '2026-01-15T05:00:00.000Z' );
-			expect( summer.afterUtc ).toBe( '2026-07-15T04:00:00.000Z' );
+			expect( winter.afterUtc ).toBe( '2026-01-15T05:00:00Z' );
+			expect( summer.afterUtc ).toBe( '2026-07-15T04:00:00Z' );
 		} );
 	} );
 } );

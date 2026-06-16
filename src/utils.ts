@@ -79,7 +79,7 @@ export function formatDateTime( dateString: string ): string {
 }
 
 /**
- * Formats a timestamp for the compact "Outdated · Changed …" badge label.
+ * Compact date/time format for tight admin columns and inline badges.
  *
  * Uses an abbreviated month + day to keep the column tight, and omits the
  * year when it matches the current year (compared in the site's timezone
@@ -103,47 +103,6 @@ export function formatBadgeTimestamp( dateString: string ): string {
 
 	return dateI18n( `${ dateFormat } ${ formats.time }`, dateString );
 }
-
-/**
- * Composes the "Outdated · Changed <date>" badge label shared by the
- * Source Posts and Imports → Posts views, so both render the same string
- * and the translator only sees one entry.
- *
- * @param {string} modifiedGmt UTC ISO 8601 source modification timestamp.
- *
- * @return {string} Localized composed label.
- */
-export function composeOutdatedLabel( modifiedGmt: string ): string {
-	return sprintf(
-		/* translators: %s: localized date when source was changed */
-		__( 'Outdated · Changed %s', 'safe-publish' ),
-		formatBadgeTimestamp( modifiedGmt )
-	);
-}
-
-/**
- * Display labels for sync statuses. `available` is source-side only; the
- * rest cover the Imports → Posts column's verdicts plus its loading state.
- */
-export const SYNC_STATUS_LABELS = {
-	outdated:    __( 'Outdated', 'safe-publish' ),
-	upToDate:    __( 'Up to date', 'safe-publish' ),
-	available:   __( 'Available', 'safe-publish' ),
-	unknown:     __( 'Unknown', 'safe-publish' ),
-	missing:     __( 'Missing on source', 'safe-publish' ),
-	unreachable: __( 'Cannot check', 'safe-publish' ),
-	invalid:     __( 'Invalid timestamp', 'safe-publish' ),
-	loading:     __( 'Checking…', 'safe-publish' ),
-} as const;
-
-/**
- * Tooltip copy for the Unknown sync status badge on the Source Posts page.
- * Surfaced when either timestamp the comparator needs can't be parsed.
- */
-export const UNKNOWN_SYNC_STATUS_TOOLTIP = __(
-	'This post is imported, but we can\'t tell whether the source has changed since. Re-import to refresh.',
-	'safe-publish'
-);
 
 /**
  * Display labels for publish statuses.

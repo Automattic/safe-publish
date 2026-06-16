@@ -1,7 +1,6 @@
 /**
- * Shared filter toolbar primitives used by the Source Posts catalog and the
- * Imports → Posts/Failures tabs. Lifted out of the per-page DataView modules
- * so each page renders the same controls with identical styling and i18n.
+ * Shared filter toolbar primitives used by the Manage listing and the
+ * orphan-failures drawer.
  *
  * @file This file defines shared filter toolbar primitives.
  */
@@ -26,22 +25,20 @@ export const URL_OR_PATH_RE = /^(https?:\/\/[^\s]+|\/[^\s]+)/;
 /**
  * Extracts a slug from a pasted URL or path.
  *
- * Drops query/hash, strips trailing slashes, and returns the last
- * non-empty path segment. Returns null when the input isn't URL-shaped,
- * no slug can be recovered, or the URL host doesn't match `validationUrl` —
- * pasting a URL from a different site would otherwise query for a slug it
- * doesn't have and silently return zero results.
+ * Drops query/hash, strips trailing slashes, and returns the last non-empty
+ * path segment. Returns null on non-URL input, no extractable slug, or a
+ * URL host that doesn't match `validationUrls` — pasting a URL from an
+ * unrelated site would otherwise silently return zero results.
  *
- * @param {string} raw           User input from the search box.
- * @param {string} validationUrl URL whose host must match the pasted URL
- *                               (e.g. the source URL for the catalog page,
- *                               the destination's home URL for Imports).
+ * @param {string}   raw            User input from the search box.
+ * @param {string[]} validationUrls Allowed hosts (typically source and destination URLs).
+ *                                  Empty list or all-unparseable disables host validation.
  *
  * @return {string|null} Slug suitable for `name=` lookup, or null.
  */
 export function detectSlugFromInput(
 	raw: string,
-	validationUrl: string
+	validationUrls: readonly string[]
 ): string | null {
 	const trimmed = raw.trim();
 	if ( ! URL_OR_PATH_RE.test( trimmed ) ) {
@@ -55,13 +52,20 @@ export function detectSlugFromInput(
 		// Bare paths inherit the placeholder host; only validate when the
 		// input was a full URL with its own host.
 		if ( url.host !== PLACEHOLDER_HOST ) {
-			try {
-				const validationHost = new URL( validationUrl ).host;
-				if ( url.host !== validationHost ) {
-					return null;
-				}
-			} catch {
-				// Validation URL unparseable; skip validation rather than block.
+			const validHosts = validationUrls
+				.map( ( validationUrl ) => {
+					try {
+						return new URL( validationUrl ).host;
+					} catch {
+						return '';
+					}
+				} )
+				.filter( ( host ) => '' !== host );
+			if (
+				validHosts.length > 0
+				&& ! validHosts.includes( url.host )
+			) {
+				return null;
 			}
 		}
 		path = url.pathname;
@@ -122,7 +126,11 @@ function siteDayBoundaryToUtcIso(
 	boundary: 'start' | 'end'
 ): string {
 	const time = 'start' === boundary ? '00:00:00' : '23:59:59';
-	return getDate( `${ calendarDay }T${ time }` ).toISOString();
+	// Strip the .sss that toISOString always emits — the backend's
+	// DATE_ATOM `P` token only accepts Z right after :s, not .sss.
+	return getDate( `${ calendarDay }T${ time }` )
+		.toISOString()
+		.replace( /\.\d{3}Z$/, 'Z' );
 }
 
 /**

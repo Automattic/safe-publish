@@ -11,10 +11,11 @@ import {
 
 describe( 'detectSlugFromInput', () => {
 	const SOURCE_URL = 'https://source.example.com';
+	const DEST_URL = 'https://destination.example.com';
 
 	it( 'should return null for a plain title search', () => {
 		// ARRANGE + ACT: input is plain text, not a URL.
-		const result = detectSlugFromInput( 'quarterly report', SOURCE_URL );
+		const result = detectSlugFromInput( 'quarterly report', [ SOURCE_URL ] );
 
 		// ASSERT: no slug detected.
 		expect( result ).toBeNull();
@@ -24,18 +25,30 @@ describe( 'detectSlugFromInput', () => {
 		// ARRANGE + ACT: matching host with a slug at the path's tail.
 		const result = detectSlugFromInput(
 			'https://source.example.com/2026/03/my-post/',
-			SOURCE_URL
+			[ SOURCE_URL ]
 		);
 
 		// ASSERT: returns the trailing slug.
 		expect( result ).toBe( 'my-post' );
 	} );
 
+	it( 'should accept any URL whose host matches one of several validation URLs', () => {
+		// ARRANGE + ACT: destination URL paste with both source + destination
+		// supplied for validation.
+		const result = detectSlugFromInput(
+			'https://destination.example.com/2026/03/my-post/',
+			[ SOURCE_URL, DEST_URL ]
+		);
+
+		// ASSERT: destination host matches, slug returned.
+		expect( result ).toBe( 'my-post' );
+	} );
+
 	it( 'should return null for a full URL on a different host', () => {
-		// ARRANGE + ACT: URL host differs from validation URL host.
+		// ARRANGE + ACT: URL host differs from every validation URL host.
 		const result = detectSlugFromInput(
 			'https://other.example.com/my-post/',
-			SOURCE_URL
+			[ SOURCE_URL, DEST_URL ]
 		);
 
 		// ASSERT: cross-host pastes are rejected so we don't query for a
@@ -45,7 +58,7 @@ describe( 'detectSlugFromInput', () => {
 
 	it( 'should accept a bare absolute path without host validation', () => {
 		// ARRANGE + ACT: input is just a path, no host to check against.
-		const result = detectSlugFromInput( '/posts/my-post/', SOURCE_URL );
+		const result = detectSlugFromInput( '/posts/my-post/', [ SOURCE_URL ] );
 
 		// ASSERT: returns the trailing slug.
 		expect( result ).toBe( 'my-post' );
@@ -55,7 +68,7 @@ describe( 'detectSlugFromInput', () => {
 		// ARRANGE + ACT: URL has a tracking query and a hash.
 		const result = detectSlugFromInput(
 			'https://source.example.com/my-post/?utm=email#section',
-			SOURCE_URL
+			[ SOURCE_URL ]
 		);
 
 		// ASSERT: query/hash are ignored; pathname's last segment wins.
@@ -64,18 +77,21 @@ describe( 'detectSlugFromInput', () => {
 
 	it( 'should return null for the site root', () => {
 		// ARRANGE + ACT: URL points to the homepage; no slug to extract.
-		const result = detectSlugFromInput( 'https://source.example.com/', SOURCE_URL );
+		const result = detectSlugFromInput(
+			'https://source.example.com/',
+			[ SOURCE_URL ]
+		);
 
 		// ASSERT: empty path yields null.
 		expect( result ).toBeNull();
 	} );
 
-	it( 'should skip host validation when the validation URL is unparseable', () => {
-		// ARRANGE + ACT: validation URL can't be parsed, so the function falls
-		// through rather than blocking.
+	it( 'should skip host validation when no validation URL is parseable', () => {
+		// ARRANGE + ACT: every supplied URL fails to parse, so the function
+		// falls through rather than blocking.
 		const result = detectSlugFromInput(
 			'https://source.example.com/my-post/',
-			'not a url'
+			[ 'not a url' ]
 		);
 
 		// ASSERT: slug is still returned.
