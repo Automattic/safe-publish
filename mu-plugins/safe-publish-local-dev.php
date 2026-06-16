@@ -6,7 +6,7 @@
  *              Active only when WP_ENVIRONMENT_TYPE is 'development'. Not
  *              packaged in the release zip (see `files` in package.json).
  * Author:      Local development
- * Version:     0.1.0
+ * Version:     0.1.1
  *
  * @package SafePublish\LocalDev
  */
