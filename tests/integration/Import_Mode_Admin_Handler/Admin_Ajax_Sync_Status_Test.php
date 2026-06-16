@@ -527,8 +527,8 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that an empty source modified_gmt resolves to `up-to-date`
-	 * instead of `invalid`. WordPress drafts that have never been saved
+	 * Verifies that an empty source modified_gmt resolves to up-to-date
+	 * instead of invalid. WordPress drafts that have never been saved
 	 * carry a `0000-00-00 00:00:00` timestamp the REST layer serializes as
 	 * empty — treating that as up-to-date avoids surfacing a phantom
 	 * "Sync check failed" the user can't act on.

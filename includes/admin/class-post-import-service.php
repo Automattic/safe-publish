@@ -1397,8 +1397,11 @@ class Post_Import_Service {
 	 *                                          'prefetched_fresh_result' (skips the in-pipeline
 	 *                                          fetch) and 'batch_fresh_data' (drives parent
 	 *                                          resolution's in-batch detection).
-	 * @return array{fields: array, processed_content: string, source_modified_gmt: string|null}|WP_Error
-	 *               Prepared data or error.
+	 * @return array{
+	 *     fields: array,
+	 *     processed_content: string,
+	 *     source_modified_gmt: string|null
+	 * }|WP_Error Prepared data or error.
 	 */
 	private function prepare_fresh_content(
 		array $fields,

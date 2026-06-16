@@ -1326,10 +1326,8 @@ final class Admin_Ajax_Controller {
 	 * entry, where status is one of `up-to-date | outdated | missing |
 	 * unreachable | invalid`, computed by comparing the source post's
 	 * `modified_gmt` against the destination's most recent
-	 * `import_date_gmt`. `modified_gmt` is set only for `outdated` and
-	 * `up-to-date` — i.e., when the source returned a parseable timestamp.
-	 * Posts are batched by type so each post-type group costs one signed
-	 * catalog call.
+	 * `import_date_gmt`. Posts are batched by type so each post-type
+	 * group costs one signed catalog call.
 	 *
 	 * Catalog_REST_Controller::ALLOWED_STATUSES excludes 'trash', so a
 	 * trashed source post reads as `missing` here. Deliberate — trashed

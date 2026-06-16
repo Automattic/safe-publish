@@ -354,7 +354,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that list_imported_source_rows filters by destination slug
-	 * when a `name` arg is provided.
+	 * when a name arg is provided.
 	 */
 	public function test_list_imported_source_rows_filters_by_post_name(): void {
 		// ARRANGE: two imported posts with distinct slugs on the destination.
