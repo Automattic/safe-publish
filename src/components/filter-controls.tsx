@@ -122,7 +122,11 @@ function siteDayBoundaryToUtcIso(
 	boundary: 'start' | 'end'
 ): string {
 	const time = 'start' === boundary ? '00:00:00' : '23:59:59';
-	return getDate( `${ calendarDay }T${ time }` ).toISOString();
+	// Strip the .sss that toISOString always emits — the backend's
+	// DATE_ATOM `P` token only accepts Z right after :s, not .sss.
+	return getDate( `${ calendarDay }T${ time }` )
+		.toISOString()
+		.replace( /\.\d{3}Z$/, 'Z' );
 }
 
 /**
