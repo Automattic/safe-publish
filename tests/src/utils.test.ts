@@ -4,7 +4,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getSettings, setSettings } from '@wordpress/date';
 import {
-	composeOutdatedLabel,
 	formatBadgeTimestamp,
 	formatDateTime,
 	extractUrlPath,
@@ -114,25 +113,6 @@ describe( 'formatBadgeTimestamp', () => {
 
 	it( 'should return "Invalid Date" for invalid date string', () => {
 		expect( formatBadgeTimestamp( 'not-a-date' ) ).toBe( 'Invalid Date' );
-	} );
-} );
-
-describe( 'composeOutdatedLabel', () => {
-	beforeEach( () => {
-		vi.useFakeTimers();
-		vi.setSystemTime( new Date( '2024-06-15T12:00:00Z' ) );
-	} );
-
-	afterEach( () => {
-		vi.useRealTimers();
-	} );
-
-	it( 'should compose the "Outdated · Changed <date>" badge label', () => {
-		// ARRANGE: pinned now = 2024-06-15; target same year.
-		// ACT: compose the label for a same-year UTC timestamp.
-		const result = composeOutdatedLabel( '2024-07-15T10:30:00Z' );
-		// ASSERT: full composed label with abbreviated date and WP time.
-		expect( result ).toBe( 'Outdated · Changed Jul 15 6:30 am' );
 	} );
 } );
 

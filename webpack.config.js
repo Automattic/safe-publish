@@ -4,10 +4,9 @@ const path = require( 'path' );
 module.exports = {
 	...defaultConfig,
 	entry: {
-		index: path.resolve( process.cwd(), 'src', 'index.tsx' ),
+		posts: path.resolve( process.cwd(), 'src', 'posts.tsx' ),
 		'audit-log': path.resolve( process.cwd(), 'src', 'audit-log.tsx' ),
 		'exports': path.resolve( process.cwd(), 'src', 'exports.tsx' ),
-		'imports': path.resolve( process.cwd(), 'src', 'imports.tsx' ),
 	},
 	resolve: {
 		...defaultConfig.resolve,

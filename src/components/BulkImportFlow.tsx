@@ -34,9 +34,8 @@ import type {
 const MAX_VISIBLE_WARNING_TITLES = 10;
 
 /**
- * Shape the bulk endpoint reads. Source Posts Imports pass the row's
- * full Post payload; the Imports tab maps ImportedPost down to this
- * minimum.
+ * Shape the bulk endpoint reads. The unified Posts listing maps each
+ * UnifiedPostRow down to this minimum before dispatching the import.
  */
 export interface BulkImportFlowPost {
 	id: number;

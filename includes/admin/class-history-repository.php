@@ -87,14 +87,16 @@ final class History_Repository {
 	/**
 	 * Logs an import action.
 	 *
-	 * @param int         $session_id       Session ID.
-	 * @param int|null    $source_post_id   Source post ID, or null if not provided.
-	 * @param string      $title            Post title.
-	 * @param string      $status           Import status (success, error, updated).
-	 * @param int|null    $post_id          WordPress post ID; null for error status.
-	 * @param string|null $error            Error message; null for success/updated.
-	 * @param array       $changes          Changes made during import.
-	 * @param array       $warnings         Non-fatal warnings raised during import.
+	 * @param int         $session_id          Session ID.
+	 * @param int|null    $source_post_id      Source post ID, or null if not provided.
+	 * @param string      $title               Post title.
+	 * @param string      $status              Import status (success, error, updated).
+	 * @param int|null    $post_id             WordPress post ID; null for error status.
+	 * @param string|null $error               Error message; null for success/updated.
+	 * @param array       $changes             Changes made during import.
+	 * @param array       $warnings            Non-fatal warnings raised during import.
+	 * @param string|null $source_modified_gmt Source post's modified_gmt at import time;
+	 *                                         null when unknown (e.g. fetch errors).
 	 * @return int|WP_Error Item ID or error.
 	 */
 	public function log_import_action(
@@ -105,7 +107,8 @@ final class History_Repository {
 		?int $post_id = null,
 		?string $error = null,
 		array $changes = array(),
-		array $warnings = array()
+		array $warnings = array(),
+		?string $source_modified_gmt = null
 	): int|WP_Error {
 		global $wpdb;
 
@@ -149,8 +152,9 @@ final class History_Repository {
 				'has_previous_content' => $has_previous_content,
 				'rolled_back'          => 0,
 				'import_date_gmt'      => current_time( 'mysql', true ),
+				'source_modified_gmt'  => $source_modified_gmt,
 			),
-			array( '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%s', '%d', '%d', '%s' )
+			array( '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%s', '%d', '%d', '%s', '%s' )
 		);
 
 		if ( false === $inserted ) {
@@ -161,6 +165,48 @@ final class History_Repository {
 		}
 
 		return (int) $wpdb->insert_id;
+	}
+
+	/**
+	 * Updates source_modified_gmt on multiple import items in one query.
+	 *
+	 * Backs the sync_status_batch write-through so the stored value drifts no
+	 * further than one batch cycle from the source's live modified_gmt.
+	 *
+	 * @param array<int, string> $updates Map of item_id => source_modified_gmt.
+	 */
+	public function update_source_modified_gmt_bulk( array $updates ): void {
+		if ( 0 === count( $updates ) ) {
+			return;
+		}
+
+		global $wpdb;
+
+		$table  = Import_Items_Table::table_name();
+		$cases  = array();
+		$ids    = array();
+		$params = array();
+
+		foreach ( $updates as $item_id => $modified ) {
+			$cases[]  = 'WHEN %d THEN %s';
+			$params[] = (int) $item_id;
+			$params[] = (string) $modified;
+			$ids[]    = (int) $item_id;
+		}
+
+		$ids_placeholder = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		array_push( $params, ...$ids );
+
+		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->query(
+			$wpdb->prepare(
+				"UPDATE `{$table}` SET source_modified_gmt = CASE id "
+					. implode( ' ', $cases )
+					. " END WHERE id IN ({$ids_placeholder})",
+				...$params
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 	}
 
 	/**
@@ -182,32 +228,6 @@ final class History_Repository {
 			array( '%s', '%s' ),
 			array( '%d' )
 		);
-	}
-
-	/**
-	 * Retrieves import sessions in reverse-chronological order with item
-	 * counts projected from the items table.
-	 *
-	 * @param int $limit Maximum number of sessions to retrieve.
-	 * @return array[] Array of session rows including total_items, successful,
-	 *                 updated, and failed counts.
-	 */
-	public function get_sessions( int $limit = 50 ): array {
-		global $wpdb;
-
-		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$rows = $wpdb->get_results(
-			$wpdb->prepare(
-				$this->build_session_select_sql(
-					'GROUP BY i.id ORDER BY i.created_at_gmt DESC, i.id DESC LIMIT %d'
-				),
-				$limit
-			),
-			ARRAY_A
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-
-		return $rows ? $rows : array();
 	}
 
 	/**
@@ -377,16 +397,146 @@ final class History_Repository {
 	}
 
 	/**
-	 * Returns a page of imported post IDs for the Imports → Posts tab listing,
-	 * with search/filter/sort applied across the full dataset.
+	 * Looks up the most recent item row for a given source post. Includes
+	 * rolled-back rows — their flag is what classifies the source as
+	 * Available with a rolled_back badge. Ties on import_date_gmt break by
+	 * highest id.
 	 *
-	 * Aggregates the items table to one row per post (the most recent active
-	 * import event — rolled-back rows are skipped) and joins wp_posts so
-	 * post-level search/filters/sort act on every imported post, not just the
-	 * current page. The inner join also drops items whose post no longer
-	 * exists, so the page never carries IDs that hydration would discard.
-	 * Returns up to per_page+1 IDs so the caller can derive has_more without
-	 * a separate count query.
+	 * @param int $source_post_id Source post ID.
+	 * @return array|null Item row or null if no row exists for the source post.
+	 */
+	public function get_active_item_for_source( int $source_post_id ): ?array {
+		global $wpdb;
+
+		$table = Import_Items_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM `{$table}` WHERE source_post_id = %d"
+					. ' ORDER BY import_date_gmt DESC, id DESC LIMIT 1',
+				$source_post_id
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return $row ? $row : null;
+	}
+
+	/**
+	 * Bulk variant of get_active_item_for_source(): one query per page
+	 * instead of N. Backed by the (source_post_id, import_date_gmt) index.
+	 *
+	 * @param int[] $source_ids Source post IDs to look up.
+	 * @return array<int, array> Map of source_post_id → most recent item row.
+	 */
+	public function get_active_items_by_source_ids( array $source_ids ): array {
+		if ( 0 === count( $source_ids ) ) {
+			return array();
+		}
+
+		global $wpdb;
+
+		$table        = Import_Items_Table::table_name();
+		$placeholders = implode( ', ', array_fill( 0, count( $source_ids ), '%d' ) );
+		$values       = array_values( $source_ids );
+
+		// NOT EXISTS picks the row with no later sibling (ties broken by id);
+		// the inner lookup is served by source_post_id_import_date.
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT t1.* FROM `{$table}` t1"
+					. " WHERE t1.source_post_id IN ({$placeholders})"
+					. " AND NOT EXISTS ( SELECT 1 FROM `{$table}` t2"
+					. ' WHERE t2.source_post_id = t1.source_post_id'
+					. ' AND ( t2.import_date_gmt > t1.import_date_gmt'
+					. ' OR ( t2.import_date_gmt = t1.import_date_gmt AND t2.id > t1.id ) ) )',
+				...$values
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		$by_source = array();
+		foreach ( is_array( $rows ) ? $rows : array() as $row ) {
+			$by_source[ (int) $row['source_post_id'] ] = $row;
+		}
+
+		return $by_source;
+	}
+
+	/**
+	 * Derives the routing state from an active item row plus the referenced
+	 * local post's presence.
+	 *
+	 * Trash counts as not-present, so trashed posts fold into Available;
+	 * restoring flips them back on next reload.
+	 *
+	 * @param array|null $active_row         Most recent item row, or null.
+	 * @param bool       $local_post_present wp_posts row exists, non-trash.
+	 * @return string Resolved state: 'available' | 'up-to-date' | 'outdated' | 'failed'.
+	 */
+	public static function derive_active_state(
+		?array $active_row,
+		bool $local_post_present
+	): string {
+		if ( null === $active_row ) {
+			return 'available';
+		}
+
+		if ( 1 === (int) ( $active_row['rolled_back'] ?? 0 ) ) {
+			return 'available';
+		}
+
+		$status = (string) ( $active_row['status'] ?? '' );
+
+		if ( 'error' === $status ) {
+			return 'failed';
+		}
+
+		if ( ! $local_post_present ) {
+			return 'available';
+		}
+
+		$source_modified = (string) ( $active_row['source_modified_gmt'] ?? '' );
+		$import_date     = (string) ( $active_row['import_date_gmt'] ?? '' );
+
+		if ( '' !== $source_modified && $source_modified > $import_date ) {
+			return 'outdated';
+		}
+
+		return 'up-to-date';
+	}
+
+	/**
+	 * Resolves the routing state for a single source post. Backs the
+	 * focus_source one-render chip swap on the listing endpoint.
+	 *
+	 * @param int $source_post_id Source post ID.
+	 * @return string One of 'available', 'up-to-date', 'outdated', 'failed'.
+	 */
+	public function resolve_source_post_state( int $source_post_id ): string {
+		$row = $this->get_active_item_for_source( $source_post_id );
+
+		$post_id            = null !== $row && isset( $row['post_id'] )
+			? (int) $row['post_id']
+			: 0;
+		$local_post_present = false;
+
+		if ( $post_id > 0 ) {
+			$status             = get_post_status( $post_id );
+			$local_post_present = false !== $status && 'trash' !== $status;
+		}
+
+		return self::derive_active_state( $row, $local_post_present );
+	}
+
+	/**
+	 * Lists imported source-post rows per the active-row rule. Returns
+	 * per_page+1 rows so the caller can derive has_more without a count
+	 * query.
 	 *
 	 * @param int   $page     1-indexed page number.
 	 * @param int   $per_page Items per page.
@@ -394,18 +544,20 @@ final class History_Repository {
 	 *     Optional. Search/filter/sort criteria.
 	 *
 	 *     @type string   $search          Title substring to match.
-	 *     @type string   $name            Exact post_name (slug) match.
-	 *     @type string[] $statuses        post_status values to include.
-	 *     @type string[] $post_types      post_type values to include.
-	 *     @type int      $session_id      Most-recent-item session to match, or 0.
-	 *     @type string   $imported_after  MySQL datetime lower bound on import_date_gmt.
-	 *     @type string   $imported_before MySQL datetime upper bound on import_date_gmt.
+	 *     @type string   $name            Exact wp_posts.post_name (slug) to match.
+	 *     @type string[] $post_types      wp_posts.post_type values to include.
+	 *     @type int      $session_id      Most-recent-item session to match.
+	 *     @type string   $imported_after  Lower bound on import_date_gmt.
+	 *     @type string   $imported_before Upper bound on import_date_gmt.
+	 *     @type string   $freshness       'any' (default), 'up-to-date',
+	 *                                     or 'outdated' — filters by
+	 *                                     source_modified_gmt vs import_date_gmt.
 	 *     @type string   $orderby         'import_date' (default) or 'title'.
 	 *     @type string   $order           'asc' or 'desc' (default).
 	 * }
-	 * @return int[] Post IDs in display order.
+	 * @return array[] Active item rows in display order.
 	 */
-	public function list_imported_post_ids(
+	public function list_imported_source_rows(
 		int $page = 1,
 		int $per_page = 20,
 		array $args = array()
@@ -419,25 +571,29 @@ final class History_Repository {
 
 		$search          = isset( $args['search'] ) ? (string) $args['search'] : '';
 		$name            = isset( $args['name'] ) ? (string) $args['name'] : '';
-		$statuses        = isset( $args['statuses'] ) ? (array) $args['statuses'] : array();
 		$post_types      = isset( $args['post_types'] ) ? (array) $args['post_types'] : array();
 		$session_id      = isset( $args['session_id'] ) ? (int) $args['session_id'] : 0;
 		$imported_after  = isset( $args['imported_after'] ) ? (string) $args['imported_after'] : '';
 		$imported_before = isset( $args['imported_before'] ) ? (string) $args['imported_before'] : '';
+		$freshness       = isset( $args['freshness'] ) ? (string) $args['freshness'] : 'any';
 		$orderby         = ( isset( $args['orderby'] ) && 'title' === $args['orderby'] )
-			? 'p.post_title'
-			: 'agg.max_date';
+			? 't1.title'
+			: 't1.import_date_gmt';
 		$order           = ( isset( $args['order'] ) && 'asc' === strtolower( (string) $args['order'] ) )
 			? 'ASC'
 			: 'DESC';
 
-		// Only %s/%d placeholders and allowlisted identifiers are interpolated
-		// below; every user value is bound through $wpdb->prepare().
-		$where  = array( 'agg.post_id IS NOT NULL' );
+		$where  = array(
+			't1.source_post_id IS NOT NULL',
+			"t1.status IN ( 'success', 'updated' )",
+			't1.rolled_back = 0',
+			't1.post_id IS NOT NULL',
+			"p.post_status != 'trash'",
+		);
 		$params = array();
 
 		if ( '' !== $search ) {
-			$where[]  = 'p.post_title LIKE %s';
+			$where[]  = 't1.title LIKE %s';
 			$params[] = '%' . $wpdb->esc_like( $search ) . '%';
 		}
 
@@ -447,31 +603,13 @@ final class History_Repository {
 		}
 
 		if ( '' !== $imported_after ) {
-			$where[]  = 'agg.max_date >= %s';
+			$where[]  = 't1.import_date_gmt >= %s';
 			$params[] = $imported_after;
 		}
 
 		if ( '' !== $imported_before ) {
-			$where[]  = 'agg.max_date <= %s';
+			$where[]  = 't1.import_date_gmt <= %s';
 			$params[] = $imported_before;
-		}
-
-		if ( count( $statuses ) > 0 ) {
-			$placeholders = implode( ', ', array_fill( 0, count( $statuses ), '%s' ) );
-			$where[]      = "p.post_status IN ({$placeholders})";
-			array_push( $params, ...array_map( 'strval', $statuses ) );
-		} else {
-			// Mirror the get_posts( 'post_status' => 'any' ) hydration: exclude
-			// statuses hidden from search (trash, auto-draft, inherit) so the
-			// page count matches the rows that actually render.
-			$hidden = array_keys(
-				get_post_stati( array( 'exclude_from_search' => true ) )
-			);
-			if ( count( $hidden ) > 0 ) {
-				$placeholders = implode( ', ', array_fill( 0, count( $hidden ), '%s' ) );
-				$where[]      = "p.post_status NOT IN ({$placeholders})";
-				array_push( $params, ...array_map( 'strval', $hidden ) );
-			}
 		}
 
 		if ( count( $post_types ) > 0 ) {
@@ -481,12 +619,16 @@ final class History_Repository {
 		}
 
 		if ( $session_id > 0 ) {
-			$where[]  = "EXISTS ( SELECT 1 FROM `{$items_table}` mr"
-				. ' WHERE mr.post_id = agg.post_id'
-				. ' AND mr.import_date_gmt = agg.max_date'
-				. ' AND mr.session_id = %d'
-				. ' AND mr.rolled_back = 0 )';
+			$where[]  = 't1.session_id = %d';
 			$params[] = $session_id;
+		}
+
+		if ( 'outdated' === $freshness ) {
+			$where[] = 't1.source_modified_gmt IS NOT NULL';
+			$where[] = 't1.source_modified_gmt > t1.import_date_gmt';
+		} elseif ( 'up-to-date' === $freshness ) {
+			$where[] = '( t1.source_modified_gmt IS NULL'
+				. ' OR t1.source_modified_gmt <= t1.import_date_gmt )';
 		}
 
 		$where_sql = implode( ' AND ', $where );
@@ -496,13 +638,16 @@ final class History_Repository {
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				'SELECT agg.post_id FROM ('
-					. "SELECT post_id, MAX(import_date_gmt) AS max_date FROM `{$items_table}`"
-					. ' WHERE post_id IS NOT NULL AND rolled_back = 0'
-					. ' GROUP BY post_id'
-					. ") agg INNER JOIN `{$posts_table}` p ON p.ID = agg.post_id"
+				'SELECT t1.*, p.post_type AS wp_post_type,'
+					. ' p.post_status AS wp_post_status'
+					. " FROM `{$items_table}` t1"
+					. " INNER JOIN `{$posts_table}` p ON p.ID = t1.post_id"
 					. " WHERE {$where_sql}"
-					. " ORDER BY {$orderby} {$order}, agg.post_id DESC"
+					. " AND NOT EXISTS ( SELECT 1 FROM `{$items_table}` t2"
+					. ' WHERE t2.source_post_id = t1.source_post_id'
+					. ' AND ( t2.import_date_gmt > t1.import_date_gmt'
+					. ' OR ( t2.import_date_gmt = t1.import_date_gmt AND t2.id > t1.id ) ) )'
+					. " ORDER BY {$orderby} {$order}, t1.id DESC"
 					. ' LIMIT %d OFFSET %d',
 				...$params
 			),
@@ -510,21 +655,266 @@ final class History_Repository {
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
-		if ( ! is_array( $rows ) ) {
-			return array();
+		return is_array( $rows ) ? $rows : array();
+	}
+
+	/**
+	 * Lists source-post rows whose most-recent item is an error with a known
+	 * source_post_id. Orphan failures surface via the drawer instead.
+	 * Returns per_page+1 rows so the caller can derive has_more.
+	 *
+	 * @param int   $page     1-indexed page number.
+	 * @param int   $per_page Items per page.
+	 * @param array $args     {
+	 *     Optional. Search/filter criteria.
+	 *
+	 *     @type string $search          Title substring to match.
+	 *     @type string $imported_after  Lower bound on import_date_gmt.
+	 *     @type string $imported_before Upper bound on import_date_gmt.
+	 *     @type string $orderby         'import_date' (default) or 'title'.
+	 *     @type string $order           'asc' or 'desc' (default).
+	 * }
+	 * @return array[] Active item rows in display order.
+	 */
+	public function list_failed_source_rows(
+		int $page = 1,
+		int $per_page = 20,
+		array $args = array()
+	): array {
+		global $wpdb;
+
+		$items_table = Import_Items_Table::table_name();
+		$offset      = max( 0, ( $page - 1 ) * $per_page );
+		$limit       = $per_page + 1;
+
+		$search          = isset( $args['search'] ) ? (string) $args['search'] : '';
+		$imported_after  = isset( $args['imported_after'] ) ? (string) $args['imported_after'] : '';
+		$imported_before = isset( $args['imported_before'] ) ? (string) $args['imported_before'] : '';
+		$orderby         = ( isset( $args['orderby'] ) && 'title' === $args['orderby'] )
+			? 't1.title'
+			: 't1.import_date_gmt';
+		$order           = ( isset( $args['order'] ) && 'asc' === strtolower( (string) $args['order'] ) )
+			? 'ASC'
+			: 'DESC';
+
+		$where  = array(
+			't1.source_post_id IS NOT NULL',
+			"t1.status = 'error'",
+		);
+		$params = array();
+
+		if ( '' !== $search ) {
+			$where[]  = 't1.title LIKE %s';
+			$params[] = '%' . $wpdb->esc_like( $search ) . '%';
 		}
 
-		return array_map(
-			static fn( array $row ): int => (int) $row['post_id'],
-			$rows
+		if ( '' !== $imported_after ) {
+			$where[]  = 't1.import_date_gmt >= %s';
+			$params[] = $imported_after;
+		}
+
+		if ( '' !== $imported_before ) {
+			$where[]  = 't1.import_date_gmt <= %s';
+			$params[] = $imported_before;
+		}
+
+		$where_sql = implode( ' AND ', $where );
+		$params[]  = $limit;
+		$params[]  = $offset;
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT t1.* FROM `{$items_table}` t1"
+					. " WHERE {$where_sql}"
+					. " AND NOT EXISTS ( SELECT 1 FROM `{$items_table}` t2"
+					. ' WHERE t2.source_post_id = t1.source_post_id'
+					. ' AND ( t2.import_date_gmt > t1.import_date_gmt'
+					. ' OR ( t2.import_date_gmt = t1.import_date_gmt AND t2.id > t1.id ) ) )'
+					. " ORDER BY {$orderby} {$order}, t1.id DESC"
+					. ' LIMIT %d OFFSET %d',
+				...$params
+			),
+			ARRAY_A
 		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return is_array( $rows ) ? $rows : array();
+	}
+
+	/**
+	 * Counts orphan failures (errors without a source_post_id).
+	 *
+	 * @return int Number of orphan failure rows.
+	 */
+	public function count_orphan_failures(): int {
+		global $wpdb;
+
+		$table = Import_Items_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$count = $wpdb->get_var(
+			"SELECT COUNT(*) FROM `{$table}`"
+				. " WHERE status = 'error' AND source_post_id IS NULL"
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return null === $count ? 0 : (int) $count;
+	}
+
+	/**
+	 * Lists orphan failure rows for the drawer (no aggregation; joins the
+	 * session row so each entry carries the source_site_url).
+	 *
+	 * @param int   $page     1-indexed page number.
+	 * @param int   $per_page Items per page.
+	 * @param array $args     {
+	 *     Optional. Search/filter criteria.
+	 *
+	 *     @type string $search           Title substring to match.
+	 *     @type string $attempted_after  MySQL datetime lower bound on import_date_gmt.
+	 *     @type string $attempted_before MySQL datetime upper bound on import_date_gmt.
+	 * }
+	 * @return array[] Item rows including session source_site_url.
+	 */
+	public function list_orphan_failures(
+		int $page = 1,
+		int $per_page = 20,
+		array $args = array()
+	): array {
+		global $wpdb;
+
+		$items_table   = Import_Items_Table::table_name();
+		$imports_table = Imports_Table::table_name();
+		$offset        = max( 0, ( $page - 1 ) * $per_page );
+		$limit         = $per_page + 1;
+
+		$search           = isset( $args['search'] ) ? (string) $args['search'] : '';
+		$attempted_after  = isset( $args['attempted_after'] )
+			? (string) $args['attempted_after']
+			: '';
+		$attempted_before = isset( $args['attempted_before'] )
+			? (string) $args['attempted_before']
+			: '';
+
+		$where  = array(
+			"it.status = 'error'",
+			'it.source_post_id IS NULL',
+		);
+		$params = array();
+
+		if ( '' !== $search ) {
+			$where[]  = 'it.title LIKE %s';
+			$params[] = '%' . $wpdb->esc_like( $search ) . '%';
+		}
+
+		if ( '' !== $attempted_after ) {
+			$where[]  = 'it.import_date_gmt >= %s';
+			$params[] = $attempted_after;
+		}
+
+		if ( '' !== $attempted_before ) {
+			$where[]  = 'it.import_date_gmt <= %s';
+			$params[] = $attempted_before;
+		}
+
+		$where_sql = implode( ' AND ', $where );
+		$params[]  = $limit;
+		$params[]  = $offset;
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT it.id, it.session_id, it.title, it.source_post_id,'
+					. ' it.error_message, it.import_date_gmt,'
+					. ' s.source_site_url'
+					. " FROM `{$items_table}` it"
+					. " INNER JOIN `{$imports_table}` s ON s.id = it.session_id"
+					. " WHERE {$where_sql}"
+					. ' ORDER BY it.import_date_gmt DESC, it.id DESC'
+					. ' LIMIT %d OFFSET %d',
+				...$params
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return is_array( $rows ) ? $rows : array();
+	}
+
+	/**
+	 * Deletes failure rows by id and/or source_post_id. Scoped to status =
+	 * 'error' so it can't reach success/updated rows. The source_post_id
+	 * path clears every prior failure attempt for a given source — the
+	 * listing only shows the most recent one, so dismissing must reach the
+	 * older siblings too or they re-surface on refresh.
+	 *
+	 * @param int[] $item_ids        Item ids to delete (drawer / orphan path).
+	 * @param int[] $source_post_ids Source post ids whose failures to delete.
+	 * @return int Number of rows removed.
+	 */
+	public function delete_failed_items(
+		array $item_ids,
+		array $source_post_ids = array()
+	): int {
+		global $wpdb;
+
+		$positive = static fn( int $id ): bool => $id > 0;
+
+		$ids     = array_values(
+			array_unique(
+				array_filter( array_map( 'absint', $item_ids ), $positive )
+			)
+		);
+		$sources = array_values(
+			array_unique(
+				array_filter( array_map( 'absint', $source_post_ids ), $positive )
+			)
+		);
+
+		if ( 0 === count( $ids ) && 0 === count( $sources ) ) {
+			return 0;
+		}
+
+		$items_table = Import_Items_Table::table_name();
+		$clauses     = array();
+		$params      = array();
+
+		if ( count( $ids ) > 0 ) {
+			$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+			$clauses[]    = "id IN ({$placeholders})";
+			$params       = array_merge( $params, $ids );
+		}
+
+		if ( count( $sources ) > 0 ) {
+			$placeholders = implode(
+				',',
+				array_fill( 0, count( $sources ), '%d' )
+			);
+			$clauses[]    = "source_post_id IN ({$placeholders})";
+			$params       = array_merge( $params, $sources );
+		}
+
+		$scope_sql = implode( ' OR ', $clauses );
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$deleted = $wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM `{$items_table}`"
+					. " WHERE status = 'error' AND ( {$scope_sql} )",
+				...$params
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return false === $deleted ? 0 : (int) $deleted;
 	}
 
 	/**
 	 * Bulk variant of get_item_for_post(): returns the most recent active item
 	 * row for each provided post ID, keyed by post_id.
 	 *
-	 * Drives the Imports → Posts tab listing — one query for the whole page
+	 * Drives the Manage listing — one query for the whole page
 	 * instead of N. Relies on the (post_id, import_date_gmt) composite
 	 * index for the inner aggregation. Rolled-back rows are excluded so the
 	 * result reflects each post's current content. Ties on import_date_gmt
@@ -574,179 +964,6 @@ final class History_Repository {
 		}
 
 		return $by_post_id;
-	}
-
-	/**
-	 * Returns the filter options for the Imports → Posts tab listing.
-	 *
-	 * Computed over the full imported set (not the current page) so the filter
-	 * dropdowns stay complete as the user narrows results.
-	 *
-	 * @return array<string, list<array{value: string, label: string}>> Options
-	 *               keyed by 'post_types'.
-	 */
-	public function get_imported_filter_facets(): array {
-		return array(
-			'post_types' => $this->get_imported_post_type_facets(),
-		);
-	}
-
-	/**
-	 * Returns the distinct post types present among imported posts.
-	 *
-	 * @return list<array{value: string, label: string}> Post-type options.
-	 */
-	private function get_imported_post_type_facets(): array {
-		global $wpdb;
-
-		$items_table = Import_Items_Table::table_name();
-		$posts_table = $wpdb->posts;
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$types = $wpdb->get_col(
-			"SELECT DISTINCT p.post_type FROM `{$items_table}` it"
-				. " INNER JOIN `{$posts_table}` p ON p.ID = it.post_id"
-				. ' WHERE it.post_id IS NOT NULL'
-				. ' ORDER BY p.post_type ASC'
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-
-		$facets = array();
-		foreach ( $types as $type ) {
-			$object   = get_post_type_object( (string) $type );
-			$label    = ( null !== $object )
-				? (string) $object->labels->singular_name
-				: (string) $type;
-			$facets[] = array(
-				'value' => (string) $type,
-				'label' => $label,
-			);
-		}
-
-		return $facets;
-	}
-
-	/**
-	 * Returns a page of failed import items for the Failures tab listing.
-	 *
-	 * Joins the session row so the response can show the source site URL and
-	 * import date without a second query. Returns up to per_page+1 rows so the
-	 * caller can derive has_more without a separate count.
-	 *
-	 * @param int   $page     1-indexed page number.
-	 * @param int   $per_page Items per page.
-	 * @param array $args     {
-	 *     Optional. Search/filter criteria.
-	 *
-	 *     @type string $search           Title substring to match.
-	 *     @type string $attempted_after  MySQL datetime lower bound on import_date_gmt.
-	 *     @type string $attempted_before MySQL datetime upper bound on import_date_gmt.
-	 * }
-	 * @return array[] Item rows including session source_site_url and date.
-	 */
-	public function list_failed_items(
-		int $page = 1,
-		int $per_page = 20,
-		array $args = array()
-	): array {
-		global $wpdb;
-
-		$items_table   = Import_Items_Table::table_name();
-		$imports_table = Imports_Table::table_name();
-		$offset        = max( 0, ( $page - 1 ) * $per_page );
-		$limit         = $per_page + 1;
-
-		$search           = isset( $args['search'] ) ? (string) $args['search'] : '';
-		$attempted_after  = isset( $args['attempted_after'] )
-			? (string) $args['attempted_after']
-			: '';
-		$attempted_before = isset( $args['attempted_before'] )
-			? (string) $args['attempted_before']
-			: '';
-
-		// Only %s/%d placeholders are interpolated below; every user value is
-		// bound through $wpdb->prepare().
-		$where  = array( "it.status = 'error'" );
-		$params = array();
-
-		if ( '' !== $search ) {
-			$where[]  = 'it.title LIKE %s';
-			$params[] = '%' . $wpdb->esc_like( $search ) . '%';
-		}
-
-		if ( '' !== $attempted_after ) {
-			$where[]  = 'it.import_date_gmt >= %s';
-			$params[] = $attempted_after;
-		}
-
-		if ( '' !== $attempted_before ) {
-			$where[]  = 'it.import_date_gmt <= %s';
-			$params[] = $attempted_before;
-		}
-
-		$where_sql = implode( ' AND ', $where );
-		$params[]  = $limit;
-		$params[]  = $offset;
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$rows = $wpdb->get_results(
-			$wpdb->prepare(
-				'SELECT it.id, it.session_id, it.title, it.source_post_id,'
-					. ' it.error_message, it.import_date_gmt,'
-					. ' s.source_site_url'
-					. " FROM `{$items_table}` it"
-					. " INNER JOIN `{$imports_table}` s ON s.id = it.session_id"
-					. " WHERE {$where_sql}"
-					. ' ORDER BY it.import_date_gmt DESC, it.id DESC'
-					. ' LIMIT %d OFFSET %d',
-				...$params
-			),
-			ARRAY_A
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-
-		return is_array( $rows ) ? $rows : array();
-	}
-
-	/**
-	 * Deletes failed import items by id.
-	 *
-	 * Scoped to `status = 'error'` so the same DELETE can't be coerced into
-	 * removing success or updated rows.
-	 *
-	 * @param int[] $item_ids Item ids to delete.
-	 * @return int Number of rows removed.
-	 */
-	public function delete_failed_items( array $item_ids ): int {
-		global $wpdb;
-
-		$ids = array_values(
-			array_unique(
-				array_filter(
-					array_map( 'absint', $item_ids ),
-					static fn( int $id ): bool => $id > 0
-				)
-			)
-		);
-
-		if ( 0 === count( $ids ) ) {
-			return 0;
-		}
-
-		$items_table  = Import_Items_Table::table_name();
-		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$deleted = $wpdb->query(
-			$wpdb->prepare(
-				"DELETE FROM `{$items_table}`"
-					. " WHERE status = 'error' AND id IN ({$placeholders})",
-				...$ids
-			)
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-
-		return false === $deleted ? 0 : (int) $deleted;
 	}
 
 	/**

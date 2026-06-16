@@ -1,8 +1,8 @@
 /**
  * Bulk Rollback Post Modal component.
  *
- * Confirms and runs a rollback across multiple Imports → Posts tab rows. A
- * mixed selection may both permanently delete newly created posts and restore
+ * Confirms and runs a rollback across multiple Manage listing rows. A mixed
+ * selection may both permanently delete newly created posts and restore
  * updated ones, so the confirmation summarizes the counts. Each row is rolled
  * back with its own request and the result reports which titles failed.
  *
@@ -25,19 +25,13 @@ import {
 import { useState } from '@wordpress/element';
 import { __, _n, sprintf } from '@wordpress/i18n';
 
-import type { ImportedPost } from '../types';
+import type { UnifiedPostRow } from '../types';
 
 /**
  * Props for the BulkRollbackPostModal component.
- *
- * @property {ImportedPost[]} items      Eligible rows to roll back (length > 1).
- * @property {string}         ajaxurl    WordPress admin-ajax URL.
- * @property {string}         nonce      AJAX nonce for the rollback endpoint.
- * @property {Function}       closeModal Callback to close the modal.
- * @property {Function}       onRefresh  Callback to refresh the listing.
  */
 interface BulkRollbackPostModalProps {
-	items: ImportedPost[];
+	items: UnifiedPostRow[];
 	ajaxurl: string;
 	nonce: string;
 	closeModal?: () => void;

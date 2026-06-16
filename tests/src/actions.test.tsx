@@ -1,330 +1,292 @@
 /**
- * Tests for action modal components and bulk operations
+ * Tests for the unified Posts action factory.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-	createActions,
-	createImportedActions,
-	type ImportedActionsContext,
-	type SourceActionsContext,
+	createPostsActions,
+	type PostsActionsContext,
 } from '@/actions';
 import BulkRollbackPostModal from '@/components/BulkRollbackPostModal';
 import RollbackPostModal from '@/components/RollbackPostModal';
-import type { ImportedPost, Post } from '@/types';
+import type {
+	ChipState,
+	ImportSyncStatus,
+	LocalState,
+	UnifiedPostRow,
+} from '@/types';
 import type { Action, ActionModal } from '@wordpress/dataviews/build-types';
 
-const SOURCE_CONTEXT: SourceActionsContext = {
+const CONTEXT: PostsActionsContext = {
 	ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
 	nonce: 'test-nonce',
-};
-
-const IMPORTED_CONTEXT: ImportedActionsContext = {
-	...SOURCE_CONTEXT,
 	restNonce: 'test-rest-nonce',
 };
 
-const actions = createActions( undefined, true, SOURCE_CONTEXT );
-
 /**
- * Builds a Post fixture with sensible listing-shape defaults. Tests can
- * override any field that matters for the case at hand.
+ * Builds a UnifiedPostRow fixture; tests override fields to match the case.
  */
-function buildPost( overrides: Partial< Post > = {} ): Post {
+function buildRow( overrides: Partial< UnifiedPostRow > = {} ): UnifiedPostRow {
 	return {
-		id: 1,
-		link: '',
-		title: 'Test',
-		date_gmt: '',
-		modified_gmt: '',
-		post_type: 'post',
-		status: 'publish',
-		...overrides,
-	};
-}
-
-/**
- * Builds an ImportedPost fixture with eligible-rollback defaults. Tests
- * override any field that matters for the case at hand.
- */
-function buildImportedPost(
-	overrides: Partial< ImportedPost > = {}
-): ImportedPost {
-	return {
-		id: 1,
+		id: 10,
 		source_post_id: 10,
 		title: 'Test',
+		link: 'https://source.example/test',
+		date_gmt: '2024-03-15T10:30:00Z',
+		modified_gmt: '2024-03-15T10:30:00Z',
 		post_type: 'post',
-		local_status: 'publish',
-		edit_url: '',
-		local_link: '',
-		source_link: '',
-		item_id: 100,
-		session_id: 5,
-		rollback_status: 'success',
-		has_previous_content: false,
+		status: 'publish',
+		local_state: 'available',
+		is_imported: false,
+		wp_post_status: null,
+		item_id: null,
+		post_id: null,
 		import_date_gmt: null,
+		error_message: null,
+		has_previous_content: false,
+		edit_url: '',
 		...overrides,
 	};
 }
 
 /**
- * Returns the modal action with the given id, throwing if absent or not modal.
+ * Builds an imported row with eligible defaults.
  */
-function getModalAction( id: string ): ActionModal< Post > {
-	const action = actions.find( ( a: Action< Post > ) => a.id === id );
+function buildImportedRow(
+	overrides: Partial< UnifiedPostRow > = {}
+): UnifiedPostRow {
+	return buildRow( {
+		local_state: 'up-to-date' as LocalState,
+		is_imported: true,
+		wp_post_status: null,
+		item_id: 100,
+		post_id: 1024,
+		import_date_gmt: '2024-03-15 10:30:00',
+		edit_url: 'https://destination.example/wp-admin/post.php?post=1024',
+		...overrides,
+	} );
+}
+
+/**
+ * Returns a modal action by id, throwing if absent or non-modal.
+ */
+function getModalAction(
+	actions: Action< UnifiedPostRow >[],
+	id: string
+): ActionModal< UnifiedPostRow > {
+	const action = actions.find( ( a ) => a.id === id );
 	if ( ! action || ! ( 'RenderModal' in action ) ) {
 		throw new Error( `Expected modal action with id "${ id }"` );
 	}
 	return action;
 }
 
-describe( 'Actions configuration', () => {
-	it( 'should export actions array', () => {
-		expect( actions ).toBeDefined();
-		expect( Array.isArray( actions ) ).toBe( true );
+describe( 'createPostsActions per-state eligibility', () => {
+	const ALL_CHIP: ChipState = 'all';
+	const actions = createPostsActions( undefined, true, CONTEXT, {}, ALL_CHIP );
+
+	it( 'Verifies that Import covers available, failed-with-source, and outdated rows', () => {
+		// ARRANGE: the merged Import action and rows in each eligible state.
+		const importAction = actions.find( ( a ) => a.id === 'import' );
+
+		// ACT + ASSERT: available, failed-with-source, and outdated all show
+		// Sync. Outdated needs a non-up-to-date verdict to stay eligible;
+		// the default action set is built with an empty sync-statuses map.
+		expect( importAction?.isEligible?.( buildRow() ) ).toBe( true );
+		expect(
+			importAction?.isEligible?.(
+				buildRow( {
+					local_state: 'failed',
+					is_imported: false,
+					wp_post_status: null,
+					item_id: 50,
+				} )
+			)
+		).toBe( true );
+		expect(
+			importAction?.isEligible?.( buildImportedRow( { local_state: 'outdated' } ) )
+		).toBe( true );
 	} );
 
-	it( 'should have import action', () => {
-		const bulkAction = actions.find( ( a ) => a.id === 'import' );
-		expect( bulkAction ).toBeDefined();
-		expect( bulkAction?.label ).toBe( 'Import' );
-		expect( bulkAction?.isPrimary ).toBe( true );
-		expect( bulkAction?.supportsBulk ).toBe( true );
-	} );
-
-	it( 'import isEligible only allows non-imported items (Update lives on the Imports tab)', () => {
-		const bulkAction = actions.find( ( a ) => a.id === 'import' );
-		expect( bulkAction?.isEligible?.( buildPost( { is_imported: false } ) ) ).toBe( true );
-		expect( bulkAction?.isEligible?.( buildPost( { is_imported: true, sync_status: 'outdated' } ) ) ).toBe( false );
-		expect( bulkAction?.isEligible?.( buildPost( { is_imported: true, sync_status: 'up-to-date' } ) ) ).toBe( false );
-		expect( bulkAction?.isEligible?.( buildPost( { is_imported: true, sync_status: 'unknown' } ) ) ).toBe( false );
-	} );
-
-	it( 'import isEligible returns false when not authorized', () => {
-		const unauthorized = createActions( undefined, false, SOURCE_CONTEXT );
-		const bulkAction = unauthorized.find( ( a ) => a.id === 'import' );
-		expect( bulkAction?.isEligible?.( buildPost( { is_imported: false } ) ) ).toBe( false );
-	} );
-} );
-
-describe( 'Import action', () => {
-	it( 'should have RenderModal component', () => {
-		const bulkAction = getModalAction( 'import' );
-		expect( typeof bulkAction.RenderModal ).toBe( 'function' );
-	} );
-
-	it( 'should hide modal header', () => {
-		const bulkAction = getModalAction( 'import' );
-		expect( bulkAction.hideModalHeader ).toBe( true );
-	} );
-
-	it( 'should focus on first content element', () => {
-		const bulkAction = getModalAction( 'import' );
-		expect( bulkAction.modalFocusOnMount ).toBe( 'firstContentElement' );
-	} );
-} );
-
-describe( 'View in Imports action', () => {
-	const viewAction = actions.find( ( a ) => a.id === 'view-in-imports' );
-
-	it( 'is hidden for non-imported rows', () => {
-		// ARRANGE + ACT + ASSERT: non-imported rows have no Imports counterpart to focus.
-		expect( viewAction?.isEligible?.( buildPost( { is_imported: false } ) ) ).toBe( false );
-	} );
-
-	it( 'is eligible for imported rows', () => {
-		// ARRANGE + ACT + ASSERT: imported rows surface the deep link.
-		expect( viewAction?.isEligible?.( buildPost( { is_imported: true } ) ) ).toBe( true );
-	} );
-
-	it( 'is a primary action so it sits in the row toolbar, not the kebab menu', () => {
-		// ARRANGE + ACT + ASSERT: primary so the imported-row toolbar shows it inline.
-		expect( viewAction?.isPrimary ).toBe( true );
-	} );
-
-	it( 'is not exposed on the Imports → Posts tab itself', () => {
-		// ARRANGE: the Imports → Posts action set.
-		const importedActions = createImportedActions( undefined, IMPORTED_CONTEXT, {} );
-		// ACT + ASSERT: View in Imports doesn't loop the user back to the same tab.
-		expect( importedActions.find( ( a ) => a.id === 'view-in-imports' ) ).toBeUndefined();
-	} );
-
-	it( 'navigates to the Imports page with focus_source set to the row id', () => {
-		// ARRANGE: stub window.location + the admin-data global the callback reads.
-		const originalLocation = window.location;
-		const originalData = window.safePublishAdminData;
-		const hrefSpy = vi.fn();
-		Object.defineProperty( window, 'location', {
-			configurable: true,
-			value: {
-				get href() { return ''; },
-				set href( value: string ) { hrefSpy( value ); },
-			},
-		} );
-		window.safePublishAdminData = {
-			ajaxurl: 'http://test.local/wp-admin/admin-ajax.php',
-			nonce: 'n',
-			restNonce: 'rn',
-			settingsUrl: 'http://test.local/wp-admin/admin.php?page=safe-publish-settings',
-			importsUrl: 'http://test.local/wp-admin/admin.php?page=safe-publish-imports',
-			containerId: 'test-container',
+	it( 'Verifies that Import hides on up-to-date imported and orphan-failure rows', () => {
+		// ARRANGE: a sync-statuses map that reports up-to-date.
+		const statuses: Record< number, { status: ImportSyncStatus } > = {
+			10: { status: 'up-to-date' },
 		};
-
-		try {
-			// ACT: callback runs for an imported row whose source id is 42.
-			if ( ! viewAction || ! ( 'callback' in viewAction ) ) {
-				throw new Error( 'Expected view-in-imports to be a button action with a callback' );
-			}
-			viewAction.callback(
-				[ buildPost( { id: 42, is_imported: true } ) ],
-				{} as never
-			);
-
-			// ASSERT: navigation hit importsUrl with focus_source=42 appended.
-			expect( hrefSpy ).toHaveBeenCalledTimes( 1 );
-			const navigatedTo = hrefSpy.mock.calls[ 0 ][ 0 ] as string;
-			expect( navigatedTo ).toContain( 'page=safe-publish-imports' );
-			expect( navigatedTo ).toContain( 'focus_source=42' );
-		} finally {
-			Object.defineProperty( window, 'location', {
-				configurable: true,
-				value: originalLocation,
-			} );
-			window.safePublishAdminData = originalData;
-		}
-	} );
-} );
-
-describe( 'createImportedActions primary-row icons', () => {
-	const importedActions = createImportedActions( undefined, IMPORTED_CONTEXT, {} );
-
-	it( 'puts Edit, Compare, and Update inline; Delete and Roll back in the kebab', () => {
-		// ARRANGE: the action set under test.
-		const byId = ( id: string ) =>
-			importedActions.find( ( a ) => a.id === id );
-
-		// ACT + ASSERT: inline trio for the primary row toolbar.
-		expect( byId( 'edit-post' )?.isPrimary ).toBe( true );
-		expect( byId( 'compare-post' )?.isPrimary ).toBe( true );
-		expect( byId( 'update-post' )?.isPrimary ).toBe( true );
-
-		// ACT + ASSERT: destructive / less-frequent actions live in the kebab.
-		expect( byId( 'delete-post' )?.isPrimary ).toBeFalsy();
-		expect( byId( 'rollback' )?.isPrimary ).toBeFalsy();
-	} );
-
-	it( 'orders Edit · Compare · Update so review precedes the action', () => {
-		// ARRANGE + ACT: positions of the inline actions.
-		const ids = importedActions.map( ( a ) => a.id );
-
-		// ASSERT: Compare sits between Edit and Update.
-		expect( ids.indexOf( 'edit-post' ) ).toBeLessThan(
-			ids.indexOf( 'compare-post' )
-		);
-		expect( ids.indexOf( 'compare-post' ) ).toBeLessThan(
-			ids.indexOf( 'update-post' )
-		);
-	} );
-} );
-
-describe( 'createImportedActions Compare action', () => {
-	/**
-	 * Returns the Compare modal action from an action set built with the given
-	 * sync statuses, throwing if it's absent.
-	 */
-	function getCompareAction(
-		syncStatuses: Parameters< typeof createImportedActions >[ 2 ]
-	): ActionModal< ImportedPost > {
-		const action = createImportedActions(
+		const importAction = createPostsActions(
 			undefined,
-			IMPORTED_CONTEXT,
-			syncStatuses
-		).find( ( a: Action< ImportedPost > ) => a.id === 'compare-post' );
-		if ( ! action || ! ( 'RenderModal' in action ) ) {
-			throw new Error( 'Expected modal action with id "compare-post"' );
-		}
-		return action;
-	}
+			true,
+			CONTEXT,
+			statuses,
+			ALL_CHIP
+		).find( ( a ) => a.id === 'import' );
 
-	it( 'is hidden for up-to-date rows and visible otherwise', () => {
-		// ARRANGE: the row identifies the source via source_post_id 10.
-		const item = buildImportedPost();
-
-		// ACT + ASSERT: explicit up-to-date verdict hides Compare.
+		// ACT + ASSERT: up-to-date imported hides Sync; failed without a
+		// source_post_id (orphan) also hides — Sync needs a source endpoint.
+		expect( importAction?.isEligible?.( buildImportedRow() ) ).toBe( false );
 		expect(
-			getCompareAction( { 10: { status: 'up-to-date' } } ).isEligible?.(
-				item
+			importAction?.isEligible?.(
+				buildRow( {
+					local_state: 'failed',
+					source_post_id: null,
+					item_id: 50,
+				} )
 			)
 		).toBe( false );
-
-		// ACT + ASSERT: ambiguous verdicts still surface Compare.
-		expect(
-			getCompareAction( { 10: { status: 'outdated' } } ).isEligible?.(
-				item
-			)
-		).toBe( true );
-		expect(
-			getCompareAction( { 10: { status: 'loading' } } ).isEligible?.(
-				item
-			)
-		).toBe( true );
-		expect(
-			getCompareAction( {} ).isEligible?.( item )
-		).toBe( true );
 	} );
-} );
 
-describe( 'createImportedActions rollback action', () => {
-	const importedActions = createImportedActions( undefined, IMPORTED_CONTEXT, {} );
-
-	/**
-	 * Returns the rollback modal action, throwing if absent or not modal.
-	 */
-	function getRollbackAction(): ActionModal< ImportedPost > {
-		const action = importedActions.find(
-			( a: Action< ImportedPost > ) => a.id === 'rollback'
+	it( 'Verifies that Import is gated by authorization', () => {
+		// ARRANGE: an unauthorized action set.
+		const unauthorized = createPostsActions(
+			undefined,
+			false,
+			CONTEXT,
+			{},
+			ALL_CHIP
 		);
-		if ( ! action || ! ( 'RenderModal' in action ) ) {
-			throw new Error( 'Expected modal action with id "rollback"' );
-		}
-		return action;
-	}
+		const importAction = unauthorized.find( ( a ) => a.id === 'import' );
 
-	it( 'supports bulk selection and stays destructive', () => {
-		// ARRANGE + ACT + ASSERT: rollback opts into the bulk toolbar.
-		const rollback = getRollbackAction();
-		expect( rollback.supportsBulk ).toBe( true );
-		expect( rollback.isDestructive ).toBe( true );
+		// ACT + ASSERT: even an Available row hides Import when unauthorized.
+		expect( importAction?.isEligible?.( buildRow() ) ).toBe( false );
 	} );
 
-	it( 'is eligible only for rows with an active item_id', () => {
-		// ARRANGE: the rollback action under test.
-		const rollback = getRollbackAction();
+	it( 'Verifies that Edit appears only on imported/outdated rows with an edit_url', () => {
+		// ARRANGE: the Edit action under test.
+		const editAction = actions.find( ( a ) => a.id === 'edit-post' );
 
-		// ACT + ASSERT: rows with an active items-table row can be rolled back.
+		// ACT + ASSERT: imported and outdated rows expose Edit; missing
+		// edit_url or other states hide it.
+		expect( editAction?.isEligible?.( buildImportedRow() ) ).toBe( true );
 		expect(
-			rollback.isEligible?.( buildImportedPost() )
+			editAction?.isEligible?.(
+				buildImportedRow( { local_state: 'outdated' } )
+			)
 		).toBe( true );
-
-		// ACT + ASSERT: rows without an active items-table row cannot.
 		expect(
-			rollback.isEligible?.( buildImportedPost( { item_id: null } ) )
+			editAction?.isEligible?.( buildImportedRow( { edit_url: '' } ) )
 		).toBe( false );
+		expect( editAction?.isEligible?.( buildRow() ) ).toBe( false );
 	} );
 
-	it( 'delegates to the single modal for one item and the bulk modal for many', () => {
-		// ARRANGE: the rollback action under test.
-		const rollback = getRollbackAction();
+	it( 'Verifies that Compare on Imported only shows on a confirmed outdated verdict', () => {
+		// ARRANGE: imported rows shouldn't surface Compare until the async
+		// sync check confirms a divergence — otherwise the action flashes
+		// then vanishes once the up-to-date verdict lands.
+		const compareLoading = actions.find( ( a ) => a.id === 'compare-post' );
+		const compareOutdatedVerdict = createPostsActions(
+			undefined,
+			true,
+			CONTEXT,
+			{ 10: { status: 'outdated' } },
+			ALL_CHIP
+		).find( ( a ) => a.id === 'compare-post' );
+		const compareUpToDate = createPostsActions(
+			undefined,
+			true,
+			CONTEXT,
+			{ 10: { status: 'up-to-date' } },
+			ALL_CHIP
+		).find( ( a ) => a.id === 'compare-post' );
 
-		// ACT + ASSERT: a single selection keeps the original single-row modal.
+		// ACT + ASSERT: imported + (no status / up-to-date) hides; imported +
+		// outdated verdict shows.
+		expect( compareLoading?.isEligible?.( buildImportedRow() ) ).toBe( false );
+		expect(
+			compareUpToDate?.isEligible?.( buildImportedRow() )
+		).toBe( false );
+		expect(
+			compareOutdatedVerdict?.isEligible?.( buildImportedRow() )
+		).toBe( true );
+	} );
+
+	it( 'Verifies that Compare always shows on server-confirmed outdated rows', () => {
+		// ARRANGE: a local_state='outdated' row needs no client verdict —
+		// the server already flagged the divergence.
+		const compare = actions.find( ( a ) => a.id === 'compare-post' );
+
+		// ACT + ASSERT: outdated shows regardless of empty syncStatuses.
+		expect(
+			compare?.isEligible?.(
+				buildImportedRow( { local_state: 'outdated' } )
+			)
+		).toBe( true );
+	} );
+
+	it( 'Verifies that Dismiss is only present on the Failed chip', () => {
+		// ARRANGE: action sets for the All chip and the Failed chip.
+		const failedActions = createPostsActions(
+			undefined,
+			true,
+			CONTEXT,
+			{},
+			'failed'
+		);
+
+		// ACT + ASSERT: Dismiss is absent off-chip and present on-chip.
+		expect(
+			actions.find( ( a ) => a.id === 'dismiss-failure' )
+		).toBeUndefined();
+		expect(
+			failedActions.find( ( a ) => a.id === 'dismiss-failure' )
+		).toBeDefined();
+	} );
+
+	it( 'Verifies that Dismiss is eligible only on failed rows with a source_post_id', () => {
+		// ARRANGE: the Dismiss action from the Failed-chip action set.
+		// Dismiss clears by source_post_id (not item_id) so older failure
+		// siblings don't re-surface on refresh.
+		const dismiss = createPostsActions(
+			undefined,
+			true,
+			CONTEXT,
+			{},
+			'failed'
+		).find( ( a ) => a.id === 'dismiss-failure' );
+
+		// ACT + ASSERT: failed-with-source exposes Dismiss; orphan failures
+		// or non-failed rows hide it.
+		expect(
+			dismiss?.isEligible?.(
+				buildRow( { local_state: 'failed', source_post_id: 10 } )
+			)
+		).toBe( true );
+		expect(
+			dismiss?.isEligible?.(
+				buildRow( { local_state: 'failed', source_post_id: null } )
+			)
+		).toBe( false );
+		expect( dismiss?.isEligible?.( buildImportedRow() ) ).toBe( false );
+		expect( dismiss?.isEligible?.( buildRow() ) ).toBe( false );
+	} );
+
+	it( 'Verifies that Rollback requires imported/outdated state and an item_id', () => {
+		// ARRANGE: the Rollback action.
+		const rollback = actions.find( ( a ) => a.id === 'rollback' );
+
+		// ACT + ASSERT: imported with an item_id shows; missing item_id
+		// or wrong state hides.
+		expect( rollback?.isEligible?.( buildImportedRow() ) ).toBe( true );
+		expect(
+			rollback?.isEligible?.( buildImportedRow( { item_id: null } ) )
+		).toBe( false );
+		expect( rollback?.isEligible?.( buildRow() ) ).toBe( false );
+	} );
+
+	it( 'Verifies that single vs bulk rollback selects the matching modal', () => {
+		// ARRANGE: the Rollback action.
+		const rollback = getModalAction( actions, 'rollback' );
+
+		// ACT + ASSERT: a single selection routes to RollbackPostModal.
 		const single = rollback.RenderModal( {
-			items: [ buildImportedPost() ],
+			items: [ buildImportedRow() ],
 		} );
 		expect( single.type ).toBe( RollbackPostModal );
 
-		// ACT + ASSERT: a multi selection routes to the bulk modal.
+		// ACT + ASSERT: a multi selection routes to BulkRollbackPostModal.
 		const bulk = rollback.RenderModal( {
-			items: [ buildImportedPost( { id: 1 } ), buildImportedPost( { id: 2 } ) ],
+			items: [
+				buildImportedRow( { id: 1, source_post_id: 1 } ),
+				buildImportedRow( { id: 2, source_post_id: 2 } ),
+			],
 		} );
 		expect( bulk.type ).toBe( BulkRollbackPostModal );
 	} );

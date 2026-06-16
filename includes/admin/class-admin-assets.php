@@ -91,11 +91,9 @@ final class Admin_Assets {
 			$script_version
 		);
 
-		// @wordpress/scripts merges the SCSS imports from every entry into a
-		// single style-index.css via splitChunks; load it when present so the
-		// page picks up component styles like .safe-publish-status-badge.
-		$style_file_path = $base_path . 'build/style-index.css';
-		$style_file_url  = $base_url . 'build/style-index.css';
+		// @wordpress/scripts emits one style-<entry>.css per entry.
+		$style_file_path = $base_path . 'build/style-' . $entry . '.css';
+		$style_file_url  = $base_url . 'build/style-' . $entry . '.css';
 
 		if ( file_exists( $style_file_path ) ) {
 			wp_enqueue_style(

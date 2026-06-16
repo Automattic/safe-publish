@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Registers AJAX endpoints consumed by row actions on the Imports → Posts tab:
+ * Registers AJAX endpoints consumed by row actions on the Manage page:
  * rollback (single + bulk). Kept out of Admin_Ajax_Controller to isolate the
  * rollback service dependency and to keep the central controller focused on
  * import flow.

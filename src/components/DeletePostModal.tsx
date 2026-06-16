@@ -8,7 +8,7 @@
  * @file This file defines the DeletePostModal component.
  */
 
-import { ApiResponse, ImportedPost } from '../types';
+import { ApiResponse, UnifiedPostRow } from '../types';
 import { getErrorMessage } from '../utils';
 import {
 	Button,
@@ -22,15 +22,9 @@ import { __, sprintf } from '@wordpress/i18n';
 
 /**
  * Props for the DeletePostModal component.
- *
- * @property {ImportedPost[]} items      Rows to trash; bulk path runs when length > 1.
- * @property {string}         ajaxurl    WordPress admin-ajax URL.
- * @property {string}         nonce      AJAX nonce for the delete endpoints.
- * @property {Function}       closeModal Callback to close the modal.
- * @property {Function}       onRefresh  Callback to refresh the listing.
  */
 interface DeletePostModalProps {
-	items: ImportedPost[];
+	items: UnifiedPostRow[];
 	ajaxurl: string;
 	nonce: string;
 	closeModal?: () => void;
@@ -71,12 +65,14 @@ const DeletePostModal = ( {
 
 		if ( isBulk ) {
 			formData.append( 'action', 'safe_publish_bulk_delete_posts' );
-			items.forEach( ( item ) =>
-				formData.append( 'post_ids[]', item.id.toString() )
-			);
+			items.forEach( ( item ) => {
+				if ( null !== item.post_id ) {
+					formData.append( 'post_ids[]', item.post_id.toString() );
+				}
+			} );
 		} else {
 			formData.append( 'action', 'safe_publish_delete_post' );
-			formData.append( 'post_id', items[ 0 ].id.toString() );
+			formData.append( 'post_id', String( items[ 0 ].post_id ?? 0 ) );
 		}
 
 		fetch( ajaxurl, {

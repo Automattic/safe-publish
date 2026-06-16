@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Stores a per-user transient with the just-finished session's id and counts,
  * then renders a notice on subsequent admin page loads with a deep-link into
- * the Imports page filtered to that batch. Dismiss is best-effort (the X is
+ * the Manage page filtered to that session. Dismiss is best-effort (the X is
  * native WP behavior plus an AJAX cleanup).
  */
 final class Post_Import_Notice {
@@ -83,7 +83,6 @@ final class Post_Import_Notice {
 	 */
 	private const PLUGIN_SCREEN_IDS = array(
 		'toplevel_page_safe-publish',
-		'safe-publish_page_safe-publish-imports',
 		'safe-publish_page_safe-publish-exports',
 		'safe-publish_page_safe-publish-settings',
 	);
@@ -107,9 +106,8 @@ final class Post_Import_Notice {
 			return;
 		}
 
-		// Auto-dismiss once the user reaches Imports — the notice's
-		// purpose was getting them here.
-		if ( 'safe-publish_page_safe-publish-imports' === $screen->id ) {
+		// Auto-dismiss once the user reaches the Manage page.
+		if ( 'toplevel_page_safe-publish' === $screen->id ) {
 			delete_transient( self::transient_key( $user_id ) );
 			return;
 		}
@@ -119,19 +117,18 @@ final class Post_Import_Notice {
 		$successful = (int) ( $data['successful'] ?? 0 );
 		$failed     = (int) ( $data['failed'] ?? 0 );
 
-		$link_args = array(
-			'page'  => 'safe-publish-imports',
-			'batch' => $session_id,
+		// Route to Failed when nothing succeeded — Imported would be empty.
+		$failures_only = 0 === $successful && $failed > 0;
+
+		$link = add_query_arg(
+			array(
+				'page'       => 'safe-publish',
+				'state'      => $failures_only ? 'failed' : 'up-to-date',
+				'session_id' => $session_id,
+			),
+			admin_url( 'admin.php' )
 		);
 
-		// When everything failed, Posts filtered to this batch is empty
-		// — route to Failures instead.
-		$failures_only = 0 === $successful && $failed > 0;
-		if ( $failures_only ) {
-			$link_args['tab'] = 'failures';
-		}
-
-		$link      = add_query_arg( $link_args, admin_url( 'admin.php' ) );
 		$link_text = $failures_only
 			? __( 'View failures', 'safe-publish' )
 			: __( 'View imports', 'safe-publish' );

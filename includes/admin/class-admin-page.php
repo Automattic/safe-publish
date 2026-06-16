@@ -29,7 +29,7 @@ final class Admin_Page {
 
 		?>
 		<div class="wrap" id="safe-publish-admin-page">
-			<h1><?php esc_html_e( 'Safe Publish', 'safe-publish' ); ?></h1>
+			<h1><?php esc_html_e( 'Manage', 'safe-publish' ); ?></h1>
 
 			<div class="safe-publish-admin-container">
 				<div class="safe-publish-dataviews-section">
@@ -65,7 +65,7 @@ final class Admin_Page {
 							</p>
 						</div>
 					<?php else : ?>
-						<div id="safe-publish-dataviews-container">
+						<div id="safe-publish-posts-container">
 							<div class="safe-publish-loading">
 								<p><?php esc_html_e( 'Loading posts…', 'safe-publish' ); ?></p>
 							</div>
@@ -87,18 +87,31 @@ final class Admin_Page {
 
 		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
+		$initial_state  = isset( $_GET['state'] ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			? sanitize_key( (string) $_GET['state'] ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.ValidatedSanitizedInput.MissingUnslash
+			: 'all';
+		$allowed_states = array( 'all', 'available', 'up-to-date', 'outdated', 'failed' );
+		if ( ! in_array( $initial_state, $allowed_states, true ) ) {
+			$initial_state = 'all';
+		}
+
+		$repository   = new History_Repository();
+		$orphan_count = $repository->count_orphan_failures();
+
 		Admin_Assets::enqueue_bundle(
-			'index',
-			'safe-publish-admin-dataviews-script',
-			'safe-publish-admin-dataviews-style',
+			'posts',
+			'safe-publish-admin-posts-script',
+			'safe-publish-admin-posts-style',
 			array(
 				'ajaxurl'       => admin_url( 'admin-ajax.php' ),
 				'settingsUrl'   => admin_url( 'admin.php?page=safe-publish-settings' ),
 				'nonce'         => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 				'restNonce'     => wp_create_nonce( 'wp_rest' ),
 				'sourceSiteUrl' => $source_site_url,
-				'importsUrl'    => admin_url( 'admin.php?page=safe-publish-imports' ),
-				'containerId'   => 'safe-publish-dataviews-container',
+				'homeUrl'       => home_url(),
+				'containerId'   => 'safe-publish-posts-container',
+				'initialState'  => $initial_state,
+				'orphanCount'   => $orphan_count,
 			)
 		);
 	}

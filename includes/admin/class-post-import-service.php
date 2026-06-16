@@ -14,7 +14,6 @@ use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
-use Safe_Publish\Utils\Sync_State_Comparator;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
 use Exception;
@@ -773,15 +772,12 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Annotates each post in an array with its local import status.
+	 * Adds local-state routing fields and row-level metadata to each post.
 	 *
-	 * Adds `is_imported`, `sync_status`, and `local_status` keys to every
-	 * element. `sync_status` is one of `available` (not imported),
-	 * `up-to-date`, `outdated`, or `unknown` — derived from
-	 * Sync_State_Comparator comparing the source's `modified_gmt` to the
-	 * items table's most recent `import_date_gmt`. `unknown` fires when
-	 * either timestamp can't be parsed (missing items row, malformed
-	 * source date). The whole page's lookups are batched into two queries.
+	 * Emits `local_state`, `is_imported`, plus active-row fields (`item_id`,
+	 * `post_id`, `import_date_gmt`, `error_message`, `has_previous_content`,
+	 * `edit_url`). Lookups are batched into one items query plus one wp_posts
+	 * query for the whole page.
 	 *
 	 * @param array $posts Posts array fetched from the source API, passed by reference.
 	 */
@@ -796,45 +792,133 @@ class Post_Import_Service {
 			)
 		);
 
-		$imported_by_source_id = $this->fetch_imported_posts_by_source_ids(
-			$source_ids
-		);
-
-		$post_ids = array_map(
-			static fn( WP_Post $p ): int => (int) $p->ID,
-			$imported_by_source_id
-		);
-
-		$items_by_post_id = 0 === count( $post_ids )
+		$active_by_source_id = 0 === count( $source_ids )
 			? array()
-			: $this->repository->get_items_for_posts( $post_ids );
+			: $this->repository->get_active_items_by_source_ids( $source_ids );
+
+		$post_ids_to_check = array_values(
+			array_filter(
+				array_map(
+					static fn( array $row ): int => isset( $row['post_id'] )
+						? (int) $row['post_id']
+						: 0,
+					$active_by_source_id
+				),
+				static fn( int $id ): bool => $id > 0
+			)
+		);
+
+		$post_status_by_id = $this->fetch_post_statuses_by_id( $post_ids_to_check );
 
 		foreach ( $posts as &$post ) {
-			$source_id = absint( $post['id'] ?? 0 );
-			$imported  = $imported_by_source_id[ $source_id ] ?? null;
+			$source_id  = absint( $post['id'] ?? 0 );
+			$active_row = $active_by_source_id[ $source_id ] ?? null;
 
-			$post['is_imported'] = null !== $imported;
+			$post_id            = null !== $active_row && isset( $active_row['post_id'] )
+				? (int) $active_row['post_id']
+				: 0;
+			$wp_post_status     = $post_id > 0
+				? ( $post_status_by_id[ $post_id ] ?? null )
+				: null;
+			$local_post_present = null !== $wp_post_status && 'trash' !== $wp_post_status;
 
-			if ( null !== $imported ) {
-				$item     = $items_by_post_id[ $imported->ID ] ?? null;
-				$is_newer = Sync_State_Comparator::source_is_newer(
-					(string) ( $post['modified_gmt'] ?? '' ),
-					(string) ( $item['import_date_gmt'] ?? '' )
-				);
+			$local_state = History_Repository::derive_active_state(
+				$active_row,
+				$local_post_present
+			);
 
-				$post['sync_status'] = match ( $is_newer ) {
-					true  => 'outdated',
-					false => 'up-to-date',
-					null  => 'unknown',
-				};
-				$post['local_status'] = $imported->post_status;
-			} else {
-				$post['sync_status']  = 'available';
-				$post['local_status'] = null;
-			}
+			$post['local_state']    = $local_state;
+			$post['is_imported']    = in_array(
+				$local_state,
+				array( 'up-to-date', 'outdated' ),
+				true
+			);
+			$post['wp_post_status'] = $local_post_present ? $wp_post_status : null;
+
+			$this->attach_active_row_metadata( $post, $active_row, $local_post_present );
 		}
 
 		unset( $post );
+	}
+
+	/**
+	 * Attaches active-row metadata to an annotated post. The edit URL is
+	 * emitted only when the referenced local post is present so
+	 * deleted_locally rows don't expose a dangling edit URL.
+	 *
+	 * @param array      $post                Row to mutate, passed by reference.
+	 * @param array|null $active_row          Active items row, or null.
+	 * @param bool       $local_post_present  Whether the referenced post still
+	 *                                        exists with a non-trash status.
+	 */
+	private function attach_active_row_metadata(
+		array &$post,
+		?array $active_row,
+		bool $local_post_present
+	): void {
+		if ( null === $active_row ) {
+			$post['item_id']              = null;
+			$post['post_id']              = null;
+			$post['import_date_gmt']      = null;
+			$post['error_message']        = null;
+			$post['has_previous_content'] = false;
+			$post['edit_url']             = '';
+			return;
+		}
+
+		$post_id = isset( $active_row['post_id'] ) ? (int) $active_row['post_id'] : 0;
+
+		$post['item_id']              = (int) $active_row['id'];
+		$post['post_id']              = $post_id > 0 ? $post_id : null;
+		$post['import_date_gmt']      = (string) ( $active_row['import_date_gmt'] ?? '' );
+		$post['error_message']        = isset( $active_row['error_message'] )
+			? (string) $active_row['error_message']
+			: null;
+		$post['has_previous_content'] = (bool) ( $active_row['has_previous_content'] ?? 0 );
+
+		if ( $local_post_present && $post_id > 0 ) {
+			$edit_url         = get_edit_post_link( $post_id, 'raw' );
+			$post['edit_url'] = is_string( $edit_url ) ? $edit_url : '';
+		} else {
+			$post['edit_url'] = '';
+		}
+	}
+
+	/**
+	 * Fetches post_status for the provided post IDs in one query.
+	 *
+	 * Direct lookup so trashed posts are visible without N cache hits.
+	 *
+	 * @param int[] $post_ids Post IDs to look up.
+	 * @return array<int, string> Map of post ID → post_status.
+	 */
+	private function fetch_post_statuses_by_id( array $post_ids ): array {
+		if ( 0 === count( $post_ids ) ) {
+			return array();
+		}
+
+		global $wpdb;
+
+		$placeholders = implode( ', ', array_fill( 0, count( $post_ids ), '%d' ) );
+		$values       = array_values( $post_ids );
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT ID, post_status FROM {$wpdb->posts}"
+					. " WHERE ID IN ({$placeholders})",
+				...$values
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		$by_id = array();
+		foreach ( is_array( $rows ) ? $rows : array() as $row ) {
+			$by_id[ (int) $row['ID'] ] = (string) $row['post_status'];
+		}
+
+		return $by_id;
 	}
 
 	/**
@@ -1021,8 +1105,9 @@ class Post_Import_Service {
 			);
 		}
 
-		$fields            = $prepared['fields'];
-		$processed_content = $prepared['processed_content'];
+		$fields              = $prepared['fields'];
+		$processed_content   = $prepared['processed_content'];
+		$source_modified_gmt = $prepared['source_modified_gmt'];
 
 		// Sideload the featured image before writing the post so that a
 		// failure here does not leave the post in a partially-updated state.
@@ -1108,7 +1193,8 @@ class Post_Import_Service {
 			$post_id,
 			null,
 			$previous_content,
-			$fields['warnings']
+			$fields['warnings'],
+			$source_modified_gmt
 		);
 
 		return $this->build_success_result( $fields, $post_id, true );
@@ -1205,8 +1291,9 @@ class Post_Import_Service {
 			);
 		}
 
-		$fields            = $prepared['fields'];
-		$processed_content = $prepared['processed_content'];
+		$fields              = $prepared['fields'];
+		$processed_content   = $prepared['processed_content'];
+		$source_modified_gmt = $prepared['source_modified_gmt'];
 
 		// Sideload the featured image before creating the post so that a
 		// failure here does not leave an orphaned draft in the DB.
@@ -1288,7 +1375,8 @@ class Post_Import_Service {
 			$post_id,
 			null,
 			array( 'action' => 'created_new_post' ),
-			$fields['warnings']
+			$fields['warnings'],
+			$source_modified_gmt
 		);
 
 		return $this->build_success_result( $fields, $post_id, false );
@@ -1309,7 +1397,11 @@ class Post_Import_Service {
 	 *                                          'prefetched_fresh_result' (skips the in-pipeline
 	 *                                          fetch) and 'batch_fresh_data' (drives parent
 	 *                                          resolution's in-batch detection).
-	 * @return array{fields: array, processed_content: string}|WP_Error Prepared data or error.
+	 * @return array{
+	 *     fields: array,
+	 *     processed_content: string,
+	 *     source_modified_gmt: string|null
+	 * }|WP_Error Prepared data or error.
 	 */
 	private function prepare_fresh_content(
 		array $fields,
@@ -1447,8 +1539,11 @@ class Post_Import_Service {
 			: $fields['terms'];
 
 		return array(
-			'fields'            => $fields,
-			'processed_content' => $processed_content,
+			'fields'              => $fields,
+			'processed_content'   => $processed_content,
+			'source_modified_gmt' => isset( $fresh_result['modified_gmt'] )
+				? (string) $fresh_result['modified_gmt']
+				: null,
 		);
 	}
 
@@ -1889,14 +1984,16 @@ class Post_Import_Service {
 	/**
 	 * Logs an import action to history, only when a session ID is provided.
 	 *
-	 * @param int|null    $session_id       Import session ID.
-	 * @param int|null    $source_post_id   Source post ID, or null if not provided.
-	 * @param string      $title            Post title.
-	 * @param string      $status           Import status (success, updated, error).
-	 * @param int|null    $post_id          WordPress post ID or null on failure.
-	 * @param string|null $error            Error message or null on success.
-	 * @param array       $changes          Contextual changes data for the item.
-	 * @param array       $warnings         Non-fatal warnings raised during import.
+	 * @param int|null    $session_id          Import session ID.
+	 * @param int|null    $source_post_id      Source post ID, or null if not provided.
+	 * @param string      $title               Post title.
+	 * @param string      $status              Import status (success, updated, error).
+	 * @param int|null    $post_id             WordPress post ID or null on failure.
+	 * @param string|null $error               Error message or null on success.
+	 * @param array       $changes             Contextual changes data for the item.
+	 * @param array       $warnings            Non-fatal warnings raised during import.
+	 * @param string|null $source_modified_gmt Source post's modified_gmt at import time;
+	 *                                         null when the fetch failed before reading it.
 	 */
 	private function log_import_if_session(
 		?int $session_id,
@@ -1906,7 +2003,8 @@ class Post_Import_Service {
 		?int $post_id,
 		?string $error,
 		array $changes,
-		array $warnings = array()
+		array $warnings = array(),
+		?string $source_modified_gmt = null
 	): void {
 		if ( null === $session_id ) {
 			return;
@@ -1920,7 +2018,8 @@ class Post_Import_Service {
 			$post_id,
 			$error,
 			$changes,
-			$warnings
+			$warnings,
+			$source_modified_gmt
 		);
 
 		if ( 'error' === $status ) {
