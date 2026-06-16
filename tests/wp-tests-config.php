@@ -45,7 +45,7 @@ define( 'WP_DEBUG_DISPLAY', false );
 
 // Set so feature gates on `wp_get_environment_type()` (e.g. the Audit
 // Log UI) exercise their enabled paths.
-define( 'WP_ENVIRONMENT_TYPE', 'local' );
+define( 'WP_ENVIRONMENT_TYPE', 'development' );
 
 // Authentication keys and salts (test values).
 define( 'AUTH_KEY', 'put your unique phrase here' );

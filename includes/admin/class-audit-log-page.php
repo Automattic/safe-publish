@@ -22,9 +22,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Registers the Audit Log submenu and the audit-events AJAX handler. The
  * page lists rows from all audit log channels with filtering by channel,
- * level, event substring, and date range. Gated to local dev only while
- * per-post import lifecycle coverage is incomplete; the table populates
- * in every environment so the data can be inspected via direct DB access.
+ * level, event substring, and date range. Gated to dev environments only
+ * while per-post import lifecycle coverage is incomplete; the table
+ * populates in every environment so the data can be inspected via direct
+ * DB access.
  */
 final class Audit_Log_Page {
 
@@ -71,10 +72,10 @@ final class Audit_Log_Page {
 
 	/**
 	 * Registers the submenu under the safe-publish parent and the AJAX
-	 * handler, for import-enabled and bidirectional modes. Local dev only.
+	 * handler, for import-enabled and bidirectional modes. Dev only.
 	 */
 	public function init(): void {
-		if ( ! self::is_local_environment() ) {
+		if ( ! self::is_dev_environment() ) {
 			return;
 		}
 
@@ -85,10 +86,10 @@ final class Audit_Log_Page {
 
 	/**
 	 * Registers the submenu under the settings-only parent and the AJAX
-	 * handler, for export-only and unconfigured modes. Local dev only.
+	 * handler, for export-only and unconfigured modes. Dev only.
 	 */
 	public function init_settings_only(): void {
-		if ( ! self::is_local_environment() ) {
+		if ( ! self::is_dev_environment() ) {
 			return;
 		}
 
@@ -100,10 +101,11 @@ final class Audit_Log_Page {
 	/**
 	 * Whether the audit log UI should be available in this environment.
 	 *
-	 * @return bool True on local dev installs (wp-env, Local, etc.).
+	 * @return bool True on dev installs (matches the value set in
+	 *              .wp-env.json and the safe-publish-local-dev mu-plugin).
 	 */
-	private static function is_local_environment(): bool {
-		return 'local' === wp_get_environment_type();
+	private static function is_dev_environment(): bool {
+		return 'development' === wp_get_environment_type();
 	}
 
 	/**
