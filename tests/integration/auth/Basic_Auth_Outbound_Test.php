@@ -11,6 +11,7 @@ namespace Safe_Publish\Tests\Integration\Auth;
 
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
+use Safe_Publish\Admin\Navigation_Ref_Rewriter;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
@@ -96,7 +97,8 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 			$content_processor,
 			$this->repository,
 			new Meta_Terms_Manager(),
-			new Telemetry_Service()
+			new Telemetry_Service(),
+			new Navigation_Ref_Rewriter()
 		);
 
 		add_filter( 'pre_http_request', array( $this, 'intercept_http_request' ), 5, 3 );

@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests\Integration;
 use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
+use Safe_Publish\Admin\Navigation_Ref_Rewriter;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
@@ -108,7 +109,8 @@ class Telemetry_Single_Import_Test extends WP_Ajax_UnitTestCase {
 				$content_processor,
 				$repository,
 				new Meta_Terms_Manager(),
-				$telemetry
+				$telemetry,
+				new Navigation_Ref_Rewriter()
 			),
 			new Post_Type_Fetcher( $http_client ),
 			$telemetry

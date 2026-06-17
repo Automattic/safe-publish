@@ -8,7 +8,7 @@
  */
 
 import { dateI18n, getSettings } from '@wordpress/date';
-import { __, sprintf } from '@wordpress/i18n';
+import { __, _n, sprintf } from '@wordpress/i18n';
 
 import type { JsonValue, Warning } from './types';
 
@@ -181,6 +181,18 @@ export function renderWarningMessage( warning: Warning ): string {
 					),
 					warning.source_id
 				);
+		case 'nav_ref_rewrite_failed':
+			return sprintf(
+				/* translators: 1: number of posts, 2: comma-separated post IDs */
+				_n(
+					'Imported this menu, but %1$d page that references it could not be updated automatically (post ID: %2$s). Re-import the menu to retry.',
+					'Imported this menu, but %1$d pages that reference it could not be updated automatically (post IDs: %2$s). Re-import the menu to retry.',
+					warning.failed_post_ids.length,
+					'safe-publish'
+				),
+				warning.failed_post_ids.length,
+				warning.failed_post_ids.join( ', ' )
+			);
 		default: {
 			const _exhaustive: never = warning;
 			return String( _exhaustive );
@@ -205,6 +217,8 @@ export function renderWarningShortLabel( warning: Warning ): string {
 			return __( 'parent orphaned', 'safe-publish' );
 		case 'unmapped_block_reference':
 			return __( 'unmapped block reference', 'safe-publish' );
+		case 'nav_ref_rewrite_failed':
+			return __( 'nav reference update failed', 'safe-publish' );
 		default: {
 			const _exhaustive: never = warning;
 			return String( _exhaustive );
