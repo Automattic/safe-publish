@@ -10,7 +10,11 @@ import {
 	renderWarningMessage,
 	renderWarningShortLabel,
 } from '@/utils';
-import type { AuthorFallbackWarning, ParentOrphanedWarning } from '@/types';
+import type {
+	AuthorFallbackWarning,
+	NavRefRewriteFailedWarning,
+	ParentOrphanedWarning,
+} from '@/types';
 
 // Pin WP date settings so format/timezone-sensitive tests are deterministic.
 let originalDateSettings: ReturnType< typeof getSettings >;
@@ -210,6 +214,34 @@ describe( 'renderWarningMessage', () => {
 		expect( message ).toContain( '99' );
 		expect( message ).toContain( 'failed to import earlier' );
 	} );
+
+	it( 'should list the stale post IDs and a retry hint for nav_ref_rewrite_failed', () => {
+		// ARRANGE: two posts could not be repointed after a menu import.
+		const warning: NavRefRewriteFailedWarning = {
+			type: 'nav_ref_rewrite_failed',
+			failed_post_ids: [ 12, 34 ],
+		};
+		// ACT: render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: the count, both IDs, and the retry instruction are present.
+		expect( message ).toContain( '2 pages' );
+		expect( message ).toContain( '12, 34' );
+		expect( message ).toContain( 'Re-import the menu to retry' );
+	} );
+
+	it( 'should use the singular phrasing for a single nav_ref_rewrite_failed post', () => {
+		// ARRANGE: a single post could not be repointed.
+		const warning: NavRefRewriteFailedWarning = {
+			type: 'nav_ref_rewrite_failed',
+			failed_post_ids: [ 7 ],
+		};
+		// ACT: render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: singular wording and the lone ID.
+		expect( message ).toContain( '1 page' );
+		expect( message ).not.toContain( '1 pages' );
+		expect( message ).toContain( '7' );
+	} );
 } );
 
 describe( 'renderWarningShortLabel', () => {
@@ -237,5 +269,17 @@ describe( 'renderWarningShortLabel', () => {
 		const label = renderWarningShortLabel( warning );
 		// ASSERT: short label is the comma-joinable string used in the bulk modal.
 		expect( label ).toBe( 'parent orphaned' );
+	} );
+
+	it( 'should return "nav reference update failed" for nav_ref_rewrite_failed', () => {
+		// ARRANGE: any nav_ref_rewrite_failed warning.
+		const warning: NavRefRewriteFailedWarning = {
+			type: 'nav_ref_rewrite_failed',
+			failed_post_ids: [ 5 ],
+		};
+		// ACT: render the short label.
+		const label = renderWarningShortLabel( warning );
+		// ASSERT: short label is the comma-joinable string used in the bulk modal.
+		expect( label ).toBe( 'nav reference update failed' );
 	} );
 } );
