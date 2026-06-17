@@ -695,12 +695,11 @@ export function PostsDataView( {
 	const hasActiveFilters =
 		'all' !== state
 		|| '' !== searchTerm
-		|| ( isCatalogPrimary
-			&& ( selectedStatuses.length > 0
-				|| null !== publishedAfter
-				|| null !== publishedBefore ) )
-		|| ( ! isCatalogPrimary
-			&& ( null !== importedAfter || null !== importedBefore ) );
+		|| selectedStatuses.length > 0
+		|| null !== publishedAfter
+		|| null !== publishedBefore
+		|| null !== importedAfter
+		|| null !== importedBefore;
 
 	const handleStatusesChange = (
 		tokens: ( string | { value: string } )[]
