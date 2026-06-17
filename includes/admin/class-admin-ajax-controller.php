@@ -1104,8 +1104,15 @@ final class Admin_Ajax_Controller {
 		}
 
 		$sort_result  = Topological_Sorter::sort( $parent_map );
-		$sorted_order = array_merge( $sort_result['sorted'], $sort_result['leftover'] );
+		$sorted_order = self::defer_dependent_types(
+			array_merge( $sort_result['sorted'], $sort_result['leftover'] ),
+			$batch_fresh_data
+		);
 		$processed    = array();
+
+		// Source ID => destination ID accumulator. Feeds block-attribute ID
+		// remapping for items referencing in-batch imports (e.g. wp_navigation).
+		$session_id_map = array();
 
 		$results    = array();
 		$successful = 0;
@@ -1125,6 +1132,7 @@ final class Admin_Ajax_Controller {
 				array(
 					'prefetched_fresh_result' => $prefetch,
 					'batch_fresh_data'        => $batch_fresh_data,
+					'session_id_map'          => $session_id_map,
 				)
 			);
 			$results[] = $result;
@@ -1133,6 +1141,7 @@ final class Admin_Ajax_Controller {
 
 			if ( $result['success'] ) {
 				++$successful;
+				$session_id_map[ $source_id ] = (int) $result['post_id'];
 			} else {
 				++$failed;
 			}
@@ -1147,12 +1156,18 @@ final class Admin_Ajax_Controller {
 			$result    = $this->post_import_service->import_post(
 				$post_data,
 				$session_id,
-				array( 'batch_fresh_data' => $batch_fresh_data )
+				array(
+					'batch_fresh_data' => $batch_fresh_data,
+					'session_id_map'   => $session_id_map,
+				)
 			);
 			$results[] = $result;
 
 			if ( $result['success'] ) {
 				++$successful;
+				if ( $source_post_id > 0 ) {
+					$session_id_map[ $source_post_id ] = (int) $result['post_id'];
+				}
 			} else {
 				++$failed;
 			}
@@ -1505,6 +1520,40 @@ final class Admin_Ajax_Controller {
 		}
 
 		return $is_newer ? 'outdated' : 'up-to-date';
+	}
+
+	/**
+	 * Moves dependent types (wp_navigation) to the end of the import order so
+	 * the items they reference via core/navigation-link `id` attrs populate
+	 * the session ID map first.
+	 *
+	 * Asymmetry is one-directional — navs reference pages, not vice versa —
+	 * so the topological sorter itself stays unaware of the type.
+	 *
+	 * @param int[]                            $sorted_order     Source IDs in topo order.
+	 * @param array<int, array<string, mixed>> $batch_fresh_data Pass-1 fresh data
+	 *                                                           keyed by source ID.
+	 * @return int[] Order with dependent types pushed to the end (request-order
+	 *               preserved among them).
+	 */
+	private static function defer_dependent_types(
+		array $sorted_order,
+		array $batch_fresh_data
+	): array {
+		$dependent_types = array( 'wp_navigation' );
+
+		$head = array();
+		$tail = array();
+		foreach ( $sorted_order as $source_id ) {
+			$post_type = (string) ( $batch_fresh_data[ $source_id ]['post_type'] ?? '' );
+			if ( in_array( $post_type, $dependent_types, true ) ) {
+				$tail[] = $source_id;
+			} else {
+				$head[] = $source_id;
+			}
+		}
+
+		return array_merge( $head, $tail );
 	}
 
 	/**

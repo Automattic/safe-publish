@@ -140,6 +140,10 @@ class Post_Import_Service {
 	 *                             - 'batch_fresh_data' (array|null, default null): map of
 	 *                               source ID => pass-1 fresh data for the current bulk batch;
 	 *                               drives parent resolution's in-batch detection.
+	 *                             - 'session_id_map' (array<int,int>, default empty): source
+	 *                               post ID => destination post ID accumulated during pass 2
+	 *                               of the bulk batch; feeds block-attribute ID remapping
+	 *                               for later items (e.g. wp_navigation links).
 	 * @return array Result data with success status, post_id, edit_url, and error keys.
 	 */
 	public function import_post(
@@ -677,7 +681,9 @@ class Post_Import_Service {
 			return $post_type;
 		}
 
-		$capability = 'page' === $post_type ? 'edit_pages' : 'edit_posts';
+		// Resolve the cap from the post type's own capability map so types
+		// like wp_navigation (edit_theme_options) work alongside post/page.
+		$capability = get_post_type_object( $post_type )->cap->edit_posts;
 
 		if ( ! current_user_can( $capability ) ) {
 			$message = sprintf(
@@ -728,20 +734,28 @@ class Post_Import_Service {
 	/**
 	 * Extracts the site base URL (scheme + host + port) from a full URL.
 	 *
-	 * Internal helper shared by the single-import and draft-processing paths.
-	 *
 	 * Preserves the port so non-default ports (e.g. local dev environments,
 	 * staging on alternate ports) reach the right service when used as a
-	 * base for REST endpoint URLs.
+	 * base for REST endpoint URLs. Returns '' for empty or unparseable input
+	 * so callers can pass through source-link values without guarding.
 	 *
 	 * @param string $url Full URL to extract the base from.
 	 * @return string Site base URL (e.g. "https://example.com" or
-	 *                "http://example.com:8889").
+	 *                "http://example.com:8889"), or '' when input is empty
+	 *                or has no scheme/host.
 	 */
 	public static function extract_site_url( string $url ): string {
+		if ( '' === $url ) {
+			return '';
+		}
+
 		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
 		$host   = wp_parse_url( $url, PHP_URL_HOST );
-		$port   = wp_parse_url( $url, PHP_URL_PORT );
+		if ( ! is_string( $scheme ) || ! is_string( $host ) ) {
+			return '';
+		}
+
+		$port = wp_parse_url( $url, PHP_URL_PORT );
 
 		return $scheme . '://' . $host . ( is_int( $port ) ? ':' . $port : '' );
 	}
@@ -752,17 +766,28 @@ class Post_Import_Service {
 	 * Returns a WP_Error if content processing fails or if kses is enabled and
 	 * sanitization would modify the content.
 	 *
-	 * @param string $content     Raw post content.
-	 * @param string $source_link Source post URL used to derive site URL.
+	 * @param string         $content        Raw post content.
+	 * @param string         $source_link    Source post URL used to derive site URL.
+	 * @param array<int,int> $session_id_map Source post ID => destination post ID for
+	 *                                       the in-flight bulk batch; feeds block ID
+	 *                                       remapping.
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
-	private function process_post_content( string $content, string $source_link ): string|WP_Error {
+	private function process_post_content(
+		string $content,
+		string $source_link,
+		array $session_id_map = array()
+	): string|WP_Error {
 		if ( empty( $source_link ) ) {
 			return $this->sanitize_field( $content, self::FIELD_CONTENT );
 		}
 
 		$source_site_url = self::extract_site_url( $source_link );
-		$processed       = $this->content_processor->process_content( $content, $source_site_url );
+		$processed       = $this->content_processor->process_content(
+			$content,
+			$source_site_url,
+			array( 'session_id_map' => $session_id_map )
+		);
 
 		if ( is_wp_error( $processed ) ) {
 			return $processed;
@@ -1333,9 +1358,10 @@ class Post_Import_Service {
 				'post_password'  => $fields['password'],
 				'post_author'    => $fields['matched_author_id'],
 				'meta_input'     => array(
-					Options::META_SOURCE_POST_ID => $fields['source_post_id'],
-					Options::META_SOURCE_LINK    => $fields['source_link'],
-					Options::META_IMPORTED_FROM  => Options::META_IMPORTED_FROM_VALUE,
+					Options::META_SOURCE_POST_ID  => $fields['source_post_id'],
+					Options::META_SOURCE_LINK     => $fields['source_link'],
+					Options::META_SOURCE_SITE_URL => self::extract_site_url( $fields['source_link'] ),
+					Options::META_IMPORTED_FROM   => Options::META_IMPORTED_FROM_VALUE,
 				),
 			),
 			$featured_attachment_id,
@@ -1395,8 +1421,9 @@ class Post_Import_Service {
 	 *                                          update path; null for new posts.
 	 * @param array    $options                 Behavior overrides; see import_post(). Reads
 	 *                                          'prefetched_fresh_result' (skips the in-pipeline
-	 *                                          fetch) and 'batch_fresh_data' (drives parent
-	 *                                          resolution's in-batch detection).
+	 *                                          fetch), 'batch_fresh_data' (drives parent
+	 *                                          resolution's in-batch detection), and
+	 *                                          'session_id_map' (feeds block ID remapping).
 	 * @return array{
 	 *     fields: array,
 	 *     processed_content: string,
@@ -1411,6 +1438,9 @@ class Post_Import_Service {
 	): array|WP_Error {
 		$prefetched_fresh_result = $options['prefetched_fresh_result'] ?? null;
 		$batch_fresh_data        = $options['batch_fresh_data'] ?? null;
+		$session_id_map          = is_array( $options['session_id_map'] ?? null )
+			? $options['session_id_map']
+			: array();
 
 		if ( null !== $prefetched_fresh_result ) {
 			$fresh_result = $prefetched_fresh_result;
@@ -1509,7 +1539,8 @@ class Post_Import_Service {
 
 		$processed_content = $this->process_post_content(
 			$fresh_result['content'] ?? '',
-			$fields['source_link']
+			$fields['source_link'],
+			$session_id_map
 		);
 
 		if ( is_wp_error( $processed_content ) ) {
@@ -1529,6 +1560,11 @@ class Post_Import_Service {
 
 			return $media_error;
 		}
+
+		$fields['warnings'] = array_merge(
+			$fields['warnings'],
+			$this->content_processor->get_warnings()
+		);
 
 		// Unsanitized values; sanitized downstream before being stored.
 		$fields['meta']  = is_array( $fresh_result['meta'] ?? null )
@@ -1604,6 +1640,11 @@ class Post_Import_Service {
 			Options::META_SOURCE_LINK,
 			$source_link
 		);
+		update_post_meta(
+			$post_id,
+			Options::META_SOURCE_SITE_URL,
+			self::extract_site_url( $source_link )
+		);
 
 		if ( $featured_attachment_id > 0 ) {
 			set_post_thumbnail( $post_id, $featured_attachment_id );
@@ -1633,7 +1674,8 @@ class Post_Import_Service {
 
 		$terms_result = $this->meta_terms_manager->update_terms(
 			$post_id,
-			$terms
+			$terms,
+			self::extract_site_url( $source_link )
 		);
 
 		if ( is_wp_error( $terms_result ) ) {
@@ -1674,6 +1716,11 @@ class Post_Import_Service {
 				Options::META_SOURCE_LINK           => get_post_meta(
 					$post_id,
 					Options::META_SOURCE_LINK,
+					true
+				),
+				Options::META_SOURCE_SITE_URL       => get_post_meta(
+					$post_id,
+					Options::META_SOURCE_SITE_URL,
 					true
 				),
 				Options::META_SOURCE_AUTHOR_EMAIL   => get_post_meta(
@@ -1868,7 +1915,8 @@ class Post_Import_Service {
 
 		$terms_result = $this->meta_terms_manager->update_terms(
 			$post_id,
-			$terms
+			$terms,
+			(string) ( $post_args['meta_input'][ Options::META_SOURCE_SITE_URL ] ?? '' )
 		);
 
 		if ( is_wp_error( $terms_result ) ) {

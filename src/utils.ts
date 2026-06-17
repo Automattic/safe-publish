@@ -163,6 +163,24 @@ export function renderWarningMessage( warning: Warning ): string {
 				),
 				warning.source.parent_id
 			);
+		case 'unmapped_block_reference':
+			return warning.kind === 'term'
+				? sprintf(
+					/* translators: %d: source term ID */
+					__(
+						"Source term %d isn't on this site. Re-save the nav once it's available.",
+						'safe-publish'
+					),
+					warning.source_id
+				)
+				: sprintf(
+					/* translators: %d: source post ID */
+					__(
+						"Source post %d isn't on this site. Import it, then re-save the nav.",
+						'safe-publish'
+					),
+					warning.source_id
+				);
 		default: {
 			const _exhaustive: never = warning;
 			return String( _exhaustive );
@@ -185,6 +203,8 @@ export function renderWarningShortLabel( warning: Warning ): string {
 			return __( 'author fallback', 'safe-publish' );
 		case 'parent_orphaned':
 			return __( 'parent orphaned', 'safe-publish' );
+		case 'unmapped_block_reference':
+			return __( 'unmapped block reference', 'safe-publish' );
 		default: {
 			const _exhaustive: never = warning;
 			return String( _exhaustive );

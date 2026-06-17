@@ -187,6 +187,7 @@ final class Post_Parity_Asserter {
 	private const PLUGIN_ADDED_META = array(
 		Options::META_SOURCE_POST_ID      => 'source post ID',
 		Options::META_SOURCE_LINK         => 'source post URL',
+		Options::META_SOURCE_SITE_URL     => 'source site URL',
 		Options::META_IMPORTED_FROM       => 'plugin marker',
 		Options::META_SOURCE_AUTHOR_EMAIL => 'source author email',
 		Options::META_SOURCE_AUTHOR_LOGIN => 'source author login',
@@ -537,9 +538,21 @@ final class Post_Parity_Asserter {
 		$author_email  = (string) ( $source_author['email'] ?? '' );
 		$author_login  = (string) ( $source_author['login'] ?? '' );
 
+		$expected_site_url = '';
+		if ( '' !== $source_link ) {
+			$scheme = wp_parse_url( $source_link, PHP_URL_SCHEME );
+			$host   = wp_parse_url( $source_link, PHP_URL_HOST );
+			$port   = wp_parse_url( $source_link, PHP_URL_PORT );
+			if ( is_string( $scheme ) && is_string( $host ) ) {
+				$expected_site_url = $scheme . '://' . $host
+					. ( is_int( $port ) ? ':' . $port : '' );
+			}
+		}
+
 		$expected = array(
 			Options::META_SOURCE_POST_ID      => $source_id,
 			Options::META_SOURCE_LINK         => $source_link,
+			Options::META_SOURCE_SITE_URL     => $expected_site_url,
 			Options::META_IMPORTED_FROM       => Options::META_IMPORTED_FROM_VALUE,
 			Options::META_SOURCE_AUTHOR_EMAIL => $author_email,
 			Options::META_SOURCE_AUTHOR_LOGIN => $author_login,
