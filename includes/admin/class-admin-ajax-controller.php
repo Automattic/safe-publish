@@ -1037,7 +1037,10 @@ final class Admin_Ajax_Controller {
 		// Force-update confirmation prompt is HTTP UX, not import logic: if the
 		// post is already imported and the caller hasn't opted into updating,
 		// return the prompt response instead of running the import.
-		$imported_post = $this->post_import_service->find_imported_post( $source_post_id );
+		$imported_post = $this->post_import_service->find_imported_post(
+			$source_post_id,
+			(string) get_option( Options::OPTION_CONNECTED_SITE_URL, '' )
+		);
 
 		if ( $imported_post && ! $force_update ) {
 			wp_send_json_success(
@@ -1484,7 +1487,10 @@ final class Admin_Ajax_Controller {
 
 		// Two bulk queries instead of N per-row meta_query + items-table reads.
 		$imported_by_source_id = $this->post_import_service
-			->fetch_imported_posts_by_source_ids( $source_ids );
+			->fetch_imported_posts_by_source_ids(
+				$source_ids,
+				(string) get_option( Options::OPTION_CONNECTED_SITE_URL, '' )
+			);
 
 		if ( 0 === count( $imported_by_source_id ) ) {
 			wp_send_json_success( array( 'statuses' => (object) array() ) );

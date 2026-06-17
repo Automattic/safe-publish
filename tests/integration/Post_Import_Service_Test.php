@@ -1294,6 +1294,45 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that find_imported_post() scopes by source site URL when one is
+	 * passed: a destination post imported from a different source isn't
+	 * returned even when the source post ID matches.
+	 */
+	public function test_find_imported_post_scopes_by_source_site_url(): void {
+		// ARRANGE: A destination post tagged with source A.
+		$dest_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta( $dest_id, Options::META_SOURCE_POST_ID, 5000 );
+		update_post_meta(
+			$dest_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source-a.example.com'
+		);
+
+		// ACT + ASSERT: Same-source lookup returns the post.
+		$same_source = $this->import_service->find_imported_post(
+			5000,
+			'https://source-a.example.com'
+		);
+		$this->assertNotNull( $same_source );
+		$this->assertSame( $dest_id, $same_source->ID );
+
+		// ACT + ASSERT: Different-source lookup returns null.
+		$wrong_source = $this->import_service->find_imported_post(
+			5000,
+			'https://source-b.example.com'
+		);
+		$this->assertNull( $wrong_source );
+
+		// ACT + ASSERT: Unscoped lookup (empty URL) still returns the post —
+		// preserves backward compat for callers that don't know the URL.
+		$unscoped = $this->import_service->find_imported_post( 5000, '' );
+		$this->assertNotNull( $unscoped );
+		$this->assertSame( $dest_id, $unscoped->ID );
+	}
+
+	/**
 	 * Verifies that the bulk import path writes an item row when
 	 * post-type resolution returns a WP_Error.
 	 */
@@ -2481,6 +2520,11 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			Options::META_SOURCE_POST_ID,
 			700
 		);
+		update_post_meta(
+			$existing_parent_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		$this->mock_post_overrides = array( 'parent' => 700 );
 
@@ -2717,6 +2761,11 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			Options::META_SOURCE_POST_ID,
 			900
 		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		$this->mock_post_overrides = array( 'parent' => 900 );
 
@@ -2770,6 +2819,11 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			Options::META_SOURCE_POST_ID,
 			910
 		);
+		update_post_meta(
+			$first_parent_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 		$second_parent_id = self::factory()->post->create(
 			array( 'post_type' => 'page' )
 		);
@@ -2777,6 +2831,11 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$second_parent_id,
 			Options::META_SOURCE_POST_ID,
 			920
+		);
+		update_post_meta(
+			$second_parent_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
 		);
 
 		$this->mock_post_overrides = array( 'parent' => 910 );
@@ -2831,6 +2890,11 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$parent_dest_id,
 			Options::META_SOURCE_POST_ID,
 			950
+		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
 		);
 
 		$this->mock_post_overrides = array( 'parent' => 950 );
@@ -2923,6 +2987,11 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			Options::META_SOURCE_POST_ID,
 			940
 		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		// ACT: Re-import the same source post — strict resolution should now
 		// succeed because the parent exists.
@@ -2958,6 +3027,11 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$parent_dest_id,
 			Options::META_SOURCE_POST_ID,
 			930
+		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
 		);
 
 		$this->mock_post_overrides = array( 'parent' => 930 );
@@ -3060,6 +3134,11 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$parent_dest_id,
 			Options::META_SOURCE_POST_ID,
 			950
+		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
 		);
 
 		$this->mock_post_overrides = array( 'parent' => 950 );

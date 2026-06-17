@@ -448,6 +448,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 		update_post_meta( $existing_post_id, 'safe_publish_source_post_id', '8001' );
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
@@ -538,6 +543,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 		update_post_meta( $existing_post_id, 'safe_publish_source_post_id', '8002' );
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
@@ -602,6 +612,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 		update_post_meta( $existing_post_id, 'safe_publish_source_post_id', '8003' );
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
@@ -805,6 +820,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			Options::META_SOURCE_POST_ID,
 			'7101'
 		);
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		// ARRANGE: Mock API returns updated field values.
 		$this->mock_post_overrides = array(
@@ -918,6 +938,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			$existing_post_id,
 			Options::META_SOURCE_POST_ID,
 			'7201'
+		);
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
 		);
 
 		// ARRANGE: Mock API returns an updated password.
@@ -1365,6 +1390,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			$existing_post_id,
 			Options::META_SOURCE_POST_ID,
 			'6021'
+		);
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
 		);
 
 		wp_set_current_user( $this->admin_user_id );

@@ -194,6 +194,11 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		}
 
 		update_post_meta( $post_id, Options::META_SOURCE_POST_ID, $source_id );
+		update_post_meta(
+			$post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		global $wpdb;
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching

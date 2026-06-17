@@ -229,7 +229,12 @@ class Post_Import_Service {
 		}
 
 		try {
-			$imported_post = $this->find_imported_post( $fields['source_post_id'] );
+			$source_site_url = self::extract_site_url( $fields['source_link'] );
+
+			$imported_post = $this->find_imported_post(
+				$fields['source_post_id'],
+				$source_site_url
+			);
 
 			if ( $imported_post ) {
 				return $this->handle_imported_post(
@@ -461,6 +466,7 @@ class Post_Import_Service {
 	 * @param int        $source_parent_id Source post's parent ID. 0 means
 	 *                                     top-level on the source.
 	 * @param string     $post_type        Destination post type slug.
+	 * @param string     $source_site_url  Source site URL for scoping the lookup; '' skips it.
 	 * @param array|null $batch_fresh_data Map of source ID => pass-1 fresh
 	 *                                     data for posts in the current bulk
 	 *                                     batch. Null for single-import.
@@ -471,6 +477,7 @@ class Post_Import_Service {
 	public function resolve_source_parent(
 		int $source_parent_id,
 		string $post_type,
+		string $source_site_url,
 		?array $batch_fresh_data = null
 	): int|WP_Error|null {
 		if ( 0 === $source_parent_id ) {
@@ -481,7 +488,10 @@ class Post_Import_Service {
 			return null;
 		}
 
-		$destination_parent = $this->find_imported_post( $source_parent_id );
+		$destination_parent = $this->find_imported_post(
+			$source_parent_id,
+			$source_site_url
+		);
 
 		if ( null !== $destination_parent ) {
 			return (int) $destination_parent->ID;
@@ -947,32 +957,47 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Returns a map of source post ID → local WP_Post for the provided IDs.
+	 * Returns a map of source post ID → local WP_Post for the provided IDs,
+	 * scoped to the source site so two destinations connected to different
+	 * sources can't collide on overlapping source post IDs.
 	 *
 	 * Single `meta_query` IN lookup instead of N individual `find_imported_post`
 	 * calls. WP_Query primes the post-meta cache for the returned IDs, so
 	 * subsequent `get_post_meta` reads inside the indexing loop are cache hits.
 	 *
-	 * @param int[] $source_ids Source post IDs to look up.
+	 * @param int[]  $source_ids      Source post IDs to look up.
+	 * @param string $source_site_url Source site URL that imports were tagged with;
+	 *                                pass '' to skip the scope filter.
 	 * @return array<int, WP_Post> Map keyed by source post ID.
 	 */
 	public function fetch_imported_posts_by_source_ids(
-		array $source_ids
+		array $source_ids,
+		string $source_site_url
 	): array {
 		if ( 0 === count( $source_ids ) ) {
 			return array();
 		}
 
+		$meta_query = array(
+			array(
+				'key'     => Options::META_SOURCE_POST_ID,
+				'value'   => $source_ids,
+				'compare' => 'IN',
+			),
+		);
+
+		if ( '' !== $source_site_url ) {
+			$meta_query['relation'] = 'AND';
+			$meta_query[]           = array(
+				'key'   => Options::META_SOURCE_SITE_URL,
+				'value' => $source_site_url,
+			);
+		}
+
 		$imported_posts = get_posts(
 			array(
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'             => array(
-					array(
-						'key'     => Options::META_SOURCE_POST_ID,
-						'value'   => $source_ids,
-						'compare' => 'IN',
-					),
-				),
+				'meta_query'             => $meta_query,
 				'post_type'              => 'any',
 				'post_status'            => 'any',
 				'posts_per_page'         => count( $source_ids ),
@@ -1046,21 +1071,42 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Finds a previously imported WordPress post by its source post ID.
+	 * Finds a previously imported WordPress post by its source post ID, scoped
+	 * to the source site so two destinations connected to different sources
+	 * can't collide on overlapping source post IDs.
 	 *
-	 * Looks across all public post types so callers importing pages or
-	 * custom hierarchical types can locate prior imports without knowing the
+	 * Looks across all post types so callers importing pages or custom
+	 * hierarchical types can locate prior imports without knowing the
 	 * destination's post type up-front.
 	 *
-	 * @param int $source_post_id Source post ID stored in post meta.
+	 * @param int    $source_post_id  Source post ID stored in post meta.
+	 * @param string $source_site_url Source site URL the import was tagged with;
+	 *                                pass '' to skip the scope filter.
 	 * @return WP_Post|null Imported post or null if not found.
 	 */
-	public function find_imported_post( int $source_post_id ): ?WP_Post {
+	public function find_imported_post(
+		int $source_post_id,
+		string $source_site_url
+	): ?WP_Post {
+		$meta_query = array(
+			array(
+				'key'   => Options::META_SOURCE_POST_ID,
+				'value' => $source_post_id,
+			),
+		);
+
+		if ( '' !== $source_site_url ) {
+			$meta_query['relation'] = 'AND';
+			$meta_query[]           = array(
+				'key'   => Options::META_SOURCE_SITE_URL,
+				'value' => $source_site_url,
+			);
+		}
+
 		$existing_posts = get_posts(
 			array(
-				'meta_key'         => Options::META_SOURCE_POST_ID,
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-				'meta_value'       => $source_post_id,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query'       => $meta_query,
 				// Source post IDs identify a source-side post irrespective of
 				// type, so look across every public type to support hierarchical
 				// imports (pages) and custom post types alongside posts.
@@ -1502,6 +1548,7 @@ class Post_Import_Service {
 		$resolved_parent = $this->resolve_source_parent(
 			$fields['source_parent_id'],
 			$post_type,
+			self::extract_site_url( $fields['source_link'] ),
 			$batch_fresh_data
 		);
 
