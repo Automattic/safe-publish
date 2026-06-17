@@ -205,7 +205,7 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that the capability-based default applies wp_kses for a caller
-	 * that does not hold `unfiltered_html`, aborting the import when the
+	 * that does not hold unfiltered_html, aborting the import when the
 	 * source content contains HTML kses strips.
 	 */
 	public function test_kses_runs_by_default_for_caller_without_unfiltered_html(): void {
@@ -262,7 +262,7 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that the capability-based default skips wp_kses for any caller
-	 * that holds `unfiltered_html`, regardless of role, so source HTML kses
+	 * that holds unfiltered_html, regardless of role, so source HTML kses
 	 * would otherwise strip imports verbatim.
 	 */
 	public function test_kses_skipped_by_default_for_caller_with_unfiltered_html(): void {

@@ -88,7 +88,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Intercepts wp/v2/media JSON API requests and returns a mock response
-	 * whose `source_url` points to a `.jpg` URL that the base-class image mock
+	 * whose source_url points to a .jpg URL that the base-class image mock
 	 * can then serve as a real fixture file.
 	 *
 	 * Registered at priority 5 — runs before the base-class image mock at 10.

@@ -57,8 +57,8 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that the AJAX response envelope carries an `items` array and
-	 * a `total` count matching the rows that pass the active filters.
+	 * Verifies that the AJAX response envelope carries an items array and
+	 * a total count matching the rows that pass the active filters.
 	 */
 	public function test_response_returns_items_and_total(): void {
 		// ARRANGE.
@@ -111,7 +111,7 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that the `before` calendar day is treated as inclusive of
+	 * Verifies that the before calendar day is treated as inclusive of
 	 * the entire selected day — picking 2026-03-02 returns events from
 	 * that day, not just events strictly before midnight.
 	 */
@@ -189,7 +189,7 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that a malformed `after` calendar day is silently dropped
+	 * Verifies that a malformed after calendar day is silently dropped
 	 * rather than passed through to the SQL layer.
 	 */
 	public function test_malformed_calendar_day_is_dropped(): void {

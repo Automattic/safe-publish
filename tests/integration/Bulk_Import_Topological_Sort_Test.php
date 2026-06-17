@@ -145,7 +145,7 @@ class Bulk_Import_Topological_Sort_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Builds a `posts_data` entry for the given source ID and post type.
+	 * Builds a posts_data entry for the given source ID and post type.
 	 *
 	 * @param int    $source_id Source post ID.
 	 * @param string $post_type REST endpoint (e.g. 'pages').

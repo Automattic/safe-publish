@@ -218,7 +218,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that a signed non-GET request on `/wp/v2/*` short-circuits
+	 * Verifies that a signed non-GET request on /wp/v2/* short-circuits
 	 * before HMAC validation and falls through to WordPress' standard auth.
 	 * The destination only ever issues reads against source `/wp/v2/*`, so
 	 * write methods on that namespace should never enter the elevated
@@ -238,8 +238,8 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that a signed POST on `/safe-publish/v1/*` still authenticates
-	 * — the method check is scoped to `/wp/v2/*` so destination-side admin
+	 * Verifies that a signed POST on /safe-publish/v1/* still authenticates
+	 * — the method check is scoped to /wp/v2/* so destination-side admin
 	 * flows that POST to source routes continue to work.
 	 */
 	public function test_post_on_safe_publish_routes_still_authenticated(): void {
