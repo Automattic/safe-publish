@@ -590,7 +590,7 @@ export function PostsDataView( {
 
 		return () => controller.abort();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [ sourceIdsKey ] );
+	}, [ sourceIdsKey, refreshNonce ] );
 
 	useEffect(
 		() => () => {
