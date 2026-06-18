@@ -1102,8 +1102,7 @@ final class Admin_Ajax_Controller {
 
 		$result = $this->post_import_service->import_post(
 			$post_data,
-			$session_id,
-			array( 'force_draft_on_update' => true )
+			$session_id
 		);
 
 		$this->repository->complete_session( $session_id );
@@ -1123,7 +1122,7 @@ final class Admin_Ajax_Controller {
 		);
 
 		$result['message'] = $result['existing']
-			? __( 'Existing draft updated with latest content.', 'safe-publish' )
+			? __( 'Existing post updated with latest content.', 'safe-publish' )
 			: __( 'Draft post created successfully.', 'safe-publish' );
 
 		wp_send_json_success( $result );

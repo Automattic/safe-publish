@@ -124,7 +124,7 @@ By default, no sanitization is applied to the post content or excerpt; both fiel
 
 ### Post Status
 
-New posts are always created as **drafts** to allow review before publishing. This is intentional. When updating an existing post via bulk import, the current status is preserved to avoid silently unpublishing live content.
+New posts are always created as **drafts** to allow review before publishing. This is intentional. When updating an existing post, the current status is preserved to avoid silently unpublishing live content.
 
 ### Excluded Fields
 
