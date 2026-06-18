@@ -500,8 +500,8 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 
 	/**
 	 * Verifies that a parseable destination row paired with an unparseable
-	 * source modified_gmt resolves to `invalid` — a distinct sentinel from
-	 * `unreachable`, so the UI can surface "data bug" vs "network blip".
+	 * source modified_gmt resolves to invalid — a distinct sentinel from
+	 * unreachable, so the UI can surface "data bug" vs "network blip".
 	 */
 	public function test_reports_invalid_when_source_modified_gmt_unparseable(): void {
 		// ARRANGE: Destination row is fine; source mock returns a string that

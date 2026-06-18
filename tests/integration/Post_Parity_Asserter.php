@@ -483,7 +483,7 @@ final class Post_Parity_Asserter {
 	}
 
 	/**
-	 * Asserts that every meta key in the source body's `meta` field
+	 * Asserts that every meta key in the source body's meta field
 	 * round-trips to the destination post unchanged.
 	 *
 	 * Compares with string coercion because update_post_meta() serializes
@@ -620,7 +620,7 @@ final class Post_Parity_Asserter {
 
 	/**
 	 * Asserts that every meta key present on the destination post is
-	 * classified: a key from the source body's `meta` field, a plugin-added
+	 * classified: a key from the source body's meta field, a plugin-added
 	 * key, an allowed WordPress default, or a deferred key reserved for a
 	 * later phase. Fails loudly when an unmodeled key appears so the
 	 * registries stay synced with what the import pipeline actually writes.
@@ -799,7 +799,7 @@ final class Post_Parity_Asserter {
 	}
 
 	/**
-	 * Reads `_embedded['wp:term']` and returns a flat taxonomy => list of
+	 * Reads _embedded['wp:term'] and returns a flat taxonomy => list of
 	 * names map.
 	 *
 	 * @param array<string, mixed> $source_body Source REST response body.
@@ -869,7 +869,7 @@ final class Post_Parity_Asserter {
 	}
 
 	/**
-	 * Reads a source REST body field, unwrapping `[ 'raw' => ... ]` wrappers.
+	 * Reads a source REST body field, unwrapping [ 'raw' => ... ] wrappers.
 	 *
 	 * @param array<string, mixed> $source_body Source REST response body.
 	 * @param string               $field       Top-level field name.

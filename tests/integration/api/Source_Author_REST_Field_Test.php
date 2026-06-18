@@ -362,7 +362,7 @@ class Source_Author_REST_Field_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that an `id` query parameter on a collection route does not
+	 * Verifies that an id query parameter on a collection route does not
 	 * promote the request to single-item handling, keeping author PII out of
 	 * list responses regardless of the query string.
 	 */

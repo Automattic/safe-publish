@@ -94,9 +94,9 @@ class URLValidatorTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that URLs whose scheme isn't `http`/`https` are rejected so
-	 * the validator can't accidentally pass through `ftp://`, `file://`,
-	 * `gopher://`, or similar schemes the plugin has no business fetching.
+	 * Verifies that URLs whose scheme isn't http/https are rejected so
+	 * the validator can't accidentally pass through ftp://, file://,
+	 * gopher://, or similar schemes the plugin has no business fetching.
 	 *
 	 * @dataProvider non_http_scheme_provider
 	 *
@@ -121,7 +121,7 @@ class URLValidatorTest extends TestCase {
 
 	/**
 	 * Verifies that schemes are matched case-insensitively per RFC 3986 —
-	 * `HTTP://` and `HTTPS://` are equivalent to the lowercase forms and
+	 * HTTP:// and HTTPS:// are equivalent to the lowercase forms and
 	 * must pass validation.
 	 *
 	 * @dataProvider uppercase_scheme_provider

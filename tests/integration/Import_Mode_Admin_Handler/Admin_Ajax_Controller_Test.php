@@ -1210,7 +1210,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 	/**
 	 * Verifies that a single-import author-resolution failure produces an
-	 * `import_items` row with status 'error' and a descriptive error_message.
+	 * import_items row with status 'error' and a descriptive error_message.
 	 */
 	public function test_ajax_create_draft_logs_author_resolution_failure(): void {
 		// ARRANGE: Source response advertises an author email that does not

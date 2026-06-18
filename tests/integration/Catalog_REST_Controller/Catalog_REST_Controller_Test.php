@@ -383,7 +383,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 
 	/**
 	 * Verifies that the title search escapes LIKE wildcards in the search
-	 * term, so a literal `%` only matches titles containing that character
+	 * term, so a literal % only matches titles containing that character
 	 * — not "anything around".
 	 */
 	public function test_search_escapes_like_wildcards(): void {
@@ -412,7 +412,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that the explicit `name` param performs exact slug lookup.
+	 * Verifies that the explicit name param performs exact slug lookup.
 	 */
 	public function test_name_param_returns_only_exact_slug_match(): void {
 		// ARRANGE: Two posts with slugs that share a prefix.
@@ -483,7 +483,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that a date-only `published_before` includes posts published
+	 * Verifies that a date-only published_before includes posts published
 	 * on that calendar day. Regression guard for the bug where
 	 * createFromFormat('Y-m-d') without the `!` prefix inherits current
 	 * time, and the upper bound was treated as midnight.
@@ -533,7 +533,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 
 	/**
 	 * Verifies that two consecutive pages together cover every record —
-	 * pins against the off-by-one where `paged` + `per_page + 1` caused
+	 * pins against the off-by-one where paged + per_page + 1 caused
 	 * WP_Query to skip one record between pages.
 	 */
 	public function test_consecutive_pages_cover_every_record(): void {

@@ -565,7 +565,7 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 
 	/**
 	 * Guards the comparator's coverage assumptions: the seeder must not emit
-	 * gallery blocks or `data-id` attributes, since neither is exercised by
+	 * gallery blocks or data-id attributes, since neither is exercised by
 	 * the URL/ID parity checks today. Grow comparator coverage before
 	 * relaxing this.
 	 */
@@ -697,7 +697,7 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that every meta key in the source body's `meta` field
+	 * Verifies that every meta key in the source body's meta field
 	 * round-trips to the destination post unchanged.
 	 */
 	public function test_source_matched_meta_parity(): void {
