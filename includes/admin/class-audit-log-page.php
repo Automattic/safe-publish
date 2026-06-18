@@ -193,7 +193,6 @@ final class Audit_Log_Page {
 			array(
 				'ajaxurl'       => admin_url( 'admin-ajax.php' ),
 				'nonce'         => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-				'restNonce'     => wp_create_nonce( 'wp_rest' ),
 				'containerId'   => 'safe-publish-audit-log-container',
 				'settingsUrl'   => admin_url( 'admin.php?page=safe-publish-settings' ),
 				'knownChannels' => self::KNOWN_CHANNELS,

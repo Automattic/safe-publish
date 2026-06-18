@@ -1132,8 +1132,6 @@ export function PostsDataView( {
 						{
 							ajaxurl: window.safePublishAdminData.ajaxurl,
 							nonce: window.safePublishAdminData.nonce,
-							restNonce:
-								window.safePublishAdminData.restNonce,
 						},
 						syncStatuses,
 						state

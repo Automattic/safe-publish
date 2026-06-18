@@ -1,88 +1,50 @@
 /**
  * Tests for diff API functions
  */
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, type Mock } from 'vitest';
+
 import {
 	fetchDiffPreview,
 	type DiffPreviewPayload,
 	type DiffPreviewResult,
 } from '@/api/diff';
+import apiFetch from '@wordpress/api-fetch';
 
-const REST_NONCE = 'test-rest-nonce';
+vi.mock( '@wordpress/api-fetch', () => ( { default: vi.fn() } ) );
+
+const mockApiFetch = apiFetch as unknown as Mock;
 
 describe( 'fetchDiffPreview', () => {
 	beforeEach( () => {
-		global.fetch = vi.fn();
+		mockApiFetch.mockReset();
 	} );
 
-	afterEach( () => {
-		vi.restoreAllMocks();
-	} );
-
-	it( 'should fetch diff preview successfully', async () => {
+	it( 'requests the REST route via apiFetch and returns the result', async () => {
+		// ARRANGE: apiFetch resolves with a diff result.
 		const mockResponse: DiffPreviewResult = {
 			contentDiffHtml: '<div>Diff content</div>',
 			blockDiffs: [],
 		};
+		mockApiFetch.mockResolvedValue( mockResponse );
 
-		( global.fetch as any ).mockResolvedValue( {
-			ok: true,
-			json: async () => mockResponse,
-		} );
+		const payload: DiffPreviewPayload = { postId: 123 };
 
-		const payload: DiffPreviewPayload = {
-			postId: 123,
-		};
+		// ACT: Fetch the diff preview.
+		const result = await fetchDiffPreview( payload );
 
-		const result = await fetchDiffPreview( payload, REST_NONCE );
+		// ASSERT: Result is returned and the request resolves against the site
+		// REST root via a relative path (apiFetch), not a hardcoded /wp-json/.
 		expect( result ).toEqual( mockResponse );
-		expect( global.fetch ).toHaveBeenCalledWith(
-			'/wp-json/safe-publish/v1/diff-preview',
-			expect.objectContaining( {
-				method: 'POST',
-				headers: expect.objectContaining( {
-					'Content-Type': 'application/json',
-				} ),
-				body: JSON.stringify( payload ),
-			} )
-		);
+		expect( mockApiFetch ).toHaveBeenCalledWith( {
+			path: '/safe-publish/v1/diff-preview',
+			method: 'POST',
+			data: payload,
+		} );
 	} );
 
-	it( 'should handle fetch error', async () => {
-		( global.fetch as any ).mockResolvedValue( {
-			ok: false,
-			text: async () => 'Error message',
-		} );
-
-		const payload: DiffPreviewPayload = {
-			postId: 123,
-		};
-
-		const result = await fetchDiffPreview( payload, REST_NONCE );
-		expect( result.error ).toBe( 'Error message' );
-	} );
-
-	it( 'should handle network error', async () => {
-		( global.fetch as any ).mockResolvedValue( {
-			ok: false,
-			text: async () => {
-				throw new Error( 'Network error' );
-			},
-		} );
-
-		const payload: DiffPreviewPayload = {
-			postId: 123,
-		};
-
-		const result = await fetchDiffPreview( payload, REST_NONCE );
-		expect( result.error ).toBe( 'Failed to fetch diff' );
-	} );
-
-	it( 'should send all payload properties', async () => {
-		( global.fetch as any ).mockResolvedValue( {
-			ok: true,
-			json: async () => ( {} ),
-		} );
+	it( 'sends all payload properties as the request data', async () => {
+		// ARRANGE: apiFetch resolves; the full payload is the request data.
+		mockApiFetch.mockResolvedValue( {} );
 
 		const payload: DiffPreviewPayload = {
 			postId: 123,
@@ -91,35 +53,34 @@ describe( 'fetchDiffPreview', () => {
 			cleanup: true,
 		};
 
-		await fetchDiffPreview( payload, REST_NONCE );
-		expect( global.fetch ).toHaveBeenCalledWith(
-			'/wp-json/safe-publish/v1/diff-preview',
-			expect.objectContaining( {
-				body: JSON.stringify( payload ),
-			} )
+		// ACT: Fetch the diff preview.
+		await fetchDiffPreview( payload );
+
+		// ASSERT: The whole payload is forwarded as data.
+		expect( mockApiFetch ).toHaveBeenCalledWith(
+			expect.objectContaining( { data: payload } )
 		);
 	} );
 
-	it( 'should include X-WP-Nonce header so WP can authenticate the request', async () => {
-		// ARRANGE: the caller passes a nonce in. Pins the contract — nonce
-		// must reach the wire as X-WP-Nonce so current_user_can() works.
-		( global.fetch as any ).mockResolvedValue( {
-			ok: true,
-			json: async () => ( {} ),
-		} );
+	it( 'surfaces the error message when apiFetch rejects', async () => {
+		// ARRANGE: apiFetch rejects with a message-bearing error.
+		mockApiFetch.mockRejectedValue( { message: 'Server says no' } );
 
-		// ACT: trigger a diff preview request.
-		await fetchDiffPreview( { postId: 123 }, REST_NONCE );
+		// ACT: Fetch the diff preview.
+		const result = await fetchDiffPreview( { postId: 123 } );
 
-		// ASSERT: the request carried the nonce.
-		expect( global.fetch ).toHaveBeenCalledWith(
-			'/wp-json/safe-publish/v1/diff-preview',
-			expect.objectContaining( {
-				headers: expect.objectContaining( {
-					'Content-Type': 'application/json',
-					'X-WP-Nonce': REST_NONCE,
-				} ),
-			} )
-		);
+		// ASSERT: The error message is surfaced to the caller.
+		expect( result.error ).toBe( 'Server says no' );
+	} );
+
+	it( 'falls back to a generic message when the rejection has no message', async () => {
+		// ARRANGE: apiFetch rejects with no usable message.
+		mockApiFetch.mockRejectedValue( {} );
+
+		// ACT: Fetch the diff preview.
+		const result = await fetchDiffPreview( { postId: 123 } );
+
+		// ASSERT: A generic fallback message is returned.
+		expect( result.error ).toBe( 'Failed to fetch diff' );
 	} );
 } );

@@ -151,7 +151,6 @@ final class Exports_Page {
 			array(
 				'ajaxurl'     => admin_url( 'admin-ajax.php' ),
 				'nonce'       => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-				'restNonce'   => wp_create_nonce( 'wp_rest' ),
 				'containerId' => 'safe-publish-exports-container',
 				'settingsUrl' => admin_url( 'admin.php?page=safe-publish-settings' ),
 			)

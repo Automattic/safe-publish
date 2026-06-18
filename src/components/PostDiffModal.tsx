@@ -32,7 +32,6 @@ import type { BlockDiff, DiffPreviewResult } from '../api/diff';
  * Props for the PostDiffModal component.
  *
  * @property {UnifiedPostRow[]}             items      Array containing the single row to diff.
- * @property {string}                       restNonce  REST API nonce for the diff endpoint.
  * @property {string}                       ajaxurl    WordPress admin-ajax URL (for the Update button).
  * @property {string}                       nonce      AJAX nonce for the create-draft endpoint.
  * @property {ImportSyncStatus | undefined} syncStatus Row's sync verdict; gates the Update button.
@@ -40,7 +39,6 @@ import type { BlockDiff, DiffPreviewResult } from '../api/diff';
  */
 interface PostDiffModalProps {
 	items: UnifiedPostRow[];
-	restNonce: string;
 	ajaxurl: string;
 	nonce: string;
 	syncStatus: ImportSyncStatus | undefined;
@@ -353,7 +351,6 @@ function hasAnyNonContentDiff(
 // eslint-disable-next-line complexity
 export default function PostDiffModal( {
 	items,
-	restNonce,
 	ajaxurl,
 	nonce,
 	syncStatus,
@@ -375,7 +372,6 @@ export default function PostDiffModal( {
 	} = useDiffPreview( {
 		postId: sourcePostId,
 		postType: firstItem.post_type,
-		restNonce,
 	} );
 
 	const {

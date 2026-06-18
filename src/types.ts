@@ -294,7 +294,6 @@ export interface PostsDataViewProps {
  *
  * @property {string}    ajaxurl        WordPress AJAX URL.
  * @property {string}    nonce          Security nonce for AJAX requests.
- * @property {string}    restNonce      Security nonce for REST API requests.
  * @property {string}    sourceSiteUrl  Source site URL.
  * @property {string}    settingsUrl    URL to the plugin settings page.
  * @property {string}    homeUrl        Destination home URL for slug detection.
@@ -305,7 +304,6 @@ export interface PostsDataViewProps {
 export interface AdminData {
 	ajaxurl: string;
 	nonce: string;
-	restNonce: string;
 	sourceSiteUrl: string;
 	settingsUrl: string;
 	homeUrl?: string;
