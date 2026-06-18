@@ -48,7 +48,7 @@ class PostTypeMapTest extends TestCase {
 			'revision'      => array( 'revision', 'revisions' ),
 			'nav_menu_item' => array( 'nav_menu_item', 'nav_menu_items' ),
 			'media'         => array( 'media', 'media' ),
-			'navigation'    => array( 'navigation', 'navigation' ),
+			'wp_navigation' => array( 'wp_navigation', 'navigation' ),
 		);
 	}
 
@@ -121,7 +121,7 @@ class PostTypeMapTest extends TestCase {
 			'revisions'      => array( 'revisions', 'revision' ),
 			'nav_menu_items' => array( 'nav_menu_items', 'nav_menu_item' ),
 			'media'          => array( 'media', 'media' ),
-			'navigation'     => array( 'navigation', 'navigation' ),
+			'navigation'     => array( 'navigation', 'wp_navigation' ),
 		);
 	}
 
@@ -156,11 +156,13 @@ class PostTypeMapTest extends TestCase {
 	 */
 	public static function builtin_provider(): array {
 		return array(
-			'post slug'      => array( 'post' ),
-			'posts endpoint' => array( 'posts' ),
-			'page slug'      => array( 'page' ),
-			'pages endpoint' => array( 'pages' ),
-			'media'          => array( 'media' ),
+			'post slug'           => array( 'post' ),
+			'posts endpoint'      => array( 'posts' ),
+			'page slug'           => array( 'page' ),
+			'pages endpoint'      => array( 'pages' ),
+			'media'               => array( 'media' ),
+			'wp_navigation slug'  => array( 'wp_navigation' ),
+			'navigation endpoint' => array( 'navigation' ),
 		);
 	}
 

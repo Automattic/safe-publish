@@ -31,7 +31,7 @@ class Post_Type_Map {
 		'revisions'      => 'revision',
 		'nav_menu_items' => 'nav_menu_item',
 		'media'          => 'media',
-		'navigation'     => 'navigation',
+		'navigation'     => 'wp_navigation',
 	);
 
 	/**
