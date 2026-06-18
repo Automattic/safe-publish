@@ -182,7 +182,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			'auto-draft'
 		);
 
-		// ACT.
+		// ACT: Run the rewrite against the seeded auto-draft.
 		$result = ( new Navigation_Ref_Rewriter() )->rewrite_cross_refs(
 			99003,
 			50003,
@@ -193,6 +193,35 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 		$this->assertSame( 0, $result['rewritten'] );
 		$this->assertStringContainsString(
 			'"ref":99003',
+			get_post( $post_id )->post_content
+		);
+	}
+
+	/**
+	 * Verifies that trashed posts are excluded from the candidate query, so a
+	 * user-trashed import is not silently rewritten.
+	 */
+	public function test_skips_trashed_posts(): void {
+		// ARRANGE: a trashed post that would otherwise match.
+		$post_id = $this->seed_referencing_post(
+			$this->nav_ref_block( 99007 ),
+			self::SOURCE_A,
+			91008,
+			'post',
+			'trash'
+		);
+
+		// ACT: Run the rewrite against the trashed post's source menu.
+		$result = ( new Navigation_Ref_Rewriter() )->rewrite_cross_refs(
+			99007,
+			50007,
+			self::SOURCE_A
+		);
+
+		// ASSERT: nothing rewritten; content unchanged.
+		$this->assertSame( 0, $result['rewritten'] );
+		$this->assertStringContainsString(
+			'"ref":99007',
 			get_post( $post_id )->post_content
 		);
 	}
@@ -209,7 +238,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			. '</div><!-- /wp:group -->';
 		$post_id = $this->seed_referencing_post( $content, self::SOURCE_A, 91005 );
 
-		// ACT.
+		// ACT: Run the rewrite for the nested navigation block.
 		$result = ( new Navigation_Ref_Rewriter() )->rewrite_cross_refs(
 			99004,
 			50004,
@@ -265,7 +294,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 		);
 		$failing_rewriter = $this->failing_rewriter();
 
-		// ACT.
+		// ACT: Run the rewrite with a failing writer.
 		$result = $failing_rewriter->rewrite_cross_refs(
 			99006,
 			50006,

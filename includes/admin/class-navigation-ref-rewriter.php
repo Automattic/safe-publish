@@ -133,7 +133,7 @@ class Navigation_Ref_Rewriter {
 				 WHERE p.post_content LIKE %s
 					 AND pm.meta_key = %s
 					 AND pm.meta_value = %s
-					 AND p.post_status != 'auto-draft'",
+					 AND p.post_status NOT IN ( 'auto-draft', 'trash' )",
 				'%wp:navigation {%"ref":' . absint( $source_nav_id ) . '%',
 				Options::META_SOURCE_SITE_URL,
 				$source_site_url
