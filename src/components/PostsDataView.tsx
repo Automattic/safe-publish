@@ -541,8 +541,6 @@ export function PostsDataView( {
 		[ rows ]
 	);
 
-	const sourceIdsKey = sourceIds.join( ',' );
-
 	useEffect( () => {
 		if ( 0 === sourceIds.length ) {
 			setSyncStatuses( {} );
@@ -589,8 +587,7 @@ export function PostsDataView( {
 			} );
 
 		return () => controller.abort();
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [ sourceIdsKey ] );
+	}, [ sourceIds ] );
 
 	useEffect(
 		() => () => {
