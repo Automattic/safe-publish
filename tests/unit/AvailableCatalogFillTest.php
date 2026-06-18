@@ -42,7 +42,8 @@ class AvailableCatalogFillTest extends TestCase {
 		// ASSERT: the page holds the first three non-imported ids in order.
 		$this->assertSame( array( 3, 5, 6 ), $this->ids( $result ) );
 
-		// ASSERT: a fourth non-imported row (id 7) remains, so has_more is true.
+		// ASSERT: a fourth non-imported row (id 7) remains, so has_more is
+		// true.
 		$this->assertTrue( $result['has_more'] );
 
 		// ASSERT: three fetches were needed, each at the source max page size.
@@ -162,7 +163,12 @@ class AvailableCatalogFillTest extends TestCase {
 	): array {
 		$controller = ( new ReflectionClass( Admin_Ajax_Controller::class ) )
 			->newInstanceWithoutConstructor();
-		set_private_property( Admin_Ajax_Controller::class, $controller, 'api', $api );
+		set_private_property(
+			Admin_Ajax_Controller::class,
+			$controller,
+			'api',
+			$api
+		);
 		set_private_property(
 			Admin_Ajax_Controller::class,
 			$controller,

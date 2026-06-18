@@ -62,6 +62,7 @@ class Fake_Catalog_Source_Posts_API extends Source_Posts_API {
 	): array|WP_Error {
 		$this->requested_per_pages[] = (int) ( $args['per_page'] ?? 0 );
 
-		return $this->pages[ (int) ( $args['page'] ?? 1 ) ] ?? $this->default_page;
+		return $this->pages[ (int) ( $args['page'] ?? 1 ) ]
+			?? $this->default_page;
 	}
 }
