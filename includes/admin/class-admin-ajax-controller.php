@@ -79,6 +79,16 @@ final class Admin_Ajax_Controller {
 	const BULK_DELETE_POSTS_BATCH_MAX = 50;
 
 	/**
+	 * Maximum number of source catalog pages scanned while filling one
+	 * Available page, bounding worst-case latency when non-imported rows are
+	 * sparse. If the scan hits this cap before the page fills, has_more stays
+	 * true so the client can keep paging.
+	 *
+	 * @var int
+	 */
+	const AVAILABLE_FILL_MAX_FETCHES = 15;
+
+	/**
 	 * Source Posts API instance.
 	 *
 	 * @var Source_Posts_API
@@ -360,8 +370,16 @@ final class Admin_Ajax_Controller {
 	): array|\WP_Error {
 		$this->validate_auth_or_fail();
 		$auth_credentials = Auth_Credential_Provider::get_credentials();
+		$args             = $this->build_catalog_args();
 
-		$args   = $this->build_catalog_args();
+		if ( 'available' === $state ) {
+			return $this->list_available_via_catalog(
+				$source_site_url,
+				$auth_credentials,
+				$args
+			);
+		}
+
 		$result = $this->api->fetch_posts(
 			$source_site_url,
 			$auth_credentials,
@@ -376,16 +394,6 @@ final class Admin_Ajax_Controller {
 			$result['items']
 		);
 
-		if ( 'available' === $state ) {
-			$result['items'] = array_values(
-				array_filter(
-					$result['items'],
-					static fn( array $item ): bool =>
-						false === ( $item['is_imported'] ?? false )
-				)
-			);
-		}
-
 		$rows = array_map(
 			static fn( array $item ): array =>
 				self::build_unified_row_from_catalog( $item ),
@@ -396,6 +404,92 @@ final class Admin_Ajax_Controller {
 			'items'    => $rows,
 			'has_more' => isset( $result['has_more'] )
 				&& true === (bool) $result['has_more'],
+		);
+	}
+
+	/**
+	 * Builds the Available payload by pulling source catalog pages until the
+	 * requested page is filled with non-imported rows.
+	 *
+	 * The Available chip drops already-imported rows, so a single source page
+	 * can render almost empty while the source still reports more raw items.
+	 * Filling across pages lets has_more reflect the non-imported count rather
+	 * than the source's raw pagination.
+	 *
+	 * @param string $source_site_url  Source site URL.
+	 * @param array  $auth_credentials Source auth credentials.
+	 * @param array  $args             Validated catalog args, incl. page/per_page.
+	 * @return array|\WP_Error Listing payload, or WP_Error on catalog failure.
+	 */
+	private function list_available_via_catalog(
+		string $source_site_url,
+		array $auth_credentials,
+		array $args
+	): array|\WP_Error {
+		$client_page     = max( 1, (int) ( $args['page'] ?? 1 ) );
+		$client_per_page = max( 1, (int) ( $args['per_page'] ?? 20 ) );
+
+		// +1 past the page window tells us whether a further page exists.
+		$offset = ( $client_page - 1 ) * $client_per_page;
+		$needed = $offset + $client_per_page + 1;
+
+		$collected       = array();
+		$collected_count = 0;
+		$source_more     = true;
+		$capped          = false;
+		$catalog_page    = 1;
+
+		while ( $collected_count < $needed && $source_more ) {
+			if ( $catalog_page > self::AVAILABLE_FILL_MAX_FETCHES ) {
+				$capped = true;
+				break;
+			}
+
+			$page_args             = $args;
+			$page_args['page']     = $catalog_page;
+			$page_args['per_page'] = Catalog_REST_Controller::MAX_PER_PAGE;
+
+			$result = $this->api->fetch_posts(
+				$source_site_url,
+				$auth_credentials,
+				$page_args
+			);
+
+			if ( is_wp_error( $result ) ) {
+				return $result;
+			}
+
+			$this->post_import_service->annotate_posts_with_import_status(
+				$result['items']
+			);
+
+			$collected = array_merge(
+				$collected,
+				array_filter(
+					$result['items'],
+					static fn( array $item ): bool =>
+						false === ( $item['is_imported'] ?? false )
+				)
+			);
+
+			$collected_count = count( $collected );
+
+			$source_more = isset( $result['has_more'] )
+				&& true === (bool) $result['has_more'];
+
+			++$catalog_page;
+		}
+
+		$rows = array_map(
+			static fn( array $item ): array =>
+				self::build_unified_row_from_catalog( $item ),
+			array_slice( $collected, $offset, $client_per_page )
+		);
+
+		return array(
+			'items'    => $rows,
+			'has_more' => $collected_count > $offset + $client_per_page
+				|| $capped,
 		);
 	}
 

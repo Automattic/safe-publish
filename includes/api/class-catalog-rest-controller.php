@@ -40,9 +40,10 @@ final class Catalog_REST_Controller {
 	private const REST_NAMESPACE = 'safe-publish/v1';
 
 	/**
-	 * Hard ceiling on per_page to bound query cost on huge sites.
+	 * Hard ceiling on per_page to bound query cost on huge sites. Also the
+	 * batch size the destination requests when filling Available pages.
 	 */
-	private const MAX_PER_PAGE = 100;
+	public const MAX_PER_PAGE = 100;
 
 	/**
 	 * Default per_page when the caller doesn't specify.
