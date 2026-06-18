@@ -621,4 +621,37 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		$this->assertSame( array(), (array) $response['data']['statuses'] );
 		$this->assertSame( 0, $this->catalog_request_count );
 	}
+
+	/**
+	 * Verifies that a connected-site URL stored with a trailing slash still
+	 * matches imports tagged with the normalized source URL, instead of every
+	 * status collapsing to missing.
+	 */
+	public function test_resolves_status_when_connected_url_has_trailing_slash(): void {
+		// ARRANGE: Option carries a trailing slash; the seeded import is tagged
+		// with the normalized form extract_site_url() produces.
+		update_option(
+			Options::OPTION_CONNECTED_SITE_URL,
+			'https://source.example.com/'
+		);
+		$source_id = 4008;
+		$this->seed_imported_post( $source_id, '2024-01-01 12:00:00' );
+		$this->source_modified_gmt[ $source_id ] = '2024-01-01T11:00:00Z';
+
+		$this->authenticate_request(
+			array( 'source_ids' => array( (string) $source_id ) )
+		);
+
+		// ACT: Dispatch.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
+
+		// ASSERT: The verdict resolves — the trailing-slash option was
+		// normalized before the source-scoped lookup.
+		$response = $this->decode_response();
+		$this->assertTrue( $response['success'] );
+		$this->assertSame(
+			'up-to-date',
+			$response['data']['statuses'][ $source_id ]['status']
+		);
+	}
 }

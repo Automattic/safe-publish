@@ -490,6 +490,58 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the create draft endpoint still returns the existing-post
+	 * confirmation when the connected-site URL is stored with a trailing slash,
+	 * rather than silently importing past the prompt.
+	 */
+	public function test_ajax_create_draft_confirmation_with_trailing_slash(): void {
+		// ARRANGE: Option carries a trailing slash; the existing import is
+		// tagged with the normalized source URL.
+		update_option(
+			Options::OPTION_CONNECTED_SITE_URL,
+			'https://source.example.com/'
+		);
+		$existing_post_id = wp_insert_post(
+			array(
+				'post_title'  => 'Already Imported Slash',
+				'post_status' => 'draft',
+				'post_type'   => 'post',
+			)
+		);
+		update_post_meta( $existing_post_id, Options::META_SOURCE_POST_ID, '8004' );
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '8004',
+			'title'          => 'Already Imported Slash',
+			'content'        => '<p>Same content.</p>',
+			'source_link'    => 'https://source.example.com/already-imported-slash',
+			'post_type'      => 'post',
+		);
+
+		// ACT: Trigger handler without force_update.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: A confirmation prompt comes back, proving the trailing-slash
+		// option was normalized before the duplicate lookup.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response );
+		$this->assertTrue( $response['success'] );
+		$this->assertTrue( $response['data']['existing'] );
+		$this->assertSame(
+			'update_existing',
+			$response['data']['confirm_action']
+		);
+		$this->assertSame( $existing_post_id, $response['data']['post_id'] );
+	}
+
+	/**
 	 * Verifies that the create draft endpoint returns an error when the title is
 	 * missing, and does not leave any import session in the database.
 	 */

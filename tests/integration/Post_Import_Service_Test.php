@@ -3410,4 +3410,67 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		);
 		$this->assertSame( $winner_id, $siblings[0]->ID );
 	}
+
+	/**
+	 * Verifies that persist_new_post() scopes its concurrent-duplicate check by
+	 * source site URL, so a post sharing a source post ID with a prior import
+	 * from a different source survives instead of being discarded.
+	 */
+	public function test_persist_new_post_keeps_cross_source_same_id_post(): void {
+		// ARRANGE: A post from source A already holds this source post ID.
+		$source_id     = 9201;
+		$source_a_post = self::factory()->post->create(
+			array(
+				'post_title'  => 'Source A post',
+				'post_status' => 'draft',
+				'meta_input'  => array(
+					Options::META_SOURCE_POST_ID  => $source_id,
+					Options::META_SOURCE_SITE_URL => 'https://source-a.example.com',
+				),
+			)
+		);
+
+		// ACT: Persist a new post for the same source post ID, but from
+		// source B.
+		$result = $this->import_service->persist_new_post(
+			array(
+				'post_title'   => 'Source B post',
+				'post_content' => '',
+				'post_status'  => 'draft',
+				'post_type'    => 'post',
+				'meta_input'   => array(
+					Options::META_SOURCE_POST_ID  => $source_id,
+					Options::META_SOURCE_SITE_URL => 'https://source-b.example.com',
+					Options::META_SOURCE_LINK     => 'https://source-b.example.com/post',
+					Options::META_IMPORTED_FROM   => Options::META_IMPORTED_FROM_VALUE,
+				),
+			),
+			0,
+			array(),
+			array(),
+			array(),
+			0
+		);
+
+		// ASSERT: The source-B post is inserted, not discarded as a duplicate.
+		$this->assertIsInt(
+			$result,
+			'Cross-source same-ID import must not be treated as a duplicate.'
+		);
+		$this->assertNotSame( $source_a_post, $result );
+
+		// ASSERT: Source A and source B posts coexist for this source ID.
+		$siblings = get_posts(
+			array(
+				'meta_key'         => Options::META_SOURCE_POST_ID,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'meta_value'       => (string) $source_id,
+				'post_type'        => 'any',
+				'post_status'      => 'any',
+				'posts_per_page'   => 3,
+				'suppress_filters' => false,
+			)
+		);
+		$this->assertCount( 2, $siblings );
+	}
 }
