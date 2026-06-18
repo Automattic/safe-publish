@@ -1025,14 +1025,12 @@ class Content_Processor {
 	}
 
 	/**
-	 * Checks if content needs processing to avoid unnecessary serialization.
-	 *
-	 * Skips parse_blocks() + serialize_blocks() for content that contains no
-	 * HTTP URLs, since media imports are the only transformation applied
-	 * during block processing.
+	 * Whether the content contains HTTP URLs, the trigger for the media/URL
+	 * transformation. Only that pass depends on this check; block-ID remapping
+	 * is gated separately by content_has_id_reference_blocks().
 	 *
 	 * @param string $content Content to check.
-	 * @return bool True if content needs processing.
+	 * @return bool True when the content contains an HTTP URL.
 	 */
 	private function content_needs_processing( string $content ): bool {
 		return false !== strpos( $content, 'http' );
@@ -1292,7 +1290,7 @@ class Content_Processor {
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
 
-		if ( empty( $rows ) ) {
+		if ( ! is_array( $rows ) || array() === $rows ) {
 			return array();
 		}
 
@@ -1372,8 +1370,8 @@ class Content_Processor {
 
 	/**
 	 * Rewrites the registered attrs on a single block using the given map.
-	 * Logs a warning for each gated-and-matched attr whose source ID was not
-	 * resolvable so the admin can surface and fix it.
+	 * Logs a warning for each matched attr whose source ID was not resolvable
+	 * so the admin can surface and fix it.
 	 *
 	 * @param array<string, mixed>                                                     $attrs    Block attrs.
 	 * @param string                                                                   $name     Block name.

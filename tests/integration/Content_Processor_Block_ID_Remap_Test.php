@@ -127,9 +127,9 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies cross-source isolation: a destination post imported from a
-	 * different source site is not picked up by the postmeta lookup even if
-	 * its source post ID happens to collide.
+	 * Verifies that a destination post imported from a different source site
+	 * is not picked up by the postmeta lookup even if its source post ID
+	 * happens to collide.
 	 */
 	public function test_postmeta_lookup_is_scoped_to_source_site(): void {
 		// ARRANGE: A destination post whose META_SOURCE_SITE_URL points at a
@@ -194,7 +194,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT.
+		// ACT: Process the custom-kind nav-link.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -218,14 +218,14 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 
 		$content = '<!-- wp:navigation {"ref":' . $source_id . '} /-->';
 
-		// ACT.
+		// ACT: Process the navigation block via the session map.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
 			array( 'session_id_map' => array( $source_id => $dest_nav ) )
 		);
 
-		// ASSERT.
+		// ASSERT: ref now points at the destination nav post.
 		$this->assertStringContainsString( '"ref":' . $dest_nav, (string) $result );
 		$this->assertStringNotContainsString( '"ref":' . $source_id, (string) $result );
 	}
@@ -262,14 +262,14 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT.
+		// ACT: Process the taxonomy nav-link.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
 			array()
 		);
 
-		// ASSERT.
+		// ASSERT: id resolved to the destination term.
 		$this->assertStringContainsString( '"id":' . $dest_term . ',', (string) $result );
 	}
 

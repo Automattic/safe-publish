@@ -205,7 +205,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 			),
 		);
 
-		// ACT.
+		// ACT: Assign terms, passing the source site URL.
 		$result = $this->manager->update_terms(
 			$this->post_id,
 			$terms,
@@ -236,7 +236,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	 * source-link context).
 	 */
 	public function test_update_terms_skips_source_meta_when_no_source_url(): void {
-		// ARRANGE.
+		// ARRANGE: A category term carrying a source_term_id.
 		$term_name = 'Skip-meta Cat ' . uniqid();
 		$terms     = array(
 			'category' => array(

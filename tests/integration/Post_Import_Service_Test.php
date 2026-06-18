@@ -1237,10 +1237,10 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		$user->add_cap( 'edit_theme_options' );
 		wp_set_current_user( $user_id );
 
-		// ACT.
+		// ACT: Resolve the wp_navigation post type for this user.
 		$result = $this->import_service->resolve_post_type( 'wp_navigation' );
 
-		// ASSERT.
+		// ASSERT: The type resolves (import permitted).
 		$this->assertSame( 'wp_navigation', $result );
 	}
 
@@ -1254,10 +1254,10 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		$user_id = self::factory()->user->create( array( 'role' => 'subscriber' ) );
 		wp_set_current_user( $user_id );
 
-		// ACT.
+		// ACT: Resolve the wp_navigation post type for this user.
 		$result = $this->import_service->resolve_post_type( 'wp_navigation' );
 
-		// ASSERT.
+		// ASSERT: Resolution is denied with a capability error.
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'post_type_capability_denied', $result->get_error_code() );
 	}

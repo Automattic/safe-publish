@@ -181,8 +181,12 @@ final class Meta_Terms_Manager {
 				$term_id = (int) $it['id'];
 			}
 			if ( ! $term_id ) {
-				$term_slug = isset( $it['slug'] ) ? sanitize_title( (string) $it['slug'] ) : '';
-				$term_name = isset( $it['name'] ) ? trim( wp_strip_all_tags( (string) $it['name'] ) ) : $term_slug;
+				$term_slug = isset( $it['slug'] )
+					? sanitize_title( (string) $it['slug'] )
+					: '';
+				$term_name = isset( $it['name'] )
+					? trim( wp_strip_all_tags( (string) $it['name'] ) )
+					: $term_slug;
 				if ( ! $term_slug && $term_name ) {
 					$term_slug = sanitize_title( $term_name );
 				}
