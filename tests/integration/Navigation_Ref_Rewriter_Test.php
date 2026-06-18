@@ -236,7 +236,11 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			. '<div class="wp-block-group">'
 			. $this->nav_ref_block( 99004 )
 			. '</div><!-- /wp:group -->';
-		$post_id = $this->seed_referencing_post( $content, self::SOURCE_A, 91005 );
+		$post_id = $this->seed_referencing_post(
+			$content,
+			self::SOURCE_A,
+			91005
+		);
 
 		// ACT: Run the rewrite for the nested navigation block.
 		$result = ( new Navigation_Ref_Rewriter() )->rewrite_cross_refs(
@@ -382,7 +386,10 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 
 		// ASSERT: import still succeeds, and a warning names the stale post.
 		$this->assertTrue( $result['success'] );
-		$warning = $this->find_warning( $result['warnings'], 'nav_ref_rewrite_failed' );
+		$warning = $this->find_warning(
+			$result['warnings'],
+			'nav_ref_rewrite_failed'
+		);
 		$this->assertNotNull( $warning );
 		$this->assertContains( $menu_a, $warning['failed_post_ids'] );
 	}
@@ -467,8 +474,16 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 		);
 		$this->assertIsInt( $post_id );
 
-		update_post_meta( $post_id, Options::META_SOURCE_POST_ID, $source_post_id );
-		update_post_meta( $post_id, Options::META_SOURCE_SITE_URL, $source_site_url );
+		update_post_meta(
+			$post_id,
+			Options::META_SOURCE_POST_ID,
+			$source_post_id
+		);
+		update_post_meta(
+			$post_id,
+			Options::META_SOURCE_SITE_URL,
+			$source_site_url
+		);
 
 		return $post_id;
 	}
