@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests\Integration\Source_Posts_API;
 
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
+use Safe_Publish\Admin\Navigation_Ref_Rewriter;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
@@ -92,7 +93,8 @@ class Custom_Post_Type_Import_Test extends Source_Posts_API_Test_Base {
 			$content_processor,
 			$this->repository,
 			new Meta_Terms_Manager(),
-			new Telemetry_Service()
+			new Telemetry_Service(),
+			new Navigation_Ref_Rewriter()
 		);
 	}
 

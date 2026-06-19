@@ -219,12 +219,24 @@ export interface UnmappedBlockReferenceWarning {
 }
 
 /**
+ * Surfaced when a navigation menu was imported but one or more destination
+ * posts that reference it by the source ID could not be updated automatically.
+ * The listed posts keep their stale ref until the menu is re-imported, which
+ * retries the rewrite.
+ */
+export interface NavRefRewriteFailedWarning {
+	type: 'nav_ref_rewrite_failed';
+	failed_post_ids: number[];
+}
+
+/**
  * Discriminated union of all import warning types.
  */
 export type Warning =
 	| AuthorFallbackWarning
 	| ParentOrphanedWarning
-	| UnmappedBlockReferenceWarning;
+	| UnmappedBlockReferenceWarning
+	| NavRefRewriteFailedWarning;
 
 /**
  * Response from create draft post operation.

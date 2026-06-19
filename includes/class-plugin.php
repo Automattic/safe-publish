@@ -17,6 +17,7 @@ use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\Exports_Page;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Import_Actions_Ajax_Handler;
+use Safe_Publish\Admin\Navigation_Ref_Rewriter;
 use Safe_Publish\Admin\Post_Import_Notice;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\Admin\Session_Rollback_Service;
@@ -283,7 +284,8 @@ final class Plugin {
 			$content_processor,
 			$repository,
 			new Meta_Terms_Manager(),
-			$this->telemetry
+			$this->telemetry,
+			new Navigation_Ref_Rewriter()
 		);
 
 		$menu_manager = new Admin_Menu_Manager();

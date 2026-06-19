@@ -100,14 +100,22 @@ class Post_Import_Service {
 	private Telemetry_Service $telemetry;
 
 	/**
+	 * Navigation cross-reference rewriter.
+	 *
+	 * @var Navigation_Ref_Rewriter
+	 */
+	private Navigation_Ref_Rewriter $nav_ref_rewriter;
+
+	/**
 	 * Constructs the Post_Import_Service instance.
 	 *
-	 * @param Source_Posts_API   $api                Source Posts API instance.
-	 * @param Media_Importer     $media_importer     Media Importer instance.
-	 * @param Content_Processor  $content_processor  Content Processor instance.
-	 * @param History_Repository $repository         History repository instance.
-	 * @param Meta_Terms_Manager $meta_terms_manager Meta Terms Manager instance.
-	 * @param Telemetry_Service  $telemetry          Telemetry service.
+	 * @param Source_Posts_API        $api                Source Posts API instance.
+	 * @param Media_Importer          $media_importer     Media Importer instance.
+	 * @param Content_Processor       $content_processor  Content Processor instance.
+	 * @param History_Repository      $repository         History repository instance.
+	 * @param Meta_Terms_Manager      $meta_terms_manager Meta Terms Manager instance.
+	 * @param Telemetry_Service       $telemetry          Telemetry service.
+	 * @param Navigation_Ref_Rewriter $nav_ref_rewriter   Navigation cross-reference rewriter.
 	 */
 	public function __construct(
 		Source_Posts_API $api,
@@ -115,7 +123,8 @@ class Post_Import_Service {
 		Content_Processor $content_processor,
 		History_Repository $repository,
 		Meta_Terms_Manager $meta_terms_manager,
-		Telemetry_Service $telemetry
+		Telemetry_Service $telemetry,
+		Navigation_Ref_Rewriter $nav_ref_rewriter
 	) {
 		$this->api                = $api;
 		$this->media_importer     = $media_importer;
@@ -123,6 +132,7 @@ class Post_Import_Service {
 		$this->repository         = $repository;
 		$this->meta_terms_manager = $meta_terms_manager;
 		$this->telemetry          = $telemetry;
+		$this->nav_ref_rewriter   = $nav_ref_rewriter;
 	}
 
 	/**
@@ -1272,6 +1282,8 @@ class Post_Import_Service {
 			);
 		}
 
+		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
+
 		$this->log_import_if_session(
 			$session_id,
 			$fields['source_post_id'],
@@ -1455,6 +1467,8 @@ class Post_Import_Service {
 			);
 		}
 
+		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
+
 		$this->log_import_if_session(
 			$session_id,
 			$fields['source_post_id'],
@@ -1468,6 +1482,42 @@ class Post_Import_Service {
 		);
 
 		return $this->build_success_result( $fields, $post_id, false );
+	}
+
+	/**
+	 * Repoints destination posts that reference a freshly imported navigation
+	 * menu, recording a warning when a matched post could not be updated.
+	 *
+	 * No-op for non-navigation imports. Best-effort: a rewrite failure
+	 * surfaces the still-stale post IDs as a warning rather than failing the
+	 * menu import.
+	 *
+	 * @param array  $fields    Sanitized post fields; mutated by reference to
+	 *                          append a warning on failure.
+	 * @param int    $post_id   Destination menu post ID.
+	 * @param string $post_type Resolved destination post type slug.
+	 */
+	private function rewrite_nav_cross_refs(
+		array &$fields,
+		int $post_id,
+		string $post_type
+	): void {
+		if ( 'wp_navigation' !== $post_type ) {
+			return;
+		}
+
+		$result = $this->nav_ref_rewriter->rewrite_cross_refs(
+			(int) $fields['source_post_id'],
+			$post_id,
+			self::extract_site_url( $fields['source_link'] )
+		);
+
+		if ( array() !== $result['failed'] ) {
+			$fields['warnings'][] = array(
+				'type'            => 'nav_ref_rewrite_failed',
+				'failed_post_ids' => $result['failed'],
+			);
+		}
 	}
 
 	/**

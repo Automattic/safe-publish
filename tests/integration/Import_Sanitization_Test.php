@@ -15,6 +15,7 @@ namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
+use Safe_Publish\Admin\Navigation_Ref_Rewriter;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
@@ -70,7 +71,8 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 			$content_processor,
 			$this->repository,
 			new Meta_Terms_Manager(),
-			new Telemetry_Service()
+			new Telemetry_Service(),
+			new Navigation_Ref_Rewriter()
 		);
 
 		update_option(
