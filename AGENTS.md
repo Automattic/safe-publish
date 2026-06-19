@@ -2,7 +2,7 @@
 
 ## LLM behavior
 
-- Analyze and verify human input before agreeing with it. Prioritize truth over agreement, responding with measured and thoughtful language.
+- Analyze and verify human input before agreeing with it. Prioritize truth over agreement.
 - Never provide answers based on unverified or vague assumptions.
 - Focus on being helpful and accurate. If uncertain about something, ask clarifying questions.
 - Read any provided instruction files in their entirety.
@@ -11,11 +11,17 @@
 
 - Use US English spelling. Common pitfalls: "behavior" (not "behaviour"), "organize" (not "organise"), "color" (not "colour"), "center" (not "centre"), "license" (not "licence"), "authorization" (not "authorisation"), "recognize" (not "recognise").
 - The possessive form of WordPress is WordPress'.
-- Finish your responses with a ✨.
 
 ## Files
 
 - Use `trash` instead of `rm` when deleting files or folders. No flags needed for directories.
+
+## Customer data
+
+- Beware when working on private tickets, or any information that contains customer data.
+- Never publish customer-identifying data — names, hostnames, URLs, account/site IDs, emails, or environment specifics — to the GitHub repo. This covers code and test fixtures, comments, commit messages, branch names, and PR/issue titles, descriptions, and comments.
+- When reproducing a customer-reported bug, replace any customer-identifying values from the report with neutral placeholders (e.g. `example.com`, `/blog`) before committing. Real values can stay in a private tracker.
+- If such data is pushed by mistake, treat it as a disclosure incident: notify the team, then scrub it from history and force-push — and note that on a public repo the force-pushed commit stays reachable until purged via GitHub Support.
 
 ## Code
 
@@ -26,10 +32,13 @@
 - When applying changes, carefully analyze whether:
   - The change could be breaking desired functionality.
   - Any related documentation files need updating.
+- Wrap code, comments and docblocks at 80 characters; never wrap them unnecessarily early. `@param`/`@return` descriptions starting beyond column 40 can extend to 100 characters. Line length is measured in display characters, with tabs counting as 4.
+
+### PHP
+
 - Verify PHP files use strict typing, and use type hinting everywhere possible.
 - Prefer using `_` instead of `@psalm-suppress PossiblyUnusedParam`.
 - Use explicit checks, don't use empty().
-- Wrap code, comments and docblocks at 80 characters; never wrap them unnecessarily early. `@param`/`@return` descriptions starting beyond column 40 can extend to 100 characters. Line length is measured in display characters, with tabs counting as 4.
 
 ### Comments and docblocks
 
@@ -63,9 +72,12 @@ While using `/code-review:code-review`:
 
 The plugin's purpose is migrating data from a source to a destination site, keeping the data's integrity and format to the maximum extent possible. The only acceptable changes are the ones required to make the migrated data operational/correct on the destination site.
 
+## Development state
+
+Currently in closed beta used by customers, soon to become public; anything introducing breaking changes or threatening backward-compatibility needs to be explicitly reported, and human-approved before implementation.
+
 ## Workflow
 
-- This project is unreleased, so keeping backward-compatibility isn't needed.
 - If whitespace issues occur during replacement, use `npm run fix` before trying to manually fix.
 - After applying changes, run `npm run fix` and then `npm run check`. Fix and repeat as needed. Disregard issues unrelated to our changes.
 - Run unit tests with `npm run test` and integration tests with `npm run test:integration`.

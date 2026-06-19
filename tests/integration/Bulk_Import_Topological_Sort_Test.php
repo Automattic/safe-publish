@@ -145,7 +145,7 @@ class Bulk_Import_Topological_Sort_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Builds a `posts_data` entry for the given source ID and post type.
+	 * Builds a posts_data entry for the given source ID and post type.
 	 *
 	 * @param int    $source_id Source post ID.
 	 * @param string $post_type REST endpoint (e.g. 'pages').
@@ -346,6 +346,11 @@ class Bulk_Import_Topological_Sort_Test extends WP_Ajax_UnitTestCase {
 			$existing_id,
 			Options::META_SOURCE_POST_ID,
 			600
+		);
+		update_post_meta(
+			$existing_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
 		);
 
 		$this->source_payloads = array(

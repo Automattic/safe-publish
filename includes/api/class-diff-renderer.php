@@ -736,6 +736,9 @@ final class Diff_Renderer {
 	/**
 	 * Builds text representation of terms for diff comparison.
 	 *
+	 * Accepts either a list of names (current side, via get_the_terms) or the
+	 * per-term records the incoming side returns from extract_embedded_terms.
+	 *
 	 * @param array $terms_array Taxonomy terms array.
 	 *
 	 * @return string Text representation.
@@ -746,8 +749,16 @@ final class Diff_Renderer {
 		}
 
 		$lines = array();
-		foreach ( $terms_array as $taxonomy => $names ) {
-			$lines[] = $taxonomy . ': ' . implode( ', ', (array) $names );
+		foreach ( $terms_array as $taxonomy => $items ) {
+			$names = array();
+			foreach ( (array) $items as $item ) {
+				if ( is_array( $item ) ) {
+					$names[] = isset( $item['name'] ) ? (string) $item['name'] : '';
+				} else {
+					$names[] = (string) $item;
+				}
+			}
+			$lines[] = $taxonomy . ': ' . implode( ', ', $names );
 		}
 
 		return implode( "\n", $lines );

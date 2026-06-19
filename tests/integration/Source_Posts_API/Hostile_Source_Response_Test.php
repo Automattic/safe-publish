@@ -103,8 +103,8 @@ class Hostile_Source_Response_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a hostile `status` value (one that would inject
-	 * arbitrary HTML attributes via the `safe-publish-status-badge--<x>`
+	 * Verifies that a hostile status value (one that would inject
+	 * arbitrary HTML attributes via the safe-publish-status-badge--<x>
 	 * className template) is clamped to an empty string.
 	 */
 	public function test_hostile_status_is_clamped_to_empty_string(): void {
@@ -160,7 +160,7 @@ class Hostile_Source_Response_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a hostile `link` (e.g. `javascript:`) is stripped to
+	 * Verifies that a hostile link (e.g. javascript:) is stripped to
 	 * an empty string by the http/https allowlist on esc_url_raw.
 	 */
 	public function test_hostile_link_scheme_is_stripped(): void {

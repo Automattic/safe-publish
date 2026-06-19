@@ -311,6 +311,9 @@ class Permission_Manager {
 			'upload_files',
 			'edit_files',
 			'unfiltered_html',
+			// wp_navigation maps every post cap to edit_theme_options;
+			// granting it lets the destination GET /wp/v2/navigation/{id}.
+			'edit_theme_options',
 		);
 
 		foreach ( $caps as $cap ) {

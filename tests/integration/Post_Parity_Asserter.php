@@ -187,6 +187,7 @@ final class Post_Parity_Asserter {
 	private const PLUGIN_ADDED_META = array(
 		Options::META_SOURCE_POST_ID      => 'source post ID',
 		Options::META_SOURCE_LINK         => 'source post URL',
+		Options::META_SOURCE_SITE_URL     => 'source site URL',
 		Options::META_IMPORTED_FROM       => 'plugin marker',
 		Options::META_SOURCE_AUTHOR_EMAIL => 'source author email',
 		Options::META_SOURCE_AUTHOR_LOGIN => 'source author login',
@@ -483,7 +484,7 @@ final class Post_Parity_Asserter {
 	}
 
 	/**
-	 * Asserts that every meta key in the source body's `meta` field
+	 * Asserts that every meta key in the source body's meta field
 	 * round-trips to the destination post unchanged.
 	 *
 	 * Compares with string coercion because update_post_meta() serializes
@@ -537,9 +538,21 @@ final class Post_Parity_Asserter {
 		$author_email  = (string) ( $source_author['email'] ?? '' );
 		$author_login  = (string) ( $source_author['login'] ?? '' );
 
+		$expected_site_url = '';
+		if ( '' !== $source_link ) {
+			$scheme = wp_parse_url( $source_link, PHP_URL_SCHEME );
+			$host   = wp_parse_url( $source_link, PHP_URL_HOST );
+			$port   = wp_parse_url( $source_link, PHP_URL_PORT );
+			if ( is_string( $scheme ) && is_string( $host ) ) {
+				$expected_site_url = $scheme . '://' . $host
+					. ( is_int( $port ) ? ':' . $port : '' );
+			}
+		}
+
 		$expected = array(
 			Options::META_SOURCE_POST_ID      => $source_id,
 			Options::META_SOURCE_LINK         => $source_link,
+			Options::META_SOURCE_SITE_URL     => $expected_site_url,
 			Options::META_IMPORTED_FROM       => Options::META_IMPORTED_FROM_VALUE,
 			Options::META_SOURCE_AUTHOR_EMAIL => $author_email,
 			Options::META_SOURCE_AUTHOR_LOGIN => $author_login,
@@ -620,7 +633,7 @@ final class Post_Parity_Asserter {
 
 	/**
 	 * Asserts that every meta key present on the destination post is
-	 * classified: a key from the source body's `meta` field, a plugin-added
+	 * classified: a key from the source body's meta field, a plugin-added
 	 * key, an allowed WordPress default, or a deferred key reserved for a
 	 * later phase. Fails loudly when an unmodeled key appears so the
 	 * registries stay synced with what the import pipeline actually writes.
@@ -799,7 +812,7 @@ final class Post_Parity_Asserter {
 	}
 
 	/**
-	 * Reads `_embedded['wp:term']` and returns a flat taxonomy => list of
+	 * Reads _embedded['wp:term'] and returns a flat taxonomy => list of
 	 * names map.
 	 *
 	 * @param array<string, mixed> $source_body Source REST response body.
@@ -869,7 +882,7 @@ final class Post_Parity_Asserter {
 	}
 
 	/**
-	 * Reads a source REST body field, unwrapping `[ 'raw' => ... ]` wrappers.
+	 * Reads a source REST body field, unwrapping [ 'raw' => ... ] wrappers.
 	 *
 	 * @param array<string, mixed> $source_body Source REST response body.
 	 * @param string               $field       Top-level field name.

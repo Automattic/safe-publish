@@ -88,7 +88,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Intercepts wp/v2/media JSON API requests and returns a mock response
-	 * whose `source_url` points to a `.jpg` URL that the base-class image mock
+	 * whose source_url points to a .jpg URL that the base-class image mock
 	 * can then serve as a real fixture file.
 	 *
 	 * Registered at priority 5 — runs before the base-class image mock at 10.
@@ -1224,6 +1224,45 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that resolve_post_type() consults the post type's own cap map,
+	 * so wp_navigation (which maps every edit cap to edit_theme_options)
+	 * imports are permitted for users with edit_theme_options but NOT
+	 * edit_posts — the case the hardcoded edit_posts/edit_pages branch missed.
+	 */
+	public function test_resolve_post_type_grants_wp_navigation_to_theme_options_user(): void {
+		// ARRANGE: A subscriber granted edit_theme_options but not edit_posts
+		// or edit_pages — verifies the type's own cap map drives the check.
+		$user_id = self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		$user    = get_user_by( 'id', $user_id );
+		$user->add_cap( 'edit_theme_options' );
+		wp_set_current_user( $user_id );
+
+		// ACT: Resolve the wp_navigation post type for this user.
+		$result = $this->import_service->resolve_post_type( 'wp_navigation' );
+
+		// ASSERT: The type resolves (import permitted).
+		$this->assertSame( 'wp_navigation', $result );
+	}
+
+	/**
+	 * Verifies that an authenticated user without edit_theme_options is
+	 * rejected from importing wp_navigation, exercising the generalized
+	 * cap-map branch.
+	 */
+	public function test_resolve_post_type_rejects_wp_navigation_without_theme_options(): void {
+		// ARRANGE: A plain Subscriber lacks both manage_options and edit_theme_options.
+		$user_id = self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		wp_set_current_user( $user_id );
+
+		// ACT: Resolve the wp_navigation post type for this user.
+		$result = $this->import_service->resolve_post_type( 'wp_navigation' );
+
+		// ASSERT: Resolution is denied with a capability error.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'post_type_capability_denied', $result->get_error_code() );
+	}
+
+	/**
 	 * Verifies that import fails when the source post type is not registered on
 	 * the destination site.
 	 */
@@ -1252,6 +1291,45 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$result['error'],
 			'Error should name the unregistered post type.'
 		);
+	}
+
+	/**
+	 * Verifies that find_imported_post() scopes by source site URL when one is
+	 * passed: a destination post imported from a different source isn't
+	 * returned even when the source post ID matches.
+	 */
+	public function test_find_imported_post_scopes_by_source_site_url(): void {
+		// ARRANGE: A destination post tagged with source A.
+		$dest_id = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		update_post_meta( $dest_id, Options::META_SOURCE_POST_ID, 5000 );
+		update_post_meta(
+			$dest_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source-a.example.com'
+		);
+
+		// ACT + ASSERT: Same-source lookup returns the post.
+		$same_source = $this->import_service->find_imported_post(
+			5000,
+			'https://source-a.example.com'
+		);
+		$this->assertNotNull( $same_source );
+		$this->assertSame( $dest_id, $same_source->ID );
+
+		// ACT + ASSERT: Different-source lookup returns null.
+		$wrong_source = $this->import_service->find_imported_post(
+			5000,
+			'https://source-b.example.com'
+		);
+		$this->assertNull( $wrong_source );
+
+		// ACT + ASSERT: Unscoped lookup (empty URL) still returns the post —
+		// preserves backward compat for callers that don't know the URL.
+		$unscoped = $this->import_service->find_imported_post( 5000, '' );
+		$this->assertNotNull( $unscoped );
+		$this->assertSame( $dest_id, $unscoped->ID );
 	}
 
 	/**
@@ -2442,6 +2520,11 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			Options::META_SOURCE_POST_ID,
 			700
 		);
+		update_post_meta(
+			$existing_parent_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		$this->mock_post_overrides = array( 'parent' => 700 );
 
@@ -2678,6 +2761,11 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			Options::META_SOURCE_POST_ID,
 			900
 		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		$this->mock_post_overrides = array( 'parent' => 900 );
 
@@ -2731,6 +2819,11 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			Options::META_SOURCE_POST_ID,
 			910
 		);
+		update_post_meta(
+			$first_parent_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 		$second_parent_id = self::factory()->post->create(
 			array( 'post_type' => 'page' )
 		);
@@ -2738,6 +2831,11 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$second_parent_id,
 			Options::META_SOURCE_POST_ID,
 			920
+		);
+		update_post_meta(
+			$second_parent_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
 		);
 
 		$this->mock_post_overrides = array( 'parent' => 910 );
@@ -2792,6 +2890,11 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$parent_dest_id,
 			Options::META_SOURCE_POST_ID,
 			950
+		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
 		);
 
 		$this->mock_post_overrides = array( 'parent' => 950 );
@@ -2884,6 +2987,11 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			Options::META_SOURCE_POST_ID,
 			940
 		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		// ACT: Re-import the same source post — strict resolution should now
 		// succeed because the parent exists.
@@ -2919,6 +3027,11 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$parent_dest_id,
 			Options::META_SOURCE_POST_ID,
 			930
+		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
 		);
 
 		$this->mock_post_overrides = array( 'parent' => 930 );
@@ -3021,6 +3134,11 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$parent_dest_id,
 			Options::META_SOURCE_POST_ID,
 			950
+		);
+		update_post_meta(
+			$parent_dest_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
 		);
 
 		$this->mock_post_overrides = array( 'parent' => 950 );
@@ -3291,5 +3409,68 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			'Loser must be force-deleted, leaving only the winner.'
 		);
 		$this->assertSame( $winner_id, $siblings[0]->ID );
+	}
+
+	/**
+	 * Verifies that persist_new_post() scopes its concurrent-duplicate check by
+	 * source site URL, so a post sharing a source post ID with a prior import
+	 * from a different source survives instead of being discarded.
+	 */
+	public function test_persist_new_post_keeps_cross_source_same_id_post(): void {
+		// ARRANGE: A post from source A already holds this source post ID.
+		$source_id     = 9201;
+		$source_a_post = self::factory()->post->create(
+			array(
+				'post_title'  => 'Source A post',
+				'post_status' => 'draft',
+				'meta_input'  => array(
+					Options::META_SOURCE_POST_ID  => $source_id,
+					Options::META_SOURCE_SITE_URL => 'https://source-a.example.com',
+				),
+			)
+		);
+
+		// ACT: Persist a new post for the same source post ID, but from
+		// source B.
+		$result = $this->import_service->persist_new_post(
+			array(
+				'post_title'   => 'Source B post',
+				'post_content' => '',
+				'post_status'  => 'draft',
+				'post_type'    => 'post',
+				'meta_input'   => array(
+					Options::META_SOURCE_POST_ID  => $source_id,
+					Options::META_SOURCE_SITE_URL => 'https://source-b.example.com',
+					Options::META_SOURCE_LINK     => 'https://source-b.example.com/post',
+					Options::META_IMPORTED_FROM   => Options::META_IMPORTED_FROM_VALUE,
+				),
+			),
+			0,
+			array(),
+			array(),
+			array(),
+			0
+		);
+
+		// ASSERT: The source-B post is inserted, not discarded as a duplicate.
+		$this->assertIsInt(
+			$result,
+			'Cross-source same-ID import must not be treated as a duplicate.'
+		);
+		$this->assertNotSame( $source_a_post, $result );
+
+		// ASSERT: Source A and source B posts coexist for this source ID.
+		$siblings = get_posts(
+			array(
+				'meta_key'         => Options::META_SOURCE_POST_ID,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'meta_value'       => (string) $source_id,
+				'post_type'        => 'any',
+				'post_status'      => 'any',
+				'posts_per_page'   => 3,
+				'suppress_filters' => false,
+			)
+		);
+		$this->assertCount( 2, $siblings );
 	}
 }

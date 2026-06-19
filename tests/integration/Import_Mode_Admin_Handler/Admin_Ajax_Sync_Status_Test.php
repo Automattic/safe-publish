@@ -194,6 +194,11 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		}
 
 		update_post_meta( $post_id, Options::META_SOURCE_POST_ID, $source_id );
+		update_post_meta(
+			$post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		global $wpdb;
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -500,8 +505,8 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 
 	/**
 	 * Verifies that a parseable destination row paired with an unparseable
-	 * source modified_gmt resolves to `invalid` — a distinct sentinel from
-	 * `unreachable`, so the UI can surface "data bug" vs "network blip".
+	 * source modified_gmt resolves to invalid — a distinct sentinel from
+	 * unreachable, so the UI can surface "data bug" vs "network blip".
 	 */
 	public function test_reports_invalid_when_source_modified_gmt_unparseable(): void {
 		// ARRANGE: Destination row is fine; source mock returns a string that
@@ -615,5 +620,38 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		$this->assertTrue( $response['success'] );
 		$this->assertSame( array(), (array) $response['data']['statuses'] );
 		$this->assertSame( 0, $this->catalog_request_count );
+	}
+
+	/**
+	 * Verifies that a connected-site URL stored with a trailing slash still
+	 * matches imports tagged with the normalized source URL, instead of every
+	 * status collapsing to missing.
+	 */
+	public function test_resolves_status_when_connected_url_has_trailing_slash(): void {
+		// ARRANGE: Option carries a trailing slash; the seeded import is tagged
+		// with the normalized form extract_site_url() produces.
+		update_option(
+			Options::OPTION_CONNECTED_SITE_URL,
+			'https://source.example.com/'
+		);
+		$source_id = 4008;
+		$this->seed_imported_post( $source_id, '2024-01-01 12:00:00' );
+		$this->source_modified_gmt[ $source_id ] = '2024-01-01T11:00:00Z';
+
+		$this->authenticate_request(
+			array( 'source_ids' => array( (string) $source_id ) )
+		);
+
+		// ACT: Dispatch.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
+
+		// ASSERT: The verdict resolves — the trailing-slash option was
+		// normalized before the source-scoped lookup.
+		$response = $this->decode_response();
+		$this->assertTrue( $response['success'] );
+		$this->assertSame(
+			'up-to-date',
+			$response['data']['statuses'][ $source_id ]['status']
+		);
 	}
 }

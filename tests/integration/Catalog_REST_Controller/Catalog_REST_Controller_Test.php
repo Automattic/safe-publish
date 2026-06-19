@@ -383,7 +383,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 
 	/**
 	 * Verifies that the title search escapes LIKE wildcards in the search
-	 * term, so a literal `%` only matches titles containing that character
+	 * term, so a literal % only matches titles containing that character
 	 * — not "anything around".
 	 */
 	public function test_search_escapes_like_wildcards(): void {
@@ -412,7 +412,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that the explicit `name` param performs exact slug lookup.
+	 * Verifies that the explicit name param performs exact slug lookup.
 	 */
 	public function test_name_param_returns_only_exact_slug_match(): void {
 		// ARRANGE: Two posts with slugs that share a prefix.
@@ -483,7 +483,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that a date-only `published_before` includes posts published
+	 * Verifies that a date-only published_before includes posts published
 	 * on that calendar day. Regression guard for the bug where
 	 * createFromFormat('Y-m-d') without the `!` prefix inherits current
 	 * time, and the upper bound was treated as midnight.
@@ -533,7 +533,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 
 	/**
 	 * Verifies that two consecutive pages together cover every record —
-	 * pins against the off-by-one where `paged` + `per_page + 1` caused
+	 * pins against the off-by-one where paged + per_page + 1 caused
 	 * WP_Query to skip one record between pages.
 	 */
 	public function test_consecutive_pages_cover_every_record(): void {
@@ -847,10 +847,9 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that the post-types endpoint returns the WP built-in
-	 * content types (post, page) and excludes back-office types that
-	 * pass the public+show_in_rest filter but aren't catalog-servable
-	 * (attachment, wp_navigation).
+	 * Verifies that the post-types endpoint returns post, page, and
+	 * wp_navigation (the non-public type the catalog explicitly opts in)
+	 * while still excluding attachment.
 	 */
 	public function test_post_types_endpoint_returns_only_catalog_eligible_types(): void {
 		// ARRANGE: Authenticated session; rely on the WP default post types.
@@ -861,13 +860,39 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 			new WP_REST_Request( 'GET', '/safe-publish/v1/catalog/post-types' )
 		);
 
-		// ASSERT: 200, includes post + page, excludes attachment and wp_navigation.
+		// ASSERT: 200, includes post + page + wp_navigation, excludes attachment.
 		$this->assertSame( 200, $response->get_status() );
 		$slugs = array_column( $response->get_data(), 'slug' );
 		$this->assertContains( 'post', $slugs );
 		$this->assertContains( 'page', $slugs );
+		$this->assertContains( 'wp_navigation', $slugs );
 		$this->assertNotContains( 'attachment', $slugs );
-		$this->assertNotContains( 'wp_navigation', $slugs );
+	}
+
+	/**
+	 * Verifies that the listing endpoint accepts wp_navigation as a
+	 * post_type param — the non-public allowlist applies to both gates.
+	 */
+	public function test_listing_endpoint_accepts_wp_navigation_post_type(): void {
+		// ARRANGE: Create one wp_navigation post and authenticate.
+		$nav_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'wp_navigation',
+				'post_status' => 'publish',
+				'post_title'  => 'Main menu',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Request the wp_navigation listing.
+		$response = $this->dispatch( array( 'post_type' => 'wp_navigation' ) );
+
+		// ASSERT: 200 and the nav post is present.
+		$this->assertSame( 200, $response->get_status() );
+		$items = $response->get_data()['items'];
+		$this->assertSame( 1, count( $items ) );
+		$this->assertSame( $nav_id, $items[0]['id'] );
+		$this->assertSame( 'wp_navigation', $items[0]['post_type'] );
 	}
 
 	/**

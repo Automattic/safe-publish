@@ -12,6 +12,7 @@ namespace Safe_Publish\Admin;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Utils\Options;
 use WP_Error;
 
 // Prevent direct access.
@@ -23,6 +24,50 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Handles content transformation, media import, and URL replacement.
  */
 class Content_Processor {
+
+	/**
+	 * Block-name => list of post-ID attrs, optionally gated on sibling
+	 * attrs (e.g. core/navigation-link.id only when kind=post-type).
+	 *
+	 * @var array<string, list<array{attr:string, gated_by?: array<string,string>}>>
+	 */
+	private const POST_ID_BLOCK_ATTRS = array(
+		'core/navigation'         => array(
+			array( 'attr' => 'ref' ),
+		),
+		'core/navigation-link'    => array(
+			array(
+				'attr'     => 'id',
+				'gated_by' => array( 'kind' => 'post-type' ),
+			),
+		),
+		'core/navigation-submenu' => array(
+			array(
+				'attr'     => 'id',
+				'gated_by' => array( 'kind' => 'post-type' ),
+			),
+		),
+	);
+
+	/**
+	 * Block-name => list of term-ID attrs; same shape as POST_ID_BLOCK_ATTRS.
+	 *
+	 * @var array<string, list<array{attr:string, gated_by?: array<string,string>}>>
+	 */
+	private const TERM_ID_BLOCK_ATTRS = array(
+		'core/navigation-link'    => array(
+			array(
+				'attr'     => 'id',
+				'gated_by' => array( 'kind' => 'taxonomy' ),
+			),
+		),
+		'core/navigation-submenu' => array(
+			array(
+				'attr'     => 'id',
+				'gated_by' => array( 'kind' => 'taxonomy' ),
+			),
+		),
+	);
 
 	/**
 	 * Media Importer instance.
@@ -68,6 +113,13 @@ class Content_Processor {
 	private array $unprocessable_media = array();
 
 	/**
+	 * Warnings raised during the current run (e.g. unmapped block IDs).
+	 *
+	 * @var array<array<string, mixed>>
+	 */
+	private array $warnings = array();
+
+	/**
 	 * Constructs the Content_Processor instance.
 	 *
 	 * @param Media_Importer          $media_importer          Media importer instance.
@@ -90,17 +142,35 @@ class Content_Processor {
 	 * Detects whether content uses Gutenberg blocks and applies the appropriate
 	 * processing strategy. Replaces source URLs in the content after processing.
 	 *
-	 * @param string $content         Post content to process.
-	 * @param string $source_site_url Source site URL.
+	 * @param string               $content         Post content to process.
+	 * @param string               $source_site_url Source site URL.
+	 * @param array<string, mixed> $context         Optional batch state. Recognized
+	 *                                              keys: `session_id_map` (array of
+	 *                                              source post ID => destination post
+	 *                                              ID for the in-flight bulk batch).
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
-	public function process_content( string $content, string $source_site_url ): string|WP_Error {
+	public function process_content(
+		string $content,
+		string $source_site_url,
+		array $context = array()
+	): string|WP_Error {
 		$this->failed_media        = array();
 		$this->unprocessable_media = array();
+		$this->warnings            = array();
 		$this->media_importer->reset_newly_created_attachment_ids();
 
+		$session_id_map = isset( $context['session_id_map'] )
+			&& is_array( $context['session_id_map'] )
+			? $context['session_id_map']
+			: array();
+
 		if ( $this->is_gutenberg_content( $content ) ) {
-			$processed_content = $this->process_gutenberg_blocks( $content, $source_site_url );
+			$processed_content = $this->process_gutenberg_blocks(
+				$content,
+				$source_site_url,
+				$session_id_map
+			);
 		} else {
 			$processed_content = $this->content_media_processor->process_content( $content, $source_site_url );
 		}
@@ -132,6 +202,15 @@ class Content_Processor {
 	}
 
 	/**
+	 * Returns warnings collected during the most recent process_content() run.
+	 *
+	 * @return array<array<string, mixed>> Warnings list.
+	 */
+	public function get_warnings(): array {
+		return $this->warnings;
+	}
+
+	/**
 	 * Checks if content contains Gutenberg blocks.
 	 *
 	 * @param string $content Post content.
@@ -144,11 +223,17 @@ class Content_Processor {
 	/**
 	 * Processes Gutenberg blocks and imports media.
 	 *
-	 * @param string $content         Post content with blocks.
-	 * @param string $source_site_url Source site URL.
+	 * @param string         $content         Post content with blocks.
+	 * @param string         $source_site_url Source site URL.
+	 * @param array<int,int> $session_id_map  Source post ID => destination post ID
+	 *                                        for the in-flight bulk batch.
 	 * @return string Processed content.
 	 */
-	public function process_gutenberg_blocks( string $content, string $source_site_url ): string {
+	private function process_gutenberg_blocks(
+		string $content,
+		string $source_site_url,
+		array $session_id_map = array()
+	): string {
 		if ( empty( $content ) ) {
 			return $content;
 		}
@@ -159,22 +244,31 @@ class Content_Processor {
 			return $content;
 		}
 
-		if ( ! $this->content_needs_processing( $content ) ) {
+		$needs_media_processing = $this->content_needs_processing( $content );
+		$needs_id_remap         = $this->content_has_id_reference_blocks( $blocks );
+
+		if ( ! $needs_media_processing && ! $needs_id_remap ) {
 			return $content;
 		}
 
-		// Process each block.
-		$processed_blocks = array_map(
-			function ( $block ) use ( $source_site_url ) {
-				return $this->process_single_block( $block, $source_site_url );
-			},
-			$blocks
-		);
+		if ( $needs_media_processing ) {
+			$blocks = array_map(
+				function ( $block ) use ( $source_site_url ) {
+					return $this->process_single_block( $block, $source_site_url );
+				},
+				$blocks
+			);
+		}
 
-		// Serialize blocks back to content.
-		$serialized_content = serialize_blocks( $processed_blocks );
+		if ( $needs_id_remap ) {
+			$blocks = $this->process_block_id_references(
+				$blocks,
+				$source_site_url,
+				$session_id_map
+			);
+		}
 
-		return $serialized_content;
+		return serialize_blocks( $blocks );
 	}
 
 	/**
@@ -395,7 +489,14 @@ class Content_Processor {
 			default:
 				// Process URL values in block attrs for custom/third-party
 				// blocks, then fall through to process innerHTML for media/links.
-				if ( isset( $block['attrs'] ) && array() !== $block['attrs'] ) {
+				// Skip blocks whose URL attrs are page/term links (handled by
+				// process_block_id_references) — sideloading them as media
+				// would download HTML and abort the import on a false failure.
+				if (
+					isset( $block['attrs'] ) && array() !== $block['attrs']
+					&& ! isset( self::POST_ID_BLOCK_ATTRS[ $block['blockName'] ] )
+					&& ! isset( self::TERM_ID_BLOCK_ATTRS[ $block['blockName'] ] )
+				) {
 					$block['attrs'] = $this->replace_urls_in_attrs(
 						$block['attrs'],
 						$source_site_url,
@@ -924,16 +1025,400 @@ class Content_Processor {
 	}
 
 	/**
-	 * Checks if content needs processing to avoid unnecessary serialization.
-	 *
-	 * Skips parse_blocks() + serialize_blocks() for content that contains no
-	 * HTTP URLs, since media imports are the only transformation applied
-	 * during block processing.
+	 * Whether the content contains HTTP URLs, the trigger for the media/URL
+	 * transformation. Only that pass depends on this check; block-ID remapping
+	 * is gated separately by content_has_id_reference_blocks().
 	 *
 	 * @param string $content Content to check.
-	 * @return bool True if content needs processing.
+	 * @return bool True when the content contains an HTTP URL.
 	 */
 	private function content_needs_processing( string $content ): bool {
 		return false !== strpos( $content, 'http' );
+	}
+
+	/**
+	 * True when the block tree contains any block name registered for
+	 * post- or term-ID remapping.
+	 *
+	 * @param array<array<string, mixed>> $blocks Parsed block tree.
+	 * @return bool
+	 */
+	private function content_has_id_reference_blocks( array $blocks ): bool {
+		foreach ( $blocks as $block ) {
+			$name = isset( $block['blockName'] ) ? (string) $block['blockName'] : '';
+			if ( '' !== $name && (
+				isset( self::POST_ID_BLOCK_ATTRS[ $name ] )
+				|| isset( self::TERM_ID_BLOCK_ATTRS[ $name ] )
+			) ) {
+				return true;
+			}
+
+			if (
+				isset( $block['innerBlocks'] )
+				&& is_array( $block['innerBlocks'] )
+				&& array() !== $block['innerBlocks']
+				&& $this->content_has_id_reference_blocks( $block['innerBlocks'] )
+			) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Rewrites post-/term-ID block attrs from source to destination IDs.
+	 *
+	 * Two-pass: collect unresolved IDs, bulk-lookup per kind, apply on a
+	 * second walk. Unmapped IDs stay in place with a warning. URL attrs are
+	 * not regenerated — replace_source_urls swaps the host downstream and
+	 * the editor resolves URLs from `id` on next save.
+	 *
+	 * @param array<array<string, mixed>> $blocks          Parsed block tree.
+	 * @param string                      $source_site_url Source site URL.
+	 * @param array<int,int>              $session_id_map  Source post ID => destination post ID
+	 *                                                     for the in-flight bulk batch.
+	 * @return array<array<string, mixed>> Mutated block tree.
+	 */
+	private function process_block_id_references(
+		array $blocks,
+		string $source_site_url,
+		array $session_id_map
+	): array {
+		$collected = array(
+			'post' => array(),
+			'term' => array(),
+		);
+		$this->collect_id_references( $blocks, $session_id_map, $collected );
+
+		$post_map = $this->lookup_destination_post_ids(
+			$collected['post'],
+			$source_site_url
+		);
+		$post_map = $session_id_map + $post_map;
+
+		$term_map = $this->lookup_destination_term_ids(
+			$collected['term'],
+			$source_site_url
+		);
+
+		return $this->apply_id_references( $blocks, $post_map, $term_map );
+	}
+
+	/**
+	 * Walks the block tree and accumulates source post/term IDs that need to
+	 * be looked up. IDs already resolvable via the session map skip the
+	 * lookup pass.
+	 *
+	 * @param array<array<string, mixed>>                         $blocks         Block tree.
+	 * @param array<int,int>                                      $session_id_map In-batch post-ID map.
+	 * @param array{post: array<int,true>, term: array<int,true>} $collected      Accumulator (by reference).
+	 */
+	private function collect_id_references(
+		array $blocks,
+		array $session_id_map,
+		array &$collected
+	): void {
+		foreach ( $blocks as $block ) {
+			$name  = isset( $block['blockName'] ) ? (string) $block['blockName'] : '';
+			$attrs = isset( $block['attrs'] ) && is_array( $block['attrs'] )
+				? $block['attrs']
+				: array();
+
+			foreach ( self::matching_refs( self::POST_ID_BLOCK_ATTRS, $name, $attrs ) as $id ) {
+				if ( ! isset( $session_id_map[ $id ] ) ) {
+					$collected['post'][ $id ] = true;
+				}
+			}
+
+			foreach ( self::matching_refs( self::TERM_ID_BLOCK_ATTRS, $name, $attrs ) as $id ) {
+				$collected['term'][ $id ] = true;
+			}
+
+			if (
+				isset( $block['innerBlocks'] )
+				&& is_array( $block['innerBlocks'] )
+				&& array() !== $block['innerBlocks']
+			) {
+				$this->collect_id_references(
+					$block['innerBlocks'],
+					$session_id_map,
+					$collected
+				);
+			}
+		}
+	}
+
+	/**
+	 * Returns the source IDs a block exposes per the given registry, after
+	 * gating attrs (e.g. `kind`) have been checked.
+	 *
+	 * @param array<string, list<array{attr:string, gated_by?: array<string,string>}>> $registry Block-name => list of attr rules.
+	 * @param string                                                                   $name     Block name.
+	 * @param array<string, mixed>                                                     $attrs    Block attrs.
+	 * @return list<int> Positive source IDs.
+	 */
+	private static function matching_refs(
+		array $registry,
+		string $name,
+		array $attrs
+	): array {
+		if ( '' === $name || ! isset( $registry[ $name ] ) ) {
+			return array();
+		}
+
+		$ids = array();
+		foreach ( $registry[ $name ] as $rule ) {
+			if ( isset( $rule['gated_by'] ) ) {
+				foreach ( $rule['gated_by'] as $gate_attr => $gate_value ) {
+					if ( ( $attrs[ $gate_attr ] ?? null ) !== $gate_value ) {
+						continue 2;
+					}
+				}
+			}
+
+			$value = $attrs[ $rule['attr'] ] ?? null;
+			$id    = is_numeric( $value ) ? (int) $value : 0;
+			if ( $id > 0 ) {
+				$ids[] = $id;
+			}
+		}
+
+		return $ids;
+	}
+
+	/**
+	 * Looks up destination post IDs for a set of source post IDs scoped to the
+	 * caller's source site via paired META_SOURCE_POST_ID/META_SOURCE_SITE_URL
+	 * postmeta. Returns a source-ID => destination-ID map.
+	 *
+	 * @param array<int, true> $source_ids      Set of source post IDs (keys).
+	 * @param string           $source_site_url Source site URL (scheme://host[:port]).
+	 * @return array<int, int> Source-ID => destination-ID.
+	 */
+	private function lookup_destination_post_ids(
+		array $source_ids,
+		string $source_site_url
+	): array {
+		if ( array() === $source_ids || '' === $source_site_url ) {
+			return array();
+		}
+
+		$ids   = array_keys( $source_ids );
+		$posts = get_posts(
+			array(
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query'             => array(
+					'relation' => 'AND',
+					array(
+						'key'     => Options::META_SOURCE_POST_ID,
+						'value'   => $ids,
+						'compare' => 'IN',
+					),
+					array(
+						'key'   => Options::META_SOURCE_SITE_URL,
+						'value' => $source_site_url,
+					),
+				),
+				// Not 'any': it omits exclude_from_search post types.
+				'post_type'              => array_keys( get_post_types() ),
+				'post_status'            => 'any',
+				'posts_per_page'         => count( $ids ),
+				'suppress_filters'       => false,
+				'update_post_term_cache' => false,
+			)
+		);
+
+		$map = array();
+		foreach ( $posts as $post ) {
+			$source_id = absint(
+				get_post_meta( $post->ID, Options::META_SOURCE_POST_ID, true )
+			);
+			if ( $source_id > 0 && ! isset( $map[ $source_id ] ) ) {
+				$map[ $source_id ] = (int) $post->ID;
+			}
+		}
+
+		return $map;
+	}
+
+	/**
+	 * Looks up destination term IDs for a set of source term IDs scoped to the
+	 * caller's source site URL via paired META_SOURCE_TERM_ID/URL term meta.
+	 *
+	 * Queries termmeta directly to avoid get_terms()'s taxonomy IN clause —
+	 * pointless at our selectivity (paired-meta narrows to a tiny result set)
+	 * and degrades on sites with thousands of registered taxonomies.
+	 *
+	 * @param array<int, true> $source_ids      Set of source term IDs (keys).
+	 * @param string           $source_site_url Exact source site URL stored as
+	 *                                          paired meta.
+	 * @return array<int, int> Source-ID => destination-ID.
+	 */
+	private function lookup_destination_term_ids(
+		array $source_ids,
+		string $source_site_url
+	): array {
+		if ( array() === $source_ids || '' === $source_site_url ) {
+			return array();
+		}
+
+		global $wpdb;
+
+		$ids          = array_keys( $source_ids );
+		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+
+		$prepare_args = array_merge(
+			array( Options::META_SOURCE_TERM_ID ),
+			array_map( 'intval', $ids ),
+			array( Options::META_SOURCE_TERM_URL, $source_site_url )
+		);
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT tm_id.term_id AS term_id,
+						tm_id.meta_value AS source_id
+				 FROM {$wpdb->termmeta} tm_id
+				 INNER JOIN {$wpdb->termmeta} tm_url
+					 ON tm_url.term_id = tm_id.term_id
+				 WHERE tm_id.meta_key = %s
+					 AND tm_id.meta_value IN ($placeholders)
+					 AND tm_url.meta_key = %s
+					 AND tm_url.meta_value = %s",
+				...$prepare_args
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
+
+		if ( ! is_array( $rows ) || array() === $rows ) {
+			return array();
+		}
+
+		// Prime the term cache so downstream get_term() calls are free.
+		$term_ids = array_map(
+			static fn( $row ): int => (int) $row->term_id,
+			$rows
+		);
+		_prime_term_caches( $term_ids );
+
+		$map = array();
+		foreach ( $rows as $row ) {
+			$source_id = absint( $row->source_id );
+			if ( $source_id > 0 && ! isset( $map[ $source_id ] ) ) {
+				$map[ $source_id ] = (int) $row->term_id;
+			}
+		}
+
+		return $map;
+	}
+
+	/**
+	 * Second-pass walk: applies the post/term ID maps to the block tree.
+	 * Unmapped references are left untouched and recorded as warnings so the
+	 * admin can fix them up after publishing dependencies.
+	 *
+	 * @param array<array<string, mixed>> $blocks   Block tree.
+	 * @param array<int,int>              $post_map Source-ID => destination-ID.
+	 * @param array<int,int>              $term_map Source-ID => destination-ID.
+	 * @return array<array<string, mixed>> Mutated tree.
+	 */
+	private function apply_id_references(
+		array $blocks,
+		array $post_map,
+		array $term_map
+	): array {
+		foreach ( $blocks as $i => $block ) {
+			$name  = isset( $block['blockName'] ) ? (string) $block['blockName'] : '';
+			$attrs = isset( $block['attrs'] ) && is_array( $block['attrs'] )
+				? $block['attrs']
+				: array();
+
+			$attrs = $this->rewrite_attrs(
+				$attrs,
+				$name,
+				self::POST_ID_BLOCK_ATTRS,
+				$post_map,
+				'post'
+			);
+			$attrs = $this->rewrite_attrs(
+				$attrs,
+				$name,
+				self::TERM_ID_BLOCK_ATTRS,
+				$term_map,
+				'term'
+			);
+
+			if ( array() !== $attrs ) {
+				$blocks[ $i ]['attrs'] = $attrs;
+			}
+
+			if (
+				isset( $block['innerBlocks'] )
+				&& is_array( $block['innerBlocks'] )
+				&& array() !== $block['innerBlocks']
+			) {
+				$blocks[ $i ]['innerBlocks'] = $this->apply_id_references(
+					$block['innerBlocks'],
+					$post_map,
+					$term_map
+				);
+			}
+		}
+
+		return $blocks;
+	}
+
+	/**
+	 * Rewrites the registered attrs on a single block using the given map.
+	 * Logs a warning for each matched attr whose source ID was not resolvable
+	 * so the admin can surface and fix it.
+	 *
+	 * @param array<string, mixed>                                                     $attrs    Block attrs.
+	 * @param string                                                                   $name     Block name.
+	 * @param array<string, list<array{attr:string, gated_by?: array<string,string>}>> $registry Block-name => list of attr rules.
+	 * @param array<int,int>                                                           $id_map   Source-ID => destination-ID.
+	 * @param string                                                                   $kind     'post' or 'term' (warning context).
+	 * @return array<string, mixed> Mutated attrs.
+	 */
+	private function rewrite_attrs(
+		array $attrs,
+		string $name,
+		array $registry,
+		array $id_map,
+		string $kind
+	): array {
+		if ( '' === $name || ! isset( $registry[ $name ] ) ) {
+			return $attrs;
+		}
+
+		foreach ( $registry[ $name ] as $rule ) {
+			if ( isset( $rule['gated_by'] ) ) {
+				foreach ( $rule['gated_by'] as $gate_attr => $gate_value ) {
+					if ( ( $attrs[ $gate_attr ] ?? null ) !== $gate_value ) {
+						continue 2;
+					}
+				}
+			}
+
+			$value     = $attrs[ $rule['attr'] ] ?? null;
+			$source_id = is_numeric( $value ) ? (int) $value : 0;
+			if ( $source_id <= 0 ) {
+				continue;
+			}
+
+			if ( isset( $id_map[ $source_id ] ) ) {
+				$attrs[ $rule['attr'] ] = $id_map[ $source_id ];
+			} else {
+				$this->warnings[] = array(
+					'type'      => 'unmapped_block_reference',
+					'kind'      => $kind,
+					'block'     => $name,
+					'source_id' => $source_id,
+				);
+			}
+		}
+
+		return $attrs;
 	}
 }

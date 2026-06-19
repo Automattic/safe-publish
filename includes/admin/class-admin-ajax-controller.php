@@ -79,6 +79,16 @@ final class Admin_Ajax_Controller {
 	const BULK_DELETE_POSTS_BATCH_MAX = 50;
 
 	/**
+	 * Maximum number of source catalog pages scanned while filling one
+	 * Available page, bounding worst-case latency when non-imported rows are
+	 * sparse. If the scan hits this cap before the page fills, has_more stays
+	 * true so the client can keep paging.
+	 *
+	 * @var int
+	 */
+	const AVAILABLE_FILL_MAX_FETCHES = 15;
+
+	/**
 	 * Source Posts API instance.
 	 *
 	 * @var Source_Posts_API
@@ -360,8 +370,16 @@ final class Admin_Ajax_Controller {
 	): array|\WP_Error {
 		$this->validate_auth_or_fail();
 		$auth_credentials = Auth_Credential_Provider::get_credentials();
+		$args             = $this->build_catalog_args();
 
-		$args   = $this->build_catalog_args();
+		if ( 'available' === $state ) {
+			return $this->list_available_via_catalog(
+				$source_site_url,
+				$auth_credentials,
+				$args
+			);
+		}
+
 		$result = $this->api->fetch_posts(
 			$source_site_url,
 			$auth_credentials,
@@ -376,16 +394,6 @@ final class Admin_Ajax_Controller {
 			$result['items']
 		);
 
-		if ( 'available' === $state ) {
-			$result['items'] = array_values(
-				array_filter(
-					$result['items'],
-					static fn( array $item ): bool =>
-						false === ( $item['is_imported'] ?? false )
-				)
-			);
-		}
-
 		$rows = array_map(
 			static fn( array $item ): array =>
 				self::build_unified_row_from_catalog( $item ),
@@ -396,6 +404,92 @@ final class Admin_Ajax_Controller {
 			'items'    => $rows,
 			'has_more' => isset( $result['has_more'] )
 				&& true === (bool) $result['has_more'],
+		);
+	}
+
+	/**
+	 * Builds the Available payload by pulling source catalog pages until the
+	 * requested page is filled with non-imported rows.
+	 *
+	 * The Available chip drops already-imported rows, so a single source page
+	 * can render almost empty while the source still reports more raw items.
+	 * Filling across pages lets has_more reflect the non-imported count rather
+	 * than the source's raw pagination.
+	 *
+	 * @param string $source_site_url  Source site URL.
+	 * @param array  $auth_credentials Source auth credentials.
+	 * @param array  $args             Validated catalog args, incl. page/per_page.
+	 * @return array|\WP_Error Listing payload, or WP_Error on catalog failure.
+	 */
+	private function list_available_via_catalog(
+		string $source_site_url,
+		array $auth_credentials,
+		array $args
+	): array|\WP_Error {
+		$client_page     = max( 1, (int) ( $args['page'] ?? 1 ) );
+		$client_per_page = max( 1, (int) ( $args['per_page'] ?? 20 ) );
+
+		// +1 past the page window tells us whether a further page exists.
+		$offset = ( $client_page - 1 ) * $client_per_page;
+		$needed = $offset + $client_per_page + 1;
+
+		$collected       = array();
+		$collected_count = 0;
+		$source_more     = true;
+		$capped          = false;
+		$catalog_page    = 1;
+
+		while ( $collected_count < $needed && $source_more ) {
+			if ( $catalog_page > self::AVAILABLE_FILL_MAX_FETCHES ) {
+				$capped = true;
+				break;
+			}
+
+			$page_args             = $args;
+			$page_args['page']     = $catalog_page;
+			$page_args['per_page'] = Catalog_REST_Controller::MAX_PER_PAGE;
+
+			$result = $this->api->fetch_posts(
+				$source_site_url,
+				$auth_credentials,
+				$page_args
+			);
+
+			if ( is_wp_error( $result ) ) {
+				return $result;
+			}
+
+			$this->post_import_service->annotate_posts_with_import_status(
+				$result['items']
+			);
+
+			$collected = array_merge(
+				$collected,
+				array_filter(
+					$result['items'],
+					static fn( array $item ): bool =>
+						false === ( $item['is_imported'] ?? false )
+				)
+			);
+
+			$collected_count = count( $collected );
+
+			$source_more = isset( $result['has_more'] )
+				&& true === (bool) $result['has_more'];
+
+			++$catalog_page;
+		}
+
+		$rows = array_map(
+			static fn( array $item ): array =>
+				self::build_unified_row_from_catalog( $item ),
+			array_slice( $collected, $offset, $client_per_page )
+		);
+
+		return array(
+			'items'    => $rows,
+			'has_more' => $collected_count > $offset + $client_per_page
+				|| $capped,
 		);
 	}
 
@@ -943,7 +1037,10 @@ final class Admin_Ajax_Controller {
 		// Force-update confirmation prompt is HTTP UX, not import logic: if the
 		// post is already imported and the caller hasn't opted into updating,
 		// return the prompt response instead of running the import.
-		$imported_post = $this->post_import_service->find_imported_post( $source_post_id );
+		$imported_post = $this->post_import_service->find_imported_post(
+			$source_post_id,
+			self::connected_site_url()
+		);
 
 		if ( $imported_post && ! $force_update ) {
 			wp_send_json_success(
@@ -1104,8 +1201,15 @@ final class Admin_Ajax_Controller {
 		}
 
 		$sort_result  = Topological_Sorter::sort( $parent_map );
-		$sorted_order = array_merge( $sort_result['sorted'], $sort_result['leftover'] );
+		$sorted_order = self::defer_dependent_types(
+			array_merge( $sort_result['sorted'], $sort_result['leftover'] ),
+			$batch_fresh_data
+		);
 		$processed    = array();
+
+		// Source ID => destination ID accumulator. Feeds block-attribute ID
+		// remapping for items referencing in-batch imports (e.g. wp_navigation).
+		$session_id_map = array();
 
 		$results    = array();
 		$successful = 0;
@@ -1125,6 +1229,7 @@ final class Admin_Ajax_Controller {
 				array(
 					'prefetched_fresh_result' => $prefetch,
 					'batch_fresh_data'        => $batch_fresh_data,
+					'session_id_map'          => $session_id_map,
 				)
 			);
 			$results[] = $result;
@@ -1133,6 +1238,7 @@ final class Admin_Ajax_Controller {
 
 			if ( $result['success'] ) {
 				++$successful;
+				$session_id_map[ $source_id ] = (int) $result['post_id'];
 			} else {
 				++$failed;
 			}
@@ -1147,12 +1253,18 @@ final class Admin_Ajax_Controller {
 			$result    = $this->post_import_service->import_post(
 				$post_data,
 				$session_id,
-				array( 'batch_fresh_data' => $batch_fresh_data )
+				array(
+					'batch_fresh_data' => $batch_fresh_data,
+					'session_id_map'   => $session_id_map,
+				)
 			);
 			$results[] = $result;
 
 			if ( $result['success'] ) {
 				++$successful;
+				if ( $source_post_id > 0 ) {
+					$session_id_map[ $source_post_id ] = (int) $result['post_id'];
+				}
 			} else {
 				++$failed;
 			}
@@ -1375,7 +1487,10 @@ final class Admin_Ajax_Controller {
 
 		// Two bulk queries instead of N per-row meta_query + items-table reads.
 		$imported_by_source_id = $this->post_import_service
-			->fetch_imported_posts_by_source_ids( $source_ids );
+			->fetch_imported_posts_by_source_ids(
+				$source_ids,
+				self::connected_site_url()
+			);
 
 		if ( 0 === count( $imported_by_source_id ) ) {
 			wp_send_json_success( array( 'statuses' => (object) array() ) );
@@ -1505,6 +1620,52 @@ final class Admin_Ajax_Controller {
 		}
 
 		return $is_newer ? 'outdated' : 'up-to-date';
+	}
+
+	/**
+	 * Moves dependent types (wp_navigation) to the end of the import order so
+	 * the items they reference via core/navigation-link `id` attrs populate
+	 * the session ID map first.
+	 *
+	 * Asymmetry is one-directional — navs reference pages, not vice versa —
+	 * so the topological sorter itself stays unaware of the type.
+	 *
+	 * @param int[]                            $sorted_order     Source IDs in topo order.
+	 * @param array<int, array<string, mixed>> $batch_fresh_data Pass-1 fresh data
+	 *                                                           keyed by source ID.
+	 * @return int[] Order with dependent types pushed to the end (request-order
+	 *               preserved among them).
+	 */
+	private static function defer_dependent_types(
+		array $sorted_order,
+		array $batch_fresh_data
+	): array {
+		$dependent_types = array( 'wp_navigation' );
+
+		$head = array();
+		$tail = array();
+		foreach ( $sorted_order as $source_id ) {
+			$post_type = (string) ( $batch_fresh_data[ $source_id ]['post_type'] ?? '' );
+			if ( in_array( $post_type, $dependent_types, true ) ) {
+				$tail[] = $source_id;
+			} else {
+				$head[] = $source_id;
+			}
+		}
+
+		return array_merge( $head, $tail );
+	}
+
+	/**
+	 * Returns the connected-site option normalized to scheme + host + port,
+	 * matching how META_SOURCE_SITE_URL is stored.
+	 *
+	 * @return string Normalized connected site URL, or '' when unset.
+	 */
+	private static function connected_site_url(): string {
+		return Post_Import_Service::extract_site_url(
+			(string) get_option( Options::OPTION_CONNECTED_SITE_URL, '' )
+		);
 	}
 
 	/**

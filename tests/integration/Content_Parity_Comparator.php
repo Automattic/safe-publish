@@ -105,8 +105,8 @@ final class Content_Parity_Comparator {
 
 	/**
 	 * Asserts that attachment-ID references (Gutenberg block-comment
-	 * `{"id":N}`, `wp-image-N` classnames, and caption-shortcode
-	 * `attachment_N` IDs) rewrite to dest IDs as multisets, so leaks and
+	 * {"id":N}, wp-image-N classnames, and caption-shortcode
+	 * attachment_N IDs) rewrite to dest IDs as multisets, so leaks and
 	 * phantoms both surface.
 	 *
 	 * @param string          $source_content       Source post_content.
@@ -230,7 +230,7 @@ final class Content_Parity_Comparator {
 	}
 
 	/**
-	 * Returns IDs from Gutenberg block-comment JSON attrs (e.g. `{"id":42}`).
+	 * Returns IDs from Gutenberg block-comment JSON attrs (e.g. {"id":42}).
 	 * Uses a regex because WP_HTML_Tag_Processor skips comments.
 	 *
 	 * @param string $content Content to scan.
@@ -243,7 +243,7 @@ final class Content_Parity_Comparator {
 	}
 
 	/**
-	 * Returns the integer IDs found in `wp-image-N` classnames.
+	 * Returns the integer IDs found in wp-image-N classnames.
 	 *
 	 * @param string $content Content to scan.
 	 * @return list<int>
@@ -255,8 +255,8 @@ final class Content_Parity_Comparator {
 	}
 
 	/**
-	 * Returns the integer IDs found in caption-family shortcode `id`
-	 * attributes (`[caption id="attachment_N"]`, `[wp_caption id=...]`).
+	 * Returns the integer IDs found in caption-family shortcode id
+	 * attributes ([caption id="attachment_N"], [wp_caption id=...]).
 	 *
 	 * @param string $content Content to scan.
 	 * @return list<int>

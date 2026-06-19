@@ -55,11 +55,14 @@ class Source_Posts_API {
 	/**
 	 * Extracts taxonomy terms from an embedded REST API response.
 	 *
-	 * Parses the `wp:term` embedded data and groups term names by taxonomy.
-	 * Terms with empty names are skipped.
+	 * Parses `wp:term` embedded data and groups per-term records by taxonomy.
+	 * Carrying the source term ID lets Meta_Terms_Manager write source-term
+	 * meta on the destination so later block-ID remap can resolve nav-link
+	 * blocks that reference the term.
 	 *
 	 * @param array $response_data Decoded REST API response for a single post.
-	 * @return array<string, list<string>> Term names grouped by taxonomy slug.
+	 * @return array<string, list<array{source_term_id:int,slug:string,name:string}>>
+	 *               Term records grouped by taxonomy slug.
 	 */
 	public static function extract_embedded_terms( array $response_data ): array {
 		$terms = array();
@@ -74,13 +77,23 @@ class Source_Posts_API {
 
 		foreach ( $response_data['_embedded']['wp:term'] as $term_group ) {
 			foreach ( $term_group as $term ) {
-				$tax = isset( $term['taxonomy'] ) ? $term['taxonomy'] : 'term';
+				$name = isset( $term['name'] ) ? (string) $term['name'] : '';
+				if ( '' === $name ) {
+					continue;
+				}
+
+				$tax = isset( $term['taxonomy'] ) ? (string) $term['taxonomy'] : 'term';
 				if ( ! isset( $terms[ $tax ] ) ) {
 					$terms[ $tax ] = array();
 				}
-				if ( isset( $term['name'] ) && '' !== $term['name'] ) {
-					$terms[ $tax ][] = $term['name'];
-				}
+
+				$terms[ $tax ][] = array(
+					'source_term_id' => isset( $term['id'] ) ? absint( $term['id'] ) : 0,
+					'slug'           => isset( $term['slug'] )
+						? sanitize_title( (string) $term['slug'] )
+						: '',
+					'name'           => $name,
+				);
 			}
 		}
 
@@ -517,6 +530,11 @@ class Source_Posts_API {
 		$post_data['menu_order']     = absint( $data['menu_order'] ?? 0 );
 		$post_data['password']       = sanitize_text_field( $data['password'] ?? '' );
 		$post_data['parent']         = absint( $data['parent'] ?? 0 );
+		// Carry the resolved WP slug so the bulk sorter can defer dependent
+		// types (wp_navigation runs after the posts/pages it links to).
+		$post_data['post_type'] = isset( $data['type'] )
+			? sanitize_key( (string) $data['type'] )
+			: '';
 
 		if ( isset( $data['link'] ) ) {
 			$post_data['link'] = esc_url_raw( $data['link'] );

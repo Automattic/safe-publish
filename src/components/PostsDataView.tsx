@@ -541,8 +541,6 @@ export function PostsDataView( {
 		[ rows ]
 	);
 
-	const sourceIdsKey = sourceIds.join( ',' );
-
 	useEffect( () => {
 		if ( 0 === sourceIds.length ) {
 			setSyncStatuses( {} );
@@ -589,8 +587,7 @@ export function PostsDataView( {
 			} );
 
 		return () => controller.abort();
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [ sourceIdsKey ] );
+	}, [ sourceIds ] );
 
 	useEffect(
 		() => () => {
@@ -695,12 +692,11 @@ export function PostsDataView( {
 	const hasActiveFilters =
 		'all' !== state
 		|| '' !== searchTerm
-		|| ( isCatalogPrimary
-			&& ( selectedStatuses.length > 0
-				|| null !== publishedAfter
-				|| null !== publishedBefore ) )
-		|| ( ! isCatalogPrimary
-			&& ( null !== importedAfter || null !== importedBefore ) );
+		|| selectedStatuses.length > 0
+		|| null !== publishedAfter
+		|| null !== publishedBefore
+		|| null !== importedAfter
+		|| null !== importedBefore;
 
 	const handleStatusesChange = (
 		tokens: ( string | { value: string } )[]

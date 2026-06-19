@@ -448,6 +448,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 		update_post_meta( $existing_post_id, 'safe_publish_source_post_id', '8001' );
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
@@ -482,6 +487,58 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			$this->count_open_sessions(),
 			'No open session should remain after the confirmation prompt'
 		);
+	}
+
+	/**
+	 * Verifies that the create draft endpoint still returns the existing-post
+	 * confirmation when the connected-site URL is stored with a trailing slash,
+	 * rather than silently importing past the prompt.
+	 */
+	public function test_ajax_create_draft_confirmation_with_trailing_slash(): void {
+		// ARRANGE: Option carries a trailing slash; the existing import is
+		// tagged with the normalized source URL.
+		update_option(
+			Options::OPTION_CONNECTED_SITE_URL,
+			'https://source.example.com/'
+		);
+		$existing_post_id = wp_insert_post(
+			array(
+				'post_title'  => 'Already Imported Slash',
+				'post_status' => 'draft',
+				'post_type'   => 'post',
+			)
+		);
+		update_post_meta( $existing_post_id, Options::META_SOURCE_POST_ID, '8004' );
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '8004',
+			'title'          => 'Already Imported Slash',
+			'content'        => '<p>Same content.</p>',
+			'source_link'    => 'https://source.example.com/already-imported-slash',
+			'post_type'      => 'post',
+		);
+
+		// ACT: Trigger handler without force_update.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: A confirmation prompt comes back, proving the trailing-slash
+		// option was normalized before the duplicate lookup.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response );
+		$this->assertTrue( $response['success'] );
+		$this->assertTrue( $response['data']['existing'] );
+		$this->assertSame(
+			'update_existing',
+			$response['data']['confirm_action']
+		);
+		$this->assertSame( $existing_post_id, $response['data']['post_id'] );
 	}
 
 	/**
@@ -538,6 +595,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 		update_post_meta( $existing_post_id, 'safe_publish_source_post_id', '8002' );
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
@@ -602,6 +664,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 		update_post_meta( $existing_post_id, 'safe_publish_source_post_id', '8003' );
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
@@ -805,6 +872,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			Options::META_SOURCE_POST_ID,
 			'7101'
 		);
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		// ARRANGE: Mock API returns updated field values.
 		$this->mock_post_overrides = array(
@@ -918,6 +990,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			$existing_post_id,
 			Options::META_SOURCE_POST_ID,
 			'7201'
+		);
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
 		);
 
 		// ARRANGE: Mock API returns an updated password.
@@ -1210,7 +1287,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 	/**
 	 * Verifies that a single-import author-resolution failure produces an
-	 * `import_items` row with status 'error' and a descriptive error_message.
+	 * import_items row with status 'error' and a descriptive error_message.
 	 */
 	public function test_ajax_create_draft_logs_author_resolution_failure(): void {
 		// ARRANGE: Source response advertises an author email that does not
@@ -1365,6 +1442,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			$existing_post_id,
 			Options::META_SOURCE_POST_ID,
 			'6021'
+		);
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
 		);
 
 		wp_set_current_user( $this->admin_user_id );

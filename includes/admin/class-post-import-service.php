@@ -140,6 +140,10 @@ class Post_Import_Service {
 	 *                             - 'batch_fresh_data' (array|null, default null): map of
 	 *                               source ID => pass-1 fresh data for the current bulk batch;
 	 *                               drives parent resolution's in-batch detection.
+	 *                             - 'session_id_map' (array<int,int>, default empty): source
+	 *                               post ID => destination post ID accumulated during pass 2
+	 *                               of the bulk batch; feeds block-attribute ID remapping
+	 *                               for later items (e.g. wp_navigation links).
 	 * @return array Result data with success status, post_id, edit_url, and error keys.
 	 */
 	public function import_post(
@@ -225,7 +229,12 @@ class Post_Import_Service {
 		}
 
 		try {
-			$imported_post = $this->find_imported_post( $fields['source_post_id'] );
+			$source_site_url = self::extract_site_url( $fields['source_link'] );
+
+			$imported_post = $this->find_imported_post(
+				$fields['source_post_id'],
+				$source_site_url
+			);
 
 			if ( $imported_post ) {
 				return $this->handle_imported_post(
@@ -457,6 +466,7 @@ class Post_Import_Service {
 	 * @param int        $source_parent_id Source post's parent ID. 0 means
 	 *                                     top-level on the source.
 	 * @param string     $post_type        Destination post type slug.
+	 * @param string     $source_site_url  Source site URL for scoping the lookup; '' skips it.
 	 * @param array|null $batch_fresh_data Map of source ID => pass-1 fresh
 	 *                                     data for posts in the current bulk
 	 *                                     batch. Null for single-import.
@@ -467,6 +477,7 @@ class Post_Import_Service {
 	public function resolve_source_parent(
 		int $source_parent_id,
 		string $post_type,
+		string $source_site_url,
 		?array $batch_fresh_data = null
 	): int|WP_Error|null {
 		if ( 0 === $source_parent_id ) {
@@ -477,7 +488,10 @@ class Post_Import_Service {
 			return null;
 		}
 
-		$destination_parent = $this->find_imported_post( $source_parent_id );
+		$destination_parent = $this->find_imported_post(
+			$source_parent_id,
+			$source_site_url
+		);
 
 		if ( null !== $destination_parent ) {
 			return (int) $destination_parent->ID;
@@ -677,7 +691,9 @@ class Post_Import_Service {
 			return $post_type;
 		}
 
-		$capability = 'page' === $post_type ? 'edit_pages' : 'edit_posts';
+		// Resolve the cap from the post type's own capability map so types
+		// like wp_navigation (edit_theme_options) work alongside post/page.
+		$capability = get_post_type_object( $post_type )->cap->edit_posts;
 
 		if ( ! current_user_can( $capability ) ) {
 			$message = sprintf(
@@ -728,20 +744,28 @@ class Post_Import_Service {
 	/**
 	 * Extracts the site base URL (scheme + host + port) from a full URL.
 	 *
-	 * Internal helper shared by the single-import and draft-processing paths.
-	 *
 	 * Preserves the port so non-default ports (e.g. local dev environments,
 	 * staging on alternate ports) reach the right service when used as a
-	 * base for REST endpoint URLs.
+	 * base for REST endpoint URLs. Returns '' for empty or unparseable input
+	 * so callers can pass through source-link values without guarding.
 	 *
 	 * @param string $url Full URL to extract the base from.
 	 * @return string Site base URL (e.g. "https://example.com" or
-	 *                "http://example.com:8889").
+	 *                "http://example.com:8889"), or '' when input is empty
+	 *                or has no scheme/host.
 	 */
 	public static function extract_site_url( string $url ): string {
+		if ( '' === $url ) {
+			return '';
+		}
+
 		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
 		$host   = wp_parse_url( $url, PHP_URL_HOST );
-		$port   = wp_parse_url( $url, PHP_URL_PORT );
+		if ( ! is_string( $scheme ) || ! is_string( $host ) ) {
+			return '';
+		}
+
+		$port = wp_parse_url( $url, PHP_URL_PORT );
 
 		return $scheme . '://' . $host . ( is_int( $port ) ? ':' . $port : '' );
 	}
@@ -752,17 +776,28 @@ class Post_Import_Service {
 	 * Returns a WP_Error if content processing fails or if kses is enabled and
 	 * sanitization would modify the content.
 	 *
-	 * @param string $content     Raw post content.
-	 * @param string $source_link Source post URL used to derive site URL.
+	 * @param string         $content        Raw post content.
+	 * @param string         $source_link    Source post URL used to derive site URL.
+	 * @param array<int,int> $session_id_map Source post ID => destination post ID for
+	 *                                       the in-flight bulk batch; feeds block ID
+	 *                                       remapping.
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
-	private function process_post_content( string $content, string $source_link ): string|WP_Error {
+	private function process_post_content(
+		string $content,
+		string $source_link,
+		array $session_id_map = array()
+	): string|WP_Error {
 		if ( empty( $source_link ) ) {
 			return $this->sanitize_field( $content, self::FIELD_CONTENT );
 		}
 
 		$source_site_url = self::extract_site_url( $source_link );
-		$processed       = $this->content_processor->process_content( $content, $source_site_url );
+		$processed       = $this->content_processor->process_content(
+			$content,
+			$source_site_url,
+			array( 'session_id_map' => $session_id_map )
+		);
 
 		if ( is_wp_error( $processed ) ) {
 			return $processed;
@@ -922,32 +957,47 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Returns a map of source post ID → local WP_Post for the provided IDs.
+	 * Returns a map of source post ID → local WP_Post for the provided IDs,
+	 * scoped to the source site so two destinations connected to different
+	 * sources can't collide on overlapping source post IDs.
 	 *
 	 * Single `meta_query` IN lookup instead of N individual `find_imported_post`
 	 * calls. WP_Query primes the post-meta cache for the returned IDs, so
 	 * subsequent `get_post_meta` reads inside the indexing loop are cache hits.
 	 *
-	 * @param int[] $source_ids Source post IDs to look up.
+	 * @param int[]  $source_ids      Source post IDs to look up.
+	 * @param string $source_site_url Source site URL that imports were tagged
+	 *                                with; pass '' to skip the scope filter.
 	 * @return array<int, WP_Post> Map keyed by source post ID.
 	 */
 	public function fetch_imported_posts_by_source_ids(
-		array $source_ids
+		array $source_ids,
+		string $source_site_url
 	): array {
 		if ( 0 === count( $source_ids ) ) {
 			return array();
 		}
 
+		$meta_query = array(
+			array(
+				'key'     => Options::META_SOURCE_POST_ID,
+				'value'   => $source_ids,
+				'compare' => 'IN',
+			),
+		);
+
+		if ( '' !== $source_site_url ) {
+			$meta_query['relation'] = 'AND';
+			$meta_query[]           = array(
+				'key'   => Options::META_SOURCE_SITE_URL,
+				'value' => $source_site_url,
+			);
+		}
+
 		$imported_posts = get_posts(
 			array(
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'             => array(
-					array(
-						'key'     => Options::META_SOURCE_POST_ID,
-						'value'   => $source_ids,
-						'compare' => 'IN',
-					),
-				),
+				'meta_query'             => $meta_query,
 				'post_type'              => 'any',
 				'post_status'            => 'any',
 				'posts_per_page'         => count( $source_ids ),
@@ -979,27 +1029,44 @@ class Post_Import_Service {
 
 	/**
 	 * Detects whether a concurrent import has created a sibling post with the
-	 * same source post ID. The winner is the post with the lowest ID (the one
-	 * inserted first); when this returns non-null, the just-inserted post is
-	 * the loser and should be discarded.
+	 * same source post ID on the same source site. The winner is the post with
+	 * the lowest ID (the one inserted first); when this returns non-null, the
+	 * just-inserted post is the loser and should be discarded.
 	 *
 	 * Bypasses the WP_Query result cache so this lookup sees INSERTs
 	 * committed by parallel requests.
 	 *
-	 * @param int $source_post_id   Source post ID stored in postmeta.
-	 * @param int $just_inserted_id Post ID returned by wp_insert_post().
+	 * @param int    $source_post_id   Source post ID stored in postmeta.
+	 * @param int    $just_inserted_id Post ID returned by wp_insert_post().
+	 * @param string $source_site_url  Source site URL to scope the lookup by;
+	 *                                 '' skips the scope filter.
 	 * @return WP_Post|null Winning sibling, or null when the just-inserted
 	 *                      post wins (lowest ID) or no sibling exists.
 	 */
 	private function detect_concurrent_duplicate(
 		int $source_post_id,
-		int $just_inserted_id
+		int $just_inserted_id,
+		string $source_site_url
 	): ?WP_Post {
+		$meta_query = array(
+			array(
+				'key'   => Options::META_SOURCE_POST_ID,
+				'value' => $source_post_id,
+			),
+		);
+
+		if ( '' !== $source_site_url ) {
+			$meta_query['relation'] = 'AND';
+			$meta_query[]           = array(
+				'key'   => Options::META_SOURCE_SITE_URL,
+				'value' => $source_site_url,
+			);
+		}
+
 		$oldest = get_posts(
 			array(
-				'meta_key'               => Options::META_SOURCE_POST_ID,
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-				'meta_value'             => $source_post_id,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query'             => $meta_query,
 				'post_type'              => 'any',
 				'post_status'            => 'any',
 				'posts_per_page'         => 1,
@@ -1021,24 +1088,44 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Finds a previously imported WordPress post by its source post ID.
+	 * Finds a previously imported WordPress post by its source post ID, scoped
+	 * to the source site so two destinations connected to different sources
+	 * can't collide on overlapping source post IDs.
 	 *
-	 * Looks across all public post types so callers importing pages or
-	 * custom hierarchical types can locate prior imports without knowing the
+	 * Looks across all post types so callers importing pages or custom
+	 * hierarchical types can locate prior imports without knowing the
 	 * destination's post type up-front.
 	 *
-	 * @param int $source_post_id Source post ID stored in post meta.
+	 * @param int    $source_post_id  Source post ID stored in post meta.
+	 * @param string $source_site_url Source site URL the import was tagged
+	 *                                with; pass '' to skip the scope filter.
 	 * @return WP_Post|null Imported post or null if not found.
 	 */
-	public function find_imported_post( int $source_post_id ): ?WP_Post {
+	public function find_imported_post(
+		int $source_post_id,
+		string $source_site_url
+	): ?WP_Post {
+		$meta_query = array(
+			array(
+				'key'   => Options::META_SOURCE_POST_ID,
+				'value' => $source_post_id,
+			),
+		);
+
+		if ( '' !== $source_site_url ) {
+			$meta_query['relation'] = 'AND';
+			$meta_query[]           = array(
+				'key'   => Options::META_SOURCE_SITE_URL,
+				'value' => $source_site_url,
+			);
+		}
+
 		$existing_posts = get_posts(
 			array(
-				'meta_key'         => Options::META_SOURCE_POST_ID,
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-				'meta_value'       => $source_post_id,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query'       => $meta_query,
 				// Source post IDs identify a source-side post irrespective of
-				// type, so look across every public type to support hierarchical
-				// imports (pages) and custom post types alongside posts.
+				// type, so look across all post types.
 				'post_type'        => 'any',
 				// 'any' excludes 'trash', 'auto-draft', and statuses with
 				// exclude_from_search=true
@@ -1333,9 +1420,10 @@ class Post_Import_Service {
 				'post_password'  => $fields['password'],
 				'post_author'    => $fields['matched_author_id'],
 				'meta_input'     => array(
-					Options::META_SOURCE_POST_ID => $fields['source_post_id'],
-					Options::META_SOURCE_LINK    => $fields['source_link'],
-					Options::META_IMPORTED_FROM  => Options::META_IMPORTED_FROM_VALUE,
+					Options::META_SOURCE_POST_ID  => $fields['source_post_id'],
+					Options::META_SOURCE_LINK     => $fields['source_link'],
+					Options::META_SOURCE_SITE_URL => self::extract_site_url( $fields['source_link'] ),
+					Options::META_IMPORTED_FROM   => Options::META_IMPORTED_FROM_VALUE,
 				),
 			),
 			$featured_attachment_id,
@@ -1395,8 +1483,9 @@ class Post_Import_Service {
 	 *                                          update path; null for new posts.
 	 * @param array    $options                 Behavior overrides; see import_post(). Reads
 	 *                                          'prefetched_fresh_result' (skips the in-pipeline
-	 *                                          fetch) and 'batch_fresh_data' (drives parent
-	 *                                          resolution's in-batch detection).
+	 *                                          fetch), 'batch_fresh_data' (drives parent
+	 *                                          resolution's in-batch detection), and
+	 *                                          'session_id_map' (feeds block ID remapping).
 	 * @return array{
 	 *     fields: array,
 	 *     processed_content: string,
@@ -1411,6 +1500,9 @@ class Post_Import_Service {
 	): array|WP_Error {
 		$prefetched_fresh_result = $options['prefetched_fresh_result'] ?? null;
 		$batch_fresh_data        = $options['batch_fresh_data'] ?? null;
+		$session_id_map          = is_array( $options['session_id_map'] ?? null )
+			? $options['session_id_map']
+			: array();
 
 		if ( null !== $prefetched_fresh_result ) {
 			$fresh_result = $prefetched_fresh_result;
@@ -1472,6 +1564,7 @@ class Post_Import_Service {
 		$resolved_parent = $this->resolve_source_parent(
 			$fields['source_parent_id'],
 			$post_type,
+			self::extract_site_url( $fields['source_link'] ),
 			$batch_fresh_data
 		);
 
@@ -1509,7 +1602,8 @@ class Post_Import_Service {
 
 		$processed_content = $this->process_post_content(
 			$fresh_result['content'] ?? '',
-			$fields['source_link']
+			$fields['source_link'],
+			$session_id_map
 		);
 
 		if ( is_wp_error( $processed_content ) ) {
@@ -1529,6 +1623,11 @@ class Post_Import_Service {
 
 			return $media_error;
 		}
+
+		$fields['warnings'] = array_merge(
+			$fields['warnings'],
+			$this->content_processor->get_warnings()
+		);
 
 		// Unsanitized values; sanitized downstream before being stored.
 		$fields['meta']  = is_array( $fresh_result['meta'] ?? null )
@@ -1604,6 +1703,11 @@ class Post_Import_Service {
 			Options::META_SOURCE_LINK,
 			$source_link
 		);
+		update_post_meta(
+			$post_id,
+			Options::META_SOURCE_SITE_URL,
+			self::extract_site_url( $source_link )
+		);
 
 		if ( $featured_attachment_id > 0 ) {
 			set_post_thumbnail( $post_id, $featured_attachment_id );
@@ -1633,7 +1737,8 @@ class Post_Import_Service {
 
 		$terms_result = $this->meta_terms_manager->update_terms(
 			$post_id,
-			$terms
+			$terms,
+			self::extract_site_url( $source_link )
 		);
 
 		if ( is_wp_error( $terms_result ) ) {
@@ -1674,6 +1779,11 @@ class Post_Import_Service {
 				Options::META_SOURCE_LINK           => get_post_meta(
 					$post_id,
 					Options::META_SOURCE_LINK,
+					true
+				),
+				Options::META_SOURCE_SITE_URL       => get_post_meta(
+					$post_id,
+					Options::META_SOURCE_SITE_URL,
 					true
 				),
 				Options::META_SOURCE_AUTHOR_EMAIL   => get_post_meta(
@@ -1813,8 +1923,16 @@ class Post_Import_Service {
 			$post_args['meta_input'][ Options::META_SOURCE_POST_ID ] ?? 0
 		);
 
+		$source_site_url = (string) (
+			$post_args['meta_input'][ Options::META_SOURCE_SITE_URL ] ?? ''
+		);
+
 		if ( $source_post_id > 0 ) {
-			$winner = $this->detect_concurrent_duplicate( $source_post_id, $post_id );
+			$winner = $this->detect_concurrent_duplicate(
+				$source_post_id,
+				$post_id,
+				$source_site_url
+			);
 
 			if ( null !== $winner ) {
 				wp_delete_post( $post_id, true );
@@ -1868,7 +1986,8 @@ class Post_Import_Service {
 
 		$terms_result = $this->meta_terms_manager->update_terms(
 			$post_id,
-			$terms
+			$terms,
+			$source_site_url
 		);
 
 		if ( is_wp_error( $terms_result ) ) {
