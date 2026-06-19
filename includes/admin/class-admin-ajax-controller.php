@@ -1037,7 +1037,10 @@ final class Admin_Ajax_Controller {
 		// Force-update confirmation prompt is HTTP UX, not import logic: if the
 		// post is already imported and the caller hasn't opted into updating,
 		// return the prompt response instead of running the import.
-		$imported_post = $this->post_import_service->find_imported_post( $source_post_id );
+		$imported_post = $this->post_import_service->find_imported_post(
+			$source_post_id,
+			self::connected_site_url()
+		);
 
 		if ( $imported_post && ! $force_update ) {
 			wp_send_json_success(
@@ -1484,7 +1487,10 @@ final class Admin_Ajax_Controller {
 
 		// Two bulk queries instead of N per-row meta_query + items-table reads.
 		$imported_by_source_id = $this->post_import_service
-			->fetch_imported_posts_by_source_ids( $source_ids );
+			->fetch_imported_posts_by_source_ids(
+				$source_ids,
+				self::connected_site_url()
+			);
 
 		if ( 0 === count( $imported_by_source_id ) ) {
 			wp_send_json_success( array( 'statuses' => (object) array() ) );
@@ -1648,6 +1654,18 @@ final class Admin_Ajax_Controller {
 		}
 
 		return array_merge( $head, $tail );
+	}
+
+	/**
+	 * Returns the connected-site option normalized to scheme + host + port,
+	 * matching how META_SOURCE_SITE_URL is stored.
+	 *
+	 * @return string Normalized connected site URL, or '' when unset.
+	 */
+	private static function connected_site_url(): string {
+		return Post_Import_Service::extract_site_url(
+			(string) get_option( Options::OPTION_CONNECTED_SITE_URL, '' )
+		);
 	}
 
 	/**

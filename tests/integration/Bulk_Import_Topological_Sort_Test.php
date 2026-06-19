@@ -347,6 +347,11 @@ class Bulk_Import_Topological_Sort_Test extends WP_Ajax_UnitTestCase {
 			Options::META_SOURCE_POST_ID,
 			600
 		);
+		update_post_meta(
+			$existing_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
 
 		$this->source_payloads = array(
 			600 => array( 'parent' => 0 ),
