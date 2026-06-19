@@ -119,6 +119,15 @@ class Options {
 	const META_SOURCE_LINK = 'safe_publish_source_link';
 
 	/**
+	 * Meta key storing the source site URL (scheme://host[:port]) the post
+	 * was imported from. Paired with META_SOURCE_POST_ID for site-scoped
+	 * lookups (prevents cross-source ID collisions).
+	 *
+	 * @var string
+	 */
+	const META_SOURCE_SITE_URL = 'safe_publish_source_site_url';
+
+	/**
 	 * Meta key identifying the source of an imported post or attachment.
 	 *
 	 * @var string
@@ -166,6 +175,20 @@ class Options {
 	 * @var string
 	 */
 	const META_SOURCE_POST_PARENT_ID = '_safe_publish_source_post_parent_id';
+
+	/**
+	 * Term meta key storing the source term ID on imported destination terms.
+	 *
+	 * @var string
+	 */
+	const META_SOURCE_TERM_ID = 'safe_publish_source_term_id';
+
+	/**
+	 * Term meta key paired with META_SOURCE_TERM_ID for site-scoped lookups.
+	 *
+	 * @var string
+	 */
+	const META_SOURCE_TERM_URL = 'safe_publish_source_term_url';
 
 	/**
 	 * WordPress settings-API group slug shared by all plugin options.

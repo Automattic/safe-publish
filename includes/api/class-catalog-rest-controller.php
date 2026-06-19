@@ -87,6 +87,15 @@ final class Catalog_REST_Controller {
 	public const ALLOWED_ORDER = array( 'asc', 'desc' );
 
 	/**
+	 * Non-public post types the catalog opts in despite public=false.
+	 * wp_navigation is structural but its posts are user-authored content
+	 * the migration is expected to carry over.
+	 *
+	 * @var string[]
+	 */
+	private const ALLOW_NON_PUBLIC = array( 'wp_navigation' );
+
+	/**
 	 * HMAC authenticator used to gate the endpoint.
 	 *
 	 * @var HMAC_Authenticator
@@ -304,24 +313,28 @@ final class Catalog_REST_Controller {
 	/**
 	 * Lists post types the catalog endpoint will actually serve.
 	 *
-	 * Mirrors handle_request()'s `public && show_in_rest` gate so the
-	 * destination's dropdown only shows types that won't 400 when selected.
-	 * Excludes built-in types that pass the filter but don't represent
-	 * content posts in the catalog sense (attachments are files with status
-	 * `inherit`; navigation menus are structural). Custom CPTs that meet
-	 * the contract come through automatically.
+	 * Mirrors resolve_post_type()'s gate so the destination's dropdown only
+	 * shows types that won't 400 when selected. Excludes attachments (files
+	 * with status `inherit`, not content posts). Lets ALLOW_NON_PUBLIC types
+	 * (e.g. wp_navigation) through despite public=false. Custom CPTs that
+	 * meet the contract come through automatically.
 	 *
 	 * @return WP_REST_Response List of catalog-eligible post types.
 	 */
 	public function handle_post_types_request(): WP_REST_Response {
-		$internal_blocklist = array( 'attachment', 'wp_navigation' );
+		$internal_blocklist = array( 'attachment' );
 
 		$items = array();
 		foreach ( get_post_types( array(), 'objects' ) as $slug => $object ) {
 			if ( in_array( $slug, $internal_blocklist, true ) ) {
 				continue;
 			}
-			if ( true !== $object->show_in_rest || true !== $object->public ) {
+			if ( true !== $object->show_in_rest ) {
+				continue;
+			}
+			if ( true !== $object->public
+				&& ! in_array( $slug, self::ALLOW_NON_PUBLIC, true )
+			) {
 				continue;
 			}
 
@@ -453,7 +466,8 @@ final class Catalog_REST_Controller {
 		if (
 			null === $object
 			|| true !== $object->show_in_rest
-			|| true !== $object->public
+			|| ( true !== $object->public
+				&& ! in_array( $slug, self::ALLOW_NON_PUBLIC, true ) )
 		) {
 			return new WP_Error(
 				'safe_publish_catalog_invalid_post_type',

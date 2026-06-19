@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\API\Meta_Terms_Manager;
+use Safe_Publish\Utils\Options;
 use WP_Error;
 
 /**
@@ -129,6 +130,135 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		// ASSERT: Returns a WP_Error from the failed wp_insert_term() call.
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'insert_term_failed', $result->get_error_code() );
+	}
+
+	/**
+	 * Verifies that update_terms() writes META_SOURCE_TERM_ID/URL on a newly
+	 * created destination term when the input item carries source_term_id and
+	 * the caller passes a non-empty source site URL.
+	 */
+	public function test_update_terms_writes_source_meta_on_created_term(): void {
+		// ARRANGE: A brand-new term carried by a single-source-payload item.
+		$term_name       = 'Brand New Cat ' . uniqid();
+		$source_term_id  = 12345;
+		$source_site_url = 'https://source.example.com';
+		$terms           = array(
+			'category' => array(
+				array(
+					'source_term_id' => $source_term_id,
+					'name'           => $term_name,
+				),
+			),
+		);
+
+		// ACT: Run the update with the source URL in play.
+		$result = $this->manager->update_terms(
+			$this->post_id,
+			$terms,
+			$source_site_url
+		);
+
+		// ASSERT: Term created and paired source meta written.
+		$this->assertTrue( $result );
+		$dest_term_ids = wp_get_post_terms(
+			$this->post_id,
+			'category',
+			array( 'fields' => 'ids' )
+		);
+		$this->assertIsArray( $dest_term_ids );
+		$this->assertSame( 1, count( $dest_term_ids ) );
+		$dest_term_id = (int) $dest_term_ids[0];
+		$this->assertSame(
+			(string) $source_term_id,
+			(string) get_term_meta( $dest_term_id, Options::META_SOURCE_TERM_ID, true )
+		);
+		$this->assertSame(
+			$source_site_url,
+			get_term_meta( $dest_term_id, Options::META_SOURCE_TERM_URL, true )
+		);
+	}
+
+	/**
+	 * Verifies that update_terms() also writes META_SOURCE_TERM_ID/URL when an
+	 * EXISTING term is matched by slug — the registry lookup later relies on
+	 * this so nav-link blocks can remap to pre-existing destination terms.
+	 */
+	public function test_update_terms_writes_source_meta_on_matched_term(): void {
+		// ARRANGE: A destination term that already exists (e.g. created by a
+		// prior, non-Safe-Publish workflow).
+		$existing_term_id = self::factory()->term->create(
+			array(
+				'taxonomy' => 'category',
+				'slug'     => 'news',
+				'name'     => 'News',
+			)
+		);
+		$source_term_id   = 67890;
+		$source_site_url  = 'https://source.example.com';
+		$terms            = array(
+			'category' => array(
+				array(
+					'source_term_id' => $source_term_id,
+					'slug'           => 'news',
+					'name'           => 'News',
+				),
+			),
+		);
+
+		// ACT: Assign terms, passing the source site URL.
+		$result = $this->manager->update_terms(
+			$this->post_id,
+			$terms,
+			$source_site_url
+		);
+
+		// ASSERT: Existing term assigned; source meta now present on it.
+		$this->assertTrue( $result );
+		$assigned = wp_get_post_terms(
+			$this->post_id,
+			'category',
+			array( 'fields' => 'ids' )
+		);
+		$this->assertSame( array( $existing_term_id ), $assigned );
+		$this->assertSame(
+			(string) $source_term_id,
+			(string) get_term_meta( $existing_term_id, Options::META_SOURCE_TERM_ID, true )
+		);
+		$this->assertSame(
+			$source_site_url,
+			get_term_meta( $existing_term_id, Options::META_SOURCE_TERM_URL, true )
+		);
+	}
+
+	/**
+	 * Verifies that update_terms() does NOT write source meta when the caller
+	 * passes an empty source_site_url (e.g. single-import paths with no
+	 * source-link context).
+	 */
+	public function test_update_terms_skips_source_meta_when_no_source_url(): void {
+		// ARRANGE: A category term carrying a source_term_id.
+		$term_name = 'Skip-meta Cat ' . uniqid();
+		$terms     = array(
+			'category' => array(
+				array(
+					'source_term_id' => 555,
+					'name'           => $term_name,
+				),
+			),
+		);
+
+		// ACT: No source URL.
+		$result = $this->manager->update_terms( $this->post_id, $terms );
+
+		// ASSERT: Term created, no source meta written.
+		$this->assertTrue( $result );
+		$ids = wp_get_post_terms( $this->post_id, 'category', array( 'fields' => 'ids' ) );
+		$this->assertIsArray( $ids );
+		$this->assertSame( 1, count( $ids ) );
+		$this->assertSame(
+			'',
+			(string) get_term_meta( (int) $ids[0], Options::META_SOURCE_TERM_ID, true )
+		);
 	}
 
 	/**

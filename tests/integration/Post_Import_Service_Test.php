@@ -1224,6 +1224,45 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that resolve_post_type() consults the post type's own cap map,
+	 * so wp_navigation (which maps every edit cap to edit_theme_options)
+	 * imports are permitted for users with edit_theme_options but NOT
+	 * edit_posts — the case the hardcoded edit_posts/edit_pages branch missed.
+	 */
+	public function test_resolve_post_type_grants_wp_navigation_to_theme_options_user(): void {
+		// ARRANGE: A subscriber granted edit_theme_options but not edit_posts
+		// or edit_pages — verifies the type's own cap map drives the check.
+		$user_id = self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		$user    = get_user_by( 'id', $user_id );
+		$user->add_cap( 'edit_theme_options' );
+		wp_set_current_user( $user_id );
+
+		// ACT: Resolve the wp_navigation post type for this user.
+		$result = $this->import_service->resolve_post_type( 'wp_navigation' );
+
+		// ASSERT: The type resolves (import permitted).
+		$this->assertSame( 'wp_navigation', $result );
+	}
+
+	/**
+	 * Verifies that an authenticated user without edit_theme_options is
+	 * rejected from importing wp_navigation, exercising the generalized
+	 * cap-map branch.
+	 */
+	public function test_resolve_post_type_rejects_wp_navigation_without_theme_options(): void {
+		// ARRANGE: A plain Subscriber lacks both manage_options and edit_theme_options.
+		$user_id = self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		wp_set_current_user( $user_id );
+
+		// ACT: Resolve the wp_navigation post type for this user.
+		$result = $this->import_service->resolve_post_type( 'wp_navigation' );
+
+		// ASSERT: Resolution is denied with a capability error.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'post_type_capability_denied', $result->get_error_code() );
+	}
+
+	/**
 	 * Verifies that import fails when the source post type is not registered on
 	 * the destination site.
 	 */
