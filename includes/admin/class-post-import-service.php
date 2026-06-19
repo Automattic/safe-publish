@@ -798,9 +798,9 @@ class Post_Import_Service {
 	/**
 	 * Processes raw post content by importing media and fixing URLs.
 	 *
-	 * Media URLs resolve against the configured connected source site. Returns a
-	 * WP_Error if content processing fails or if kses is enabled and sanitization
-	 * would modify the content.
+	 * Media URLs resolve against the configured connected source site. Returns
+	 * a WP_Error if content processing fails or if kses is enabled and
+	 * sanitization would modify the content.
 	 *
 	 * @param string         $content        Raw post content.
 	 * @param array<int,int> $session_id_map Source post ID => destination post ID for
@@ -2136,13 +2136,14 @@ class Post_Import_Service {
 	 * the image before the post exists in the DB, so a download failure does not
 	 * leave the post in a partially-written state.
 	 *
-	 * Returns 0 when no featured image is configured (no-op). Returns the
-	 * attachment ID (> 0) on a successful import. Returns false when a featured
-	 * media ID is set but the import fails. The source media is fetched from the
-	 * configured connected site.
+	 * Returns 0 when there is nothing to import: either no featured media ID is
+	 * set, or the connected source site is not configured. Returns the
+	 * attachment ID (> 0) on a successful import, and false when a media ID is
+	 * set against a configured source but the sideload fails. The source media
+	 * is fetched from the configured connected site.
 	 *
 	 * @param int $featured_media_id Source featured media ID.
-	 * @return int|false Attachment ID on success, 0 when not configured, false on failure.
+	 * @return int|false Attachment ID, 0 if nothing imported, false on failure.
 	 */
 	public function import_featured_image_attachment(
 		int $featured_media_id

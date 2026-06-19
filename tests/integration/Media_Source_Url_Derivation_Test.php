@@ -68,16 +68,29 @@ class Media_Source_Url_Derivation_Test extends Source_Posts_API_Test_Base {
 	protected function setUp(): void {
 		parent::setUp();
 
-		// Record every featured-media REST request URL (priority 1, before the
-		// JSON mock at priority 5) then pass through so the mock still responds.
-		add_filter( 'pre_http_request', array( $this, 'record_media_api_url' ), 1, 3 );
+		// Record media REST URLs at priority 1, before the priority-5 JSON
+		// mock, then pass through so the mock still responds.
+		add_filter(
+			'pre_http_request',
+			array( $this, 'record_media_api_url' ),
+			1,
+			3
+		);
 
-		// Return valid media JSON whose source_url is a .jpg the base-class image
-		// mock can serve, so the featured import resolves end-to-end.
-		add_filter( 'pre_http_request', array( $this, 'mock_media_api_request' ), 5, 3 );
+		// Return media JSON whose source_url is a .jpg the base-class image
+		// mock serves, so the featured import resolves end-to-end.
+		add_filter(
+			'pre_http_request',
+			array( $this, 'mock_media_api_request' ),
+			5,
+			3
+		);
 
-		// Stand in for a subdirectory-subsite source: connection URL with a path.
-		update_option( Options::OPTION_CONNECTED_SITE_URL, self::SUBSITE_SOURCE_URL );
+		// Simulate a subdirectory-subsite source: connection URL with a path.
+		update_option(
+			Options::OPTION_CONNECTED_SITE_URL,
+			self::SUBSITE_SOURCE_URL
+		);
 
 		$this->repository = new History_Repository();
 
@@ -103,8 +116,16 @@ class Media_Source_Url_Derivation_Test extends Source_Posts_API_Test_Base {
 	 */
 	#[\Override]
 	protected function tearDown(): void {
-		remove_filter( 'pre_http_request', array( $this, 'record_media_api_url' ), 1 );
-		remove_filter( 'pre_http_request', array( $this, 'mock_media_api_request' ), 5 );
+		remove_filter(
+			'pre_http_request',
+			array( $this, 'record_media_api_url' ),
+			1
+		);
+		remove_filter(
+			'pre_http_request',
+			array( $this, 'mock_media_api_request' ),
+			5
+		);
 		parent::tearDown();
 	}
 
@@ -133,12 +154,12 @@ class Media_Source_Url_Derivation_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Returns a mock wp/v2/media JSON response with a fixture-backed source_url.
+	 * Returns a mock wp/v2/media response with a fixture-backed source_url.
 	 *
 	 * @param false|array|WP_Error $preempt Early-return value passed by WP.
 	 * @param array                $args    Request arguments (unused).
 	 * @param string               $url     Request URL.
-	 * @return false|array|WP_Error Preemptive response or the unchanged preempt.
+	 * @return false|array|WP_Error Preemptive response or unchanged preempt.
 	 */
 	public function mock_media_api_request(
 		false|array|WP_Error $preempt,
@@ -231,15 +252,21 @@ class Media_Source_Url_Derivation_Test extends Source_Posts_API_Test_Base {
 
 		// Delete the imported attachment so the re-import re-fetches the media
 		// instead of reusing the deduplicated attachment.
-		wp_delete_attachment( (int) get_post_thumbnail_id( $first['post_id'] ), true );
+		wp_delete_attachment(
+			(int) get_post_thumbnail_id( $first['post_id'] ),
+			true
+		);
 		$this->captured_media_urls = array();
 
 		// ACT: Re-import the same post (update path / handle_imported_post).
 		$second = $this->import_service->import_post( $post_data, $session_id );
 
-		// ASSERT: Re-import succeeds and the media request kept the subsite path.
+		// ASSERT: Re-import succeeds and media request kept the subsite path.
 		$this->assertTrue( $second['success'], 'Re-import should succeed.' );
-		$this->assertTrue( $second['existing'], 'Re-import should hit the update path.' );
+		$this->assertTrue(
+			$second['existing'],
+			'Re-import should hit the update path.'
+		);
 		$this->assertContains(
 			'https://source.example.com/blog/wp-json/wp/v2/media/100',
 			$this->captured_media_urls,
@@ -252,8 +279,8 @@ class Media_Source_Url_Derivation_Test extends Source_Posts_API_Test_Base {
 	 * URL even when the per-post source_link is empty.
 	 *
 	 * An empty source_link must not silently skip media processing; the source
-	 * REST root comes from the connection, so inline images are still sideloaded
-	 * and their URLs rewritten to the destination library.
+	 * REST root comes from the connection, so inline images are still
+	 * sideloaded and their URLs rewritten to the destination library.
 	 */
 	public function test_content_images_imported_when_source_link_empty(): void {
 		// ARRANGE: A post whose source_link is empty but whose content has an
