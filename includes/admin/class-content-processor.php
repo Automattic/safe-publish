@@ -1220,7 +1220,8 @@ class Content_Processor {
 						'value' => $source_site_url,
 					),
 				),
-				'post_type'              => 'any',
+				// Not 'any': it omits exclude_from_search post types.
+				'post_type'              => array_keys( get_post_types() ),
 				'post_status'            => 'any',
 				'posts_per_page'         => count( $ids ),
 				'suppress_filters'       => false,

@@ -231,6 +231,41 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that core/navigation.ref resolves a wp_navigation post via
+	 * postmeta when the source ID isn't in the session map. The post type
+	 * is excluded from search, so the lookup must not rely on 'any'.
+	 */
+	public function test_remaps_navigation_ref_via_postmeta_fallback(): void {
+		// ARRANGE: A destination nav post carrying the source-tracking meta
+		// from a prior-session import.
+		$dest_nav  = self::factory()->post->create(
+			array( 'post_type' => 'wp_navigation' )
+		);
+		$source_id = 99007;
+		update_post_meta( $dest_nav, Options::META_SOURCE_POST_ID, $source_id );
+		update_post_meta(
+			$dest_nav,
+			Options::META_SOURCE_SITE_URL,
+			self::SOURCE_SITE_URL
+		);
+
+		$content = '<!-- wp:navigation {"ref":' . $source_id . '} /-->';
+
+		// ACT: Empty session map — the lookup must find the wp_navigation
+		// post via postmeta.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: ref rewritten to the destination nav; no warning raised.
+		$this->assertStringContainsString( '"ref":' . $dest_nav, (string) $result );
+		$this->assertStringNotContainsString( '"ref":' . $source_id, (string) $result );
+		$this->assertSame( array(), $this->processor->get_warnings() );
+	}
+
+	/**
 	 * Verifies that nav-link blocks with kind=taxonomy resolve their id via
 	 * paired META_SOURCE_TERM_ID/META_SOURCE_TERM_URL term meta.
 	 */
