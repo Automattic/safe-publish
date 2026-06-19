@@ -206,9 +206,25 @@ export interface ParentOrphanedWarning {
 }
 
 /**
+ * Surfaced when a block (e.g. core/navigation-link, core/navigation) carries
+ * a post- or term-ID reference whose source ID could not be resolved on the
+ * destination, so the attribute was left at the source value. The admin can
+ * fix it by ensuring the linked content is imported and reopening the nav.
+ */
+export interface UnmappedBlockReferenceWarning {
+	type: 'unmapped_block_reference';
+	kind: 'post' | 'term';
+	block: string;
+	source_id: number;
+}
+
+/**
  * Discriminated union of all import warning types.
  */
-export type Warning = AuthorFallbackWarning | ParentOrphanedWarning;
+export type Warning =
+	| AuthorFallbackWarning
+	| ParentOrphanedWarning
+	| UnmappedBlockReferenceWarning;
 
 /**
  * Response from create draft post operation.
