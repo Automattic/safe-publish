@@ -27,18 +27,16 @@ Registered only on source-mode installs. HMAC-authenticated; called by the desti
 
 ### Content endpoints
 
-Content endpoints are called from the WordPress admin UI and use **cookie authentication** with a nonce — no additional setup needed.
+Content endpoints are called from the WordPress admin UI and use **cookie authentication** with a nonce. The plugin uses [`@wordpress/api-fetch`](https://www.npmjs.com/package/@wordpress/api-fetch), which resolves the REST root (including any subsite path on multisite) and attaches the nonce automatically:
 
 ```javascript
-fetch('/wp-json/safe-publish/v1/diff-preview', {
+import apiFetch from '@wordpress/api-fetch';
+
+apiFetch( {
+  path: '/safe-publish/v1/diff-preview',
   method: 'POST',
-  credentials: 'include',
-  headers: {
-    'Content-Type': 'application/json',
-    'X-WP-Nonce': wpApiSettings.nonce
-  },
-  body: JSON.stringify({ postId: 123, postType: 'post' })
-});
+  data: { postId: 123, postType: 'post' },
+} );
 ```
 
 Application Passwords can also be used for external access to these endpoints, but are incompatible when [VIP Basic Authentication](https://docs.wpvip.com/security-controls/basic-authentication/) is enabled — see [Authentication](../concepts/authentication.md).

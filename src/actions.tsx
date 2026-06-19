@@ -28,7 +28,6 @@ import { __ } from '@wordpress/i18n';
 export interface PostsActionsContext {
 	ajaxurl: string;
 	nonce: string;
-	restNonce: string;
 }
 
 /**
@@ -60,7 +59,7 @@ const isRollbackEligible = ( item: UnifiedPostRow ): boolean =>
  *
  * @param {Function}            onRefresh    Listing refresh callback.
  * @param {boolean}             isAuthorized Whether the source authorizes imports.
- * @param {PostsActionsContext} context      Admin-ajax URL + nonce + REST nonce.
+ * @param {PostsActionsContext} context      Admin-ajax URL + nonce.
  * @param {Object}              syncStatuses Per-row sync entries keyed by source post id.
  * @param {ChipState}           chipState    Current chip; gates Failed-only actions.
  *
@@ -95,7 +94,6 @@ export const createPostsActions = (
 		RenderModal: ( { items } ) => (
 			<PostDiffModal
 				items={ items }
-				restNonce={ context.restNonce }
 				ajaxurl={ context.ajaxurl }
 				nonce={ context.nonce }
 				syncStatus={

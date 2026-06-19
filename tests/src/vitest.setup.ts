@@ -9,7 +9,6 @@ import { afterEach } from 'vitest';
 ( global as any ).window.safePublishAdminData = {
 	ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
 	nonce: 'test-nonce',
-	restNonce: 'test-rest-nonce',
 	sourceSiteUrl: 'https://example.com',
 	settingsUrl: 'https://example.com/wp-admin/admin.php?page=safe-publish-settings',
 	containerId: 'safe-publish-posts-container',

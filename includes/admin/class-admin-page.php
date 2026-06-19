@@ -106,7 +106,6 @@ final class Admin_Page {
 				'ajaxurl'       => admin_url( 'admin-ajax.php' ),
 				'settingsUrl'   => admin_url( 'admin.php?page=safe-publish-settings' ),
 				'nonce'         => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-				'restNonce'     => wp_create_nonce( 'wp_rest' ),
 				'sourceSiteUrl' => $source_site_url,
 				'homeUrl'       => home_url(),
 				'containerId'   => 'safe-publish-posts-container',

@@ -19,7 +19,6 @@ import type { Action, ActionModal } from '@wordpress/dataviews/build-types';
 const CONTEXT: PostsActionsContext = {
 	ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
 	nonce: 'test-nonce',
-	restNonce: 'test-rest-nonce',
 };
 
 /**

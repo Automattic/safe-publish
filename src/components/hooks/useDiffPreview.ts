@@ -16,14 +16,12 @@ import type { BlockDiff, DiffPreviewResult } from '../../api/diff';
  * The diff renderer re-fetches source content server-side, so the
  * frontend only needs to identify the post to diff.
  *
- * @property {number} postId    ID of the post to fetch diff for.
- * @property {string} postType  Post type slug.
- * @property {string} restNonce REST API nonce for the diff endpoint.
+ * @property {number} postId   ID of the post to fetch diff for.
+ * @property {string} postType Post type slug.
  */
 interface UseDiffPreviewParams {
 	postId: number;
 	postType?: string;
-	restNonce: string;
 }
 
 /**
@@ -55,7 +53,6 @@ interface UseDiffPreviewResult {
 export function useDiffPreview( {
 	postId,
 	postType,
-	restNonce,
 }: UseDiffPreviewParams ): UseDiffPreviewResult {
 	const [ diffHtml, setDiffHtml ] = useState< string | null >( null );
 	const [ blockDiffs, setBlockDiffs ] = useState< BlockDiff[] >( [] );
@@ -71,15 +68,12 @@ export function useDiffPreview( {
 			setIsLoading( true );
 			setError( null );
 
-			const result = await fetchDiffPreview(
-				{
-					postId,
-					postType,
-					mode: 'split',
-					cleanup: true,
-				},
-				restNonce
-			);
+			const result = await fetchDiffPreview( {
+				postId,
+				postType,
+				mode: 'split',
+				cleanup: true,
+			} );
 
 			if ( ! active ) {
 				return;
@@ -106,7 +100,7 @@ export function useDiffPreview( {
 		return () => {
 			active = false;
 		};
-	}, [ postId, postType, restNonce, refetchCount ] );
+	}, [ postId, postType, refetchCount ] );
 
 	const refetch = useCallback( () => {
 		setRefetchCount( ( count ) => count + 1 );
