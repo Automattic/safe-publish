@@ -16,6 +16,13 @@
 
 - Use `trash` instead of `rm` when deleting files or folders. No flags needed for directories.
 
+## Customer data
+
+- Beware when working on private tickets, or any information that contains customer data.
+- Never publish customer-identifying data — names, hostnames, URLs, account/site IDs, emails, or environment specifics — to the GitHub repo. This covers code and test fixtures, comments, commit messages, branch names, and PR/issue titles, descriptions, and comments.
+- When reproducing a customer-reported bug, replace any customer-identifying values from the report with neutral placeholders (e.g. `example.com`, `/blog`) before committing. Real values can stay in a private tracker.
+- If such data is pushed by mistake, treat it as a disclosure incident: notify the team, then scrub it from history and force-push — and note that on a public repo the force-pushed commit stays reachable until purged via GitHub Support.
+
 ## Code
 
 - Write concise code.
