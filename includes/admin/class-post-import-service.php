@@ -141,9 +141,6 @@ class Post_Import_Service {
 	 * @param array    $post_data  Post data array containing id, title, content, link, etc.
 	 * @param int|null $session_id Optional import session ID for history tracking.
 	 * @param array    $options    Optional behavior overrides:
-	 *                             - 'force_draft_on_update' (bool, default false): override
-	 *                               post_status to 'draft' on update. Single-import uses this;
-	 *                               bulk preserves status.
 	 *                             - 'prefetched_fresh_result' (array|null, default null):
 	 *                               pre-fetched fetch_fresh_post() response; skips the
 	 *                               in-pipeline fetch in the bulk two-pass flow.
@@ -1170,9 +1167,8 @@ class Post_Import_Service {
 	 * post. Aborts with an error result if the fetch fails; the post will
 	 * not be updated with stale snapshot data.
 	 *
-	 * Post status is preserved by default to avoid silently unpublishing live
-	 * posts during automated bulk runs. Callers using the single-import review
-	 * flow can pass `force_draft_on_update` in $options to override.
+	 * Post status is preserved on update to avoid silently unpublishing live
+	 * posts; only new posts are created as drafts.
 	 *
 	 * @param WP_Post  $imported_post Imported WordPress post.
 	 * @param array    $fields        Sanitized post fields.
@@ -1259,10 +1255,6 @@ class Post_Import_Service {
 			'post_password'  => $fields['password'],
 			'post_author'    => $fields['matched_author_id'],
 		);
-
-		if ( true === ( $options['force_draft_on_update'] ?? false ) ) {
-			$post_args['post_status'] = 'draft';
-		}
 
 		$post_id = $this->persist_updated_post(
 			$post_args,

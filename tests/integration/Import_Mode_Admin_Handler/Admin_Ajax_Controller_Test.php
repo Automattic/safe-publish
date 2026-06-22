@@ -552,6 +552,61 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that re-importing an existing published post through the single
+	 * import endpoint preserves its published status instead of resetting it to
+	 * draft, so the post stays live on the frontend.
+	 */
+	public function test_ajax_create_draft_preserves_published_status_on_update(): void {
+		// ARRANGE: Pre-create an already-imported, published post.
+		update_option(
+			Options::OPTION_CONNECTED_SITE_URL,
+			'https://source.example.com'
+		);
+		$existing_post_id = wp_insert_post(
+			array(
+				'post_title'  => 'Live Post',
+				'post_status' => 'publish',
+				'post_type'   => 'post',
+			)
+		);
+		update_post_meta( $existing_post_id, Options::META_SOURCE_POST_ID, '8050' );
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '8050',
+			'title'          => 'Live Post',
+			'content'        => '<p>Updated content.</p>',
+			'source_link'    => 'https://source.example.com/live-post',
+			'post_type'      => 'post',
+			'force_update'   => 'true',
+		);
+
+		// ACT: Confirm the update of the existing post.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: The update succeeds against the existing post.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertTrue( $response['success'], 'Update should return success' );
+		$this->assertTrue( $response['data']['existing'], 'Should flag the post as already existing' );
+		$this->assertSame( $existing_post_id, $response['data']['post_id'], 'Should update the existing post' );
+
+		// ASSERT: The post stays published — the single import must not unpublish
+		// live content.
+		$this->assertSame(
+			'publish',
+			get_post_status( $existing_post_id ),
+			'Single re-import must not change the existing post status.'
+		);
+	}
+
+	/**
 	 * Verifies that the create draft endpoint returns an error when the title is
 	 * missing, and does not leave any import session in the database.
 	 */

@@ -257,48 +257,6 @@ class Full_Workflow_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that bulk re-import does not reset post_status on an already-published post.
-	 */
-	public function test_bulk_reimport_preserves_published_post_status(): void {
-		// ARRANGE: Import a post, then publish it to simulate a live post.
-		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
-
-		$post_data = array(
-			'id'             => 7001,
-			'title'          => 'Published Post',
-			'content'        => '<p>Original content.</p>',
-			'link'           => 'https://source.example.com/published-post',
-			'featured_media' => 0,
-			'post_type'      => 'posts',
-			'excerpt'        => '',
-			'meta'           => array(),
-			'terms'          => array(),
-		);
-
-		$first = $this->import_service->import_post( $post_data, $session_id );
-		$this->assertTrue( $first['success'] );
-
-		wp_update_post(
-			array(
-				'ID'          => $first['post_id'],
-				'post_status' => 'publish',
-			)
-		);
-
-		// ACT: Re-import the same post with updated content.
-		$post_data['title'] = 'Published Post (updated)';
-
-		$second = $this->import_service->import_post( $post_data, $session_id );
-
-		// ASSERT: Post status is preserved.
-		$this->assertTrue( $second['success'] );
-		$this->assertTrue( $second['existing'] );
-
-		$updated_post = get_post( $second['post_id'] );
-		$this->assertSame( 'publish', $updated_post->post_status, 'Bulk re-import must not demote a published post to draft.' );
-	}
-
-	/**
 	 * Verifies that bulk import writes excerpt and meta to the created post.
 	 */
 	public function test_bulk_import_writes_excerpt_and_meta(): void {

@@ -1061,11 +1061,9 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that the bulk update path preserves the existing post status
-	 * instead of resetting it to 'draft'.
-	 *
-	 * This is the key behavioral difference from the single-import path: bulk
-	 * re-imports must not silently unpublish live posts.
+	 * Verifies that the update path preserves the existing post status instead
+	 * of resetting it to 'draft', so re-imports never silently unpublish live
+	 * posts.
 	 */
 	public function test_bulk_reimport_preserves_post_status(): void {
 		$session_id = $this->repository->create_session(
