@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://www.coderabbit.ai/integrations/schema.v2.json
+
+# Project coding standards live in AGENTS.md, which CodeRabbit reads
+# automatically. Keep this file to review posture, scope, and tool wiring,
+# not duplicated coding rules.
+language: en-US
+reviews:
+  profile: chill
+  request_changes_workflow: true
+  poem: false
+  collapse_walkthrough: true
+  path_filters:
+    - '!build/**'
+    - '!**/package-lock.json'
+    - '!**/composer.lock'
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - trunk
+      - 'add/.*'
+      - 'fix/.*'
+      - 'update/.*'
+  tools:
+    # CI (static-checks.yml) already runs these; disable to avoid duplicate
+    # inline comments. shellcheck (bin/ scripts), actionlint (workflows),
+    # gitleaks, markdownlint, languagetool and yamllint stay on by default.
+    eslint:
+      enabled: false
+    stylelint:
+      enabled: false
+    phpcs:
+      enabled: false
+    phpstan:
+      enabled: false
+    phpmd:
+      enabled: false
