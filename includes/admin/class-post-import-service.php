@@ -781,13 +781,28 @@ class Post_Import_Service {
 	}
 
 	/**
+	 * Returns the configured connected source site URL, without a trailing
+	 * slash.
+	 *
+	 * Media imports resolve the source REST root against this stored connection
+	 * so the subsite path (e.g. "/blog") is preserved.
+	 *
+	 * @return string Connected site URL, or empty string when not configured.
+	 */
+	private function get_connected_source_url(): string {
+		return untrailingslashit(
+			(string) get_option( Options::OPTION_CONNECTED_SITE_URL, '' )
+		);
+	}
+
+	/**
 	 * Processes raw post content by importing media and fixing URLs.
 	 *
-	 * Returns a WP_Error if content processing fails or if kses is enabled and
+	 * Media URLs resolve against the configured connected source site. Returns
+	 * a WP_Error if content processing fails or if kses is enabled and
 	 * sanitization would modify the content.
 	 *
 	 * @param string         $content        Raw post content.
-	 * @param string         $source_link    Source post URL used to derive site URL.
 	 * @param array<int,int> $session_id_map Source post ID => destination post ID for
 	 *                                       the in-flight bulk batch; feeds block ID
 	 *                                       remapping.
@@ -795,15 +810,15 @@ class Post_Import_Service {
 	 */
 	private function process_post_content(
 		string $content,
-		string $source_link,
 		array $session_id_map = array()
 	): string|WP_Error {
-		if ( empty( $source_link ) ) {
+		$source_site_url = $this->get_connected_source_url();
+
+		if ( '' === $source_site_url ) {
 			return $this->sanitize_field( $content, self::FIELD_CONTENT );
 		}
 
-		$source_site_url = self::extract_site_url( $source_link );
-		$processed       = $this->content_processor->process_content(
+		$processed = $this->content_processor->process_content(
 			$content,
 			$source_site_url,
 			array( 'session_id_map' => $session_id_map )
@@ -1209,8 +1224,7 @@ class Post_Import_Service {
 		// Sideload the featured image before writing the post so that a
 		// failure here does not leave the post in a partially-updated state.
 		$featured_attachment_id = $this->import_featured_image_attachment(
-			$fields['featured_media_id'],
-			$fields['source_link']
+			$fields['featured_media_id']
 		);
 
 		if ( false === $featured_attachment_id ) {
@@ -1397,8 +1411,7 @@ class Post_Import_Service {
 		// Sideload the featured image before creating the post so that a
 		// failure here does not leave an orphaned draft in the DB.
 		$featured_attachment_id = $this->import_featured_image_attachment(
-			$fields['featured_media_id'],
-			$fields['source_link']
+			$fields['featured_media_id']
 		);
 
 		if ( false === $featured_attachment_id ) {
@@ -1652,7 +1665,6 @@ class Post_Import_Service {
 
 		$processed_content = $this->process_post_content(
 			$fresh_result['content'] ?? '',
-			$fields['source_link'],
 			$session_id_map
 		);
 
@@ -2124,23 +2136,27 @@ class Post_Import_Service {
 	 * the image before the post exists in the DB, so a download failure does not
 	 * leave the post in a partially-written state.
 	 *
-	 * Returns 0 when no featured image is configured (no-op). Returns the
-	 * attachment ID (> 0) on a successful import. Returns false when a featured
-	 * media ID is set but the import fails.
+	 * Returns 0 when there is nothing to import: either no featured media ID is
+	 * set, or the connected source site is not configured. Returns the
+	 * attachment ID (> 0) on a successful import, and false when a media ID is
+	 * set against a configured source but the sideload fails. The source media
+	 * is fetched from the configured connected site.
 	 *
-	 * @param int    $featured_media_id Source featured media ID.
-	 * @param string $source_link       Source post URL used to derive site URL.
-	 * @return int|false Attachment ID on success, 0 when not configured, false on failure.
+	 * @param int $featured_media_id Source featured media ID.
+	 * @return int|false Attachment ID, 0 if nothing imported, false on failure.
 	 */
 	public function import_featured_image_attachment(
-		int $featured_media_id,
-		string $source_link
+		int $featured_media_id
 	): int|false {
-		if ( empty( $featured_media_id ) || empty( $source_link ) ) {
+		if ( 0 === $featured_media_id ) {
 			return 0;
 		}
 
-		$source_site_url = self::extract_site_url( $source_link );
+		$source_site_url = $this->get_connected_source_url();
+
+		if ( '' === $source_site_url ) {
+			return 0;
+		}
 
 		$attachment_id = $this->media_importer->import_featured_image(
 			$featured_media_id,

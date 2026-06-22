@@ -374,11 +374,21 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	/**
 	 * Verifies that the draft path preserves a non-default source port when
 	 * resolving relative media URLs for content processing.
+	 *
+	 * The resolution base is the configured connected site URL, so the port is
+	 * taken from there rather than from the per-post source link.
 	 */
 	public function test_ajax_create_draft_preserves_port_for_relative_media_imports(): void {
 		// ARRANGE: Mock fresh content with a relative image URL.
 		$this->mock_post_overrides = array(
 			'content' => '<p><img src="/port-test.jpg" alt="Port test"></p>',
+		);
+
+		// The source site is configured on a non-default port; relative media
+		// URLs must resolve against it.
+		update_option(
+			Options::OPTION_CONNECTED_SITE_URL,
+			'https://source.example.com:8889'
 		);
 
 		wp_set_current_user( $this->admin_user_id );
