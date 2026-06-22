@@ -629,7 +629,7 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 	 */
 	public function test_resolves_status_when_connected_url_has_trailing_slash(): void {
 		// ARRANGE: Option carries a trailing slash; the seeded import is tagged
-		// with the normalized form extract_site_url() produces.
+		// with the normalized form normalize_site_url() produces.
 		update_option(
 			Options::OPTION_CONNECTED_SITE_URL,
 			'https://source.example.com/'

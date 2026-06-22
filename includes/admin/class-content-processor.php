@@ -13,6 +13,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Validators\URL_Validator;
 use WP_Error;
 
 // Prevent direct access.
@@ -1092,7 +1093,7 @@ class Content_Processor {
 		$this->collect_id_references( $blocks, $session_id_map, $collected );
 
 		// Media keeps the subsite path; the lookups match the host-only meta.
-		$lookup_site_url = self::reduce_to_site_url( $source_site_url );
+		$lookup_site_url = URL_Validator::normalize_site_url( $source_site_url );
 
 		$post_map = $this->lookup_destination_post_ids(
 			$collected['post'],
@@ -1188,31 +1189,6 @@ class Content_Processor {
 		}
 
 		return $ids;
-	}
-
-	/**
-	 * Reduces a source URL to its scheme://host[:port] identity, dropping any
-	 * subsite path. Mirrors the host-only form the import service writes into
-	 * the source-tracking meta, so block-ID lookups match. A non-default port
-	 * is preserved. Returns '' for empty or unparseable input.
-	 *
-	 * @param string $url Source URL, possibly carrying a subsite path.
-	 * @return string Scheme://host[:port], or '' when input has no scheme/host.
-	 */
-	private static function reduce_to_site_url( string $url ): string {
-		if ( '' === $url ) {
-			return '';
-		}
-
-		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
-		$host   = wp_parse_url( $url, PHP_URL_HOST );
-		if ( ! is_string( $scheme ) || ! is_string( $host ) ) {
-			return '';
-		}
-
-		$port = wp_parse_url( $url, PHP_URL_PORT );
-
-		return $scheme . '://' . $host . ( is_int( $port ) ? ':' . $port : '' );
 	}
 
 	/**

@@ -15,7 +15,7 @@ use Safe_Publish\Validators\URL_Validator;
 /**
  * URL Validator Test.
  *
- * Tests URL validation and sanitization.
+ * Tests URL validation, sanitization, and site-URL normalization.
  */
 class URLValidatorTest extends TestCase {
 
@@ -179,5 +179,80 @@ class URLValidatorTest extends TestCase {
 			'IPv6 ULA'             => array( 'http://[fd00::1]' ),
 			'IPv6 link-local'      => array( 'http://[fe80::1]' ),
 		);
+	}
+
+	/**
+	 * Verifies that an explicit non-default port survives normalization so
+	 * REST endpoints built on the result hit the right service.
+	 */
+	public function test_normalize_site_url_preserves_non_default_port(): void {
+		// ARRANGE: a URL with an explicit non-default port and a subsite path.
+		$url = 'http://example.com:8889/blog/some-post/';
+
+		// ACT: reduce to the site identity.
+		$identity = URL_Validator::normalize_site_url( $url );
+
+		// ASSERT: the port stays on the identity.
+		$this->assertSame( 'http://example.com:8889', $identity );
+	}
+
+	/**
+	 * Verifies that no spurious colon is appended when the URL has no
+	 * explicit port.
+	 */
+	public function test_normalize_site_url_omits_port_when_url_has_none(): void {
+		// ARRANGE: a URL on the default port.
+		$url = 'https://example.com/2024/06/some-post/';
+
+		// ACT: reduce to the site identity.
+		$identity = URL_Validator::normalize_site_url( $url );
+
+		// ASSERT: scheme and host only.
+		$this->assertSame( 'https://example.com', $identity );
+	}
+
+	/**
+	 * Verifies that path, query, and fragment are stripped so only the site
+	 * identity remains.
+	 */
+	public function test_normalize_site_url_strips_path_query_and_fragment(): void {
+		// ARRANGE: a URL with path, query, and fragment.
+		$url = 'https://example.com:8443/path/to/post?foo=1#section';
+
+		// ACT: reduce to the site identity.
+		$identity = URL_Validator::normalize_site_url( $url );
+
+		// ASSERT: only scheme + host + port remains.
+		$this->assertSame( 'https://example.com:8443', $identity );
+	}
+
+	/**
+	 * Verifies that empty input returns an empty string so callers can pass
+	 * source links through unguarded.
+	 */
+	public function test_normalize_site_url_returns_empty_for_empty_input(): void {
+		// ARRANGE: empty input.
+		$url = '';
+
+		// ACT: reduce to the site identity.
+		$identity = URL_Validator::normalize_site_url( $url );
+
+		// ASSERT: empty string out.
+		$this->assertSame( '', $identity );
+	}
+
+	/**
+	 * Verifies that input with no parseable scheme and host returns an empty
+	 * string.
+	 */
+	public function test_normalize_site_url_returns_empty_for_unparseable_input(): void {
+		// ARRANGE: a bare path with no scheme or host.
+		$url = '/blog/some-post';
+
+		// ACT: reduce to the site identity.
+		$identity = URL_Validator::normalize_site_url( $url );
+
+		// ASSERT: empty string out.
+		$this->assertSame( '', $identity );
 	}
 }
