@@ -108,9 +108,8 @@ class URL_Validator {
 	 * Reduces a URL to its scheme://host[:port] identity, dropping path,
 	 * query, and fragment.
 	 *
-	 * The canonical site-identity form used for source-tracking meta and
-	 * scoping comparisons. An explicit non-default port is preserved so REST
-	 * endpoints built on the result reach the right service.
+	 * The host-only base that normalize_site_url_with_path() extends with the
+	 * subsite path to form the identity used for source-tracking and scoping.
 	 *
 	 * @param string $url Full URL to normalize.
 	 * @return string Site identity (e.g. "https://example.com" or
