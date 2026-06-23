@@ -119,7 +119,7 @@ final class Safe_Publish_API extends REST_Base {
 		$local_post       = $this->diff_renderer->find_local_post(
 			$source_post_id,
 			$mapped_post_type,
-			Options::get_connected_site_url()
+			Options::get_connected_site_url_with_path()
 		);
 
 		if ( is_wp_error( $local_post ) ) {
