@@ -103,4 +103,33 @@ class URL_Validator {
 
 		return false;
 	}
+
+	/**
+	 * Reduces a URL to its scheme://host[:port] identity, dropping path,
+	 * query, and fragment.
+	 *
+	 * The canonical site-identity form used for source-tracking meta and
+	 * scoping comparisons. An explicit non-default port is preserved so REST
+	 * endpoints built on the result reach the right service.
+	 *
+	 * @param string $url Full URL to normalize.
+	 * @return string Site identity (e.g. "https://example.com" or
+	 *                "http://example.com:8889"), or '' when input is empty
+	 *                or has no scheme/host.
+	 */
+	public static function normalize_site_url( string $url ): string {
+		if ( '' === $url ) {
+			return '';
+		}
+
+		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
+		$host   = wp_parse_url( $url, PHP_URL_HOST );
+		if ( ! is_string( $scheme ) || ! is_string( $host ) ) {
+			return '';
+		}
+
+		$port = wp_parse_url( $url, PHP_URL_PORT );
+
+		return $scheme . '://' . $host . ( is_int( $port ) ? ':' . $port : '' );
+	}
 }
