@@ -11,6 +11,9 @@ namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\API\Diff_Renderer;
 use Safe_Publish\API\Source_Post_Type_Resolver;
+use Safe_Publish\Utils\Options;
+use WP_Error;
+use WP_Post;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
@@ -75,7 +78,7 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 		do_action( 'rest_api_init' );
 
-		// Create test post with source post ID meta.
+		// Create test post tagged with the source post ID and site URL.
 		$this->post_id = $this->factory()->post->create(
 			array(
 				'post_title'   => 'Original Title',
@@ -86,6 +89,73 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		);
 
 		update_post_meta( $this->post_id, 'safe_publish_source_post_id', self::SOURCE_POST_ID );
+		update_post_meta( $this->post_id, 'safe_publish_source_site_url', 'https://example.com' );
+	}
+
+	/**
+	 * Verifies that find_local_post scopes the Compare lookup by source site:
+	 * a post imported from a different source with the same source ID and post
+	 * type is not returned for the connected source.
+	 */
+	public function test_find_local_post_scopes_by_source_site_url(): void {
+		// ARRANGE: Two posts share a source ID and post type but were imported
+		// from different source sites.
+		$source_a_post = $this->factory()->post->create(
+			array( 'post_type' => 'post' )
+		);
+		update_post_meta(
+			$source_a_post,
+			Options::META_SOURCE_POST_ID,
+			self::SOURCE_POST_ID
+		);
+		update_post_meta(
+			$source_a_post,
+			Options::META_SOURCE_SITE_URL,
+			'https://source-a.example.com'
+		);
+
+		$source_b_post = $this->factory()->post->create(
+			array( 'post_type' => 'post' )
+		);
+		update_post_meta(
+			$source_b_post,
+			Options::META_SOURCE_POST_ID,
+			self::SOURCE_POST_ID
+		);
+		update_post_meta(
+			$source_b_post,
+			Options::META_SOURCE_SITE_URL,
+			'https://source-b.example.com'
+		);
+
+		$renderer = new Diff_Renderer();
+
+		// ACT + ASSERT: Scoping to source A resolves source A's post.
+		$scoped = $renderer->find_local_post(
+			self::SOURCE_POST_ID,
+			'post',
+			'https://source-a.example.com'
+		);
+		$this->assertInstanceOf( WP_Post::class, $scoped );
+		$this->assertSame( $source_a_post, $scoped->ID );
+
+		// ACT + ASSERT: Scoping to a source with no matching post errors rather
+		// than falling back to a different source's post.
+		$wrong_source = $renderer->find_local_post(
+			self::SOURCE_POST_ID,
+			'post',
+			'https://source-c.example.com'
+		);
+		$this->assertInstanceOf( WP_Error::class, $wrong_source );
+
+		// ACT + ASSERT: An empty URL opts out of scoping and still resolves a
+		// post, preserving the unscoped lookup behavior.
+		$unscoped = $renderer->find_local_post(
+			self::SOURCE_POST_ID,
+			'post',
+			''
+		);
+		$this->assertInstanceOf( WP_Post::class, $unscoped );
 	}
 
 	/**
@@ -209,6 +279,11 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			'safe_publish_source_post_id',
 			self::SOURCE_POST_ID + 1
 		);
+		update_post_meta(
+			$post_id,
+			'safe_publish_source_site_url',
+			'https://example.com'
+		);
 
 		// Source returns the same raw value.
 		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
@@ -290,6 +365,11 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			$local_movie_id,
 			'safe_publish_source_post_id',
 			self::SOURCE_POST_ID
+		);
+		update_post_meta(
+			$local_movie_id,
+			'safe_publish_source_site_url',
+			'https://example.com'
 		);
 
 		update_option(

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\API;
 
 use Safe_Publish\Utils\Auth_Credential_Provider;
+use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use WP_Error;
 use WP_REST_Request;
@@ -117,7 +118,8 @@ final class Safe_Publish_API extends REST_Base {
 		$mapped_post_type = Post_Type_Map::to_wp_slug( $post_type );
 		$local_post       = $this->diff_renderer->find_local_post(
 			$source_post_id,
-			$mapped_post_type
+			$mapped_post_type,
+			Options::get_connected_site_url()
 		);
 
 		if ( is_wp_error( $local_post ) ) {
