@@ -121,9 +121,10 @@ class Options {
 	const META_SOURCE_LINK = 'safe_publish_source_link';
 
 	/**
-	 * Meta key storing the source site URL (scheme://host[:port]) the post
-	 * was imported from. Paired with META_SOURCE_POST_ID for site-scoped
-	 * lookups (prevents cross-source ID collisions).
+	 * Meta key storing the source site identity (scheme://host[:port] plus
+	 * subsite path) the post was imported from. Paired with META_SOURCE_POST_ID
+	 * for site-scoped lookups, preventing both cross-source and cross-subsite
+	 * ID collisions.
 	 *
 	 * @var string
 	 */
@@ -243,13 +244,14 @@ class Options {
 	}
 
 	/**
-	 * Returns the connected site URL normalized to its scheme://host[:port]
-	 * identity, matching how the source-tracking meta is stored.
+	 * Returns the connected site URL normalized to its path-bearing
+	 * scheme://host[:port]/path identity, matching how the source-tracking meta
+	 * is stored. The path scopes the identity to a specific subsite.
 	 *
 	 * @return string Normalized connected site URL, or '' when unset.
 	 */
-	public static function get_connected_site_url(): string {
-		return URL_Validator::normalize_site_url(
+	public static function get_connected_site_url_with_path(): string {
+		return URL_Validator::normalize_site_url_with_path(
 			(string) self::get_value( self::OPTION_CONNECTED_SITE_URL, '' )
 		);
 	}

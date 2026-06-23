@@ -16,7 +16,6 @@ use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
-use Safe_Publish\Validators\URL_Validator;
 use Exception;
 use WP_Error;
 use WP_Post;
@@ -237,9 +236,7 @@ class Post_Import_Service {
 		}
 
 		try {
-			$source_site_url = URL_Validator::normalize_site_url(
-				$fields['source_link']
-			);
+			$source_site_url = Options::get_connected_site_url_with_path();
 
 			$imported_post = $this->find_imported_post(
 				$fields['source_post_id'],
@@ -1396,9 +1393,7 @@ class Post_Import_Service {
 			return $this->build_error_result( $fields, $error_message );
 		}
 
-		$source_site_url = URL_Validator::normalize_site_url(
-			$fields['source_link']
-		);
+		$source_site_url = Options::get_connected_site_url_with_path();
 
 		$post_id = $this->persist_new_post(
 			array(
@@ -1492,7 +1487,7 @@ class Post_Import_Service {
 		$result = $this->nav_ref_rewriter->rewrite_cross_refs(
 			(int) $fields['source_post_id'],
 			$post_id,
-			URL_Validator::normalize_site_url( $fields['source_link'] )
+			Options::get_connected_site_url_with_path()
 		);
 
 		if ( array() !== $result['failed'] ) {
@@ -1597,7 +1592,7 @@ class Post_Import_Service {
 		$resolved_parent = $this->resolve_source_parent(
 			$fields['source_parent_id'],
 			$post_type,
-			URL_Validator::normalize_site_url( $fields['source_link'] ),
+			Options::get_connected_site_url_with_path(),
 			$batch_fresh_data
 		);
 
@@ -1738,7 +1733,7 @@ class Post_Import_Service {
 		update_post_meta(
 			$post_id,
 			Options::META_SOURCE_SITE_URL,
-			URL_Validator::normalize_site_url( $source_link )
+			Options::get_connected_site_url_with_path()
 		);
 
 		if ( $featured_attachment_id > 0 ) {
@@ -1770,7 +1765,7 @@ class Post_Import_Service {
 		$terms_result = $this->meta_terms_manager->update_terms(
 			$post_id,
 			$terms,
-			URL_Validator::normalize_site_url( $source_link )
+			Options::get_connected_site_url_with_path()
 		);
 
 		if ( is_wp_error( $terms_result ) ) {

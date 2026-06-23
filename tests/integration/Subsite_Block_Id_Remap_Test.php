@@ -26,22 +26,19 @@ use Safe_Publish\Utils\Telemetry_Service;
 /**
  * Guards the subsite ref-remap path: when the connected source URL carries a
  * subsite path (e.g. https://host/blog), block-ID references in imported
- * content must still remap to destination IDs. The remap lookups scope by the
- * host-only source identity written into post/term meta, so the path-bearing
- * connection URL has to be reduced before the lookup runs. Exercised through
- * the real import path so the regression's wiring is covered.
+ * content must remap to destination IDs scoped to that subsite. The import
+ * tags content with the path-bearing source identity, and the remap lookups
+ * scope by the same value. Exercised through the real import path so the
+ * wiring is covered.
  */
 class Subsite_Block_Id_Remap_Test extends Source_Posts_API_Test_Base {
 
 	/**
-	 * Connection URL standing in for a subdirectory-subsite source.
+	 * Connection URL standing in for a subdirectory-subsite source. The import
+	 * derives the source identity from it, so it doubles as the meta value
+	 * tagged onto imported content.
 	 */
 	private const SUBSITE_SOURCE_URL = 'https://source.example.com/blog';
-
-	/**
-	 * Host-only source identity, as the import service tags imported content.
-	 */
-	private const HOST_ONLY_SOURCE_URL = 'https://source.example.com';
 
 	/**
 	 * Post import service instance.
@@ -94,13 +91,13 @@ class Subsite_Block_Id_Remap_Test extends Source_Posts_API_Test_Base {
 	 * Verifies that post and term block-ID references remap to destination IDs
 	 * when the connected source URL carries a subsite path.
 	 *
-	 * The destination targets are tagged host-only, exactly as the import
-	 * service writes them. A path-bearing lookup would miss them and leave the
-	 * references pointing at the source IDs.
+	 * The destination targets are tagged with the path-bearing identity, exactly
+	 * as the import service writes them. A host-only lookup would miss them and
+	 * leave the references pointing at the source IDs.
 	 */
 	public function test_remaps_post_and_term_references_on_subsite_source(): void {
-		// ARRANGE: Destination targets tagged host-only, plus a post whose
-		// nav content references their source IDs.
+		// ARRANGE: Destination targets tagged with the subsite identity, plus a
+		// post whose nav content references their source IDs.
 		$post_source_id = 99201;
 		$term_source_id = 99202;
 
@@ -115,7 +112,7 @@ class Subsite_Block_Id_Remap_Test extends Source_Posts_API_Test_Base {
 		update_post_meta(
 			$dest_page,
 			Options::META_SOURCE_SITE_URL,
-			self::HOST_ONLY_SOURCE_URL
+			self::SUBSITE_SOURCE_URL
 		);
 
 		$dest_term = self::factory()->term->create(
@@ -129,7 +126,7 @@ class Subsite_Block_Id_Remap_Test extends Source_Posts_API_Test_Base {
 		update_term_meta(
 			$dest_term,
 			Options::META_SOURCE_TERM_URL,
-			self::HOST_ONLY_SOURCE_URL
+			self::SUBSITE_SOURCE_URL
 		);
 
 		$this->mock_post_overrides = array(
