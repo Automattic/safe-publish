@@ -13,6 +13,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Validators\URL_Validator;
 use WP_Error;
 
 // Prevent direct access.
@@ -1091,15 +1092,18 @@ class Content_Processor {
 		);
 		$this->collect_id_references( $blocks, $session_id_map, $collected );
 
+		// Media keeps the subsite path; the lookups match the host-only meta.
+		$lookup_site_url = URL_Validator::normalize_site_url( $source_site_url );
+
 		$post_map = $this->lookup_destination_post_ids(
 			$collected['post'],
-			$source_site_url
+			$lookup_site_url
 		);
 		$post_map = $session_id_map + $post_map;
 
 		$term_map = $this->lookup_destination_term_ids(
 			$collected['term'],
-			$source_site_url
+			$lookup_site_url
 		);
 
 		return $this->apply_id_references( $blocks, $post_map, $term_map );
