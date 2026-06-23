@@ -58,7 +58,7 @@ final class Diff_Renderer {
 		$local_post = $this->find_local_post(
 			$source_post_id,
 			$mapped_post_type,
-			Options::get_connected_site_url()
+			Options::get_connected_site_url_with_path()
 		);
 		if ( is_wp_error( $local_post ) ) {
 			return $local_post;

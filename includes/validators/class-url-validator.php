@@ -108,9 +108,8 @@ class URL_Validator {
 	 * Reduces a URL to its scheme://host[:port] identity, dropping path,
 	 * query, and fragment.
 	 *
-	 * The canonical site-identity form used for source-tracking meta and
-	 * scoping comparisons. An explicit non-default port is preserved so REST
-	 * endpoints built on the result reach the right service.
+	 * The host-only base that normalize_site_url_with_path() extends with the
+	 * subsite path to form the identity used for source-tracking and scoping.
 	 *
 	 * @param string $url Full URL to normalize.
 	 * @return string Site identity (e.g. "https://example.com" or
@@ -131,5 +130,31 @@ class URL_Validator {
 		$port = wp_parse_url( $url, PHP_URL_PORT );
 
 		return $scheme . '://' . $host . ( is_int( $port ) ? ':' . $port : '' );
+	}
+
+	/**
+	 * Reduces a URL to its scheme://host[:port] identity plus normalized path,
+	 * dropping query and fragment.
+	 *
+	 * The path-bearing site identity, used to scope source-tracking meta per
+	 * subsite. The path's trailing slash is stripped so a connection URL stored
+	 * with or without it compares equal.
+	 *
+	 * @param string $url Full URL to normalize.
+	 * @return string Site identity with path (e.g. "https://example.com/blog"),
+	 *                or '' when input is empty or has no scheme/host.
+	 */
+	public static function normalize_site_url_with_path( string $url ): string {
+		$identity = self::normalize_site_url( $url );
+		if ( '' === $identity ) {
+			return '';
+		}
+
+		$path = wp_parse_url( $url, PHP_URL_PATH );
+		if ( ! is_string( $path ) ) {
+			return $identity;
+		}
+
+		return $identity . untrailingslashit( $path );
 	}
 }

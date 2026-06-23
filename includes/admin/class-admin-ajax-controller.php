@@ -1039,7 +1039,7 @@ final class Admin_Ajax_Controller {
 		// return the prompt response instead of running the import.
 		$imported_post = $this->post_import_service->find_imported_post(
 			$source_post_id,
-			Options::get_connected_site_url()
+			Options::get_connected_site_url_with_path()
 		);
 
 		if ( $imported_post && ! $force_update ) {
@@ -1488,7 +1488,7 @@ final class Admin_Ajax_Controller {
 		$imported_by_source_id = $this->post_import_service
 			->fetch_imported_posts_by_source_ids(
 				$source_ids,
-				Options::get_connected_site_url()
+				Options::get_connected_site_url_with_path()
 			);
 
 		if ( 0 === count( $imported_by_source_id ) ) {

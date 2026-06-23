@@ -1092,8 +1092,10 @@ class Content_Processor {
 		);
 		$this->collect_id_references( $blocks, $session_id_map, $collected );
 
-		// Media keeps the subsite path; the lookups match the host-only meta.
-		$lookup_site_url = URL_Validator::normalize_site_url( $source_site_url );
+		// Path-bearing identity, matching how the source meta is stored.
+		$lookup_site_url = URL_Validator::normalize_site_url_with_path(
+			$source_site_url
+		);
 
 		$post_map = $this->lookup_destination_post_ids(
 			$collected['post'],
@@ -1197,7 +1199,7 @@ class Content_Processor {
 	 * postmeta. Returns a source-ID => destination-ID map.
 	 *
 	 * @param array<int, true> $source_ids      Set of source post IDs (keys).
-	 * @param string           $source_site_url Source site URL (scheme://host[:port]).
+	 * @param string           $source_site_url Path-bearing source site identity.
 	 * @return array<int, int> Source-ID => destination-ID.
 	 */
 	private function lookup_destination_post_ids(
