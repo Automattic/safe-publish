@@ -24,6 +24,7 @@ use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\Admin\Settings_Logger;
 use Safe_Publish\Admin\Settings_Page;
 use Safe_Publish\Admin\Settings_Sanitizer;
+use Safe_Publish\Admin\Source_Backfill_Notice;
 use Safe_Publish\Auth\Auth_Manager;
 use Safe_Publish\API\Catalog_REST_Controller;
 use Safe_Publish\API\Source_Posts_API;
@@ -39,6 +40,7 @@ use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Source_Site_Url_Backfill;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
 
@@ -135,6 +137,12 @@ final class Plugin {
 			'vip_pendo_allowed_screens',
 			array( $this, 'register_pendo_screens' )
 		);
+
+		add_action(
+			'admin_init',
+			array( Source_Site_Url_Backfill::class, 'maybe_run' )
+		);
+		( new Source_Backfill_Notice() )->init();
 
 		if ( $can_import ) {
 			$this->init_full_admin();
