@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Utils;
 
+use Safe_Publish\Validators\URL_Validator;
+
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -238,6 +240,18 @@ class Options {
 		}
 
 		return get_option( $option, $default_value );
+	}
+
+	/**
+	 * Returns the connected site URL normalized to its scheme://host[:port]
+	 * identity, matching how the source-tracking meta is stored.
+	 *
+	 * @return string Normalized connected site URL, or '' when unset.
+	 */
+	public static function get_connected_site_url(): string {
+		return URL_Validator::normalize_site_url(
+			(string) self::get_value( self::OPTION_CONNECTED_SITE_URL, '' )
+		);
 	}
 
 	/**

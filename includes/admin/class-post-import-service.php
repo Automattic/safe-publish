@@ -16,6 +16,7 @@ use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
+use Safe_Publish\Validators\URL_Validator;
 use Exception;
 use WP_Error;
 use WP_Post;
@@ -236,7 +237,9 @@ class Post_Import_Service {
 		}
 
 		try {
-			$source_site_url = self::extract_site_url( $fields['source_link'] );
+			$source_site_url = URL_Validator::normalize_site_url(
+				$fields['source_link']
+			);
 
 			$imported_post = $this->find_imported_post(
 				$fields['source_post_id'],
@@ -746,35 +749,6 @@ class Post_Import_Service {
 			implode( ' ', $messages ),
 			array( 'fields' => $fields )
 		);
-	}
-
-	/**
-	 * Extracts the site base URL (scheme + host + port) from a full URL.
-	 *
-	 * Preserves the port so non-default ports (e.g. local dev environments,
-	 * staging on alternate ports) reach the right service when used as a
-	 * base for REST endpoint URLs. Returns '' for empty or unparseable input
-	 * so callers can pass through source-link values without guarding.
-	 *
-	 * @param string $url Full URL to extract the base from.
-	 * @return string Site base URL (e.g. "https://example.com" or
-	 *                "http://example.com:8889"), or '' when input is empty
-	 *                or has no scheme/host.
-	 */
-	public static function extract_site_url( string $url ): string {
-		if ( '' === $url ) {
-			return '';
-		}
-
-		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
-		$host   = wp_parse_url( $url, PHP_URL_HOST );
-		if ( ! is_string( $scheme ) || ! is_string( $host ) ) {
-			return '';
-		}
-
-		$port = wp_parse_url( $url, PHP_URL_PORT );
-
-		return $scheme . '://' . $host . ( is_int( $port ) ? ':' . $port : '' );
 	}
 
 	/**
@@ -1422,6 +1396,10 @@ class Post_Import_Service {
 			return $this->build_error_result( $fields, $error_message );
 		}
 
+		$source_site_url = URL_Validator::normalize_site_url(
+			$fields['source_link']
+		);
+
 		$post_id = $this->persist_new_post(
 			array(
 				'post_title'     => $fields['title'],
@@ -1439,7 +1417,7 @@ class Post_Import_Service {
 				'meta_input'     => array(
 					Options::META_SOURCE_POST_ID  => $fields['source_post_id'],
 					Options::META_SOURCE_LINK     => $fields['source_link'],
-					Options::META_SOURCE_SITE_URL => self::extract_site_url( $fields['source_link'] ),
+					Options::META_SOURCE_SITE_URL => $source_site_url,
 					Options::META_IMPORTED_FROM   => Options::META_IMPORTED_FROM_VALUE,
 				),
 			),
@@ -1514,7 +1492,7 @@ class Post_Import_Service {
 		$result = $this->nav_ref_rewriter->rewrite_cross_refs(
 			(int) $fields['source_post_id'],
 			$post_id,
-			self::extract_site_url( $fields['source_link'] )
+			URL_Validator::normalize_site_url( $fields['source_link'] )
 		);
 
 		if ( array() !== $result['failed'] ) {
@@ -1619,7 +1597,7 @@ class Post_Import_Service {
 		$resolved_parent = $this->resolve_source_parent(
 			$fields['source_parent_id'],
 			$post_type,
-			self::extract_site_url( $fields['source_link'] ),
+			URL_Validator::normalize_site_url( $fields['source_link'] ),
 			$batch_fresh_data
 		);
 
@@ -1760,7 +1738,7 @@ class Post_Import_Service {
 		update_post_meta(
 			$post_id,
 			Options::META_SOURCE_SITE_URL,
-			self::extract_site_url( $source_link )
+			URL_Validator::normalize_site_url( $source_link )
 		);
 
 		if ( $featured_attachment_id > 0 ) {
@@ -1792,7 +1770,7 @@ class Post_Import_Service {
 		$terms_result = $this->meta_terms_manager->update_terms(
 			$post_id,
 			$terms,
-			self::extract_site_url( $source_link )
+			URL_Validator::normalize_site_url( $source_link )
 		);
 
 		if ( is_wp_error( $terms_result ) ) {
