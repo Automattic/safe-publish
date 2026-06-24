@@ -304,7 +304,6 @@ function buildIssue( overrides: Partial< AttentionIssue > = {} ): AttentionIssue
 		target_kind: 'post',
 		severity: 'error',
 		source_site_url: 'https://source.example.com',
-		detail: {},
 		first_detected_gmt: '2024-03-15 10:30:00',
 		last_seen_gmt: '2024-03-15 10:30:00',
 		affected_title: 'Primary Menu',

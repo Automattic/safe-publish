@@ -173,8 +173,8 @@ export type AttentionIssueType =
 
 /**
  * One open degradation issue, keyed by (affected_post_id, issue_type,
- * target_ref, target_kind). `detail` mirrors the row's stored metadata;
- * `retryable` is the server's signal that the row's fixup can run.
+ * target_ref, target_kind). `retryable` is the server's signal that the row's
+ * fixup can run.
  */
 export interface AttentionIssue {
 	affected_post_id: number;
@@ -183,7 +183,6 @@ export interface AttentionIssue {
 	target_kind: 'post' | 'term';
 	severity: 'warning' | 'error';
 	source_site_url: string;
-	detail: JsonObject;
 	first_detected_gmt: string;
 	last_seen_gmt: string;
 	affected_title: string;

@@ -489,7 +489,6 @@ final class Admin_Ajax_Controller {
 			'target_kind'        => (string) $row['target_kind'],
 			'severity'           => (string) $row['severity'],
 			'source_site_url'    => (string) $row['source_site_url'],
-			'detail'             => (array) $row['detail'],
 			'first_detected_gmt' => (string) $row['first_detected_gmt'],
 			'last_seen_gmt'      => (string) $row['last_seen_gmt'],
 			'affected_title'     => get_the_title( $affected_post_id ),

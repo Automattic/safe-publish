@@ -298,7 +298,6 @@ function makeIssue( overrides: Partial< AttentionIssue > ): AttentionIssue {
 		target_kind: 'post',
 		severity: 'warning',
 		source_site_url: 'https://source.example.com',
-		detail: {},
 		first_detected_gmt: '2024-01-01 00:00:00',
 		last_seen_gmt: '2024-01-01 00:00:00',
 		affected_title: 'About',
@@ -314,11 +313,6 @@ describe( 'renderIssueMessage', () => {
 		const issue = makeIssue( {
 			target_kind: 'post',
 			target_ref: 700,
-			detail: {
-				block: 'core/navigation-link',
-				kind: 'post',
-				source_id: 700,
-			},
 		} );
 		// ACT: render the message.
 		const message = renderIssueMessage( issue );
@@ -333,7 +327,6 @@ describe( 'renderIssueMessage', () => {
 		const issue = makeIssue( {
 			target_kind: 'term',
 			target_ref: 701,
-			detail: { kind: 'term', source_id: 701 },
 		} );
 		// ACT: render the message.
 		const message = renderIssueMessage( issue );
@@ -348,7 +341,6 @@ describe( 'renderIssueMessage', () => {
 		const issue = makeIssue( {
 			issue_type: 'parent_orphaned',
 			target_ref: 42,
-			detail: { parent_id: 42, parent_title: null, reason: 'not_imported' },
 		} );
 		// ACT: render the message.
 		const message = renderIssueMessage( issue );
@@ -363,7 +355,6 @@ describe( 'renderIssueMessage', () => {
 			issue_type: 'nav_ref_rewrite_failed',
 			target_ref: 8300,
 			severity: 'error',
-			detail: { source_nav_id: 8300 },
 			retryable: true,
 		} );
 		// ACT: render the message.
