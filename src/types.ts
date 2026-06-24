@@ -173,8 +173,8 @@ export type AttentionIssueType =
 
 /**
  * One open degradation issue, keyed by (affected_post_id, issue_type,
- * target_ref, target_kind). `detail` carries the small render payload for the
- * issue sentence; `retryable` is false for types whose fixup isn't callable yet.
+ * target_ref, target_kind). `detail` mirrors the row's stored metadata;
+ * `retryable` is the server's signal that the row's fixup can run.
  */
 export interface AttentionIssue {
 	affected_post_id: number;

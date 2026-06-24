@@ -387,6 +387,7 @@ export const createAttentionIssueActions = (
 			);
 			formData.append( 'issue_type', issue.issue_type );
 			formData.append( 'target_ref', String( issue.target_ref ) );
+			formData.append( 'target_kind', issue.target_kind );
 
 			void fetch( context.ajaxurl, { method: 'POST', body: formData } )
 				.then(
