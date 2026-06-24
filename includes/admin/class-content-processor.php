@@ -15,6 +15,7 @@ use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Validators\URL_Validator;
 use WP_Error;
+use WP_Post;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -25,6 +26,14 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Handles content transformation, media import, and URL replacement.
  */
 class Content_Processor {
+
+	/**
+	 * Post meta recording the unix timestamp at which a stale block reference was
+	 * repointed in place by a retry.
+	 *
+	 * @var string
+	 */
+	public const META_REF_REPOINTED_AT = '_safe_publish_block_ref_repointed_at';
 
 	/**
 	 * Block-name => list of post-ID attrs, optionally gated on sibling
@@ -1112,6 +1121,184 @@ class Content_Processor {
 	}
 
 	/**
+	 * Repoints one stale block reference in a post to its now-resolvable
+	 * destination ID.
+	 *
+	 * Targeted counterpart to the import-time remap: it repoints only the attrs
+	 * matching $target_ref and $target_kind, leaving resolved siblings
+	 * untouched, and persists without a revision or post_modified bump.
+	 *
+	 * @param int    $affected_post_id Post holding the stale reference.
+	 * @param int    $target_ref       Source id to repoint.
+	 * @param string $target_kind      'post' or 'term'.
+	 * @param string $source_site_url  Source identity scoping the lookup.
+	 * @return bool True when the reference resolved and was repointed.
+	 */
+	public function repoint_block_reference(
+		int $affected_post_id,
+		int $target_ref,
+		string $target_kind,
+		string $source_site_url
+	): bool {
+		if ( $target_ref <= 0 ) {
+			return false;
+		}
+
+		$dest_id = $this->resolve_target_ref(
+			$target_ref,
+			$target_kind,
+			$source_site_url
+		);
+
+		if ( 0 === $dest_id ) {
+			return false;
+		}
+
+		$post = get_post( $affected_post_id );
+
+		if ( ! $post instanceof WP_Post || '' === $post->post_content ) {
+			return false;
+		}
+
+		$registry = 'term' === $target_kind
+			? self::TERM_ID_BLOCK_ATTRS
+			: self::POST_ID_BLOCK_ATTRS;
+
+		$changed = false;
+		$blocks  = $this->repoint_refs(
+			parse_blocks( $post->post_content ),
+			$registry,
+			$target_ref,
+			$dest_id,
+			$changed
+		);
+
+		if ( ! $changed ) {
+			return false;
+		}
+
+		$persisted = $this->persist_repointed_content(
+			$affected_post_id,
+			serialize_blocks( $blocks )
+		);
+
+		if ( ! $persisted ) {
+			return false;
+		}
+
+		clean_post_cache( $affected_post_id );
+		update_post_meta( $affected_post_id, self::META_REF_REPOINTED_AT, time() );
+
+		return true;
+	}
+
+	/**
+	 * Resolves a source ref to its destination ID via the same source-scoped
+	 * lookups the import uses.
+	 *
+	 * @param int    $target_ref      Source id.
+	 * @param string $target_kind     'post' or 'term'.
+	 * @param string $source_site_url Source identity to scope by.
+	 * @return int Destination ID, or 0 when it does not resolve.
+	 */
+	private function resolve_target_ref(
+		int $target_ref,
+		string $target_kind,
+		string $source_site_url
+	): int {
+		$lookup_site_url = URL_Validator::normalize_site_url_with_path(
+			$source_site_url
+		);
+		$source_ids      = array( $target_ref => true );
+
+		$map = 'term' === $target_kind
+			? $this->lookup_destination_term_ids( $source_ids, $lookup_site_url )
+			: $this->lookup_destination_post_ids( $source_ids, $lookup_site_url );
+
+		return isset( $map[ $target_ref ] ) ? (int) $map[ $target_ref ] : 0;
+	}
+
+	/**
+	 * Recursively repoints registered id-bearing attrs whose value equals
+	 * $target_ref to $dest_id, honoring each attr's kind gating.
+	 *
+	 * @param array<array<string, mixed>>                                              $blocks     Block tree.
+	 * @param array<string, list<array{attr:string, gated_by?: array<string,string>}>> $registry   Attr rules for the target kind.
+	 * @param int                                                                      $target_ref Source id to match.
+	 * @param int                                                                      $dest_id    Destination id to write.
+	 * @param bool                                                                     $changed    Set true, by reference, on any repoint.
+	 * @return array<array<string, mixed>> Mutated tree.
+	 */
+	private function repoint_refs(
+		array $blocks,
+		array $registry,
+		int $target_ref,
+		int $dest_id,
+		bool &$changed
+	): array {
+		foreach ( $blocks as $i => $block ) {
+			$name  = isset( $block['blockName'] ) ? (string) $block['blockName'] : '';
+			$attrs = isset( $block['attrs'] ) && is_array( $block['attrs'] )
+				? $block['attrs']
+				: array();
+
+			foreach ( $registry[ $name ] ?? array() as $rule ) {
+				if ( ! self::gate_passes( $rule, $attrs ) ) {
+					continue;
+				}
+
+				$value = $attrs[ $rule['attr'] ] ?? null;
+				if ( is_numeric( $value ) && (int) $value === $target_ref ) {
+					$attrs[ $rule['attr'] ] = $dest_id;
+					$blocks[ $i ]['attrs']  = $attrs;
+					$changed                = true;
+				}
+			}
+
+			if (
+				isset( $block['innerBlocks'] )
+				&& is_array( $block['innerBlocks'] )
+				&& array() !== $block['innerBlocks']
+			) {
+				$blocks[ $i ]['innerBlocks'] = $this->repoint_refs(
+					$block['innerBlocks'],
+					$registry,
+					$target_ref,
+					$dest_id,
+					$changed
+				);
+			}
+		}
+
+		return $blocks;
+	}
+
+	/**
+	 * Persists repointed content via a direct write, bypassing wp_update_post so
+	 * the system touch-up creates no revision and leaves post_modified intact.
+	 * Isolated so tests can force a write failure.
+	 *
+	 * @param int    $post_id     Post to update.
+	 * @param string $new_content Serialized block content.
+	 * @return bool True when the row was updated.
+	 */
+	protected function persist_repointed_content(
+		int $post_id,
+		string $new_content
+	): bool {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$result = $wpdb->update(
+			$wpdb->posts,
+			array( 'post_content' => $new_content ),
+			array( 'ID' => $post_id )
+		);
+
+		return false !== $result;
+	}
+
+	/**
 	 * Walks the block tree and accumulates source post/term IDs that need to
 	 * be looked up. IDs already resolvable via the session map skip the
 	 * lookup pass.
@@ -1175,12 +1362,8 @@ class Content_Processor {
 
 		$ids = array();
 		foreach ( $registry[ $name ] as $rule ) {
-			if ( isset( $rule['gated_by'] ) ) {
-				foreach ( $rule['gated_by'] as $gate_attr => $gate_value ) {
-					if ( ( $attrs[ $gate_attr ] ?? null ) !== $gate_value ) {
-						continue 2;
-					}
-				}
+			if ( ! self::gate_passes( $rule, $attrs ) ) {
+				continue;
 			}
 
 			$value = $attrs[ $rule['attr'] ] ?? null;
@@ -1191,6 +1374,27 @@ class Content_Processor {
 		}
 
 		return $ids;
+	}
+
+	/**
+	 * Reports whether a block attr rule's gating attrs (e.g. kind) all match.
+	 *
+	 * @param array{attr:string, gated_by?: array<string,string>} $rule  Attr rule.
+	 * @param array<string, mixed>                                $attrs Block attrs.
+	 * @return bool True when the rule applies to the block.
+	 */
+	private static function gate_passes( array $rule, array $attrs ): bool {
+		if ( ! isset( $rule['gated_by'] ) ) {
+			return true;
+		}
+
+		foreach ( $rule['gated_by'] as $gate_attr => $gate_value ) {
+			if ( ( $attrs[ $gate_attr ] ?? null ) !== $gate_value ) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**
