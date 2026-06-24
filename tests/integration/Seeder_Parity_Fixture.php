@@ -355,6 +355,9 @@ final class Seeder_Parity_Fixture {
 			'content'             => array( 'raw' => $payload['content'] ),
 			'excerpt'             => array( 'raw' => $payload['excerpt'] ),
 			'link'                => $payload['link'],
+			// Synthetic source guid the importer ignores; lets the parity suite
+			// assert the dest regenerates its own (DIVERGENCE_REGISTRY 'guid').
+			'guid'                => $this->source_base_url . '/?p=' . $source_id,
 			'slug'                => $payload['slug'],
 			'type'                => $payload['post_type'],
 			'status'              => $payload['status'],
