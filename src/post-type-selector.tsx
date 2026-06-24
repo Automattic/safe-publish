@@ -17,10 +17,6 @@ import {
 } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
-// Post types temporarily hidden from the selector until their import gaps
-// are resolved (wp_navigation).
-const HIDDEN_POST_TYPES = [ 'wp_navigation' ];
-
 /**
  * Represents a post type option from the source site.
  *
@@ -195,12 +191,10 @@ export function PostTypeSelector( {
 	// Use slug (not rest_base) as the option value: the catalog endpoint
 	// expects the WP post type slug, and centralizing on slug avoids the
 	// slug/rest_base translation gap for custom CPTs.
-	const selectOptions = postTypes
-		.filter( postType => ! HIDDEN_POST_TYPES.includes( postType.slug ) )
-		.map( postType => ( {
-			label: postType.label,
-			value: postType.slug,
-		} ) );
+	const selectOptions = postTypes.map( postType => ( {
+		label: postType.label,
+		value: postType.slug,
+	} ) );
 
 	// Always ensure we have at least the default "post" option.
 	if ( 0 === selectOptions.length && ! isLoading ) {
