@@ -375,6 +375,7 @@ describe( 'createAttentionIssueActions', () => {
 		expect( body.get( 'affected_post_id' ) ).toBe( '1024' );
 		expect( body.get( 'issue_type' ) ).toBe( 'nav_ref_rewrite_failed' );
 		expect( body.get( 'target_ref' ) ).toBe( '8300' );
+		expect( body.get( 'target_kind' ) ).toBe( 'post' );
 	} );
 
 	it( 'reports an error and still refreshes on a failed retry', async () => {
