@@ -95,22 +95,27 @@ final class Admin_Page {
 			$initial_state = 'all';
 		}
 
-		$repository   = new History_Repository();
-		$orphan_count = $repository->count_orphan_failures();
+		$repository       = new History_Repository();
+		$orphan_count     = $repository->count_orphan_failures();
+		$attention_issues = new Attention_Issues_Repository();
+		$attention_count  = $attention_issues->count_open_issues(
+			Options::get_connected_site_url_with_path()
+		);
 
 		Admin_Assets::enqueue_bundle(
 			'posts',
 			'safe-publish-admin-posts-script',
 			'safe-publish-admin-posts-style',
 			array(
-				'ajaxurl'       => admin_url( 'admin-ajax.php' ),
-				'settingsUrl'   => admin_url( 'admin.php?page=safe-publish-settings' ),
-				'nonce'         => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-				'sourceSiteUrl' => $source_site_url,
-				'homeUrl'       => home_url(),
-				'containerId'   => 'safe-publish-posts-container',
-				'initialState'  => $initial_state,
-				'orphanCount'   => $orphan_count,
+				'ajaxurl'        => admin_url( 'admin-ajax.php' ),
+				'settingsUrl'    => admin_url( 'admin.php?page=safe-publish-settings' ),
+				'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+				'sourceSiteUrl'  => $source_site_url,
+				'homeUrl'        => home_url(),
+				'containerId'    => 'safe-publish-posts-container',
+				'initialState'   => $initial_state,
+				'orphanCount'    => $orphan_count,
+				'attentionCount' => $attention_count,
 			)
 		);
 	}

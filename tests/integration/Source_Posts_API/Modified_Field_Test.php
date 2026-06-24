@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration\Source_Posts_API;
 
+use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Navigation_Ref_Rewriter;
@@ -77,7 +78,8 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 			$this->repository,
 			new Meta_Terms_Manager(),
 			new Telemetry_Service(),
-			new Navigation_Ref_Rewriter()
+			new Navigation_Ref_Rewriter(),
+			new Attention_Issues_Repository()
 		);
 	}
 
