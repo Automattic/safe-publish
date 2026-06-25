@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Navigation_Ref_Rewriter;
@@ -285,7 +286,8 @@ final class Seeder_Parity_Fixture {
 			new History_Repository(),
 			new Meta_Terms_Manager(),
 			new Telemetry_Service(),
-			new Navigation_Ref_Rewriter()
+			new Navigation_Ref_Rewriter(),
+			new Attention_Issues_Repository()
 		);
 	}
 
@@ -355,6 +357,9 @@ final class Seeder_Parity_Fixture {
 			'content'             => array( 'raw' => $payload['content'] ),
 			'excerpt'             => array( 'raw' => $payload['excerpt'] ),
 			'link'                => $payload['link'],
+			// Synthetic source guid the importer ignores; lets the parity suite
+			// assert the dest regenerates its own (DIVERGENCE_REGISTRY 'guid').
+			'guid'                => $this->source_base_url . '/?p=' . $source_id,
 			'slug'                => $payload['slug'],
 			'type'                => $payload['post_type'],
 			'status'              => $payload['status'],
