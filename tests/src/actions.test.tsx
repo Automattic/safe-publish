@@ -446,4 +446,71 @@ describe( 'createAttentionIssueActions', () => {
 			} )
 		);
 	} );
+
+	it( 'shows an in-flight notice while the retry runs', () => {
+		// ARRANGE: a retry whose response never settles, so it stays in flight.
+		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
+		const onNotice = vi.fn();
+
+		const retry = createAttentionIssueActions( vi.fn(), {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+			onNotice,
+		} )[ 0 ];
+
+		// ACT: run the Retry callback.
+		runCallback( retry, [ buildIssue() ] );
+
+		// ASSERT: an info notice shows immediately, before any response.
+		expect( onNotice ).toHaveBeenCalledWith( {
+			status: 'info',
+			message: 'Retrying…',
+		} );
+	} );
+
+	it( 'ignores a second retry for the same issue while one is in flight', () => {
+		// ARRANGE: a retry that stays in flight, plus a shared in-flight set.
+		const fetchMock = vi.fn().mockReturnValue( new Promise( () => {} ) );
+		vi.stubGlobal( 'fetch', fetchMock );
+		const inFlight = new Set< string >();
+
+		const retry = createAttentionIssueActions( vi.fn(), {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+			inFlight,
+		} )[ 0 ];
+
+		// ACT: click twice before the first request settles.
+		runCallback( retry, [ buildIssue() ] );
+		runCallback( retry, [ buildIssue() ] );
+
+		// ASSERT: only the first submit fired a request.
+		expect( fetchMock ).toHaveBeenCalledTimes( 1 );
+	} );
+
+	it( 'clears the in-flight notice when the retry resolves', async () => {
+		// ARRANGE: a retry that resolves the issue.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: () =>
+					Promise.resolve( { success: true, data: { resolved: true } } ),
+			} )
+		);
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		const retry = createAttentionIssueActions( onRefresh, {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+			onNotice,
+		} )[ 0 ];
+
+		// ACT: run the Retry callback.
+		runCallback( retry, [ buildIssue() ] );
+
+		// ASSERT: the transient notice ends cleared once the issue resolves.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		expect( onNotice ).toHaveBeenLastCalledWith( null );
+	} );
 } );

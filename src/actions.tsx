@@ -29,7 +29,7 @@ import {
 	RetryAttentionIssueResponse,
 	UnifiedPostRow,
 } from './types';
-import { getErrorMessage, renderIssueMessage } from './utils';
+import { attentionIssueId, getErrorMessage, renderIssueMessage } from './utils';
 import { Action } from '@wordpress/dataviews/build-types';
 import { __, sprintf } from '@wordpress/i18n';
 
@@ -342,11 +342,11 @@ export const createOrphanFailuresActions = (
 ];
 
 /**
- * A retry outcome surfaced to the user: a hard failure (error) or a fixup that
- * ran without clearing the issue (warning).
+ * A banner shown for a retry: in-flight (info), failed (error), or ran without
+ * clearing the issue (warning).
  */
 export interface RetryNotice {
-	status: 'error' | 'warning';
+	status: 'error' | 'warning' | 'info';
 	message: string;
 }
 
@@ -357,6 +357,8 @@ export interface AttentionIssueActionsContext {
 	ajaxurl: string;
 	nonce: string;
 	onNotice?: ( notice: RetryNotice | null ) => void;
+	// Keys of issues with a retry in flight, to drop concurrent submits.
+	inFlight?: Set< string >;
 }
 
 /**
@@ -366,6 +368,7 @@ export interface AttentionIssueActionsContext {
  * fixup, which is self-verifying, then refreshes the listing so the row clears
  * or stays based on the actual result. A run that fails or leaves the issue
  * open surfaces a notice, so the attempt never reads as a silent success.
+ * Concurrent submits for the same issue are ignored while one is in flight.
  *
  * @param {Function}                     onRefresh Callback to refresh the drawer.
  * @param {AttentionIssueActionsContext} context   Admin-ajax URL, nonce, notice sink.
@@ -388,8 +391,19 @@ export const createAttentionIssueActions = (
 				return;
 			}
 
-			// Clear any prior outcome so a re-click reads as a fresh attempt.
-			context.onNotice?.( null );
+			// The button stays clickable, so guard against concurrent submits
+			// for the same issue.
+			const key = attentionIssueId( issue );
+			if ( context.inFlight?.has( key ) ) {
+				return;
+			}
+			context.inFlight?.add( key );
+
+			// Signal the attempt is running; also clears any prior outcome.
+			context.onNotice?.( {
+				status: 'info',
+				message: __( 'Retrying…', 'safe-publish' ),
+			} );
 
 			const formData = new FormData();
 			formData.append( 'action', 'safe_publish_retry_attention_issue' );
@@ -432,7 +446,12 @@ export const createAttentionIssueActions = (
 								renderIssueMessage( issue )
 							),
 						} );
+						return;
 					}
+
+					// Resolved: drop the in-flight notice; the row clears on
+					// the refetch below.
+					context.onNotice?.( null );
 				} )
 				.catch( () => {
 					context.onNotice?.( {
@@ -444,6 +463,7 @@ export const createAttentionIssueActions = (
 					} );
 				} )
 				.finally( () => {
+					context.inFlight?.delete( key );
 					onRefresh?.();
 				} );
 		},

@@ -14,7 +14,7 @@ import {
 } from '../utils';
 import { Button, Modal, Notice, Spinner } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
-import { useCallback, useEffect, useState } from '@wordpress/element';
+import { useCallback, useEffect, useRef, useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
 
@@ -64,6 +64,8 @@ const AttentionDrawer = ( {
 	// Retry outcomes get their own banner so they carry a warning/error
 	// severity, separate from the list-load `error` notice.
 	const [ retryNotice, setRetryNotice ] = useState< RetryNotice | null >( null );
+	// Issues with a retry in flight, so the action drops concurrent submits.
+	const inFlightRetries = useRef< Set< string > >( new Set() );
 	const [ refreshNonce, setRefreshNonce ] = useState( 0 );
 
 	const refresh = useCallback( () => {
@@ -216,6 +218,7 @@ const AttentionDrawer = ( {
 		ajaxurl,
 		nonce,
 		onNotice: setRetryNotice,
+		inFlight: inFlightRetries.current,
 	} );
 
 	return (
