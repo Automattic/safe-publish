@@ -42,22 +42,25 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	private const REFERENCE_TIME = 1735689600;
 
 	/**
-	 * Source post ID where the synthetic post batch starts. Chosen high enough
-	 * that it can't collide with any factory-created IDs.
+	 * Source post ID where the synthetic post batch starts. Kept far above the
+	 * integration suite's wp_posts AUTO_INCREMENT range so a fresh dest post ID
+	 * can never coincidentally equal a source ID (see
+	 * test_id_diverges_from_source).
 	 */
-	private const SOURCE_ID_BASE = 1000;
+	private const SOURCE_ID_BASE = 9000000;
 
 	/**
 	 * Source post ID where the synthetic page batch starts. Offset from the
-	 * post base so post and page source IDs never collide.
+	 * post base so post and page source IDs never collide, in the same high
+	 * range as SOURCE_ID_BASE.
 	 */
-	private const SOURCE_PAGE_ID_BASE = 1100;
+	private const SOURCE_PAGE_ID_BASE = 9100000;
 
 	/**
-	 * Source media ID where the synthetic batch starts. Chosen high enough not
-	 * to collide with post IDs or factory-created IDs.
+	 * Source media ID where the synthetic batch starts. Same high range, kept
+	 * distinct from the post and page bases.
 	 */
-	private const SOURCE_MEDIA_ID_BASE = 5000;
+	private const SOURCE_MEDIA_ID_BASE = 9500000;
 
 	/**
 	 * Class-wide imported batch shared by every test method.
@@ -240,6 +243,39 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	 */
 	private function source_content( int $source_id ): string {
 		return (string) self::$fixture->source_rest_bodies[ $source_id ]['content']['raw'];
+	}
+
+	/**
+	 * Asserts a wp_posts MySQL datetime parses and falls in the recent import
+	 * window: not in the future and within 600 seconds of $now_ts. The window
+	 * only has to beat the generator's 90-day source date spread, so it stays
+	 * generous against the gap between the class-wide import and the calling
+	 * method. wp-env defaults to UTC, so the value parses cleanly as UTC.
+	 *
+	 * @param string $mysql_datetime wp_posts datetime column value.
+	 * @param int    $now_ts         Upper bound captured by the caller.
+	 * @param string $label          Label prefixed to failure messages.
+	 */
+	private function assert_datetime_is_recent(
+		string $mysql_datetime,
+		int $now_ts,
+		string $label
+	): void {
+		$ts = strtotime( $mysql_datetime . ' UTC' );
+
+		$this->assertIsInt( $ts, "{$label} should parse" );
+
+		$delta = $now_ts - (int) $ts;
+		$this->assertGreaterThanOrEqual(
+			0,
+			$delta,
+			"{$label} should not be in the future"
+		);
+		$this->assertLessThan(
+			600,
+			$delta,
+			"{$label} should be near the import time"
+		);
 	}
 
 	/**
@@ -453,43 +489,124 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that imported posts get a post_date close to the import
-	 * time, not the source publish date. Counterpart to the post_date entry
-	 * in DIVERGENCE_REGISTRY.
+	 * Verifies that imported posts get a post_date close to the import time,
+	 * not the source publish date. Counterpart to the post_date entry in
+	 * DIVERGENCE_REGISTRY.
 	 *
-	 * Uses post_date rather than post_date_gmt because WordPress leaves
-	 * post_date_gmt as "0000-00-00 00:00:00" for drafts until they are
-	 * published, and imported posts land as drafts (see the post_status
-	 * reverse-assertion above).
+	 * Uses post_date rather than post_date_gmt because WordPress leaves the GMT
+	 * date columns at the draft sentinel until publish (locked in
+	 * test_gmt_dates_lock_to_zero_for_drafts).
 	 */
 	public function test_post_date_locks_to_import_time(): void {
-		// ARRANGE: capture an upper bound for the dest post_date. The test
-		// runs in wp-env which defaults to UTC, so post_date parses cleanly
-		// as a UTC timestamp.
+		// ARRANGE: capture an upper bound for the dest post_date.
 		$now_ts = time();
 
-		// ACT + ASSERT: each dest post_date is recent — the window only has to
-		// beat the 90-day source date spread, so it stays generous against the
-		// gap between the class-wide import and this method.
+		// ACT + ASSERT: each dest post_date is recent.
 		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
-			$dest    = get_post( $dest_id );
-			$dest_ts = strtotime( $dest->post_date . ' UTC' );
-
-			$this->assertIsInt(
-				$dest_ts,
-				"Source ID {$source_id} post_date should parse"
+			$this->assert_datetime_is_recent(
+				(string) get_post( $dest_id )->post_date,
+				$now_ts,
+				"Source ID {$source_id} post_date"
 			);
+		}
+	}
 
-			$delta = $now_ts - (int) $dest_ts;
-			$this->assertGreaterThanOrEqual(
-				0,
-				$delta,
-				"Source ID {$source_id} post_date should not be in the future"
+	/**
+	 * Verifies that imported posts get post_modified set to the import time,
+	 * not a propagated source modified time. Counterpart to the post_modified
+	 * entry in DIVERGENCE_REGISTRY. post_modified_gmt stays the draft sentinel
+	 * (locked in test_gmt_dates_lock_to_zero_for_drafts).
+	 */
+	public function test_post_modified_locks_to_import_time(): void {
+		// ARRANGE: capture an upper bound for the dest post_modified.
+		$now_ts = time();
+
+		// ACT + ASSERT: each dest post_modified is recent.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$this->assert_datetime_is_recent(
+				(string) get_post( $dest_id )->post_modified,
+				$now_ts,
+				"Source ID {$source_id} post_modified"
 			);
-			$this->assertLessThan(
-				600,
-				$delta,
-				"Source ID {$source_id} post_date should be near the import time"
+		}
+	}
+
+	/**
+	 * Verifies that imported posts keep both GMT date columns (post_date_gmt
+	 * and post_modified_gmt) at WordPress' draft sentinel "0000-00-00 00:00:00".
+	 * Counterpart to those entries in DIVERGENCE_REGISTRY: WordPress only fills
+	 * them at publish time, so a non-zero value would mean a source date leaked
+	 * through or the post no longer lands as a draft.
+	 */
+	public function test_gmt_dates_lock_to_zero_for_drafts(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: each dest GMT date column is the draft sentinel.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$dest = get_post( $dest_id );
+			$this->assertSame(
+				'0000-00-00 00:00:00',
+				$dest->post_date_gmt,
+				"Source ID {$source_id} post_date_gmt should stay the draft"
+				. ' sentinel until publish'
+			);
+			$this->assertSame(
+				'0000-00-00 00:00:00',
+				$dest->post_modified_gmt,
+				"Source ID {$source_id} post_modified_gmt should stay the draft"
+				. ' sentinel until publish'
+			);
+		}
+	}
+
+	/**
+	 * Verifies that each imported post lands on a fresh destination ID instead
+	 * of reusing the source ID. Counterpart to the ID entry in
+	 * DIVERGENCE_REGISTRY: source and dest are separate WordPress ID spaces.
+	 * The source IDs are kept clear of the dest ID range (see SOURCE_ID_BASE),
+	 * so a match can never be coincidental.
+	 */
+	public function test_id_diverges_from_source(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: each dest ID differs from its source ID.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$this->assertNotSame(
+				$source_id,
+				$dest_id,
+				"Source ID {$source_id} should import to a fresh dest ID"
+			);
+		}
+	}
+
+	/**
+	 * Verifies that imported posts get a destination-generated guid rather than
+	 * the source guid. Counterpart to the guid entry in DIVERGENCE_REGISTRY:
+	 * WordPress core's own importer preserves the source guid, so locking the
+	 * regeneration forces an explicit decision if that behavior ever changes.
+	 */
+	public function test_guid_regenerated_on_dest(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: dest guid is non-empty and does not reuse the source guid.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$dest_guid   = (string) get_post( $dest_id )->guid;
+			$source_guid = (string) self::$fixture
+				->source_rest_bodies[ $source_id ]['guid'];
+
+			// Guard the comparison below: a missing source guid would let the
+			// reuse check pass trivially.
+			$this->assertNotSame(
+				'',
+				$source_guid,
+				"Source ID {$source_id} should seed a source guid"
+			);
+			$this->assertNotSame(
+				'',
+				$dest_guid,
+				"Source ID {$source_id} dest guid should be non-empty"
+			);
+			$this->assertNotSame(
+				$source_guid,
+				$dest_guid,
+				"Source ID {$source_id} dest guid should not reuse source guid"
 			);
 		}
 	}
