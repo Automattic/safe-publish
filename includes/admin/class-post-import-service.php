@@ -107,15 +107,34 @@ class Post_Import_Service {
 	private Navigation_Ref_Rewriter $nav_ref_rewriter;
 
 	/**
+	 * Attention issues repository.
+	 *
+	 * @var Attention_Issues_Repository
+	 */
+	private Attention_Issues_Repository $attention_issues;
+
+	/**
+	 * Issue types keyed to the imported post itself, reconciled from its
+	 * finalized import warnings.
+	 *
+	 * @var string[]
+	 */
+	private const ATTENTION_POST_ISSUE_TYPES = array(
+		'unmapped_block_reference',
+		'parent_orphaned',
+	);
+
+	/**
 	 * Constructs the Post_Import_Service instance.
 	 *
-	 * @param Source_Posts_API        $api                Source Posts API instance.
-	 * @param Media_Importer          $media_importer     Media Importer instance.
-	 * @param Content_Processor       $content_processor  Content Processor instance.
-	 * @param History_Repository      $repository         History repository instance.
-	 * @param Meta_Terms_Manager      $meta_terms_manager Meta Terms Manager instance.
-	 * @param Telemetry_Service       $telemetry          Telemetry service.
-	 * @param Navigation_Ref_Rewriter $nav_ref_rewriter   Navigation cross-reference rewriter.
+	 * @param Source_Posts_API            $api                Source Posts API instance.
+	 * @param Media_Importer              $media_importer     Media Importer instance.
+	 * @param Content_Processor           $content_processor  Content Processor instance.
+	 * @param History_Repository          $repository         History repository instance.
+	 * @param Meta_Terms_Manager          $meta_terms_manager Meta Terms Manager instance.
+	 * @param Telemetry_Service           $telemetry          Telemetry service.
+	 * @param Navigation_Ref_Rewriter     $nav_ref_rewriter   Navigation cross-reference rewriter.
+	 * @param Attention_Issues_Repository $attention_issues   Attention issues repository.
 	 */
 	public function __construct(
 		Source_Posts_API $api,
@@ -124,7 +143,8 @@ class Post_Import_Service {
 		History_Repository $repository,
 		Meta_Terms_Manager $meta_terms_manager,
 		Telemetry_Service $telemetry,
-		Navigation_Ref_Rewriter $nav_ref_rewriter
+		Navigation_Ref_Rewriter $nav_ref_rewriter,
+		Attention_Issues_Repository $attention_issues
 	) {
 		$this->api                = $api;
 		$this->media_importer     = $media_importer;
@@ -133,6 +153,7 @@ class Post_Import_Service {
 		$this->meta_terms_manager = $meta_terms_manager;
 		$this->telemetry          = $telemetry;
 		$this->nav_ref_rewriter   = $nav_ref_rewriter;
+		$this->attention_issues   = $attention_issues;
 	}
 
 	/**
@@ -1260,6 +1281,7 @@ class Post_Import_Service {
 		}
 
 		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
+		$this->record_attention_issues( $fields, $post_id );
 
 		$this->log_import_if_session(
 			$session_id,
@@ -1446,6 +1468,7 @@ class Post_Import_Service {
 		}
 
 		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
+		$this->record_attention_issues( $fields, $post_id );
 
 		$this->log_import_if_session(
 			$session_id,
@@ -1464,7 +1487,8 @@ class Post_Import_Service {
 
 	/**
 	 * Repoints destination posts that reference a freshly imported navigation
-	 * menu, recording a warning when a matched post could not be updated.
+	 * menu, recording a warning when a matched post could not be updated and
+	 * reconciling the menu's attention issues from the per-post outcome.
 	 *
 	 * No-op for non-navigation imports. Best-effort: a rewrite failure
 	 * surfaces the still-stale post IDs as a warning rather than failing the
@@ -1484,10 +1508,13 @@ class Post_Import_Service {
 			return;
 		}
 
+		$source_nav_id   = (int) $fields['source_post_id'];
+		$source_site_url = Options::get_connected_site_url_with_path();
+
 		$result = $this->nav_ref_rewriter->rewrite_cross_refs(
-			(int) $fields['source_post_id'],
+			$source_nav_id,
 			$post_id,
-			Options::get_connected_site_url_with_path()
+			$source_site_url
 		);
 
 		if ( array() !== $result['failed'] ) {
@@ -1496,6 +1523,180 @@ class Post_Import_Service {
 				'failed_post_ids' => $result['failed'],
 			);
 		}
+
+		// Posts whose write failed stay open; every other referencing post for
+		// this menu now points correctly, so its issue is resolved.
+		$this->attention_issues->reconcile_target_issues(
+			'nav_ref_rewrite_failed',
+			$source_nav_id,
+			'post',
+			'error',
+			$source_site_url,
+			$result['failed'],
+			array( 'source_nav_id' => $source_nav_id )
+		);
+	}
+
+	/**
+	 * Records the attention issues attached to a freshly imported post.
+	 *
+	 * Reconciles the post's open block-reference and orphaned-parent issues
+	 * against its finalized import warnings: unresolved refs are upserted, and
+	 * any that now resolve are cleared. Navigation rewrite failures are recorded
+	 * separately, keyed to the referencing posts.
+	 *
+	 * @param array $fields  Finalized post fields, including warnings.
+	 * @param int   $post_id Destination post id.
+	 */
+	private function record_attention_issues( array $fields, int $post_id ): void {
+		$source_site_url = Options::get_connected_site_url_with_path();
+
+		if ( '' === $source_site_url ) {
+			return;
+		}
+
+		$current = array();
+
+		foreach ( $fields['warnings'] as $warning ) {
+			$issue = $this->warning_to_post_issue( $warning );
+
+			if ( null !== $issue ) {
+				$current[] = $issue;
+			}
+		}
+
+		$this->attention_issues->reconcile_post_issues(
+			$post_id,
+			$source_site_url,
+			self::ATTENTION_POST_ISSUE_TYPES,
+			$current
+		);
+	}
+
+	/**
+	 * Translates a post-keyed import warning into an attention issue.
+	 *
+	 * Returns null for warnings that are not tracked as issues (author
+	 * fallbacks) or that are reconciled elsewhere (navigation rewrite
+	 * failures, which key to the referencing posts, not the imported one).
+	 *
+	 * @param array $warning Single import warning record.
+	 * @return array|null Issue fields, or null when the warning is not tracked.
+	 */
+	private function warning_to_post_issue( array $warning ): ?array {
+		$type = $warning['type'] ?? '';
+
+		if ( 'unmapped_block_reference' === $type ) {
+			return array(
+				'issue_type'  => $type,
+				'target_ref'  => (int) $warning['source_id'],
+				'target_kind' => (string) $warning['kind'],
+				'severity'    => 'warning',
+				'detail'      => array(
+					'kind'      => (string) $warning['kind'],
+					'block'     => (string) ( $warning['block'] ?? '' ),
+					'source_id' => (int) $warning['source_id'],
+				),
+			);
+		}
+
+		if ( 'parent_orphaned' === $type ) {
+			return array(
+				'issue_type'  => $type,
+				'target_ref'  => (int) $warning['source']['parent_id'],
+				'target_kind' => 'post',
+				'severity'    => 'warning',
+				'detail'      => array(
+					'parent_id'    => (int) $warning['source']['parent_id'],
+					'parent_title' => $warning['source']['parent_title'] ?? null,
+					'reason'       => (string) ( $warning['reason'] ?? '' ),
+				),
+			);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Re-runs the navigation rewriter for a menu and reconciles its issues.
+	 *
+	 * Self-verifying retry: re-attempts every post referencing the menu, so an
+	 * issue clears precisely when its post no longer fails the rewrite. No-op
+	 * when the menu is not present on the destination.
+	 *
+	 * @param int    $source_nav_id   Menu's source post id.
+	 * @param string $source_site_url Path-bearing source identity.
+	 */
+	public function retry_nav_ref_rewrite(
+		int $source_nav_id,
+		string $source_site_url
+	): void {
+		if ( '' === $source_site_url ) {
+			return;
+		}
+
+		$dest_nav = $this->find_imported_navigation(
+			$source_nav_id,
+			$source_site_url
+		);
+
+		if ( ! $dest_nav instanceof WP_Post ) {
+			return;
+		}
+
+		$result = $this->nav_ref_rewriter->rewrite_cross_refs(
+			$source_nav_id,
+			$dest_nav->ID,
+			$source_site_url
+		);
+
+		$this->attention_issues->reconcile_target_issues(
+			'nav_ref_rewrite_failed',
+			$source_nav_id,
+			'post',
+			'error',
+			$source_site_url,
+			$result['failed'],
+			array( 'source_nav_id' => $source_nav_id )
+		);
+	}
+
+	/**
+	 * Finds the imported navigation menu for a source ID and identity.
+	 *
+	 * Queries wp_navigation explicitly because it is excluded from the
+	 * post_type 'any' query find_imported_post relies on.
+	 *
+	 * @param int    $source_nav_id   Menu's source post id.
+	 * @param string $source_site_url Path-bearing source identity.
+	 * @return WP_Post|null Imported menu, or null if not found.
+	 */
+	private function find_imported_navigation(
+		int $source_nav_id,
+		string $source_site_url
+	): ?WP_Post {
+		$menus = get_posts(
+			array(
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query'       => array(
+					'relation' => 'AND',
+					array(
+						'key'   => Options::META_SOURCE_POST_ID,
+						'value' => $source_nav_id,
+					),
+					array(
+						'key'   => Options::META_SOURCE_SITE_URL,
+						'value' => $source_site_url,
+					),
+				),
+				'post_type'        => 'wp_navigation',
+				'post_status'      => 'any',
+				'posts_per_page'   => 1,
+				'suppress_filters' => false,
+			)
+		);
+
+		return empty( $menus ) ? null : $menus[0];
 	}
 
 	/**

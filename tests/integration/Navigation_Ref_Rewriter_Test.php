@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Navigation_Ref_Rewriter;
@@ -456,7 +457,8 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			new History_Repository(),
 			new Meta_Terms_Manager(),
 			new Telemetry_Service(),
-			$rewriter
+			$rewriter,
+			new Attention_Issues_Repository()
 		);
 	}
 

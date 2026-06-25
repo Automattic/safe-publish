@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish;
 
 use Safe_Publish\Admin\Admin_Ajax_Controller;
+use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Admin\Import_Mode_Admin_Handler;
 use Safe_Publish\Admin\Admin_Menu_Manager;
 use Safe_Publish\Admin\Audit_Log_Page;
@@ -36,6 +37,7 @@ use Safe_Publish\API\Source_Author_REST_Field;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Utils\Attention_Issues_Table;
 use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
@@ -90,6 +92,12 @@ final class Plugin {
 		Audit_Log_Table::maybe_create_table();
 		Imports_Table::maybe_create_table();
 		Import_Items_Table::maybe_create_table();
+		Attention_Issues_Table::maybe_create_table();
+
+		add_action(
+			'deleted_post',
+			array( $this, 'purge_attention_issues_for_post' )
+		);
 
 		( new Settings_Logger() )->register_handlers();
 
@@ -224,6 +232,18 @@ final class Plugin {
 	}
 
 	/**
+	 * Clears a deleted post's attention issues.
+	 *
+	 * A hard-deleted post can never be re-imported to reconcile its issues, so
+	 * they are removed here to keep unfixable rows from accumulating.
+	 *
+	 * @param int $post_id Deleted post id.
+	 */
+	public function purge_attention_issues_for_post( int $post_id ): void {
+		( new Attention_Issues_Repository() )->delete_for_post( $post_id );
+	}
+
+	/**
 	 * Initializes the full admin UI for import and bidirectional modes.
 	 */
 	private function init_full_admin(): void {
@@ -276,6 +296,7 @@ final class Plugin {
 		assert( $this->telemetry instanceof Telemetry_Service );
 
 		$repository       = new History_Repository();
+		$attention_issues = new Attention_Issues_Repository();
 		$rollback_service = new Session_Rollback_Service( $repository );
 
 		$exports_page   = new Exports_Page();
@@ -293,7 +314,8 @@ final class Plugin {
 			$repository,
 			new Meta_Terms_Manager(),
 			$this->telemetry,
-			new Navigation_Ref_Rewriter()
+			new Navigation_Ref_Rewriter(),
+			$attention_issues
 		);
 
 		$menu_manager = new Admin_Menu_Manager();
@@ -303,7 +325,8 @@ final class Plugin {
 			$repository,
 			$post_import_service,
 			$post_type_fetcher,
-			$this->telemetry
+			$this->telemetry,
+			$attention_issues
 		);
 
 		return new Import_Mode_Admin_Handler(

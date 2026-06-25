@@ -1,14 +1,16 @@
 /**
  * Tests for the unified Posts action factory.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+	createAttentionIssueActions,
 	createPostsActions,
 	type PostsActionsContext,
 } from '@/actions';
 import BulkRollbackPostModal from '@/components/BulkRollbackPostModal';
 import RollbackPostModal from '@/components/RollbackPostModal';
 import type {
+	AttentionIssue,
 	ChipState,
 	ImportSyncStatus,
 	LocalState,
@@ -288,5 +290,116 @@ describe( 'createPostsActions per-state eligibility', () => {
 			],
 		} );
 		expect( bulk.type ).toBe( BulkRollbackPostModal );
+	} );
+} );
+
+/**
+ * Builds an AttentionIssue fixture; tests override fields to match the case.
+ */
+function buildIssue( overrides: Partial< AttentionIssue > = {} ): AttentionIssue {
+	return {
+		affected_post_id: 1024,
+		issue_type: 'nav_ref_rewrite_failed',
+		target_ref: 8300,
+		target_kind: 'post',
+		severity: 'error',
+		source_site_url: 'https://source.example.com',
+		detail: {},
+		first_detected_gmt: '2024-03-15 10:30:00',
+		last_seen_gmt: '2024-03-15 10:30:00',
+		affected_title: 'Primary Menu',
+		affected_edit_url: '',
+		retryable: true,
+		...overrides,
+	};
+}
+
+/**
+ * Invokes a DataViews action callback regardless of its declared arity.
+ */
+function runCallback(
+	action: Action< AttentionIssue >,
+	items: AttentionIssue[]
+): void {
+	(
+		action as unknown as { callback: ( rows: AttentionIssue[] ) => void }
+	).callback( items );
+}
+
+describe( 'createAttentionIssueActions', () => {
+	afterEach( () => {
+		vi.unstubAllGlobals();
+	} );
+
+	it( 'shows Retry only for retryable issues', () => {
+		// ARRANGE: the Retry action.
+		const retry = createAttentionIssueActions( undefined, {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+		} )[ 0 ];
+
+		// ACT + ASSERT: a retryable issue is eligible; a guidance-only one isn't.
+		expect( retry.isEligible?.( buildIssue( { retryable: true } ) ) ).toBe(
+			true
+		);
+		expect(
+			retry.isEligible?.(
+				buildIssue( {
+					issue_type: 'unmapped_block_reference',
+					retryable: false,
+				} )
+			)
+		).toBe( false );
+	} );
+
+	it( 'posts the retry request and refreshes on success', async () => {
+		// ARRANGE: a succeeding endpoint and a refresh spy.
+		const fetchMock = vi.fn().mockResolvedValue( {
+			json: () => Promise.resolve( { success: true, data: { resolved: true } } ),
+		} );
+		vi.stubGlobal( 'fetch', fetchMock );
+		const onRefresh = vi.fn();
+
+		const retry = createAttentionIssueActions( onRefresh, {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+		} )[ 0 ];
+
+		// ACT: run the Retry callback for one issue.
+		runCallback( retry, [ buildIssue() ] );
+
+		// ASSERT: it posts the issue identity and refreshes the listing.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		const body = fetchMock.mock.calls[ 0 ][ 1 ].body as FormData;
+		expect( body.get( 'action' ) ).toBe( 'safe_publish_retry_attention_issue' );
+		expect( body.get( 'affected_post_id' ) ).toBe( '1024' );
+		expect( body.get( 'issue_type' ) ).toBe( 'nav_ref_rewrite_failed' );
+		expect( body.get( 'target_ref' ) ).toBe( '8300' );
+	} );
+
+	it( 'reports an error and still refreshes on a failed retry', async () => {
+		// ARRANGE: an endpoint that rejects the retry and an error sink.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: () =>
+					Promise.resolve( { success: false, error: 'Nope.' } ),
+			} )
+		);
+		const onRefresh = vi.fn();
+		const onError = vi.fn();
+
+		const retry = createAttentionIssueActions( onRefresh, {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+			onError,
+		} )[ 0 ];
+
+		// ACT: run the Retry callback.
+		runCallback( retry, [ buildIssue() ] );
+
+		// ASSERT: the error is surfaced and the listing still refreshes.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		expect( onError ).toHaveBeenCalledWith( 'Nope.' );
 	} );
 } );

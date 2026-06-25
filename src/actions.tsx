@@ -4,7 +4,14 @@
  *
  * @file This file defines DataViews actions for the Safe Publish plugin.
  */
-import { download, pages, pencil, rotateLeft, trash } from '@wordpress/icons';
+import {
+	download,
+	pages,
+	pencil,
+	rotateLeft,
+	trash,
+	update,
+} from '@wordpress/icons';
 
 import BulkImportFlow from './components/BulkImportFlow';
 import BulkRollbackPostModal from './components/BulkRollbackPostModal';
@@ -14,11 +21,15 @@ import ImportModal from './components/ImportModal';
 import PostDiffModal from './components/PostDiffModal';
 import RollbackPostModal from './components/RollbackPostModal';
 import {
+	ApiResponse,
+	AttentionIssue,
 	ChipState,
 	ImportSyncStatus,
 	OrphanFailure,
+	RetryAttentionIssueResponse,
 	UnifiedPostRow,
 } from './types';
+import { getErrorMessage } from './utils';
 import { Action } from '@wordpress/dataviews/build-types';
 import { __ } from '@wordpress/i18n';
 
@@ -327,5 +338,81 @@ export const createOrphanFailuresActions = (
 				onRefresh={ onRefresh }
 			/>
 		),
+	},
+];
+
+/**
+ * Auth + error context for the Needs attention drawer's Retry action.
+ */
+export interface AttentionIssueActionsContext {
+	ajaxurl: string;
+	nonce: string;
+	onError?: ( message: string ) => void;
+}
+
+/**
+ * Creates the drawer's Retry action for attention issues.
+ *
+ * Eligible only for issues whose fixup is callable today; it re-runs the real
+ * fixup, which is self-verifying, then refreshes the listing so the row clears
+ * or stays based on the actual result.
+ *
+ * @param {Function}                     onRefresh Callback to refresh the drawer.
+ * @param {AttentionIssueActionsContext} context   Admin-ajax URL, nonce, error sink.
+ *
+ * @return {Action<AttentionIssue>[]} Array of DataViews actions.
+ */
+export const createAttentionIssueActions = (
+	onRefresh: ( () => void ) | undefined,
+	context: AttentionIssueActionsContext
+): Action< AttentionIssue >[] => [
+	{
+		id: 'retry-attention-issue',
+		label: __( 'Retry', 'safe-publish' ),
+		icon: update,
+		isPrimary: true,
+		isEligible: ( item ) => item.retryable,
+		callback: ( items ) => {
+			const issue = items[ 0 ];
+			if ( ! issue ) {
+				return;
+			}
+
+			const formData = new FormData();
+			formData.append( 'action', 'safe_publish_retry_attention_issue' );
+			formData.append( 'nonce', context.nonce );
+			formData.append(
+				'affected_post_id',
+				String( issue.affected_post_id )
+			);
+			formData.append( 'issue_type', issue.issue_type );
+			formData.append( 'target_ref', String( issue.target_ref ) );
+
+			void fetch( context.ajaxurl, { method: 'POST', body: formData } )
+				.then(
+					( response ) =>
+						response.json() as Promise<
+							ApiResponse< RetryAttentionIssueResponse >
+						>
+				)
+				.then( ( result ) => {
+					if ( ! result.success ) {
+						context.onError?.(
+							getErrorMessage(
+								result,
+								__( 'Retry failed.', 'safe-publish' )
+							)
+						);
+					}
+				} )
+				.catch( () => {
+					context.onError?.(
+						__( 'Network error during retry.', 'safe-publish' )
+					);
+				} )
+				.finally( () => {
+					onRefresh?.();
+				} );
+		},
 	},
 ];

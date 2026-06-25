@@ -4,13 +4,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getSettings, setSettings } from '@wordpress/date';
 import {
+	attentionIssueId,
 	formatBadgeTimestamp,
 	formatDateTime,
 	extractUrlPath,
+	renderIssueMessage,
 	renderWarningMessage,
 	renderWarningShortLabel,
 } from '@/utils';
 import type {
+	AttentionIssue,
 	AuthorFallbackWarning,
 	NavRefRewriteFailedWarning,
 	ParentOrphanedWarning,
@@ -281,5 +284,117 @@ describe( 'renderWarningShortLabel', () => {
 		const label = renderWarningShortLabel( warning );
 		// ASSERT: short label is the comma-joinable string used in the bulk modal.
 		expect( label ).toBe( 'nav reference update failed' );
+	} );
+} );
+
+/**
+ * Builds an AttentionIssue fixture; tests override fields to match the case.
+ */
+function makeIssue( overrides: Partial< AttentionIssue > ): AttentionIssue {
+	return {
+		affected_post_id: 10,
+		issue_type: 'unmapped_block_reference',
+		target_ref: 700,
+		target_kind: 'post',
+		severity: 'warning',
+		source_site_url: 'https://source.example.com',
+		detail: {},
+		first_detected_gmt: '2024-01-01 00:00:00',
+		last_seen_gmt: '2024-01-01 00:00:00',
+		affected_title: 'About',
+		affected_edit_url: '',
+		retryable: false,
+		...overrides,
+	};
+}
+
+describe( 'renderIssueMessage', () => {
+	it( 'reuses the unmapped-post warning copy, reconstructed from detail', () => {
+		// ARRANGE: an unmapped post-reference issue.
+		const issue = makeIssue( {
+			target_kind: 'post',
+			target_ref: 700,
+			detail: {
+				block: 'core/navigation-link',
+				kind: 'post',
+				source_id: 700,
+			},
+		} );
+		// ACT & ASSERT: identical to the import-warning renderer's output.
+		expect( renderIssueMessage( issue ) ).toBe(
+			renderWarningMessage( {
+				type: 'unmapped_block_reference',
+				kind: 'post',
+				block: 'core/navigation-link',
+				source_id: 700,
+			} )
+		);
+	} );
+
+	it( 'reuses the unmapped-term warning copy', () => {
+		// ARRANGE: an unmapped term-reference issue.
+		const issue = makeIssue( {
+			target_kind: 'term',
+			target_ref: 701,
+			detail: { kind: 'term', source_id: 701 },
+		} );
+		// ACT: render the message.
+		const message = renderIssueMessage( issue );
+		// ASSERT: term phrasing and the source ID are present.
+		expect( message ).toContain( '701' );
+		expect( message ).toContain( 'term' );
+	} );
+
+	it( 'reuses the parent_orphaned warning copy from detail', () => {
+		// ARRANGE: an orphaned-parent issue.
+		const issue = makeIssue( {
+			issue_type: 'parent_orphaned',
+			target_ref: 42,
+			detail: { parent_id: 42, parent_title: null, reason: 'not_imported' },
+		} );
+		// ACT & ASSERT: identical to the import-warning renderer's output.
+		expect( renderIssueMessage( issue ) ).toBe(
+			renderWarningMessage( {
+				type: 'parent_orphaned',
+				source: { parent_id: 42, parent_title: null },
+				reason: 'not_imported',
+			} )
+		);
+	} );
+
+	it( 'renders a page-centric sentence for nav_ref_rewrite_failed', () => {
+		// ARRANGE: a per-page navigation rewrite failure.
+		const issue = makeIssue( {
+			issue_type: 'nav_ref_rewrite_failed',
+			target_ref: 8300,
+			severity: 'error',
+			detail: { source_nav_id: 8300 },
+			retryable: true,
+		} );
+		// ACT: render the message.
+		const message = renderIssueMessage( issue );
+		// ASSERT: the menu ID and the retry hint are present.
+		expect( message ).toContain( '8300' );
+		expect( message ).toContain( 'Retry' );
+	} );
+} );
+
+describe( 'attentionIssueId', () => {
+	it( 'keeps a post and a term reference sharing a target_ref distinct', () => {
+		// ARRANGE: same post, same source ref, different kind — the collision
+		// the 4-column identity key guards against.
+		const postRef = makeIssue( { target_kind: 'post', target_ref: 42 } );
+		const termRef = makeIssue( { target_kind: 'term', target_ref: 42 } );
+		// ACT & ASSERT: the ids differ, so DataViews rows stay unique.
+		expect( attentionIssueId( postRef ) ).not.toBe(
+			attentionIssueId( termRef )
+		);
+	} );
+
+	it( 'is stable for the same identity', () => {
+		// ARRANGE & ACT: two issues with the same identity.
+		const id = attentionIssueId( makeIssue( {} ) );
+		// ASSERT: the id is deterministic.
+		expect( id ).toBe( attentionIssueId( makeIssue( {} ) ) );
 	} );
 } );
