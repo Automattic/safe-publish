@@ -4,6 +4,7 @@
  *
  * @file This file defines the AttentionDrawer component.
  */
+import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 import { createAttentionIssueActions, type RetryNotice } from '../actions';
 import { DEFAULT_ITEMS_PER_PAGE, LAYOUT_TABLE } from '../constants';
 import {
@@ -135,6 +136,21 @@ const AttentionDrawer = ( {
 
 		return () => controller.abort();
 	}, [ ajaxurl, nonce, view.page, view.perPage, refreshNonce ] );
+
+	const setPage = useCallback(
+		( next: number ): void =>
+			setView( ( current ) => ( { ...current, page: next } ) ),
+		[]
+	);
+
+	useStepBackWhenPageEmpties( {
+		hasFetchedOnce,
+		isLoading,
+		fetchError: error,
+		isEmpty: 0 === items.length,
+		page: view.page,
+		setPage,
+	} );
 
 	const fields: DataViewsField< AttentionIssue >[] = [
 		{
