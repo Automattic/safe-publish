@@ -48,6 +48,12 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	private const SOURCE_ID_BASE = 1000;
 
 	/**
+	 * Source post ID where the synthetic page batch starts. Offset from the
+	 * post base so post and page source IDs never collide.
+	 */
+	private const SOURCE_PAGE_ID_BASE = 1100;
+
+	/**
 	 * Source media ID where the synthetic batch starts. Chosen high enough not
 	 * to collide with post IDs or factory-created IDs.
 	 */
@@ -125,7 +131,10 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 
 	/**
 	 * Describes the batch: six posts covering the generator's full editor,
-	 * status, and image-mode rotations.
+	 * status, and image-mode rotations, plus four pages for post_type coverage.
+	 * Page index 3 lands on the classic editor, so the batch exercises block and
+	 * shortcode parity on pages too. Pages carry no category/post_tag
+	 * assignments, mirroring a real page source.
 	 *
 	 * @return list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool}>
 	 */
@@ -137,6 +146,13 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				'count'          => 6,
 				'source_id_base' => self::SOURCE_ID_BASE,
 				'assign_terms'   => true,
+			),
+			array(
+				'type'           => 'page',
+				'endpoint'       => 'pages',
+				'count'          => 4,
+				'source_id_base' => self::SOURCE_PAGE_ID_BASE,
+				'assign_terms'   => false,
 			),
 		);
 	}
@@ -217,6 +233,16 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Returns the raw source post_content for a source ID.
+	 *
+	 * @param int $source_id Source post ID.
+	 * @return string
+	 */
+	private function source_content( int $source_id ): string {
+		return (string) self::$fixture->source_rest_bodies[ $source_id ]['content']['raw'];
+	}
+
+	/**
 	 * Verifies that every source body imported to a distinct destination post.
 	 * Guards against silent-pass tests: every later assertion iterates the
 	 * dest map, so an empty or short batch would let them pass trivially.
@@ -288,9 +314,43 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies Gutenberg block-structural parity for every imported post: dest
+	 * parses into at least one block, carries the same multiset of block names
+	 * as source, and has no orphaned block-comment delimiters.
+	 */
+	public function test_block_structural_parity(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: each dest post's block structure matches source.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			Content_Parity_Comparator::assert_block_structural_parity(
+				$this->source_content( $source_id ),
+				(string) get_post( $dest_id )->post_content,
+				$this
+			);
+		}
+	}
+
+	/**
+	 * Verifies caption-shortcode parity for every imported post: dest preserves
+	 * the source caption count, keeps the tags balanced, and carries identical
+	 * non-id attributes.
+	 */
+	public function test_shortcode_parity(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: each dest post's caption shortcodes match source.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			Content_Parity_Comparator::assert_shortcode_parity(
+				$this->source_content( $source_id ),
+				(string) get_post( $dest_id )->post_content,
+				$this
+			);
+		}
+	}
+
+	/**
 	 * Guards the comparator's coverage assumptions: the seeder must not emit
-	 * gallery blocks or data-id attributes, since neither is exercised by
-	 * the URL/ID parity checks today. Grow comparator coverage before
+	 * gallery blocks, data-id attributes, or non-caption shortcodes, since none
+	 * is exercised by the parity checks today. Grow comparator coverage before
 	 * relaxing this.
 	 */
 	public function test_seeder_does_not_emit_unsupported_references(): void {
@@ -312,6 +372,18 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 			$raw,
 			'Seeder must not emit data-id attributes until the comparator'
 			. ' covers data-id rewriting.'
+		);
+		$this->assertStringNotContainsString(
+			'[gallery',
+			$raw,
+			'Seeder must not emit gallery shortcodes until the rewriter covers'
+			. ' their bare attachment IDs.'
+		);
+		$this->assertStringNotContainsString(
+			'[playlist',
+			$raw,
+			'Seeder must not emit playlist shortcodes until the rewriter covers'
+			. ' their bare attachment IDs.'
 		);
 	}
 
