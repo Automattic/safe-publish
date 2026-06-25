@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the out-of-import degradation producer contract.
+ * Integration tests for the reconciliation producer contract.
  *
  * @package Safe_Publish
  */
@@ -13,14 +13,13 @@ use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Utils\Attention_Issues_Table;
 use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Log_Events;
-use Safe_Publish\Utils\Navigation_Logger;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Reconcile_Logger;
 use WP_UnitTestCase;
 
 /**
- * Exercises the producer contract an out-of-import fixup must follow: a
- * degradation logs a navigation warning and opens an attention issue, and
- * resolving the fixup logs an info event and clears the issue.
+ * Exercises the dual-write contract a reconciliation producer must follow: each
+ * outcome logs a reconcile event and updates the issues store in lockstep.
  */
 class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 
@@ -32,11 +31,11 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 	private Attention_Issues_Repository $issues;
 
 	/**
-	 * Navigation channel logger under test.
+	 * Reconcile channel logger under test.
 	 *
-	 * @var Navigation_Logger
+	 * @var Reconcile_Logger
 	 */
-	private Navigation_Logger $logger;
+	private Reconcile_Logger $logger;
 
 	/**
 	 * Creates both stores and instantiates the producer's collaborators.
@@ -46,18 +45,18 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 		parent::setUp();
 
 		Audit_Log_Table::create_table();
-		Audit_Log_Table::clear( 'navigation' );
+		Audit_Log_Table::clear( 'reconcile' );
 		Attention_Issues_Table::create_table();
 
 		$this->issues = new Attention_Issues_Repository();
-		$this->logger = new Navigation_Logger();
+		$this->logger = new Reconcile_Logger();
 	}
 
 	/**
-	 * Verifies that an out-of-import degradation writes to both the audit log
-	 * and the issues store, and that resolving the fixup clears both.
+	 * Verifies that an unresolved reference writes a warning to both the audit
+	 * log and the issues store, and that resolving it clears both.
 	 */
-	public function test_degradation_logs_warning_and_opens_issue_then_resolves(): void {
+	public function test_unresolved_logs_warning_then_resolves(): void {
 		// ARRANGE: a destination post tagged with its path-bearing source.
 		$source_site_url = 'https://example.com/blog';
 		$post_id         = self::factory()->post->create();
@@ -67,12 +66,6 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 			$source_site_url
 		);
 
-		// The navigation URL reconciler owns the real issue type; this literal
-		// stands in for it to exercise the shared contract.
-		$issue_type = 'nav_url_unresolved';
-		$target_ref = 4242;
-		$source_url = 'https://example.com/blog/about';
-
 		// The producer scopes the issue by the identity stored on the post.
 		$stored_source = (string) get_post_meta(
 			$post_id,
@@ -80,29 +73,39 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 			true
 		);
 
+		$issue_type  = 'unmapped_block_reference';
+		$target_ref  = 4242;
+		$target_kind = 'post';
+
 		// ACT: the producer logs a warning and opens the issue.
-		$this->logger->link_unresolved( $post_id, $target_ref, $source_url );
+		$this->logger->unresolved(
+			$issue_type,
+			$post_id,
+			$target_ref,
+			$target_kind
+		);
 		$this->issues->upsert_issue(
 			$post_id,
 			$issue_type,
 			$target_ref,
-			'post',
+			$target_kind,
 			'warning',
 			$stored_source
 		);
 
-		// ASSERT: the audit log holds the navigation warning.
+		// ASSERT: the audit log holds the reconcile warning, tagged by type.
 		$warnings = Audit_Log_Table::get_events(
 			array(
-				'channel' => 'navigation',
+				'channel' => 'reconcile',
 				'level'   => 'warning',
 			)
 		);
 		$this->assertCount( 1, $warnings );
 		$this->assertSame(
-			Log_Events::NAV_LINK_UNRESOLVED,
+			Log_Events::RECONCILE_UNRESOLVED,
 			$warnings[0]['event']
 		);
+		$this->assertSame( $issue_type, $warnings[0]['data']['issue_type'] );
 
 		// ASSERT: the issue is open and scoped to the source identity.
 		$issue = $this->issues->get_issue( $post_id, $issue_type, $target_ref );
@@ -110,35 +113,40 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 		$this->assertSame( 'warning', $issue['severity'] );
 		$this->assertSame( $source_site_url, $issue['source_site_url'] );
 
-		// ACT: the fixup succeeded, so log info and clear the issue.
-		$this->logger->link_resolved( $post_id, $target_ref, $source_url );
-		$resolved = $this->issues->resolve_issue(
+		// ACT: the reconciliation succeeded, so log info and clear the issue.
+		$this->logger->resolved(
+			$issue_type,
+			$post_id,
+			$target_ref,
+			$target_kind
+		);
+		$cleared = $this->issues->resolve_issue(
 			$post_id,
 			$issue_type,
 			$target_ref,
-			'post'
+			$target_kind
 		);
 
 		// ASSERT: one row cleared, an info event recorded, no issue remains.
-		$this->assertSame( 1, $resolved );
+		$this->assertSame( 1, $cleared );
 		$info = Audit_Log_Table::get_events(
 			array(
-				'channel' => 'navigation',
+				'channel' => 'reconcile',
 				'level'   => 'info',
 			)
 		);
 		$this->assertCount( 1, $info );
-		$this->assertSame( Log_Events::NAV_LINK_RESOLVED, $info[0]['event'] );
+		$this->assertSame( Log_Events::RECONCILE_RESOLVED, $info[0]['event'] );
 		$this->assertNull(
 			$this->issues->get_issue( $post_id, $issue_type, $target_ref )
 		);
 	}
 
 	/**
-	 * Verifies that a failed fixup write logs a navigation error event and
+	 * Verifies that a failed reconciliation write logs a reconcile error and
 	 * opens an error-severity issue.
 	 */
-	public function test_rewrite_failure_logs_error_and_opens_error_issue(): void {
+	public function test_failed_write_logs_error_and_opens_error_issue(): void {
 		// ARRANGE: a destination post tagged with its source identity.
 		$source_site_url = 'https://example.com/blog';
 		$post_id         = self::factory()->post->create();
@@ -148,38 +156,36 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 			$source_site_url
 		);
 
-		$issue_type = 'nav_url_unresolved';
-		$target_ref = 4242;
-		$source_url = 'https://example.com/blog/about';
+		$issue_type  = 'nav_ref_rewrite_failed';
+		$target_ref  = 4242;
+		$target_kind = 'post';
 
-		// ACT: the fixup write failed, so log an error and open an error issue.
-		$this->logger->link_rewrite_failed(
+		// ACT: the write failed, so log an error and open an error issue.
+		$this->logger->failed(
+			$issue_type,
 			$post_id,
 			$target_ref,
-			$source_url,
+			$target_kind,
 			'db write failed'
 		);
 		$this->issues->upsert_issue(
 			$post_id,
 			$issue_type,
 			$target_ref,
-			'post',
+			$target_kind,
 			'error',
 			$source_site_url
 		);
 
-		// ASSERT: the audit log holds the navigation error event.
+		// ASSERT: the audit log holds the reconcile error event.
 		$errors = Audit_Log_Table::get_events(
 			array(
-				'channel' => 'navigation',
+				'channel' => 'reconcile',
 				'level'   => 'error',
 			)
 		);
 		$this->assertCount( 1, $errors );
-		$this->assertSame(
-			Log_Events::NAV_LINK_REWRITE_FAILED,
-			$errors[0]['event']
-		);
+		$this->assertSame( Log_Events::RECONCILE_FAILED, $errors[0]['event'] );
 
 		// ASSERT: the issue is open at error severity.
 		$issue = $this->issues->get_issue( $post_id, $issue_type, $target_ref );

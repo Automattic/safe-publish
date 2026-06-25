@@ -50,7 +50,7 @@ final class Audit_Log_Page {
 		'export',
 		'import',
 		'media',
-		'navigation',
+		'reconcile',
 		'settings',
 	);
 
