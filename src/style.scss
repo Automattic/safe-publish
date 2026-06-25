@@ -236,6 +236,10 @@
 		--safe-publish-badge-color: var(--safe-publish-status-error);
 	}
 
+	&--warning {
+		--safe-publish-badge-color: var(--safe-publish-status-warning);
+	}
+
 	&--info {
 		--safe-publish-badge-color: var(--safe-publish-text-muted);
 	}

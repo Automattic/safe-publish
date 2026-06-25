@@ -464,7 +464,7 @@ export interface ExportEvent {
 export interface AuditEvent {
 	id: number;
 	channel: string;
-	level: 'info' | 'error';
+	level: 'info' | 'warning' | 'error';
 	event: string;
 	date: string;
 	actor_user_id: number;
