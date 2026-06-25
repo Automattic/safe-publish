@@ -33,8 +33,8 @@ final class Post_Parity_Asserter {
 	 * Canonical list of wp_posts columns the asserter classifies.
 	 *
 	 * Updated when WordPress changes the schema. Each column must appear in
-	 * exactly one of: identity / content / status / misc rules, the content
-	 * body comparator bucket, the divergence registry, or the deferred
+	 * exactly one of: identity / content / status / misc / author rules, the
+	 * content body comparator bucket, the divergence registry, or the deferred
 	 * registry.
 	 *
 	 * @var list<string>
@@ -161,13 +161,23 @@ final class Post_Parity_Asserter {
 	);
 
 	/**
+	 * Author column checked via assert_author_columns(), not a direct column
+	 * copy: the source side is the safe_publish_author block, the dest a
+	 * resolved numeric post_author.
+	 *
+	 * @var array<string, string>
+	 */
+	private const AUTHOR_COLUMNS = array(
+		'post_author' => 'resolved to a dest user by email from safe_publish_author',
+	);
+
+	/**
 	 * Columns whose parity check is deferred to a later test phase. Each
 	 * entry names the phase that will cover it.
 	 *
 	 * @var array<string, string>
 	 */
 	private const DEFERRED_REGISTRY = array(
-		'post_author' => 'deferred: author resolution semantics (later phase)',
 		'post_parent' => 'deferred: hierarchical post support not in seeder yet',
 	);
 
@@ -451,6 +461,53 @@ final class Post_Parity_Asserter {
 	}
 
 	/**
+	 * Asserts the dest post_author resolves to a WP user whose email matches the
+	 * source safe_publish_author block. Email is the importer's only match key;
+	 * the source login round-trips via META_SOURCE_AUTHOR_LOGIN (asserted in
+	 * assert_plugin_added_meta) and display_name is not propagated, so neither
+	 * is re-checked here.
+	 *
+	 * @param array<string, mixed> $source_body Source REST response body.
+	 * @param WP_Post              $dest_post   Imported destination post.
+	 * @param TestCase             $test        Active test case.
+	 */
+	public static function assert_author_columns(
+		array $source_body,
+		WP_Post $dest_post,
+		TestCase $test
+	): void {
+		$source_author = (array) ( $source_body['safe_publish_author'] ?? array() );
+		$source_email  = (string) ( $source_author['email'] ?? '' );
+
+		$test->assertNotSame(
+			'',
+			$source_email,
+			"Source body for dest post {$dest_post->ID} should carry a"
+			. ' safe_publish_author email'
+		);
+
+		$author_id = (int) $dest_post->post_author;
+		$test->assertGreaterThan(
+			0,
+			$author_id,
+			"Dest post {$dest_post->ID} should resolve a post_author"
+		);
+
+		$user = get_userdata( $author_id );
+		$test->assertNotFalse(
+			$user,
+			"Dest post_author {$author_id} should be an existing WP user"
+		);
+
+		$test->assertSame(
+			$source_email,
+			(string) $user->user_email,
+			"Dest post_author {$author_id} email should match source author"
+			. ' email'
+		);
+	}
+
+	/**
 	 * Asserts that every wp_posts column is classified (parity rule,
 	 * content-body comparator bucket, divergence registry, or deferred
 	 * registry). Fails loudly when a column is unmodeled so adding columns
@@ -466,6 +523,7 @@ final class Post_Parity_Asserter {
 			array_values( self::STATUS_COLUMNS ),
 			array_values( self::MISC_COLUMNS ),
 			array_keys( self::DEFAULT_VALUE_COLUMNS ),
+			array_keys( self::AUTHOR_COLUMNS ),
 			array_keys( self::DIVERGENCE_REGISTRY ),
 			array_keys( self::CONTENT_BODY_COLUMNS ),
 			array_keys( self::DEFERRED_REGISTRY )
