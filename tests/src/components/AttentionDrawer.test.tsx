@@ -17,6 +17,7 @@ vi.mock( '@wordpress/dataviews', () => ( {
 		fields,
 		view,
 		onChangeView,
+		actions = [],
 	}: {
 		data: AttentionIssue[];
 		fields: Array< {
@@ -25,6 +26,12 @@ vi.mock( '@wordpress/dataviews', () => ( {
 		} >;
 		view: { page?: number };
 		onChangeView: ( next: { page?: number } ) => void;
+		actions?: Array< {
+			id: string;
+			label: string;
+			isEligible?: ( item: AttentionIssue ) => boolean;
+			callback?: ( items: AttentionIssue[] ) => void;
+		} >;
 	} ): JSX.Element => (
 		<div>
 			<button
@@ -42,6 +49,19 @@ vi.mock( '@wordpress/dataviews', () => ( {
 							{ field.render ? field.render( { item } ) : null }
 						</span>
 					) ) }
+					{ actions
+						.filter(
+							( action ) =>
+								! action.isEligible || action.isEligible( item )
+						)
+						.map( ( action ) => (
+							<button
+								key={ action.id }
+								onClick={ () => action.callback?.( [ item ] ) }
+							>
+								{ action.label }
+							</button>
+						) ) }
 				</div>
 			) ) }
 		</div>
@@ -55,7 +75,6 @@ const ISSUE: AttentionIssue = {
 	target_kind: 'post',
 	severity: 'error',
 	source_site_url: 'https://source.example.com',
-	detail: { source_nav_id: 8300 },
 	first_detected_gmt: '2024-03-15 10:30:00',
 	last_seen_gmt: '2024-03-15 10:30:00',
 	affected_title: 'Primary Menu',
@@ -119,6 +138,56 @@ describe( 'AttentionDrawer', () => {
 		expect(
 			await screen.findByText( 'Nothing needs attention.' )
 		).toBeInTheDocument();
+	} );
+
+	it( 'surfaces a warning banner when a retry leaves the issue open', async () => {
+		// ARRANGE: a retryable unmapped-reference issue whose retry runs but
+		// doesn't resolve. The stub branches by the posted action.
+		const issue: AttentionIssue = {
+			...ISSUE,
+			issue_type: 'unmapped_block_reference',
+			target_kind: 'post',
+			target_ref: 5,
+		};
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				(
+					_url: string,
+					options: RequestInit
+				): Promise< { json: () => Promise< unknown > } > => {
+					const isRetry =
+						( options.body as FormData ).get( 'action' ) ===
+						'safe_publish_retry_attention_issue';
+					return Promise.resolve( {
+						json: () =>
+							Promise.resolve(
+								isRetry
+									? { success: true, data: { resolved: false } }
+									: {
+											success: true,
+											data: { items: [ issue ], has_more: false },
+									  }
+							),
+					} );
+				}
+			)
+		);
+
+		// ACT: render, then retry the row once it appears.
+		render(
+			<AttentionDrawer
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+				onClose={ () => undefined }
+			/>
+		);
+		fireEvent.click( await screen.findByRole( 'button', { name: 'Retry' } ) );
+
+		// ASSERT: the unresolved retry surfaces its guidance as a banner.
+		expect(
+			( await screen.findAllByText( /Still needs attention/ ) ).length
+		).toBeGreaterThan( 0 );
 	} );
 
 	it( 'steps back to the prior page when a trailing page empties', async () => {

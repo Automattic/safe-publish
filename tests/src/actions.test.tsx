@@ -304,7 +304,6 @@ function buildIssue( overrides: Partial< AttentionIssue > = {} ): AttentionIssue
 		target_kind: 'post',
 		severity: 'error',
 		source_site_url: 'https://source.example.com',
-		detail: {},
 		first_detected_gmt: '2024-03-15 10:30:00',
 		last_seen_gmt: '2024-03-15 10:30:00',
 		affected_title: 'Primary Menu',
@@ -375,10 +374,11 @@ describe( 'createAttentionIssueActions', () => {
 		expect( body.get( 'affected_post_id' ) ).toBe( '1024' );
 		expect( body.get( 'issue_type' ) ).toBe( 'nav_ref_rewrite_failed' );
 		expect( body.get( 'target_ref' ) ).toBe( '8300' );
+		expect( body.get( 'target_kind' ) ).toBe( 'post' );
 	} );
 
-	it( 'reports an error and still refreshes on a failed retry', async () => {
-		// ARRANGE: an endpoint that rejects the retry and an error sink.
+	it( 'surfaces an error notice and still refreshes on a failed retry', async () => {
+		// ARRANGE: an endpoint that rejects the retry and a notice sink.
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockResolvedValue( {
@@ -387,19 +387,130 @@ describe( 'createAttentionIssueActions', () => {
 			} )
 		);
 		const onRefresh = vi.fn();
-		const onError = vi.fn();
+		const onNotice = vi.fn();
 
 		const retry = createAttentionIssueActions( onRefresh, {
 			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
 			nonce: 'test-nonce',
-			onError,
+			onNotice,
 		} )[ 0 ];
 
 		// ACT: run the Retry callback.
 		runCallback( retry, [ buildIssue() ] );
 
-		// ASSERT: the error is surfaced and the listing still refreshes.
+		// ASSERT: an error notice is surfaced and the listing still refreshes.
 		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
-		expect( onError ).toHaveBeenCalledWith( 'Nope.' );
+		expect( onNotice ).toHaveBeenCalledWith( {
+			status: 'error',
+			message: 'Nope.',
+		} );
+	} );
+
+	it( 'surfaces a warning notice when the fixup leaves the issue open', async () => {
+		// ARRANGE: a fixup that runs but doesn't clear the issue.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: () =>
+					Promise.resolve( {
+						success: true,
+						data: { resolved: false },
+					} ),
+			} )
+		);
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		const retry = createAttentionIssueActions( onRefresh, {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+			onNotice,
+		} )[ 0 ];
+
+		// ACT: retry an unmapped reference whose dependency isn't imported yet.
+		runCallback( retry, [
+			buildIssue( {
+				issue_type: 'unmapped_block_reference',
+				target_ref: 5,
+				target_kind: 'post',
+			} ),
+		] );
+
+		// ASSERT: a warning notice carrying the guidance is surfaced and the
+		// listing still refreshes.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		expect( onNotice ).toHaveBeenCalledWith(
+			expect.objectContaining( {
+				status: 'warning',
+				message: expect.stringContaining( 'Import it, then Retry' ),
+			} )
+		);
+	} );
+
+	it( 'shows an in-flight notice while the retry runs', () => {
+		// ARRANGE: a retry whose response never settles, so it stays in flight.
+		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
+		const onNotice = vi.fn();
+
+		const retry = createAttentionIssueActions( vi.fn(), {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+			onNotice,
+		} )[ 0 ];
+
+		// ACT: run the Retry callback.
+		runCallback( retry, [ buildIssue() ] );
+
+		// ASSERT: an info notice shows immediately, before any response.
+		expect( onNotice ).toHaveBeenCalledWith( {
+			status: 'info',
+			message: 'Retrying…',
+		} );
+	} );
+
+	it( 'ignores a second retry for the same issue while one is in flight', () => {
+		// ARRANGE: a retry that stays in flight, plus a shared in-flight set.
+		const fetchMock = vi.fn().mockReturnValue( new Promise( () => {} ) );
+		vi.stubGlobal( 'fetch', fetchMock );
+		const inFlight = new Set< string >();
+
+		const retry = createAttentionIssueActions( vi.fn(), {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+			inFlight,
+		} )[ 0 ];
+
+		// ACT: click twice before the first request settles.
+		runCallback( retry, [ buildIssue() ] );
+		runCallback( retry, [ buildIssue() ] );
+
+		// ASSERT: only the first submit fired a request.
+		expect( fetchMock ).toHaveBeenCalledTimes( 1 );
+	} );
+
+	it( 'clears the in-flight notice when the retry resolves', async () => {
+		// ARRANGE: a retry that resolves the issue.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: () =>
+					Promise.resolve( { success: true, data: { resolved: true } } ),
+			} )
+		);
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		const retry = createAttentionIssueActions( onRefresh, {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+			onNotice,
+		} )[ 0 ];
+
+		// ACT: run the Retry callback.
+		runCallback( retry, [ buildIssue() ] );
+
+		// ASSERT: the transient notice ends cleared once the issue resolves.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		expect( onNotice ).toHaveBeenLastCalledWith( null );
 	} );
 } );

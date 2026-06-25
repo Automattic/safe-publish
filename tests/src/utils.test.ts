@@ -298,7 +298,6 @@ function makeIssue( overrides: Partial< AttentionIssue > ): AttentionIssue {
 		target_kind: 'post',
 		severity: 'warning',
 		source_site_url: 'https://source.example.com',
-		detail: {},
 		first_detected_gmt: '2024-01-01 00:00:00',
 		last_seen_gmt: '2024-01-01 00:00:00',
 		affected_title: 'About',
@@ -309,57 +308,45 @@ function makeIssue( overrides: Partial< AttentionIssue > ): AttentionIssue {
 }
 
 describe( 'renderIssueMessage', () => {
-	it( 'reuses the unmapped-post warning copy, reconstructed from detail', () => {
+	it( 'renders retry-oriented copy for an unmapped post reference', () => {
 		// ARRANGE: an unmapped post-reference issue.
 		const issue = makeIssue( {
 			target_kind: 'post',
 			target_ref: 700,
-			detail: {
-				block: 'core/navigation-link',
-				kind: 'post',
-				source_id: 700,
-			},
 		} );
-		// ACT & ASSERT: identical to the import-warning renderer's output.
-		expect( renderIssueMessage( issue ) ).toBe(
-			renderWarningMessage( {
-				type: 'unmapped_block_reference',
-				kind: 'post',
-				block: 'core/navigation-link',
-				source_id: 700,
-			} )
-		);
+		// ACT: render the message.
+		const message = renderIssueMessage( issue );
+		// ASSERT: post phrasing, the source ID, and the retry hint are present.
+		expect( message ).toContain( '700' );
+		expect( message ).toContain( 'post' );
+		expect( message ).toContain( 'Retry' );
 	} );
 
-	it( 'reuses the unmapped-term warning copy', () => {
+	it( 'renders retry-oriented copy for an unmapped term reference', () => {
 		// ARRANGE: an unmapped term-reference issue.
 		const issue = makeIssue( {
 			target_kind: 'term',
 			target_ref: 701,
-			detail: { kind: 'term', source_id: 701 },
 		} );
 		// ACT: render the message.
 		const message = renderIssueMessage( issue );
-		// ASSERT: term phrasing and the source ID are present.
+		// ASSERT: term phrasing, the source ID, and the retry hint are present.
 		expect( message ).toContain( '701' );
 		expect( message ).toContain( 'term' );
+		expect( message ).toContain( 'Retry' );
 	} );
 
-	it( 'reuses the parent_orphaned warning copy from detail', () => {
+	it( 'renders retry-oriented copy for an orphaned parent', () => {
 		// ARRANGE: an orphaned-parent issue.
 		const issue = makeIssue( {
 			issue_type: 'parent_orphaned',
 			target_ref: 42,
-			detail: { parent_id: 42, parent_title: null, reason: 'not_imported' },
 		} );
-		// ACT & ASSERT: identical to the import-warning renderer's output.
-		expect( renderIssueMessage( issue ) ).toBe(
-			renderWarningMessage( {
-				type: 'parent_orphaned',
-				source: { parent_id: 42, parent_title: null },
-				reason: 'not_imported',
-			} )
-		);
+		// ACT: render the message.
+		const message = renderIssueMessage( issue );
+		// ASSERT: the parent source ID and the retry hint are present.
+		expect( message ).toContain( '42' );
+		expect( message ).toContain( 'Retry' );
 	} );
 
 	it( 'renders a page-centric sentence for nav_ref_rewrite_failed', () => {
@@ -368,7 +355,6 @@ describe( 'renderIssueMessage', () => {
 			issue_type: 'nav_ref_rewrite_failed',
 			target_ref: 8300,
 			severity: 'error',
-			detail: { source_nav_id: 8300 },
 			retryable: true,
 		} );
 		// ACT: render the message.

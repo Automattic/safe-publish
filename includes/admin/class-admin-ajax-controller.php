@@ -89,23 +89,16 @@ final class Admin_Ajax_Controller {
 	const AVAILABLE_FILL_MAX_FETCHES = 15;
 
 	/**
-	 * Tracked attention issue types accepted by the retry endpoint.
+	 * Attention issue types the retry endpoint can run a fixup for. Doubles as
+	 * the allowlist for the issue_type request param.
 	 *
 	 * @var string[]
 	 */
-	const ATTENTION_ISSUE_TYPES = array(
+	const ATTENTION_ISSUE_RETRYABLE_TYPES = array(
 		'unmapped_block_reference',
 		'nav_ref_rewrite_failed',
 		'parent_orphaned',
 	);
-
-	/**
-	 * Attention issue types whose fixup is callable today. Other types list
-	 * with guidance text until their fixup is extracted.
-	 *
-	 * @var string[]
-	 */
-	const ATTENTION_ISSUE_RETRYABLE_TYPES = array( 'nav_ref_rewrite_failed' );
 
 	/**
 	 * Source Posts API instance.
@@ -406,40 +399,76 @@ final class Admin_Ajax_Controller {
 			wp_unslash( $_POST['issue_type'] ?? '' )
 		);
 		$target_ref       = absint( $_POST['target_ref'] ?? 0 );
+		$target_kind      = sanitize_text_field(
+			wp_unslash( $_POST['target_kind'] ?? '' )
+		);
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		if ( ! in_array( $issue_type, self::ATTENTION_ISSUE_TYPES, true ) ) {
+		if ( ! in_array( $issue_type, self::ATTENTION_ISSUE_RETRYABLE_TYPES, true ) ) {
 			wp_send_json_error( __( 'Unknown issue type.', 'safe-publish' ) );
+		}
+
+		if ( ! in_array( $target_kind, array( 'post', 'term' ), true ) ) {
+			wp_send_json_error( __( 'Unknown target kind.', 'safe-publish' ) );
 		}
 
 		$issue = $this->attention_issues->get_issue(
 			$affected_post_id,
 			$issue_type,
-			$target_ref
+			$target_ref,
+			$target_kind
 		);
 
 		if ( null === $issue ) {
 			wp_send_json_error( __( 'Issue not found.', 'safe-publish' ) );
 		}
 
-		if ( ! in_array( $issue_type, self::ATTENTION_ISSUE_RETRYABLE_TYPES, true ) ) {
-			wp_send_json_error(
-				__( 'This issue type cannot be retried yet.', 'safe-publish' )
-			);
-		}
-
-		$this->post_import_service->retry_nav_ref_rewrite(
-			(int) $issue['target_ref'],
-			(string) $issue['source_site_url']
-		);
+		$this->dispatch_retry( $issue );
 
 		$resolved = null === $this->attention_issues->get_issue(
 			$affected_post_id,
 			$issue_type,
-			$target_ref
+			$target_ref,
+			$target_kind
 		);
 
 		wp_send_json_success( array( 'resolved' => $resolved ) );
+	}
+
+	/**
+	 * Routes a fetched issue row to the fixup for its type.
+	 *
+	 * @param array $issue Issue row from the repository.
+	 */
+	private function dispatch_retry( array $issue ): void {
+		$affected_post_id = (int) $issue['affected_post_id'];
+		$target_ref       = (int) $issue['target_ref'];
+		$target_kind      = (string) $issue['target_kind'];
+		$source_site_url  = (string) $issue['source_site_url'];
+
+		switch ( (string) $issue['issue_type'] ) {
+			case 'nav_ref_rewrite_failed':
+				$this->post_import_service->retry_nav_ref_rewrite(
+					$target_ref,
+					$source_site_url
+				);
+				break;
+			case 'unmapped_block_reference':
+				$this->post_import_service->retry_block_ref_repoint(
+					$affected_post_id,
+					$target_ref,
+					$target_kind,
+					$source_site_url
+				);
+				break;
+			case 'parent_orphaned':
+				$this->post_import_service->retry_parent_relink(
+					$affected_post_id,
+					$target_ref,
+					$source_site_url
+				);
+				break;
+		}
 	}
 
 	/**
@@ -460,7 +489,6 @@ final class Admin_Ajax_Controller {
 			'target_kind'        => (string) $row['target_kind'],
 			'severity'           => (string) $row['severity'],
 			'source_site_url'    => (string) $row['source_site_url'],
-			'detail'             => (array) $row['detail'],
 			'first_detected_gmt' => (string) $row['first_detected_gmt'],
 			'last_seen_gmt'      => (string) $row['last_seen_gmt'],
 			'affected_title'     => get_the_title( $affected_post_id ),

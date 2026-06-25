@@ -265,40 +265,43 @@ final class Attention_Issues_Repository {
 	}
 
 	/**
-	 * Fetches a single issue row, matching on everything but target_kind.
+	 * Fetches a single issue row.
 	 *
-	 * The retry endpoint, its only caller, acts on the nav type, which is
-	 * always target_kind 'post', so the lookup is unambiguous. For a type that
-	 * can collide on target_kind (a post and a term sharing a target_ref) this
-	 * returns an arbitrary match; pass target_kind before reusing it there.
+	 * Pass $target_kind to disambiguate a post and a term that share a
+	 * target_ref; leave it null to match the first row regardless of kind.
 	 *
-	 * @param int    $affected_post_id Destination post id.
-	 * @param string $issue_type       Issue type.
-	 * @param int    $target_ref       Source id of the target.
+	 * @param int         $affected_post_id Destination post id.
+	 * @param string      $issue_type       Issue type.
+	 * @param int         $target_ref       Source id of the target.
+	 * @param string|null $target_kind      'post', 'term', or null to match any.
 	 * @return array|null Issue row with detail decoded, or null when absent.
 	 */
 	public function get_issue(
 		int $affected_post_id,
 		string $issue_type,
-		int $target_ref
+		int $target_ref,
+		?string $target_kind = null
 	): ?array {
 		global $wpdb;
 
-		$table = Attention_Issues_Table::table_name();
+		$table  = Attention_Issues_Table::table_name();
+		$where  = 'affected_post_id = %d AND issue_type = %s AND target_ref = %d';
+		$params = array( $affected_post_id, $issue_type, $target_ref );
 
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		if ( null !== $target_kind ) {
+			$where   .= ' AND target_kind = %s';
+			$params[] = $target_kind;
+		}
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$row = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT * FROM `{$table}`"
-					. ' WHERE affected_post_id = %d AND issue_type = %s'
-					. ' AND target_ref = %d',
-				$affected_post_id,
-				$issue_type,
-				$target_ref
+				"SELECT * FROM `{$table}` WHERE {$where}",
+				...$params
 			),
 			ARRAY_A
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
 		if ( ! is_array( $row ) ) {
 			return null;
@@ -307,6 +310,73 @@ final class Attention_Issues_Repository {
 		$row['detail'] = $this->decode_detail( $row['detail'] ?? '' );
 
 		return $row;
+	}
+
+	/**
+	 * Resolves a single issue, keyed by its full identity.
+	 *
+	 * Lets a retry clear exactly the row it fixed without reconciling the post's
+	 * other issues.
+	 *
+	 * @param int    $affected_post_id Destination post id.
+	 * @param string $issue_type       Issue type.
+	 * @param int    $target_ref       Source id of the target.
+	 * @param string $target_kind      'post' or 'term'.
+	 * @return int Number of rows deleted.
+	 */
+	public function resolve_issue(
+		int $affected_post_id,
+		string $issue_type,
+		int $target_ref,
+		string $target_kind
+	): int {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$deleted = $wpdb->delete(
+			Attention_Issues_Table::table_name(),
+			array(
+				'affected_post_id' => $affected_post_id,
+				'issue_type'       => $issue_type,
+				'target_ref'       => $target_ref,
+				'target_kind'      => $target_kind,
+			),
+			array( '%d', '%s', '%d', '%s' )
+		);
+
+		return false === $deleted ? 0 : (int) $deleted;
+	}
+
+	/**
+	 * Refreshes last_seen_gmt on a single issue, marking a retry that ran but did
+	 * not resolve it.
+	 *
+	 * @param int    $affected_post_id Destination post id.
+	 * @param string $issue_type       Issue type.
+	 * @param int    $target_ref       Source id of the target.
+	 * @param string $target_kind      'post' or 'term'.
+	 */
+	public function touch_issue(
+		int $affected_post_id,
+		string $issue_type,
+		int $target_ref,
+		string $target_kind
+	): void {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->update(
+			Attention_Issues_Table::table_name(),
+			array( 'last_seen_gmt' => current_time( 'mysql', true ) ),
+			array(
+				'affected_post_id' => $affected_post_id,
+				'issue_type'       => $issue_type,
+				'target_ref'       => $target_ref,
+				'target_kind'      => $target_kind,
+			),
+			array( '%s' ),
+			array( '%d', '%s', '%d', '%s' )
+		);
 	}
 
 	/**

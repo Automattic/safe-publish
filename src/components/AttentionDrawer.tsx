@@ -5,7 +5,7 @@
  * @file This file defines the AttentionDrawer component.
  */
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
-import { createAttentionIssueActions } from '../actions';
+import { createAttentionIssueActions, type RetryNotice } from '../actions';
 import { DEFAULT_ITEMS_PER_PAGE, LAYOUT_TABLE } from '../constants';
 import {
 	attentionIssueId,
@@ -15,7 +15,7 @@ import {
 } from '../utils';
 import { Button, Modal, Notice, Spinner } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
-import { useCallback, useEffect, useState } from '@wordpress/element';
+import { useCallback, useEffect, useRef, useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
 
@@ -62,6 +62,11 @@ const AttentionDrawer = ( {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ hasFetchedOnce, setHasFetchedOnce ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
+	// Retry outcomes get their own banner so they carry a warning/error
+	// severity, separate from the list-load `error` notice.
+	const [ retryNotice, setRetryNotice ] = useState< RetryNotice | null >( null );
+	// Issues with a retry in flight, so the action drops concurrent submits.
+	const inFlightRetries = useRef< Set< string > >( new Set() );
 	const [ refreshNonce, setRefreshNonce ] = useState( 0 );
 
 	const refresh = useCallback( () => {
@@ -228,7 +233,8 @@ const AttentionDrawer = ( {
 	const actions = createAttentionIssueActions( refresh, {
 		ajaxurl,
 		nonce,
-		onError: setError,
+		onNotice: setRetryNotice,
+		inFlight: inFlightRetries.current,
 	} );
 
 	return (
@@ -256,6 +262,14 @@ const AttentionDrawer = ( {
 				{ error && (
 					<Notice status="error" onRemove={ () => setError( null ) }>
 						{ error }
+					</Notice>
+				) }
+				{ retryNotice && (
+					<Notice
+						status={ retryNotice.status }
+						onRemove={ () => setRetryNotice( null ) }
+					>
+						{ retryNotice.message }
 					</Notice>
 				) }
 				{ isLoading && ! hasFetchedOnce && (

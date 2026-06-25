@@ -125,6 +125,14 @@ class Post_Import_Service {
 	);
 
 	/**
+	 * Post meta recording the unix timestamp at which an orphaned post was
+	 * re-linked to its parent by a retry.
+	 *
+	 * @var string
+	 */
+	public const META_PARENT_RELINKED_AT = '_safe_publish_parent_relinked_at';
+
+	/**
 	 * Constructs the Post_Import_Service instance.
 	 *
 	 * @param Source_Posts_API            $api                Source Posts API instance.
@@ -1659,6 +1667,170 @@ class Post_Import_Service {
 			$result['failed'],
 			array( 'source_nav_id' => $source_nav_id )
 		);
+	}
+
+	/**
+	 * Repoints one stale block reference in place and resolves its issue on
+	 * success.
+	 *
+	 * Self-verifying: the issue clears only when the target now resolves and the
+	 * post was repointed; otherwise the row stays, with last_seen refreshed.
+	 *
+	 * @param int    $affected_post_id Post holding the reference.
+	 * @param int    $target_ref       Source id to repoint.
+	 * @param string $target_kind      'post' or 'term'.
+	 * @param string $source_site_url  Path-bearing source identity.
+	 */
+	public function retry_block_ref_repoint(
+		int $affected_post_id,
+		int $target_ref,
+		string $target_kind,
+		string $source_site_url
+	): void {
+		$repointed = $this->content_processor->repoint_block_reference(
+			$affected_post_id,
+			$target_ref,
+			$target_kind,
+			$source_site_url
+		);
+
+		$this->resolve_or_touch(
+			$repointed,
+			$affected_post_id,
+			'unmapped_block_reference',
+			$target_ref,
+			$target_kind
+		);
+	}
+
+	/**
+	 * Re-resolves an orphaned source parent and re-links the post when it now
+	 * exists on the destination, resolving the issue on success.
+	 *
+	 * @param int    $affected_post_id Orphaned child post.
+	 * @param int    $source_parent_id Source parent id.
+	 * @param string $source_site_url  Path-bearing source identity.
+	 */
+	public function retry_parent_relink(
+		int $affected_post_id,
+		int $source_parent_id,
+		string $source_site_url
+	): void {
+		$relinked = $this->relink_parent(
+			$affected_post_id,
+			$source_parent_id,
+			$source_site_url
+		);
+
+		$this->resolve_or_touch(
+			$relinked,
+			$affected_post_id,
+			'parent_orphaned',
+			$source_parent_id,
+			'post'
+		);
+	}
+
+	/**
+	 * Sets the post's parent when the source parent now resolves.
+	 *
+	 * @param int    $affected_post_id Child post.
+	 * @param int    $source_parent_id Source parent id.
+	 * @param string $source_site_url  Path-bearing source identity.
+	 * @return bool True when the parent was re-linked.
+	 */
+	private function relink_parent(
+		int $affected_post_id,
+		int $source_parent_id,
+		string $source_site_url
+	): bool {
+		$post = get_post( $affected_post_id );
+
+		if ( ! $post instanceof WP_Post ) {
+			return false;
+		}
+
+		$resolved = $this->resolve_source_parent(
+			$source_parent_id,
+			$post->post_type,
+			$source_site_url
+		);
+
+		if ( ! is_int( $resolved ) || $resolved <= 0 ) {
+			return false;
+		}
+
+		if ( ! $this->persist_post_parent( $affected_post_id, $resolved ) ) {
+			return false;
+		}
+
+		clean_post_cache( $affected_post_id );
+		update_post_meta(
+			$affected_post_id,
+			self::META_PARENT_RELINKED_AT,
+			time()
+		);
+
+		return true;
+	}
+
+	/**
+	 * Resolves an issue after a successful single-row fixup, or refreshes it when
+	 * the fixup ran without clearing the degradation.
+	 *
+	 * @param bool   $fixed            Whether the fixup succeeded.
+	 * @param int    $affected_post_id Destination post id.
+	 * @param string $issue_type       Issue type.
+	 * @param int    $target_ref       Source id of the target.
+	 * @param string $target_kind      'post' or 'term'.
+	 */
+	private function resolve_or_touch(
+		bool $fixed,
+		int $affected_post_id,
+		string $issue_type,
+		int $target_ref,
+		string $target_kind
+	): void {
+		if ( $fixed ) {
+			$this->attention_issues->resolve_issue(
+				$affected_post_id,
+				$issue_type,
+				$target_ref,
+				$target_kind
+			);
+			return;
+		}
+
+		$this->attention_issues->touch_issue(
+			$affected_post_id,
+			$issue_type,
+			$target_ref,
+			$target_kind
+		);
+	}
+
+	/**
+	 * Writes post_parent directly, bypassing wp_update_post so the re-link
+	 * creates no revision and leaves post_modified intact.
+	 *
+	 * @param int $post_id   Child post id.
+	 * @param int $parent_id Destination parent id.
+	 * @return bool True when the row was updated.
+	 */
+	protected function persist_post_parent(
+		int $post_id,
+		int $parent_id
+	): bool {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$result = $wpdb->update(
+			$wpdb->posts,
+			array( 'post_parent' => $parent_id ),
+			array( 'ID' => $post_id )
+		);
+
+		return false !== $result;
 	}
 
 	/**

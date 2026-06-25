@@ -229,10 +229,8 @@ export function renderWarningShortLabel( warning: Warning ): string {
 /**
  * Renders an open attention issue as a user-facing sentence.
  *
- * Reuses the import-warning copy for the post-keyed types, reconstructing the
- * warning from the issue's stored detail. Navigation rewrite failures get a
- * page-centric sentence because the issue is one referencing page, not the
- * menu.
+ * Each type gets copy that points at the Retry action, rather than the manual
+ * workaround the import-time warnings describe.
  *
  * @param {AttentionIssue} issue Issue to render.
  *
@@ -241,30 +239,32 @@ export function renderWarningShortLabel( warning: Warning ): string {
 export function renderIssueMessage( issue: AttentionIssue ): string {
 	switch ( issue.issue_type ) {
 		case 'unmapped_block_reference':
-			return renderWarningMessage( {
-				type: 'unmapped_block_reference',
-				kind: issue.target_kind,
-				block:
-					typeof issue.detail.block === 'string'
-						? issue.detail.block
-						: '',
-				source_id: issue.target_ref,
-			} );
+			return issue.target_kind === 'term'
+				? sprintf(
+					/* translators: %d: source term ID */
+					__(
+						"Source term %d isn't on this site yet. Import it, then Retry.",
+						'safe-publish'
+					),
+					issue.target_ref
+				)
+				: sprintf(
+					/* translators: %d: source post ID */
+					__(
+						"Source post %d isn't on this site yet. Import it, then Retry.",
+						'safe-publish'
+					),
+					issue.target_ref
+				);
 		case 'parent_orphaned':
-			return renderWarningMessage( {
-				type: 'parent_orphaned',
-				source: {
-					parent_id: issue.target_ref,
-					parent_title:
-						typeof issue.detail.parent_title === 'string'
-							? issue.detail.parent_title
-							: null,
-				},
-				reason:
-					issue.detail.reason === 'failed_in_batch'
-						? 'failed_in_batch'
-						: 'not_imported',
-			} );
+			return sprintf(
+				/* translators: %d: source parent post ID */
+				__(
+					"This page's parent (source ID %d) isn't on this site yet. Import it, then Retry.",
+					'safe-publish'
+				),
+				issue.target_ref
+			);
 		case 'nav_ref_rewrite_failed':
 			return sprintf(
 				/* translators: %d: source navigation menu ID */
