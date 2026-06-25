@@ -22,7 +22,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  * State projection, not an event log: one upserted row per identity
  * (affected_post_id, issue_type, target_ref, target_kind). Detection upserts
  * on a still-open degradation and resolves (deletes) the row once the
- * underlying fixup succeeds, so reads are a plain SELECT of open rows.
+ * underlying reconciliation succeeds, so reads are a plain SELECT of open
+ * rows.
  */
 final class Attention_Issues_Repository {
 
@@ -133,7 +134,7 @@ final class Attention_Issues_Repository {
 	 * @param string $target_kind     'post' or 'term'.
 	 * @param string $severity        'warning' or 'error'.
 	 * @param string $source_site_url Path-bearing source identity.
-	 * @param int[]  $failed_post_ids Posts whose fixup write failed.
+	 * @param int[]  $failed_post_ids Posts whose reconciliation write failed.
 	 * @param array  $detail          Small render payload, stored as JSON.
 	 */
 	public function reconcile_target_issues(

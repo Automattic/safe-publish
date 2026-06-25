@@ -364,11 +364,12 @@ export interface AttentionIssueActionsContext {
 /**
  * Creates the drawer's Retry action for attention issues.
  *
- * Eligible only for issues whose fixup is callable today; it re-runs the real
- * fixup, which is self-verifying, then refreshes the listing so the row clears
- * or stays based on the actual result. A run that fails or leaves the issue
- * open surfaces a notice, so the attempt never reads as a silent success.
- * Concurrent submits for the same issue are ignored while one is in flight.
+ * Eligible only for issues whose reconciliation is callable today; it re-runs
+ * the real reconciliation, which is self-verifying, then refreshes the listing
+ * so the row clears or stays based on the actual result. A run that fails or
+ * leaves the issue open surfaces a notice, so the attempt never reads as a
+ * silent success. Concurrent submits for the same issue are ignored while one
+ * is in flight.
  *
  * @param {Function}                     onRefresh Callback to refresh the drawer.
  * @param {AttentionIssueActionsContext} context   Admin-ajax URL, nonce, notice sink.
@@ -435,8 +436,8 @@ export const createAttentionIssueActions = (
 						return;
 					}
 
-					// Fixup ran but the issue persists; surface it so the
-					// refetch doesn't read as a silent success.
+					// Reconciliation ran but the issue persists; surface it
+					// so the refetch doesn't read as a silent success.
 					if ( ! result.data.resolved ) {
 						context.onNotice?.( {
 							status: 'warning',

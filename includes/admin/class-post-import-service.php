@@ -1775,10 +1775,10 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Resolves an issue after a successful single-row fixup, or refreshes it when
-	 * the fixup ran without clearing the degradation.
+	 * Resolves an issue after a successful single-row reconciliation, or
+	 * refreshes it when the reconciliation ran without clearing the degradation.
 	 *
-	 * @param bool   $fixed            Whether the fixup succeeded.
+	 * @param bool   $fixed            Whether the reconciliation succeeded.
 	 * @param int    $affected_post_id Destination post id.
 	 * @param string $issue_type       Issue type.
 	 * @param int    $target_ref       Source id of the target.

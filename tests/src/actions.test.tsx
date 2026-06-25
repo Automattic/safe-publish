@@ -406,8 +406,8 @@ describe( 'createAttentionIssueActions', () => {
 		} );
 	} );
 
-	it( 'surfaces a warning notice when the fixup leaves the issue open', async () => {
-		// ARRANGE: a fixup that runs but doesn't clear the issue.
+	it( 'surfaces a warning notice when the reconciliation leaves the issue open', async () => {
+		// ARRANGE: a reconciliation that runs but doesn't clear the issue.
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockResolvedValue( {

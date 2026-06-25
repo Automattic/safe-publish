@@ -28,7 +28,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * inter-nav references when one menu is imported before another it embeds.
  *
  * Writes post_content directly via $wpdb instead of wp_update_post so the
- * fixup neither bumps post_modified nor creates a revision: it is a
+ * reconciliation neither bumps post_modified nor creates a revision: it is a
  * system-touched correction, not a user edit. The per-post audit meta is the
  * only trace of the change precisely because no revision is created — do not
  * switch to wp_update_post without revisiting that trade-off.
