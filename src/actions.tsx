@@ -29,9 +29,9 @@ import {
 	RetryAttentionIssueResponse,
 	UnifiedPostRow,
 } from './types';
-import { getErrorMessage } from './utils';
+import { getErrorMessage, renderIssueMessage } from './utils';
 import { Action } from '@wordpress/dataviews/build-types';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
 /**
  * Auth context for the unified Posts action set.
@@ -342,12 +342,21 @@ export const createOrphanFailuresActions = (
 ];
 
 /**
- * Auth + error context for the Needs attention drawer's Retry action.
+ * A retry outcome surfaced to the user: a hard failure (error) or a fixup that
+ * ran without clearing the issue (warning).
+ */
+export interface RetryNotice {
+	status: 'error' | 'warning';
+	message: string;
+}
+
+/**
+ * Auth + notice context for the Needs attention drawer's Retry action.
  */
 export interface AttentionIssueActionsContext {
 	ajaxurl: string;
 	nonce: string;
-	onError?: ( message: string ) => void;
+	onNotice?: ( notice: RetryNotice | null ) => void;
 }
 
 /**
@@ -355,10 +364,11 @@ export interface AttentionIssueActionsContext {
  *
  * Eligible only for issues whose fixup is callable today; it re-runs the real
  * fixup, which is self-verifying, then refreshes the listing so the row clears
- * or stays based on the actual result.
+ * or stays based on the actual result. A run that fails or leaves the issue
+ * open surfaces a notice, so the attempt never reads as a silent success.
  *
  * @param {Function}                     onRefresh Callback to refresh the drawer.
- * @param {AttentionIssueActionsContext} context   Admin-ajax URL, nonce, error sink.
+ * @param {AttentionIssueActionsContext} context   Admin-ajax URL, nonce, notice sink.
  *
  * @return {Action<AttentionIssue>[]} Array of DataViews actions.
  */
@@ -377,6 +387,9 @@ export const createAttentionIssueActions = (
 			if ( ! issue ) {
 				return;
 			}
+
+			// Clear any prior outcome so a re-click reads as a fresh attempt.
+			context.onNotice?.( null );
 
 			const formData = new FormData();
 			formData.append( 'action', 'safe_publish_retry_attention_issue' );
@@ -398,18 +411,37 @@ export const createAttentionIssueActions = (
 				)
 				.then( ( result ) => {
 					if ( ! result.success ) {
-						context.onError?.(
-							getErrorMessage(
+						context.onNotice?.( {
+							status: 'error',
+							message: getErrorMessage(
 								result,
 								__( 'Retry failed.', 'safe-publish' )
-							)
-						);
+							),
+						} );
+						return;
+					}
+
+					// Fixup ran but the issue persists; surface it so the
+					// refetch doesn't read as a silent success.
+					if ( ! result.data.resolved ) {
+						context.onNotice?.( {
+							status: 'warning',
+							message: sprintf(
+								/* translators: %s: issue guidance sentence */
+								__( 'Still needs attention. %s', 'safe-publish' ),
+								renderIssueMessage( issue )
+							),
+						} );
 					}
 				} )
 				.catch( () => {
-					context.onError?.(
-						__( 'Network error during retry.', 'safe-publish' )
-					);
+					context.onNotice?.( {
+						status: 'error',
+						message: __(
+							'Network error during retry.',
+							'safe-publish'
+						),
+					} );
 				} )
 				.finally( () => {
 					onRefresh?.();

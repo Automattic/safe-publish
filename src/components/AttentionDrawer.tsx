@@ -4,7 +4,7 @@
  *
  * @file This file defines the AttentionDrawer component.
  */
-import { createAttentionIssueActions } from '../actions';
+import { createAttentionIssueActions, type RetryNotice } from '../actions';
 import { DEFAULT_ITEMS_PER_PAGE, LAYOUT_TABLE } from '../constants';
 import {
 	attentionIssueId,
@@ -61,6 +61,9 @@ const AttentionDrawer = ( {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ hasFetchedOnce, setHasFetchedOnce ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
+	// Retry outcomes get their own banner so they carry a warning/error
+	// severity, separate from the list-load `error` notice.
+	const [ retryNotice, setRetryNotice ] = useState< RetryNotice | null >( null );
 	const [ refreshNonce, setRefreshNonce ] = useState( 0 );
 
 	const refresh = useCallback( () => {
@@ -212,7 +215,7 @@ const AttentionDrawer = ( {
 	const actions = createAttentionIssueActions( refresh, {
 		ajaxurl,
 		nonce,
-		onError: setError,
+		onNotice: setRetryNotice,
 	} );
 
 	return (
@@ -240,6 +243,14 @@ const AttentionDrawer = ( {
 				{ error && (
 					<Notice status="error" onRemove={ () => setError( null ) }>
 						{ error }
+					</Notice>
+				) }
+				{ retryNotice && (
+					<Notice
+						status={ retryNotice.status }
+						onRemove={ () => setRetryNotice( null ) }
+					>
+						{ retryNotice.message }
 					</Notice>
 				) }
 				{ isLoading && ! hasFetchedOnce && (
