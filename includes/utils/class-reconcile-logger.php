@@ -13,12 +13,12 @@ namespace Safe_Publish\Utils;
  * Logger for reference-reconciliation events (channel "reconcile").
  *
  * Reconciliation re-runs a repair on a degraded cross-reference and records the
- * outcome. Producers (the Retry endpoint today, any out-of-import producer
- * later) dual-write: log the outcome here for admins AND mirror it to the
- * issues store for users — resolved() with resolve_issue(), unresolved() with
- * upsert_issue(), failed() with upsert_issue() at error severity. Scope every
- * issue by the affected post's stored META_SOURCE_SITE_URL, the path-bearing
- * source identity.
+ * outcome. Producers (Retry today, any out-of-import producer later) log it
+ * here for admins and update the user-facing issues store. The audit entry
+ * records one outcome per reconciliation, not a per-row mirror: a target-scoped
+ * reconciliation settles several issue rows but logs once. Scope every issue by
+ * the affected post's stored META_SOURCE_SITE_URL, the path-bearing source
+ * identity.
  *
  * Outcomes are type-agnostic: issue_type names the reference class reconciled,
  * so a new reference class reuses these helpers without adding events.

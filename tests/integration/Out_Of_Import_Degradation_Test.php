@@ -18,8 +18,8 @@ use Safe_Publish\Utils\Reconcile_Logger;
 use WP_UnitTestCase;
 
 /**
- * Exercises the dual-write contract a reconciliation producer must follow: each
- * outcome logs a reconcile event and updates the issues store in lockstep.
+ * Exercises the Reconcile_Logger helpers and the matching issues-store writes —
+ * for each outcome, the reconcile event plus opening or clearing the issue.
  */
 class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 
