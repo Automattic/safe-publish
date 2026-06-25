@@ -17,8 +17,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Central registry of log event codes referenced by the per-event helper
  * methods on each channel logger (Auth_Logger, Content_Logger, Dispatch_Logger,
- * Export_Logger, Import_Logger, Media_Logger, Settings_Logger). The constants
- * here are the contract; the helpers enforce the payload shape per event.
+ * Export_Logger, Import_Logger, Media_Logger, Navigation_Logger,
+ * Settings_Logger). The constants here are the contract; the helpers enforce
+ * the payload shape per event.
+ *
+ * A channel is a producer subsystem (auth, media import, the navigation
+ * reconciler), not a content type: imported structures such as tags or
+ * categories record degradations as import-channel events and attention-issue
+ * types, not new channels.
  */
 class Log_Events {
 	// Media import events.
@@ -81,4 +87,9 @@ class Log_Events {
 	const BASIC_AUTH_USERNAME_CHANGED = 'BASIC_AUTH_USERNAME_CHANGED';
 	const BASIC_AUTH_PASSWORD_CHANGED = 'BASIC_AUTH_PASSWORD_CHANGED';
 	const SYNC_MODE_CHANGED           = 'SYNC_MODE_CHANGED';
+
+	// Out-of-import navigation reconciliation events.
+	const NAV_LINK_UNRESOLVED     = 'NAV_LINK_UNRESOLVED';
+	const NAV_LINK_REWRITE_FAILED = 'NAV_LINK_REWRITE_FAILED';
+	const NAV_LINK_RESOLVED       = 'NAV_LINK_RESOLVED';
 }
