@@ -12,12 +12,13 @@ namespace Safe_Publish\Utils;
 /**
  * Abstract base logger for Safe Publish events.
  *
- * Info events are stored in the database and fire a WordPress action hook.
- * Error events additionally write to the server error log.
+ * Info and warning events are stored in the database and fire a WordPress
+ * action hook. Error events additionally write to the server error log.
  * Subclasses define the channel and expose typed per-event helper methods
- * (e.g. Auth_Logger::request_authenticated) that internally call log_event/log_error.
- * Those methods are the only entry point — log_event and log_error are
- * protected so each event's payload shape is locked to a single contract.
+ * (e.g. Auth_Logger::request_authenticated) that internally call
+ * log_event/log_warning/log_error. Those methods are the only entry point —
+ * log_event, log_warning, and log_error are protected so each event's payload
+ * shape is locked to a single contract.
  */
 abstract class Logger {
 
@@ -41,7 +42,21 @@ abstract class Logger {
 	 * @param array  $data  Optional. Additional event data. Default empty array.
 	 */
 	protected function log_event( string $event, array $data = array() ): void {
-		$this->write( $event, $data, false );
+		$this->write( $event, $data, 'info' );
+	}
+
+	/**
+	 * Logs a degradation event: the operation completed but left a degraded,
+	 * user-remediable result such as an unresolved reference.
+	 *
+	 * Protected so callers must go through a channel logger's typed helper
+	 * method, keeping each event's payload shape under a single contract.
+	 *
+	 * @param string $event Event type.
+	 * @param array  $data  Optional. Additional event data. Default empty array.
+	 */
+	protected function log_warning( string $event, array $data = array() ): void {
+		$this->write( $event, $data, 'warning' );
 	}
 
 	/**
@@ -55,21 +70,20 @@ abstract class Logger {
 	 * @param array  $data  Optional. Additional event data. Default empty array.
 	 */
 	protected function log_error( string $event, array $data = array() ): void {
-		$this->write( $event, $data, true );
+		$this->write( $event, $data, 'error' );
 	}
 
 	/**
 	 * Writes a log entry to the configured targets.
 	 *
-	 * @param string $event         Event type.
-	 * @param array  $data          Additional event data.
-	 * @param bool   $use_error_log Whether to also write to the server error log.
+	 * @param string $event Event type.
+	 * @param array  $data  Additional event data.
+	 * @param string $level Event level: 'info', 'warning', or 'error'.
 	 */
-	private function write( string $event, array $data, bool $use_error_log ): void {
+	private function write( string $event, array $data, string $level ): void {
 		$log_data = $this->build_log_data( $event, $data );
-		$level    = $use_error_log ? 'error' : 'info';
 
-		if ( ! defined( 'WP_TESTS_DOMAIN' ) && $use_error_log ) {
+		if ( ! defined( 'WP_TESTS_DOMAIN' ) && 'error' === $level ) {
 			$prefix = '[Safe-Publish-' . ucfirst( $this->channel ) . '] ';
 			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			error_log( $prefix . $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES ) );
@@ -208,7 +222,7 @@ abstract class Logger {
 	 * Subclasses may override this method to add side effects while calling
 	 * parent::store_log_event() to preserve the base storage behavior.
 	 *
-	 * @param string $level    Event level: 'info' or 'error'.
+	 * @param string $level    Event level: 'info', 'warning', or 'error'.
 	 * @param string $event    Event type.
 	 * @param array  $log_data Full event data.
 	 */
