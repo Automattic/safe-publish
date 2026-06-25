@@ -2,26 +2,39 @@
  * Tests for the AttentionDrawer component.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import AttentionDrawer from '@/components/AttentionDrawer';
 import type { AttentionIssue } from '@/types';
 
 // DataViews pulls in @wordpress/private-apis, which cannot unlock in the test
 // env. Stub it with a minimal renderer that exercises each field's render so
-// the row mapping (title link, reused issue copy) is still asserted.
+// the row mapping (title link, reused issue copy) is still asserted, plus a
+// next-page control that drives onChangeView for the pagination test.
 vi.mock( '@wordpress/dataviews', () => ( {
 	DataViews: ( {
 		data,
 		fields,
+		view,
+		onChangeView,
 	}: {
 		data: AttentionIssue[];
 		fields: Array< {
 			id: string;
 			render?: ( arg: { item: AttentionIssue } ) => JSX.Element;
 		} >;
+		view: { page?: number };
+		onChangeView: ( next: { page?: number } ) => void;
 	} ): JSX.Element => (
 		<div>
+			<button
+				type="button"
+				onClick={ () =>
+					onChangeView( { ...view, page: ( view.page ?? 1 ) + 1 } )
+				}
+			>
+				next-page
+			</button>
 			{ data.map( ( item ) => (
 				<div key={ item.affected_post_id }>
 					{ fields.map( ( field ) => (
@@ -106,5 +119,51 @@ describe( 'AttentionDrawer', () => {
 		expect(
 			await screen.findByText( 'Nothing needs attention.' )
 		).toBeInTheDocument();
+	} );
+
+	it( 'steps back to the prior page when a trailing page empties', async () => {
+		// ARRANGE: page 1 holds an issue; any later page comes back empty, as
+		// it would once the trailing page's issues are resolved.
+		const fetchMock = vi
+			.fn()
+			.mockImplementation(
+				( _url: string, options: { body: FormData } ) =>
+					Promise.resolve( {
+						json: () =>
+							Promise.resolve( {
+								success: true,
+								data: {
+									items:
+										'1' === options.body.get( 'page' )
+											? [ ISSUE ]
+											: [],
+									has_more: false,
+								},
+							} ),
+					} )
+			);
+		vi.stubGlobal( 'fetch', fetchMock );
+
+		// ACT: land on page 1, then page into the now-empty page 2.
+		render(
+			<AttentionDrawer
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+				onClose={ () => undefined }
+			/>
+		);
+		await screen.findByText( 'Primary Menu' );
+		fireEvent.click( screen.getByText( 'next-page' ) );
+
+		// ASSERT: the empty page triggers a step-back that refetches page 1,
+		// so the listing recovers instead of falsely reading as clear.
+		await waitFor( () => {
+			const pages = fetchMock.mock.calls.map( ( call ) =>
+				( call[ 1 ] as { body: FormData } ).body.get( 'page' )
+			);
+			expect( pages ).toContain( '2' );
+			expect( pages[ pages.length - 1 ] ).toBe( '1' );
+		} );
+		expect( await screen.findByText( 'Primary Menu' ) ).toBeInTheDocument();
 	} );
 } );
