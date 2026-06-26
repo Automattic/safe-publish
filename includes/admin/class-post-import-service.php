@@ -14,6 +14,7 @@ use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
+use Safe_Publish\Utils\Reconcile_Outcome;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
 use Exception;
@@ -1629,18 +1630,22 @@ class Post_Import_Service {
 	 * Re-runs the navigation rewriter for a menu and reconciles its issues.
 	 *
 	 * Self-verifying retry: re-attempts every post referencing the menu, so an
-	 * issue clears precisely when its post no longer fails the rewrite. No-op
-	 * when the menu is not present on the destination.
+	 * issue clears precisely when its post no longer fails the rewrite.
 	 *
-	 * @param int    $source_nav_id   Menu's source post id.
-	 * @param string $source_site_url Path-bearing source identity.
+	 * @param int    $affected_post_id Referencing post whose issue was retried.
+	 * @param int    $source_nav_id    Menu's source post id.
+	 * @param string $source_site_url  Path-bearing source identity.
+	 * @return Reconcile_Outcome Target_absent when the menu is not present;
+	 *                           write_failed when this post's rewrite failed;
+	 *                           resolved otherwise.
 	 */
 	public function retry_nav_ref_rewrite(
+		int $affected_post_id,
 		int $source_nav_id,
 		string $source_site_url
-	): void {
+	): Reconcile_Outcome {
 		if ( '' === $source_site_url ) {
-			return;
+			return Reconcile_Outcome::target_absent( 'Source identity is empty.' );
 		}
 
 		$dest_nav = $this->find_imported_navigation(
@@ -1649,7 +1654,12 @@ class Post_Import_Service {
 		);
 
 		if ( ! $dest_nav instanceof WP_Post ) {
-			return;
+			return Reconcile_Outcome::target_absent(
+				sprintf(
+					'Destination navigation menu for source %d is not imported.',
+					$source_nav_id
+				)
+			);
 		}
 
 		$result = $this->nav_ref_rewriter->rewrite_cross_refs(
@@ -1667,6 +1677,16 @@ class Post_Import_Service {
 			$result['failed'],
 			array( 'source_nav_id' => $source_nav_id )
 		);
+
+		$failed_ids = array_map( 'intval', $result['failed'] );
+
+		if ( in_array( $affected_post_id, $failed_ids, true ) ) {
+			return Reconcile_Outcome::write_failed(
+				'Navigation rewrite failed for the referencing post.'
+			);
+		}
+
+		return Reconcile_Outcome::resolved();
 	}
 
 	/**
@@ -1680,14 +1700,15 @@ class Post_Import_Service {
 	 * @param int    $target_ref       Source id to repoint.
 	 * @param string $target_kind      'post' or 'term'.
 	 * @param string $source_site_url  Path-bearing source identity.
+	 * @return Reconcile_Outcome The reconciliation outcome.
 	 */
 	public function retry_block_ref_repoint(
 		int $affected_post_id,
 		int $target_ref,
 		string $target_kind,
 		string $source_site_url
-	): void {
-		$repointed = $this->content_processor->repoint_block_reference(
+	): Reconcile_Outcome {
+		$outcome = $this->content_processor->repoint_block_reference(
 			$affected_post_id,
 			$target_ref,
 			$target_kind,
@@ -1695,12 +1716,14 @@ class Post_Import_Service {
 		);
 
 		$this->resolve_or_touch(
-			$repointed,
+			$outcome->is_resolved(),
 			$affected_post_id,
 			'unmapped_block_reference',
 			$target_ref,
 			$target_kind
 		);
+
+		return $outcome;
 	}
 
 	/**
@@ -1710,25 +1733,28 @@ class Post_Import_Service {
 	 * @param int    $affected_post_id Orphaned child post.
 	 * @param int    $source_parent_id Source parent id.
 	 * @param string $source_site_url  Path-bearing source identity.
+	 * @return Reconcile_Outcome The reconciliation outcome.
 	 */
 	public function retry_parent_relink(
 		int $affected_post_id,
 		int $source_parent_id,
 		string $source_site_url
-	): void {
-		$relinked = $this->relink_parent(
+	): Reconcile_Outcome {
+		$outcome = $this->relink_parent(
 			$affected_post_id,
 			$source_parent_id,
 			$source_site_url
 		);
 
 		$this->resolve_or_touch(
-			$relinked,
+			$outcome->is_resolved(),
 			$affected_post_id,
 			'parent_orphaned',
 			$source_parent_id,
 			'post'
 		);
+
+		return $outcome;
 	}
 
 	/**
@@ -1737,17 +1763,18 @@ class Post_Import_Service {
 	 * @param int    $affected_post_id Child post.
 	 * @param int    $source_parent_id Source parent id.
 	 * @param string $source_site_url  Path-bearing source identity.
-	 * @return bool True when the parent was re-linked.
+	 * @return Reconcile_Outcome Resolved when re-linked; target_absent,
+	 *                           write_failed, or unresolved otherwise.
 	 */
 	private function relink_parent(
 		int $affected_post_id,
 		int $source_parent_id,
 		string $source_site_url
-	): bool {
+	): Reconcile_Outcome {
 		$post = get_post( $affected_post_id );
 
 		if ( ! $post instanceof WP_Post ) {
-			return false;
+			return Reconcile_Outcome::unresolved( 'Affected post is missing.' );
 		}
 
 		$resolved = $this->resolve_source_parent(
@@ -1757,11 +1784,18 @@ class Post_Import_Service {
 		);
 
 		if ( ! is_int( $resolved ) || $resolved <= 0 ) {
-			return false;
+			return Reconcile_Outcome::target_absent(
+				sprintf(
+					'Source parent %d is not imported on the destination.',
+					$source_parent_id
+				)
+			);
 		}
 
 		if ( ! $this->persist_post_parent( $affected_post_id, $resolved ) ) {
-			return false;
+			return Reconcile_Outcome::write_failed(
+				'Failed to write the post parent.'
+			);
 		}
 
 		clean_post_cache( $affected_post_id );
@@ -1771,7 +1805,7 @@ class Post_Import_Service {
 			time()
 		);
 
-		return true;
+		return Reconcile_Outcome::resolved();
 	}
 
 	/**
