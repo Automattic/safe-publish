@@ -54,8 +54,12 @@ final class Diff_Renderer {
 
 		$mapped_post_type = Post_Type_Map::to_wp_slug( $post_type );
 
-		// Find local post by source post ID.
-		$local_post = $this->find_local_post( $source_post_id, $mapped_post_type );
+		// Find the local post by source ID, scoped to the connected source.
+		$local_post = $this->find_local_post(
+			$source_post_id,
+			$mapped_post_type,
+			Options::get_connected_site_url_with_path()
+		);
 		if ( is_wp_error( $local_post ) ) {
 			return $local_post;
 		}
@@ -134,20 +138,37 @@ final class Diff_Renderer {
 	/**
 	 * Finds local post by source post ID.
 	 *
-	 * @param int    $source_post_id Source post ID to search for.
-	 * @param string $post_type      Post type to search.
+	 * @param int    $source_post_id  Source post ID to search for.
+	 * @param string $post_type       Post type to search.
+	 * @param string $source_site_url Source site URL the import was tagged
+	 *                                with; pass '' to skip the scope filter.
 	 *
 	 * @return WP_Post|WP_Error Post object on success, WP_Error if not found.
 	 */
 	public function find_local_post(
 		int $source_post_id,
-		string $post_type
+		string $post_type,
+		string $source_site_url
 	): WP_Post|WP_Error {
+		$meta_query = array(
+			array(
+				'key'   => Options::META_SOURCE_POST_ID,
+				'value' => $source_post_id,
+			),
+		);
+
+		if ( '' !== $source_site_url ) {
+			$meta_query['relation'] = 'AND';
+			$meta_query[]           = array(
+				'key'   => Options::META_SOURCE_SITE_URL,
+				'value' => $source_site_url,
+			);
+		}
+
 		$query = new WP_Query(
 			array(
-				'meta_key'       => Options::META_SOURCE_POST_ID,
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-				'meta_value'     => $source_post_id,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query'     => $meta_query,
 				'post_type'      => $post_type,
 				'post_status'    => 'any',
 				'posts_per_page' => 1,

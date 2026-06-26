@@ -9,7 +9,7 @@
  * Author: WPVIP
  * Author URI: https://wpvip.com
  * Text Domain: safe-publish
- * Version: 0.1.1
+ * Version: 0.2.0
  * Requires at least: 6.8
  * Requires PHP: 8.2
  */
@@ -27,7 +27,7 @@ if ( defined( 'SAFE_PUBLISH_LOADED' ) ) {
 
 // Define plugin constants.
 define( 'SAFE_PUBLISH_LOADED', true );
-define( 'SAFE_PUBLISH_VERSION', '0.1.1' );
+define( 'SAFE_PUBLISH_VERSION', '0.2.0' );
 define( 'SAFE_PUBLISH_PLUGIN_FILE', __FILE__ );
 define( 'SAFE_PUBLISH_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SAFE_PUBLISH_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -124,6 +124,7 @@ function safe_publish_activation(): void {
 	\Safe_Publish\Utils\Audit_Log_Table::create_table();
 	\Safe_Publish\Utils\Imports_Table::create_table();
 	\Safe_Publish\Utils\Import_Items_Table::create_table();
+	\Safe_Publish\Utils\Attention_Issues_Table::create_table();
 
 	// Set default options.
 	if ( false === get_option( 'safe_publish_connected_site_url' ) ) {

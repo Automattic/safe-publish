@@ -10,7 +10,7 @@
 import { dateI18n, getSettings } from '@wordpress/date';
 import { __, _n, sprintf } from '@wordpress/i18n';
 
-import type { JsonValue, Warning } from './types';
+import type { AttentionIssue, JsonValue, Warning } from './types';
 
 /**
  * Extracts a human-readable error message from an API response.
@@ -224,6 +224,78 @@ export function renderWarningShortLabel( warning: Warning ): string {
 			return String( _exhaustive );
 		}
 	}
+}
+
+/**
+ * Renders an open attention issue as a user-facing sentence.
+ *
+ * Each type gets copy that points at the Retry action, rather than the manual
+ * workaround the import-time warnings describe.
+ *
+ * @param {AttentionIssue} issue Issue to render.
+ *
+ * @return {string} Localized message text.
+ */
+export function renderIssueMessage( issue: AttentionIssue ): string {
+	switch ( issue.issue_type ) {
+		case 'unmapped_block_reference':
+			return issue.target_kind === 'term'
+				? sprintf(
+					/* translators: %d: source term ID */
+					__(
+						"Source term %d isn't on this site yet. Import it, then Retry.",
+						'safe-publish'
+					),
+					issue.target_ref
+				)
+				: sprintf(
+					/* translators: %d: source post ID */
+					__(
+						"Source post %d isn't on this site yet. Import it, then Retry.",
+						'safe-publish'
+					),
+					issue.target_ref
+				);
+		case 'parent_orphaned':
+			return sprintf(
+				/* translators: %d: source parent post ID */
+				__(
+					"This page's parent (source ID %d) isn't on this site yet. Import it, then Retry.",
+					'safe-publish'
+				),
+				issue.target_ref
+			);
+		case 'nav_ref_rewrite_failed':
+			return sprintf(
+				/* translators: %d: source navigation menu ID */
+				__(
+					"This page's link to menu %d couldn't be updated automatically. Retry to re-attempt it.",
+					'safe-publish'
+				),
+				issue.target_ref
+			);
+		default: {
+			const _exhaustive: never = issue.issue_type;
+			return String( _exhaustive );
+		}
+	}
+}
+
+/**
+ * Stable client id for an attention issue, matching its full identity key so a
+ * post and a term reference sharing a target_ref stay distinct.
+ *
+ * @param {AttentionIssue} issue Issue row.
+ *
+ * @return {string} Composite identifier.
+ */
+export function attentionIssueId( issue: AttentionIssue ): string {
+	return [
+		issue.affected_post_id,
+		issue.issue_type,
+		issue.target_ref,
+		issue.target_kind,
+	].join( ':' );
 }
 
 /**

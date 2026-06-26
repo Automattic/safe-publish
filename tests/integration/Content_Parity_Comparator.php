@@ -18,10 +18,12 @@ use WP_HTML_Tag_Processor;
  * Companion to Post_Parity_Asserter: post_content can't be checked with
  * assertSame() because the importer rewrites every media URL and Gutenberg
  * attachment-ID reference. Positive checks lock the rewrites; reverse
- * assertions lock documented gaps and safety invariants.
+ * assertions lock documented gaps and safety invariants. Block-structural and
+ * shortcode parity are checked structurally (names, balance, attributes), not
+ * for per-block semantic equivalence.
  *
  * Out of scope: gallery `attrs.ids` and `data-id` (not seeded today),
- * block-structural validity (parse_blocks round-trip).
+ * non-caption shortcode families, per-block semantic equivalence.
  */
 final class Content_Parity_Comparator {
 
@@ -190,6 +192,196 @@ final class Content_Parity_Comparator {
 				"Dest content must not contain double-encoded '{$needle}'"
 			);
 		}
+	}
+
+	/**
+	 * Asserts Gutenberg block-structural parity. The importer rewrites block
+	 * attributes by string replacement and never restructures blocks, so the
+	 * multiset of block names must be identical between source and dest;
+	 * corrupted attribute JSON would demote a block to freeform and drop it from
+	 * the dest multiset. Also checks dest parses into at least one block and
+	 * carries no orphaned block-comment delimiters.
+	 *
+	 * @param string   $source_content Source post_content.
+	 * @param string   $dest_content   Imported dest post_content.
+	 * @param TestCase $test           Active test case.
+	 */
+	public static function assert_block_structural_parity(
+		string $source_content,
+		string $dest_content,
+		TestCase $test
+	): void {
+		$dest_blocks = parse_blocks( $dest_content );
+
+		$test->assertGreaterThanOrEqual(
+			1,
+			count( $dest_blocks ),
+			'Dest content must parse into at least one block'
+		);
+
+		$source_names = self::collect_block_names( parse_blocks( $source_content ) );
+		$dest_names   = self::collect_block_names( $dest_blocks );
+		sort( $source_names );
+		sort( $dest_names );
+
+		$test->assertSame(
+			$source_names,
+			$dest_names,
+			'Dest must carry the same multiset of Gutenberg block names as source'
+		);
+
+		self::assert_no_residual_block_delimiters( $dest_blocks, $test );
+	}
+
+	/**
+	 * Asserts caption-shortcode parity. The importer preserves every source
+	 * caption verbatim apart from rewriting its attachment id, so dest must keep
+	 * the same caption count, balanced open/close tags (no half-tag leftovers),
+	 * and identical non-id attributes. Count parity doubles as a reverse-
+	 * assertion: a future importer that transformed captions into blocks would
+	 * drop the dest count and fail here, forcing an explicit decision.
+	 *
+	 * @param string   $source_content Source post_content.
+	 * @param string   $dest_content   Imported dest post_content.
+	 * @param TestCase $test           Active test case.
+	 */
+	public static function assert_shortcode_parity(
+		string $source_content,
+		string $dest_content,
+		TestCase $test
+	): void {
+		$source_captions = self::collect_caption_attrs( $source_content );
+		$dest_captions   = self::collect_caption_attrs( $dest_content );
+
+		$test->assertSame(
+			count( $source_captions ),
+			count( $dest_captions ),
+			'Dest must preserve every source caption shortcode'
+		);
+
+		$dest_closers = preg_match_all(
+			'#\[/(?:caption|wp_caption)\]#i',
+			$dest_content
+		);
+		$test->assertSame(
+			count( $dest_captions ),
+			(int) $dest_closers,
+			'Dest caption shortcodes must be balanced (no half-tag leftovers)'
+		);
+
+		foreach ( $source_captions as $i => $source_atts ) {
+			// Non-id attributes survive verbatim; the id is rewritten to the
+			// dest attachment, so its value parity is left to
+			// assert_attachment_id_parity() and only its presence is checked.
+			$test->assertSame(
+				self::without_id( $source_atts ),
+				self::without_id( $dest_captions[ $i ] ),
+				'Dest caption must preserve its non-id attributes verbatim'
+			);
+			$test->assertArrayHasKey(
+				'id',
+				$dest_captions[ $i ],
+				'Dest caption must keep its id attribute'
+			);
+		}
+	}
+
+	/**
+	 * Collects non-empty block names from a parse_blocks() tree, recursing into
+	 * inner blocks. Freeform (null-name) blocks are skipped.
+	 *
+	 * @param array<array-key, array<string, mixed>> $blocks Parsed block tree.
+	 * @return list<string>
+	 */
+	private static function collect_block_names( array $blocks ): array {
+		$names = array();
+
+		foreach ( $blocks as $block ) {
+			$name = $block['blockName'] ?? null;
+			if ( is_string( $name ) && '' !== $name ) {
+				$names[] = $name;
+			}
+
+			$inner = $block['innerBlocks'] ?? array();
+			if ( is_array( $inner ) && array() !== $inner ) {
+				$names = array_merge( $names, self::collect_block_names( $inner ) );
+			}
+		}
+
+		return $names;
+	}
+
+	/**
+	 * Reverse-asserts no freeform block carries a residual block-comment
+	 * delimiter. The parser consumes well-formed delimiters, so a leftover only
+	 * survives as literal text in a freeform block — the signature of an
+	 * orphaned or malformed-attribute block.
+	 *
+	 * @param array<array-key, array<string, mixed>> $blocks Parsed block tree.
+	 * @param TestCase                               $test   Active test case.
+	 */
+	private static function assert_no_residual_block_delimiters(
+		array $blocks,
+		TestCase $test
+	): void {
+		foreach ( $blocks as $block ) {
+			$name = $block['blockName'] ?? null;
+			if ( null === $name ) {
+				$html = (string) ( $block['innerHTML'] ?? '' );
+				$test->assertStringNotContainsString(
+					'<!-- wp:',
+					$html,
+					'Freeform block must not contain an orphaned block opener'
+				);
+				$test->assertStringNotContainsString(
+					'<!-- /wp:',
+					$html,
+					'Freeform block must not contain an orphaned block closer'
+				);
+			}
+
+			$inner = $block['innerBlocks'] ?? array();
+			if ( is_array( $inner ) && array() !== $inner ) {
+				self::assert_no_residual_block_delimiters( $inner, $test );
+			}
+		}
+	}
+
+	/**
+	 * Returns each caption-family shortcode's parsed attributes in document
+	 * order.
+	 *
+	 * @param string $content Content to scan.
+	 * @return list<array<string, string>>
+	 */
+	private static function collect_caption_attrs( string $content ): array {
+		if ( ! preg_match_all(
+			'#\[(?:caption|wp_caption)\b([^\]]*)\]#i',
+			$content,
+			$matches
+		) ) {
+			return array();
+		}
+
+		$captions = array();
+		foreach ( $matches[1] as $attr_string ) {
+			$atts       = shortcode_parse_atts( trim( $attr_string ) );
+			$captions[] = is_array( $atts ) ? $atts : array();
+		}
+
+		return $captions;
+	}
+
+	/**
+	 * Returns a shortcode-attribute array with the id entry removed.
+	 *
+	 * @param array<string, string> $atts Parsed shortcode attributes.
+	 * @return array<string, string>
+	 */
+	private static function without_id( array $atts ): array {
+		unset( $atts['id'] );
+
+		return $atts;
 	}
 
 	/**

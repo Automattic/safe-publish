@@ -184,7 +184,7 @@ The source author's email and login are also stored in post metadata for referen
 
 Safe Publish writes an audit log of security- and content-relevant actions to the destination site. Logged events include authenticated cross-site requests, content exports, the result of each imported item, rollbacks, and changes to the connection settings.
 
-Each event records a channel (such as authentication, content, export, import, or media), a severity level (informational or error), the event type, a timestamp, and structured details. The export history is surfaced in the admin interface; the full log is available to developers through the plugin's query interface and through the `safe_publish_event_logged` action (see [Filters](#filters)).
+Each event records a channel (such as authentication, content, export, import, or media), a severity level (informational, warning, or error), the event type, a timestamp, and structured details. The export history is surfaced in the admin interface; the full log is available to developers through the plugin's query interface and through the `safe_publish_event_logged` action (see [Filters](#filters)).
 
 ## Custom post types
 

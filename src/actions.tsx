@@ -4,7 +4,14 @@
  *
  * @file This file defines DataViews actions for the Safe Publish plugin.
  */
-import { download, pages, pencil, rotateLeft, trash } from '@wordpress/icons';
+import {
+	download,
+	pages,
+	pencil,
+	rotateLeft,
+	trash,
+	update,
+} from '@wordpress/icons';
 
 import BulkImportFlow from './components/BulkImportFlow';
 import BulkRollbackPostModal from './components/BulkRollbackPostModal';
@@ -14,13 +21,17 @@ import ImportModal from './components/ImportModal';
 import PostDiffModal from './components/PostDiffModal';
 import RollbackPostModal from './components/RollbackPostModal';
 import {
+	ApiResponse,
+	AttentionIssue,
 	ChipState,
 	ImportSyncStatus,
 	OrphanFailure,
+	RetryAttentionIssueResponse,
 	UnifiedPostRow,
 } from './types';
+import { attentionIssueId, getErrorMessage, renderIssueMessage } from './utils';
 import { Action } from '@wordpress/dataviews/build-types';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
 /**
  * Auth context for the unified Posts action set.
@@ -327,5 +338,135 @@ export const createOrphanFailuresActions = (
 				onRefresh={ onRefresh }
 			/>
 		),
+	},
+];
+
+/**
+ * A banner shown for a retry: in-flight (info), failed (error), or ran without
+ * clearing the issue (warning).
+ */
+export interface RetryNotice {
+	status: 'error' | 'warning' | 'info';
+	message: string;
+}
+
+/**
+ * Auth + notice context for the Needs attention drawer's Retry action.
+ */
+export interface AttentionIssueActionsContext {
+	ajaxurl: string;
+	nonce: string;
+	onNotice?: ( notice: RetryNotice | null ) => void;
+	// Keys of issues with a retry in flight, to drop concurrent submits.
+	inFlight?: Set< string >;
+}
+
+/**
+ * Creates the drawer's Retry action for attention issues.
+ *
+ * Eligible only for issues whose reconciliation is callable today; it re-runs
+ * the real reconciliation, which is self-verifying, then refreshes the listing
+ * so the row clears or stays based on the actual result. A run that fails or
+ * leaves the issue open surfaces a notice, so the attempt never reads as a
+ * silent success. Concurrent submits for the same issue are ignored while one
+ * is in flight.
+ *
+ * @param {Function}                     onRefresh Callback to refresh the drawer.
+ * @param {AttentionIssueActionsContext} context   Admin-ajax URL, nonce, notice sink.
+ *
+ * @return {Action<AttentionIssue>[]} Array of DataViews actions.
+ */
+export const createAttentionIssueActions = (
+	onRefresh: ( () => void ) | undefined,
+	context: AttentionIssueActionsContext
+): Action< AttentionIssue >[] => [
+	{
+		id: 'retry-attention-issue',
+		label: __( 'Retry', 'safe-publish' ),
+		icon: update,
+		isPrimary: true,
+		isEligible: ( item ) => item.retryable,
+		callback: ( items ) => {
+			const issue = items[ 0 ];
+			if ( ! issue ) {
+				return;
+			}
+
+			// The button stays clickable, so guard against concurrent submits
+			// for the same issue.
+			const key = attentionIssueId( issue );
+			if ( context.inFlight?.has( key ) ) {
+				return;
+			}
+			context.inFlight?.add( key );
+
+			// Signal the attempt is running; also clears any prior outcome.
+			context.onNotice?.( {
+				status: 'info',
+				message: __( 'Retrying…', 'safe-publish' ),
+			} );
+
+			const formData = new FormData();
+			formData.append( 'action', 'safe_publish_retry_attention_issue' );
+			formData.append( 'nonce', context.nonce );
+			formData.append(
+				'affected_post_id',
+				String( issue.affected_post_id )
+			);
+			formData.append( 'issue_type', issue.issue_type );
+			formData.append( 'target_ref', String( issue.target_ref ) );
+			formData.append( 'target_kind', issue.target_kind );
+
+			void fetch( context.ajaxurl, { method: 'POST', body: formData } )
+				.then(
+					( response ) =>
+						response.json() as Promise<
+							ApiResponse< RetryAttentionIssueResponse >
+						>
+				)
+				.then( ( result ) => {
+					if ( ! result.success ) {
+						context.onNotice?.( {
+							status: 'error',
+							message: getErrorMessage(
+								result,
+								__( 'Retry failed.', 'safe-publish' )
+							),
+						} );
+						return;
+					}
+
+					// Reconciliation ran but the issue persists; surface it
+					// so the refetch doesn't read as a silent success.
+					if ( ! result.data.resolved ) {
+						context.onNotice?.( {
+							status: 'warning',
+							message: sprintf(
+								/* translators: %s: issue guidance sentence */
+								__( 'Still needs attention. %s', 'safe-publish' ),
+								renderIssueMessage( issue )
+							),
+						} );
+						return;
+					}
+
+					// Resolved: drop the in-flight notice; the row clears on
+					// the refetch below.
+					context.onNotice?.( null );
+				} )
+				.catch( () => {
+					context.onNotice?.( {
+						status: 'error',
+						message: __(
+							'Network error during retry.',
+							'safe-publish'
+						),
+					} );
+				} )
+				.finally( () => {
+					context.inFlight?.delete( key );
+					onRefresh?.();
+				} );
+		},
 	},
 ];

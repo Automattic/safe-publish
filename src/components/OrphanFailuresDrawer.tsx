@@ -4,6 +4,7 @@
  *
  * @file This file defines the OrphanFailuresDrawer component.
  */
+import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 import { createOrphanFailuresActions } from '../actions';
 import { DEFAULT_ITEMS_PER_PAGE, LAYOUT_TABLE } from '../constants';
 import { formatDateTime, getErrorMessage } from '../utils';
@@ -17,7 +18,6 @@ import {
 import { DataViews, View } from '@wordpress/dataviews';
 import { useCallback, useEffect, useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
-
 
 import type {
 	ApiResponse,
@@ -135,6 +135,21 @@ const OrphanFailuresDrawer = ( {
 
 		return () => controller.abort();
 	}, [ ajaxurl, nonce, view.page, view.perPage, search, refreshNonce ] );
+
+	const setPage = useCallback(
+		( next: number ): void =>
+			setView( ( current ) => ( { ...current, page: next } ) ),
+		[]
+	);
+
+	useStepBackWhenPageEmpties( {
+		hasFetchedOnce,
+		isLoading,
+		fetchError: error,
+		isEmpty: 0 === items.length,
+		page: view.page,
+		setPage,
+	} );
 
 	const fields: DataViewsField< OrphanFailure >[] = [
 		{

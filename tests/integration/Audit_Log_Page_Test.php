@@ -111,6 +111,33 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the levels[] filter accepts 'warning' and returns only
+	 * warning-level rows, confirming warning is part of the page's level
+	 * filter contract.
+	 */
+	public function test_response_honors_warning_level_filter(): void {
+		// ARRANGE: one row per level on a single channel.
+		Audit_Log_Table::insert( 'import', 'info', 'A', '2026-03-01 10:00:00', array() );
+		Audit_Log_Table::insert( 'import', 'warning', 'B', '2026-03-02 11:00:00', array() );
+		Audit_Log_Table::insert( 'import', 'error', 'C', '2026-03-03 12:00:00', array() );
+
+		$_POST = array(
+			'nonce'  => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'levels' => array( 'warning' ),
+		);
+
+		// ACT.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_get_audit_events' );
+
+		// ASSERT: only the warning row passes the filter.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 1, $response['data']['total'] );
+		$this->assertSame( 'warning', $response['data']['items'][0]['level'] );
+		$this->assertSame( 'B', $response['data']['items'][0]['event'] );
+	}
+
+	/**
 	 * Verifies that the before bound is treated as inclusive of the entire
 	 * selected day — picking 2026-03-02 returns events from that day, not just
 	 * events strictly before midnight.

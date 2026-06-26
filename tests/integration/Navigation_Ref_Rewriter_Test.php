@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Navigation_Ref_Rewriter;
@@ -166,6 +167,45 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 		$this->assertStringContainsString(
 			'"ref":99002',
 			get_post( $source_b_post )->post_content
+		);
+	}
+
+	/**
+	 * Verifies that rewriting scopes by the full subsite identity, so two
+	 * subsites of one host sharing a numeric source ID do not collide.
+	 */
+	public function test_skips_posts_from_a_different_subsite(): void {
+		// ARRANGE: two posts hold the same ref but were imported from two
+		// subsites of the same host.
+		$blog_url  = self::SOURCE_A . '/blog';
+		$news_url  = self::SOURCE_A . '/news';
+		$blog_post = $this->seed_referencing_post(
+			$this->nav_ref_block( 99008 ),
+			$blog_url,
+			91009
+		);
+		$news_post = $this->seed_referencing_post(
+			$this->nav_ref_block( 99008 ),
+			$news_url,
+			91010
+		);
+
+		// ACT: rewrite under the /blog subsite only.
+		$result = ( new Navigation_Ref_Rewriter() )->rewrite_cross_refs(
+			99008,
+			50008,
+			$blog_url
+		);
+
+		// ASSERT: the /blog post is repointed; /news is left untouched.
+		$this->assertSame( 1, $result['rewritten'] );
+		$this->assertStringContainsString(
+			'"ref":50008',
+			get_post( $blog_post )->post_content
+		);
+		$this->assertStringContainsString(
+			'"ref":99008',
+			get_post( $news_post )->post_content
 		);
 	}
 
@@ -417,7 +457,8 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			new History_Repository(),
 			new Meta_Terms_Manager(),
 			new Telemetry_Service(),
-			$rewriter
+			$rewriter,
+			new Attention_Issues_Repository()
 		);
 	}
 

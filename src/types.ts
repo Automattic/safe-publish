@@ -92,7 +92,8 @@ export interface UnifiedPostRow {
  * when the endpoint resolved it; the frontend uses them to swap the active
  * chip + highlight the focused row in the rendered list.
  *
- * `orphan_count` is populated only when the request set with_orphan_count=1.
+ * `orphan_count` is populated only when the request set with_orphan_count=1;
+ * `attention_count` only when with_attention_count=1.
  */
 export interface PostsResponse {
 	items: UnifiedPostRow[];
@@ -101,6 +102,7 @@ export interface PostsResponse {
 	focused_state?: LocalState;
 	focused_source_post_id?: number;
 	orphan_count?: number;
+	attention_count?: number;
 }
 
 /**
@@ -159,6 +161,48 @@ export interface OrphanFailure {
 export interface OrphanFailuresResponse {
 	items: OrphanFailure[];
 	has_more: boolean;
+}
+
+/**
+ * Tracked degradation issue types surfaced on the Needs attention tab.
+ */
+export type AttentionIssueType =
+	| 'unmapped_block_reference'
+	| 'nav_ref_rewrite_failed'
+	| 'parent_orphaned';
+
+/**
+ * One open degradation issue, keyed by (affected_post_id, issue_type,
+ * target_ref, target_kind). `retryable` is the server's signal that the row's
+ * reconciliation can run.
+ */
+export interface AttentionIssue {
+	affected_post_id: number;
+	issue_type: AttentionIssueType;
+	target_ref: number;
+	target_kind: 'post' | 'term';
+	severity: 'warning' | 'error';
+	source_site_url: string;
+	first_detected_gmt: string;
+	last_seen_gmt: string;
+	affected_title: string;
+	affected_edit_url: string;
+	retryable: boolean;
+}
+
+/**
+ * Envelope returned by safe_publish_list_attention_issues.
+ */
+export interface AttentionIssuesResponse {
+	items: AttentionIssue[];
+	has_more: boolean;
+}
+
+/**
+ * Envelope returned by safe_publish_retry_attention_issue.
+ */
+export interface RetryAttentionIssueResponse {
+	resolved: boolean;
 }
 
 /**
@@ -320,14 +364,15 @@ export interface PostsDataViewProps {
 /**
  * Admin data passed from PHP via wp_add_inline_script.
  *
- * @property {string}    ajaxurl        WordPress AJAX URL.
- * @property {string}    nonce          Security nonce for AJAX requests.
- * @property {string}    sourceSiteUrl  Source site URL.
- * @property {string}    settingsUrl    URL to the plugin settings page.
- * @property {string}    homeUrl        Destination home URL for slug detection.
- * @property {string}    containerId    Container element ID.
- * @property {ChipState} [initialState] Chip state from ?state=... on load.
- * @property {number}    [orphanCount]  Orphan-failures count at server render.
+ * @property {string}    ajaxurl          WordPress AJAX URL.
+ * @property {string}    nonce            Security nonce for AJAX requests.
+ * @property {string}    sourceSiteUrl    Source site URL.
+ * @property {string}    settingsUrl      URL to the plugin settings page.
+ * @property {string}    homeUrl          Destination home URL for slug detection.
+ * @property {string}    containerId      Container element ID.
+ * @property {ChipState} [initialState]   Chip state from ?state=... on load.
+ * @property {number}    [orphanCount]    Orphan-failures count at server render.
+ * @property {number}    [attentionCount] Open attention-issues count at render.
  */
 export interface AdminData {
 	ajaxurl: string;
@@ -338,6 +383,7 @@ export interface AdminData {
 	containerId: string;
 	initialState?: ChipState;
 	orphanCount?: number;
+	attentionCount?: number;
 	knownChannels?: string[];
 	knownLevels?: string[];
 }
@@ -418,7 +464,7 @@ export interface ExportEvent {
 export interface AuditEvent {
 	id: number;
 	channel: string;
-	level: 'info' | 'error';
+	level: 'info' | 'warning' | 'error';
 	event: string;
 	date: string;
 	actor_user_id: number;

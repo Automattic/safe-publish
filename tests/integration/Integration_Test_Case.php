@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Utils\Attention_Issues_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use WP_UnitTestCase;
@@ -36,6 +37,7 @@ abstract class Integration_Test_Case extends WP_UnitTestCase {
 
 		Imports_Table::create_table();
 		Import_Items_Table::create_table();
+		Attention_Issues_Table::create_table();
 
 		$this->truncate_history_tables();
 	}
@@ -50,17 +52,19 @@ abstract class Integration_Test_Case extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Removes all rows from both history tables.
+	 * Removes all rows from the import history and attention issue tables.
 	 */
 	private function truncate_history_tables(): void {
 		global $wpdb;
 
-		$items    = Import_Items_Table::table_name();
-		$sessions = Imports_Table::table_name();
+		$items     = Import_Items_Table::table_name();
+		$sessions  = Imports_Table::table_name();
+		$attention = Attention_Issues_Table::table_name();
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
 		$wpdb->query( "DELETE FROM `{$items}`" );
 		$wpdb->query( "DELETE FROM `{$sessions}`" );
+		$wpdb->query( "DELETE FROM `{$attention}`" );
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
 	}
 }

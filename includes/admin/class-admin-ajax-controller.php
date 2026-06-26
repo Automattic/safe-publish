@@ -16,6 +16,7 @@ use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Datetime_Sanitizer;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Reconcile_Logger;
 use Safe_Publish\Utils\Sync_State_Comparator;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
@@ -89,6 +90,18 @@ final class Admin_Ajax_Controller {
 	const AVAILABLE_FILL_MAX_FETCHES = 15;
 
 	/**
+	 * Attention issue types the retry endpoint can reconcile. Doubles as
+	 * the allowlist for the issue_type request param.
+	 *
+	 * @var string[]
+	 */
+	const ATTENTION_ISSUE_RETRYABLE_TYPES = array(
+		'unmapped_block_reference',
+		'nav_ref_rewrite_failed',
+		'parent_orphaned',
+	);
+
+	/**
 	 * Source Posts API instance.
 	 *
 	 * @var Source_Posts_API
@@ -124,26 +137,36 @@ final class Admin_Ajax_Controller {
 	private Telemetry_Service $telemetry;
 
 	/**
+	 * Attention issues repository.
+	 *
+	 * @var Attention_Issues_Repository
+	 */
+	private Attention_Issues_Repository $attention_issues;
+
+	/**
 	 * Constructs the Admin_Ajax_Controller instance.
 	 *
-	 * @param Source_Posts_API    $api                 Source Posts API instance.
-	 * @param History_Repository  $repository          History repository instance.
-	 * @param Post_Import_Service $post_import_service Post Import Service instance.
-	 * @param Post_Type_Fetcher   $post_type_fetcher   Post Type Fetcher instance.
-	 * @param Telemetry_Service   $telemetry           Telemetry service.
+	 * @param Source_Posts_API            $api                Source Posts API instance.
+	 * @param History_Repository          $repository         History repository instance.
+	 * @param Post_Import_Service         $post_import_service Post Import Service instance.
+	 * @param Post_Type_Fetcher           $post_type_fetcher  Post Type Fetcher instance.
+	 * @param Telemetry_Service           $telemetry          Telemetry service.
+	 * @param Attention_Issues_Repository $attention_issues   Attention issues repository.
 	 */
 	public function __construct(
 		Source_Posts_API $api,
 		History_Repository $repository,
 		Post_Import_Service $post_import_service,
 		Post_Type_Fetcher $post_type_fetcher,
-		Telemetry_Service $telemetry
+		Telemetry_Service $telemetry,
+		Attention_Issues_Repository $attention_issues
 	) {
 		$this->api                 = $api;
 		$this->repository          = $repository;
 		$this->post_import_service = $post_import_service;
 		$this->post_type_fetcher   = $post_type_fetcher;
 		$this->telemetry           = $telemetry;
+		$this->attention_issues    = $attention_issues;
 	}
 
 	/**
@@ -152,6 +175,8 @@ final class Admin_Ajax_Controller {
 	public function register_handlers(): void {
 		add_action( 'wp_ajax_safe_publish_list_posts', array( $this, 'ajax_list_posts' ) );
 		add_action( 'wp_ajax_safe_publish_list_orphan_failures', array( $this, 'ajax_list_orphan_failures' ) );
+		add_action( 'wp_ajax_safe_publish_list_attention_issues', array( $this, 'ajax_list_attention_issues' ) );
+		add_action( 'wp_ajax_safe_publish_retry_attention_issue', array( $this, 'ajax_retry_attention_issue' ) );
 		add_action( 'wp_ajax_safe_publish_delete_failed_items', array( $this, 'ajax_delete_failed_items' ) );
 		add_action( 'wp_ajax_safe_publish_fetch_post_types', array( $this, 'ajax_fetch_post_types' ) );
 		add_action( 'wp_ajax_safe_publish_test_connection', array( $this, 'ajax_test_connection' ) );
@@ -209,9 +234,10 @@ final class Admin_Ajax_Controller {
 		);
 		// Allowlisted to a small enum by sanitize_state.
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-		$requested_state   = self::sanitize_state( $_POST['state'] ?? 'all' );
-		$focus_source_id   = absint( $_POST['focus_source_id'] ?? 0 );
-		$with_orphan_count = 1 === absint( $_POST['with_orphan_count'] ?? 0 );
+		$requested_state      = self::sanitize_state( $_POST['state'] ?? 'all' );
+		$focus_source_id      = absint( $_POST['focus_source_id'] ?? 0 );
+		$with_orphan_count    = 1 === absint( $_POST['with_orphan_count'] ?? 0 );
+		$with_attention_count = 1 === absint( $_POST['with_attention_count'] ?? 0 );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if ( '' === $source_site_url ) {
@@ -246,6 +272,11 @@ final class Admin_Ajax_Controller {
 		}
 		if ( $with_orphan_count ) {
 			$payload['orphan_count'] = $this->repository->count_orphan_failures();
+		}
+		if ( $with_attention_count ) {
+			$payload['attention_count'] = $this->attention_issues->count_open_issues(
+				Options::get_connected_site_url_with_path()
+			);
 		}
 
 		wp_send_json_success( $payload );
@@ -309,6 +340,213 @@ final class Admin_Ajax_Controller {
 				'items'    => $items,
 				'has_more' => $has_more,
 			)
+		);
+	}
+
+	/**
+	 * Lists open attention issues for the connected source, errors first.
+	 */
+	public function ajax_list_attention_issues(): void {
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		// The list and Retry act on imported content and Retry writes to it,
+		// so gate by the import capability. This becomes load-bearing under the
+		// editor-rollback roadmap; revisit alongside that gate change.
+		$this->verify_ajax_capability( 'edit_posts' );
+
+		// phpcs:disable WordPress.Security.NonceVerification.Missing
+		$page     = max( 1, absint( $_POST['page'] ?? 1 ) );
+		$per_page = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		$source_site_url = Options::get_connected_site_url_with_path();
+
+		$rows = $this->attention_issues->get_open_issues(
+			$source_site_url,
+			$page,
+			$per_page
+		);
+
+		$has_more = count( $rows ) > $per_page;
+		if ( $has_more ) {
+			$rows = array_slice( $rows, 0, $per_page );
+		}
+
+		$items = array_map(
+			array( $this, 'format_attention_issue' ),
+			$rows
+		);
+
+		wp_send_json_success(
+			array(
+				'items'    => $items,
+				'has_more' => $has_more,
+			)
+		);
+	}
+
+	/**
+	 * Re-runs an issue's reconciliation and reports whether it cleared.
+	 *
+	 * Self-verifying: the row is resolved or refreshed by the reconciliation
+	 * itself, so the response reflects the issue's state after the real work
+	 * ran.
+	 */
+	public function ajax_retry_attention_issue(): void {
+		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		$this->verify_ajax_capability( 'edit_posts' );
+
+		// phpcs:disable WordPress.Security.NonceVerification.Missing
+		$affected_post_id = absint( $_POST['affected_post_id'] ?? 0 );
+		$issue_type       = sanitize_text_field(
+			wp_unslash( $_POST['issue_type'] ?? '' )
+		);
+		$target_ref       = absint( $_POST['target_ref'] ?? 0 );
+		$target_kind      = sanitize_text_field(
+			wp_unslash( $_POST['target_kind'] ?? '' )
+		);
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		if ( ! in_array( $issue_type, self::ATTENTION_ISSUE_RETRYABLE_TYPES, true ) ) {
+			wp_send_json_error( __( 'Unknown issue type.', 'safe-publish' ) );
+		}
+
+		if ( ! in_array( $target_kind, array( 'post', 'term' ), true ) ) {
+			wp_send_json_error( __( 'Unknown target kind.', 'safe-publish' ) );
+		}
+
+		$issue = $this->attention_issues->get_issue(
+			$affected_post_id,
+			$issue_type,
+			$target_ref,
+			$target_kind
+		);
+
+		if ( null === $issue ) {
+			wp_send_json_error( __( 'Issue not found.', 'safe-publish' ) );
+		}
+
+		$this->dispatch_retry( $issue );
+
+		$resolved = null === $this->attention_issues->get_issue(
+			$affected_post_id,
+			$issue_type,
+			$target_ref,
+			$target_kind
+		);
+
+		$this->log_reconcile_outcome( $issue, $resolved );
+
+		wp_send_json_success( array( 'resolved' => $resolved ) );
+	}
+
+	/**
+	 * Records the retry's reconciliation outcome to the audit log.
+	 *
+	 * The cleared/unresolved/failed result and the issue's severity select a
+	 * reconcile info/warning/error event.
+	 *
+	 * @param array $issue    Pre-retry issue row.
+	 * @param bool  $resolved Whether the issue cleared.
+	 */
+	private function log_reconcile_outcome( array $issue, bool $resolved ): void {
+		$logger           = new Reconcile_Logger();
+		$issue_type       = (string) $issue['issue_type'];
+		$affected_post_id = (int) $issue['affected_post_id'];
+		$target_ref       = (int) $issue['target_ref'];
+		$target_kind      = (string) $issue['target_kind'];
+
+		if ( $resolved ) {
+			$logger->resolved(
+				$issue_type,
+				$affected_post_id,
+				$target_ref,
+				$target_kind
+			);
+			return;
+		}
+
+		if ( 'error' === (string) $issue['severity'] ) {
+			$logger->failed(
+				$issue_type,
+				$affected_post_id,
+				$target_ref,
+				$target_kind,
+				'Reconciliation did not clear the issue on retry.'
+			);
+			return;
+		}
+
+		$logger->unresolved(
+			$issue_type,
+			$affected_post_id,
+			$target_ref,
+			$target_kind
+		);
+	}
+
+	/**
+	 * Routes a fetched issue row to the reconciliation for its type.
+	 *
+	 * @param array $issue Issue row from the repository.
+	 */
+	private function dispatch_retry( array $issue ): void {
+		$affected_post_id = (int) $issue['affected_post_id'];
+		$target_ref       = (int) $issue['target_ref'];
+		$target_kind      = (string) $issue['target_kind'];
+		$source_site_url  = (string) $issue['source_site_url'];
+
+		switch ( (string) $issue['issue_type'] ) {
+			case 'nav_ref_rewrite_failed':
+				$this->post_import_service->retry_nav_ref_rewrite(
+					$target_ref,
+					$source_site_url
+				);
+				break;
+			case 'unmapped_block_reference':
+				$this->post_import_service->retry_block_ref_repoint(
+					$affected_post_id,
+					$target_ref,
+					$target_kind,
+					$source_site_url
+				);
+				break;
+			case 'parent_orphaned':
+				$this->post_import_service->retry_parent_relink(
+					$affected_post_id,
+					$target_ref,
+					$source_site_url
+				);
+				break;
+		}
+	}
+
+	/**
+	 * Shapes an issue row for the client, adding the affected post's title and
+	 * an edit link (empty when the user cannot edit that post).
+	 *
+	 * @param array $row Open issue row from the repository.
+	 * @return array Client-facing issue payload.
+	 */
+	private function format_attention_issue( array $row ): array {
+		$affected_post_id = (int) $row['affected_post_id'];
+		$edit_url         = get_edit_post_link( $affected_post_id, 'raw' );
+
+		return array(
+			'affected_post_id'   => $affected_post_id,
+			'issue_type'         => (string) $row['issue_type'],
+			'target_ref'         => (int) $row['target_ref'],
+			'target_kind'        => (string) $row['target_kind'],
+			'severity'           => (string) $row['severity'],
+			'source_site_url'    => (string) $row['source_site_url'],
+			'first_detected_gmt' => (string) $row['first_detected_gmt'],
+			'last_seen_gmt'      => (string) $row['last_seen_gmt'],
+			'affected_title'     => get_the_title( $affected_post_id ),
+			'affected_edit_url'  => is_string( $edit_url ) ? $edit_url : '',
+			'retryable'          => in_array(
+				(string) $row['issue_type'],
+				self::ATTENTION_ISSUE_RETRYABLE_TYPES,
+				true
+			),
 		);
 	}
 
@@ -1039,7 +1277,7 @@ final class Admin_Ajax_Controller {
 		// return the prompt response instead of running the import.
 		$imported_post = $this->post_import_service->find_imported_post(
 			$source_post_id,
-			self::connected_site_url()
+			Options::get_connected_site_url_with_path()
 		);
 
 		if ( $imported_post && ! $force_update ) {
@@ -1488,7 +1726,7 @@ final class Admin_Ajax_Controller {
 		$imported_by_source_id = $this->post_import_service
 			->fetch_imported_posts_by_source_ids(
 				$source_ids,
-				self::connected_site_url()
+				Options::get_connected_site_url_with_path()
 			);
 
 		if ( 0 === count( $imported_by_source_id ) ) {
@@ -1653,18 +1891,6 @@ final class Admin_Ajax_Controller {
 		}
 
 		return array_merge( $head, $tail );
-	}
-
-	/**
-	 * Returns the connected-site option normalized to scheme + host + port,
-	 * matching how META_SOURCE_SITE_URL is stored.
-	 *
-	 * @return string Normalized connected site URL, or '' when unset.
-	 */
-	private static function connected_site_url(): string {
-		return Post_Import_Service::extract_site_url(
-			(string) get_option( Options::OPTION_CONNECTED_SITE_URL, '' )
-		);
 	}
 
 	/**
