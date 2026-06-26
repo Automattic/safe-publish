@@ -152,12 +152,15 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	 * Describes the batch: six posts covering the generator's full editor,
 	 * status, and image-mode rotations, plus four pages for post_type coverage.
 	 * Page index 3 lands on the classic editor, so the batch exercises block and
-	 * shortcode parity on pages too. Pages carry no category/post_tag
-	 * assignments, mirroring a real page source.
+	 * shortcode parity on pages too; it is also seeded as a child of page index
+	 * 1, non-adjacent in import order, so post_parent resolution is proven by
+	 * source ID rather than import position. Pages carry no category/post_tag
+	 * assignments, mirroring a real page source. Posts stay flat
+	 * (non-hierarchical).
 	 *
 	 * @param int $post_author_id Dest user the post slice is authored by.
 	 * @param int $page_author_id Dest user the page slice is authored by.
-	 * @return list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool, author_user_id: int}>
+	 * @return list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool, author_user_id: int, parent_links: array<int, int>}>
 	 */
 	private static function batch_slices(
 		int $post_author_id,
@@ -171,6 +174,7 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				'source_id_base' => self::SOURCE_ID_BASE,
 				'assign_terms'   => true,
 				'author_user_id' => $post_author_id,
+				'parent_links'   => array(),
 			),
 			array(
 				'type'           => 'page',
@@ -179,6 +183,7 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				'source_id_base' => self::SOURCE_PAGE_ID_BASE,
 				'assign_terms'   => false,
 				'author_user_id' => $page_author_id,
+				'parent_links'   => array( 3 => 1 ),
 			),
 		);
 	}
@@ -538,6 +543,37 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the child page's post_parent resolves to its source
+	 * parent's dest ID, while posts and top-level pages keep post_parent 0.
+	 * Also guards against a silent pass where the batch seeds no child at all.
+	 */
+	public function test_parent_columns_parity(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: each dest post_parent matches the source parent mapping, and
+		// the batch exercised at least one non-zero parent.
+		$child_count = 0;
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$source_body = self::$fixture->source_rest_bodies[ $source_id ];
+			if ( (int) ( $source_body['parent'] ?? 0 ) > 0 ) {
+				++$child_count;
+			}
+
+			Post_Parity_Asserter::assert_parent_columns(
+				$source_body,
+				get_post( $dest_id ),
+				self::$fixture->dest_post_ids,
+				$this
+			);
+		}
+
+		$this->assertGreaterThan(
+			0,
+			$child_count,
+			'Batch should seed at least one child post to exercise post_parent'
+		);
+	}
+
+	/**
 	 * Verifies that every wp_posts column has been classified by the
 	 * asserter. Guards against silent gaps when WordPress adds a column or
 	 * a column is omitted from the rules.
@@ -719,24 +755,6 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
 			Post_Parity_Asserter::assert_plugin_added_meta(
 				self::$fixture->source_rest_bodies[ $source_id ],
-				get_post( $dest_id ),
-				$this
-			);
-		}
-	}
-
-	/**
-	 * Verifies that every meta key listed in DEFERRED_META is absent on each
-	 * dest post. Locks the current phase's "not yet emitted" state so that a
-	 * future phase emitting one of these keys (e.g. META_SOURCE_POST_PARENT_ID
-	 * when hierarchical-post support ships) surfaces as a test failure and
-	 * forces the registry to be updated.
-	 */
-	public function test_deferred_meta_keys_absent(): void {
-		// ARRANGE + ACT: batch already imported.
-		// ASSERT: no deferred meta key is present on any dest post.
-		foreach ( self::$fixture->dest_post_ids as $dest_id ) {
-			Post_Parity_Asserter::assert_deferred_meta_absent(
 				get_post( $dest_id ),
 				$this
 			);

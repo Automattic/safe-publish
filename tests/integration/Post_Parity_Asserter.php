@@ -33,9 +33,9 @@ final class Post_Parity_Asserter {
 	 * Canonical list of wp_posts columns the asserter classifies.
 	 *
 	 * Updated when WordPress changes the schema. Each column must appear in
-	 * exactly one of: identity / content / status / misc / author rules, the
-	 * content body comparator bucket, the divergence registry, or the deferred
-	 * registry.
+	 * exactly one of: identity / content / status / misc / author / parent
+	 * rules, the content body comparator bucket, the divergence registry, or
+	 * the deferred registry.
 	 *
 	 * @var list<string>
 	 */
@@ -172,36 +172,48 @@ final class Post_Parity_Asserter {
 	);
 
 	/**
-	 * Columns whose parity check is deferred to a later test phase. Each
-	 * entry names the phase that will cover it.
+	 * Parent column checked via assert_parent_columns(), not a direct column
+	 * copy: the importer resolves the source parent to a dest post ID, and only
+	 * for hierarchical types.
 	 *
 	 * @var array<string, string>
 	 */
-	private const DEFERRED_REGISTRY = array(
-		'post_parent' => 'deferred: hierarchical post support not in seeder yet',
+	private const PARENT_COLUMNS = array(
+		'post_parent' => 'resolved to a dest parent post ID from the source parent',
 	);
+
+	/**
+	 * Columns whose parity check is deferred to a later test phase. Each entry
+	 * names the phase that will cover it. Empty for now; repopulate when a
+	 * future phase defers a column.
+	 *
+	 * @var array<string, string>
+	 */
+	private const DEFERRED_REGISTRY = array();
 
 	/**
 	 * Plugin-added meta keys the importer writes when importing a post. The
 	 * expected value per post is computed in assert_plugin_added_meta() — this
 	 * map only documents what each key means so reviewers can audit the set.
 	 *
-	 * Entries are written unconditionally and value-checked strictly, except
-	 * _thumbnail_id, which is written only when the source had a
-	 * featured_media (its dynamic dest attachment ID is checked for
-	 * resolution rather than value-equality — see
-	 * assert_thumbnail_id_for_source()).
+	 * Most entries are written unconditionally and value-checked strictly. Two
+	 * are conditional: _thumbnail_id only when the source had a featured_media
+	 * (its dynamic dest attachment ID is resolution-checked, see
+	 * assert_thumbnail_id_for_source()), and META_SOURCE_POST_PARENT_ID only on
+	 * a hierarchical post with a non-zero source parent (checked against the
+	 * source parent ID, see assert_source_parent_meta_for_source()).
 	 *
 	 * @var array<string, string>
 	 */
 	private const PLUGIN_ADDED_META = array(
-		Options::META_SOURCE_POST_ID      => 'source post ID',
-		Options::META_SOURCE_LINK         => 'source post URL',
-		Options::META_SOURCE_SITE_URL     => 'source site URL',
-		Options::META_IMPORTED_FROM       => 'plugin marker',
-		Options::META_SOURCE_AUTHOR_EMAIL => 'source author email',
-		Options::META_SOURCE_AUTHOR_LOGIN => 'source author login',
-		'_thumbnail_id'                   => 'dest attachment ID (resolution-checked)',
+		Options::META_SOURCE_POST_ID        => 'source post ID',
+		Options::META_SOURCE_LINK           => 'source post URL',
+		Options::META_SOURCE_SITE_URL       => 'source site URL',
+		Options::META_IMPORTED_FROM         => 'plugin marker',
+		Options::META_SOURCE_AUTHOR_EMAIL   => 'source author email',
+		Options::META_SOURCE_AUTHOR_LOGIN   => 'source author login',
+		Options::META_SOURCE_POST_PARENT_ID => 'source parent post ID (hierarchical only)',
+		'_thumbnail_id'                     => 'dest attachment ID (resolution-checked)',
 	);
 
 	/**
@@ -217,13 +229,12 @@ final class Post_Parity_Asserter {
 	/**
 	 * Meta keys whose parity check is deferred to a later test phase. Allowed
 	 * but not asserted; entries move into PLUGIN_ADDED_META when the matching
-	 * phase ships and starts emitting them.
+	 * phase ships and starts emitting them. Empty for now; repopulate when a
+	 * future phase defers a meta key.
 	 *
 	 * @var array<string, string>
 	 */
-	private const DEFERRED_META = array(
-		Options::META_SOURCE_POST_PARENT_ID => 'hierarchical post support',
-	);
+	private const DEFERRED_META = array();
 
 	/**
 	 * Taxonomies whose term assignments are verified for parity. Aligned with
@@ -508,6 +519,53 @@ final class Post_Parity_Asserter {
 	}
 
 	/**
+	 * Asserts the dest post_parent matches the source parent: a child resolves
+	 * to the dest ID its source parent imported to; posts and top-level pages
+	 * keep post_parent 0. Mirrors the importer's resolve_source_parent(), which
+	 * resolves a parent only for hierarchical types with a non-zero source
+	 * parent.
+	 *
+	 * @param array<string, mixed> $source_body          Source REST response body.
+	 * @param WP_Post              $dest_post            Imported destination post.
+	 * @param array<int, int>      $source_id_to_dest_id Source post ID => dest post ID.
+	 * @param TestCase             $test                Active test case.
+	 */
+	public static function assert_parent_columns(
+		array $source_body,
+		WP_Post $dest_post,
+		array $source_id_to_dest_id,
+		TestCase $test
+	): void {
+		$source_parent_id = (int) ( $source_body['parent'] ?? 0 );
+		$dest_parent      = (int) $dest_post->post_parent;
+
+		if (
+			0 === $source_parent_id
+			|| ! is_post_type_hierarchical( $dest_post->post_type )
+		) {
+			$test->assertSame(
+				0,
+				$dest_parent,
+				"Dest post {$dest_post->ID} post_parent should be 0 when the"
+				. ' source is top-level or the type is non-hierarchical'
+			);
+			return;
+		}
+
+		$test->assertArrayHasKey(
+			$source_parent_id,
+			$source_id_to_dest_id,
+			"Source parent {$source_parent_id} should have imported to a dest post"
+		);
+		$test->assertSame(
+			$source_id_to_dest_id[ $source_parent_id ],
+			$dest_parent,
+			"Dest post {$dest_post->ID} post_parent should be the dest ID of"
+			. " source parent {$source_parent_id}"
+		);
+	}
+
+	/**
 	 * Asserts that every wp_posts column is classified (parity rule,
 	 * content-body comparator bucket, divergence registry, or deferred
 	 * registry). Fails loudly when a column is unmodeled so adding columns
@@ -524,6 +582,7 @@ final class Post_Parity_Asserter {
 			array_values( self::MISC_COLUMNS ),
 			array_keys( self::DEFAULT_VALUE_COLUMNS ),
 			array_keys( self::AUTHOR_COLUMNS ),
+			array_keys( self::PARENT_COLUMNS ),
 			array_keys( self::DIVERGENCE_REGISTRY ),
 			array_keys( self::CONTENT_BODY_COLUMNS ),
 			array_keys( self::DEFERRED_REGISTRY )
@@ -580,6 +639,8 @@ final class Post_Parity_Asserter {
 	 * source-author meta values are deterministic and asserted strictly.
 	 * _thumbnail_id is checked for presence + featured-attachment resolution
 	 * when the source had a featured_media; absence otherwise.
+	 * META_SOURCE_POST_PARENT_ID is checked present + equal to the source
+	 * parent ID on a hierarchical child; absence otherwise.
 	 *
 	 * @param array<string, mixed> $source_body Source REST response body.
 	 * @param WP_Post              $dest_post   Imported destination post.
@@ -626,6 +687,12 @@ final class Post_Parity_Asserter {
 		}
 
 		self::assert_thumbnail_id_for_source(
+			$source_body,
+			$dest_post,
+			$test
+		);
+
+		self::assert_source_parent_meta_for_source(
 			$source_body,
 			$dest_post,
 			$test
@@ -690,6 +757,51 @@ final class Post_Parity_Asserter {
 	}
 
 	/**
+	 * Asserts that the dest post's META_SOURCE_POST_PARENT_ID tracks the source
+	 * parent: present and equal to the source parent ID on a hierarchical post
+	 * with a non-zero source parent, absent otherwise. Mirrors the importer's
+	 * write_source_parent_meta().
+	 *
+	 * @param array<string, mixed> $source_body Source REST response body.
+	 * @param WP_Post              $dest_post   Imported destination post.
+	 * @param TestCase             $test        Active test case.
+	 */
+	private static function assert_source_parent_meta_for_source(
+		array $source_body,
+		WP_Post $dest_post,
+		TestCase $test
+	): void {
+		$source_parent_id = (int) ( $source_body['parent'] ?? 0 );
+		$meta_present     = metadata_exists(
+			'post',
+			$dest_post->ID,
+			Options::META_SOURCE_POST_PARENT_ID
+		);
+
+		if (
+			0 === $source_parent_id
+			|| ! is_post_type_hierarchical( $dest_post->post_type )
+		) {
+			$test->assertFalse(
+				$meta_present,
+				'META_SOURCE_POST_PARENT_ID should be absent for a top-level or'
+				. ' non-hierarchical post'
+			);
+			return;
+		}
+
+		$test->assertSame(
+			(string) $source_parent_id,
+			(string) get_post_meta(
+				$dest_post->ID,
+				Options::META_SOURCE_POST_PARENT_ID,
+				true
+			),
+			'META_SOURCE_POST_PARENT_ID should equal the source parent ID'
+		);
+	}
+
+	/**
 	 * Asserts that every meta key present on the destination post is
 	 * classified: a key from the source body's meta field, a plugin-added
 	 * key, an allowed WordPress default, or a deferred key reserved for a
@@ -736,30 +848,6 @@ final class Post_Parity_Asserter {
 				implode( ', ', $unmodeled )
 			)
 		);
-	}
-
-	/**
-	 * Asserts that every meta key listed in DEFERRED_META is absent on the
-	 * destination post. Locks the current phase's behavior so that when a
-	 * later phase starts emitting one of these keys (e.g. a hierarchical-post
-	 * phase emitting `META_SOURCE_POST_PARENT_ID`), the test fails and forces
-	 * an explicit move out of DEFERRED_META into PLUGIN_ADDED_META.
-	 *
-	 * @param WP_Post  $dest_post Imported destination post.
-	 * @param TestCase $test      Active test case.
-	 */
-	public static function assert_deferred_meta_absent(
-		WP_Post $dest_post,
-		TestCase $test
-	): void {
-		foreach ( self::DEFERRED_META as $key => $reason ) {
-			$test->assertFalse(
-				metadata_exists( 'post', $dest_post->ID, $key ),
-				"Deferred meta '{$key}' should be absent in current phase"
-				. " ({$reason}); move it to PLUGIN_ADDED_META when the"
-				. ' phase that emits it ships.'
-			);
-		}
 	}
 
 	/**

@@ -85,11 +85,11 @@ final class Seeder_Parity_Fixture {
 	/**
 	 * Constructor.
 	 *
-	 * @param string                                                                                                                $source_base_url Source site URL.
-	 * @param int                                                                                                                   $reference_time  Unix timestamp used as "now" for date math.
-	 * @param int                                                                                                                   $media_id_base   Source media IDs start one past this value.
-	 * @param int                                                                                                                   $admin_user_id   User the import runs as; owns sideloaded media.
-	 * @param list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool, author_user_id: int}> $slices One descriptor per post-type slice in the batch.
+	 * @param string                                                                                                                                               $source_base_url Source site URL.
+	 * @param int                                                                                                                                                  $reference_time  Unix timestamp used as "now" for date math.
+	 * @param int                                                                                                                                                  $media_id_base   Source media IDs start one past this value.
+	 * @param int                                                                                                                                                  $admin_user_id   User the import runs as; owns sideloaded media.
+	 * @param list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool, author_user_id: int, parent_links: array<int, int>}> $slices One descriptor per post-type slice in the batch. parent_links maps a child's 1-based slice index to its parent's.
 	 */
 	public function __construct(
 		private string $source_base_url,
@@ -203,8 +203,11 @@ final class Seeder_Parity_Fixture {
 					++$next_img_id;
 				}
 
-				$source_id = $slice['source_id_base'] + $i;
-				$payload   = $generator->generate( $i, $image_refs );
+				$source_id        = $slice['source_id_base'] + $i;
+				$source_parent_id = isset( $slice['parent_links'][ $i ] )
+					? $slice['source_id_base'] + $slice['parent_links'][ $i ]
+					: 0;
+				$payload          = $generator->generate( $i, $image_refs );
 
 				if ( ! $slice['assign_terms'] ) {
 					$payload['terms'] = array();
@@ -215,7 +218,8 @@ final class Seeder_Parity_Fixture {
 				$this->source_rest_bodies[ $source_id ]      = $this->payload_to_rest_body(
 					$source_id,
 					$payload,
-					$slice['author_user_id']
+					$slice['author_user_id'],
+					$source_parent_id
 				);
 			}
 		}
@@ -341,18 +345,21 @@ final class Seeder_Parity_Fixture {
 	 *
 	 * Mirrors the shape of a real wp/v2 post response: title/content/excerpt are
 	 * wrapped in [ 'raw' => ... ], taxonomy assignments land under
-	 * _embedded['wp:term'], and the plugin's safe_publish_author block is
-	 * stamped with the slice's author.
+	 * _embedded['wp:term'], the plugin's safe_publish_author block is stamped
+	 * with the slice's author, and parent carries the source parent ID (0 for
+	 * top-level).
 	 *
-	 * @param int                  $source_id      Source post ID.
-	 * @param array<string, mixed> $payload        Generator payload.
-	 * @param int                  $author_user_id Dest user whose identity stamps safe_publish_author.
+	 * @param int                  $source_id        Source post ID.
+	 * @param array<string, mixed> $payload          Generator payload.
+	 * @param int                  $author_user_id   Dest user whose identity stamps safe_publish_author.
+	 * @param int                  $source_parent_id Source parent post ID; 0 for top-level.
 	 * @return array<string, mixed>
 	 */
 	private function payload_to_rest_body(
 		int $source_id,
 		array $payload,
-		int $author_user_id
+		int $author_user_id,
+		int $source_parent_id
 	): array {
 		$author = get_userdata( $author_user_id );
 
@@ -375,7 +382,7 @@ final class Seeder_Parity_Fixture {
 			'ping_status'         => 'open',
 			'menu_order'          => 0,
 			'password'            => '',
-			'parent'              => 0,
+			'parent'              => $source_parent_id,
 			'meta'                => $payload['meta'],
 			'safe_publish_author' => array(
 				'email'        => false !== $author ? (string) $author->user_email : '',
