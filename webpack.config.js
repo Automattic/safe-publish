@@ -37,4 +37,19 @@ module.exports = {
 			},
 		],
 	},
+	optimization: {
+		...defaultConfig.optimization,
+		splitChunks: {
+			...defaultConfig.optimization.splitChunks,
+			cacheGroups: {
+				...defaultConfig.optimization.splitChunks.cacheGroups,
+				// Merge every entry's style.scss into one fixed-name
+				// stylesheet, enqueued on all admin pages.
+				style: {
+					...defaultConfig.optimization.splitChunks.cacheGroups.style,
+					name: 'style-safe-publish',
+				},
+			},
+		},
+	},
 };

@@ -17,13 +17,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Enqueues a built admin bundle plus the shared style/data wiring.
  *
- * The Source Posts, Imports, Exports, and Audit Log admin pages each
- * enqueue the same shape: one entry script, the design tokens, the
- * bundle's split-out style-index.css, the static admin/react-components
- * stylesheets, and an inline `window.safePublishAdminData = {...}` for
- * the React side. This helper centralizes that wiring so a new page can
- * opt in by calling {@see self::enqueue_bundle()} with its own entry
- * name and inline data.
+ * The Manage, Exports, and Audit Log admin pages each enqueue the same
+ * shape: one entry script, the design tokens, the shared compiled
+ * stylesheet, the static admin stylesheet, and an inline
+ * `window.safePublishAdminData = {...}` for the React side. This helper
+ * centralizes that wiring so a new page can opt in by calling
+ * {@see self::enqueue_bundle()} with its own entry name and inline data.
  */
 final class Admin_Assets {
 
@@ -35,12 +34,12 @@ final class Admin_Assets {
 	 * `$inline_data` fails to JSON-encode — surfaces an admin notice in
 	 * `WP_DEBUG` so developers can diagnose.
 	 *
-	 * @param string               $entry         Bundle entry name (`index`/`imports`/`exports`/`audit-log`),
+	 * @param string               $entry         Bundle entry name (`posts`/`exports`/`audit-log`),
 	 *                                            locating `build/{entry}.js` and
 	 *                                            `build/{entry}.asset.php`.
 	 * @param string               $script_handle Handle to register the entry script under.
-	 * @param string               $style_handle  Handle to register the bundle's split-out
-	 *                                            style-index.css under, when that file exists.
+	 * @param string               $style_handle  Handle to register the shared compiled
+	 *                                            stylesheet under, when the build output exists.
 	 * @param array<string, mixed> $inline_data   JSON-encodable payload assigned to
 	 *                                            `window.safePublishAdminData`.
 	 */
@@ -91,9 +90,9 @@ final class Admin_Assets {
 			$script_version
 		);
 
-		// @wordpress/scripts emits one style-<entry>.css per entry.
-		$style_file_path = $base_path . 'build/style-' . $entry . '.css';
-		$style_file_url  = $base_url . 'build/style-' . $entry . '.css';
+		// All entries share one compiled stylesheet (see webpack.config.js).
+		$style_file_path = $base_path . 'build/style-safe-publish.css';
+		$style_file_url  = $base_url . 'build/style-safe-publish.css';
 
 		if ( file_exists( $style_file_path ) ) {
 			wp_enqueue_style(
@@ -108,13 +107,6 @@ final class Admin_Assets {
 			'safe-publish-admin-style',
 			$base_url . 'assets/css/admin.css',
 			array( 'safe-publish-tokens' ),
-			$script_version
-		);
-
-		wp_enqueue_style(
-			'safe-publish-react-components-style',
-			$base_url . 'assets/css/react-components.css',
-			array( 'wp-components', 'safe-publish-tokens' ),
 			$script_version
 		);
 
