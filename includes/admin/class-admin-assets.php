@@ -101,6 +101,8 @@ final class Admin_Assets {
 				array( 'wp-components', 'safe-publish-tokens' ),
 				$script_version
 			);
+			// Serve the RTLCSS-built -rtl variant on RTL locales.
+			wp_style_add_data( $style_handle, 'rtl', 'replace' );
 		}
 
 		wp_enqueue_style(
