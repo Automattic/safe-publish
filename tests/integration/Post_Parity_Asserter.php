@@ -461,11 +461,11 @@ final class Post_Parity_Asserter {
 	}
 
 	/**
-	 * Asserts the dest post_author resolves to a WP user whose email matches the
-	 * source safe_publish_author block. Email is the importer's only match key;
-	 * the source login round-trips via META_SOURCE_AUTHOR_LOGIN (asserted in
-	 * assert_plugin_added_meta) and display_name is not propagated, so neither
-	 * is re-checked here.
+	 * Asserts the dest post_author resolves to a WP user whose email matches
+	 * the source safe_publish_author block. Email is the importer's only match
+	 * key; the source login round-trips via META_SOURCE_AUTHOR_LOGIN (asserted
+	 * in assert_plugin_added_meta) and display_name is not propagated, so
+	 * neither is re-checked here.
 	 *
 	 * @param array<string, mixed> $source_body Source REST response body.
 	 * @param WP_Post              $dest_post   Imported destination post.
