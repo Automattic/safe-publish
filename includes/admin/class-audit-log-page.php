@@ -50,6 +50,7 @@ final class Audit_Log_Page {
 		'export',
 		'import',
 		'media',
+		'reconcile',
 		'settings',
 	);
 
@@ -58,7 +59,7 @@ final class Audit_Log_Page {
 	 *
 	 * @var string[]
 	 */
-	public const KNOWN_LEVELS = array( 'info', 'error' );
+	public const KNOWN_LEVELS = array( 'info', 'warning', 'error' );
 
 	/**
 	 * Maximum rows the AJAX handler will return in one page.
@@ -206,7 +207,7 @@ final class Audit_Log_Page {
 	 *
 	 * Request params (all optional):
 	 *   - channels[]   string[]  Filter by channels. Unknown values match zero rows.
-	 *   - levels[]     string[]  'info' and/or 'error'.
+	 *   - levels[]     string[]  'info', 'warning', and/or 'error'.
 	 *   - event_search string    Partial match on the event column.
 	 *   - after        string    ISO 8601 datetime or YYYY-MM-DD; lower bound on created_at_gmt.
 	 *   - before       string    ISO 8601 datetime or YYYY-MM-DD; upper bound (end-of-day if date-only).

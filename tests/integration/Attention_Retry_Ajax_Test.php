@@ -11,13 +11,16 @@ namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Utils\Attention_Issues_Table;
+use Safe_Publish\Utils\Audit_Log_Table;
+use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
 
 /**
- * Exercises the controller glue between the retry request and the fixups: type
- * dispatch, target_kind threading, the retryable allowlist, and the capability
- * gate. The fixups themselves are covered in Attention_Issues_Test.
+ * Exercises the controller glue between the retry request and the
+ * reconciliations: type dispatch, target_kind threading, the retryable
+ * allowlist, and the capability gate. The reconciliations themselves are
+ * covered in Attention_Issues_Test.
  */
 class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 
@@ -43,6 +46,8 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 		parent::setUp();
 
 		Attention_Issues_Table::create_table();
+		Audit_Log_Table::create_table();
+		Audit_Log_Table::clear( 'reconcile' );
 		$this->attention = new Attention_Issues_Repository();
 
 		wp_set_current_user(
@@ -123,7 +128,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		// ASSERT: the parent is linked and the row is gone — proving the dispatch
-		// routed to the parent fixup, not the block one.
+		// routed to the parent reconciliation, not the block one.
 		$this->assertTrue( $response['data']['resolved'] );
 		$this->assertSame(
 			$parent_id,
@@ -193,7 +198,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: rejected before any fixup runs.
+		// ASSERT: rejected before any reconciliation runs.
 		$this->assertFalse( $response['success'] );
 	}
 
@@ -211,7 +216,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: rejected before any fixup runs.
+		// ASSERT: rejected before any reconciliation runs.
 		$this->assertFalse( $response['success'] );
 	}
 
@@ -249,6 +254,117 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 				'post'
 			)
 		);
+	}
+
+	/**
+	 * Verifies that a successful retry records a reconcile info event tagged with
+	 * the issue type, completing the dual-write contract.
+	 */
+	public function test_retry_logs_reconcile_resolved_event(): void {
+		// ARRANGE: a resolvable block reference and its open issue.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => $this->nav_link_content( 9700, 'post-type' ) )
+		);
+		$this->seed_target_post( 9700 );
+		$this->open_issue( $post_id, 'unmapped_block_reference', 9700, 'post' );
+
+		// ACT: retry through the endpoint.
+		$response = $this->retry(
+			array(
+				'affected_post_id' => (string) $post_id,
+				'issue_type'       => 'unmapped_block_reference',
+				'target_ref'       => '9700',
+				'target_kind'      => 'post',
+			)
+		);
+
+		// ASSERT: resolved, and a reconcile info event names the issue type.
+		$this->assertTrue( $response['data']['resolved'] );
+		$events = Audit_Log_Table::get_events(
+			array( 'channel' => 'reconcile' )
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( 'info', $events[0]['level'] );
+		$this->assertSame( Log_Events::RECONCILE_RESOLVED, $events[0]['event'] );
+		$this->assertSame(
+			'unmapped_block_reference',
+			$events[0]['data']['issue_type']
+		);
+	}
+
+	/**
+	 * Verifies that a retry that cannot resolve the reference records a reconcile
+	 * warning instead of clearing the issue.
+	 */
+	public function test_unresolved_retry_logs_reconcile_warning(): void {
+		// ARRANGE: a stale ref whose target was never imported.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => $this->nav_link_content( 9999, 'post-type' ) )
+		);
+		$this->open_issue( $post_id, 'unmapped_block_reference', 9999, 'post' );
+
+		// ACT: retry; the target is absent, so the issue stays open.
+		$response = $this->retry(
+			array(
+				'affected_post_id' => (string) $post_id,
+				'issue_type'       => 'unmapped_block_reference',
+				'target_ref'       => '9999',
+				'target_kind'      => 'post',
+			)
+		);
+
+		// ASSERT: unresolved, and a reconcile warning was recorded.
+		$this->assertFalse( $response['data']['resolved'] );
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel' => 'reconcile',
+				'level'   => 'warning',
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame(
+			Log_Events::RECONCILE_UNRESOLVED,
+			$events[0]['event']
+		);
+	}
+
+	/**
+	 * Verifies that retrying an error-severity issue that stays open records a
+	 * reconcile error, preserving the severity in the audit log.
+	 */
+	public function test_unresolved_error_retry_logs_reconcile_error(): void {
+		// ARRANGE: an error-severity nav issue whose menu is absent, so the retry
+		// finds nothing to reconcile and the row stays.
+		$post_id = self::factory()->post->create();
+		$this->attention->upsert_issue(
+			$post_id,
+			'nav_ref_rewrite_failed',
+			9300,
+			'post',
+			'error',
+			self::SOURCE
+		);
+
+		// ACT: retry through the endpoint.
+		$response = $this->retry(
+			array(
+				'affected_post_id' => (string) $post_id,
+				'issue_type'       => 'nav_ref_rewrite_failed',
+				'target_ref'       => '9300',
+				'target_kind'      => 'post',
+			)
+		);
+
+		// ASSERT: unresolved, and an error-level reconcile event recorded.
+		$this->assertFalse( $response['data']['resolved'] );
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel' => 'reconcile',
+				'level'   => 'error',
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( Log_Events::RECONCILE_FAILED, $events[0]['event'] );
 	}
 
 	/**

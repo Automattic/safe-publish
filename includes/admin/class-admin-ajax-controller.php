@@ -16,6 +16,7 @@ use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Datetime_Sanitizer;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Reconcile_Logger;
 use Safe_Publish\Utils\Sync_State_Comparator;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
@@ -89,7 +90,7 @@ final class Admin_Ajax_Controller {
 	const AVAILABLE_FILL_MAX_FETCHES = 15;
 
 	/**
-	 * Attention issue types the retry endpoint can run a fixup for. Doubles as
+	 * Attention issue types the retry endpoint can reconcile. Doubles as
 	 * the allowlist for the issue_type request param.
 	 *
 	 * @var string[]
@@ -384,10 +385,11 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Re-runs an issue's fixup and reports whether it cleared.
+	 * Re-runs an issue's reconciliation and reports whether it cleared.
 	 *
-	 * Self-verifying: the row is resolved or refreshed by the fixup itself, so
-	 * the response reflects the issue's state after the real work ran.
+	 * Self-verifying: the row is resolved or refreshed by the reconciliation
+	 * itself, so the response reflects the issue's state after the real work
+	 * ran.
 	 */
 	public function ajax_retry_attention_issue(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
@@ -432,11 +434,58 @@ final class Admin_Ajax_Controller {
 			$target_kind
 		);
 
+		$this->log_reconcile_outcome( $issue, $resolved );
+
 		wp_send_json_success( array( 'resolved' => $resolved ) );
 	}
 
 	/**
-	 * Routes a fetched issue row to the fixup for its type.
+	 * Records the retry's reconciliation outcome to the audit log.
+	 *
+	 * The cleared/unresolved/failed result and the issue's severity select a
+	 * reconcile info/warning/error event.
+	 *
+	 * @param array $issue    Pre-retry issue row.
+	 * @param bool  $resolved Whether the issue cleared.
+	 */
+	private function log_reconcile_outcome( array $issue, bool $resolved ): void {
+		$logger           = new Reconcile_Logger();
+		$issue_type       = (string) $issue['issue_type'];
+		$affected_post_id = (int) $issue['affected_post_id'];
+		$target_ref       = (int) $issue['target_ref'];
+		$target_kind      = (string) $issue['target_kind'];
+
+		if ( $resolved ) {
+			$logger->resolved(
+				$issue_type,
+				$affected_post_id,
+				$target_ref,
+				$target_kind
+			);
+			return;
+		}
+
+		if ( 'error' === (string) $issue['severity'] ) {
+			$logger->failed(
+				$issue_type,
+				$affected_post_id,
+				$target_ref,
+				$target_kind,
+				'Reconciliation did not clear the issue on retry.'
+			);
+			return;
+		}
+
+		$logger->unresolved(
+			$issue_type,
+			$affected_post_id,
+			$target_ref,
+			$target_kind
+		);
+	}
+
+	/**
+	 * Routes a fetched issue row to the reconciliation for its type.
 	 *
 	 * @param array $issue Issue row from the repository.
 	 */

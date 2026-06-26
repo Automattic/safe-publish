@@ -174,7 +174,7 @@ export type AttentionIssueType =
 /**
  * One open degradation issue, keyed by (affected_post_id, issue_type,
  * target_ref, target_kind). `retryable` is the server's signal that the row's
- * fixup can run.
+ * reconciliation can run.
  */
 export interface AttentionIssue {
 	affected_post_id: number;
@@ -464,7 +464,7 @@ export interface ExportEvent {
 export interface AuditEvent {
 	id: number;
 	channel: string;
-	level: 'info' | 'error';
+	level: 'info' | 'warning' | 'error';
 	event: string;
 	date: string;
 	actor_user_id: number;

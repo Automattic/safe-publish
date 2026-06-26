@@ -412,7 +412,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Verifies that a navigation rewrite failure opens an error issue and Retry
-	 * re-runs the fixup to clear it.
+	 * re-runs the reconciliation to clear it.
 	 */
 	public function test_nav_rewrite_failure_opens_error_issue_and_retry_clears_it(): void {
 		// ARRANGE: a previously imported menu references menu 8300 by source ID.

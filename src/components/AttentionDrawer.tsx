@@ -1,6 +1,6 @@
 /**
  * Side drawer that lists open degradation issues for the connected source and
- * offers a self-verifying Retry where the fixup is callable.
+ * offers a self-verifying Retry where the reconciliation is callable.
  *
  * @file This file defines the AttentionDrawer component.
  */
