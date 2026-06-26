@@ -85,11 +85,11 @@ final class Seeder_Parity_Fixture {
 	/**
 	 * Constructor.
 	 *
-	 * @param string                                                                                           $source_base_url Source site URL.
-	 * @param int                                                                                              $reference_time  Unix timestamp used as "now" for date math.
-	 * @param int                                                                                              $media_id_base   Source media IDs start one past this value.
-	 * @param int                                                                                              $admin_user_id   User that owns imported posts and media.
-	 * @param list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool}> $slices One descriptor per post-type slice in the batch.
+	 * @param string                                                                                                                $source_base_url Source site URL.
+	 * @param int                                                                                                                   $reference_time  Unix timestamp used as "now" for date math.
+	 * @param int                                                                                                                   $media_id_base   Source media IDs start one past this value.
+	 * @param int                                                                                                                   $admin_user_id   User the import runs as; owns sideloaded media.
+	 * @param list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool, author_user_id: int}> $slices One descriptor per post-type slice in the batch.
 	 */
 	public function __construct(
 		private string $source_base_url,
@@ -214,7 +214,8 @@ final class Seeder_Parity_Fixture {
 				$this->endpoint_by_source_id[ $source_id ]   = $slice['endpoint'];
 				$this->source_rest_bodies[ $source_id ]      = $this->payload_to_rest_body(
 					$source_id,
-					$payload
+					$payload,
+					$slice['author_user_id']
 				);
 			}
 		}
@@ -341,14 +342,19 @@ final class Seeder_Parity_Fixture {
 	 * Mirrors the shape of a real wp/v2 post response: title/content/excerpt are
 	 * wrapped in [ 'raw' => ... ], taxonomy assignments land under
 	 * _embedded['wp:term'], and the plugin's safe_publish_author block is
-	 * included so the destination's author resolution can run.
+	 * stamped with the slice's author.
 	 *
-	 * @param int                  $source_id Source post ID.
-	 * @param array<string, mixed> $payload   Generator payload.
+	 * @param int                  $source_id      Source post ID.
+	 * @param array<string, mixed> $payload        Generator payload.
+	 * @param int                  $author_user_id Dest user whose identity stamps safe_publish_author.
 	 * @return array<string, mixed>
 	 */
-	private function payload_to_rest_body( int $source_id, array $payload ): array {
-		$admin = get_userdata( $this->admin_user_id );
+	private function payload_to_rest_body(
+		int $source_id,
+		array $payload,
+		int $author_user_id
+	): array {
+		$author = get_userdata( $author_user_id );
 
 		return array(
 			'id'                  => $source_id,
@@ -372,9 +378,9 @@ final class Seeder_Parity_Fixture {
 			'parent'              => 0,
 			'meta'                => $payload['meta'],
 			'safe_publish_author' => array(
-				'email'        => false !== $admin ? (string) $admin->user_email : '',
-				'login'        => false !== $admin ? (string) $admin->user_login : '',
-				'display_name' => false !== $admin ? (string) $admin->display_name : '',
+				'email'        => false !== $author ? (string) $author->user_email : '',
+				'login'        => false !== $author ? (string) $author->user_login : '',
+				'display_name' => false !== $author ? (string) $author->display_name : '',
 			),
 			'_embedded'           => array(
 				'wp:term' => $this->embedded_terms( $payload['terms'] ),

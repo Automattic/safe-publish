@@ -70,11 +70,19 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	private static Seeder_Parity_Fixture $fixture;
 
 	/**
-	 * Admin user that owns imported posts and authors REST mock responses.
+	 * Admin user that runs the import and authors the post slice.
 	 *
 	 * @var int
 	 */
 	private static int $admin_user_id;
+
+	/**
+	 * Authors the page slice, distinct from the importing admin so the suite
+	 * exercises resolution to a non-current user.
+	 *
+	 * @var int
+	 */
+	private static int $page_author_id;
 
 	/**
 	 * Defines the auth secret and history tables, creates the admin user and
@@ -92,8 +100,15 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 		Imports_Table::create_table();
 		Import_Items_Table::create_table();
 
-		self::$admin_user_id = $factory->user->create(
+		self::$admin_user_id  = $factory->user->create(
 			array( 'role' => 'administrator' )
+		);
+		self::$page_author_id = $factory->user->create(
+			array(
+				'role'       => 'editor',
+				'user_email' => 'page-author@dest.example',
+				'user_login' => 'page-author',
+			)
 		);
 		wp_set_current_user( self::$admin_user_id );
 
@@ -107,7 +122,7 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 			self::REFERENCE_TIME,
 			self::SOURCE_MEDIA_ID_BASE,
 			self::$admin_user_id,
-			self::batch_slices()
+			self::batch_slices( self::$admin_user_id, self::$page_author_id )
 		);
 		self::$fixture->seed();
 	}
@@ -119,6 +134,7 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	public static function wpTearDownAfterClass(): void {
 		self::$fixture->cleanup();
 		self::delete_user( self::$admin_user_id );
+		self::delete_user( self::$page_author_id );
 		delete_option( Options::OPTION_CONNECTED_SITE_URL );
 	}
 
@@ -139,9 +155,14 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	 * shortcode parity on pages too. Pages carry no category/post_tag
 	 * assignments, mirroring a real page source.
 	 *
-	 * @return list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool}>
+	 * @param int $post_author_id Dest user the post slice is authored by.
+	 * @param int $page_author_id Dest user the page slice is authored by.
+	 * @return list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool, author_user_id: int}>
 	 */
-	private static function batch_slices(): array {
+	private static function batch_slices(
+		int $post_author_id,
+		int $page_author_id
+	): array {
 		return array(
 			array(
 				'type'           => 'post',
@@ -149,6 +170,7 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				'count'          => 6,
 				'source_id_base' => self::SOURCE_ID_BASE,
 				'assign_terms'   => true,
+				'author_user_id' => $post_author_id,
 			),
 			array(
 				'type'           => 'page',
@@ -156,6 +178,7 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				'count'          => 4,
 				'source_id_base' => self::SOURCE_PAGE_ID_BASE,
 				'assign_terms'   => false,
+				'author_user_id' => $page_author_id,
 			),
 		);
 	}
@@ -455,6 +478,63 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				$this
 			);
 		}
+	}
+
+	/**
+	 * Verifies that each imported post's post_author resolves to a destination
+	 * user whose email matches the source safe_publish_author block.
+	 */
+	public function test_author_columns_parity(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: each dest post_author matches the source author by email.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			Post_Parity_Asserter::assert_author_columns(
+				self::$fixture->source_rest_bodies[ $source_id ],
+				get_post( $dest_id ),
+				$this
+			);
+		}
+	}
+
+	/**
+	 * Verifies that author resolution is keyed on the source email: posts that
+	 * share an author email resolve to one dest user (dedup), and the page
+	 * slice's distinct author resolves to a different dest user than the post
+	 * slice. Proves the importer matches by email rather than attributing every
+	 * post to the importing user.
+	 */
+	public function test_author_resolves_to_distinct_dest_users(): void {
+		// ARRANGE: collect the dest user each source author email resolved to,
+		// asserting along the way that one email never maps to two dest users.
+		$dest_user_by_email = array();
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$body      = self::$fixture->source_rest_bodies[ $source_id ];
+			$email     = (string) ( $body['safe_publish_author']['email'] ?? '' );
+			$author_id = (int) get_post( $dest_id )->post_author;
+
+			if ( isset( $dest_user_by_email[ $email ] ) ) {
+				$this->assertSame(
+					$dest_user_by_email[ $email ],
+					$author_id,
+					"Source author '{$email}' should resolve to one dest user"
+				);
+			} else {
+				$dest_user_by_email[ $email ] = $author_id;
+			}
+		}
+
+		// ASSERT: the batch exercised more than one author, and distinct source
+		// emails resolved to distinct dest users.
+		$this->assertGreaterThan(
+			1,
+			count( $dest_user_by_email ),
+			'Batch should seed more than one source author email'
+		);
+		$this->assertSame(
+			count( $dest_user_by_email ),
+			count( array_unique( array_values( $dest_user_by_email ) ) ),
+			'Distinct source author emails should resolve to distinct dest users'
+		);
 	}
 
 	/**
