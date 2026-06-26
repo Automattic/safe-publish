@@ -83,13 +83,14 @@ class Reconcile_Logger extends Logger {
 	}
 
 	/**
-	 * Logs a reconciliation whose write failed.
+	 * Logs an error-severity reconciliation that left the issue unresolved,
+	 * whether the write failed or the retry could not clear it.
 	 *
 	 * @param string $issue_type       Tracked issue type being reconciled.
 	 * @param int    $affected_post_id Post holding the reference.
 	 * @param int    $target_ref       Source id the reference points at.
 	 * @param string $target_kind      'post' or 'term'.
-	 * @param string $error            Failure detail from the write.
+	 * @param string $error            Detail on why the issue remains.
 	 */
 	public function failed(
 		string $issue_type,
