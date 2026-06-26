@@ -66,16 +66,24 @@ final class Post_Parity_Asserter {
 	);
 
 	/**
-	 * Identity-style columns: post_type, slug.
+	 * Identity-style columns checked by raw equality: post_type.
 	 *
-	 * Source REST field => wp_posts column.
+	 * Source REST field => wp_posts column. post_name is checked separately (see
+	 * SLUG_COLUMN) because the importer runs the source slug through
+	 * sanitize_title(), so raw equality fails for any non-ASCII slug.
 	 *
 	 * @var array<string, string>
 	 */
 	private const IDENTITY_COLUMNS = array(
 		'type' => 'post_type',
-		'slug' => 'post_name',
 	);
+
+	/**
+	 * Slug column, checked as sanitize_title( source slug ) rather than raw
+	 * equality, mirroring wp_insert_post()'s slug handling. The check stays
+	 * identical for already-sanitized ASCII slugs.
+	 */
+	private const SLUG_COLUMN = 'post_name';
 
 	/**
 	 * Content-style columns checked for parity. post_content lives in
@@ -333,7 +341,8 @@ final class Post_Parity_Asserter {
 	private const FEATURED_MEDIA_TYPE_VALUE = 'featured_image';
 
 	/**
-	 * Asserts parity for identity-style columns (type, slug).
+	 * Asserts parity for identity columns: post_type by raw equality, post_name
+	 * as sanitize_title() of the source slug.
 	 *
 	 * @param array<string, mixed> $source_body Source REST response body.
 	 * @param WP_Post              $dest_post   Imported destination post.
@@ -349,6 +358,14 @@ final class Post_Parity_Asserter {
 			$source_body,
 			$dest_post,
 			$test
+		);
+
+		$source_slug = (string) self::source_value( $source_body, 'slug' );
+		$test->assertSame(
+			sanitize_title( $source_slug ),
+			(string) $dest_post->post_name,
+			"wp_posts column '" . self::SLUG_COLUMN . "' should be"
+			. ' sanitize_title() of the source slug'
 		);
 	}
 
@@ -577,6 +594,7 @@ final class Post_Parity_Asserter {
 	public static function assert_no_unmodeled_columns( TestCase $test ): void {
 		$classified = array_merge(
 			array_values( self::IDENTITY_COLUMNS ),
+			array( self::SLUG_COLUMN ),
 			array_values( self::CONTENT_COLUMNS ),
 			array_values( self::STATUS_COLUMNS ),
 			array_values( self::MISC_COLUMNS ),

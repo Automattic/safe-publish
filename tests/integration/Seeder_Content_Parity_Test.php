@@ -63,6 +63,15 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	private const SOURCE_MEDIA_ID_BASE = 9500000;
 
 	/**
+	 * Source post IDs for the bespoke edge-case pages (non-ASCII and empty
+	 * content). Same high range, distinct from every other base. Both seed as
+	 * pages so the category-less body never picks up the default category that
+	 * WordPress auto-assigns to a post.
+	 */
+	private const EDGE_NON_ASCII_SOURCE_ID = 9200001;
+	private const EDGE_EMPTY_SOURCE_ID     = 9200002;
+
+	/**
 	 * Class-wide imported batch shared by every test method.
 	 *
 	 * @var Seeder_Parity_Fixture
@@ -122,7 +131,8 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 			self::REFERENCE_TIME,
 			self::SOURCE_MEDIA_ID_BASE,
 			self::$admin_user_id,
-			self::batch_slices( self::$admin_user_id, self::$page_author_id )
+			self::batch_slices( self::$admin_user_id, self::$page_author_id ),
+			self::batch_edge_cases( self::$page_author_id )
 		);
 		self::$fixture->seed();
 	}
@@ -156,7 +166,10 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	 * 1, non-adjacent in import order, so post_parent resolution is proven by
 	 * source ID rather than import position. Pages carry no category/post_tag
 	 * assignments, mirroring a real page source. Posts stay flat
-	 * (non-hierarchical).
+	 * (non-hierarchical). Even-indexed bodies carry non-default
+	 * comment/ping/password/menu_order scalars and odd-indexed stay on the
+	 * WordPress defaults (see Seeder_Parity_Fixture::scalars_for_index()).
+	 * Bespoke edge cases are seeded separately by batch_edge_cases().
 	 *
 	 * @param int $post_author_id Dest user the post slice is authored by.
 	 * @param int $page_author_id Dest user the page slice is authored by.
@@ -184,6 +197,33 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				'assign_terms'   => false,
 				'author_user_id' => $page_author_id,
 				'parent_links'   => array( 3 => 1 ),
+			),
+		);
+	}
+
+	/**
+	 * Describes the bespoke edge-case bodies appended to the batch: a non-ASCII
+	 * page (multibyte title/slug/content plus unescaped entities) and an
+	 * empty-content page. Both seed as pages so the category-less body never
+	 * picks up WordPress' default category, and both stay top-level on default
+	 * scalars; the fixture supplies their content.
+	 *
+	 * @param int $page_author_id Dest user the edge-case pages are authored by.
+	 * @return list<array{kind: string, endpoint: string, source_id: int, author_user_id: int}>
+	 */
+	private static function batch_edge_cases( int $page_author_id ): array {
+		return array(
+			array(
+				'kind'           => 'non_ascii',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_NON_ASCII_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+			),
+			array(
+				'kind'           => 'empty',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_EMPTY_SOURCE_ID,
+				'author_user_id' => $page_author_id,
 			),
 		);
 	}
@@ -856,5 +896,94 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 		// ARRANGE + ACT: nothing to set up; pure static check.
 		// ASSERT: every attachment-applicable column is classified.
 		Post_Parity_Asserter::assert_no_unmodeled_attachment_columns( $this );
+	}
+
+	/**
+	 * Verifies that the empty-content edge page imports with empty post_content
+	 * and no injected markers, locking the empty-body path.
+	 */
+	public function test_empty_content_imports_empty(): void {
+		// ARRANGE + ACT: batch already imported.
+		$this->assertArrayHasKey(
+			self::EDGE_EMPTY_SOURCE_ID,
+			self::$fixture->dest_post_ids,
+			'Empty-content edge page should import to a dest post'
+		);
+
+		// ASSERT: the empty-content page kept empty post_content.
+		$dest_id = self::$fixture->dest_post_ids[ self::EDGE_EMPTY_SOURCE_ID ];
+		$this->assertSame(
+			'',
+			(string) get_post( $dest_id )->post_content,
+			'Empty source content should import as empty post_content'
+		);
+	}
+
+	/**
+	 * Verifies that the non-ASCII edge page seeds multibyte characters, an
+	 * emoji, and unescaped entities, so the encoding and slug parity checks that
+	 * run over the whole batch are not vacuously satisfied by ASCII input.
+	 */
+	public function test_non_ascii_edge_seeds_multibyte_and_entities(): void {
+		// ARRANGE: read the non-ASCII edge page's source body.
+		$body    = self::$fixture->source_rest_bodies[ self::EDGE_NON_ASCII_SOURCE_ID ];
+		$content = (string) $body['content']['raw'];
+		$slug    = (string) $body['slug'];
+
+		// ASSERT: it imported, carries the multibyte/entity payload, and uses a
+		// slug that sanitize_title() actually transforms.
+		$this->assertArrayHasKey(
+			self::EDGE_NON_ASCII_SOURCE_ID,
+			self::$fixture->dest_post_ids,
+			'Non-ASCII edge page should import to a dest post'
+		);
+		$this->assertStringContainsString(
+			"\u{65e5}\u{672c}\u{8a9e}",
+			$content,
+			'Non-ASCII content should carry CJK characters'
+		);
+		$this->assertStringContainsString(
+			"\u{1f389}",
+			$content,
+			'Non-ASCII content should carry a 4-byte emoji'
+		);
+		$this->assertStringContainsString(
+			'&amp;',
+			$content,
+			'Non-ASCII content should carry an unescaped entity'
+		);
+		$this->assertStringContainsString(
+			'&mdash;',
+			$content,
+			'Non-ASCII content should carry a named entity'
+		);
+		$this->assertNotSame(
+			$slug,
+			sanitize_title( $slug ),
+			'Non-ASCII slug should be transformed by sanitize_title()'
+		);
+	}
+
+	/**
+	 * Verifies that no imported post raised an import warning, reverse-asserting
+	 * that the clean batch, including the empty and non-ASCII edge pages,
+	 * triggers no degradation.
+	 */
+	public function test_import_raised_no_warnings(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: warnings were captured for every imported post and each is
+		// empty.
+		$this->assertSame(
+			array_keys( self::$fixture->dest_post_ids ),
+			array_keys( self::$fixture->warnings_by_source_id ),
+			'Warnings should be captured for every imported post'
+		);
+		foreach ( self::$fixture->warnings_by_source_id as $source_id => $warnings ) {
+			$this->assertSame(
+				array(),
+				$warnings,
+				"Source ID {$source_id} should import without warnings"
+			);
+		}
 	}
 }
