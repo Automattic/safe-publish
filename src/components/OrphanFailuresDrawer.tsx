@@ -9,7 +9,6 @@ import { createOrphanFailuresActions } from '../actions';
 import { DEFAULT_ITEMS_PER_PAGE, LAYOUT_TABLE } from '../constants';
 import { formatDateTime, getErrorMessage } from '../utils';
 import {
-	Button,
 	Modal,
 	Notice,
 	Spinner,
@@ -202,8 +201,7 @@ const OrphanFailuresDrawer = ( {
 			title={ __( 'Orphan failures', 'safe-publish' ) }
 			onRequestClose={ onClose }
 			className="safe-publish-orphan-failures-drawer"
-			isFullScreen={ false }
-			size="medium"
+			size="fill"
 			__experimentalHideHeader={ false }
 		>
 			<div
@@ -231,9 +229,6 @@ const OrphanFailuresDrawer = ( {
 							} }
 						/>
 					</div>
-					<Button variant="tertiary" onClick={ onClose }>
-						{ __( 'Close', 'safe-publish' ) }
-					</Button>
 				</div>
 				{ error && (
 					<Notice status="error" onRemove={ () => setError( null ) }>
