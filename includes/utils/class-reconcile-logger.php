@@ -33,6 +33,60 @@ class Reconcile_Logger extends Logger {
 	}
 
 	/**
+	 * Records a reconciliation outcome, routing it to the matching event.
+	 *
+	 * @param Reconcile_Outcome $outcome          What the reconciliation did.
+	 * @param string            $issue_type       Tracked issue type reconciled.
+	 * @param int               $affected_post_id Post holding the reference.
+	 * @param int               $target_ref       Source id of the target.
+	 * @param string            $target_kind      'post' or 'term'.
+	 */
+	public function record(
+		Reconcile_Outcome $outcome,
+		string $issue_type,
+		int $affected_post_id,
+		int $target_ref,
+		string $target_kind
+	): void {
+		switch ( $outcome->type ) {
+			case Reconcile_Outcome::RESOLVED:
+				$this->resolved(
+					$issue_type,
+					$affected_post_id,
+					$target_ref,
+					$target_kind
+				);
+				return;
+			case Reconcile_Outcome::WRITE_FAILED:
+				$this->failed(
+					$issue_type,
+					$affected_post_id,
+					$target_ref,
+					$target_kind,
+					$outcome->detail
+				);
+				return;
+			case Reconcile_Outcome::TARGET_ABSENT:
+				$this->target_absent(
+					$issue_type,
+					$affected_post_id,
+					$target_ref,
+					$target_kind,
+					$outcome->detail
+				);
+				return;
+			default:
+				$this->unresolved(
+					$issue_type,
+					$affected_post_id,
+					$target_ref,
+					$target_kind,
+					$outcome->detail
+				);
+		}
+	}
+
+	/**
 	 * Logs a reference reconciled to its destination target.
 	 *
 	 * @param string $issue_type       Tracked issue type that was reconciled.
@@ -58,39 +112,72 @@ class Reconcile_Logger extends Logger {
 	}
 
 	/**
-	 * Logs a reference left unresolved after a reconciliation attempt.
+	 * Logs a reference left unresolved after a reconciliation attempt that
+	 * neither failed a write nor found the target absent.
 	 *
 	 * @param string $issue_type       Tracked issue type still unresolved.
 	 * @param int    $affected_post_id Post holding the reference.
 	 * @param int    $target_ref       Source id the reference points at.
 	 * @param string $target_kind      'post' or 'term'.
+	 * @param string $reason           Optional detail on why it remains.
 	 */
 	public function unresolved(
 		string $issue_type,
 		int $affected_post_id,
 		int $target_ref,
-		string $target_kind
+		string $target_kind,
+		string $reason = ''
 	): void {
-		$this->log_warning(
-			Log_Events::RECONCILE_UNRESOLVED,
-			$this->payload(
-				$issue_type,
-				$affected_post_id,
-				$target_ref,
-				$target_kind
-			)
+		$data = $this->payload(
+			$issue_type,
+			$affected_post_id,
+			$target_ref,
+			$target_kind
 		);
+
+		if ( '' !== $reason ) {
+			$data['reason'] = $reason;
+		}
+
+		$this->log_warning( Log_Events::RECONCILE_UNRESOLVED, $data );
 	}
 
 	/**
-	 * Logs an error-severity reconciliation that left the issue unresolved,
-	 * whether the write failed or the retry could not clear it.
+	 * Logs a reconciliation skipped because the target is not present on the
+	 * destination, so the retry was a no-op and the issue stays open.
 	 *
 	 * @param string $issue_type       Tracked issue type being reconciled.
 	 * @param int    $affected_post_id Post holding the reference.
 	 * @param int    $target_ref       Source id the reference points at.
 	 * @param string $target_kind      'post' or 'term'.
-	 * @param string $error            Detail on why the issue remains.
+	 * @param string $reason           Why the target is considered absent.
+	 */
+	public function target_absent(
+		string $issue_type,
+		int $affected_post_id,
+		int $target_ref,
+		string $target_kind,
+		string $reason
+	): void {
+		$data           = $this->payload(
+			$issue_type,
+			$affected_post_id,
+			$target_ref,
+			$target_kind
+		);
+		$data['reason'] = $reason;
+
+		$this->log_warning( Log_Events::RECONCILE_TARGET_ABSENT, $data );
+	}
+
+	/**
+	 * Logs a reconciliation whose write was attempted and failed.
+	 *
+	 * @param string $issue_type       Tracked issue type being reconciled.
+	 * @param int    $affected_post_id Post holding the reference.
+	 * @param int    $target_ref       Source id the reference points at.
+	 * @param string $target_kind      'post' or 'term'.
+	 * @param string $error            Detail on why the write failed.
 	 */
 	public function failed(
 		string $issue_type,

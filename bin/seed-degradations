@@ -1,0 +1,79 @@
+#!/bin/sh
+#
+# Seed (or purge) import degradations so the admin "Needs attention" and
+# "orphan failures" drawers can be exercised in a local environment.
+#
+# The source-side page setup runs in the tests-cli container (source site) and
+# the import runs in the cli container (destination site); a single WP-CLI
+# eval can only reach one site, so this wrapper routes each step and passes the
+# created page IDs from the first step into the second.
+#
+# Prefer running via `npm run seed:degradations` so wp-env resolves on PATH.
+#
+# Usage:
+#   bin/seed-degradations            Seed both drawers on the destination.
+#   bin/seed-degradations count=30   Also add 30 filler entries per drawer.
+#   bin/seed-degradations purge=1    Remove the seeded demo artifacts.
+
+set -e
+
+# wp-env mounts the plugin under wp-content/plugins/<checkout dir name>,
+# which differs from the canonical slug in worktrees.
+PLUGIN_DIR="$(basename "$(git rev-parse --show-toplevel)")"
+SCRIPT="./bin/seed-degradations.php"
+
+PURGE=""
+COUNT_ARG=""
+for arg in "$@"; do
+	case "$arg" in
+		purge=1)
+			PURGE="purge=1"
+			;;
+		count=*)
+			COUNT_ARG="$arg"
+			;;
+		*)
+			echo "Unknown argument '$arg'. Use purge=1, count=N, or no arguments." >&2
+			exit 1
+			;;
+	esac
+done
+
+# shellcheck disable=SC2086
+run() {
+	container="$1"
+	shift
+	# --use-include runs the file via include() instead of eval(), which is
+	# required for declare(strict_types=1) (PHP disallows declare inside eval).
+	wp-env run "$container" --env-cwd="wp-content/plugins/$PLUGIN_DIR" \
+		wp eval-file --use-include "$SCRIPT" "$@"
+}
+
+if [ -n "$PURGE" ]; then
+	echo "Purging destination demo artifacts..."
+	run cli step=import purge=1
+	echo "Purging source demo pages..."
+	run tests-cli step=source purge=1
+	echo "Purge complete."
+	exit 0
+fi
+
+echo "Creating source demo pages..."
+# shellcheck disable=SC2086
+SRC_OUT="$(run tests-cli step=source $COUNT_ARG 2>&1)"
+PARENT_ID="$(printf '%s\n' "$SRC_OUT" | sed -n 's/^SEED_PARENT_ID=//p' | tr -d '\r')"
+CHILD_ID="$(printf '%s\n' "$SRC_OUT" | sed -n 's/^SEED_CHILD_ID=//p' | tr -d '\r')"
+REFERENCES_ID="$(printf '%s\n' "$SRC_OUT" | sed -n 's/^SEED_REFERENCES_ID=//p' | tr -d '\r')"
+UNRESOLVABLE_ID="$(printf '%s\n' "$SRC_OUT" | sed -n 's/^SEED_UNRESOLVABLE_ID=//p' | tr -d '\r')"
+VOLUME_ID="$(printf '%s\n' "$SRC_OUT" | sed -n 's/^SEED_VOLUME_ID=//p' | tr -d '\r')"
+
+if [ -z "$PARENT_ID" ] || [ -z "$CHILD_ID" ] || [ -z "$REFERENCES_ID" ] || [ -z "$UNRESOLVABLE_ID" ] || [ -z "$VOLUME_ID" ]; then
+	echo "Source step did not return page IDs:" >&2
+	printf '%s\n' "$SRC_OUT" >&2
+	exit 1
+fi
+echo "Source parent=$PARENT_ID child=$CHILD_ID references=$REFERENCES_ID unresolvable=$UNRESOLVABLE_ID volume=$VOLUME_ID"
+
+echo "Importing on destination..."
+# shellcheck disable=SC2086
+run cli step=import "child_id=$CHILD_ID" "parent_id=$PARENT_ID" "references_id=$REFERENCES_ID" "unresolvable_id=$UNRESOLVABLE_ID" "volume_id=$VOLUME_ID" $COUNT_ARG

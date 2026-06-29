@@ -293,10 +293,10 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that a retry that cannot resolve the reference records a reconcile
-	 * warning instead of clearing the issue.
+	 * Verifies that retrying a block reference whose target was never imported
+	 * records a reconcile target-absent warning instead of clearing the issue.
 	 */
-	public function test_unresolved_retry_logs_reconcile_warning(): void {
+	public function test_target_absent_block_retry_logs_target_absent(): void {
 		// ARRANGE: a stale ref whose target was never imported.
 		$post_id = self::factory()->post->create(
 			array( 'post_content' => $this->nav_link_content( 9999, 'post-type' ) )
@@ -313,7 +313,45 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: unresolved, and a reconcile warning was recorded.
+		// ASSERT: unresolved, and a reconcile target-absent warning was recorded.
+		$this->assertFalse( $response['data']['resolved'] );
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel' => 'reconcile',
+				'level'   => 'warning',
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame(
+			Log_Events::RECONCILE_TARGET_ABSENT,
+			$events[0]['event']
+		);
+	}
+
+	/**
+	 * Verifies that retrying a block reference whose target is present but no
+	 * longer appears in the post content records a reconcile unresolved warning.
+	 */
+	public function test_unresolved_block_retry_logs_unresolved(): void {
+		// ARRANGE: the target is importable, but the post content holds no
+		// matching reference.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => 'No navigation block here.' )
+		);
+		$this->seed_target_post( 9700 );
+		$this->open_issue( $post_id, 'unmapped_block_reference', 9700, 'post' );
+
+		// ACT: retry through the endpoint.
+		$response = $this->retry(
+			array(
+				'affected_post_id' => (string) $post_id,
+				'issue_type'       => 'unmapped_block_reference',
+				'target_ref'       => '9700',
+				'target_kind'      => 'post',
+			)
+		);
+
+		// ASSERT: unresolved, and a plain reconcile unresolved warning recorded.
 		$this->assertFalse( $response['data']['resolved'] );
 		$events = Audit_Log_Table::get_events(
 			array(
@@ -329,12 +367,13 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that retrying an error-severity issue that stays open records a
-	 * reconcile error, preserving the severity in the audit log.
+	 * Verifies that retrying an error-severity nav issue whose menu is absent
+	 * records a target-absent warning, not an error, since no write was
+	 * attempted.
 	 */
-	public function test_unresolved_error_retry_logs_reconcile_error(): void {
+	public function test_target_absent_nav_retry_logs_target_absent_not_error(): void {
 		// ARRANGE: an error-severity nav issue whose menu is absent, so the retry
-		// finds nothing to reconcile and the row stays.
+		// has nothing to reconcile and the row stays.
 		$post_id = self::factory()->post->create();
 		$this->attention->upsert_issue(
 			$post_id,
@@ -355,16 +394,29 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: unresolved, and an error-level reconcile event recorded.
+		// ASSERT: unresolved, no error event recorded, and a target-absent
+		// warning recorded instead.
 		$this->assertFalse( $response['data']['resolved'] );
+		$this->assertCount(
+			0,
+			Audit_Log_Table::get_events(
+				array(
+					'channel' => 'reconcile',
+					'level'   => 'error',
+				)
+			)
+		);
 		$events = Audit_Log_Table::get_events(
 			array(
 				'channel' => 'reconcile',
-				'level'   => 'error',
+				'level'   => 'warning',
 			)
 		);
 		$this->assertCount( 1, $events );
-		$this->assertSame( Log_Events::RECONCILE_FAILED, $events[0]['event'] );
+		$this->assertSame(
+			Log_Events::RECONCILE_TARGET_ABSENT,
+			$events[0]['event']
+		);
 	}
 
 	/**
