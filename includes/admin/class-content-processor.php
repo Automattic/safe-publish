@@ -13,6 +13,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Reconcile_Outcome;
 use Safe_Publish\Validators\URL_Validator;
 use WP_Error;
 use WP_Post;
@@ -1132,16 +1133,17 @@ class Content_Processor {
 	 * @param int    $target_ref       Source id to repoint.
 	 * @param string $target_kind      'post' or 'term'.
 	 * @param string $source_site_url  Source identity scoping the lookup.
-	 * @return bool True when the reference resolved and was repointed.
+	 * @return Reconcile_Outcome Resolved when repointed; target_absent,
+	 *                           write_failed, or unresolved otherwise.
 	 */
 	public function repoint_block_reference(
 		int $affected_post_id,
 		int $target_ref,
 		string $target_kind,
 		string $source_site_url
-	): bool {
+	): Reconcile_Outcome {
 		if ( $target_ref <= 0 ) {
-			return false;
+			return Reconcile_Outcome::unresolved( 'Invalid target reference.' );
 		}
 
 		$dest_id = $this->resolve_target_ref(
@@ -1151,13 +1153,21 @@ class Content_Processor {
 		);
 
 		if ( 0 === $dest_id ) {
-			return false;
+			return Reconcile_Outcome::target_absent(
+				sprintf(
+					'Target %1$s %2$d is not imported on the destination.',
+					$target_kind,
+					$target_ref
+				)
+			);
 		}
 
 		$post = get_post( $affected_post_id );
 
 		if ( ! $post instanceof WP_Post || '' === $post->post_content ) {
-			return false;
+			return Reconcile_Outcome::unresolved(
+				'Affected post is missing or has no content.'
+			);
 		}
 
 		$registry = 'term' === $target_kind
@@ -1174,7 +1184,9 @@ class Content_Processor {
 		);
 
 		if ( ! $changed ) {
-			return false;
+			return Reconcile_Outcome::unresolved(
+				'No matching reference found in the post content.'
+			);
 		}
 
 		$persisted = $this->persist_repointed_content(
@@ -1183,13 +1195,15 @@ class Content_Processor {
 		);
 
 		if ( ! $persisted ) {
-			return false;
+			return Reconcile_Outcome::write_failed(
+				'Failed to persist the repointed content.'
+			);
 		}
 
 		clean_post_cache( $affected_post_id );
 		update_post_meta( $affected_post_id, self::META_REF_REPOINTED_AT, time() );
 
-		return true;
+		return Reconcile_Outcome::resolved();
 	}
 
 	/**
