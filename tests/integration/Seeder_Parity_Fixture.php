@@ -104,7 +104,7 @@ final class Seeder_Parity_Fixture {
 	 * @param int                                                                                                                                                  $media_id_base   Source media IDs start one past this value.
 	 * @param int                                                                                                                                                  $admin_user_id   User the import runs as; owns sideloaded media.
 	 * @param list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool, author_user_id: int, parent_links: array<int, int>}> $slices One descriptor per post-type slice in the batch. parent_links maps a child's 1-based slice index to its parent's.
-	 * @param list<array{kind: string, endpoint: string, source_id: int, author_user_id: int}>                                                                     $edge_cases One descriptor per bespoke edge-case body ('non_ascii', 'empty'); each seeds a single top-level, image-free post.
+	 * @param list<array{kind: string, endpoint: string, source_id: int, author_user_id: int}>                                                                     $edge_cases One descriptor per bespoke edge-case body ('non_ascii', 'empty', 'embed'); each seeds a single top-level, image-free post.
 	 */
 	public function __construct(
 		private string $source_base_url,
@@ -283,8 +283,9 @@ final class Seeder_Parity_Fixture {
 	/**
 	 * Builds the bespoke edge-case bodies and registers them alongside the
 	 * generator-driven batch. Each is a single top-level, image-free post on
-	 * default scalars; the multibyte and empty content exercise encoding and
-	 * empty-body parity that the deterministic generator never emits.
+	 * default scalars, exercising parity the deterministic generator never
+	 * emits: multibyte/entity encoding, empty content, and an external embed
+	 * url's verbatim preservation.
 	 */
 	private function build_edge_case_bodies(): void {
 		foreach ( $this->edge_cases as $edge ) {
@@ -308,9 +309,11 @@ final class Seeder_Parity_Fixture {
 	 * full multibyte set (including an emoji) and unescaped entities in the
 	 * content; its slug is non-ASCII so the asserter checks sanitize_title()
 	 * parity, while its link stays ASCII so META_SOURCE_LINK round-trips. The
-	 * 'empty' body has empty content to exercise the empty-body path.
+	 * 'empty' body has empty content to exercise the empty-body path. The
+	 * 'embed' body carries a core/embed block whose url is on an external
+	 * provider host, exercising the importer's no-rewrite contract for embeds.
 	 *
-	 * @param string $kind     Edge-case kind: 'non_ascii' or 'empty'.
+	 * @param string $kind     Edge-case kind: 'non_ascii', 'empty', or 'embed'.
 	 * @param string $endpoint REST endpoint the body is served from.
 	 * @return array<string, mixed> Generator-shaped payload.
 	 */
@@ -332,6 +335,28 @@ final class Seeder_Parity_Fixture {
 				'link'    => $this->source_base_url . '/edge-empty-content',
 				'content' => '',
 				'excerpt' => 'Excerpt for the empty-content edge case.',
+			);
+		}
+
+		if ( 'embed' === $kind ) {
+			$provider_url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+
+			return $base + array(
+				'title'   => 'Edge case embed block',
+				'slug'    => 'edge-embed-block',
+				'link'    => $this->source_base_url . '/edge-embed-block',
+				'content' => '<!-- wp:embed {"url":"' . $provider_url
+					. '","type":"video","providerNameSlug":"youtube",'
+					. '"responsive":true,"className":'
+					. '"wp-embed-aspect-16-9 wp-has-aspect-ratio"} -->' . "\n"
+					. '<figure class="wp-block-embed is-type-video '
+					. 'is-provider-youtube wp-block-embed-youtube '
+					. 'wp-embed-aspect-16-9 wp-has-aspect-ratio">'
+					. '<div class="wp-block-embed__wrapper">' . "\n"
+					. $provider_url . "\n"
+					. '</div></figure>' . "\n"
+					. '<!-- /wp:embed -->',
+				'excerpt' => 'Excerpt for the embed edge case.',
 			);
 		}
 

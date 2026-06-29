@@ -63,13 +63,21 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	private const SOURCE_MEDIA_ID_BASE = 9500000;
 
 	/**
-	 * Source post IDs for the bespoke edge-case pages (non-ASCII and empty
-	 * content). Same high range, distinct from every other base. Both seed as
+	 * Source post IDs for the bespoke edge-case pages (non-ASCII, empty, and
+	 * embed). Same high range, distinct from every other base. All seed as
 	 * pages so the category-less body never picks up the default category that
 	 * WordPress auto-assigns to a post.
 	 */
 	private const EDGE_NON_ASCII_SOURCE_ID = 9200001;
 	private const EDGE_EMPTY_SOURCE_ID     = 9200002;
+	private const EDGE_EMBED_SOURCE_ID     = 9200003;
+
+	/**
+	 * Provider host of the embed edge page's url. Distinct from
+	 * SOURCE_BASE_URL's host so test_embed_url_parity exercises an external URL
+	 * the importer must leave untouched.
+	 */
+	private const EDGE_EMBED_PROVIDER_HOST = 'www.youtube.com';
 
 	/**
 	 * Class-wide imported batch shared by every test method.
@@ -203,9 +211,10 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 
 	/**
 	 * Describes the bespoke edge-case bodies appended to the batch: a non-ASCII
-	 * page (multibyte title/slug/content plus unescaped entities) and an
-	 * empty-content page. Both seed as pages so the category-less body never
-	 * picks up WordPress' default category, and both stay top-level on default
+	 * page (multibyte title/slug/content plus unescaped entities), an
+	 * empty-content page, and an embed page (a core/embed block with an
+	 * external provider url). All seed as pages so the category-less body never
+	 * picks up WordPress' default category, and all stay top-level on default
 	 * scalars; the fixture supplies their content.
 	 *
 	 * @param int $page_author_id Dest user the edge-case pages are authored by.
@@ -223,6 +232,12 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				'kind'           => 'empty',
 				'endpoint'       => 'pages',
 				'source_id'      => self::EDGE_EMPTY_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+			),
+			array(
+				'kind'           => 'embed',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_EMBED_SOURCE_ID,
 				'author_user_id' => $page_author_id,
 			),
 		);
@@ -446,6 +461,25 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 			Content_Parity_Comparator::assert_shortcode_parity(
 				$this->source_content( $source_id ),
 				(string) get_post( $dest_id )->post_content,
+				$this
+			);
+		}
+	}
+
+	/**
+	 * Verifies that every imported post preserves its source embed-block url
+	 * multiset verbatim, locking process_embed_block()'s no-rewrite contract.
+	 */
+	public function test_embed_url_parity(): void {
+		// ARRANGE: build the URL sideload map from the imported attachments.
+		$url_map = $this->build_source_url_to_dest_url_map();
+
+		// ACT + ASSERT: each dest post preserves its source embed url multiset.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			Content_Parity_Comparator::assert_embed_url_parity(
+				$this->source_content( $source_id ),
+				(string) get_post( $dest_id )->post_content,
+				$url_map,
 				$this
 			);
 		}
@@ -965,9 +999,37 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the embed edge page seeds a core/embed block whose url is
+	 * on a host distinct from the source site, so test_embed_url_parity is not
+	 * vacuously satisfied by a batch with no external embed.
+	 */
+	public function test_embed_edge_seeds_external_provider_url(): void {
+		// ARRANGE: read the embed edge page's source content.
+		$content = $this->source_content( self::EDGE_EMBED_SOURCE_ID );
+
+		// ASSERT: it imported, carries a core/embed block, and references an
+		// external provider host the importer must leave untouched.
+		$this->assertArrayHasKey(
+			self::EDGE_EMBED_SOURCE_ID,
+			self::$fixture->dest_post_ids,
+			'Embed edge page should import to a dest post'
+		);
+		$this->assertStringContainsString(
+			'<!-- wp:embed',
+			$content,
+			'Embed edge content should carry a core/embed block'
+		);
+		$this->assertStringContainsString(
+			self::EDGE_EMBED_PROVIDER_HOST,
+			$content,
+			'Embed edge content should reference the external provider host'
+		);
+	}
+
+	/**
 	 * Verifies that no imported post raised an import warning, reverse-asserting
-	 * that the clean batch, including the empty and non-ASCII edge pages,
-	 * triggers no degradation.
+	 * that the clean batch, including the empty, non-ASCII, and embed edge
+	 * pages, triggers no degradation.
 	 */
 	public function test_import_raised_no_warnings(): void {
 		// ARRANGE + ACT: batch already imported.
