@@ -51,6 +51,13 @@ final class Seeder_Parity_Fixture {
 	private const NON_DEFAULT_PASSWORD = 'Seeded-P@ssw0rd_42';
 
 	/**
+	 * Anchor UUID linking the footnotes edge body's in-text reference to its
+	 * meta entry, as WordPress does. ASCII and slash-free so the meta JSON
+	 * round-trips verbatim through update_post_meta().
+	 */
+	private const FOOTNOTE_ANCHOR_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+
+	/**
 	 * Source REST bodies keyed by source post ID.
 	 *
 	 * @var array<int, array<string, mixed>>
@@ -104,7 +111,7 @@ final class Seeder_Parity_Fixture {
 	 * @param int                                                                                                                                                  $media_id_base   Source media IDs start one past this value.
 	 * @param int                                                                                                                                                  $admin_user_id   User the import runs as; owns sideloaded media.
 	 * @param list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool, author_user_id: int, parent_links: array<int, int>}> $slices One descriptor per post-type slice in the batch. parent_links maps a child's 1-based slice index to its parent's.
-	 * @param list<array{kind: string, endpoint: string, source_id: int, author_user_id: int}>                                                                     $edge_cases One descriptor per bespoke edge-case body ('non_ascii', 'empty', 'embed'); each seeds a single top-level, image-free post.
+	 * @param list<array{kind: string, endpoint: string, source_id: int, author_user_id: int}>                                                                     $edge_cases One descriptor per bespoke edge-case body ('non_ascii', 'empty', 'embed', 'footnotes'); each seeds a single top-level, image-free post.
 	 */
 	public function __construct(
 		private string $source_base_url,
@@ -284,8 +291,8 @@ final class Seeder_Parity_Fixture {
 	 * Builds the bespoke edge-case bodies and registers them alongside the
 	 * generator-driven batch. Each is a single top-level, image-free post on
 	 * default scalars, exercising parity the deterministic generator never
-	 * emits: multibyte/entity encoding, empty content, and an external embed
-	 * url's verbatim preservation.
+	 * emits: multibyte/entity encoding, empty content, an external embed url's
+	 * verbatim preservation, and footnotes meta round-tripping.
 	 */
 	private function build_edge_case_bodies(): void {
 		foreach ( $this->edge_cases as $edge ) {
@@ -312,8 +319,12 @@ final class Seeder_Parity_Fixture {
 	 * 'empty' body has empty content to exercise the empty-body path. The
 	 * 'embed' body carries a core/embed block whose url is on an external
 	 * provider host, exercising the importer's no-rewrite contract for embeds.
+	 * The 'footnotes' body pairs a core/footnotes block with a matching
+	 * footnotes meta JSON, exercising verbatim propagation of WordPress'
+	 * footnotes meta (a JSON-encoded string, not an array).
 	 *
-	 * @param string $kind     Edge-case kind: 'non_ascii', 'empty', or 'embed'.
+	 * @param string $kind     Edge-case kind: 'non_ascii', 'empty', 'embed',
+	 *                         or 'footnotes'.
 	 * @param string $endpoint REST endpoint the body is served from.
 	 * @return array<string, mixed> Generator-shaped payload.
 	 */
@@ -357,6 +368,38 @@ final class Seeder_Parity_Fixture {
 					. '</div></figure>' . "\n"
 					. '<!-- /wp:embed -->',
 				'excerpt' => 'Excerpt for the embed edge case.',
+			);
+		}
+
+		if ( 'footnotes' === $kind ) {
+			$anchor    = self::FOOTNOTE_ANCHOR_ID;
+			$footnotes = (string) wp_json_encode(
+				array(
+					array(
+						'content' => 'Footnote one explains the cited claim.',
+						'id'      => $anchor,
+					),
+				),
+				JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+			);
+
+			// array_merge (not +) so the footnotes meta replaces $base's empty
+			// meta; + keeps the left-hand value on a key collision.
+			return array_merge(
+				$base,
+				array(
+					'title'   => 'Edge case footnotes',
+					'slug'    => 'edge-footnotes',
+					'link'    => $this->source_base_url . '/edge-footnotes',
+					'content' => "<!-- wp:paragraph -->\n"
+						. '<p>Body text with a footnote.<sup data-fn="'
+						. $anchor . '" class="fn"><a href="#' . $anchor
+						. '" id="' . $anchor . '-link">1</a></sup></p>' . "\n"
+						. "<!-- /wp:paragraph -->\n\n"
+						. '<!-- wp:footnotes /-->',
+					'excerpt' => 'Excerpt for the footnotes edge case.',
+					'meta'    => array( 'footnotes' => $footnotes ),
+				)
 			);
 		}
 
