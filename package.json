@@ -43,6 +43,7 @@
     "postinstall": "composer install",
     "release": "./bin/release",
     "seed": "./bin/seed",
+    "seed:degradations": "./bin/seed-degradations",
     "seed:destination": "./bin/seed site=destination",
     "seed:full": "./bin/seed preset=full",
     "seed:source": "./bin/seed site=source",
