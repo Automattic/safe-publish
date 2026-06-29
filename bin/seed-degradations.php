@@ -9,8 +9,9 @@
  * each in a different wp-env container:
  *
  *   step=source   On the source site: upsert the demo pages (a parent/child
- *                 pair, a resolvable links page with its two targets, and an
- *                 unresolvable links page). Prints page IDs for the wrapper.
+ *                 pair, a resolvable links page with its two targets, an
+ *                 unresolvable links page, and optionally a volume page when
+ *                 count>0). Prints page IDs for the wrapper.
  *   step=import   On the destination site: import the child (orphan fallback
  *                 on) for a parent_orphaned issue and the links pages for
  *                 unmapped_block_reference issues, run a no-id import for an
@@ -222,7 +223,10 @@ function safe_publish_demo_volume_content( int $count ): string {
  * @param array<string, string> $arguments Parsed CLI arguments.
  * @param bool                  $is_purge  Whether to delete the demo pages.
  */
-function safe_publish_demo_run_source( array $arguments, bool $is_purge ): void {
+function safe_publish_demo_run_source(
+	array $arguments,
+	bool $is_purge
+): void {
 	// Block comments in the links page survive insertion only with
 	// unfiltered_html, so act as the admin to keep kses from stripping them.
 	wp_set_current_user( 1 );
@@ -454,7 +458,7 @@ function safe_publish_demo_count_unmapped( array $result ): int {
 	return count(
 		array_filter(
 			$result['warnings'] ?? array(),
-			static function ( $warning ) {
+			static function ( array $warning ) {
 				return 'unmapped_block_reference' === ( $warning['type'] ?? '' );
 			}
 		)
@@ -488,7 +492,9 @@ function safe_publish_demo_seed_nav_failure(
 		true
 	);
 	if ( is_wp_error( $referrer ) ) {
-		WP_CLI::error( 'Nav referrer insert failed: ' . $referrer->get_error_message() );
+		WP_CLI::error(
+			'Nav referrer insert failed: ' . $referrer->get_error_message()
+		);
 	}
 	update_post_meta( $referrer, Options::META_SOURCE_SITE_URL, $source_site_url );
 
@@ -503,7 +509,9 @@ function safe_publish_demo_seed_nav_failure(
 		true
 	);
 	if ( is_wp_error( $menu ) ) {
-		WP_CLI::error( 'Nav menu insert failed: ' . $menu->get_error_message() );
+		WP_CLI::error(
+			'Nav menu insert failed: ' . $menu->get_error_message()
+		);
 	}
 	update_post_meta( $menu, Options::META_SOURCE_POST_ID, $nav_id );
 	update_post_meta( $menu, Options::META_SOURCE_SITE_URL, $source_site_url );
@@ -519,12 +527,19 @@ function safe_publish_demo_seed_nav_failure(
 		 * @param string $new_content Serialized block content.
 		 * @return bool Always false.
 		 */
-		protected function persist_rewritten_content( int $post_id, string $new_content ): bool {
+		protected function persist_rewritten_content(
+			int $post_id,
+			string $new_content
+		): bool {
 			return false;
 		}
 		// phpcs:enable Generic.CodeAnalysis.UnusedFunctionParameter
 	};
-	$result  = $failing->rewrite_cross_refs( $nav_id, (int) $menu, $source_site_url );
+	$result  = $failing->rewrite_cross_refs(
+		$nav_id,
+		(int) $menu,
+		$source_site_url
+	);
 	if ( count( $result['failed'] ) < 1 ) {
 		WP_CLI::error( 'Nav rewrite matched no referrer; issue not seeded.' );
 	}
@@ -575,7 +590,10 @@ function safe_publish_demo_purge_destination(): void {
  * @param array<string, string> $arguments Parsed CLI arguments.
  * @param bool                  $is_purge  Whether to remove demo artifacts.
  */
-function safe_publish_demo_run_import( array $arguments, bool $is_purge ): void {
+function safe_publish_demo_run_import(
+	array $arguments,
+	bool $is_purge
+): void {
 	// Page creation and import run capability checks; act as the admin.
 	wp_set_current_user( 1 );
 
@@ -616,7 +634,11 @@ function safe_publish_demo_run_import( array $arguments, bool $is_purge ): void 
 	$api              = new Source_Posts_API( new HTTP_Client() );
 	$repository       = new History_Repository();
 	$attention_issues = new Attention_Issues_Repository();
-	$service          = safe_publish_demo_build_service( $api, $repository, $attention_issues );
+	$service          = safe_publish_demo_build_service(
+		$api,
+		$repository,
+		$attention_issues
+	);
 
 	// Clear prior demo orphan rows + staged pages (volume + nav) so repeated
 	// runs don't inflate the counts.
