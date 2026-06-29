@@ -31,7 +31,8 @@ final class Content_Parity_Comparator {
 	 * URL-bearing tag attributes checked for rewrite parity, keyed by the
 	 * uppercase tag name WP_HTML_Tag_Processor::get_tag() returns. Block
 	 * comments aren't scanned (the tag processor skips them), so the
-	 * `attrs.url` the importer adds to image blocks doesn't show up here.
+	 * `attrs.url` the importer adds to image blocks doesn't show up here;
+	 * embed-block `attrs.url` is checked by assert_embed_url_parity().
 	 *
 	 * `srcset` descriptors are handled by Content_Media_Processor at import
 	 * time but the seeder doesn't emit srcset yet, so they're not checked
@@ -102,6 +103,44 @@ final class Content_Parity_Comparator {
 			$actual,
 			'Dest content must carry the rewritten URL multiset, per'
 			. ' (tag, attribute) bucket'
+		);
+	}
+
+	/**
+	 * Asserts embed-block url parity: each core/embed (and legacy core-embed/*)
+	 * block's url attribute maps through the sideload map and the resulting
+	 * multiset must equal the dest multiset. External provider URLs are absent
+	 * from the map, so this reverse-asserts the importer leaves them verbatim.
+	 *
+	 * The url lives in the block-comment JSON, which WP_HTML_Tag_Processor
+	 * skips, so assert_url_parity() never sees it; this covers it explicitly.
+	 *
+	 * @param string                $source_content        Source post_content.
+	 * @param string                $dest_content          Imported dest post_content.
+	 * @param array<string, string> $source_url_to_dest_url Sideload map.
+	 * @param TestCase              $test                  Active test case.
+	 */
+	public static function assert_embed_url_parity(
+		string $source_content,
+		string $dest_content,
+		array $source_url_to_dest_url,
+		TestCase $test
+	): void {
+		$expected = array_map(
+			static fn ( string $url ): string =>
+				$source_url_to_dest_url[ $url ] ?? $url,
+			self::collect_embed_urls( parse_blocks( $source_content ) )
+		);
+		$actual   = self::collect_embed_urls( parse_blocks( $dest_content ) );
+
+		sort( $expected );
+		sort( $actual );
+
+		$test->assertSame(
+			$expected,
+			$actual,
+			'Dest content must carry the embed url multiset, with external'
+			. ' provider URLs preserved verbatim'
 		);
 	}
 
@@ -211,6 +250,18 @@ final class Content_Parity_Comparator {
 		string $dest_content,
 		TestCase $test
 	): void {
+		// Empty source has no blocks to mirror, so the importer must leave the
+		// dest empty too. parse_blocks('') yields zero blocks, so the >=1 rule
+		// below would otherwise misfire on a legitimately empty body.
+		if ( '' === trim( $source_content ) ) {
+			$test->assertSame(
+				'',
+				trim( $dest_content ),
+				'Empty source content must import to empty dest content'
+			);
+			return;
+		}
+
 		$dest_blocks = parse_blocks( $dest_content );
 
 		$test->assertGreaterThanOrEqual(
@@ -419,6 +470,38 @@ final class Content_Parity_Comparator {
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Collects core/embed (and legacy core-embed/*) url attributes from a
+	 * parse_blocks() tree, recursing into inner blocks.
+	 *
+	 * @param array<array-key, array<string, mixed>> $blocks Parsed block tree.
+	 * @return list<string>
+	 */
+	private static function collect_embed_urls( array $blocks ): array {
+		$urls = array();
+
+		foreach ( $blocks as $block ) {
+			$name = $block['blockName'] ?? null;
+			$url  = $block['attrs']['url'] ?? null;
+
+			if (
+				is_string( $name )
+				&& ( 'core/embed' === $name
+					|| str_starts_with( $name, 'core-embed/' ) )
+				&& is_string( $url ) && '' !== $url
+			) {
+				$urls[] = $url;
+			}
+
+			$inner = $block['innerBlocks'] ?? array();
+			if ( is_array( $inner ) && array() !== $inner ) {
+				$urls = array_merge( $urls, self::collect_embed_urls( $inner ) );
+			}
+		}
+
+		return $urls;
 	}
 
 	/**

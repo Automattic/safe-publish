@@ -15,6 +15,7 @@ use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Reconcile_Logger;
+use Safe_Publish\Utils\Reconcile_Outcome;
 use WP_UnitTestCase;
 
 /**
@@ -191,5 +192,114 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 		$issue = $this->issues->get_issue( $post_id, $issue_type, $target_ref );
 		$this->assertIsArray( $issue );
 		$this->assertSame( 'error', $issue['severity'] );
+	}
+
+	/**
+	 * Verifies that recording a resolved outcome logs a reconcile info event.
+	 */
+	public function test_record_resolved_logs_info_event(): void {
+		// ARRANGE & ACT: record a resolved outcome.
+		$this->logger->record(
+			Reconcile_Outcome::resolved(),
+			'unmapped_block_reference',
+			4242,
+			700,
+			'post'
+		);
+
+		// ASSERT: one info event names the resolved reconcile.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel' => 'reconcile',
+				'level'   => 'info',
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( Log_Events::RECONCILE_RESOLVED, $events[0]['event'] );
+	}
+
+	/**
+	 * Verifies that recording a target-absent outcome logs a reconcile warning
+	 * carrying the reason.
+	 */
+	public function test_record_target_absent_logs_warning_with_reason(): void {
+		// ARRANGE & ACT: record a target-absent outcome.
+		$this->logger->record(
+			Reconcile_Outcome::target_absent( 'Target post 700 is not imported.' ),
+			'unmapped_block_reference',
+			4242,
+			700,
+			'post'
+		);
+
+		// ASSERT: one warning event names the target-absent reconcile and reason.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel' => 'reconcile',
+				'level'   => 'warning',
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame(
+			Log_Events::RECONCILE_TARGET_ABSENT,
+			$events[0]['event']
+		);
+		$this->assertSame(
+			'Target post 700 is not imported.',
+			$events[0]['data']['reason']
+		);
+	}
+
+	/**
+	 * Verifies that recording a write-failed outcome logs a reconcile error
+	 * carrying the failure detail.
+	 */
+	public function test_record_write_failed_logs_error_with_detail(): void {
+		// ARRANGE & ACT: record a write-failed outcome.
+		$this->logger->record(
+			Reconcile_Outcome::write_failed( 'db write failed' ),
+			'nav_ref_rewrite_failed',
+			4242,
+			700,
+			'post'
+		);
+
+		// ASSERT: one error event names the failed reconcile and detail.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel' => 'reconcile',
+				'level'   => 'error',
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( Log_Events::RECONCILE_FAILED, $events[0]['event'] );
+		$this->assertSame( 'db write failed', $events[0]['data']['error'] );
+	}
+
+	/**
+	 * Verifies that recording an unresolved outcome logs a reconcile warning.
+	 */
+	public function test_record_unresolved_logs_warning_event(): void {
+		// ARRANGE & ACT: record an unresolved outcome.
+		$this->logger->record(
+			Reconcile_Outcome::unresolved( 'No matching reference found.' ),
+			'unmapped_block_reference',
+			4242,
+			700,
+			'post'
+		);
+
+		// ASSERT: one warning event names the unresolved reconcile.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel' => 'reconcile',
+				'level'   => 'warning',
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame(
+			Log_Events::RECONCILE_UNRESOLVED,
+			$events[0]['event']
+		);
 	}
 }
