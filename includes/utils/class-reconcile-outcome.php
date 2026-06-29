@@ -18,8 +18,9 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Immutable result of one reconciliation attempt.
  *
  * Names what a retry actually did so the audit log records the true outcome
- * rather than inferring it from the issue's severity. The write_failed and
- * target_absent outcomes carry a detail string naming the specific cause.
+ * rather than inferring it from the issue's severity. The write_failed,
+ * target_absent, and unresolved outcomes carry a detail string naming the
+ * specific cause.
  */
 final class Reconcile_Outcome {
 
@@ -37,7 +38,8 @@ final class Reconcile_Outcome {
 	public readonly string $type;
 
 	/**
-	 * Cause detail for write_failed and target_absent; empty otherwise.
+	 * Cause detail for write_failed, target_absent, and unresolved; empty
+	 * otherwise.
 	 *
 	 * @var string
 	 */
