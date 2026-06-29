@@ -63,14 +63,15 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	private const SOURCE_MEDIA_ID_BASE = 9500000;
 
 	/**
-	 * Source post IDs for the bespoke edge-case pages (non-ASCII, empty, and
-	 * embed). Same high range, distinct from every other base. All seed as
-	 * pages so the category-less body never picks up the default category that
-	 * WordPress auto-assigns to a post.
+	 * Source post IDs for the bespoke edge-case pages (non-ASCII, empty, embed,
+	 * and footnotes). Same high range, distinct from every other base. All seed
+	 * as pages so the category-less body never picks up the default category
+	 * that WordPress auto-assigns to a post.
 	 */
 	private const EDGE_NON_ASCII_SOURCE_ID = 9200001;
 	private const EDGE_EMPTY_SOURCE_ID     = 9200002;
 	private const EDGE_EMBED_SOURCE_ID     = 9200003;
+	private const EDGE_FOOTNOTES_SOURCE_ID = 9200004;
 
 	/**
 	 * Provider host of the embed edge page's url. Distinct from
@@ -212,9 +213,10 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	/**
 	 * Describes the bespoke edge-case bodies appended to the batch: a non-ASCII
 	 * page (multibyte title/slug/content plus unescaped entities), an
-	 * empty-content page, and an embed page (a core/embed block with an
-	 * external provider url). All seed as pages so the category-less body never
-	 * picks up WordPress' default category, and all stay top-level on default
+	 * empty-content page, an embed page (a core/embed block with an external
+	 * provider url), and a footnotes page (a core/footnotes block plus matching
+	 * footnotes meta). All seed as pages so the category-less body never picks
+	 * up WordPress' default category, and all stay top-level on default
 	 * scalars; the fixture supplies their content.
 	 *
 	 * @param int $page_author_id Dest user the edge-case pages are authored by.
@@ -238,6 +240,12 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				'kind'           => 'embed',
 				'endpoint'       => 'pages',
 				'source_id'      => self::EDGE_EMBED_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+			),
+			array(
+				'kind'           => 'footnotes',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_FOOTNOTES_SOURCE_ID,
 				'author_user_id' => $page_author_id,
 			),
 		);
@@ -1027,9 +1035,57 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the footnotes edge page round-trips both channels WordPress
+	 * footnotes use — the core/footnotes block in post_content and the
+	 * separately stored footnotes meta JSON — confirming both survive the
+	 * import together.
+	 */
+	public function test_footnotes_edge_round_trips_block_and_meta(): void {
+		// ARRANGE + ACT: batch imported; read the seed and dest post.
+		$this->assertArrayHasKey(
+			self::EDGE_FOOTNOTES_SOURCE_ID,
+			self::$fixture->dest_post_ids,
+			'Footnotes edge page should import to a dest post'
+		);
+		$body           = self::$fixture->source_rest_bodies[ self::EDGE_FOOTNOTES_SOURCE_ID ];
+		$source_content = (string) $body['content']['raw'];
+		$source_meta    = (string) ( $body['meta']['footnotes'] ?? '' );
+		$dest_id        = self::$fixture->dest_post_ids[ self::EDGE_FOOTNOTES_SOURCE_ID ];
+		$dest_meta      = (string) get_post_meta( $dest_id, 'footnotes', true );
+
+		// ASSERT: the seed has a core/footnotes block and non-empty meta JSON
+		// (so the checks below aren't vacuous), then both survive the import.
+		$this->assertStringContainsString(
+			'<!-- wp:footnotes /-->',
+			$source_content,
+			'Footnotes edge content should seed a core/footnotes block'
+		);
+		$this->assertStringContainsString(
+			'<!-- wp:footnotes /-->',
+			(string) get_post( $dest_id )->post_content,
+			'Dest content should preserve the core/footnotes block'
+		);
+		$source_footnotes = json_decode( $source_meta, true );
+		$this->assertIsArray(
+			$source_footnotes,
+			'Footnotes source meta should decode to an array'
+		);
+		$this->assertNotSame(
+			array(),
+			$source_footnotes,
+			'Footnotes source meta should carry at least one footnote'
+		);
+		$this->assertSame(
+			$source_footnotes,
+			json_decode( $dest_meta, true ),
+			'Footnotes meta should round-trip structurally to the dest post'
+		);
+	}
+
+	/**
 	 * Verifies that no imported post raised an import warning, reverse-asserting
-	 * that the clean batch, including the empty, non-ASCII, and embed edge
-	 * pages, triggers no degradation.
+	 * that the clean batch, including the empty, non-ASCII, embed, and footnotes
+	 * edge pages, triggers no degradation.
 	 */
 	public function test_import_raised_no_warnings(): void {
 		// ARRANGE + ACT: batch already imported.
