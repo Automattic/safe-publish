@@ -20,6 +20,7 @@ import DeletePostModal from './components/DeletePostModal';
 import ImportModal from './components/ImportModal';
 import PostDiffModal from './components/PostDiffModal';
 import RollbackPostModal from './components/RollbackPostModal';
+import { RETRY_PENDING_DELAY_MS } from './constants';
 import {
 	ApiResponse,
 	AttentionIssue,
@@ -29,7 +30,12 @@ import {
 	RetryAttentionIssueResponse,
 	UnifiedPostRow,
 } from './types';
-import { attentionIssueId, getErrorMessage, renderIssueMessage } from './utils';
+import {
+	attentionIssueId,
+	attentionIssueLabel,
+	getErrorMessage,
+	renderIssueMessage,
+} from './utils';
 import { Action } from '@wordpress/dataviews/build-types';
 import { __, sprintf } from '@wordpress/i18n';
 
@@ -342,11 +348,11 @@ export const createOrphanFailuresActions = (
 ];
 
 /**
- * A banner shown for a retry: in-flight (info), failed (error), or ran without
- * clearing the issue (warning).
+ * A banner shown for a retry outcome: in-flight (info), resolved (success),
+ * failed (error), or ran without clearing the issue (warning).
  */
 export interface RetryNotice {
-	status: 'error' | 'warning' | 'info';
+	status: 'error' | 'warning' | 'info' | 'success';
 	message: string;
 }
 
@@ -366,9 +372,9 @@ export interface AttentionIssueActionsContext {
  *
  * Eligible only for issues whose reconciliation is callable today; it re-runs
  * the real reconciliation, which is self-verifying, then refreshes the listing
- * so the row clears or stays based on the actual result. A run that fails or
- * leaves the issue open surfaces a notice, so the attempt never reads as a
- * silent success. Concurrent submits for the same issue are ignored while one
+ * so the row clears or stays based on the actual result. Every outcome —
+ * resolved, still open, or failed — surfaces a notice, so a run never reads as
+ * a silent success. Concurrent submits for the same issue are ignored while one
  * is in flight.
  *
  * @param {Function}                     onRefresh Callback to refresh the drawer.
@@ -400,11 +406,15 @@ export const createAttentionIssueActions = (
 			}
 			context.inFlight?.add( key );
 
-			// Signal the attempt is running; also clears any prior outcome.
-			context.onNotice?.( {
-				status: 'info',
-				message: __( 'Retrying…', 'safe-publish' ),
-			} );
+			// Clear any prior outcome, then show "Retrying…" only if the
+			// request outlasts the delay, so fast retries skip the flash.
+			context.onNotice?.( null );
+			const pendingTimer = setTimeout( () => {
+				context.onNotice?.( {
+					status: 'info',
+					message: __( 'Retrying…', 'safe-publish' ),
+				} );
+			}, RETRY_PENDING_DELAY_MS );
 
 			const formData = new FormData();
 			formData.append( 'action', 'safe_publish_retry_attention_issue' );
@@ -425,6 +435,8 @@ export const createAttentionIssueActions = (
 						>
 				)
 				.then( ( result ) => {
+					clearTimeout( pendingTimer );
+
 					if ( ! result.success ) {
 						context.onNotice?.( {
 							status: 'error',
@@ -450,11 +462,19 @@ export const createAttentionIssueActions = (
 						return;
 					}
 
-					// Resolved: drop the in-flight notice; the row clears on
-					// the refetch below.
-					context.onNotice?.( null );
+					// Resolved: confirm it, since the row drops from the
+					// refetched list and would otherwise clear silently.
+					context.onNotice?.( {
+						status: 'success',
+						message: sprintf(
+							/* translators: %s: affected content title */
+							__( 'Resolved: %s', 'safe-publish' ),
+							attentionIssueLabel( issue )
+						),
+					} );
 				} )
 				.catch( () => {
+					clearTimeout( pendingTimer );
 					context.onNotice?.( {
 						status: 'error',
 						message: __(

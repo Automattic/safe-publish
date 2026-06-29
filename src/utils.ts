@@ -299,6 +299,24 @@ export function attentionIssueId( issue: AttentionIssue ): string {
 }
 
 /**
+ * Display label for an issue's affected content: its title, or a post-id
+ * fallback when the title is empty.
+ *
+ * @param {AttentionIssue} issue Issue row.
+ *
+ * @return {string} Human-readable content label.
+ */
+export function attentionIssueLabel( issue: AttentionIssue ): string {
+	return '' !== issue.affected_title
+		? issue.affected_title
+		: sprintf(
+			/* translators: %d: post ID */
+			__( '#%d', 'safe-publish' ),
+			issue.affected_post_id
+		);
+}
+
+/**
  * Extracts the path from a URL for display.
  *
  * @param {string} url Full URL to extract the path from.

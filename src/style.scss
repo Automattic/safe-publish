@@ -365,6 +365,14 @@ html:has(body.toplevel_page_safe-publish) {
 	flex-wrap: wrap;
 	gap: 16px;
 	margin: 16px 0 16px 48px;
+
+	.safe-publish-issue-summary__button--warning svg {
+		fill: var(--safe-publish-status-warning);
+	}
+
+	.safe-publish-issue-summary__button--error svg {
+		fill: var(--safe-publish-status-error);
+	}
 }
 
 .dataviews-action-modal__tertiary {

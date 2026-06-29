@@ -766,21 +766,13 @@ final class History_Repository {
 	 * Lists orphan failure rows for the drawer (no aggregation; joins the
 	 * session row so each entry carries the source_site_url).
 	 *
-	 * @param int   $page     1-indexed page number.
-	 * @param int   $per_page Items per page.
-	 * @param array $args     {
-	 *     Optional. Search/filter criteria.
-	 *
-	 *     @type string $search           Title substring to match.
-	 *     @type string $attempted_after  MySQL datetime lower bound on import_date_gmt.
-	 *     @type string $attempted_before MySQL datetime upper bound on import_date_gmt.
-	 * }
+	 * @param int $page     1-indexed page number.
+	 * @param int $per_page Items per page.
 	 * @return array[] Item rows including session source_site_url.
 	 */
 	public function list_orphan_failures(
 		int $page = 1,
-		int $per_page = 20,
-		array $args = array()
+		int $per_page = 20
 	): array {
 		global $wpdb;
 
@@ -788,39 +780,6 @@ final class History_Repository {
 		$imports_table = Imports_Table::table_name();
 		$offset        = max( 0, ( $page - 1 ) * $per_page );
 		$limit         = $per_page + 1;
-
-		$search           = isset( $args['search'] ) ? (string) $args['search'] : '';
-		$attempted_after  = isset( $args['attempted_after'] )
-			? (string) $args['attempted_after']
-			: '';
-		$attempted_before = isset( $args['attempted_before'] )
-			? (string) $args['attempted_before']
-			: '';
-
-		$where  = array(
-			"it.status = 'error'",
-			'it.source_post_id IS NULL',
-		);
-		$params = array();
-
-		if ( '' !== $search ) {
-			$where[]  = 'it.title LIKE %s';
-			$params[] = '%' . $wpdb->esc_like( $search ) . '%';
-		}
-
-		if ( '' !== $attempted_after ) {
-			$where[]  = 'it.import_date_gmt >= %s';
-			$params[] = $attempted_after;
-		}
-
-		if ( '' !== $attempted_before ) {
-			$where[]  = 'it.import_date_gmt <= %s';
-			$params[] = $attempted_before;
-		}
-
-		$where_sql = implode( ' AND ', $where );
-		$params[]  = $limit;
-		$params[]  = $offset;
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
@@ -830,10 +789,11 @@ final class History_Repository {
 					. ' s.source_site_url'
 					. " FROM `{$items_table}` it"
 					. " INNER JOIN `{$imports_table}` s ON s.id = it.session_id"
-					. " WHERE {$where_sql}"
+					. " WHERE it.status = 'error' AND it.source_post_id IS NULL"
 					. ' ORDER BY it.import_date_gmt DESC, it.id DESC'
 					. ' LIMIT %d OFFSET %d',
-				...$params
+				$limit,
+				$offset
 			),
 			ARRAY_A
 		);

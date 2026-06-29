@@ -4,7 +4,7 @@
  *
  * @file This file defines the PostsDataView component.
  */
-import { help, update } from '@wordpress/icons';
+import { cancelCircleFilled, caution, help, update } from '@wordpress/icons';
 
 import AttentionDrawer from './AttentionDrawer';
 import AuthStatusNotice from './AuthStatusNotice';
@@ -1018,26 +1018,30 @@ export function PostsDataView( {
 				<div className="safe-publish-issue-summary">
 					{ attentionCount > 0 && (
 						<Button
+							className="safe-publish-issue-summary__button safe-publish-issue-summary__button--warning"
 							variant="tertiary"
+							icon={ caution }
 							onClick={ () =>
 								setIsAttentionDrawerOpen( true )
 							}
 						>
 							{ sprintf(
 								/* translators: %d: open attention issues count */
-								__( 'Needs attention (%d) →', 'safe-publish' ),
+								__( 'Needs attention (%d)', 'safe-publish' ),
 								attentionCount
 							) }
 						</Button>
 					) }
 					{ orphanCount > 0 && (
 						<Button
+							className="safe-publish-issue-summary__button safe-publish-issue-summary__button--error"
 							variant="tertiary"
+							icon={ cancelCircleFilled }
 							onClick={ () => setIsOrphanDrawerOpen( true ) }
 						>
 							{ sprintf(
 								/* translators: %d: orphan failures count */
-								__( 'Orphan failures (%d) →', 'safe-publish' ),
+								__( 'Orphan failures (%d)', 'safe-publish' ),
 								orphanCount
 							) }
 						</Button>

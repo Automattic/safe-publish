@@ -119,6 +119,12 @@ describe( 'AttentionDrawer', () => {
 		// ASSERT: the affected title and the per-issue message appear.
 		expect( await screen.findByText( 'Primary Menu' ) ).toBeInTheDocument();
 		expect( screen.getByText( /menu 8300/ ) ).toBeInTheDocument();
+
+		// ASSERT: the content link opens in a new tab so following it doesn't
+		// tear down the drawer.
+		const link = screen.getByRole( 'link', { name: 'Primary Menu' } );
+		expect( link ).toHaveAttribute( 'target', '_blank' );
+		expect( link ).toHaveAttribute( 'rel', 'noreferrer' );
 	} );
 
 	it( 'shows an empty state when nothing needs attention', async () => {
@@ -187,6 +193,50 @@ describe( 'AttentionDrawer', () => {
 		// ASSERT: the unresolved retry surfaces its guidance as a banner.
 		expect(
 			( await screen.findAllByText( /Still needs attention/ ) ).length
+		).toBeGreaterThan( 0 );
+	} );
+
+	it( 'confirms a resolved retry with a success banner', async () => {
+		// ARRANGE: a retryable issue whose retry resolves. The stub branches by
+		// the posted action: the retry clears, the list keeps returning it.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				(
+					_url: string,
+					options: RequestInit
+				): Promise< { json: () => Promise< unknown > } > => {
+					const isRetry =
+						( options.body as FormData ).get( 'action' ) ===
+						'safe_publish_retry_attention_issue';
+					return Promise.resolve( {
+						json: () =>
+							Promise.resolve(
+								isRetry
+									? { success: true, data: { resolved: true } }
+									: {
+											success: true,
+											data: { items: [ ISSUE ], has_more: false },
+									  }
+							),
+					} );
+				}
+			)
+		);
+
+		// ACT: render, then retry the row once it appears.
+		render(
+			<AttentionDrawer
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+				onClose={ () => undefined }
+			/>
+		);
+		fireEvent.click( await screen.findByRole( 'button', { name: 'Retry' } ) );
+
+		// ASSERT: a success banner names the resolved content.
+		expect(
+			( await screen.findAllByText( /Resolved: Primary Menu/ ) ).length
 		).toBeGreaterThan( 0 );
 	} );
 

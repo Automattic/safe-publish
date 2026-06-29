@@ -291,33 +291,11 @@ final class Admin_Ajax_Controller {
 		$this->verify_ajax_capability();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing
-		$page             = max( 1, absint( $_POST['page'] ?? 1 ) );
-		$per_page         = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
-		$search           = trim(
-			sanitize_text_field( wp_unslash( $_POST['search'] ?? '' ) )
-		);
-		$attempted_after  = Datetime_Sanitizer::sanitize_iso_datetime(
-			sanitize_text_field( wp_unslash( $_POST['attempted_after'] ?? '' ) ),
-			false
-		);
-		$attempted_before = Datetime_Sanitizer::sanitize_iso_datetime(
-			sanitize_text_field( wp_unslash( $_POST['attempted_before'] ?? '' ) ),
-			true
-		);
+		$page     = max( 1, absint( $_POST['page'] ?? 1 ) );
+		$per_page = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$args = array();
-		if ( '' !== $search ) {
-			$args['search'] = $search;
-		}
-		if ( is_string( $attempted_after ) ) {
-			$args['attempted_after'] = $attempted_after;
-		}
-		if ( is_string( $attempted_before ) ) {
-			$args['attempted_before'] = $attempted_before;
-		}
-
-		$rows = $this->repository->list_orphan_failures( $page, $per_page, $args );
+		$rows = $this->repository->list_orphan_failures( $page, $per_page );
 
 		$has_more = count( $rows ) > $per_page;
 		if ( $has_more ) {
