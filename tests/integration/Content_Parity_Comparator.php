@@ -211,6 +211,18 @@ final class Content_Parity_Comparator {
 		string $dest_content,
 		TestCase $test
 	): void {
+		// Empty source has no blocks to mirror, so the importer must leave the
+		// dest empty too. parse_blocks('') yields zero blocks, so the >=1 rule
+		// below would otherwise misfire on a legitimately empty body.
+		if ( '' === trim( $source_content ) ) {
+			$test->assertSame(
+				'',
+				trim( $dest_content ),
+				'Empty source content must import to empty dest content'
+			);
+			return;
+		}
+
 		$dest_blocks = parse_blocks( $dest_content );
 
 		$test->assertGreaterThanOrEqual(
