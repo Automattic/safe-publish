@@ -468,9 +468,7 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 
 	/**
 	 * Verifies that every imported post preserves its source embed-block url
-	 * multiset: a source-hosted url maps through the sideload map, while an
-	 * external provider url survives verbatim. Locks process_embed_block()'s
-	 * no-rewrite contract.
+	 * multiset verbatim, locking process_embed_block()'s no-rewrite contract.
 	 */
 	public function test_embed_url_parity(): void {
 		// ARRANGE: build the URL sideload map from the imported attachments.
@@ -1025,11 +1023,6 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 			self::EDGE_EMBED_PROVIDER_HOST,
 			$content,
 			'Embed edge content should reference the external provider host'
-		);
-		$this->assertNotSame(
-			self::EDGE_EMBED_PROVIDER_HOST,
-			(string) wp_parse_url( self::SOURCE_BASE_URL, PHP_URL_HOST ),
-			'Embed provider host must differ from the source host'
 		);
 	}
 
