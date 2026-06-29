@@ -102,3 +102,7 @@ Without `revision=`, each post's revision auto-bumps by one. Pass `revision=N` t
 3. 5 pages (`type=page`), `editor=gutenberg`, `images=auto` (pages 21–25) — exercises the page post type, which skips taxonomy assignment
 
 When `fresh=1` is passed, a `purge=1` step runs before the batches to wipe previously seeded content. Each batch then appends cleanly without risking wiping content created by an earlier batch.
+
+## See Also
+
+To seed the admin degradation drawers (Needs attention and orphan failures) instead of content, see [Seeding Import Degradations](seeding-degradations.md).
