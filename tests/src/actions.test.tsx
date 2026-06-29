@@ -7,6 +7,7 @@ import {
 	createPostsActions,
 	type PostsActionsContext,
 } from '@/actions';
+import { RETRY_PENDING_DELAY_MS } from '@/constants';
 import BulkRollbackPostModal from '@/components/BulkRollbackPostModal';
 import RollbackPostModal from '@/components/RollbackPostModal';
 import type {
@@ -328,6 +329,7 @@ function runCallback(
 describe( 'createAttentionIssueActions', () => {
 	afterEach( () => {
 		vi.unstubAllGlobals();
+		vi.useRealTimers();
 	} );
 
 	it( 'shows Retry only for retryable issues', () => {
@@ -447,8 +449,9 @@ describe( 'createAttentionIssueActions', () => {
 		);
 	} );
 
-	it( 'shows an in-flight notice while the retry runs', () => {
+	it( 'holds the in-flight notice back until the delay elapses', () => {
 		// ARRANGE: a retry whose response never settles, so it stays in flight.
+		vi.useFakeTimers();
 		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
 		const onNotice = vi.fn();
 
@@ -461,7 +464,17 @@ describe( 'createAttentionIssueActions', () => {
 		// ACT: run the Retry callback.
 		runCallback( retry, [ buildIssue() ] );
 
-		// ASSERT: an info notice shows immediately, before any response.
+		// ASSERT: the banner clears at once, but "Retrying…" waits out the
+		// delay so a fast retry never flashes it.
+		expect( onNotice ).toHaveBeenCalledWith( null );
+		expect( onNotice ).not.toHaveBeenCalledWith(
+			expect.objectContaining( { status: 'info' } )
+		);
+
+		// ACT: let the delay elapse.
+		vi.advanceTimersByTime( RETRY_PENDING_DELAY_MS );
+
+		// ASSERT: only now does the in-flight notice appear.
 		expect( onNotice ).toHaveBeenCalledWith( {
 			status: 'info',
 			message: 'Retrying…',
@@ -470,6 +483,7 @@ describe( 'createAttentionIssueActions', () => {
 
 	it( 'ignores a second retry for the same issue while one is in flight', () => {
 		// ARRANGE: a retry that stays in flight, plus a shared in-flight set.
+		vi.useFakeTimers();
 		const fetchMock = vi.fn().mockReturnValue( new Promise( () => {} ) );
 		vi.stubGlobal( 'fetch', fetchMock );
 		const inFlight = new Set< string >();
@@ -488,7 +502,7 @@ describe( 'createAttentionIssueActions', () => {
 		expect( fetchMock ).toHaveBeenCalledTimes( 1 );
 	} );
 
-	it( 'clears the in-flight notice when the retry resolves', async () => {
+	it( 'confirms resolution with a success notice naming the content', async () => {
 		// ARRANGE: a retry that resolves the issue.
 		vi.stubGlobal(
 			'fetch',
@@ -506,11 +520,18 @@ describe( 'createAttentionIssueActions', () => {
 			onNotice,
 		} )[ 0 ];
 
-		// ACT: run the Retry callback.
-		runCallback( retry, [ buildIssue() ] );
+		// ACT: retry an issue that clears.
+		runCallback( retry, [ buildIssue( { affected_title: 'Primary Menu' } ) ] );
 
-		// ASSERT: the transient notice ends cleared once the issue resolves.
+		// ASSERT: the outcome confirms the fix by name, and the quick resolve
+		// never flashed the in-flight notice.
 		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
-		expect( onNotice ).toHaveBeenLastCalledWith( null );
+		expect( onNotice ).toHaveBeenLastCalledWith( {
+			status: 'success',
+			message: 'Resolved: Primary Menu',
+		} );
+		expect( onNotice ).not.toHaveBeenCalledWith(
+			expect.objectContaining( { status: 'info' } )
+		);
 	} );
 } );
