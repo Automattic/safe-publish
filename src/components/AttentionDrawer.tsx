@@ -13,7 +13,7 @@ import {
 	getErrorMessage,
 	renderIssueMessage,
 } from '../utils';
-import { Button, Modal, Notice, Spinner } from '@wordpress/components';
+import { Modal, Notice, Spinner } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
 import { useCallback, useEffect, useRef, useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
@@ -242,8 +242,7 @@ const AttentionDrawer = ( {
 			title={ __( 'Needs attention', 'safe-publish' ) }
 			onRequestClose={ onClose }
 			className="safe-publish-attention-drawer"
-			isFullScreen={ false }
-			size="medium"
+			size="fill"
 			__experimentalHideHeader={ false }
 		>
 			<div
@@ -254,11 +253,6 @@ const AttentionDrawer = ( {
 					} as React.CSSProperties
 				}
 			>
-				<div className="safe-publish-controls-row">
-					<Button variant="tertiary" onClick={ onClose }>
-						{ __( 'Close', 'safe-publish' ) }
-					</Button>
-				</div>
 				{ error && (
 					<Notice status="error" onRemove={ () => setError( null ) }>
 						{ error }

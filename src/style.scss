@@ -324,8 +324,11 @@ html:has(body.toplevel_page_safe-publish) {
 	white-space: nowrap;
 }
 
-.safe-publish-orphan-toolbar {
-	margin: 0 0 8px 48px;
+.safe-publish-issue-summary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 16px;
+	margin: 16px 0 16px 48px;
 }
 
 .dataviews-action-modal__tertiary {
