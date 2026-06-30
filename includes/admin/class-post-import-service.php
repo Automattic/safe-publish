@@ -122,6 +122,7 @@ class Post_Import_Service {
 	 */
 	private const ATTENTION_POST_ISSUE_TYPES = array(
 		'unmapped_block_reference',
+		'unmigratable_reusable_block',
 		'parent_orphaned',
 	);
 
@@ -1549,10 +1550,10 @@ class Post_Import_Service {
 	/**
 	 * Records the attention issues attached to a freshly imported post.
 	 *
-	 * Reconciles the post's open block-reference and orphaned-parent issues
-	 * against its finalized import warnings: unresolved refs are upserted, and
-	 * any that now resolve are cleared. Navigation rewrite failures are recorded
-	 * separately, keyed to the referencing posts.
+	 * Reconciles the post's open block-reference, orphaned-parent, and
+	 * reusable-block issues against its finalized import warnings: unresolved
+	 * refs are upserted, and any that now resolve are cleared. Navigation
+	 * rewrite failures are recorded separately, keyed to the referencing posts.
 	 *
 	 * @param array $fields  Finalized post fields, including warnings.
 	 * @param int   $post_id Destination post id.
@@ -1606,6 +1607,15 @@ class Post_Import_Service {
 					'block'     => (string) ( $warning['block'] ?? '' ),
 					'source_id' => (int) $warning['source_id'],
 				),
+			);
+		}
+
+		if ( 'unmigratable_reusable_block' === $type ) {
+			return array(
+				'issue_type'  => $type,
+				'target_ref'  => (int) $warning['source_id'],
+				'target_kind' => 'post',
+				'severity'    => 'warning',
 			);
 		}
 

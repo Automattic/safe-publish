@@ -18,7 +18,7 @@ Re-running is idempotent: the counts hold steady, and dropping `count` back to i
 
 ## What Gets Seeded
 
-Five **Needs attention** issues — one of every issue type, covering both severities — plus one **orphan failure**:
+Six **Needs attention** issues — one of every issue type, covering both severities — plus one **orphan failure**:
 
 | Affected page               | Issue type                            | Severity | Resolves via                                |
 | --------------------------- | ------------------------------------- | -------- | ------------------------------------------- |
@@ -26,10 +26,11 @@ Five **Needs attention** issues — one of every issue type, covering both sever
 | Unmapped References Demo    | `unmapped_block_reference` (post, ×2) | warning  | import **Unmapped Target A** / **B**, Retry |
 | Unresolvable Reference Demo | `unmapped_block_reference` (term)     | warning  | never — points at a non-existent term       |
 | Nav Referrer Demo           | `nav_ref_rewrite_failed`              | error    | Retry alone                                 |
+| Reusable Block Demo         | `unmigratable_reusable_block`         | warning  | never — not migrated, no Retry offered      |
 
 The orphan failure — titled "Import with no source ID" — comes from an import request with no source post id.
 
-The resolvable rows demonstrate the self-verifying Retry: import the named target (switch the post-type dropdown to **Pages**), then click **Retry** and the issue clears. The unresolvable term reference stays open no matter what, for contrast.
+The resolvable rows demonstrate the self-verifying Retry: import the named target (switch the post-type dropdown to **Pages**), then click **Retry** and the issue clears. The unresolvable term reference stays open no matter what, and the reusable block has no Retry at all (reusable blocks aren't migrated), for contrast.
 
 ## Exercising the Drawers
 

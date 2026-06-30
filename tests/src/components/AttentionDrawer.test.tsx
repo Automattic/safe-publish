@@ -127,6 +127,37 @@ describe( 'AttentionDrawer', () => {
 		expect( link ).toHaveAttribute( 'rel', 'noreferrer' );
 	} );
 
+	it( 'omits the Retry button for a non-retryable reusable-block issue', async () => {
+		// ARRANGE: a non-retryable unmigratable-reusable-block issue.
+		mockListResponse( [
+			{
+				...ISSUE,
+				issue_type: 'unmigratable_reusable_block',
+				target_kind: 'post',
+				target_ref: 555,
+				severity: 'warning',
+				retryable: false,
+			},
+		] );
+
+		// ACT: render the drawer.
+		render(
+			<AttentionDrawer
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+				onClose={ () => undefined }
+			/>
+		);
+
+		// ASSERT: the issue copy shows, but no Retry action is offered.
+		expect(
+			await screen.findByText( /Reusable block 555/ )
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole( 'button', { name: 'Retry' } )
+		).not.toBeInTheDocument();
+	} );
+
 	it( 'shows an empty state when nothing needs attention', async () => {
 		// ARRANGE: the endpoint returns no issues.
 		mockListResponse( [] );

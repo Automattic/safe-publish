@@ -9,6 +9,9 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Admin\Admin_Ajax_Controller;
+use Safe_Publish\Admin\Attention_Issues_Repository;
+use Safe_Publish\Utils\Attention_Issues_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
@@ -64,14 +67,15 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 
 	/**
 	 * Source post IDs for the bespoke edge-case pages (non-ASCII, empty, embed,
-	 * and footnotes). Same high range, distinct from every other base. All seed
-	 * as pages so the category-less body never picks up the default category
-	 * that WordPress auto-assigns to a post.
+	 * footnotes, and reusable-block). Same high range, distinct from every other
+	 * base. All seed as pages so the category-less body never picks up the
+	 * default category that WordPress auto-assigns to a post.
 	 */
-	private const EDGE_NON_ASCII_SOURCE_ID = 9200001;
-	private const EDGE_EMPTY_SOURCE_ID     = 9200002;
-	private const EDGE_EMBED_SOURCE_ID     = 9200003;
-	private const EDGE_FOOTNOTES_SOURCE_ID = 9200004;
+	private const EDGE_NON_ASCII_SOURCE_ID      = 9200001;
+	private const EDGE_EMPTY_SOURCE_ID          = 9200002;
+	private const EDGE_EMBED_SOURCE_ID          = 9200003;
+	private const EDGE_FOOTNOTES_SOURCE_ID      = 9200004;
+	private const EDGE_REUSABLE_BLOCK_SOURCE_ID = 9200005;
 
 	/**
 	 * Provider host of the embed edge page's url. Distinct from
@@ -117,6 +121,7 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 
 		Imports_Table::create_table();
 		Import_Items_Table::create_table();
+		Attention_Issues_Table::create_table();
 
 		self::$admin_user_id  = $factory->user->create(
 			array( 'role' => 'administrator' )
@@ -214,9 +219,10 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	 * Describes the bespoke edge-case bodies appended to the batch: a non-ASCII
 	 * page (multibyte title/slug/content plus unescaped entities), an
 	 * empty-content page, an embed page (a core/embed block with an external
-	 * provider url), and a footnotes page (a core/footnotes block plus matching
-	 * footnotes meta). All seed as pages so the category-less body never picks
-	 * up WordPress' default category, and all stay top-level on default
+	 * provider url), a footnotes page (a core/footnotes block plus matching
+	 * footnotes meta), and a reusable-block page (a core/block referencing an
+	 * unimported wp_block). All seed as pages so the category-less body never
+	 * picks up WordPress' default category, and all stay top-level on default
 	 * scalars; the fixture supplies their content.
 	 *
 	 * @param int $page_author_id Dest user the edge-case pages are authored by.
@@ -246,6 +252,12 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				'kind'           => 'footnotes',
 				'endpoint'       => 'pages',
 				'source_id'      => self::EDGE_FOOTNOTES_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+			),
+			array(
+				'kind'           => 'reusable_block',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_REUSABLE_BLOCK_SOURCE_ID,
 				'author_user_id' => $page_author_id,
 			),
 		);
@@ -497,7 +509,9 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	 * Guards the comparator's coverage assumptions: the seeder must not emit
 	 * gallery blocks, data-id attributes, or non-caption shortcodes, since none
 	 * is exercised by the parity checks today. Grow comparator coverage before
-	 * relaxing this.
+	 * relaxing this. The reusable block (core/block) the batch does emit is
+	 * intentional and verified by test_reusable_block_edge_surfaces_degradation,
+	 * not the parity comparator.
 	 */
 	public function test_seeder_does_not_emit_unsupported_references(): void {
 		// ARRANGE + ACT: concatenate every seeded source content body.
@@ -1083,25 +1097,84 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that no imported post raised an import warning, reverse-asserting
-	 * that the clean batch, including the empty, non-ASCII, embed, and footnotes
-	 * edge pages, triggers no degradation.
+	 * Verifies that no imported post other than the reusable-block edge raised an
+	 * import warning, reverse-asserting that the clean batch, including the empty,
+	 * non-ASCII, embed, and footnotes edge pages, triggers no degradation. The
+	 * reusable-block page's degradation is asserted by
+	 * test_reusable_block_edge_surfaces_degradation.
 	 */
 	public function test_import_raised_no_warnings(): void {
 		// ARRANGE + ACT: batch already imported.
-		// ASSERT: warnings were captured for every imported post and each is
-		// empty.
+		// ASSERT: warnings captured for every imported post; only the
+		// reusable-block edge degrades, every other post is warning-free.
 		$this->assertSame(
 			array_keys( self::$fixture->dest_post_ids ),
 			array_keys( self::$fixture->warnings_by_source_id ),
 			'Warnings should be captured for every imported post'
 		);
 		foreach ( self::$fixture->warnings_by_source_id as $source_id => $warnings ) {
+			if ( self::EDGE_REUSABLE_BLOCK_SOURCE_ID === $source_id ) {
+				continue;
+			}
 			$this->assertSame(
 				array(),
 				$warnings,
 				"Source ID {$source_id} should import without warnings"
 			);
 		}
+	}
+
+	/**
+	 * Verifies that the reusable-block edge page surfaces an
+	 * unmigratable-reusable-block degradation: the import raises the warning,
+	 * opens a non-retryable attention issue carrying the source ref, and leaves
+	 * the core/block in place on the destination.
+	 */
+	public function test_reusable_block_edge_surfaces_degradation(): void {
+		// ARRANGE + ACT: batch imported; locate the reusable-block edge page.
+		$this->assertArrayHasKey(
+			self::EDGE_REUSABLE_BLOCK_SOURCE_ID,
+			self::$fixture->dest_post_ids,
+			'Reusable-block edge page should import to a dest post'
+		);
+		$dest_id = self::$fixture->dest_post_ids[ self::EDGE_REUSABLE_BLOCK_SOURCE_ID ];
+		$ref     = Seeder_Parity_Fixture::REUSABLE_BLOCK_SOURCE_REF;
+
+		// ASSERT: the import raised exactly the reusable-block warning.
+		$this->assertSame(
+			array(
+				array(
+					'type'      => 'unmigratable_reusable_block',
+					'source_id' => $ref,
+				),
+			),
+			self::$fixture->warnings_by_source_id[ self::EDGE_REUSABLE_BLOCK_SOURCE_ID ],
+			'Reusable-block edge import should raise one unmigratable warning'
+		);
+
+		// ASSERT: a non-retryable attention issue carries the source ref.
+		$issue = ( new Attention_Issues_Repository() )->get_issue(
+			$dest_id,
+			'unmigratable_reusable_block',
+			$ref,
+			'post'
+		);
+		$this->assertNotNull(
+			$issue,
+			'Reusable-block degradation should open an attention issue'
+		);
+		$this->assertSame( 'warning', $issue['severity'] );
+		$this->assertNotContains(
+			'unmigratable_reusable_block',
+			Admin_Ajax_Controller::ATTENTION_ISSUE_RETRYABLE_TYPES,
+			'Reusable-block issue must not be retryable'
+		);
+
+		// ASSERT: the core/block ref is left in place on the destination.
+		$this->assertStringContainsString(
+			'<!-- wp:block {"ref":' . $ref . '} /-->',
+			(string) get_post( $dest_id )->post_content,
+			'Dest content should preserve the unmigrated core/block ref'
+		);
 	}
 }

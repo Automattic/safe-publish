@@ -58,6 +58,13 @@ final class Seeder_Parity_Fixture {
 	private const FOOTNOTE_ANCHOR_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 
 	/**
+	 * Source wp_block ID referenced by the reusable-block edge body's core/block.
+	 * The plugin never imports wp_block, so this reference dangles by design and
+	 * the import surfaces it as a degradation.
+	 */
+	public const REUSABLE_BLOCK_SOURCE_REF = 9300001;
+
+	/**
 	 * Source REST bodies keyed by source post ID.
 	 *
 	 * @var array<int, array<string, mixed>>
@@ -111,7 +118,7 @@ final class Seeder_Parity_Fixture {
 	 * @param int                                                                                                                                                  $media_id_base   Source media IDs start one past this value.
 	 * @param int                                                                                                                                                  $admin_user_id   User the import runs as; owns sideloaded media.
 	 * @param list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool, author_user_id: int, parent_links: array<int, int>}> $slices One descriptor per post-type slice in the batch. parent_links maps a child's 1-based slice index to its parent's.
-	 * @param list<array{kind: string, endpoint: string, source_id: int, author_user_id: int}>                                                                     $edge_cases One descriptor per bespoke edge-case body ('non_ascii', 'empty', 'embed', 'footnotes'); each seeds a single top-level, image-free post.
+	 * @param list<array{kind: string, endpoint: string, source_id: int, author_user_id: int}>                                                                     $edge_cases One descriptor per bespoke edge-case body ('non_ascii', 'empty', 'embed', 'footnotes', 'reusable_block'); each seeds a single top-level, image-free post.
 	 */
 	public function __construct(
 		private string $source_base_url,
@@ -292,7 +299,8 @@ final class Seeder_Parity_Fixture {
 	 * generator-driven batch. Each is a single top-level, image-free post on
 	 * default scalars, exercising parity the deterministic generator never
 	 * emits: multibyte/entity encoding, empty content, an external embed url's
-	 * verbatim preservation, and footnotes meta round-tripping.
+	 * verbatim preservation, footnotes meta round-tripping, and an unmigratable
+	 * reusable block surfacing as a degradation.
 	 */
 	private function build_edge_case_bodies(): void {
 		foreach ( $this->edge_cases as $edge ) {
@@ -321,10 +329,12 @@ final class Seeder_Parity_Fixture {
 	 * provider host, exercising the importer's no-rewrite contract for embeds.
 	 * The 'footnotes' body pairs a core/footnotes block with a matching
 	 * footnotes meta JSON, exercising verbatim propagation of WordPress'
-	 * footnotes meta (a JSON-encoded string, not an array).
+	 * footnotes meta (a JSON-encoded string, not an array). The 'reusable_block'
+	 * body carries a core/block whose ref names a source wp_block the plugin
+	 * never imports, exercising the unmigratable-reusable-block degradation.
 	 *
 	 * @param string $kind     Edge-case kind: 'non_ascii', 'empty', 'embed',
-	 *                         or 'footnotes'.
+	 *                         'footnotes', or 'reusable_block'.
 	 * @param string $endpoint REST endpoint the body is served from.
 	 * @return array<string, mixed> Generator-shaped payload.
 	 */
@@ -368,6 +378,17 @@ final class Seeder_Parity_Fixture {
 					. '</div></figure>' . "\n"
 					. '<!-- /wp:embed -->',
 				'excerpt' => 'Excerpt for the embed edge case.',
+			);
+		}
+
+		if ( 'reusable_block' === $kind ) {
+			return $base + array(
+				'title'   => 'Edge case reusable block',
+				'slug'    => 'edge-reusable-block',
+				'link'    => $this->source_base_url . '/edge-reusable-block',
+				'content' => '<!-- wp:block {"ref":'
+					. self::REUSABLE_BLOCK_SOURCE_REF . '} /-->',
+				'excerpt' => 'Excerpt for the reusable-block edge case.',
 			);
 		}
 

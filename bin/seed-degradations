@@ -65,15 +65,16 @@ PARENT_ID="$(printf '%s\n' "$SRC_OUT" | sed -n 's/^SEED_PARENT_ID=//p' | tr -d '
 CHILD_ID="$(printf '%s\n' "$SRC_OUT" | sed -n 's/^SEED_CHILD_ID=//p' | tr -d '\r')"
 REFERENCES_ID="$(printf '%s\n' "$SRC_OUT" | sed -n 's/^SEED_REFERENCES_ID=//p' | tr -d '\r')"
 UNRESOLVABLE_ID="$(printf '%s\n' "$SRC_OUT" | sed -n 's/^SEED_UNRESOLVABLE_ID=//p' | tr -d '\r')"
+REUSABLE_ID="$(printf '%s\n' "$SRC_OUT" | sed -n 's/^SEED_REUSABLE_ID=//p' | tr -d '\r')"
 VOLUME_ID="$(printf '%s\n' "$SRC_OUT" | sed -n 's/^SEED_VOLUME_ID=//p' | tr -d '\r')"
 
-if [ -z "$PARENT_ID" ] || [ -z "$CHILD_ID" ] || [ -z "$REFERENCES_ID" ] || [ -z "$UNRESOLVABLE_ID" ] || [ -z "$VOLUME_ID" ]; then
+if [ -z "$PARENT_ID" ] || [ -z "$CHILD_ID" ] || [ -z "$REFERENCES_ID" ] || [ -z "$UNRESOLVABLE_ID" ] || [ -z "$REUSABLE_ID" ] || [ -z "$VOLUME_ID" ]; then
 	echo "Source step did not return page IDs:" >&2
 	printf '%s\n' "$SRC_OUT" >&2
 	exit 1
 fi
-echo "Source parent=$PARENT_ID child=$CHILD_ID references=$REFERENCES_ID unresolvable=$UNRESOLVABLE_ID volume=$VOLUME_ID"
+echo "Source parent=$PARENT_ID child=$CHILD_ID references=$REFERENCES_ID unresolvable=$UNRESOLVABLE_ID reusable=$REUSABLE_ID volume=$VOLUME_ID"
 
 echo "Importing on destination..."
 # shellcheck disable=SC2086
-run cli step=import "child_id=$CHILD_ID" "parent_id=$PARENT_ID" "references_id=$REFERENCES_ID" "unresolvable_id=$UNRESOLVABLE_ID" "volume_id=$VOLUME_ID" $COUNT_ARG
+run cli step=import "child_id=$CHILD_ID" "parent_id=$PARENT_ID" "references_id=$REFERENCES_ID" "unresolvable_id=$UNRESOLVABLE_ID" "reusable_id=$REUSABLE_ID" "volume_id=$VOLUME_ID" $COUNT_ARG

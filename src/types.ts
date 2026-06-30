@@ -168,6 +168,7 @@ export interface OrphanFailuresResponse {
  */
 export type AttentionIssueType =
 	| 'unmapped_block_reference'
+	| 'unmigratable_reusable_block'
 	| 'nav_ref_rewrite_failed'
 	| 'parent_orphaned';
 
@@ -274,12 +275,24 @@ export interface NavRefRewriteFailedWarning {
 }
 
 /**
+ * Surfaced when content carries a reusable block (core/block) whose source
+ * wp_block the plugin does not import, so the reference dangles and the block
+ * renders empty on the destination. Resolved only by recreating the block's
+ * content directly in the post, so the attention issue is not retryable.
+ */
+export interface UnmigratableReusableBlockWarning {
+	type: 'unmigratable_reusable_block';
+	source_id: number;
+}
+
+/**
  * Discriminated union of all import warning types.
  */
 export type Warning =
 	| AuthorFallbackWarning
 	| ParentOrphanedWarning
 	| UnmappedBlockReferenceWarning
+	| UnmigratableReusableBlockWarning
 	| NavRefRewriteFailedWarning;
 
 /**
