@@ -216,6 +216,10 @@ If duplicates still occur:
 
 This is a known limitation of WordPress' embed cache when imported posts reference each other while still in draft. See [Embedded posts may render as plain links](concepts/import-process.md#embedded-posts-may-render-as-plain-links) for the cause and recovery steps.
 
+#### Internal body links 404 or open the wrong page
+
+Links inside post body content are migrated by host swap only, preserving the path, so a link can break when the target's destination slug or permalink differs from the source. See [Internal body links may 404 or open the wrong page](concepts/import-process.md#internal-body-links-may-404-or-open-the-wrong-page) for the cause and what to review.
+
 ### Validation Errors
 
 | Error code                 | Cause                                                  | Solution                                                 |
