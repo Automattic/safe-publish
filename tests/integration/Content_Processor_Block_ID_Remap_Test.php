@@ -79,7 +79,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			array( 'session_id_map' => array( $source_id => $dest_post ) )
 		);
 
-		// ASSERT: id rewritten; URL host swap left to replace_source_urls.
+		// ASSERT: id rewritten to the destination post.
 		$this->assertStringContainsString( '"id":' . $dest_post . ',', (string) $result );
 		$this->assertStringNotContainsString( '"id":' . $source_id . ',', (string) $result );
 	}
@@ -384,7 +384,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT.
+		// ACT: run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -429,7 +429,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT.
+		// ACT: run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -473,7 +473,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT.
+		// ACT: run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -517,7 +517,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT.
+		// ACT: run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -562,7 +562,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT.
+		// ACT: run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -600,7 +600,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT.
+		// ACT: run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -643,7 +643,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT.
+		// ACT: run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -684,7 +684,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT.
+		// ACT: run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -745,7 +745,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			array( $this->post_link( $source_id, self::SOURCE_SITE_URL . '/about' ) )
 		);
 
-		// ACT.
+		// ACT: run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -779,7 +779,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			array( $this->post_link( $source_id, self::SOURCE_SITE_URL . '/about' ) )
 		);
 
-		// ACT.
+		// ACT: run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -834,7 +834,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT.
+		// ACT: run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
