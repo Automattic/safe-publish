@@ -1135,7 +1135,8 @@ class Content_Processor {
 	 *
 	 * Targeted counterpart to the import-time remap: it repoints only the attrs
 	 * matching $target_ref and $target_kind, leaving resolved siblings
-	 * untouched, and persists without a revision or post_modified bump.
+	 * untouched, and persists without a revision or post_modified bump. Link
+	 * urls are re-derived alongside the ID where the block rule carries one.
 	 *
 	 * @param int    $affected_post_id Post holding the stale reference.
 	 * @param int    $target_ref       Source id to repoint.
@@ -1687,8 +1688,9 @@ class Content_Processor {
 	 *
 	 * The source url's query is carried over with post/term identity vars
 	 * removed (so a plain-permalink source's stale id cannot override the new
-	 * path) and its fragment preserved. Draft/pending post targets are left
-	 * alone: their slug is not final, so re-deriving would store a temporary url.
+	 * path) and its fragment preserved. Draft, pending, and auto-draft post
+	 * targets are left alone: their slug is not final, so re-deriving would
+	 * store a temporary url.
 	 *
 	 * @param array<string, mixed> $attrs    Block attrs.
 	 * @param string               $url_attr Attr holding the link url.
