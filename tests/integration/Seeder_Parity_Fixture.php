@@ -45,6 +45,19 @@ final class Seeder_Parity_Fixture {
 	use Per_Source_Id_Post_Api_Mock_Trait;
 
 	/**
+	 * Plaintext password seeded on the non-default half of the batch. Chosen to
+	 * survive sanitize_text_field() unchanged so the round-trip is verbatim.
+	 */
+	private const NON_DEFAULT_PASSWORD = 'Seeded-P@ssw0rd_42';
+
+	/**
+	 * Anchor UUID linking the footnotes edge body's in-text reference to its
+	 * meta entry, as WordPress does. ASCII and slash-free so the meta JSON
+	 * round-trips verbatim through update_post_meta().
+	 */
+	private const FOOTNOTE_ANCHOR_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+
+	/**
 	 * Source REST bodies keyed by source post ID.
 	 *
 	 * @var array<int, array<string, mixed>>
@@ -66,6 +79,14 @@ final class Seeder_Parity_Fixture {
 	 * @var array<int, int>
 	 */
 	public array $dest_post_ids = array();
+
+	/**
+	 * Source post ID => import warnings returned for that post. An empty list
+	 * means the import raised no warnings.
+	 *
+	 * @var array<int, list<array<string, mixed>>>
+	 */
+	public array $warnings_by_source_id = array();
 
 	/**
 	 * Source media ID => media REST body served for featured-image resolution.
@@ -90,13 +111,15 @@ final class Seeder_Parity_Fixture {
 	 * @param int                                                                                                                                                  $media_id_base   Source media IDs start one past this value.
 	 * @param int                                                                                                                                                  $admin_user_id   User the import runs as; owns sideloaded media.
 	 * @param list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool, author_user_id: int, parent_links: array<int, int>}> $slices One descriptor per post-type slice in the batch. parent_links maps a child's 1-based slice index to its parent's.
+	 * @param list<array{kind: string, endpoint: string, source_id: int, author_user_id: int}>                                                                     $edge_cases One descriptor per bespoke edge-case body ('non_ascii', 'empty', 'embed', 'footnotes'); each seeds a single top-level, image-free post.
 	 */
 	public function __construct(
 		private string $source_base_url,
 		private int $reference_time,
 		private int $media_id_base,
 		private int $admin_user_id,
-		private array $slices
+		private array $slices,
+		private array $edge_cases = array()
 	) {}
 
 	/**
@@ -105,6 +128,7 @@ final class Seeder_Parity_Fixture {
 	 */
 	public function seed(): void {
 		$this->build_source_bodies();
+		$this->build_edge_case_bodies();
 		$this->import_batch();
 	}
 
@@ -219,12 +243,176 @@ final class Seeder_Parity_Fixture {
 					$source_id,
 					$payload,
 					$slice['author_user_id'],
-					$source_parent_id
+					$source_parent_id,
+					$this->scalars_for_index( $i )
 				);
 			}
 		}
 
 		$this->source_media_bodies = $this->build_source_media_bodies();
+	}
+
+	/**
+	 * Returns the status-family scalars for a 1-based slice index. Even indices
+	 * get non-default values so the batch exercises both the WordPress defaults
+	 * and propagated non-defaults under one import.
+	 *
+	 * @param int $index Post index within its slice (1-based).
+	 * @return array{comment_status: string, ping_status: string, menu_order: int, password: string}
+	 */
+	private function scalars_for_index( int $index ): array {
+		if ( 0 !== $index % 2 ) {
+			return $this->default_scalars();
+		}
+
+		return array(
+			'comment_status' => 'closed',
+			'ping_status'    => 'closed',
+			'menu_order'     => $index,
+			'password'       => self::NON_DEFAULT_PASSWORD,
+		);
+	}
+
+	/**
+	 * Returns the WordPress-default status-family scalars.
+	 *
+	 * @return array{comment_status: string, ping_status: string, menu_order: int, password: string}
+	 */
+	private function default_scalars(): array {
+		return array(
+			'comment_status' => 'open',
+			'ping_status'    => 'open',
+			'menu_order'     => 0,
+			'password'       => '',
+		);
+	}
+
+	/**
+	 * Builds the bespoke edge-case bodies and registers them alongside the
+	 * generator-driven batch. Each is a single top-level, image-free post on
+	 * default scalars, exercising parity the deterministic generator never
+	 * emits: multibyte/entity encoding, empty content, an external embed url's
+	 * verbatim preservation, and footnotes meta round-tripping.
+	 */
+	private function build_edge_case_bodies(): void {
+		foreach ( $this->edge_cases as $edge ) {
+			$source_id = $edge['source_id'];
+
+			$this->endpoint_by_source_id[ $source_id ] = $edge['endpoint'];
+			$this->source_rest_bodies[ $source_id ]    = $this->payload_to_rest_body(
+				$source_id,
+				$this->edge_case_payload( $edge['kind'], $edge['endpoint'] ),
+				$edge['author_user_id'],
+				0,
+				$this->default_scalars()
+			);
+		}
+	}
+
+	/**
+	 * Builds the generator-shaped payload for an edge-case kind.
+	 *
+	 * The 'non_ascii' body carries accented Latin and CJK in the title plus the
+	 * full multibyte set (including an emoji) and unescaped entities in the
+	 * content; its slug is non-ASCII so the asserter checks sanitize_title()
+	 * parity, while its link stays ASCII so META_SOURCE_LINK round-trips. The
+	 * 'empty' body has empty content to exercise the empty-body path. The
+	 * 'embed' body carries a core/embed block whose url is on an external
+	 * provider host, exercising the importer's no-rewrite contract for embeds.
+	 * The 'footnotes' body pairs a core/footnotes block with a matching
+	 * footnotes meta JSON, exercising verbatim propagation of WordPress'
+	 * footnotes meta (a JSON-encoded string, not an array).
+	 *
+	 * @param string $kind     Edge-case kind: 'non_ascii', 'empty', 'embed',
+	 *                         or 'footnotes'.
+	 * @param string $endpoint REST endpoint the body is served from.
+	 * @return array<string, mixed> Generator-shaped payload.
+	 */
+	private function edge_case_payload( string $kind, string $endpoint ): array {
+		$post_type = 'pages' === $endpoint ? 'page' : 'post';
+		$base      = array(
+			'post_type'      => $post_type,
+			'status'         => 'publish',
+			'date'           => gmdate( 'Y-m-d H:i:s', $this->reference_time ),
+			'meta'           => array(),
+			'terms'          => array(),
+			'featured_media' => 0,
+		);
+
+		if ( 'empty' === $kind ) {
+			return $base + array(
+				'title'   => 'Edge case empty content',
+				'slug'    => 'edge-empty-content',
+				'link'    => $this->source_base_url . '/edge-empty-content',
+				'content' => '',
+				'excerpt' => 'Excerpt for the empty-content edge case.',
+			);
+		}
+
+		if ( 'embed' === $kind ) {
+			$provider_url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+
+			return $base + array(
+				'title'   => 'Edge case embed block',
+				'slug'    => 'edge-embed-block',
+				'link'    => $this->source_base_url . '/edge-embed-block',
+				'content' => '<!-- wp:embed {"url":"' . $provider_url
+					. '","type":"video","providerNameSlug":"youtube",'
+					. '"responsive":true,"className":'
+					. '"wp-embed-aspect-16-9 wp-has-aspect-ratio"} -->' . "\n"
+					. '<figure class="wp-block-embed is-type-video '
+					. 'is-provider-youtube wp-block-embed-youtube '
+					. 'wp-embed-aspect-16-9 wp-has-aspect-ratio">'
+					. '<div class="wp-block-embed__wrapper">' . "\n"
+					. $provider_url . "\n"
+					. '</div></figure>' . "\n"
+					. '<!-- /wp:embed -->',
+				'excerpt' => 'Excerpt for the embed edge case.',
+			);
+		}
+
+		if ( 'footnotes' === $kind ) {
+			$anchor    = self::FOOTNOTE_ANCHOR_ID;
+			$footnotes = (string) wp_json_encode(
+				array(
+					array(
+						'content' => 'Footnote one explains the cited claim.',
+						'id'      => $anchor,
+					),
+				),
+				JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+			);
+
+			// array_merge (not +) so the footnotes meta replaces $base's empty
+			// meta; + keeps the left-hand value on a key collision.
+			return array_merge(
+				$base,
+				array(
+					'title'   => 'Edge case footnotes',
+					'slug'    => 'edge-footnotes',
+					'link'    => $this->source_base_url . '/edge-footnotes',
+					'content' => "<!-- wp:paragraph -->\n"
+						. '<p>Body text with a footnote.<sup data-fn="'
+						. $anchor . '" class="fn"><a href="#' . $anchor
+						. '" id="' . $anchor . '-link">1</a></sup></p>' . "\n"
+						. "<!-- /wp:paragraph -->\n\n"
+						. '<!-- wp:footnotes /-->',
+					'excerpt' => 'Excerpt for the footnotes edge case.',
+					'meta'    => array( 'footnotes' => $footnotes ),
+				)
+			);
+		}
+
+		return $base + array(
+			'title'   => "Café \u{65e5}\u{672c}\u{8a9e} Tîtle &amp; Sübtitle &mdash; Fin",
+			'slug'    => "café-\u{65e5}\u{672c}\u{8a9e}-slug",
+			'link'    => $this->source_base_url . '/edge-non-ascii',
+			'content' => "<!-- wp:paragraph -->\n"
+				. "<p>Café \u{65e5}\u{672c}\u{8a9e} \u{1f389} \u{2014} A &amp; B"
+				. " &mdash; C</p>\n"
+				. '<!-- /wp:paragraph -->',
+			'excerpt' => 'Résumé café — éxcerpt.',
+		);
 	}
 
 	/**
@@ -263,7 +451,10 @@ final class Seeder_Parity_Fixture {
 					);
 				}
 
-				$this->dest_post_ids[ $source_id ] = (int) $result['post_id'];
+				$this->dest_post_ids[ $source_id ]         = (int) $result['post_id'];
+				$this->warnings_by_source_id[ $source_id ] = is_array( $result['warnings'] ?? null )
+					? $result['warnings']
+					: array();
 			}
 		} finally {
 			$this->remove_image_byte_response_mock();
@@ -347,19 +538,22 @@ final class Seeder_Parity_Fixture {
 	 * wrapped in [ 'raw' => ... ], taxonomy assignments land under
 	 * _embedded['wp:term'], the plugin's safe_publish_author block is stamped
 	 * with the slice's author, and parent carries the source parent ID (0 for
-	 * top-level).
+	 * top-level). The status-family scalars come from the caller so the batch
+	 * exercises non-default comment/ping/password/menu_order values.
 	 *
-	 * @param int                  $source_id        Source post ID.
-	 * @param array<string, mixed> $payload          Generator payload.
-	 * @param int                  $author_user_id   Dest user whose identity stamps safe_publish_author.
-	 * @param int                  $source_parent_id Source parent post ID; 0 for top-level.
+	 * @param int                                                                                   $source_id        Source post ID.
+	 * @param array<string, mixed>                                                                  $payload          Generator payload.
+	 * @param int                                                                                   $author_user_id   Dest user whose identity stamps safe_publish_author.
+	 * @param int                                                                                   $source_parent_id Source parent post ID; 0 for top-level.
+	 * @param array{comment_status: string, ping_status: string, menu_order: int, password: string} $scalars Status-family column values.
 	 * @return array<string, mixed>
 	 */
 	private function payload_to_rest_body(
 		int $source_id,
 		array $payload,
 		int $author_user_id,
-		int $source_parent_id
+		int $source_parent_id,
+		array $scalars
 	): array {
 		$author = get_userdata( $author_user_id );
 
@@ -378,10 +572,10 @@ final class Seeder_Parity_Fixture {
 			'status'              => $payload['status'],
 			'date'                => $payload['date'],
 			'date_gmt'            => $payload['date'],
-			'comment_status'      => 'open',
-			'ping_status'         => 'open',
-			'menu_order'          => 0,
-			'password'            => '',
+			'comment_status'      => $scalars['comment_status'],
+			'ping_status'         => $scalars['ping_status'],
+			'menu_order'          => $scalars['menu_order'],
+			'password'            => $scalars['password'],
 			'parent'              => $source_parent_id,
 			'meta'                => $payload['meta'],
 			'safe_publish_author' => array(

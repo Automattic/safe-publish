@@ -17,6 +17,7 @@ use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Datetime_Sanitizer;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Reconcile_Logger;
+use Safe_Publish\Utils\Reconcile_Outcome;
 use Safe_Publish\Utils\Sync_State_Comparator;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
@@ -290,33 +291,11 @@ final class Admin_Ajax_Controller {
 		$this->verify_ajax_capability();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing
-		$page             = max( 1, absint( $_POST['page'] ?? 1 ) );
-		$per_page         = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
-		$search           = trim(
-			sanitize_text_field( wp_unslash( $_POST['search'] ?? '' ) )
-		);
-		$attempted_after  = Datetime_Sanitizer::sanitize_iso_datetime(
-			sanitize_text_field( wp_unslash( $_POST['attempted_after'] ?? '' ) ),
-			false
-		);
-		$attempted_before = Datetime_Sanitizer::sanitize_iso_datetime(
-			sanitize_text_field( wp_unslash( $_POST['attempted_before'] ?? '' ) ),
-			true
-		);
+		$page     = max( 1, absint( $_POST['page'] ?? 1 ) );
+		$per_page = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$args = array();
-		if ( '' !== $search ) {
-			$args['search'] = $search;
-		}
-		if ( is_string( $attempted_after ) ) {
-			$args['attempted_after'] = $attempted_after;
-		}
-		if ( is_string( $attempted_before ) ) {
-			$args['attempted_before'] = $attempted_before;
-		}
-
-		$rows = $this->repository->list_orphan_failures( $page, $per_page, $args );
+		$rows = $this->repository->list_orphan_failures( $page, $per_page );
 
 		$has_more = count( $rows ) > $per_page;
 		if ( $has_more ) {
@@ -425,7 +404,7 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( __( 'Issue not found.', 'safe-publish' ) );
 		}
 
-		$this->dispatch_retry( $issue );
+		$outcome = $this->dispatch_retry( $issue );
 
 		$resolved = null === $this->attention_issues->get_issue(
 			$affected_post_id,
@@ -434,62 +413,38 @@ final class Admin_Ajax_Controller {
 			$target_kind
 		);
 
-		$this->log_reconcile_outcome( $issue, $resolved );
+		$this->record_reconcile_outcome( $issue, $outcome );
 
 		wp_send_json_success( array( 'resolved' => $resolved ) );
 	}
 
 	/**
-	 * Records the retry's reconciliation outcome to the audit log.
+	 * Records the retry's actual reconciliation outcome to the audit log.
 	 *
-	 * The cleared/unresolved/failed result and the issue's severity select a
-	 * reconcile info/warning/error event.
-	 *
-	 * @param array $issue    Pre-retry issue row.
-	 * @param bool  $resolved Whether the issue cleared.
+	 * @param array             $issue   Pre-retry issue row.
+	 * @param Reconcile_Outcome $outcome What the reconciliation did.
 	 */
-	private function log_reconcile_outcome( array $issue, bool $resolved ): void {
-		$logger           = new Reconcile_Logger();
-		$issue_type       = (string) $issue['issue_type'];
-		$affected_post_id = (int) $issue['affected_post_id'];
-		$target_ref       = (int) $issue['target_ref'];
-		$target_kind      = (string) $issue['target_kind'];
-
-		if ( $resolved ) {
-			$logger->resolved(
-				$issue_type,
-				$affected_post_id,
-				$target_ref,
-				$target_kind
-			);
-			return;
-		}
-
-		if ( 'error' === (string) $issue['severity'] ) {
-			$logger->failed(
-				$issue_type,
-				$affected_post_id,
-				$target_ref,
-				$target_kind,
-				'Reconciliation did not clear the issue on retry.'
-			);
-			return;
-		}
-
-		$logger->unresolved(
-			$issue_type,
-			$affected_post_id,
-			$target_ref,
-			$target_kind
+	private function record_reconcile_outcome(
+		array $issue,
+		Reconcile_Outcome $outcome
+	): void {
+		( new Reconcile_Logger() )->record(
+			$outcome,
+			(string) $issue['issue_type'],
+			(int) $issue['affected_post_id'],
+			(int) $issue['target_ref'],
+			(string) $issue['target_kind']
 		);
 	}
 
 	/**
-	 * Routes a fetched issue row to the reconciliation for its type.
+	 * Routes a fetched issue row to the reconciliation for its type and returns
+	 * the outcome.
 	 *
 	 * @param array $issue Issue row from the repository.
+	 * @return Reconcile_Outcome The reconciliation outcome.
 	 */
-	private function dispatch_retry( array $issue ): void {
+	private function dispatch_retry( array $issue ): Reconcile_Outcome {
 		$affected_post_id = (int) $issue['affected_post_id'];
 		$target_ref       = (int) $issue['target_ref'];
 		$target_kind      = (string) $issue['target_kind'];
@@ -497,27 +452,27 @@ final class Admin_Ajax_Controller {
 
 		switch ( (string) $issue['issue_type'] ) {
 			case 'nav_ref_rewrite_failed':
-				$this->post_import_service->retry_nav_ref_rewrite(
+				return $this->post_import_service->retry_nav_ref_rewrite(
+					$affected_post_id,
 					$target_ref,
 					$source_site_url
 				);
-				break;
 			case 'unmapped_block_reference':
-				$this->post_import_service->retry_block_ref_repoint(
+				return $this->post_import_service->retry_block_ref_repoint(
 					$affected_post_id,
 					$target_ref,
 					$target_kind,
 					$source_site_url
 				);
-				break;
 			case 'parent_orphaned':
-				$this->post_import_service->retry_parent_relink(
+				return $this->post_import_service->retry_parent_relink(
 					$affected_post_id,
 					$target_ref,
 					$source_site_url
 				);
-				break;
 		}
+
+		return Reconcile_Outcome::unresolved( 'Unknown issue type.' );
 	}
 
 	/**

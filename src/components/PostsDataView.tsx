@@ -4,7 +4,7 @@
  *
  * @file This file defines the PostsDataView component.
  */
-import { help, update } from '@wordpress/icons';
+import { cancelCircleFilled, caution, help, update } from '@wordpress/icons';
 
 import AttentionDrawer from './AttentionDrawer';
 import AuthStatusNotice from './AuthStatusNotice';
@@ -317,7 +317,7 @@ export function PostsDataView( {
 	const [ attentionCount, setAttentionCount ] = useState(
 		window.safePublishAdminData.attentionCount ?? 0
 	);
-	const [ isDrawerOpen, setIsDrawerOpen ] = useState( false );
+	const [ isOrphanDrawerOpen, setIsOrphanDrawerOpen ] = useState( false );
 	const [ isAttentionDrawerOpen, setIsAttentionDrawerOpen ] = useState( false );
 
 	const [ selectedPostType, setSelectedPostType ] = useState( 'post' );
@@ -1014,6 +1014,40 @@ export function PostsDataView( {
 				status={ authStatus }
 				settingsUrl={ window.safePublishAdminData?.settingsUrl }
 			/>
+			{ ( attentionCount > 0 || orphanCount > 0 ) && (
+				<div className="safe-publish-issue-summary">
+					{ attentionCount > 0 && (
+						<Button
+							className="safe-publish-issue-summary__button safe-publish-issue-summary__button--warning"
+							variant="tertiary"
+							icon={ caution }
+							onClick={ () =>
+								setIsAttentionDrawerOpen( true )
+							}
+						>
+							{ sprintf(
+								/* translators: %d: open attention issues count */
+								__( 'Needs attention (%d)', 'safe-publish' ),
+								attentionCount
+							) }
+						</Button>
+					) }
+					{ orphanCount > 0 && (
+						<Button
+							className="safe-publish-issue-summary__button safe-publish-issue-summary__button--error"
+							variant="tertiary"
+							icon={ cancelCircleFilled }
+							onClick={ () => setIsOrphanDrawerOpen( true ) }
+						>
+							{ sprintf(
+								/* translators: %d: orphan failures count */
+								__( 'Orphan failures (%d)', 'safe-publish' ),
+								orphanCount
+							) }
+						</Button>
+					) }
+				</div>
+			) }
 			<div className="safe-publish-controls-row">
 				{ /* The items table doesn't snapshot post_type for error
 				rows, so the filter can't be honored on the Failed chip. */ }
@@ -1097,40 +1131,6 @@ export function PostsDataView( {
 					</Button>
 				) }
 			</div>
-			{ attentionCount > 0 && (
-				<div className="safe-publish-attention-toolbar">
-					<Button
-						variant="tertiary"
-						onClick={ () => setIsAttentionDrawerOpen( true ) }
-					>
-						{ sprintf(
-							/* translators: %d: open attention issues count */
-							__(
-								'Needs attention (%d) →',
-								'safe-publish'
-							),
-							attentionCount
-						) }
-					</Button>
-				</div>
-			) }
-			{ orphanCount > 0 && (
-				<div className="safe-publish-orphan-toolbar">
-					<Button
-						variant="tertiary"
-						onClick={ () => setIsDrawerOpen( true ) }
-					>
-						{ sprintf(
-							/* translators: %d: orphan failures count */
-							__(
-								'%d orphan failures →',
-								'safe-publish'
-							),
-							orphanCount
-						) }
-					</Button>
-				</div>
-			) }
 			{ postTypeError && (
 				<Notice
 					className="safe-publish-post-type-error"
@@ -1203,11 +1203,11 @@ export function PostsDataView( {
 					}
 				/>
 			) }
-			{ isDrawerOpen && (
+			{ isOrphanDrawerOpen && (
 				<OrphanFailuresDrawer
 					ajaxurl={ window.safePublishAdminData.ajaxurl }
 					nonce={ window.safePublishAdminData.nonce }
-					onClose={ () => setIsDrawerOpen( false ) }
+					onClose={ () => setIsOrphanDrawerOpen( false ) }
 					onRemoved={ handleOrphanCountRefresh }
 				/>
 			) }
