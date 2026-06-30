@@ -10,12 +10,15 @@
  *
  *   step=source   On the source site: upsert the demo pages (a parent/child
  *                 pair, a resolvable links page with its two targets, an
- *                 unresolvable links page, and optionally a volume page when
- *                 count>0). Prints page IDs for the wrapper.
+ *                 unresolvable links page, a reusable-block page, and
+ *                 optionally a volume page when count>0). Prints page IDs for
+ *                 the wrapper.
  *   step=import   On the destination site: import the child (orphan fallback
- *                 on) for a parent_orphaned issue and the links pages for
- *                 unmapped_block_reference issues, run a no-id import for an
- *                 orphan failure, and stage a nav_ref_rewrite_failed issue.
+ *                 on) for a parent_orphaned issue, the links pages for
+ *                 unmapped_block_reference issues, and the reusable-block page
+ *                 for an unmigratable_reusable_block issue, run a no-id import
+ *                 for an orphan failure, and stage a nav_ref_rewrite_failed
+ *                 issue.
  *
  * Pass purge=1 with either step to remove that side's seeded artifacts.
  * Pass count=N (seed only) to add N filler entries per drawer for pagination.
@@ -56,6 +59,9 @@ const SAFE_PUBLISH_DEMO_TARGET_B_SLUG       = 'sp-demo-target-b';
 const SAFE_PUBLISH_DEMO_TARGET_B_TITLE      = 'Unmapped Target B';
 const SAFE_PUBLISH_DEMO_UNRESOLVABLE_SLUG   = 'sp-demo-unresolvable-reference';
 const SAFE_PUBLISH_DEMO_UNRESOLVABLE_TITLE  = 'Unresolvable Reference Demo';
+const SAFE_PUBLISH_DEMO_REUSABLE_SLUG       = 'sp-demo-reusable-block';
+const SAFE_PUBLISH_DEMO_REUSABLE_TITLE      = 'Reusable Block Demo';
+const SAFE_PUBLISH_DEMO_REUSABLE_REF        = 930001;
 const SAFE_PUBLISH_DEMO_VOLUME_SLUG         = 'sp-demo-volume';
 const SAFE_PUBLISH_DEMO_VOLUME_TITLE        = 'Volume Demo';
 const SAFE_PUBLISH_DEMO_VOLUME_ORPHAN_TITLE = 'Volume orphan failure';
@@ -197,6 +203,16 @@ function safe_publish_demo_unresolvable_content(): string {
 }
 
 /**
+ * Builds a page whose core/block references an unimported wp_block, so the
+ * import opens a non-retryable unmigratable_reusable_block issue.
+ *
+ * @return string Raw block markup.
+ */
+function safe_publish_demo_reusable_content(): string {
+	return '<!-- wp:block {"ref":' . SAFE_PUBLISH_DEMO_REUSABLE_REF . '} /-->';
+}
+
+/**
  * Builds a links page with the given number of navigation links to
  * deliberately unresolvable source IDs, used to fill a drawer past one page.
  *
@@ -237,6 +253,7 @@ function safe_publish_demo_run_source(
 			'parent',
 			'references',
 			'references-unresolvable',
+			'reusable-block',
 			'volume',
 			'target-a',
 			'target-b',
@@ -311,6 +328,14 @@ function safe_publish_demo_run_source(
 		$author_id,
 		safe_publish_demo_unresolvable_content()
 	);
+	$reusable_id     = safe_publish_demo_upsert_page(
+		'reusable-block',
+		SAFE_PUBLISH_DEMO_REUSABLE_SLUG,
+		SAFE_PUBLISH_DEMO_REUSABLE_TITLE,
+		0,
+		$author_id,
+		safe_publish_demo_reusable_content()
+	);
 
 	// Optional volume: one page with `count` filler links to push the drawer
 	// past a page. Removed when count is 0 so the count self-corrects.
@@ -337,6 +362,7 @@ function safe_publish_demo_run_source(
 	WP_CLI::log( 'SEED_CHILD_ID=' . $child_id );
 	WP_CLI::log( 'SEED_REFERENCES_ID=' . $references_id );
 	WP_CLI::log( 'SEED_UNRESOLVABLE_ID=' . $unresolvable_id );
+	WP_CLI::log( 'SEED_REUSABLE_ID=' . $reusable_id );
 	WP_CLI::log( 'SEED_VOLUME_ID=' . $volume_id );
 }
 
@@ -567,6 +593,7 @@ function safe_publish_demo_purge_destination(): void {
 		SAFE_PUBLISH_DEMO_CHILD_TITLE,
 		SAFE_PUBLISH_DEMO_REFERENCES_TITLE,
 		SAFE_PUBLISH_DEMO_UNRESOLVABLE_TITLE,
+		SAFE_PUBLISH_DEMO_REUSABLE_TITLE,
 		SAFE_PUBLISH_DEMO_VOLUME_TITLE,
 		SAFE_PUBLISH_DEMO_NAV_REFERRER_TITLE,
 		SAFE_PUBLISH_DEMO_TARGET_A_TITLE,
@@ -607,14 +634,16 @@ function safe_publish_demo_run_import(
 	$parent_id       = (int) ( $arguments['parent_id'] ?? 0 );
 	$references_id   = (int) ( $arguments['references_id'] ?? 0 );
 	$unresolvable_id = (int) ( $arguments['unresolvable_id'] ?? 0 );
+	$reusable_id     = (int) ( $arguments['reusable_id'] ?? 0 );
 	$volume_id       = (int) ( $arguments['volume_id'] ?? 0 );
 	$count           = max( 0, (int) ( $arguments['count'] ?? 0 ) );
 	if (
 		$child_id <= 0 || $parent_id <= 0
 		|| $references_id <= 0 || $unresolvable_id <= 0
+		|| $reusable_id <= 0
 	) {
 		WP_CLI::error(
-			'step=import requires child_id, parent_id, references_id, unresolvable_id.'
+			'step=import requires child_id, parent_id, references_id, unresolvable_id, reusable_id.'
 		);
 	}
 	if ( $count > 0 && $volume_id <= 0 ) {
@@ -722,6 +751,29 @@ function safe_publish_demo_run_import(
 		}
 
 		$unmapped_count += safe_publish_demo_count_unmapped( $reference_result );
+	}
+
+	// Reusable-block page: its core/block references an unimported wp_block, so
+	// the import opens a non-retryable unmigratable_reusable_block issue.
+	$reusable_prefetch = $api->fetch_fresh_post( $reusable_id, 'page' );
+	$reusable_options  = is_wp_error( $reusable_prefetch )
+		? array()
+		: array( 'prefetched_fresh_result' => $reusable_prefetch );
+	$reusable_result   = $service->import_post(
+		array(
+			'id'        => $reusable_id,
+			'post_type' => 'page',
+			'title'     => SAFE_PUBLISH_DEMO_REUSABLE_TITLE,
+			'link'      => rtrim( $source_site_url, '/' ) . '/?p=' . $reusable_id,
+		),
+		$session_id,
+		$reusable_options
+	);
+	if ( ! $reusable_result['success'] ) {
+		WP_CLI::error(
+			'Import of "' . SAFE_PUBLISH_DEMO_REUSABLE_TITLE . '" failed: '
+				. $reusable_result['error']
+		);
 	}
 
 	$service->import_post(
