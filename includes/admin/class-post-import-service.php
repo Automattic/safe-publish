@@ -122,6 +122,7 @@ class Post_Import_Service {
 	 */
 	private const ATTENTION_POST_ISSUE_TYPES = array(
 		'unmapped_block_reference',
+		'unmigratable_reusable_block',
 		'parent_orphaned',
 	);
 
@@ -1606,6 +1607,15 @@ class Post_Import_Service {
 					'block'     => (string) ( $warning['block'] ?? '' ),
 					'source_id' => (int) $warning['source_id'],
 				),
+			);
+		}
+
+		if ( 'unmigratable_reusable_block' === $type ) {
+			return array(
+				'issue_type'  => $type,
+				'target_ref'  => (int) $warning['source_id'],
+				'target_kind' => 'post',
+				'severity'    => 'warning',
 			);
 		}
 

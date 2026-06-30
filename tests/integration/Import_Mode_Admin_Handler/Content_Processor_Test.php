@@ -356,6 +356,70 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the unmigratable-reusable-block warning fires only for
+	 * core/block — not for core/navigation, which also carries a ref but is a
+	 * menu reference, not a reusable block.
+	 */
+	public function test_only_core_block_raises_reusable_block_warning(): void {
+		// ARRANGE: a paragraph, a core/navigation carrying its own ref, and one
+		// core/block. No source URLs, so the only media-free warnings come from
+		// the ref scans.
+		$source_site_url = 'https://source.example.com';
+		$content         = implode(
+			"\n",
+			array(
+				'<!-- wp:paragraph --><p>Intro.</p><!-- /wp:paragraph -->',
+				'<!-- wp:navigation {"ref":99} /-->',
+				'<!-- wp:block {"ref":4242} /-->',
+			)
+		);
+
+		// ACT: process the document.
+		$this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: only the core/block's ref is flagged as a reusable block; the
+		// navigation ref is not (it surfaces separately as an unmapped reference).
+		$reusable = array_values(
+			array_filter(
+				$this->processor->get_warnings(),
+				static fn( array $warning ): bool =>
+					'unmigratable_reusable_block' === ( $warning['type'] ?? '' )
+			)
+		);
+		$this->assertSame(
+			array(
+				array(
+					'type'      => 'unmigratable_reusable_block',
+					'source_id' => 4242,
+				),
+			),
+			$reusable,
+			'Only core/block should raise an unmigratable-reusable-block warning'
+		);
+	}
+
+	/**
+	 * Verifies that a document with no core/block raises no reusable-block
+	 * warning, so the scan never false-flags ordinary blocks.
+	 */
+	public function test_non_reusable_blocks_raise_no_warning(): void {
+		// ARRANGE: common blocks, no core/block, no source URLs.
+		$source_site_url = 'https://source.example.com';
+		$content         = '<!-- wp:paragraph --><p>Text.</p><!-- /wp:paragraph -->'
+			. '<!-- wp:heading --><h2>Heading</h2><!-- /wp:heading -->';
+
+		// ACT: process the document.
+		$this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: no warnings at all.
+		$this->assertSame(
+			array(),
+			$this->processor->get_warnings(),
+			'Ordinary blocks must not raise a reusable-block warning'
+		);
+	}
+
+	/**
 	 * Verifies that Gutenberg block content containing source-site links is
 	 * processed through the full parse-transform-serialize pipeline.
 	 *

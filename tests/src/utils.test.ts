@@ -17,6 +17,7 @@ import type {
 	AuthorFallbackWarning,
 	NavRefRewriteFailedWarning,
 	ParentOrphanedWarning,
+	UnmigratableReusableBlockWarning,
 } from '@/types';
 
 // Pin WP date settings so format/timezone-sensitive tests are deterministic.
@@ -245,6 +246,19 @@ describe( 'renderWarningMessage', () => {
 		expect( message ).not.toContain( '1 pages' );
 		expect( message ).toContain( '7' );
 	} );
+
+	it( 'should render the recreate-the-block hint for unmigratable_reusable_block', () => {
+		// ARRANGE: a reusable block whose source wp_block is not imported.
+		const warning: UnmigratableReusableBlockWarning = {
+			type: 'unmigratable_reusable_block',
+			source_id: 555,
+		};
+		// ACT: render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: the source ID and the recreate-the-content hint are present.
+		expect( message ).toContain( '555' );
+		expect( message ).toContain( 'Recreate' );
+	} );
 } );
 
 describe( 'renderWarningShortLabel', () => {
@@ -284,6 +298,18 @@ describe( 'renderWarningShortLabel', () => {
 		const label = renderWarningShortLabel( warning );
 		// ASSERT: short label is the comma-joinable string used in the bulk modal.
 		expect( label ).toBe( 'nav reference update failed' );
+	} );
+
+	it( 'should return "reusable block not migrated" for unmigratable_reusable_block', () => {
+		// ARRANGE: any unmigratable_reusable_block warning.
+		const warning: UnmigratableReusableBlockWarning = {
+			type: 'unmigratable_reusable_block',
+			source_id: 555,
+		};
+		// ACT: render the short label.
+		const label = renderWarningShortLabel( warning );
+		// ASSERT: short label is the comma-joinable string used in the bulk modal.
+		expect( label ).toBe( 'reusable block not migrated' );
 	} );
 } );
 
@@ -362,6 +388,21 @@ describe( 'renderIssueMessage', () => {
 		// ASSERT: the menu ID and the retry hint are present.
 		expect( message ).toContain( '8300' );
 		expect( message ).toContain( 'Retry' );
+	} );
+
+	it( 'renders manual-fix copy without a Retry hint for unmigratable_reusable_block', () => {
+		// ARRANGE: a non-retryable reusable-block issue.
+		const issue = makeIssue( {
+			issue_type: 'unmigratable_reusable_block',
+			target_ref: 555,
+		} );
+		// ACT: render the message.
+		const message = renderIssueMessage( issue );
+		// ASSERT: the source ID and recreate hint show; the copy points at the
+		// manual fix, not Retry, since the issue is not retryable.
+		expect( message ).toContain( '555' );
+		expect( message ).toContain( 'Recreate' );
+		expect( message ).not.toContain( 'Retry' );
 	} );
 } );
 
