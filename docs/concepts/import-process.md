@@ -280,6 +280,12 @@ wp post meta list <post-id> --fields=meta_key --format=csv \
   | xargs -I{} wp post meta delete <post-id> {}
 ```
 
+### Internal body links may 404 or open the wrong page
+
+Internal links inside post body content (for example `<a href>` in paragraphs and lists) are migrated by host swap only: the source host is replaced with the destination host, but the path is preserved. If a linked page's destination slug or permalink differs from the source — a slug collision (such as `/about` becoming `/about-2` because the destination already has an `/about` page), a different permalink structure, or plain versus pretty permalinks — the link can return a 404 or resolve to a different page. Review internal links after migrating onto a site that already has content.
+
+Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink automatically.
+
 ## Next Steps
 
 - [Content Validation](validation.md) - Understanding validation
