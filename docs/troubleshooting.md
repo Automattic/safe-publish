@@ -220,6 +220,10 @@ This is a known limitation of WordPress' embed cache when imported posts referen
 
 Links inside post body content are migrated by host swap only, preserving the path, so a link can break when the target's destination slug or permalink differs from the source. See [Internal body links may 404 or open the wrong page](concepts/import-process.md#internal-body-links-may-404-or-open-the-wrong-page) for the cause and what to review.
 
+#### Navigation links to draft targets 404 or open the wrong page
+
+A navigation link or submenu whose target was a draft at import keeps the host-swapped source path instead of being re-derived, so it can break under a slug collision or a different permalink structure. See [Navigation links to draft targets may 404 or open the wrong page](concepts/import-process.md#navigation-links-to-draft-targets-may-404-or-open-the-wrong-page) for the fix.
+
 ### Validation Errors
 
 | Error code                 | Cause                                                  | Solution                                                 |
