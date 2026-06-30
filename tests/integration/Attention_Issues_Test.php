@@ -612,9 +612,9 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			self::BLOG_URL
 		);
 
-		// ASSERT: the first wrote, the second was a no-op.
-		$this->assertTrue( $first );
-		$this->assertFalse( $second );
+		// ASSERT: the first repoint resolved; the second made no change.
+		$this->assertSame( Reconcile_Outcome::RESOLVED, $first->type );
+		$this->assertSame( Reconcile_Outcome::UNRESOLVED, $second->type );
 		$this->assertSame( array( $dest_id ), $this->nav_link_ids( $post_id ) );
 	}
 
