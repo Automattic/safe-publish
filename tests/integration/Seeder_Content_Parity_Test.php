@@ -1131,7 +1131,7 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	 * the core/block in place on the destination.
 	 */
 	public function test_reusable_block_edge_surfaces_degradation(): void {
-		// ARRANGE: locate the imported reusable-block edge page.
+		// ARRANGE + ACT: batch imported; locate the reusable-block edge page.
 		$this->assertArrayHasKey(
 			self::EDGE_REUSABLE_BLOCK_SOURCE_ID,
 			self::$fixture->dest_post_ids,

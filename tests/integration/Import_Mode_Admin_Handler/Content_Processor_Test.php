@@ -396,6 +396,27 @@ class Content_Processor_Test extends Integration_Test_Case {
 			$reusable,
 			'Only core/block should raise an unmigratable-reusable-block warning'
 		);
+
+		// ASSERT: the navigation ref surfaces separately as an unmapped reference.
+		$unmapped = array_values(
+			array_filter(
+				$this->processor->get_warnings(),
+				static fn( array $warning ): bool =>
+					'unmapped_block_reference' === ( $warning['type'] ?? '' )
+			)
+		);
+		$this->assertSame(
+			array(
+				array(
+					'type'      => 'unmapped_block_reference',
+					'kind'      => 'post',
+					'block'     => 'core/navigation',
+					'source_id' => 99,
+				),
+			),
+			$unmapped,
+			'The navigation ref should surface as one unmapped reference'
+		);
 	}
 
 	/**
