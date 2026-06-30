@@ -502,6 +502,82 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that retrying an unmapped post nav-link re-derives its url to the
+	 * destination permalink, without bumping post_modified.
+	 */
+	public function test_block_ref_retry_rederives_post_link_url(): void {
+		// ARRANGE: pretty permalinks, plus an import linking to a not-yet
+		// imported source post (url left as the host-swapped source path).
+		$this->set_permalink_structure( '/%postname%/' );
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7210,
+			array( 'content' => $this->single_nav_link_content( 9710 ) )
+		);
+		$post_id = $result['post_id'];
+
+		// ARRANGE: the target becomes available; capture the pre-retry state.
+		$dest_id   = $this->seed_target_post( 9710, self::BLOG_URL );
+		$permalink = (string) get_permalink( $dest_id );
+		$modified  = get_post_field( 'post_modified', $post_id );
+
+		// ACT: retry the repoint.
+		$this->import_service->retry_block_ref_repoint(
+			$post_id,
+			9710,
+			'post',
+			self::BLOG_URL
+		);
+
+		// ASSERT: id repointed and url re-derived to the destination permalink.
+		$this->assertSame( array( $dest_id ), $this->nav_link_ids( $post_id ) );
+		$this->assertSame( array( $permalink ), $this->nav_link_urls( $post_id ) );
+
+		// ASSERT: a system touch-up — post_modified intact.
+		$this->assertSame(
+			$modified,
+			get_post_field( 'post_modified', $post_id )
+		);
+	}
+
+	/**
+	 * Verifies that re-deriving a nav-link url on repoint is idempotent: a
+	 * second repoint to the same resolved target makes no write.
+	 */
+	public function test_block_ref_repoint_url_rederive_is_idempotent(): void {
+		// ARRANGE: pretty permalinks and an import linking to a not-yet-imported
+		// source post; then make the target available.
+		$this->set_permalink_structure( '/%postname%/' );
+		$result    = $this->import_under(
+			self::BLOG_URL,
+			7211,
+			array( 'content' => $this->single_nav_link_content( 9711 ) )
+		);
+		$post_id   = $result['post_id'];
+		$dest_id   = $this->seed_target_post( 9711, self::BLOG_URL );
+		$processor = $this->content_processor();
+
+		// ACT: first repoint resolves and re-derives; second repeats.
+		$first  = $processor->repoint_block_reference(
+			$post_id,
+			9711,
+			'post',
+			self::BLOG_URL
+		);
+		$second = $processor->repoint_block_reference(
+			$post_id,
+			9711,
+			'post',
+			self::BLOG_URL
+		);
+
+		// ASSERT: the first wrote, the second was a no-op.
+		$this->assertTrue( $first );
+		$this->assertFalse( $second );
+		$this->assertSame( array( $dest_id ), $this->nav_link_ids( $post_id ) );
+	}
+
+	/**
 	 * Verifies that retrying an unmapped term reference repoints the taxonomy
 	 * nav-link in place and clears the issue.
 	 */
@@ -1266,5 +1342,57 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		foreach ( $block['innerBlocks'] ?? array() as $inner ) {
 			$this->collect_nav_link_ids( $inner, $ids );
 		}
+	}
+
+	/**
+	 * Returns the url attrs of a post's core/navigation-link blocks, in order.
+	 *
+	 * @param int $post_id Post to read.
+	 * @return string[] Nav-link url attrs.
+	 */
+	private function nav_link_urls( int $post_id ): array {
+		$content = (string) get_post_field( 'post_content', $post_id );
+		$urls    = array();
+
+		foreach ( parse_blocks( $content ) as $block ) {
+			$this->collect_nav_link_urls( $block, $urls );
+		}
+
+		return $urls;
+	}
+
+	/**
+	 * Accumulates core/navigation-link url attrs from a block tree.
+	 *
+	 * @param array    $block Parsed block.
+	 * @param string[] $urls  Accumulator, by reference.
+	 */
+	private function collect_nav_link_urls( array $block, array &$urls ): void {
+		if (
+			'core/navigation-link' === ( $block['blockName'] ?? '' )
+			&& isset( $block['attrs']['url'] )
+			&& is_string( $block['attrs']['url'] )
+		) {
+			$urls[] = $block['attrs']['url'];
+		}
+
+		foreach ( $block['innerBlocks'] ?? array() as $inner ) {
+			$this->collect_nav_link_urls( $inner, $urls );
+		}
+	}
+
+	/**
+	 * Builds a content processor wired against real WP dependencies.
+	 *
+	 * @return Content_Processor Content processor instance.
+	 */
+	private function content_processor(): Content_Processor {
+		$media_importer = new Media_Importer( new HTTP_Client() );
+
+		return new Content_Processor(
+			$media_importer,
+			new Content_Media_Processor( $media_importer ),
+			new Shortcode_ID_Rewriter()
+		);
 	}
 }
