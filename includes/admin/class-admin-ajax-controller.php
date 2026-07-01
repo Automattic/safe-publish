@@ -483,18 +483,19 @@ final class Admin_Ajax_Controller {
 	 * @return array Client-facing issue payload.
 	 */
 	private function format_attention_issue( array $row ): array {
-		$affected_post_id = (int) $row['affected_post_id'];
-		$edit_url         = get_edit_post_link( $affected_post_id, 'raw' );
-		$detail           = is_array( $row['detail'] ?? null )
+		$affected_post_id  = (int) $row['affected_post_id'];
+		$edit_url          = get_edit_post_link( $affected_post_id, 'raw' );
+		$detail            = is_array( $row['detail'] ?? null )
 			? $row['detail']
 			: array();
+		$is_reusable_block = 'core/block' === ( $detail['block'] ?? '' );
 
 		return array(
 			'affected_post_id'         => $affected_post_id,
 			'issue_type'               => (string) $row['issue_type'],
 			'target_ref'               => (int) $row['target_ref'],
 			'target_kind'              => (string) $row['target_kind'],
-			'target_is_reusable_block' => 'core/block' === ( $detail['block'] ?? '' ),
+			'target_is_reusable_block' => $is_reusable_block,
 			'severity'                 => (string) $row['severity'],
 			'source_site_url'          => (string) $row['source_site_url'],
 			'first_detected_gmt'       => (string) $row['first_detected_gmt'],
