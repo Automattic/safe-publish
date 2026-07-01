@@ -14,11 +14,10 @@
  *                 optionally a volume page when count>0). Prints page IDs for
  *                 the wrapper.
  *   step=import   On the destination site: import the child (orphan fallback
- *                 on) for a parent_orphaned issue, the links pages for
- *                 unmapped_block_reference issues, and the reusable-block page
- *                 for an unmigratable_reusable_block issue, run a no-id import
- *                 for an orphan failure, and stage a nav_ref_rewrite_failed
- *                 issue.
+ *                 on) for a parent_orphaned issue, and the links and
+ *                 reusable-block pages for unmapped_block_reference issues, run
+ *                 a no-id import for an orphan failure, and stage a
+ *                 nav_ref_rewrite_failed issue.
  *
  * Pass purge=1 with either step to remove that side's seeded artifacts.
  * Pass count=N (seed only) to add N filler entries per drawer for pagination.
@@ -204,7 +203,8 @@ function safe_publish_demo_unresolvable_content(): string {
 
 /**
  * Builds a page whose core/block references an unimported wp_block, so the
- * import opens a non-retryable unmigratable_reusable_block issue.
+ * import opens a retryable unmapped_block_reference issue flagged as a reusable
+ * block.
  *
  * @return string Raw block markup.
  */
@@ -754,7 +754,8 @@ function safe_publish_demo_run_import(
 	}
 
 	// Reusable-block page: its core/block references an unimported wp_block, so
-	// the import opens a non-retryable unmigratable_reusable_block issue.
+	// the import opens a retryable unmapped_block_reference issue flagged as a
+	// reusable block.
 	$reusable_prefetch = $api->fetch_fresh_post( $reusable_id, 'page' );
 	$reusable_options  = is_wp_error( $reusable_prefetch )
 		? array()
