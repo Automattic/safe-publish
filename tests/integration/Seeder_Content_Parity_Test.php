@@ -988,6 +988,66 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the featured image's source alt text propagates to the dest
+	 * attachment's _wp_attachment_image_alt, while inline-only attachments keep
+	 * it absent (featured-path-only propagation). Guards against a vacuous pass
+	 * by requiring the batch to exercise both branches.
+	 */
+	public function test_featured_attachment_alt_text_propagated(): void {
+		// ARRANGE + ACT: batch already imported.
+		$key              = '_wp_attachment_image_alt';
+		$featured_checked = 0;
+		$inline_checked   = 0;
+
+		// ASSERT: featured attachments carry the alt; inline-only ones do not.
+		foreach ( self::$fixture->image_refs_by_source_id as $source_id => $refs ) {
+			$featured_source_id = (int) (
+				self::$fixture->source_rest_bodies[ $source_id ]['featured_media'] ?? 0
+			);
+
+			foreach ( $refs as $ref ) {
+				$dest = $this->find_dest_attachment_by_source_url( $ref['url'] );
+				$this->assertNotNull(
+					$dest,
+					"Source URL {$ref['url']} should resolve a dest attachment"
+				);
+
+				if ( $ref['id'] === $featured_source_id ) {
+					$expected = self::$fixture->source_media_alt_text( $ref['id'] );
+					$this->assertNotSame(
+						'',
+						$expected,
+						"Featured media {$ref['id']} should seed a non-empty alt"
+					);
+					$this->assertSame(
+						$expected,
+						(string) get_post_meta( $dest->ID, $key, true ),
+						"Featured attachment {$dest->ID} alt should match source"
+					);
+					++$featured_checked;
+				} else {
+					$this->assertFalse(
+						metadata_exists( 'post', $dest->ID, $key ),
+						"Inline-only attachment {$dest->ID} should not carry alt"
+					);
+					++$inline_checked;
+				}
+			}
+		}
+
+		$this->assertGreaterThan(
+			0,
+			$featured_checked,
+			'Batch should exercise at least one featured attachment'
+		);
+		$this->assertGreaterThan(
+			0,
+			$inline_checked,
+			'Batch should exercise at least one inline-only attachment'
+		);
+	}
+
+	/**
 	 * Verifies that the empty-content edge page imports with empty post_content
 	 * and no injected markers, locking the empty-body path.
 	 */

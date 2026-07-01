@@ -179,6 +179,19 @@ final class Seeder_Parity_Fixture {
 	}
 
 	/**
+	 * Returns the source alt text mocked for a media ID, or '' when the media
+	 * isn't mocked, so the parity test can value-check the propagated alt.
+	 *
+	 * @param int $source_media_id Source media ID.
+	 * @return string
+	 */
+	public function source_media_alt_text( int $source_media_id ): string {
+		return (string) (
+			$this->source_media_bodies[ $source_media_id ]['alt_text'] ?? ''
+		);
+	}
+
+	/**
 	 * Returns the pre-built source REST body for the post mock. Falls back to
 	 * null so unregistered IDs surface as a WP_Error.
 	 *
@@ -522,9 +535,9 @@ final class Seeder_Parity_Fixture {
 
 	/**
 	 * Builds the wp/v2/media/{id} mock bodies for every image referenced in the
-	 * batch. The plugin only reads source_url today; alt_text, title, and
-	 * caption are included so future propagation work surfaces against a
-	 * non-empty source without having to reseed.
+	 * batch. The plugin reads source_url and alt_text today; title and caption
+	 * are included so future propagation work surfaces against a non-empty
+	 * source without having to reseed.
 	 *
 	 * @return array<int, array<string, mixed>> Media ID => REST body.
 	 */
