@@ -18,9 +18,9 @@ use Safe_Publish\Utils\Options;
 
 /**
  * Exercises process_block_id_references via the public process_content()
- * entry point, asserting that nav-link/submenu/navigation blocks have
- * their post/term references rewritten and that unmapped references
- * surface as warnings without aborting the run.
+ * entry point, asserting that nav-link/submenu/navigation and core/block
+ * blocks have their post/term references rewritten and that unmapped
+ * references surface as warnings without aborting the run.
  */
 class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 
@@ -263,6 +263,98 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 		$this->assertStringContainsString( '"ref":' . $dest_nav, (string) $result );
 		$this->assertStringNotContainsString( '"ref":' . $source_id, (string) $result );
 		$this->assertSame( array(), $this->processor->get_warnings() );
+	}
+
+	/**
+	 * Verifies that core/block.ref is rewritten via the session map when the
+	 * referenced source wp_block resolves to an in-batch import.
+	 */
+	public function test_remaps_reusable_block_ref_via_session_map(): void {
+		// ARRANGE: a destination wp_block standing in for the freshly imported
+		// reusable block, and a core/block referencing the source's ID for it.
+		$dest_block = self::factory()->post->create(
+			array( 'post_type' => 'wp_block' )
+		);
+		$source_id  = 99030;
+		$content    = '<!-- wp:block {"ref":' . $source_id . '} /-->';
+
+		// ACT: process with the session map carrying the mapping.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( $source_id => $dest_block ) )
+		);
+
+		// ASSERT: ref now points at the destination block; no warning raised.
+		$this->assertStringContainsString( '"ref":' . $dest_block, (string) $result );
+		$this->assertStringNotContainsString( '"ref":' . $source_id, (string) $result );
+		$this->assertSame( array(), $this->processor->get_warnings() );
+	}
+
+	/**
+	 * Verifies that core/block.ref resolves a wp_block via postmeta when the
+	 * source ID isn't in the session map. wp_block is excluded from search, so
+	 * the lookup must not rely on 'any'.
+	 */
+	public function test_remaps_reusable_block_ref_via_postmeta_fallback(): void {
+		// ARRANGE: a destination wp_block carrying the source-tracking meta from
+		// a prior-session import.
+		$dest_block = self::factory()->post->create(
+			array( 'post_type' => 'wp_block' )
+		);
+		$source_id  = 99031;
+		update_post_meta( $dest_block, Options::META_SOURCE_POST_ID, $source_id );
+		update_post_meta(
+			$dest_block,
+			Options::META_SOURCE_SITE_URL,
+			self::SOURCE_SITE_URL
+		);
+
+		$content = '<!-- wp:block {"ref":' . $source_id . '} /-->';
+
+		// ACT: empty session map — the lookup must find the wp_block via postmeta.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: ref rewritten to the destination block; no warning raised.
+		$this->assertStringContainsString( '"ref":' . $dest_block, (string) $result );
+		$this->assertStringNotContainsString( '"ref":' . $source_id, (string) $result );
+		$this->assertSame( array(), $this->processor->get_warnings() );
+	}
+
+	/**
+	 * Verifies that an unresolved core/block.ref is left in place and surfaces
+	 * as an unmapped_block_reference warning keyed to the core/block name, so a
+	 * missing reusable-block target folds into the retryable degradation.
+	 */
+	public function test_reusable_block_ref_unmapped_when_target_absent(): void {
+		// ARRANGE: a core/block whose source wp_block is not on the destination.
+		$source_id = 99032;
+		$content   = '<!-- wp:block {"ref":' . $source_id . '} /-->';
+
+		// ACT: process with no mapping available.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: ref stays at the source value; one warning names core/block.
+		$this->assertStringContainsString( '"ref":' . $source_id, (string) $result );
+		$this->assertSame(
+			array(
+				array(
+					'type'      => 'unmapped_block_reference',
+					'kind'      => 'post',
+					'block'     => 'core/block',
+					'source_id' => $source_id,
+				),
+			),
+			$this->processor->get_warnings()
+		);
 	}
 
 	/**

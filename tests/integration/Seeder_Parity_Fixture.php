@@ -59,8 +59,8 @@ final class Seeder_Parity_Fixture {
 
 	/**
 	 * Source wp_block ID referenced by the reusable-block edge body's core/block.
-	 * The plugin never imports wp_block, so this reference dangles by design and
-	 * the import surfaces it as a degradation.
+	 * This batch does not import the target wp_block, so the reference surfaces
+	 * as a retryable unmapped_block_reference degradation.
 	 */
 	public const REUSABLE_BLOCK_SOURCE_REF = 9300001;
 
@@ -299,8 +299,8 @@ final class Seeder_Parity_Fixture {
 	 * generator-driven batch. Each is a single top-level, image-free post on
 	 * default scalars, exercising parity the deterministic generator never
 	 * emits: multibyte/entity encoding, empty content, an external embed url's
-	 * verbatim preservation, footnotes meta round-tripping, and an unmigratable
-	 * reusable block surfacing as a degradation.
+	 * verbatim preservation, footnotes meta round-tripping, and a reusable block
+	 * whose target is not imported, surfacing as a retryable unmapped reference.
 	 */
 	private function build_edge_case_bodies(): void {
 		foreach ( $this->edge_cases as $edge ) {
@@ -330,8 +330,8 @@ final class Seeder_Parity_Fixture {
 	 * The 'footnotes' body pairs a core/footnotes block with a matching
 	 * footnotes meta JSON, exercising verbatim propagation of WordPress'
 	 * footnotes meta (a JSON-encoded string, not an array). The 'reusable_block'
-	 * body carries a core/block whose ref names a source wp_block the plugin
-	 * never imports, exercising the unmigratable-reusable-block degradation.
+	 * body carries a core/block whose ref names a source wp_block this batch does
+	 * not import, exercising the retryable unmapped-reference degradation.
 	 *
 	 * @param string $kind     Edge-case kind: 'non_ascii', 'empty', 'embed',
 	 *                         'footnotes', or 'reusable_block'.

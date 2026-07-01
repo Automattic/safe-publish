@@ -356,14 +356,15 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that the unmigratable-reusable-block warning fires only for
-	 * core/block — not for core/navigation, which also carries a ref but is a
-	 * menu reference, not a reusable block.
+	 * Verifies that an unresolved core/block ref surfaces as an
+	 * unmapped_block_reference carrying its block name, so a missing
+	 * reusable-block target folds into the same retryable degradation as any
+	 * other unresolved block ref.
 	 */
-	public function test_only_core_block_raises_reusable_block_warning(): void {
+	public function test_core_block_ref_surfaces_as_unmapped_reference(): void {
 		// ARRANGE: a paragraph, a core/navigation carrying its own ref, and one
-		// core/block. No source URLs, so the only media-free warnings come from
-		// the ref scans.
+		// core/block. No source URLs and neither ref resolves on the
+		// destination, so the only warnings come from the ref scan.
 		$source_site_url = 'https://source.example.com';
 		$content         = implode(
 			"\n",
@@ -377,34 +378,8 @@ class Content_Processor_Test extends Integration_Test_Case {
 		// ACT: process the document.
 		$this->processor->process_content( $content, $source_site_url );
 
-		// ASSERT: only the core/block's ref is flagged as a reusable block; the
-		// navigation ref is not (it surfaces separately as an unmapped reference).
-		$reusable = array_values(
-			array_filter(
-				$this->processor->get_warnings(),
-				static fn( array $warning ): bool =>
-					'unmigratable_reusable_block' === ( $warning['type'] ?? '' )
-			)
-		);
-		$this->assertSame(
-			array(
-				array(
-					'type'      => 'unmigratable_reusable_block',
-					'source_id' => 4242,
-				),
-			),
-			$reusable,
-			'Only core/block should raise an unmigratable-reusable-block warning'
-		);
-
-		// ASSERT: the navigation ref surfaces separately as an unmapped reference.
-		$unmapped = array_values(
-			array_filter(
-				$this->processor->get_warnings(),
-				static fn( array $warning ): bool =>
-					'unmapped_block_reference' === ( $warning['type'] ?? '' )
-			)
-		);
+		// ASSERT: both refs surface as unmapped references, distinguished by
+		// block name; core/block is not treated specially.
 		$this->assertSame(
 			array(
 				array(
@@ -413,18 +388,24 @@ class Content_Processor_Test extends Integration_Test_Case {
 					'block'     => 'core/navigation',
 					'source_id' => 99,
 				),
+				array(
+					'type'      => 'unmapped_block_reference',
+					'kind'      => 'post',
+					'block'     => 'core/block',
+					'source_id' => 4242,
+				),
 			),
-			$unmapped,
-			'The navigation ref should surface as one unmapped reference'
+			$this->processor->get_warnings(),
+			'Both refs should surface as unmapped references keyed by block name'
 		);
 	}
 
 	/**
-	 * Verifies that a document with no core/block raises no reusable-block
-	 * warning, so the scan never false-flags ordinary blocks.
+	 * Verifies that blocks carrying no id reference raise no warning, so the
+	 * ref scan never false-flags ordinary blocks.
 	 */
-	public function test_non_reusable_blocks_raise_no_warning(): void {
-		// ARRANGE: common blocks, no core/block, no source URLs.
+	public function test_blocks_without_id_refs_raise_no_warning(): void {
+		// ARRANGE: common blocks, no id-bearing refs, no source URLs.
 		$source_site_url = 'https://source.example.com';
 		$content         = '<!-- wp:paragraph --><p>Text.</p><!-- /wp:paragraph -->'
 			. '<!-- wp:heading --><h2>Heading</h2><!-- /wp:heading -->';
@@ -436,7 +417,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		$this->assertSame(
 			array(),
 			$this->processor->get_warnings(),
-			'Ordinary blocks must not raise a reusable-block warning'
+			'Ordinary blocks must not raise a warning'
 		);
 	}
 

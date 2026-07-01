@@ -1125,10 +1125,11 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that the reusable-block edge page surfaces an
-	 * unmigratable-reusable-block degradation: the import raises the warning,
-	 * opens a non-retryable attention issue carrying the source ref, and leaves
-	 * the core/block in place on the destination.
+	 * Verifies that the reusable-block edge page surfaces a retryable
+	 * unmapped_block_reference degradation: the import raises the warning keyed
+	 * to core/block, opens a retryable attention issue carrying the source ref
+	 * and the reusable-block detail, and leaves the ref in place since this
+	 * batch does not import the target wp_block.
 	 */
 	public function test_reusable_block_edge_surfaces_degradation(): void {
 		// ARRANGE + ACT: batch imported; locate the reusable-block edge page.
@@ -1140,22 +1141,25 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 		$dest_id = self::$fixture->dest_post_ids[ self::EDGE_REUSABLE_BLOCK_SOURCE_ID ];
 		$ref     = Seeder_Parity_Fixture::REUSABLE_BLOCK_SOURCE_REF;
 
-		// ASSERT: the import raised exactly the reusable-block warning.
+		// ASSERT: the import raised exactly the core/block unmapped reference.
 		$this->assertSame(
 			array(
 				array(
-					'type'      => 'unmigratable_reusable_block',
+					'type'      => 'unmapped_block_reference',
+					'kind'      => 'post',
+					'block'     => 'core/block',
 					'source_id' => $ref,
 				),
 			),
 			self::$fixture->warnings_by_source_id[ self::EDGE_REUSABLE_BLOCK_SOURCE_ID ],
-			'Reusable-block edge import should raise one unmigratable warning'
+			'Reusable-block edge import should raise one core/block unmapped reference'
 		);
 
-		// ASSERT: a non-retryable attention issue carries the source ref.
+		// ASSERT: a retryable attention issue carries the source ref and the
+		// reusable-block detail that drives the Patterns-oriented copy.
 		$issue = ( new Attention_Issues_Repository() )->get_issue(
 			$dest_id,
-			'unmigratable_reusable_block',
+			'unmapped_block_reference',
 			$ref,
 			'post'
 		);
@@ -1164,17 +1168,22 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 			'Reusable-block degradation should open an attention issue'
 		);
 		$this->assertSame( 'warning', $issue['severity'] );
-		$this->assertNotContains(
-			'unmigratable_reusable_block',
+		$this->assertSame(
+			'core/block',
+			$issue['detail']['block'] ?? '',
+			'Issue detail should record the core/block name'
+		);
+		$this->assertContains(
+			'unmapped_block_reference',
 			Admin_Ajax_Controller::ATTENTION_ISSUE_RETRYABLE_TYPES,
-			'Reusable-block issue must not be retryable'
+			'Reusable-block issue must be retryable'
 		);
 
 		// ASSERT: the core/block ref is left in place on the destination.
 		$this->assertStringContainsString(
 			'<!-- wp:block {"ref":' . $ref . '} /-->',
 			(string) get_post( $dest_id )->post_content,
-			'Dest content should preserve the unmigrated core/block ref'
+			'Dest content should preserve the unresolved core/block ref'
 		);
 	}
 }

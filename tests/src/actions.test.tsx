@@ -303,6 +303,7 @@ function buildIssue( overrides: Partial< AttentionIssue > = {} ): AttentionIssue
 		issue_type: 'nav_ref_rewrite_failed',
 		target_ref: 8300,
 		target_kind: 'post',
+		target_is_reusable_block: false,
 		severity: 'error',
 		source_site_url: 'https://source.example.com',
 		first_detected_gmt: '2024-03-15 10:30:00',

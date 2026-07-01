@@ -17,10 +17,10 @@ use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
 
 /**
- * Exercises the controller glue between the retry request and the
- * reconciliations: type dispatch, target_kind threading, the retryable
- * allowlist, and the capability gate. The reconciliations themselves are
- * covered in Attention_Issues_Test.
+ * Exercises the controller glue for the attention-issue endpoints: retry type
+ * dispatch, target_kind threading, the retryable allowlist, the capability
+ * gate, and the list payload's reusable-block flag. The reconciliations
+ * themselves are covered in Attention_Issues_Test.
  */
 class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 
@@ -417,6 +417,60 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			Log_Events::RECONCILE_TARGET_ABSENT,
 			$events[0]['event']
 		);
+	}
+
+	/**
+	 * Verifies that the list endpoint flags a core/block reference as a reusable
+	 * block so the drawer can render Patterns-oriented copy, while a non-block
+	 * unmapped reference is not flagged.
+	 */
+	public function test_list_flags_reusable_block_reference(): void {
+		// ARRANGE: two open unmapped references — one core/block, one nav — each
+		// on its own affected post.
+		$reusable_post = self::factory()->post->create();
+		$nav_post      = self::factory()->post->create();
+		$this->attention->upsert_issue(
+			$reusable_post,
+			'unmapped_block_reference',
+			9300001,
+			'post',
+			'warning',
+			self::SOURCE,
+			array( 'block' => 'core/block' )
+		);
+		$this->attention->upsert_issue(
+			$nav_post,
+			'unmapped_block_reference',
+			9400,
+			'post',
+			'warning',
+			self::SOURCE,
+			array( 'block' => 'core/navigation' )
+		);
+
+		// ACT: list the open issues.
+		$response = $this->list_issues();
+
+		// ASSERT: the flag distinguishes the reusable-block reference.
+		$flags = array();
+		foreach ( $response['data']['items'] as $item ) {
+			$flags[ $item['affected_post_id'] ] = $item['target_is_reusable_block'];
+		}
+		$this->assertTrue( $flags[ $reusable_post ] );
+		$this->assertFalse( $flags[ $nav_post ] );
+	}
+
+	/**
+	 * Dispatches the list endpoint and returns the decoded JSON response.
+	 *
+	 * @return array Decoded response.
+	 */
+	private function list_issues(): array {
+		$_POST = array( 'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ) );
+
+		$this->dispatch_ajax_expecting_die( 'safe_publish_list_attention_issues' );
+
+		return json_decode( $this->_last_response, true );
 	}
 
 	/**
