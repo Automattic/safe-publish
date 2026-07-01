@@ -107,6 +107,34 @@ final class Content_Parity_Comparator {
 	}
 
 	/**
+	 * Asserts inline <img alt> parity. The importer rewrites images surgically
+	 * (URL/ID swap, no tag regeneration), so every source alt survives
+	 * verbatim; the source and dest alt multisets must be equal. A change that
+	 * regenerated the <img> and dropped alt fails here.
+	 *
+	 * @param string   $source_content Source post_content.
+	 * @param string   $dest_content   Imported dest post_content.
+	 * @param TestCase $test           Active test case.
+	 */
+	public static function assert_inline_img_alt_parity(
+		string $source_content,
+		string $dest_content,
+		TestCase $test
+	): void {
+		$expected = self::collect_img_alts( $source_content );
+		$actual   = self::collect_img_alts( $dest_content );
+
+		sort( $expected );
+		sort( $actual );
+
+		$test->assertSame(
+			$expected,
+			$actual,
+			'Dest content must preserve the inline <img alt> multiset verbatim'
+		);
+	}
+
+	/**
 	 * Asserts embed-block url parity: each core/embed (and legacy core-embed/*)
 	 * block's url attribute maps through the sideload map and the resulting
 	 * multiset must equal the dest multiset. External provider URLs are absent
@@ -470,6 +498,37 @@ final class Content_Parity_Comparator {
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Returns the alt value of every <img> in document order. Empty-string
+	 * alts are kept (a decorative image is a meaningful value); an img whose
+	 * alt is missing or valueless is skipped.
+	 *
+	 * @param string $content Content to scan.
+	 * @return list<string>
+	 */
+	private static function collect_img_alts( string $content ): array {
+		$alts = array();
+
+		if ( '' === $content ) {
+			return $alts;
+		}
+
+		$processor = new WP_HTML_Tag_Processor( $content );
+
+		while ( $processor->next_tag() ) {
+			if ( 'IMG' !== $processor->get_tag() ) {
+				continue;
+			}
+
+			$alt = $processor->get_attribute( 'alt' );
+			if ( is_string( $alt ) ) {
+				$alts[] = $alt;
+			}
+		}
+
+		return $alts;
 	}
 
 	/**
