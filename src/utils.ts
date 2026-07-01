@@ -164,6 +164,16 @@ export function renderWarningMessage( warning: Warning ): string {
 				warning.source.parent_id
 			);
 		case 'unmapped_block_reference':
+			if ( warning.block === 'core/block' ) {
+				return sprintf(
+					/* translators: %d: source reusable block (wp_block) ID */
+					__(
+						"Reusable block %d isn't on this site. Import it under Patterns, then re-import this post.",
+						'safe-publish'
+					),
+					warning.source_id
+				);
+			}
 			return warning.kind === 'term'
 				? sprintf(
 					/* translators: %d: source term ID */
@@ -193,15 +203,6 @@ export function renderWarningMessage( warning: Warning ): string {
 				warning.failed_post_ids.length,
 				warning.failed_post_ids.join( ', ' )
 			);
-		case 'unmigratable_reusable_block':
-			return sprintf(
-				/* translators: %d: source reusable block (wp_block) ID */
-				__(
-					"Reusable block %d isn't migrated, so it will render empty here. Recreate its content directly in this post.",
-					'safe-publish'
-				),
-				warning.source_id
-			);
 		default: {
 			const _exhaustive: never = warning;
 			return String( _exhaustive );
@@ -225,11 +226,11 @@ export function renderWarningShortLabel( warning: Warning ): string {
 		case 'parent_orphaned':
 			return __( 'parent orphaned', 'safe-publish' );
 		case 'unmapped_block_reference':
-			return __( 'unmapped block reference', 'safe-publish' );
+			return warning.block === 'core/block'
+				? __( 'reusable block reference', 'safe-publish' )
+				: __( 'unmapped block reference', 'safe-publish' );
 		case 'nav_ref_rewrite_failed':
 			return __( 'nav reference update failed', 'safe-publish' );
-		case 'unmigratable_reusable_block':
-			return __( 'reusable block not migrated', 'safe-publish' );
 		default: {
 			const _exhaustive: never = warning;
 			return String( _exhaustive );
@@ -238,10 +239,8 @@ export function renderWarningShortLabel( warning: Warning ): string {
 }
 
 /**
- * Renders an open attention issue as a user-facing sentence.
- *
- * Retryable types get copy that points at the Retry action; non-retryable ones
- * (e.g. an unmigratable reusable block) describe the manual fix instead.
+ * Renders an open attention issue as a user-facing sentence pointing at the
+ * fix: import the referenced content, then Retry.
  *
  * @param {AttentionIssue} issue Issue to render.
  *
@@ -250,6 +249,16 @@ export function renderWarningShortLabel( warning: Warning ): string {
 export function renderIssueMessage( issue: AttentionIssue ): string {
 	switch ( issue.issue_type ) {
 		case 'unmapped_block_reference':
+			if ( issue.target_is_reusable_block ) {
+				return sprintf(
+					/* translators: %d: source reusable block (wp_block) ID */
+					__(
+						"Reusable block %d isn't on this site yet. Import it under Patterns, then Retry.",
+						'safe-publish'
+					),
+					issue.target_ref
+				);
+			}
 			return issue.target_kind === 'term'
 				? sprintf(
 					/* translators: %d: source term ID */
@@ -281,15 +290,6 @@ export function renderIssueMessage( issue: AttentionIssue ): string {
 				/* translators: %d: source navigation menu ID */
 				__(
 					"This page's link to menu %d couldn't be updated automatically. Retry to re-attempt it.",
-					'safe-publish'
-				),
-				issue.target_ref
-			);
-		case 'unmigratable_reusable_block':
-			return sprintf(
-				/* translators: %d: source reusable block (wp_block) ID */
-				__(
-					"Reusable block %d isn't migrated, so it renders empty here. Recreate its content directly in this post.",
 					'safe-publish'
 				),
 				issue.target_ref
