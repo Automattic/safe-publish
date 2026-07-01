@@ -87,6 +87,7 @@ If an `<a>` tag ends in a file extension allowed by WordPress, it is processed i
 
 - Fetched separately via the `/wp-json/wp/v2/media/{id}` endpoint using the `featured_media` ID from the post response.
 - Uploaded to media library.
+- The source alt text is applied to the destination attachment, so theme-rendered thumbnails keep their alt.
 - Set as post thumbnail via `set_post_thumbnail()`.
 
 ### URL Replacement
@@ -289,6 +290,10 @@ Navigation links and submenus are the exception: they carry an explicit entity r
 ### Navigation links to draft targets may 404 or open the wrong page
 
 Navigation links and submenus are re-derived only when their target was already published at import. If the target was a draft, its slug isn't final, so the link keeps the host-swapped source path and behaves like an [internal body link](#internal-body-links-may-404-or-open-the-wrong-page) — it can 404 or open the wrong page under a slug collision or a different permalink structure. Re-import the referring content after the target is published to re-derive the URL; the Retry action does not cover this case.
+
+### Media library metadata is only partly migrated
+
+Imported images render correctly in the migrated post — inline image alt text travels inside the post content, and the featured image's alt text is applied to its attachment. But the destination media library's own record for an imported attachment is not fully populated from the source: the attachment title falls back to a filename-derived default, the caption and description are left empty, and only the featured image carries alt text at the library level. This affects browsing or searching the destination media library, re-inserting an imported image into another post, and themes or blocks that read attachment-level fields — not how images appear in the migrated post itself.
 
 ## Next Steps
 
