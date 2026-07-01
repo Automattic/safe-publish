@@ -410,6 +410,20 @@ class Media_Importer {
 			update_post_meta( $attachment_id, Options::META_FEATURED_MEDIA_ID, $featured_media_id );
 			update_post_meta( $attachment_id, Options::META_MEDIA_TYPE, 'featured_image' );
 
+			// Propagate the source alt text, stored as WordPress stores it.
+			// Skipped when empty so the meta stays absent, like a native upload.
+			$alt_text = wp_strip_all_tags(
+				(string) ( $media_data['alt_text'] ?? '' ),
+				true
+			);
+			if ( '' !== $alt_text ) {
+				update_post_meta(
+					$attachment_id,
+					'_wp_attachment_image_alt',
+					wp_slash( $alt_text )
+				);
+			}
+
 			return $attachment_id;
 		}
 
