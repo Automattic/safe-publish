@@ -16,6 +16,7 @@ use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Reconcile_Outcome;
 use Safe_Publish\Validators\URL_Validator;
 use WP_Error;
+use WP_HTML_Tag_Processor;
 use WP_Post;
 use WP_Post_Type;
 use WP_Taxonomy;
@@ -486,7 +487,43 @@ class Content_Processor {
 
 			case 'core/video':
 			case 'core/audio':
-				$block = $this->process_media_block( $block, $source_site_url );
+				$block = $this->process_media_block(
+					$block,
+					$source_site_url,
+					self::string_attr( $block, 'src' ),
+					'src',
+					'id'
+				);
+				break;
+
+			case 'core/cover':
+				$block = $this->process_media_block(
+					$block,
+					$source_site_url,
+					self::string_attr( $block, 'url' ),
+					'url',
+					'id'
+				);
+				break;
+
+			case 'core/file':
+				$block = $this->process_media_block(
+					$block,
+					$source_site_url,
+					self::string_attr( $block, 'href' ),
+					'href',
+					'id'
+				);
+				break;
+
+			case 'core/media-text':
+				$block = $this->process_media_block(
+					$block,
+					$source_site_url,
+					$this->extract_media_text_src( $block ),
+					null,
+					'mediaId'
+				);
 				break;
 
 			case 'core/embed':
@@ -562,7 +599,10 @@ class Content_Processor {
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
-		$attachment_id = $this->media_importer->import_source_media_as_attachment( $original_url, $source_site_url );
+		$attachment_id = $this->media_importer->import_source_media_as_attachment(
+			$original_url,
+			$source_site_url
+		);
 
 		if ( null === $attachment_id ) {
 			// Third-party src — leave attrs unchanged but still process
@@ -635,7 +675,10 @@ class Content_Processor {
 				}
 
 				$original_url  = $image['url'];
-				$attachment_id = $this->media_importer->import_source_media_as_attachment( $original_url, $source_site_url );
+				$attachment_id = $this->media_importer->import_source_media_as_attachment(
+					$original_url,
+					$source_site_url
+				);
 
 				if ( null === $attachment_id ) {
 					continue; // Third-party src — skip this image's attrs.
@@ -715,49 +758,69 @@ class Content_Processor {
 	}
 
 	/**
-	 * Processes a media block (video or audio) to import its source.
+	 * Imports a block's source media and points its attachment-id attr at the
+	 * new destination attachment.
 	 *
-	 * @param array  $block           Block data.
-	 * @param string $source_site_url Source site URL.
+	 * The media URL is resolved by the caller because its location varies: it is
+	 * a block attr for most blocks (src, url, href) but is sourced from innerHTML
+	 * for core/media-text, whose mediaUrl attr is not stored in the block. A
+	 * third-party (null) or failed (false) import leaves the attrs untouched.
+	 *
+	 * @param array       $block           Block data.
+	 * @param string      $source_site_url Source site URL.
+	 * @param string      $media_url       Source media URL to import.
+	 * @param string|null $url_attr        Attr to set to the local URL, or null
+	 *                                     when the block stores no URL attr.
+	 * @param string      $id_attr         Attr to set to the attachment ID.
 	 * @return array Processed block.
 	 */
-	private function process_media_block( array $block, string $source_site_url ): array {
-		if ( empty( $block['attrs']['src'] ) ) {
+	private function process_media_block(
+		array $block,
+		string $source_site_url,
+		string $media_url,
+		?string $url_attr,
+		string $id_attr
+	): array {
+		if ( '' === $media_url ) {
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
-		$original_url  = $block['attrs']['src'];
-		$attachment_id = $this->media_importer->import_source_media_as_attachment( $original_url, $source_site_url );
+		$attachment_id = $this->media_importer->import_source_media_as_attachment(
+			$media_url,
+			$source_site_url
+		);
 
 		if ( null === $attachment_id ) {
-			// Third-party src — leave attrs unchanged but still process
+			// Third-party media — leave attrs unchanged but still process
 			// innerHTML so any source-domain anchor hrefs get sideloaded.
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		if ( false === $attachment_id ) {
-			$this->failed_media[] = $original_url;
+			$this->failed_media[] = $media_url;
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		$new_url = wp_get_attachment_url( $attachment_id );
 
 		if ( false === $new_url ) {
-			$this->failed_media[] = $original_url;
+			$this->failed_media[] = $media_url;
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
-		$block['attrs']['src'] = $new_url;
-		$block['attrs']['id']  = $attachment_id;
+		if ( null !== $url_attr ) {
+			$block['attrs'][ $url_attr ] = $new_url;
+		}
+		$block['attrs'][ $id_attr ] = $attachment_id;
 
 		$url_with_parameters = Media_Importer::reapply_query_parameters(
-			$original_url,
+			$media_url,
 			$new_url
 		);
 
 		if ( ! empty( $block['innerHTML'] ) ) {
 			$block['innerHTML'] = str_replace(
-				$original_url,
+				$media_url,
 				$url_with_parameters,
 				$block['innerHTML']
 			);
@@ -767,7 +830,7 @@ class Content_Processor {
 			foreach ( $block['innerContent'] as $index => $content ) {
 				if ( is_string( $content ) ) {
 					$block['innerContent'][ $index ] = str_replace(
-						$original_url,
+						$media_url,
 						$url_with_parameters,
 						$content
 					);
@@ -776,6 +839,47 @@ class Content_Processor {
 		}
 
 		return $this->process_block_inner_html( $block, $source_site_url );
+	}
+
+	/**
+	 * Returns a core/media-text block's media src, read from the first img or
+	 * video in its innerHTML. The block stores mediaUrl as an HTML-sourced attr,
+	 * so it is absent from the parsed block attrs.
+	 *
+	 * @param array $block Block data.
+	 * @return string Media src, or '' when none is present.
+	 */
+	private function extract_media_text_src( array $block ): string {
+		$html = $block['innerHTML'] ?? '';
+		if ( ! is_string( $html ) || '' === $html ) {
+			return '';
+		}
+
+		$processor = new WP_HTML_Tag_Processor( $html );
+		while ( $processor->next_tag() ) {
+			if ( ! in_array( $processor->get_tag(), array( 'IMG', 'VIDEO' ), true ) ) {
+				continue;
+			}
+
+			$src = $processor->get_attribute( 'src' );
+			if ( is_string( $src ) && '' !== $src ) {
+				return $src;
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Returns a block attr as a string, or '' when absent or not a string.
+	 *
+	 * @param array  $block Block data.
+	 * @param string $attr  Attr name.
+	 * @return string Attr value, or ''.
+	 */
+	private static function string_attr( array $block, string $attr ): string {
+		$value = $block['attrs'][ $attr ] ?? '';
+		return is_string( $value ) ? $value : '';
 	}
 
 	/**
