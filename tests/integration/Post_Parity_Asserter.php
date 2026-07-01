@@ -20,8 +20,8 @@ use WP_Post;
  * Models every wp_posts column, every dest meta key, every term assignment,
  * and every sideloaded-attachment field explicitly: each is either checked
  * for parity, delegated to Content_Parity_Comparator for URL/ID-aware
- * checks, listed in a divergence / plugin-added registry with the documented
- * reason, or listed as deferred (covered in a later test phase). The
+ * checks, listed in a divergence / plugin-added / propagated registry with the
+ * documented reason, or listed as deferred (covered in a later test phase). The
  * assert_no_unmodeled_* checks fail loudly if a column, meta key, or term
  * assignment ever appears outside these categories — so a future schema
  * change or import-pipeline tweak surfaces as a test failure rather than
