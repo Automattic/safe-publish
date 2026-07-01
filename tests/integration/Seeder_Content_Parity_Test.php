@@ -969,6 +969,7 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 					self::SOURCE_BASE_URL,
 					'image/jpeg',
 					$featured_id,
+					self::$fixture->source_media_metadata( $ref['id'] ),
 					$this
 				);
 			}
@@ -988,18 +989,22 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that the featured image's source alt text propagates to the dest
-	 * attachment's _wp_attachment_image_alt, while inline-only attachments keep
-	 * it absent (featured-path-only propagation). Guards against a vacuous pass
-	 * by requiring the batch to exercise both branches.
+	 * Verifies that source library metadata (alt, title, caption, description)
+	 * propagates to every sideloaded attachment, matching the raw source values
+	 * after the importer's per-field sanitization. Guards against a vacuous pass
+	 * by requiring the batch to exercise both a featured-flagged and an
+	 * inline-only attachment.
+	 *
+	 * The seeder embeds every image inline, so here the featured attachment is
+	 * written by the inline map path; the by-ID featured path is covered in
+	 * isolation by Media_Importer_Featured_Metadata_Test.
 	 */
-	public function test_featured_attachment_alt_text_propagated(): void {
+	public function test_library_metadata_propagates_to_all_attachments(): void {
 		// ARRANGE + ACT: batch already imported.
-		$key              = '_wp_attachment_image_alt';
 		$featured_checked = 0;
 		$inline_checked   = 0;
 
-		// ASSERT: featured attachments carry the alt; inline-only ones do not.
+		// ASSERT: each attachment carries the source library metadata.
 		foreach ( self::$fixture->image_refs_by_source_id as $source_id => $refs ) {
 			$featured_source_id = (int) (
 				self::$fixture->source_rest_bodies[ $source_id ]['featured_media'] ?? 0
@@ -1012,27 +1017,36 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 					"Source URL {$ref['url']} should resolve a dest attachment"
 				);
 
-				if ( $ref['id'] === $featured_source_id ) {
-					$expected = wp_strip_all_tags(
-						self::$fixture->source_media_alt_text( $ref['id'] ),
+				$meta = self::$fixture->source_media_metadata( $ref['id'] );
+
+				$this->assertSame(
+					wp_strip_all_tags( $meta['alt'], true ),
+					(string) get_post_meta(
+						$dest->ID,
+						'_wp_attachment_image_alt',
 						true
-					);
-					$this->assertNotSame(
-						'',
-						$expected,
-						"Featured media {$ref['id']} should seed a non-empty alt"
-					);
-					$this->assertSame(
-						$expected,
-						(string) get_post_meta( $dest->ID, $key, true ),
-						"Featured attachment {$dest->ID} alt should match source"
-					);
+					),
+					"Attachment {$dest->ID} alt should match source"
+				);
+				$this->assertSame(
+					sanitize_text_field( $meta['title'] ),
+					$dest->post_title,
+					"Attachment {$dest->ID} title should match source"
+				);
+				$this->assertSame(
+					wp_kses_post( $meta['caption'] ),
+					$dest->post_excerpt,
+					"Attachment {$dest->ID} caption should match source"
+				);
+				$this->assertSame(
+					wp_kses_post( $meta['description'] ),
+					$dest->post_content,
+					"Attachment {$dest->ID} description should match source"
+				);
+
+				if ( $ref['id'] === $featured_source_id ) {
 					++$featured_checked;
 				} else {
-					$this->assertFalse(
-						metadata_exists( 'post', $dest->ID, $key ),
-						"Inline-only attachment {$dest->ID} should not carry alt"
-					);
 					++$inline_checked;
 				}
 			}
