@@ -1013,7 +1013,10 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				);
 
 				if ( $ref['id'] === $featured_source_id ) {
-					$expected = self::$fixture->source_media_alt_text( $ref['id'] );
+					$expected = wp_strip_all_tags(
+						self::$fixture->source_media_alt_text( $ref['id'] ),
+						true
+					);
 					$this->assertNotSame(
 						'',
 						$expected,
