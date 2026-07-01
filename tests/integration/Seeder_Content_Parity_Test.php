@@ -11,6 +11,7 @@ namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Admin\Attention_Issues_Repository;
+use Safe_Publish\Seeder\Content_Generator;
 use Safe_Publish\Utils\Attention_Issues_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
@@ -503,6 +504,38 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				$this
 			);
 		}
+	}
+
+	/**
+	 * Verifies that inline <img alt> text round-trips verbatim for every
+	 * imported post, and guards against a vacuous pass by requiring the batch
+	 * to seed the distinctive block-image alt.
+	 */
+	public function test_inline_img_alt_parity(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: each dest post preserves its source inline alt multiset, and
+		// the batch seeded a distinctive non-empty alt so the check isn't
+		// vacuous.
+		$seeded_distinctive_alt = false;
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$source = $this->source_content( $source_id );
+
+			Content_Parity_Comparator::assert_inline_img_alt_parity(
+				$source,
+				(string) get_post( $dest_id )->post_content,
+				$this
+			);
+
+			if ( str_contains( $source, Content_Generator::BLOCK_IMAGE_ALT ) ) {
+				$seeded_distinctive_alt = true;
+			}
+		}
+
+		$this->assertTrue(
+			$seeded_distinctive_alt,
+			'Batch should seed the distinctive block-image alt so the alt'
+			. ' multiset check is not vacuously satisfied'
+		);
 	}
 
 	/**
