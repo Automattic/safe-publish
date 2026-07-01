@@ -32,6 +32,7 @@ class Post_Type_Map {
 		'nav_menu_items' => 'nav_menu_item',
 		'media'          => 'media',
 		'navigation'     => 'wp_navigation',
+		'blocks'         => 'wp_block',
 	);
 
 	/**

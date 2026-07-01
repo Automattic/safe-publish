@@ -17,7 +17,7 @@ import type {
 	AuthorFallbackWarning,
 	NavRefRewriteFailedWarning,
 	ParentOrphanedWarning,
-	UnmigratableReusableBlockWarning,
+	UnmappedBlockReferenceWarning,
 } from '@/types';
 
 // Pin WP date settings so format/timezone-sensitive tests are deterministic.
@@ -247,17 +247,37 @@ describe( 'renderWarningMessage', () => {
 		expect( message ).toContain( '7' );
 	} );
 
-	it( 'should render the recreate-the-block hint for unmigratable_reusable_block', () => {
-		// ARRANGE: a reusable block whose source wp_block is not imported.
-		const warning: UnmigratableReusableBlockWarning = {
-			type: 'unmigratable_reusable_block',
+	it( 'should render the nav re-save hint for a non-block unmapped reference', () => {
+		// ARRANGE: an unresolved core/navigation ref.
+		const warning: UnmappedBlockReferenceWarning = {
+			type: 'unmapped_block_reference',
+			kind: 'post',
+			block: 'core/navigation',
+			source_id: 700,
+		};
+		// ACT: render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: the source ID and the nav-oriented hint are present.
+		expect( message ).toContain( '700' );
+		expect( message ).toContain( 'nav' );
+	} );
+
+	it( 'should render the Patterns hint for a core/block unmapped reference', () => {
+		// ARRANGE: an unresolved core/block ref (reusable block).
+		const warning: UnmappedBlockReferenceWarning = {
+			type: 'unmapped_block_reference',
+			kind: 'post',
+			block: 'core/block',
 			source_id: 555,
 		};
 		// ACT: render the message.
 		const message = renderWarningMessage( warning );
-		// ASSERT: the source ID and the recreate-the-content hint are present.
+		// ASSERT: reusable-block phrasing and the Patterns location hint show,
+		// distinct from the nav copy.
 		expect( message ).toContain( '555' );
-		expect( message ).toContain( 'Recreate' );
+		expect( message ).toContain( 'Reusable block' );
+		expect( message ).toContain( 'Patterns' );
+		expect( message ).not.toContain( 'nav' );
 	} );
 } );
 
@@ -300,16 +320,32 @@ describe( 'renderWarningShortLabel', () => {
 		expect( label ).toBe( 'nav reference update failed' );
 	} );
 
-	it( 'should return "reusable block not migrated" for unmigratable_reusable_block', () => {
-		// ARRANGE: any unmigratable_reusable_block warning.
-		const warning: UnmigratableReusableBlockWarning = {
-			type: 'unmigratable_reusable_block',
-			source_id: 555,
+	it( 'should return "unmapped block reference" for a non-block unmapped reference', () => {
+		// ARRANGE: an unresolved core/navigation ref.
+		const warning: UnmappedBlockReferenceWarning = {
+			type: 'unmapped_block_reference',
+			kind: 'post',
+			block: 'core/navigation',
+			source_id: 700,
 		};
 		// ACT: render the short label.
 		const label = renderWarningShortLabel( warning );
 		// ASSERT: short label is the comma-joinable string used in the bulk modal.
-		expect( label ).toBe( 'reusable block not migrated' );
+		expect( label ).toBe( 'unmapped block reference' );
+	} );
+
+	it( 'should return "reusable block reference" for a core/block unmapped reference', () => {
+		// ARRANGE: an unresolved core/block ref.
+		const warning: UnmappedBlockReferenceWarning = {
+			type: 'unmapped_block_reference',
+			kind: 'post',
+			block: 'core/block',
+			source_id: 555,
+		};
+		// ACT: render the short label.
+		const label = renderWarningShortLabel( warning );
+		// ASSERT: reusable-block label, distinct from the generic one.
+		expect( label ).toBe( 'reusable block reference' );
 	} );
 } );
 
@@ -322,6 +358,7 @@ function makeIssue( overrides: Partial< AttentionIssue > ): AttentionIssue {
 		issue_type: 'unmapped_block_reference',
 		target_ref: 700,
 		target_kind: 'post',
+		target_is_reusable_block: false,
 		severity: 'warning',
 		source_site_url: 'https://source.example.com',
 		first_detected_gmt: '2024-01-01 00:00:00',
@@ -390,19 +427,21 @@ describe( 'renderIssueMessage', () => {
 		expect( message ).toContain( 'Retry' );
 	} );
 
-	it( 'renders manual-fix copy without a Retry hint for unmigratable_reusable_block', () => {
-		// ARRANGE: a non-retryable reusable-block issue.
+	it( 'renders Patterns-oriented retry copy for a reusable-block reference', () => {
+		// ARRANGE: an unmapped reference whose target is a reusable block.
 		const issue = makeIssue( {
-			issue_type: 'unmigratable_reusable_block',
 			target_ref: 555,
+			target_is_reusable_block: true,
+			retryable: true,
 		} );
 		// ACT: render the message.
 		const message = renderIssueMessage( issue );
-		// ASSERT: the source ID and recreate hint show; the copy points at the
-		// manual fix, not Retry, since the issue is not retryable.
+		// ASSERT: reusable-block phrasing, the Patterns location hint, and the
+		// retry hint show — the block is now migratable, so Retry resolves it.
 		expect( message ).toContain( '555' );
-		expect( message ).toContain( 'Recreate' );
-		expect( message ).not.toContain( 'Retry' );
+		expect( message ).toContain( 'Reusable block' );
+		expect( message ).toContain( 'Patterns' );
+		expect( message ).toContain( 'Retry' );
 	} );
 } );
 

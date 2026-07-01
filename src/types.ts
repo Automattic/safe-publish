@@ -168,7 +168,6 @@ export interface OrphanFailuresResponse {
  */
 export type AttentionIssueType =
 	| 'unmapped_block_reference'
-	| 'unmigratable_reusable_block'
 	| 'nav_ref_rewrite_failed'
 	| 'parent_orphaned';
 
@@ -182,6 +181,7 @@ export interface AttentionIssue {
 	issue_type: AttentionIssueType;
 	target_ref: number;
 	target_kind: 'post' | 'term';
+	target_is_reusable_block: boolean;
 	severity: 'warning' | 'error';
 	source_site_url: string;
 	first_detected_gmt: string;
@@ -251,10 +251,10 @@ export interface ParentOrphanedWarning {
 }
 
 /**
- * Surfaced when a block (e.g. core/navigation-link, core/navigation) carries
- * a post- or term-ID reference whose source ID could not be resolved on the
- * destination, so the attribute was left at the source value. The admin can
- * fix it by ensuring the linked content is imported and reopening the nav.
+ * Surfaced when a block (e.g. core/navigation-link, core/navigation,
+ * core/block) carries a post- or term-ID reference whose source ID could not
+ * be resolved on the destination, so the attribute was left at the source
+ * value. The admin can fix it by importing the referenced content and retrying.
  */
 export interface UnmappedBlockReferenceWarning {
 	type: 'unmapped_block_reference';
@@ -275,24 +275,12 @@ export interface NavRefRewriteFailedWarning {
 }
 
 /**
- * Surfaced when content carries a reusable block (core/block) whose source
- * wp_block the plugin does not import, so the reference dangles and the block
- * renders empty on the destination. Resolved only by recreating the block's
- * content directly in the post, so the attention issue is not retryable.
- */
-export interface UnmigratableReusableBlockWarning {
-	type: 'unmigratable_reusable_block';
-	source_id: number;
-}
-
-/**
  * Discriminated union of all import warning types.
  */
 export type Warning =
 	| AuthorFallbackWarning
 	| ParentOrphanedWarning
 	| UnmappedBlockReferenceWarning
-	| UnmigratableReusableBlockWarning
 	| NavRefRewriteFailedWarning;
 
 /**

@@ -73,6 +73,7 @@ const ISSUE: AttentionIssue = {
 	issue_type: 'nav_ref_rewrite_failed',
 	target_ref: 8300,
 	target_kind: 'post',
+	target_is_reusable_block: false,
 	severity: 'error',
 	source_site_url: 'https://source.example.com',
 	first_detected_gmt: '2024-03-15 10:30:00',
@@ -127,16 +128,17 @@ describe( 'AttentionDrawer', () => {
 		expect( link ).toHaveAttribute( 'rel', 'noreferrer' );
 	} );
 
-	it( 'omits the Retry button for a non-retryable reusable-block issue', async () => {
-		// ARRANGE: a non-retryable unmigratable-reusable-block issue.
+	it( 'offers Retry with Patterns-oriented copy for a reusable-block issue', async () => {
+		// ARRANGE: a retryable reusable-block reference issue.
 		mockListResponse( [
 			{
 				...ISSUE,
-				issue_type: 'unmigratable_reusable_block',
+				issue_type: 'unmapped_block_reference',
 				target_kind: 'post',
 				target_ref: 555,
+				target_is_reusable_block: true,
 				severity: 'warning',
-				retryable: false,
+				retryable: true,
 			},
 		] );
 
@@ -149,13 +151,14 @@ describe( 'AttentionDrawer', () => {
 			/>
 		);
 
-		// ASSERT: the issue copy shows, but no Retry action is offered.
+		// ASSERT: the Patterns-oriented copy shows and Retry is offered, since
+		// importing the block now resolves the reference.
 		expect(
-			await screen.findByText( /Reusable block 555/ )
+			await screen.findByText( /Reusable block 555.*Patterns/ )
 		).toBeInTheDocument();
 		expect(
-			screen.queryByRole( 'button', { name: 'Retry' } )
-		).not.toBeInTheDocument();
+			screen.getByRole( 'button', { name: 'Retry' } )
+		).toBeInTheDocument();
 	} );
 
 	it( 'shows an empty state when nothing needs attention', async () => {
