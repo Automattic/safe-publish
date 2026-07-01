@@ -88,12 +88,12 @@ final class Catalog_REST_Controller {
 
 	/**
 	 * Non-public post types the catalog opts in despite public=false.
-	 * wp_navigation is structural but its posts are user-authored content
-	 * the migration is expected to carry over.
+	 * wp_navigation and wp_block are structural but their posts are
+	 * user-authored content the migration is expected to carry over.
 	 *
 	 * @var string[]
 	 */
-	private const ALLOW_NON_PUBLIC = array( 'wp_navigation' );
+	private const ALLOW_NON_PUBLIC = array( 'wp_navigation', 'wp_block' );
 
 	/**
 	 * HMAC authenticator used to gate the endpoint.

@@ -47,6 +47,9 @@ class Content_Processor {
 	 * @var array<string, list<array{attr:string, gated_by?: array<string,string>, url_attr?: string}>>
 	 */
 	private const POST_ID_BLOCK_ATTRS = array(
+		'core/block'              => array(
+			array( 'attr' => 'ref' ),
+		),
 		'core/navigation'         => array(
 			array( 'attr' => 'ref' ),
 		),
@@ -265,10 +268,6 @@ class Content_Processor {
 
 		$needs_media_processing = $this->content_needs_processing( $content );
 		$needs_id_remap         = $this->content_has_id_reference_blocks( $blocks );
-
-		if ( false !== strpos( $content, '<!-- wp:block ' ) ) {
-			$this->flag_unmigratable_reusable_blocks( $blocks );
-		}
 
 		if ( ! $needs_media_processing && ! $needs_id_remap ) {
 			return $content;
@@ -1087,37 +1086,6 @@ class Content_Processor {
 		}
 
 		return false;
-	}
-
-	/**
-	 * Records a degradation for every reusable block (core/block) in the tree.
-	 *
-	 * The block's ref names a source wp_block, which the plugin never imports, so
-	 * the reference dangles on the destination. The ref is left in place: this
-	 * surfaces the limitation, it does not migrate the block.
-	 *
-	 * @param array<array<string, mixed>> $blocks Parsed block tree.
-	 */
-	private function flag_unmigratable_reusable_blocks( array $blocks ): void {
-		foreach ( $blocks as $block ) {
-			if ( 'core/block' === ( $block['blockName'] ?? '' ) ) {
-				$ref = $block['attrs']['ref'] ?? null;
-				if ( is_numeric( $ref ) && (int) $ref > 0 ) {
-					$this->warnings[] = array(
-						'type'      => 'unmigratable_reusable_block',
-						'source_id' => (int) $ref,
-					);
-				}
-			}
-
-			if (
-				isset( $block['innerBlocks'] )
-				&& is_array( $block['innerBlocks'] )
-				&& array() !== $block['innerBlocks']
-			) {
-				$this->flag_unmigratable_reusable_blocks( $block['innerBlocks'] );
-			}
-		}
 	}
 
 	/**
