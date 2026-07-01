@@ -1,7 +1,7 @@
 #!/bin/sh
 #
-# Bootstrap a worktree: install deps and pick a free wp-env port pair so it
-# doesn't collide with the main checkout's 8888/8889.
+# Bootstrap a worktree: install dependencies and assign a free wp-env port
+# pair, recorded in .devports so `npm run dev` loads it automatically.
 #
 # Usage: bin/setup-worktree
 
@@ -9,18 +9,45 @@ set -e
 
 cd "$(git rev-parse --show-toplevel)"
 
-echo "Installing npm and composer dependencies..."
-npm install
+echo "Installing dependencies..."
+npm install --no-audit --no-fund --prefer-offline
+
+worktrees="$(git worktree list --porcelain 2>/dev/null |
+	sed -n 's/^worktree //p')"
+if [ -z "$worktrees" ]; then
+	echo "warning: could not list worktrees; using listening checks only" >&2
+fi
 
 is_free() {
 	! lsof -iTCP:"$1" -sTCP:LISTEN -P -n >/dev/null 2>&1
 }
 
+# Ports recorded by sibling worktrees, so a pair stays reserved even while its
+# worktree is stopped. Best-effort: an unreadable file is skipped, not fatal.
+claimed_ports() {
+	oldifs="$IFS"
+	IFS='
+'
+	for wt in $worktrees; do
+		[ "$wt" = "$PWD" ] && continue
+		[ -f "$wt/.devports" ] || continue
+		if [ -r "$wt/.devports" ]; then
+			grep -hE '^WP_ENV_(TESTS_)?PORT=' "$wt/.devports" | cut -d= -f2
+		else
+			echo "warning: cannot read $wt/.devports; ports not reserved" >&2
+		fi
+	done
+	IFS="$oldifs"
+}
+
 find_pair() {
+	claimed="$(claimed_ports)"
 	port=8890
 	while [ "$port" -lt 9100 ]; do
 		tests_port=$((port + 1))
-		if is_free "$port" && is_free "$tests_port"; then
+		if ! printf '%s\n' "$claimed" | grep -qx "$port" &&
+			! printf '%s\n' "$claimed" | grep -qx "$tests_port" &&
+			is_free "$port" && is_free "$tests_port"; then
 			echo "$port $tests_port"
 			return 0
 		fi
@@ -30,18 +57,68 @@ find_pair() {
 	exit 1
 }
 
-pair=$(find_pair) && set -- $pair
-PORT="$1"
-TESTS_PORT="$2"
+# Serialize allocation: concurrent setups would otherwise read the same claimed
+# set before any writes .devports and pick the same pair. mkdir is an atomic,
+# dependency-free lock (flock is absent on macOS), kept in the shared git dir so
+# all worktrees contend on one.
+lock_base="$(git rev-parse --git-common-dir)"
+case "$lock_base" in
+/*) ;;
+*) lock_base="$PWD/$lock_base" ;;
+esac
+lock_dir="$lock_base/sp-devports.lock"
+have_lock=0
+
+acquire_lock() {
+	i=0
+	while ! mkdir "$lock_dir" 2>/dev/null; do
+		i=$((i + 1))
+		if [ "$i" -gt 600 ]; then
+			echo "warning: timed out waiting on port lock; proceeding" >&2
+			return 0
+		fi
+		sleep 0.1
+	done
+	have_lock=1
+	trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT INT TERM
+}
+
+release_lock() {
+	[ "$have_lock" = 1 ] || return 0
+	rmdir "$lock_dir" 2>/dev/null || true
+	have_lock=0
+	trap - EXIT INT TERM
+}
+
+# Precedence: an explicit WP_ENV_PORT (e.g. from an orchestrator) wins; else
+# reuse an existing .devports (idempotent); else allocate a free pair. Runs
+# under the lock so simultaneous setups get distinct pairs.
+acquire_lock
+
+PORT=""
+TESTS_PORT=""
+
+if [ -n "$WP_ENV_PORT" ]; then
+	PORT="$WP_ENV_PORT"
+	TESTS_PORT="${WP_ENV_TESTS_PORT:-$((PORT + 1))}"
+elif [ -f .devports ]; then
+	PORT="$(grep -E '^WP_ENV_PORT=' .devports | cut -d= -f2)"
+	TESTS_PORT="$(grep -E '^WP_ENV_TESTS_PORT=' .devports | cut -d= -f2)"
+fi
+
+if [ -z "$PORT" ] || [ -z "$TESTS_PORT" ]; then
+	pair="$(find_pair)"
+	set -- $pair
+	PORT="$1"
+	TESTS_PORT="$2"
+fi
+
+printf 'WP_ENV_PORT=%s\nWP_ENV_TESTS_PORT=%s\n' "$PORT" "$TESTS_PORT" >.devports
+
+release_lock
 
 echo ""
-echo "Picked ports: dev=$PORT tests=$TESTS_PORT"
+echo "Setup complete. Ports $PORT/$TESTS_PORT recorded in .devports."
 echo ""
-echo "Start this worktree's wp-env with:"
-echo ""
-echo "  WP_ENV_PORT=$PORT WP_ENV_TESTS_PORT=$TESTS_PORT npm run dev"
-echo ""
-echo "To make these the default for this shell:"
-echo ""
-echo "  export WP_ENV_PORT=$PORT WP_ENV_TESTS_PORT=$TESTS_PORT"
+echo "Start this worktree's wp-env with: npm run dev"
 echo ""
