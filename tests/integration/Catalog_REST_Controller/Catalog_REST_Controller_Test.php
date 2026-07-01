@@ -847,9 +847,9 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that the post-types endpoint returns post, page, and
-	 * wp_navigation (the non-public type the catalog explicitly opts in)
-	 * while still excluding attachment.
+	 * Verifies that the post-types endpoint returns post, page, wp_navigation,
+	 * and wp_block (the non-public types the catalog explicitly opts in) while
+	 * still excluding attachment.
 	 */
 	public function test_post_types_endpoint_returns_only_catalog_eligible_types(): void {
 		// ARRANGE: Authenticated session; rely on the WP default post types.
@@ -860,12 +860,14 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 			new WP_REST_Request( 'GET', '/safe-publish/v1/catalog/post-types' )
 		);
 
-		// ASSERT: 200, includes post + page + wp_navigation, excludes attachment.
+		// ASSERT: 200, includes post + page + the opted-in non-public types,
+		// excludes attachment.
 		$this->assertSame( 200, $response->get_status() );
 		$slugs = array_column( $response->get_data(), 'slug' );
 		$this->assertContains( 'post', $slugs );
 		$this->assertContains( 'page', $slugs );
 		$this->assertContains( 'wp_navigation', $slugs );
+		$this->assertContains( 'wp_block', $slugs );
 		$this->assertNotContains( 'attachment', $slugs );
 	}
 
@@ -893,6 +895,32 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$this->assertSame( 1, count( $items ) );
 		$this->assertSame( $nav_id, $items[0]['id'] );
 		$this->assertSame( 'wp_navigation', $items[0]['post_type'] );
+	}
+
+	/**
+	 * Verifies that the listing endpoint accepts wp_block as a post_type
+	 * param — the non-public allowlist applies to both gates.
+	 */
+	public function test_listing_endpoint_accepts_wp_block_post_type(): void {
+		// ARRANGE: Create one wp_block post and authenticate.
+		$block_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'wp_block',
+				'post_status' => 'publish',
+				'post_title'  => 'Reusable intro',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Request the wp_block listing.
+		$response = $this->dispatch( array( 'post_type' => 'wp_block' ) );
+
+		// ASSERT: 200 and the block post is present.
+		$this->assertSame( 200, $response->get_status() );
+		$items = $response->get_data()['items'];
+		$this->assertSame( 1, count( $items ) );
+		$this->assertSame( $block_id, $items[0]['id'] );
+		$this->assertSame( 'wp_block', $items[0]['post_type'] );
 	}
 
 	/**

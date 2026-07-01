@@ -483,21 +483,26 @@ final class Admin_Ajax_Controller {
 	 * @return array Client-facing issue payload.
 	 */
 	private function format_attention_issue( array $row ): array {
-		$affected_post_id = (int) $row['affected_post_id'];
-		$edit_url         = get_edit_post_link( $affected_post_id, 'raw' );
+		$affected_post_id  = (int) $row['affected_post_id'];
+		$edit_url          = get_edit_post_link( $affected_post_id, 'raw' );
+		$detail            = is_array( $row['detail'] ?? null )
+			? $row['detail']
+			: array();
+		$is_reusable_block = 'core/block' === ( $detail['block'] ?? '' );
 
 		return array(
-			'affected_post_id'   => $affected_post_id,
-			'issue_type'         => (string) $row['issue_type'],
-			'target_ref'         => (int) $row['target_ref'],
-			'target_kind'        => (string) $row['target_kind'],
-			'severity'           => (string) $row['severity'],
-			'source_site_url'    => (string) $row['source_site_url'],
-			'first_detected_gmt' => (string) $row['first_detected_gmt'],
-			'last_seen_gmt'      => (string) $row['last_seen_gmt'],
-			'affected_title'     => get_the_title( $affected_post_id ),
-			'affected_edit_url'  => is_string( $edit_url ) ? $edit_url : '',
-			'retryable'          => in_array(
+			'affected_post_id'         => $affected_post_id,
+			'issue_type'               => (string) $row['issue_type'],
+			'target_ref'               => (int) $row['target_ref'],
+			'target_kind'              => (string) $row['target_kind'],
+			'target_is_reusable_block' => $is_reusable_block,
+			'severity'                 => (string) $row['severity'],
+			'source_site_url'          => (string) $row['source_site_url'],
+			'first_detected_gmt'       => (string) $row['first_detected_gmt'],
+			'last_seen_gmt'            => (string) $row['last_seen_gmt'],
+			'affected_title'           => get_the_title( $affected_post_id ),
+			'affected_edit_url'        => is_string( $edit_url ) ? $edit_url : '',
+			'retryable'                => in_array(
 				(string) $row['issue_type'],
 				self::ATTENTION_ISSUE_RETRYABLE_TYPES,
 				true
@@ -1393,14 +1398,15 @@ final class Admin_Ajax_Controller {
 		}
 
 		$sort_result  = Topological_Sorter::sort( $parent_map );
-		$sorted_order = self::defer_dependent_types(
+		$sorted_order = self::order_dependent_types(
 			array_merge( $sort_result['sorted'], $sort_result['leftover'] ),
 			$batch_fresh_data
 		);
 		$processed    = array();
 
 		// Source ID => destination ID accumulator. Feeds block-attribute ID
-		// remapping for items referencing in-batch imports (e.g. wp_navigation).
+		// remapping for items referencing in-batch imports (e.g. wp_navigation
+		// links, core/block refs).
 		$session_id_map = array();
 
 		$results    = array();
@@ -1815,37 +1821,40 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Moves dependent types (wp_navigation) to the end of the import order so
-	 * the items they reference via core/navigation-link `id` attrs populate
-	 * the session ID map first.
+	 * Orders dependent types around the posts that reference them so the
+	 * referenced side populates the session ID map first.
 	 *
-	 * Asymmetry is one-directional — navs reference pages, not vice versa —
-	 * so the topological sorter itself stays unaware of the type.
+	 * Reusable blocks (wp_block) move to the front: a post's core/block ref
+	 * must resolve against an already-imported block. Navigation menus
+	 * (wp_navigation) move to the back: they reference pages via
+	 * core/navigation-link `id`, so those pages must import first. Every other
+	 * type keeps its topological position.
 	 *
 	 * @param int[]                            $sorted_order     Source IDs in topo order.
 	 * @param array<int, array<string, mixed>> $batch_fresh_data Pass-1 fresh data
 	 *                                                           keyed by source ID.
-	 * @return int[] Order with dependent types pushed to the end (request-order
-	 *               preserved among them).
+	 * @return int[] Reordered source IDs (request-order preserved within each
+	 *               group).
 	 */
-	private static function defer_dependent_types(
+	private static function order_dependent_types(
 		array $sorted_order,
 		array $batch_fresh_data
 	): array {
-		$dependent_types = array( 'wp_navigation' );
-
 		$head = array();
+		$body = array();
 		$tail = array();
 		foreach ( $sorted_order as $source_id ) {
 			$post_type = (string) ( $batch_fresh_data[ $source_id ]['post_type'] ?? '' );
-			if ( in_array( $post_type, $dependent_types, true ) ) {
+			if ( 'wp_block' === $post_type ) {
+				$head[] = $source_id;
+			} elseif ( 'wp_navigation' === $post_type ) {
 				$tail[] = $source_id;
 			} else {
-				$head[] = $source_id;
+				$body[] = $source_id;
 			}
 		}
 
-		return array_merge( $head, $tail );
+		return array_merge( $head, $body, $tail );
 	}
 
 	/**

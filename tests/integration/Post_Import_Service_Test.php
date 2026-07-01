@@ -1265,6 +1265,25 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that resolve_post_type() permits wp_block imports for a user with
+	 * edit_posts, since wp_block maps its edit cap to edit_posts — so the source
+	 * service user's existing grant covers it without a dedicated capability.
+	 */
+	public function test_resolve_post_type_grants_wp_block_to_edit_posts_user(): void {
+		// ARRANGE: A subscriber granted edit_posts but not manage_options.
+		$user_id = self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		$user    = get_user_by( 'id', $user_id );
+		$user->add_cap( 'edit_posts' );
+		wp_set_current_user( $user_id );
+
+		// ACT: Resolve the wp_block post type for this user.
+		$result = $this->import_service->resolve_post_type( 'wp_block' );
+
+		// ASSERT: The type resolves (import permitted).
+		$this->assertSame( 'wp_block', $result );
+	}
+
+	/**
 	 * Verifies that import fails when the source post type is not registered on
 	 * the destination site.
 	 */
