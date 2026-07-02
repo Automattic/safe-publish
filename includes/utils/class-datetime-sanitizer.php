@@ -18,9 +18,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Shared datetime helpers for the catalog/wire boundary: parses incoming
- * ISO 8601 or bare-calendar-day params, and formats outgoing MySQL GMT
- * timestamps as ISO 8601.
+ * Shared datetime helpers: validates an ISO 8601 or bare-calendar-day value
+ * into a MySQL datetime, and formats a MySQL GMT timestamp as ISO 8601.
  */
 class Datetime_Sanitizer {
 
