@@ -20,8 +20,8 @@ use WP_Post;
  * Models every wp_posts column, every dest meta key, every term assignment,
  * and every sideloaded-attachment field explicitly: each is either checked
  * for parity, delegated to Content_Parity_Comparator for URL/ID-aware
- * checks, listed in a divergence / plugin-added registry with the documented
- * reason, or listed as deferred (covered in a later test phase). The
+ * checks, listed in a divergence / plugin-added / propagated registry with the
+ * documented reason, or listed as deferred (covered in a later test phase). The
  * assert_no_unmodeled_* checks fail loudly if a column, meta key, or term
  * assignment ever appears outside these categories — so a future schema
  * change or import-pipeline tweak surfaces as a test failure rather than
@@ -312,6 +312,16 @@ final class Post_Parity_Asserter {
 	);
 
 	/**
+	 * WordPress-core meta the importer propagates from the source media record,
+	 * only on the featured-image path (inline imports have a URL but no record).
+	 *
+	 * @var array<string, string>
+	 */
+	private const PROPAGATED_FEATURED_ATTACHMENT_META = array(
+		'_wp_attachment_image_alt' => 'source alt_text propagated on the featured path',
+	);
+
+	/**
 	 * Attachment meta keys WordPress core writes on every sideloaded
 	 * attachment. Their values are dest-regenerated artifacts (path, sub-size
 	 * map), so they're classified rather than parity-checked.
@@ -324,15 +334,14 @@ final class Post_Parity_Asserter {
 	);
 
 	/**
-	 * Attachment meta keys whose parity check is deferred. Reverse-asserted
-	 * absent in assert_attachment_deferred_meta_absent() so the test fails
-	 * when a future PR starts propagating them.
+	 * Attachment meta keys whose parity check is deferred to a later phase.
+	 * Allowed when present but not asserted; entries move into a plugin-added or
+	 * propagated set when the phase ships. Empty for now; repopulate when a
+	 * future phase defers an attachment meta key.
 	 *
 	 * @var array<string, string>
 	 */
-	private const ATTACHMENT_META_DEFERRED = array(
-		'_wp_attachment_image_alt' => 'deferred: source alt_text not propagated yet',
-	);
+	private const ATTACHMENT_META_DEFERRED = array();
 
 	/**
 	 * Value the importer stores in META_MEDIA_TYPE for featured-image
@@ -1087,7 +1096,6 @@ final class Post_Parity_Asserter {
 		self::assert_attachment_divergence_locks( $dest, $test );
 		self::assert_attachment_deferred_columns_default( $dest, $test );
 		self::assert_attachment_divergent_meta_present( $dest, $test );
-		self::assert_attachment_deferred_meta_absent( $dest, $test );
 		self::assert_attachment_plugin_meta(
 			$dest,
 			$source_url,
@@ -1300,26 +1308,6 @@ final class Post_Parity_Asserter {
 	}
 
 	/**
-	 * Reverse-asserts each ATTACHMENT_META_DEFERRED key is absent on the dest
-	 * attachment.
-	 *
-	 * @param WP_Post  $dest_attachment Dest attachment post.
-	 * @param TestCase $test            Active test case.
-	 */
-	private static function assert_attachment_deferred_meta_absent(
-		WP_Post $dest_attachment,
-		TestCase $test
-	): void {
-		foreach ( self::ATTACHMENT_META_DEFERRED as $key => $reason ) {
-			$test->assertFalse(
-				metadata_exists( 'post', $dest_attachment->ID, $key ),
-				"Deferred attachment meta '{$key}' should be absent in current"
-				. " phase ({$reason})"
-			);
-		}
-	}
-
-	/**
 	 * Asserts PLUGIN_ADDED_ATTACHMENT_META values, plus
 	 * PLUGIN_ADDED_FEATURED_ATTACHMENT_META when the attachment was imported
 	 * via the featured-image path.
@@ -1409,7 +1397,8 @@ final class Post_Parity_Asserter {
 		if ( $is_featured ) {
 			$classified = array_merge(
 				$classified,
-				array_keys( self::PLUGIN_ADDED_FEATURED_ATTACHMENT_META )
+				array_keys( self::PLUGIN_ADDED_FEATURED_ATTACHMENT_META ),
+				array_keys( self::PROPAGATED_FEATURED_ATTACHMENT_META )
 			);
 		}
 
