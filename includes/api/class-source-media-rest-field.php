@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Registers the `safe_publish_media` REST field so the destination can bring
+ * Registers the safe_publish_media REST field so the destination can bring
  * each inline image's source library metadata (alt, title, caption,
  * description) when it sideloads the image.
  *
@@ -54,14 +54,14 @@ class Source_Media_REST_Field {
 	}
 
 	/**
-	 * Registers the `rest_api_init` hook that adds the REST field.
+	 * Registers the rest_api_init hook that adds the REST field.
 	 */
 	public function init(): void {
 		add_action( 'rest_api_init', array( $this, 'register_field' ) );
 	}
 
 	/**
-	 * Registers the `safe_publish_media` field on every public, REST-exposed
+	 * Registers the safe_publish_media field on every public, REST-exposed
 	 * post type, excluding attachments (which carry no inline media of their
 	 * own).
 	 */
@@ -203,11 +203,11 @@ class Source_Media_REST_Field {
 	}
 
 	/**
-	 * Detects whether the request resolves a single post via its `id` route
-	 * parameter, rather than a collection route carrying `?id=`.
+	 * Detects whether the request resolves a single post via its id route
+	 * parameter, rather than a collection route carrying an id query parameter.
 	 *
 	 * @param WP_REST_Request $request Current REST request.
-	 * @return bool True when the route bound a positive numeric `id`.
+	 * @return bool True when the route bound a positive numeric id.
 	 */
 	private function is_single_item_request( WP_REST_Request $request ): bool {
 		$request_id = $request->get_url_params()['id'] ?? null;
