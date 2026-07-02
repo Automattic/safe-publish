@@ -442,14 +442,14 @@ class Source_Posts_API {
 	 * @param string $source_site_url   Source site URL.
 	 * @param array  $auth_credentials  Optional. Authentication credentials. Default empty array.
 	 * @param string $post_type         Optional. Post type slug or REST endpoint. Default 'post'.
-	 * @return array|false Post data array on success, false on failure.
+	 * @return array|false|WP_Error Post data, WP_Error if too large, or false.
 	 */
 	public function fetch_fresh_post_content(
 		int $source_post_id,
 		string $source_site_url,
 		array $auth_credentials = array(),
 		string $post_type = 'post'
-	): array|false {
+	): array|false|WP_Error {
 		// Validate URL first.
 		if ( ! URL_Validator::is_valid_external_url( $source_site_url ) ) {
 			return false;
@@ -489,6 +489,13 @@ class Source_Posts_API {
 				$source_site_url,
 				$response->get_error_message()
 			);
+
+			// Surface the size-limit reason so the import UI can explain the
+			// failure instead of showing a generic message.
+			$error_code = $response->get_error_code();
+			if ( HTTP_Client::ERROR_RESPONSE_TOO_LARGE === $error_code ) {
+				return $response;
+			}
 
 			return false;
 		}
@@ -622,6 +629,10 @@ class Source_Posts_API {
 			$auth_credentials,
 			$post_type
 		);
+
+		if ( is_wp_error( $fresh_data ) ) {
+			return $fresh_data;
+		}
 
 		if ( false === $fresh_data ) {
 			return new WP_Error(
