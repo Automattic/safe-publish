@@ -113,12 +113,24 @@ final class Catalog_REST_Controller {
 	private HMAC_Authenticator $authenticator;
 
 	/**
+	 * Dispatch logger for catalog failure audit rows.
+	 *
+	 * @var Dispatch_Logger
+	 */
+	private Dispatch_Logger $dispatch_logger;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param HMAC_Authenticator $authenticator HMAC authenticator instance.
+	 * @param HMAC_Authenticator $authenticator   HMAC authenticator instance.
+	 * @param Dispatch_Logger    $dispatch_logger Dispatch logger instance.
 	 */
-	public function __construct( HMAC_Authenticator $authenticator ) {
-		$this->authenticator = $authenticator;
+	public function __construct(
+		HMAC_Authenticator $authenticator,
+		Dispatch_Logger $dispatch_logger
+	) {
+		$this->authenticator   = $authenticator;
+		$this->dispatch_logger = $dispatch_logger;
 	}
 
 	/**
@@ -169,12 +181,27 @@ final class Catalog_REST_Controller {
 	}
 
 	/**
-	 * Handles a single catalog request.
+	 * Handles a single catalog request, auditing any failure outcome.
 	 *
 	 * @param WP_REST_Request $request Incoming REST request.
 	 * @return WP_REST_Response|WP_Error Catalog envelope or error.
 	 */
 	public function handle_request(
+		WP_REST_Request $request
+	): WP_REST_Response|WP_Error {
+		return $this->log_dispatch_outcome(
+			$request,
+			$this->build_catalog_response( $request )
+		);
+	}
+
+	/**
+	 * Builds the catalog response for a listing request.
+	 *
+	 * @param WP_REST_Request $request Incoming REST request.
+	 * @return WP_REST_Response|WP_Error Catalog envelope or error.
+	 */
+	private function build_catalog_response(
 		WP_REST_Request $request
 	): WP_REST_Response|WP_Error {
 		$post_type = $this->resolve_post_type(
@@ -277,6 +304,40 @@ final class Catalog_REST_Controller {
 			),
 			200
 		);
+	}
+
+	/**
+	 * Records a catalog dispatch failure in the audit trail.
+	 *
+	 * The endpoint gates on the HMAC flag directly instead of through
+	 * Permission_Manager::setup_authenticated_context(), which hooks dispatch
+	 * logging for /wp/v2/ routes — so without this, catalog failures would
+	 * never reach the audit channel. build_catalog_response only ever fails
+	 * with a WP_Error, so that is the sole outcome logged here.
+	 *
+	 * @param WP_REST_Request           $request  Incoming REST request.
+	 * @param WP_REST_Response|WP_Error $response Response produced for the request.
+	 * @return WP_REST_Response|WP_Error The response, unchanged.
+	 */
+	private function log_dispatch_outcome(
+		WP_REST_Request $request,
+		WP_REST_Response|WP_Error $response
+	): WP_REST_Response|WP_Error {
+		if ( ! is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$this->dispatch_logger->dispatch_request_error(
+			$request->get_route(),
+			(string) $request->get_header( 'X-Safe-Publish-Action' ),
+			HTTP_Client::parse_destination_site_url(
+				(string) $request->get_header( 'User-Agent' )
+			),
+			$response->get_error_code(),
+			$response->get_error_message()
+		);
+
+		return $response;
 	}
 
 	/**

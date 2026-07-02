@@ -224,6 +224,10 @@ Links inside post body content are migrated by host swap only, preserving the pa
 
 A navigation link or submenu whose target was a draft at import keeps the host-swapped source path instead of being re-derived, so it can break under a slug collision or a different permalink structure. See [Navigation links to draft targets may 404 or open the wrong page](concepts/import-process.md#navigation-links-to-draft-targets-may-404-or-open-the-wrong-page) for the fix.
 
+#### Imported images have no title, caption, or alt in the media library
+
+The destination media library's record for an imported attachment is only partly populated from the source. See [Media library metadata is only partly migrated](concepts/import-process.md#media-library-metadata-is-only-partly-migrated) for what does and doesn't migrate.
+
 ### Validation Errors
 
 | Error code                 | Cause                                                  | Solution                                                 |

@@ -46,6 +46,13 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	private HMAC_Authenticator $authenticator;
 
 	/**
+	 * Audit events captured via the safe_publish_event_logged hook.
+	 *
+	 * @var array<int, array{channel: string, event: string, data: array}>
+	 */
+	private array $logged_events = array();
+
+	/**
 	 * Registers the controller and a fresh REST server for each test.
 	 */
 	#[\Override]
@@ -63,7 +70,18 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 			home_url()
 		);
 
-		( new Catalog_REST_Controller( $this->authenticator ) )->init();
+		( new Catalog_REST_Controller(
+			$this->authenticator,
+			new Dispatch_Logger()
+		) )->init();
+
+		$this->logged_events = array();
+		add_action(
+			'safe_publish_event_logged',
+			array( $this, 'capture_logged_event' ),
+			10,
+			3
+		);
 
 		global $wp_rest_server;
 		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound, Squiz.PHP.DisallowMultipleAssignments.Found
@@ -77,6 +95,12 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	 */
 	#[\Override]
 	protected function tearDown(): void {
+		remove_action(
+			'safe_publish_event_logged',
+			array( $this, 'capture_logged_event' ),
+			10
+		);
+
 		global $wp_rest_server;
 		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
 		$wp_rest_server = null;
@@ -1059,15 +1083,96 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that a catalog request failing with a WP_Error writes a
+	 * DISPATCH_REQUEST_ERROR row to the dispatch audit channel, carrying the
+	 * route, declared action, destination URL, and error code.
+	 */
+	public function test_wp_error_writes_dispatch_request_error_row(): void {
+		// ARRANGE: Authenticated request that will fail the post-type gate.
+		register_post_type(
+			'sp_private',
+			array(
+				'public'       => false,
+				'show_in_rest' => false,
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		try {
+			// ACT: Dispatch with the Safe Publish action + User-Agent headers.
+			$response = $this->dispatch(
+				array( 'post_type' => 'sp_private' ),
+				array(
+					'X-Safe-Publish-Action' => 'list',
+					'User-Agent'            => 'Safe Publish/1.0.0; https://dest.example.com',
+				)
+			);
+
+			// ASSERT: Request failed and exactly one dispatch row was written.
+			$this->assertSame( 400, $response->get_status() );
+			$dispatch_events = $this->dispatch_channel_events();
+			$this->assertCount( 1, $dispatch_events );
+
+			$event = $dispatch_events[0];
+			$this->assertSame( 'DISPATCH_REQUEST_ERROR', $event['event'] );
+			$this->assertSame(
+				'/safe-publish/v1/catalog/posts',
+				$event['data']['route']
+			);
+			$this->assertSame( 'list', $event['data']['action'] );
+			$this->assertSame(
+				'https://dest.example.com',
+				$event['data']['destination_site_url']
+			);
+			$this->assertSame(
+				'safe_publish_catalog_invalid_post_type',
+				$event['data']['error_code']
+			);
+		} finally {
+			unregister_post_type( 'sp_private' );
+		}
+	}
+
+	/**
+	 * Verifies that a successful catalog request writes no dispatch audit row
+	 * — only failures are recorded on the dispatch channel.
+	 */
+	public function test_successful_request_writes_no_dispatch_row(): void {
+		// ARRANGE: A published post and an authenticated request.
+		self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Dispatch a valid request.
+		$response = $this->dispatch(
+			array(),
+			array(
+				'X-Safe-Publish-Action' => 'list',
+				'User-Agent'            => 'Safe Publish/1.0.0; https://dest.example.com',
+			)
+		);
+
+		// ASSERT: 200 and no dispatch-channel rows.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertCount( 0, $this->dispatch_channel_events() );
+	}
+
+	/**
 	 * Dispatches the catalog route with optional overrides.
 	 *
-	 * @param array $params Query params to set on the request.
+	 * @param array $params  Query params to set on the request.
+	 * @param array $headers Headers to set on the request.
 	 * @return WP_REST_Response
 	 */
-	private function dispatch( array $params = array() ): WP_REST_Response {
+	private function dispatch(
+		array $params = array(),
+		array $headers = array()
+	): WP_REST_Response {
 		$request = new WP_REST_Request( 'GET', '/safe-publish/v1/catalog/posts' );
 		foreach ( $params as $key => $value ) {
 			$request->set_param( $key, $value );
+		}
+		foreach ( $headers as $name => $value ) {
+			$request->set_header( $name, $value );
 		}
 
 		return $this->server->dispatch( $request );
@@ -1093,5 +1198,38 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$reflection = new ReflectionClass( $this->authenticator );
 		$property   = $reflection->getProperty( 'authenticated' );
 		$property->setValue( $this->authenticator, $authenticated );
+	}
+
+	/**
+	 * Captures an audit event fired during a test.
+	 *
+	 * @param string $channel Audit channel.
+	 * @param string $event   Event type.
+	 * @param array  $data    Event payload.
+	 */
+	public function capture_logged_event(
+		string $channel,
+		string $event,
+		array $data
+	): void {
+		$this->logged_events[] = array(
+			'channel' => $channel,
+			'event'   => $event,
+			'data'    => $data,
+		);
+	}
+
+	/**
+	 * Returns the captured events written to the dispatch channel.
+	 *
+	 * @return array<int, array{channel: string, event: string, data: array}>
+	 */
+	private function dispatch_channel_events(): array {
+		return array_values(
+			array_filter(
+				$this->logged_events,
+				static fn( array $e ): bool => 'dispatch' === $e['channel']
+			)
+		);
 	}
 }
