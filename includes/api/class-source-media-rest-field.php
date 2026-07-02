@@ -141,12 +141,22 @@ class Source_Media_REST_Field {
 			return array();
 		}
 
-		$map = array();
+		$uploads_prefix = $this->uploads_path_prefix();
+		$map            = array();
 
 		foreach ( array_unique( $matches[0] ) as $raw_url ) {
 			$url = strtok( $raw_url, '?' );
 
 			if ( false === $url || isset( $map[ $url ] ) ) {
+				continue;
+			}
+
+			// Only URLs under the uploads directory can resolve to an
+			// attachment, so skip the rest without a query.
+			if (
+				'' !== $uploads_prefix
+				&& ! $this->is_under_uploads( $url, $uploads_prefix )
+			) {
 				continue;
 			}
 
@@ -185,21 +195,134 @@ class Source_Media_REST_Field {
 
 	/**
 	 * Resolves a URL to its attachment ID, preferring the VIP-optimized lookup,
-	 * and confirms the ID belongs to an attachment.
+	 * and confirms the ID belongs to an attachment. A sized rendition URL that
+	 * no attachment stores verbatim falls back to the parent it derives from.
 	 *
 	 * @param string $url Media URL.
 	 * @return int Attachment ID, or 0 when the URL is not an attachment.
 	 */
 	private function attachment_id_from_url( string $url ): int {
-		if ( function_exists( 'wpcom_vip_attachment_url_to_postid' ) ) {
-			// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.attachment_url_to_postid_wpcom_vip_attachment_url_to_postid
-			$id = (int) wpcom_vip_attachment_url_to_postid( $url );
-		} else {
-			// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.attachment_url_to_postid_attachment_url_to_postid
-			$id = (int) attachment_url_to_postid( $url );
+		$id = $this->lookup_attachment_id( $url );
+
+		if ( 0 === $id ) {
+			$id = $this->resolve_sized_url_parent( $url );
 		}
 
 		return 'attachment' === get_post_type( $id ) ? $id : 0;
+	}
+
+	/**
+	 * Looks up an attachment ID by exact URL, preferring the VIP-optimized
+	 * function. Returns the raw match without confirming the post type.
+	 *
+	 * @param string $url Media URL.
+	 * @return int Attachment ID candidate, or 0 when there is no exact match.
+	 */
+	private function lookup_attachment_id( string $url ): int {
+		if ( function_exists( 'wpcom_vip_attachment_url_to_postid' ) ) {
+			// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.attachment_url_to_postid_wpcom_vip_attachment_url_to_postid
+			return (int) wpcom_vip_attachment_url_to_postid( $url );
+		}
+
+		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.attachment_url_to_postid_attachment_url_to_postid
+		return (int) attachment_url_to_postid( $url );
+	}
+
+	/**
+	 * Resolves a sized image URL to the parent attachment it derives from.
+	 * Strips the size suffix and looks up the parent, then confirms the URL is
+	 * one of that parent's registered sizes, so metadata is never borrowed from
+	 * an unrelated attachment that merely shares the base filename.
+	 *
+	 * @param string $url Sized media URL.
+	 * @return int Parent attachment ID, or 0 when not a known rendition.
+	 */
+	private function resolve_sized_url_parent( string $url ): int {
+		$parent_url = preg_replace( '/-\d+x\d+(?=\.[a-zA-Z0-9]+$)/', '', $url );
+
+		if ( ! is_string( $parent_url ) || $parent_url === $url ) {
+			return 0;
+		}
+
+		$parent_id = $this->lookup_attachment_id( $parent_url );
+
+		if (
+			$parent_id > 0
+			&& $this->is_rendition_of( $url, $parent_id )
+		) {
+			return $parent_id;
+		}
+
+		return 0;
+	}
+
+	/**
+	 * Checks whether a URL's filename is one of the sizes WordPress registered
+	 * for the given attachment, marking it a genuine rendition of that item.
+	 *
+	 * @param string $url       Sized media URL.
+	 * @param int    $parent_id Candidate parent attachment.
+	 * @return bool True when the URL matches a registered size file.
+	 */
+	private function is_rendition_of( string $url, int $parent_id ): bool {
+		$metadata = wp_get_attachment_metadata( $parent_id );
+
+		if (
+			! is_array( $metadata )
+			|| ! isset( $metadata['sizes'] )
+			|| ! is_array( $metadata['sizes'] )
+		) {
+			return false;
+		}
+
+		$filename = wp_basename( (string) wp_parse_url( $url, PHP_URL_PATH ) );
+
+		foreach ( $metadata['sizes'] as $size ) {
+			if (
+				is_array( $size )
+				&& isset( $size['file'] )
+				&& $size['file'] === $filename
+			) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Returns the uploads directory path used to skip non-media URLs before an
+	 * attachment lookup, or an empty string when it is not usable as a filter
+	 * (uploads at the web root), so every match is scanned instead.
+	 *
+	 * @return string Uploads path without a trailing slash, or empty string.
+	 */
+	private function uploads_path_prefix(): string {
+		$uploads = wp_get_upload_dir();
+		$baseurl = (string) ( $uploads['baseurl'] ?? '' );
+		$path    = wp_parse_url( $baseurl, PHP_URL_PATH );
+
+		if ( ! is_string( $path ) || '' === $path || '/' === $path ) {
+			return '';
+		}
+
+		return untrailingslashit( $path );
+	}
+
+	/**
+	 * Checks whether a URL's path lies under the uploads directory. Compares by
+	 * path so a scheme or CDN-host difference never excludes a real attachment;
+	 * a different host would already be dropped by the host-anchored scan.
+	 *
+	 * @param string $url            Media URL.
+	 * @param string $uploads_prefix Uploads path without a trailing slash.
+	 * @return bool True when the URL path is under the uploads directory.
+	 */
+	private function is_under_uploads( string $url, string $uploads_prefix ): bool {
+		$path = wp_parse_url( $url, PHP_URL_PATH );
+
+		return is_string( $path )
+			&& str_starts_with( $path, $uploads_prefix . '/' );
 	}
 
 	/**

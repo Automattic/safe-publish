@@ -226,7 +226,7 @@ A navigation link or submenu whose target was a draft at import keeps the host-s
 
 #### A sideloaded image has no title, caption, or alt in the media library
 
-Real source media-library images bring their alt text, title, caption, and description to the destination attachment. The exceptions are responsive `srcset` sub-sizes and files linked but not held in the source library, which have no source record to copy. See [Some sideloaded files carry no source library metadata](concepts/import-process.md#some-sideloaded-files-carry-no-source-library-metadata).
+Real source media-library images bring their alt text, title, caption, and description to the destination attachment, including images inserted at an intermediate size and responsive `srcset` sub-sizes. The exception is a file linked but not held in the source library, which has no source record to copy. See [Some sideloaded files carry no source library metadata](concepts/import-process.md#some-sideloaded-files-carry-no-source-library-metadata).
 
 ### Validation Errors
 

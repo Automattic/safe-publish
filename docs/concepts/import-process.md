@@ -294,9 +294,8 @@ Navigation links and submenus are re-derived only when their target was already 
 
 ### Some sideloaded files carry no source library metadata
 
-Every imported image that is a real item in the source media library brings its library metadata — alt text, title, caption, and description — to the destination attachment, inline and featured alike. Two kinds of sideloaded file are the exception because they have no source library record to copy from:
+Every imported image that is a real item in the source media library brings its library metadata — alt text, title, caption, and description — to the destination attachment, inline and featured alike. This covers images inserted at an intermediate size (for example `…-1024x683.jpg`) and responsive `srcset` sub-sizes: each sized URL is matched back to the library item it was generated from, so it inherits that item's metadata. One kind of sideloaded file is the exception, because it has no source library record to copy from:
 
-- **`srcset` sub-sizes**: each responsive `srcset` descriptor is sideloaded as its own attachment, but only the main image is a library item on the source, so the sub-size attachments get filename-derived defaults. The destination regenerates its own responsive sizes for the main image regardless.
 - **Non-library file links**: an `<a href>` to a file that is not in the source media library (for example an uploaded PDF referenced by path) is sideloaded without a record to draw from.
 
 ## Next Steps
