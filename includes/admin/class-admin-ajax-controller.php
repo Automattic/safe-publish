@@ -226,7 +226,9 @@ final class Admin_Ajax_Controller {
 	 * `focused_state` so the frontend can swap its chip in one render.
 	 */
 	public function ajax_list_posts(): void {
-		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
 		$this->verify_ajax_capability();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing
@@ -287,7 +289,9 @@ final class Admin_Ajax_Controller {
 	 * Lists orphan failures (errors with no source_post_id) for the drawer.
 	 */
 	public function ajax_list_orphan_failures(): void {
-		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
 		$this->verify_ajax_capability();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing
@@ -326,7 +330,9 @@ final class Admin_Ajax_Controller {
 	 * Lists open attention issues for the connected source, errors first.
 	 */
 	public function ajax_list_attention_issues(): void {
-		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
 		// The list and Retry act on imported content and Retry writes to it,
 		// so gate by the import capability. This becomes load-bearing under the
 		// editor-rollback roadmap; revisit alongside that gate change.
@@ -371,7 +377,9 @@ final class Admin_Ajax_Controller {
 	 * ran.
 	 */
 	public function ajax_retry_attention_issue(): void {
-		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
 		$this->verify_ajax_capability( 'edit_posts' );
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing
@@ -515,7 +523,9 @@ final class Admin_Ajax_Controller {
 	 * status='error' so success/updated rows are unreachable.
 	 */
 	public function ajax_delete_failed_items(): void {
-		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
 		$this->verify_ajax_capability();
 
 		// Each element is downstream-sanitized via absint().
@@ -1096,7 +1106,9 @@ final class Admin_Ajax_Controller {
 	 * Handles AJAX request for fetching post types.
 	 */
 	public function ajax_fetch_post_types(): void {
-		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
 		$this->verify_ajax_capability();
 
 		$source_site_url = sanitize_text_field( wp_unslash( $_POST['source_site_url'] ?? '' ) );
@@ -1122,7 +1134,9 @@ final class Admin_Ajax_Controller {
 	 * Handles AJAX request for testing connection.
 	 */
 	public function ajax_test_connection(): void {
-		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
 		$this->verify_ajax_capability();
 
 		$connected_site_url = sanitize_text_field( wp_unslash( $_POST['connected_site_url'] ?? '' ) );
@@ -1163,7 +1177,9 @@ final class Admin_Ajax_Controller {
 	 * network request.
 	 */
 	public function ajax_auth_status(): void {
-		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
 		$this->verify_ajax_capability();
 
 		wp_send_json_success( $this->get_cached_auth_status() );
@@ -1202,7 +1218,9 @@ final class Admin_Ajax_Controller {
 	 * processes content, creates or updates the post, and logs history.
 	 */
 	public function ajax_create_draft(): void {
-		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
 		$this->verify_ajax_capability( 'edit_posts' );
 
 		$this->validate_auth_or_fail();
@@ -1335,7 +1353,9 @@ final class Admin_Ajax_Controller {
 	 * parent is imported before its children.
 	 */
 	public function ajax_bulk_import(): void {
-		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
 		$this->verify_ajax_capability( 'edit_posts' );
 
 		$this->validate_auth_or_fail();
@@ -1507,7 +1527,9 @@ final class Admin_Ajax_Controller {
 	 * required so this endpoint can't be repurposed to trash arbitrary posts.
 	 */
 	public function ajax_delete_post(): void {
-		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
 		$this->verify_ajax_capability( 'delete_posts' );
 
 		$post_id = absint( $_POST['post_id'] ?? 0 );
@@ -1556,7 +1578,9 @@ final class Admin_Ajax_Controller {
 	 * the single-delete path.
 	 */
 	public function ajax_bulk_delete_posts(): void {
-		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
 		$this->verify_ajax_capability( 'delete_posts' );
 
 		// Each element is downstream-sanitized via absint().
@@ -1644,7 +1668,9 @@ final class Admin_Ajax_Controller {
 	 * posts have no public surface, so sync-status treats them as deleted.
 	 */
 	public function ajax_sync_status_batch(): void {
-		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
 		$this->verify_ajax_capability( 'edit_posts' );
 
 		$this->validate_auth_or_fail();
