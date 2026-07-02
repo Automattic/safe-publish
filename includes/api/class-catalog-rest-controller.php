@@ -51,6 +51,16 @@ final class Catalog_REST_Controller {
 	private const DEFAULT_PER_PAGE = 20;
 
 	/**
+	 * Caps the title LIKE clauses a search builds, bounding query cost.
+	 */
+	private const MAX_SEARCH_TOKENS = 8;
+
+	/**
+	 * Query var marking the catalog's own search query.
+	 */
+	private const SEARCH_QUERY_FLAG = 'safe_publish_catalog_search';
+
+	/**
 	 * Post statuses the destination is allowed to filter against.
 	 * Public so the destination AJAX controller can validate before
 	 * round-tripping to the source.
@@ -371,6 +381,7 @@ final class Catalog_REST_Controller {
 	 */
 	private function run_query( array $args, bool $with_search ): array {
 		if ( $with_search ) {
+			$args[ self::SEARCH_QUERY_FLAG ] = true;
 			add_filter( 'posts_search', array( $this, 'override_posts_search' ), 10, 2 );
 		}
 
@@ -399,22 +410,29 @@ final class Catalog_REST_Controller {
 	 * exact slug fallback, so the destination's "search titles" affordance
 	 * matches what the catalog actually queries.
 	 *
+	 * Scoped to the catalog's own query via an internal query-var flag, so
+	 * this global filter leaves any nested query untouched.
+	 *
 	 * Final shape: `AND ((title LIKE %t1% AND title LIKE %t2% ...) OR
-	 * post_name = %full_term%)`. The slug branch only meaningfully matches
-	 * single-token inputs (slugs don't contain spaces); multi-token search
-	 * resolves through the AND'd title clauses.
+	 * post_name = %full_term%)`, capped at MAX_SEARCH_TOKENS title clauses.
+	 * The slug branch only meaningfully matches single-token inputs (slugs
+	 * don't contain spaces); multi-token search resolves through the AND'd
+	 * title clauses.
 	 *
 	 * Same `LIKE '%foo%'` profile as `wp/v2/posts?search` (narrower scope,
 	 * indexed slug shortcut). VIP Enterprise Search is worth considering
 	 * if performance demands it.
 	 *
-	 * @param string   $search Existing search SQL fragment (ignored).
+	 * @param string   $search Existing search SQL fragment.
 	 * @param WP_Query $query  Current WP_Query instance.
 	 * @return string SQL fragment to splice into the WHERE clause.
 	 */
 	public function override_posts_search( string $search, WP_Query $query ): string {
+		if ( true !== $query->get( self::SEARCH_QUERY_FLAG ) ) {
+			return $search;
+		}
+
 		global $wpdb;
-		unset( $search );
 
 		$term = trim( (string) $query->get( 's' ) );
 		if ( '' === $term ) {
@@ -428,6 +446,7 @@ final class Catalog_REST_Controller {
 		$tokens = array_values(
 			array_filter( $tokens, static fn( string $t ): bool => '' !== $t )
 		);
+		$tokens = array_slice( $tokens, 0, self::MAX_SEARCH_TOKENS );
 
 		$title_clauses = array();
 		foreach ( $tokens as $token ) {

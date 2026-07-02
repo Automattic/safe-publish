@@ -16,6 +16,7 @@ use Safe_Publish\Auth\Auth_Logger;
 use Safe_Publish\Auth\HMAC_Authenticator;
 use Safe_Publish\Auth\Permission_Manager;
 use ReflectionClass;
+use WP_Query;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
@@ -409,6 +410,95 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		// ASSERT: Only the post containing the literal "100%" matches.
 		$this->assertCount( 1, $items );
 		$this->assertSame( $literal, $items[0]['id'] );
+	}
+
+	/**
+	 * Verifies that the title-only search override is scoped to the catalog's
+	 * own query: a nested WP_Query with `s` set that fires while the filter is
+	 * registered keeps WP's default multi-column search.
+	 */
+	public function test_search_override_does_not_leak_into_nested_query(): void {
+		// ARRANGE: A post that only matches the nested term in its body.
+		$body_only = self::factory()->post->create(
+			array(
+				'post_status'  => 'publish',
+				'post_title'   => 'Nothing to see',
+				'post_content' => 'Contains the needle in its body.',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		// Fire one nested search from inside the outer catalog query and
+		// capture what it matched; the guard keeps it to a single run.
+		$nested_ids = array();
+		$ran        = false;
+		$listener   = static function ( array $posts ) use ( &$nested_ids, &$ran ): array {
+			if ( $ran ) {
+				return $posts;
+			}
+			$ran        = true;
+			$nested     = new WP_Query(
+				array(
+					's'         => 'needle',
+					'post_type' => 'post',
+					'fields'    => 'ids',
+				)
+			);
+			$nested_ids = $nested->posts;
+
+			return $posts;
+		};
+		add_filter( 'the_posts', $listener );
+
+		try {
+			// ACT: Run the outer catalog search; our override is active for it.
+			$this->dispatch_items( array( 'search' => 'outer' ) );
+		} finally {
+			remove_filter( 'the_posts', $listener );
+		}
+
+		// ASSERT: Nested query matched the body; the override didn't leak in.
+		$this->assertContains( $body_only, $nested_ids );
+	}
+
+	/**
+	 * Verifies that the search caps the number of AND'd title LIKE clauses so
+	 * a very long term can't explode query cost.
+	 */
+	public function test_search_caps_title_like_clause_count(): void {
+		// ARRANGE: A 50-token term and one post to query against.
+		$term = implode(
+			' ',
+			array_map( static fn( int $n ): string => 'tok' . $n, range( 1, 50 ) )
+		);
+		self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$this->force_hmac_authenticated( true );
+
+		// Capture the WHERE built for the search query (the only one carrying
+		// title LIKEs).
+		$captured_where = '';
+		$listener       = static function ( array $clauses ) use ( &$captured_where ): array {
+			if ( str_contains( $clauses['where'], 'post_title LIKE' ) ) {
+				$captured_where = $clauses['where'];
+			}
+
+			return $clauses;
+		};
+		add_filter( 'posts_clauses', $listener );
+
+		try {
+			// ACT: Run the search.
+			$this->dispatch_items( array( 'search' => $term ) );
+		} finally {
+			remove_filter( 'posts_clauses', $listener );
+		}
+
+		// ASSERT: The WHERE carries the capped count of title LIKEs (8), not
+		// one per token.
+		$this->assertSame(
+			8,
+			substr_count( $captured_where, 'post_title LIKE' )
+		);
 	}
 
 	/**
