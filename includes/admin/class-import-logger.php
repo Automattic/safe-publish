@@ -180,4 +180,31 @@ class Import_Logger extends Logger {
 			)
 		);
 	}
+
+	/**
+	 * Logs a per-item import failure.
+	 *
+	 * @param int      $session_id     Session the failed item belongs to.
+	 * @param int|null $source_post_id Source post ID, or null when unknown.
+	 * @param string   $action         Failure reason code (e.g. post_update_failed).
+	 * @param string   $error          Human-readable failure message.
+	 * @param array    $context        Optional. Extra event data merged in.
+	 */
+	public function item_failed(
+		int $session_id,
+		?int $source_post_id,
+		string $action,
+		string $error,
+		array $context = array()
+	): void {
+		$this->log_error(
+			Log_Events::IMPORT_ITEM_FAILED,
+			array(
+				'session_id'     => $session_id,
+				'source_post_id' => $source_post_id,
+				'action'         => $action,
+				'error'          => $error,
+			) + $context
+		);
+	}
 }
