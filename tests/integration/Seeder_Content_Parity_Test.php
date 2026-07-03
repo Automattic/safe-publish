@@ -969,6 +969,7 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 					self::SOURCE_BASE_URL,
 					'image/jpeg',
 					$featured_id,
+					self::$fixture->source_media_metadata( $ref['id'] ),
 					$this
 				);
 			}
@@ -985,6 +986,82 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 		// ARRANGE + ACT: nothing to set up; pure static check.
 		// ASSERT: every attachment-applicable column is classified.
 		Post_Parity_Asserter::assert_no_unmodeled_attachment_columns( $this );
+	}
+
+	/**
+	 * Verifies that source library metadata (alt, title, caption, description)
+	 * propagates to every sideloaded attachment, matching the raw source values
+	 * after the importer's per-field sanitization. Guards against a vacuous pass
+	 * by requiring the batch to exercise both a featured-flagged and an
+	 * inline-only attachment.
+	 *
+	 * The seeder embeds every image inline, so here the featured attachment is
+	 * written by the inline map path; the by-ID featured path is covered in
+	 * isolation by Media_Importer_Featured_Metadata_Test.
+	 */
+	public function test_library_metadata_propagates_to_all_attachments(): void {
+		// ARRANGE + ACT: batch already imported.
+		$featured_checked = 0;
+		$inline_checked   = 0;
+
+		// ASSERT: each attachment carries the source library metadata.
+		foreach ( self::$fixture->image_refs_by_source_id as $source_id => $refs ) {
+			$featured_source_id = (int) (
+				self::$fixture->source_rest_bodies[ $source_id ]['featured_media'] ?? 0
+			);
+
+			foreach ( $refs as $ref ) {
+				$dest = $this->find_dest_attachment_by_source_url( $ref['url'] );
+				$this->assertNotNull(
+					$dest,
+					"Source URL {$ref['url']} should resolve a dest attachment"
+				);
+
+				$meta = self::$fixture->source_media_metadata( $ref['id'] );
+
+				$this->assertSame(
+					wp_strip_all_tags( $meta['alt'], true ),
+					(string) get_post_meta(
+						$dest->ID,
+						'_wp_attachment_image_alt',
+						true
+					),
+					"Attachment {$dest->ID} alt should match source"
+				);
+				$this->assertSame(
+					sanitize_text_field( $meta['title'] ),
+					$dest->post_title,
+					"Attachment {$dest->ID} title should match source"
+				);
+				$this->assertSame(
+					wp_kses_post( $meta['caption'] ),
+					$dest->post_excerpt,
+					"Attachment {$dest->ID} caption should match source"
+				);
+				$this->assertSame(
+					wp_kses_post( $meta['description'] ),
+					$dest->post_content,
+					"Attachment {$dest->ID} description should match source"
+				);
+
+				if ( $ref['id'] === $featured_source_id ) {
+					++$featured_checked;
+				} else {
+					++$inline_checked;
+				}
+			}
+		}
+
+		$this->assertGreaterThan(
+			0,
+			$featured_checked,
+			'Batch should exercise at least one featured attachment'
+		);
+		$this->assertGreaterThan(
+			0,
+			$inline_checked,
+			'Batch should exercise at least one inline-only attachment'
+		);
 	}
 
 	/**

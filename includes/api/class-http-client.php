@@ -159,6 +159,25 @@ final class HTTP_Client {
 	}
 
 	/**
+	 * Extracts the destination site URL from a Safe Publish User-Agent string.
+	 *
+	 * The destination sends "Safe Publish/VERSION; URL"; this returns the URL
+	 * portion, falling back to the full string when the format is unexpected.
+	 *
+	 * @param string $user_agent Raw User-Agent value.
+	 * @return string Destination URL, or '' when the header is absent.
+	 */
+	public static function parse_destination_site_url( string $user_agent ): string {
+		if ( '' === $user_agent ) {
+			return '';
+		}
+
+		$parts = explode( '; ', $user_agent, 2 );
+
+		return isset( $parts[1] ) ? trim( $parts[1] ) : $user_agent;
+	}
+
+	/**
 	 * Makes a safe remote GET request.
 	 *
 	 * Non-VIP environments are routed through `wp_safe_remote_get` so the

@@ -86,6 +86,36 @@ class HTTPClientTest extends TestCase {
 	}
 
 	/**
+	 * Verifies that parse_destination_site_url extracts the URL from a standard
+	 * Safe Publish User-Agent string.
+	 */
+	public function test_parse_destination_site_url_extracts_url_from_user_agent(): void {
+		$result = HTTP_Client::parse_destination_site_url(
+			'Safe Publish/1.2.3; https://dest.example.com'
+		);
+
+		$this->assertSame( 'https://dest.example.com', $result );
+	}
+
+	/**
+	 * Verifies that parse_destination_site_url returns an empty string for an
+	 * absent User-Agent header.
+	 */
+	public function test_parse_destination_site_url_returns_empty_string_for_missing_header(): void {
+		$this->assertSame( '', HTTP_Client::parse_destination_site_url( '' ) );
+	}
+
+	/**
+	 * Verifies that parse_destination_site_url returns the raw value when the
+	 * User-Agent does not match the expected format.
+	 */
+	public function test_parse_destination_site_url_returns_raw_value_for_unknown_format(): void {
+		$result = HTTP_Client::parse_destination_site_url( 'curl/7.88.0' );
+
+		$this->assertSame( 'curl/7.88.0', $result );
+	}
+
+	/**
 	 * Verifies that should_verify_ssl returns a boolean.
 	 */
 	public function test_should_verify_ssl_returns_bool(): void {
