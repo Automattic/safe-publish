@@ -11,6 +11,7 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\Meta_Terms_Manager;
+use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
@@ -1948,6 +1949,12 @@ class Post_Import_Service {
 			);
 
 			if ( is_wp_error( $fresh_result ) ) {
+				// Preserve the size-limit code; mask other fetch failures.
+				$error_code = $fresh_result->get_error_code();
+				if ( HTTP_Client::ERROR_RESPONSE_TOO_LARGE === $error_code ) {
+					return $fresh_result;
+				}
+
 				return new WP_Error(
 					'fetch_failed',
 					$fresh_result->get_error_message()
