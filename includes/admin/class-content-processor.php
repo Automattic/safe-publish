@@ -168,9 +168,10 @@ class Content_Processor {
 	 * @param string               $content         Post content to process.
 	 * @param string               $source_site_url Source site URL.
 	 * @param array<string, mixed> $context         Optional batch state. Recognized
-	 *                                              keys: `session_id_map` (array of
-	 *                                              source post ID => destination post
-	 *                                              ID for the in-flight bulk batch).
+	 *                                              keys: `session_id_map` (bulk source
+	 *                                              => dest post IDs) and
+	 *                                              `library_metadata_map` (source URL =>
+	 *                                              library metadata).
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
 	public function process_content(
@@ -187,6 +188,13 @@ class Content_Processor {
 			&& is_array( $context['session_id_map'] )
 			? $context['session_id_map']
 			: array();
+
+		$this->media_importer->set_library_metadata_map(
+			isset( $context['library_metadata_map'] )
+				&& is_array( $context['library_metadata_map'] )
+				? $context['library_metadata_map']
+				: array()
+		);
 
 		if ( $this->is_gutenberg_content( $content ) ) {
 			$processed_content = $this->process_gutenberg_blocks(
