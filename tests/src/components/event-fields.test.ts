@@ -1,11 +1,12 @@
 /**
- * Tests for ExportEvent column helpers used by the export-history
- * DataViews.
+ * Tests for audit and export event column helpers.
  */
 import { describe, expect, it } from 'vitest';
 
 import {
+	getChannelLabel,
 	getDestinationLabel,
+	getEventLabel,
 	getStatusLabel,
 	getUserLabel,
 } from '@/components/event-fields';
@@ -116,5 +117,53 @@ describe( 'getStatusLabel', () => {
 
 		// ASSERT: info level renders as "Exported".
 		expect( result ).toBe( 'Exported' );
+	} );
+} );
+
+describe( 'getEventLabel', () => {
+	it( 'should return the mapped label for a known event code', () => {
+		// ARRANGE: a known Log_Events code.
+		const event = 'ITEM_ROLLBACK_FAILED';
+
+		// ACT: derive the event column label.
+		const result = getEventLabel( event );
+
+		// ASSERT: the code maps to its human-readable label.
+		expect( result ).toBe( 'Item rollback failed' );
+	} );
+
+	it( 'should fall back to the raw code for an unknown event', () => {
+		// ARRANGE: a code with no mapping.
+		const event = 'NOT_A_REAL_EVENT';
+
+		// ACT: derive the event column label.
+		const result = getEventLabel( event );
+
+		// ASSERT: unmapped codes pass through unchanged.
+		expect( result ).toBe( 'NOT_A_REAL_EVENT' );
+	} );
+} );
+
+describe( 'getChannelLabel', () => {
+	it( 'should return the mapped label for a known channel', () => {
+		// ARRANGE: a known channel slug.
+		const channel = 'media';
+
+		// ACT: derive the channel column label.
+		const result = getChannelLabel( channel );
+
+		// ASSERT: the slug maps to its human-readable label.
+		expect( result ).toBe( 'Media' );
+	} );
+
+	it( 'should fall back to the raw slug for an unknown channel', () => {
+		// ARRANGE: a slug with no mapping.
+		const channel = 'not_a_channel';
+
+		// ACT: derive the channel column label.
+		const result = getChannelLabel( channel );
+
+		// ASSERT: unmapped slugs pass through unchanged.
+		expect( result ).toBe( 'not_a_channel' );
 	} );
 } );
