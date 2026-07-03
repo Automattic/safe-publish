@@ -1288,12 +1288,11 @@ final class Admin_Ajax_Controller {
 		$session_id = $session_result;
 
 		$post_data = array(
-			'id'             => $source_post_id,
-			'title'          => $title,
+			'id'        => $source_post_id,
+			'title'     => $title,
 			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized by Post_Import_Service::extract_post_fields().
-			'link'           => wp_unslash( $_POST['source_link'] ?? '' ),
-			'post_type'      => $raw_post_type,
-			'featured_media' => absint( $_POST['featured_media_id'] ?? 0 ),
+			'link'      => wp_unslash( $_POST['source_link'] ?? '' ),
+			'post_type' => $raw_post_type,
 		);
 
 		// JSON string not sanitized to preserve structure; validated after decode.
