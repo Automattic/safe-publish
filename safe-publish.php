@@ -105,9 +105,44 @@ function safe_publish_init_plugin(): void {
 	// Load text domain.
 	load_plugin_textdomain( 'safe-publish', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
 
+	// The plugin requires cURL with SSL for outbound source requests.
+	if ( ! safe_publish_has_curl_ssl() ) {
+		add_action( 'admin_notices', 'safe_publish_curl_required_notice' );
+		return;
+	}
+
 	// Initialize the main plugin class.
 	$safe_publish_plugin = new \Safe_Publish\Plugin();
 	$safe_publish_plugin->init();
+}
+
+/**
+ * Reports whether cURL with SSL support is available.
+ *
+ * @return bool True when the cURL extension is loaded with SSL support.
+ */
+function safe_publish_has_curl_ssl(): bool {
+	if ( ! function_exists( 'curl_init' ) || ! function_exists( 'curl_exec' ) ) {
+		return false;
+	}
+
+	$version = curl_version();
+
+	return is_array( $version )
+		&& 0 !== ( CURL_VERSION_SSL & $version['features'] );
+}
+
+/**
+ * Renders the admin notice shown when cURL with SSL is unavailable.
+ */
+function safe_publish_curl_required_notice(): void {
+	wp_admin_notice(
+		esc_html__(
+			'Safe Publish requires the cURL PHP extension with SSL support, which is not available on this site.',
+			'safe-publish'
+		),
+		array( 'type' => 'error' )
+	);
 }
 
 /**
