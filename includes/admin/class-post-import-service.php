@@ -2071,13 +2071,10 @@ class Post_Import_Service {
 			$this->content_processor->get_warnings()
 		);
 
-		// Unsanitized values; sanitized downstream before being stored.
-		$fields['meta']  = is_array( $fresh_result['meta'] ?? null )
-			? $fresh_result['meta']
-			: $fields['meta'];
-		$fields['terms'] = is_array( $fresh_result['terms'] ?? null )
-			? $fresh_result['terms']
-			: $fields['terms'];
+		// Meta and terms come from the fresh source payload, not the request.
+		// fetch_fresh_post_content() guarantees both as arrays.
+		$fields['meta']  = $fresh_result['meta'];
+		$fields['terms'] = $fresh_result['terms'];
 
 		return array(
 			'fields'              => $fields,
