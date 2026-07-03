@@ -718,24 +718,9 @@ final class Catalog_REST_Controller {
 				)
 			),
 			'post_type'    => $post->post_type,
-			'date_gmt'     => self::format_gmt_iso( $post->post_date_gmt ),
-			'modified_gmt' => self::format_gmt_iso( $post->post_modified_gmt ),
+			'date_gmt'     => Datetime_Sanitizer::gmt_to_iso8601( $post->post_date_gmt ),
+			'modified_gmt' => Datetime_Sanitizer::gmt_to_iso8601( $post->post_modified_gmt ),
 			'status'       => $post->post_status,
 		);
-	}
-
-	/**
-	 * Converts a MySQL GMT datetime ("Y-m-d H:i:s") to ISO 8601 with a Z
-	 * marker. Empty/zero values yield an empty string.
-	 *
-	 * @param string $mysql_gmt MySQL GMT datetime.
-	 * @return string ISO 8601 GMT string or empty when input is unset.
-	 */
-	private static function format_gmt_iso( string $mysql_gmt ): string {
-		if ( '' === $mysql_gmt || str_starts_with( $mysql_gmt, '0000' ) ) {
-			return '';
-		}
-
-		return str_replace( ' ', 'T', $mysql_gmt ) . 'Z';
 	}
 }

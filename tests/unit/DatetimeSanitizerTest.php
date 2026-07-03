@@ -118,4 +118,29 @@ class DatetimeSanitizerTest extends TestCase {
 		$this->assertFalse( Datetime_Sanitizer::sanitize_iso_datetime( 'not-a-date' ) );
 		$this->assertFalse( Datetime_Sanitizer::sanitize_iso_datetime( '2026/06/10' ) );
 	}
+
+	/**
+	 * Verifies that a MySQL GMT datetime is formatted as ISO 8601 with a Z
+	 * marker so the wire payload carries an explicit UTC timestamp.
+	 */
+	public function test_gmt_to_iso8601_marks_utc_with_z(): void {
+		// ACT: Format a MySQL GMT datetime.
+		$result = Datetime_Sanitizer::gmt_to_iso8601( '2026-06-10 15:30:00' );
+
+		// ASSERT: The space becomes 'T' and a 'Z' marks UTC.
+		$this->assertSame( '2026-06-10T15:30:00Z', $result );
+	}
+
+	/**
+	 * Verifies that empty and MySQL zero-date sentinel inputs collapse to an
+	 * empty string rather than a malformed '0000-00-00T00:00:00Z'.
+	 */
+	public function test_gmt_to_iso8601_empty_and_zero_dates_return_empty(): void {
+		// ACT + ASSERT: Empty and zero-date inputs both collapse to ''.
+		$this->assertSame( '', Datetime_Sanitizer::gmt_to_iso8601( '' ) );
+		$this->assertSame(
+			'',
+			Datetime_Sanitizer::gmt_to_iso8601( '0000-00-00 00:00:00' )
+		);
+	}
 }

@@ -18,8 +18,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Shared date/datetime parser used by every date-range AJAX/REST handler
- * to accept ISO 8601 datetimes alongside bare calendar days.
+ * Shared datetime helpers: validates an ISO 8601 or bare-calendar-day value
+ * into a MySQL datetime, and formats a MySQL GMT timestamp as ISO 8601.
  */
 class Datetime_Sanitizer {
 
@@ -66,5 +66,20 @@ class Datetime_Sanitizer {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Formats a MySQL GMT datetime ("Y-m-d H:i:s") as ISO 8601 with a Z
+	 * marker. Empty or zero-date ("0000-...") values yield an empty string.
+	 *
+	 * @param string $mysql_gmt MySQL GMT datetime.
+	 * @return string ISO 8601 GMT string, or empty when unset or a zero date.
+	 */
+	public static function gmt_to_iso8601( string $mysql_gmt ): string {
+		if ( '' === $mysql_gmt || str_starts_with( $mysql_gmt, '0000' ) ) {
+			return '';
+		}
+
+		return str_replace( ' ', 'T', $mysql_gmt ) . 'Z';
 	}
 }
