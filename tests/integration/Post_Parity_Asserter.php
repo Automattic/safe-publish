@@ -273,18 +273,27 @@ final class Post_Parity_Asserter {
 	);
 
 	/**
+	 * Attachment-post columns propagated from the source media record, value-
+	 * checked against the raw source library values in
+	 * assert_attachment_propagated_columns().
+	 *
+	 * @var array<string, string>
+	 */
+	private const ATTACHMENT_PROPAGATED_COLUMNS = array(
+		'post_title'   => 'source media title',
+		'post_excerpt' => 'source media caption',
+		'post_content' => 'source media description',
+	);
+
+	/**
 	 * Attachment-post columns whose parity check is deferred. Reverse-asserted
 	 * to the WordPress default in assert_attachment_deferred_columns_default()
-	 * so the test fails when a future PR starts propagating one of them and
-	 * forces the registry move.
+	 * so the test fails when a future PR starts propagating one of them.
 	 *
 	 * @var array<string, string>
 	 */
 	private const ATTACHMENT_DEFERRED_REGISTRY = array(
-		'post_title'   => 'deferred: source media title not propagated yet',
-		'post_excerpt' => 'deferred: source media caption not propagated yet',
-		'post_content' => 'deferred: source media description not propagated yet',
-		'post_name'    => 'deferred: filename-derived; source slug not propagated',
+		'post_name' => 'deferred: filename-derived; source slug not propagated',
 	);
 
 	/**
@@ -312,13 +321,13 @@ final class Post_Parity_Asserter {
 	);
 
 	/**
-	 * WordPress-core meta the importer propagates from the source media record,
-	 * only on the featured-image path (inline imports have a URL but no record).
+	 * WordPress-core meta the importer propagates from the source media record
+	 * onto every sideloaded attachment, inline or featured.
 	 *
 	 * @var array<string, string>
 	 */
-	private const PROPAGATED_FEATURED_ATTACHMENT_META = array(
-		'_wp_attachment_image_alt' => 'source alt_text propagated on the featured path',
+	private const PROPAGATED_ATTACHMENT_META = array(
+		'_wp_attachment_image_alt' => 'source alt_text propagated to every attachment',
 	);
 
 	/**
@@ -1076,11 +1085,12 @@ final class Post_Parity_Asserter {
 	 * classification the asserter models. Returns it so callers can chain
 	 * further checks.
 	 *
-	 * @param string   $source_url               Source URL the dest was sideloaded from.
-	 * @param string   $source_site_url          Source site URL stamped on META_IMPORTED_FROM.
-	 * @param string   $expected_mime_type       Expected dest post_mime_type.
-	 * @param int|null $featured_source_media_id Source featured-media ID, or null for inline-only.
-	 * @param TestCase $test                     Active test case.
+	 * @param string                $source_url               Source URL the dest was sideloaded from.
+	 * @param string                $source_site_url          Source site URL stamped on META_IMPORTED_FROM.
+	 * @param string                $expected_mime_type       Expected dest post_mime_type.
+	 * @param int|null              $featured_source_media_id Source featured-media ID, or null for inline-only.
+	 * @param array<string, string> $expected_metadata Source alt/title/caption/description to value-check.
+	 * @param TestCase              $test                     Active test case.
 	 * @return WP_Post Dest attachment post.
 	 */
 	public static function assert_imported_attachment_for_source_url(
@@ -1088,14 +1098,17 @@ final class Post_Parity_Asserter {
 		string $source_site_url,
 		string $expected_mime_type,
 		?int $featured_source_media_id,
+		array $expected_metadata,
 		TestCase $test
 	): WP_Post {
 		$dest = self::find_dest_attachment_for_source_url( $source_url, $test );
 
 		self::assert_attachment_parity_columns( $dest, $expected_mime_type, $test );
 		self::assert_attachment_divergence_locks( $dest, $test );
+		self::assert_attachment_propagated_columns( $dest, $expected_metadata, $test );
 		self::assert_attachment_deferred_columns_default( $dest, $test );
 		self::assert_attachment_divergent_meta_present( $dest, $test );
+		self::assert_attachment_propagated_meta( $dest, $expected_metadata, $test );
 		self::assert_attachment_plugin_meta(
 			$dest,
 			$source_url,
@@ -1129,6 +1142,7 @@ final class Post_Parity_Asserter {
 		// assert_attachment_parity_columns().
 		$classified = array_merge(
 			array( 'post_mime_type', 'post_type' ),
+			array_keys( self::ATTACHMENT_PROPAGATED_COLUMNS ),
 			array_keys( self::ATTACHMENT_DIVERGENCE_REGISTRY ),
 			array_keys( self::ATTACHMENT_DEFERRED_REGISTRY )
 		);
@@ -1219,6 +1233,60 @@ final class Post_Parity_Asserter {
 	}
 
 	/**
+	 * Value-checks the propagated attachment columns (title, caption,
+	 * description) against the source library values, applying the importer's
+	 * per-field sanitization. Requires non-empty values so the check can't pass
+	 * vacuously.
+	 *
+	 * @param WP_Post               $dest_attachment   Dest attachment post.
+	 * @param array<string, string> $expected_metadata Source alt/title/caption/description.
+	 * @param TestCase              $test              Active test case.
+	 */
+	private static function assert_attachment_propagated_columns(
+		WP_Post $dest_attachment,
+		array $expected_metadata,
+		TestCase $test
+	): void {
+		$title = sanitize_text_field(
+			(string) ( $expected_metadata['title'] ?? '' )
+		);
+		$test->assertNotSame( '', $title, 'Source should seed a non-empty title' );
+		$test->assertSame(
+			$title,
+			$dest_attachment->post_title,
+			"Dest attachment {$dest_attachment->ID} post_title should match source"
+		);
+
+		$caption = wp_kses_post(
+			(string) ( $expected_metadata['caption'] ?? '' )
+		);
+		$test->assertNotSame(
+			'',
+			$caption,
+			'Source should seed a non-empty caption'
+		);
+		$test->assertSame(
+			$caption,
+			$dest_attachment->post_excerpt,
+			"Dest attachment {$dest_attachment->ID} post_excerpt should match source"
+		);
+
+		$description = wp_kses_post(
+			(string) ( $expected_metadata['description'] ?? '' )
+		);
+		$test->assertNotSame(
+			'',
+			$description,
+			'Source should seed a non-empty description'
+		);
+		$test->assertSame(
+			$description,
+			$dest_attachment->post_content,
+			"Dest attachment {$dest_attachment->ID} post_content should match source"
+		);
+	}
+
+	/**
 	 * Reverse-asserts each ATTACHMENT_DEFERRED_REGISTRY column lands on the
 	 * WordPress default.
 	 *
@@ -1229,37 +1297,40 @@ final class Post_Parity_Asserter {
 		WP_Post $dest_attachment,
 		TestCase $test
 	): void {
-		$attached_file  = (string) get_post_meta(
-			$dest_attachment->ID,
-			'_wp_attached_file',
-			true
-		);
-		$basename       = wp_basename( $attached_file );
-		$expected_title = preg_replace( '/\.[^.]+$/', '', $basename );
-
-		$test->assertSame(
-			$expected_title,
-			$dest_attachment->post_title,
-			"Dest attachment {$dest_attachment->ID} post_title should be the"
-			. ' filename-derived WP default (source title not propagated)'
-		);
-		$test->assertSame(
-			'',
-			$dest_attachment->post_excerpt,
-			"Dest attachment {$dest_attachment->ID} post_excerpt should be"
-			. ' empty (source caption not propagated)'
-		);
-		$test->assertSame(
-			'',
-			$dest_attachment->post_content,
-			"Dest attachment {$dest_attachment->ID} post_content should be"
-			. ' empty (source description not propagated)'
-		);
 		$test->assertNotSame(
 			'',
 			(string) $dest_attachment->post_name,
 			"Dest attachment {$dest_attachment->ID} post_name should be the"
 			. ' filename-derived WP default (source slug not propagated)'
+		);
+	}
+
+	/**
+	 * Value-checks the propagated attachment meta (_wp_attachment_image_alt)
+	 * against the source alt, applying the importer's tag-strip.
+	 *
+	 * @param WP_Post               $dest_attachment   Dest attachment post.
+	 * @param array<string, string> $expected_metadata Source alt/title/caption/description.
+	 * @param TestCase              $test              Active test case.
+	 */
+	private static function assert_attachment_propagated_meta(
+		WP_Post $dest_attachment,
+		array $expected_metadata,
+		TestCase $test
+	): void {
+		$alt = wp_strip_all_tags(
+			(string) ( $expected_metadata['alt'] ?? '' ),
+			true
+		);
+		$test->assertNotSame( '', $alt, 'Source should seed a non-empty alt' );
+		$test->assertSame(
+			$alt,
+			(string) get_post_meta(
+				$dest_attachment->ID,
+				'_wp_attachment_image_alt',
+				true
+			),
+			"Dest attachment {$dest_attachment->ID} alt should match source"
 		);
 	}
 
@@ -1374,8 +1445,8 @@ final class Post_Parity_Asserter {
 
 	/**
 	 * Asserts that every meta key present on the dest attachment is
-	 * classified: a plugin-added key, a WP-default divergent key, or a
-	 * deferred key. Inline-only attachments are not allowed to carry
+	 * classified: a plugin-added or propagated key, a WP-default divergent key,
+	 * or a deferred key. Inline-only attachments are not allowed to carry
 	 * featured-specific plugin meta; featured-sourced ones are.
 	 *
 	 * @param WP_Post  $dest_attachment Dest attachment post.
@@ -1390,6 +1461,7 @@ final class Post_Parity_Asserter {
 	): void {
 		$classified = array_merge(
 			array_keys( self::PLUGIN_ADDED_ATTACHMENT_META ),
+			array_keys( self::PROPAGATED_ATTACHMENT_META ),
 			array_keys( self::ATTACHMENT_META_DIVERGENCE ),
 			array_keys( self::ATTACHMENT_META_DEFERRED )
 		);
@@ -1397,8 +1469,7 @@ final class Post_Parity_Asserter {
 		if ( $is_featured ) {
 			$classified = array_merge(
 				$classified,
-				array_keys( self::PLUGIN_ADDED_FEATURED_ATTACHMENT_META ),
-				array_keys( self::PROPAGATED_FEATURED_ATTACHMENT_META )
+				array_keys( self::PLUGIN_ADDED_FEATURED_ATTACHMENT_META )
 			);
 		}
 

@@ -554,6 +554,8 @@ class Source_Posts_API {
 		// resolved on the source" (empty strings).
 		$post_data['source_author'] = self::extract_source_author( $data );
 
+		$post_data['source_media'] = self::extract_source_media( $data );
+
 		return $post_data;
 	}
 
@@ -587,6 +589,40 @@ class Source_Posts_API {
 				? sanitize_text_field( (string) $author['display_name'] )
 				: '',
 		);
+	}
+
+	/**
+	 * Extracts the safe_publish_media map from a REST response. Enforces the
+	 * URL => fields shape only; the values are sanitized at write time by the
+	 * media importer.
+	 *
+	 * @param array $data Decoded REST response for a single post.
+	 * @return array<string, array<string, string>> Source URL => library metadata.
+	 */
+	private static function extract_source_media( array $data ): array {
+		if (
+			! isset( $data['safe_publish_media'] )
+			|| ! is_array( $data['safe_publish_media'] )
+		) {
+			return array();
+		}
+
+		$map = array();
+
+		foreach ( $data['safe_publish_media'] as $url => $fields ) {
+			if ( ! is_string( $url ) || '' === $url || ! is_array( $fields ) ) {
+				continue;
+			}
+
+			$map[ $url ] = array(
+				'alt'         => (string) ( $fields['alt'] ?? '' ),
+				'title'       => (string) ( $fields['title'] ?? '' ),
+				'caption'     => (string) ( $fields['caption'] ?? '' ),
+				'description' => (string) ( $fields['description'] ?? '' ),
+			);
+		}
+
+		return $map;
 	}
 
 	/**

@@ -81,13 +81,14 @@ If an `<a>` tag ends in a file extension allowed by WordPress, it is processed i
 4. **Deduplicate**: If the URL was already imported, the existing attachment URL is used, and download is skipped.
 5. **Download**: File fetched using WordPress core's `download_url()`; downloadability is verified at this point.
 6. **Import**: File type is validated and added to the media library via `media_handle_sideload()`.
-7. **Replace**: Source URL replaced with the new attachment URL in content; previously stripped query parameters are reapplied.
+7. **Enrich**: The image's source library metadata — alt text, title, caption, and description — is applied to the new attachment. The source resolves each URL back to its attachment record (a capability core REST lacks) and returns the values alongside the post.
+8. **Replace**: Source URL replaced with the new attachment URL in content; previously stripped query parameters are reapplied.
 
 ### Featured Image
 
 - Fetched separately via the `/wp-json/wp/v2/media/{id}` endpoint using the `featured_media` ID from the post response.
 - Uploaded to media library.
-- The source alt text is applied to the destination attachment, so theme-rendered thumbnails keep their alt.
+- The source library metadata (alt text, title, caption, description) is applied to the destination attachment, fetched in edit context for the raw values.
 - Set as post thumbnail via `set_post_thumbnail()`.
 
 ### URL Replacement
@@ -291,9 +292,11 @@ Navigation links and submenus are the exception: they carry an explicit entity r
 
 Navigation links and submenus are re-derived only when their target was already published at import. If the target was a draft, its slug isn't final, so the link keeps the host-swapped source path and behaves like an [internal body link](#internal-body-links-may-404-or-open-the-wrong-page) — it can 404 or open the wrong page under a slug collision or a different permalink structure. Re-import the referring content after the target is published to re-derive the URL; the Retry action does not cover this case.
 
-### Media library metadata is only partly migrated
+### Some sideloaded files carry no source library metadata
 
-Imported images render correctly in the migrated post — inline image alt text travels inside the post content, and the featured image's alt text is applied to its attachment. But the destination media library's own record for an imported attachment is not fully populated from the source: the attachment title falls back to a filename-derived default, the caption and description are left empty, and only the featured image carries alt text at the library level. This affects browsing or searching the destination media library, re-inserting an imported image into another post, and themes or blocks that read attachment-level fields — not how images appear in the migrated post itself.
+Every imported image that is a real item in the source media library brings its library metadata — alt text, title, caption, and description — to the destination attachment, inline and featured alike. This covers images inserted at an intermediate size (for example `…-1024x683.jpg`) and responsive `srcset` sub-sizes: each sized URL is matched back to the library item it was generated from, so it inherits that item's metadata. One kind of sideloaded file is the exception, because it has no source library record to copy from:
+
+- **Non-library file links**: an `<a href>` to a file that is not in the source media library (for example an uploaded PDF referenced by path) is sideloaded without a record to draw from.
 
 ## Next Steps
 
