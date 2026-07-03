@@ -701,8 +701,7 @@ html:has(body.toplevel_page_safe-publish) {
 	color: var(--safe-publish-status-error);
 }
 
-.safe-publish-audit-channel,
-.safe-publish-audit-event {
+.safe-publish-audit-channel {
 	font-size: 12px;
 	background: var(--safe-publish-bg-muted);
 	padding: 2px 6px;
