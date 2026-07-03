@@ -16,7 +16,6 @@ use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Validators\URL_Validator;
 use WP_Error;
-use WP_Post;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -322,51 +321,6 @@ class Source_Posts_API {
 	);
 
 	/**
-	 * Prepares a single WP_Post for the catalog listing payload.
-	 *
-	 * The shape mirrors what the destination's listing UI expects.
-	 *
-	 * @param WP_Post $post Source post.
-	 * @return array Listing payload.
-	 */
-	public static function prepare_listing_payload_from_post( WP_Post $post ): array {
-		$permalink = get_permalink( $post );
-
-		return array(
-			'id'           => $post->ID,
-			'link'         => is_string( $permalink ) ? esc_url_raw( $permalink ) : '',
-			'title'        => sanitize_text_field(
-				wp_strip_all_tags(
-					html_entity_decode(
-						$post->post_title,
-						ENT_QUOTES | ENT_HTML5,
-						'UTF-8'
-					)
-				)
-			),
-			'post_type'    => $post->post_type,
-			'date_gmt'     => self::format_gmt_iso( $post->post_date_gmt ),
-			'modified_gmt' => self::format_gmt_iso( $post->post_modified_gmt ),
-			'status'       => $post->post_status,
-		);
-	}
-
-	/**
-	 * Converts a MySQL GMT datetime ("Y-m-d H:i:s") to ISO 8601 with a Z
-	 * marker. Empty/zero values yield an empty string.
-	 *
-	 * @param string $mysql_gmt MySQL GMT datetime.
-	 * @return string ISO 8601 GMT string or empty when input is unset.
-	 */
-	private static function format_gmt_iso( string $mysql_gmt ): string {
-		if ( '' === $mysql_gmt || str_starts_with( $mysql_gmt, '0000' ) ) {
-			return '';
-		}
-
-		return str_replace( ' ', 'T', $mysql_gmt ) . 'Z';
-	}
-
-	/**
 	 * Tests API connection.
 	 *
 	 * Delegates to the shared-secret probe so the result reflects whether the
@@ -554,6 +508,8 @@ class Source_Posts_API {
 		// resolved on the source" (empty strings).
 		$post_data['source_author'] = self::extract_source_author( $data );
 
+		$post_data['source_media'] = self::extract_source_media( $data );
+
 		return $post_data;
 	}
 
@@ -587,6 +543,40 @@ class Source_Posts_API {
 				? sanitize_text_field( (string) $author['display_name'] )
 				: '',
 		);
+	}
+
+	/**
+	 * Extracts the safe_publish_media map from a REST response. Enforces the
+	 * URL => fields shape only; the values are sanitized at write time by the
+	 * media importer.
+	 *
+	 * @param array $data Decoded REST response for a single post.
+	 * @return array<string, array<string, string>> Source URL => library metadata.
+	 */
+	private static function extract_source_media( array $data ): array {
+		if (
+			! isset( $data['safe_publish_media'] )
+			|| ! is_array( $data['safe_publish_media'] )
+		) {
+			return array();
+		}
+
+		$map = array();
+
+		foreach ( $data['safe_publish_media'] as $url => $fields ) {
+			if ( ! is_string( $url ) || '' === $url || ! is_array( $fields ) ) {
+				continue;
+			}
+
+			$map[ $url ] = array(
+				'alt'         => (string) ( $fields['alt'] ?? '' ),
+				'title'       => (string) ( $fields['title'] ?? '' ),
+				'caption'     => (string) ( $fields['caption'] ?? '' ),
+				'description' => (string) ( $fields['description'] ?? '' ),
+			);
+		}
+
+		return $map;
 	}
 
 	/**
