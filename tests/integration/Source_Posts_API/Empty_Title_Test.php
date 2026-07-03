@@ -72,6 +72,35 @@ class Empty_Title_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a title of only a non-breaking space, which survives the
+	 * source's sanitize_text_field, is treated as empty and replaced with the
+	 * "(no title)" placeholder instead of rendering as a blank row.
+	 */
+	public function test_whitespace_only_title_becomes_placeholder(): void {
+		// ARRANGE: Source item whose title is a lone non-breaking space.
+		$this->mock_body = $this->envelope_with(
+			array(
+				'id'           => 1,
+				'link'         => 'https://source.example.com/nbsp-title',
+				'title'        => "\u{00A0}",
+				'post_type'    => 'post',
+				'date_gmt'     => '2024-07-15T15:00:00Z',
+				'modified_gmt' => '2024-07-15T15:00:00Z',
+				'status'       => 'publish',
+			)
+		);
+
+		// ACT: Fetch the catalog.
+		$result = ( new Source_Posts_API( new HTTP_Client() ) )
+			->fetch_posts( $this->source_site_url );
+
+		// ASSERT: The whitespace title is replaced with the placeholder.
+		$this->assertIsArray( $result );
+		$this->assertCount( 1, $result['items'] );
+		$this->assertSame( '(no title)', $result['items'][0]['title'] );
+	}
+
+	/**
 	 * Verifies that an item without a usable id is still dropped, so the
 	 * placeholder substitution didn't weaken the shape guard.
 	 */

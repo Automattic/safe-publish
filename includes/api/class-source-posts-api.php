@@ -265,9 +265,9 @@ class Source_Posts_API {
 	 *   template (React doesn't escape className contents).
 	 *
 	 * Items without an id are dropped for stable listing shape regardless of
-	 * source plugin version; an empty title is replaced with a "(no title)"
-	 * placeholder so untitled source posts stay visible instead of vanishing
-	 * from the listing.
+	 * source plugin version; an empty or whitespace-only title is replaced
+	 * with a "(no title)" placeholder so untitled source posts stay visible
+	 * instead of vanishing from the listing.
 	 *
 	 * @param mixed $item Raw item from the catalog response.
 	 * @return array|null Shape-valid item, or null when it has no usable id.
@@ -283,7 +283,8 @@ class Source_Posts_API {
 		}
 
 		$title = isset( $item['title'] ) ? (string) $item['title'] : '';
-		if ( '' === $title ) {
+		// Empty or whitespace-only, including a non-breaking space.
+		if ( 1 === preg_match( '/^[\p{Z}\s]*$/u', $title ) ) {
 			$title = __( '(no title)', 'safe-publish' );
 		}
 
