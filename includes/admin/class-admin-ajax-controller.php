@@ -1287,6 +1287,7 @@ final class Admin_Ajax_Controller {
 
 		$session_id = $session_result;
 
+		// Meta and terms come from the fresh source payload, not the request.
 		$post_data = array(
 			'id'        => $source_post_id,
 			'title'     => $title,
@@ -1294,26 +1295,6 @@ final class Admin_Ajax_Controller {
 			'link'      => wp_unslash( $_POST['source_link'] ?? '' ),
 			'post_type' => $raw_post_type,
 		);
-
-		// JSON string not sanitized to preserve structure; validated after decode.
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-		$meta_param = isset( $_POST['meta'] ) ? wp_unslash( $_POST['meta'] ) : '';
-		if ( is_string( $meta_param ) && '' !== $meta_param ) {
-			$decoded_meta = json_decode( $meta_param, true );
-			if ( is_array( $decoded_meta ) ) {
-				$post_data['meta'] = $decoded_meta;
-			}
-		}
-
-		// JSON string not sanitized to preserve structure; validated after decode.
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-		$terms_param = isset( $_POST['terms'] ) ? wp_unslash( $_POST['terms'] ) : '';
-		if ( is_string( $terms_param ) && '' !== $terms_param ) {
-			$decoded_terms = json_decode( $terms_param, true );
-			if ( is_array( $decoded_terms ) ) {
-				$post_data['terms'] = $decoded_terms;
-			}
-		}
 
 		$result = $this->post_import_service->import_post(
 			$post_data,
