@@ -8,7 +8,7 @@
  *
  * @file This file defines the AuditLogDataView component.
  */
-import { getUserLabel } from './event-fields';
+import { getChannelLabel, getEventLabel, getUserLabel } from './event-fields';
 import {
 	calendarRangeToUtcBounds,
 	DateRangeFilter,
@@ -370,7 +370,9 @@ export function AuditLogDataView(): JSX.Element {
 			label: __( 'Channel', 'safe-publish' ),
 			enableSorting: false,
 			render: ( { item }: { item: AuditEvent } ): JSX.Element => (
-				<code className="safe-publish-audit-channel">{ item.channel }</code>
+				<span className="safe-publish-audit-channel">
+					{ getChannelLabel( item.channel ) }
+				</span>
 			),
 		},
 		{
@@ -399,7 +401,7 @@ export function AuditLogDataView(): JSX.Element {
 			label: __( 'Event', 'safe-publish' ),
 			enableSorting: false,
 			render: ( { item }: { item: AuditEvent } ): JSX.Element => (
-				<code className="safe-publish-audit-event">{ item.event }</code>
+				<span>{ getEventLabel( item.event ) }</span>
 			),
 		},
 		{
