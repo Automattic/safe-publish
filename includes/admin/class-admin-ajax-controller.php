@@ -364,7 +364,8 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Re-runs an issue's reconciliation and reports whether it cleared.
+	 * Re-runs an issue's reconciliation and reports its outcome and whether it
+	 * cleared.
 	 *
 	 * Self-verifying: the row is resolved or refreshed by the reconciliation
 	 * itself, so the response reflects the issue's state after the real work
@@ -415,7 +416,13 @@ final class Admin_Ajax_Controller {
 
 		$this->record_reconcile_outcome( $issue, $outcome );
 
-		wp_send_json_success( array( 'resolved' => $resolved ) );
+		wp_send_json_success(
+			array(
+				'resolved' => $resolved,
+				'outcome'  => $outcome->type,
+				'detail'   => $outcome->detail,
+			)
+		);
 	}
 
 	/**
