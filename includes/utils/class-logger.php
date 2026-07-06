@@ -12,13 +12,12 @@ namespace Safe_Publish\Utils;
 /**
  * Abstract base logger for Safe Publish events.
  *
- * Info and warning events are stored in the database and fire a WordPress
- * action hook. Error events additionally write to the server error log.
- * Subclasses define the channel and expose typed per-event helper methods
- * (e.g. Auth_Logger::request_authenticated) that internally call
- * log_event/log_warning/log_error. Those methods are the only entry point —
- * log_event, log_warning, and log_error are protected so each event's payload
- * shape is locked to a single contract.
+ * Two independent axes govern an event: its audit-DB level (info, warning,
+ * error) and whether it also reaches the server error log. Only log_error
+ * writes to the server log, and only as a PII-free skeleton; log_failure
+ * stores an error-level audit row without touching the server log. Subclasses
+ * expose typed per-event helpers that call the protected log_* methods,
+ * locking each event's payload shape to a single contract.
  */
 abstract class Logger {
 
@@ -33,60 +32,75 @@ abstract class Logger {
 	protected string $channel;
 
 	/**
-	 * Logs an informational event to the database and fires a hook.
-	 *
-	 * Protected so callers must go through a channel logger's typed helper
-	 * method, keeping each event's payload shape under a single contract.
+	 * Logs an informational event to the audit database.
 	 *
 	 * @param string $event Event type.
 	 * @param array  $data  Optional. Additional event data. Default empty array.
 	 */
 	protected function log_event( string $event, array $data = array() ): void {
-		$this->write( $event, $data, 'info' );
+		$this->write( $event, $data, 'info', false );
 	}
 
 	/**
 	 * Logs a degradation event: the operation completed but left a degraded,
 	 * user-remediable result such as an unresolved reference.
 	 *
-	 * Protected so callers must go through a channel logger's typed helper
-	 * method, keeping each event's payload shape under a single contract.
-	 *
 	 * @param string $event Event type.
 	 * @param array  $data  Optional. Additional event data. Default empty array.
 	 */
 	protected function log_warning( string $event, array $data = array() ): void {
-		$this->write( $event, $data, 'warning' );
+		$this->write( $event, $data, 'warning', false );
 	}
 
 	/**
-	 * Logs a failure event to the server error log and the database, and fires
-	 * a hook.
+	 * Logs an operator-actionable fault to the audit database (level error)
+	 * and, as a PII-free skeleton, to the server error log.
 	 *
-	 * Protected so callers must go through a channel logger's typed helper
-	 * method, keeping each event's payload shape under a single contract.
+	 * For faults worth surfacing beyond the audit trail: missing config,
+	 * failed rollback, unexpected exception. Expected domain failures use
+	 * log_failure.
 	 *
 	 * @param string $event Event type.
 	 * @param array  $data  Optional. Additional event data. Default empty array.
 	 */
 	protected function log_error( string $event, array $data = array() ): void {
-		$this->write( $event, $data, 'error' );
+		$this->write( $event, $data, 'error', true );
+	}
+
+	/**
+	 * Logs an expected plugin-domain failure to the audit database at level
+	 * error, without writing to the server error log.
+	 *
+	 * For handled failures (rejected auth, unsupported media, unresolved
+	 * reference) that belong in the audit trail but must not pollute the
+	 * server log. Operator-actionable faults use log_error.
+	 *
+	 * @param string $event Event type.
+	 * @param array  $data  Optional. Additional event data. Default empty array.
+	 */
+	protected function log_failure( string $event, array $data = array() ): void {
+		$this->write( $event, $data, 'error', false );
 	}
 
 	/**
 	 * Writes a log entry to the configured targets.
 	 *
-	 * @param string $event Event type.
-	 * @param array  $data  Additional event data.
-	 * @param string $level Event level: 'info', 'warning', or 'error'.
+	 * @param string $event      Event type.
+	 * @param array  $data       Additional event data.
+	 * @param string $level      Event level: 'info', 'warning', or 'error'.
+	 * @param bool   $server_log Whether to also emit a server-log line.
 	 */
-	private function write( string $event, array $data, string $level ): void {
+	private function write(
+		string $event,
+		array $data,
+		string $level,
+		bool $server_log
+	): void {
 		$log_data = $this->build_log_data( $event, $data );
 
-		if ( ! defined( 'WP_TESTS_DOMAIN' ) && 'error' === $level ) {
-			$prefix = '[Safe-Publish-' . ucfirst( $this->channel ) . '] ';
-			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-			error_log( $prefix . $event . ': ' . wp_json_encode( $log_data, JSON_UNESCAPED_SLASHES ) );
+		if ( $server_log ) {
+			$skeleton = $this->build_server_log_skeleton( $level, $log_data );
+			$this->write_server_log( $event, $skeleton );
 		}
 
 		global $wpdb;
@@ -98,6 +112,68 @@ abstract class Logger {
 		if ( function_exists( 'do_action' ) ) {
 			do_action( 'safe_publish_event_logged', $this->channel, $event, $log_data );
 		}
+	}
+
+	/**
+	 * Writes the PII-free skeleton to the server error log. The sole
+	 * server-log sink; skipped under the test harness, and overridable so
+	 * tests can observe the write.
+	 *
+	 * @param string $event    Event type.
+	 * @param array  $skeleton PII-free projection built for the server log.
+	 */
+	protected function write_server_log( string $event, array $skeleton ): void {
+		if ( defined( 'WP_TESTS_DOMAIN' ) ) {
+			return;
+		}
+
+		$prefix = '[Safe-Publish-' . ucfirst( $this->channel ) . '] ';
+		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+		error_log( $prefix . $event . ': ' . wp_json_encode( $skeleton, JSON_UNESCAPED_SLASHES ) );
+	}
+
+	/**
+	 * Projects the full log data down to a PII-free server-log skeleton.
+	 *
+	 * Allowlist only: forensic scalars and a fixed set of non-identifying
+	 * context keys. Free-text messages, actor display name, request URI, user
+	 * agent, and site URL stay in the audit DB, never the server log.
+	 *
+	 * @param string $level    Event level stored in the audit DB.
+	 * @param array  $log_data Full event data from build_log_data().
+	 * @return array PII-free subset safe for the server error log.
+	 */
+	private function build_server_log_skeleton(
+		string $level,
+		array $log_data
+	): array {
+		$skeleton = array(
+			'event'         => $log_data['event'] ?? '',
+			'timestamp'     => $log_data['timestamp'] ?? '',
+			'channel'       => $this->channel,
+			'level'         => $level,
+			'actor_source'  => $log_data['actor_source'] ?? '',
+			'actor_user_id' => (int) ( $log_data['actor_user_id'] ?? 0 ),
+		);
+
+		// These must hold structured, non-PII scalars; never free text.
+		$context_allowlist = array(
+			'session_id',
+			'source_post_id',
+			'action',
+			'error_code',
+			'reason',
+			'parent_id',
+			'status',
+		);
+
+		foreach ( $context_allowlist as $key ) {
+			if ( isset( $log_data[ $key ] ) && is_scalar( $log_data[ $key ] ) ) {
+				$skeleton[ $key ] = $log_data[ $key ];
+			}
+		}
+
+		return $skeleton;
 	}
 
 	/**
