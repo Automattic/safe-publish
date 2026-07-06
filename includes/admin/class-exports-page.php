@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\Utils\Audit_Log_Table;
+use Safe_Publish\Utils\Datetime_Sanitizer;
 use Safe_Publish\Utils\Options;
 
 // Prevent direct access.
@@ -205,7 +206,7 @@ final class Exports_Page {
 
 				return array(
 					'id'                   => (int) $row['id'],
-					'date'                 => str_replace( ' ', 'T', $created ) . 'Z',
+					'date'                 => Datetime_Sanitizer::gmt_to_iso8601( $created ),
 					'level'                => $row['level'],
 					'event'                => $row['event'],
 					'actor_user_id'        => (int) $data['actor_user_id'],

@@ -12,10 +12,10 @@ namespace Safe_Publish\Tests\Integration;
 use WPAjaxDieContinueException;
 
 /**
- * Dispatches AJAX actions that end in wp_die() and verifies the expected
- * WPAjaxDieContinueException was thrown.
+ * Shared helpers for AJAX tests whose handler ends in wp_die().
  *
- * After the exception is caught, tests can inspect $this->_last_response.
+ * Dispatches the action and swallows the expected WPAjaxDieContinueException,
+ * then asserts common shapes of $this->_last_response.
  */
 trait Ajax_Die_Continue_Trait {
 
@@ -35,5 +35,18 @@ trait Ajax_Die_Continue_Trait {
 		} catch ( WPAjaxDieContinueException $e ) {
 			// Expected; the AJAX handler ends execution via wp_die().
 		}
+	}
+
+	/**
+	 * Asserts the last AJAX response is the structured session-expired error.
+	 */
+	protected function assert_session_expired_response(): void {
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response );
+		$this->assertFalse( $response['success'] );
+		$this->assertSame(
+			'safe_publish_nonce_expired',
+			$response['data']['code']
+		);
 	}
 }
