@@ -368,6 +368,46 @@ export interface AttentionIssueActionsContext {
 }
 
 /**
+ * Maps a not-resolved retry outcome to its notice; a write failure surfaces as
+ * an error, not a soft warning.
+ *
+ * @param {RetryAttentionIssueResponse['outcome']} outcome Reconciliation outcome.
+ * @param {AttentionIssue}                         issue   Retried issue.
+ *
+ * @return {RetryNotice} Notice to surface.
+ */
+const retryOutcomeNotice = (
+	outcome: RetryAttentionIssueResponse[ 'outcome' ],
+	issue: AttentionIssue
+): RetryNotice => {
+	switch ( outcome ) {
+		case 'write_failed':
+			return {
+				status: 'error',
+				message: sprintf(
+					/* translators: %s: affected content title */
+					__( "Retry couldn't complete for %s.", 'safe-publish' ),
+					attentionIssueLabel( issue )
+				),
+			};
+		case 'target_absent':
+			return {
+				status: 'warning',
+				message: renderIssueMessage( issue ),
+			};
+		default:
+			return {
+				status: 'warning',
+				message: sprintf(
+					/* translators: %s: issue guidance sentence */
+					__( 'Still needs attention. %s', 'safe-publish' ),
+					renderIssueMessage( issue )
+				),
+			};
+	}
+};
+
+/**
  * Creates the drawer's Retry action for attention issues.
  *
  * Eligible only for issues whose reconciliation is callable today; it re-runs
@@ -448,17 +488,12 @@ export const createAttentionIssueActions = (
 						return;
 					}
 
-					// Reconciliation ran but the issue persists; surface it
-					// so the refetch doesn't read as a silent success.
+					// Reconciliation ran but the issue persists; map the outcome
+					// to a notice so the refetch doesn't read as a silent success.
 					if ( ! result.data.resolved ) {
-						context.onNotice?.( {
-							status: 'warning',
-							message: sprintf(
-								/* translators: %s: issue guidance sentence */
-								__( 'Still needs attention. %s', 'safe-publish' ),
-								renderIssueMessage( issue )
-							),
-						} );
+						context.onNotice?.(
+							retryOutcomeNotice( result.data.outcome, issue )
+						);
 						return;
 					}
 
