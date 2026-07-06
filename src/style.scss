@@ -255,7 +255,43 @@ html:has(body.toplevel_page_safe-publish) {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: flex-end;
-	gap: 12px 16px;
+	gap: 16px;
+	margin: 16px 0 16px 48px;
+
+	.safe-publish-post-type-selector {
+		width: 212px;
+	}
+
+	.safe-publish-control--search {
+		flex: 1 1 240px;
+		max-width: 360px;
+	}
+
+	.safe-publish-control--statuses {
+		flex: 1 1 240px;
+		max-width: 320px;
+		position: relative;
+	}
+
+	// FormTokenField's suggestions list expands inline (flex: 1 0 100%) and
+	// pushes the controls row taller on focus; float it as a popover instead.
+	.safe-publish-control--statuses .components-form-token-field__suggestions-list {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		right: 0;
+		z-index: 20;
+		background: #fff;
+		border: 1px solid #ddd;
+		border-top: none;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+		margin-top: 2px;
+		max-height: 200px;
+	}
+
+	.safe-publish-control--dates {
+		flex: 0 0 auto;
+	}
 }
 
 .safe-publish-local-state-cell {
@@ -324,8 +360,19 @@ html:has(body.toplevel_page_safe-publish) {
 	white-space: nowrap;
 }
 
-.safe-publish-orphan-toolbar {
-	margin: 0 0 8px 48px;
+.safe-publish-issue-summary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 16px;
+	margin: 16px 0 16px 48px;
+
+	.safe-publish-issue-summary__button--warning svg {
+		fill: var(--safe-publish-status-warning);
+	}
+
+	.safe-publish-issue-summary__button--error svg {
+		fill: var(--safe-publish-status-error);
+	}
 }
 
 .dataviews-action-modal__tertiary {
@@ -590,4 +637,101 @@ html:has(body.toplevel_page_safe-publish) {
 // `.dataviews-view-table tr ...` rule so specificity wins.
 .safe-publish-dataviews-wrapper .dataviews-view-table tr .dataviews-item-actions .components-button:not(.dataviews-all-actions-button) {
 	opacity: 1;
+}
+
+// Each admin page drives search/filter from its own toolbar; hide DataViews'
+// built-ins so they don't duplicate the UI.
+.safe-publish-dataviews-wrapper .dataviews-search,
+.safe-publish-dataviews-wrapper .dataviews-filters {
+	display: none;
+}
+
+// Hiding the built-in search/filter UI leaves an empty toolbar row above the
+// table; drop its vertical padding so it doesn't read as a white band.
+.safe-publish-dataviews-wrapper .dataviews__view-actions {
+	padding-top: 0;
+	padding-bottom: 0;
+}
+
+// Replace DataViews' "Page X of Y" widget where pagination is approximate: the
+// catalog endpoint sets no_found_rows and signals more via has_more, so the
+// true total is unknown. Hide the native page-select and render "Page N" from
+// the wrapper's --safe-publish-page-text variable; Prev/Next stay.
+.safe-publish-dataviews-wrapper--approx-pagination .dataviews-pagination__page-select {
+	display: none;
+}
+
+.safe-publish-dataviews-wrapper--approx-pagination .dataviews-pagination::before {
+	content: var(--safe-publish-page-text, "");
+	margin-right: auto;
+	font-size: 11px;
+	font-weight: 500;
+	text-transform: uppercase;
+}
+
+.safe-publish-date-picker-panel {
+	display: flex;
+	flex-direction: row;
+	gap: 24px;
+	padding: 16px;
+}
+
+// Two side-by-side calendars need ~620px of popover width, which gets clipped
+// once the wp-admin sidebar collapses (mobile breakpoint at 782px). Stack at
+// and below that breakpoint to match wp-admin's own responsive boundary.
+@media (max-width: 782px) {
+
+	.safe-publish-date-picker-panel {
+		flex-direction: column;
+	}
+}
+
+.safe-publish-date-picker-panel__heading {
+	font-weight: 600;
+	margin: 0 0 4px;
+}
+
+.safe-publish-post-type-error {
+	max-width: 480px;
+	margin-left: 48px;
+	margin-top: 16px;
+}
+
+.safe-publish-failed-error {
+	color: var(--safe-publish-status-error);
+}
+
+.safe-publish-audit-channel {
+	font-size: 12px;
+	background: var(--safe-publish-bg-muted);
+	padding: 2px 6px;
+	border-radius: 3px;
+	white-space: nowrap;
+}
+
+.safe-publish-audit-details {
+	max-width: 480px;
+}
+
+.safe-publish-audit-details__summary {
+	cursor: pointer;
+	font-size: 12px;
+	color: var(--safe-publish-text-muted);
+}
+
+.safe-publish-audit-details[open] .safe-publish-audit-details__summary {
+	margin-bottom: 6px;
+}
+
+.safe-publish-audit-details__json {
+	margin: 0;
+	padding: 8px 10px;
+	background: var(--safe-publish-bg-muted);
+	border: 1px solid var(--safe-publish-border);
+	border-radius: 3px;
+	font-size: 12px;
+	line-height: 1.5;
+	max-height: 240px;
+	overflow: auto;
+	white-space: pre;
 }

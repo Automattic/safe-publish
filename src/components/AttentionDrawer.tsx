@@ -4,11 +4,14 @@
  *
  * @file This file defines the AttentionDrawer component.
  */
+import { update } from '@wordpress/icons';
+
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 import { createAttentionIssueActions, type RetryNotice } from '../actions';
 import { DEFAULT_ITEMS_PER_PAGE, LAYOUT_TABLE } from '../constants';
 import {
 	attentionIssueId,
+	attentionIssueLabel,
 	formatDateTime,
 	getErrorMessage,
 	renderIssueMessage,
@@ -51,7 +54,6 @@ const AttentionDrawer = ( {
 		type: 'table',
 		perPage: DEFAULT_ITEMS_PER_PAGE,
 		page: 1,
-		sort: { field: 'first_detected_gmt', direction: 'desc' },
 		fields: [ 'message', 'severity', 'source_site_url', 'first_detected_gmt' ],
 		titleField: 'affected_title',
 		layout: { density: 'compact' },
@@ -62,8 +64,8 @@ const AttentionDrawer = ( {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ hasFetchedOnce, setHasFetchedOnce ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
-	// Retry outcomes get their own banner so they carry a warning/error
-	// severity, separate from the list-load `error` notice.
+	// Retry outcomes get their own banner, separate from the list-load
+	// `error` notice.
 	const [ retryNotice, setRetryNotice ] = useState< RetryNotice | null >( null );
 	// Issues with a retry in flight, so the action drops concurrent submits.
 	const inFlightRetries = useRef< Set< string > >( new Set() );
@@ -158,16 +160,15 @@ const AttentionDrawer = ( {
 			label: __( 'Content', 'safe-publish' ),
 			enableSorting: false,
 			render: ( { item } ) => {
-				const label =
-					'' !== item.affected_title
-						? item.affected_title
-						: sprintf(
-							/* translators: %d: post ID */
-							__( '#%d', 'safe-publish' ),
-							item.affected_post_id
-						);
+				const label = attentionIssueLabel( item );
 				return '' !== item.affected_edit_url ? (
-					<a href={ item.affected_edit_url }>{ label }</a>
+					<a
+						href={ item.affected_edit_url }
+						target="_blank"
+						rel="noreferrer"
+					>
+						{ label }
+					</a>
 				) : (
 					<span>{ label }</span>
 				);
@@ -242,8 +243,7 @@ const AttentionDrawer = ( {
 			title={ __( 'Needs attention', 'safe-publish' ) }
 			onRequestClose={ onClose }
 			className="safe-publish-attention-drawer"
-			isFullScreen={ false }
-			size="medium"
+			size="fill"
 			__experimentalHideHeader={ false }
 		>
 			<div
@@ -254,11 +254,6 @@ const AttentionDrawer = ( {
 					} as React.CSSProperties
 				}
 			>
-				<div className="safe-publish-controls-row">
-					<Button variant="tertiary" onClick={ onClose }>
-						{ __( 'Close', 'safe-publish' ) }
-					</Button>
-				</div>
 				{ error && (
 					<Notice status="error" onRemove={ () => setError( null ) }>
 						{ error }
@@ -293,6 +288,16 @@ const AttentionDrawer = ( {
 						paginationInfo={ paginationInfo }
 						defaultLayouts={ { [ LAYOUT_TABLE ]: {} } }
 						actions={ actions }
+						header={
+							<Button
+								className="safe-publish-refresh-button"
+								icon={ update }
+								aria-busy={ isLoading }
+								disabled={ isLoading }
+								label={ __( 'Refresh', 'safe-publish' ) }
+								onClick={ refresh }
+							/>
+						}
 					/>
 				) }
 			</div>

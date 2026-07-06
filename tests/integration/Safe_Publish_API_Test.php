@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\API\Diff_Renderer;
+use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Source_Post_Type_Resolver;
 use Safe_Publish\Utils\Options;
 use WP_Error;
@@ -90,6 +91,39 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 
 		update_post_meta( $this->post_id, 'safe_publish_source_post_id', self::SOURCE_POST_ID );
 		update_post_meta( $this->post_id, 'safe_publish_source_site_url', 'https://example.com' );
+	}
+
+	/**
+	 * Verifies that render_diff surfaces the size-limit error from the source
+	 * fetch instead of masking it behind the generic source_fetch_failed
+	 * message.
+	 */
+	public function test_render_diff_surfaces_oversized_response_error(): void {
+		// ARRANGE: The source fetch reports the size-limit error.
+		$make_request = function ( $url ) {
+			unset( $url );
+			return new WP_Error(
+				HTTP_Client::ERROR_RESPONSE_TOO_LARGE,
+				'Response too large.'
+			);
+		};
+		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+		$request->set_param( 'mode', 'split' );
+
+		// ACT: Render the diff.
+		$renderer = new Diff_Renderer();
+		$result   = $renderer->render_diff( $request, $make_request, array() );
+
+		// ASSERT: The size-specific code propagates.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			HTTP_Client::ERROR_RESPONSE_TOO_LARGE,
+			$result->get_error_code()
+		);
 	}
 
 	/**

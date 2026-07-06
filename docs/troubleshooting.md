@@ -216,6 +216,18 @@ If duplicates still occur:
 
 This is a known limitation of WordPress' embed cache when imported posts reference each other while still in draft. See [Embedded posts may render as plain links](concepts/import-process.md#embedded-posts-may-render-as-plain-links) for the cause and recovery steps.
 
+#### Internal body links 404 or open the wrong page
+
+Links inside post body content are migrated by host swap only, preserving the path, so a link can break when the target's destination slug or permalink differs from the source. See [Internal body links may 404 or open the wrong page](concepts/import-process.md#internal-body-links-may-404-or-open-the-wrong-page) for the cause and what to review.
+
+#### Navigation links to draft targets 404 or open the wrong page
+
+A navigation link or submenu whose target was a draft at import keeps the host-swapped source path instead of being re-derived, so it can break under a slug collision or a different permalink structure. See [Navigation links to draft targets may 404 or open the wrong page](concepts/import-process.md#navigation-links-to-draft-targets-may-404-or-open-the-wrong-page) for the fix.
+
+#### A sideloaded image has no title, caption, or alt in the media library
+
+Real source media-library images bring their alt text, title, caption, and description to the destination attachment, including images inserted at an intermediate size and responsive `srcset` sub-sizes. The exception is a file linked but not held in the source library, which has no source record to copy. See [Some sideloaded files carry no source library metadata](concepts/import-process.md#some-sideloaded-files-carry-no-source-library-metadata).
+
 ### Validation Errors
 
 | Error code                 | Cause                                                  | Solution                                                 |

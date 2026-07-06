@@ -23,6 +23,7 @@ use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Source_Posts_API\Source_Posts_API_Test_Base;
 use Safe_Publish\Utils\Attention_Issues_Table;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Reconcile_Outcome;
 use Safe_Publish\Utils\Telemetry_Service;
 use WP_Error;
 
@@ -442,15 +443,54 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		$this->assertSame( 'error', $issue['severity'] );
 
 		// ACT: retry through a succeeding rewriter.
-		$this->import_service->retry_nav_ref_rewrite( 8300, self::BLOG_URL );
+		$outcome = $this->import_service->retry_nav_ref_rewrite(
+			$menu_a,
+			8300,
+			self::BLOG_URL
+		);
 
-		// ASSERT: the issue is cleared and the stale ref repointed.
+		// ASSERT: the outcome is resolved, the issue cleared, the ref repointed.
+		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
 		$this->assertNull(
 			$this->attention->get_issue( $menu_a, 'nav_ref_rewrite_failed', 8300 )
 		);
 		$this->assertStringNotContainsString(
 			'"ref":8300',
 			(string) get_post_field( 'post_content', $menu_a )
+		);
+	}
+
+	/**
+	 * Verifies that retrying a navigation rewrite whose write fails again reports
+	 * a write-failed outcome and keeps the error issue open.
+	 */
+	public function test_nav_retry_through_failing_rewriter_reports_write_failed(): void {
+		// ARRANGE: a referencing post and a menu imported with a failing rewriter,
+		// opening the error issue keyed to the referencing post.
+		$menu_a  = $this->seed_referencing_post(
+			$this->nav_ref_block( 8300 ),
+			self::BLOG_URL,
+			8101
+		);
+		$service = $this->build_import_service( $this->failing_rewriter() );
+		$this->import_under(
+			self::BLOG_URL,
+			8300,
+			array(),
+			'wp_navigation',
+			$service
+		);
+		$this->assertNotNull(
+			$this->attention->get_issue( $menu_a, 'nav_ref_rewrite_failed', 8300 )
+		);
+
+		// ACT: retry through the same failing rewriter.
+		$outcome = $service->retry_nav_ref_rewrite( $menu_a, 8300, self::BLOG_URL );
+
+		// ASSERT: the write failed and the issue stays open.
+		$this->assertSame( Reconcile_Outcome::WRITE_FAILED, $outcome->type );
+		$this->assertNotNull(
+			$this->attention->get_issue( $menu_a, 'nav_ref_rewrite_failed', 8300 )
 		);
 	}
 
@@ -475,14 +515,15 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		$before   = count( wp_get_post_revisions( $post_id ) );
 
 		// ACT: retry the repoint.
-		$this->import_service->retry_block_ref_repoint(
+		$outcome = $this->import_service->retry_block_ref_repoint(
 			$post_id,
 			9700,
 			'post',
 			self::BLOG_URL
 		);
 
-		// ASSERT: the issue cleared and the ref now holds the destination id.
+		// ASSERT: the outcome is resolved, the ref now holds the destination id.
+		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
 		$this->assertNull(
 			$this->attention->get_issue(
 				$post_id,
@@ -499,6 +540,82 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			$modified,
 			get_post_field( 'post_modified', $post_id )
 		);
+	}
+
+	/**
+	 * Verifies that retrying an unmapped post nav-link re-derives its url to the
+	 * destination permalink, without bumping post_modified.
+	 */
+	public function test_block_ref_retry_rederives_post_link_url(): void {
+		// ARRANGE: pretty permalinks, plus an import linking to a not-yet
+		// imported source post (url left as the host-swapped source path).
+		$this->set_permalink_structure( '/%postname%/' );
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7210,
+			array( 'content' => $this->single_nav_link_content( 9710 ) )
+		);
+		$post_id = $result['post_id'];
+
+		// ARRANGE: the target becomes available; capture the pre-retry state.
+		$dest_id   = $this->seed_target_post( 9710, self::BLOG_URL );
+		$permalink = (string) get_permalink( $dest_id );
+		$modified  = get_post_field( 'post_modified', $post_id );
+
+		// ACT: retry the repoint.
+		$this->import_service->retry_block_ref_repoint(
+			$post_id,
+			9710,
+			'post',
+			self::BLOG_URL
+		);
+
+		// ASSERT: id repointed and url re-derived to the destination permalink.
+		$this->assertSame( array( $dest_id ), $this->nav_link_ids( $post_id ) );
+		$this->assertSame( array( $permalink ), $this->nav_link_urls( $post_id ) );
+
+		// ASSERT: a system touch-up — post_modified intact.
+		$this->assertSame(
+			$modified,
+			get_post_field( 'post_modified', $post_id )
+		);
+	}
+
+	/**
+	 * Verifies that re-deriving a nav-link url on repoint is idempotent: a
+	 * second repoint to the same resolved target makes no write.
+	 */
+	public function test_block_ref_repoint_url_rederive_is_idempotent(): void {
+		// ARRANGE: pretty permalinks and an import linking to a not-yet-imported
+		// source post; then make the target available.
+		$this->set_permalink_structure( '/%postname%/' );
+		$result    = $this->import_under(
+			self::BLOG_URL,
+			7211,
+			array( 'content' => $this->single_nav_link_content( 9711 ) )
+		);
+		$post_id   = $result['post_id'];
+		$dest_id   = $this->seed_target_post( 9711, self::BLOG_URL );
+		$processor = $this->content_processor();
+
+		// ACT: first repoint resolves and re-derives; second repeats.
+		$first  = $processor->repoint_block_reference(
+			$post_id,
+			9711,
+			'post',
+			self::BLOG_URL
+		);
+		$second = $processor->repoint_block_reference(
+			$post_id,
+			9711,
+			'post',
+			self::BLOG_URL
+		);
+
+		// ASSERT: the first repoint resolved; the second made no change.
+		$this->assertSame( Reconcile_Outcome::RESOLVED, $first->type );
+		$this->assertSame( Reconcile_Outcome::UNRESOLVED, $second->type );
+		$this->assertSame( array( $dest_id ), $this->nav_link_ids( $post_id ) );
 	}
 
 	/**
@@ -601,14 +718,16 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		);
 
 		// ACT: retry without the target present.
-		$this->import_service->retry_block_ref_repoint(
+		$outcome = $this->import_service->retry_block_ref_repoint(
 			$post_id,
 			9700,
 			'post',
 			self::BLOG_URL
 		);
 
-		// ASSERT: the issue stays, last_seen refreshed, content intact.
+		// ASSERT: the outcome is target-absent and the issue stays, last_seen
+		// refreshed, content intact.
+		$this->assertSame( Reconcile_Outcome::TARGET_ABSENT, $outcome->type );
 		$issue = $this->attention->get_issue(
 			$post_id,
 			'unmapped_block_reference',
@@ -639,9 +758,15 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			new Navigation_Ref_Rewriter(),
 			$this->failing_content_processor()
 		);
-		$service->retry_block_ref_repoint( $post_id, 9700, 'post', self::BLOG_URL );
+		$outcome = $service->retry_block_ref_repoint(
+			$post_id,
+			9700,
+			'post',
+			self::BLOG_URL
+		);
 
-		// ASSERT: the issue stays and the content is unchanged.
+		// ASSERT: the outcome is write-failed, the issue stays, content unchanged.
+		$this->assertSame( Reconcile_Outcome::WRITE_FAILED, $outcome->type );
 		$this->assertNotNull(
 			$this->attention->get_issue(
 				$post_id,
@@ -769,9 +894,14 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		$this->assertCount( 1, $this->open_rows_for_source( self::BLOG_URL ) );
 
 		// ACT: retry while the parent is still absent.
-		$this->import_service->retry_parent_relink( $post_id, 9850, self::BLOG_URL );
+		$outcome = $this->import_service->retry_parent_relink(
+			$post_id,
+			9850,
+			self::BLOG_URL
+		);
 
-		// ASSERT: the issue stays and the post is still top-level.
+		// ASSERT: the outcome is target-absent, the issue stays, post top-level.
+		$this->assertSame( Reconcile_Outcome::TARGET_ABSENT, $outcome->type );
 		$this->assertNotNull(
 			$this->attention->get_issue( $post_id, 'parent_orphaned', 9850, 'post' )
 		);
@@ -779,9 +909,14 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 
 		// ACT: make the parent available and retry again.
 		$parent_id = $this->seed_target_post( 9850, self::BLOG_URL );
-		$this->import_service->retry_parent_relink( $post_id, 9850, self::BLOG_URL );
+		$outcome   = $this->import_service->retry_parent_relink(
+			$post_id,
+			9850,
+			self::BLOG_URL
+		);
 
-		// ASSERT: the parent is linked and the issue cleared.
+		// ASSERT: the outcome is resolved, the parent linked, the issue cleared.
+		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
 		$this->assertSame(
 			$parent_id,
 			(int) get_post_field( 'post_parent', $post_id )
@@ -1266,5 +1401,57 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		foreach ( $block['innerBlocks'] ?? array() as $inner ) {
 			$this->collect_nav_link_ids( $inner, $ids );
 		}
+	}
+
+	/**
+	 * Returns the url attrs of a post's core/navigation-link blocks, in order.
+	 *
+	 * @param int $post_id Post to read.
+	 * @return string[] Nav-link url attrs.
+	 */
+	private function nav_link_urls( int $post_id ): array {
+		$content = (string) get_post_field( 'post_content', $post_id );
+		$urls    = array();
+
+		foreach ( parse_blocks( $content ) as $block ) {
+			$this->collect_nav_link_urls( $block, $urls );
+		}
+
+		return $urls;
+	}
+
+	/**
+	 * Accumulates core/navigation-link url attrs from a block tree.
+	 *
+	 * @param array    $block Parsed block.
+	 * @param string[] $urls  Accumulator, by reference.
+	 */
+	private function collect_nav_link_urls( array $block, array &$urls ): void {
+		if (
+			'core/navigation-link' === ( $block['blockName'] ?? '' )
+			&& isset( $block['attrs']['url'] )
+			&& is_string( $block['attrs']['url'] )
+		) {
+			$urls[] = $block['attrs']['url'];
+		}
+
+		foreach ( $block['innerBlocks'] ?? array() as $inner ) {
+			$this->collect_nav_link_urls( $inner, $urls );
+		}
+	}
+
+	/**
+	 * Builds a content processor wired against real WP dependencies.
+	 *
+	 * @return Content_Processor Content processor instance.
+	 */
+	private function content_processor(): Content_Processor {
+		$media_importer = new Media_Importer( new HTTP_Client() );
+
+		return new Content_Processor(
+			$media_importer,
+			new Content_Media_Processor( $media_importer ),
+			new Shortcode_ID_Rewriter()
+		);
 	}
 }

@@ -26,6 +26,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class HTTP_Client {
 
 	/**
+	 * Caps the buffered response body so a compromised or malfunctioning source
+	 * cannot exhaust the worker's memory; make_request() calls can adjust it
+	 * through the safe_publish_request_args filter.
+	 */
+	public const MAX_RESPONSE_BYTES = 10 * MB_IN_BYTES;
+
+	/**
+	 * WP_Error code returned when a source response exceeds the size cap.
+	 */
+	public const ERROR_RESPONSE_TOO_LARGE = 'response_too_large';
+
+	/**
 	 * Makes an HTTP request. $action is sent as X-Safe-Publish-Action and
 	 * signed into the HMAC payload by VIP_Safe_Auth::get_auth_params().
 	 *
@@ -49,10 +61,11 @@ final class HTTP_Client {
 
 		$request_args = array_merge(
 			array(
-				'timeout'     => $timeout,
-				'user-agent'  => $this->get_user_agent(),
-				'sslverify'   => $sslverify,
-				'redirection' => 0, // Prevent redirects for security.
+				'timeout'             => $timeout,
+				'user-agent'          => $this->get_user_agent(),
+				'sslverify'           => $sslverify,
+				'redirection'         => 0, // Prevent redirects for security.
+				'limit_response_size' => self::MAX_RESPONSE_BYTES,
 			),
 			$additional_args
 		);
@@ -109,6 +122,23 @@ final class HTTP_Client {
 			);
 		}
 
+		// The transport truncates the body at limit_response_size; a body that
+		// reaches the cap means the source sent an oversized response.
+		$size_limit = $request_args['limit_response_size'] ?? 0;
+		if (
+			is_int( $size_limit ) && $size_limit > 0
+			&& strlen( wp_remote_retrieve_body( $response ) ) >= $size_limit
+		) {
+			return new WP_Error(
+				self::ERROR_RESPONSE_TOO_LARGE,
+				sprintf(
+					/* translators: %s: maximum response size, e.g. "10 MB". */
+					__( 'The source site returned a response larger than the maximum allowed size (%s).', 'safe-publish' ),
+					size_format( $size_limit )
+				)
+			);
+		}
+
 		return $response;
 	}
 
@@ -126,6 +156,25 @@ final class HTTP_Client {
 			$plugin_version,
 			$site_url
 		);
+	}
+
+	/**
+	 * Extracts the destination site URL from a Safe Publish User-Agent string.
+	 *
+	 * The destination sends "Safe Publish/VERSION; URL"; this returns the URL
+	 * portion, falling back to the full string when the format is unexpected.
+	 *
+	 * @param string $user_agent Raw User-Agent value.
+	 * @return string Destination URL, or '' when the header is absent.
+	 */
+	public static function parse_destination_site_url( string $user_agent ): string {
+		if ( '' === $user_agent ) {
+			return '';
+		}
+
+		$parts = explode( '; ', $user_agent, 2 );
+
+		return isset( $parts[1] ) ? trim( $parts[1] ) : $user_agent;
 	}
 
 	/**

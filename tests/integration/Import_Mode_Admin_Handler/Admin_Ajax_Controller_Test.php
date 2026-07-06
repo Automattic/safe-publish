@@ -20,7 +20,6 @@ use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
 use WP_Error;
-use WPAjaxDieStopException;
 
 /**
  * Admin Ajax Controller Test Class.
@@ -166,16 +165,16 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			'nonce' => 'not-a-valid-nonce',
 		);
 
-		// ASSERT: Nonce failure calls wp_die( -1 ).
-		$this->expectException( WPAjaxDieStopException::class );
-		$this->expectExceptionMessage( '-1' );
-
 		// ACT: Trigger the AJAX handler registered by the plugin.
-		$this->_handleAjax( 'safe_publish_create_draft' );
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: Structured session-expired error rather than a bare -1 die.
+		$this->assert_session_expired_response();
 	}
 
 	/**
-	 * Verifies that the bulk import endpoint rejects unauthenticated requests.
+	 * Verifies that the bulk import endpoint rejects requests with an invalid
+	 * nonce.
 	 */
 	public function test_ajax_bulk_import_rejects_request_with_invalid_nonce(): void {
 		// ARRANGE: Authenticate as admin, but supply a bad nonce.
@@ -184,12 +183,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			'nonce' => 'not-a-valid-nonce',
 		);
 
-		// ASSERT: Nonce failure calls wp_die( -1 ).
-		$this->expectException( WPAjaxDieStopException::class );
-		$this->expectExceptionMessage( '-1' );
-
 		// ACT: Trigger the AJAX handler registered by the plugin.
-		$this->_handleAjax( 'safe_publish_bulk_import' );
+		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_import' );
+
+		// ASSERT: Structured session-expired error rather than a bare -1 die.
+		$this->assert_session_expired_response();
 	}
 
 	/**
@@ -1142,12 +1140,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array( 'nonce' => 'not-a-valid-nonce' );
 
-		// ASSERT: Nonce failure calls wp_die( -1 ).
-		$this->expectException( WPAjaxDieStopException::class );
-		$this->expectExceptionMessage( '-1' );
-
 		// ACT: Trigger the AJAX handler.
-		$this->_handleAjax( 'safe_publish_auth_status' );
+		$this->dispatch_ajax_expecting_die( 'safe_publish_auth_status' );
+
+		// ASSERT: Structured session-expired error rather than a bare -1 die.
+		$this->assert_session_expired_response();
 	}
 
 	/**

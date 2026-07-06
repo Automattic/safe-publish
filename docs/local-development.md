@@ -76,6 +76,8 @@ For local development, you'll need two WordPress sites to test import functional
 
 To populate the source or destination site with realistic test content for manual testing or import verification, see [Content Seeding](content-seeding.md).
 
+To seed the admin degradation drawers (Needs attention and orphan failures) for UI testing, see [Seeding Import Degradations](seeding-degradations.md).
+
 ### Code Quality
 
 Before committing, validate and fix code quality:

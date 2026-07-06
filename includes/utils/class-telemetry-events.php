@@ -82,6 +82,7 @@ class Telemetry_Events {
 		'post_type_not_registered',
 		'post_type_capability_denied',
 		'fetch_failed',
+		'response_too_large',
 		'media_download_failed',
 		'malformed_media_markup',
 		'content_processing_failed',

@@ -9,6 +9,10 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Admin\Admin_Ajax_Controller;
+use Safe_Publish\Admin\Attention_Issues_Repository;
+use Safe_Publish\Seeder\Content_Generator;
+use Safe_Publish\Utils\Attention_Issues_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
@@ -63,6 +67,25 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	private const SOURCE_MEDIA_ID_BASE = 9500000;
 
 	/**
+	 * Source post IDs for the bespoke edge-case pages (non-ASCII, empty, embed,
+	 * footnotes, and reusable-block). Same high range, distinct from every other
+	 * base. All seed as pages so the category-less body never picks up the
+	 * default category that WordPress auto-assigns to a post.
+	 */
+	private const EDGE_NON_ASCII_SOURCE_ID      = 9200001;
+	private const EDGE_EMPTY_SOURCE_ID          = 9200002;
+	private const EDGE_EMBED_SOURCE_ID          = 9200003;
+	private const EDGE_FOOTNOTES_SOURCE_ID      = 9200004;
+	private const EDGE_REUSABLE_BLOCK_SOURCE_ID = 9200005;
+
+	/**
+	 * Provider host of the embed edge page's url. Distinct from
+	 * SOURCE_BASE_URL's host so test_embed_url_parity exercises an external URL
+	 * the importer must leave untouched.
+	 */
+	private const EDGE_EMBED_PROVIDER_HOST = 'www.youtube.com';
+
+	/**
 	 * Class-wide imported batch shared by every test method.
 	 *
 	 * @var Seeder_Parity_Fixture
@@ -99,6 +122,7 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 
 		Imports_Table::create_table();
 		Import_Items_Table::create_table();
+		Attention_Issues_Table::create_table();
 
 		self::$admin_user_id  = $factory->user->create(
 			array( 'role' => 'administrator' )
@@ -122,7 +146,8 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 			self::REFERENCE_TIME,
 			self::SOURCE_MEDIA_ID_BASE,
 			self::$admin_user_id,
-			self::batch_slices( self::$admin_user_id, self::$page_author_id )
+			self::batch_slices( self::$admin_user_id, self::$page_author_id ),
+			self::batch_edge_cases( self::$page_author_id )
 		);
 		self::$fixture->seed();
 	}
@@ -156,7 +181,10 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	 * 1, non-adjacent in import order, so post_parent resolution is proven by
 	 * source ID rather than import position. Pages carry no category/post_tag
 	 * assignments, mirroring a real page source. Posts stay flat
-	 * (non-hierarchical).
+	 * (non-hierarchical). Even-indexed bodies carry non-default
+	 * comment/ping/password/menu_order scalars and odd-indexed stay on the
+	 * WordPress defaults (see Seeder_Parity_Fixture::scalars_for_index()).
+	 * Bespoke edge cases are seeded separately by batch_edge_cases().
 	 *
 	 * @param int $post_author_id Dest user the post slice is authored by.
 	 * @param int $page_author_id Dest user the page slice is authored by.
@@ -184,6 +212,54 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				'assign_terms'   => false,
 				'author_user_id' => $page_author_id,
 				'parent_links'   => array( 3 => 1 ),
+			),
+		);
+	}
+
+	/**
+	 * Describes the bespoke edge-case bodies appended to the batch: a non-ASCII
+	 * page (multibyte title/slug/content plus unescaped entities), an
+	 * empty-content page, an embed page (a core/embed block with an external
+	 * provider url), a footnotes page (a core/footnotes block plus matching
+	 * footnotes meta), and a reusable-block page (a core/block referencing an
+	 * unimported wp_block). All seed as pages so the category-less body never
+	 * picks up WordPress' default category, and all stay top-level on default
+	 * scalars; the fixture supplies their content.
+	 *
+	 * @param int $page_author_id Dest user the edge-case pages are authored by.
+	 * @return list<array{kind: string, endpoint: string, source_id: int, author_user_id: int}>
+	 */
+	private static function batch_edge_cases( int $page_author_id ): array {
+		return array(
+			array(
+				'kind'           => 'non_ascii',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_NON_ASCII_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+			),
+			array(
+				'kind'           => 'empty',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_EMPTY_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+			),
+			array(
+				'kind'           => 'embed',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_EMBED_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+			),
+			array(
+				'kind'           => 'footnotes',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_FOOTNOTES_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+			),
+			array(
+				'kind'           => 'reusable_block',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_REUSABLE_BLOCK_SOURCE_ID,
+				'author_user_id' => $page_author_id,
 			),
 		);
 	}
@@ -412,10 +488,63 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that every imported post preserves its source embed-block url
+	 * multiset verbatim, locking process_embed_block()'s no-rewrite contract.
+	 */
+	public function test_embed_url_parity(): void {
+		// ARRANGE: build the URL sideload map from the imported attachments.
+		$url_map = $this->build_source_url_to_dest_url_map();
+
+		// ACT + ASSERT: each dest post preserves its source embed url multiset.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			Content_Parity_Comparator::assert_embed_url_parity(
+				$this->source_content( $source_id ),
+				(string) get_post( $dest_id )->post_content,
+				$url_map,
+				$this
+			);
+		}
+	}
+
+	/**
+	 * Verifies that inline <img alt> text round-trips verbatim for every
+	 * imported post, and guards against a vacuous pass by requiring the batch
+	 * to seed the distinctive block-image alt.
+	 */
+	public function test_inline_img_alt_parity(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: each dest post preserves its source inline alt multiset, and
+		// the batch seeded a distinctive non-empty alt so the check isn't
+		// vacuous.
+		$seeded_distinctive_alt = false;
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$source = $this->source_content( $source_id );
+
+			Content_Parity_Comparator::assert_inline_img_alt_parity(
+				$source,
+				(string) get_post( $dest_id )->post_content,
+				$this
+			);
+
+			if ( str_contains( $source, Content_Generator::BLOCK_IMAGE_ALT ) ) {
+				$seeded_distinctive_alt = true;
+			}
+		}
+
+		$this->assertTrue(
+			$seeded_distinctive_alt,
+			'Batch should seed the distinctive block-image alt so the alt'
+			. ' multiset check is not vacuously satisfied'
+		);
+	}
+
+	/**
 	 * Guards the comparator's coverage assumptions: the seeder must not emit
 	 * gallery blocks, data-id attributes, or non-caption shortcodes, since none
 	 * is exercised by the parity checks today. Grow comparator coverage before
-	 * relaxing this.
+	 * relaxing this. The reusable block (core/block) the batch does emit is
+	 * intentional and verified by test_reusable_block_edge_surfaces_degradation,
+	 * not the parity comparator.
 	 */
 	public function test_seeder_does_not_emit_unsupported_references(): void {
 		// ARRANGE + ACT: concatenate every seeded source content body.
@@ -840,6 +969,7 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 					self::SOURCE_BASE_URL,
 					'image/jpeg',
 					$featured_id,
+					self::$fixture->source_media_metadata( $ref['id'] ),
 					$this
 				);
 			}
@@ -856,5 +986,314 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 		// ARRANGE + ACT: nothing to set up; pure static check.
 		// ASSERT: every attachment-applicable column is classified.
 		Post_Parity_Asserter::assert_no_unmodeled_attachment_columns( $this );
+	}
+
+	/**
+	 * Verifies that source library metadata (alt, title, caption, description)
+	 * propagates to every sideloaded attachment, matching the raw source values
+	 * after the importer's per-field sanitization. Guards against a vacuous pass
+	 * by requiring the batch to exercise both a featured-flagged and an
+	 * inline-only attachment.
+	 *
+	 * The seeder embeds every image inline, so here the featured attachment is
+	 * written by the inline map path; the by-ID featured path is covered in
+	 * isolation by Media_Importer_Featured_Metadata_Test.
+	 */
+	public function test_library_metadata_propagates_to_all_attachments(): void {
+		// ARRANGE + ACT: batch already imported.
+		$featured_checked = 0;
+		$inline_checked   = 0;
+
+		// ASSERT: each attachment carries the source library metadata.
+		foreach ( self::$fixture->image_refs_by_source_id as $source_id => $refs ) {
+			$featured_source_id = (int) (
+				self::$fixture->source_rest_bodies[ $source_id ]['featured_media'] ?? 0
+			);
+
+			foreach ( $refs as $ref ) {
+				$dest = $this->find_dest_attachment_by_source_url( $ref['url'] );
+				$this->assertNotNull(
+					$dest,
+					"Source URL {$ref['url']} should resolve a dest attachment"
+				);
+
+				$meta = self::$fixture->source_media_metadata( $ref['id'] );
+
+				$this->assertSame(
+					wp_strip_all_tags( $meta['alt'], true ),
+					(string) get_post_meta(
+						$dest->ID,
+						'_wp_attachment_image_alt',
+						true
+					),
+					"Attachment {$dest->ID} alt should match source"
+				);
+				$this->assertSame(
+					sanitize_text_field( $meta['title'] ),
+					$dest->post_title,
+					"Attachment {$dest->ID} title should match source"
+				);
+				$this->assertSame(
+					wp_kses_post( $meta['caption'] ),
+					$dest->post_excerpt,
+					"Attachment {$dest->ID} caption should match source"
+				);
+				$this->assertSame(
+					wp_kses_post( $meta['description'] ),
+					$dest->post_content,
+					"Attachment {$dest->ID} description should match source"
+				);
+
+				if ( $ref['id'] === $featured_source_id ) {
+					++$featured_checked;
+				} else {
+					++$inline_checked;
+				}
+			}
+		}
+
+		$this->assertGreaterThan(
+			0,
+			$featured_checked,
+			'Batch should exercise at least one featured attachment'
+		);
+		$this->assertGreaterThan(
+			0,
+			$inline_checked,
+			'Batch should exercise at least one inline-only attachment'
+		);
+	}
+
+	/**
+	 * Verifies that the empty-content edge page imports with empty post_content
+	 * and no injected markers, locking the empty-body path.
+	 */
+	public function test_empty_content_imports_empty(): void {
+		// ARRANGE + ACT: batch already imported.
+		$this->assertArrayHasKey(
+			self::EDGE_EMPTY_SOURCE_ID,
+			self::$fixture->dest_post_ids,
+			'Empty-content edge page should import to a dest post'
+		);
+
+		// ASSERT: the empty-content page kept empty post_content.
+		$dest_id = self::$fixture->dest_post_ids[ self::EDGE_EMPTY_SOURCE_ID ];
+		$this->assertSame(
+			'',
+			(string) get_post( $dest_id )->post_content,
+			'Empty source content should import as empty post_content'
+		);
+	}
+
+	/**
+	 * Verifies that the non-ASCII edge page seeds multibyte characters, an
+	 * emoji, and unescaped entities, so the encoding and slug parity checks that
+	 * run over the whole batch are not vacuously satisfied by ASCII input.
+	 */
+	public function test_non_ascii_edge_seeds_multibyte_and_entities(): void {
+		// ARRANGE: read the non-ASCII edge page's source body.
+		$body    = self::$fixture->source_rest_bodies[ self::EDGE_NON_ASCII_SOURCE_ID ];
+		$content = (string) $body['content']['raw'];
+		$slug    = (string) $body['slug'];
+
+		// ASSERT: it imported, carries the multibyte/entity payload, and uses a
+		// slug that sanitize_title() actually transforms.
+		$this->assertArrayHasKey(
+			self::EDGE_NON_ASCII_SOURCE_ID,
+			self::$fixture->dest_post_ids,
+			'Non-ASCII edge page should import to a dest post'
+		);
+		$this->assertStringContainsString(
+			"\u{65e5}\u{672c}\u{8a9e}",
+			$content,
+			'Non-ASCII content should carry CJK characters'
+		);
+		$this->assertStringContainsString(
+			"\u{1f389}",
+			$content,
+			'Non-ASCII content should carry a 4-byte emoji'
+		);
+		$this->assertStringContainsString(
+			'&amp;',
+			$content,
+			'Non-ASCII content should carry an unescaped entity'
+		);
+		$this->assertStringContainsString(
+			'&mdash;',
+			$content,
+			'Non-ASCII content should carry a named entity'
+		);
+		$this->assertNotSame(
+			$slug,
+			sanitize_title( $slug ),
+			'Non-ASCII slug should be transformed by sanitize_title()'
+		);
+	}
+
+	/**
+	 * Verifies that the embed edge page seeds a core/embed block whose url is
+	 * on a host distinct from the source site, so test_embed_url_parity is not
+	 * vacuously satisfied by a batch with no external embed.
+	 */
+	public function test_embed_edge_seeds_external_provider_url(): void {
+		// ARRANGE: read the embed edge page's source content.
+		$content = $this->source_content( self::EDGE_EMBED_SOURCE_ID );
+
+		// ASSERT: it imported, carries a core/embed block, and references an
+		// external provider host the importer must leave untouched.
+		$this->assertArrayHasKey(
+			self::EDGE_EMBED_SOURCE_ID,
+			self::$fixture->dest_post_ids,
+			'Embed edge page should import to a dest post'
+		);
+		$this->assertStringContainsString(
+			'<!-- wp:embed',
+			$content,
+			'Embed edge content should carry a core/embed block'
+		);
+		$this->assertStringContainsString(
+			self::EDGE_EMBED_PROVIDER_HOST,
+			$content,
+			'Embed edge content should reference the external provider host'
+		);
+	}
+
+	/**
+	 * Verifies that the footnotes edge page round-trips both channels WordPress
+	 * footnotes use — the core/footnotes block in post_content and the
+	 * separately stored footnotes meta JSON — confirming both survive the
+	 * import together.
+	 */
+	public function test_footnotes_edge_round_trips_block_and_meta(): void {
+		// ARRANGE + ACT: batch imported; read the seed and dest post.
+		$this->assertArrayHasKey(
+			self::EDGE_FOOTNOTES_SOURCE_ID,
+			self::$fixture->dest_post_ids,
+			'Footnotes edge page should import to a dest post'
+		);
+		$body           = self::$fixture->source_rest_bodies[ self::EDGE_FOOTNOTES_SOURCE_ID ];
+		$source_content = (string) $body['content']['raw'];
+		$source_meta    = (string) ( $body['meta']['footnotes'] ?? '' );
+		$dest_id        = self::$fixture->dest_post_ids[ self::EDGE_FOOTNOTES_SOURCE_ID ];
+		$dest_meta      = (string) get_post_meta( $dest_id, 'footnotes', true );
+
+		// ASSERT: the seed has a core/footnotes block and non-empty meta JSON
+		// (so the checks below aren't vacuous), then both survive the import.
+		$this->assertStringContainsString(
+			'<!-- wp:footnotes /-->',
+			$source_content,
+			'Footnotes edge content should seed a core/footnotes block'
+		);
+		$this->assertStringContainsString(
+			'<!-- wp:footnotes /-->',
+			(string) get_post( $dest_id )->post_content,
+			'Dest content should preserve the core/footnotes block'
+		);
+		$source_footnotes = json_decode( $source_meta, true );
+		$this->assertIsArray(
+			$source_footnotes,
+			'Footnotes source meta should decode to an array'
+		);
+		$this->assertNotSame(
+			array(),
+			$source_footnotes,
+			'Footnotes source meta should carry at least one footnote'
+		);
+		$this->assertSame(
+			$source_footnotes,
+			json_decode( $dest_meta, true ),
+			'Footnotes meta should round-trip structurally to the dest post'
+		);
+	}
+
+	/**
+	 * Verifies that no imported post other than the reusable-block edge raised an
+	 * import warning, reverse-asserting that the clean batch, including the empty,
+	 * non-ASCII, embed, and footnotes edge pages, triggers no degradation. The
+	 * reusable-block page's degradation is asserted by
+	 * test_reusable_block_edge_surfaces_degradation.
+	 */
+	public function test_import_raised_no_warnings(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: warnings captured for every imported post; only the
+		// reusable-block edge degrades, every other post is warning-free.
+		$this->assertSame(
+			array_keys( self::$fixture->dest_post_ids ),
+			array_keys( self::$fixture->warnings_by_source_id ),
+			'Warnings should be captured for every imported post'
+		);
+		foreach ( self::$fixture->warnings_by_source_id as $source_id => $warnings ) {
+			if ( self::EDGE_REUSABLE_BLOCK_SOURCE_ID === $source_id ) {
+				continue;
+			}
+			$this->assertSame(
+				array(),
+				$warnings,
+				"Source ID {$source_id} should import without warnings"
+			);
+		}
+	}
+
+	/**
+	 * Verifies that the reusable-block edge page surfaces a retryable
+	 * unmapped_block_reference degradation: the import raises the warning keyed
+	 * to core/block, opens a retryable attention issue carrying the source ref
+	 * and the reusable-block detail, and leaves the ref in place since this
+	 * batch does not import the target wp_block.
+	 */
+	public function test_reusable_block_edge_surfaces_degradation(): void {
+		// ARRANGE + ACT: batch imported; locate the reusable-block edge page.
+		$this->assertArrayHasKey(
+			self::EDGE_REUSABLE_BLOCK_SOURCE_ID,
+			self::$fixture->dest_post_ids,
+			'Reusable-block edge page should import to a dest post'
+		);
+		$dest_id = self::$fixture->dest_post_ids[ self::EDGE_REUSABLE_BLOCK_SOURCE_ID ];
+		$ref     = Seeder_Parity_Fixture::REUSABLE_BLOCK_SOURCE_REF;
+
+		// ASSERT: the import raised exactly the core/block unmapped reference.
+		$this->assertSame(
+			array(
+				array(
+					'type'      => 'unmapped_block_reference',
+					'kind'      => 'post',
+					'block'     => 'core/block',
+					'source_id' => $ref,
+				),
+			),
+			self::$fixture->warnings_by_source_id[ self::EDGE_REUSABLE_BLOCK_SOURCE_ID ],
+			'Reusable-block edge import should raise one core/block unmapped reference'
+		);
+
+		// ASSERT: a retryable attention issue carries the source ref and the
+		// reusable-block detail that drives the Patterns-oriented copy.
+		$issue = ( new Attention_Issues_Repository() )->get_issue(
+			$dest_id,
+			'unmapped_block_reference',
+			$ref,
+			'post'
+		);
+		$this->assertNotNull(
+			$issue,
+			'Reusable-block degradation should open an attention issue'
+		);
+		$this->assertSame( 'warning', $issue['severity'] );
+		$this->assertSame(
+			'core/block',
+			$issue['detail']['block'] ?? '',
+			'Issue detail should record the core/block name'
+		);
+		$this->assertContains(
+			'unmapped_block_reference',
+			Admin_Ajax_Controller::ATTENTION_ISSUE_RETRYABLE_TYPES,
+			'Reusable-block issue must be retryable'
+		);
+
+		// ASSERT: the core/block ref is left in place on the destination.
+		$this->assertStringContainsString(
+			'<!-- wp:block {"ref":' . $ref . '} /-->',
+			(string) get_post( $dest_id )->post_content,
+			'Dest content should preserve the unresolved core/block ref'
+		);
 	}
 }

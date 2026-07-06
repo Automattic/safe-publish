@@ -4,6 +4,8 @@
  *
  * @file This file defines the OrphanFailuresDrawer component.
  */
+import { update } from '@wordpress/icons';
+
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 import { createOrphanFailuresActions } from '../actions';
 import { DEFAULT_ITEMS_PER_PAGE, LAYOUT_TABLE } from '../constants';
@@ -13,7 +15,6 @@ import {
 	Modal,
 	Notice,
 	Spinner,
-	TextControl,
 } from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
 import { useCallback, useEffect, useState } from '@wordpress/element';
@@ -51,7 +52,6 @@ const OrphanFailuresDrawer = ( {
 		type: 'table',
 		perPage: DEFAULT_ITEMS_PER_PAGE,
 		page: 1,
-		sort: { field: 'import_date_gmt', direction: 'desc' },
 		fields: [ 'import_date_gmt', 'error_message' ],
 		titleField: 'title',
 		layout: { density: 'compact' },
@@ -59,7 +59,6 @@ const OrphanFailuresDrawer = ( {
 
 	const [ items, setItems ] = useState< OrphanFailure[] >( [] );
 	const [ hasMore, setHasMore ] = useState( false );
-	const [ search, setSearch ] = useState( '' );
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ hasFetchedOnce, setHasFetchedOnce ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
@@ -78,9 +77,6 @@ const OrphanFailuresDrawer = ( {
 		formData.append( 'nonce', nonce );
 		formData.append( 'page', String( view.page ?? 1 ) );
 		formData.append( 'per_page', String( view.perPage ?? DEFAULT_ITEMS_PER_PAGE ) );
-		if ( '' !== search ) {
-			formData.append( 'search', search );
-		}
 
 		setIsLoading( true );
 		setError( null );
@@ -134,7 +130,7 @@ const OrphanFailuresDrawer = ( {
 			} );
 
 		return () => controller.abort();
-	}, [ ajaxurl, nonce, view.page, view.perPage, search, refreshNonce ] );
+	}, [ ajaxurl, nonce, view.page, view.perPage, refreshNonce ] );
 
 	const setPage = useCallback(
 		( next: number ): void =>
@@ -202,8 +198,7 @@ const OrphanFailuresDrawer = ( {
 			title={ __( 'Orphan failures', 'safe-publish' ) }
 			onRequestClose={ onClose }
 			className="safe-publish-orphan-failures-drawer"
-			isFullScreen={ false }
-			size="medium"
+			size="fill"
 			__experimentalHideHeader={ false }
 		>
 			<div
@@ -214,27 +209,6 @@ const OrphanFailuresDrawer = ( {
 					} as React.CSSProperties
 				}
 			>
-				<div className="safe-publish-controls-row">
-					<div className="safe-publish-control safe-publish-control--search">
-						<TextControl
-							__nextHasNoMarginBottom
-							__next40pxDefaultSize
-							label={ __( 'Search titles', 'safe-publish' ) }
-							hideLabelFromVision
-							value={ search }
-							onChange={ ( value ) => {
-								setSearch( value );
-								setView( ( current ) => ( {
-									...( current ),
-									page: 1,
-								} ) );
-							} }
-						/>
-					</div>
-					<Button variant="tertiary" onClick={ onClose }>
-						{ __( 'Close', 'safe-publish' ) }
-					</Button>
-				</div>
 				{ error && (
 					<Notice status="error" onRemove={ () => setError( null ) }>
 						{ error }
@@ -261,6 +235,16 @@ const OrphanFailuresDrawer = ( {
 						paginationInfo={ paginationInfo }
 						defaultLayouts={ { [ LAYOUT_TABLE ]: {} } }
 						actions={ actions }
+						header={
+							<Button
+								className="safe-publish-refresh-button"
+								icon={ update }
+								aria-busy={ isLoading }
+								disabled={ isLoading }
+								label={ __( 'Refresh', 'safe-publish' ) }
+								onClick={ refresh }
+							/>
+						}
 					/>
 				) }
 			</div>

@@ -17,10 +17,10 @@ use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
 
 /**
- * Exercises the controller glue between the retry request and the
- * reconciliations: type dispatch, target_kind threading, the retryable
- * allowlist, and the capability gate. The reconciliations themselves are
- * covered in Attention_Issues_Test.
+ * Exercises the controller glue for the attention-issue endpoints: retry type
+ * dispatch, target_kind threading, the retryable allowlist, the capability
+ * gate, and the list payload's reusable-block flag. The reconciliations
+ * themselves are covered in Attention_Issues_Test.
  */
 class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 
@@ -67,7 +67,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 
 	/**
 	 * Verifies that retrying an unmapped block reference dispatches the block
-	 * repoint and resolves the issue.
+	 * repoint, resolves the issue, and reports a resolved outcome.
 	 */
 	public function test_retry_unmapped_block_reference_dispatches_and_resolves(): void {
 		// ARRANGE: a post with a stale post-type ref, its now-present target, and
@@ -88,9 +88,12 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: the endpoint reports resolved and the row is gone.
+		// ASSERT: the endpoint reports a resolved outcome with no detail and
+		// the row is gone.
 		$this->assertTrue( $response['success'] );
 		$this->assertTrue( $response['data']['resolved'] );
+		$this->assertSame( 'resolved', $response['data']['outcome'] );
+		$this->assertSame( '', $response['data']['detail'] );
 		$this->assertNull(
 			$this->attention->get_issue(
 				$post_id,
@@ -293,10 +296,11 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that a retry that cannot resolve the reference records a reconcile
-	 * warning instead of clearing the issue.
+	 * Verifies that retrying a block reference whose target was never imported
+	 * returns a target_absent outcome and records a target-absent warning
+	 * instead of clearing the issue.
 	 */
-	public function test_unresolved_retry_logs_reconcile_warning(): void {
+	public function test_target_absent_block_retry_logs_target_absent(): void {
 		// ARRANGE: a stale ref whose target was never imported.
 		$post_id = self::factory()->post->create(
 			array( 'post_content' => $this->nav_link_content( 9999, 'post-type' ) )
@@ -313,8 +317,53 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: unresolved, and a reconcile warning was recorded.
+		// ASSERT: a target_absent outcome with a detail, and a reconcile
+		// target-absent warning was recorded.
 		$this->assertFalse( $response['data']['resolved'] );
+		$this->assertSame( 'target_absent', $response['data']['outcome'] );
+		$this->assertNotSame( '', $response['data']['detail'] );
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel' => 'reconcile',
+				'level'   => 'warning',
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame(
+			Log_Events::RECONCILE_TARGET_ABSENT,
+			$events[0]['event']
+		);
+	}
+
+	/**
+	 * Verifies that retrying a block reference whose target is present but no
+	 * longer appears in the post content returns an unresolved outcome and
+	 * records a reconcile unresolved warning.
+	 */
+	public function test_unresolved_block_retry_logs_unresolved(): void {
+		// ARRANGE: the target is importable, but the post content holds no
+		// matching reference.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => 'No navigation block here.' )
+		);
+		$this->seed_target_post( 9700 );
+		$this->open_issue( $post_id, 'unmapped_block_reference', 9700, 'post' );
+
+		// ACT: retry through the endpoint.
+		$response = $this->retry(
+			array(
+				'affected_post_id' => (string) $post_id,
+				'issue_type'       => 'unmapped_block_reference',
+				'target_ref'       => '9700',
+				'target_kind'      => 'post',
+			)
+		);
+
+		// ASSERT: an unresolved outcome with a detail, and a plain reconcile
+		// unresolved warning recorded.
+		$this->assertFalse( $response['data']['resolved'] );
+		$this->assertSame( 'unresolved', $response['data']['outcome'] );
+		$this->assertNotSame( '', $response['data']['detail'] );
 		$events = Audit_Log_Table::get_events(
 			array(
 				'channel' => 'reconcile',
@@ -329,12 +378,13 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that retrying an error-severity issue that stays open records a
-	 * reconcile error, preserving the severity in the audit log.
+	 * Verifies that retrying an error-severity nav issue whose menu is absent
+	 * records a target-absent warning, not an error, since no write was
+	 * attempted.
 	 */
-	public function test_unresolved_error_retry_logs_reconcile_error(): void {
+	public function test_target_absent_nav_retry_logs_target_absent_not_error(): void {
 		// ARRANGE: an error-severity nav issue whose menu is absent, so the retry
-		// finds nothing to reconcile and the row stays.
+		// has nothing to reconcile and the row stays.
 		$post_id = self::factory()->post->create();
 		$this->attention->upsert_issue(
 			$post_id,
@@ -355,16 +405,83 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: unresolved, and an error-level reconcile event recorded.
+		// ASSERT: unresolved, no error event recorded, and a target-absent
+		// warning recorded instead.
 		$this->assertFalse( $response['data']['resolved'] );
+		$this->assertCount(
+			0,
+			Audit_Log_Table::get_events(
+				array(
+					'channel' => 'reconcile',
+					'level'   => 'error',
+				)
+			)
+		);
 		$events = Audit_Log_Table::get_events(
 			array(
 				'channel' => 'reconcile',
-				'level'   => 'error',
+				'level'   => 'warning',
 			)
 		);
 		$this->assertCount( 1, $events );
-		$this->assertSame( Log_Events::RECONCILE_FAILED, $events[0]['event'] );
+		$this->assertSame(
+			Log_Events::RECONCILE_TARGET_ABSENT,
+			$events[0]['event']
+		);
+	}
+
+	/**
+	 * Verifies that the list endpoint flags a core/block reference as a reusable
+	 * block so the drawer can render Patterns-oriented copy, while a non-block
+	 * unmapped reference is not flagged.
+	 */
+	public function test_list_flags_reusable_block_reference(): void {
+		// ARRANGE: two open unmapped references — one core/block, one nav — each
+		// on its own affected post.
+		$reusable_post = self::factory()->post->create();
+		$nav_post      = self::factory()->post->create();
+		$this->attention->upsert_issue(
+			$reusable_post,
+			'unmapped_block_reference',
+			9300001,
+			'post',
+			'warning',
+			self::SOURCE,
+			array( 'block' => 'core/block' )
+		);
+		$this->attention->upsert_issue(
+			$nav_post,
+			'unmapped_block_reference',
+			9400,
+			'post',
+			'warning',
+			self::SOURCE,
+			array( 'block' => 'core/navigation' )
+		);
+
+		// ACT: list the open issues.
+		$response = $this->list_issues();
+
+		// ASSERT: the flag distinguishes the reusable-block reference.
+		$flags = array();
+		foreach ( $response['data']['items'] as $item ) {
+			$flags[ $item['affected_post_id'] ] = $item['target_is_reusable_block'];
+		}
+		$this->assertTrue( $flags[ $reusable_post ] );
+		$this->assertFalse( $flags[ $nav_post ] );
+	}
+
+	/**
+	 * Dispatches the list endpoint and returns the decoded JSON response.
+	 *
+	 * @return array Decoded response.
+	 */
+	private function list_issues(): array {
+		$_POST = array( 'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ) );
+
+		$this->dispatch_ajax_expecting_die( 'safe_publish_list_attention_issues' );
+
+		return json_decode( $this->_last_response, true );
 	}
 
 	/**

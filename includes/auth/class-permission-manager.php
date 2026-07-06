@@ -11,6 +11,7 @@ namespace Safe_Publish\Auth;
 
 use Safe_Publish\API\Dispatch_Logger;
 use Safe_Publish\API\Export_Logger;
+use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Request_Actions;
 use WP_Error;
 use WP_HTTP_Response;
@@ -710,7 +711,7 @@ class Permission_Manager {
 		$route = $request->get_route();
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__HTTP_USER_AGENT__
 		$raw_user_agent       = $_SERVER['HTTP_USER_AGENT'] ?? '';
-		$destination_site_url = $this->parse_destination_site_url( $raw_user_agent );
+		$destination_site_url = HTTP_Client::parse_destination_site_url( $raw_user_agent );
 
 		if ( Request_Actions::is_export( $action ) ) {
 			$this->log_export_outcome( $response, $route, $destination_site_url );
@@ -807,26 +808,5 @@ class Permission_Manager {
 				$status
 			);
 		}
-	}
-
-	/**
-	 * Extracts the destination site URL from a Safe Publish User-Agent string.
-	 *
-	 * The destination sends: "Safe Publish/VERSION; https://dest.example.com".
-	 * Returns the URL portion, or the full string if the expected format is not
-	 * matched.
-	 *
-	 * @param string $user_agent Raw HTTP_USER_AGENT value.
-	 * @return string Destination URL, or empty string if header is absent.
-	 */
-	private function parse_destination_site_url( string $user_agent ): string {
-		if ( '' === $user_agent ) {
-			return '';
-		}
-
-		// Format: "Safe Publish/x.y.z; https://dest.example.com".
-		$parts = explode( '; ', $user_agent, 2 );
-
-		return isset( $parts[1] ) ? trim( $parts[1] ) : $user_agent;
 	}
 }

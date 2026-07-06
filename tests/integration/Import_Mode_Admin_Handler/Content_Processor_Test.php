@@ -356,6 +356,72 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that an unresolved core/block ref surfaces as an
+	 * unmapped_block_reference carrying its block name, so a missing
+	 * reusable-block target folds into the same retryable degradation as any
+	 * other unresolved block ref.
+	 */
+	public function test_core_block_ref_surfaces_as_unmapped_reference(): void {
+		// ARRANGE: a paragraph, a core/navigation carrying its own ref, and one
+		// core/block. No source URLs and neither ref resolves on the
+		// destination, so the only warnings come from the ref scan.
+		$source_site_url = 'https://source.example.com';
+		$content         = implode(
+			"\n",
+			array(
+				'<!-- wp:paragraph --><p>Intro.</p><!-- /wp:paragraph -->',
+				'<!-- wp:navigation {"ref":99} /-->',
+				'<!-- wp:block {"ref":4242} /-->',
+			)
+		);
+
+		// ACT: process the document.
+		$this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: both refs surface as unmapped references, distinguished by
+		// block name; core/block is not treated specially.
+		$this->assertSame(
+			array(
+				array(
+					'type'      => 'unmapped_block_reference',
+					'kind'      => 'post',
+					'block'     => 'core/navigation',
+					'source_id' => 99,
+				),
+				array(
+					'type'      => 'unmapped_block_reference',
+					'kind'      => 'post',
+					'block'     => 'core/block',
+					'source_id' => 4242,
+				),
+			),
+			$this->processor->get_warnings(),
+			'Both refs should surface as unmapped references keyed by block name'
+		);
+	}
+
+	/**
+	 * Verifies that blocks carrying no id reference raise no warning, so the
+	 * ref scan never false-flags ordinary blocks.
+	 */
+	public function test_blocks_without_id_refs_raise_no_warning(): void {
+		// ARRANGE: common blocks, no id-bearing refs, no source URLs.
+		$source_site_url = 'https://source.example.com';
+		$content         = '<!-- wp:paragraph --><p>Text.</p><!-- /wp:paragraph -->'
+			. '<!-- wp:heading --><h2>Heading</h2><!-- /wp:heading -->';
+
+		// ACT: process the document.
+		$this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: no warnings at all.
+		$this->assertSame(
+			array(),
+			$this->processor->get_warnings(),
+			'Ordinary blocks must not raise a warning'
+		);
+	}
+
+	/**
 	 * Verifies that Gutenberg block content containing source-site links is
 	 * processed through the full parse-transform-serialize pipeline.
 	 *

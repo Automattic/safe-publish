@@ -1265,6 +1265,25 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that resolve_post_type() permits wp_block imports for a user with
+	 * edit_posts, since wp_block maps its edit cap to edit_posts — so the source
+	 * service user's existing grant covers it without a dedicated capability.
+	 */
+	public function test_resolve_post_type_grants_wp_block_to_edit_posts_user(): void {
+		// ARRANGE: A subscriber granted edit_posts but not manage_options.
+		$user_id = self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		$user    = get_user_by( 'id', $user_id );
+		$user->add_cap( 'edit_posts' );
+		wp_set_current_user( $user_id );
+
+		// ACT: Resolve the wp_block post type for this user.
+		$result = $this->import_service->resolve_post_type( 'wp_block' );
+
+		// ASSERT: The type resolves (import permitted).
+		$this->assertSame( 'wp_block', $result );
+	}
+
+	/**
 	 * Verifies that import fails when the source post type is not registered on
 	 * the destination site.
 	 */
@@ -3474,5 +3493,43 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			)
 		);
 		$this->assertCount( 2, $siblings );
+	}
+
+	/**
+	 * Verifies that importing an untitled source post stores an empty
+	 * post_title. The listing posts the "(no title)" placeholder, which clears
+	 * the required-title gate, but the authoritative fresh fetch restores the
+	 * real empty title before persistence, so the placeholder never lands in
+	 * stored data.
+	 */
+	public function test_import_preserves_empty_title(): void {
+		// ARRANGE: Fresh source payload has an empty title; the frontend posts
+		// the "(no title)" placeholder the listing substitutes for display.
+		$this->mock_post_overrides = array(
+			'title'   => '',
+			'content' => '<p>Body.</p>',
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+
+		$post_data = array(
+			'id'        => 9500,
+			'title'     => '(no title)',
+			'link'      => 'https://source.example.com/untitled',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Import the untitled post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import succeeds and the stored title is empty, not the
+		// "(no title)" placeholder.
+		$this->assertTrue( $result['success'], 'Import should succeed.' );
+		$post = get_post( $result['post_id'] );
+		$this->assertNotNull( $post );
+		$this->assertSame( '', $post->post_title );
 	}
 }

@@ -46,6 +46,12 @@ class Content_Generator {
 	public const REVISION_META_KEY = '_seeder_revision';
 
 	/**
+	 * Alt text emitted on the block-editor image, so parity tests can lock
+	 * inline <img alt> preservation against a distinctive, non-empty value.
+	 */
+	public const BLOCK_IMAGE_ALT = 'Seeded block image alt';
+
+	/**
 	 * Marker comments wrapping the per-revision note appended to post
 	 * content. Used to strip prior notes on subsequent updates so revisions
 	 * don't accumulate.
@@ -394,7 +400,8 @@ class Content_Generator {
 				. "\"sizeSlug\":\"large\"} -->\n";
 			$content .= '<figure class="wp-block-image size-large">';
 			$content .= '<img src="' . esc_url( $url )
-				. '" alt="" class="wp-image-' . absint( $id ) . '"/>';
+				. '" alt="' . esc_attr( self::BLOCK_IMAGE_ALT )
+				. '" class="wp-image-' . absint( $id ) . '"/>';
 			$content .= "</figure>\n";
 			$content .= '<!-- /wp:image -->';
 		}

@@ -164,6 +164,16 @@ export function renderWarningMessage( warning: Warning ): string {
 				warning.source.parent_id
 			);
 		case 'unmapped_block_reference':
+			if ( warning.block === 'core/block' ) {
+				return sprintf(
+					/* translators: %d: source reusable block (wp_block) ID */
+					__(
+						"Reusable block %d isn't on this site. Import it under Patterns, then re-import this post.",
+						'safe-publish'
+					),
+					warning.source_id
+				);
+			}
 			return warning.kind === 'term'
 				? sprintf(
 					/* translators: %d: source term ID */
@@ -216,7 +226,9 @@ export function renderWarningShortLabel( warning: Warning ): string {
 		case 'parent_orphaned':
 			return __( 'parent orphaned', 'safe-publish' );
 		case 'unmapped_block_reference':
-			return __( 'unmapped block reference', 'safe-publish' );
+			return warning.block === 'core/block'
+				? __( 'reusable block reference', 'safe-publish' )
+				: __( 'unmapped block reference', 'safe-publish' );
 		case 'nav_ref_rewrite_failed':
 			return __( 'nav reference update failed', 'safe-publish' );
 		default: {
@@ -227,10 +239,8 @@ export function renderWarningShortLabel( warning: Warning ): string {
 }
 
 /**
- * Renders an open attention issue as a user-facing sentence.
- *
- * Each type gets copy that points at the Retry action, rather than the manual
- * workaround the import-time warnings describe.
+ * Renders an open attention issue as a user-facing sentence pointing at the
+ * fix: import the referenced content, then Retry.
  *
  * @param {AttentionIssue} issue Issue to render.
  *
@@ -239,6 +249,16 @@ export function renderWarningShortLabel( warning: Warning ): string {
 export function renderIssueMessage( issue: AttentionIssue ): string {
 	switch ( issue.issue_type ) {
 		case 'unmapped_block_reference':
+			if ( issue.target_is_reusable_block ) {
+				return sprintf(
+					/* translators: %d: source reusable block (wp_block) ID */
+					__(
+						"Reusable block %d isn't on this site yet. Import it under Patterns, then Retry.",
+						'safe-publish'
+					),
+					issue.target_ref
+				);
+			}
 			return issue.target_kind === 'term'
 				? sprintf(
 					/* translators: %d: source term ID */
@@ -296,6 +316,24 @@ export function attentionIssueId( issue: AttentionIssue ): string {
 		issue.target_ref,
 		issue.target_kind,
 	].join( ':' );
+}
+
+/**
+ * Display label for an issue's affected content: its title, or a post-id
+ * fallback when the title is empty.
+ *
+ * @param {AttentionIssue} issue Issue row.
+ *
+ * @return {string} Human-readable content label.
+ */
+export function attentionIssueLabel( issue: AttentionIssue ): string {
+	return '' !== issue.affected_title
+		? issue.affected_title
+		: sprintf(
+			/* translators: %d: post ID */
+			__( '#%d', 'safe-publish' ),
+			issue.affected_post_id
+		);
 }
 
 /**
