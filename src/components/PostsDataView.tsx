@@ -16,7 +16,7 @@ import {
 } from './filter-controls';
 import { useAuthStatus } from './hooks/useAuthStatus';
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
-import { createPostsActions } from '../actions';
+import { createPostsActions, type ActionNotice } from '../actions';
 import {
 	DEFAULT_ITEMS_PER_PAGE,
 	LAYOUT_TABLE,
@@ -343,6 +343,9 @@ export function PostsDataView( {
 	const [ hasFetchedOnce, setHasFetchedOnce ] = useState( false );
 	const [ fetchError, setFetchError ] = useState< string | null >( null );
 	const [ postTypeError, setPostTypeError ] = useState< string | null >( null );
+	const [ rollbackNotice, setRollbackNotice ] = useState< ActionNotice | null >(
+		null
+	);
 	const [ refreshNonce, setRefreshNonce ] = useState( 0 );
 	const [ syncStatuses, setSyncStatuses ] = useState<
 		Record< number, { status: ImportSyncStatus } >
@@ -1149,6 +1152,14 @@ export function PostsDataView( {
 					{ fetchError }
 				</Notice>
 			) }
+			{ rollbackNotice && (
+				<Notice
+					status={ rollbackNotice.status }
+					onRemove={ () => setRollbackNotice( null ) }
+				>
+					{ rollbackNotice.message }
+				</Notice>
+			) }
 			{ isLoading && ! hasFetchedOnce && (
 				<div
 					className="safe-publish-loading"
@@ -1187,6 +1198,7 @@ export function PostsDataView( {
 						{
 							ajaxurl: window.safePublishAdminData.ajaxurl,
 							nonce: window.safePublishAdminData.nonce,
+							onNotice: setRollbackNotice,
 						},
 						syncStatuses,
 						state

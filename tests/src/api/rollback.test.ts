@@ -82,17 +82,27 @@ describe( 'rollbackItem', () => {
 		expect( body.get( 'item_id' ) ).toBe( '100' );
 	} );
 
-	it( 'Verifies that the server-reported action is returned on success', async () => {
-		// ARRANGE: the endpoint reports a restore.
+	it( 'Verifies that the server-reported action and message are returned on success', async () => {
+		// ARRANGE: the endpoint reports a restore with its confirmation message.
 		( global.fetch as any ).mockResolvedValue( {
-			json: async () => ( { success: true, data: { action: 'restored' } } ),
+			json: async () => ( {
+				success: true,
+				data: {
+					action: 'restored',
+					message: 'Post successfully restored to previous version',
+				},
+			} ),
 		} );
 
 		// ACT: roll back the item.
 		const outcome = await rollbackItem( 100, AJAX_URL, NONCE );
 
-		// ASSERT: the outcome surfaces the server-reported action verbatim.
-		expect( outcome ).toEqual( { success: true, action: 'restored' } );
+		// ASSERT: the outcome surfaces the server-reported action and message.
+		expect( outcome ).toEqual( {
+			success: true,
+			action: 'restored',
+			message: 'Post successfully restored to previous version',
+		} );
 	} );
 
 	it( 'Verifies that the server error message surfaces on failure', async () => {

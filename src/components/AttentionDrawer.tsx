@@ -7,7 +7,7 @@
 import { update } from '@wordpress/icons';
 
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
-import { createAttentionIssueActions, type RetryNotice } from '../actions';
+import { createAttentionIssueActions, type ActionNotice } from '../actions';
 import { DEFAULT_ITEMS_PER_PAGE, LAYOUT_TABLE } from '../constants';
 import {
 	attentionIssueId,
@@ -66,7 +66,7 @@ const AttentionDrawer = ( {
 	const [ error, setError ] = useState< string | null >( null );
 	// Retry outcomes get their own banner, separate from the list-load
 	// `error` notice.
-	const [ retryNotice, setRetryNotice ] = useState< RetryNotice | null >( null );
+	const [ retryNotice, setRetryNotice ] = useState< ActionNotice | null >( null );
 	// Issues with a retry in flight, so the action drops concurrent submits.
 	const inFlightRetries = useRef< Set< string > >( new Set() );
 	const [ refreshNonce, setRefreshNonce ] = useState( 0 );
