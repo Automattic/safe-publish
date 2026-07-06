@@ -153,9 +153,10 @@ final class VIP_Safe_Auth {
 		);
 
 		$request_args = array(
-			'timeout'     => 3,
-			'redirection' => 0,
-			'user-agent'  => ( new HTTP_Client() )->get_user_agent(),
+			'timeout'             => 3,
+			'redirection'         => 0,
+			'user-agent'          => ( new HTTP_Client() )->get_user_agent(),
+			'limit_response_size' => HTTP_Client::MAX_RESPONSE_BYTES,
 		);
 
 		if ( isset( $auth_params['headers'] ) ) {

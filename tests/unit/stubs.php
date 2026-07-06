@@ -189,6 +189,14 @@ function wp_remote_retrieve_response_code( array|WP_Error $response ): int {
 	return (int) ( $response['response']['code'] ?? 0 );
 }
 
+function wp_remote_retrieve_body( array|WP_Error $response ): string {
+	if ( $response instanceof WP_Error ) {
+		return '';
+	}
+
+	return (string) ( $response['body'] ?? '' );
+}
+
 function set_test_http_response( array|WP_Error $response ): void {
 	$GLOBALS['_test_http_response'] = $response;
 }

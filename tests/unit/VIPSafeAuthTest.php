@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
+use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Request_Actions;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use WP_Error;
@@ -511,5 +512,31 @@ class VIPSafeAuthTest extends TestCase {
 		$this->assertStringContainsString( 'context=edit', $GLOBALS['_test_http_last_url'] );
 		$this->assertStringContainsString( 'per_page=1', $GLOBALS['_test_http_last_url'] );
 		$this->assertArrayHasKey( 'X-Safe-Publish-Signature', $GLOBALS['_test_http_last_args']['headers'] );
+	}
+
+	/**
+	 * Verifies that the auth probe forwards the response-size cap to the
+	 * transport.
+	 */
+	public function test_test_authorization_bounds_response_size(): void {
+		// ARRANGE: Stub a successful response so the probe completes.
+		set_test_http_response( array( 'response' => array( 'code' => 200 ) ) );
+		$site_url    = 'https://example.com';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		// ACT: Probe the source.
+		VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
+
+		// ASSERT: The transport received the response-size cap.
+		$this->assertArrayHasKey(
+			'limit_response_size',
+			$GLOBALS['_test_http_last_args']
+		);
+		$this->assertSame(
+			HTTP_Client::MAX_RESPONSE_BYTES,
+			$GLOBALS['_test_http_last_args']['limit_response_size']
+		);
 	}
 }

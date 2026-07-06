@@ -11,7 +11,9 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\Meta_Terms_Manager;
+use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Utils\Reconcile_Outcome;
@@ -800,15 +802,15 @@ class Post_Import_Service {
 	 * a WP_Error if content processing fails or if kses is enabled and
 	 * sanitization would modify the content.
 	 *
-	 * @param string         $content        Raw post content.
-	 * @param array<int,int> $session_id_map Source post ID => destination post ID for
-	 *                                       the in-flight bulk batch; feeds block ID
-	 *                                       remapping.
+	 * @param string                               $content              Raw post content.
+	 * @param array<int,int>                       $session_id_map       Bulk batch source => destination post IDs.
+	 * @param array<string, array<string, string>> $library_metadata_map Source URL => library metadata for sideloads.
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
 	private function process_post_content(
 		string $content,
-		array $session_id_map = array()
+		array $session_id_map = array(),
+		array $library_metadata_map = array()
 	): string|WP_Error {
 		$source_site_url = $this->get_connected_source_url();
 
@@ -819,7 +821,10 @@ class Post_Import_Service {
 		$processed = $this->content_processor->process_content(
 			$content,
 			$source_site_url,
-			array( 'session_id_map' => $session_id_map )
+			array(
+				'session_id_map'       => $session_id_map,
+				'library_metadata_map' => $library_metadata_map,
+			)
 		);
 
 		if ( is_wp_error( $processed ) ) {
@@ -1948,6 +1953,12 @@ class Post_Import_Service {
 			);
 
 			if ( is_wp_error( $fresh_result ) ) {
+				// Preserve the size-limit code; mask other fetch failures.
+				$error_code = $fresh_result->get_error_code();
+				if ( HTTP_Client::ERROR_RESPONSE_TOO_LARGE === $error_code ) {
+					return $fresh_result;
+				}
+
 				return new WP_Error(
 					'fetch_failed',
 					$fresh_result->get_error_message()
@@ -1966,6 +1977,9 @@ class Post_Import_Service {
 		$fields['source_author']     = is_array( $fresh_result['source_author'] ?? null )
 			? $fresh_result['source_author']
 			: null;
+		$fields['source_media']      = is_array( $fresh_result['source_media'] ?? null )
+			? $fresh_result['source_media']
+			: array();
 
 		// Resolve the source author before any media processing so a failed
 		// resolution does not leave orphan attachments behind.
@@ -2037,7 +2051,8 @@ class Post_Import_Service {
 
 		$processed_content = $this->process_post_content(
 			$fresh_result['content'] ?? '',
-			$session_id_map
+			$session_id_map,
+			$fields['source_media']
 		);
 
 		if ( is_wp_error( $processed_content ) ) {
@@ -2063,13 +2078,10 @@ class Post_Import_Service {
 			$this->content_processor->get_warnings()
 		);
 
-		// Unsanitized values; sanitized downstream before being stored.
-		$fields['meta']  = is_array( $fresh_result['meta'] ?? null )
-			? $fresh_result['meta']
-			: $fields['meta'];
-		$fields['terms'] = is_array( $fresh_result['terms'] ?? null )
-			? $fresh_result['terms']
-			: $fields['terms'];
+		// Meta and terms come from the fresh source payload, not the request.
+		// fetch_fresh_post_content() guarantees both as arrays.
+		$fields['meta']  = $fresh_result['meta'];
+		$fields['terms'] = $fresh_result['terms'];
 
 		return array(
 			'fields'              => $fields,
@@ -2532,7 +2544,8 @@ class Post_Import_Service {
 
 		$attachment_id = $this->media_importer->import_featured_image(
 			$featured_media_id,
-			$source_site_url
+			$source_site_url,
+			Auth_Credential_Provider::get_credentials()
 		);
 
 		return $attachment_id;

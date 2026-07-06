@@ -179,6 +179,17 @@ final class Seeder_Parity_Fixture {
 	}
 
 	/**
+	 * Returns the source library metadata (alt, title, caption, description)
+	 * mocked for a media ID, so parity tests can value-check what propagates.
+	 *
+	 * @param int $source_media_id Source media ID.
+	 * @return array{alt: string, title: string, caption: string, description: string}
+	 */
+	public function source_media_metadata( int $source_media_id ): array {
+		return $this->media_metadata_for_id( $source_media_id );
+	}
+
+	/**
 	 * Returns the pre-built source REST body for the post mock. Falls back to
 	 * null so unregistered IDs surface as a WP_Error.
 	 *
@@ -251,7 +262,8 @@ final class Seeder_Parity_Fixture {
 					$payload,
 					$slice['author_user_id'],
 					$source_parent_id,
-					$this->scalars_for_index( $i )
+					$this->scalars_for_index( $i ),
+					$image_refs
 				);
 			}
 		}
@@ -521,10 +533,9 @@ final class Seeder_Parity_Fixture {
 	}
 
 	/**
-	 * Builds the wp/v2/media/{id} mock bodies for every image referenced in the
-	 * batch. The plugin only reads source_url today; alt_text, title, and
-	 * caption are included so future propagation work surfaces against a
-	 * non-empty source without having to reseed.
+	 * Builds the wp/v2/media/{id} mock bodies (edit-context shape) for every
+	 * image referenced in the batch, so the featured-image fetch resolves a
+	 * source_url and the raw library fields.
 	 *
 	 * @return array<int, array<string, mixed>> Media ID => REST body.
 	 */
@@ -533,23 +544,40 @@ final class Seeder_Parity_Fixture {
 
 		foreach ( $this->image_refs_by_source_id as $refs ) {
 			foreach ( $refs as $ref ) {
+				$meta                 = $this->media_metadata_for_id( $ref['id'] );
 				$bodies[ $ref['id'] ] = array(
-					'id'         => $ref['id'],
-					'source_url' => $ref['url'],
-					'media_type' => 'image',
-					'mime_type'  => 'image/jpeg',
-					'alt_text'   => "Mock alt text for media {$ref['id']}",
-					'title'      => array(
-						'raw' => "Mock title for media {$ref['id']}",
-					),
-					'caption'    => array(
-						'raw' => "Mock caption for media {$ref['id']}",
-					),
+					'id'          => $ref['id'],
+					'source_url'  => $ref['url'],
+					'media_type'  => 'image',
+					'mime_type'   => 'image/jpeg',
+					'alt_text'    => $meta['alt'],
+					'title'       => array( 'raw' => $meta['title'] ),
+					'caption'     => array( 'raw' => $meta['caption'] ),
+					'description' => array( 'raw' => $meta['description'] ),
 				);
 			}
 		}
 
 		return $bodies;
+	}
+
+	/**
+	 * Returns the deterministic source library metadata for a media ID, the
+	 * single source of truth behind both the media REST bodies and the
+	 * safe_publish_media map. Each field carries a distinct tag so the importer's
+	 * per-field sanitizers stay load-bearing (title/alt strip, caption and
+	 * description keep the safe HTML wp_kses_post allows).
+	 *
+	 * @param int $source_media_id Source media ID.
+	 * @return array{alt: string, title: string, caption: string, description: string}
+	 */
+	private function media_metadata_for_id( int $source_media_id ): array {
+		return array(
+			'alt'         => "Mock alt <b>text</b> for media {$source_media_id}",
+			'title'       => "Mock <i>title</i> for media {$source_media_id}",
+			'caption'     => "Mock <em>caption</em> for media {$source_media_id}",
+			'description' => "Mock <strong>desc</strong> for media {$source_media_id}",
+		);
 	}
 
 	/**
@@ -567,6 +595,7 @@ final class Seeder_Parity_Fixture {
 	 * @param int                                                                                   $author_user_id   Dest user whose identity stamps safe_publish_author.
 	 * @param int                                                                                   $source_parent_id Source parent post ID; 0 for top-level.
 	 * @param array{comment_status: string, ping_status: string, menu_order: int, password: string} $scalars Status-family column values.
+	 * @param list<array{id: int, url: string}>                                                     $image_refs Image refs seeding safe_publish_media; empty for edge cases.
 	 * @return array<string, mixed>
 	 */
 	private function payload_to_rest_body(
@@ -574,9 +603,17 @@ final class Seeder_Parity_Fixture {
 		array $payload,
 		int $author_user_id,
 		int $source_parent_id,
-		array $scalars
+		array $scalars,
+		array $image_refs = array()
 	): array {
 		$author = get_userdata( $author_user_id );
+
+		$safe_publish_media = array();
+		foreach ( $image_refs as $ref ) {
+			$safe_publish_media[ $ref['url'] ] = $this->media_metadata_for_id(
+				$ref['id']
+			);
+		}
 
 		return array(
 			'id'                  => $source_id,
@@ -604,6 +641,7 @@ final class Seeder_Parity_Fixture {
 				'login'        => false !== $author ? (string) $author->user_login : '',
 				'display_name' => false !== $author ? (string) $author->display_name : '',
 			),
+			'safe_publish_media'  => $safe_publish_media,
 			'_embedded'           => array(
 				'wp:term' => $this->embedded_terms( $payload['terms'] ),
 			),

@@ -235,6 +235,13 @@ final class Diff_Renderer {
 		);
 
 		if ( is_wp_error( $response ) ) {
+			// Surface the size-limit reason; mask other failures behind a
+			// generic message.
+			$error_code = $response->get_error_code();
+			if ( HTTP_Client::ERROR_RESPONSE_TOO_LARGE === $error_code ) {
+				return $response;
+			}
+
 			return new WP_Error(
 				'source_fetch_failed',
 				__( 'Failed to fetch source post.', 'safe-publish' ),
