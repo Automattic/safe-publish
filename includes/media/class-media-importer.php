@@ -11,6 +11,7 @@ namespace Safe_Publish\Media;
 
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Request_Actions;
+use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Media\Media_Logger;
 use Safe_Publish\Utils\Options;
 
@@ -50,6 +51,14 @@ class Media_Importer {
 	 * @var int[]
 	 */
 	private array $newly_created_attachment_ids = array();
+
+	/**
+	 * Source URL => library metadata applied to the attachment sideloaded from
+	 * that URL, keyed by the query-stripped source URL.
+	 *
+	 * @var array<string, array<string, string>>
+	 */
+	private array $library_metadata_map = array();
 
 	/**
 	 * Constructs the Media_Importer instance.
@@ -146,6 +155,11 @@ class Media_Importer {
 		update_post_meta( $attachment_id, Options::META_IMPORTED_FROM, $source_site_url );
 
 		$this->newly_created_attachment_ids[] = $attachment_id;
+
+		$this->apply_library_metadata(
+			$attachment_id,
+			$this->library_metadata_map[ $media_url ] ?? array()
+		);
 
 		return wp_get_attachment_url( $attachment_id );
 	}
@@ -319,6 +333,11 @@ class Media_Importer {
 
 		$this->newly_created_attachment_ids[] = $attachment_id;
 
+		$this->apply_library_metadata(
+			$attachment_id,
+			$this->library_metadata_map[ $media_url ] ?? array()
+		);
+
 		return $attachment_id;
 	}
 
@@ -330,6 +349,70 @@ class Media_Importer {
 	 */
 	public function reset_newly_created_attachment_ids(): void {
 		$this->newly_created_attachment_ids = array();
+	}
+
+	/**
+	 * Sets the library metadata map applied while sideloading this import's media.
+	 *
+	 * @param array<string, array<string, string>> $map Source URL => metadata.
+	 */
+	public function set_library_metadata_map( array $map ): void {
+		$this->library_metadata_map = $map;
+	}
+
+	/**
+	 * Writes source library metadata onto a sideloaded attachment. As the single
+	 * write point for both inline and featured media, it sanitizes each field
+	 * here rather than trusting the source. Empty fields are left absent.
+	 *
+	 * @param int                   $attachment_id Attachment to write to.
+	 * @param array<string, string> $metadata      Source alt/title/caption/description.
+	 */
+	private function apply_library_metadata( int $attachment_id, array $metadata ): void {
+		$alt = wp_strip_all_tags( (string) ( $metadata['alt'] ?? '' ), true );
+		if ( '' !== $alt ) {
+			update_post_meta(
+				$attachment_id,
+				'_wp_attachment_image_alt',
+				wp_slash( $alt )
+			);
+		}
+
+		$post_update = array();
+		$title       = sanitize_text_field( (string) ( $metadata['title'] ?? '' ) );
+		if ( '' !== $title ) {
+			$post_update['post_title'] = wp_slash( $title );
+		}
+		$caption = wp_kses_post( (string) ( $metadata['caption'] ?? '' ) );
+		if ( '' !== $caption ) {
+			$post_update['post_excerpt'] = wp_slash( $caption );
+		}
+		$description = wp_kses_post( (string) ( $metadata['description'] ?? '' ) );
+		if ( '' !== $description ) {
+			$post_update['post_content'] = wp_slash( $description );
+		}
+
+		if ( array() !== $post_update ) {
+			$post_update['ID'] = $attachment_id;
+			wp_update_post( $post_update );
+		}
+	}
+
+	/**
+	 * Extracts the library metadata from a wp/v2/media record fetched in edit
+	 * context. Title, caption, and description are unwrapped from their raw
+	 * value; alt_text is a plain string.
+	 *
+	 * @param array<string, mixed> $media_data Decoded media REST record.
+	 * @return array<string, string> Alt/title/caption/description.
+	 */
+	private static function media_record_metadata( array $media_data ): array {
+		return array(
+			'alt'         => (string) ( $media_data['alt_text'] ?? '' ),
+			'title'       => (string) ( $media_data['title']['raw'] ?? '' ),
+			'caption'     => (string) ( $media_data['caption']['raw'] ?? '' ),
+			'description' => (string) ( $media_data['description']['raw'] ?? '' ),
+		);
 	}
 
 	/**
@@ -369,9 +452,13 @@ class Media_Importer {
 			return $existing_attachment;
 		}
 
-		// Fetch media details from source site.
+		// Fetch media details. Edit context returns the raw library fields
+		// (title, caption, description); alt_text is plain in either context.
 		$media_api_url = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/media/' . $featured_media_id;
-		$response      = $this->http_client->make_request(
+		if ( VIP_Safe_Auth::has_valid_credential_format( $auth_credentials ) ) {
+			$media_api_url = add_query_arg( 'context', 'edit', $media_api_url );
+		}
+		$response = $this->http_client->make_request(
 			$media_api_url,
 			Request_Actions::MEDIA_IMPORT,
 			$auth_credentials
@@ -410,17 +497,12 @@ class Media_Importer {
 			update_post_meta( $attachment_id, Options::META_FEATURED_MEDIA_ID, $featured_media_id );
 			update_post_meta( $attachment_id, Options::META_MEDIA_TYPE, 'featured_image' );
 
-			// Propagate the source alt text, stored as WordPress stores it.
-			// Skipped when empty so the meta stays absent, like a native upload.
-			$alt_text = wp_strip_all_tags(
-				(string) ( $media_data['alt_text'] ?? '' ),
-				true
-			);
-			if ( '' !== $alt_text ) {
-				update_post_meta(
+			// Apply the source library metadata only when this run sideloaded the
+			// attachment, so a dedup hit on a prior import is left untouched.
+			if ( in_array( $attachment_id, $this->newly_created_attachment_ids, true ) ) {
+				$this->apply_library_metadata(
 					$attachment_id,
-					'_wp_attachment_image_alt',
-					wp_slash( $alt_text )
+					self::media_record_metadata( $media_data )
 				);
 			}
 

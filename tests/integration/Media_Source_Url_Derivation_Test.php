@@ -189,6 +189,23 @@ class Media_Source_Url_Derivation_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Whether any captured media URL begins with the given base, ignoring the
+	 * query string the importer appends (e.g. context=edit).
+	 *
+	 * @param string $base_url Expected REST base URL without query.
+	 * @return bool
+	 */
+	private function captured_media_request_targets( string $base_url ): bool {
+		foreach ( $this->captured_media_urls as $url ) {
+			if ( str_starts_with( $url, $base_url ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * Verifies that the create path fetches the featured image from the subsite
 	 * REST root, retaining the connection URL's path.
 	 *
@@ -219,9 +236,10 @@ class Media_Source_Url_Derivation_Test extends Source_Posts_API_Test_Base {
 
 		// ASSERT: Import succeeds and the media request kept the subsite path.
 		$this->assertTrue( $result['success'], 'Import should succeed.' );
-		$this->assertContains(
-			'https://source.example.com/blog/wp-json/wp/v2/media/100',
-			$this->captured_media_urls,
+		$this->assertTrue(
+			$this->captured_media_request_targets(
+				'https://source.example.com/blog/wp-json/wp/v2/media/100'
+			),
 			'Featured-media REST request must target the subsite REST root, not the network root.'
 		);
 	}
@@ -271,9 +289,10 @@ class Media_Source_Url_Derivation_Test extends Source_Posts_API_Test_Base {
 			$second['existing'],
 			'Re-import should hit the update path.'
 		);
-		$this->assertContains(
-			'https://source.example.com/blog/wp-json/wp/v2/media/100',
-			$this->captured_media_urls,
+		$this->assertTrue(
+			$this->captured_media_request_targets(
+				'https://source.example.com/blog/wp-json/wp/v2/media/100'
+			),
 			'Featured-media REST request must target the subsite REST root on the update path.'
 		);
 	}

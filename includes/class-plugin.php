@@ -35,6 +35,7 @@ use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\API\Safe_Publish_API;
 use Safe_Publish\API\Source_Author_REST_Field;
+use Safe_Publish\API\Source_Media_REST_Field;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
@@ -127,6 +128,12 @@ final class Plugin {
 			);
 
 			$source_author_field->init();
+
+			$source_media_field = new Source_Media_REST_Field(
+				$auth_manager->get_authenticator()
+			);
+
+			$source_media_field->init();
 
 			$catalog_controller = new Catalog_REST_Controller(
 				$auth_manager->get_authenticator(),

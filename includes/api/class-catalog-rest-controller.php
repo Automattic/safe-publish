@@ -294,7 +294,7 @@ final class Catalog_REST_Controller {
 
 		$items = array();
 		foreach ( $posts as $post ) {
-			$items[] = Source_Posts_API::prepare_listing_payload_from_post( $post );
+			$items[] = self::prepare_listing_payload_from_post( $post );
 		}
 
 		return new WP_REST_Response(
@@ -369,7 +369,7 @@ final class Catalog_REST_Controller {
 
 		$items = array();
 		foreach ( $this->run_query( $args, false ) as $post ) {
-			$items[] = Source_Posts_API::prepare_listing_payload_from_post( $post );
+			$items[] = self::prepare_listing_payload_from_post( $post );
 		}
 
 		return new WP_REST_Response(
@@ -691,6 +691,36 @@ final class Catalog_REST_Controller {
 				'type'  => 'array',
 				'items' => array( 'type' => 'integer' ),
 			),
+		);
+	}
+
+	/**
+	 * Prepares a single WP_Post for the catalog listing payload.
+	 *
+	 * The shape mirrors what the destination's listing UI expects.
+	 *
+	 * @param WP_Post $post Source post.
+	 * @return array Listing payload.
+	 */
+	public static function prepare_listing_payload_from_post( WP_Post $post ): array {
+		$permalink = get_permalink( $post );
+
+		return array(
+			'id'           => $post->ID,
+			'link'         => is_string( $permalink ) ? esc_url_raw( $permalink ) : '',
+			'title'        => sanitize_text_field(
+				wp_strip_all_tags(
+					html_entity_decode(
+						$post->post_title,
+						ENT_QUOTES | ENT_HTML5,
+						'UTF-8'
+					)
+				)
+			),
+			'post_type'    => $post->post_type,
+			'date_gmt'     => Datetime_Sanitizer::gmt_to_iso8601( $post->post_date_gmt ),
+			'modified_gmt' => Datetime_Sanitizer::gmt_to_iso8601( $post->post_modified_gmt ),
+			'status'       => $post->post_status,
 		);
 	}
 }

@@ -67,7 +67,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 
 	/**
 	 * Verifies that retrying an unmapped block reference dispatches the block
-	 * repoint and resolves the issue.
+	 * repoint, resolves the issue, and reports a resolved outcome.
 	 */
 	public function test_retry_unmapped_block_reference_dispatches_and_resolves(): void {
 		// ARRANGE: a post with a stale post-type ref, its now-present target, and
@@ -88,9 +88,12 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: the endpoint reports resolved and the row is gone.
+		// ASSERT: the endpoint reports a resolved outcome with no detail and
+		// the row is gone.
 		$this->assertTrue( $response['success'] );
 		$this->assertTrue( $response['data']['resolved'] );
+		$this->assertSame( 'resolved', $response['data']['outcome'] );
+		$this->assertSame( '', $response['data']['detail'] );
 		$this->assertNull(
 			$this->attention->get_issue(
 				$post_id,
@@ -294,7 +297,8 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 
 	/**
 	 * Verifies that retrying a block reference whose target was never imported
-	 * records a reconcile target-absent warning instead of clearing the issue.
+	 * returns a target_absent outcome and records a target-absent warning
+	 * instead of clearing the issue.
 	 */
 	public function test_target_absent_block_retry_logs_target_absent(): void {
 		// ARRANGE: a stale ref whose target was never imported.
@@ -313,8 +317,11 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: unresolved, and a reconcile target-absent warning was recorded.
+		// ASSERT: a target_absent outcome with a detail, and a reconcile
+		// target-absent warning was recorded.
 		$this->assertFalse( $response['data']['resolved'] );
+		$this->assertSame( 'target_absent', $response['data']['outcome'] );
+		$this->assertNotSame( '', $response['data']['detail'] );
 		$events = Audit_Log_Table::get_events(
 			array(
 				'channel' => 'reconcile',
@@ -330,7 +337,8 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 
 	/**
 	 * Verifies that retrying a block reference whose target is present but no
-	 * longer appears in the post content records a reconcile unresolved warning.
+	 * longer appears in the post content returns an unresolved outcome and
+	 * records a reconcile unresolved warning.
 	 */
 	public function test_unresolved_block_retry_logs_unresolved(): void {
 		// ARRANGE: the target is importable, but the post content holds no
@@ -351,8 +359,11 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: unresolved, and a plain reconcile unresolved warning recorded.
+		// ASSERT: an unresolved outcome with a detail, and a plain reconcile
+		// unresolved warning recorded.
 		$this->assertFalse( $response['data']['resolved'] );
+		$this->assertSame( 'unresolved', $response['data']['outcome'] );
+		$this->assertNotSame( '', $response['data']['detail'] );
 		$events = Audit_Log_Table::get_events(
 			array(
 				'channel' => 'reconcile',

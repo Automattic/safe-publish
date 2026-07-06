@@ -14,6 +14,7 @@ use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Navigation_Ref_Rewriter;
 use Safe_Publish\Admin\Post_Import_Service;
+use Safe_Publish\API\Catalog_REST_Controller;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
@@ -119,7 +120,7 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 		$this->assertNotNull( $post );
 
 		// ACT: Run the source-side preparer directly.
-		$prepared = Source_Posts_API::prepare_listing_payload_from_post( $post );
+		$prepared = Catalog_REST_Controller::prepare_listing_payload_from_post( $post );
 
 		// ASSERT: modified_gmt is the Z-marked GMT timestamp; date_gmt
 		// likewise carries the Z marker.
@@ -161,7 +162,7 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 		$this->assertNotNull( $post );
 
 		// ACT: Run the preparer.
-		$prepared = Source_Posts_API::prepare_listing_payload_from_post( $post );
+		$prepared = Catalog_REST_Controller::prepare_listing_payload_from_post( $post );
 
 		// ASSERT: Zero dates collapse to empty strings, not to '0000-00-00T...Z'.
 		$this->assertSame( '', $prepared['date_gmt'] );

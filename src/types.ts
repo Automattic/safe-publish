@@ -201,9 +201,14 @@ export interface AttentionIssuesResponse {
 
 /**
  * Envelope returned by safe_publish_retry_attention_issue.
+ *
+ * Map the UI off the bounded `outcome`; `detail` is an internal, untranslated
+ * diagnostic, not for display.
  */
 export interface RetryAttentionIssueResponse {
 	resolved: boolean;
+	outcome: 'resolved' | 'target_absent' | 'write_failed' | 'unresolved';
+	detail: string;
 }
 
 /**

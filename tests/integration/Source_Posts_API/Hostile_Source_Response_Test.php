@@ -13,8 +13,7 @@ namespace Safe_Publish\Tests\Integration\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\Tests\Integration\Integration_Test_Case;
-use Safe_Publish\Utils\Options;
-use WP_Error;
+use Safe_Publish\Tests\Integration\Mock_Catalog_Response_Trait;
 
 /**
  * Hostile Source Response Test.
@@ -27,79 +26,24 @@ use WP_Error;
  */
 class Hostile_Source_Response_Test extends Integration_Test_Case {
 
-	/**
-	 * Source URL the mocked catalog endpoint is rooted at.
-	 */
-	private const SOURCE_SITE_URL = 'https://source.example.com';
+	use Mock_Catalog_Response_Trait;
 
 	/**
-	 * Body returned by the mocked catalog response, set per test.
-	 *
-	 * @var string
-	 */
-	private string $mock_body = '';
-
-	/**
-	 * Sets the connected URL and registers the HTTP mock.
+	 * Registers the catalog HTTP mock.
 	 */
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
-
-		update_option( Options::OPTION_CONNECTED_SITE_URL, self::SOURCE_SITE_URL );
-		add_filter( 'pre_http_request', array( $this, 'intercept_http_request' ), 5, 3 );
+		$this->register_catalog_mock();
 	}
 
 	/**
-	 * Cleans up the HTTP mock and the connected-URL option.
+	 * Unregisters the catalog HTTP mock.
 	 */
 	#[\Override]
 	protected function tearDown(): void {
-		remove_filter( 'pre_http_request', array( $this, 'intercept_http_request' ), 5 );
-		delete_option( Options::OPTION_CONNECTED_SITE_URL );
+		$this->unregister_catalog_mock();
 		parent::tearDown();
-	}
-
-	/**
-	 * Returns the mocked catalog response.
-	 *
-	 * @param false|array|WP_Error $preempt Preemptive return value.
-	 * @param array                $args    HTTP request arguments (unused).
-	 * @param string               $url     Request URL.
-	 * @return array Mock HTTP response.
-	 */
-	public function intercept_http_request(
-		false|array|WP_Error $preempt,
-		array $args,
-		string $url
-	): array {
-		unset( $preempt, $args, $url );
-
-		return array(
-			'headers'  => array(),
-			'body'     => $this->mock_body,
-			'response' => array(
-				'code'    => 200,
-				'message' => 'OK',
-			),
-			'cookies'  => array(),
-			'filename' => null,
-		);
-	}
-
-	/**
-	 * Builds the mocked envelope body around a single item.
-	 *
-	 * @param array $item Listing item payload.
-	 * @return string Encoded envelope.
-	 */
-	private function envelope_with( array $item ): string {
-		return (string) wp_json_encode(
-			array(
-				'items'    => array( $item ),
-				'has_more' => false,
-			)
-		);
 	}
 
 	/**
@@ -124,7 +68,7 @@ class Hostile_Source_Response_Test extends Integration_Test_Case {
 
 		// ACT: Fetch via the destination's API.
 		$result = ( new Source_Posts_API( new HTTP_Client() ) )
-			->fetch_posts( self::SOURCE_SITE_URL );
+			->fetch_posts( $this->source_site_url );
 
 		// ASSERT: Status was not allowlisted, so the destination drops it.
 		$this->assertIsArray( $result );
@@ -151,7 +95,7 @@ class Hostile_Source_Response_Test extends Integration_Test_Case {
 
 		// ACT.
 		$result = ( new Source_Posts_API( new HTTP_Client() ) )
-			->fetch_posts( self::SOURCE_SITE_URL );
+			->fetch_posts( $this->source_site_url );
 
 		// ASSERT: Status survives intact.
 		$this->assertIsArray( $result );
@@ -180,7 +124,7 @@ class Hostile_Source_Response_Test extends Integration_Test_Case {
 
 		// ACT.
 		$result = ( new Source_Posts_API( new HTTP_Client() ) )
-			->fetch_posts( self::SOURCE_SITE_URL );
+			->fetch_posts( $this->source_site_url );
 
 		// ASSERT: esc_url_raw with an http/https allowlist returns an empty
 		// string for any other scheme.
@@ -208,7 +152,7 @@ class Hostile_Source_Response_Test extends Integration_Test_Case {
 
 		// ACT.
 		$result = ( new Source_Posts_API( new HTTP_Client() ) )
-			->fetch_posts( self::SOURCE_SITE_URL );
+			->fetch_posts( $this->source_site_url );
 
 		// ASSERT.
 		$this->assertIsArray( $result );
