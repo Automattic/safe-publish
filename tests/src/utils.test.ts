@@ -8,6 +8,7 @@ import {
 	formatBadgeTimestamp,
 	formatDateTime,
 	extractUrlPath,
+	getErrorMessage,
 	renderIssueMessage,
 	renderWarningMessage,
 	renderWarningShortLabel,
@@ -44,6 +45,26 @@ beforeEach( () => {
 
 afterEach( () => {
 	setSettings( originalDateSettings );
+} );
+
+describe( 'getErrorMessage', () => {
+	it( 'should surface the session-expired message from a nonce-expired response', () => {
+		// ARRANGE: the structured 403 body the AJAX handlers return on a
+		// stale nonce.
+		const response = {
+			success: false as const,
+			data: {
+				code: 'safe_publish_nonce_expired',
+				message: 'Your session has expired. Reload the page.',
+			},
+		};
+
+		// ACT: extract the user-facing message.
+		const message = getErrorMessage( response );
+
+		// ASSERT: the session-expiry copy surfaces, not the generic fallback.
+		expect( message ).toBe( 'Your session has expired. Reload the page.' );
+	} );
 } );
 
 describe( 'formatDateTime', () => {

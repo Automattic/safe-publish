@@ -237,7 +237,7 @@ final class Audit_Log_Page {
 					'channel'            => (string) $row['channel'],
 					'level'              => (string) $row['level'],
 					'event'              => (string) $row['event'],
-					'date'               => str_replace( ' ', 'T', $created ) . 'Z',
+					'date'               => Datetime_Sanitizer::gmt_to_iso8601( $created ),
 					'actor_user_id'      => isset( $data['actor_user_id'] ) ? (int) $data['actor_user_id'] : 0,
 					'actor_display_name' => isset( $data['actor_display_name'] ) ? (string) $data['actor_display_name'] : '',
 					'actor_source'       => isset( $data['actor_source'] ) ? (string) $data['actor_source'] : '',

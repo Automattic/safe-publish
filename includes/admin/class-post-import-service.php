@@ -11,6 +11,7 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\Meta_Terms_Manager;
+use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
@@ -1952,6 +1953,12 @@ class Post_Import_Service {
 			);
 
 			if ( is_wp_error( $fresh_result ) ) {
+				// Preserve the size-limit code; mask other fetch failures.
+				$error_code = $fresh_result->get_error_code();
+				if ( HTTP_Client::ERROR_RESPONSE_TOO_LARGE === $error_code ) {
+					return $fresh_result;
+				}
+
 				return new WP_Error(
 					'fetch_failed',
 					$fresh_result->get_error_message()
@@ -2071,13 +2078,10 @@ class Post_Import_Service {
 			$this->content_processor->get_warnings()
 		);
 
-		// Unsanitized values; sanitized downstream before being stored.
-		$fields['meta']  = is_array( $fresh_result['meta'] ?? null )
-			? $fresh_result['meta']
-			: $fields['meta'];
-		$fields['terms'] = is_array( $fresh_result['terms'] ?? null )
-			? $fresh_result['terms']
-			: $fields['terms'];
+		// Meta and terms come from the fresh source payload, not the request.
+		// fetch_fresh_post_content() guarantees both as arrays.
+		$fields['meta']  = $fresh_result['meta'];
+		$fields['terms'] = $fresh_result['terms'];
 
 		return array(
 			'fields'              => $fields,

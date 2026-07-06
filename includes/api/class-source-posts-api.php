@@ -263,11 +263,13 @@ class Source_Posts_API {
 	 *   value can't escape the `safe-publish-status-badge--<status>` class
 	 *   template (React doesn't escape className contents).
 	 *
-	 * Items without an id or title are dropped so the destination's listing
-	 * UI has stable shape guarantees regardless of source plugin version.
+	 * Items without an id are dropped for stable listing shape regardless of
+	 * source plugin version; an empty or whitespace-only title is replaced
+	 * with a "(no title)" placeholder so untitled source posts stay visible
+	 * instead of vanishing from the listing.
 	 *
 	 * @param mixed $item Raw item from the catalog response.
-	 * @return array|null Shape-valid item or null when required fields are missing.
+	 * @return array|null Shape-valid item, or null when it has no usable id.
 	 */
 	private static function normalize_listing_item( mixed $item ): ?array {
 		if ( ! is_array( $item ) ) {
@@ -280,8 +282,9 @@ class Source_Posts_API {
 		}
 
 		$title = isset( $item['title'] ) ? (string) $item['title'] : '';
-		if ( '' === $title ) {
-			return null;
+		// Empty or whitespace-only, including a non-breaking space.
+		if ( 1 === preg_match( '/^[\p{Z}\s]*$/u', $title ) ) {
+			$title = __( '(no title)', 'safe-publish' );
 		}
 
 		$raw_link  = (string) ( $item['link'] ?? '' );
@@ -396,14 +399,14 @@ class Source_Posts_API {
 	 * @param string $source_site_url   Source site URL.
 	 * @param array  $auth_credentials  Optional. Authentication credentials. Default empty array.
 	 * @param string $post_type         Optional. Post type slug or REST endpoint. Default 'post'.
-	 * @return array|false Post data array on success, false on failure.
+	 * @return array|false|WP_Error Post data, WP_Error if too large, or false.
 	 */
 	public function fetch_fresh_post_content(
 		int $source_post_id,
 		string $source_site_url,
 		array $auth_credentials = array(),
 		string $post_type = 'post'
-	): array|false {
+	): array|false|WP_Error {
 		// Validate URL first.
 		if ( ! URL_Validator::is_valid_external_url( $source_site_url ) ) {
 			return false;
@@ -443,6 +446,13 @@ class Source_Posts_API {
 				$source_site_url,
 				$response->get_error_message()
 			);
+
+			// Surface the size-limit reason so the import UI can explain the
+			// failure instead of showing a generic message.
+			$error_code = $response->get_error_code();
+			if ( HTTP_Client::ERROR_RESPONSE_TOO_LARGE === $error_code ) {
+				return $response;
+			}
 
 			return false;
 		}
@@ -612,6 +622,10 @@ class Source_Posts_API {
 			$auth_credentials,
 			$post_type
 		);
+
+		if ( is_wp_error( $fresh_data ) ) {
+			return $fresh_data;
+		}
 
 		if ( false === $fresh_data ) {
 			return new WP_Error(

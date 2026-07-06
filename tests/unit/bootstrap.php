@@ -43,6 +43,10 @@ if ( ! defined( 'HOUR_IN_SECONDS' ) ) {
 	define( 'HOUR_IN_SECONDS', 60 * MINUTE_IN_SECONDS );
 }
 
+if ( ! defined( 'MB_IN_BYTES' ) ) {
+	define( 'MB_IN_BYTES', 1024 * 1024 );
+}
+
 // Load Composer autoloader.
 require_once __DIR__ . '/../../vendor/autoload.php';
 
