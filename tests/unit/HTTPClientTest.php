@@ -11,6 +11,7 @@ namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
 use Safe_Publish\API\HTTP_Client;
+use Safe_Publish\API\Request_Actions;
 
 /**
  * HTTP Client Test.
@@ -38,6 +39,40 @@ class HTTPClientTest extends TestCase {
 	 */
 	public function test_http_client_initializes(): void {
 		$this->assertInstanceOf( HTTP_Client::class, $this->http_client );
+	}
+
+	/**
+	 * Resets the HTTP response stub between tests.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		reset_test_http_response();
+		parent::tearDown();
+	}
+
+	/**
+	 * Verifies that make_request forwards the response-size cap to the
+	 * transport.
+	 */
+	public function test_make_request_bounds_response_size(): void {
+		// ARRANGE: Stub a successful response so the request completes.
+		set_test_http_response( array( 'response' => array( 'code' => 200 ) ) );
+
+		// ACT: Issue a request through the shared client.
+		$this->http_client->make_request(
+			'https://example.com/wp-json/safe-publish/v1/catalog/posts',
+			Request_Actions::LIST_ITEMS
+		);
+
+		// ASSERT: The transport received the response-size cap.
+		$this->assertArrayHasKey(
+			'limit_response_size',
+			$GLOBALS['_test_http_last_args']
+		);
+		$this->assertSame(
+			HTTP_Client::MAX_RESPONSE_BYTES,
+			$GLOBALS['_test_http_last_args']['limit_response_size']
+		);
 	}
 
 	/**
