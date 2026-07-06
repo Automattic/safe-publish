@@ -7,6 +7,7 @@ import {
 	createPostsActions,
 	type PostsActionsContext,
 } from '@/actions';
+import { RETRY_PENDING_DELAY_MS } from '@/constants';
 import BulkRollbackPostModal from '@/components/BulkRollbackPostModal';
 import RollbackPostModal from '@/components/RollbackPostModal';
 import type {
@@ -302,6 +303,7 @@ function buildIssue( overrides: Partial< AttentionIssue > = {} ): AttentionIssue
 		issue_type: 'nav_ref_rewrite_failed',
 		target_ref: 8300,
 		target_kind: 'post',
+		target_is_reusable_block: false,
 		severity: 'error',
 		source_site_url: 'https://source.example.com',
 		first_detected_gmt: '2024-03-15 10:30:00',
@@ -328,6 +330,7 @@ function runCallback(
 describe( 'createAttentionIssueActions', () => {
 	afterEach( () => {
 		vi.unstubAllGlobals();
+		vi.useRealTimers();
 	} );
 
 	it( 'shows Retry only for retryable issues', () => {
@@ -406,15 +409,64 @@ describe( 'createAttentionIssueActions', () => {
 		} );
 	} );
 
-	it( 'surfaces a warning notice when the reconciliation leaves the issue open', async () => {
-		// ARRANGE: a reconciliation that runs but doesn't clear the issue.
+	it( 'maps an unresolved outcome to a still-needs-attention warning', async () => {
+		// ARRANGE: a reconciliation that ran but left the issue open.
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockResolvedValue( {
 				json: () =>
 					Promise.resolve( {
 						success: true,
-						data: { resolved: false },
+						data: {
+							resolved: false,
+							outcome: 'unresolved',
+							detail: '',
+						},
+					} ),
+			} )
+		);
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		const retry = createAttentionIssueActions( onRefresh, {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+			onNotice,
+		} )[ 0 ];
+
+		// ACT: retry an unmapped reference the run couldn't clear.
+		runCallback( retry, [
+			buildIssue( {
+				issue_type: 'unmapped_block_reference',
+				target_ref: 5,
+				target_kind: 'post',
+			} ),
+		] );
+
+		// ASSERT: a still-needs-attention warning is surfaced and the listing
+		// still refreshes.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		expect( onNotice ).toHaveBeenCalledWith(
+			expect.objectContaining( {
+				status: 'warning',
+				message: expect.stringContaining( 'Still needs attention.' ),
+			} )
+		);
+	} );
+
+	it( 'maps a target_absent outcome to actionable import guidance', async () => {
+		// ARRANGE: a reconciliation whose target still isn't on this site.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: () =>
+					Promise.resolve( {
+						success: true,
+						data: {
+							resolved: false,
+							outcome: 'target_absent',
+							detail: 'Internal diagnostic.',
+						},
 					} ),
 			} )
 		);
@@ -436,19 +488,54 @@ describe( 'createAttentionIssueActions', () => {
 			} ),
 		] );
 
-		// ASSERT: a warning notice carrying the guidance is surfaced and the
-		// listing still refreshes.
+		// ASSERT: the import-then-retry guidance is surfaced as a warning,
+		// distinct from the generic still-needs-attention copy.
 		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
-		expect( onNotice ).toHaveBeenCalledWith(
-			expect.objectContaining( {
-				status: 'warning',
-				message: expect.stringContaining( 'Import it, then Retry' ),
-			} )
-		);
+		const notice = onNotice.mock.calls.at( -1 )?.[ 0 ];
+		expect( notice.status ).toBe( 'warning' );
+		expect( notice.message ).toContain( 'Import it, then Retry' );
+		expect( notice.message ).not.toContain( 'Still needs attention' );
 	} );
 
-	it( 'shows an in-flight notice while the retry runs', () => {
+	it( 'maps a write_failed outcome to an error notice', async () => {
+		// ARRANGE: a reconciliation whose write failed.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: () =>
+					Promise.resolve( {
+						success: true,
+						data: {
+							resolved: false,
+							outcome: 'write_failed',
+							detail: 'Internal diagnostic.',
+						},
+					} ),
+			} )
+		);
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		const retry = createAttentionIssueActions( onRefresh, {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+			onNotice,
+		} )[ 0 ];
+
+		// ACT: retry an issue whose reconciliation write failed.
+		runCallback( retry, [ buildIssue( { affected_title: 'Primary Menu' } ) ] );
+
+		// ASSERT: a hard error notice is surfaced, not a soft warning.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		expect( onNotice ).toHaveBeenCalledWith( {
+			status: 'error',
+			message: "Retry couldn't complete for Primary Menu.",
+		} );
+	} );
+
+	it( 'holds the in-flight notice back until the delay elapses', () => {
 		// ARRANGE: a retry whose response never settles, so it stays in flight.
+		vi.useFakeTimers();
 		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
 		const onNotice = vi.fn();
 
@@ -461,7 +548,17 @@ describe( 'createAttentionIssueActions', () => {
 		// ACT: run the Retry callback.
 		runCallback( retry, [ buildIssue() ] );
 
-		// ASSERT: an info notice shows immediately, before any response.
+		// ASSERT: the banner clears at once, but "Retrying…" waits out the
+		// delay so a fast retry never flashes it.
+		expect( onNotice ).toHaveBeenCalledWith( null );
+		expect( onNotice ).not.toHaveBeenCalledWith(
+			expect.objectContaining( { status: 'info' } )
+		);
+
+		// ACT: let the delay elapse.
+		vi.advanceTimersByTime( RETRY_PENDING_DELAY_MS );
+
+		// ASSERT: only now does the in-flight notice appear.
 		expect( onNotice ).toHaveBeenCalledWith( {
 			status: 'info',
 			message: 'Retrying…',
@@ -470,6 +567,7 @@ describe( 'createAttentionIssueActions', () => {
 
 	it( 'ignores a second retry for the same issue while one is in flight', () => {
 		// ARRANGE: a retry that stays in flight, plus a shared in-flight set.
+		vi.useFakeTimers();
 		const fetchMock = vi.fn().mockReturnValue( new Promise( () => {} ) );
 		vi.stubGlobal( 'fetch', fetchMock );
 		const inFlight = new Set< string >();
@@ -488,7 +586,7 @@ describe( 'createAttentionIssueActions', () => {
 		expect( fetchMock ).toHaveBeenCalledTimes( 1 );
 	} );
 
-	it( 'clears the in-flight notice when the retry resolves', async () => {
+	it( 'confirms resolution with a success notice naming the content', async () => {
 		// ARRANGE: a retry that resolves the issue.
 		vi.stubGlobal(
 			'fetch',
@@ -506,11 +604,18 @@ describe( 'createAttentionIssueActions', () => {
 			onNotice,
 		} )[ 0 ];
 
-		// ACT: run the Retry callback.
-		runCallback( retry, [ buildIssue() ] );
+		// ACT: retry an issue that clears.
+		runCallback( retry, [ buildIssue( { affected_title: 'Primary Menu' } ) ] );
 
-		// ASSERT: the transient notice ends cleared once the issue resolves.
+		// ASSERT: the outcome confirms the fix by name, and the quick resolve
+		// never flashed the in-flight notice.
 		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
-		expect( onNotice ).toHaveBeenLastCalledWith( null );
+		expect( onNotice ).toHaveBeenLastCalledWith( {
+			status: 'success',
+			message: 'Resolved: Primary Menu',
+		} );
+		expect( onNotice ).not.toHaveBeenCalledWith(
+			expect.objectContaining( { status: 'info' } )
+		);
 	} );
 } );

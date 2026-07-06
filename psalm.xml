@@ -21,6 +21,7 @@
             <directory name="vendor/"/>
             <file name="tests/wp-tests-config.php"/>
             <file name="bin/seed-content.php"/>
+            <file name="bin/seed-degradations.php"/>
         </ignoreFiles>
     </projectFiles>
     <issueHandlers>

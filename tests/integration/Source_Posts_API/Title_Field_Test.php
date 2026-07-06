@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration\Source_Posts_API;
 
+use Safe_Publish\API\Catalog_REST_Controller;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 
@@ -60,7 +61,7 @@ class Title_Field_Test extends Source_Posts_API_Test_Base {
 		$post = get_post( $post_id );
 		$this->assertNotNull( $post );
 
-		$prepared = Source_Posts_API::prepare_listing_payload_from_post( $post );
+		$prepared = Catalog_REST_Controller::prepare_listing_payload_from_post( $post );
 
 		return $prepared['title'];
 	}

@@ -16,6 +16,7 @@ use Safe_Publish\Auth\Auth_Logger;
 use Safe_Publish\Auth\HMAC_Authenticator;
 use Safe_Publish\Auth\Permission_Manager;
 use ReflectionClass;
+use WP_Query;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
@@ -45,6 +46,13 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	private HMAC_Authenticator $authenticator;
 
 	/**
+	 * Audit events captured via the safe_publish_event_logged hook.
+	 *
+	 * @var array<int, array{channel: string, event: string, data: array}>
+	 */
+	private array $logged_events = array();
+
+	/**
 	 * Registers the controller and a fresh REST server for each test.
 	 */
 	#[\Override]
@@ -62,7 +70,18 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 			home_url()
 		);
 
-		( new Catalog_REST_Controller( $this->authenticator ) )->init();
+		( new Catalog_REST_Controller(
+			$this->authenticator,
+			new Dispatch_Logger()
+		) )->init();
+
+		$this->logged_events = array();
+		add_action(
+			'safe_publish_event_logged',
+			array( $this, 'capture_logged_event' ),
+			10,
+			3
+		);
 
 		global $wp_rest_server;
 		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound, Squiz.PHP.DisallowMultipleAssignments.Found
@@ -76,6 +95,12 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	 */
 	#[\Override]
 	protected function tearDown(): void {
+		remove_action(
+			'safe_publish_event_logged',
+			array( $this, 'capture_logged_event' ),
+			10
+		);
+
 		global $wp_rest_server;
 		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
 		$wp_rest_server = null;
@@ -409,6 +434,95 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		// ASSERT: Only the post containing the literal "100%" matches.
 		$this->assertCount( 1, $items );
 		$this->assertSame( $literal, $items[0]['id'] );
+	}
+
+	/**
+	 * Verifies that the title-only search override is scoped to the catalog's
+	 * own query: a nested WP_Query with `s` set that fires while the filter is
+	 * registered keeps WP's default multi-column search.
+	 */
+	public function test_search_override_does_not_leak_into_nested_query(): void {
+		// ARRANGE: A post that only matches the nested term in its body.
+		$body_only = self::factory()->post->create(
+			array(
+				'post_status'  => 'publish',
+				'post_title'   => 'Nothing to see',
+				'post_content' => 'Contains the needle in its body.',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		// Fire one nested search from inside the outer catalog query and
+		// capture what it matched; the guard keeps it to a single run.
+		$nested_ids = array();
+		$ran        = false;
+		$listener   = static function ( array $posts ) use ( &$nested_ids, &$ran ): array {
+			if ( $ran ) {
+				return $posts;
+			}
+			$ran        = true;
+			$nested     = new WP_Query(
+				array(
+					's'         => 'needle',
+					'post_type' => 'post',
+					'fields'    => 'ids',
+				)
+			);
+			$nested_ids = $nested->posts;
+
+			return $posts;
+		};
+		add_filter( 'the_posts', $listener );
+
+		try {
+			// ACT: Run the outer catalog search; our override is active for it.
+			$this->dispatch_items( array( 'search' => 'outer' ) );
+		} finally {
+			remove_filter( 'the_posts', $listener );
+		}
+
+		// ASSERT: Nested query matched the body; the override didn't leak in.
+		$this->assertContains( $body_only, $nested_ids );
+	}
+
+	/**
+	 * Verifies that the search caps the number of AND'd title LIKE clauses so
+	 * a very long term can't explode query cost.
+	 */
+	public function test_search_caps_title_like_clause_count(): void {
+		// ARRANGE: A 50-token term and one post to query against.
+		$term = implode(
+			' ',
+			array_map( static fn( int $n ): string => 'tok' . $n, range( 1, 50 ) )
+		);
+		self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$this->force_hmac_authenticated( true );
+
+		// Capture the WHERE built for the search query (the only one carrying
+		// title LIKEs).
+		$captured_where = '';
+		$listener       = static function ( array $clauses ) use ( &$captured_where ): array {
+			if ( str_contains( $clauses['where'], 'post_title LIKE' ) ) {
+				$captured_where = $clauses['where'];
+			}
+
+			return $clauses;
+		};
+		add_filter( 'posts_clauses', $listener );
+
+		try {
+			// ACT: Run the search.
+			$this->dispatch_items( array( 'search' => $term ) );
+		} finally {
+			remove_filter( 'posts_clauses', $listener );
+		}
+
+		// ASSERT: The WHERE carries the capped count of title LIKEs (8), not
+		// one per token.
+		$this->assertSame(
+			8,
+			substr_count( $captured_where, 'post_title LIKE' )
+		);
 	}
 
 	/**
@@ -847,9 +961,9 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that the post-types endpoint returns post, page, and
-	 * wp_navigation (the non-public type the catalog explicitly opts in)
-	 * while still excluding attachment.
+	 * Verifies that the post-types endpoint returns post, page, wp_navigation,
+	 * and wp_block (the non-public types the catalog explicitly opts in) while
+	 * still excluding attachment.
 	 */
 	public function test_post_types_endpoint_returns_only_catalog_eligible_types(): void {
 		// ARRANGE: Authenticated session; rely on the WP default post types.
@@ -860,12 +974,14 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 			new WP_REST_Request( 'GET', '/safe-publish/v1/catalog/post-types' )
 		);
 
-		// ASSERT: 200, includes post + page + wp_navigation, excludes attachment.
+		// ASSERT: 200, includes post + page + the opted-in non-public types,
+		// excludes attachment.
 		$this->assertSame( 200, $response->get_status() );
 		$slugs = array_column( $response->get_data(), 'slug' );
 		$this->assertContains( 'post', $slugs );
 		$this->assertContains( 'page', $slugs );
 		$this->assertContains( 'wp_navigation', $slugs );
+		$this->assertContains( 'wp_block', $slugs );
 		$this->assertNotContains( 'attachment', $slugs );
 	}
 
@@ -893,6 +1009,32 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$this->assertSame( 1, count( $items ) );
 		$this->assertSame( $nav_id, $items[0]['id'] );
 		$this->assertSame( 'wp_navigation', $items[0]['post_type'] );
+	}
+
+	/**
+	 * Verifies that the listing endpoint accepts wp_block as a post_type
+	 * param — the non-public allowlist applies to both gates.
+	 */
+	public function test_listing_endpoint_accepts_wp_block_post_type(): void {
+		// ARRANGE: Create one wp_block post and authenticate.
+		$block_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'wp_block',
+				'post_status' => 'publish',
+				'post_title'  => 'Reusable intro',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Request the wp_block listing.
+		$response = $this->dispatch( array( 'post_type' => 'wp_block' ) );
+
+		// ASSERT: 200 and the block post is present.
+		$this->assertSame( 200, $response->get_status() );
+		$items = $response->get_data()['items'];
+		$this->assertSame( 1, count( $items ) );
+		$this->assertSame( $block_id, $items[0]['id'] );
+		$this->assertSame( 'wp_block', $items[0]['post_type'] );
 	}
 
 	/**
@@ -941,15 +1083,96 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that a catalog request failing with a WP_Error writes a
+	 * DISPATCH_REQUEST_ERROR row to the dispatch audit channel, carrying the
+	 * route, declared action, destination URL, and error code.
+	 */
+	public function test_wp_error_writes_dispatch_request_error_row(): void {
+		// ARRANGE: Authenticated request that will fail the post-type gate.
+		register_post_type(
+			'sp_private',
+			array(
+				'public'       => false,
+				'show_in_rest' => false,
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		try {
+			// ACT: Dispatch with the Safe Publish action + User-Agent headers.
+			$response = $this->dispatch(
+				array( 'post_type' => 'sp_private' ),
+				array(
+					'X-Safe-Publish-Action' => 'list',
+					'User-Agent'            => 'Safe Publish/1.0.0; https://dest.example.com',
+				)
+			);
+
+			// ASSERT: Request failed and exactly one dispatch row was written.
+			$this->assertSame( 400, $response->get_status() );
+			$dispatch_events = $this->dispatch_channel_events();
+			$this->assertCount( 1, $dispatch_events );
+
+			$event = $dispatch_events[0];
+			$this->assertSame( 'DISPATCH_REQUEST_ERROR', $event['event'] );
+			$this->assertSame(
+				'/safe-publish/v1/catalog/posts',
+				$event['data']['route']
+			);
+			$this->assertSame( 'list', $event['data']['action'] );
+			$this->assertSame(
+				'https://dest.example.com',
+				$event['data']['destination_site_url']
+			);
+			$this->assertSame(
+				'safe_publish_catalog_invalid_post_type',
+				$event['data']['error_code']
+			);
+		} finally {
+			unregister_post_type( 'sp_private' );
+		}
+	}
+
+	/**
+	 * Verifies that a successful catalog request writes no dispatch audit row
+	 * — only failures are recorded on the dispatch channel.
+	 */
+	public function test_successful_request_writes_no_dispatch_row(): void {
+		// ARRANGE: A published post and an authenticated request.
+		self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Dispatch a valid request.
+		$response = $this->dispatch(
+			array(),
+			array(
+				'X-Safe-Publish-Action' => 'list',
+				'User-Agent'            => 'Safe Publish/1.0.0; https://dest.example.com',
+			)
+		);
+
+		// ASSERT: 200 and no dispatch-channel rows.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertCount( 0, $this->dispatch_channel_events() );
+	}
+
+	/**
 	 * Dispatches the catalog route with optional overrides.
 	 *
-	 * @param array $params Query params to set on the request.
+	 * @param array $params  Query params to set on the request.
+	 * @param array $headers Headers to set on the request.
 	 * @return WP_REST_Response
 	 */
-	private function dispatch( array $params = array() ): WP_REST_Response {
+	private function dispatch(
+		array $params = array(),
+		array $headers = array()
+	): WP_REST_Response {
 		$request = new WP_REST_Request( 'GET', '/safe-publish/v1/catalog/posts' );
 		foreach ( $params as $key => $value ) {
 			$request->set_param( $key, $value );
+		}
+		foreach ( $headers as $name => $value ) {
+			$request->set_header( $name, $value );
 		}
 
 		return $this->server->dispatch( $request );
@@ -975,5 +1198,38 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$reflection = new ReflectionClass( $this->authenticator );
 		$property   = $reflection->getProperty( 'authenticated' );
 		$property->setValue( $this->authenticator, $authenticated );
+	}
+
+	/**
+	 * Captures an audit event fired during a test.
+	 *
+	 * @param string $channel Audit channel.
+	 * @param string $event   Event type.
+	 * @param array  $data    Event payload.
+	 */
+	public function capture_logged_event(
+		string $channel,
+		string $event,
+		array $data
+	): void {
+		$this->logged_events[] = array(
+			'channel' => $channel,
+			'event'   => $event,
+			'data'    => $data,
+		);
+	}
+
+	/**
+	 * Returns the captured events written to the dispatch channel.
+	 *
+	 * @return array<int, array{channel: string, event: string, data: array}>
+	 */
+	private function dispatch_channel_events(): array {
+		return array_values(
+			array_filter(
+				$this->logged_events,
+				static fn( array $e ): bool => 'dispatch' === $e['channel']
+			)
+		);
 	}
 }

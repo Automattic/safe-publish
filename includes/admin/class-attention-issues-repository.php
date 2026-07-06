@@ -95,7 +95,7 @@ final class Attention_Issues_Repository {
 	 * @param string[] $managed_types    Issue types this reconcile owns.
 	 * @param array[]  $current          Issues to keep open; each carries
 	 *                                   issue_type, target_ref, target_kind,
-	 *                                   severity, and detail.
+	 *                                   severity, and an optional detail array.
 	 */
 	public function reconcile_post_issues(
 		int $affected_post_id,

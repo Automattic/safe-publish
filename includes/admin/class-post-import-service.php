@@ -11,9 +11,12 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\Meta_Terms_Manager;
+use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
+use Safe_Publish\Utils\Reconcile_Outcome;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
 use Exception;
@@ -799,15 +802,15 @@ class Post_Import_Service {
 	 * a WP_Error if content processing fails or if kses is enabled and
 	 * sanitization would modify the content.
 	 *
-	 * @param string         $content        Raw post content.
-	 * @param array<int,int> $session_id_map Source post ID => destination post ID for
-	 *                                       the in-flight bulk batch; feeds block ID
-	 *                                       remapping.
+	 * @param string                               $content              Raw post content.
+	 * @param array<int,int>                       $session_id_map       Bulk batch source => destination post IDs.
+	 * @param array<string, array<string, string>> $library_metadata_map Source URL => library metadata for sideloads.
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
 	private function process_post_content(
 		string $content,
-		array $session_id_map = array()
+		array $session_id_map = array(),
+		array $library_metadata_map = array()
 	): string|WP_Error {
 		$source_site_url = $this->get_connected_source_url();
 
@@ -818,7 +821,10 @@ class Post_Import_Service {
 		$processed = $this->content_processor->process_content(
 			$content,
 			$source_site_url,
-			array( 'session_id_map' => $session_id_map )
+			array(
+				'session_id_map'       => $session_id_map,
+				'library_metadata_map' => $library_metadata_map,
+			)
 		);
 
 		if ( is_wp_error( $processed ) ) {
@@ -1629,18 +1635,22 @@ class Post_Import_Service {
 	 * Re-runs the navigation rewriter for a menu and reconciles its issues.
 	 *
 	 * Self-verifying retry: re-attempts every post referencing the menu, so an
-	 * issue clears precisely when its post no longer fails the rewrite. No-op
-	 * when the menu is not present on the destination.
+	 * issue clears precisely when its post no longer fails the rewrite.
 	 *
-	 * @param int    $source_nav_id   Menu's source post id.
-	 * @param string $source_site_url Path-bearing source identity.
+	 * @param int    $affected_post_id Referencing post whose issue was retried.
+	 * @param int    $source_nav_id    Menu's source post id.
+	 * @param string $source_site_url  Path-bearing source identity.
+	 * @return Reconcile_Outcome Target_absent when the menu is not present;
+	 *                           write_failed when this post's rewrite failed;
+	 *                           resolved otherwise.
 	 */
 	public function retry_nav_ref_rewrite(
+		int $affected_post_id,
 		int $source_nav_id,
 		string $source_site_url
-	): void {
+	): Reconcile_Outcome {
 		if ( '' === $source_site_url ) {
-			return;
+			return Reconcile_Outcome::target_absent( 'Source identity is empty.' );
 		}
 
 		$dest_nav = $this->find_imported_navigation(
@@ -1649,7 +1659,12 @@ class Post_Import_Service {
 		);
 
 		if ( ! $dest_nav instanceof WP_Post ) {
-			return;
+			return Reconcile_Outcome::target_absent(
+				sprintf(
+					'Destination navigation menu for source %d is not imported.',
+					$source_nav_id
+				)
+			);
 		}
 
 		$result = $this->nav_ref_rewriter->rewrite_cross_refs(
@@ -1667,6 +1682,16 @@ class Post_Import_Service {
 			$result['failed'],
 			array( 'source_nav_id' => $source_nav_id )
 		);
+
+		$failed_ids = array_map( 'intval', $result['failed'] );
+
+		if ( in_array( $affected_post_id, $failed_ids, true ) ) {
+			return Reconcile_Outcome::write_failed(
+				'Navigation rewrite failed for the referencing post.'
+			);
+		}
+
+		return Reconcile_Outcome::resolved();
 	}
 
 	/**
@@ -1680,14 +1705,15 @@ class Post_Import_Service {
 	 * @param int    $target_ref       Source id to repoint.
 	 * @param string $target_kind      'post' or 'term'.
 	 * @param string $source_site_url  Path-bearing source identity.
+	 * @return Reconcile_Outcome The reconciliation outcome.
 	 */
 	public function retry_block_ref_repoint(
 		int $affected_post_id,
 		int $target_ref,
 		string $target_kind,
 		string $source_site_url
-	): void {
-		$repointed = $this->content_processor->repoint_block_reference(
+	): Reconcile_Outcome {
+		$outcome = $this->content_processor->repoint_block_reference(
 			$affected_post_id,
 			$target_ref,
 			$target_kind,
@@ -1695,12 +1721,14 @@ class Post_Import_Service {
 		);
 
 		$this->resolve_or_touch(
-			$repointed,
+			$outcome->is_resolved(),
 			$affected_post_id,
 			'unmapped_block_reference',
 			$target_ref,
 			$target_kind
 		);
+
+		return $outcome;
 	}
 
 	/**
@@ -1710,25 +1738,28 @@ class Post_Import_Service {
 	 * @param int    $affected_post_id Orphaned child post.
 	 * @param int    $source_parent_id Source parent id.
 	 * @param string $source_site_url  Path-bearing source identity.
+	 * @return Reconcile_Outcome The reconciliation outcome.
 	 */
 	public function retry_parent_relink(
 		int $affected_post_id,
 		int $source_parent_id,
 		string $source_site_url
-	): void {
-		$relinked = $this->relink_parent(
+	): Reconcile_Outcome {
+		$outcome = $this->relink_parent(
 			$affected_post_id,
 			$source_parent_id,
 			$source_site_url
 		);
 
 		$this->resolve_or_touch(
-			$relinked,
+			$outcome->is_resolved(),
 			$affected_post_id,
 			'parent_orphaned',
 			$source_parent_id,
 			'post'
 		);
+
+		return $outcome;
 	}
 
 	/**
@@ -1737,17 +1768,18 @@ class Post_Import_Service {
 	 * @param int    $affected_post_id Child post.
 	 * @param int    $source_parent_id Source parent id.
 	 * @param string $source_site_url  Path-bearing source identity.
-	 * @return bool True when the parent was re-linked.
+	 * @return Reconcile_Outcome Resolved when re-linked; target_absent,
+	 *                           write_failed, or unresolved otherwise.
 	 */
 	private function relink_parent(
 		int $affected_post_id,
 		int $source_parent_id,
 		string $source_site_url
-	): bool {
+	): Reconcile_Outcome {
 		$post = get_post( $affected_post_id );
 
 		if ( ! $post instanceof WP_Post ) {
-			return false;
+			return Reconcile_Outcome::unresolved( 'Affected post is missing.' );
 		}
 
 		$resolved = $this->resolve_source_parent(
@@ -1757,11 +1789,18 @@ class Post_Import_Service {
 		);
 
 		if ( ! is_int( $resolved ) || $resolved <= 0 ) {
-			return false;
+			return Reconcile_Outcome::target_absent(
+				sprintf(
+					'Source parent %d is not imported on the destination.',
+					$source_parent_id
+				)
+			);
 		}
 
 		if ( ! $this->persist_post_parent( $affected_post_id, $resolved ) ) {
-			return false;
+			return Reconcile_Outcome::write_failed(
+				'Failed to write the post parent.'
+			);
 		}
 
 		clean_post_cache( $affected_post_id );
@@ -1771,7 +1810,7 @@ class Post_Import_Service {
 			time()
 		);
 
-		return true;
+		return Reconcile_Outcome::resolved();
 	}
 
 	/**
@@ -1914,6 +1953,12 @@ class Post_Import_Service {
 			);
 
 			if ( is_wp_error( $fresh_result ) ) {
+				// Preserve the size-limit code; mask other fetch failures.
+				$error_code = $fresh_result->get_error_code();
+				if ( HTTP_Client::ERROR_RESPONSE_TOO_LARGE === $error_code ) {
+					return $fresh_result;
+				}
+
 				return new WP_Error(
 					'fetch_failed',
 					$fresh_result->get_error_message()
@@ -1932,6 +1977,9 @@ class Post_Import_Service {
 		$fields['source_author']     = is_array( $fresh_result['source_author'] ?? null )
 			? $fresh_result['source_author']
 			: null;
+		$fields['source_media']      = is_array( $fresh_result['source_media'] ?? null )
+			? $fresh_result['source_media']
+			: array();
 
 		// Resolve the source author before any media processing so a failed
 		// resolution does not leave orphan attachments behind.
@@ -2003,7 +2051,8 @@ class Post_Import_Service {
 
 		$processed_content = $this->process_post_content(
 			$fresh_result['content'] ?? '',
-			$session_id_map
+			$session_id_map,
+			$fields['source_media']
 		);
 
 		if ( is_wp_error( $processed_content ) ) {
@@ -2029,13 +2078,10 @@ class Post_Import_Service {
 			$this->content_processor->get_warnings()
 		);
 
-		// Unsanitized values; sanitized downstream before being stored.
-		$fields['meta']  = is_array( $fresh_result['meta'] ?? null )
-			? $fresh_result['meta']
-			: $fields['meta'];
-		$fields['terms'] = is_array( $fresh_result['terms'] ?? null )
-			? $fresh_result['terms']
-			: $fields['terms'];
+		// Meta and terms come from the fresh source payload, not the request.
+		// fetch_fresh_post_content() guarantees both as arrays.
+		$fields['meta']  = $fresh_result['meta'];
+		$fields['terms'] = $fresh_result['terms'];
 
 		return array(
 			'fields'              => $fields,
@@ -2498,7 +2544,8 @@ class Post_Import_Service {
 
 		$attachment_id = $this->media_importer->import_featured_image(
 			$featured_media_id,
-			$source_site_url
+			$source_site_url,
+			Auth_Credential_Provider::get_credentials()
 		);
 
 		return $attachment_id;

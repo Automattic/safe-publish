@@ -49,6 +49,7 @@ class PostTypeMapTest extends TestCase {
 			'nav_menu_item' => array( 'nav_menu_item', 'nav_menu_items' ),
 			'media'         => array( 'media', 'media' ),
 			'wp_navigation' => array( 'wp_navigation', 'navigation' ),
+			'wp_block'      => array( 'wp_block', 'blocks' ),
 		);
 	}
 
@@ -122,6 +123,7 @@ class PostTypeMapTest extends TestCase {
 			'nav_menu_items' => array( 'nav_menu_items', 'nav_menu_item' ),
 			'media'          => array( 'media', 'media' ),
 			'navigation'     => array( 'navigation', 'wp_navigation' ),
+			'blocks'         => array( 'blocks', 'wp_block' ),
 		);
 	}
 
@@ -163,6 +165,8 @@ class PostTypeMapTest extends TestCase {
 			'media'               => array( 'media' ),
 			'wp_navigation slug'  => array( 'wp_navigation' ),
 			'navigation endpoint' => array( 'navigation' ),
+			'wp_block slug'       => array( 'wp_block' ),
+			'blocks endpoint'     => array( 'blocks' ),
 		);
 	}
 

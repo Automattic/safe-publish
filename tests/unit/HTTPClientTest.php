@@ -11,6 +11,7 @@ namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
 use Safe_Publish\API\HTTP_Client;
+use Safe_Publish\API\Request_Actions;
 
 /**
  * HTTP Client Test.
@@ -41,6 +42,40 @@ class HTTPClientTest extends TestCase {
 	}
 
 	/**
+	 * Resets the HTTP response stub between tests.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		reset_test_http_response();
+		parent::tearDown();
+	}
+
+	/**
+	 * Verifies that make_request forwards the response-size cap to the
+	 * transport.
+	 */
+	public function test_make_request_bounds_response_size(): void {
+		// ARRANGE: Stub a successful response so the request completes.
+		set_test_http_response( array( 'response' => array( 'code' => 200 ) ) );
+
+		// ACT: Issue a request through the shared client.
+		$this->http_client->make_request(
+			'https://example.com/wp-json/safe-publish/v1/catalog/posts',
+			Request_Actions::LIST_ITEMS
+		);
+
+		// ASSERT: The transport received the response-size cap.
+		$this->assertArrayHasKey(
+			'limit_response_size',
+			$GLOBALS['_test_http_last_args']
+		);
+		$this->assertSame(
+			HTTP_Client::MAX_RESPONSE_BYTES,
+			$GLOBALS['_test_http_last_args']['limit_response_size']
+		);
+	}
+
+	/**
 	 * Verifies that get_user_agent returns a string.
 	 */
 	public function test_get_user_agent_returns_string(): void {
@@ -48,6 +83,36 @@ class HTTPClientTest extends TestCase {
 
 		$this->assertIsString( $user_agent );
 		$this->assertStringContainsString( 'Safe Publish', $user_agent );
+	}
+
+	/**
+	 * Verifies that parse_destination_site_url extracts the URL from a standard
+	 * Safe Publish User-Agent string.
+	 */
+	public function test_parse_destination_site_url_extracts_url_from_user_agent(): void {
+		$result = HTTP_Client::parse_destination_site_url(
+			'Safe Publish/1.2.3; https://dest.example.com'
+		);
+
+		$this->assertSame( 'https://dest.example.com', $result );
+	}
+
+	/**
+	 * Verifies that parse_destination_site_url returns an empty string for an
+	 * absent User-Agent header.
+	 */
+	public function test_parse_destination_site_url_returns_empty_string_for_missing_header(): void {
+		$this->assertSame( '', HTTP_Client::parse_destination_site_url( '' ) );
+	}
+
+	/**
+	 * Verifies that parse_destination_site_url returns the raw value when the
+	 * User-Agent does not match the expected format.
+	 */
+	public function test_parse_destination_site_url_returns_raw_value_for_unknown_format(): void {
+		$result = HTTP_Client::parse_destination_site_url( 'curl/7.88.0' );
+
+		$this->assertSame( 'curl/7.88.0', $result );
 	}
 
 	/**
