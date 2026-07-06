@@ -356,4 +356,64 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		// unchanged value must not be treated as a failure.
 		$this->assertTrue( $result );
 	}
+
+	/**
+	 * Verifies that update_meta() returns true on a re-import of unchanged
+	 * scalar values whose PHP type differs from the string form stored by
+	 * WordPress (e.g. Jetpack keys carrying booleans/integers).
+	 *
+	 * WordPress writes scalar meta to the database as strings, so a boolean
+	 * true reads back as "1" and an int 0 as "0". update_post_meta() then
+	 * returns false on re-import because nothing changed; a strict read-back
+	 * comparison would wrongly flag these keys as failed writes.
+	 */
+	public function test_update_meta_returns_true_for_unchanged_scalar_types(): void {
+		// ARRANGE: Import scalar-typed meta once so it is stored as strings,
+		// mirroring keys like _jetpack_dont_email_post_to_subs (bool) and
+		// _jetpack_newsletter_tier_id (int).
+		$meta = array(
+			'_jetpack_dont_email_post_to_subs' => true,
+			'jetpack_post_was_ever_published'  => false,
+			'_jetpack_newsletter_tier_id'      => 0,
+		);
+		$this->assertTrue( $this->manager->update_meta( $this->post_id, $meta ) );
+
+		// ACT: Re-import the identical scalar values, as an update would.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		// ASSERT: No false failure — the type-tolerant read-back treats the
+		// unchanged bool/int values as already stored.
+		$this->assertTrue( $result );
+	}
+
+	/**
+	 * Verifies that update_meta() still reports a WP_Error when a write of a
+	 * falsy value to a missing key genuinely fails, rather than mistaking the
+	 * absent key (which reads back as "") for a successfully stored false.
+	 */
+	public function test_update_meta_reports_failed_write_of_missing_false_value(): void {
+		// ARRANGE: Block all meta writes and target a key that does not yet
+		// exist with a false value. An absent key reads back as "", the same
+		// string a stored false yields, so only an existence check can tell
+		// the failed write apart from a genuine no-op.
+		$filter = static function () {
+			return false;
+		};
+		add_filter( 'update_post_metadata', $filter );
+
+		$meta = array( 'never_written_flag' => false );
+
+		// ACT: Attempt the blocked write.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		remove_filter( 'update_post_metadata', $filter );
+
+		// ASSERT: The genuine failure is reported, not swallowed.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'meta_update_failed', $result->get_error_code() );
+		$this->assertStringContainsString(
+			'never_written_flag',
+			$result->get_error_message()
+		);
+	}
 }
