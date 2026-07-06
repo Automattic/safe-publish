@@ -73,6 +73,7 @@ class Log_Events {
 	const DISPATCH_RESPONSE_BAD_STATUS = 'DISPATCH_RESPONSE_BAD_STATUS';
 
 	// Import session and item lifecycle events.
+	const IMPORT_ITEM_FAILED          = 'IMPORT_ITEM_FAILED';
 	const SESSION_ROLLED_BACK         = 'SESSION_ROLLED_BACK';
 	const ITEM_ROLLED_BACK            = 'ITEM_ROLLED_BACK';
 	const SESSION_ALREADY_ROLLED_BACK = 'SESSION_ALREADY_ROLLED_BACK';

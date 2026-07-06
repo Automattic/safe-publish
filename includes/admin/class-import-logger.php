@@ -13,10 +13,18 @@ use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Logger;
 
 /**
- * Logger for Safe Publish import-history events such as session and item
- * rollbacks.
+ * Logger for Safe Publish import session and item lifecycle events.
  */
 class Import_Logger extends Logger {
+
+	/**
+	 * Failure codes treated as unexpected and escalated to the server log via
+	 * log_error. Every other code is an expected domain failure routed to
+	 * log_failure, which records the audit row without a server-log line.
+	 *
+	 * @var string[]
+	 */
+	private const UNEXPECTED_FAILURE_CODES = array( 'unexpected_exception' );
 
 	/**
 	 * Constructs the Import_Logger instance.
@@ -179,5 +187,37 @@ class Import_Logger extends Logger {
 				'wpdb_error'      => $wpdb_error,
 			)
 		);
+	}
+
+	/**
+	 * Logs a per-item import failure, routing by error code (see
+	 * UNEXPECTED_FAILURE_CODES).
+	 *
+	 * @param int      $session_id     Session the failed item belongs to.
+	 * @param int|null $source_post_id Source post ID, or null when unknown.
+	 * @param string   $error_code     Failure reason code (e.g. post_update_failed).
+	 * @param string   $error_message  Human-readable failure message.
+	 * @param array    $context        Optional. Extra event data merged in.
+	 */
+	public function item_failed(
+		int $session_id,
+		?int $source_post_id,
+		string $error_code,
+		string $error_message,
+		array $context = array()
+	): void {
+		$data = array(
+			'session_id'     => $session_id,
+			'source_post_id' => $source_post_id,
+			'error_code'     => $error_code,
+			'error_message'  => $error_message,
+		) + $context;
+
+		if ( in_array( $error_code, self::UNEXPECTED_FAILURE_CODES, true ) ) {
+			$this->log_error( Log_Events::IMPORT_ITEM_FAILED, $data );
+			return;
+		}
+
+		$this->log_failure( Log_Events::IMPORT_ITEM_FAILED, $data );
 	}
 }

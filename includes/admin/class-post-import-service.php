@@ -641,6 +641,33 @@ class Post_Import_Service {
 	}
 
 	/**
+	 * Copies the parent-resolution reason and parent_id from a WP_Error's data
+	 * onto the given payload when present, so the abort path carries the
+	 * structured detail into both History and the audit event.
+	 *
+	 * @param WP_Error $error   Error whose data may hold reason and parent_id.
+	 * @param array    $payload Payload to receive the detail.
+	 * @return array Payload with reason and parent_id merged in when present.
+	 */
+	private function merge_parent_detail( WP_Error $error, array $payload ): array {
+		$error_data = $error->get_error_data();
+
+		if ( ! is_array( $error_data ) ) {
+			return $payload;
+		}
+
+		if ( isset( $error_data['reason'] ) ) {
+			$payload['reason'] = $error_data['reason'];
+		}
+
+		if ( isset( $error_data['parent_id'] ) ) {
+			$payload['parent_id'] = (int) $error_data['parent_id'];
+		}
+
+		return $payload;
+	}
+
+	/**
 	 * Builds a standardized error result array for an import operation.
 	 *
 	 * @param array  $fields        Sanitized post fields.
@@ -1210,7 +1237,10 @@ class Post_Import_Service {
 				'error',
 				null,
 				$prepared->get_error_message(),
-				array( 'action' => $prepared->get_error_code() )
+				$this->merge_parent_detail(
+					$prepared,
+					array( 'action' => $prepared->get_error_code() )
+				)
 			);
 
 			return $this->build_error_result(
@@ -1394,7 +1424,10 @@ class Post_Import_Service {
 				'error',
 				null,
 				$prepared->get_error_message(),
-				array( 'action' => $prepared->get_error_code() )
+				$this->merge_parent_detail(
+					$prepared,
+					array( 'action' => $prepared->get_error_code() )
+				)
 			);
 
 			return $this->build_error_result(
@@ -2024,7 +2057,10 @@ class Post_Import_Service {
 				return new WP_Error(
 					$fallback->get_error_code(),
 					$fallback->get_error_message(),
-					array( 'fields' => $fields )
+					$this->merge_parent_detail(
+						$fallback,
+						array( 'fields' => $fields )
+					)
 				);
 			}
 
@@ -2662,7 +2698,7 @@ class Post_Import_Service {
 			'error',
 			null,
 			$e->getMessage(),
-			array()
+			array( 'action' => 'unexpected_exception' )
 		);
 
 		return $this->build_error_result( $fields, $e->getMessage() );
