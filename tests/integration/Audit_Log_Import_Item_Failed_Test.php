@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests\Integration;
 use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
+use Safe_Publish\Admin\Import_Logger;
 use Safe_Publish\Admin\Navigation_Ref_Rewriter;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\API\HTTP_Client;
@@ -93,7 +94,9 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 		$this->assertSame( 'import', $event['channel'] );
 		$this->assertSame( 'error', $event['level'] );
 		$this->assertSame( Log_Events::IMPORT_ITEM_FAILED, $event['event'] );
-		$this->assertSame( 'validation_failed', $event['data']['action'] );
+		$this->assertSame( 'validation_failed', $event['data']['error_code'] );
+		$this->assertArrayHasKey( 'error_message', $event['data'] );
+		$this->assertNotSame( '', $event['data']['error_message'] );
 		$this->assertSame( 4321, $event['data']['source_post_id'] );
 		$this->assertSame( $session_id, $event['data']['session_id'] );
 
@@ -124,7 +127,7 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 		// ASSERT: the event is recorded for the bulk path too.
 		$events = $this->failed_events();
 		$this->assertCount( 1, $events );
-		$this->assertSame( 'validation_failed', $events[0]['data']['action'] );
+		$this->assertSame( 'validation_failed', $events[0]['data']['error_code'] );
 		$this->assertSame( 8765, $events[0]['data']['source_post_id'] );
 		$this->assertSame( $session_id, $events[0]['data']['session_id'] );
 	}
@@ -178,7 +181,7 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 		$events = $this->failed_events();
 		$this->assertCount( 1, $events );
 		$this->assertSame( 'error', $events[0]['level'] );
-		$this->assertSame( 'unexpected_exception', $events[0]['data']['action'] );
+		$this->assertSame( 'unexpected_exception', $events[0]['data']['error_code'] );
 		$this->assertSame( 5150, $events[0]['data']['source_post_id'] );
 	}
 
@@ -206,9 +209,51 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 		// ASSERT: the event carries the parent-resolution detail.
 		$events = $this->failed_events();
 		$this->assertCount( 1, $events );
-		$this->assertSame( 'parent_not_resolved', $events[0]['data']['action'] );
+		$this->assertSame( 'parent_not_resolved', $events[0]['data']['error_code'] );
 		$this->assertSame( 'not_imported', $events[0]['data']['reason'] );
 		$this->assertSame( 909, $events[0]['data']['parent_id'] );
+	}
+
+	/**
+	 * Verifies that item_failed escalates only an unexpected code to the server
+	 * log, keeping expected domain failures in the audit DB alone.
+	 */
+	public function test_item_failed_routes_unexpected_codes_to_server_log(): void {
+		// ARRANGE: an import logger capturing server-log skeletons.
+		$logger = new class() extends Import_Logger {
+
+			/**
+			 * Skeletons captured in place of the real error_log() sink.
+			 *
+			 * @var array[]
+			 */
+			public array $server_log_skeletons = array();
+
+			/**
+			 * Captures the skeleton instead of writing to error_log().
+			 *
+			 * @param string $event    Event type.
+			 * @param array  $skeleton PII-free projection for the server log.
+			 */
+			#[\Override]
+			protected function write_server_log(
+				string $event,
+				array $skeleton
+			): void {
+				$this->server_log_skeletons[] = $skeleton;
+			}
+		};
+
+		// ACT: an expected domain failure, then an unexpected exception.
+		$logger->item_failed( 101, 202, 'validation_failed', 'Bad title.' );
+		$logger->item_failed( 101, 202, 'unexpected_exception', 'Boom.' );
+
+		// ASSERT: only the unexpected exception reached the server log.
+		$this->assertCount( 1, $logger->server_log_skeletons );
+		$this->assertSame(
+			'unexpected_exception',
+			$logger->server_log_skeletons[0]['error_code']
+		);
 	}
 
 	/**
