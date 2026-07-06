@@ -12,6 +12,8 @@ namespace Safe_Publish\Tests\Integration;
 use Safe_Publish\API\Diff_Renderer;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Source_Post_Type_Resolver;
+use Safe_Publish\Utils\Audit_Log_Table;
+use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Options;
 use WP_Error;
 use WP_Post;
@@ -96,10 +98,14 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	/**
 	 * Verifies that render_diff surfaces the size-limit error from the source
 	 * fetch instead of masking it behind the generic source_fetch_failed
-	 * message.
+	 * message, and records the failure in the content audit log like every
+	 * other diff-fetch failure.
 	 */
 	public function test_render_diff_surfaces_oversized_response_error(): void {
-		// ARRANGE: The source fetch reports the size-limit error.
+		// ARRANGE: A fresh content audit log and a source fetch that reports
+		// the size-limit error.
+		Audit_Log_Table::clear( 'content' );
+
 		$make_request = function ( $url ) {
 			unset( $url );
 			return new WP_Error(
@@ -124,6 +130,138 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			HTTP_Client::ERROR_RESPONSE_TOO_LARGE,
 			$result->get_error_code()
 		);
+
+		// ASSERT: The size failure is also recorded in the content audit log,
+		// like every other diff-fetch failure.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'content',
+				'event_type' => Log_Events::CONTENT_FETCH_FAILED,
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( 'error', $events[0]['level'] );
+		$this->assertSame(
+			self::SOURCE_POST_ID,
+			$events[0]['data']['source_post_id']
+		);
+	}
+
+	/**
+	 * Verifies that render_diff surfaces the specific upstream fetch error and
+	 * records a content-channel CONTENT_FETCH_FAILED audit row at level error,
+	 * instead of masking the reason behind the generic message.
+	 *
+	 * The no-server-log classification of content_fetch_failed (log_failure)
+	 * is covered by Domain_Failure_Server_Log_Test.
+	 */
+	public function test_render_diff_surfaces_and_logs_source_fetch_error(): void {
+		// ARRANGE: A fresh content-channel audit log and a source fetch that
+		// fails with a specific, non-size transport error.
+		Audit_Log_Table::clear( 'content' );
+
+		$upstream_message = 'cURL error 7: Failed to connect to source host.';
+		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		$make_request = static function ( $_url, $_action, $_credentials ) use ( $upstream_message ) {
+			return new WP_Error( 'http_request_failed', $upstream_message );
+		};
+		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+		$request->set_param( 'mode', 'split' );
+
+		// ACT: Render the diff.
+		$renderer = new Diff_Renderer();
+		$result   = $renderer->render_diff( $request, $make_request, array() );
+
+		// ASSERT: The specific upstream reason surfaces under the stable code.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'source_fetch_failed', $result->get_error_code() );
+		$this->assertSame( $upstream_message, $result->get_error_message() );
+
+		// ASSERT: A single content-channel failure row is recorded at level
+		// error, carrying the source post ID and upstream message.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'content',
+				'event_type' => Log_Events::CONTENT_FETCH_FAILED,
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( 'error', $events[0]['level'] );
+		$this->assertSame(
+			self::SOURCE_POST_ID,
+			$events[0]['data']['source_post_id']
+		);
+		$this->assertSame( $upstream_message, $events[0]['data']['error'] );
+	}
+
+	/**
+	 * Verifies that a featured-media fetch failure during diff rendering is
+	 * logged instead of being silently swallowed, while the preview still
+	 * renders successfully with the incoming image treated as absent.
+	 */
+	public function test_render_diff_logs_swallowed_featured_media_fetch_error(): void {
+		// ARRANGE: A fresh content-channel audit log. The source post fetch
+		// succeeds and advertises a featured image, but the media fetch fails.
+		Audit_Log_Table::clear( 'content' );
+
+		$incoming_featured_id = 999;
+		$media_error_message  = 'cURL error 28: Media request timed out.';
+		$make_request         = static function ( $url ) use (
+			$incoming_featured_id,
+			$media_error_message
+		) {
+			if ( false !== strpos(
+				(string) $url,
+				'/wp/v2/media/' . $incoming_featured_id
+			) ) {
+				return new WP_Error( 'http_request_failed', $media_error_message );
+			}
+
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => wp_json_encode(
+					array(
+						'title'          => array( 'raw' => 'Source Title' ),
+						'content'        => array( 'raw' => '<p>Source content.</p>' ),
+						'excerpt'        => array( 'raw' => 'Source excerpt.' ),
+						'featured_media' => $incoming_featured_id,
+					)
+				),
+			);
+		};
+		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+		$request->set_param( 'mode', 'split' );
+
+		// ACT: Render the diff.
+		$renderer = new Diff_Renderer();
+		$result   = $renderer->render_diff( $request, $make_request, array() );
+
+		// ASSERT: The diff still succeeds; the media failure did not abort it.
+		$this->assertIsArray( $result );
+
+		// ASSERT: The previously swallowed media failure is now recorded
+		// against the featured media ID at level error.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'content',
+				'event_type' => Log_Events::CONTENT_FETCH_FAILED,
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( 'error', $events[0]['level'] );
+		$this->assertSame(
+			$incoming_featured_id,
+			$events[0]['data']['source_post_id']
+		);
+		$this->assertSame( $media_error_message, $events[0]['data']['error'] );
 	}
 
 	/**
