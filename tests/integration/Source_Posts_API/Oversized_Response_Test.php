@@ -169,7 +169,7 @@ class Oversized_Response_Test extends Integration_Test_Case {
 		$result = ( new Source_Posts_API( new HTTP_Client() ) )
 			->fetch_fresh_post( 123, 'post' );
 
-		// ASSERT: The specific code, not fresh_content_fetch_failed.
+		// ASSERT: The size-specific code propagates, not a generic fetch error.
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame(
 			HTTP_Client::ERROR_RESPONSE_TOO_LARGE,
