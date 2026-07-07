@@ -265,6 +265,27 @@ class Meta_Extension_Filters_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that a non-array filter return is coerced to an array, keeping
+	 * the import crash-proof for downstream array sinks.
+	 */
+	public function test_post_meta_filter_non_array_return_is_coerced(): void {
+		// ARRANGE: A filter returns null, as a bare return would.
+		add_filter( 'safe_publish_source_post_meta', static fn() => null );
+
+		// ACT: Fetch a post.
+		$result = $this->api->fetch_fresh_post_content(
+			99,
+			self::SOURCE_SITE_URL,
+			self::CREDS,
+			'post'
+		);
+
+		// ASSERT: Meta is coerced to an empty array, not null.
+		$this->assertIsArray( $result );
+		$this->assertSame( array(), $result['meta'] );
+	}
+
+	/**
 	 * Verifies that meta added by the filter reaches destination postmeta.
 	 */
 	public function test_mutated_meta_reaches_postmeta(): void {

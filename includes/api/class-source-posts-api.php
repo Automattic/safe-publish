@@ -539,12 +539,15 @@ class Source_Posts_API {
 		 * @param array $context Fetch context: source_post_id, post_type,
 		 *                       source_site_url.
 		 */
-		$post_data['meta'] = apply_filters(
+		$filtered_meta = apply_filters(
 			'safe_publish_source_post_meta',
 			isset( $data['meta'] ) && is_array( $data['meta'] ) ? $data['meta'] : array(),
 			$data,
 			$fetch_context
 		);
+
+		// A filter may return a non-array; downstream needs an array.
+		$post_data['meta'] = is_array( $filtered_meta ) ? $filtered_meta : array();
 
 		$post_data['terms'] = self::extract_embedded_terms( $data );
 
