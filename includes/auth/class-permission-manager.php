@@ -232,16 +232,16 @@ class Permission_Manager {
 	 *
 	 * Handles capability mapping that occurs before user_has_cap.
 	 *
-	 * @param array  $caps    Required capabilities.
-	 * @param string $cap     Capability being checked.
-	 * @param int    $user_id User ID.
-	 * @param array  $_args   Arguments passed to capability check.
+	 * @param array      $caps    Required capabilities.
+	 * @param string     $cap     Capability being checked.
+	 * @param int|string $user_id User ID.
+	 * @param array      $_args   Arguments passed to capability check.
 	 * @return array Modified capabilities.
 	 */
 	public function override_meta_capabilities( // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		array $caps,
 		string $cap,
-		int $user_id,
+		int|string $user_id,
 		array $_args
 	): array {
 		if ( ! $this->authenticated ) {
@@ -266,6 +266,10 @@ class Permission_Manager {
 		if ( ! in_array( $cap, $edit_caps, true ) ) {
 			return $caps;
 		}
+
+		// map_meta_cap documents $user_id as int but does not enforce it;
+		// cast the possibly-string value for the int-typed logger.
+		$user_id = (int) $user_id;
 
 		$this->logger->meta_cap_overridden( $cap, $user_id, $caps );
 

@@ -37,6 +37,12 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 	private const TEST_DESTINATION_URL = 'https://dest.example.com';
 
 	/**
+	 * Non-numeric string user id — the value class that crashed the callback
+	 * pre-fix. A numeric string would coerce through core's weak-mode dispatch.
+	 */
+	private const STRING_USER_ID = '';
+
+	/**
 	 * Permission manager instance.
 	 *
 	 * @var Permission_Manager
@@ -512,6 +518,51 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 		// filters works the second time around.
 		$this->assertTrue( $this->permission_manager->is_authenticated() );
 		$this->assertTrue( current_user_can( 'edit_posts' ) );
+	}
+
+	/**
+	 * Verifies that an edit capability maps to the always-granted 'exist'
+	 * when the map_meta_cap user id arrives as a string.
+	 */
+	public function test_override_meta_capabilities_grants_edit_cap_for_string_user_id(): void {
+		// ARRANGE: Authenticated context so the edit-capability branch runs.
+		$request = new WP_REST_Request( 'GET', '/wp/v2/posts/42' );
+		$this->permission_manager->setup_authenticated_context( $request );
+
+		// ACT: Map an edit capability with a string user id.
+		$caps = $this->permission_manager->override_meta_capabilities(
+			array( 'edit_post' ),
+			'edit_post',
+			self::STRING_USER_ID,
+			array()
+		);
+
+		// ASSERT: Granted via 'exist'.
+		$this->assertSame( array( 'exist' ), $caps );
+	}
+
+	/**
+	 * Verifies that firing the map_meta_cap filter through WordPress'
+	 * weak-mode hook dispatch survives a non-numeric string user id,
+	 * reproducing the production path that crashed before the fix.
+	 */
+	public function test_map_meta_cap_filter_survives_string_user_id(): void {
+		// ARRANGE: Authenticated context registers the map_meta_cap callback.
+		$request = new WP_REST_Request( 'GET', '/wp/v2/posts/42' );
+		$this->permission_manager->setup_authenticated_context( $request );
+
+		// ACT: Fire the filter as core's map_meta_cap() does.
+		$caps = apply_filters(
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
+			'map_meta_cap',
+			array( 'edit_post' ),
+			'edit_post',
+			self::STRING_USER_ID,
+			array()
+		);
+
+		// ASSERT: Granted via 'exist'.
+		$this->assertSame( array( 'exist' ), $caps );
 	}
 
 	/**
