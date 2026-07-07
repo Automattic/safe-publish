@@ -473,7 +473,7 @@ class Content_Processor {
 	}
 
 	/**
-	 * Processes a single Gutenberg block.
+	 * Processes a single Gutenberg block, descending into any inner blocks.
 	 *
 	 * @param array  $block           Block data.
 	 * @param string $source_site_url Source site URL.
@@ -580,6 +580,39 @@ class Content_Processor {
 					);
 				}
 				break;
+		}
+
+		// Descend into container blocks so nested media is imported. Gallery
+		// walks its own inner blocks above.
+		if ( 'core/gallery' !== $block['blockName'] ) {
+			$block = $this->process_inner_blocks( $block, $source_site_url );
+		}
+
+		return $block;
+	}
+
+	/**
+	 * Routes a container's inner blocks back through process_single_block() so
+	 * media nested at any depth is imported.
+	 *
+	 * @param array  $block           Block data.
+	 * @param string $source_site_url Source site URL.
+	 * @return array Block with processed inner blocks.
+	 */
+	private function process_inner_blocks( array $block, string $source_site_url ): array {
+		if (
+			! isset( $block['innerBlocks'] )
+			|| ! is_array( $block['innerBlocks'] )
+			|| array() === $block['innerBlocks']
+		) {
+			return $block;
+		}
+
+		foreach ( $block['innerBlocks'] as $index => $inner_block ) {
+			$block['innerBlocks'][ $index ] = $this->process_single_block(
+				$inner_block,
+				$source_site_url
+			);
 		}
 
 		return $block;
