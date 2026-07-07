@@ -36,7 +36,7 @@ class Media_Logger extends Logger {
 		string $source_site_url,
 		string $error
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::MEDIA_DOWNLOAD_FAILED,
 			array(
 				'url'             => $url,
@@ -61,7 +61,7 @@ class Media_Logger extends Logger {
 		string $error,
 		string $import_path
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::MEDIA_SIDELOAD_FAILED,
 			array(
 				'url'             => $url,
@@ -85,7 +85,7 @@ class Media_Logger extends Logger {
 		string $source_site_url,
 		string $detected_extension
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::MEDIA_UNSUPPORTED_FILE_TYPE,
 			array(
 				'url'                => $url,
@@ -108,7 +108,7 @@ class Media_Logger extends Logger {
 		string $source_site_url,
 		mixed $attachment_id
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::INVALID_ATTACHMENT_ID,
 			array(
 				'url'             => $url,
@@ -130,7 +130,7 @@ class Media_Logger extends Logger {
 		string $source_site_url,
 		string $error
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::FEATURED_IMAGE_FETCH_FAILED,
 			array(
 				'media_id'        => $media_id,
@@ -150,7 +150,7 @@ class Media_Logger extends Logger {
 		int $media_id,
 		string $source_site_url
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::FEATURED_IMAGE_SOURCE_MISSING,
 			array(
 				'media_id'        => $media_id,
