@@ -72,6 +72,49 @@ add_filter( 'safe_publish_request_args', function( array $args, string $url ): a
 }, 10, 2 );
 ```
 
+### `safe_publish_source_fetch_query_args`
+
+Filter the query string of the single-post fetch to the source site. Useful for requesting additional top-level response keys or passing source-specific arguments. Note that `_fields` is subtractive — using it drops the fields the import requires. See [Migrating ACF and Secure Custom Fields Values](acf-scf.md).
+
+**Parameters:**
+
+- `array $query_args` — query args appended to the fetch URL (includes `_embed`, plus `context` when authenticated)
+- `array $context` — fetch context: `source_post_id` (int), `post_type` (string), `source_site_url` (string)
+
+**Returns:** `array`
+
+**Example:**
+
+```php
+add_filter( 'safe_publish_source_fetch_query_args', function( array $query_args, array $context ): array {
+    $query_args['custom_source_arg'] = '1';
+    return $query_args;
+}, 10, 2 );
+```
+
+### `safe_publish_source_post_meta`
+
+Filter the post meta imported from the source, before it is written to the destination. Receives the full decoded REST response, so integrations can merge in values from other top-level keys such as ACF/SCF's `acf` object. See [Migrating ACF and Secure Custom Fields Values](acf-scf.md).
+
+**Parameters:**
+
+- `array $meta` — meta from the REST `meta` object (empty array when the response has none)
+- `array $data` — the full decoded REST response for the post
+- `array $context` — fetch context: `source_post_id` (int), `post_type` (string), `source_site_url` (string)
+
+**Returns:** `array`
+
+**Example:**
+
+```php
+add_filter( 'safe_publish_source_post_meta', function( array $meta, array $data ): array {
+    if ( isset( $data['acf']['hero_title'] ) ) {
+        $meta['hero_title'] = $data['acf']['hero_title'];
+    }
+    return $meta;
+}, 10, 2 );
+```
+
 ### `safe_publish_import_allow_author_fallback`
 
 Filter whether the import may fall back to the importing author when the source author cannot be matched on the destination site. By default, an unmatched source author aborts the import.

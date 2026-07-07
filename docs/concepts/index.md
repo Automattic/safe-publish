@@ -80,5 +80,5 @@ Safe Publish is designed specifically for controlled content promotion between W
 ### Safe Publish may not be a good fit if:
 
 - You need real-time or automatic content synchronization without human review.
-- You need to import complex plugin-specific data (e.g., ACF field groups, WooCommerce product data) without custom development. Post meta exposed via the REST API is imported, but plugin-specific data structures may require additional code.
+- You need to import complex plugin-specific data (e.g., ACF field groups, WooCommerce product data) without custom development. Post meta exposed via the REST API is imported, and ACF/SCF field values can be migrated with a small integration (see [Migrating ACF and Secure Custom Fields Values](../extending/acf-scf.md)), but plugin-specific data structures may still require additional code.
 - You are migrating an entire site — Safe Publish is optimized for ongoing selective content promotion, not one-time full migrations.

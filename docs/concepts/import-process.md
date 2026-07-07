@@ -186,11 +186,9 @@ The source Custom Post Type (CPT) must be registered with `'show_in_rest' => tru
 
 Source post meta exposed through the core REST API `meta` object is imported automatically. Custom fields must be registered with `register_post_meta()` and `'show_in_rest' => true` on the source site to be included in that object. For custom post types, the post type must also support `custom-fields`.
 
-Safe Publish does not import arbitrary top-level REST fields. Fields exposed with `register_rest_field()` or ACF's top-level `acf` REST object are ignored unless the same values are also present in the core `meta` object.
+Safe Publish does not import arbitrary top-level REST fields by default. Fields exposed with `register_rest_field()`, or ACF's top-level `acf` object, are not imported unless the same values are present in the core `meta` object — or an integration merges them in through the `safe_publish_source_post_meta` filter.
 
-ACF and Secure Custom Fields (SCF) values are regular post meta. To migrate them, register the source field value keys with `register_post_meta()` and `show_in_rest => true`, preferably only for the fields that should migrate. Register companion reference keys, such as `_hero_title` for `hero_title`, when the destination editor needs ACF/SCF to recognize the value.
-
-No field registration is required on the destination to store the meta values. However, Safe Publish does not currently create or sync ACF/SCF field groups. The destination editor only renders those values as ACF/SCF controls when the destination has ACF or SCF active and has matching field definitions with the same field keys.
+ACF and Secure Custom Fields (SCF) values are regular post meta. Migrate them with the filter-based recipe in [Migrating ACF and Secure Custom Fields Values](../extending/acf-scf.md), or by exposing the field keys as post meta (see [Custom Post Types](../extending/post-types.md#acf-and-secure-custom-fields-support)). Safe Publish stores the values but does not create or sync ACF/SCF field groups.
 
 ### Terms
 
