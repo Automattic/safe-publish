@@ -946,6 +946,188 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a core/image nested inside a core/group container has its
+	 * media imported and its attrs rewritten to the destination attachment.
+	 */
+	public function test_process_image_nested_in_group_imports_media(): void {
+		// ARRANGE: A core/image nested inside a core/group container.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/grouped-photo.jpg';
+		$content         = '<!-- wp:group -->'
+			. '<div class="wp-block-group">'
+			. '<!-- wp:image {"url":"' . $image_url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $image_url . '" alt="Grouped"/></figure>'
+			. '<!-- /wp:image -->'
+			. '</div>'
+			. '<!-- /wp:group -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block content through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Exactly one attachment was created for the nested image.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Nested image inside a group must be sideloaded'
+		);
+
+		// ASSERT: The source URL no longer appears anywhere in the output.
+		$this->assertStringNotContainsString(
+			$image_url,
+			$processed,
+			'Nested source image URL must be replaced with the local upload URL'
+		);
+
+		// ASSERT: The nested block attrs point at a local upload URL and an id.
+		$this->assertMatchesRegularExpression(
+			'/"url":"[^"]*wp-content\/uploads[^"]*"/',
+			$processed,
+			'Nested block attrs url should point to local uploads'
+		);
+		$this->assertMatchesRegularExpression(
+			'/"id":\d+/',
+			$processed,
+			'Nested block attrs should contain a numeric attachment ID'
+		);
+
+		// ASSERT: The group wrapper block is preserved.
+		$this->assertStringContainsString(
+			'<!-- wp:group -->',
+			$processed,
+			'Group wrapper block must be preserved'
+		);
+
+		// ASSERT: No failure was recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that a core/image nested two levels deep (Columns > Column) is
+	 * imported, proving the inner-block descent recurses to arbitrary depth.
+	 */
+	public function test_process_image_nested_two_levels_deep_imports_media(): void {
+		// ARRANGE: A core/image inside a column inside a columns container.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/deep-photo.jpg';
+		$content         = '<!-- wp:columns -->'
+			. '<div class="wp-block-columns">'
+			. '<!-- wp:column -->'
+			. '<div class="wp-block-column">'
+			. '<!-- wp:image {"url":"' . $image_url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $image_url . '" alt="Deep"/></figure>'
+			. '<!-- /wp:image -->'
+			. '</div>'
+			. '<!-- /wp:column -->'
+			. '</div>'
+			. '<!-- /wp:columns -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block content through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Exactly one attachment was created for the deeply nested image.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Image nested two levels deep must be sideloaded'
+		);
+
+		// ASSERT: The source URL no longer appears anywhere in the output.
+		$this->assertStringNotContainsString(
+			$image_url,
+			$processed,
+			'Deeply nested source image URL must be replaced'
+		);
+
+		// ASSERT: A local upload URL is present in the block attrs.
+		$this->assertMatchesRegularExpression(
+			'/"url":"[^"]*wp-content\/uploads[^"]*"/',
+			$processed,
+			'Deeply nested block attrs url should point to local uploads'
+		);
+
+		// ASSERT: Both wrapper blocks are preserved.
+		$this->assertStringContainsString(
+			'<!-- wp:columns -->',
+			$processed,
+			'Columns wrapper must be preserved'
+		);
+		$this->assertStringContainsString(
+			'<!-- wp:column -->',
+			$processed,
+			'Column wrapper must be preserved'
+		);
+
+		// ASSERT: No failure was recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that a core/cover imports both its own background media and a
+	 * core/image nested in its overlay, covering the container's dual role.
+	 */
+	public function test_process_cover_imports_background_and_nested_overlay_media(): void {
+		// ARRANGE: A core/cover with a background image plus a nested image in
+		// its overlay inner container.
+		$source_site_url = 'https://source.example.com';
+		$background_url  = 'https://source.example.com/cover-bg.jpg';
+		$overlay_url     = 'https://source.example.com/overlay-photo.jpg';
+		$content         = '<!-- wp:cover {"url":"' . $background_url . '"} -->'
+			. '<div class="wp-block-cover">'
+			. '<img class="wp-block-cover__image-background" src="' . $background_url . '"/>'
+			. '<div class="wp-block-cover__inner-container">'
+			. '<!-- wp:image {"url":"' . $overlay_url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $overlay_url . '" alt="Overlay"/></figure>'
+			. '<!-- /wp:image -->'
+			. '</div></div>'
+			. '<!-- /wp:cover -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block content through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Two attachments were created — the background and the overlay.
+		$this->assertSame(
+			$attachments_before + 2,
+			$this->get_attachment_count(),
+			'Cover background and nested overlay image must both be sideloaded'
+		);
+
+		// ASSERT: The background source URL no longer appears in the output.
+		$this->assertStringNotContainsString(
+			$background_url,
+			$processed,
+			'Cover background URL must be replaced'
+		);
+
+		// ASSERT: The nested overlay source URL no longer appears in the output.
+		$this->assertStringNotContainsString(
+			$overlay_url,
+			$processed,
+			'Nested overlay image URL must be replaced'
+		);
+
+		// ASSERT: No failure was recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
 	 * Verifies that a Gutenberg image block referencing source-site media with
 	 * a non-standard extension (.heic) is sideloaded correctly.
 	 *
