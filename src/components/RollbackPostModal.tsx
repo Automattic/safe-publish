@@ -19,6 +19,7 @@ import {
 import { useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
+import type { ActionNotice } from '../actions';
 import type { UnifiedPostRow } from '../types';
 
 /**
@@ -29,6 +30,7 @@ interface RollbackPostModalProps {
 	ajaxurl: string;
 	nonce: string;
 	closeModal?: () => void;
+	onNotice?: ( notice: ActionNotice | null ) => void;
 	onRefresh?: () => void;
 }
 
@@ -42,6 +44,7 @@ const RollbackPostModal = ( {
 	ajaxurl,
 	nonce,
 	closeModal,
+	onNotice,
 	onRefresh,
 }: RollbackPostModalProps ) => {
 	const [ isLoading, setIsLoading ] = useState( false );
@@ -71,6 +74,7 @@ const RollbackPostModal = ( {
 				return;
 			}
 
+			onNotice?.( { status: 'success', message: outcome.message } );
 			onRefresh?.();
 			setIsLoading( false );
 			closeModal?.();
