@@ -109,7 +109,8 @@ Filter the post meta imported from the source, before it is written to the desti
 ```php
 add_filter( 'safe_publish_source_post_meta', function( array $meta, array $data ): array {
     if ( isset( $data['acf']['hero_title'] ) ) {
-        $meta['hero_title'] = $data['acf']['hero_title'];
+        // Source values are untrusted; sanitize for the field's type.
+        $meta['hero_title'] = sanitize_text_field( (string) $data['acf']['hero_title'] );
     }
     return $meta;
 }, 10, 2 );
