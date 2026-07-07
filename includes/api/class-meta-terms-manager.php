@@ -49,17 +49,11 @@ final class Meta_Terms_Manager {
 				$result = update_post_meta( $post_id, $key, $meta_value );
 
 				if ( false === $result ) {
-					// update_post_meta() returns false both on a genuine
-					// write failure and when the stored value is already
-					// identical. Confirm the key exists and holds the
-					// intended value before treating it as written, so a
-					// real failure is not mistaken for a no-op re-import.
-					//
-					// WordPress stores scalar meta as strings (bool true
-					// reads back as "1", int 0 as "0"), and get_post_meta()
-					// returns "" for an absent key. The existence check is
-					// what stops a false or empty value — which stringifies
-					// to "" — from matching a key that was never written.
+					// update_post_meta() returns false both on failure and
+					// on a no-op re-import of an unchanged value. WordPress
+					// stores scalars as strings, so compare stringwise; and
+					// since an absent key also reads back as "", require the
+					// key to exist to tell a failed falsy write from a no-op.
 					$stored  = get_post_meta( $post_id, $key, true );
 					$matches = is_array( $meta_value ) || is_object( $meta_value )
 						? $stored == $meta_value // phpcs:ignore WordPress.PHP.StrictComparisons.LooseComparison
