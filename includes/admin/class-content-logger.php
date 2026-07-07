@@ -36,7 +36,7 @@ class Content_Logger extends Logger {
 		string $source_site_url,
 		string $error
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::CONTENT_FETCH_FAILED,
 			array(
 				'source_post_id'  => $source_post_id,
@@ -56,7 +56,7 @@ class Content_Logger extends Logger {
 		int $source_post_id,
 		string $source_site_url
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::CONTENT_FETCH_INVALID_RESPONSE,
 			array(
 				'source_post_id'  => $source_post_id,
@@ -75,7 +75,7 @@ class Content_Logger extends Logger {
 		int $source_post_id,
 		string $source_site_url
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::CONTENT_FETCH_RAW_FIELDS_MISSING,
 			array(
 				'source_post_id'  => $source_post_id,

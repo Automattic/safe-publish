@@ -44,7 +44,7 @@ class Dispatch_Logger extends Logger {
 		string $error_code,
 		string $error_message
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::DISPATCH_REQUEST_ERROR,
 			array(
 				'route'                => $route,
@@ -70,7 +70,7 @@ class Dispatch_Logger extends Logger {
 		string $destination_site_url,
 		int $status
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::DISPATCH_RESPONSE_BAD_STATUS,
 			array(
 				'route'                => $route,
