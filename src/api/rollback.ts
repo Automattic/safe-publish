@@ -22,12 +22,13 @@ export type RollbackAction = 'deleted' | 'restored';
 /**
  * Outcome of rolling back a single item.
  *
- * @property {boolean}        success  Whether the rollback succeeded.
- * @property {RollbackAction} [action] Action taken on success.
- * @property {string}         [error]  Human-readable message on failure.
+ * @property {boolean}        success   Whether the rollback succeeded.
+ * @property {RollbackAction} [action]  Action taken on success.
+ * @property {string}         [message] Confirmation message on success.
+ * @property {string}         [error]   Human-readable message on failure.
  */
 export type RollbackItemOutcome =
-	| { success: true; action: RollbackAction }
+	| { success: true; action: RollbackAction; message: string }
 	| { success: false; error: string };
 
 /**
@@ -95,6 +96,7 @@ export const rollbackItem = async (
 
 		const result = ( await response.json() ) as ApiResponse< {
 			action: RollbackAction;
+			message: string;
 		} >;
 
 		if ( ! result.success ) {
@@ -107,7 +109,11 @@ export const rollbackItem = async (
 			};
 		}
 
-		return { success: true, action: result.data.action };
+		return {
+			success: true,
+			action: result.data.action,
+			message: result.data.message,
+		};
 	} catch ( error ) {
 		return {
 			success: false,
