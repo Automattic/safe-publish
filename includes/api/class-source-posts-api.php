@@ -431,6 +431,25 @@ class Source_Posts_API {
 			$query_args['context'] = 'edit';
 		}
 
+		$fetch_context = array(
+			'source_post_id'  => $source_post_id,
+			'post_type'       => $post_type,
+			'source_site_url' => $source_site_url,
+		);
+
+		/**
+		 * Filters the query args for the source single-post fetch.
+		 *
+		 * @param array $query_args Query args appended to the fetch URL.
+		 * @param array $context    Fetch context: source_post_id, post_type,
+		 *                          source_site_url.
+		 */
+		$query_args = apply_filters(
+			'safe_publish_source_fetch_query_args',
+			$query_args,
+			$fetch_context
+		);
+
 		$api_url = add_query_arg( $query_args, $api_endpoint );
 
 		// Make request.
@@ -509,7 +528,23 @@ class Source_Posts_API {
 		$post_data['content'] = $data['content']['raw'];
 		$post_data['excerpt'] = $data['excerpt']['raw'];
 
-		$post_data['meta'] = isset( $data['meta'] ) && is_array( $data['meta'] ) ? $data['meta'] : array();
+		/**
+		 * Filters the source post meta before it is persisted.
+		 *
+		 * Receives the full decoded REST response so integrations can read
+		 * additional top-level keys, such as ACF/SCF values under acf.
+		 *
+		 * @param array $meta    Meta from the REST meta object.
+		 * @param array $data    Full decoded REST response for the post.
+		 * @param array $context Fetch context: source_post_id, post_type,
+		 *                       source_site_url.
+		 */
+		$post_data['meta'] = apply_filters(
+			'safe_publish_source_post_meta',
+			isset( $data['meta'] ) && is_array( $data['meta'] ) ? $data['meta'] : array(),
+			$data,
+			$fetch_context
+		);
 
 		$post_data['terms'] = self::extract_embedded_terms( $data );
 
