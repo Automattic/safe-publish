@@ -66,7 +66,7 @@ add_filter(
 );
 ```
 
-The merged values are written to destination postmeta unchanged. Source values are untrusted, though: a compromised source could send markup, and ACF does not escape on output (`the_field()` echoes stored values verbatim), so storing them raw risks stored XSS. Sanitize each value for its field type before storing — `sanitize_text_field()` for plain text, `wp_kses_post()` for rich text — or make sure your theme escapes every ACF value on output.
+The merged values are written to destination postmeta unchanged. Source values are untrusted, though: a compromised source could send markup, and ACF does not escape on output (`the_field()` echoes stored values verbatim), so storing them raw risks stored XSS. Sanitize each value for its field type before storing — `sanitize_text_field()` for plain text, `wp_kses_post()` for rich text — or make sure your theme escapes each value for its context on output.
 
 To migrate only a known set of fields, replace the loop with an explicit allowlist:
 
@@ -144,7 +144,7 @@ Avoid `_fields`: it is subtractive, so requesting `_fields=acf` drops the title,
 
 ## Caveats
 
-- **Source values are untrusted.** Safe Publish stores meta verbatim and does not sanitize values — sanitize each value for its field type on input, or escape ACF output.
+- **Source values are untrusted.** Safe Publish stores meta verbatim and does not sanitize values — sanitize each value for its field type on input, or escape it for its context on output.
 - **Source field groups must expose REST.** Values appear under `acf` only when the source field group has **Show in REST API** enabled.
 - **Matching definitions on the destination.** Safe Publish stores the values, but the editor renders them as ACF/SCF controls only when ACF or SCF is active on the destination and has matching field groups with the same field keys. Safe Publish does not create or sync field groups.
 - **Reference fields carry source IDs.** Image, file, post object, relationship, taxonomy, and user fields transfer as the source site's IDs. Remap them to destination IDs yourself when the referenced objects differ across sites.
