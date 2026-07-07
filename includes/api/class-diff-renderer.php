@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\API;
 
+use Safe_Publish\Admin\Content_Logger;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use stdClass;
@@ -29,6 +30,20 @@ if ( ! defined( 'ABSPATH' ) ) {
  * taxonomies, meta, featured media, and block-level diffs.
  */
 final class Diff_Renderer {
+
+	/**
+	 * Logger instance.
+	 *
+	 * @var Content_Logger
+	 */
+	private Content_Logger $logger;
+
+	/**
+	 * Constructs the Diff_Renderer instance.
+	 */
+	public function __construct() {
+		$this->logger = new Content_Logger();
+	}
 
 	/**
 	 * Renders a comprehensive diff preview for a source post. The post and
@@ -235,16 +250,24 @@ final class Diff_Renderer {
 		);
 
 		if ( is_wp_error( $response ) ) {
-			// Surface the size-limit reason; mask other failures behind a
-			// generic message.
+			$message    = $response->get_error_message();
 			$error_code = $response->get_error_code();
+
+			$this->logger->content_fetch_failed(
+				$post_id,
+				$source_site_url,
+				$message
+			);
+
+			// Size-limit reason passes through with its own code; other
+			// failures surface under the stable UI error code.
 			if ( HTTP_Client::ERROR_RESPONSE_TOO_LARGE === $error_code ) {
 				return $response;
 			}
 
 			return new WP_Error(
 				'source_fetch_failed',
-				__( 'Failed to fetch source post.', 'safe-publish' ),
+				$message,
 				array( 'status' => 500 )
 			);
 		}
@@ -510,6 +533,14 @@ final class Diff_Renderer {
 				if ( is_array( $media_json ) && ! empty( $media_json['source_url'] ) ) {
 					$incoming_featured_url = (string) $media_json['source_url'];
 				}
+			} else {
+				// Log the failure rather than silently rendering the incoming
+				// featured image as absent.
+				$this->logger->content_fetch_failed(
+					$incoming_featured_id,
+					$source_site_url,
+					$media_response->get_error_message()
+				);
 			}
 		}
 

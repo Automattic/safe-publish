@@ -149,12 +149,20 @@ class SourcePostsAPITest extends TestCase {
 	}
 
 	/**
-	 * Verifies that fetch_fresh_post_content returns false for invalid URLs.
+	 * Verifies that fetch_fresh_post_content returns the invalid-URL WP_Error
+	 * for an unusable source site URL, so the caller can surface the reason.
 	 */
-	public function test_fetch_fresh_post_content_with_invalid_url_returns_false(): void {
+	public function test_fetch_fresh_post_content_with_invalid_url_returns_error(): void {
+		// ARRANGE: An invalid source site URL the URL_Validator rejects.
+		// ACT: Fetch fresh content for that URL.
 		$result = $this->api->fetch_fresh_post_content( 123, 'invalid-url' );
 
-		$this->assertFalse( $result );
+		// ASSERT: Returns the distinct invalid-URL WP_Error.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'fresh_content_invalid_url',
+			$result->get_error_code()
+		);
 	}
 
 	/**
@@ -180,22 +188,22 @@ class SourcePostsAPITest extends TestCase {
 	}
 
 	/**
-	 * Verifies that fetch_fresh_post converts a false return
-	 * from the underlying fetch_fresh_post_content into a WP_Error with the
-	 * fetch_failed code, preserving the import abort contract.
+	 * Verifies that fetch_fresh_post propagates the specific WP_Error the
+	 * underlying fetch_fresh_post_content returns, so the import abort surfaces
+	 * the reason instead of a generic message.
 	 */
-	public function test_fetch_fresh_post_converts_underlying_false_to_error(): void {
+	public function test_fetch_fresh_post_propagates_underlying_error(): void {
 		// ARRANGE: Configure a URL the URL_Validator rejects so the underlying
-		// fetch_fresh_post_content short-circuits to false.
+		// fetch_fresh_post_content returns the invalid-URL WP_Error.
 		set_test_option( Options::OPTION_CONNECTED_SITE_URL, 'not-a-real-url' );
 
 		// ACT: Invoke the wrapper.
 		$result = $this->api->fetch_fresh_post( 123, 'posts' );
 
-		// ASSERT: Returns the fetch_failed WP_Error.
+		// ASSERT: The specific invalid-URL code propagates through.
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame(
-			'fresh_content_fetch_failed',
+			'fresh_content_invalid_url',
 			$result->get_error_code()
 		);
 
