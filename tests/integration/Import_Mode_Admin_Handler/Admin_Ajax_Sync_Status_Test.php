@@ -16,7 +16,6 @@ use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
 use WP_Error;
-use WPAjaxDieStopException;
 
 /**
  * Sync Status Batch AJAX Test Class.
@@ -252,12 +251,11 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array( 'nonce' => 'not-a-valid-nonce' );
 
-		// ASSERT: Nonce failure calls wp_die( -1 ).
-		$this->expectException( WPAjaxDieStopException::class );
-		$this->expectExceptionMessage( '-1' );
-
 		// ACT: Dispatch the handler.
-		$this->_handleAjax( 'safe_publish_sync_status_batch' );
+		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
+
+		// ASSERT: Structured session-expired error rather than a bare -1 die.
+		$this->assert_session_expired_response();
 	}
 
 	/**
@@ -629,7 +627,7 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 	 */
 	public function test_resolves_status_when_connected_url_has_trailing_slash(): void {
 		// ARRANGE: Option carries a trailing slash; the seeded import is tagged
-		// with the normalized form extract_site_url() produces.
+		// with the normalized form normalize_site_url() produces.
 		update_option(
 			Options::OPTION_CONNECTED_SITE_URL,
 			'https://source.example.com/'

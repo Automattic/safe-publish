@@ -51,6 +51,16 @@ final class Catalog_REST_Controller {
 	private const DEFAULT_PER_PAGE = 20;
 
 	/**
+	 * Caps the title LIKE clauses a search builds, bounding query cost.
+	 */
+	private const MAX_SEARCH_TOKENS = 8;
+
+	/**
+	 * Query var marking the catalog's own search query.
+	 */
+	private const SEARCH_QUERY_FLAG = 'safe_publish_catalog_search';
+
+	/**
 	 * Post statuses the destination is allowed to filter against.
 	 * Public so the destination AJAX controller can validate before
 	 * round-tripping to the source.
@@ -88,12 +98,12 @@ final class Catalog_REST_Controller {
 
 	/**
 	 * Non-public post types the catalog opts in despite public=false.
-	 * wp_navigation is structural but its posts are user-authored content
-	 * the migration is expected to carry over.
+	 * wp_navigation and wp_block are structural but their posts are
+	 * user-authored content the migration is expected to carry over.
 	 *
 	 * @var string[]
 	 */
-	private const ALLOW_NON_PUBLIC = array( 'wp_navigation' );
+	private const ALLOW_NON_PUBLIC = array( 'wp_navigation', 'wp_block' );
 
 	/**
 	 * HMAC authenticator used to gate the endpoint.
@@ -103,12 +113,24 @@ final class Catalog_REST_Controller {
 	private HMAC_Authenticator $authenticator;
 
 	/**
+	 * Dispatch logger for catalog failure audit rows.
+	 *
+	 * @var Dispatch_Logger
+	 */
+	private Dispatch_Logger $dispatch_logger;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param HMAC_Authenticator $authenticator HMAC authenticator instance.
+	 * @param HMAC_Authenticator $authenticator   HMAC authenticator instance.
+	 * @param Dispatch_Logger    $dispatch_logger Dispatch logger instance.
 	 */
-	public function __construct( HMAC_Authenticator $authenticator ) {
-		$this->authenticator = $authenticator;
+	public function __construct(
+		HMAC_Authenticator $authenticator,
+		Dispatch_Logger $dispatch_logger
+	) {
+		$this->authenticator   = $authenticator;
+		$this->dispatch_logger = $dispatch_logger;
 	}
 
 	/**
@@ -159,12 +181,27 @@ final class Catalog_REST_Controller {
 	}
 
 	/**
-	 * Handles a single catalog request.
+	 * Handles a single catalog request, auditing any failure outcome.
 	 *
 	 * @param WP_REST_Request $request Incoming REST request.
 	 * @return WP_REST_Response|WP_Error Catalog envelope or error.
 	 */
 	public function handle_request(
+		WP_REST_Request $request
+	): WP_REST_Response|WP_Error {
+		return $this->log_dispatch_outcome(
+			$request,
+			$this->build_catalog_response( $request )
+		);
+	}
+
+	/**
+	 * Builds the catalog response for a listing request.
+	 *
+	 * @param WP_REST_Request $request Incoming REST request.
+	 * @return WP_REST_Response|WP_Error Catalog envelope or error.
+	 */
+	private function build_catalog_response(
 		WP_REST_Request $request
 	): WP_REST_Response|WP_Error {
 		$post_type = $this->resolve_post_type(
@@ -257,7 +294,7 @@ final class Catalog_REST_Controller {
 
 		$items = array();
 		foreach ( $posts as $post ) {
-			$items[] = Source_Posts_API::prepare_listing_payload_from_post( $post );
+			$items[] = self::prepare_listing_payload_from_post( $post );
 		}
 
 		return new WP_REST_Response(
@@ -267,6 +304,40 @@ final class Catalog_REST_Controller {
 			),
 			200
 		);
+	}
+
+	/**
+	 * Records a catalog dispatch failure in the audit trail.
+	 *
+	 * The endpoint gates on the HMAC flag directly instead of through
+	 * Permission_Manager::setup_authenticated_context(), which hooks dispatch
+	 * logging for /wp/v2/ routes — so without this, catalog failures would
+	 * never reach the audit channel. build_catalog_response only ever fails
+	 * with a WP_Error, so that is the sole outcome logged here.
+	 *
+	 * @param WP_REST_Request           $request  Incoming REST request.
+	 * @param WP_REST_Response|WP_Error $response Response produced for the request.
+	 * @return WP_REST_Response|WP_Error The response, unchanged.
+	 */
+	private function log_dispatch_outcome(
+		WP_REST_Request $request,
+		WP_REST_Response|WP_Error $response
+	): WP_REST_Response|WP_Error {
+		if ( ! is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$this->dispatch_logger->dispatch_request_error(
+			$request->get_route(),
+			(string) $request->get_header( 'X-Safe-Publish-Action' ),
+			HTTP_Client::parse_destination_site_url(
+				(string) $request->get_header( 'User-Agent' )
+			),
+			$response->get_error_code(),
+			$response->get_error_message()
+		);
+
+		return $response;
 	}
 
 	/**
@@ -298,7 +369,7 @@ final class Catalog_REST_Controller {
 
 		$items = array();
 		foreach ( $this->run_query( $args, false ) as $post ) {
-			$items[] = Source_Posts_API::prepare_listing_payload_from_post( $post );
+			$items[] = self::prepare_listing_payload_from_post( $post );
 		}
 
 		return new WP_REST_Response(
@@ -371,6 +442,7 @@ final class Catalog_REST_Controller {
 	 */
 	private function run_query( array $args, bool $with_search ): array {
 		if ( $with_search ) {
+			$args[ self::SEARCH_QUERY_FLAG ] = true;
 			add_filter( 'posts_search', array( $this, 'override_posts_search' ), 10, 2 );
 		}
 
@@ -399,22 +471,29 @@ final class Catalog_REST_Controller {
 	 * exact slug fallback, so the destination's "search titles" affordance
 	 * matches what the catalog actually queries.
 	 *
+	 * Scoped to the catalog's own query via an internal query-var flag, so
+	 * this global filter leaves any nested query untouched.
+	 *
 	 * Final shape: `AND ((title LIKE %t1% AND title LIKE %t2% ...) OR
-	 * post_name = %full_term%)`. The slug branch only meaningfully matches
-	 * single-token inputs (slugs don't contain spaces); multi-token search
-	 * resolves through the AND'd title clauses.
+	 * post_name = %full_term%)`, capped at MAX_SEARCH_TOKENS title clauses.
+	 * The slug branch only meaningfully matches single-token inputs (slugs
+	 * don't contain spaces); multi-token search resolves through the AND'd
+	 * title clauses.
 	 *
 	 * Same `LIKE '%foo%'` profile as `wp/v2/posts?search` (narrower scope,
 	 * indexed slug shortcut). VIP Enterprise Search is worth considering
 	 * if performance demands it.
 	 *
-	 * @param string   $search Existing search SQL fragment (ignored).
+	 * @param string   $search Existing search SQL fragment.
 	 * @param WP_Query $query  Current WP_Query instance.
 	 * @return string SQL fragment to splice into the WHERE clause.
 	 */
 	public function override_posts_search( string $search, WP_Query $query ): string {
+		if ( true !== $query->get( self::SEARCH_QUERY_FLAG ) ) {
+			return $search;
+		}
+
 		global $wpdb;
-		unset( $search );
 
 		$term = trim( (string) $query->get( 's' ) );
 		if ( '' === $term ) {
@@ -428,6 +507,7 @@ final class Catalog_REST_Controller {
 		$tokens = array_values(
 			array_filter( $tokens, static fn( string $t ): bool => '' !== $t )
 		);
+		$tokens = array_slice( $tokens, 0, self::MAX_SEARCH_TOKENS );
 
 		$title_clauses = array();
 		foreach ( $tokens as $token ) {
@@ -611,6 +691,36 @@ final class Catalog_REST_Controller {
 				'type'  => 'array',
 				'items' => array( 'type' => 'integer' ),
 			),
+		);
+	}
+
+	/**
+	 * Prepares a single WP_Post for the catalog listing payload.
+	 *
+	 * The shape mirrors what the destination's listing UI expects.
+	 *
+	 * @param WP_Post $post Source post.
+	 * @return array Listing payload.
+	 */
+	public static function prepare_listing_payload_from_post( WP_Post $post ): array {
+		$permalink = get_permalink( $post );
+
+		return array(
+			'id'           => $post->ID,
+			'link'         => is_string( $permalink ) ? esc_url_raw( $permalink ) : '',
+			'title'        => sanitize_text_field(
+				wp_strip_all_tags(
+					html_entity_decode(
+						$post->post_title,
+						ENT_QUOTES | ENT_HTML5,
+						'UTF-8'
+					)
+				)
+			),
+			'post_type'    => $post->post_type,
+			'date_gmt'     => Datetime_Sanitizer::gmt_to_iso8601( $post->post_date_gmt ),
+			'modified_gmt' => Datetime_Sanitizer::gmt_to_iso8601( $post->post_modified_gmt ),
+			'status'       => $post->post_status,
 		);
 	}
 }

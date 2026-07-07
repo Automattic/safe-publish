@@ -395,7 +395,8 @@ class SeederContentGeneratorTest extends TestCase {
 
 	/**
 	 * Verifies that gutenberg content embeds an image block per image_ref,
-	 * referencing the caller-provided id and url verbatim.
+	 * referencing the caller-provided id and url verbatim and the fixed
+	 * non-empty alt.
 	 */
 	public function test_gutenberg_content_embeds_image_blocks(): void {
 		// ARRANGE: two image references.
@@ -423,6 +424,10 @@ class SeederContentGeneratorTest extends TestCase {
 		);
 		$this->assertStringContainsString(
 			'class="wp-image-100"',
+			$content
+		);
+		$this->assertStringContainsString(
+			'alt="' . Content_Generator::BLOCK_IMAGE_ALT . '"',
 			$content
 		);
 	}

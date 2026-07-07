@@ -54,6 +54,8 @@ add_filter( 'safe_publish_request_timeout', fn( int $timeout ): int => 30 );
 
 Filter HTTP request arguments before any outgoing request to a source site.
 
+`$args` carries a default `limit_response_size` of 10 MB that caps the response body buffered into memory, preventing an oversized response from a source site from exhausting the PHP worker. Image downloads use WordPress core's `download_url()` directly and are not affected.
+
 **Parameters:**
 
 - `array $args` — `wp_remote_get`/`wp_remote_post` arguments

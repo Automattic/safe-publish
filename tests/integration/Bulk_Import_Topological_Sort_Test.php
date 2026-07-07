@@ -9,8 +9,6 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
-use Safe_Publish\Utils\Import_Items_Table;
-use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
 
@@ -21,70 +19,30 @@ class Bulk_Import_Topological_Sort_Test extends WP_Ajax_UnitTestCase {
 
 	use Ajax_Die_Continue_Trait;
 	use Per_Source_Id_Post_Api_Mock_Trait;
+	use Bulk_Import_Ajax_Trait;
 
 	/**
-	 * Fallback shared secret used when no environment constant is defined.
-	 */
-	private const FALLBACK_SECRET = 'integration-test-secret-key-32chars-ok';
-
-	/**
-	 * Source post payloads keyed by source ID. Each entry is a partial REST
-	 * response body merged into the mock default.
-	 *
-	 * @var array<int, array<string, mixed>>
-	 */
-	private array $source_payloads = array();
-
-	/**
-	 * Admin user ID for the AJAX request.
-	 *
-	 * @var int
-	 */
-	private int $admin_user_id;
-
-	/**
-	 * Sets up the auth secret, tables, admin user, connected-site URL, and the
-	 * per-source-id HTTP mock.
+	 * Sets up the bulk-import harness against the single-site connection.
 	 */
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
-
-		if ( ! defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ) {
-			define( 'SAFE_PUBLISH_SHARED_SECRET', self::FALLBACK_SECRET );
-		}
-
-		Imports_Table::create_table();
-		Import_Items_Table::create_table();
-
-		$this->admin_user_id = $this->factory()->user->create(
-			array( 'role' => 'administrator' )
-		);
-		wp_set_current_user( $this->admin_user_id );
-
-		update_option(
-			Options::OPTION_CONNECTED_SITE_URL,
-			'https://source.example.com'
-		);
-
-		$this->add_per_source_id_post_api_mock();
+		$this->set_up_bulk_import_harness( 'https://source.example.com' );
 	}
 
 	/**
-	 * Tears down fixtures and removes the HTTP mock.
+	 * Tears down the bulk-import harness.
 	 */
 	#[\Override]
 	protected function tearDown(): void {
-		$this->remove_per_source_id_post_api_mock();
-		delete_option( Options::OPTION_CONNECTED_SITE_URL );
-		$this->source_payloads = array();
+		$this->tear_down_bulk_import_harness();
 		parent::tearDown();
 	}
 
 	/**
-	 * Builds the per-source-id REST body for the trait. Each test registers
-	 * the relevant IDs in $this->source_payloads; unregistered IDs surface as
-	 * a WP_Error via the trait.
+	 * Builds the per-source-id REST body for the trait, based on the single-site
+	 * connection. Each test registers the relevant IDs in $this->source_payloads;
+	 * unregistered IDs surface as a WP_Error via the trait.
 	 *
 	 * @param int $source_id Source post ID parsed from the request URL.
 	 * @return array<string, mixed>|null Mock body, or null when not mocked.
@@ -95,53 +53,7 @@ class Bulk_Import_Topological_Sort_Test extends WP_Ajax_UnitTestCase {
 			return null;
 		}
 
-		$override = $this->source_payloads[ $source_id ];
-		$admin    = get_userdata( $this->admin_user_id );
-
-		return array(
-			'id'                  => $source_id,
-			'title'               => array(
-				'raw' => $override['title'] ?? "Source Post {$source_id}",
-			),
-			'featured_media'      => 0,
-			'content'             => array( 'raw' => '<p>Content.</p>' ),
-			'excerpt'             => array( 'raw' => '' ),
-			'link'                => "https://source.example.com/post-{$source_id}",
-			'slug'                => "post-{$source_id}",
-			'comment_status'      => '',
-			'ping_status'         => '',
-			'menu_order'          => 0,
-			'password'            => '',
-			'parent'              => $override['parent'] ?? 0,
-			'meta'                => array(),
-			'safe_publish_author' => array(
-				'email'        => false !== $admin ? (string) $admin->user_email : '',
-				'login'        => false !== $admin ? (string) $admin->user_login : '',
-				'display_name' => false !== $admin ? (string) $admin->display_name : '',
-			),
-		);
-	}
-
-	/**
-	 * Dispatches the bulk-import AJAX action with the given source posts
-	 * payload and returns the decoded JSON response.
-	 *
-	 * @param array $posts_data Request payload sent as posts_data JSON.
-	 * @return array Decoded response.
-	 */
-	private function dispatch_bulk_import( array $posts_data ): array {
-		$_POST = array(
-			'nonce'      => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-			'posts_data' => wp_json_encode( $posts_data ),
-		);
-
-		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_import' );
-
-		$decoded = json_decode( $this->_last_response, true );
-		$this->assertIsArray( $decoded );
-		$this->assertTrue( $decoded['success'] );
-
-		return $decoded['data'];
+		return $this->bulk_mock_body( $source_id, 'https://source.example.com' );
 	}
 
 	/**
@@ -408,6 +320,44 @@ class Bulk_Import_Topological_Sort_Test extends WP_Ajax_UnitTestCase {
 			$data['results'],
 			'Results array length must match the reported total.'
 		);
+	}
+
+	/**
+	 * Verifies that a reusable block (wp_block) is pulled ahead of a page whose
+	 * core/block references it, so the ref resolves in-batch via the session map
+	 * even when the referring page is listed first.
+	 */
+	public function test_reusable_block_target_imports_before_referrer(): void {
+		// ARRANGE: a reusable block (810) and a page (820) whose core/block
+		// references it, with the page listed first in request order.
+		$this->source_payloads = array(
+			810 => array( 'type' => 'wp_block' ),
+			820 => array( 'content' => '<!-- wp:block {"ref":810} /-->' ),
+		);
+
+		// ACT: dispatch with the referring page first.
+		$data = $this->dispatch_bulk_import(
+			array(
+				$this->payload_entry( 820, 'pages' ),
+				$this->payload_entry( 810, 'blocks' ),
+			)
+		);
+
+		// ASSERT: both succeed and the block is processed ahead of its referrer.
+		$this->assertSame( 2, $data['successful'] );
+		$this->assertSame( 0, $data['failed'] );
+		$this->assertSame( 810, $data['results'][0]['source_post_id'] );
+		$this->assertSame( 820, $data['results'][1]['source_post_id'] );
+
+		// ASSERT: the page's core/block ref resolved in-batch to the block's
+		// destination ID, with no unmapped-reference warning.
+		$block_dest = (int) $data['results'][0]['post_id'];
+		$page_dest  = (int) $data['results'][1]['post_id'];
+		$this->assertStringContainsString(
+			'<!-- wp:block {"ref":' . $block_dest . '} /-->',
+			(string) get_post( $page_dest )->post_content
+		);
+		$this->assertSame( array(), $data['results'][1]['warnings'] );
 	}
 
 	/**

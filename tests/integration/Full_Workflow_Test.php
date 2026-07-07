@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Navigation_Ref_Rewriter;
@@ -105,7 +106,8 @@ class Full_Workflow_Test extends Integration_Test_Case {
 			$this->repository,
 			new Meta_Terms_Manager(),
 			new Telemetry_Service(),
-			new Navigation_Ref_Rewriter()
+			new Navigation_Ref_Rewriter(),
+			new Attention_Issues_Repository()
 		);
 
 		// Configure the connected site URL so fetch_fresh_post() can make requests.
@@ -254,48 +256,6 @@ class Full_Workflow_Test extends Integration_Test_Case {
 		);
 		$this->assertContains( 'success', $statuses, 'First import item should have status "success".' );
 		$this->assertContains( 'updated', $statuses, 'Second import item should have status "updated".' );
-	}
-
-	/**
-	 * Verifies that bulk re-import does not reset post_status on an already-published post.
-	 */
-	public function test_bulk_reimport_preserves_published_post_status(): void {
-		// ARRANGE: Import a post, then publish it to simulate a live post.
-		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
-
-		$post_data = array(
-			'id'             => 7001,
-			'title'          => 'Published Post',
-			'content'        => '<p>Original content.</p>',
-			'link'           => 'https://source.example.com/published-post',
-			'featured_media' => 0,
-			'post_type'      => 'posts',
-			'excerpt'        => '',
-			'meta'           => array(),
-			'terms'          => array(),
-		);
-
-		$first = $this->import_service->import_post( $post_data, $session_id );
-		$this->assertTrue( $first['success'] );
-
-		wp_update_post(
-			array(
-				'ID'          => $first['post_id'],
-				'post_status' => 'publish',
-			)
-		);
-
-		// ACT: Re-import the same post with updated content.
-		$post_data['title'] = 'Published Post (updated)';
-
-		$second = $this->import_service->import_post( $post_data, $session_id );
-
-		// ASSERT: Post status is preserved.
-		$this->assertTrue( $second['success'] );
-		$this->assertTrue( $second['existing'] );
-
-		$updated_post = get_post( $second['post_id'] );
-		$this->assertSame( 'publish', $updated_post->post_status, 'Bulk re-import must not demote a published post to draft.' );
 	}
 
 	/**

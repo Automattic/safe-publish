@@ -9,25 +9,25 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Admin\Admin_Ajax_Controller;
+use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Seeder\Content_Generator;
+use Safe_Publish\Utils\Attention_Issues_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
-use WP_Ajax_UnitTestCase;
+use WP_UnitTestCase;
+use WP_UnitTest_Factory;
 
 /**
  * Seeder Content Parity Test Class.
  *
- * Coverage is scoped to the rules the asserter classifies; the asserter itself
- * is the source of truth for which fields, meta keys, and term assignments
- * are checked versus deferred.
+ * Imports a seeded batch once in wpSetUpBeforeClass() and runs read-only parity
+ * assertions across many test methods. Coverage is scoped to the rules the
+ * asserter classifies; the asserter itself is the source of truth for which
+ * fields, meta keys, and term assignments are checked versus deferred.
  */
-class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
-
-	use Ajax_Die_Continue_Trait;
-	use Mock_Media_HTTP_Trait;
-	use Per_Source_Id_Media_Api_Mock_Trait;
-	use Per_Source_Id_Post_Api_Mock_Trait;
+class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 
 	/**
 	 * Fallback shared secret used when no environment constant is defined.
@@ -46,390 +46,222 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	private const REFERENCE_TIME = 1735689600;
 
 	/**
-	 * Source post ID where the synthetic batch starts. Chosen high enough
-	 * that it can't collide with any factory-created IDs.
+	 * Source post ID where the synthetic post batch starts. Kept far above the
+	 * integration suite's wp_posts AUTO_INCREMENT range so a fresh dest post ID
+	 * can never coincidentally equal a source ID (see
+	 * test_id_diverges_from_source).
 	 */
-	private const SOURCE_ID_BASE = 1000;
+	private const SOURCE_ID_BASE = 9000000;
 
 	/**
-	 * Source media ID where the synthetic batch starts. Chosen high enough
-	 * not to collide with post IDs or factory-created IDs.
+	 * Source post ID where the synthetic page batch starts. Offset from the
+	 * post base so post and page source IDs never collide, in the same high
+	 * range as SOURCE_ID_BASE.
 	 */
-	private const SOURCE_MEDIA_ID_BASE = 5000;
+	private const SOURCE_PAGE_ID_BASE = 9100000;
 
 	/**
-	 * Source REST bodies keyed by source post ID. Each entry is the full
-	 * JSON-decodable body the mock returns when the importer fetches the
-	 * source post.
+	 * Source media ID where the synthetic batch starts. Same high range, kept
+	 * distinct from the post and page bases.
+	 */
+	private const SOURCE_MEDIA_ID_BASE = 9500000;
+
+	/**
+	 * Source post IDs for the bespoke edge-case pages (non-ASCII, empty, embed,
+	 * footnotes, and reusable-block). Same high range, distinct from every other
+	 * base. All seed as pages so the category-less body never picks up the
+	 * default category that WordPress auto-assigns to a post.
+	 */
+	private const EDGE_NON_ASCII_SOURCE_ID      = 9200001;
+	private const EDGE_EMPTY_SOURCE_ID          = 9200002;
+	private const EDGE_EMBED_SOURCE_ID          = 9200003;
+	private const EDGE_FOOTNOTES_SOURCE_ID      = 9200004;
+	private const EDGE_REUSABLE_BLOCK_SOURCE_ID = 9200005;
+
+	/**
+	 * Provider host of the embed edge page's url. Distinct from
+	 * SOURCE_BASE_URL's host so test_embed_url_parity exercises an external URL
+	 * the importer must leave untouched.
+	 */
+	private const EDGE_EMBED_PROVIDER_HOST = 'www.youtube.com';
+
+	/**
+	 * Class-wide imported batch shared by every test method.
 	 *
-	 * @var array<int, array<string, mixed>>
+	 * @var Seeder_Parity_Fixture
 	 */
-	private array $source_rest_bodies = array();
+	private static Seeder_Parity_Fixture $fixture;
 
 	/**
-	 * Source post ID => destination post ID after the bulk import.
-	 *
-	 * @var array<int, int>
-	 */
-	private array $dest_post_ids = array();
-
-	/**
-	 * Source post ID => list of image references generated for that post.
-	 * Each reference is `array{ id: int, url: string }`. The first entry of
-	 * each list is also the post's featured_media.
-	 *
-	 * @var array<int, list<array{id: int, url: string}>>
-	 */
-	private array $image_refs_by_source_id = array();
-
-	/**
-	 * Source media ID => media REST body. Returned by the trait when the
-	 * importer hits wp/v2/media/{id} for featured-image resolution.
-	 *
-	 * @var array<int, array<string, mixed>>
-	 */
-	private array $source_media_bodies = array();
-
-	/**
-	 * Admin user that owns imported posts and authors REST mock responses.
+	 * Admin user that runs the import and authors the post slice.
 	 *
 	 * @var int
 	 */
-	private int $admin_user_id;
+	private static int $admin_user_id;
 
 	/**
-	 * Sets up the auth secret, history tables, admin user, connected-site
-	 * option, builds the source REST + media bodies for the batch, registers
-	 * the post/media/image-byte mocks, and dispatches the bulk import once
-	 * so test methods can read the resulting dest state.
+	 * Authors the page slice, distinct from the importing admin so the suite
+	 * exercises resolution to a non-current user.
+	 *
+	 * @var int
 	 */
-	#[\Override]
-	protected function setUp(): void {
-		parent::setUp();
+	private static int $page_author_id;
 
+	/**
+	 * Defines the auth secret and history tables, creates the admin user and
+	 * connected-site option, then seeds and imports the batch once. The import
+	 * is committed here because each test method runs in a rolled-back
+	 * transaction.
+	 *
+	 * @param WP_UnitTest_Factory $factory Shared fixture factory.
+	 */
+	public static function wpSetUpBeforeClass( WP_UnitTest_Factory $factory ): void {
 		if ( ! defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ) {
 			define( 'SAFE_PUBLISH_SHARED_SECRET', self::FALLBACK_SECRET );
 		}
 
 		Imports_Table::create_table();
 		Import_Items_Table::create_table();
+		Attention_Issues_Table::create_table();
 
-		$this->admin_user_id = $this->factory()->user->create(
+		self::$admin_user_id  = $factory->user->create(
 			array( 'role' => 'administrator' )
 		);
-		wp_set_current_user( $this->admin_user_id );
+		self::$page_author_id = $factory->user->create(
+			array(
+				'role'       => 'editor',
+				'user_email' => 'page-author@dest.example',
+				'user_login' => 'page-author',
+			)
+		);
+		wp_set_current_user( self::$admin_user_id );
 
 		update_option(
 			Options::OPTION_CONNECTED_SITE_URL,
 			self::SOURCE_BASE_URL
 		);
 
-		$this->source_rest_bodies  = $this->build_source_rest_bodies();
-		$this->source_media_bodies = $this->build_source_media_bodies();
-
-		$this->add_per_source_id_post_api_mock();
-		$this->add_per_source_id_media_api_mock();
-		$this->add_image_byte_response_mock();
-
-		$this->dest_post_ids = $this->run_bulk_import();
-	}
-
-	/**
-	 * Cleans up imported attachments (so files don't leak into other tests),
-	 * removes the mock filters, and clears the connected-site URL.
-	 */
-	#[\Override]
-	protected function tearDown(): void {
-		$this->delete_imported_attachments();
-		$this->remove_image_byte_response_mock();
-		$this->remove_per_source_id_media_api_mock();
-		$this->remove_per_source_id_post_api_mock();
-		delete_option( Options::OPTION_CONNECTED_SITE_URL );
-		parent::tearDown();
-	}
-
-	/**
-	 * Returns the pre-built source REST body for the trait. Falls back to null
-	 * so unregistered IDs surface as a WP_Error.
-	 *
-	 * @param int $source_id Source post ID parsed from the request URL.
-	 * @return array<string, mixed>|null Mock body, or null when not mocked.
-	 */
-	#[\Override]
-	protected function mock_body_for_source_id( int $source_id ): ?array {
-		return $this->source_rest_bodies[ $source_id ] ?? null;
-	}
-
-	/**
-	 * Returns the pre-built media REST body for the trait. Falls back to null
-	 * so unregistered IDs surface as a WP_Error.
-	 *
-	 * @param int $source_media_id Source media ID from the request URL.
-	 * @return array<string, mixed>|null Mock body, or null when not mocked.
-	 */
-	#[\Override]
-	protected function mock_body_for_source_media_id(
-		int $source_media_id
-	): ?array {
-		return $this->source_media_bodies[ $source_media_id ] ?? null;
-	}
-
-	/**
-	 * Builds the source REST bodies for the test batch via Content_Generator.
-	 *
-	 * Six posts cover the generator's full source-status rotation (publish by
-	 * default, draft every 5th, private every 6th) and full image-mode rotation
-	 * via the 'auto' images_mode (1-image, 2-image, 2-resized). Each post's
-	 * image references are recorded on $image_refs_by_source_id so the
-	 * attachment-parity asserter knows which URLs to expect on dest.
-	 *
-	 * @return array<int, array<string, mixed>> Source ID => REST body.
-	 */
-	private function build_source_rest_bodies(): array {
-		$count = 6;
-
-		$generator = new Content_Generator(
-			'post',
-			'mixed',
-			'auto',
-			$count,
-			1,
-			0,
-			'',
+		self::$fixture = new Seeder_Parity_Fixture(
+			self::SOURCE_BASE_URL,
 			self::REFERENCE_TIME,
-			self::SOURCE_BASE_URL
+			self::SOURCE_MEDIA_ID_BASE,
+			self::$admin_user_id,
+			self::batch_slices( self::$admin_user_id, self::$page_author_id ),
+			self::batch_edge_cases( self::$page_author_id )
 		);
-
-		$bodies      = array();
-		$next_img_id = self::SOURCE_MEDIA_ID_BASE + 1;
-
-		for ( $i = 1; $i <= $count; $i++ ) {
-			$image_count = $this->image_count_for_index( $generator, $i );
-			$image_refs  = array();
-			for ( $j = 0; $j < $image_count; $j++ ) {
-				$image_refs[] = array(
-					'id'  => $next_img_id,
-					'url' => $this->source_image_url( $next_img_id ),
-				);
-				++$next_img_id;
-			}
-
-			$source_id = self::SOURCE_ID_BASE + $i;
-			$payload   = $generator->generate( $i, $image_refs );
-
-			$this->image_refs_by_source_id[ $source_id ] = $image_refs;
-			$bodies[ $source_id ]                        = $this->payload_to_rest_body(
-				$source_id,
-				$payload
-			);
-		}
-
-		return $bodies;
+		self::$fixture->seed();
 	}
 
 	/**
-	 * Resolves the number of images Content_Generator's auto image mode emits
-	 * for the given index. Mirrors the generator's resolve_image_mode() output:
-	 * '1' → 1, '2' or '2-resized' → 2.
-	 *
-	 * @param Content_Generator $generator Configured generator.
-	 * @param int               $index     1-based post index.
-	 * @return int Image count for that index.
+	 * Removes everything the class committed: the imported posts, attachments,
+	 * and terms, the admin user, and the connected-site URL.
 	 */
-	private function image_count_for_index(
-		Content_Generator $generator,
-		int $index
-	): int {
-		return '1' === $generator->resolve_image_mode( $index ) ? 1 : 2;
+	public static function wpTearDownAfterClass(): void {
+		self::$fixture->cleanup();
+		self::delete_user( self::$admin_user_id );
+		self::delete_user( self::$page_author_id );
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
 	}
 
 	/**
-	 * Builds the deterministic source-side URL for an image attachment.
-	 *
-	 * @param int $source_media_id Source media ID.
-	 * @return string Absolute URL under the source uploads path.
+	 * Restores the importing user so attachment-author assertions see the same
+	 * current user the committed fixture was imported under.
 	 */
-	private function source_image_url( int $source_media_id ): string {
-		return self::SOURCE_BASE_URL
-			. '/wp-content/uploads/2025/01/seeded-image-'
-			. $source_media_id . '.jpg';
+	#[\Override]
+	protected function setUp(): void {
+		parent::setUp();
+		wp_set_current_user( self::$admin_user_id );
 	}
 
 	/**
-	 * Builds the wp/v2/media/{id} mock bodies for every image referenced in
-	 * the batch. The plugin only reads `source_url` today; alt_text, title,
-	 * and caption are included so future propagation work surfaces against a
-	 * non-empty source without having to reseed.
+	 * Describes the batch: six posts covering the generator's full editor,
+	 * status, and image-mode rotations, plus four pages for post_type coverage.
+	 * Page index 3 lands on the classic editor, so the batch exercises block and
+	 * shortcode parity on pages too; it is also seeded as a child of page index
+	 * 1, non-adjacent in import order, so post_parent resolution is proven by
+	 * source ID rather than import position. Pages carry no category/post_tag
+	 * assignments, mirroring a real page source. Posts stay flat
+	 * (non-hierarchical). Even-indexed bodies carry non-default
+	 * comment/ping/password/menu_order scalars and odd-indexed stay on the
+	 * WordPress defaults (see Seeder_Parity_Fixture::scalars_for_index()).
+	 * Bespoke edge cases are seeded separately by batch_edge_cases().
 	 *
-	 * @return array<int, array<string, mixed>> Media ID => REST body.
+	 * @param int $post_author_id Dest user the post slice is authored by.
+	 * @param int $page_author_id Dest user the page slice is authored by.
+	 * @return list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool, author_user_id: int, parent_links: array<int, int>}>
 	 */
-	private function build_source_media_bodies(): array {
-		$bodies = array();
-
-		foreach ( $this->image_refs_by_source_id as $refs ) {
-			foreach ( $refs as $ref ) {
-				$bodies[ $ref['id'] ] = array(
-					'id'         => $ref['id'],
-					'source_url' => $ref['url'],
-					'media_type' => 'image',
-					'mime_type'  => 'image/jpeg',
-					'alt_text'   => "Mock alt text for media {$ref['id']}",
-					'title'      => array(
-						'raw' => "Mock title for media {$ref['id']}",
-					),
-					'caption'    => array(
-						'raw' => "Mock caption for media {$ref['id']}",
-					),
-				);
-			}
-		}
-
-		return $bodies;
-	}
-
-	/**
-	 * Deletes all attachments imported during setUp before the per-test DB
-	 * rollback so the sideloaded files don't leak into other tests' uploads
-	 * dirs. The DB delete is rolled back along with everything else.
-	 */
-	private function delete_imported_attachments(): void {
-		$attachments = get_posts(
-			array(
-				'post_type'        => 'attachment',
-				'post_status'      => 'any',
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'       => array(
-					array(
-						'key'   => Options::META_IMPORTED_FROM,
-						'value' => self::SOURCE_BASE_URL,
-					),
-				),
-				'posts_per_page'   => -1,
-				'suppress_filters' => false,
-			)
-		);
-
-		foreach ( $attachments as $attachment ) {
-			wp_delete_attachment( $attachment->ID, true );
-		}
-	}
-
-	/**
-	 * Wraps a generator payload into a full REST response body.
-	 *
-	 * Mirrors the shape of a real wp/v2 post response: title/content/excerpt
-	 * are wrapped in `[ 'raw' => ... ]`, taxonomy assignments land under
-	 * _embedded['wp:term'], and the plugin's safe_publish_author block is
-	 * included so the destination's author resolution can run.
-	 *
-	 * @param int                  $source_id Source post ID.
-	 * @param array<string, mixed> $payload   Generator payload.
-	 * @return array<string, mixed>
-	 */
-	private function payload_to_rest_body( int $source_id, array $payload ): array {
-		$admin = get_userdata( $this->admin_user_id );
-
+	private static function batch_slices(
+		int $post_author_id,
+		int $page_author_id
+	): array {
 		return array(
-			'id'                  => $source_id,
-			'title'               => array( 'raw' => $payload['title'] ),
-			'featured_media'      => $payload['featured_media'],
-			'content'             => array( 'raw' => $payload['content'] ),
-			'excerpt'             => array( 'raw' => $payload['excerpt'] ),
-			'link'                => $payload['link'],
-			'slug'                => $payload['slug'],
-			'type'                => $payload['post_type'],
-			'status'              => $payload['status'],
-			'date'                => $payload['date'],
-			'date_gmt'            => $payload['date'],
-			'comment_status'      => 'open',
-			'ping_status'         => 'open',
-			'menu_order'          => 0,
-			'password'            => '',
-			'parent'              => 0,
-			'meta'                => $payload['meta'],
-			'safe_publish_author' => array(
-				'email'        => false !== $admin ? (string) $admin->user_email : '',
-				'login'        => false !== $admin ? (string) $admin->user_login : '',
-				'display_name' => false !== $admin ? (string) $admin->display_name : '',
+			array(
+				'type'           => 'post',
+				'endpoint'       => 'posts',
+				'count'          => 6,
+				'source_id_base' => self::SOURCE_ID_BASE,
+				'assign_terms'   => true,
+				'author_user_id' => $post_author_id,
+				'parent_links'   => array(),
 			),
-			'_embedded'           => array(
-				'wp:term' => $this->embedded_terms( $payload['terms'] ),
+			array(
+				'type'           => 'page',
+				'endpoint'       => 'pages',
+				'count'          => 4,
+				'source_id_base' => self::SOURCE_PAGE_ID_BASE,
+				'assign_terms'   => false,
+				'author_user_id' => $page_author_id,
+				'parent_links'   => array( 3 => 1 ),
 			),
 		);
 	}
 
 	/**
-	 * Converts taxonomy => term-name lists into the _embedded['wp:term']
-	 * shape the import code expects.
+	 * Describes the bespoke edge-case bodies appended to the batch: a non-ASCII
+	 * page (multibyte title/slug/content plus unescaped entities), an
+	 * empty-content page, an embed page (a core/embed block with an external
+	 * provider url), a footnotes page (a core/footnotes block plus matching
+	 * footnotes meta), and a reusable-block page (a core/block referencing an
+	 * unimported wp_block). All seed as pages so the category-less body never
+	 * picks up WordPress' default category, and all stay top-level on default
+	 * scalars; the fixture supplies their content.
 	 *
-	 * @param array<string, list<string>> $terms Taxonomy => term names.
-	 * @return list<list<array{taxonomy: string, name: string}>>
+	 * @param int $page_author_id Dest user the edge-case pages are authored by.
+	 * @return list<array{kind: string, endpoint: string, source_id: int, author_user_id: int}>
 	 */
-	private function embedded_terms( array $terms ): array {
-		$groups = array();
-
-		foreach ( $terms as $taxonomy => $term_names ) {
-			$group = array();
-			foreach ( $term_names as $name ) {
-				$group[] = array(
-					'taxonomy' => $taxonomy,
-					'name'     => $name,
-				);
-			}
-			$groups[] = $group;
-		}
-
-		return $groups;
-	}
-
-	/**
-	 * Dispatches the bulk-import AJAX action for the configured batch and
-	 * returns a source ID => destination post ID mapping.
-	 *
-	 * @return array<int, int>
-	 */
-	private function run_bulk_import(): array {
-		$posts_data = array();
-
-		foreach ( $this->source_rest_bodies as $source_id => $body ) {
-			$posts_data[] = array(
-				'id'        => $source_id,
-				'title'     => $body['title']['raw'],
-				'link'      => $body['link'],
-				'post_type' => 'posts',
-			);
-		}
-
-		$_POST = array(
-			'nonce'      => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-			'posts_data' => wp_json_encode( $posts_data ),
+	private static function batch_edge_cases( int $page_author_id ): array {
+		return array(
+			array(
+				'kind'           => 'non_ascii',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_NON_ASCII_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+			),
+			array(
+				'kind'           => 'empty',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_EMPTY_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+			),
+			array(
+				'kind'           => 'embed',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_EMBED_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+			),
+			array(
+				'kind'           => 'footnotes',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_FOOTNOTES_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+			),
+			array(
+				'kind'           => 'reusable_block',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_REUSABLE_BLOCK_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+			),
 		);
-
-		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_import' );
-
-		$decoded = json_decode( $this->_last_response, true );
-		$this->assertIsArray( $decoded );
-		$this->assertTrue( $decoded['success'] );
-
-		$dest_ids = array();
-
-		foreach ( $decoded['data']['results'] as $result ) {
-			$this->assertTrue(
-				$result['success'],
-				"Import should succeed for source ID {$result['source_post_id']}"
-			);
-			$dest_ids[ (int) $result['source_post_id'] ] = (int) $result['post_id'];
-		}
-
-		// Guard against silent-pass tests: every later assertion iterates
-		// $dest_ids, so an empty or short batch would let them pass trivially.
-		$this->assertCount(
-			count( $this->source_rest_bodies ),
-			$dest_ids,
-			'Bulk import should return one dest ID per source body'
-		);
-
-		return $dest_ids;
 	}
 
 	/**
@@ -440,7 +272,7 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	private function build_source_url_to_dest_url_map(): array {
 		$map = array();
 
-		foreach ( $this->image_refs_by_source_id as $refs ) {
+		foreach ( self::$fixture->image_refs_by_source_id as $refs ) {
 			foreach ( $refs as $ref ) {
 				$dest = $this->find_dest_attachment_by_source_url( $ref['url'] );
 				if ( null === $dest ) {
@@ -467,7 +299,7 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	private function build_source_id_to_dest_id_map(): array {
 		$map = array();
 
-		foreach ( $this->image_refs_by_source_id as $refs ) {
+		foreach ( self::$fixture->image_refs_by_source_id as $refs ) {
 			foreach ( $refs as $ref ) {
 				$dest = $this->find_dest_attachment_by_source_url( $ref['url'] );
 				if ( null === $dest ) {
@@ -508,15 +340,73 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Returns the raw source post_content for a source ID.
+	 *
+	 * @param int $source_id Source post ID.
+	 * @return string
+	 */
+	private function source_content( int $source_id ): string {
+		return (string) self::$fixture->source_rest_bodies[ $source_id ]['content']['raw'];
+	}
+
+	/**
+	 * Asserts a wp_posts MySQL datetime parses and falls in the recent import
+	 * window: not in the future and within 600 seconds of $now_ts. The window
+	 * only has to beat the generator's 90-day source date spread, so it stays
+	 * generous against the gap between the class-wide import and the calling
+	 * method. wp-env defaults to UTC, so the value parses cleanly as UTC.
+	 *
+	 * @param string $mysql_datetime wp_posts datetime column value.
+	 * @param int    $now_ts         Upper bound captured by the caller.
+	 * @param string $label          Label prefixed to failure messages.
+	 */
+	private function assert_datetime_is_recent(
+		string $mysql_datetime,
+		int $now_ts,
+		string $label
+	): void {
+		$ts = strtotime( $mysql_datetime . ' UTC' );
+
+		$this->assertIsInt( $ts, "{$label} should parse" );
+
+		$delta = $now_ts - (int) $ts;
+		$this->assertGreaterThanOrEqual(
+			0,
+			$delta,
+			"{$label} should not be in the future"
+		);
+		$this->assertLessThan(
+			600,
+			$delta,
+			"{$label} should be near the import time"
+		);
+	}
+
+	/**
+	 * Verifies that every source body imported to a distinct destination post.
+	 * Guards against silent-pass tests: every later assertion iterates the
+	 * dest map, so an empty or short batch would let them pass trivially.
+	 */
+	public function test_every_source_post_imported(): void {
+		// ARRANGE + ACT: batch imported in wpSetUpBeforeClass.
+		// ASSERT: one dest ID per source body.
+		$this->assertCount(
+			count( self::$fixture->source_rest_bodies ),
+			self::$fixture->dest_post_ids,
+			'Import should return one dest ID per source body'
+		);
+	}
+
+	/**
 	 * Verifies that identity-style columns (post_type, post_name) match
 	 * source for every imported post.
 	 */
 	public function test_identity_columns_parity(): void {
-		// ARRANGE + ACT: batch already imported in setUp.
+		// ARRANGE + ACT: batch already imported.
 		// ASSERT: each dest post matches source on identity columns.
-		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
 			Post_Parity_Asserter::assert_identity_columns(
-				$this->source_rest_bodies[ $source_id ],
+				self::$fixture->source_rest_bodies[ $source_id ],
 				get_post( $dest_id ),
 				$this
 			);
@@ -529,11 +419,11 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	 * CONTENT_BODY_COLUMNS and is exercised by test_content_body_parity().
 	 */
 	public function test_content_columns_parity(): void {
-		// ARRANGE + ACT: batch already imported in setUp.
+		// ARRANGE + ACT: batch already imported.
 		// ASSERT: each dest post matches source on content columns.
-		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
 			Post_Parity_Asserter::assert_content_columns(
-				$this->source_rest_bodies[ $source_id ],
+				self::$fixture->source_rest_bodies[ $source_id ],
 				get_post( $dest_id ),
 				$this
 			);
@@ -551,9 +441,9 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 
 		// ACT + ASSERT: each dest post's content matches source after the
 		// importer's URL/ID rewriting.
-		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
 			Post_Parity_Asserter::assert_content_body_parity(
-				$this->source_rest_bodies[ $source_id ],
+				self::$fixture->source_rest_bodies[ $source_id ],
 				get_post( $dest_id ),
 				$url_map,
 				$id_map,
@@ -564,15 +454,102 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies Gutenberg block-structural parity for every imported post: dest
+	 * parses into at least one block, carries the same multiset of block names
+	 * as source, and has no orphaned block-comment delimiters.
+	 */
+	public function test_block_structural_parity(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: each dest post's block structure matches source.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			Content_Parity_Comparator::assert_block_structural_parity(
+				$this->source_content( $source_id ),
+				(string) get_post( $dest_id )->post_content,
+				$this
+			);
+		}
+	}
+
+	/**
+	 * Verifies caption-shortcode parity for every imported post: dest preserves
+	 * the source caption count, keeps the tags balanced, and carries identical
+	 * non-id attributes.
+	 */
+	public function test_shortcode_parity(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: each dest post's caption shortcodes match source.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			Content_Parity_Comparator::assert_shortcode_parity(
+				$this->source_content( $source_id ),
+				(string) get_post( $dest_id )->post_content,
+				$this
+			);
+		}
+	}
+
+	/**
+	 * Verifies that every imported post preserves its source embed-block url
+	 * multiset verbatim, locking process_embed_block()'s no-rewrite contract.
+	 */
+	public function test_embed_url_parity(): void {
+		// ARRANGE: build the URL sideload map from the imported attachments.
+		$url_map = $this->build_source_url_to_dest_url_map();
+
+		// ACT + ASSERT: each dest post preserves its source embed url multiset.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			Content_Parity_Comparator::assert_embed_url_parity(
+				$this->source_content( $source_id ),
+				(string) get_post( $dest_id )->post_content,
+				$url_map,
+				$this
+			);
+		}
+	}
+
+	/**
+	 * Verifies that inline <img alt> text round-trips verbatim for every
+	 * imported post, and guards against a vacuous pass by requiring the batch
+	 * to seed the distinctive block-image alt.
+	 */
+	public function test_inline_img_alt_parity(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: each dest post preserves its source inline alt multiset, and
+		// the batch seeded a distinctive non-empty alt so the check isn't
+		// vacuous.
+		$seeded_distinctive_alt = false;
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$source = $this->source_content( $source_id );
+
+			Content_Parity_Comparator::assert_inline_img_alt_parity(
+				$source,
+				(string) get_post( $dest_id )->post_content,
+				$this
+			);
+
+			if ( str_contains( $source, Content_Generator::BLOCK_IMAGE_ALT ) ) {
+				$seeded_distinctive_alt = true;
+			}
+		}
+
+		$this->assertTrue(
+			$seeded_distinctive_alt,
+			'Batch should seed the distinctive block-image alt so the alt'
+			. ' multiset check is not vacuously satisfied'
+		);
+	}
+
+	/**
 	 * Guards the comparator's coverage assumptions: the seeder must not emit
-	 * gallery blocks or data-id attributes, since neither is exercised by
-	 * the URL/ID parity checks today. Grow comparator coverage before
-	 * relaxing this.
+	 * gallery blocks, data-id attributes, or non-caption shortcodes, since none
+	 * is exercised by the parity checks today. Grow comparator coverage before
+	 * relaxing this. The reusable block (core/block) the batch does emit is
+	 * intentional and verified by test_reusable_block_edge_surfaces_degradation,
+	 * not the parity comparator.
 	 */
 	public function test_seeder_does_not_emit_unsupported_references(): void {
 		// ARRANGE + ACT: concatenate every seeded source content body.
 		$raw = '';
-		foreach ( $this->source_rest_bodies as $body ) {
+		foreach ( self::$fixture->source_rest_bodies as $body ) {
 			$raw .= (string) ( $body['content']['raw'] ?? '' ) . "\n";
 		}
 
@@ -589,6 +566,18 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 			'Seeder must not emit data-id attributes until the comparator'
 			. ' covers data-id rewriting.'
 		);
+		$this->assertStringNotContainsString(
+			'[gallery',
+			$raw,
+			'Seeder must not emit gallery shortcodes until the rewriter covers'
+			. ' their bare attachment IDs.'
+		);
+		$this->assertStringNotContainsString(
+			'[playlist',
+			$raw,
+			'Seeder must not emit playlist shortcodes until the rewriter covers'
+			. ' their bare attachment IDs.'
+		);
 	}
 
 	/**
@@ -597,11 +586,11 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	 * asserted separately in test_post_status_locks_to_draft.
 	 */
 	public function test_status_columns_parity(): void {
-		// ARRANGE + ACT: batch already imported in setUp.
+		// ARRANGE + ACT: batch already imported.
 		// ASSERT: each dest post matches source on status columns.
-		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
 			Post_Parity_Asserter::assert_status_columns(
-				$this->source_rest_bodies[ $source_id ],
+				self::$fixture->source_rest_bodies[ $source_id ],
 				get_post( $dest_id ),
 				$this
 			);
@@ -613,16 +602,104 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	 * with no source-side value land on the WordPress default on dest.
 	 */
 	public function test_misc_columns_parity(): void {
-		// ARRANGE + ACT: batch already imported in setUp.
+		// ARRANGE + ACT: batch already imported.
 		// ASSERT: each dest post matches source on misc columns and WP
 		// defaults.
-		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
 			Post_Parity_Asserter::assert_misc_columns(
-				$this->source_rest_bodies[ $source_id ],
+				self::$fixture->source_rest_bodies[ $source_id ],
 				get_post( $dest_id ),
 				$this
 			);
 		}
+	}
+
+	/**
+	 * Verifies that each imported post's post_author resolves to a destination
+	 * user whose email matches the source safe_publish_author block.
+	 */
+	public function test_author_columns_parity(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: each dest post_author matches the source author by email.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			Post_Parity_Asserter::assert_author_columns(
+				self::$fixture->source_rest_bodies[ $source_id ],
+				get_post( $dest_id ),
+				$this
+			);
+		}
+	}
+
+	/**
+	 * Verifies that author resolution is keyed on the source email: posts that
+	 * share an author email resolve to one dest user (dedup), and the page
+	 * slice's distinct author resolves to a different dest user than the post
+	 * slice. Proves the importer matches by email rather than attributing every
+	 * post to the importing user.
+	 */
+	public function test_author_resolves_to_distinct_dest_users(): void {
+		// ARRANGE: collect the dest user each source author email resolved to,
+		// asserting along the way that one email never maps to two dest users.
+		$dest_user_by_email = array();
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$body      = self::$fixture->source_rest_bodies[ $source_id ];
+			$email     = (string) ( $body['safe_publish_author']['email'] ?? '' );
+			$author_id = (int) get_post( $dest_id )->post_author;
+
+			if ( isset( $dest_user_by_email[ $email ] ) ) {
+				$this->assertSame(
+					$dest_user_by_email[ $email ],
+					$author_id,
+					"Source author '{$email}' should resolve to one dest user"
+				);
+			} else {
+				$dest_user_by_email[ $email ] = $author_id;
+			}
+		}
+
+		// ASSERT: the batch exercised more than one author, and distinct source
+		// emails resolved to distinct dest users.
+		$this->assertGreaterThan(
+			1,
+			count( $dest_user_by_email ),
+			'Batch should seed more than one source author email'
+		);
+		$this->assertSame(
+			count( $dest_user_by_email ),
+			count( array_unique( array_values( $dest_user_by_email ) ) ),
+			'Distinct source author emails should resolve to distinct dest users'
+		);
+	}
+
+	/**
+	 * Verifies that the child page's post_parent resolves to its source
+	 * parent's dest ID, while posts and top-level pages keep post_parent 0.
+	 * Also guards against a silent pass where the batch seeds no child at all.
+	 */
+	public function test_parent_columns_parity(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: each dest post_parent matches the source parent mapping, and
+		// the batch exercised at least one non-zero parent.
+		$child_count = 0;
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$source_body = self::$fixture->source_rest_bodies[ $source_id ];
+			if ( (int) ( $source_body['parent'] ?? 0 ) > 0 ) {
+				++$child_count;
+			}
+
+			Post_Parity_Asserter::assert_parent_columns(
+				$source_body,
+				get_post( $dest_id ),
+				self::$fixture->dest_post_ids,
+				$this
+			);
+		}
+
+		$this->assertGreaterThan(
+			0,
+			$child_count,
+			'Batch should seed at least one child post to exercise post_parent'
+		);
 	}
 
 	/**
@@ -644,9 +721,9 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	 * import code change.
 	 */
 	public function test_post_status_locks_to_draft(): void {
-		// ARRANGE + ACT: batch imported in setUp.
+		// ARRANGE + ACT: batch imported.
 		// ASSERT: every dest post is draft.
-		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
 			$dest = get_post( $dest_id );
 			$this->assertSame(
 				'draft',
@@ -657,41 +734,124 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that imported posts get a post_date close to the import
-	 * time, not the source publish date. Counterpart to the post_date entry
-	 * in DIVERGENCE_REGISTRY.
+	 * Verifies that imported posts get a post_date close to the import time,
+	 * not the source publish date. Counterpart to the post_date entry in
+	 * DIVERGENCE_REGISTRY.
 	 *
-	 * Uses post_date rather than post_date_gmt because WordPress leaves
-	 * post_date_gmt as "0000-00-00 00:00:00" for drafts until they are
-	 * published, and imported posts land as drafts (see the post_status
-	 * reverse-assertion above).
+	 * Uses post_date rather than post_date_gmt because WordPress leaves the GMT
+	 * date columns at the draft sentinel until publish (locked in
+	 * test_gmt_dates_lock_to_zero_for_drafts).
 	 */
 	public function test_post_date_locks_to_import_time(): void {
-		// ARRANGE: capture an upper bound for the dest post_date. The test
-		// runs in wp-env which defaults to UTC, so post_date parses cleanly
-		// as a UTC timestamp.
+		// ARRANGE: capture an upper bound for the dest post_date.
 		$now_ts = time();
 
-		// ACT + ASSERT: each dest post_date is within 60s of $now_ts.
-		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
-			$dest    = get_post( $dest_id );
-			$dest_ts = strtotime( $dest->post_date . ' UTC' );
-
-			$this->assertIsInt(
-				$dest_ts,
-				"Source ID {$source_id} post_date should parse"
+		// ACT + ASSERT: each dest post_date is recent.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$this->assert_datetime_is_recent(
+				(string) get_post( $dest_id )->post_date,
+				$now_ts,
+				"Source ID {$source_id} post_date"
 			);
+		}
+	}
 
-			$delta = $now_ts - (int) $dest_ts;
-			$this->assertGreaterThanOrEqual(
-				0,
-				$delta,
-				"Source ID {$source_id} post_date should not be in the future"
+	/**
+	 * Verifies that imported posts get post_modified set to the import time,
+	 * not a propagated source modified time. Counterpart to the post_modified
+	 * entry in DIVERGENCE_REGISTRY. post_modified_gmt stays the draft sentinel
+	 * (locked in test_gmt_dates_lock_to_zero_for_drafts).
+	 */
+	public function test_post_modified_locks_to_import_time(): void {
+		// ARRANGE: capture an upper bound for the dest post_modified.
+		$now_ts = time();
+
+		// ACT + ASSERT: each dest post_modified is recent.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$this->assert_datetime_is_recent(
+				(string) get_post( $dest_id )->post_modified,
+				$now_ts,
+				"Source ID {$source_id} post_modified"
 			);
-			$this->assertLessThan(
-				60,
-				$delta,
-				"Source ID {$source_id} post_date should be within 60s of now"
+		}
+	}
+
+	/**
+	 * Verifies that imported posts keep both GMT date columns (post_date_gmt
+	 * and post_modified_gmt) at WordPress' draft sentinel "0000-00-00 00:00:00".
+	 * Counterpart to those entries in DIVERGENCE_REGISTRY: WordPress only fills
+	 * them at publish time, so a non-zero value would mean a source date leaked
+	 * through or the post no longer lands as a draft.
+	 */
+	public function test_gmt_dates_lock_to_zero_for_drafts(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: each dest GMT date column is the draft sentinel.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$dest = get_post( $dest_id );
+			$this->assertSame(
+				'0000-00-00 00:00:00',
+				$dest->post_date_gmt,
+				"Source ID {$source_id} post_date_gmt should stay the draft"
+				. ' sentinel until publish'
+			);
+			$this->assertSame(
+				'0000-00-00 00:00:00',
+				$dest->post_modified_gmt,
+				"Source ID {$source_id} post_modified_gmt should stay the draft"
+				. ' sentinel until publish'
+			);
+		}
+	}
+
+	/**
+	 * Verifies that each imported post lands on a fresh destination ID instead
+	 * of reusing the source ID. Counterpart to the ID entry in
+	 * DIVERGENCE_REGISTRY: source and dest are separate WordPress ID spaces.
+	 * The source IDs are kept clear of the dest ID range (see SOURCE_ID_BASE),
+	 * so a match can never be coincidental.
+	 */
+	public function test_id_diverges_from_source(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: each dest ID differs from its source ID.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$this->assertNotSame(
+				$source_id,
+				$dest_id,
+				"Source ID {$source_id} should import to a fresh dest ID"
+			);
+		}
+	}
+
+	/**
+	 * Verifies that imported posts get a destination-generated guid rather than
+	 * the source guid. Counterpart to the guid entry in DIVERGENCE_REGISTRY:
+	 * WordPress core's own importer preserves the source guid, so locking the
+	 * regeneration forces an explicit decision if that behavior ever changes.
+	 */
+	public function test_guid_regenerated_on_dest(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: dest guid is non-empty and does not reuse the source guid.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$dest_guid   = (string) get_post( $dest_id )->guid;
+			$source_guid = (string) self::$fixture
+				->source_rest_bodies[ $source_id ]['guid'];
+
+			// Guard the comparison below: a missing source guid would let the
+			// reuse check pass trivially.
+			$this->assertNotSame(
+				'',
+				$source_guid,
+				"Source ID {$source_id} should seed a source guid"
+			);
+			$this->assertNotSame(
+				'',
+				$dest_guid,
+				"Source ID {$source_id} dest guid should be non-empty"
+			);
+			$this->assertNotSame(
+				$source_guid,
+				$dest_guid,
+				"Source ID {$source_id} dest guid should not reuse source guid"
 			);
 		}
 	}
@@ -701,11 +861,11 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	 * round-trips to the destination post unchanged.
 	 */
 	public function test_source_matched_meta_parity(): void {
-		// ARRANGE + ACT: batch already imported in setUp.
+		// ARRANGE + ACT: batch already imported.
 		// ASSERT: each dest post carries the source meta values.
-		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
 			Post_Parity_Asserter::assert_source_matched_meta(
-				$this->source_rest_bodies[ $source_id ],
+				self::$fixture->source_rest_bodies[ $source_id ],
 				get_post( $dest_id ),
 				$this
 			);
@@ -719,29 +879,11 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	 * the right shape.
 	 */
 	public function test_plugin_added_meta_present(): void {
-		// ARRANGE + ACT: batch already imported in setUp.
+		// ARRANGE + ACT: batch already imported.
 		// ASSERT: each dest post carries the plugin-added meta keys.
-		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
 			Post_Parity_Asserter::assert_plugin_added_meta(
-				$this->source_rest_bodies[ $source_id ],
-				get_post( $dest_id ),
-				$this
-			);
-		}
-	}
-
-	/**
-	 * Verifies that every meta key listed in DEFERRED_META is absent on each
-	 * dest post. Locks the current phase's "not yet emitted" state so that a
-	 * future phase emitting one of these keys (e.g. META_SOURCE_POST_PARENT_ID
-	 * when hierarchical-post support ships) surfaces as a test failure and
-	 * forces the registry to be updated.
-	 */
-	public function test_deferred_meta_keys_absent(): void {
-		// ARRANGE + ACT: batch already imported in setUp.
-		// ASSERT: no deferred meta key is present on any dest post.
-		foreach ( $this->dest_post_ids as $dest_id ) {
-			Post_Parity_Asserter::assert_deferred_meta_absent(
+				self::$fixture->source_rest_bodies[ $source_id ],
 				get_post( $dest_id ),
 				$this
 			);
@@ -755,11 +897,11 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	 * starts emitting a new meta key.
 	 */
 	public function test_no_unmodeled_meta_keys(): void {
-		// ARRANGE + ACT: batch already imported in setUp.
+		// ARRANGE + ACT: batch already imported.
 		// ASSERT: every dest meta key on every imported post is classified.
-		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
 			Post_Parity_Asserter::assert_no_unmodeled_meta_keys(
-				$this->source_rest_bodies[ $source_id ],
+				self::$fixture->source_rest_bodies[ $source_id ],
 				get_post( $dest_id ),
 				$this
 			);
@@ -772,11 +914,11 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	 * importer's default parent (0) and description ('').
 	 */
 	public function test_term_assignments_parity(): void {
-		// ARRANGE + ACT: batch already imported in setUp.
+		// ARRANGE + ACT: batch already imported.
 		// ASSERT: each dest post has the source term assignments.
-		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
 			Post_Parity_Asserter::assert_term_assignments(
-				$this->source_rest_bodies[ $source_id ],
+				self::$fixture->source_rest_bodies[ $source_id ],
 				get_post( $dest_id ),
 				$this
 			);
@@ -789,11 +931,11 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	 * importer's behavior of attaching only the terms the source asked for.
 	 */
 	public function test_no_unmodeled_term_assignments(): void {
-		// ARRANGE + ACT: batch already imported in setUp.
+		// ARRANGE + ACT: batch already imported.
 		// ASSERT: every dest term assignment traces to a source one.
-		foreach ( $this->dest_post_ids as $source_id => $dest_id ) {
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
 			Post_Parity_Asserter::assert_no_unmodeled_term_assignments(
-				$this->source_rest_bodies[ $source_id ],
+				self::$fixture->source_rest_bodies[ $source_id ],
 				get_post( $dest_id ),
 				$this
 			);
@@ -807,14 +949,14 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 	 * the asserter documents.
 	 */
 	public function test_source_referenced_attachments_imported(): void {
-		// ARRANGE + ACT: batch already imported in setUp.
+		// ARRANGE + ACT: batch already imported.
 		// ASSERT: each source URL resolves to a single classified dest
 		// attachment. Featured/inline classification is driven by the source
 		// body's `featured_media` field (same source-of-truth the asserter
 		// uses) rather than image_refs ordering.
-		foreach ( $this->image_refs_by_source_id as $source_id => $refs ) {
+		foreach ( self::$fixture->image_refs_by_source_id as $source_id => $refs ) {
 			$featured_source_id = (int) (
-				$this->source_rest_bodies[ $source_id ]['featured_media'] ?? 0
+				self::$fixture->source_rest_bodies[ $source_id ]['featured_media'] ?? 0
 			);
 
 			foreach ( $refs as $ref ) {
@@ -827,6 +969,7 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 					self::SOURCE_BASE_URL,
 					'image/jpeg',
 					$featured_id,
+					self::$fixture->source_media_metadata( $ref['id'] ),
 					$this
 				);
 			}
@@ -843,5 +986,314 @@ class Seeder_Content_Parity_Test extends WP_Ajax_UnitTestCase {
 		// ARRANGE + ACT: nothing to set up; pure static check.
 		// ASSERT: every attachment-applicable column is classified.
 		Post_Parity_Asserter::assert_no_unmodeled_attachment_columns( $this );
+	}
+
+	/**
+	 * Verifies that source library metadata (alt, title, caption, description)
+	 * propagates to every sideloaded attachment, matching the raw source values
+	 * after the importer's per-field sanitization. Guards against a vacuous pass
+	 * by requiring the batch to exercise both a featured-flagged and an
+	 * inline-only attachment.
+	 *
+	 * The seeder embeds every image inline, so here the featured attachment is
+	 * written by the inline map path; the by-ID featured path is covered in
+	 * isolation by Media_Importer_Featured_Metadata_Test.
+	 */
+	public function test_library_metadata_propagates_to_all_attachments(): void {
+		// ARRANGE + ACT: batch already imported.
+		$featured_checked = 0;
+		$inline_checked   = 0;
+
+		// ASSERT: each attachment carries the source library metadata.
+		foreach ( self::$fixture->image_refs_by_source_id as $source_id => $refs ) {
+			$featured_source_id = (int) (
+				self::$fixture->source_rest_bodies[ $source_id ]['featured_media'] ?? 0
+			);
+
+			foreach ( $refs as $ref ) {
+				$dest = $this->find_dest_attachment_by_source_url( $ref['url'] );
+				$this->assertNotNull(
+					$dest,
+					"Source URL {$ref['url']} should resolve a dest attachment"
+				);
+
+				$meta = self::$fixture->source_media_metadata( $ref['id'] );
+
+				$this->assertSame(
+					wp_strip_all_tags( $meta['alt'], true ),
+					(string) get_post_meta(
+						$dest->ID,
+						'_wp_attachment_image_alt',
+						true
+					),
+					"Attachment {$dest->ID} alt should match source"
+				);
+				$this->assertSame(
+					sanitize_text_field( $meta['title'] ),
+					$dest->post_title,
+					"Attachment {$dest->ID} title should match source"
+				);
+				$this->assertSame(
+					wp_kses_post( $meta['caption'] ),
+					$dest->post_excerpt,
+					"Attachment {$dest->ID} caption should match source"
+				);
+				$this->assertSame(
+					wp_kses_post( $meta['description'] ),
+					$dest->post_content,
+					"Attachment {$dest->ID} description should match source"
+				);
+
+				if ( $ref['id'] === $featured_source_id ) {
+					++$featured_checked;
+				} else {
+					++$inline_checked;
+				}
+			}
+		}
+
+		$this->assertGreaterThan(
+			0,
+			$featured_checked,
+			'Batch should exercise at least one featured attachment'
+		);
+		$this->assertGreaterThan(
+			0,
+			$inline_checked,
+			'Batch should exercise at least one inline-only attachment'
+		);
+	}
+
+	/**
+	 * Verifies that the empty-content edge page imports with empty post_content
+	 * and no injected markers, locking the empty-body path.
+	 */
+	public function test_empty_content_imports_empty(): void {
+		// ARRANGE + ACT: batch already imported.
+		$this->assertArrayHasKey(
+			self::EDGE_EMPTY_SOURCE_ID,
+			self::$fixture->dest_post_ids,
+			'Empty-content edge page should import to a dest post'
+		);
+
+		// ASSERT: the empty-content page kept empty post_content.
+		$dest_id = self::$fixture->dest_post_ids[ self::EDGE_EMPTY_SOURCE_ID ];
+		$this->assertSame(
+			'',
+			(string) get_post( $dest_id )->post_content,
+			'Empty source content should import as empty post_content'
+		);
+	}
+
+	/**
+	 * Verifies that the non-ASCII edge page seeds multibyte characters, an
+	 * emoji, and unescaped entities, so the encoding and slug parity checks that
+	 * run over the whole batch are not vacuously satisfied by ASCII input.
+	 */
+	public function test_non_ascii_edge_seeds_multibyte_and_entities(): void {
+		// ARRANGE: read the non-ASCII edge page's source body.
+		$body    = self::$fixture->source_rest_bodies[ self::EDGE_NON_ASCII_SOURCE_ID ];
+		$content = (string) $body['content']['raw'];
+		$slug    = (string) $body['slug'];
+
+		// ASSERT: it imported, carries the multibyte/entity payload, and uses a
+		// slug that sanitize_title() actually transforms.
+		$this->assertArrayHasKey(
+			self::EDGE_NON_ASCII_SOURCE_ID,
+			self::$fixture->dest_post_ids,
+			'Non-ASCII edge page should import to a dest post'
+		);
+		$this->assertStringContainsString(
+			"\u{65e5}\u{672c}\u{8a9e}",
+			$content,
+			'Non-ASCII content should carry CJK characters'
+		);
+		$this->assertStringContainsString(
+			"\u{1f389}",
+			$content,
+			'Non-ASCII content should carry a 4-byte emoji'
+		);
+		$this->assertStringContainsString(
+			'&amp;',
+			$content,
+			'Non-ASCII content should carry an unescaped entity'
+		);
+		$this->assertStringContainsString(
+			'&mdash;',
+			$content,
+			'Non-ASCII content should carry a named entity'
+		);
+		$this->assertNotSame(
+			$slug,
+			sanitize_title( $slug ),
+			'Non-ASCII slug should be transformed by sanitize_title()'
+		);
+	}
+
+	/**
+	 * Verifies that the embed edge page seeds a core/embed block whose url is
+	 * on a host distinct from the source site, so test_embed_url_parity is not
+	 * vacuously satisfied by a batch with no external embed.
+	 */
+	public function test_embed_edge_seeds_external_provider_url(): void {
+		// ARRANGE: read the embed edge page's source content.
+		$content = $this->source_content( self::EDGE_EMBED_SOURCE_ID );
+
+		// ASSERT: it imported, carries a core/embed block, and references an
+		// external provider host the importer must leave untouched.
+		$this->assertArrayHasKey(
+			self::EDGE_EMBED_SOURCE_ID,
+			self::$fixture->dest_post_ids,
+			'Embed edge page should import to a dest post'
+		);
+		$this->assertStringContainsString(
+			'<!-- wp:embed',
+			$content,
+			'Embed edge content should carry a core/embed block'
+		);
+		$this->assertStringContainsString(
+			self::EDGE_EMBED_PROVIDER_HOST,
+			$content,
+			'Embed edge content should reference the external provider host'
+		);
+	}
+
+	/**
+	 * Verifies that the footnotes edge page round-trips both channels WordPress
+	 * footnotes use — the core/footnotes block in post_content and the
+	 * separately stored footnotes meta JSON — confirming both survive the
+	 * import together.
+	 */
+	public function test_footnotes_edge_round_trips_block_and_meta(): void {
+		// ARRANGE + ACT: batch imported; read the seed and dest post.
+		$this->assertArrayHasKey(
+			self::EDGE_FOOTNOTES_SOURCE_ID,
+			self::$fixture->dest_post_ids,
+			'Footnotes edge page should import to a dest post'
+		);
+		$body           = self::$fixture->source_rest_bodies[ self::EDGE_FOOTNOTES_SOURCE_ID ];
+		$source_content = (string) $body['content']['raw'];
+		$source_meta    = (string) ( $body['meta']['footnotes'] ?? '' );
+		$dest_id        = self::$fixture->dest_post_ids[ self::EDGE_FOOTNOTES_SOURCE_ID ];
+		$dest_meta      = (string) get_post_meta( $dest_id, 'footnotes', true );
+
+		// ASSERT: the seed has a core/footnotes block and non-empty meta JSON
+		// (so the checks below aren't vacuous), then both survive the import.
+		$this->assertStringContainsString(
+			'<!-- wp:footnotes /-->',
+			$source_content,
+			'Footnotes edge content should seed a core/footnotes block'
+		);
+		$this->assertStringContainsString(
+			'<!-- wp:footnotes /-->',
+			(string) get_post( $dest_id )->post_content,
+			'Dest content should preserve the core/footnotes block'
+		);
+		$source_footnotes = json_decode( $source_meta, true );
+		$this->assertIsArray(
+			$source_footnotes,
+			'Footnotes source meta should decode to an array'
+		);
+		$this->assertNotSame(
+			array(),
+			$source_footnotes,
+			'Footnotes source meta should carry at least one footnote'
+		);
+		$this->assertSame(
+			$source_footnotes,
+			json_decode( $dest_meta, true ),
+			'Footnotes meta should round-trip structurally to the dest post'
+		);
+	}
+
+	/**
+	 * Verifies that no imported post other than the reusable-block edge raised an
+	 * import warning, reverse-asserting that the clean batch, including the empty,
+	 * non-ASCII, embed, and footnotes edge pages, triggers no degradation. The
+	 * reusable-block page's degradation is asserted by
+	 * test_reusable_block_edge_surfaces_degradation.
+	 */
+	public function test_import_raised_no_warnings(): void {
+		// ARRANGE + ACT: batch already imported.
+		// ASSERT: warnings captured for every imported post; only the
+		// reusable-block edge degrades, every other post is warning-free.
+		$this->assertSame(
+			array_keys( self::$fixture->dest_post_ids ),
+			array_keys( self::$fixture->warnings_by_source_id ),
+			'Warnings should be captured for every imported post'
+		);
+		foreach ( self::$fixture->warnings_by_source_id as $source_id => $warnings ) {
+			if ( self::EDGE_REUSABLE_BLOCK_SOURCE_ID === $source_id ) {
+				continue;
+			}
+			$this->assertSame(
+				array(),
+				$warnings,
+				"Source ID {$source_id} should import without warnings"
+			);
+		}
+	}
+
+	/**
+	 * Verifies that the reusable-block edge page surfaces a retryable
+	 * unmapped_block_reference degradation: the import raises the warning keyed
+	 * to core/block, opens a retryable attention issue carrying the source ref
+	 * and the reusable-block detail, and leaves the ref in place since this
+	 * batch does not import the target wp_block.
+	 */
+	public function test_reusable_block_edge_surfaces_degradation(): void {
+		// ARRANGE + ACT: batch imported; locate the reusable-block edge page.
+		$this->assertArrayHasKey(
+			self::EDGE_REUSABLE_BLOCK_SOURCE_ID,
+			self::$fixture->dest_post_ids,
+			'Reusable-block edge page should import to a dest post'
+		);
+		$dest_id = self::$fixture->dest_post_ids[ self::EDGE_REUSABLE_BLOCK_SOURCE_ID ];
+		$ref     = Seeder_Parity_Fixture::REUSABLE_BLOCK_SOURCE_REF;
+
+		// ASSERT: the import raised exactly the core/block unmapped reference.
+		$this->assertSame(
+			array(
+				array(
+					'type'      => 'unmapped_block_reference',
+					'kind'      => 'post',
+					'block'     => 'core/block',
+					'source_id' => $ref,
+				),
+			),
+			self::$fixture->warnings_by_source_id[ self::EDGE_REUSABLE_BLOCK_SOURCE_ID ],
+			'Reusable-block edge import should raise one core/block unmapped reference'
+		);
+
+		// ASSERT: a retryable attention issue carries the source ref and the
+		// reusable-block detail that drives the Patterns-oriented copy.
+		$issue = ( new Attention_Issues_Repository() )->get_issue(
+			$dest_id,
+			'unmapped_block_reference',
+			$ref,
+			'post'
+		);
+		$this->assertNotNull(
+			$issue,
+			'Reusable-block degradation should open an attention issue'
+		);
+		$this->assertSame( 'warning', $issue['severity'] );
+		$this->assertSame(
+			'core/block',
+			$issue['detail']['block'] ?? '',
+			'Issue detail should record the core/block name'
+		);
+		$this->assertContains(
+			'unmapped_block_reference',
+			Admin_Ajax_Controller::ATTENTION_ISSUE_RETRYABLE_TYPES,
+			'Reusable-block issue must be retryable'
+		);
+
+		// ASSERT: the core/block ref is left in place on the destination.
+		$this->assertStringContainsString(
+			'<!-- wp:block {"ref":' . $ref . '} /-->',
+			(string) get_post( $dest_id )->post_content,
+			'Dest content should preserve the unresolved core/block ref'
+		);
 	}
 }

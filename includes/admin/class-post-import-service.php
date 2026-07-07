@@ -11,9 +11,12 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\Meta_Terms_Manager;
+use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
+use Safe_Publish\Utils\Reconcile_Outcome;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
 use Exception;
@@ -107,15 +110,42 @@ class Post_Import_Service {
 	private Navigation_Ref_Rewriter $nav_ref_rewriter;
 
 	/**
+	 * Attention issues repository.
+	 *
+	 * @var Attention_Issues_Repository
+	 */
+	private Attention_Issues_Repository $attention_issues;
+
+	/**
+	 * Issue types keyed to the imported post itself, reconciled from its
+	 * finalized import warnings.
+	 *
+	 * @var string[]
+	 */
+	private const ATTENTION_POST_ISSUE_TYPES = array(
+		'unmapped_block_reference',
+		'parent_orphaned',
+	);
+
+	/**
+	 * Post meta recording the unix timestamp at which an orphaned post was
+	 * re-linked to its parent by a retry.
+	 *
+	 * @var string
+	 */
+	public const META_PARENT_RELINKED_AT = '_safe_publish_parent_relinked_at';
+
+	/**
 	 * Constructs the Post_Import_Service instance.
 	 *
-	 * @param Source_Posts_API        $api                Source Posts API instance.
-	 * @param Media_Importer          $media_importer     Media Importer instance.
-	 * @param Content_Processor       $content_processor  Content Processor instance.
-	 * @param History_Repository      $repository         History repository instance.
-	 * @param Meta_Terms_Manager      $meta_terms_manager Meta Terms Manager instance.
-	 * @param Telemetry_Service       $telemetry          Telemetry service.
-	 * @param Navigation_Ref_Rewriter $nav_ref_rewriter   Navigation cross-reference rewriter.
+	 * @param Source_Posts_API            $api                Source Posts API instance.
+	 * @param Media_Importer              $media_importer     Media Importer instance.
+	 * @param Content_Processor           $content_processor  Content Processor instance.
+	 * @param History_Repository          $repository         History repository instance.
+	 * @param Meta_Terms_Manager          $meta_terms_manager Meta Terms Manager instance.
+	 * @param Telemetry_Service           $telemetry          Telemetry service.
+	 * @param Navigation_Ref_Rewriter     $nav_ref_rewriter   Navigation cross-reference rewriter.
+	 * @param Attention_Issues_Repository $attention_issues   Attention issues repository.
 	 */
 	public function __construct(
 		Source_Posts_API $api,
@@ -124,7 +154,8 @@ class Post_Import_Service {
 		History_Repository $repository,
 		Meta_Terms_Manager $meta_terms_manager,
 		Telemetry_Service $telemetry,
-		Navigation_Ref_Rewriter $nav_ref_rewriter
+		Navigation_Ref_Rewriter $nav_ref_rewriter,
+		Attention_Issues_Repository $attention_issues
 	) {
 		$this->api                = $api;
 		$this->media_importer     = $media_importer;
@@ -133,6 +164,7 @@ class Post_Import_Service {
 		$this->meta_terms_manager = $meta_terms_manager;
 		$this->telemetry          = $telemetry;
 		$this->nav_ref_rewriter   = $nav_ref_rewriter;
+		$this->attention_issues   = $attention_issues;
 	}
 
 	/**
@@ -141,9 +173,6 @@ class Post_Import_Service {
 	 * @param array    $post_data  Post data array containing id, title, content, link, etc.
 	 * @param int|null $session_id Optional import session ID for history tracking.
 	 * @param array    $options    Optional behavior overrides:
-	 *                             - 'force_draft_on_update' (bool, default false): override
-	 *                               post_status to 'draft' on update. Single-import uses this;
-	 *                               bulk preserves status.
 	 *                             - 'prefetched_fresh_result' (array|null, default null):
 	 *                               pre-fetched fetch_fresh_post() response; skips the
 	 *                               in-pipeline fetch in the bulk two-pass flow.
@@ -239,7 +268,7 @@ class Post_Import_Service {
 		}
 
 		try {
-			$source_site_url = self::extract_site_url( $fields['source_link'] );
+			$source_site_url = Options::get_connected_site_url_with_path();
 
 			$imported_post = $this->find_imported_post(
 				$fields['source_post_id'],
@@ -612,6 +641,33 @@ class Post_Import_Service {
 	}
 
 	/**
+	 * Copies the parent-resolution reason and parent_id from a WP_Error's data
+	 * onto the given payload when present, so the abort path carries the
+	 * structured detail into both History and the audit event.
+	 *
+	 * @param WP_Error $error   Error whose data may hold reason and parent_id.
+	 * @param array    $payload Payload to receive the detail.
+	 * @return array Payload with reason and parent_id merged in when present.
+	 */
+	private function merge_parent_detail( WP_Error $error, array $payload ): array {
+		$error_data = $error->get_error_data();
+
+		if ( ! is_array( $error_data ) ) {
+			return $payload;
+		}
+
+		if ( isset( $error_data['reason'] ) ) {
+			$payload['reason'] = $error_data['reason'];
+		}
+
+		if ( isset( $error_data['parent_id'] ) ) {
+			$payload['parent_id'] = (int) $error_data['parent_id'];
+		}
+
+		return $payload;
+	}
+
+	/**
 	 * Builds a standardized error result array for an import operation.
 	 *
 	 * @param array  $fields        Sanitized post fields.
@@ -752,61 +808,50 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Extracts the site base URL (scheme + host + port) from a full URL.
+	 * Returns the configured connected source site URL, without a trailing
+	 * slash.
 	 *
-	 * Preserves the port so non-default ports (e.g. local dev environments,
-	 * staging on alternate ports) reach the right service when used as a
-	 * base for REST endpoint URLs. Returns '' for empty or unparseable input
-	 * so callers can pass through source-link values without guarding.
+	 * Media imports resolve the source REST root against this stored connection
+	 * so the subsite path (e.g. "/blog") is preserved.
 	 *
-	 * @param string $url Full URL to extract the base from.
-	 * @return string Site base URL (e.g. "https://example.com" or
-	 *                "http://example.com:8889"), or '' when input is empty
-	 *                or has no scheme/host.
+	 * @return string Connected site URL, or empty string when not configured.
 	 */
-	public static function extract_site_url( string $url ): string {
-		if ( '' === $url ) {
-			return '';
-		}
-
-		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
-		$host   = wp_parse_url( $url, PHP_URL_HOST );
-		if ( ! is_string( $scheme ) || ! is_string( $host ) ) {
-			return '';
-		}
-
-		$port = wp_parse_url( $url, PHP_URL_PORT );
-
-		return $scheme . '://' . $host . ( is_int( $port ) ? ':' . $port : '' );
+	private function get_connected_source_url(): string {
+		return untrailingslashit(
+			(string) get_option( Options::OPTION_CONNECTED_SITE_URL, '' )
+		);
 	}
 
 	/**
 	 * Processes raw post content by importing media and fixing URLs.
 	 *
-	 * Returns a WP_Error if content processing fails or if kses is enabled and
+	 * Media URLs resolve against the configured connected source site. Returns
+	 * a WP_Error if content processing fails or if kses is enabled and
 	 * sanitization would modify the content.
 	 *
-	 * @param string         $content        Raw post content.
-	 * @param string         $source_link    Source post URL used to derive site URL.
-	 * @param array<int,int> $session_id_map Source post ID => destination post ID for
-	 *                                       the in-flight bulk batch; feeds block ID
-	 *                                       remapping.
+	 * @param string                               $content              Raw post content.
+	 * @param array<int,int>                       $session_id_map       Bulk batch source => destination post IDs.
+	 * @param array<string, array<string, string>> $library_metadata_map Source URL => library metadata for sideloads.
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
 	private function process_post_content(
 		string $content,
-		string $source_link,
-		array $session_id_map = array()
+		array $session_id_map = array(),
+		array $library_metadata_map = array()
 	): string|WP_Error {
-		if ( empty( $source_link ) ) {
+		$source_site_url = $this->get_connected_source_url();
+
+		if ( '' === $source_site_url ) {
 			return $this->sanitize_field( $content, self::FIELD_CONTENT );
 		}
 
-		$source_site_url = self::extract_site_url( $source_link );
-		$processed       = $this->content_processor->process_content(
+		$processed = $this->content_processor->process_content(
 			$content,
 			$source_site_url,
-			array( 'session_id_map' => $session_id_map )
+			array(
+				'session_id_map'       => $session_id_map,
+				'library_metadata_map' => $library_metadata_map,
+			)
 		);
 
 		if ( is_wp_error( $processed ) ) {
@@ -1155,9 +1200,8 @@ class Post_Import_Service {
 	 * post. Aborts with an error result if the fetch fails; the post will
 	 * not be updated with stale snapshot data.
 	 *
-	 * Post status is preserved by default to avoid silently unpublishing live
-	 * posts during automated bulk runs. Callers using the single-import review
-	 * flow can pass `force_draft_on_update` in $options to override.
+	 * Post status is preserved on update to avoid silently unpublishing live
+	 * posts; only new posts are created as drafts.
 	 *
 	 * @param WP_Post  $imported_post Imported WordPress post.
 	 * @param array    $fields        Sanitized post fields.
@@ -1193,7 +1237,10 @@ class Post_Import_Service {
 				'error',
 				null,
 				$prepared->get_error_message(),
-				array( 'action' => $prepared->get_error_code() )
+				$this->merge_parent_detail(
+					$prepared,
+					array( 'action' => $prepared->get_error_code() )
+				)
 			);
 
 			return $this->build_error_result(
@@ -1209,8 +1256,7 @@ class Post_Import_Service {
 		// Sideload the featured image before writing the post so that a
 		// failure here does not leave the post in a partially-updated state.
 		$featured_attachment_id = $this->import_featured_image_attachment(
-			$fields['featured_media_id'],
-			$fields['source_link']
+			$fields['featured_media_id']
 		);
 
 		if ( false === $featured_attachment_id ) {
@@ -1246,10 +1292,6 @@ class Post_Import_Service {
 			'post_author'    => $fields['matched_author_id'],
 		);
 
-		if ( true === ( $options['force_draft_on_update'] ?? false ) ) {
-			$post_args['post_status'] = 'draft';
-		}
-
 		$post_id = $this->persist_updated_post(
 			$post_args,
 			$featured_attachment_id,
@@ -1283,6 +1325,7 @@ class Post_Import_Service {
 		}
 
 		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
+		$this->record_attention_issues( $fields, $post_id );
 
 		$this->log_import_if_session(
 			$session_id,
@@ -1381,7 +1424,10 @@ class Post_Import_Service {
 				'error',
 				null,
 				$prepared->get_error_message(),
-				array( 'action' => $prepared->get_error_code() )
+				$this->merge_parent_detail(
+					$prepared,
+					array( 'action' => $prepared->get_error_code() )
+				)
 			);
 
 			return $this->build_error_result(
@@ -1397,8 +1443,7 @@ class Post_Import_Service {
 		// Sideload the featured image before creating the post so that a
 		// failure here does not leave an orphaned draft in the DB.
 		$featured_attachment_id = $this->import_featured_image_attachment(
-			$fields['featured_media_id'],
-			$fields['source_link']
+			$fields['featured_media_id']
 		);
 
 		if ( false === $featured_attachment_id ) {
@@ -1417,6 +1462,8 @@ class Post_Import_Service {
 			return $this->build_error_result( $fields, $error_message );
 		}
 
+		$source_site_url = Options::get_connected_site_url_with_path();
+
 		$post_id = $this->persist_new_post(
 			array(
 				'post_title'     => $fields['title'],
@@ -1434,7 +1481,7 @@ class Post_Import_Service {
 				'meta_input'     => array(
 					Options::META_SOURCE_POST_ID  => $fields['source_post_id'],
 					Options::META_SOURCE_LINK     => $fields['source_link'],
-					Options::META_SOURCE_SITE_URL => self::extract_site_url( $fields['source_link'] ),
+					Options::META_SOURCE_SITE_URL => $source_site_url,
 					Options::META_IMPORTED_FROM   => Options::META_IMPORTED_FROM_VALUE,
 				),
 			),
@@ -1468,6 +1515,7 @@ class Post_Import_Service {
 		}
 
 		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
+		$this->record_attention_issues( $fields, $post_id );
 
 		$this->log_import_if_session(
 			$session_id,
@@ -1486,7 +1534,8 @@ class Post_Import_Service {
 
 	/**
 	 * Repoints destination posts that reference a freshly imported navigation
-	 * menu, recording a warning when a matched post could not be updated.
+	 * menu, recording a warning when a matched post could not be updated and
+	 * reconciling the menu's attention issues from the per-post outcome.
 	 *
 	 * No-op for non-navigation imports. Best-effort: a rewrite failure
 	 * surfaces the still-stale post IDs as a warning rather than failing the
@@ -1506,10 +1555,13 @@ class Post_Import_Service {
 			return;
 		}
 
+		$source_nav_id   = (int) $fields['source_post_id'];
+		$source_site_url = Options::get_connected_site_url_with_path();
+
 		$result = $this->nav_ref_rewriter->rewrite_cross_refs(
-			(int) $fields['source_post_id'],
+			$source_nav_id,
 			$post_id,
-			self::extract_site_url( $fields['source_link'] )
+			$source_site_url
 		);
 
 		if ( array() !== $result['failed'] ) {
@@ -1518,6 +1570,377 @@ class Post_Import_Service {
 				'failed_post_ids' => $result['failed'],
 			);
 		}
+
+		// Posts whose write failed stay open; every other referencing post for
+		// this menu now points correctly, so its issue is resolved.
+		$this->attention_issues->reconcile_target_issues(
+			'nav_ref_rewrite_failed',
+			$source_nav_id,
+			'post',
+			'error',
+			$source_site_url,
+			$result['failed'],
+			array( 'source_nav_id' => $source_nav_id )
+		);
+	}
+
+	/**
+	 * Records the attention issues attached to a freshly imported post.
+	 *
+	 * Reconciles the post's open block-reference and orphaned-parent issues
+	 * against its finalized import warnings: unresolved refs are upserted, and
+	 * any that now resolve are cleared. Navigation rewrite failures are recorded
+	 * separately, keyed to the referencing posts.
+	 *
+	 * @param array $fields  Finalized post fields, including warnings.
+	 * @param int   $post_id Destination post id.
+	 */
+	private function record_attention_issues( array $fields, int $post_id ): void {
+		$source_site_url = Options::get_connected_site_url_with_path();
+
+		if ( '' === $source_site_url ) {
+			return;
+		}
+
+		$current = array();
+
+		foreach ( $fields['warnings'] as $warning ) {
+			$issue = $this->warning_to_post_issue( $warning );
+
+			if ( null !== $issue ) {
+				$current[] = $issue;
+			}
+		}
+
+		$this->attention_issues->reconcile_post_issues(
+			$post_id,
+			$source_site_url,
+			self::ATTENTION_POST_ISSUE_TYPES,
+			$current
+		);
+	}
+
+	/**
+	 * Translates a post-keyed import warning into an attention issue.
+	 *
+	 * Returns null for warnings that are not tracked as issues (author
+	 * fallbacks) or that are reconciled elsewhere (navigation rewrite
+	 * failures, which key to the referencing posts, not the imported one).
+	 *
+	 * @param array $warning Single import warning record.
+	 * @return array|null Issue fields, or null when the warning is not tracked.
+	 */
+	private function warning_to_post_issue( array $warning ): ?array {
+		$type = $warning['type'] ?? '';
+
+		if ( 'unmapped_block_reference' === $type ) {
+			return array(
+				'issue_type'  => $type,
+				'target_ref'  => (int) $warning['source_id'],
+				'target_kind' => (string) $warning['kind'],
+				'severity'    => 'warning',
+				'detail'      => array(
+					'kind'      => (string) $warning['kind'],
+					'block'     => (string) ( $warning['block'] ?? '' ),
+					'source_id' => (int) $warning['source_id'],
+				),
+			);
+		}
+
+		if ( 'parent_orphaned' === $type ) {
+			return array(
+				'issue_type'  => $type,
+				'target_ref'  => (int) $warning['source']['parent_id'],
+				'target_kind' => 'post',
+				'severity'    => 'warning',
+				'detail'      => array(
+					'parent_id'    => (int) $warning['source']['parent_id'],
+					'parent_title' => $warning['source']['parent_title'] ?? null,
+					'reason'       => (string) ( $warning['reason'] ?? '' ),
+				),
+			);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Re-runs the navigation rewriter for a menu and reconciles its issues.
+	 *
+	 * Self-verifying retry: re-attempts every post referencing the menu, so an
+	 * issue clears precisely when its post no longer fails the rewrite.
+	 *
+	 * @param int    $affected_post_id Referencing post whose issue was retried.
+	 * @param int    $source_nav_id    Menu's source post id.
+	 * @param string $source_site_url  Path-bearing source identity.
+	 * @return Reconcile_Outcome Target_absent when the menu is not present;
+	 *                           write_failed when this post's rewrite failed;
+	 *                           resolved otherwise.
+	 */
+	public function retry_nav_ref_rewrite(
+		int $affected_post_id,
+		int $source_nav_id,
+		string $source_site_url
+	): Reconcile_Outcome {
+		if ( '' === $source_site_url ) {
+			return Reconcile_Outcome::target_absent( 'Source identity is empty.' );
+		}
+
+		$dest_nav = $this->find_imported_navigation(
+			$source_nav_id,
+			$source_site_url
+		);
+
+		if ( ! $dest_nav instanceof WP_Post ) {
+			return Reconcile_Outcome::target_absent(
+				sprintf(
+					'Destination navigation menu for source %d is not imported.',
+					$source_nav_id
+				)
+			);
+		}
+
+		$result = $this->nav_ref_rewriter->rewrite_cross_refs(
+			$source_nav_id,
+			$dest_nav->ID,
+			$source_site_url
+		);
+
+		$this->attention_issues->reconcile_target_issues(
+			'nav_ref_rewrite_failed',
+			$source_nav_id,
+			'post',
+			'error',
+			$source_site_url,
+			$result['failed'],
+			array( 'source_nav_id' => $source_nav_id )
+		);
+
+		$failed_ids = array_map( 'intval', $result['failed'] );
+
+		if ( in_array( $affected_post_id, $failed_ids, true ) ) {
+			return Reconcile_Outcome::write_failed(
+				'Navigation rewrite failed for the referencing post.'
+			);
+		}
+
+		return Reconcile_Outcome::resolved();
+	}
+
+	/**
+	 * Repoints one stale block reference in place and resolves its issue on
+	 * success.
+	 *
+	 * Self-verifying: the issue clears only when the target now resolves and the
+	 * post was repointed; otherwise the row stays, with last_seen refreshed.
+	 *
+	 * @param int    $affected_post_id Post holding the reference.
+	 * @param int    $target_ref       Source id to repoint.
+	 * @param string $target_kind      'post' or 'term'.
+	 * @param string $source_site_url  Path-bearing source identity.
+	 * @return Reconcile_Outcome The reconciliation outcome.
+	 */
+	public function retry_block_ref_repoint(
+		int $affected_post_id,
+		int $target_ref,
+		string $target_kind,
+		string $source_site_url
+	): Reconcile_Outcome {
+		$outcome = $this->content_processor->repoint_block_reference(
+			$affected_post_id,
+			$target_ref,
+			$target_kind,
+			$source_site_url
+		);
+
+		$this->resolve_or_touch(
+			$outcome->is_resolved(),
+			$affected_post_id,
+			'unmapped_block_reference',
+			$target_ref,
+			$target_kind
+		);
+
+		return $outcome;
+	}
+
+	/**
+	 * Re-resolves an orphaned source parent and re-links the post when it now
+	 * exists on the destination, resolving the issue on success.
+	 *
+	 * @param int    $affected_post_id Orphaned child post.
+	 * @param int    $source_parent_id Source parent id.
+	 * @param string $source_site_url  Path-bearing source identity.
+	 * @return Reconcile_Outcome The reconciliation outcome.
+	 */
+	public function retry_parent_relink(
+		int $affected_post_id,
+		int $source_parent_id,
+		string $source_site_url
+	): Reconcile_Outcome {
+		$outcome = $this->relink_parent(
+			$affected_post_id,
+			$source_parent_id,
+			$source_site_url
+		);
+
+		$this->resolve_or_touch(
+			$outcome->is_resolved(),
+			$affected_post_id,
+			'parent_orphaned',
+			$source_parent_id,
+			'post'
+		);
+
+		return $outcome;
+	}
+
+	/**
+	 * Sets the post's parent when the source parent now resolves.
+	 *
+	 * @param int    $affected_post_id Child post.
+	 * @param int    $source_parent_id Source parent id.
+	 * @param string $source_site_url  Path-bearing source identity.
+	 * @return Reconcile_Outcome Resolved when re-linked; target_absent,
+	 *                           write_failed, or unresolved otherwise.
+	 */
+	private function relink_parent(
+		int $affected_post_id,
+		int $source_parent_id,
+		string $source_site_url
+	): Reconcile_Outcome {
+		$post = get_post( $affected_post_id );
+
+		if ( ! $post instanceof WP_Post ) {
+			return Reconcile_Outcome::unresolved( 'Affected post is missing.' );
+		}
+
+		$resolved = $this->resolve_source_parent(
+			$source_parent_id,
+			$post->post_type,
+			$source_site_url
+		);
+
+		if ( ! is_int( $resolved ) || $resolved <= 0 ) {
+			return Reconcile_Outcome::target_absent(
+				sprintf(
+					'Source parent %d is not imported on the destination.',
+					$source_parent_id
+				)
+			);
+		}
+
+		if ( ! $this->persist_post_parent( $affected_post_id, $resolved ) ) {
+			return Reconcile_Outcome::write_failed(
+				'Failed to write the post parent.'
+			);
+		}
+
+		clean_post_cache( $affected_post_id );
+		update_post_meta(
+			$affected_post_id,
+			self::META_PARENT_RELINKED_AT,
+			time()
+		);
+
+		return Reconcile_Outcome::resolved();
+	}
+
+	/**
+	 * Resolves an issue after a successful single-row reconciliation, or
+	 * refreshes it when the reconciliation ran without clearing the degradation.
+	 *
+	 * @param bool   $fixed            Whether the reconciliation succeeded.
+	 * @param int    $affected_post_id Destination post id.
+	 * @param string $issue_type       Issue type.
+	 * @param int    $target_ref       Source id of the target.
+	 * @param string $target_kind      'post' or 'term'.
+	 */
+	private function resolve_or_touch(
+		bool $fixed,
+		int $affected_post_id,
+		string $issue_type,
+		int $target_ref,
+		string $target_kind
+	): void {
+		if ( $fixed ) {
+			$this->attention_issues->resolve_issue(
+				$affected_post_id,
+				$issue_type,
+				$target_ref,
+				$target_kind
+			);
+			return;
+		}
+
+		$this->attention_issues->touch_issue(
+			$affected_post_id,
+			$issue_type,
+			$target_ref,
+			$target_kind
+		);
+	}
+
+	/**
+	 * Writes post_parent directly, bypassing wp_update_post so the re-link
+	 * creates no revision and leaves post_modified intact.
+	 *
+	 * @param int $post_id   Child post id.
+	 * @param int $parent_id Destination parent id.
+	 * @return bool True when the row was updated.
+	 */
+	protected function persist_post_parent(
+		int $post_id,
+		int $parent_id
+	): bool {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$result = $wpdb->update(
+			$wpdb->posts,
+			array( 'post_parent' => $parent_id ),
+			array( 'ID' => $post_id )
+		);
+
+		return false !== $result;
+	}
+
+	/**
+	 * Finds the imported navigation menu for a source ID and identity.
+	 *
+	 * Queries wp_navigation explicitly because it is excluded from the
+	 * post_type 'any' query find_imported_post relies on.
+	 *
+	 * @param int    $source_nav_id   Menu's source post id.
+	 * @param string $source_site_url Path-bearing source identity.
+	 * @return WP_Post|null Imported menu, or null if not found.
+	 */
+	private function find_imported_navigation(
+		int $source_nav_id,
+		string $source_site_url
+	): ?WP_Post {
+		$menus = get_posts(
+			array(
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query'       => array(
+					'relation' => 'AND',
+					array(
+						'key'   => Options::META_SOURCE_POST_ID,
+						'value' => $source_nav_id,
+					),
+					array(
+						'key'   => Options::META_SOURCE_SITE_URL,
+						'value' => $source_site_url,
+					),
+				),
+				'post_type'        => 'wp_navigation',
+				'post_status'      => 'any',
+				'posts_per_page'   => 1,
+				'suppress_filters' => false,
+			)
+		);
+
+		return empty( $menus ) ? null : $menus[0];
 	}
 
 	/**
@@ -1563,6 +1986,12 @@ class Post_Import_Service {
 			);
 
 			if ( is_wp_error( $fresh_result ) ) {
+				// Preserve the size-limit code; mask other fetch failures.
+				$error_code = $fresh_result->get_error_code();
+				if ( HTTP_Client::ERROR_RESPONSE_TOO_LARGE === $error_code ) {
+					return $fresh_result;
+				}
+
 				return new WP_Error(
 					'fetch_failed',
 					$fresh_result->get_error_message()
@@ -1581,6 +2010,9 @@ class Post_Import_Service {
 		$fields['source_author']     = is_array( $fresh_result['source_author'] ?? null )
 			? $fresh_result['source_author']
 			: null;
+		$fields['source_media']      = is_array( $fresh_result['source_media'] ?? null )
+			? $fresh_result['source_media']
+			: array();
 
 		// Resolve the source author before any media processing so a failed
 		// resolution does not leave orphan attachments behind.
@@ -1614,7 +2046,7 @@ class Post_Import_Service {
 		$resolved_parent = $this->resolve_source_parent(
 			$fields['source_parent_id'],
 			$post_type,
-			self::extract_site_url( $fields['source_link'] ),
+			Options::get_connected_site_url_with_path(),
 			$batch_fresh_data
 		);
 
@@ -1625,7 +2057,10 @@ class Post_Import_Service {
 				return new WP_Error(
 					$fallback->get_error_code(),
 					$fallback->get_error_message(),
-					array( 'fields' => $fields )
+					$this->merge_parent_detail(
+						$fallback,
+						array( 'fields' => $fields )
+					)
 				);
 			}
 
@@ -1652,8 +2087,8 @@ class Post_Import_Service {
 
 		$processed_content = $this->process_post_content(
 			$fresh_result['content'] ?? '',
-			$fields['source_link'],
-			$session_id_map
+			$session_id_map,
+			$fields['source_media']
 		);
 
 		if ( is_wp_error( $processed_content ) ) {
@@ -1679,13 +2114,10 @@ class Post_Import_Service {
 			$this->content_processor->get_warnings()
 		);
 
-		// Unsanitized values; sanitized downstream before being stored.
-		$fields['meta']  = is_array( $fresh_result['meta'] ?? null )
-			? $fresh_result['meta']
-			: $fields['meta'];
-		$fields['terms'] = is_array( $fresh_result['terms'] ?? null )
-			? $fresh_result['terms']
-			: $fields['terms'];
+		// Meta and terms come from the fresh source payload, not the request.
+		// fetch_fresh_post_content() guarantees both as arrays.
+		$fields['meta']  = $fresh_result['meta'];
+		$fields['terms'] = $fresh_result['terms'];
 
 		return array(
 			'fields'              => $fields,
@@ -1756,7 +2188,7 @@ class Post_Import_Service {
 		update_post_meta(
 			$post_id,
 			Options::META_SOURCE_SITE_URL,
-			self::extract_site_url( $source_link )
+			Options::get_connected_site_url_with_path()
 		);
 
 		if ( $featured_attachment_id > 0 ) {
@@ -1788,7 +2220,7 @@ class Post_Import_Service {
 		$terms_result = $this->meta_terms_manager->update_terms(
 			$post_id,
 			$terms,
-			self::extract_site_url( $source_link )
+			Options::get_connected_site_url_with_path()
 		);
 
 		if ( is_wp_error( $terms_result ) ) {
@@ -2124,27 +2556,32 @@ class Post_Import_Service {
 	 * the image before the post exists in the DB, so a download failure does not
 	 * leave the post in a partially-written state.
 	 *
-	 * Returns 0 when no featured image is configured (no-op). Returns the
-	 * attachment ID (> 0) on a successful import. Returns false when a featured
-	 * media ID is set but the import fails.
+	 * Returns 0 when there is nothing to import: either no featured media ID is
+	 * set, or the connected source site is not configured. Returns the
+	 * attachment ID (> 0) on a successful import, and false when a media ID is
+	 * set against a configured source but the sideload fails. The source media
+	 * is fetched from the configured connected site.
 	 *
-	 * @param int    $featured_media_id Source featured media ID.
-	 * @param string $source_link       Source post URL used to derive site URL.
-	 * @return int|false Attachment ID on success, 0 when not configured, false on failure.
+	 * @param int $featured_media_id Source featured media ID.
+	 * @return int|false Attachment ID, 0 if nothing imported, false on failure.
 	 */
 	public function import_featured_image_attachment(
-		int $featured_media_id,
-		string $source_link
+		int $featured_media_id
 	): int|false {
-		if ( empty( $featured_media_id ) || empty( $source_link ) ) {
+		if ( 0 === $featured_media_id ) {
 			return 0;
 		}
 
-		$source_site_url = self::extract_site_url( $source_link );
+		$source_site_url = $this->get_connected_source_url();
+
+		if ( '' === $source_site_url ) {
+			return 0;
+		}
 
 		$attachment_id = $this->media_importer->import_featured_image(
 			$featured_media_id,
-			$source_site_url
+			$source_site_url,
+			Auth_Credential_Provider::get_credentials()
 		);
 
 		return $attachment_id;
@@ -2261,7 +2698,7 @@ class Post_Import_Service {
 			'error',
 			null,
 			$e->getMessage(),
-			array()
+			array( 'action' => 'unexpected_exception' )
 		);
 
 		return $this->build_error_result( $fields, $e->getMessage() );

@@ -8,7 +8,7 @@
  *
  * @file This file defines the AuditLogDataView component.
  */
-import { getUserLabel } from './event-fields';
+import { getChannelLabel, getEventLabel, getUserLabel } from './event-fields';
 import {
 	calendarRangeToUtcBounds,
 	DateRangeFilter,
@@ -370,7 +370,9 @@ export function AuditLogDataView(): JSX.Element {
 			label: __( 'Channel', 'safe-publish' ),
 			enableSorting: false,
 			render: ( { item }: { item: AuditEvent } ): JSX.Element => (
-				<code className="safe-publish-audit-channel">{ item.channel }</code>
+				<span className="safe-publish-audit-channel">
+					{ getChannelLabel( item.channel ) }
+				</span>
 			),
 		},
 		{
@@ -378,9 +380,12 @@ export function AuditLogDataView(): JSX.Element {
 			label: __( 'Level', 'safe-publish' ),
 			enableSorting: false,
 			render: ( { item }: { item: AuditEvent } ): JSX.Element => {
-				const label = 'error' === item.level
-					? __( 'Error', 'safe-publish' )
-					: __( 'Info', 'safe-publish' );
+				const labels: Record< AuditEvent[ 'level' ], string > = {
+					info: __( 'Info', 'safe-publish' ),
+					warning: __( 'Warning', 'safe-publish' ),
+					error: __( 'Error', 'safe-publish' ),
+				};
+				const label = labels[ item.level ];
 				return (
 					<span
 						className={ `safe-publish-status-badge safe-publish-status-badge--${ item.level }` }
@@ -396,7 +401,7 @@ export function AuditLogDataView(): JSX.Element {
 			label: __( 'Event', 'safe-publish' ),
 			enableSorting: false,
 			render: ( { item }: { item: AuditEvent } ): JSX.Element => (
-				<code className="safe-publish-audit-event">{ item.event }</code>
+				<span>{ getEventLabel( item.event ) }</span>
 			),
 		},
 		{

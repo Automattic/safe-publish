@@ -4,16 +4,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getSettings, setSettings } from '@wordpress/date';
 import {
+	attentionIssueId,
 	formatBadgeTimestamp,
 	formatDateTime,
 	extractUrlPath,
+	getErrorMessage,
+	renderIssueMessage,
 	renderWarningMessage,
 	renderWarningShortLabel,
 } from '@/utils';
 import type {
+	AttentionIssue,
 	AuthorFallbackWarning,
 	NavRefRewriteFailedWarning,
 	ParentOrphanedWarning,
+	UnmappedBlockReferenceWarning,
 } from '@/types';
 
 // Pin WP date settings so format/timezone-sensitive tests are deterministic.
@@ -40,6 +45,26 @@ beforeEach( () => {
 
 afterEach( () => {
 	setSettings( originalDateSettings );
+} );
+
+describe( 'getErrorMessage', () => {
+	it( 'should surface the session-expired message from a nonce-expired response', () => {
+		// ARRANGE: the structured 403 body the AJAX handlers return on a
+		// stale nonce.
+		const response = {
+			success: false as const,
+			data: {
+				code: 'safe_publish_nonce_expired',
+				message: 'Your session has expired. Reload the page.',
+			},
+		};
+
+		// ACT: extract the user-facing message.
+		const message = getErrorMessage( response );
+
+		// ASSERT: the session-expiry copy surfaces, not the generic fallback.
+		expect( message ).toBe( 'Your session has expired. Reload the page.' );
+	} );
 } );
 
 describe( 'formatDateTime', () => {
@@ -242,6 +267,39 @@ describe( 'renderWarningMessage', () => {
 		expect( message ).not.toContain( '1 pages' );
 		expect( message ).toContain( '7' );
 	} );
+
+	it( 'should render the nav re-save hint for a non-block unmapped reference', () => {
+		// ARRANGE: an unresolved core/navigation ref.
+		const warning: UnmappedBlockReferenceWarning = {
+			type: 'unmapped_block_reference',
+			kind: 'post',
+			block: 'core/navigation',
+			source_id: 700,
+		};
+		// ACT: render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: the source ID and the nav-oriented hint are present.
+		expect( message ).toContain( '700' );
+		expect( message ).toContain( 'nav' );
+	} );
+
+	it( 'should render the Patterns hint for a core/block unmapped reference', () => {
+		// ARRANGE: an unresolved core/block ref (reusable block).
+		const warning: UnmappedBlockReferenceWarning = {
+			type: 'unmapped_block_reference',
+			kind: 'post',
+			block: 'core/block',
+			source_id: 555,
+		};
+		// ACT: render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: reusable-block phrasing and the Patterns location hint show,
+		// distinct from the nav copy.
+		expect( message ).toContain( '555' );
+		expect( message ).toContain( 'Reusable block' );
+		expect( message ).toContain( 'Patterns' );
+		expect( message ).not.toContain( 'nav' );
+	} );
 } );
 
 describe( 'renderWarningShortLabel', () => {
@@ -281,5 +339,149 @@ describe( 'renderWarningShortLabel', () => {
 		const label = renderWarningShortLabel( warning );
 		// ASSERT: short label is the comma-joinable string used in the bulk modal.
 		expect( label ).toBe( 'nav reference update failed' );
+	} );
+
+	it( 'should return "unmapped block reference" for a non-block unmapped reference', () => {
+		// ARRANGE: an unresolved core/navigation ref.
+		const warning: UnmappedBlockReferenceWarning = {
+			type: 'unmapped_block_reference',
+			kind: 'post',
+			block: 'core/navigation',
+			source_id: 700,
+		};
+		// ACT: render the short label.
+		const label = renderWarningShortLabel( warning );
+		// ASSERT: short label is the comma-joinable string used in the bulk modal.
+		expect( label ).toBe( 'unmapped block reference' );
+	} );
+
+	it( 'should return "reusable block reference" for a core/block unmapped reference', () => {
+		// ARRANGE: an unresolved core/block ref.
+		const warning: UnmappedBlockReferenceWarning = {
+			type: 'unmapped_block_reference',
+			kind: 'post',
+			block: 'core/block',
+			source_id: 555,
+		};
+		// ACT: render the short label.
+		const label = renderWarningShortLabel( warning );
+		// ASSERT: reusable-block label, distinct from the generic one.
+		expect( label ).toBe( 'reusable block reference' );
+	} );
+} );
+
+/**
+ * Builds an AttentionIssue fixture; tests override fields to match the case.
+ */
+function makeIssue( overrides: Partial< AttentionIssue > ): AttentionIssue {
+	return {
+		affected_post_id: 10,
+		issue_type: 'unmapped_block_reference',
+		target_ref: 700,
+		target_kind: 'post',
+		target_is_reusable_block: false,
+		severity: 'warning',
+		source_site_url: 'https://source.example.com',
+		first_detected_gmt: '2024-01-01 00:00:00',
+		last_seen_gmt: '2024-01-01 00:00:00',
+		affected_title: 'About',
+		affected_edit_url: '',
+		retryable: false,
+		...overrides,
+	};
+}
+
+describe( 'renderIssueMessage', () => {
+	it( 'renders retry-oriented copy for an unmapped post reference', () => {
+		// ARRANGE: an unmapped post-reference issue.
+		const issue = makeIssue( {
+			target_kind: 'post',
+			target_ref: 700,
+		} );
+		// ACT: render the message.
+		const message = renderIssueMessage( issue );
+		// ASSERT: post phrasing, the source ID, and the retry hint are present.
+		expect( message ).toContain( '700' );
+		expect( message ).toContain( 'post' );
+		expect( message ).toContain( 'Retry' );
+	} );
+
+	it( 'renders retry-oriented copy for an unmapped term reference', () => {
+		// ARRANGE: an unmapped term-reference issue.
+		const issue = makeIssue( {
+			target_kind: 'term',
+			target_ref: 701,
+		} );
+		// ACT: render the message.
+		const message = renderIssueMessage( issue );
+		// ASSERT: term phrasing, the source ID, and the retry hint are present.
+		expect( message ).toContain( '701' );
+		expect( message ).toContain( 'term' );
+		expect( message ).toContain( 'Retry' );
+	} );
+
+	it( 'renders retry-oriented copy for an orphaned parent', () => {
+		// ARRANGE: an orphaned-parent issue.
+		const issue = makeIssue( {
+			issue_type: 'parent_orphaned',
+			target_ref: 42,
+		} );
+		// ACT: render the message.
+		const message = renderIssueMessage( issue );
+		// ASSERT: the parent source ID and the retry hint are present.
+		expect( message ).toContain( '42' );
+		expect( message ).toContain( 'Retry' );
+	} );
+
+	it( 'renders a page-centric sentence for nav_ref_rewrite_failed', () => {
+		// ARRANGE: a per-page navigation rewrite failure.
+		const issue = makeIssue( {
+			issue_type: 'nav_ref_rewrite_failed',
+			target_ref: 8300,
+			severity: 'error',
+			retryable: true,
+		} );
+		// ACT: render the message.
+		const message = renderIssueMessage( issue );
+		// ASSERT: the menu ID and the retry hint are present.
+		expect( message ).toContain( '8300' );
+		expect( message ).toContain( 'Retry' );
+	} );
+
+	it( 'renders Patterns-oriented retry copy for a reusable-block reference', () => {
+		// ARRANGE: an unmapped reference whose target is a reusable block.
+		const issue = makeIssue( {
+			target_ref: 555,
+			target_is_reusable_block: true,
+			retryable: true,
+		} );
+		// ACT: render the message.
+		const message = renderIssueMessage( issue );
+		// ASSERT: reusable-block phrasing, the Patterns location hint, and the
+		// retry hint show — the block is now migratable, so Retry resolves it.
+		expect( message ).toContain( '555' );
+		expect( message ).toContain( 'Reusable block' );
+		expect( message ).toContain( 'Patterns' );
+		expect( message ).toContain( 'Retry' );
+	} );
+} );
+
+describe( 'attentionIssueId', () => {
+	it( 'keeps a post and a term reference sharing a target_ref distinct', () => {
+		// ARRANGE: same post, same source ref, different kind — the collision
+		// the 4-column identity key guards against.
+		const postRef = makeIssue( { target_kind: 'post', target_ref: 42 } );
+		const termRef = makeIssue( { target_kind: 'term', target_ref: 42 } );
+		// ACT & ASSERT: the ids differ, so DataViews rows stay unique.
+		expect( attentionIssueId( postRef ) ).not.toBe(
+			attentionIssueId( termRef )
+		);
+	} );
+
+	it( 'is stable for the same identity', () => {
+		// ARRANGE & ACT: two issues with the same identity.
+		const id = attentionIssueId( makeIssue( {} ) );
+		// ASSERT: the id is deterministic.
+		expect( id ).toBe( attentionIssueId( makeIssue( {} ) ) );
 	} );
 } );

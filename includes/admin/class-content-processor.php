@@ -13,7 +13,14 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Reconcile_Outcome;
+use Safe_Publish\Validators\URL_Validator;
 use WP_Error;
+use WP_HTML_Tag_Processor;
+use WP_Post;
+use WP_Post_Type;
+use WP_Taxonomy;
+use WP_Term;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -26,12 +33,24 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Content_Processor {
 
 	/**
-	 * Block-name => list of post-ID attrs, optionally gated on sibling
-	 * attrs (e.g. core/navigation-link.id only when kind=post-type).
+	 * Post meta recording the unix timestamp at which a stale block reference was
+	 * repointed in place by a retry.
 	 *
-	 * @var array<string, list<array{attr:string, gated_by?: array<string,string>}>>
+	 * @var string
+	 */
+	public const META_REF_REPOINTED_AT = '_safe_publish_block_ref_repointed_at';
+
+	/**
+	 * Block-name => list of post-ID attrs, optionally gated on sibling attrs
+	 * (e.g. core/navigation-link.id only when kind=post-type) and optionally
+	 * naming a url_attr to re-derive from the resolved destination id.
+	 *
+	 * @var array<string, list<array{attr:string, gated_by?: array<string,string>, url_attr?: string}>>
 	 */
 	private const POST_ID_BLOCK_ATTRS = array(
+		'core/block'              => array(
+			array( 'attr' => 'ref' ),
+		),
 		'core/navigation'         => array(
 			array( 'attr' => 'ref' ),
 		),
@@ -39,12 +58,14 @@ class Content_Processor {
 			array(
 				'attr'     => 'id',
 				'gated_by' => array( 'kind' => 'post-type' ),
+				'url_attr' => 'url',
 			),
 		),
 		'core/navigation-submenu' => array(
 			array(
 				'attr'     => 'id',
 				'gated_by' => array( 'kind' => 'post-type' ),
+				'url_attr' => 'url',
 			),
 		),
 	);
@@ -52,19 +73,21 @@ class Content_Processor {
 	/**
 	 * Block-name => list of term-ID attrs; same shape as POST_ID_BLOCK_ATTRS.
 	 *
-	 * @var array<string, list<array{attr:string, gated_by?: array<string,string>}>>
+	 * @var array<string, list<array{attr:string, gated_by?: array<string,string>, url_attr?: string}>>
 	 */
 	private const TERM_ID_BLOCK_ATTRS = array(
 		'core/navigation-link'    => array(
 			array(
 				'attr'     => 'id',
 				'gated_by' => array( 'kind' => 'taxonomy' ),
+				'url_attr' => 'url',
 			),
 		),
 		'core/navigation-submenu' => array(
 			array(
 				'attr'     => 'id',
 				'gated_by' => array( 'kind' => 'taxonomy' ),
+				'url_attr' => 'url',
 			),
 		),
 	);
@@ -145,9 +168,10 @@ class Content_Processor {
 	 * @param string               $content         Post content to process.
 	 * @param string               $source_site_url Source site URL.
 	 * @param array<string, mixed> $context         Optional batch state. Recognized
-	 *                                              keys: `session_id_map` (array of
-	 *                                              source post ID => destination post
-	 *                                              ID for the in-flight bulk batch).
+	 *                                              keys: `session_id_map` (bulk source
+	 *                                              => dest post IDs) and
+	 *                                              `library_metadata_map` (source URL =>
+	 *                                              library metadata).
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
 	public function process_content(
@@ -164,6 +188,13 @@ class Content_Processor {
 			&& is_array( $context['session_id_map'] )
 			? $context['session_id_map']
 			: array();
+
+		$this->media_importer->set_library_metadata_map(
+			isset( $context['library_metadata_map'] )
+				&& is_array( $context['library_metadata_map'] )
+				? $context['library_metadata_map']
+				: array()
+		);
 
 		if ( $this->is_gutenberg_content( $content ) ) {
 			$processed_content = $this->process_gutenberg_blocks(
@@ -464,7 +495,43 @@ class Content_Processor {
 
 			case 'core/video':
 			case 'core/audio':
-				$block = $this->process_media_block( $block, $source_site_url );
+				$block = $this->process_media_block(
+					$block,
+					$source_site_url,
+					self::string_attr( $block, 'src' ),
+					'src',
+					'id'
+				);
+				break;
+
+			case 'core/cover':
+				$block = $this->process_media_block(
+					$block,
+					$source_site_url,
+					self::string_attr( $block, 'url' ),
+					'url',
+					'id'
+				);
+				break;
+
+			case 'core/file':
+				$block = $this->process_media_block(
+					$block,
+					$source_site_url,
+					self::string_attr( $block, 'href' ),
+					'href',
+					'id'
+				);
+				break;
+
+			case 'core/media-text':
+				$block = $this->process_media_block(
+					$block,
+					$source_site_url,
+					$this->extract_media_text_src( $block ),
+					null,
+					'mediaId'
+				);
 				break;
 
 			case 'core/embed':
@@ -540,7 +607,10 @@ class Content_Processor {
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
-		$attachment_id = $this->media_importer->import_source_media_as_attachment( $original_url, $source_site_url );
+		$attachment_id = $this->media_importer->import_source_media_as_attachment(
+			$original_url,
+			$source_site_url
+		);
 
 		if ( null === $attachment_id ) {
 			// Third-party src — leave attrs unchanged but still process
@@ -613,7 +683,10 @@ class Content_Processor {
 				}
 
 				$original_url  = $image['url'];
-				$attachment_id = $this->media_importer->import_source_media_as_attachment( $original_url, $source_site_url );
+				$attachment_id = $this->media_importer->import_source_media_as_attachment(
+					$original_url,
+					$source_site_url
+				);
 
 				if ( null === $attachment_id ) {
 					continue; // Third-party src — skip this image's attrs.
@@ -693,49 +766,69 @@ class Content_Processor {
 	}
 
 	/**
-	 * Processes a media block (video or audio) to import its source.
+	 * Imports a block's source media and points its attachment-id attr at the
+	 * new destination attachment.
 	 *
-	 * @param array  $block           Block data.
-	 * @param string $source_site_url Source site URL.
+	 * The media URL is resolved by the caller because its location varies: it is
+	 * a block attr for most blocks (src, url, href) but is sourced from innerHTML
+	 * for core/media-text, whose mediaUrl attr is not stored in the block. A
+	 * third-party (null) or failed (false) import leaves the attrs untouched.
+	 *
+	 * @param array       $block           Block data.
+	 * @param string      $source_site_url Source site URL.
+	 * @param string      $media_url       Source media URL to import.
+	 * @param string|null $url_attr        Attr to set to the local URL, or null
+	 *                                     when the block stores no URL attr.
+	 * @param string      $id_attr         Attr to set to the attachment ID.
 	 * @return array Processed block.
 	 */
-	private function process_media_block( array $block, string $source_site_url ): array {
-		if ( empty( $block['attrs']['src'] ) ) {
+	private function process_media_block(
+		array $block,
+		string $source_site_url,
+		string $media_url,
+		?string $url_attr,
+		string $id_attr
+	): array {
+		if ( '' === $media_url ) {
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
-		$original_url  = $block['attrs']['src'];
-		$attachment_id = $this->media_importer->import_source_media_as_attachment( $original_url, $source_site_url );
+		$attachment_id = $this->media_importer->import_source_media_as_attachment(
+			$media_url,
+			$source_site_url
+		);
 
 		if ( null === $attachment_id ) {
-			// Third-party src — leave attrs unchanged but still process
+			// Third-party media — leave attrs unchanged but still process
 			// innerHTML so any source-domain anchor hrefs get sideloaded.
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		if ( false === $attachment_id ) {
-			$this->failed_media[] = $original_url;
+			$this->failed_media[] = $media_url;
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		$new_url = wp_get_attachment_url( $attachment_id );
 
 		if ( false === $new_url ) {
-			$this->failed_media[] = $original_url;
+			$this->failed_media[] = $media_url;
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
-		$block['attrs']['src'] = $new_url;
-		$block['attrs']['id']  = $attachment_id;
+		if ( null !== $url_attr ) {
+			$block['attrs'][ $url_attr ] = $new_url;
+		}
+		$block['attrs'][ $id_attr ] = $attachment_id;
 
 		$url_with_parameters = Media_Importer::reapply_query_parameters(
-			$original_url,
+			$media_url,
 			$new_url
 		);
 
 		if ( ! empty( $block['innerHTML'] ) ) {
 			$block['innerHTML'] = str_replace(
-				$original_url,
+				$media_url,
 				$url_with_parameters,
 				$block['innerHTML']
 			);
@@ -745,7 +838,7 @@ class Content_Processor {
 			foreach ( $block['innerContent'] as $index => $content ) {
 				if ( is_string( $content ) ) {
 					$block['innerContent'][ $index ] = str_replace(
-						$original_url,
+						$media_url,
 						$url_with_parameters,
 						$content
 					);
@@ -754,6 +847,47 @@ class Content_Processor {
 		}
 
 		return $this->process_block_inner_html( $block, $source_site_url );
+	}
+
+	/**
+	 * Returns a core/media-text block's media src, read from the first img or
+	 * video in its innerHTML. The block stores mediaUrl as an HTML-sourced attr,
+	 * so it is absent from the parsed block attrs.
+	 *
+	 * @param array $block Block data.
+	 * @return string Media src, or '' when none is present.
+	 */
+	private function extract_media_text_src( array $block ): string {
+		$html = $block['innerHTML'] ?? '';
+		if ( ! is_string( $html ) || '' === $html ) {
+			return '';
+		}
+
+		$processor = new WP_HTML_Tag_Processor( $html );
+		while ( $processor->next_tag() ) {
+			if ( ! in_array( $processor->get_tag(), array( 'IMG', 'VIDEO' ), true ) ) {
+				continue;
+			}
+
+			$src = $processor->get_attribute( 'src' );
+			if ( is_string( $src ) && '' !== $src ) {
+				return $src;
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Returns a block attr as a string, or '' when absent or not a string.
+	 *
+	 * @param array  $block Block data.
+	 * @param string $attr  Attr name.
+	 * @return string Attr value, or ''.
+	 */
+	private static function string_attr( array $block, string $attr ): string {
+		$value = $block['attrs'][ $attr ] ?? '';
+		return is_string( $value ) ? $value : '';
 	}
 
 	/**
@@ -1070,9 +1204,9 @@ class Content_Processor {
 	 * Rewrites post-/term-ID block attrs from source to destination IDs.
 	 *
 	 * Two-pass: collect unresolved IDs, bulk-lookup per kind, apply on a
-	 * second walk. Unmapped IDs stay in place with a warning. URL attrs are
-	 * not regenerated — replace_source_urls swaps the host downstream and
-	 * the editor resolves URLs from `id` on next save.
+	 * second walk. Unmapped IDs stay in place with a warning. For nav-link and
+	 * submenu blocks the link url is re-derived from the resolved destination
+	 * id; replace_source_urls still swaps the host for any url left untouched.
 	 *
 	 * @param array<array<string, mixed>> $blocks          Parsed block tree.
 	 * @param string                      $source_site_url Source site URL.
@@ -1091,18 +1225,230 @@ class Content_Processor {
 		);
 		$this->collect_id_references( $blocks, $session_id_map, $collected );
 
+		// Path-bearing identity, matching how the source meta is stored.
+		$lookup_site_url = URL_Validator::normalize_site_url_with_path(
+			$source_site_url
+		);
+
 		$post_map = $this->lookup_destination_post_ids(
 			$collected['post'],
-			$source_site_url
+			$lookup_site_url
 		);
 		$post_map = $session_id_map + $post_map;
 
 		$term_map = $this->lookup_destination_term_ids(
 			$collected['term'],
-			$source_site_url
+			$lookup_site_url
 		);
 
 		return $this->apply_id_references( $blocks, $post_map, $term_map );
+	}
+
+	/**
+	 * Repoints one stale block reference in a post to its now-resolvable
+	 * destination ID.
+	 *
+	 * Targeted counterpart to the import-time remap: it repoints only the attrs
+	 * matching $target_ref and $target_kind, leaving resolved siblings
+	 * untouched, and persists without a revision or post_modified bump. Link
+	 * urls are re-derived alongside the ID where the block rule carries one.
+	 *
+	 * @param int    $affected_post_id Post holding the stale reference.
+	 * @param int    $target_ref       Source id to repoint.
+	 * @param string $target_kind      'post' or 'term'.
+	 * @param string $source_site_url  Source identity scoping the lookup.
+	 * @return Reconcile_Outcome Resolved when repointed; target_absent,
+	 *                           write_failed, or unresolved otherwise.
+	 */
+	public function repoint_block_reference(
+		int $affected_post_id,
+		int $target_ref,
+		string $target_kind,
+		string $source_site_url
+	): Reconcile_Outcome {
+		if ( $target_ref <= 0 ) {
+			return Reconcile_Outcome::unresolved( 'Invalid target reference.' );
+		}
+
+		$dest_id = $this->resolve_target_ref(
+			$target_ref,
+			$target_kind,
+			$source_site_url
+		);
+
+		if ( 0 === $dest_id ) {
+			return Reconcile_Outcome::target_absent(
+				sprintf(
+					'Target %1$s %2$d is not imported on the destination.',
+					$target_kind,
+					$target_ref
+				)
+			);
+		}
+
+		$post = get_post( $affected_post_id );
+
+		if ( ! $post instanceof WP_Post || '' === $post->post_content ) {
+			return Reconcile_Outcome::unresolved(
+				'Affected post is missing or has no content.'
+			);
+		}
+
+		$registry = 'term' === $target_kind
+			? self::TERM_ID_BLOCK_ATTRS
+			: self::POST_ID_BLOCK_ATTRS;
+
+		$changed = false;
+		$blocks  = $this->repoint_refs(
+			parse_blocks( $post->post_content ),
+			$registry,
+			$target_kind,
+			$target_ref,
+			$dest_id,
+			$changed
+		);
+
+		if ( ! $changed ) {
+			return Reconcile_Outcome::unresolved(
+				'No matching reference found in the post content.'
+			);
+		}
+
+		$persisted = $this->persist_repointed_content(
+			$affected_post_id,
+			serialize_blocks( $blocks )
+		);
+
+		if ( ! $persisted ) {
+			return Reconcile_Outcome::write_failed(
+				'Failed to persist the repointed content.'
+			);
+		}
+
+		clean_post_cache( $affected_post_id );
+		update_post_meta( $affected_post_id, self::META_REF_REPOINTED_AT, time() );
+
+		return Reconcile_Outcome::resolved();
+	}
+
+	/**
+	 * Resolves a source ref to its destination ID via the same source-scoped
+	 * lookups the import uses.
+	 *
+	 * @param int    $target_ref      Source id.
+	 * @param string $target_kind     'post' or 'term'.
+	 * @param string $source_site_url Source identity to scope by.
+	 * @return int Destination ID, or 0 when it does not resolve.
+	 */
+	private function resolve_target_ref(
+		int $target_ref,
+		string $target_kind,
+		string $source_site_url
+	): int {
+		$lookup_site_url = URL_Validator::normalize_site_url_with_path(
+			$source_site_url
+		);
+		$source_ids      = array( $target_ref => true );
+
+		$map = 'term' === $target_kind
+			? $this->lookup_destination_term_ids( $source_ids, $lookup_site_url )
+			: $this->lookup_destination_post_ids( $source_ids, $lookup_site_url );
+
+		return isset( $map[ $target_ref ] ) ? (int) $map[ $target_ref ] : 0;
+	}
+
+	/**
+	 * Recursively repoints registered id-bearing attrs whose value equals
+	 * $target_ref to $dest_id, honoring each attr's kind gating. When a rule
+	 * names a url_attr, the link url is re-derived from $dest_id too.
+	 *
+	 * @param array<array<string, mixed>>                                                                 $blocks     Block tree.
+	 * @param array<string, list<array{attr:string, gated_by?: array<string,string>, url_attr?: string}>> $registry   Attr rules for the target kind.
+	 * @param string                                                                                      $kind       'post' or 'term'.
+	 * @param int                                                                                         $target_ref Source id to match.
+	 * @param int                                                                                         $dest_id    Destination id to write.
+	 * @param bool                                                                                        $changed    Set true, by reference, on any repoint.
+	 * @return array<array<string, mixed>> Mutated tree.
+	 */
+	private function repoint_refs(
+		array $blocks,
+		array $registry,
+		string $kind,
+		int $target_ref,
+		int $dest_id,
+		bool &$changed
+	): array {
+		foreach ( $blocks as $i => $block ) {
+			$name  = isset( $block['blockName'] ) ? (string) $block['blockName'] : '';
+			$attrs = isset( $block['attrs'] ) && is_array( $block['attrs'] )
+				? $block['attrs']
+				: array();
+
+			foreach ( $registry[ $name ] ?? array() as $rule ) {
+				if ( ! self::gate_passes( $rule, $attrs ) ) {
+					continue;
+				}
+
+				$value = $attrs[ $rule['attr'] ] ?? null;
+				if ( is_numeric( $value ) && (int) $value === $target_ref ) {
+					$attrs[ $rule['attr'] ] = $dest_id;
+
+					if ( isset( $rule['url_attr'] ) ) {
+						$attrs = $this->rederive_link_url(
+							$attrs,
+							$rule['url_attr'],
+							$dest_id,
+							$kind
+						);
+					}
+
+					$blocks[ $i ]['attrs'] = $attrs;
+					$changed               = true;
+				}
+			}
+
+			if (
+				isset( $block['innerBlocks'] )
+				&& is_array( $block['innerBlocks'] )
+				&& array() !== $block['innerBlocks']
+			) {
+				$blocks[ $i ]['innerBlocks'] = $this->repoint_refs(
+					$block['innerBlocks'],
+					$registry,
+					$kind,
+					$target_ref,
+					$dest_id,
+					$changed
+				);
+			}
+		}
+
+		return $blocks;
+	}
+
+	/**
+	 * Persists repointed content via a direct write, bypassing wp_update_post so
+	 * the system touch-up creates no revision and leaves post_modified intact.
+	 * Isolated so tests can force a write failure.
+	 *
+	 * @param int    $post_id     Post to update.
+	 * @param string $new_content Serialized block content.
+	 * @return bool True when the row was updated.
+	 */
+	protected function persist_repointed_content(
+		int $post_id,
+		string $new_content
+	): bool {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$result = $wpdb->update(
+			$wpdb->posts,
+			array( 'post_content' => $new_content ),
+			array( 'ID' => $post_id )
+		);
+
+		return false !== $result;
 	}
 
 	/**
@@ -1153,9 +1499,9 @@ class Content_Processor {
 	 * Returns the source IDs a block exposes per the given registry, after
 	 * gating attrs (e.g. `kind`) have been checked.
 	 *
-	 * @param array<string, list<array{attr:string, gated_by?: array<string,string>}>> $registry Block-name => list of attr rules.
-	 * @param string                                                                   $name     Block name.
-	 * @param array<string, mixed>                                                     $attrs    Block attrs.
+	 * @param array<string, list<array{attr:string, gated_by?: array<string,string>, url_attr?: string}>> $registry Block-name => list of attr rules.
+	 * @param string                                                                                      $name     Block name.
+	 * @param array<string, mixed>                                                                        $attrs    Block attrs.
 	 * @return list<int> Positive source IDs.
 	 */
 	private static function matching_refs(
@@ -1169,12 +1515,8 @@ class Content_Processor {
 
 		$ids = array();
 		foreach ( $registry[ $name ] as $rule ) {
-			if ( isset( $rule['gated_by'] ) ) {
-				foreach ( $rule['gated_by'] as $gate_attr => $gate_value ) {
-					if ( ( $attrs[ $gate_attr ] ?? null ) !== $gate_value ) {
-						continue 2;
-					}
-				}
+			if ( ! self::gate_passes( $rule, $attrs ) ) {
+				continue;
 			}
 
 			$value = $attrs[ $rule['attr'] ] ?? null;
@@ -1188,12 +1530,33 @@ class Content_Processor {
 	}
 
 	/**
+	 * Reports whether a block attr rule's gating attrs (e.g. kind) all match.
+	 *
+	 * @param array{attr:string, gated_by?: array<string,string>, url_attr?: string} $rule  Attr rule.
+	 * @param array<string, mixed>                                                   $attrs Block attrs.
+	 * @return bool True when the rule applies to the block.
+	 */
+	private static function gate_passes( array $rule, array $attrs ): bool {
+		if ( ! isset( $rule['gated_by'] ) ) {
+			return true;
+		}
+
+		foreach ( $rule['gated_by'] as $gate_attr => $gate_value ) {
+			if ( ( $attrs[ $gate_attr ] ?? null ) !== $gate_value ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
 	 * Looks up destination post IDs for a set of source post IDs scoped to the
 	 * caller's source site via paired META_SOURCE_POST_ID/META_SOURCE_SITE_URL
 	 * postmeta. Returns a source-ID => destination-ID map.
 	 *
 	 * @param array<int, true> $source_ids      Set of source post IDs (keys).
-	 * @param string           $source_site_url Source site URL (scheme://host[:port]).
+	 * @param string           $source_site_url Path-bearing source site identity.
 	 * @return array<int, int> Source-ID => destination-ID.
 	 */
 	private function lookup_destination_post_ids(
@@ -1371,14 +1734,15 @@ class Content_Processor {
 
 	/**
 	 * Rewrites the registered attrs on a single block using the given map.
-	 * Logs a warning for each matched attr whose source ID was not resolvable
-	 * so the admin can surface and fix it.
+	 * When a rule names a url_attr, the link url is re-derived from the
+	 * resolved destination id. Logs a warning for each matched attr whose
+	 * source ID was not resolvable so the admin can surface and fix it.
 	 *
-	 * @param array<string, mixed>                                                     $attrs    Block attrs.
-	 * @param string                                                                   $name     Block name.
-	 * @param array<string, list<array{attr:string, gated_by?: array<string,string>}>> $registry Block-name => list of attr rules.
-	 * @param array<int,int>                                                           $id_map   Source-ID => destination-ID.
-	 * @param string                                                                   $kind     'post' or 'term' (warning context).
+	 * @param array<string, mixed>                                                                        $attrs    Block attrs.
+	 * @param string                                                                                      $name     Block name.
+	 * @param array<string, list<array{attr:string, gated_by?: array<string,string>, url_attr?: string}>> $registry Block-name => list of attr rules.
+	 * @param array<int,int>                                                                              $id_map   Source-ID => destination-ID.
+	 * @param string                                                                                      $kind     'post' or 'term'.
 	 * @return array<string, mixed> Mutated attrs.
 	 */
 	private function rewrite_attrs(
@@ -1408,7 +1772,17 @@ class Content_Processor {
 			}
 
 			if ( isset( $id_map[ $source_id ] ) ) {
-				$attrs[ $rule['attr'] ] = $id_map[ $source_id ];
+				$dest_id                = (int) $id_map[ $source_id ];
+				$attrs[ $rule['attr'] ] = $dest_id;
+
+				if ( isset( $rule['url_attr'] ) ) {
+					$attrs = $this->rederive_link_url(
+						$attrs,
+						$rule['url_attr'],
+						$dest_id,
+						$kind
+					);
+				}
 			} else {
 				$this->warnings[] = array(
 					'type'      => 'unmapped_block_reference',
@@ -1420,5 +1794,139 @@ class Content_Processor {
 		}
 
 		return $attrs;
+	}
+
+	/**
+	 * Re-derives a nav-link/submenu url from its resolved destination id so the
+	 * href matches where the target lives (e.g. /about -> /about-2 after a slug
+	 * collision). Posts resolve via get_permalink, terms via get_term_link.
+	 *
+	 * The source url's query is carried over with post/term identity vars
+	 * removed (so a plain-permalink source's stale id cannot override the new
+	 * path) and its fragment preserved. Draft, pending, and auto-draft post
+	 * targets are left alone: their slug is not final, so re-deriving would
+	 * store a temporary url.
+	 *
+	 * @param array<string, mixed> $attrs    Block attrs.
+	 * @param string               $url_attr Attr holding the link url.
+	 * @param int                  $dest_id  Resolved destination id.
+	 * @param string               $kind     'post' or 'term'.
+	 * @return array<string, mixed> Attrs with the url re-derived when applicable.
+	 */
+	private function rederive_link_url(
+		array $attrs,
+		string $url_attr,
+		int $dest_id,
+		string $kind
+	): array {
+		$current = $attrs[ $url_attr ] ?? null;
+		if ( ! is_string( $current ) || '' === $current ) {
+			return $attrs;
+		}
+
+		if ( 'term' !== $kind && $this->is_unpublished_post( $dest_id ) ) {
+			return $attrs;
+		}
+
+		$permalink = 'term' === $kind
+			? get_term_link( $dest_id )
+			: get_permalink( $dest_id );
+
+		if ( ! is_string( $permalink ) ) {
+			return $attrs;
+		}
+
+		$result = $permalink;
+
+		$query = $this->portable_query( $current, $dest_id, $kind );
+		if ( '' !== $query ) {
+			$separator = false === strpos( $permalink, '?' ) ? '?' : '&';
+			$result   .= $separator . $query;
+		}
+
+		$fragment = wp_parse_url( $current, PHP_URL_FRAGMENT );
+		if ( is_string( $fragment ) && '' !== $fragment ) {
+			$result .= '#' . $fragment;
+		}
+
+		$attrs[ $url_attr ] = $result;
+
+		return $attrs;
+	}
+
+	/**
+	 * Whether a post target is unpublished, so its permalink is not yet final.
+	 *
+	 * @param int $post_id Destination post id.
+	 * @return bool True for draft, pending, or auto-draft posts.
+	 */
+	private function is_unpublished_post( int $post_id ): bool {
+		return in_array(
+			get_post_status( $post_id ),
+			array( 'draft', 'pending', 'auto-draft' ),
+			true
+		);
+	}
+
+	/**
+	 * Returns the source url's query with the target's identity vars removed,
+	 * keeping portable params (e.g. lang, utm, orderby). Stripping the identity
+	 * vars stops a plain-permalink source's stale id from overriding the
+	 * re-derived destination path.
+	 *
+	 * @param string $url     Source url to read the query from.
+	 * @param int    $dest_id Resolved destination id.
+	 * @param string $kind    'post' or 'term'.
+	 * @return string Filtered query (no leading '?'), or '' when none remains.
+	 */
+	private function portable_query( string $url, int $dest_id, string $kind ): string {
+		$query = wp_parse_url( $url, PHP_URL_QUERY );
+		if ( ! is_string( $query ) || '' === $query ) {
+			return '';
+		}
+
+		$args = array();
+		wp_parse_str( $query, $args );
+
+		foreach ( $this->identity_query_vars( $dest_id, $kind ) as $var ) {
+			unset( $args[ $var ] );
+		}
+
+		return http_build_query( $args );
+	}
+
+	/**
+	 * Lists the query vars WordPress uses to identify the target post or term,
+	 * including the destination type's registered query var, so they can be
+	 * stripped from a re-derived url.
+	 *
+	 * @param int    $dest_id Resolved destination id.
+	 * @param string $kind    'post' or 'term'.
+	 * @return list<string> Identity query var names.
+	 */
+	private function identity_query_vars( int $dest_id, string $kind ): array {
+		if ( 'term' === $kind ) {
+			$vars = array( 'cat', 'tag', 'taxonomy', 'term' );
+			$term = get_term( $dest_id );
+			if ( $term instanceof WP_Term ) {
+				$taxonomy = get_taxonomy( $term->taxonomy );
+				if ( $taxonomy instanceof WP_Taxonomy && is_string( $taxonomy->query_var ) ) {
+					$vars[] = $taxonomy->query_var;
+				}
+			}
+
+			return $vars;
+		}
+
+		$vars = array( 'p', 'page_id', 'attachment_id', 'post_type' );
+		$post = get_post( $dest_id );
+		if ( $post instanceof WP_Post ) {
+			$type = get_post_type_object( $post->post_type );
+			if ( $type instanceof WP_Post_Type && is_string( $type->query_var ) ) {
+				$vars[] = $type->query_var;
+			}
+		}
+
+		return $vars;
 	}
 }

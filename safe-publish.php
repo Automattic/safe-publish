@@ -9,7 +9,7 @@
  * Author: WPVIP
  * Author URI: https://wpvip.com
  * Text Domain: safe-publish
- * Version: 0.1.1
+ * Version: 0.3.0
  * Requires at least: 6.8
  * Requires PHP: 8.2
  */
@@ -27,7 +27,7 @@ if ( defined( 'SAFE_PUBLISH_LOADED' ) ) {
 
 // Define plugin constants.
 define( 'SAFE_PUBLISH_LOADED', true );
-define( 'SAFE_PUBLISH_VERSION', '0.1.1' );
+define( 'SAFE_PUBLISH_VERSION', '0.3.0' );
 define( 'SAFE_PUBLISH_PLUGIN_FILE', __FILE__ );
 define( 'SAFE_PUBLISH_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SAFE_PUBLISH_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -105,9 +105,48 @@ function safe_publish_init_plugin(): void {
 	// Load text domain.
 	load_plugin_textdomain( 'safe-publish', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
 
+	// The plugin requires cURL with SSL for outbound source requests.
+	if ( ! safe_publish_has_curl_ssl() ) {
+		add_action( 'admin_notices', 'safe_publish_curl_required_notice' );
+		return;
+	}
+
 	// Initialize the main plugin class.
 	$safe_publish_plugin = new \Safe_Publish\Plugin();
 	$safe_publish_plugin->init();
+}
+
+/**
+ * Reports whether cURL with SSL support is available.
+ *
+ * @return bool True when the cURL extension is loaded with SSL support.
+ */
+function safe_publish_has_curl_ssl(): bool {
+	if ( ! function_exists( 'curl_init' ) || ! function_exists( 'curl_exec' ) ) {
+		return false;
+	}
+
+	$version = curl_version();
+
+	return is_array( $version )
+		&& 0 !== ( CURL_VERSION_SSL & $version['features'] );
+}
+
+/**
+ * Renders the admin notice shown when cURL with SSL is unavailable.
+ */
+function safe_publish_curl_required_notice(): void {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+
+	wp_admin_notice(
+		esc_html__(
+			'Safe Publish requires the cURL PHP extension with SSL support, which is not available on this site.',
+			'safe-publish'
+		),
+		array( 'type' => 'error' )
+	);
 }
 
 /**
@@ -124,6 +163,7 @@ function safe_publish_activation(): void {
 	\Safe_Publish\Utils\Audit_Log_Table::create_table();
 	\Safe_Publish\Utils\Imports_Table::create_table();
 	\Safe_Publish\Utils\Import_Items_Table::create_table();
+	\Safe_Publish\Utils\Attention_Issues_Table::create_table();
 
 	// Set default options.
 	if ( false === get_option( 'safe_publish_connected_site_url' ) ) {

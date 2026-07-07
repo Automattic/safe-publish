@@ -15,11 +15,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Centralizes the capability check shared by all plugin AJAX handlers.
+ * Centralizes the guards shared by all plugin AJAX handlers.
  *
  * Each handler still calls `check_ajax_referer()` inline so that PHPCS can
- * trace nonce verification to `$_POST` accesses. This trait only provides the
- * capability guard that follows.
+ * trace nonce verification to `$_POST` accesses. This trait provides the
+ * capability guard and the session-expired response that follow.
  */
 trait Verifies_Ajax_Request {
 
@@ -39,5 +39,25 @@ trait Verifies_Ajax_Request {
 				403
 			);
 		}
+	}
+
+	/**
+	 * Sends a session-expired JSON error response and halts execution.
+	 *
+	 * Handlers route a failed nonce here so the frontend receives a structured
+	 * code to surface as a clear reload prompt instead of the bare -1 that
+	 * check_ajax_referer emits by default.
+	 */
+	private function send_session_expired_error(): void {
+		wp_send_json_error(
+			array(
+				'code'    => 'safe_publish_nonce_expired',
+				'message' => __(
+					'Your session has expired. Reload the page.',
+					'safe-publish'
+				),
+			),
+			403
+		);
 	}
 }

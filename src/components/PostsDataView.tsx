@@ -4,8 +4,9 @@
  *
  * @file This file defines the PostsDataView component.
  */
-import { help, update } from '@wordpress/icons';
+import { cancelCircleFilled, caution, help, update } from '@wordpress/icons';
 
+import AttentionDrawer from './AttentionDrawer';
 import AuthStatusNotice from './AuthStatusNotice';
 import OrphanFailuresDrawer from './OrphanFailuresDrawer';
 import {
@@ -313,7 +314,11 @@ export function PostsDataView( {
 	const [ orphanCount, setOrphanCount ] = useState(
 		window.safePublishAdminData.orphanCount ?? 0
 	);
-	const [ isDrawerOpen, setIsDrawerOpen ] = useState( false );
+	const [ attentionCount, setAttentionCount ] = useState(
+		window.safePublishAdminData.attentionCount ?? 0
+	);
+	const [ isOrphanDrawerOpen, setIsOrphanDrawerOpen ] = useState( false );
+	const [ isAttentionDrawerOpen, setIsAttentionDrawerOpen ] = useState( false );
 
 	const [ selectedPostType, setSelectedPostType ] = useState( 'post' );
 	const [ searchTerm, setSearchTerm ] = useState( '' );
@@ -444,6 +449,7 @@ export function PostsDataView( {
 		}
 		if ( ! hasFetchedOnce ) {
 			formData.append( 'with_orphan_count', '1' );
+			formData.append( 'with_attention_count', '1' );
 		}
 
 		setIsLoading( true );
@@ -480,6 +486,10 @@ export function PostsDataView( {
 
 				if ( typeof data.orphan_count === 'number' ) {
 					setOrphanCount( data.orphan_count );
+				}
+
+				if ( typeof data.attention_count === 'number' ) {
+					setAttentionCount( data.attention_count );
 				}
 
 				// Server resolves focus_source to a concrete state; swap the
@@ -959,6 +969,38 @@ export function PostsDataView( {
 			} );
 	}, [ sourceSiteUrl, selectedPostType ] );
 
+	const handleAttentionCountRefresh = useCallback( () => {
+		const formData = new FormData();
+		formData.append( 'action', 'safe_publish_list_posts' );
+		formData.append( 'nonce', window.safePublishAdminData.nonce );
+		formData.append( 'source_site_url', sourceSiteUrl );
+		formData.append( 'state', 'all' );
+		formData.append( 'page', '1' );
+		formData.append( 'per_page', '1' );
+		formData.append( 'post_type', selectedPostType );
+		formData.append( 'with_attention_count', '1' );
+
+		fetch( window.safePublishAdminData.ajaxurl, {
+			method: 'POST',
+			body: formData,
+		} )
+			.then(
+				( response ) =>
+					response.json() as Promise< ApiResponse< PostsResponse > >
+			)
+			.then( ( result ) => {
+				if (
+					result.success
+					&& typeof result.data.attention_count === 'number'
+				) {
+					setAttentionCount( result.data.attention_count );
+				}
+			} )
+			.catch( () => {
+				/* leave count stale; next reload corrects */
+			} );
+	}, [ sourceSiteUrl, selectedPostType ] );
+
 	return (
 		<div
 			className="safe-publish-dataviews-wrapper safe-publish-dataviews-wrapper--approx-pagination"
@@ -972,6 +1014,40 @@ export function PostsDataView( {
 				status={ authStatus }
 				settingsUrl={ window.safePublishAdminData?.settingsUrl }
 			/>
+			{ ( attentionCount > 0 || orphanCount > 0 ) && (
+				<div className="safe-publish-issue-summary">
+					{ attentionCount > 0 && (
+						<Button
+							className="safe-publish-issue-summary__button safe-publish-issue-summary__button--warning"
+							variant="tertiary"
+							icon={ caution }
+							onClick={ () =>
+								setIsAttentionDrawerOpen( true )
+							}
+						>
+							{ sprintf(
+								/* translators: %d: open attention issues count */
+								__( 'Needs attention (%d)', 'safe-publish' ),
+								attentionCount
+							) }
+						</Button>
+					) }
+					{ orphanCount > 0 && (
+						<Button
+							className="safe-publish-issue-summary__button safe-publish-issue-summary__button--error"
+							variant="tertiary"
+							icon={ cancelCircleFilled }
+							onClick={ () => setIsOrphanDrawerOpen( true ) }
+						>
+							{ sprintf(
+								/* translators: %d: orphan failures count */
+								__( 'Orphan failures (%d)', 'safe-publish' ),
+								orphanCount
+							) }
+						</Button>
+					) }
+				</div>
+			) }
 			<div className="safe-publish-controls-row">
 				{ /* The items table doesn't snapshot post_type for error
 				rows, so the filter can't be honored on the Failed chip. */ }
@@ -1055,23 +1131,6 @@ export function PostsDataView( {
 					</Button>
 				) }
 			</div>
-			{ orphanCount > 0 && (
-				<div className="safe-publish-orphan-toolbar">
-					<Button
-						variant="tertiary"
-						onClick={ () => setIsDrawerOpen( true ) }
-					>
-						{ sprintf(
-							/* translators: %d: orphan failures count */
-							__(
-								'%d orphan failures →',
-								'safe-publish'
-							),
-							orphanCount
-						) }
-					</Button>
-				</div>
-			) }
 			{ postTypeError && (
 				<Notice
 					className="safe-publish-post-type-error"
@@ -1144,12 +1203,20 @@ export function PostsDataView( {
 					}
 				/>
 			) }
-			{ isDrawerOpen && (
+			{ isOrphanDrawerOpen && (
 				<OrphanFailuresDrawer
 					ajaxurl={ window.safePublishAdminData.ajaxurl }
 					nonce={ window.safePublishAdminData.nonce }
-					onClose={ () => setIsDrawerOpen( false ) }
+					onClose={ () => setIsOrphanDrawerOpen( false ) }
 					onRemoved={ handleOrphanCountRefresh }
+				/>
+			) }
+			{ isAttentionDrawerOpen && (
+				<AttentionDrawer
+					ajaxurl={ window.safePublishAdminData.ajaxurl }
+					nonce={ window.safePublishAdminData.nonce }
+					onClose={ () => setIsAttentionDrawerOpen( false ) }
+					onChanged={ handleAttentionCountRefresh }
 				/>
 			) }
 		</div>

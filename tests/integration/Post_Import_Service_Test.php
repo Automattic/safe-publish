@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Navigation_Ref_Rewriter;
@@ -75,7 +76,8 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$this->repository,
 			new Meta_Terms_Manager(),
 			new Telemetry_Service(),
-			new Navigation_Ref_Rewriter()
+			new Navigation_Ref_Rewriter(),
+			new Attention_Issues_Repository()
 		);
 	}
 
@@ -1061,11 +1063,9 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that the bulk update path preserves the existing post status
-	 * instead of resetting it to 'draft'.
-	 *
-	 * This is the key behavioral difference from the single-import path: bulk
-	 * re-imports must not silently unpublish live posts.
+	 * Verifies that the update path preserves the existing post status instead
+	 * of resetting it to 'draft', so re-imports never silently unpublish live
+	 * posts.
 	 */
 	public function test_bulk_reimport_preserves_post_status(): void {
 		$session_id = $this->repository->create_session(
@@ -1262,6 +1262,25 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		// ASSERT: Resolution is denied with a capability error.
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'post_type_capability_denied', $result->get_error_code() );
+	}
+
+	/**
+	 * Verifies that resolve_post_type() permits wp_block imports for a user with
+	 * edit_posts, since wp_block maps its edit cap to edit_posts — so the source
+	 * service user's existing grant covers it without a dedicated capability.
+	 */
+	public function test_resolve_post_type_grants_wp_block_to_edit_posts_user(): void {
+		// ARRANGE: A subscriber granted edit_posts but not manage_options.
+		$user_id = self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		$user    = get_user_by( 'id', $user_id );
+		$user->add_cap( 'edit_posts' );
+		wp_set_current_user( $user_id );
+
+		// ACT: Resolve the wp_block post type for this user.
+		$result = $this->import_service->resolve_post_type( 'wp_block' );
+
+		// ASSERT: The type resolves (import permitted).
+		$this->assertSame( 'wp_block', $result );
 	}
 
 	/**
@@ -3474,5 +3493,43 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			)
 		);
 		$this->assertCount( 2, $siblings );
+	}
+
+	/**
+	 * Verifies that importing an untitled source post stores an empty
+	 * post_title. The listing posts the "(no title)" placeholder, which clears
+	 * the required-title gate, but the authoritative fresh fetch restores the
+	 * real empty title before persistence, so the placeholder never lands in
+	 * stored data.
+	 */
+	public function test_import_preserves_empty_title(): void {
+		// ARRANGE: Fresh source payload has an empty title; the frontend posts
+		// the "(no title)" placeholder the listing substitutes for display.
+		$this->mock_post_overrides = array(
+			'title'   => '',
+			'content' => '<p>Body.</p>',
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+
+		$post_data = array(
+			'id'        => 9500,
+			'title'     => '(no title)',
+			'link'      => 'https://source.example.com/untitled',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Import the untitled post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Import succeeds and the stored title is empty, not the
+		// "(no title)" placeholder.
+		$this->assertTrue( $result['success'], 'Import should succeed.' );
+		$post = get_post( $result['post_id'] );
+		$this->assertNotNull( $post );
+		$this->assertSame( '', $post->post_title );
 	}
 }

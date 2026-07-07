@@ -24,6 +24,10 @@ export const DEFAULT_ITEMS_PER_PAGE = 20;
 // every keystroke; short enough to feel responsive on URL paste.
 export const SEARCH_DEBOUNCE_MS = 400;
 
+// Delay before the "Retrying…" notice appears, so retries that resolve
+// quickly clear without flashing a transient banner first.
+export const RETRY_PENDING_DELAY_MS = 400;
+
 // Sorting constants (kept for potential future use).
 export const SORTING_DIRECTIONS = [ 'asc', 'desc' ] as const;
 export const sortArrows = { asc: '↑', desc: '↓' };

@@ -20,7 +20,6 @@ use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
 use WP_Error;
-use WPAjaxDieStopException;
 
 /**
  * Admin Ajax Controller Test Class.
@@ -166,16 +165,16 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			'nonce' => 'not-a-valid-nonce',
 		);
 
-		// ASSERT: Nonce failure calls wp_die( -1 ).
-		$this->expectException( WPAjaxDieStopException::class );
-		$this->expectExceptionMessage( '-1' );
-
 		// ACT: Trigger the AJAX handler registered by the plugin.
-		$this->_handleAjax( 'safe_publish_create_draft' );
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: Structured session-expired error rather than a bare -1 die.
+		$this->assert_session_expired_response();
 	}
 
 	/**
-	 * Verifies that the bulk import endpoint rejects unauthenticated requests.
+	 * Verifies that the bulk import endpoint rejects requests with an invalid
+	 * nonce.
 	 */
 	public function test_ajax_bulk_import_rejects_request_with_invalid_nonce(): void {
 		// ARRANGE: Authenticate as admin, but supply a bad nonce.
@@ -184,12 +183,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			'nonce' => 'not-a-valid-nonce',
 		);
 
-		// ASSERT: Nonce failure calls wp_die( -1 ).
-		$this->expectException( WPAjaxDieStopException::class );
-		$this->expectExceptionMessage( '-1' );
-
 		// ACT: Trigger the AJAX handler registered by the plugin.
-		$this->_handleAjax( 'safe_publish_bulk_import' );
+		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_import' );
+
+		// ASSERT: Structured session-expired error rather than a bare -1 die.
+		$this->assert_session_expired_response();
 	}
 
 	/**
@@ -374,11 +372,21 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	/**
 	 * Verifies that the draft path preserves a non-default source port when
 	 * resolving relative media URLs for content processing.
+	 *
+	 * The resolution base is the configured connected site URL, so the port is
+	 * taken from there rather than from the per-post source link.
 	 */
 	public function test_ajax_create_draft_preserves_port_for_relative_media_imports(): void {
 		// ARRANGE: Mock fresh content with a relative image URL.
 		$this->mock_post_overrides = array(
 			'content' => '<p><img src="/port-test.jpg" alt="Port test"></p>',
+		);
+
+		// The source site is configured on a non-default port; relative media
+		// URLs must resolve against it.
+		update_option(
+			Options::OPTION_CONNECTED_SITE_URL,
+			'https://source.example.com:8889'
 		);
 
 		wp_set_current_user( $this->admin_user_id );
@@ -539,6 +547,61 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			$response['data']['confirm_action']
 		);
 		$this->assertSame( $existing_post_id, $response['data']['post_id'] );
+	}
+
+	/**
+	 * Verifies that re-importing an existing published post through the single
+	 * import endpoint preserves its published status instead of resetting it to
+	 * draft, so the post stays live on the frontend.
+	 */
+	public function test_ajax_create_draft_preserves_published_status_on_update(): void {
+		// ARRANGE: Pre-create an already-imported, published post.
+		update_option(
+			Options::OPTION_CONNECTED_SITE_URL,
+			'https://source.example.com'
+		);
+		$existing_post_id = wp_insert_post(
+			array(
+				'post_title'  => 'Live Post',
+				'post_status' => 'publish',
+				'post_type'   => 'post',
+			)
+		);
+		update_post_meta( $existing_post_id, Options::META_SOURCE_POST_ID, '8050' );
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '8050',
+			'title'          => 'Live Post',
+			'content'        => '<p>Updated content.</p>',
+			'source_link'    => 'https://source.example.com/live-post',
+			'post_type'      => 'post',
+			'force_update'   => 'true',
+		);
+
+		// ACT: Confirm the update of the existing post.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: The update succeeds against the existing post.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertTrue( $response['success'], 'Update should return success' );
+		$this->assertTrue( $response['data']['existing'], 'Should flag the post as already existing' );
+		$this->assertSame( $existing_post_id, $response['data']['post_id'], 'Should update the existing post' );
+
+		// ASSERT: The post stays published — the single import must not unpublish
+		// live content.
+		$this->assertSame(
+			'publish',
+			get_post_status( $existing_post_id ),
+			'Single re-import must not change the existing post status.'
+		);
 	}
 
 	/**
@@ -1077,12 +1140,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array( 'nonce' => 'not-a-valid-nonce' );
 
-		// ASSERT: Nonce failure calls wp_die( -1 ).
-		$this->expectException( WPAjaxDieStopException::class );
-		$this->expectExceptionMessage( '-1' );
-
 		// ACT: Trigger the AJAX handler.
-		$this->_handleAjax( 'safe_publish_auth_status' );
+		$this->dispatch_ajax_expecting_die( 'safe_publish_auth_status' );
+
+		// ASSERT: Structured session-expired error rather than a bare -1 die.
+		$this->assert_session_expired_response();
 	}
 
 	/**

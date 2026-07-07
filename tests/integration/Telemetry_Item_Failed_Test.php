@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Navigation_Ref_Rewriter;
@@ -19,9 +20,11 @@ use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Telemetry_Event_Queue;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
+use WP_Error;
 
 /**
  * Telemetry Item Failed Test.
@@ -31,6 +34,12 @@ use Safe_Publish\Utils\Telemetry_Service;
  * error_code enum and session_type derived from the session row.
  */
 class Telemetry_Item_Failed_Test extends Integration_Test_Case {
+
+	/**
+	 * Response cap the safe_publish_request_args filter installs so a small
+	 * body reaches the size limit.
+	 */
+	private const RESPONSE_CAP = 256;
 
 	/**
 	 * Queue that captures telemetry events emitted by the import service.
@@ -80,8 +89,27 @@ class Telemetry_Item_Failed_Test extends Integration_Test_Case {
 			$this->repository,
 			new Meta_Terms_Manager(),
 			$telemetry,
-			new Navigation_Ref_Rewriter()
+			new Navigation_Ref_Rewriter(),
+			new Attention_Issues_Repository()
 		);
+	}
+
+	/**
+	 * Removes the oversized-response filters and connected-URL option.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		remove_filter(
+			'safe_publish_request_args',
+			array( $this, 'lower_response_cap' )
+		);
+		remove_filter(
+			'pre_http_request',
+			array( $this, 'return_oversized_response' ),
+			5
+		);
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
+		parent::tearDown();
 	}
 
 	/**
@@ -174,6 +202,49 @@ class Telemetry_Item_Failed_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that an oversized fresh-content fetch reports the size-specific
+	 * error_code in telemetry instead of the generic fetch_failed or the
+	 * unknown fallback.
+	 */
+	public function test_oversized_fresh_fetch_reports_size_error_code(): void {
+		// ARRANGE: a session, a connected source, and a response over the cap.
+		$session_id = $this->create_session( 'single' );
+		update_option(
+			Options::OPTION_CONNECTED_SITE_URL,
+			'https://source.example.com'
+		);
+		add_filter(
+			'safe_publish_request_args',
+			array( $this, 'lower_response_cap' )
+		);
+		add_filter(
+			'pre_http_request',
+			array( $this, 'return_oversized_response' ),
+			5,
+			3
+		);
+
+		// ACT: import a valid post whose fresh-content fetch exceeds the cap.
+		$this->import_service->import_post(
+			array(
+				'id'        => 4242,
+				'title'     => 'Oversized source',
+				'link'      => 'https://source.example.com/post-4242',
+				'post_type' => 'pages',
+			),
+			$session_id
+		);
+
+		// ASSERT: the size-specific code reaches telemetry.
+		$events = $this->queue->events();
+		$this->assertCount( 1, $events );
+		$this->assertSame(
+			HTTP_Client::ERROR_RESPONSE_TOO_LARGE,
+			$events[0]['properties']['error_code']
+		);
+	}
+
+	/**
 	 * Creates a session of the given type and returns its id.
 	 *
 	 * @param string $session_type Either 'single' or 'bulk'.
@@ -187,5 +258,43 @@ class Telemetry_Item_Failed_Test extends Integration_Test_Case {
 		$this->assertIsInt( $result );
 
 		return $result;
+	}
+
+	/**
+	 * Lowers the response cap so a small body reaches it.
+	 *
+	 * @param array $args Request arguments.
+	 * @return array Request arguments with the cap lowered.
+	 */
+	public function lower_response_cap( array $args ): array {
+		$args['limit_response_size'] = self::RESPONSE_CAP;
+		return $args;
+	}
+
+	/**
+	 * Returns a mocked response whose body exceeds the cap.
+	 *
+	 * @param false|array|WP_Error $preempt Preemptive return value (unused).
+	 * @param array                $args    Request arguments (unused).
+	 * @param string               $url     Request URL (unused).
+	 * @return array Mock HTTP response with an oversized body.
+	 */
+	public function return_oversized_response(
+		false|array|WP_Error $preempt,
+		array $args,
+		string $url
+	): array {
+		unset( $preempt, $args, $url );
+
+		return array(
+			'headers'  => array(),
+			'body'     => str_repeat( 'a', self::RESPONSE_CAP + 1 ),
+			'response' => array(
+				'code'    => 200,
+				'message' => 'OK',
+			),
+			'cookies'  => array(),
+			'filename' => null,
+		);
 	}
 }
