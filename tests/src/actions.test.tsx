@@ -292,6 +292,38 @@ describe( 'createPostsActions per-state eligibility', () => {
 		} );
 		expect( bulk.type ).toBe( BulkRollbackPostModal );
 	} );
+
+	it( 'Verifies that the notice sink reaches only the single-item rollback modal', () => {
+		// ARRANGE: an action set whose context carries a notice sink.
+		const onNotice = vi.fn();
+		const rollback = getModalAction(
+			createPostsActions(
+				undefined,
+				true,
+				{ ...CONTEXT, onNotice },
+				{},
+				ALL_CHIP
+			),
+			'rollback'
+		);
+
+		// ACT: render the single-item and bulk rollback modals.
+		const single = rollback.RenderModal( { items: [ buildImportedRow() ] } );
+		const bulk = rollback.RenderModal( {
+			items: [
+				buildImportedRow( { id: 1, source_post_id: 1 } ),
+				buildImportedRow( { id: 2, source_post_id: 2 } ),
+			],
+		} );
+
+		// ASSERT: the single modal receives the sink; bulk is left untouched.
+		expect( ( single.props as { onNotice?: unknown } ).onNotice ).toBe(
+			onNotice
+		);
+		expect(
+			( bulk.props as { onNotice?: unknown } ).onNotice
+		).toBeUndefined();
+	} );
 } );
 
 /**

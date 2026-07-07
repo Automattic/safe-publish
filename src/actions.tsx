@@ -45,6 +45,7 @@ import { __, sprintf } from '@wordpress/i18n';
 export interface PostsActionsContext {
 	ajaxurl: string;
 	nonce: string;
+	onNotice?: ( notice: ActionNotice | null ) => void;
 }
 
 /**
@@ -76,7 +77,7 @@ const isRollbackEligible = ( item: UnifiedPostRow ): boolean =>
  *
  * @param {Function}            onRefresh    Listing refresh callback.
  * @param {boolean}             isAuthorized Whether the source authorizes imports.
- * @param {PostsActionsContext} context      Admin-ajax URL + nonce.
+ * @param {PostsActionsContext} context      Admin-ajax URL, nonce, notice sink.
  * @param {Object}              syncStatuses Per-row sync entries keyed by source post id.
  * @param {ChipState}           chipState    Current chip; gates Failed-only actions.
  *
@@ -265,6 +266,7 @@ export const createPostsActions = (
 					ajaxurl={ context.ajaxurl }
 					nonce={ context.nonce }
 					closeModal={ closeModal }
+					onNotice={ context.onNotice }
 					onRefresh={ onRefresh }
 				/>
 			) : (
@@ -348,10 +350,10 @@ export const createOrphanFailuresActions = (
 ];
 
 /**
- * A banner shown for a retry outcome: in-flight (info), resolved (success),
- * failed (error), or ran without clearing the issue (warning).
+ * A banner shown for an action outcome: in-flight (info), succeeded (success),
+ * failed (error), or completed without resolving the issue (warning).
  */
-export interface RetryNotice {
+export interface ActionNotice {
 	status: 'error' | 'warning' | 'info' | 'success';
 	message: string;
 }
@@ -362,7 +364,7 @@ export interface RetryNotice {
 export interface AttentionIssueActionsContext {
 	ajaxurl: string;
 	nonce: string;
-	onNotice?: ( notice: RetryNotice | null ) => void;
+	onNotice?: ( notice: ActionNotice | null ) => void;
 	// Keys of issues with a retry in flight, to drop concurrent submits.
 	inFlight?: Set< string >;
 }
@@ -374,12 +376,12 @@ export interface AttentionIssueActionsContext {
  * @param {RetryAttentionIssueResponse['outcome']} outcome Reconciliation outcome.
  * @param {AttentionIssue}                         issue   Retried issue.
  *
- * @return {RetryNotice} Notice to surface.
+ * @return {ActionNotice} Notice to surface.
  */
 const retryOutcomeNotice = (
 	outcome: RetryAttentionIssueResponse[ 'outcome' ],
 	issue: AttentionIssue
-): RetryNotice => {
+): ActionNotice => {
 	switch ( outcome ) {
 		case 'write_failed':
 			return {

@@ -61,7 +61,7 @@ class Auth_Logger extends Logger {
 		int $time_diff,
 		int $max_allowed
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::TIMESTAMP_EXPIRED,
 			array(
 				'route'             => $route,
@@ -84,7 +84,7 @@ class Auth_Logger extends Logger {
 		string $route,
 		string $method
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::CONTENT_HASH_MISSING,
 			array(
 				'route'  => $route,
@@ -103,7 +103,7 @@ class Auth_Logger extends Logger {
 		string $route,
 		string $method
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::CONTENT_HASH_MISMATCH,
 			array(
 				'route'  => $route,
@@ -141,7 +141,7 @@ class Auth_Logger extends Logger {
 		string $route,
 		string $method
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::SITE_URL_HEADER_MISSING,
 			array(
 				'route'  => $route,
@@ -164,7 +164,7 @@ class Auth_Logger extends Logger {
 		string $request_site_url,
 		string $connected_site_url
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::SITE_URL_MISMATCH,
 			array(
 				'route'              => $route,
@@ -191,7 +191,7 @@ class Auth_Logger extends Logger {
 		string $request_site_url,
 		int $received_sig_length
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::SIGNATURE_INVALID,
 			array(
 				'route'               => $route,
@@ -233,8 +233,8 @@ class Auth_Logger extends Logger {
 
 	/**
 	 * Logs a successfully-authenticated request whose declared action header
-	 * is missing or unrecognized. Error level: indicates a destination bug,
-	 * version skew, or an unexpected client signing with a valid HMAC secret.
+	 * is missing or unrecognized. Signals a destination bug, version skew, or
+	 * an unexpected client signing with a valid HMAC secret.
 	 *
 	 * @param string $route            REST route of the request.
 	 * @param string $method           HTTP method of the request.
@@ -247,7 +247,7 @@ class Auth_Logger extends Logger {
 		string $received_action,
 		string $request_site_url
 	): void {
-		$this->log_error(
+		$this->log_failure(
 			Log_Events::REQUEST_ACTION_UNRECOGNIZED,
 			array(
 				'route'            => $route,

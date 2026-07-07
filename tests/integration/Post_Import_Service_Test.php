@@ -850,11 +850,12 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			'Import should fail when raw fields are unavailable.'
 		);
 
-		// ASSERT: Error message identifies the fetch as the failure point.
+		// ASSERT: Error surfaces the specific raw-fields reason, not a generic
+		// fetch-failed message.
 		$this->assertStringContainsString(
-			'Could not fetch fresh content',
+			'missing raw content fields',
 			$result['error'],
-			'Error should indicate fresh content fetch failed.'
+			'Error should surface the specific raw-fields fetch failure.'
 		);
 
 		// ASSERT: No post should have been created.

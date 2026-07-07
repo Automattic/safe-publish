@@ -399,17 +399,27 @@ class Source_Posts_API {
 	 * @param string $source_site_url   Source site URL.
 	 * @param array  $auth_credentials  Optional. Authentication credentials. Default empty array.
 	 * @param string $post_type         Optional. Post type slug or REST endpoint. Default 'post'.
-	 * @return array|false|WP_Error Post data, WP_Error if too large, or false.
+	 * @return array|WP_Error Post data, or a WP_Error describing the failure.
 	 */
 	public function fetch_fresh_post_content(
 		int $source_post_id,
 		string $source_site_url,
 		array $auth_credentials = array(),
 		string $post_type = 'post'
-	): array|false|WP_Error {
+	): array|WP_Error {
 		// Validate URL first.
 		if ( ! URL_Validator::is_valid_external_url( $source_site_url ) ) {
-			return false;
+			$this->logger->content_fetch_failed(
+				$source_post_id,
+				$source_site_url,
+				'The connected site URL is invalid.'
+			);
+
+			return new WP_Error(
+				'fresh_content_invalid_url',
+				__( 'The connected site URL is invalid.', 'safe-publish' ),
+				array( 'status' => 500 )
+			);
 		}
 
 		// Build API URL for single post.
@@ -466,14 +476,9 @@ class Source_Posts_API {
 				$response->get_error_message()
 			);
 
-			// Surface the size-limit reason so the import UI can explain the
-			// failure instead of showing a generic message.
-			$error_code = $response->get_error_code();
-			if ( HTTP_Client::ERROR_RESPONSE_TOO_LARGE === $error_code ) {
-				return $response;
-			}
-
-			return false;
+			// Propagate the upstream error so the import UI can explain the
+			// specific transport/HTTP reason instead of a generic message.
+			return $response;
 		}
 
 		$body = wp_remote_retrieve_body( $response );
@@ -485,7 +490,14 @@ class Source_Posts_API {
 				$source_site_url
 			);
 
-			return false;
+			return new WP_Error(
+				'fresh_content_invalid_response',
+				__(
+					'The source site returned an invalid response.',
+					'safe-publish'
+				),
+				array( 'status' => 502 )
+			);
 		}
 
 		// Require raw field values (edit context) to preserve data parity.
@@ -499,7 +511,14 @@ class Source_Posts_API {
 				$source_site_url
 			);
 
-			return false;
+			return new WP_Error(
+				'fresh_content_raw_fields_missing',
+				__(
+					'The source response is missing raw content fields. Verify authentication and edit permissions on the source site.',
+					'safe-publish'
+				),
+				array( 'status' => 403 )
+			);
 		}
 
 		// Extract post data.
@@ -631,9 +650,9 @@ class Source_Posts_API {
 	 * Fetches fresh post content using the configured connected site URL.
 	 *
 	 * Convenience wrapper around fetch_fresh_post_content() that reads the
-	 * connected site URL from options, obtains credentials, and converts
-	 * the underlying false return into a WP_Error so callers can abort
-	 * the import on a uniform error type.
+	 * connected site URL from options, obtains credentials, and propagates
+	 * the specific WP_Error the underlying fetch returns so callers can abort
+	 * the import and surface the reason.
 	 *
 	 * @param int    $source_post_id Source post ID to fetch.
 	 * @param string $post_type      Post type slug or REST endpoint.
@@ -660,17 +679,6 @@ class Source_Posts_API {
 			$auth_credentials,
 			$post_type
 		);
-
-		if ( is_wp_error( $fresh_data ) ) {
-			return $fresh_data;
-		}
-
-		if ( false === $fresh_data ) {
-			return new WP_Error(
-				'fresh_content_fetch_failed',
-				__( 'Could not fetch fresh content from the source site. The post was not imported.', 'safe-publish' )
-			);
-		}
 
 		return $fresh_data;
 	}
