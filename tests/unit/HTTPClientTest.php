@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests;
 use PHPUnit\Framework\TestCase;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Request_Actions;
+use WP_Error;
 
 /**
  * HTTP Client Test.
@@ -72,6 +73,146 @@ class HTTPClientTest extends TestCase {
 		$this->assertSame(
 			HTTP_Client::MAX_RESPONSE_BYTES,
 			$GLOBALS['_test_http_last_args']['limit_response_size']
+		);
+	}
+
+	/**
+	 * Verifies that make_request appends the source site's REST error message
+	 * to the WP_Error on a non-200 response.
+	 */
+	public function test_make_request_appends_source_error_message(): void {
+		// ARRANGE: Stub a 400 carrying a WordPress REST error body.
+		$detail = 'Requested post type is not available through the catalog.';
+		$body   = wp_json_encode(
+			array(
+				'code'    => 'safe_publish_catalog_invalid_post_type',
+				'message' => $detail,
+				'data'    => array( 'status' => 400 ),
+			)
+		);
+		$this->stub_http_error( 400, $body );
+
+		// ACT: Issue a catalog request through the shared client.
+		$result = $this->make_catalog_request();
+
+		// ASSERT: The error carries both the HTTP code and the source message.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$error_message = $result->get_error_message();
+		$this->assertStringContainsString( '400', $error_message );
+		$this->assertStringContainsString( $detail, $error_message );
+	}
+
+	/**
+	 * Verifies that make_request preserves the source error code and status in
+	 * the WP_Error data while keeping the http_error code.
+	 */
+	public function test_make_request_preserves_source_error_data(): void {
+		// ARRANGE: Stub a 400 carrying a WordPress REST error body.
+		$body = wp_json_encode(
+			array(
+				'code'    => 'safe_publish_catalog_invalid_date',
+				'message' => 'Invalid date parameters.',
+				'data'    => array( 'status' => 400 ),
+			)
+		);
+		$this->stub_http_error( 400, $body );
+
+		// ACT: Issue a catalog request through the shared client.
+		$result = $this->make_catalog_request();
+
+		// ASSERT: The source code and status ride along under http_error.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'http_error', $result->get_error_code() );
+		$this->assertSame(
+			array(
+				'source_code'   => 'safe_publish_catalog_invalid_date',
+				'source_status' => 400,
+			),
+			$result->get_error_data()
+		);
+	}
+
+	/**
+	 * Verifies that make_request bounds an oversized source error message and
+	 * marks the truncation with an ellipsis.
+	 */
+	public function test_make_request_truncates_long_source_error_message(): void {
+		// ARRANGE: Stub a 400 whose message far exceeds the display cap.
+		$body = wp_json_encode( array( 'message' => str_repeat( 'a', 500 ) ) );
+		$this->stub_http_error( 400, $body );
+
+		// ACT: Issue a catalog request through the shared client.
+		$result = $this->make_catalog_request();
+
+		// ASSERT: The appended detail is capped at 300 chars plus an ellipsis.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertStringEndsWith(
+			str_repeat( 'a', 300 ) . '…',
+			$result->get_error_message()
+		);
+	}
+
+	/**
+	 * Verifies that make_request truncates a multibyte source message on a
+	 * character boundary, keeping the surfaced message valid UTF-8.
+	 */
+	public function test_make_request_truncates_multibyte_message_safely(): void {
+		// ARRANGE: Stub a 400 whose multibyte message exceeds the cap; the
+		// ASCII prefix offsets the byte boundary so a naive byte cut would
+		// split a character.
+		$body = wp_json_encode(
+			array( 'message' => 'x' . str_repeat( '中', 400 ) )
+		);
+		$this->stub_http_error( 400, $body );
+
+		// ACT: Issue a catalog request through the shared client.
+		$result = $this->make_catalog_request();
+
+		// ASSERT: The message is truncated yet remains valid UTF-8.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$error_message = $result->get_error_message();
+		$this->assertStringEndsWith( '…', $error_message );
+		$this->assertSame( 1, preg_match( '//u', $error_message ) );
+	}
+
+	/**
+	 * Verifies that make_request returns the generic HTTP-error message, with
+	 * no error data, when the source body is not a JSON REST error.
+	 *
+	 * @dataProvider unparseable_error_body_provider
+	 *
+	 * @param string $body Response body that must not yield a source message.
+	 */
+	public function test_make_request_returns_generic_message_for_unparseable_body(
+		string $body
+	): void {
+		// ARRANGE: Stub a 500 with a body that carries no REST error message.
+		$this->stub_http_error( 500, $body );
+
+		// ACT: Issue a catalog request through the shared client.
+		$result = $this->make_catalog_request();
+
+		// ASSERT: The generic message stands and no error data is attached.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'Source site returned HTTP error 500.',
+			$result->get_error_message()
+		);
+		$this->assertNull( $result->get_error_data() );
+	}
+
+	/**
+	 * Data provider for bodies that must degrade to the generic HTTP error.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function unparseable_error_body_provider(): array {
+		return array(
+			'empty'       => array( '' ),
+			'html'        => array( '<html>Bad Gateway</html>' ),
+			'json scalar' => array( '"a string"' ),
+			'json object' => array( '{"foo":"bar"}' ),
+			'json array'  => array( '[1,2,3]' ),
 		);
 	}
 
@@ -170,5 +311,32 @@ class HTTPClientTest extends TestCase {
 		$this->http_client->cleanup_temp_file( '' );
 
 		$this->assertTrue( true );
+	}
+
+	/**
+	 * Issues a catalog listing request through the shared client.
+	 *
+	 * @return array|WP_Error make_request result.
+	 */
+	private function make_catalog_request(): array|WP_Error {
+		return $this->http_client->make_request(
+			'https://example.com/wp-json/safe-publish/v1/catalog/posts',
+			Request_Actions::LIST_ITEMS
+		);
+	}
+
+	/**
+	 * Stubs a non-200 HTTP response with the given status code and body.
+	 *
+	 * @param int    $code HTTP status code.
+	 * @param string $body Raw response body.
+	 */
+	private function stub_http_error( int $code, string $body ): void {
+		set_test_http_response(
+			array(
+				'response' => array( 'code' => $code ),
+				'body'     => $body,
+			)
+		);
 	}
 }

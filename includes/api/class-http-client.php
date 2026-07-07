@@ -38,6 +38,12 @@ final class HTTP_Client {
 	public const ERROR_RESPONSE_TOO_LARGE = 'response_too_large';
 
 	/**
+	 * Caps the source-supplied error detail appended to an HTTP-error message,
+	 * keeping the surfaced message a sane length for display.
+	 */
+	private const MAX_ERROR_DETAIL_LENGTH = 300;
+
+	/**
 	 * Makes an HTTP request. $action is sent as X-Safe-Publish-Action and
 	 * signed into the HMAC payload by VIP_Safe_Auth::get_auth_params().
 	 *
@@ -112,13 +118,32 @@ final class HTTP_Client {
 
 		$response_code = wp_remote_retrieve_response_code( $response );
 		if ( 200 !== $response_code ) {
+			$message = sprintf(
+				/* translators: %d: HTTP response code */
+				__( 'Source site returned HTTP error %d.', 'safe-publish' ),
+				$response_code
+			);
+
+			$source_error = $this->parse_source_error(
+				wp_remote_retrieve_body( $response )
+			);
+
+			if ( isset( $source_error['message'] ) ) {
+				$message .= ' ' . $source_error['message'];
+			}
+
+			$error_data = array();
+			if ( isset( $source_error['code'] ) ) {
+				$error_data['source_code'] = $source_error['code'];
+			}
+			if ( isset( $source_error['status'] ) ) {
+				$error_data['source_status'] = $source_error['status'];
+			}
+
 			return new WP_Error(
 				'http_error',
-				sprintf(
-					/* translators: %d: HTTP response code */
-					__( 'Source site returned HTTP error %d.', 'safe-publish' ),
-					$response_code
-				)
+				$message,
+				array() === $error_data ? null : $error_data
 			);
 		}
 
@@ -140,6 +165,63 @@ final class HTTP_Client {
 		}
 
 		return $response;
+	}
+
+	/**
+	 * Extracts the message, code, and status from a WordPress REST error body.
+	 *
+	 * Returns an empty array unless the body decodes to a JSON object, so a
+	 * non-JSON or empty body degrades to the generic HTTP-error message.
+	 *
+	 * @param string $body Raw response body.
+	 * @return array Any of 'message', 'code', and 'status' the body carried.
+	 */
+	private function parse_source_error( string $body ): array {
+		$decoded = json_decode( $body, true );
+		if ( ! is_array( $decoded ) ) {
+			return array();
+		}
+
+		$parsed = array();
+
+		$message = $decoded['message'] ?? null;
+		if ( is_string( $message ) ) {
+			$detail = trim( $message );
+			if ( '' !== $detail ) {
+				$parsed['message'] = $this->truncate_error_detail( $detail );
+			}
+		}
+
+		$code = $decoded['code'] ?? null;
+		if ( is_string( $code ) && '' !== $code ) {
+			$parsed['code'] = $code;
+		}
+
+		$data   = $decoded['data'] ?? null;
+		$status = is_array( $data ) ? ( $data['status'] ?? null ) : null;
+		if ( is_int( $status ) ) {
+			$parsed['status'] = $status;
+		}
+
+		return $parsed;
+	}
+
+	/**
+	 * Bounds a source error detail to a display-friendly length.
+	 *
+	 * Truncates on a UTF-8 character boundary so the cut can never leave a
+	 * partial multibyte sequence, which would make the surfaced message
+	 * invalid UTF-8 (dropped by esc_html, rejected by json_encode).
+	 *
+	 * @param string $detail Trimmed, non-empty error detail.
+	 * @return string Detail unchanged, or truncated with an ellipsis.
+	 */
+	private function truncate_error_detail( string $detail ): string {
+		$pattern = sprintf( '/^.{0,%d}/su', self::MAX_ERROR_DETAIL_LENGTH );
+		preg_match( $pattern, $detail, $matches );
+		$truncated = $matches[0] ?? substr( $detail, 0, self::MAX_ERROR_DETAIL_LENGTH );
+
+		return $truncated === $detail ? $detail : $truncated . '…';
 	}
 
 	/**
