@@ -12,6 +12,7 @@ namespace Safe_Publish\Admin;
 use Safe_Publish\API\Catalog_REST_Controller;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\Post_Type_Fetcher;
+use Safe_Publish\Auth\Auth_Logger;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Datetime_Sanitizer;
@@ -1213,6 +1214,19 @@ final class Admin_Ajax_Controller {
 			$result,
 			self::AUTH_STATUS_TTL
 		);
+
+		// Persist non-authorized outcomes so the destination has a trail of why
+		// it cannot connect. Only a cold cache reaches here, so this is throttled.
+		$status = (string) ( $result['status'] ?? '' );
+		if (
+			VIP_Safe_Auth::STATUS_UNAUTHORIZED === $status
+			|| VIP_Safe_Auth::STATUS_UNREACHABLE === $status
+		) {
+			( new Auth_Logger() )->connection_probe_failed(
+				$status,
+				(int) ( $result['code'] ?? 0 )
+			);
+		}
 
 		return $result;
 	}

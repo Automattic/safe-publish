@@ -946,6 +946,188 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a core/image nested inside a core/group container has its
+	 * media imported and its attrs rewritten to the destination attachment.
+	 */
+	public function test_process_image_nested_in_group_imports_media(): void {
+		// ARRANGE: A core/image nested inside a core/group container.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/grouped-photo.jpg';
+		$content         = '<!-- wp:group -->'
+			. '<div class="wp-block-group">'
+			. '<!-- wp:image {"url":"' . $image_url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $image_url . '" alt="Grouped"/></figure>'
+			. '<!-- /wp:image -->'
+			. '</div>'
+			. '<!-- /wp:group -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block content through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Exactly one attachment was created for the nested image.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Nested image inside a group must be sideloaded'
+		);
+
+		// ASSERT: The source URL no longer appears anywhere in the output.
+		$this->assertStringNotContainsString(
+			$image_url,
+			$processed,
+			'Nested source image URL must be replaced with the local upload URL'
+		);
+
+		// ASSERT: The nested block attrs point at a local upload URL and an id.
+		$this->assertMatchesRegularExpression(
+			'/"url":"[^"]*wp-content\/uploads[^"]*"/',
+			$processed,
+			'Nested block attrs url should point to local uploads'
+		);
+		$this->assertMatchesRegularExpression(
+			'/"id":\d+/',
+			$processed,
+			'Nested block attrs should contain a numeric attachment ID'
+		);
+
+		// ASSERT: The group wrapper block is preserved.
+		$this->assertStringContainsString(
+			'<!-- wp:group -->',
+			$processed,
+			'Group wrapper block must be preserved'
+		);
+
+		// ASSERT: No failure was recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that a core/image nested two levels deep (Columns > Column) is
+	 * imported, proving the inner-block descent recurses to arbitrary depth.
+	 */
+	public function test_process_image_nested_two_levels_deep_imports_media(): void {
+		// ARRANGE: A core/image inside a column inside a columns container.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/deep-photo.jpg';
+		$content         = '<!-- wp:columns -->'
+			. '<div class="wp-block-columns">'
+			. '<!-- wp:column -->'
+			. '<div class="wp-block-column">'
+			. '<!-- wp:image {"url":"' . $image_url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $image_url . '" alt="Deep"/></figure>'
+			. '<!-- /wp:image -->'
+			. '</div>'
+			. '<!-- /wp:column -->'
+			. '</div>'
+			. '<!-- /wp:columns -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block content through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Exactly one attachment was created for the deeply nested image.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Image nested two levels deep must be sideloaded'
+		);
+
+		// ASSERT: The source URL no longer appears anywhere in the output.
+		$this->assertStringNotContainsString(
+			$image_url,
+			$processed,
+			'Deeply nested source image URL must be replaced'
+		);
+
+		// ASSERT: A local upload URL is present in the block attrs.
+		$this->assertMatchesRegularExpression(
+			'/"url":"[^"]*wp-content\/uploads[^"]*"/',
+			$processed,
+			'Deeply nested block attrs url should point to local uploads'
+		);
+
+		// ASSERT: Both wrapper blocks are preserved.
+		$this->assertStringContainsString(
+			'<!-- wp:columns -->',
+			$processed,
+			'Columns wrapper must be preserved'
+		);
+		$this->assertStringContainsString(
+			'<!-- wp:column -->',
+			$processed,
+			'Column wrapper must be preserved'
+		);
+
+		// ASSERT: No failure was recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that a core/cover imports both its own background media and a
+	 * core/image nested in its overlay, covering the container's dual role.
+	 */
+	public function test_process_cover_imports_background_and_nested_overlay_media(): void {
+		// ARRANGE: A core/cover with a background image plus a nested image in
+		// its overlay inner container.
+		$source_site_url = 'https://source.example.com';
+		$background_url  = 'https://source.example.com/cover-bg.jpg';
+		$overlay_url     = 'https://source.example.com/overlay-photo.jpg';
+		$content         = '<!-- wp:cover {"url":"' . $background_url . '"} -->'
+			. '<div class="wp-block-cover">'
+			. '<img class="wp-block-cover__image-background" src="' . $background_url . '"/>'
+			. '<div class="wp-block-cover__inner-container">'
+			. '<!-- wp:image {"url":"' . $overlay_url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $overlay_url . '" alt="Overlay"/></figure>'
+			. '<!-- /wp:image -->'
+			. '</div></div>'
+			. '<!-- /wp:cover -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block content through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Two attachments were created — the background and the overlay.
+		$this->assertSame(
+			$attachments_before + 2,
+			$this->get_attachment_count(),
+			'Cover background and nested overlay image must both be sideloaded'
+		);
+
+		// ASSERT: The background source URL no longer appears in the output.
+		$this->assertStringNotContainsString(
+			$background_url,
+			$processed,
+			'Cover background URL must be replaced'
+		);
+
+		// ASSERT: The nested overlay source URL no longer appears in the output.
+		$this->assertStringNotContainsString(
+			$overlay_url,
+			$processed,
+			'Nested overlay image URL must be replaced'
+		);
+
+		// ASSERT: No failure was recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
 	 * Verifies that a Gutenberg image block referencing source-site media with
 	 * a non-standard extension (.heic) is sideloaded correctly.
 	 *
@@ -1241,6 +1423,315 @@ class Content_Processor_Test extends Integration_Test_Case {
 			array(),
 			$this->processor->get_failed_media(),
 			'Skipped third-party URL in attrs must not be recorded as a failure'
+		);
+	}
+
+	/**
+	 * Verifies that media in top-level classic HTML mixed with a block is
+	 * imported and rewritten to a local upload.
+	 *
+	 * A Classic block stores its HTML without delimiters, so it parses to a
+	 * null block name that was previously skipped — leaving the media uncopied
+	 * while the URL was still host-swapped to the destination.
+	 */
+	public function test_process_top_level_classic_media_mixed_with_block_is_imported(): void {
+		// ARRANGE: a block followed by top-level classic HTML with a
+		// source-site image.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/classic-photo.jpg';
+		$content         = '<!-- wp:paragraph --><p>Intro.</p>'
+			. '<!-- /wp:paragraph -->'
+			. '<p>Classic <img src="' . $image_url . '" alt="A photo"></p>';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: process the mixed document through the Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: exactly one attachment was created for the classic image.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Classic media should be sideloaded as one attachment'
+		);
+
+		// ASSERT: the source URL is replaced by a local upload URL.
+		$this->assertStringNotContainsString(
+			$image_url,
+			$processed,
+			'Source image URL should be replaced'
+		);
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Local upload URL should be present'
+		);
+
+		// ASSERT: the block and the classic text around the image survive.
+		$this->assertStringContainsString(
+			'<!-- wp:paragraph -->',
+			$processed,
+			'The accompanying block should be preserved'
+		);
+		$this->assertStringContainsString(
+			'<p>Classic ',
+			$processed,
+			'Classic markup around the image should be preserved'
+		);
+
+		// ASSERT: nothing recorded as failed or unprocessable.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+		$this->assertSame(
+			array(),
+			$this->processor->get_unprocessable_media(),
+			'No unprocessable media should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that media in a delimited core/freeform block is imported and
+	 * its URL rewritten to the local upload in the serialized output.
+	 *
+	 * A freeform block serializes its body from innerContent, so rewriting
+	 * only innerHTML would be discarded — leaving a host-swapped URL pointing
+	 * at a file that was never copied.
+	 */
+	public function test_process_delimited_freeform_media_is_imported_and_rewritten(): void {
+		// ARRANGE: a delimited core/freeform block with a source-site image.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/freeform-photo.jpg';
+		$content         = '<!-- wp:freeform -->'
+			. '<img src="' . $image_url . '" alt="A photo">'
+			. '<!-- /wp:freeform -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: process the freeform block through the Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: exactly one attachment was created.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Freeform media should be sideloaded as one attachment'
+		);
+
+		// ASSERT: the upload URL survives serialization from innerContent, so
+		// the host-swapped source path is not what remains.
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Rewritten upload URL must survive serialization'
+		);
+		$this->assertStringNotContainsString(
+			get_site_url() . '/freeform-photo.jpg',
+			$processed,
+			'Output must not keep the host-swapped source path'
+		);
+
+		// ASSERT: no media failures were recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that media in the inner HTML of a custom block (not in its
+	 * attrs) is imported and its URL rewritten to the local upload.
+	 *
+	 * Custom blocks fall through to the default handler, which serializes from
+	 * innerContent, so rewriting only innerHTML would be discarded — leaving a
+	 * host-swapped URL pointing at a file that was never copied.
+	 */
+	public function test_process_custom_block_media_in_inner_html_is_rewritten(): void {
+		// ARRANGE: a custom block with a source-site image only in innerHTML.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/card.jpg';
+		$content         = '<!-- wp:my-plugin/card -->'
+			. '<div class="wp-block-my-plugin-card">'
+			. '<img src="' . $image_url . '" alt="Card"/>'
+			. '</div>'
+			. '<!-- /wp:my-plugin/card -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: process the custom block through the Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: exactly one attachment was created.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Custom-block innerHTML media should be sideloaded as one attachment'
+		);
+
+		// ASSERT: the upload URL survives serialization from innerContent, so
+		// the host-swapped source path is not what remains.
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Rewritten upload URL must survive serialization'
+		);
+		$this->assertStringNotContainsString(
+			get_site_url() . '/card.jpg',
+			$processed,
+			'Output must not keep the host-swapped source path'
+		);
+		$this->assertStringNotContainsString(
+			$image_url,
+			$processed,
+			'Source image URL should be replaced'
+		);
+
+		// ASSERT: no media failures were recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that media inline in a text block (paragraph, heading, list,
+	 * quote) is imported and its URL rewritten to the local upload.
+	 *
+	 * These blocks serialize from innerContent, so rewriting only innerHTML
+	 * would be discarded — leaving a host-swapped URL for a file that was
+	 * never copied.
+	 */
+	public function test_process_paragraph_inline_media_is_rewritten(): void {
+		// ARRANGE: a paragraph block with an inline source-site image.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/inline.jpg';
+		$content         = '<!-- wp:paragraph --><p>Text '
+			. '<img src="' . $image_url . '" alt="Inline"/></p>'
+			. '<!-- /wp:paragraph -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: process the paragraph through the Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: exactly one attachment was created.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Inline paragraph media should be sideloaded as one attachment'
+		);
+
+		// ASSERT: the upload URL survives serialization from innerContent.
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Rewritten upload URL must survive serialization'
+		);
+		$this->assertStringNotContainsString(
+			get_site_url() . '/inline.jpg',
+			$processed,
+			'Output must not keep the host-swapped source path'
+		);
+
+		// ASSERT: no media failures were recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that media in a core/html block's inner HTML is imported and
+	 * its URL rewritten to the local upload.
+	 */
+	public function test_process_html_block_media_is_rewritten(): void {
+		// ARRANGE: a core/html block containing a source-site image.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/htmlblock.jpg';
+		$content         = '<!-- wp:html -->'
+			. '<img src="' . $image_url . '" alt="H"/>'
+			. '<!-- /wp:html -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: process the html block through the Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: exactly one attachment was created.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'HTML-block media should be sideloaded as one attachment'
+		);
+
+		// ASSERT: the upload URL survives serialization from innerContent.
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Rewritten upload URL must survive serialization'
+		);
+		$this->assertStringNotContainsString(
+			get_site_url() . '/htmlblock.jpg',
+			$processed,
+			'Output must not keep the host-swapped source path'
+		);
+
+		// ASSERT: no media failures were recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that source media embedded in a core/embed block's inner HTML
+	 * is imported and its URL rewritten to the local upload.
+	 */
+	public function test_process_embed_block_media_is_rewritten(): void {
+		// ARRANGE: an embed block whose innerHTML carries a source-site image.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/embed-thumb.jpg';
+		$content         = '<!-- wp:embed -->'
+			. '<figure class="wp-block-embed">'
+			. '<img src="' . $image_url . '" alt="Preview"/>'
+			. '</figure>'
+			. '<!-- /wp:embed -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: process the embed block through the Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: exactly one attachment was created.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Embed-block media should be sideloaded as one attachment'
+		);
+
+		// ASSERT: the upload URL survives serialization from innerContent.
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Rewritten upload URL must survive serialization'
+		);
+		$this->assertStringNotContainsString(
+			get_site_url() . '/embed-thumb.jpg',
+			$processed,
+			'Output must not keep the host-swapped source path'
+		);
+
+		// ASSERT: no media failures were recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
 		);
 	}
 

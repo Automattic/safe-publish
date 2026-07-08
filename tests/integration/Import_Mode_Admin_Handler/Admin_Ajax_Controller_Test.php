@@ -15,8 +15,10 @@ use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Tests\Integration\Ajax_Die_Continue_Trait;
 use Safe_Publish\Tests\Integration\Mock_Media_HTTP_Trait;
 use Safe_Publish\Tests\Integration\Mock_Post_API_Trait;
+use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
+use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
 use WP_Error;
@@ -1257,6 +1259,221 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		$this->assertSame(
 			VIP_Safe_Auth::STATUS_UNAUTHORIZED,
 			$cached['status']
+		);
+	}
+
+	/**
+	 * Verifies that a cold-cache probe rejected with 401 writes exactly one
+	 * error-level CONNECTION_PROBE_FAILED row carrying the status and code.
+	 */
+	public function test_cold_cache_unauthorized_probe_logs_failure(): void {
+		// ARRANGE: Stub the probe endpoint to reject with 401 and start cold.
+		$probe_filter = $this->stub_probe_response(
+			array(
+				'response' => array( 'code' => 401 ),
+				'body'     => '',
+				'headers'  => array(),
+			)
+		);
+		$this->reset_auth_audit_log();
+		delete_site_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+		);
+
+		// ACT: Trigger the cached auth-status probe.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_auth_status' );
+
+		remove_filter( 'pre_http_request', $probe_filter, 1 );
+
+		// ASSERT: A single error-level row records the unauthorized outcome.
+		$rows = $this->connection_probe_failed_rows();
+		$this->assertCount( 1, $rows );
+		$this->assertSame( 'error', $rows[0]['level'] );
+		$this->assertSame(
+			VIP_Safe_Auth::STATUS_UNAUTHORIZED,
+			$rows[0]['data']['probe_status']
+		);
+		$this->assertSame( 401, $rows[0]['data']['code'] );
+	}
+
+	/**
+	 * Verifies that a cold-cache probe that cannot reach the source writes one
+	 * error-level row with code 0 and without storing the transport message.
+	 */
+	public function test_cold_cache_unreachable_probe_logs_failure(): void {
+		// ARRANGE: Stub the probe endpoint to fail at the transport layer.
+		$probe_filter = $this->stub_probe_response(
+			new WP_Error( 'http_request_failed', 'Connection refused' )
+		);
+		$this->reset_auth_audit_log();
+		delete_site_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+		);
+
+		// ACT: Trigger the cached auth-status probe.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_auth_status' );
+
+		remove_filter( 'pre_http_request', $probe_filter, 1 );
+
+		// ASSERT: One row records the unreachable outcome with code 0.
+		$rows = $this->connection_probe_failed_rows();
+		$this->assertCount( 1, $rows );
+		$this->assertSame( 'error', $rows[0]['level'] );
+		$this->assertSame(
+			VIP_Safe_Auth::STATUS_UNREACHABLE,
+			$rows[0]['data']['probe_status']
+		);
+		$this->assertSame( 0, $rows[0]['data']['code'] );
+
+		// ASSERT: The transport message stays out of the audit payload.
+		$this->assertArrayNotHasKey( 'message', $rows[0]['data'] );
+	}
+
+	/**
+	 * Verifies that a cold-cache probe that authorizes writes no audit row.
+	 */
+	public function test_cold_cache_authorized_probe_does_not_log(): void {
+		// ARRANGE: Stub the probe endpoint to authorize (200) and start cold.
+		$probe_filter = $this->stub_probe_response(
+			array(
+				'response' => array( 'code' => 200 ),
+				'body'     => '[]',
+				'headers'  => array(),
+			)
+		);
+		$this->reset_auth_audit_log();
+		delete_site_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+		);
+
+		// ACT: Trigger the cached auth-status probe.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_auth_status' );
+
+		remove_filter( 'pre_http_request', $probe_filter, 1 );
+
+		// ASSERT: Success is a non-event — nothing is logged.
+		$this->assertCount( 0, $this->connection_probe_failed_rows() );
+	}
+
+	/**
+	 * Verifies that a cold-cache probe with no connected URL configured writes
+	 * no audit row.
+	 */
+	public function test_cold_cache_url_unset_probe_does_not_log(): void {
+		// ARRANGE: Remove the connected URL so the probe resolves to url_unset
+		// without a network call, and start cold.
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
+		$this->reset_auth_audit_log();
+		delete_site_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+		);
+
+		// ACT: Trigger the cached auth-status probe.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_auth_status' );
+
+		// ASSERT: Not-yet-configured is a non-event — nothing is logged.
+		$this->assertCount( 0, $this->connection_probe_failed_rows() );
+	}
+
+	/**
+	 * Verifies that a warm cache is served without re-probing the source or
+	 * writing an audit row, even when the cached status is a failure.
+	 */
+	public function test_warm_cache_does_not_reprobe_or_log(): void {
+		// ARRANGE: Seed a failing probe result and guard against any network hit.
+		$probe_calls  = 0;
+		$probe_filter = static function (
+			$preempt,
+			array $_args,
+			string $url
+		) use ( &$probe_calls ) {
+			if ( 1 === preg_match( '#/wp-json/wp/v2/posts\?#', $url ) ) {
+				++$probe_calls;
+			}
+			return $preempt;
+		};
+		add_filter( 'pre_http_request', $probe_filter, 1, 3 );
+		$this->reset_auth_audit_log();
+		set_site_transient(
+			Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT,
+			array(
+				'status' => VIP_Safe_Auth::STATUS_UNAUTHORIZED,
+				'code'   => 401,
+			),
+			Admin_Ajax_Controller::AUTH_STATUS_TTL
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+		);
+
+		// ACT: Trigger the cached auth-status probe.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_auth_status' );
+
+		remove_filter( 'pre_http_request', $probe_filter, 1 );
+
+		// ASSERT: The cache hit neither re-probed nor logged.
+		$this->assertSame( 0, $probe_calls );
+		$this->assertCount( 0, $this->connection_probe_failed_rows() );
+	}
+
+	/**
+	 * Adds a pre_http_request filter that answers the auth-status probe with a
+	 * fixed response, leaving every other request untouched.
+	 *
+	 * @param array|WP_Error $response Response returned for the probe request.
+	 * @return callable The registered filter, for removal by the caller.
+	 */
+	private function stub_probe_response( array|WP_Error $response ): callable {
+		$filter = static function (
+			$preempt,
+			array $_args,
+			string $url
+		) use ( $response ) {
+			if ( false !== $preempt ) {
+				return $preempt;
+			}
+			if ( 1 === preg_match( '#/wp-json/wp/v2/posts\?#', $url ) ) {
+				return $response;
+			}
+			return $preempt;
+		};
+		add_filter( 'pre_http_request', $filter, 1, 3 );
+		return $filter;
+	}
+
+	/**
+	 * Creates the audit-log table and clears the auth channel.
+	 */
+	private function reset_auth_audit_log(): void {
+		Audit_Log_Table::create_table();
+		Audit_Log_Table::clear( 'auth' );
+	}
+
+	/**
+	 * Returns the auth-channel CONNECTION_PROBE_FAILED audit rows.
+	 *
+	 * @return array Matching audit rows.
+	 */
+	private function connection_probe_failed_rows(): array {
+		return Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'auth',
+				'event_type' => Log_Events::CONNECTION_PROBE_FAILED,
+			)
 		);
 	}
 

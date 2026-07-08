@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration\Auth;
 
 use Safe_Publish\Auth\Auth_Logger;
+use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Log_Events;
 use WP_UnitTestCase;
@@ -231,6 +232,58 @@ class Auth_Server_Log_Test extends WP_UnitTestCase {
 		$events = $this->events_for( Log_Events::CONNECTED_URL_NOT_CONFIGURED );
 		$this->assertCount( 1, $events );
 		$this->assertSame( 'error', $events[0]['level'] );
+	}
+
+	/**
+	 * Verifies that a non-authorized connection probe records an error-level
+	 * audit row without emitting a server-log line.
+	 */
+	public function test_connection_probe_failed_skips_server_log(): void {
+		// ARRANGE: An auth logger that captures any server-log write.
+		$logger = new class() extends Auth_Logger {
+			/**
+			 * Server-log writes captured in place of error_log() calls.
+			 *
+			 * @var array<int, array>
+			 */
+			public array $server_log_writes = array();
+
+			/**
+			 * Captures the write instead of touching the server log.
+			 *
+			 * @param string $event    Event type.
+			 * @param array  $skeleton PII-free server-log projection.
+			 */
+			#[\Override]
+			protected function write_server_log(
+				string $event,
+				array $skeleton
+			): void {
+				$this->server_log_writes[] = array(
+					'event'    => $event,
+					'skeleton' => $skeleton,
+				);
+			}
+		};
+
+		// ACT: Log a rejected connection probe.
+		$logger->connection_probe_failed(
+			VIP_Safe_Auth::STATUS_UNAUTHORIZED,
+			401
+		);
+
+		// ASSERT: Nothing reached the server log.
+		$this->assertCount( 0, $logger->server_log_writes );
+
+		// ASSERT: The audit row persists at level error with its payload.
+		$events = $this->events_for( Log_Events::CONNECTION_PROBE_FAILED );
+		$this->assertCount( 1, $events );
+		$this->assertSame( 'error', $events[0]['level'] );
+		$this->assertSame(
+			VIP_Safe_Auth::STATUS_UNAUTHORIZED,
+			$events[0]['data']['probe_status']
+		);
+		$this->assertSame( 401, $events[0]['data']['code'] );
 	}
 
 	/**
