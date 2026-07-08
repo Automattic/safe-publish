@@ -984,6 +984,7 @@ class Content_Processor {
 
 	/**
 	 * Rewrites media and file links in a block's innerHTML and innerContent.
+	 *
 	 * Both are processed because serialize_blocks() rebuilds the body from
 	 * innerContent, so an innerHTML-only rewrite would be discarded.
 	 *
