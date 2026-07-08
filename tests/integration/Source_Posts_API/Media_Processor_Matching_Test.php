@@ -537,12 +537,12 @@ class Media_Processor_Matching_Test extends Source_Posts_API_Test_Base {
 
 		// ASSERT: The URL is recorded as unprocessable, not as a download
 		// failure.
-		$this->assertContains(
+		$this->assertArrayHasKey(
 			$url,
 			$this->content_media_processor->get_unprocessable_media(),
 			'Missed URL should be in unprocessable_media'
 		);
-		$this->assertNotContains(
+		$this->assertArrayNotHasKey(
 			$url,
 			$this->content_media_processor->get_failed_media(),
 			'Missed URL must not be in failed_media'

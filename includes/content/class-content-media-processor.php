@@ -39,17 +39,17 @@ class Content_Media_Processor {
 	private Media_Importer $media_importer;
 
 	/**
-	 * URLs of media files that failed to import.
+	 * Media files that failed to import, keyed by source URL.
 	 *
-	 * @var array
+	 * @var array<string, string> URL => originating block name.
 	 */
 	private array $failed_media = array();
 
 	/**
-	 * URLs found in media element attributes that could not be processed,
-	 * typically due to malformed HTML.
+	 * Media URLs that could not be processed, typically due to malformed HTML,
+	 * keyed by source URL.
 	 *
-	 * @var array
+	 * @var array<string, string> URL => originating block name.
 	 */
 	private array $unprocessable_media = array();
 
@@ -75,11 +75,14 @@ class Content_Media_Processor {
 	 *
 	 * @param string $content         Post content with source media URLs.
 	 * @param string $source_site_url Source site URL.
+	 * @param string $block_name      Block that contains this content, empty
+	 *                                for classic (non-block) content.
 	 * @return string Processed content with imported media.
 	 */
 	public function process_content(
 		string $content,
-		string $source_site_url
+		string $source_site_url,
+		string $block_name = ''
 	): string {
 		if ( '' === $content ) {
 			return $content;
@@ -93,21 +96,28 @@ class Content_Media_Processor {
 					$this->import_and_replace_attr(
 						$processor,
 						'src',
-						$source_site_url
+						$source_site_url,
+						$block_name
 					);
-					$this->process_srcset_attr( $processor, $source_site_url );
+					$this->process_srcset_attr(
+						$processor,
+						$source_site_url,
+						$block_name
+					);
 					break;
 
 				case 'VIDEO':
 					$this->import_and_replace_attr(
 						$processor,
 						'src',
-						$source_site_url
+						$source_site_url,
+						$block_name
 					);
 					$this->import_and_replace_attr(
 						$processor,
 						'poster',
-						$source_site_url
+						$source_site_url,
+						$block_name
 					);
 					break;
 
@@ -115,7 +125,8 @@ class Content_Media_Processor {
 					$this->import_and_replace_attr(
 						$processor,
 						'src',
-						$source_site_url
+						$source_site_url,
+						$block_name
 					);
 					break;
 
@@ -123,9 +134,14 @@ class Content_Media_Processor {
 					$this->import_and_replace_attr(
 						$processor,
 						'src',
-						$source_site_url
+						$source_site_url,
+						$block_name
 					);
-					$this->process_srcset_attr( $processor, $source_site_url );
+					$this->process_srcset_attr(
+						$processor,
+						$source_site_url,
+						$block_name
+					);
 					break;
 
 				case 'A':
@@ -137,7 +153,8 @@ class Content_Media_Processor {
 						$this->import_and_replace_attr(
 							$processor,
 							'href',
-							$source_site_url
+							$source_site_url,
+							$block_name
 						);
 					}
 					break;
@@ -146,7 +163,8 @@ class Content_Media_Processor {
 					$this->import_and_replace_attr(
 						$processor,
 						'src',
-						$source_site_url
+						$source_site_url,
+						$block_name
 					);
 					break;
 
@@ -154,7 +172,8 @@ class Content_Media_Processor {
 					$this->import_and_replace_attr(
 						$processor,
 						'data',
-						$source_site_url
+						$source_site_url,
+						$block_name
 					);
 					break;
 			}
@@ -162,15 +181,19 @@ class Content_Media_Processor {
 
 		$content = $processor->get_updated_html();
 
-		$this->detect_missed_media_urls( $content, $source_site_url );
+		$this->detect_missed_media_urls(
+			$content,
+			$source_site_url,
+			$block_name
+		);
 
 		return $content;
 	}
 
 	/**
-	 * Returns the list of media URLs that failed to import.
+	 * Returns the media files that failed to import.
 	 *
-	 * @return array Failed media URLs.
+	 * @return array<string, string> URL => originating block name.
 	 */
 	public function get_failed_media(): array {
 		return $this->failed_media;
@@ -186,7 +209,7 @@ class Content_Media_Processor {
 	/**
 	 * Returns media URLs that could not be processed due to malformed HTML.
 	 *
-	 * @return array Unprocessable media URLs.
+	 * @return array<string, string> URL => originating block name.
 	 */
 	public function get_unprocessable_media(): array {
 		return $this->unprocessable_media;
@@ -206,11 +229,13 @@ class Content_Media_Processor {
 	 * @param WP_HTML_Tag_Processor $processor       HTML processor positioned on the current tag.
 	 * @param string                $attr_name       Attribute name (e.g. src, poster).
 	 * @param string                $source_site_url Source site URL.
+	 * @param string                $block_name      Originating block name, empty if none.
 	 */
 	private function import_and_replace_attr(
 		WP_HTML_Tag_Processor $processor,
 		string $attr_name,
-		string $source_site_url
+		string $source_site_url,
+		string $block_name = ''
 	): void {
 		$url = $processor->get_attribute( $attr_name );
 
@@ -229,7 +254,7 @@ class Content_Media_Processor {
 
 			$processor->set_attribute( $attr_name, $new_url );
 		} elseif ( false === $new_url ) {
-			$this->failed_media[] = $url;
+			$this->failed_media[ $url ] = $block_name;
 		}
 	}
 
@@ -238,12 +263,14 @@ class Content_Media_Processor {
 	 * URL is imported individually. Failed descriptors are dropped from the
 	 * value. If no descriptors remain, the srcset attribute is removed entirely.
 	 *
-	 * @param WP_HTML_Tag_Processor $processor      HTML processor positioned on the current tag.
+	 * @param WP_HTML_Tag_Processor $processor       HTML processor positioned on the current tag.
 	 * @param string                $source_site_url Source site URL.
+	 * @param string                $block_name      Originating block name, empty if none.
 	 */
 	private function process_srcset_attr(
 		WP_HTML_Tag_Processor $processor,
-		string $source_site_url
+		string $source_site_url,
+		string $block_name = ''
 	): void {
 		$srcset = $processor->get_attribute( 'srcset' );
 
@@ -251,7 +278,11 @@ class Content_Media_Processor {
 			return;
 		}
 
-		$new_srcset = $this->process_srcset_value( $srcset, $source_site_url );
+		$new_srcset = $this->process_srcset_value(
+			$srcset,
+			$source_site_url,
+			$block_name
+		);
 
 		if ( '' === $new_srcset ) {
 			$processor->remove_attribute( 'srcset' );
@@ -269,12 +300,14 @@ class Content_Media_Processor {
 	 *
 	 * @param string $srcset_value    Raw srcset attribute value.
 	 * @param string $source_site_url Source site URL.
+	 * @param string $block_name      Originating block name, empty if none.
 	 * @return string Processed srcset value, or empty string if all descriptors
 	 *                failed.
 	 */
 	private function process_srcset_value(
 		string $srcset_value,
-		string $source_site_url
+		string $source_site_url,
+		string $block_name = ''
 	): string {
 		$descriptors     = array_map( 'trim', explode( ',', $srcset_value ) );
 		$new_descriptors = array();
@@ -299,7 +332,7 @@ class Content_Media_Processor {
 			}
 
 			if ( false === $new_url ) {
-				$this->failed_media[] = $url;
+				$this->failed_media[ $url ] = $block_name;
 				continue;
 			}
 
@@ -328,10 +361,12 @@ class Content_Media_Processor {
 	 *
 	 * @param string $content         Processed content.
 	 * @param string $source_site_url Source site URL.
+	 * @param string $block_name      Originating block name, empty if none.
 	 */
 	private function detect_missed_media_urls(
 		string $content,
-		string $source_site_url
+		string $source_site_url,
+		string $block_name = ''
 	): void {
 		$source_host = wp_parse_url( $source_site_url, PHP_URL_HOST );
 
@@ -366,9 +401,9 @@ class Content_Media_Processor {
 		$remaining = array_unique( $matches[1] );
 
 		foreach ( $remaining as $url ) {
-			if ( ! in_array( $url, $this->unprocessable_media, true )
-				&& ! in_array( $url, $this->failed_media, true ) ) {
-				$this->unprocessable_media[] = $url;
+			if ( ! array_key_exists( $url, $this->unprocessable_media )
+				&& ! array_key_exists( $url, $this->failed_media ) ) {
+				$this->unprocessable_media[ $url ] = $block_name;
 			}
 		}
 	}

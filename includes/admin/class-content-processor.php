@@ -121,17 +121,17 @@ class Content_Processor {
 	private array $disabled_filters = array();
 
 	/**
-	 * URLs of media files that failed to import.
+	 * Media files that failed to import, keyed by source URL.
 	 *
-	 * @var array
+	 * @var array<string, string> URL => originating block name.
 	 */
 	private array $failed_media = array();
 
 	/**
-	 * URLs found in media element attributes that could not be processed,
-	 * typically due to malformed HTML.
+	 * Media URLs that could not be processed, typically due to malformed HTML,
+	 * keyed by source URL.
 	 *
-	 * @var array
+	 * @var array<string, string> URL => originating block name.
 	 */
 	private array $unprocessable_media = array();
 
@@ -203,7 +203,11 @@ class Content_Processor {
 				$session_id_map
 			);
 		} else {
-			$processed_content = $this->content_media_processor->process_content( $content, $source_site_url );
+			$processed_content = $this->content_media_processor->process_content(
+				$content,
+				$source_site_url,
+				''
+			);
 		}
 
 		// Rewrite caption-family shortcode IDs after URL rewriting so the
@@ -212,18 +216,14 @@ class Content_Processor {
 
 		// Merge failures from content_media_processor (used in both the
 		// Gutenberg and non-Gutenberg paths).
-		$this->failed_media = array_unique(
-			array_merge(
-				$this->failed_media,
-				$this->content_media_processor->get_failed_media()
-			)
+		$this->failed_media = self::merge_media_map(
+			$this->failed_media,
+			$this->content_media_processor->get_failed_media()
 		);
 
-		$this->unprocessable_media = array_unique(
-			array_merge(
-				$this->unprocessable_media,
-				$this->content_media_processor->get_unprocessable_media()
-			)
+		$this->unprocessable_media = self::merge_media_map(
+			$this->unprocessable_media,
+			$this->content_media_processor->get_unprocessable_media()
 		);
 
 		$this->content_media_processor->reset_failed_media();
@@ -416,9 +416,9 @@ class Content_Processor {
 	}
 
 	/**
-	 * Returns the list of media URLs that failed to import.
+	 * Returns the media files that failed to import.
 	 *
-	 * @return array Failed media URLs.
+	 * @return array<string, string> URL => originating block name.
 	 */
 	public function get_failed_media(): array {
 		return $this->failed_media;
@@ -436,10 +436,10 @@ class Content_Processor {
 		}
 
 		return sprintf(
-			/* translators: 1: number of failed media files, 2: comma-separated list of failed media file URLs */
+			/* translators: 1: number of failed media files, 2: comma-separated list of failed media file URLs, each optionally followed by the originating block name in parentheses */
 			__( 'Import failed: %1$d media file(s) could not be downloaded: %2$s', 'safe-publish' ),
 			count( $this->failed_media ),
-			implode( ', ', $this->failed_media )
+			self::format_media_list( $this->failed_media )
 		);
 	}
 
@@ -447,7 +447,7 @@ class Content_Processor {
 	 * Returns media URLs that could not be processed due to malformed HTML in
 	 * the source content.
 	 *
-	 * @return array Unprocessable media URLs.
+	 * @return array<string, string> URL => originating block name.
 	 */
 	public function get_unprocessable_media(): array {
 		return $this->unprocessable_media;
@@ -465,11 +465,52 @@ class Content_Processor {
 		}
 
 		return sprintf(
-			/* translators: 1: number of unprocessable media URLs, 2: comma-separated list of URLs */
+			/* translators: 1: number of unprocessable media URLs, 2: comma-separated list of URLs, each optionally followed by the originating block name in parentheses */
 			__( 'Import failed: %1$d media URL(s) could not be processed because the surrounding HTML markup is malformed (e.g. unclosed quotes). Fix the markup on the source site and retry: %2$s', 'safe-publish' ),
 			count( $this->unprocessable_media ),
-			implode( ', ', $this->unprocessable_media )
+			self::format_media_list( $this->unprocessable_media )
 		);
+	}
+
+	/**
+	 * Merges a media map into a base map, keyed by URL.
+	 *
+	 * On a URL collision the base label wins unless it is empty, so a known
+	 * originating block name is never overwritten by an empty one. Keying by
+	 * URL preserves the per-URL dedup.
+	 *
+	 * @param array<string, string> $base     Base map, URL => block name.
+	 * @param array<string, string> $incoming Map to merge in.
+	 * @return array<string, string> Merged map.
+	 */
+	private static function merge_media_map( array $base, array $incoming ): array {
+		foreach ( $incoming as $url => $block_name ) {
+			$existing = $base[ $url ] ?? '';
+			if ( '' === $existing ) {
+				$base[ $url ] = $block_name;
+			}
+		}
+
+		return $base;
+	}
+
+	/**
+	 * Formats a media map as a comma-separated list. Each URL is followed by its
+	 * originating block name in parentheses, or left bare when the name is empty.
+	 *
+	 * @param array<string, string> $media_map Map of URL => block name.
+	 * @return string Comma-separated list of media entries.
+	 */
+	private static function format_media_list( array $media_map ): string {
+		$entries = array();
+
+		foreach ( $media_map as $url => $block_name ) {
+			$entries[] = '' === $block_name
+				? $url
+				: sprintf( '%s (%s)', $url, $block_name );
+		}
+
+		return implode( ', ', $entries );
 	}
 
 	/**
@@ -654,14 +695,14 @@ class Content_Processor {
 		}
 
 		if ( false === $attachment_id ) {
-			$this->failed_media[] = $original_url;
+			$this->failed_media[ $original_url ] = $block['blockName'];
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		$new_url = wp_get_attachment_url( $attachment_id );
 
 		if ( false === $new_url ) {
-			$this->failed_media[] = $original_url;
+			$this->failed_media[ $original_url ] = $block['blockName'];
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
@@ -728,14 +769,14 @@ class Content_Processor {
 				}
 
 				if ( false === $attachment_id ) {
-					$this->failed_media[] = $original_url;
+					$this->failed_media[ $original_url ] = $block['blockName'];
 					continue;
 				}
 
 				$new_url = wp_get_attachment_url( $attachment_id );
 
 				if ( false === $new_url ) {
-					$this->failed_media[] = $original_url;
+					$this->failed_media[ $original_url ] = $block['blockName'];
 					continue;
 				}
 
@@ -840,14 +881,14 @@ class Content_Processor {
 		}
 
 		if ( false === $attachment_id ) {
-			$this->failed_media[] = $media_url;
+			$this->failed_media[ $media_url ] = $block['blockName'];
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		$new_url = wp_get_attachment_url( $attachment_id );
 
 		if ( false === $new_url ) {
-			$this->failed_media[] = $media_url;
+			$this->failed_media[ $media_url ] = $block['blockName'];
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
@@ -936,7 +977,8 @@ class Content_Processor {
 		if ( ! empty( $block['attrs']['content'] ) ) {
 			$block['attrs']['content'] = $this->content_media_processor->process_content(
 				$block['attrs']['content'],
-				$source_site_url
+				$source_site_url,
+				$block['blockName']
 			);
 		}
 
@@ -954,10 +996,14 @@ class Content_Processor {
 	 * @return array Block with processed HTML.
 	 */
 	private function process_block_inner_html( array $block, string $source_site_url ): array {
+		// Classic/freeform blocks have a null name; default the label to ''.
+		$block_name = $block['blockName'] ?? '';
+
 		if ( ! empty( $block['innerHTML'] ) ) {
 			$block['innerHTML'] = $this->content_media_processor->process_content(
 				$block['innerHTML'],
-				$source_site_url
+				$source_site_url,
+				$block_name
 			);
 		}
 
@@ -966,7 +1012,8 @@ class Content_Processor {
 				if ( is_string( $content ) ) {
 					$block['innerContent'][ $index ] = $this->content_media_processor->process_content(
 						$content,
-						$source_site_url
+						$source_site_url,
+						$block_name
 					);
 				}
 			}
@@ -1116,14 +1163,14 @@ class Content_Processor {
 				}
 
 				if ( false === $attachment_id ) {
-					$this->failed_media[] = $value;
+					$this->failed_media[ $value ] = $block['blockName'];
 					continue;
 				}
 
 				$new_url = wp_get_attachment_url( $attachment_id );
 
 				if ( false === $new_url ) {
-					$this->failed_media[] = $value;
+					$this->failed_media[ $value ] = $block['blockName'];
 					continue;
 				}
 

@@ -683,7 +683,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		// ASSERT: The failing src URL is recorded as a failure.
 		$this->assertSame(
 			array( $broken_url ),
-			$this->processor->get_failed_media(),
+			array_keys( $this->processor->get_failed_media() ),
 			'Failing <img src> should be recorded in failed_media'
 		);
 	}
@@ -885,7 +885,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		// ASSERT: The failing src URL is recorded as a failure.
 		$this->assertSame(
 			array( $broken_url ),
-			$this->processor->get_failed_media(),
+			array_keys( $this->processor->get_failed_media() ),
 			'Failing video src should be recorded in failed_media'
 		);
 	}
@@ -1733,5 +1733,264 @@ class Content_Processor_Test extends Integration_Test_Case {
 			$this->processor->get_failed_media(),
 			'No media failures should be recorded'
 		);
+	}
+
+	/**
+	 * Verifies that a failed core/image download names the block in the message.
+	 */
+	public function test_failed_media_message_names_the_image_block(): void {
+		// ARRANGE: A core/image block whose image download will fail.
+		$url     = 'https://source.example.com/broken-image.jpg';
+		$content = '<!-- wp:image {"url":"' . $url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $url . '"/></figure>'
+			. '<!-- /wp:image -->';
+
+		// ACT: Process the content with the download forced to fail.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The failure is attributed to the core/image block.
+		$this->assertSame(
+			array( $url => 'core/image' ),
+			$this->processor->get_failed_media()
+		);
+		$this->assertStringContainsString(
+			$url . ' (core/image)',
+			(string) $this->processor->get_failed_media_error_message(),
+			'Message should name the originating block'
+		);
+	}
+
+	/**
+	 * Verifies that a failed core/gallery image names the block in the message.
+	 */
+	public function test_failed_media_message_names_the_gallery_block(): void {
+		// ARRANGE: A core/gallery block with a failing image.
+		$url     = 'https://source.example.com/broken-gallery.jpg';
+		$content = '<!-- wp:gallery {"images":[{"url":"' . $url . '"}]} -->'
+			. '<figure class="wp-block-gallery"><img src="' . $url . '"/></figure>'
+			. '<!-- /wp:gallery -->';
+
+		// ACT: Process the content with the download forced to fail.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The failure is attributed to the core/gallery block.
+		$this->assertSame(
+			array( $url => 'core/gallery' ),
+			$this->processor->get_failed_media()
+		);
+		$this->assertStringContainsString(
+			$url . ' (core/gallery)',
+			(string) $this->processor->get_failed_media_error_message()
+		);
+	}
+
+	/**
+	 * Verifies that a failed core/video src names the block in the message.
+	 */
+	public function test_failed_media_message_names_the_media_block(): void {
+		// ARRANGE: A core/video block whose src download will fail.
+		$url     = 'https://source.example.com/broken-clip.mp4';
+		$content = '<!-- wp:video {"src":"' . $url . '"} -->'
+			. '<figure class="wp-block-video"><video src="' . $url . '"></video></figure>'
+			. '<!-- /wp:video -->';
+
+		// ACT: Process the content with the download forced to fail.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The failure is attributed to the core/video block.
+		$this->assertSame(
+			array( $url => 'core/video' ),
+			$this->processor->get_failed_media()
+		);
+		$this->assertStringContainsString(
+			$url . ' (core/video)',
+			(string) $this->processor->get_failed_media_error_message()
+		);
+	}
+
+	/**
+	 * Verifies that a failed URL in a third-party block's attrs names the block.
+	 */
+	public function test_failed_media_message_names_a_custom_attr_block(): void {
+		// ARRANGE: A third-party block with a failing media URL in its attrs.
+		$url     = 'https://source.example.com/broken-slider.jpg';
+		$content = '<!-- wp:acme/slider {"backgroundUrl":"' . $url . '"} -->'
+			. '<div class="acme-slider"></div>'
+			. '<!-- /wp:acme/slider -->';
+
+		// ACT: Process the content with the download forced to fail.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The failure is attributed to the custom block.
+		$this->assertSame(
+			array( $url => 'acme/slider' ),
+			$this->processor->get_failed_media()
+		);
+		$this->assertStringContainsString(
+			$url . ' (acme/slider)',
+			(string) $this->processor->get_failed_media_error_message()
+		);
+	}
+
+	/**
+	 * Verifies that an inline <img> failure inside core/html names the block.
+	 */
+	public function test_failed_media_message_names_the_html_block(): void {
+		// ARRANGE: A core/html block with an inline <img> that will fail.
+		$url     = 'https://source.example.com/broken-html.jpg';
+		$content = '<!-- wp:html --><img src="' . $url . '"/><!-- /wp:html -->';
+
+		// ACT: Process the content with the download forced to fail.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The inner-HTML failure is attributed to the core/html block.
+		$this->assertSame(
+			array( $url => 'core/html' ),
+			$this->processor->get_failed_media()
+		);
+		$this->assertStringContainsString(
+			$url . ' (core/html)',
+			(string) $this->processor->get_failed_media_error_message()
+		);
+	}
+
+	/**
+	 * Verifies that an inline <img> failure inside a paragraph names the block.
+	 */
+	public function test_failed_media_message_names_the_paragraph_block(): void {
+		// ARRANGE: A core/paragraph block with an inline <img> that will fail.
+		$url     = 'https://source.example.com/broken-inline.jpg';
+		$content = '<!-- wp:paragraph --><p>Photo <img src="' . $url . '"/></p>'
+			. '<!-- /wp:paragraph -->';
+
+		// ACT: Process the content with the download forced to fail.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The inner-HTML failure is attributed to the paragraph block.
+		$this->assertSame(
+			array( $url => 'core/paragraph' ),
+			$this->processor->get_failed_media()
+		);
+		$this->assertStringContainsString(
+			$url . ' (core/paragraph)',
+			(string) $this->processor->get_failed_media_error_message()
+		);
+	}
+
+	/**
+	 * Verifies that classic (non-block) content renders a bare URL, no block.
+	 */
+	public function test_failed_media_message_leaves_classic_content_unlabeled(): void {
+		// ARRANGE: Classic (non-block) content with an <img> that will fail.
+		$url     = 'https://source.example.com/broken-classic.jpg';
+		$content = '<p>Photo <img src="' . $url . '"/></p>';
+
+		// ACT: Process the content with the download forced to fail.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: No block name is recorded and the URL renders without parens.
+		$this->assertSame(
+			array( $url => '' ),
+			$this->processor->get_failed_media()
+		);
+		$message = (string) $this->processor->get_failed_media_error_message();
+		$this->assertStringContainsString( $url, $message );
+		$this->assertStringNotContainsString( $url . ' (', $message );
+	}
+
+	/**
+	 * Verifies that the message lists each failed URL with its own block name.
+	 */
+	public function test_failed_media_message_lists_each_url_with_its_block(): void {
+		// ARRANGE: An image block and a gallery block, both failing to download.
+		$image_url   = 'https://source.example.com/a.jpg';
+		$gallery_url = 'https://source.example.com/b.jpg';
+		$content     = '<!-- wp:image {"url":"' . $image_url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $image_url . '"/></figure>'
+			. '<!-- /wp:image -->'
+			. '<!-- wp:gallery {"images":[{"url":"' . $gallery_url . '"}]} -->'
+			. '<figure class="wp-block-gallery"><img src="' . $gallery_url . '"/></figure>'
+			. '<!-- /wp:gallery -->';
+
+		// ACT: Process the content with both downloads forced to fail.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: Each URL is followed by its originating block, comma-joined.
+		$this->assertSame(
+			'Import failed: 2 media file(s) could not be downloaded: '
+				. $image_url . ' (core/image), '
+				. $gallery_url . ' (core/gallery)',
+			$this->processor->get_failed_media_error_message()
+		);
+	}
+
+	/**
+	 * Verifies that malformed markup inside a block labels the unprocessable
+	 * message with the originating block name.
+	 */
+	public function test_unprocessable_media_message_names_the_block(): void {
+		// ARRANGE: A core/html block whose unclosed src quote the HTML API
+		// cannot parse, leaving a source-domain URL for the regex to catch.
+		$url     = 'https://source.example.com/malformed.jpg';
+		$content = '<!-- wp:html --><img src="' . $url . '<!-- /wp:html -->';
+
+		// ACT: Process the block content.
+		$this->processor->process_content( $content, 'https://source.example.com' );
+
+		// ASSERT: The unprocessable URL is attributed to the core/html block.
+		$this->assertSame(
+			array( $url => 'core/html' ),
+			$this->processor->get_unprocessable_media()
+		);
+		$this->assertStringContainsString(
+			$url . ' (core/html)',
+			(string) $this->processor->get_unprocessable_media_error_message()
+		);
+	}
+
+	/**
+	 * Verifies that malformed markup in classic content renders a bare URL in
+	 * the unprocessable message.
+	 */
+	public function test_unprocessable_media_message_leaves_classic_unlabeled(): void {
+		// ARRANGE: Classic (non-block) content with an unclosed src quote.
+		$url     = 'https://source.example.com/classic-malformed.jpg';
+		$content = '<img src="' . $url;
+
+		// ACT: Process the classic content.
+		$this->processor->process_content( $content, 'https://source.example.com' );
+
+		// ASSERT: No block name is recorded and the URL renders without parens.
+		$this->assertSame(
+			array( $url => '' ),
+			$this->processor->get_unprocessable_media()
+		);
+		$message = (string) $this->processor->get_unprocessable_media_error_message();
+		$this->assertStringContainsString( $url, $message );
+		$this->assertStringNotContainsString( $url . ' (', $message );
+	}
+
+	/**
+	 * Processes content with every source-domain download forced to fail.
+	 *
+	 * @param string $content Block or classic content to process.
+	 */
+	private function process_with_all_downloads_failing( string $content ): void {
+		$fail_all = static function ( $preempt, array $args, string $url ) {
+			unset( $args );
+			return str_contains( $url, 'source.example.com' )
+				? new WP_Error( 'http_request_failed', 'forced failure for test' )
+				: $preempt;
+		};
+		add_filter( 'pre_http_request', $fail_all, 5, 3 );
+
+		try {
+			$this->processor->process_content(
+				$content,
+				'https://source.example.com'
+			);
+		} finally {
+			remove_filter( 'pre_http_request', $fail_all, 5 );
+		}
 	}
 }

@@ -324,7 +324,9 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 		$this->assertSame( $before, $this->get_attachment_count() );
 		$attrs = $this->block_attrs( $result, 'core/file' );
 		$this->assertSame( $source_id, $attrs['id'] );
-		$this->assertContains( $href, $this->processor->get_failed_media() );
+		$failed = $this->processor->get_failed_media();
+		$this->assertArrayHasKey( $href, $failed );
+		$this->assertSame( 'core/file', $failed[ $href ] );
 	}
 
 	/**

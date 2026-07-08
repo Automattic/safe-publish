@@ -49,7 +49,7 @@ class Error_Handling_Test extends Source_Posts_API_Test_Base {
 		// ASSERT: The failed URL is tracked so the import service can fail the import.
 		$this->assertSame(
 			array( 'https://example.com/nonexistent-404.jpg' ),
-			$this->content_media_processor->get_failed_media(),
+			array_keys( $this->content_media_processor->get_failed_media() ),
 			'Failed image URL should be recorded for the import service to act on'
 		);
 
@@ -178,7 +178,7 @@ class Error_Handling_Test extends Source_Posts_API_Test_Base {
 		// ASSERT: The failed URL is tracked so the import service can fail the import.
 		$this->assertSame(
 			array( 'https://example.com/server-error.jpg' ),
-			$this->content_media_processor->get_failed_media(),
+			array_keys( $this->content_media_processor->get_failed_media() ),
 			'Failed image URL should be recorded for the import service to act on'
 		);
 
@@ -233,7 +233,7 @@ class Error_Handling_Test extends Source_Posts_API_Test_Base {
 			// ASSERT: The failed URL is tracked so the import service can fail the import.
 			$this->assertSame(
 				array( 'https://example.com/network-timeout.jpg' ),
-				$this->content_media_processor->get_failed_media(),
+				array_keys( $this->content_media_processor->get_failed_media() ),
 				'Failed image URL should be recorded for the import service to act on'
 			);
 
@@ -308,7 +308,7 @@ class Error_Handling_Test extends Source_Posts_API_Test_Base {
 			// ASSERT: The failed URL is tracked so the import service can fail the import.
 			$this->assertSame(
 				array( 'https://example.com/trigger-sideload-error.jpg' ),
-				$this->content_media_processor->get_failed_media(),
+				array_keys( $this->content_media_processor->get_failed_media() ),
 				'Failed image URL should be recorded for the import service to act on'
 			);
 
@@ -349,7 +349,7 @@ class Error_Handling_Test extends Source_Posts_API_Test_Base {
 		// ASSERT: The failed srcset URL is tracked so the import service can abort.
 		$this->assertSame(
 			array( 'https://example.com/nonexistent-2x.jpg' ),
-			$this->content_media_processor->get_failed_media(),
+			array_keys( $this->content_media_processor->get_failed_media() ),
 			'Failed srcset URL must be recorded in failed_media'
 		);
 
@@ -375,7 +375,7 @@ class Error_Handling_Test extends Source_Posts_API_Test_Base {
 		// ASSERT: The failed video URL is tracked so the import service can abort.
 		$this->assertSame(
 			array( 'https://example.com/nonexistent-clip.mp4' ),
-			$this->content_media_processor->get_failed_media(),
+			array_keys( $this->content_media_processor->get_failed_media() ),
 			'Failed video src URL must be recorded in failed_media'
 		);
 	}
@@ -396,7 +396,7 @@ class Error_Handling_Test extends Source_Posts_API_Test_Base {
 		$this->content_media_processor->process_content( $content, $source_site_url );
 
 		// ASSERT: The failed poster URL is tracked.
-		$this->assertContains(
+		$this->assertArrayHasKey(
 			'https://example.com/nonexistent-poster.jpg',
 			$this->content_media_processor->get_failed_media(),
 			'Failed video poster URL must be recorded in failed_media'
@@ -420,7 +420,7 @@ class Error_Handling_Test extends Source_Posts_API_Test_Base {
 		// ASSERT: The failed audio URL is tracked so the import service can abort.
 		$this->assertSame(
 			array( 'https://example.com/nonexistent-track.mp3' ),
-			$this->content_media_processor->get_failed_media(),
+			array_keys( $this->content_media_processor->get_failed_media() ),
 			'Failed audio src URL must be recorded in failed_media'
 		);
 	}
