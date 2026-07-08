@@ -480,8 +480,13 @@ class Content_Processor {
 	 * @return array Processed block.
 	 */
 	private function process_single_block( array $block, string $source_site_url ): array {
-		if ( empty( $block['blockName'] ) ) {
-			return $block;
+		// Top-level classic HTML parses to a null block name; core/freeform is
+		// its delimited equivalent.
+		if (
+			null === $block['blockName']
+			|| 'core/freeform' === $block['blockName']
+		) {
+			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		switch ( $block['blockName'] ) {
@@ -978,9 +983,10 @@ class Content_Processor {
 	}
 
 	/**
-	 * Processes block innerHTML and innerContent for remaining media URLs (e.g.
-	 * <a href> wrapping a media element) that block-specific handling did not
-	 * cover.
+	 * Rewrites media and file links in a block's innerHTML and innerContent.
+	 *
+	 * Both are processed because serialize_blocks() rebuilds the body from
+	 * innerContent, so an innerHTML-only rewrite would be discarded.
 	 *
 	 * @param array  $block           Block data.
 	 * @param string $source_site_url Source site URL.
