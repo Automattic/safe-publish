@@ -107,11 +107,11 @@ register_post_type( 'documentation', [
 
 ## ACF and Secure Custom Fields Support
 
-ACF and Secure Custom Fields (SCF) store field values in regular post meta, but Safe Publish reads only the core REST API `meta` object. ACF's built-in **Show in REST API** setting exposes fields under a separate top-level `acf` object, which Safe Publish does not import.
+ACF and Secure Custom Fields (SCF) store field values in regular post meta, but Safe Publish reads only the core REST API `meta` object — not the separate top-level `acf` object those plugins expose.
 
-To migrate ACF or SCF values, register the field value keys with `register_post_meta()` and `show_in_rest => true` on the source site. Prefer registering only the field keys that should migrate, with the correct REST type and schema for each field. Registering every ACF/SCF or underscored meta key can expose internal or sensitive values in REST responses.
+The recommended way to migrate ACF/SCF values, including repeater, group, and flexible-content fields, is the filter-based recipe in [Migrating ACF and Secure Custom Fields Values](acf-scf.md).
 
-ACF and SCF also store a companion reference key for each field, such as `_hero_title` for `hero_title`. Migrate the companion key when the destination editor needs ACF/SCF to recognize the imported value.
+For a few scalar fields, registering the value keys with `register_post_meta()` and `show_in_rest => true` on the source remains a valid lightweight option. Register only the keys that should migrate — exposing every ACF/SCF or underscored key can leak internal values into REST responses — plus the companion reference key (such as `_hero_title` for `hero_title`) when the destination editor must recognize the value:
 
 ```php
 add_action( 'init', function() {
@@ -129,7 +129,7 @@ add_action( 'init', function() {
 } );
 ```
 
-The destination does not need field registration to store the imported meta. However, the editor only renders the values as ACF/SCF controls when ACF or SCF is active on the destination and the destination has matching field definitions with the same field keys. Safe Publish does not currently create or sync field groups.
+Either way, the destination stores the meta without field registration, but renders ACF/SCF controls only when ACF or SCF is active there with matching field definitions. Safe Publish does not create or sync field groups.
 
 ## Troubleshooting
 
