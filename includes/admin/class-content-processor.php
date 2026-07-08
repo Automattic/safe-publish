@@ -480,8 +480,13 @@ class Content_Processor {
 	 * @return array Processed block.
 	 */
 	private function process_single_block( array $block, string $source_site_url ): array {
-		if ( empty( $block['blockName'] ) ) {
-			return $block;
+		// Top-level classic HTML parses to a null block name; core/freeform
+		// serializes from innerContent, so rewrite innerHTML and innerContent.
+		if (
+			null === $block['blockName']
+			|| 'core/freeform' === $block['blockName']
+		) {
+			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		switch ( $block['blockName'] ) {

@@ -1425,4 +1425,119 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'Skipped third-party URL in attrs must not be recorded as a failure'
 		);
 	}
+
+	/**
+	 * Verifies that media in top-level classic HTML mixed with a block is
+	 * imported and rewritten to a local upload.
+	 *
+	 * A Classic block stores its HTML without delimiters, so it parses to a
+	 * null block name that was previously skipped — leaving the media uncopied
+	 * while the URL was still host-swapped to the destination.
+	 */
+	public function test_process_top_level_classic_media_mixed_with_block_is_imported(): void {
+		// ARRANGE: a block followed by top-level classic HTML with a
+		// source-site image.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/classic-photo.jpg';
+		$content         = '<!-- wp:paragraph --><p>Intro.</p>'
+			. '<!-- /wp:paragraph -->'
+			. '<p>Classic <img src="' . $image_url . '" alt="A photo"></p>';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: process the mixed document through the Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: exactly one attachment was created for the classic image.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Classic media should be sideloaded as one attachment'
+		);
+
+		// ASSERT: the source URL is replaced by a local upload URL.
+		$this->assertStringNotContainsString(
+			$image_url,
+			$processed,
+			'Source image URL should be replaced'
+		);
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Local upload URL should be present'
+		);
+
+		// ASSERT: the block and the classic text around the image survive.
+		$this->assertStringContainsString(
+			'<!-- wp:paragraph -->',
+			$processed,
+			'The accompanying block should be preserved'
+		);
+		$this->assertStringContainsString(
+			'<p>Classic ',
+			$processed,
+			'Classic markup around the image should be preserved'
+		);
+
+		// ASSERT: nothing recorded as failed or unprocessable.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+		$this->assertSame(
+			array(),
+			$this->processor->get_unprocessable_media(),
+			'No unprocessable media should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that media in a delimited core/freeform block is imported and
+	 * its URL rewritten to the local upload in the serialized output.
+	 *
+	 * A freeform block serializes its body from innerContent, so rewriting
+	 * only innerHTML would be discarded — leaving a host-swapped URL pointing
+	 * at a file that was never copied.
+	 */
+	public function test_process_delimited_freeform_media_is_imported_and_rewritten(): void {
+		// ARRANGE: a delimited core/freeform block with a source-site image.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/freeform-photo.jpg';
+		$content         = '<!-- wp:freeform -->'
+			. '<img src="' . $image_url . '" alt="A photo">'
+			. '<!-- /wp:freeform -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: process the freeform block through the Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: exactly one attachment was created.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Freeform media should be sideloaded as one attachment'
+		);
+
+		// ASSERT: the upload URL survives serialization from innerContent, so
+		// the host-swapped source path is not what remains.
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Rewritten upload URL must survive serialization'
+		);
+		$this->assertStringNotContainsString(
+			get_site_url() . '/freeform-photo.jpg',
+			$processed,
+			'Output must not keep the host-swapped source path'
+		);
+
+		// ASSERT: no media failures were recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
 }
