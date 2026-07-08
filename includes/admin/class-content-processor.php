@@ -544,24 +544,25 @@ class Content_Processor {
 			case 'core-embed/vimeo':
 			case 'core-embed/twitter':
 			case 'core-embed/instagram':
-				$block = $this->process_embed_block( $block, $source_site_url );
+			case 'core/paragraph':
+			case 'core/heading':
+			case 'core/list':
+			case 'core/quote':
+				// These blocks carry media only in their inner content.
+				$block = $this->process_block_inner_html(
+					$block,
+					$source_site_url
+				);
 				break;
 
 			case 'core/html':
 				$block = $this->process_html_block( $block, $source_site_url );
 				break;
 
-			case 'core/paragraph':
-			case 'core/heading':
-			case 'core/list':
-			case 'core/quote':
-				$block = $this->process_text_block( $block, $source_site_url );
-				break;
-
 			default:
 				// Process URL values in block attrs for custom/third-party
-				// blocks, then fall through to process innerHTML for media/links.
-				// Skip blocks whose URL attrs are page/term links (handled by
+				// blocks, then the inner markup for media/links. Skip
+				// blocks whose URL attrs are page/term links (handled by
 				// process_block_id_references) — sideloading them as media
 				// would download HTML and abort the import on a false failure.
 				if (
@@ -576,14 +577,10 @@ class Content_Processor {
 					);
 				}
 
-				// Process innerHTML for any blocks that might contain media or
-				// links.
-				if ( isset( $block['innerHTML'] ) && '' !== $block['innerHTML'] ) {
-					$block['innerHTML'] = $this->content_media_processor->process_content(
-						$block['innerHTML'],
-						$source_site_url
-					);
-				}
+				$block = $this->process_block_inner_html(
+					$block,
+					$source_site_url
+				);
 				break;
 		}
 
@@ -929,23 +926,6 @@ class Content_Processor {
 	}
 
 	/**
-	 * Processes embed block content.
-	 *
-	 * @param array  $block           Embed block data.
-	 * @param string $source_site_url Source site URL.
-	 * @return array Processed block.
-	 */
-	private function process_embed_block( array $block, string $source_site_url ): array {
-		// Most embed blocks work with URLs that don't need media import,
-		// but we can process the innerHTML for any embedded media.
-		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = $this->content_media_processor->process_content( $block['innerHTML'], $source_site_url );
-		}
-
-		return $block;
-	}
-
-	/**
 	 * Processes HTML block to import media.
 	 *
 	 * @param array  $block           HTML block data.
@@ -960,26 +940,7 @@ class Content_Processor {
 			);
 		}
 
-		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = $this->content_media_processor->process_content( $block['innerHTML'], $source_site_url );
-		}
-
-		return $block;
-	}
-
-	/**
-	 * Processes text blocks (paragraph, heading, list, quote) to import media.
-	 *
-	 * @param array  $block           Text block data.
-	 * @param string $source_site_url Source site URL.
-	 * @return array Processed block.
-	 */
-	private function process_text_block( array $block, string $source_site_url ): array {
-		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = $this->content_media_processor->process_content( $block['innerHTML'], $source_site_url );
-		}
-
-		return $block;
+		return $this->process_block_inner_html( $block, $source_site_url );
 	}
 
 	/**

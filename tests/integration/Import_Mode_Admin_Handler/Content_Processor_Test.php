@@ -1540,4 +1540,198 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'No media failures should be recorded'
 		);
 	}
+
+	/**
+	 * Verifies that media in the inner HTML of a custom block (not in its
+	 * attrs) is imported and its URL rewritten to the local upload.
+	 *
+	 * Custom blocks fall through to the default handler, which serializes from
+	 * innerContent, so rewriting only innerHTML would be discarded — leaving a
+	 * host-swapped URL pointing at a file that was never copied.
+	 */
+	public function test_process_custom_block_media_in_inner_html_is_rewritten(): void {
+		// ARRANGE: a custom block with a source-site image only in innerHTML.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/card.jpg';
+		$content         = '<!-- wp:my-plugin/card -->'
+			. '<div class="wp-block-my-plugin-card">'
+			. '<img src="' . $image_url . '" alt="Card"/>'
+			. '</div>'
+			. '<!-- /wp:my-plugin/card -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: process the custom block through the Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: exactly one attachment was created.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Custom-block innerHTML media should be sideloaded as one attachment'
+		);
+
+		// ASSERT: the upload URL survives serialization from innerContent, so
+		// the host-swapped source path is not what remains.
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Rewritten upload URL must survive serialization'
+		);
+		$this->assertStringNotContainsString(
+			get_site_url() . '/card.jpg',
+			$processed,
+			'Output must not keep the host-swapped source path'
+		);
+		$this->assertStringNotContainsString(
+			$image_url,
+			$processed,
+			'Source image URL should be replaced'
+		);
+
+		// ASSERT: no media failures were recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that media inline in a text block (paragraph, heading, list,
+	 * quote) is imported and its URL rewritten to the local upload.
+	 *
+	 * These blocks serialize from innerContent, so rewriting only innerHTML
+	 * would be discarded — leaving a host-swapped URL for a file that was
+	 * never copied.
+	 */
+	public function test_process_paragraph_inline_media_is_rewritten(): void {
+		// ARRANGE: a paragraph block with an inline source-site image.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/inline.jpg';
+		$content         = '<!-- wp:paragraph --><p>Text '
+			. '<img src="' . $image_url . '" alt="Inline"/></p>'
+			. '<!-- /wp:paragraph -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: process the paragraph through the Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: exactly one attachment was created.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Inline paragraph media should be sideloaded as one attachment'
+		);
+
+		// ASSERT: the upload URL survives serialization from innerContent.
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Rewritten upload URL must survive serialization'
+		);
+		$this->assertStringNotContainsString(
+			get_site_url() . '/inline.jpg',
+			$processed,
+			'Output must not keep the host-swapped source path'
+		);
+
+		// ASSERT: no media failures were recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that media in a core/html block's inner HTML is imported and
+	 * its URL rewritten to the local upload.
+	 */
+	public function test_process_html_block_media_is_rewritten(): void {
+		// ARRANGE: a core/html block containing a source-site image.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/htmlblock.jpg';
+		$content         = '<!-- wp:html -->'
+			. '<img src="' . $image_url . '" alt="H"/>'
+			. '<!-- /wp:html -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: process the html block through the Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: exactly one attachment was created.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'HTML-block media should be sideloaded as one attachment'
+		);
+
+		// ASSERT: the upload URL survives serialization from innerContent.
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Rewritten upload URL must survive serialization'
+		);
+		$this->assertStringNotContainsString(
+			get_site_url() . '/htmlblock.jpg',
+			$processed,
+			'Output must not keep the host-swapped source path'
+		);
+
+		// ASSERT: no media failures were recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
+
+	/**
+	 * Verifies that source media embedded in a core/embed block's inner HTML
+	 * is imported and its URL rewritten to the local upload.
+	 */
+	public function test_process_embed_block_media_is_rewritten(): void {
+		// ARRANGE: an embed block whose innerHTML carries a source-site image.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/embed-thumb.jpg';
+		$content         = '<!-- wp:embed -->'
+			. '<figure class="wp-block-embed">'
+			. '<img src="' . $image_url . '" alt="Preview"/>'
+			. '</figure>'
+			. '<!-- /wp:embed -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: process the embed block through the Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: exactly one attachment was created.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Embed-block media should be sideloaded as one attachment'
+		);
+
+		// ASSERT: the upload URL survives serialization from innerContent.
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Rewritten upload URL must survive serialization'
+		);
+		$this->assertStringNotContainsString(
+			get_site_url() . '/embed-thumb.jpg',
+			$processed,
+			'Output must not keep the host-swapped source path'
+		);
+
+		// ASSERT: no media failures were recorded.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'No media failures should be recorded'
+		);
+	}
 }
