@@ -259,6 +259,22 @@ class Auth_Logger extends Logger {
 	}
 
 	/**
+	 * Logs a cached auth-status probe that did not authorize.
+	 *
+	 * @param string $status Probe status (unauthorized or unreachable).
+	 * @param int    $code   HTTP status code, or 0 if unavailable.
+	 */
+	public function connection_probe_failed( string $status, int $code ): void {
+		$this->log_failure(
+			Log_Events::CONNECTION_PROBE_FAILED,
+			array(
+				'probe_status' => $status,
+				'code'         => $code,
+			)
+		);
+	}
+
+	/**
 	 * Logs that capability-based authentication context was set up.
 	 *
 	 * @param string $route    REST route of the request.
