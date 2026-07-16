@@ -88,6 +88,13 @@ class Media_Importer {
 			$media_url = rtrim( $source_site_url, '/' ) . '/' . ltrim( $media_url, '/' );
 		}
 
+		// A URL already under this site's uploads directory is local media a
+		// previous pass imported, not a source asset. Leave it unchanged. See
+		// is_local_media_url() for why re-importing it corrupts the block.
+		if ( $this->is_local_media_url( $media_url ) ) {
+			return null;
+		}
+
 		// Skip media that originates from a third-party domain — it is an
 		// external resource the source site doesn't own and should not be
 		// sideloaded. Return null so callers can distinguish this from a
@@ -180,6 +187,13 @@ class Media_Importer {
 		// Make URL absolute if it's relative.
 		if ( ! filter_var( $media_url, FILTER_VALIDATE_URL ) ) {
 			$media_url = rtrim( $source_site_url, '/' ) . '/' . ltrim( $media_url, '/' );
+		}
+
+		// A URL already under this site's uploads directory is local media a
+		// previous pass imported, not a source asset. Leave it unchanged. See
+		// is_local_media_url() for why re-importing it corrupts the block.
+		if ( $this->is_local_media_url( $media_url ) ) {
+			return null;
 		}
 
 		// Skip media that originates from a third-party domain — it is an
@@ -595,6 +609,41 @@ class Media_Importer {
 			require_once ABSPATH . 'wp-admin/includes/file.php';
 			require_once ABSPATH . 'wp-admin/includes/image.php';
 		}
+	}
+
+	/**
+	 * Determines whether a URL already points at this site's uploads directory.
+	 *
+	 * Such a URL is local media an earlier processing pass imported, not a
+	 * source asset to sideload. This matters when the source and destination
+	 * share a hostname (same-domain multisite, or same host on a different
+	 * port), because the third-party-domain guard compares hostnames only and
+	 * would otherwise treat an already-localized URL as source-owned. A block
+	 * that carries the same URL in both its attributes and inner HTML — such as
+	 * core/cover — has its attribute rewritten to the local URL first; without
+	 * this check the inner-HTML pass re-imports that local URL, duplicating the
+	 * attachment and leaving the two references pointing at different files,
+	 * which fails block validation on the destination.
+	 *
+	 * @param string $media_url Absolute media URL to test.
+	 * @return bool True when the URL is under the local uploads base URL.
+	 */
+	private function is_local_media_url( string $media_url ): bool {
+		$uploads = wp_get_upload_dir();
+
+		if ( ! empty( $uploads['error'] ) || ! isset( $uploads['baseurl'] ) ) {
+			return false;
+		}
+
+		$base = untrailingslashit( strtok( $uploads['baseurl'], '?' ) );
+
+		if ( '' === $base ) {
+			return false;
+		}
+
+		$candidate = strtok( $media_url, '?' );
+
+		return $candidate === $base || str_starts_with( $candidate, $base . '/' );
 	}
 
 	/**

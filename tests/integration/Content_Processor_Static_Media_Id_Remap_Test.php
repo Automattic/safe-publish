@@ -330,6 +330,79 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 	}
 
 	/**
+	 * Verifies that a core/cover block imports its background exactly once and
+	 * keeps its url attr and inner img src consistent when the source shares the
+	 * destination's hostname.
+	 *
+	 * Reproduces the block-recovery bug: the attribute pass imports the source
+	 * background and rewrites the inner img src to the local upload URL, then the
+	 * inner-HTML pass re-imports that already-local URL because the third-party
+	 * guard compares hostnames only. That duplicated the attachment and left the
+	 * url attr and img src pointing at different files, failing block validation.
+	 */
+	public function test_cover_same_host_imports_once_and_stays_consistent(): void {
+		// ARRANGE: a source sharing the destination hostname (same-domain
+		// multisite, or same host on a different port), with a cover background
+		// served from a theme path so the attribute pass imports it.
+		$origin      = $this->origin( get_site_url() );
+		$source_site = $origin;
+		$url         = $origin . '/wp-content/themes/example/assets/cover.jpg';
+		$content     = $this->cover_block( $url, 900010 );
+
+		$serve = function ( $preempt, array $args, string $requested ) use ( $origin ) {
+			unset( $args );
+			return false === $preempt && str_starts_with( $requested, $origin )
+				? $this->get_fixture_response( 'test-1x1.jpg', 'image/jpeg' )
+				: $preempt;
+		};
+		add_filter( 'pre_http_request', $serve, 5, 3 );
+		$before = $this->get_attachment_count();
+
+		try {
+			// ACT: run the full processing pipeline.
+			$result = (string) $this->processor->process_content( $content, $source_site );
+		} finally {
+			remove_filter( 'pre_http_request', $serve, 5 );
+		}
+
+		// ASSERT: exactly one attachment, and the url attr and img src both
+		// resolve to it — no split-brain that trips block recovery.
+		$this->assertSame( $before + 1, $this->get_attachment_count(), 'Cover background must import exactly once' );
+		$attrs   = $this->block_attrs( $result, 'core/cover' );
+		$img_src = $this->first_media_src( $result );
+		$this->assertStringContainsString( 'wp-content/uploads', (string) $attrs['url'] );
+		$this->assertStringContainsString( 'wp-content/uploads', $img_src );
+		$this->assertSame( (string) $attrs['url'], $img_src, 'Cover url attr and inner img src must match' );
+		$this->assertSame(
+			$this->media_importer->get_attachment_id_from_url( (string) $attrs['url'] ),
+			$this->media_importer->get_attachment_id_from_url( $img_src ),
+			'url attr and img src must resolve to the same attachment'
+		);
+		$this->assertStringNotContainsString( $url, $result );
+		$this->assertSame( array(), $this->processor->get_failed_media() );
+	}
+
+	/**
+	 * Returns the scheme://host[:port] origin of a URL.
+	 *
+	 * @param string $url URL to reduce to its origin.
+	 * @return string Origin, or '' when the URL has no host.
+	 */
+	private function origin( string $url ): string {
+		$parts = wp_parse_url( $url );
+		$host  = $parts['host'] ?? '';
+
+		if ( '' === $host ) {
+			return '';
+		}
+
+		$scheme = $parts['scheme'] ?? 'http';
+		$port   = isset( $parts['port'] ) ? ':' . $parts['port'] : '';
+
+		return $scheme . '://' . $host . $port;
+	}
+
+	/**
 	 * Builds a core/cover block with an image background and matching id.
 	 *
 	 * @param string $url Background image url.
