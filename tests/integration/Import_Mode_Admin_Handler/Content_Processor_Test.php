@@ -1427,6 +1427,54 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a source-domain permalink stored in a custom block's attrs
+	 * is left unchanged and not recorded as a media failure.
+	 *
+	 * Custom blocks commonly store a post's own permalink in an attr (e.g. a
+	 * "postLink" holding https://source.example.com/?p=123). The generic attrs
+	 * walk must not sideload it: it is an HTML page, not a media file, and
+	 * downloading it fails and aborts the whole import.
+	 */
+	public function test_process_custom_block_skips_source_permalink_in_attrs(): void {
+		// ARRANGE: A custom block whose attr holds the source post permalink
+		// alongside a genuine source-domain image attr.
+		$source_site_url = 'https://source.example.com';
+		$post_permalink  = 'https://source.example.com/?p=123';
+		$image_url       = 'https://source.example.com/author.jpg';
+		$content         = '<!-- wp:my-plugin/group {"postLink":"' . $post_permalink . '","authorImage":"' . $image_url . '"} -->'
+			. '<div class="wp-block-my-plugin-group"></div>'
+			. '<!-- /wp:my-plugin/group -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Only the image was sideloaded, not the permalink.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Only the media attr should be sideloaded, not the permalink'
+		);
+
+		// ASSERT: The permalink survives as a link (host-swapped to the
+		// destination like any source link), not converted to an upload.
+		$this->assertStringContainsString(
+			'?p=123',
+			$processed,
+			'Permalink in attrs should remain a link, not become an upload'
+		);
+
+		// ASSERT: The permalink was not recorded as a media failure. Without
+		// the extension gate it downloads HTML, fails, and aborts the import.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'Source-domain permalink in attrs must not be recorded as a failure'
+		);
+	}
+
+	/**
 	 * Verifies that media in top-level classic HTML mixed with a block is
 	 * imported and rewritten to a local upload.
 	 *
