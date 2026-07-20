@@ -1428,7 +1428,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that a source-domain permalink stored in a custom block's attrs
-	 * is left unchanged and not recorded as a media failure.
+	 * is kept as a link and not recorded as a media failure.
 	 *
 	 * Custom blocks commonly store a post's own permalink in an attr (e.g. a
 	 * "postLink" holding https://source.example.com/?p=123). The generic attrs
