@@ -1157,10 +1157,8 @@ class Content_Processor {
 				$this->content_media_processor
 					->has_uploadable_file_extension( $value )
 			) {
-				// Only sideload attrs that look like a media file. Custom
-				// blocks often store post or page permalinks in attrs (e.g.
-				// a "postLink" holding https://example.com/?p=123); downloading
-				// those as media fails and aborts the whole import.
+				// Only sideload attrs that look like a media file. A non-media
+				// URL such as a permalink fails and aborts the import.
 				$attachment_id = $this->media_importer
 					->import_source_media_as_attachment( $value, $source_site_url );
 

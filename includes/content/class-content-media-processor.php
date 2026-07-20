@@ -414,8 +414,7 @@ class Content_Media_Processor {
 	 *
 	 * Used to distinguish downloadable file URLs from page links: WordPress
 	 * page URLs use extensionless pretty permalinks or query strings, while
-	 * media library files always have an extension. Public so the block-attr
-	 * walk in Content_Processor can apply the same media-vs-link test.
+	 * media library files always have an extension.
 	 *
 	 * @param string $url URL to inspect.
 	 * @return bool True if the extension maps to an allowed type.

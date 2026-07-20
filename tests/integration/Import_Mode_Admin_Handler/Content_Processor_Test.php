@@ -1457,8 +1457,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'Only the media attr should be sideloaded, not the permalink'
 		);
 
-		// ASSERT: The permalink survives as a link (host-swapped to the
-		// destination like any source link), not converted to an upload.
+		// ASSERT: The permalink survives as a link, not converted to an upload.
 		$this->assertStringContainsString(
 			'?p=123',
 			$processed,
