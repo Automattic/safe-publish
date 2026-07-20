@@ -206,7 +206,7 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 
 **Solutions**:
 
-1. **Understand the cause**: Yoast stores these under protected `_yoast_wpseo_*` meta keys, which WordPress core's REST API omits from the `meta` object. Safe Publish imports only the `meta` object, so the values never leave the source.
+1. **Understand the cause**: Yoast stores these under protected `_yoast_wpseo_*` meta keys, and WordPress core's REST API omits a meta key from the `meta` object unless it is registered with `show_in_rest`. Yoast registers only a few of these keys, so Safe Publish — which imports only the `meta` object — does not receive most of them by default.
 
 2. **Use the migration recipe**: Register the Yoast keys for REST on the **source** so they enter the `meta` object. See the [Yoast SEO recipe](extending/yoast.md). No destination-side code is needed for scalar keys.
 
