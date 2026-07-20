@@ -18,14 +18,14 @@ Pendo coordinates (for reference when doing the UI work):
 
 All events carry the global properties set in `Plugin::init()` — `plugin_version` and `sync_mode` — plus the VIP library's standard context (`is_vip_user`, `vip_org`, `vip_env`, `wp_version`, `environment_type`, `hosting_provider`, `is_multisite`, `mu_plugins_version`, `site_id`).
 
-| Event (`safe_publish_` prefix) | Trigger | Event-specific properties | Status |
-|---|---|---|---|
-| `single_import_completed` | End of single-import AJAX (`ajax_create_draft`) | `outcome` (`new`\|`updated`), `warning_count` | Live (registered in Pendo) |
-| `bulk_import_completed` | End of bulk-import AJAX (`ajax_bulk_import`) | `batch_size`, `successful`, `failed`, `has_failures` | Live in code, awaiting first receipt |
-| `import_item_failed` | Per-item error in `Post_Import_Service` | `error_code` (bounded enum), `session_type` (`single`\|`bulk`), `media_failure_count` (only for media errors) | Live in code, awaiting first receipt |
-| `rollback_performed` | Both rollback handlers, success and failure | `scope` (`session`\|`item`), `deleted_count`, `restored_count`, `failed_count`, `outcome` (`success`\|`partial`\|`failed`) | Live in code, awaiting first receipt |
-| `connection_test_completed` | End of test-connection AJAX (`ajax_test_connection`) | `outcome` (`authorized`\|`unauthorized`\|`unreachable`\|`url_unset`\|`unknown`) | **New — this change** |
-| `sync_mode_configured` | Sync-mode option first set or changed | `previous_mode`, `new_mode` (bounded enums), `is_first_configuration` (bool) | **New — this change** |
+| Event (`safe_publish_` prefix) | Trigger                                              | Event-specific properties                                                                                                  | Status                               |
+| ------------------------------ | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `single_import_completed`      | End of single-import AJAX (`ajax_create_draft`)      | `outcome` (`new`\|`updated`), `warning_count`                                                                              | Live (registered in Pendo)           |
+| `bulk_import_completed`        | End of bulk-import AJAX (`ajax_bulk_import`)         | `batch_size`, `successful`, `failed`, `has_failures`                                                                       | Live in code, awaiting first receipt |
+| `import_item_failed`           | Per-item error in `Post_Import_Service`              | `error_code` (bounded enum), `session_type` (`single`\|`bulk`), `media_failure_count` (only for media errors)              | Live in code, awaiting first receipt |
+| `rollback_performed`           | Both rollback handlers, success and failure          | `scope` (`session`\|`item`), `deleted_count`, `restored_count`, `failed_count`, `outcome` (`success`\|`partial`\|`failed`) | Live in code, awaiting first receipt |
+| `connection_test_completed`    | End of test-connection AJAX (`ajax_test_connection`) | `outcome` (`authorized`\|`unauthorized`\|`unreachable`\|`url_unset`\|`unknown`)                                            | **New — this change**                |
+| `sync_mode_configured`         | Sync-mode option first set or changed                | `previous_mode`, `new_mode` (bounded enums), `is_first_configuration` (bool)                                               | **New — this change**                |
 
 > A Track event only appears in Pendo after it has been received at least once. As of this writing only `safe_publish_single_import_completed` has registered; the other events surface automatically once real traffic produces them. There is nothing to pre-create.
 
@@ -108,11 +108,11 @@ This can run as a recurring Claude Code job (`/loop` or a scheduled routine) pos
 
 ## What's automatable vs. manual
 
-| Work | How |
-|---|---|
-| Backend events (this change: connection test, sync-mode) | Code — shipped |
-| Track events appearing in Pendo | Automatic on first receipt — nothing to do |
-| Export heartbeat event | Code — **held for human approval** (serving path) |
-| Frontend tag fixes (A1–A3) | Manual, Pendo UI |
-| Product Area, Segments, Guides (C1–C3) | Manual, Pendo UI |
-| Usage reporting / digests (D) | Automatable on top of the read-only Pendo MCP |
+| Work                                                     | How                                               |
+| -------------------------------------------------------- | ------------------------------------------------- |
+| Backend events (this change: connection test, sync-mode) | Code — shipped                                    |
+| Track events appearing in Pendo                          | Automatic on first receipt — nothing to do        |
+| Export heartbeat event                                   | Code — **held for human approval** (serving path) |
+| Frontend tag fixes (A1–A3)                               | Manual, Pendo UI                                  |
+| Product Area, Segments, Guides (C1–C3)                   | Manual, Pendo UI                                  |
+| Usage reporting / digests (D)                            | Automatable on top of the read-only Pendo MCP     |
