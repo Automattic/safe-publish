@@ -88,9 +88,7 @@ class Media_Importer {
 			$media_url = rtrim( $source_site_url, '/' ) . '/' . ltrim( $media_url, '/' );
 		}
 
-		// A URL already under this site's uploads directory is local media a
-		// previous pass imported, not a source asset. Leave it unchanged. See
-		// is_local_media_url() for why re-importing it corrupts the block.
+		// Already localized by a previous pass; skip to avoid duplicating it.
 		if ( $this->is_local_media_url( $media_url ) ) {
 			return null;
 		}
@@ -189,9 +187,7 @@ class Media_Importer {
 			$media_url = rtrim( $source_site_url, '/' ) . '/' . ltrim( $media_url, '/' );
 		}
 
-		// A URL already under this site's uploads directory is local media a
-		// previous pass imported, not a source asset. Leave it unchanged. See
-		// is_local_media_url() for why re-importing it corrupts the block.
+		// Already localized by a previous pass; skip to avoid duplicating it.
 		if ( $this->is_local_media_url( $media_url ) ) {
 			return null;
 		}
@@ -614,16 +610,13 @@ class Media_Importer {
 	/**
 	 * Determines whether a URL already points at this site's uploads directory.
 	 *
-	 * Such a URL is local media an earlier processing pass imported, not a
-	 * source asset to sideload. This matters when the source and destination
-	 * share a hostname (same-domain multisite, or same host on a different
-	 * port), because the third-party-domain guard compares hostnames only and
-	 * would otherwise treat an already-localized URL as source-owned. A block
-	 * that carries the same URL in both its attributes and inner HTML — such as
-	 * core/cover — has its attribute rewritten to the local URL first; without
-	 * this check the inner-HTML pass re-imports that local URL, duplicating the
-	 * attachment and leaving the two references pointing at different files,
-	 * which fails block validation on the destination.
+	 * Matches the full uploads base URL, not just its path, so media on the
+	 * same host at a different port stays remote and is still imported — a
+	 * distinction the hostname-only third-party guard cannot make. Without it,
+	 * a same-host migration re-imports a URL already rewritten to the
+	 * destination and duplicates the attachment. Blocks that repeat the URL
+	 * in an attribute and their inner HTML (e.g. core/cover) then fail block
+	 * validation.
 	 *
 	 * @param string $media_url Absolute media URL to test.
 	 * @return bool True when the URL is under the local uploads base URL.

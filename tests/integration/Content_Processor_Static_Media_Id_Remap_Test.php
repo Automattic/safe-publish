@@ -383,6 +383,47 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 	}
 
 	/**
+	 * Verifies that media on the destination host but a different port is still
+	 * imported, not mistaken for already-local media and skipped.
+	 *
+	 * Guards the full-URL match in is_local_media_url: a path-only check would
+	 * treat this uploads-shaped source URL as local and leave it unrewritten.
+	 */
+	public function test_same_host_different_port_media_is_imported_not_skipped(): void {
+		// ARRANGE: a cover background on the destination host but a different
+		// port, under an uploads-shaped path that a path-only check would
+		// misread as already-local.
+		$dest_origin = $this->origin( get_site_url() );
+		$source_site = $this->with_other_port( $dest_origin );
+		$url         = $source_site . '/wp-content/uploads/2020/01/photo.jpg';
+		$content     = $this->cover_block( $url, 900011 );
+
+		$serve = function ( $preempt, array $args, string $requested ) use ( $source_site ) {
+			unset( $args );
+			return false === $preempt && str_starts_with( $requested, $source_site )
+				? $this->get_fixture_response( 'test-1x1.jpg', 'image/jpeg' )
+				: $preempt;
+		};
+		add_filter( 'pre_http_request', $serve, 5, 3 );
+		$before = $this->get_attachment_count();
+
+		try {
+			// ACT: run the full processing pipeline.
+			$result = (string) $this->processor->process_content( $content, $source_site );
+		} finally {
+			remove_filter( 'pre_http_request', $serve, 5 );
+		}
+
+		// ASSERT: the different-port media was imported and localized to this
+		// site's uploads, not left pointing at the source.
+		$this->assertSame( $before + 1, $this->get_attachment_count(), 'Different-port media must be imported' );
+		$attrs = $this->block_attrs( $result, 'core/cover' );
+		$this->assertStringContainsString( $dest_origin . '/wp-content/uploads', (string) $attrs['url'] );
+		$this->assertStringNotContainsString( $url, $result );
+		$this->assertSame( array(), $this->processor->get_failed_media() );
+	}
+
+	/**
 	 * Returns the scheme://host[:port] origin of a URL.
 	 *
 	 * @param string $url URL to reduce to its origin.
@@ -400,6 +441,22 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 		$port   = isset( $parts['port'] ) ? ':' . $parts['port'] : '';
 
 		return $scheme . '://' . $host . $port;
+	}
+
+	/**
+	 * Returns the origin with its port shifted, to model a source that shares
+	 * the destination host but answers on a different port.
+	 *
+	 * @param string $origin scheme://host[:port] origin.
+	 * @return string Origin on a different port.
+	 */
+	private function with_other_port( string $origin ): string {
+		$parts  = wp_parse_url( $origin );
+		$scheme = $parts['scheme'] ?? 'http';
+		$host   = $parts['host'] ?? 'localhost';
+		$port   = (int) ( $parts['port'] ?? 80 );
+
+		return $scheme . '://' . $host . ':' . ( $port + 1 );
 	}
 
 	/**
