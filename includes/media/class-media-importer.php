@@ -611,12 +611,10 @@ class Media_Importer {
 	 * Determines whether a URL already points at this site's uploads directory.
 	 *
 	 * Matches the full uploads base URL, not just its path, so media on the
-	 * same host at a different port stays remote and is still imported — a
-	 * distinction the hostname-only third-party guard cannot make. Without it,
-	 * a same-host migration re-imports a URL already rewritten to the
-	 * destination and duplicates the attachment. Blocks that repeat the URL
-	 * in an attribute and their inner HTML (e.g. core/cover) then fail block
-	 * validation.
+	 * same host but a different port stays remote and is still imported — a
+	 * distinction the hostname-only third-party guard cannot make. Skipping
+	 * such an already-localized URL keeps a same-host migration from
+	 * re-importing it and duplicating the attachment.
 	 *
 	 * @param string $media_url Absolute media URL to test.
 	 * @return bool True when the URL is under the local uploads base URL.
