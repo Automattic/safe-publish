@@ -88,6 +88,11 @@ class Media_Importer {
 			$media_url = rtrim( $source_site_url, '/' ) . '/' . ltrim( $media_url, '/' );
 		}
 
+		// Already localized by a previous pass; skip to avoid duplicating it.
+		if ( $this->is_local_media_url( $media_url ) ) {
+			return null;
+		}
+
 		// Skip media that originates from a third-party domain — it is an
 		// external resource the source site doesn't own and should not be
 		// sideloaded. Return null so callers can distinguish this from a
@@ -180,6 +185,11 @@ class Media_Importer {
 		// Make URL absolute if it's relative.
 		if ( ! filter_var( $media_url, FILTER_VALIDATE_URL ) ) {
 			$media_url = rtrim( $source_site_url, '/' ) . '/' . ltrim( $media_url, '/' );
+		}
+
+		// Already localized by a previous pass; skip to avoid duplicating it.
+		if ( $this->is_local_media_url( $media_url ) ) {
+			return null;
 		}
 
 		// Skip media that originates from a third-party domain — it is an
@@ -595,6 +605,36 @@ class Media_Importer {
 			require_once ABSPATH . 'wp-admin/includes/file.php';
 			require_once ABSPATH . 'wp-admin/includes/image.php';
 		}
+	}
+
+	/**
+	 * Determines whether a URL already points at this site's uploads directory.
+	 *
+	 * Matches the full uploads base URL, not just its path, so media on the
+	 * same host but a different port stays remote and is still imported — a
+	 * distinction the hostname-only third-party guard cannot make. Skipping
+	 * such an already-localized URL keeps a same-host migration from
+	 * re-importing it and duplicating the attachment.
+	 *
+	 * @param string $media_url Absolute media URL to test.
+	 * @return bool True when the URL is under the local uploads base URL.
+	 */
+	private function is_local_media_url( string $media_url ): bool {
+		$uploads = wp_get_upload_dir();
+
+		if ( ! empty( $uploads['error'] ) || ! isset( $uploads['baseurl'] ) ) {
+			return false;
+		}
+
+		$base = untrailingslashit( strtok( $uploads['baseurl'], '?' ) );
+
+		if ( '' === $base ) {
+			return false;
+		}
+
+		$candidate = strtok( $media_url, '?' );
+
+		return $candidate === $base || str_starts_with( $candidate, $base . '/' );
 	}
 
 	/**
