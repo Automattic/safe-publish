@@ -94,7 +94,7 @@ add_filter( 'safe_publish_source_fetch_query_args', function( array $query_args,
 
 ### `safe_publish_source_post_meta`
 
-Filter the post meta imported from the source, before it is written to the destination. Receives the full decoded REST response, so integrations can merge in values from other top-level keys such as ACF/SCF's `acf` object. See [Migrating ACF and Secure Custom Fields Values](acf-scf.md).
+Filter the post meta imported from the source, before it is written to the destination. Receives the full decoded REST response, so integrations can merge in values from other top-level keys such as ACF/SCF's `acf` object. See [Migrating ACF and Secure Custom Fields Values](acf-scf.md) and [Migrating Yoast SEO Meta](yoast.md).
 
 **Parameters:**
 
