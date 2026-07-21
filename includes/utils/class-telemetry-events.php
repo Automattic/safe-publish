@@ -26,10 +26,21 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Telemetry_Events {
 
 	// Event names.
-	const BULK_IMPORT_COMPLETED   = 'bulk_import_completed';
-	const SINGLE_IMPORT_COMPLETED = 'single_import_completed';
-	const IMPORT_ITEM_FAILED      = 'import_item_failed';
-	const ROLLBACK_PERFORMED      = 'rollback_performed';
+	const BULK_IMPORT_COMPLETED     = 'bulk_import_completed';
+	const SINGLE_IMPORT_COMPLETED   = 'single_import_completed';
+	const IMPORT_ITEM_FAILED        = 'import_item_failed';
+	const ROLLBACK_PERFORMED        = 'rollback_performed';
+	const CONNECTION_TEST_COMPLETED = 'connection_test_completed';
+	const SYNC_MODE_CONFIGURED      = 'sync_mode_configured';
+
+	// connection_test_completed -> outcome enum. Mirrors the VIP_Safe_Auth
+	// STATUS_* probe results; anything else falls back to
+	// CONNECTION_OUTCOME_UNKNOWN so the property stays bounded.
+	const CONNECTION_OUTCOME_AUTHORIZED   = 'authorized';
+	const CONNECTION_OUTCOME_UNAUTHORIZED = 'unauthorized';
+	const CONNECTION_OUTCOME_UNREACHABLE  = 'unreachable';
+	const CONNECTION_OUTCOME_URL_UNSET    = 'url_unset';
+	const CONNECTION_OUTCOME_UNKNOWN      = 'unknown';
 
 	// single_import_completed -> outcome enum.
 	const SINGLE_OUTCOME_NEW     = 'new';
@@ -67,6 +78,21 @@ class Telemetry_Events {
 		'import',
 		'export',
 		'bidirectional',
+	);
+
+	/**
+	 * Allowed values for the connection_test_completed outcome property.
+	 * Mirrors the four VIP_Safe_Auth STATUS_* probe results; anything else
+	 * normalizes to CONNECTION_OUTCOME_UNKNOWN so an unbounded string can't
+	 * leak into telemetry.
+	 *
+	 * @var list<string>
+	 */
+	const CONNECTION_OUTCOME_ALLOWED = array(
+		self::CONNECTION_OUTCOME_AUTHORIZED,
+		self::CONNECTION_OUTCOME_UNAUTHORIZED,
+		self::CONNECTION_OUTCOME_UNREACHABLE,
+		self::CONNECTION_OUTCOME_URL_UNSET,
 	);
 
 	/**
@@ -120,6 +146,20 @@ class Telemetry_Events {
 		return in_array( $code, self::ERROR_CODE_ALLOWED, true )
 			? $code
 			: self::ERROR_CODE_UNKNOWN;
+	}
+
+	/**
+	 * Normalizes a raw auth-probe status into the bounded connection outcome
+	 * enum. Anything not in the allowlist falls back to
+	 * CONNECTION_OUTCOME_UNKNOWN so the outcome property stays bounded.
+	 *
+	 * @param string $status Raw status from VIP_Safe_Auth::test_authorization().
+	 * @return string Allowed outcome, or CONNECTION_OUTCOME_UNKNOWN.
+	 */
+	public static function normalize_connection_outcome( string $status ): string {
+		return in_array( $status, self::CONNECTION_OUTCOME_ALLOWED, true )
+			? $status
+			: self::CONNECTION_OUTCOME_UNKNOWN;
 	}
 
 	/**

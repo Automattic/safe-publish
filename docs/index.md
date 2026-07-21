@@ -17,6 +17,7 @@
   - [Custom Post Type Support](extending/post-types.md) - Supporting custom post types
   - [REST API Extension](extending/api.md) - Extending the plugin's API
 
+- [Telemetry & Pendo plan](telemetry.md) - Backend events, frontend tagging, and the Pendo configuration plan
 - [Local Development](local-development.md) - Setting up a development environment
 - [Content Seeding](content-seeding.md) - Populating environments with test content
 - [Troubleshooting](troubleshooting.md) - Common issues and solutions

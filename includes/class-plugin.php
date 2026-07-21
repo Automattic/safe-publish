@@ -43,6 +43,7 @@ use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Sync_Mode_Telemetry;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
 
@@ -110,6 +111,8 @@ final class Plugin {
 				'sync_mode'      => Telemetry_Events::normalize_sync_mode( $sync_mode ),
 			)
 		);
+
+		( new Sync_Mode_Telemetry( $this->telemetry ) )->register_handlers();
 
 		$can_export = in_array(
 			$sync_mode,
