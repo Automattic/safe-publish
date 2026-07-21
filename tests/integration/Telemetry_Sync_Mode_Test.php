@@ -21,7 +21,7 @@ use WP_UnitTestCase;
  *
  * Verifies that saving or changing the sync mode emits sync_mode_configured
  * with bounded previous/new modes and the first-configuration flag, and that
- * no-op saves stay silent.
+ * no-op and mode-less saves stay silent.
  */
 class Telemetry_Sync_Mode_Test extends WP_UnitTestCase {
 
@@ -125,5 +125,44 @@ class Telemetry_Sync_Mode_Test extends WP_UnitTestCase {
 
 		// ASSERT: no event, so the funnel isn't polluted by no-op saves.
 		$this->assertCount( 0, $this->queue->events() );
+	}
+
+	/**
+	 * Verifies that a mode-less first save (empty option row) emits nothing,
+	 * so the funnel isn't marked configured before a mode is chosen.
+	 */
+	public function test_unselected_mode_on_first_save_emits_nothing(): void {
+		// ARRANGE: a fresh install with no sync-mode row (setUp deleted it).
+
+		// ACT: the settings form is saved with no mode selected, which creates
+		// the option row with the empty default.
+		add_option( Options::OPTION_SYNC_MODE, '' );
+
+		// ASSERT: no event, since an unselected mode is not a configuration.
+		$this->assertCount( 0, $this->queue->events() );
+	}
+
+	/**
+	 * Verifies that the first real selection after a mode-less save is still
+	 * flagged first, driven by the previous mode being unconfigured rather
+	 * than by the add-vs-update hook.
+	 */
+	public function test_first_real_selection_after_empty_row_is_flagged_first(): void {
+		// ARRANGE: an empty sync-mode row left by a mode-less save.
+		add_option( Options::OPTION_SYNC_MODE, '' );
+		$this->queue->clear();
+
+		// ACT: the operator picks import for the first time.
+		update_option( Options::OPTION_SYNC_MODE, 'import' );
+
+		// ASSERT: one event, flagged as the first configuration.
+		$events = $this->queue->events();
+		$this->assertCount( 1, $events );
+		$this->assertSame(
+			Telemetry_Events::SYNC_MODE_UNCONFIGURED,
+			$events[0]['properties']['previous_mode']
+		);
+		$this->assertSame( 'import', $events[0]['properties']['new_mode'] );
+		$this->assertTrue( $events[0]['properties']['is_first_configuration'] );
 	}
 }
