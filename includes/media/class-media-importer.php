@@ -23,7 +23,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Media Importer Class.
  *
- * Handles importing media files from the source site into the WordPress media library.
+ * Handles importing media files from the source site into the WordPress media
+ * library.
  */
 class Media_Importer {
 
@@ -73,15 +74,20 @@ class Media_Importer {
 	/**
 	 * Imports source media file to WordPress media library.
 	 *
-	 * @param string $media_url       Source media URL.
-	 * @param string $source_site_url Source site URL for resolving relative URLs.
-	 * @return string|false|null New media URL on success, false on failure,
-	 *                           null when the URL belongs to a third-party
-	 *                           domain and should be left unchanged.
+	 * @param string $media_url         Source media URL.
+	 * @param string $source_site_url   Source site URL for resolving relative URLs.
+	 * @param bool   $skip_if_not_media Return null (leave the URL unchanged)
+	 *                                  instead of false when the download is not
+	 *                                  an allowed upload type, for ambiguous URLs
+	 *                                  that may be a page link rather than media.
+	 * @return string|false|null New media URL on success, false on failure, null
+	 *                           when the URL belongs to a third-party domain, or
+	 *                           when it is not media and $skip_if_not_media is set.
 	 */
 	public function import_source_media(
 		string $media_url,
-		string $source_site_url
+		string $source_site_url,
+		bool $skip_if_not_media = false
 	): string|false|null {
 		// Make URL absolute if it's relative.
 		if ( ! filter_var( $media_url, FILTER_VALIDATE_URL ) ) {
@@ -127,9 +133,32 @@ class Media_Importer {
 			return false;
 		}
 
-		// Get file info.
-		$file_info = pathinfo( $media_url );
-		$filename  = sanitize_file_name( $file_info['basename'] );
+		// Derive a filename whose extension matches the real content, so
+		// extensionless URLs still resolve to a valid upload type.
+		$basename = sanitize_file_name( (string) pathinfo( $media_url, PATHINFO_BASENAME ) );
+		$filename = $this->resolve_media_filename( $temp_file, $basename );
+
+		if ( '' === $filename ) {
+			$this->http_client->cleanup_temp_file( $temp_file );
+
+			if ( $skip_if_not_media ) {
+				return null;
+			}
+
+			$this->logger->media_unsupported_file_type(
+				$media_url,
+				$source_site_url,
+				(string) pathinfo( $media_url, PATHINFO_EXTENSION )
+			);
+			return false;
+		}
+
+		// For an ambiguous URL, leave it as a link when its content is not the
+		// media type its extension implies (e.g. HTML served at a .pdf URL).
+		if ( $skip_if_not_media && ! $this->is_media_content( $temp_file, $filename ) ) {
+			$this->http_client->cleanup_temp_file( $temp_file );
+			return null;
+		}
 
 		// Prepare file array for wp_handle_sideload.
 		$file_array = array(
@@ -172,15 +201,20 @@ class Media_Importer {
 	/**
 	 * Imports source media file to media library and returns attachment ID.
 	 *
-	 * @param string $media_url       Source media URL.
-	 * @param string $source_site_url Source site URL for resolving relative URLs.
-	 * @return int|false|null Attachment ID on success, false on failure,
-	 *                        null when the URL belongs to a third-party
-	 *                        domain and should be left unchanged.
+	 * @param string $media_url         Source media URL.
+	 * @param string $source_site_url   Source site URL for resolving relative URLs.
+	 * @param bool   $skip_if_not_media Return null (leave the URL unchanged)
+	 *                                  instead of false when the download is not
+	 *                                  an allowed upload type, for ambiguous URLs
+	 *                                  that may be a page link rather than media.
+	 * @return int|false|null Attachment ID on success, false on failure, null
+	 *                        when the URL belongs to a third-party domain, or
+	 *                        when it is not media and $skip_if_not_media is set.
 	 */
 	public function import_source_media_as_attachment(
 		string $media_url,
-		string $source_site_url
+		string $source_site_url,
+		bool $skip_if_not_media = false
 	): int|false|null {
 		// Make URL absolute if it's relative.
 		if ( ! filter_var( $media_url, FILTER_VALIDATE_URL ) ) {
@@ -233,53 +267,40 @@ class Media_Importer {
 				$temp_file->get_error_message()
 			);
 
-			// Remove the filter if we added it.
-			if ( $webp_filter_added ) {
-				remove_filter( 'upload_mimes', array( $this, 'add_webp_mime_type' ) );
-			}
+			$this->remove_webp_import_filters( $webp_filter_added );
 			return false;
 		}
 
-		// Get file info and validate.
-		$file_info = pathinfo( $media_url );
-		$filename  = sanitize_file_name( $file_info['basename'] ); // Sanitize filename.
+		// Derive a filename whose extension matches the real content, so
+		// extensionless URLs still resolve to a valid upload type.
+		$basename = sanitize_file_name( (string) pathinfo( $media_url, PATHINFO_BASENAME ) );
+		$filename = $this->resolve_media_filename( $temp_file, $basename );
 
-		// Ensure we have a proper file extension.
-		if ( empty( $file_info['extension'] ) ) {
-			// Try to detect file type from downloaded file.
-			$file_type = wp_check_filetype( $temp_file );
-			if ( ! empty( $file_type['ext'] ) ) {
-				$filename .= '.' . $file_type['ext'];
+		if ( '' === $filename ) {
+			$this->http_client->cleanup_temp_file( $temp_file );
+			$this->remove_webp_import_filters( $webp_filter_added );
+
+			if ( $skip_if_not_media ) {
+				return null;
 			}
-		}
 
-		// Validate file type is allowed.
-		$file_type = wp_check_filetype( $filename );
-
-		// Add WebP support if not natively supported.
-		if (
-			false === $file_type['type'] &&
-			isset( $file_info['extension'] ) &&
-			'webp' === strtolower( $file_info['extension'] )
-		) {
-			$file_type = array(
-				'ext'  => 'webp',
-				'type' => 'image/webp',
-			);
-		}
-
-		if ( false === $file_type['type'] ) {
 			$this->logger->media_unsupported_file_type(
 				$media_url,
 				$source_site_url,
-				$file_info['extension'] ?? ''
+				(string) pathinfo( $media_url, PATHINFO_EXTENSION )
 			);
-
-			$this->http_client->cleanup_temp_file( $temp_file );
-
 			return false;
 		}
 
+		// For an ambiguous URL, leave it as a link when its content is not the
+		// media type its extension implies (e.g. HTML served at a .pdf URL).
+		if ( $skip_if_not_media && ! $this->is_media_content( $temp_file, $filename ) ) {
+			$this->http_client->cleanup_temp_file( $temp_file );
+			$this->remove_webp_import_filters( $webp_filter_added );
+			return null;
+		}
+
+		$file_type = wp_check_filetype( $filename );
 		$file_size = filesize( $temp_file );
 
 		// Prepare file array for media_handle_sideload.
@@ -309,13 +330,7 @@ class Media_Importer {
 		// Clean up temp file.
 		$this->http_client->cleanup_temp_file( $temp_file );
 
-		// Remove the WebP filter if we added it.
-		if ( $webp_filter_added ) {
-			remove_filter( 'upload_mimes', array( $this, 'add_webp_mime_type' ) );
-		}
-
-		// Remove the filetype filter.
-		remove_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ) );
+		$this->remove_webp_import_filters( $webp_filter_added );
 
 		if ( is_wp_error( $attachment_id ) ) {
 			$this->logger->media_sideload_failed(
@@ -592,6 +607,96 @@ class Media_Importer {
 			}
 		}
 		return $wp_check_filetype_and_ext;
+	}
+
+	/**
+	 * Removes the WebP support filters added for a sideload attempt.
+	 *
+	 * @param bool $upload_mimes_added Whether the upload_mimes filter was added.
+	 */
+	private function remove_webp_import_filters( bool $upload_mimes_added ): void {
+		if ( $upload_mimes_added ) {
+			remove_filter( 'upload_mimes', array( $this, 'add_webp_mime_type' ) );
+		}
+
+		remove_filter(
+			'wp_check_filetype_and_ext',
+			array( $this, 'handle_webp_filetype' )
+		);
+	}
+
+	/**
+	 * Resolves the filename to sideload a downloaded file under.
+	 *
+	 * When the URL basename already maps to a known type, it is used as-is and
+	 * media_handle_sideload() validates the bytes against it. Otherwise an
+	 * extension is derived from the downloaded bytes so extensionless media
+	 * still imports.
+	 *
+	 * @param string $temp_file Path to the downloaded file.
+	 * @param string $basename  Filename derived from the source URL.
+	 * @return string Filename to sideload, or '' when the content is not an
+	 *                allowed upload type.
+	 */
+	private function resolve_media_filename( string $temp_file, string $basename ): string {
+		$filetype = wp_check_filetype( $basename );
+
+		if ( false !== $filetype['type'] ) {
+			return $basename;
+		}
+
+		$extension = $this->detect_extension_from_content( $temp_file );
+
+		if ( '' === $extension ) {
+			return '';
+		}
+
+		return ( '' === $basename ? 'file' : $basename ) . '.' . $extension;
+	}
+
+	/**
+	 * Reports whether a downloaded file's real content matches an allowed upload
+	 * type for the given filename. Distinguishes a genuine media file from a page
+	 * served at a media-looking URL before sideloading it.
+	 *
+	 * @param string $temp_file Path to the downloaded file.
+	 * @param string $filename  Filename the file would be sideloaded under.
+	 * @return bool True when the content is an allowed upload type.
+	 */
+	private function is_media_content( string $temp_file, string $filename ): bool {
+		$verified = wp_check_filetype_and_ext( $temp_file, $filename );
+
+		return false !== $verified['type'];
+	}
+
+	/**
+	 * Detects an allowed upload extension from a file's actual content.
+	 *
+	 * Uses WordPress' image detection first, then fileinfo for other types, so
+	 * the result reflects the bytes rather than a URL extension or response
+	 * header. Returns an empty string when the content is not an allowed type.
+	 *
+	 * @param string $temp_file Path to the downloaded file.
+	 * @return string Extension without a leading dot, or '' when undetectable.
+	 */
+	private function detect_extension_from_content( string $temp_file ): string {
+		$mime = wp_get_image_mime( $temp_file );
+
+		if ( ! is_string( $mime ) && extension_loaded( 'fileinfo' ) ) {
+			$detected = ( new \finfo( FILEINFO_MIME_TYPE ) )->file( $temp_file );
+
+			if ( is_string( $detected ) && '' !== $detected ) {
+				$mime = $detected;
+			}
+		}
+
+		if ( ! is_string( $mime ) || ! in_array( $mime, get_allowed_mime_types(), true ) ) {
+			return '';
+		}
+
+		$extension = wp_get_default_extension_for_mime_type( $mime );
+
+		return is_string( $extension ) ? $extension : '';
 	}
 
 	/**

@@ -1157,13 +1157,14 @@ class Content_Processor {
 				$this->content_media_processor
 					->has_uploadable_file_extension( $value )
 			) {
-				// Only sideload attrs that look like a media file. A non-media
-				// URL such as a permalink fails and aborts the import.
+				// Only sideload attrs that look like a media file. A media-looking
+				// URL that downloads to a page (e.g. a .pdf permalink serving
+				// HTML) is left as a link rather than recorded as a failure.
 				$attachment_id = $this->media_importer
-					->import_source_media_as_attachment( $value, $source_site_url );
+					->import_source_media_as_attachment( $value, $source_site_url, true );
 
 				if ( null === $attachment_id ) {
-					continue; // Third-party or non-source URL — leave unchanged.
+					continue; // Third-party, non-source, or not media — leave unchanged.
 				}
 
 				if ( false === $attachment_id ) {

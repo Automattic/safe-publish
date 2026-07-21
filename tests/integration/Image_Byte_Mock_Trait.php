@@ -93,13 +93,13 @@ trait Image_Byte_Mock_Trait {
 	 * through so other pre_http_request filters can handle them.
 	 *
 	 * @param false|array|WP_Error $preempt Preemptive return value.
-	 * @param array                $_args   HTTP arguments (unused).
+	 * @param array                $args    HTTP arguments.
 	 * @param string               $url     Request URL.
 	 * @return false|array|WP_Error
 	 */
 	public function mock_image_byte_response(
 		false|array|WP_Error $preempt,
-		array $_args,
+		array $args,
 		string $url
 	): false|array|WP_Error {
 		if ( false !== $preempt ) {
@@ -113,9 +113,33 @@ trait Image_Byte_Mock_Trait {
 			return $preempt;
 		}
 
-		$fixture = self::IMAGE_FIXTURE_MAP[ $extension ];
+		$fixture  = self::IMAGE_FIXTURE_MAP[ $extension ];
+		$response = $this->get_fixture_response( $fixture['file'], $fixture['mime'] );
+		$this->populate_download_temp( $args, (string) $response['body'] );
 
-		return $this->get_fixture_response( $fixture['file'], $fixture['mime'] );
+		return $response;
+	}
+
+	/**
+	 * Writes a mocked response body to the temp file download_url() streams
+	 * into, so byte-level type detection sees real content at download time.
+	 *
+	 * When pre_http_request short-circuits, download_url() never writes the body
+	 * to the target path it passes as the 'filename' request arg.
+	 *
+	 * @param array  $args HTTP request arguments passed to pre_http_request.
+	 * @param string $body Response body to write.
+	 */
+	protected function populate_download_temp( array $args, string $body ): void {
+		$filename = $args['filename'] ?? '';
+
+		if ( ! is_string( $filename ) || '' === $filename ) {
+			return;
+		}
+
+		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_file_put_contents
+		file_put_contents( $filename, $body );
+		clearstatcache( true, $filename );
 	}
 
 	/**
