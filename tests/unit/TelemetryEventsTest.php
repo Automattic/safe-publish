@@ -155,6 +155,48 @@ class TelemetryEventsTest extends TestCase {
 	}
 
 	/**
+	 * Verifies that each VIP_Safe_Auth probe status passes through the
+	 * connection-outcome normalizer unchanged.
+	 */
+	public function test_normalize_connection_outcome_allows_known_statuses(): void {
+		// ARRANGE: the four bounded probe statuses.
+		$statuses = Telemetry_Events::CONNECTION_OUTCOME_ALLOWED;
+
+		// ACT & ASSERT: each status normalizes to itself.
+		foreach ( $statuses as $status ) {
+			$this->assertSame(
+				$status,
+				Telemetry_Events::normalize_connection_outcome( $status )
+			);
+		}
+	}
+
+	/**
+	 * Verifies that an unknown probe status collapses to the bounded fallback
+	 * so an unbounded string can't reach Pendo.
+	 */
+	public function test_normalize_connection_outcome_replaces_unknown_with_fallback(): void {
+		// ARRANGE: a status outside the allowlist and the empty string that a
+		// missing status key would produce.
+		$unexpected = 'teapot';
+		$missing    = '';
+
+		// ACT: normalize each.
+		$unexpected_result = Telemetry_Events::normalize_connection_outcome( $unexpected );
+		$missing_result    = Telemetry_Events::normalize_connection_outcome( $missing );
+
+		// ASSERT: both report the bounded fallback.
+		$this->assertSame(
+			Telemetry_Events::CONNECTION_OUTCOME_UNKNOWN,
+			$unexpected_result
+		);
+		$this->assertSame(
+			Telemetry_Events::CONNECTION_OUTCOME_UNKNOWN,
+			$missing_result
+		);
+	}
+
+	/**
 	 * Verifies that a clean run with no failures and at least one row
 	 * changed is reported as success.
 	 */
