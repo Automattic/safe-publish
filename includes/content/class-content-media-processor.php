@@ -412,14 +412,14 @@ class Content_Media_Processor {
 	 * Checks whether a URL path ends in a file extension that WordPress allows
 	 * as an upload.
 	 *
-	 * Used to distinguish downloadable file URLs from page links in link
-	 * elements: WordPress page URLs use extensionless pretty permalinks or
-	 * query strings, while media library files always have an extension.
+	 * Used to distinguish downloadable file URLs from page links: WordPress
+	 * page URLs use extensionless pretty permalinks or query strings, while
+	 * media library files always have an extension.
 	 *
 	 * @param string $url URL to inspect.
 	 * @return bool True if the extension maps to an allowed type.
 	 */
-	private function has_uploadable_file_extension( string $url ): bool {
+	public function has_uploadable_file_extension( string $url ): bool {
 		$path = wp_parse_url( $url, PHP_URL_PATH );
 
 		if ( ! is_string( $path ) ) {

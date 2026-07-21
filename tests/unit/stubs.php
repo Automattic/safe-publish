@@ -164,6 +164,13 @@ function wp_get_environment_type(): string {
 	return 'production';
 }
 
+function wp_get_upload_dir(): array {
+	return array(
+		'baseurl' => 'http://localhost/wp-content/uploads',
+		'error'   => false,
+	);
+}
+
 function untrailingslashit( string $path ): string {
 	return rtrim( $path, '/\\' );
 }

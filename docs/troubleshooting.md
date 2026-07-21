@@ -200,6 +200,20 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
    - Add or sync the matching field group definitions on the destination.
    - If editor rendering is not needed, no action is required; the values are already stored as post meta.
 
+#### Yoast SEO settings do not migrate
+
+**Symptoms**: A post's Yoast meta description, SEO title, or other Yoast settings are empty on the destination after import.
+
+**Solutions**:
+
+1. **Understand the cause**: Yoast stores these under protected `_yoast_wpseo_*` meta keys, and WordPress core's REST API omits a meta key from the `meta` object unless it is registered with `show_in_rest`. Yoast registers only a few of these keys, so Safe Publish — which imports only the `meta` object — does not receive most of them by default.
+
+2. **Use the migration recipe**: Register the Yoast keys for REST on the **source** so they enter the `meta` object. See the [Yoast SEO recipe](extending/yoast.md). No destination-side code is needed for scalar keys.
+
+3. **Verify the source REST response**: Fetch the source post with `context=edit` and confirm the `_yoast_wpseo_*` keys appear under the core `meta` object after registering them.
+
+4. **Check source-specific values**: `_yoast_wpseo_canonical` and `_yoast_wpseo_primary_category` carry source URLs and term IDs; remap or omit them rather than importing verbatim.
+
 #### Duplicate content imported
 
 **Symptoms**: Same post imported multiple times

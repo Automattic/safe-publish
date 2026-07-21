@@ -30,6 +30,7 @@ Extend the plugin's REST API capabilities. The REST API surface is intentionally
 - **Control import sanitization** — use [`safe_publish_import_kses`](hooks.md#safe_publish_import_kses) to enable kses sanitization, and [`safe_publish_import_kses_allowed_html`](hooks.md#safe_publish_import_kses_allowed_html) to customize allowed tags.
 - **Add custom request headers** — use [`safe_publish_request_args`](hooks.md#safe_publish_request_args) to inject authentication headers or other HTTP arguments.
 - **Migrate ACF/SCF field values** — use [`safe_publish_source_post_meta`](hooks.md#safe_publish_source_post_meta) to fold the source `acf` object into imported meta. See [Migrating ACF and Secure Custom Fields Values](acf-scf.md).
+- **Migrate Yoast SEO meta** — expose the `_yoast_wpseo_*` keys for REST on the source so they enter the core `meta` object. See [Migrating Yoast SEO Meta](yoast.md).
 
 See the [Hooks and Filters Reference](hooks.md) for full parameter documentation and examples.
 
@@ -89,6 +90,7 @@ When extending Safe Publish on WordPress VIP:
 - [Hooks Reference](hooks.md) - Complete list of actions and filters
 - [Custom Post Types](post-types.md) - Adding post type support
 - [ACF and SCF Values](acf-scf.md) - Migrating custom field values
+- [Yoast SEO Meta](yoast.md) - Migrating Yoast SEO settings
 - [REST API](api.md) - Extending the API
 - [Troubleshooting](../troubleshooting.md) - Common issues
 
