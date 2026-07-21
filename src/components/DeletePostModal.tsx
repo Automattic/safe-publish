@@ -89,7 +89,7 @@ const DeletePostModal = ( {
 					setError(
 						getErrorMessage(
 							result,
-							__( 'Failed to delete', 'safe-publish' )
+							__( 'Failed to delete the post.', 'safe-publish' )
 						)
 					);
 					setIsLoading( false );
@@ -151,7 +151,7 @@ const DeletePostModal = ( {
 					{ isLoading ? (
 						<>
 							<Spinner />
-							{ __( 'Deleting…', 'safe-publish' ) }
+							{ __( 'Moving to trash…', 'safe-publish' ) }
 						</>
 					) : (
 						__( 'Move to Trash', 'safe-publish' )
