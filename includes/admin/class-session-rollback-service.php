@@ -175,7 +175,7 @@ final class Session_Rollback_Service {
 		if ( ! wp_delete_post( $post_id, true ) ) {
 			return new WP_Error(
 				'delete_failed',
-				__( 'Failed to delete the post', 'safe-publish' )
+				__( 'Failed to delete the post.', 'safe-publish' )
 			);
 		}
 
