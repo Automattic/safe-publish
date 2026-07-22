@@ -8,7 +8,9 @@ import {
 	type PostsActionsContext,
 } from '@/actions';
 import { RETRY_PENDING_DELAY_MS } from '@/constants';
+import BulkImportFlow from '@/components/BulkImportFlow';
 import BulkRollbackPostModal from '@/components/BulkRollbackPostModal';
+import ImportModal from '@/components/ImportModal';
 import RollbackPostModal from '@/components/RollbackPostModal';
 import type {
 	AttentionIssue,
@@ -322,6 +324,70 @@ describe( 'createPostsActions per-state eligibility', () => {
 		);
 		expect(
 			( bulk.props as { onNotice?: unknown } ).onNotice
+		).toBeUndefined();
+	} );
+
+	it( 'Verifies that bulk Import reports the skipped count to the batch modal', () => {
+		// ARRANGE: five rows selected, three of them handed to the modal as
+		// import-eligible.
+		const importAction = getModalAction(
+			createPostsActions( undefined, true, CONTEXT, {}, ALL_CHIP, 5 ),
+			'import'
+		);
+
+		// ACT: render the batch modal for the three eligible rows.
+		const modal = importAction.RenderModal( {
+			items: [
+				buildRow( { id: 1, source_post_id: 1 } ),
+				buildRow( { id: 2, source_post_id: 2 } ),
+				buildRow( { id: 3, source_post_id: 3 } ),
+			],
+		} );
+
+		// ASSERT: the batch modal is told the two remaining rows were skipped.
+		expect( modal.type ).toBe( BulkImportFlow );
+		expect(
+			( modal.props as { skippedCount?: number } ).skippedCount
+		).toBe( 2 );
+	} );
+
+	it( 'Verifies that bulk Import clamps the skipped count at zero', () => {
+		// ARRANGE: a stale selected count lower than the eligible rows handed
+		// to the modal, which must not yield a negative skipped count.
+		const importAction = getModalAction(
+			createPostsActions( undefined, true, CONTEXT, {}, ALL_CHIP, 1 ),
+			'import'
+		);
+
+		// ACT: render the batch modal for two eligible rows.
+		const modal = importAction.RenderModal( {
+			items: [
+				buildRow( { id: 1, source_post_id: 1 } ),
+				buildRow( { id: 2, source_post_id: 2 } ),
+			],
+		} );
+
+		// ASSERT: the skipped count floors at zero rather than going negative.
+		expect( modal.type ).toBe( BulkImportFlow );
+		expect(
+			( modal.props as { skippedCount?: number } ).skippedCount
+		).toBe( 0 );
+	} );
+
+	it( 'Verifies that a lone eligible row routes to the single modal without a skipped count', () => {
+		// ARRANGE: four rows selected but only one is import-eligible.
+		const importAction = getModalAction(
+			createPostsActions( undefined, true, CONTEXT, {}, ALL_CHIP, 4 ),
+			'import'
+		);
+
+		// ACT: render the modal for the single eligible row.
+		const modal = importAction.RenderModal( { items: [ buildRow() ] } );
+
+		// ASSERT: the single-post modal is used and carries no skipped count.
+		expect( modal.type ).toBe( ImportModal );
+		expect(
+			( modal.props as { skippedCount?: number } ).skippedCount
 		).toBeUndefined();
 	} );
 } );
