@@ -45,6 +45,7 @@
 - Write short and to the point comments; lengthy comments allowed only when they provide value.
 - Adhere to WordPress inline documentation standards.
 - Docblock summaries are plain prose; no backticks or Markdown.
+- In lint suppressions, don't append an inline `-- reason`; when a rationale adds value, put it on a plain comment line directly above the `eslint-disable` directive.
 
 ## Tests
 
