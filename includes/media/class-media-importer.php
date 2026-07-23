@@ -263,6 +263,30 @@ class Media_Importer {
 		// Also add a filter specifically for media_handle_sideload to bypass restrictions.
 		add_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ), 10, 3 );
 
+		// Guarantee the upload filters are removed on every exit, including the
+		// early returns for a failed download or unsupported file type.
+		try {
+			return $this->download_and_create_attachment( $media_url, $source_site_url );
+		} finally {
+			if ( $webp_filter_added ) {
+				remove_filter( 'upload_mimes', array( $this, 'add_webp_mime_type' ) );
+			}
+			remove_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ) );
+		}
+	}
+
+	/**
+	 * Downloads a media URL and creates the attachment, assuming the WebP upload
+	 * filters are already registered.
+	 *
+	 * @param string $media_url       Query-stripped source media URL.
+	 * @param string $source_site_url Source site URL, recorded as import origin.
+	 * @return int|false Attachment ID on success, false on failure.
+	 */
+	private function download_and_create_attachment(
+		string $media_url,
+		string $source_site_url
+	): int|false {
 		$temp_file = $this->http_client->download_file( $media_url );
 
 		if ( is_wp_error( $temp_file ) ) {
@@ -272,10 +296,6 @@ class Media_Importer {
 				$temp_file->get_error_message()
 			);
 
-			// Remove the filter if we added it.
-			if ( $webp_filter_added ) {
-				remove_filter( 'upload_mimes', array( $this, 'add_webp_mime_type' ) );
-			}
 			return false;
 		}
 
@@ -347,14 +367,6 @@ class Media_Importer {
 
 		// Clean up temp file.
 		$this->http_client->cleanup_temp_file( $temp_file );
-
-		// Remove the WebP filter if we added it.
-		if ( $webp_filter_added ) {
-			remove_filter( 'upload_mimes', array( $this, 'add_webp_mime_type' ) );
-		}
-
-		// Remove the filetype filter.
-		remove_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ) );
 
 		if ( is_wp_error( $attachment_id ) ) {
 			$this->logger->media_sideload_failed(
