@@ -203,6 +203,45 @@ class Media_Importer {
 			return null;
 		}
 
+		return $this->sideload_media( $media_url, $source_site_url );
+	}
+
+	/**
+	 * Sideloads source media resolved by ID, regardless of serving host.
+	 *
+	 * A URL resolved from a source media ID is owned, so the third-party host
+	 * guard is bypassed: off-domain media (CDN, files service, Photon) still
+	 * belongs to the source and must be sideloaded.
+	 *
+	 * @param string $media_url       Source media URL.
+	 * @param string $source_site_url Source site URL for resolving relative URLs.
+	 * @return int|false Attachment ID on success, false on failure.
+	 */
+	public function import_owned_media_as_attachment(
+		string $media_url,
+		string $source_site_url
+	): int|false {
+		// Make URL absolute if it's relative.
+		if ( ! filter_var( $media_url, FILTER_VALIDATE_URL ) ) {
+			$media_url = rtrim( $source_site_url, '/' ) . '/' . ltrim( $media_url, '/' );
+		}
+
+		return $this->sideload_media( $media_url, $source_site_url );
+	}
+
+	/**
+	 * Downloads a resolved media URL into the library and returns its
+	 * attachment ID. Any host or ownership check is the caller's
+	 * responsibility.
+	 *
+	 * @param string $media_url       Absolute source media URL.
+	 * @param string $source_site_url Source site URL, recorded as import origin.
+	 * @return int|false Attachment ID on success, false on failure.
+	 */
+	private function sideload_media(
+		string $media_url,
+		string $source_site_url
+	): int|false {
 		$media_url = strtok( $media_url, '?' ); // Remove query parameters.
 
 		// Check if we already imported this media.
@@ -496,13 +535,15 @@ class Media_Importer {
 			return false;
 		}
 
-		// Import the media and get the attachment ID.
-		$attachment_id = $this->import_source_media_as_attachment( $media_data['source_url'], $source_site_url );
+		// Resolved by ID, so it is owned regardless of serving host.
+		$attachment_id = $this->import_owned_media_as_attachment(
+			$media_data['source_url'],
+			$source_site_url
+		);
 
 		if ( $attachment_id ) {
-			// Inline content imports don't set META_IMPORTED_FROM; setting it
-			// explicitly here ensures get_attachment_by_featured_media_id()'s
-			// AND-query can find it.
+			// get_attachment_by_featured_media_id() matches on both the source
+			// featured media ID and the origin site, so record the pair here.
 			update_post_meta( $attachment_id, Options::META_IMPORTED_FROM, $source_site_url );
 			update_post_meta( $attachment_id, Options::META_FEATURED_MEDIA_ID, $featured_media_id );
 			update_post_meta( $attachment_id, Options::META_MEDIA_TYPE, 'featured_image' );
