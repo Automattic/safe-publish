@@ -2018,6 +2018,38 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a URL failing a block-level download is reported only as a
+	 * download failure, never also as unprocessable markup, when the same URL
+	 * recurs in malformed inner HTML.
+	 */
+	public function test_failed_download_not_also_reported_as_unprocessable(): void {
+		// ARRANGE: A core/image block whose attrs.url fails to download and
+		// whose inner HTML repeats that URL in an unclosed src quote the HTML
+		// API cannot parse.
+		$url     = 'https://source.example.com/broken.jpg';
+		$content = '<!-- wp:image {"url":"' . $url . '"} -->'
+			. '<img src="' . $url
+			. '<!-- /wp:image -->';
+
+		// ACT: Process the content with the download forced to fail.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The URL is recorded as a download failure.
+		$this->assertSame(
+			array( $url ),
+			array_keys( $this->processor->get_failed_media() ),
+			'Failed download URL should be recorded in failed_media'
+		);
+
+		// ASSERT: The same URL is not also reported as unprocessable markup.
+		$this->assertSame(
+			array(),
+			$this->processor->get_unprocessable_media(),
+			'Failed download URL must not also be recorded as unprocessable'
+		);
+	}
+
+	/**
 	 * Processes content with every source-domain download forced to fail.
 	 *
 	 * @param string $content Block or classic content to process.

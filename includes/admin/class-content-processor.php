@@ -230,6 +230,12 @@ class Content_Processor {
 			$this->content_media_processor->get_unprocessable_media()
 		);
 
+		// The per-block markup pass can't see block-level download failures.
+		$this->unprocessable_media = array_diff_key(
+			$this->unprocessable_media,
+			$this->failed_media
+		);
+
 		$this->content_media_processor->reset_failed_media();
 		$this->content_media_processor->reset_unprocessable_media();
 
