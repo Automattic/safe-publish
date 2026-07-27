@@ -38,8 +38,7 @@
 
 - Verify PHP files use strict typing, and use type hinting everywhere possible.
 - Prefer using `_` instead of `@psalm-suppress PossiblyUnusedParam`.
-- Use explicit checks, don't use empty().
-- Prefer explicit checks over boolean coercion — `0 === $id`, not `! $id`.
+- Use explicit checks — don't use empty(), and don't coerce with `! $id` (write `0 === $id`).
 
 ### Comments and docblocks
 
@@ -47,7 +46,6 @@
 - Adhere to WordPress inline documentation standards.
 - Docblock summaries are plain prose; no backticks or Markdown.
 - In comments, capitalize the first word after a colon only when it begins prose — not a literal or code reference (quoted string, identifier, URL, and the like).
-- In lint suppressions, don't append an inline `-- reason`; when a rationale adds value, put it on a plain comment line directly above the `eslint-disable` directive.
 
 ## Tests
 
