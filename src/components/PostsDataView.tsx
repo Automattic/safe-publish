@@ -690,7 +690,7 @@ export function PostsDataView( {
 			setDetection(
 				detectSlugFromInput( trimmed, {
 					sourceUrl: sourceSiteUrl,
-					destinationUrl: window.location.origin,
+					destinationUrl: window.safePublishAdminData.homeUrl ?? '',
 				} )
 			);
 			setDebouncedSearch( trimmed );
