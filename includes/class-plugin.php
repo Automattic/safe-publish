@@ -25,7 +25,6 @@ use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\Admin\Settings_Logger;
 use Safe_Publish\Admin\Settings_Page;
 use Safe_Publish\Admin\Settings_Sanitizer;
-use Safe_Publish\Admin\Source_Backfill_Notice;
 use Safe_Publish\Auth\Auth_Manager;
 use Safe_Publish\API\Catalog_REST_Controller;
 use Safe_Publish\API\Dispatch_Logger;
@@ -44,7 +43,7 @@ use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
-use Safe_Publish\Utils\Source_Site_Url_Backfill;
+use Safe_Publish\Utils\Sync_Mode_Telemetry;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
 
@@ -113,6 +112,8 @@ final class Plugin {
 			)
 		);
 
+		( new Sync_Mode_Telemetry( $this->telemetry ) )->register_handlers();
+
 		$can_export = in_array(
 			$sync_mode,
 			array( Options::SYNC_MODE_EXPORT, Options::SYNC_MODE_BIDIRECTIONAL ),
@@ -157,9 +158,8 @@ final class Plugin {
 
 		add_action(
 			'admin_init',
-			array( Source_Site_Url_Backfill::class, 'maybe_run' )
+			array( self::class, 'cleanup_removed_backfill_data' )
 		);
-		( new Source_Backfill_Notice() )->init();
 
 		if ( $can_import ) {
 			$this->init_full_admin();
@@ -250,6 +250,38 @@ final class Plugin {
 	 */
 	public function purge_attention_issues_for_post( int $post_id ): void {
 		( new Attention_Issues_Repository() )->delete_for_post( $post_id );
+	}
+
+	/**
+	 * Deletes the leftover data from the removed source-scoping backfill.
+	 *
+	 * The backfill left a status option and a per-user notice-dismissal meta.
+	 * Keyed on the option's presence, this runs once per site then no-ops.
+	 *
+	 * @todo Remove this method and its admin_init hook once every site has
+	 *       loaded an admin page on this version or later.
+	 */
+	public static function cleanup_removed_backfill_data(): void {
+		// Housekeeping for full admin page loads; skip frequent AJAX requests.
+		if ( wp_doing_ajax() ) {
+			return;
+		}
+
+		$status_option = 'safe_publish_source_backfill_status';
+
+		if ( false === get_option( $status_option ) ) {
+			return;
+		}
+
+		// Delete the gate option last so a crash mid-run re-runs and converges.
+		delete_metadata(
+			'user',
+			0,
+			'safe_publish_source_backfill_notice_dismissed',
+			'',
+			true
+		);
+		delete_option( $status_option );
 	}
 
 	/**

@@ -1174,6 +1174,15 @@ final class Admin_Ajax_Controller {
 
 		$results = $this->api->test_connection( $connected_site_url, $auth_credentials );
 
+		$this->telemetry->record_event(
+			Telemetry_Events::CONNECTION_TEST_COMPLETED,
+			array(
+				'outcome' => Telemetry_Events::normalize_connection_outcome(
+					(string) ( $results['status'] ?? '' )
+				),
+			)
+		);
+
 		wp_send_json_success( $results );
 	}
 
