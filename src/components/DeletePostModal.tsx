@@ -89,7 +89,7 @@ const DeletePostModal = ( {
 					setError(
 						getErrorMessage(
 							result,
-							__( 'Failed to delete the post.', 'safe-publish' )
+							__( 'Failed to move the post to trash.', 'safe-publish' )
 						)
 					);
 					setIsLoading( false );
