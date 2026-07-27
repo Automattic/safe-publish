@@ -75,12 +75,12 @@ const isRollbackEligible = ( item: UnifiedPostRow ): boolean =>
  * (Compare/Import hide on up-to-date); 'failed' on the Failed chip also
  * exposes Dismiss. Mixed bulk selections rely on per-item isEligible.
  *
- * @param {Function}            onRefresh     Listing refresh callback.
- * @param {boolean}             isAuthorized  Whether the source authorizes imports.
- * @param {PostsActionsContext} context       Admin-ajax URL, nonce, notice sink.
- * @param {Object}              syncStatuses  Per-row sync entries keyed by source post id.
- * @param {ChipState}           chipState     Current chip; gates Failed-only actions.
- * @param {number}              selectedCount Selected rows; sizes the bulk-import skipped count.
+ * @param {Function}            onRefresh       Listing refresh callback.
+ * @param {boolean}             isAuthorized    Whether the source authorizes imports.
+ * @param {PostsActionsContext} context         Admin-ajax URL, nonce, notice sink.
+ * @param {Object}              syncStatuses    Per-row sync entries keyed by source post id.
+ * @param {ChipState}           chipState       Current chip; gates Failed-only actions.
+ * @param {number}              [selectedCount] Selected rows; sizes the bulk-import skipped count.
  *
  * @return {Action<UnifiedPostRow>[]} Array of DataViews actions.
  */
