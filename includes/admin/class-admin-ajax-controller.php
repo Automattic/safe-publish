@@ -1571,7 +1571,7 @@ final class Admin_Ajax_Controller {
 		$result = wp_trash_post( $post->ID );
 
 		if ( ! $result ) {
-			wp_send_json_error( __( 'Failed to delete the post.', 'safe-publish' ) );
+			wp_send_json_error( __( 'Failed to move the post to trash.', 'safe-publish' ) );
 		}
 
 		wp_send_json_success( array( 'message' => __( 'Post moved to trash.', 'safe-publish' ) ) );
@@ -1615,7 +1615,7 @@ final class Admin_Ajax_Controller {
 				sprintf(
 					/* translators: %d: maximum number of posts per batch */
 					__(
-						'Bulk delete is limited to %d posts at a time.',
+						'Bulk trash is limited to %d posts at a time.',
 						'safe-publish'
 					),
 					self::BULK_DELETE_POSTS_BATCH_MAX
