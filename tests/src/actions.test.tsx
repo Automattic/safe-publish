@@ -374,7 +374,7 @@ describe( 'createPostsActions per-state eligibility', () => {
 		).toBe( 0 );
 	} );
 
-	it( 'Verifies that a lone eligible row routes to the single modal without a skipped count', () => {
+	it( 'Verifies that a lone eligible row routes to the single modal with the skipped count', () => {
 		// ARRANGE: four rows selected but only one is import-eligible.
 		const importAction = getModalAction(
 			createPostsActions( undefined, true, CONTEXT, {}, ALL_CHIP, 4 ),
@@ -384,11 +384,11 @@ describe( 'createPostsActions per-state eligibility', () => {
 		// ACT: render the modal for the single eligible row.
 		const modal = importAction.RenderModal( { items: [ buildRow() ] } );
 
-		// ASSERT: the single-post modal is used and carries no skipped count.
+		// ASSERT: the single-post modal is used and reports the three dropped rows.
 		expect( modal.type ).toBe( ImportModal );
 		expect(
 			( modal.props as { skippedCount?: number } ).skippedCount
-		).toBeUndefined();
+		).toBe( 3 );
 	} );
 } );
 
