@@ -376,7 +376,6 @@ export function PostsDataView( {
 	// can't be looked up here; the render shows a switch-chips hint instead.
 	const slugChipMismatch =
 		null !== detection
-		&& 'unknown' !== detection.origin
 		&& 'failed' !== state
 		&& ! slugMatchesChip( detection.origin, isCatalogPrimary );
 
