@@ -207,6 +207,48 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a permalink in a non-allowlisted custom block's attrs is
+	 * host-swapped but never ID-remapped, even when the source post resolves.
+	 */
+	public function test_custom_block_permalink_attr_not_remapped(): void {
+		// ARRANGE: a resolvable source->dest mapping plus a custom block that
+		// stores the source permalink in an arbitrary attr.
+		$dest_post = self::factory()->post->create( array( 'post_type' => 'page' ) );
+		$source_id = 99023;
+		update_post_meta( $dest_post, Options::META_SOURCE_POST_ID, $source_id );
+		update_post_meta(
+			$dest_post,
+			Options::META_SOURCE_SITE_URL,
+			self::SOURCE_SITE_URL
+		);
+
+		$content = '<!-- wp:my-plugin/group {"postLink":"'
+			. self::SOURCE_SITE_URL . '/?p=' . $source_id . '"} -->'
+			. '<div class="wp-block-my-plugin-group"></div>'
+			. '<!-- /wp:my-plugin/group -->';
+
+		// ACT: process with the mapping also offered via the session map.
+		$result = (string) $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( $source_id => $dest_post ) )
+		);
+
+		// ASSERT: host swapped to the destination, but the source id is kept
+		// (not remapped to the dest post) and no unmapped-ref warning raised.
+		$post_link = null;
+		foreach ( parse_blocks( $result ) as $block ) {
+			if ( 'my-plugin/group' === ( $block['blockName'] ?? '' ) ) {
+				$post_link = $block['attrs']['postLink'] ?? null;
+				break;
+			}
+		}
+
+		$this->assertSame( 'http://example.org/?p=' . $source_id, $post_link );
+		$this->assertSame( array(), $this->processor->get_warnings() );
+	}
+
+	/**
 	 * Verifies that core/navigation.ref is rewritten via the session map.
 	 */
 	public function test_remaps_navigation_ref_via_session_map(): void {
