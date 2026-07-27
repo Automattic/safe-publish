@@ -104,7 +104,7 @@ export const rollbackItem = async (
 				success: false,
 				error: getErrorMessage(
 					result,
-					__( 'Failed to roll back', 'safe-publish' )
+					__( 'Failed to roll back the post.', 'safe-publish' )
 				),
 			};
 		}
