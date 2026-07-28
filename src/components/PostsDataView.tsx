@@ -591,7 +591,7 @@ export function PostsDataView( {
 			sourceSiteUrl,
 			selectedPostType,
 			debouncedSearch,
-			slugFromUrl,
+			detection?.slug,
 			statusKey,
 			publishedAfter,
 			publishedBefore,
