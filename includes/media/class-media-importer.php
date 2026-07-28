@@ -139,11 +139,20 @@ class Media_Importer {
 
 		// Import to media library.
 		// Prevent WordPress from potentially degrading the original image quality.
-		add_filter( 'big_image_size_threshold', '__return_false' );
-		$attachment_id = media_handle_sideload( $file_array, 0 );
-		remove_filter( 'big_image_size_threshold', '__return_false' );
+		add_filter(
+			'big_image_size_threshold',
+			array( $this, 'disable_big_image_scaling' )
+		);
 
-		$this->http_client->cleanup_temp_file( $temp_file );
+		try {
+			$attachment_id = media_handle_sideload( $file_array, 0 );
+		} finally {
+			remove_filter(
+				'big_image_size_threshold',
+				array( $this, 'disable_big_image_scaling' )
+			);
+			$this->http_client->cleanup_temp_file( $temp_file );
+		}
 
 		if ( is_wp_error( $attachment_id ) ) {
 			$this->logger->media_sideload_failed(
@@ -355,21 +364,29 @@ class Media_Importer {
 
 		// Import to media library with error handling.
 		// Prevent WordPress from potentially degrading the original image quality.
-		add_filter( 'big_image_size_threshold', '__return_false' );
-		/** @psalm-suppress InvalidArgument - $_FILES['size'] is int */
-		$attachment_id = media_handle_sideload(
-			$file_array,
-			0,
-			null,
-			array(
-				'test_form' => false, // Skip form validation.
-				'test_type' => true,  // But keep type validation.
-			)
+		add_filter(
+			'big_image_size_threshold',
+			array( $this, 'disable_big_image_scaling' )
 		);
-		remove_filter( 'big_image_size_threshold', '__return_false' );
 
-		// Clean up temp file.
-		$this->http_client->cleanup_temp_file( $temp_file );
+		try {
+			/** @psalm-suppress InvalidArgument - $_FILES['size'] is int */
+			$attachment_id = media_handle_sideload(
+				$file_array,
+				0,
+				null,
+				array(
+					'test_form' => false, // Skip form validation.
+					'test_type' => true,  // But keep type validation.
+				)
+			);
+		} finally {
+			remove_filter(
+				'big_image_size_threshold',
+				array( $this, 'disable_big_image_scaling' )
+			);
+			$this->http_client->cleanup_temp_file( $temp_file );
+		}
 
 		if ( is_wp_error( $attachment_id ) ) {
 			$this->logger->media_sideload_failed(
@@ -614,6 +631,17 @@ class Media_Importer {
 
 		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.attachment_url_to_postid_attachment_url_to_postid
 		return attachment_url_to_postid( $url );
+	}
+
+	/**
+	 * Preserves the full-resolution original during a sideload. Uses a named
+	 * callback, not the shared '__return_false', so removing it cannot detach
+	 * another plugin's big_image_size_threshold filter.
+	 *
+	 * @return bool Always false.
+	 */
+	public function disable_big_image_scaling(): bool {
+		return false;
 	}
 
 	/**
