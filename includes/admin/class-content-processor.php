@@ -45,6 +45,10 @@ class Content_Processor {
 	 * (e.g. core/navigation-link.id only when kind=post-type) and optionally
 	 * naming a url_attr to re-derive from the resolved destination id.
 	 *
+	 * Deliberately curated: only attrs known to hold a source post/term
+	 * reference are remapped; a permalink in any other attr is host-swapped
+	 * only, by design.
+	 *
 	 * @var array<string, list<array{attr:string, gated_by?: array<string,string>, url_attr?: string}>>
 	 */
 	private const POST_ID_BLOCK_ATTRS = array(
@@ -224,6 +228,12 @@ class Content_Processor {
 		$this->unprocessable_media = self::merge_media_map(
 			$this->unprocessable_media,
 			$this->content_media_processor->get_unprocessable_media()
+		);
+
+		// The per-block markup pass can't see block-level download failures.
+		$this->unprocessable_media = array_diff_key(
+			$this->unprocessable_media,
+			$this->failed_media
 		);
 
 		$this->content_media_processor->reset_failed_media();

@@ -50,7 +50,7 @@ describe( 'RollbackPostModal', () => {
 					success: true,
 					data: {
 						action: 'restored',
-						message: 'Post successfully restored to previous version',
+						message: 'Post restored to its previous version.',
 					},
 				} ),
 			} )
@@ -77,7 +77,7 @@ describe( 'RollbackPostModal', () => {
 		await waitFor( () =>
 			expect( onNotice ).toHaveBeenCalledWith( {
 				status: 'success',
-				message: 'Post successfully restored to previous version',
+				message: 'Post restored to its previous version.',
 			} )
 		);
 		expect( onRefresh ).toHaveBeenCalled();

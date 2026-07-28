@@ -284,6 +284,8 @@ wp post meta list <post-id> --fields=meta_key --format=csv \
 
 Internal links inside post body content (for example `<a href>` in paragraphs and lists) are migrated by host swap only: the source host is replaced with the destination host, but the path is preserved. If a linked page's destination slug or permalink differs from the source — a slug collision (such as `/about` becoming `/about-2` because the destination already has an `/about` page), a different permalink structure, or plain versus pretty permalinks — the link can return a 404 or resolve to a different page. Review internal links after migrating onto a site that already has content.
 
+A permalink stored in a custom or third-party block's attributes — for example a block that saves a post's own URL — is treated the same way: host-swapped, but not re-derived. Rewriting an arbitrary attribute that merely looks like a permalink could point it at the wrong content, so only blocks whose attributes carry an explicit, known entity reference are re-derived.
+
 Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink automatically — unless the target was a draft at import (see [below](#navigation-links-to-draft-targets-may-404-or-open-the-wrong-page)).
 
 ### Navigation links to draft targets may 404 or open the wrong page

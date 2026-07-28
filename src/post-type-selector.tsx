@@ -148,14 +148,13 @@ export function PostTypeSelector( {
 			} else {
 				// eslint-disable-next-line no-console
 				console.error( 'Safe Publish PostTypeSelector: API error:', response );
-				setError( getErrorMessage( response, __( 'Failed to load post types', 'safe-publish' ) ) );
+				setError( getErrorMessage( response, __( 'Failed to load post types.', 'safe-publish' ) ) );
 				setPostTypes( [] );
 			}
 		} catch ( err ) {
 			// eslint-disable-next-line no-console
 			console.error( 'Safe Publish PostTypeSelector: Network error:', err );
-			/* translators: %s is the error message */
-			setError( __( 'Network error while loading post types: %s', 'safe-publish' ).replace( '%s', String( err ) ) );
+			setError( __( 'Network error while loading post types.', 'safe-publish' ) );
 			setPostTypes( [] );
 		} finally {
 			setIsLoading( false );

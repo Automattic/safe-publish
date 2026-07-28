@@ -111,7 +111,7 @@ export function useImportPost( {
 					setError(
 						getErrorMessage(
 							result,
-							__( 'Failed to import', 'safe-publish' )
+							__( 'Failed to import the post.', 'safe-publish' )
 						)
 					);
 					return;

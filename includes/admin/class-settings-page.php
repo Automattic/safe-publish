@@ -280,7 +280,7 @@ final class Settings_Page {
 							} )
 							.catch( function () {
 								resultEl.className   = 'notice notice-error inline';
-								resultEl.textContent = "<?php echo esc_js( __( 'Network error occurred during connection test.', 'safe-publish' ) ); ?>";
+								resultEl.textContent = "<?php echo esc_js( __( 'Network error while testing the connection.', 'safe-publish' ) ); ?>";
 							} )
 							.finally( function () {
 								testBtn.disabled = false;

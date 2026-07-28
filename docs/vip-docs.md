@@ -126,7 +126,7 @@ Safe Publish supports importing a single post or many posts at once. Both paths 
 
 If a post with the same source post ID already exists on the destination, Safe Publish updates that post rather than creating a duplicate. If no matching post exists, it creates a new one.
 
-By default, a child post is skipped if its parent is not present on the destination, to avoid creating orphaned content. Developers can change this with the `safe_publish_import_allow_orphans` filter (see [Filters](#filters)).
+By default, importing a child post fails if its parent is not present on the destination, to avoid creating orphaned content. Developers can change this with the `safe_publish_import_allow_orphans` filter (see [Filters](#filters)).
 
 ### Import multiple posts (bulk import)
 
@@ -230,7 +230,7 @@ Safe Publish is scoped to publishing content between two paired sites. The follo
 - **Real-time, two-way sync.** Content moves as on-demand snapshots in one direction per operation, even when both sites are in `bidirectional` mode.
 - **Plugin, theme, or configuration transfer.** Only content — posts, pages, custom post types, their media, and their taxonomy terms — is imported.
 - **Third-party media import.** Media referenced in post content and hosted off the source domain is left as-is; its URLs are not rewritten or localized. Featured images are an exception — they are downloaded regardless of serving host.
-- **Importing children of missing parents.** By default, a child post whose parent is absent on the destination is skipped, unless `safe_publish_import_allow_orphans` is enabled.
+- **Importing children of missing parents.** By default, importing a child post whose parent is absent on the destination fails, unless `safe_publish_import_allow_orphans` is enabled.
 
 ## Troubleshooting
 
@@ -242,7 +242,7 @@ Safe Publish registers a "Safe Publish Authentication Configuration" test under 
 
 Cross-site requests are rejected when the source and destination clocks differ by more than the allowed window (300 seconds by default). Correct the system time on both servers. If a larger tolerance is genuinely required, raise it with the `safe_publish_auth_max_time_diff` filter.
 
-### A child post was skipped during import
+### An import failed with a missing-parent error
 
 The post's parent was not present on the destination. Import the parent first, or enable `safe_publish_import_allow_orphans` to allow importing the child without its parent.
 
