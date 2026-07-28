@@ -87,7 +87,7 @@ If an `<a>` tag ends in a file extension allowed by WordPress, it is processed i
 ### Featured Image
 
 - Fetched separately via the `/wp-json/wp/v2/media/{id}` endpoint using the `featured_media` ID from the post response.
-- Uploaded to media library.
+- Uploaded to media library regardless of serving host — unlike content media (step 3), an off-domain featured image is still downloaded because it belongs to the source.
 - The source library metadata (alt text, title, caption, description) is applied to the destination attachment, fetched in edit context for the raw values.
 - Set as post thumbnail via `set_post_thumbnail()`.
 
