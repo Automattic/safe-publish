@@ -15,6 +15,7 @@ import {
 	detectSlugFromInput,
 } from './filter-controls';
 import { useAuthStatus } from './hooks/useAuthStatus';
+import { useResetSelectionOnQueryChange } from './hooks/useResetSelectionOnQueryChange';
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 import { createPostsActions, type ActionNotice } from '../actions';
 import {
@@ -563,6 +564,26 @@ export function PostsDataView( {
 		focusSourceId,
 		refreshNonce,
 	] );
+
+	// Query identity only: page and sort are excluded so navigating a
+	// result set keeps the selection.
+	useResetSelectionOnQueryChange(
+		JSON.stringify( [
+			state,
+			sourceSiteUrl,
+			selectedPostType,
+			debouncedSearch,
+			slugFromUrl,
+			statusKey,
+			publishedAfter,
+			publishedBefore,
+			importedAfter,
+			importedBefore,
+			focusSourceId,
+			refreshNonce,
+		] ),
+		() => setSelection( [] )
+	);
 
 	const sourceIds = useMemo(
 		() =>
