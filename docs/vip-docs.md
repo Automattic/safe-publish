@@ -229,7 +229,7 @@ Safe Publish is scoped to publishing content between two paired sites. The follo
 - **Scheduled or automatic sync.** Imports are performed manually; there is no cron-based synchronization.
 - **Real-time, two-way sync.** Content moves as on-demand snapshots in one direction per operation, even when both sites are in `bidirectional` mode.
 - **Plugin, theme, or configuration transfer.** Only content — posts, pages, custom post types, their media, and their taxonomy terms — is imported.
-- **Third-party media import.** Media hosted off the source domain is left as-is; its URLs are not rewritten or localized.
+- **Third-party media import.** Media referenced in post content and hosted off the source domain is left as-is; its URLs are not rewritten or localized. Featured images are an exception — they are downloaded regardless of serving host.
 - **Importing children of missing parents.** By default, importing a child post whose parent is absent on the destination fails, unless `safe_publish_import_allow_orphans` is enabled.
 
 ## Troubleshooting
@@ -255,4 +255,4 @@ Safe Publish attributes each imported post to a destination user matched by the 
 
 ### Imported media did not transfer
 
-Confirm the media is hosted on the source site's domain — third-party media is intentionally left in place and not downloaded. Media download and sideload failures are recorded in the audit log's media channel, which can be reviewed to identify the specific files that failed.
+For media referenced in content, confirm it is hosted on the source site's domain — such third-party media is intentionally left in place and not downloaded. Featured images are downloaded regardless of host, so this does not apply to them. Media download and sideload failures are recorded in the audit log's media channel, which can be reviewed to identify the specific files that failed.
