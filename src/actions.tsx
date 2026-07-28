@@ -71,15 +71,16 @@ const isRollbackEligible = ( item: UnifiedPostRow ): boolean =>
  * Creates DataViews actions for the unified Manage listing. Import covers
  * first-time create, re-import (update), and retry against a single source
  * endpoint; per-state eligibility: 'available'/'failed' → Import;
- * 'up-to-date'/'outdated' → Compare, Import, Edit, Delete, Rollback
+ * 'up-to-date'/'outdated' → Compare, Import, Edit, Trash, Rollback
  * (Compare/Import hide on up-to-date); 'failed' on the Failed chip also
  * exposes Dismiss. Mixed bulk selections rely on per-item isEligible.
  *
- * @param {Function}            onRefresh    Listing refresh callback.
- * @param {boolean}             isAuthorized Whether the source authorizes imports.
- * @param {PostsActionsContext} context      Admin-ajax URL, nonce, notice sink.
- * @param {Object}              syncStatuses Per-row sync entries keyed by source post id.
- * @param {ChipState}           chipState    Current chip; gates Failed-only actions.
+ * @param {Function}            onRefresh       Listing refresh callback.
+ * @param {boolean}             isAuthorized    Whether the source authorizes imports.
+ * @param {PostsActionsContext} context         Admin-ajax URL, nonce, notice sink.
+ * @param {Object}              syncStatuses    Per-row sync entries keyed by source post id.
+ * @param {ChipState}           chipState       Current chip; gates Failed-only actions.
+ * @param {number}              [selectedCount] Selected rows; sizes the bulk-import skipped count.
  *
  * @return {Action<UnifiedPostRow>[]} Array of DataViews actions.
  */
@@ -88,7 +89,8 @@ export const createPostsActions = (
 	isAuthorized: boolean,
 	context: PostsActionsContext,
 	syncStatuses: Record< number, { status: ImportSyncStatus } >,
-	chipState: ChipState
+	chipState: ChipState,
+	selectedCount = 0
 ): Action< UnifiedPostRow >[] => {
 	const actions: Action< UnifiedPostRow >[] = [
 	{
@@ -157,6 +159,7 @@ export const createPostsActions = (
 						sourceLink={ item.link }
 						postType={ item.post_type }
 						isUpdate={ isUpdate }
+						skippedCount={ Math.max( 0, selectedCount - items.length ) }
 						ajaxurl={ context.ajaxurl }
 						nonce={ context.nonce }
 						closeModal={ closeModal }
@@ -172,6 +175,7 @@ export const createPostsActions = (
 						post_type: item.post_type,
 						title: item.title,
 					} ) ) }
+					skippedCount={ Math.max( 0, selectedCount - items.length ) }
 					context={ { ajaxurl: context.ajaxurl, nonce: context.nonce } }
 					onClose={ () => closeModal?.() }
 					onRefresh={ onRefresh }
@@ -179,6 +183,11 @@ export const createPostsActions = (
 						/* translators: %d is the number of selected posts */
 						confirmQuestion: __(
 							'Import %d selected posts from the source?',
+							'safe-publish'
+						),
+						/* translators: 1: importable count, 2: total selected count */
+						confirmQuestionPartial: __(
+							'Import %1$d of %2$d selected posts from the source?',
 							'safe-publish'
 						),
 						confirmDescription: __(
@@ -231,7 +240,7 @@ export const createPostsActions = (
 	},
 	{
 		id: 'delete-post',
-		label: __( 'Delete', 'safe-publish' ),
+		label: __( 'Trash', 'safe-publish' ),
 		icon: trash,
 		isDestructive: true,
 		hideModalHeader: true,
@@ -388,7 +397,7 @@ const retryOutcomeNotice = (
 				status: 'error',
 				message: sprintf(
 					/* translators: %s: affected content title */
-					__( "Retry couldn't complete for %s.", 'safe-publish' ),
+					__( 'Failed to retry %s.', 'safe-publish' ),
 					attentionIssueLabel( issue )
 				),
 			};
@@ -484,7 +493,7 @@ export const createAttentionIssueActions = (
 							status: 'error',
 							message: getErrorMessage(
 								result,
-								__( 'Retry failed.', 'safe-publish' )
+								__( 'Failed to retry.', 'safe-publish' )
 							),
 						} );
 						return;
@@ -515,7 +524,7 @@ export const createAttentionIssueActions = (
 					context.onNotice?.( {
 						status: 'error',
 						message: __(
-							'Network error during retry.',
+							'Network error while retrying.',
 							'safe-publish'
 						),
 					} );

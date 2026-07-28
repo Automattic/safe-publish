@@ -45,6 +45,10 @@ class Content_Processor {
 	 * (e.g. core/navigation-link.id only when kind=post-type) and optionally
 	 * naming a url_attr to re-derive from the resolved destination id.
 	 *
+	 * Deliberately curated: only attrs known to hold a source post/term
+	 * reference are remapped; a permalink in any other attr is host-swapped
+	 * only, by design.
+	 *
 	 * @var array<string, list<array{attr:string, gated_by?: array<string,string>, url_attr?: string}>>
 	 */
 	private const POST_ID_BLOCK_ATTRS = array(
@@ -224,6 +228,12 @@ class Content_Processor {
 		$this->unprocessable_media = self::merge_media_map(
 			$this->unprocessable_media,
 			$this->content_media_processor->get_unprocessable_media()
+		);
+
+		// The per-block markup pass can't see block-level download failures.
+		$this->unprocessable_media = array_diff_key(
+			$this->unprocessable_media,
+			$this->failed_media
 		);
 
 		$this->content_media_processor->reset_failed_media();
@@ -1157,13 +1167,14 @@ class Content_Processor {
 				$this->content_media_processor
 					->has_uploadable_file_extension( $value )
 			) {
-				// Only sideload attrs that look like a media file. A non-media
-				// URL such as a permalink fails and aborts the import.
+				// Only sideload attrs that look like a media file. A media-looking
+				// URL that downloads to a page (e.g. a .pdf permalink serving
+				// HTML) is left as a link rather than recorded as a failure.
 				$attachment_id = $this->media_importer
-					->import_source_media_as_attachment( $value, $source_site_url );
+					->import_source_media_as_attachment( $value, $source_site_url, true );
 
 				if ( null === $attachment_id ) {
-					continue; // Third-party or non-source URL — leave unchanged.
+					continue; // Third-party, non-source, or not media — leave unchanged.
 				}
 
 				if ( false === $attachment_id ) {
