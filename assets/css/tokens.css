@@ -33,6 +33,7 @@
 	--safe-publish-status-warning-border: #f0d589;
 	--safe-publish-status-error: #d63638;
 	--safe-publish-status-error-hover: #b32d2e;
+	--safe-publish-status-future: #9b59b6;
 
 	/* Pills. */
 	--safe-publish-pill-bg-neutral: #dcdcde;
@@ -43,9 +44,7 @@
 
 	/* Diff palette (unified across inline highlights and block surfaces). */
 	--safe-publish-diff-added-bg: #d1f2a5;
-	--safe-publish-diff-added-text: #1a7f37;
 	--safe-publish-diff-removed-bg: #ffd8da;
-	--safe-publish-diff-removed-text: #cf222e;
 	--safe-publish-diff-surface-bg: #f6f8fa;
 	--safe-publish-diff-surface-border: #d0d7de;
 }

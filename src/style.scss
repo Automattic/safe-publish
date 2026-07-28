@@ -223,7 +223,7 @@
 	}
 
 	&--future {
-		--safe-publish-badge-color: #9b59b6;
+		--safe-publish-badge-color: var(--safe-publish-status-future);
 	}
 
 	// Colored dot with neutral text — for reference columns, not the
@@ -281,8 +281,8 @@ html:has(body.toplevel_page_safe-publish) {
 		left: 0;
 		right: 0;
 		z-index: 20;
-		background: #fff;
-		border: 1px solid #ddd;
+		background: var(--safe-publish-surface-bg);
+		border: 1px solid var(--safe-publish-border);
 		border-top: none;
 		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 		margin-top: 2px;
