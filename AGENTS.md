@@ -38,7 +38,7 @@
 
 - Verify PHP files use strict typing, and use type hinting everywhere possible.
 - Prefer using `_` instead of `@psalm-suppress PossiblyUnusedParam`.
-- Use explicit checks — don't use empty(), and don't coerce with `!` (write `0 === $id`, `null === $post`).
+- Use explicit checks — don't use `empty()`, and don't coerce values with `!`. Reserve `!` for booleans and predicates; write an explicit comparison instead (`0 === $id`, `null === $post`), and for a multi-falsy union a type test (`! ( $result instanceof WP_Post )`, not `! $result`).
 
 ### Comments and docblocks
 
