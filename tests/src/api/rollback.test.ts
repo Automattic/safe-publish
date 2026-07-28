@@ -89,7 +89,7 @@ describe( 'rollbackItem', () => {
 				success: true,
 				data: {
 					action: 'restored',
-					message: 'Post successfully restored to previous version',
+					message: 'Post restored to its previous version.',
 				},
 			} ),
 		} );
@@ -101,7 +101,7 @@ describe( 'rollbackItem', () => {
 		expect( outcome ).toEqual( {
 			success: true,
 			action: 'restored',
-			message: 'Post successfully restored to previous version',
+			message: 'Post restored to its previous version.',
 		} );
 	} );
 
