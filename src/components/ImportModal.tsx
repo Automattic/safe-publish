@@ -117,7 +117,7 @@ const ImportModal = ( {
 							closeModal?.();
 						} }
 					>
-						{ __( 'Edit Post', 'safe-publish' ) }
+						{ __( 'Edit post', 'safe-publish' ) }
 					</Button>
 				</HStack>
 			</VStack>

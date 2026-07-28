@@ -64,7 +64,35 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Mocks HTTP requests for media downloads, serving real fixture files.
+	 * HTML body served for source URLs that resolve to a page rather than a
+	 * media file, so byte-level detection sees text/html content.
+	 *
+	 * @var string
+	 */
+	private const HTML_PAGE_BODY = '<!DOCTYPE html><html><head><title>Report</title></head><body><p>Not a media file.</p></body></html>';
+
+	/**
+	 * Plain-text body served for source URLs that resolve to a soft-404, whose
+	 * bytes fileinfo reports as text/plain — an always-allowed upload type.
+	 *
+	 * @var string
+	 */
+	private const TEXT_BODY = 'This URL does not resolve to a media file.';
+
+	/**
+	 * Minimal PDF body served for extensionless URLs so byte-level detection
+	 * sees application/pdf content, exercising the non-image detection path.
+	 *
+	 * @var string
+	 */
+	private const PDF_BODY = "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 3 3]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF";
+
+	/**
+	 * Mocks HTTP requests for media downloads, serving fixtures by content type.
+	 *
+	 * Serves fixtures by URL extension, or by an intent marker in the path
+	 * (serves-html, serves-image, serves-pdf) for the ambiguous cases, and writes
+	 * the body to the download temp file so content detection sees real bytes.
 	 *
 	 * @param false|array|WP_Error $preempt A preemptive return value.
 	 * @param array                $args    HTTP request arguments.
@@ -76,13 +104,51 @@ class Content_Processor_Test extends Integration_Test_Case {
 		array $args,
 		string $url
 	): false|array|WP_Error {
-		unset( $args );
-
 		if ( false !== $preempt || ! str_contains( $url, 'source.example.com' ) ) {
 			return $preempt;
 		}
 
-		$extension   = strtolower( pathinfo( (string) wp_parse_url( $url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
+		// A source URL that serves an HTML page even though its path ends in an
+		// uploadable extension (the media-looking page-link case).
+		if ( str_contains( $url, 'serves-html' ) ) {
+			$response = $this->build_response( self::HTML_PAGE_BODY, 'text/html' );
+			$this->populate_download_temp( $args, self::HTML_PAGE_BODY );
+
+			return $response;
+		}
+
+		// A source URL serving a plain-text soft-404, whose bytes fileinfo
+		// reports as text/plain (an always-allowed upload type).
+		if ( str_contains( $url, 'serves-text' ) ) {
+			$response = $this->build_response( self::TEXT_BODY, 'text/plain' );
+			$this->populate_download_temp( $args, self::TEXT_BODY );
+
+			return $response;
+		}
+
+		$extension = strtolower( pathinfo( (string) wp_parse_url( $url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
+
+		// A source media file served without a file extension in its URL. The
+		// "headerless" variant also omits the Content-Type header, so the type
+		// can only be recovered from the downloaded bytes.
+		if ( '' === $extension && str_contains( $url, 'serves-image' ) ) {
+			return $this->serve_fixture(
+				$args,
+				'test-1x1.jpg',
+				'image/jpeg',
+				! str_contains( $url, 'headerless' )
+			);
+		}
+
+		// A non-image source file (PDF) served without a file extension, to
+		// exercise the fileinfo-based content detection.
+		if ( '' === $extension && str_contains( $url, 'serves-pdf' ) ) {
+			$response = $this->build_response( self::PDF_BODY, 'application/pdf' );
+			$this->populate_download_temp( $args, self::PDF_BODY );
+
+			return $response;
+		}
+
 		$fixture_map = array(
 			'heic' => array( 'test-1x1.jpg', 'image/jpeg' ),
 			'jpg'  => array( 'test-1x1.jpg', 'image/jpeg' ),
@@ -96,7 +162,59 @@ class Content_Processor_Test extends Integration_Test_Case {
 			return $preempt;
 		}
 
-		return $this->get_fixture_response( ...$fixture_map[ $extension ] );
+		return $this->serve_fixture( $args, ...$fixture_map[ $extension ] );
+	}
+
+	/**
+	 * Serves a fixture response and writes its bytes to the download temp file.
+	 *
+	 * @param array  $args             HTTP request arguments.
+	 * @param string $filename         Fixture filename.
+	 * @param string $mime_type        MIME type for the Content-Type header.
+	 * @param bool   $send_content_type Whether to include the Content-Type header.
+	 * @return array HTTP response array.
+	 */
+	private function serve_fixture(
+		array $args,
+		string $filename,
+		string $mime_type,
+		bool $send_content_type = true
+	): array {
+		$response = $this->get_fixture_response( $filename, $mime_type );
+
+		if ( ! $send_content_type ) {
+			// Simulate an origin that omits Content-Type, so download_url()
+			// cannot recover an extension from the header.
+			unset( $response['headers']['content-type'] );
+		}
+
+		$this->populate_download_temp( $args, (string) $response['body'] );
+
+		return $response;
+	}
+
+	/**
+	 * Builds a 200 HTTP response array with the given body and content type.
+	 *
+	 * @param string $body      Response body.
+	 * @param string $mime_type Content-Type header value.
+	 * @return array HTTP response array.
+	 */
+	private function build_response( string $body, string $mime_type ): array {
+		return array(
+			'headers'       => array(
+				'content-type'   => $mime_type,
+				'content-length' => (string) strlen( $body ),
+			),
+			'body'          => $body,
+			'response'      => array(
+				'code'    => 200,
+				'message' => 'OK',
+			),
+			'cookies'       => array(),
+			'filename'      => null,
+			'http_response' => null,
+		);
 	}
 
 	/**
@@ -1474,6 +1592,349 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a source image served at an extensionless URL inside an
+	 * inline <img> is sideloaded rather than aborting the import.
+	 *
+	 * The URL path carries no file extension, so the type is recovered from the
+	 * downloaded bytes; without that recovery the sideload is rejected and the
+	 * failure aborts the whole import.
+	 */
+	public function test_process_extensionless_source_image_in_img_is_imported(): void {
+		// ARRANGE: Classic content with an <img> whose source URL has no file
+		// extension but serves image bytes.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/media/serves-image';
+		$content         = '<img src="' . $image_url . '"/>';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the classic content.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: The extensionless image was sideloaded as one attachment.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Extensionless source image should be sideloaded'
+		);
+
+		// ASSERT: The <img> src now points at a local upload.
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Extensionless image src should be rewritten to a local upload URL'
+		);
+		$this->assertStringNotContainsString(
+			$image_url,
+			$processed,
+			'Source image URL should be replaced'
+		);
+
+		// ASSERT: A successful import is not recorded as a failure.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'A successfully imported extensionless image is not a failure'
+		);
+	}
+
+	/**
+	 * Verifies that a source image served at an extensionless URL that also
+	 * omits its Content-Type header is sideloaded rather than aborting.
+	 *
+	 * Exercises the import_source_media_as_attachment() path: without a header,
+	 * download_url() cannot recover an extension, so the type must come from the
+	 * downloaded bytes.
+	 */
+	public function test_process_extensionless_source_image_in_core_image_is_imported(): void {
+		// ARRANGE: A core/image block whose url has no file extension and whose
+		// response carries no Content-Type header.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = 'https://source.example.com/media/serves-image-headerless';
+		$content         = '<!-- wp:image {"url":"' . $image_url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $image_url . '"/></figure>'
+			. '<!-- /wp:image -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: The extensionless image was sideloaded as one attachment.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Extensionless core/image source should be sideloaded'
+		);
+
+		// ASSERT: The block now references a local upload, not the source URL.
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Extensionless image should be rewritten to a local upload URL'
+		);
+		$this->assertStringNotContainsString(
+			$image_url,
+			$processed,
+			'Source image URL should be replaced'
+		);
+
+		// ASSERT: A successful import is not recorded as a failure.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'A successfully imported extensionless image is not a failure'
+		);
+	}
+
+	/**
+	 * Verifies that a non-image source file served at an extensionless URL is
+	 * sideloaded by detecting its type from content.
+	 *
+	 * Exercises the fileinfo detection branch for a type wp_get_image_mime()
+	 * cannot identify, confirming extensionless coverage is not image-only.
+	 */
+	public function test_process_extensionless_source_pdf_is_imported(): void {
+		// ARRANGE: An <embed> whose extensionless src serves PDF bytes.
+		$source_site_url = 'https://source.example.com';
+		$file_url        = 'https://source.example.com/files/serves-pdf';
+		$content         = '<embed src="' . $file_url . '"/>';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the classic content.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: The extensionless PDF was sideloaded as one attachment.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Extensionless source PDF should be sideloaded'
+		);
+
+		// ASSERT: The embed src now points at a local .pdf upload.
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Extensionless PDF src should be rewritten to a local upload URL'
+		);
+		$this->assertStringContainsString(
+			'.pdf',
+			$processed,
+			'Detected content type should give the upload a .pdf extension'
+		);
+
+		// ASSERT: A successful import is not recorded as a failure.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'A successfully imported extensionless PDF is not a failure'
+		);
+	}
+
+	/**
+	 * Verifies that an anchor href whose path ends in an uploadable extension
+	 * but resolves to an HTML page is kept as a link, not sideloaded.
+	 *
+	 * The bytes are HTML, not the media type the extension implies, so the URL
+	 * is left as a link (host-swapped) instead of being recorded as a failure
+	 * that would abort the import.
+	 */
+	public function test_process_media_looking_page_link_in_anchor_is_kept_as_link(): void {
+		// ARRANGE: An anchor whose href path ends in .pdf but serves HTML.
+		$source_site_url = 'https://source.example.com';
+		$page_url        = 'https://source.example.com/serves-html/report.pdf';
+		$content         = '<a href="' . $page_url . '">Report</a>';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the classic content.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Nothing was sideloaded.
+		$this->assert_no_new_attachments(
+			$attachments_before,
+			'Media-looking page link must not be sideloaded'
+		);
+
+		// ASSERT: The href is kept as a link, host-swapped to the destination.
+		$this->assertStringContainsString(
+			get_site_url() . '/serves-html/report.pdf',
+			$processed,
+			'Page link should be host-swapped, not localized'
+		);
+		$this->assertStringNotContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Page link must not become a local upload'
+		);
+
+		// ASSERT: The page link is not recorded as a media failure.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'Media-looking page link must not be recorded as a failure'
+		);
+	}
+
+	/**
+	 * Verifies that a custom block attr holding a source URL whose path ends in
+	 * an uploadable extension but resolves to an HTML page is kept as a link.
+	 *
+	 * Exercises the replace_urls_in_attrs() path: the downloaded bytes are
+	 * HTML, so the attr is left as a link instead of aborting the import.
+	 */
+	public function test_process_media_looking_page_link_in_custom_attr_is_kept_as_link(): void {
+		// ARRANGE: A custom block attr holding a .pdf URL that serves HTML.
+		$source_site_url = 'https://source.example.com';
+		$page_url        = 'https://source.example.com/serves-html/brochure.pdf';
+		$content         = '<!-- wp:my-plugin/card {"fileUrl":"' . $page_url . '"} -->'
+			. '<div class="wp-block-my-plugin-card"></div>'
+			. '<!-- /wp:my-plugin/card -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Nothing was sideloaded.
+		$this->assert_no_new_attachments(
+			$attachments_before,
+			'Media-looking page link in attrs must not be sideloaded'
+		);
+
+		// ASSERT: The attr is kept as a link, host-swapped to the destination.
+		$this->assertStringContainsString(
+			get_site_url() . '/serves-html/brochure.pdf',
+			$processed,
+			'Page link in attrs should be host-swapped, not localized'
+		);
+
+		// ASSERT: The page link is not recorded as a media failure.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'Media-looking page link in attrs must not be recorded as a failure'
+		);
+	}
+
+	/**
+	 * Verifies that a custom block attr holding a .webp URL that serves an HTML
+	 * page is kept as a link, not sideloaded as a bogus WebP attachment.
+	 *
+	 * This path registers the WebP upload shim, which would otherwise re-assert
+	 * image/webp for the page during the content check; is_media_content() strips
+	 * it so the real type (text/html) is seen and the link is preserved.
+	 */
+	public function test_process_media_looking_webp_page_link_in_custom_attr_is_kept_as_link(): void {
+		// ARRANGE: A custom block attr holding a .webp URL that serves HTML.
+		$source_site_url = 'https://source.example.com';
+		$page_url        = 'https://source.example.com/serves-html/photo.webp';
+		$content         = '<!-- wp:my-plugin/card {"fileUrl":"' . $page_url . '"} -->'
+			. '<div class="wp-block-my-plugin-card"></div>'
+			. '<!-- /wp:my-plugin/card -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Nothing was sideloaded.
+		$this->assert_no_new_attachments(
+			$attachments_before,
+			'WebP-looking page link in attrs must not be sideloaded'
+		);
+
+		// ASSERT: The attr is kept as a link, host-swapped to the destination.
+		$this->assertStringContainsString(
+			get_site_url() . '/serves-html/photo.webp',
+			$processed,
+			'WebP page link in attrs should be host-swapped, not localized'
+		);
+
+		// ASSERT: The page link is not recorded as a media failure.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'WebP-looking page link in attrs must not be recorded as a failure'
+		);
+	}
+
+	/**
+	 * Verifies that an extensionless <img> src resolving to a plain-text page is
+	 * not sideloaded as a bogus text attachment.
+	 *
+	 * With no extension the type is taken from the bytes, and only image, video,
+	 * audio, and PDF content is sideloaded, so a text/plain soft-404 surfaces as
+	 * a failure rather than being stored as a .txt upload and reported as success.
+	 */
+	public function test_process_extensionless_img_serving_text_is_not_sideloaded(): void {
+		// ARRANGE: An <img> whose extensionless URL serves a plain-text page.
+		$source_site_url = 'https://source.example.com';
+		$page_url        = 'https://source.example.com/serves-text/asset';
+		$content         = '<img src="' . $page_url . '"/>';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the classic content.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Nothing was sideloaded — no bogus text attachment.
+		$this->assert_no_new_attachments(
+			$attachments_before,
+			'A text page at an extensionless img src must not be sideloaded'
+		);
+		$this->assertStringNotContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Extensionless text must not be rewritten to a local upload'
+		);
+
+		// ASSERT: It surfaces as a media failure, not a silent success.
+		$this->assertNotSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'Non-media at an img src must be recorded as a failure'
+		);
+	}
+
+	/**
+	 * Verifies that a genuine media file at an anchor href whose sideload fails
+	 * is recorded as a failure, not silently left as a link.
+	 *
+	 * The leave-as-link path is only for content that is not media. A real image
+	 * whose sideload fails (e.g. an unwritable uploads dir) must still surface so
+	 * the import does not swap the link to an upload that was never created.
+	 */
+	public function test_process_anchor_href_media_with_failing_sideload_is_recorded(): void {
+		// ARRANGE: An anchor href to a genuine source image, with the sideload
+		// step forced to fail after a successful download.
+		$source_site_url = 'https://source.example.com';
+		$href_url        = 'https://source.example.com/report.jpg';
+		$content         = '<a href="' . $href_url . '">Download</a>';
+
+		$fail_sideload = static function ( array $file ): array {
+			$file['error'] = 'Forced sideload failure for test';
+			return $file;
+		};
+		add_filter( 'wp_handle_sideload_prefilter', $fail_sideload, 11, 1 );
+
+		// ACT: Process the content with sideload forced to fail.
+		try {
+			$this->processor->process_content( $content, $source_site_url );
+		} finally {
+			remove_filter( 'wp_handle_sideload_prefilter', $fail_sideload, 11 );
+		}
+
+		// ASSERT: The genuine media failure is surfaced, not swallowed.
+		$this->assertSame(
+			array( $href_url => '' ),
+			$this->processor->get_failed_media(),
+			'A genuine media file that fails to sideload must be recorded'
+		);
+	}
+
+	/**
 	 * Verifies that media in top-level classic HTML mixed with a block is
 	 * imported and rewritten to a local upload.
 	 *
@@ -2015,6 +2476,38 @@ class Content_Processor_Test extends Integration_Test_Case {
 		$message = (string) $this->processor->get_unprocessable_media_error_message();
 		$this->assertStringContainsString( $url, $message );
 		$this->assertStringNotContainsString( $url . ' (', $message );
+	}
+
+	/**
+	 * Verifies that a URL failing a block-level download is reported only as a
+	 * download failure, never also as unprocessable markup, when the same URL
+	 * recurs in malformed inner HTML.
+	 */
+	public function test_failed_download_not_also_reported_as_unprocessable(): void {
+		// ARRANGE: A core/image block whose attrs.url fails to download and
+		// whose inner HTML repeats that URL in an unclosed src quote the HTML
+		// API cannot parse.
+		$url     = 'https://source.example.com/broken.jpg';
+		$content = '<!-- wp:image {"url":"' . $url . '"} -->'
+			. '<img src="' . $url
+			. '<!-- /wp:image -->';
+
+		// ACT: Process the content with the download forced to fail.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The URL is recorded as a download failure.
+		$this->assertSame(
+			array( $url ),
+			array_keys( $this->processor->get_failed_media() ),
+			'Failed download URL should be recorded in failed_media'
+		);
+
+		// ASSERT: The same URL is not also reported as unprocessable markup.
+		$this->assertSame(
+			array(),
+			$this->processor->get_unprocessable_media(),
+			'Failed download URL must not also be recorded as unprocessable'
+		);
 	}
 
 	/**

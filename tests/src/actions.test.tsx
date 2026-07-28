@@ -627,7 +627,7 @@ describe( 'createAttentionIssueActions', () => {
 		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
 		expect( onNotice ).toHaveBeenCalledWith( {
 			status: 'error',
-			message: "Retry couldn't complete for Primary Menu.",
+			message: 'Failed to retry Primary Menu.',
 		} );
 	} );
 

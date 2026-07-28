@@ -128,6 +128,18 @@ function get_test_doing_it_wrong_calls(): array {
 	return $GLOBALS['_test_doing_it_wrong_calls'] ?? array();
 }
 
+function get_posts( array $args = array() ): array {
+	return $GLOBALS['_test_get_posts_result'] ?? array();
+}
+
+function set_test_get_posts_result( array $result ): void {
+	$GLOBALS['_test_get_posts_result'] = $result;
+}
+
+function reset_test_get_posts_result(): void {
+	unset( $GLOBALS['_test_get_posts_result'] );
+}
+
 /**
  * Sets or clears an environment variable for a test.
  *

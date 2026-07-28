@@ -71,7 +71,7 @@ const isRollbackEligible = ( item: UnifiedPostRow ): boolean =>
  * Creates DataViews actions for the unified Manage listing. Import covers
  * first-time create, re-import (update), and retry against a single source
  * endpoint; per-state eligibility: 'available'/'failed' → Import;
- * 'up-to-date'/'outdated' → Compare, Import, Edit, Delete, Rollback
+ * 'up-to-date'/'outdated' → Compare, Import, Edit, Trash, Rollback
  * (Compare/Import hide on up-to-date); 'failed' on the Failed chip also
  * exposes Dismiss. Mixed bulk selections rely on per-item isEligible.
  *
@@ -240,7 +240,7 @@ export const createPostsActions = (
 	},
 	{
 		id: 'delete-post',
-		label: __( 'Delete', 'safe-publish' ),
+		label: __( 'Trash', 'safe-publish' ),
 		icon: trash,
 		isDestructive: true,
 		hideModalHeader: true,
@@ -397,7 +397,7 @@ const retryOutcomeNotice = (
 				status: 'error',
 				message: sprintf(
 					/* translators: %s: affected content title */
-					__( "Retry couldn't complete for %s.", 'safe-publish' ),
+					__( 'Failed to retry %s.', 'safe-publish' ),
 					attentionIssueLabel( issue )
 				),
 			};
@@ -493,7 +493,7 @@ export const createAttentionIssueActions = (
 							status: 'error',
 							message: getErrorMessage(
 								result,
-								__( 'Retry failed.', 'safe-publish' )
+								__( 'Failed to retry.', 'safe-publish' )
 							),
 						} );
 						return;
@@ -524,7 +524,7 @@ export const createAttentionIssueActions = (
 					context.onNotice?.( {
 						status: 'error',
 						message: __(
-							'Network error during retry.',
+							'Network error while retrying.',
 							'safe-publish'
 						),
 					} );

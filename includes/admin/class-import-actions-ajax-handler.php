@@ -169,8 +169,8 @@ final class Import_Actions_Ajax_Handler {
 		);
 
 		$messages = array(
-			'deleted'  => __( 'Post successfully deleted', 'safe-publish' ),
-			'restored' => __( 'Post successfully restored to previous version', 'safe-publish' ),
+			'deleted'  => __( 'Post permanently deleted.', 'safe-publish' ),
+			'restored' => __( 'Post restored to its previous version.', 'safe-publish' ),
 		);
 
 		$result['message'] = $messages[ $result['action'] ] ?? $result['action'];
