@@ -65,6 +65,9 @@ const DeleteFailedImportsModal = ( {
 	const [ error, setError ] = useState< string | null >( null );
 
 	const isBulk = items.length > 1;
+	// Dismiss (Failed chip) and Remove (orphan drawer) share this modal; the
+	// verb tracks the scope so each entry reads in its own voice.
+	const isDismiss = 'sources' === scope;
 
 	const handleDelete = (): void => {
 		setIsLoading( true );
@@ -90,7 +93,9 @@ const DeleteFailedImportsModal = ( {
 					setError(
 						getErrorMessage(
 							result,
-							__( 'Failed to remove.', 'safe-publish' )
+							isDismiss
+								? __( 'Failed to dismiss.', 'safe-publish' )
+								: __( 'Failed to remove.', 'safe-publish' )
 						)
 					);
 					setIsLoading( false );
@@ -111,21 +116,43 @@ const DeleteFailedImportsModal = ( {
 			} );
 	};
 
+	let confirmationText: string;
+	if ( isBulk ) {
+		confirmationText = isDismiss
+			? sprintf(
+					/* translators: %d: number of failed imports selected. */
+					__( 'Dismiss %d failed imports?', 'safe-publish' ),
+					items.length
+			  )
+			: sprintf(
+					/* translators: %d: number of failed imports selected. */
+					__( 'Remove %d failed imports?', 'safe-publish' ),
+					items.length
+			  );
+	} else {
+		confirmationText = isDismiss
+			? sprintf(
+					/* translators: %s: failed-import title. */
+					__( 'Dismiss "%s"?', 'safe-publish' ),
+					items[ 0 ].title
+			  )
+			: sprintf(
+					/* translators: %s: failed-import title. */
+					__( 'Remove "%s"?', 'safe-publish' ),
+					items[ 0 ].title
+			  );
+	}
+
+	const processingLabel = isDismiss
+		? __( 'Dismissing…', 'safe-publish' )
+		: __( 'Removing…', 'safe-publish' );
+	const actionLabel = isDismiss
+		? __( 'Dismiss', 'safe-publish' )
+		: __( 'Remove', 'safe-publish' );
+
 	return (
 		<VStack spacing="5">
-			<Text>
-				{ isBulk
-					? sprintf(
-							/* translators: %d: number of failed imports selected. */
-							__( 'Remove %d failed imports?', 'safe-publish' ),
-							items.length
-					  )
-					: sprintf(
-							/* translators: %s: failed-import title. */
-							__( 'Remove "%s"?', 'safe-publish' ),
-							items[ 0 ].title
-					  ) }
-			</Text>
+			<Text>{ confirmationText }</Text>
 			{ error && (
 				<Text role="alert" style={ { color: '#d63638' } }>
 					{ error }
@@ -150,10 +177,10 @@ const DeleteFailedImportsModal = ( {
 					{ isLoading ? (
 						<>
 							<Spinner />
-							{ __( 'Removing…', 'safe-publish' ) }
+							{ processingLabel }
 						</>
 					) : (
-						__( 'Remove', 'safe-publish' )
+						actionLabel
 					) }
 				</Button>
 			</HStack>
