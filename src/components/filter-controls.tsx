@@ -34,14 +34,16 @@ export type SlugOrigin = 'source' | 'destination' | 'unknown';
 export type SlugDetection = { slug: string; origin: SlugOrigin };
 
 /**
- * Host of a URL, or '' when it can't be parsed.
+ * Canonical host of a URL, leading "www." dropped, or '' when it can't be
+ * parsed. Dropping www. lets a browser-canonical host and its bare form
+ * compare equal.
  *
  * @param {string} url URL to parse.
- * @return {string} Host, or '' on failure.
+ * @return {string} Canonical host, or '' on failure.
  */
 const hostOf = ( url: string ): string => {
 	try {
-		return new URL( url ).host;
+		return new URL( url ).host.replace( /^www\./, '' );
 	} catch {
 		return '';
 	}
@@ -80,10 +82,11 @@ export function detectSlugFromInput(
 		// Bare paths inherit the placeholder host; only attribute an origin
 		// for a full URL with its own host.
 		if ( url.host !== PLACEHOLDER_HOST ) {
+			const pastedHost = hostOf( trimmed );
 			const sourceHost = hostOf( sourceUrl );
 			const destHost = hostOf( destinationUrl );
-			const matchesSource = '' !== sourceHost && url.host === sourceHost;
-			const matchesDest = '' !== destHost && url.host === destHost;
+			const matchesSource = '' !== sourceHost && pastedHost === sourceHost;
+			const matchesDest = '' !== destHost && pastedHost === destHost;
 
 			if ( matchesSource && ! matchesDest ) {
 				origin = 'source';

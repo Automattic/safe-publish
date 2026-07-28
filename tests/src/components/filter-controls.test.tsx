@@ -60,6 +60,34 @@ describe( 'detectSlugFromInput', () => {
 		expect( result ).toBeNull();
 	} );
 
+	it( 'should ignore a leading www. when matching the source host', () => {
+		// ARRANGE + ACT: a browser-canonical www. permalink pasted against a
+		// bare-host source — the same site after a canonical redirect.
+		const result = detectSlugFromInput(
+			'https://www.source.example.com/my-post/',
+			urls
+		);
+
+		// ASSERT: www. is dropped on both sides, so it attributes to the
+		// source instead of rejecting and falling back to a text search.
+		expect( result ).toEqual( { slug: 'my-post', origin: 'source' } );
+	} );
+
+	it( 'should ignore a leading www. on the connected host', () => {
+		// ARRANGE + ACT: source is stored with a leading www.; the pasted
+		// permalink omits it.
+		const result = detectSlugFromInput(
+			'https://source.example.com/my-post/',
+			{
+				sourceUrl: 'https://www.source.example.com',
+				destinationUrl: DEST_URL,
+			}
+		);
+
+		// ASSERT: www. is dropped on both sides, so the host still matches.
+		expect( result ).toEqual( { slug: 'my-post', origin: 'source' } );
+	} );
+
 	it( 'should tag a bare absolute path with the unknown origin', () => {
 		// ARRANGE + ACT: input is just a path, no host to attribute.
 		const result = detectSlugFromInput( '/posts/my-post/', urls );
