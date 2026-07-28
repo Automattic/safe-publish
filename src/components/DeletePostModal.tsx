@@ -128,7 +128,7 @@ const DeletePostModal = ( {
 		<VStack spacing="5">
 			<Text>{ confirmationText }</Text>
 			{ error && (
-				<Text role="alert" style={ { color: '#d63638' } }>
+				<Text role="alert" style={ { color: 'var(--safe-publish-status-error)' } }>
 					{ error }
 				</Text>
 			) }

@@ -88,7 +88,7 @@ const RollbackPostModal = ( {
 					__( 'Roll back "%s"?', 'safe-publish' ), post.title ) }
 			</Text>
 			<Text>{ description }</Text>
-			{ error && <Text role="alert" style={ { color: '#d63638' } }>{ error }</Text> }
+			{ error && <Text role="alert" style={ { color: 'var(--safe-publish-status-error)' } }>{ error }</Text> }
 			<HStack justify="right">
 				<Button
 					__next40pxDefaultSize
