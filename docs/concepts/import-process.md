@@ -64,7 +64,7 @@ The following element/attribute combinations are processed:
 | `<embed>`  | `src`               |
 | `<object>` | `data`              |
 
-If an `<a>` tag ends in a file extension allowed by WordPress, it is processed in this step. Regular links are processed later.
+If an `<a>` tag's `href` ends in a file extension allowed by WordPress, it is processed as media in this step; its content then decides whether it is imported or kept as a link (step 6). Regular links are processed later.
 
 ### What Is Not Processed
 
@@ -80,7 +80,7 @@ If an `<a>` tag ends in a file extension allowed by WordPress, it is processed i
 3. **Filter**: Third-party domain URLs are left unchanged.
 4. **Deduplicate**: If the URL was already imported, the existing attachment URL is used, and download is skipped.
 5. **Download**: File fetched using WordPress core's `download_url()`; downloadability is verified at this point.
-6. **Import**: File type is validated and added to the media library via `media_handle_sideload()`.
+6. **Import**: The file type is classified from the downloaded content, not the URL extension — image, video, audio, and PDF are added to the media library via `media_handle_sideload()`; a media-looking URL that resolves to a page is kept as a link.
 7. **Enrich**: The image's source library metadata — alt text, title, caption, and description — is applied to the new attachment. The source resolves each URL back to its attachment record (a capability core REST lacks) and returns the values alongside the post.
 8. **Replace**: Source URL replaced with the new attachment URL in content; previously stripped query parameters are reapplied.
 

@@ -142,6 +142,7 @@ class Media_Importer {
 			$this->http_client->cleanup_temp_file( $temp_file );
 
 			if ( $skip_if_not_media ) {
+				$this->logger->media_left_as_link( $media_url, $source_site_url );
 				return null;
 			}
 
@@ -157,6 +158,7 @@ class Media_Importer {
 		// media type its extension implies (e.g. HTML served at a .pdf URL).
 		if ( $skip_if_not_media && ! $this->is_media_content( $temp_file, $filename ) ) {
 			$this->http_client->cleanup_temp_file( $temp_file );
+			$this->logger->media_left_as_link( $media_url, $source_site_url );
 			return null;
 		}
 
@@ -370,6 +372,7 @@ class Media_Importer {
 			$this->http_client->cleanup_temp_file( $temp_file );
 
 			if ( $skip_if_not_media ) {
+				$this->logger->media_left_as_link( $media_url, $source_site_url );
 				return null;
 			}
 
@@ -385,6 +388,7 @@ class Media_Importer {
 		// media type its extension implies (e.g. HTML served at a .pdf URL).
 		if ( $skip_if_not_media && ! $this->is_media_content( $temp_file, $filename ) ) {
 			$this->http_client->cleanup_temp_file( $temp_file );
+			$this->logger->media_left_as_link( $media_url, $source_site_url );
 			return null;
 		}
 
@@ -750,25 +754,46 @@ class Media_Importer {
 	 * type for the given filename. Distinguishes a genuine media file from a page
 	 * served at a media-looking URL before sideloading it.
 	 *
+	 * Content validation relies on the fileinfo extension; where it is
+	 * unavailable, wp_check_filetype_and_ext() trusts the URL extension, so a
+	 * page served at a media URL cannot be distinguished from real media.
+	 *
 	 * @param string $temp_file Path to the downloaded file.
 	 * @param string $filename  Filename the file would be sideloaded under.
 	 * @return bool True when the content is an allowed upload type.
 	 */
 	private function is_media_content( string $temp_file, string $filename ): bool {
+		// Verify the content without the WebP shim, which would otherwise
+		// re-assert image/webp for a page served at a .webp URL and pass it off
+		// as media. Restore it afterward for the sideload that follows.
+		$shim_priority = has_filter(
+			'wp_check_filetype_and_ext',
+			array( $this, 'handle_webp_filetype' )
+		);
+		if ( false !== $shim_priority ) {
+			remove_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ) );
+		}
+
 		$verified = wp_check_filetype_and_ext( $temp_file, $filename );
+
+		if ( false !== $shim_priority ) {
+			add_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ), 10, 3 );
+		}
 
 		return false !== $verified['type'];
 	}
 
 	/**
-	 * Detects an allowed upload extension from a file's actual content.
+	 * Detects a sideloadable media extension from a file's actual content.
 	 *
 	 * Uses WordPress' image detection first, then fileinfo for other types, so
 	 * the result reflects the bytes rather than a URL extension or response
-	 * header. Returns an empty string when the content is not an allowed type.
+	 * header. Only image, video, audio, and PDF content is accepted, so an
+	 * extensionless URL resolving to a page, script, archive, or document is
+	 * left as a link. Returns an empty string when the content is not media.
 	 *
 	 * @param string $temp_file Path to the downloaded file.
-	 * @return string Extension without a leading dot, or '' when undetectable.
+	 * @return string Extension without a leading dot, or '' when not media.
 	 */
 	private function detect_extension_from_content( string $temp_file ): string {
 		$mime = wp_get_image_mime( $temp_file );
@@ -781,13 +806,28 @@ class Media_Importer {
 			}
 		}
 
-		if ( ! is_string( $mime ) || ! in_array( $mime, get_allowed_mime_types(), true ) ) {
+		if ( ! is_string( $mime ) || ! $this->is_sideloadable_media_mime( $mime ) ) {
 			return '';
 		}
 
 		$extension = wp_get_default_extension_for_mime_type( $mime );
 
 		return is_string( $extension ) ? $extension : '';
+	}
+
+	/**
+	 * Reports whether a MIME type is one this importer sideloads: image, video,
+	 * audio, or PDF. Other types (pages, scripts, archives, office documents)
+	 * are left as links rather than pulled into the media library.
+	 *
+	 * @param string $mime MIME type to test.
+	 * @return bool True when the type is sideloadable media.
+	 */
+	private function is_sideloadable_media_mime( string $mime ): bool {
+		return str_starts_with( $mime, 'image/' )
+			|| str_starts_with( $mime, 'video/' )
+			|| str_starts_with( $mime, 'audio/' )
+			|| 'application/pdf' === $mime;
 	}
 
 	/**

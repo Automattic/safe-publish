@@ -72,6 +72,14 @@ class Content_Processor_Test extends Integration_Test_Case {
 	private const HTML_PAGE_BODY = '<!DOCTYPE html><html><head><title>Report</title></head><body><p>Not a media file.</p></body></html>';
 
 	/**
+	 * Plain-text body served for source URLs that resolve to a soft-404, whose
+	 * bytes fileinfo reports as text/plain — an always-allowed upload type.
+	 *
+	 * @var string
+	 */
+	private const TEXT_BODY = 'This URL does not resolve to a media file.';
+
+	/**
 	 * Minimal PDF body served for extensionless URLs so byte-level detection
 	 * sees application/pdf content, exercising the non-image detection path.
 	 *
@@ -105,6 +113,15 @@ class Content_Processor_Test extends Integration_Test_Case {
 		if ( str_contains( $url, 'serves-html' ) ) {
 			$response = $this->build_response( self::HTML_PAGE_BODY, 'text/html' );
 			$this->populate_download_temp( $args, self::HTML_PAGE_BODY );
+
+			return $response;
+		}
+
+		// A source URL serving a plain-text soft-404, whose bytes fileinfo
+		// reports as text/plain (an always-allowed upload type).
+		if ( str_contains( $url, 'serves-text' ) ) {
+			$response = $this->build_response( self::TEXT_BODY, 'text/plain' );
+			$this->populate_download_temp( $args, self::TEXT_BODY );
 
 			return $response;
 		}
@@ -1798,6 +1815,86 @@ class Content_Processor_Test extends Integration_Test_Case {
 			array(),
 			$this->processor->get_failed_media(),
 			'Media-looking page link in attrs must not be recorded as a failure'
+		);
+	}
+
+	/**
+	 * Verifies that a custom block attr holding a .webp URL that serves an HTML
+	 * page is kept as a link, not sideloaded as a bogus WebP attachment.
+	 *
+	 * This path registers the WebP upload shim, which would otherwise re-assert
+	 * image/webp for the page during the content check; is_media_content() strips
+	 * it so the real type (text/html) is seen and the link is preserved.
+	 */
+	public function test_process_media_looking_webp_page_link_in_custom_attr_is_kept_as_link(): void {
+		// ARRANGE: A custom block attr holding a .webp URL that serves HTML.
+		$source_site_url = 'https://source.example.com';
+		$page_url        = 'https://source.example.com/serves-html/photo.webp';
+		$content         = '<!-- wp:my-plugin/card {"fileUrl":"' . $page_url . '"} -->'
+			. '<div class="wp-block-my-plugin-card"></div>'
+			. '<!-- /wp:my-plugin/card -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Nothing was sideloaded.
+		$this->assert_no_new_attachments(
+			$attachments_before,
+			'WebP-looking page link in attrs must not be sideloaded'
+		);
+
+		// ASSERT: The attr is kept as a link, host-swapped to the destination.
+		$this->assertStringContainsString(
+			get_site_url() . '/serves-html/photo.webp',
+			$processed,
+			'WebP page link in attrs should be host-swapped, not localized'
+		);
+
+		// ASSERT: The page link is not recorded as a media failure.
+		$this->assertSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'WebP-looking page link in attrs must not be recorded as a failure'
+		);
+	}
+
+	/**
+	 * Verifies that an extensionless <img> src resolving to a plain-text page is
+	 * not sideloaded as a bogus text attachment.
+	 *
+	 * With no extension the type is taken from the bytes, and only image, video,
+	 * audio, and PDF content is sideloaded, so a text/plain soft-404 surfaces as
+	 * a failure rather than being stored as a .txt upload and reported as success.
+	 */
+	public function test_process_extensionless_img_serving_text_is_not_sideloaded(): void {
+		// ARRANGE: An <img> whose extensionless URL serves a plain-text page.
+		$source_site_url = 'https://source.example.com';
+		$page_url        = 'https://source.example.com/serves-text/asset';
+		$content         = '<img src="' . $page_url . '"/>';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the classic content.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Nothing was sideloaded — no bogus text attachment.
+		$this->assert_no_new_attachments(
+			$attachments_before,
+			'A text page at an extensionless img src must not be sideloaded'
+		);
+		$this->assertStringNotContainsString(
+			'wp-content/uploads',
+			$processed,
+			'Extensionless text must not be rewritten to a local upload'
+		);
+
+		// ASSERT: It surfaces as a media failure, not a silent success.
+		$this->assertNotSame(
+			array(),
+			$this->processor->get_failed_media(),
+			'Non-media at an img src must be recorded as a failure'
 		);
 	}
 
