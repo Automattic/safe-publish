@@ -23,23 +23,52 @@ import { __, _x, sprintf } from '@wordpress/i18n';
 export const URL_OR_PATH_RE = /^(https?:\/\/[^\s]+|\/[^\s]+)/;
 
 /**
- * Extracts a slug from a pasted URL or path.
+ * Which site a pasted URL points at; 'unknown' when the host can't tell them
+ * apart (a bare path, or a shared source/destination host).
+ */
+export type SlugOrigin = 'source' | 'destination' | 'unknown';
+
+/**
+ * A slug extracted from user input, tagged with the site it came from.
+ */
+export type SlugDetection = { slug: string; origin: SlugOrigin };
+
+/**
+ * Canonical host of a URL, leading "www." dropped, or '' when it can't be
+ * parsed. Dropping www. lets a browser-canonical host and its bare form
+ * compare equal.
  *
- * Drops query/hash, strips trailing slashes, and returns the last non-empty
- * path segment. Returns null on non-URL input, no extractable slug, or a
- * URL host that doesn't match `validationUrls` — pasting a URL from an
- * unrelated site would otherwise silently return zero results.
+ * @param {string} url URL to parse.
+ * @return {string} Canonical host, or '' on failure.
+ */
+const hostOf = ( url: string ): string => {
+	try {
+		return new URL( url ).host.replace( /^www\./, '' );
+	} catch {
+		return '';
+	}
+};
+
+/**
+ * Extracts a slug from a pasted URL or path, tagged with its origin.
  *
- * @param {string}   raw            User input from the search box.
- * @param {string[]} validationUrls Allowed hosts (typically source and destination URLs).
- *                                  Empty list or all-unparseable disables host validation.
+ * Drops query/hash and returns the last path segment. Returns null for
+ * non-URL input, an empty path, or a full URL whose host matches neither
+ * connected site. Origin is 'source'/'destination' by matching host, else
+ * 'unknown' — a bare path, an unparseable host pair, or source and
+ * destination sharing a host (subdirectory multisite).
  *
- * @return {string|null} Slug suitable for `name=` lookup, or null.
+ * @param {string} raw                 User input from the search box.
+ * @param {Object} urls                Connected site URLs for attribution.
+ * @param {string} urls.sourceUrl      Source site URL.
+ * @param {string} urls.destinationUrl Destination site URL.
+ *
+ * @return {SlugDetection|null} Slug with its origin, or null.
  */
 export function detectSlugFromInput(
 	raw: string,
-	validationUrls: readonly string[]
-): string | null {
+	{ sourceUrl, destinationUrl }: { sourceUrl: string; destinationUrl: string }
+): SlugDetection | null {
 	const trimmed = raw.trim();
 	if ( ! URL_OR_PATH_RE.test( trimmed ) ) {
 		return null;
@@ -47,26 +76,31 @@ export function detectSlugFromInput(
 
 	const PLACEHOLDER_HOST = 'placeholder.example';
 	let path = trimmed;
+	let origin: SlugOrigin = 'unknown';
 	try {
 		const url = new URL( trimmed, `https://${ PLACEHOLDER_HOST }` );
-		// Bare paths inherit the placeholder host; only validate when the
-		// input was a full URL with its own host.
+		// Bare paths inherit the placeholder host; only attribute an origin
+		// for a full URL with its own host.
 		if ( url.host !== PLACEHOLDER_HOST ) {
-			const validHosts = validationUrls
-				.map( ( validationUrl ) => {
-					try {
-						return new URL( validationUrl ).host;
-					} catch {
-						return '';
-					}
-				} )
-				.filter( ( host ) => '' !== host );
-			if (
-				validHosts.length > 0
-				&& ! validHosts.includes( url.host )
+			const pastedHost = hostOf( trimmed );
+			const sourceHost = hostOf( sourceUrl );
+			const destHost = hostOf( destinationUrl );
+			const matchesSource = '' !== sourceHost && pastedHost === sourceHost;
+			const matchesDest = '' !== destHost && pastedHost === destHost;
+
+			if ( matchesSource && ! matchesDest ) {
+				origin = 'source';
+			} else if ( matchesDest && ! matchesSource ) {
+				origin = 'destination';
+			} else if (
+				! matchesSource
+				&& ! matchesDest
+				&& ( '' !== sourceHost || '' !== destHost )
 			) {
+				// A resolvable host matching neither site — reject the paste.
 				return null;
 			}
+			// Both match → shared host → origin stays 'unknown'.
 		}
 		path = url.pathname;
 	} catch {
@@ -75,7 +109,29 @@ export function detectSlugFromInput(
 
 	const segments = path.split( '/' ).filter( ( seg ) => '' !== seg );
 	const last = segments.pop();
-	return last && '' !== last ? last : null;
+	return last && '' !== last ? { slug: last, origin } : null;
+}
+
+/**
+ * Whether a detected slug's origin matches the active chip's slug column.
+ *
+ * Catalog-primary chips (All, Available) match the source slug; local-primary
+ * chips (Up to date, Outdated) match the destination slug. An 'unknown' origin
+ * matches any chip so bare paths stay best-effort.
+ *
+ * @param {SlugOrigin} origin           Detected origin of the pasted URL.
+ * @param {boolean}    isCatalogPrimary Whether the active chip is catalog-primary.
+ *
+ * @return {boolean} True when the slug can be looked up on this chip.
+ */
+export function slugMatchesChip(
+	origin: SlugOrigin,
+	isCatalogPrimary: boolean
+): boolean {
+	if ( 'unknown' === origin ) {
+		return true;
+	}
+	return origin === ( isCatalogPrimary ? 'source' : 'destination' );
 }
 
 /**

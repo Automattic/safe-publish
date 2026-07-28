@@ -13,6 +13,8 @@ import {
 	calendarRangeToUtcBounds,
 	DateRangeFilter,
 	detectSlugFromInput,
+	slugMatchesChip,
+	type SlugDetection,
 } from './filter-controls';
 import { useAuthStatus } from './hooks/useAuthStatus';
 import { useResetSelectionOnQueryChange } from './hooks/useResetSelectionOnQueryChange';
@@ -264,7 +266,7 @@ function SearchHelpButton(): JSX.Element {
 						</strong>
 						{ ' — ' }
 						{ __(
-							'finds the exact post by slug. Source URLs work everywhere except Failed; destination URLs work on Up to date and Outdated.',
+							'finds the exact post by slug. Source links match on All and Available; destination links on Up to date and Outdated.',
 							'safe-publish'
 						) }
 					</p>
@@ -335,7 +337,7 @@ export function PostsDataView( {
 	const [ selectedPostType, setSelectedPostType ] = useState( 'post' );
 	const [ searchTerm, setSearchTerm ] = useState( '' );
 	const [ debouncedSearch, setDebouncedSearch ] = useState( '' );
-	const [ slugFromUrl, setSlugFromUrl ] = useState< string | null >( null );
+	const [ detection, setDetection ] = useState< SlugDetection | null >( null );
 	const [ selectedStatuses, setSelectedStatuses ] = useState< string[] >( [] );
 	const [ publishedAfter, setPublishedAfter ] = useState< string | null >( null );
 	const [ publishedBefore, setPublishedBefore ] = useState< string | null >(
@@ -389,6 +391,13 @@ export function PostsDataView( {
 
 	const isCatalogPrimary = 'all' === state || 'available' === state;
 
+	// A pasted URL whose origin doesn't match the active chip's slug column
+	// can't be looked up here; the render shows a switch-chips hint instead.
+	const slugChipMismatch =
+		null !== detection
+		&& 'failed' !== state
+		&& ! slugMatchesChip( detection.origin, isCatalogPrimary );
+
 	const handleChipChange = useCallback(
 		( next: ChipState ): void => {
 			setStateValue( next );
@@ -410,6 +419,14 @@ export function PostsDataView( {
 
 	useEffect( () => {
 		abortRef.current?.abort();
+
+		// Nothing to fetch on a mismatch; the render shows the switch hint.
+		if ( slugChipMismatch ) {
+			setIsLoading( false );
+			setFetchError( null );
+			return;
+		}
+
 		const controller = new AbortController();
 		abortRef.current = controller;
 
@@ -433,8 +450,8 @@ export function PostsDataView( {
 
 		// Failed's query doesn't join wp_posts, so name= can't filter — fall
 		// back to the raw text so the chip doesn't silently return everything.
-		if ( null !== slugFromUrl && 'failed' !== state ) {
-			formData.append( 'name', slugFromUrl );
+		if ( null !== detection && 'failed' !== state ) {
+			formData.append( 'name', detection.slug );
 		} else if ( '' !== debouncedSearch ) {
 			formData.append( 'search', debouncedSearch );
 		}
@@ -555,7 +572,8 @@ export function PostsDataView( {
 		view.sort?.field,
 		view.sort?.direction,
 		debouncedSearch,
-		slugFromUrl,
+		detection?.slug,
+		slugChipMismatch,
 		statusKey,
 		publishedAfter,
 		publishedBefore,
@@ -573,7 +591,7 @@ export function PostsDataView( {
 			sourceSiteUrl,
 			selectedPostType,
 			debouncedSearch,
-			slugFromUrl,
+			detection?.slug,
 			statusKey,
 			publishedAfter,
 			publishedBefore,
@@ -706,12 +724,12 @@ export function PostsDataView( {
 
 		searchDebounceRef.current = setTimeout( () => {
 			const trimmed = raw.trim();
-			// Keep both so a chip change can fall back without re-debouncing.
-			setSlugFromUrl(
-				detectSlugFromInput( trimmed, [
-					sourceSiteUrl,
-					window.location.origin,
-				] )
+			// Keep both so a chip change can re-route without re-debouncing.
+			setDetection(
+				detectSlugFromInput( trimmed, {
+					sourceUrl: sourceSiteUrl,
+					destinationUrl: window.safePublishAdminData.homeUrl ?? '',
+				} )
 			);
 			setDebouncedSearch( trimmed );
 			resetPage();
@@ -730,7 +748,7 @@ export function PostsDataView( {
 		}
 		setSearchTerm( '' );
 		setDebouncedSearch( '' );
-		setSlugFromUrl( null );
+		setDetection( null );
 		setSelectedStatuses( [] );
 		setPublishedAfter( null );
 		setPublishedBefore( null );
@@ -1182,7 +1200,7 @@ export function PostsDataView( {
 					{ postTypeError }
 				</Notice>
 			) }
-			{ fetchError && (
+			{ ! slugChipMismatch && fetchError && (
 				<Notice
 					className="safe-publish-post-type-error"
 					status="error"
@@ -1199,7 +1217,26 @@ export function PostsDataView( {
 					{ rollbackNotice.message }
 				</Notice>
 			) }
-			{ isLoading && ! hasFetchedOnce && (
+			{ slugChipMismatch && (
+				<div
+					className="safe-publish-no-data"
+					role="status"
+					aria-live="polite"
+				>
+					<p>
+						{ 'source' === detection?.origin
+							? __(
+									'This looks like a source link. Switch to All or Available to find it.',
+									'safe-publish'
+							  )
+							: __(
+									'This looks like a destination link. Switch to Up to date or Outdated to find it.',
+									'safe-publish'
+							  ) }
+					</p>
+				</div>
+			) }
+			{ ! slugChipMismatch && isLoading && ! hasFetchedOnce && (
 				<div
 					className="safe-publish-loading"
 					role="status"
@@ -1208,7 +1245,8 @@ export function PostsDataView( {
 					<p>{ __( 'Loading posts…', 'safe-publish' ) }</p>
 				</div>
 			) }
-			{ hasFetchedOnce
+			{ ! slugChipMismatch
+				&& hasFetchedOnce
 				&& ! fetchError
 				&& 0 === rows.length
 				&& ! isLoading && (
@@ -1217,10 +1255,10 @@ export function PostsDataView( {
 						role="status"
 						aria-live="polite"
 					>
-						<p>{ emptyStateCopy( state, slugFromUrl ) }</p>
+						<p>{ emptyStateCopy( state, detection?.slug ?? null ) }</p>
 					</div>
 			) }
-			{ hasFetchedOnce && rows.length > 0 && (
+			{ ! slugChipMismatch && hasFetchedOnce && rows.length > 0 && (
 				<DataViews
 					getItemId={ getRowId }
 					data={ rows }
