@@ -347,8 +347,7 @@ function hasAnyNonContentDiff(
  *
  * @return {JSX.Element} Rendered modal content.
  */
-// Modal aggregates many independent rendering branches.
-// eslint-disable-next-line complexity
+// eslint-disable-next-line complexity -- modal aggregates many independent rendering branches.
 export default function PostDiffModal( {
 	items,
 	ajaxurl,

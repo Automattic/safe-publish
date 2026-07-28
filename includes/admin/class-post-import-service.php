@@ -313,8 +313,7 @@ class Post_Import_Service {
 			self::IMPORT_LOCK_KEY_PREFIX . $source_post_id,
 			1,
 			self::IMPORT_LOCK_GROUP,
-			// IMPORT_LOCK_TTL is 300 seconds.
-			// phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined
+			// phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined -- IMPORT_LOCK_TTL is 300 seconds.
 			self::IMPORT_LOCK_TTL
 		);
 	}
