@@ -90,12 +90,12 @@ Kses sanitization can be opted into via the [`safe_publish_import_kses`](../exte
 
 ### 5. Media Validation
 
-Media is validated during the import process itself, not as a separate pre-import step. Failed media does not block the import — the post is still created and the original source URL is preserved.
+Media is validated during the import process itself, not as a separate pre-import step. Failed media does not block the import — the post is still created and the original source URL is preserved. A link that looks like media but resolves to a page (for example an HTML page at a `.pdf` URL) is kept as a link, not downloaded or counted as a failure.
 
 **What it checks (at import time):**
 
-- Image file types are supported (validated via `wp_check_filetype()`).
-- Images can be downloaded from the source URL.
+- The downloaded content is media — image, video, audio, or PDF — identified from its bytes, not its URL extension.
+- Media can be downloaded from the source URL.
 
 **Common failures:**
 
@@ -107,7 +107,7 @@ Media is validated during the import process itself, not as a separate pre-impor
 
 - Verify images exist on the source site.
 - Check image URLs are publicly accessible.
-- Ensure images are in supported formats (JPEG, PNG, GIF, WebP).
+- Ensure media is a supported type (image, video, audio, or PDF).
 
 For a list of validation error codes and solutions, see the [Troubleshooting guide](../troubleshooting.md#validation-errors).
 

@@ -96,6 +96,26 @@ class Media_Logger extends Logger {
 	}
 
 	/**
+	 * Logs a media-looking URL left as a link because its content is not
+	 * sideloadable media (for example a page served at a .pdf URL).
+	 *
+	 * @param string $url             Media-looking URL left unchanged.
+	 * @param string $source_site_url Source site the URL originated from.
+	 */
+	public function media_left_as_link(
+		string $url,
+		string $source_site_url
+	): void {
+		$this->log_warning(
+			Log_Events::MEDIA_LEFT_AS_LINK,
+			array(
+				'url'             => $url,
+				'source_site_url' => $source_site_url,
+			)
+		);
+	}
+
+	/**
 	 * Logs that the attachment ID returned by media_handle_sideload was not
 	 * a positive numeric value.
 	 *

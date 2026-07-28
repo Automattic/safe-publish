@@ -17,6 +17,7 @@ import {
 	type SlugDetection,
 } from './filter-controls';
 import { useAuthStatus } from './hooks/useAuthStatus';
+import { useResetSelectionOnQueryChange } from './hooks/useResetSelectionOnQueryChange';
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 import { createPostsActions, type ActionNotice } from '../actions';
 import {
@@ -284,6 +285,16 @@ function SearchHelpButton(): JSX.Element {
 }
 
 /**
+ * Stable DataViews row id: source post id when present, else the local
+ * item id or row id.
+ *
+ * @param {UnifiedPostRow} item Row to identify.
+ * @return {string} Selection id used by DataViews.
+ */
+const getRowId = ( item: UnifiedPostRow ): string =>
+	String( item.source_post_id ?? item.item_id ?? item.id );
+
+/**
  * PostsDataView component.
  *
  * @param {PostsDataViewProps} props Component props.
@@ -312,6 +323,7 @@ export function PostsDataView( {
 	} );
 
 	const [ rows, setRows ] = useState< UnifiedPostRow[] >( [] );
+	const [ selection, setSelection ] = useState< string[] >( [] );
 	const [ hasMore, setHasMore ] = useState( false );
 	const [ orphanCount, setOrphanCount ] = useState(
 		window.safePublishAdminData.orphanCount ?? 0
@@ -357,6 +369,13 @@ export function PostsDataView( {
 		() => setRefreshNonce( ( nonce ) => nonce + 1 ),
 		[]
 	);
+
+	// Sizes the bulk-import "N skipped" notice: selected rows minus the
+	// import-eligible subset DataViews hands the modal.
+	const selectedCount = useMemo( () => {
+		const ids = new Set( selection );
+		return rows.filter( ( row ) => ids.has( getRowId( row ) ) ).length;
+	}, [ rows, selection ] );
 
 	// Consume the ?state= deep-link once; chip changes stay ephemeral.
 	useEffect( () => stripUrlParam( 'state' ), [] );
@@ -563,6 +582,26 @@ export function PostsDataView( {
 		focusSourceId,
 		refreshNonce,
 	] );
+
+	// Query identity only: page and sort are excluded so navigating a
+	// result set keeps the selection.
+	useResetSelectionOnQueryChange(
+		JSON.stringify( [
+			state,
+			sourceSiteUrl,
+			selectedPostType,
+			debouncedSearch,
+			slugFromUrl,
+			statusKey,
+			publishedAfter,
+			publishedBefore,
+			importedAfter,
+			importedBefore,
+			focusSourceId,
+			refreshNonce,
+		] ),
+		() => setSelection( [] )
+	);
 
 	const sourceIds = useMemo(
 		() =>
@@ -1221,13 +1260,13 @@ export function PostsDataView( {
 			) }
 			{ ! slugChipMismatch && hasFetchedOnce && rows.length > 0 && (
 				<DataViews
-					getItemId={ ( item: UnifiedPostRow ) =>
-						String( item.source_post_id ?? item.item_id ?? item.id )
-					}
+					getItemId={ getRowId }
 					data={ rows }
 					fields={ fields }
 					view={ effectiveView }
 					onChangeView={ handleViewChange }
+					selection={ selection }
+					onChangeSelection={ setSelection }
 					paginationInfo={ paginationInfo }
 					defaultLayouts={ { [ LAYOUT_TABLE ]: {} } }
 					actions={ createPostsActions(
@@ -1239,7 +1278,8 @@ export function PostsDataView( {
 							onNotice: setRollbackNotice,
 						},
 						syncStatuses,
-						state
+						state,
+						selectedCount
 					) }
 					header={
 						<Button

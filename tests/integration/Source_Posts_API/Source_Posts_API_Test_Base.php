@@ -103,11 +103,6 @@ abstract class Source_Posts_API_Test_Base extends Integration_Test_Case {
 		array $args,
 		string $url
 	): false|array|WP_Error {
-		// explicitly unset $args, to resolve Psalm's PossiblyUnusedParam error
-		// during the pre-commit check. A @psalm-suppress annotation doesn't
-		// solve this.
-		unset( $args );
-
 		// Respect responses already set by higher-priority filters.
 		if ( false !== $preempt ) {
 			return $preempt;
@@ -152,17 +147,24 @@ abstract class Source_Posts_API_Test_Base extends Integration_Test_Case {
 		$extension = pathinfo( wp_parse_url( $url, PHP_URL_PATH ), PATHINFO_EXTENSION );
 		$extension = strtolower( $extension );
 
+		$image_fixtures = array(
+			'jpg'  => array( 'test-1x1.jpg', 'image/jpeg' ),
+			'jpeg' => array( 'test-1x1.jpg', 'image/jpeg' ),
+			'png'  => array( 'test-1x1.png', 'image/png' ),
+			'gif'  => array( 'test-1x1.gif', 'image/gif' ),
+			'webp' => array( 'test-1x1.webp', 'image/webp' ),
+		);
+
+		// Serve real fixture bytes for image types, writing them to the download
+		// temp file so content-based type detection sees them at download time.
+		if ( isset( $image_fixtures[ $extension ] ) ) {
+			$response = $this->get_fixture_response( ...$image_fixtures[ $extension ] );
+			$this->populate_download_temp( $args, (string) $response['body'] );
+			return $response;
+		}
+
 		// Return appropriate mock response based on file type.
 		switch ( $extension ) {
-			case 'jpg':
-			case 'jpeg':
-				return $this->get_fixture_response( 'test-1x1.jpg', 'image/jpeg' );
-			case 'png':
-				return $this->get_fixture_response( 'test-1x1.png', 'image/png' );
-			case 'gif':
-				return $this->get_fixture_response( 'test-1x1.gif', 'image/gif' );
-			case 'webp':
-				return $this->get_fixture_response( 'test-1x1.webp', 'image/webp' );
 			case 'mp4':
 				// For video/audio, still use mock data as we don't have fixtures.
 				return array(
