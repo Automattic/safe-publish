@@ -209,9 +209,12 @@ class Media_Importer {
 	/**
 	 * Sideloads source media resolved by ID, regardless of serving host.
 	 *
-	 * A URL resolved from a source media ID is owned, so the third-party host
-	 * guard is bypassed: off-domain media (CDN, files service, Photon) still
-	 * belongs to the source and must be sideloaded.
+	 * A URL resolved from a source media ID is owned, so both the third-party
+	 * host guard and the is_local_media_url() already-local check are bypassed:
+	 * off-domain media (CDN, files service, Photon) still belongs to the source
+	 * and must be sideloaded. Skipping the already-local check can duplicate an
+	 * attachment on a same-host re-import — accepted, since running it would
+	 * return null and abort the post.
 	 *
 	 * @param string $media_url       Source media URL.
 	 * @param string $source_site_url Source site URL for resolving relative URLs.
