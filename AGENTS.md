@@ -38,7 +38,7 @@
 
 - Verify PHP files use strict typing, and use type hinting everywhere possible.
 - Prefer using `_` instead of `@psalm-suppress PossiblyUnusedParam`.
-- Use explicit checks — don't use empty(), and don't coerce with `! $id` (write `0 === $id`).
+- Use explicit checks — don't use empty(), and don't coerce with `!` (write `0 === $id`, `null === $post`).
 
 ### Comments and docblocks
 
