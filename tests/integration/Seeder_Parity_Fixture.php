@@ -81,6 +81,15 @@ final class Seeder_Parity_Fixture {
 	public array $image_refs_by_source_id = array();
 
 	/**
+	 * Attachment references seeded inside gallery/playlist shortcodes, as
+	 * `array{ id: int, url: string }`. Kept apart from image_refs_by_source_id so
+	 * the inline-image parity assertions never treat them as post images.
+	 *
+	 * @var list<array{id: int, url: string}>
+	 */
+	public array $shortcode_media_refs = array();
+
+	/**
 	 * Source post ID => destination post ID after the import.
 	 *
 	 * @var array<int, int>
@@ -118,7 +127,7 @@ final class Seeder_Parity_Fixture {
 	 * @param int                                                                                                                                                  $media_id_base   Source media IDs start one past this value.
 	 * @param int                                                                                                                                                  $admin_user_id   User the import runs as; owns sideloaded media.
 	 * @param list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool, author_user_id: int, parent_links: array<int, int>}> $slices One descriptor per post-type slice in the batch. parent_links maps a child's 1-based slice index to its parent's.
-	 * @param list<array{kind: string, endpoint: string, source_id: int, author_user_id: int}>                                                                     $edge_cases One descriptor per bespoke edge-case body ('non_ascii', 'empty', 'embed', 'footnotes', 'reusable_block'); each seeds a single top-level, image-free post.
+	 * @param list<array{kind: string, endpoint: string, source_id: int, author_user_id: int, media_ids?: list<int>}>                                              $edge_cases One descriptor per bespoke edge-case body ('non_ascii', 'empty', 'embed', 'footnotes', 'reusable_block', 'gallery_shortcode', 'playlist_shortcode'); each seeds a single top-level post. The shortcode kinds sideload the media_ids they reference; the rest are image-free.
 	 */
 	public function __construct(
 		private string $source_base_url,
@@ -308,23 +317,53 @@ final class Seeder_Parity_Fixture {
 
 	/**
 	 * Builds the bespoke edge-case bodies and registers them alongside the
-	 * generator-driven batch. Each is a single top-level, image-free post on
-	 * default scalars, exercising parity the deterministic generator never
-	 * emits: multibyte/entity encoding, empty content, an external embed url's
-	 * verbatim preservation, footnotes meta round-tripping, and a reusable block
-	 * whose target is not imported, surfacing as a retryable unmapped reference.
+	 * generator-driven batch. Each is a single top-level post on default
+	 * scalars, exercising parity the deterministic generator never emits:
+	 * multibyte/entity encoding, empty content, an external embed url's verbatim
+	 * preservation, footnotes meta round-tripping, a reusable block whose target
+	 * is not imported (a retryable unmapped reference), and gallery/playlist
+	 * shortcodes whose bare source attachment IDs are sideloaded and rewritten.
 	 */
 	private function build_edge_case_bodies(): void {
 		foreach ( $this->edge_cases as $edge ) {
 			$source_id = $edge['source_id'];
+			$media_ids = $edge['media_ids'] ?? array();
+
+			$this->register_shortcode_media_bodies( $media_ids );
 
 			$this->endpoint_by_source_id[ $source_id ] = $edge['endpoint'];
 			$this->source_rest_bodies[ $source_id ]    = $this->payload_to_rest_body(
 				$source_id,
-				$this->edge_case_payload( $edge['kind'], $edge['endpoint'] ),
+				$this->edge_case_payload( $edge['kind'], $edge['endpoint'], $media_ids ),
 				$edge['author_user_id'],
 				0,
 				$this->default_scalars()
+			);
+		}
+	}
+
+	/**
+	 * Registers a wp/v2/media/{id} mock body and records a source ref for each
+	 * attachment ID a gallery/playlist shortcode references, so
+	 * import_source_media_by_id() resolves it to a downloadable source_url the
+	 * byte mock serves.
+	 *
+	 * @param int[] $media_ids Source attachment IDs referenced by a shortcode.
+	 */
+	private function register_shortcode_media_bodies( array $media_ids ): void {
+		foreach ( $media_ids as $media_id ) {
+			$url = $this->source_image_url( $media_id );
+
+			$this->source_media_bodies[ $media_id ] = array(
+				'id'         => $media_id,
+				'source_url' => $url,
+				'media_type' => 'image',
+				'mime_type'  => 'image/jpeg',
+				'alt_text'   => '',
+			);
+			$this->shortcode_media_refs[]           = array(
+				'id'  => $media_id,
+				'url' => $url,
 			);
 		}
 	}
@@ -343,14 +382,24 @@ final class Seeder_Parity_Fixture {
 	 * footnotes meta JSON, exercising verbatim propagation of WordPress'
 	 * footnotes meta (a JSON-encoded string, not an array). The 'reusable_block'
 	 * body carries a core/block whose ref names a source wp_block this batch does
-	 * not import, exercising the retryable unmapped-reference degradation.
+	 * not import, exercising the retryable unmapped-reference degradation. The
+	 * 'gallery_shortcode' body spreads media_ids across a classic [gallery]'s
+	 * ids, include, and exclude attributes and 'playlist_shortcode' carries them
+	 * in a [playlist]'s ids, exercising the rewriter end-to-end for every
+	 * id-bearing attribute.
 	 *
-	 * @param string $kind     Edge-case kind: 'non_ascii', 'empty', 'embed',
-	 *                         'footnotes', or 'reusable_block'.
-	 * @param string $endpoint REST endpoint the body is served from.
+	 * @param string $kind      Edge-case kind: 'non_ascii', 'empty', 'embed',
+	 *                          'footnotes', 'reusable_block', 'gallery_shortcode',
+	 *                          or 'playlist_shortcode'.
+	 * @param string $endpoint  REST endpoint the body is served from.
+	 * @param int[]  $media_ids Source attachment IDs for the shortcode kinds.
 	 * @return array<string, mixed> Generator-shaped payload.
 	 */
-	private function edge_case_payload( string $kind, string $endpoint ): array {
+	private function edge_case_payload(
+		string $kind,
+		string $endpoint,
+		array $media_ids = array()
+	): array {
 		$post_type = 'pages' === $endpoint ? 'page' : 'post';
 		$base      = array(
 			'post_type'      => $post_type,
@@ -433,6 +482,37 @@ final class Seeder_Parity_Fixture {
 					'excerpt' => 'Excerpt for the footnotes edge case.',
 					'meta'    => array( 'footnotes' => $footnotes ),
 				)
+			);
+		}
+
+		if ( 'gallery_shortcode' === $kind ) {
+			// Spread media_ids across ids, include, and exclude so all three
+			// id-bearing attributes are rewritten; array_slice tolerates a short
+			// list, leaving an attribute's CSV empty.
+			return $base + array(
+				'title'   => 'Edge case gallery shortcode',
+				'slug'    => 'edge-gallery-shortcode',
+				'link'    => $this->source_base_url . '/edge-gallery-shortcode',
+				'content' => sprintf(
+					'[gallery ids="%s" include="%s" exclude="%s" columns="3" link="file"]',
+					implode( ',', array_slice( $media_ids, 0, 2 ) ),
+					implode( ',', array_slice( $media_ids, 2, 1 ) ),
+					implode( ',', array_slice( $media_ids, 3, 1 ) )
+				),
+				'excerpt' => 'Excerpt for the gallery-shortcode edge case.',
+			);
+		}
+
+		if ( 'playlist_shortcode' === $kind ) {
+			return $base + array(
+				'title'   => 'Edge case playlist shortcode',
+				'slug'    => 'edge-playlist-shortcode',
+				'link'    => $this->source_base_url . '/edge-playlist-shortcode',
+				'content' => sprintf(
+					'[playlist type="audio" ids="%s"]',
+					implode( ',', $media_ids )
+				),
+				'excerpt' => 'Excerpt for the playlist-shortcode edge case.',
 			);
 		}
 

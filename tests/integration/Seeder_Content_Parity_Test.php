@@ -68,15 +68,40 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 
 	/**
 	 * Source post IDs for the bespoke edge-case pages (non-ASCII, empty, embed,
-	 * footnotes, and reusable-block). Same high range, distinct from every other
-	 * base. All seed as pages so the category-less body never picks up the
-	 * default category that WordPress auto-assigns to a post.
+	 * footnotes, reusable-block, and the gallery/playlist shortcodes). Same high
+	 * range, distinct from every other base. All seed as pages so the
+	 * category-less body never picks up the default category that WordPress
+	 * auto-assigns to a post.
 	 */
-	private const EDGE_NON_ASCII_SOURCE_ID      = 9200001;
-	private const EDGE_EMPTY_SOURCE_ID          = 9200002;
-	private const EDGE_EMBED_SOURCE_ID          = 9200003;
-	private const EDGE_FOOTNOTES_SOURCE_ID      = 9200004;
-	private const EDGE_REUSABLE_BLOCK_SOURCE_ID = 9200005;
+	private const EDGE_NON_ASCII_SOURCE_ID          = 9200001;
+	private const EDGE_EMPTY_SOURCE_ID              = 9200002;
+	private const EDGE_EMBED_SOURCE_ID              = 9200003;
+	private const EDGE_FOOTNOTES_SOURCE_ID          = 9200004;
+	private const EDGE_REUSABLE_BLOCK_SOURCE_ID     = 9200005;
+	private const EDGE_GALLERY_SHORTCODE_SOURCE_ID  = 9200006;
+	private const EDGE_PLAYLIST_SHORTCODE_SOURCE_ID = 9200007;
+
+	/**
+	 * Source attachment IDs the gallery-shortcode edge page references, spread
+	 * across its ids, include, and exclude attributes so all three are rewritten
+	 * end-to-end. Kept clear of the SOURCE_MEDIA_ID_BASE slice-image range so a
+	 * dest attachment ID can never coincide with a source ID.
+	 *
+	 * @var list<int>
+	 */
+	private const GALLERY_SHORTCODE_MEDIA_IDS = array(
+		9600001,
+		9600002,
+		9600003,
+		9600004,
+	);
+
+	/**
+	 * Source attachment ID referenced by the playlist-shortcode edge page.
+	 *
+	 * @var list<int>
+	 */
+	private const PLAYLIST_SHORTCODE_MEDIA_IDS = array( 9600005 );
 
 	/**
 	 * Provider host of the embed edge page's url. Distinct from
@@ -221,13 +246,14 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	 * page (multibyte title/slug/content plus unescaped entities), an
 	 * empty-content page, an embed page (a core/embed block with an external
 	 * provider url), a footnotes page (a core/footnotes block plus matching
-	 * footnotes meta), and a reusable-block page (a core/block referencing an
-	 * unimported wp_block). All seed as pages so the category-less body never
-	 * picks up WordPress' default category, and all stay top-level on default
-	 * scalars; the fixture supplies their content.
+	 * footnotes meta), a reusable-block page (a core/block referencing an
+	 * unimported wp_block), and gallery/playlist shortcode pages (bare source
+	 * attachment IDs the rewriter resolves and rewrites). All seed as pages so
+	 * the category-less body never picks up WordPress' default category, and all
+	 * stay top-level on default scalars; the fixture supplies their content.
 	 *
 	 * @param int $page_author_id Dest user the edge-case pages are authored by.
-	 * @return list<array{kind: string, endpoint: string, source_id: int, author_user_id: int}>
+	 * @return list<array{kind: string, endpoint: string, source_id: int, author_user_id: int, media_ids?: list<int>}>
 	 */
 	private static function batch_edge_cases( int $page_author_id ): array {
 		return array(
@@ -261,6 +287,20 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				'source_id'      => self::EDGE_REUSABLE_BLOCK_SOURCE_ID,
 				'author_user_id' => $page_author_id,
 			),
+			array(
+				'kind'           => 'gallery_shortcode',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_GALLERY_SHORTCODE_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+				'media_ids'      => self::GALLERY_SHORTCODE_MEDIA_IDS,
+			),
+			array(
+				'kind'           => 'playlist_shortcode',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_PLAYLIST_SHORTCODE_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+				'media_ids'      => self::PLAYLIST_SHORTCODE_MEDIA_IDS,
+			),
 		);
 	}
 
@@ -292,7 +332,8 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Builds the source ID => dest ID sideload map for the imported batch.
+	 * Builds the source ID => dest ID sideload map for the imported batch,
+	 * covering both inline images and gallery/playlist shortcode media.
 	 *
 	 * @return array<int, int>
 	 */
@@ -306,6 +347,13 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 					continue;
 				}
 
+				$map[ $ref['id'] ] = $dest->ID;
+			}
+		}
+
+		foreach ( self::$fixture->shortcode_media_refs as $ref ) {
+			$dest = $this->find_dest_attachment_by_source_url( $ref['url'] );
+			if ( null !== $dest ) {
 				$map[ $ref['id'] ] = $dest->ID;
 			}
 		}
@@ -488,6 +536,51 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that gallery/playlist shortcode attachment IDs are rewritten to
+	 * their destination attachments end-to-end: each dest shortcode keeps its
+	 * count, order, and non-id attributes, maps every source id to its dest id
+	 * in order, and leaves no source id behind. Guards against a vacuous pass by
+	 * requiring both a gallery and a playlist shortcode to be verified.
+	 */
+	public function test_media_shortcode_parity(): void {
+		// ARRANGE: the source ID => dest ID map covers the shortcode media.
+		$id_map            = $this->build_source_id_to_dest_id_map();
+		$gallery_verified  = false;
+		$playlist_verified = false;
+
+		// ACT + ASSERT: every shortcode-bearing post rewrote its ids to dest.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$source       = $this->source_content( $source_id );
+			$has_gallery  = str_contains( $source, '[gallery' );
+			$has_playlist = str_contains( $source, '[playlist' );
+
+			if ( ! $has_gallery && ! $has_playlist ) {
+				continue;
+			}
+
+			Content_Parity_Comparator::assert_media_shortcode_parity(
+				$source,
+				(string) get_post( $dest_id )->post_content,
+				$id_map,
+				$this
+			);
+
+			$gallery_verified  = $gallery_verified || $has_gallery;
+			$playlist_verified = $playlist_verified || $has_playlist;
+		}
+
+		// ASSERT: both kinds were verified, so the loop was not vacuous.
+		$this->assertTrue(
+			$gallery_verified,
+			'Batch should seed a [gallery] shortcode to verify'
+		);
+		$this->assertTrue(
+			$playlist_verified,
+			'Batch should seed a [playlist] shortcode to verify'
+		);
+	}
+
+	/**
 	 * Verifies that every imported post preserves its source embed-block url
 	 * multiset verbatim, locking process_embed_block()'s no-rewrite contract.
 	 */
@@ -540,11 +633,11 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 
 	/**
 	 * Guards the comparator's coverage assumptions: the seeder must not emit
-	 * gallery blocks, data-id attributes, or non-caption shortcodes, since none
-	 * is exercised by the parity checks today. Grow comparator coverage before
-	 * relaxing this. The reusable block (core/block) the batch does emit is
-	 * intentional and verified by test_reusable_block_edge_surfaces_degradation,
-	 * not the parity comparator.
+	 * gallery blocks or data-id attributes, since neither is exercised by the
+	 * parity checks today. Grow comparator coverage before relaxing this.
+	 * Gallery/playlist shortcodes are emitted and verified by
+	 * test_media_shortcode_parity; the reusable block (core/block) is verified by
+	 * test_reusable_block_edge_surfaces_degradation.
 	 */
 	public function test_seeder_does_not_emit_unsupported_references(): void {
 		// ARRANGE + ACT: concatenate every seeded source content body.
@@ -565,20 +658,6 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 			$raw,
 			'Seeder must not emit data-id attributes until the comparator'
 			. ' covers data-id rewriting.'
-		);
-		$this->assertStringNotContainsString(
-			'[gallery',
-			$raw,
-			'Seeder must not emit gallery shortcodes until the parity fixture'
-			. ' emits and verifies them (follow-up); the rewriter already covers'
-			. ' their IDs.'
-		);
-		$this->assertStringNotContainsString(
-			'[playlist',
-			$raw,
-			'Seeder must not emit playlist shortcodes until the parity fixture'
-			. ' emits and verifies them (follow-up); the rewriter already covers'
-			. ' their IDs.'
 		);
 	}
 
