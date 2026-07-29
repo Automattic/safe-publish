@@ -139,19 +139,20 @@ class Media_Logger extends Logger {
 	}
 
 	/**
-	 * Logs a failure to fetch a featured image's details from the source site.
+	 * Logs a failure to fetch a source attachment's details by ID from the
+	 * source site.
 	 *
 	 * @param int    $media_id        Source media ID being fetched.
 	 * @param string $source_site_url Source site the request targeted.
 	 * @param string $error           WP_Error message from the request.
 	 */
-	public function featured_image_fetch_failed(
+	public function source_media_fetch_failed(
 		int $media_id,
 		string $source_site_url,
 		string $error
 	): void {
 		$this->log_failure(
-			Log_Events::FEATURED_IMAGE_FETCH_FAILED,
+			Log_Events::SOURCE_MEDIA_FETCH_FAILED,
 			array(
 				'media_id'        => $media_id,
 				'source_site_url' => $source_site_url,
@@ -161,17 +162,17 @@ class Media_Logger extends Logger {
 	}
 
 	/**
-	 * Logs a featured image response whose payload lacked source_url.
+	 * Logs a source media response whose payload lacked source_url.
 	 *
 	 * @param int    $media_id        Source media ID that was fetched.
 	 * @param string $source_site_url Source site the request targeted.
 	 */
-	public function featured_image_source_missing(
+	public function source_media_url_missing(
 		int $media_id,
 		string $source_site_url
 	): void {
 		$this->log_failure(
-			Log_Events::FEATURED_IMAGE_SOURCE_MISSING,
+			Log_Events::SOURCE_MEDIA_URL_MISSING,
 			array(
 				'media_id'        => $media_id,
 				'source_site_url' => $source_site_url,

@@ -851,6 +851,9 @@ class Post_Import_Service {
 			array(
 				'session_id_map'       => $session_id_map,
 				'library_metadata_map' => $library_metadata_map,
+				// Threaded so shortcode ID resolution can read private/unattached
+				// source media that anonymous requests would 403 on.
+				'auth_credentials'     => Auth_Credential_Provider::get_credentials(),
 			)
 		);
 

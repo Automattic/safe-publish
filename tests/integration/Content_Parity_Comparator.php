@@ -597,7 +597,7 @@ final class Content_Parity_Comparator {
 	 */
 	private static function collect_caption_shortcode_ids( string $content ): array {
 		preg_match_all(
-			'/\[(?:caption|wp_caption)\b[^\]]*\bid\s*=\s*["\']attachment_(\d+)["\']/i',
+			'/\[(?:caption|wp_caption)\b[^\]]*(?<![\w-])id\s*=\s*["\']attachment_(\d+)["\']/i',
 			$content,
 			$matches
 		);

@@ -19,6 +19,7 @@ import type {
 	NavRefRewriteFailedWarning,
 	ParentOrphanedWarning,
 	UnmappedBlockReferenceWarning,
+	UnmappedShortcodeReferenceWarning,
 } from '@/types';
 
 // Pin WP date settings so format/timezone-sensitive tests are deterministic.
@@ -300,6 +301,19 @@ describe( 'renderWarningMessage', () => {
 		expect( message ).toContain( 'Patterns' );
 		expect( message ).not.toContain( 'nav' );
 	} );
+
+	it( 'should render the source attachment ID for unmapped_shortcode_reference', () => {
+		// ARRANGE: an unresolved gallery/playlist shortcode reference.
+		const warning: UnmappedShortcodeReferenceWarning = {
+			type: 'unmapped_shortcode_reference',
+			source_id: 705,
+		};
+		// ACT: render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: the source ID and the gallery/playlist wording are present.
+		expect( message ).toContain( '705' );
+		expect( message ).toContain( 'Gallery/playlist' );
+	} );
 } );
 
 describe( 'renderWarningShortLabel', () => {
@@ -367,6 +381,18 @@ describe( 'renderWarningShortLabel', () => {
 		const label = renderWarningShortLabel( warning );
 		// ASSERT: reusable-block label, distinct from the generic one.
 		expect( label ).toBe( 'reusable block reference' );
+	} );
+
+	it( 'should return "unmapped shortcode reference" for unmapped_shortcode_reference', () => {
+		// ARRANGE: any unmapped_shortcode_reference warning.
+		const warning: UnmappedShortcodeReferenceWarning = {
+			type: 'unmapped_shortcode_reference',
+			source_id: 705,
+		};
+		// ACT: render the short label.
+		const label = renderWarningShortLabel( warning );
+		// ASSERT: short label is the comma-joinable string used in the bulk modal.
+		expect( label ).toBe( 'unmapped shortcode reference' );
 	} );
 } );
 

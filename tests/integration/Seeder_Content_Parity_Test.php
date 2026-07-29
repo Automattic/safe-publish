@@ -569,14 +569,16 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 		$this->assertStringNotContainsString(
 			'[gallery',
 			$raw,
-			'Seeder must not emit gallery shortcodes until the rewriter covers'
-			. ' their bare attachment IDs.'
+			'Seeder must not emit gallery shortcodes until the parity fixture'
+			. ' emits and verifies them (follow-up); the rewriter already covers'
+			. ' their IDs.'
 		);
 		$this->assertStringNotContainsString(
 			'[playlist',
 			$raw,
-			'Seeder must not emit playlist shortcodes until the rewriter covers'
-			. ' their bare attachment IDs.'
+			'Seeder must not emit playlist shortcodes until the parity fixture'
+			. ' emits and verifies them (follow-up); the rewriter already covers'
+			. ' their IDs.'
 		);
 	}
 

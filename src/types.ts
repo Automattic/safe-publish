@@ -280,13 +280,24 @@ export interface NavRefRewriteFailedWarning {
 }
 
 /**
+ * Surfaced when a [gallery] or [playlist] shortcode references a source
+ * attachment ID that could not be resolved on the destination (deleted on the
+ * source, or private without auth), so the ID was left at the source value.
+ */
+export interface UnmappedShortcodeReferenceWarning {
+	type: 'unmapped_shortcode_reference';
+	source_id: number;
+}
+
+/**
  * Discriminated union of all import warning types.
  */
 export type Warning =
 	| AuthorFallbackWarning
 	| ParentOrphanedWarning
 	| UnmappedBlockReferenceWarning
-	| NavRefRewriteFailedWarning;
+	| NavRefRewriteFailedWarning
+	| UnmappedShortcodeReferenceWarning;
 
 /**
  * Response from create draft post operation.
