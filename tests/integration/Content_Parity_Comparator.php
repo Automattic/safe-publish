@@ -22,8 +22,8 @@ use WP_HTML_Tag_Processor;
  * shortcode parity are checked structurally (names, balance, attributes), not
  * for per-block semantic equivalence.
  *
- * Out of scope: gallery `attrs.ids` and `data-id` (not seeded today),
- * non-caption shortcode families, per-block semantic equivalence.
+ * Out of scope: block-gallery `attrs.ids` and `data-id` (not seeded today),
+ * per-block semantic equivalence.
  */
 final class Content_Parity_Comparator {
 
@@ -63,6 +63,15 @@ final class Content_Parity_Comparator {
 		'&amp;lt;',
 		'&amp;gt;',
 	);
+
+	/**
+	 * Gallery/playlist attributes whose CSV values carry attachment IDs.
+	 * shortcode_parse_atts() keys them separately from lookalikes such as
+	 * data-ids, giving the boundary precision the rewriter's regex has.
+	 *
+	 * @var list<string>
+	 */
+	private const MEDIA_SHORTCODE_ID_ATTRS = array( 'ids', 'include', 'exclude' );
 
 	/**
 	 * Asserts URL parity per (tag, attr) bucket: source URLs map through the
@@ -366,6 +375,73 @@ final class Content_Parity_Comparator {
 	}
 
 	/**
+	 * Asserts gallery/playlist shortcode parity. The importer rewrites the bare
+	 * source attachment ids in ids/include/exclude to dest ids and preserves
+	 * everything else, so dest must keep the same shortcode count, document
+	 * order, and non-id attributes; the id list must be the source ids mapped to
+	 * dest, in order; and every dest id must resolve to a local attachment.
+	 *
+	 * @param string          $source_content       Source post_content.
+	 * @param string          $dest_content         Imported dest post_content.
+	 * @param array<int, int> $source_id_to_dest_id Source attachment ID => dest ID.
+	 * @param TestCase        $test                 Active test case.
+	 */
+	public static function assert_media_shortcode_parity(
+		string $source_content,
+		string $dest_content,
+		array $source_id_to_dest_id,
+		TestCase $test
+	): void {
+		$source = self::collect_media_shortcodes( $source_content );
+		$dest   = self::collect_media_shortcodes( $dest_content );
+
+		$test->assertSame(
+			count( $source ),
+			count( $dest ),
+			'Dest must preserve every source gallery/playlist shortcode'
+		);
+
+		foreach ( $source as $i => $shortcode ) {
+			$test->assertSame(
+				$shortcode['tag'],
+				$dest[ $i ]['tag'],
+				'Dest shortcode must keep its tag and document order'
+			);
+			// Non-id attributes survive verbatim; the id CSVs are rewritten and
+			// checked below.
+			$test->assertSame(
+				self::without_media_ids( $shortcode['atts'] ),
+				self::without_media_ids( $dest[ $i ]['atts'] ),
+				'Dest shortcode must preserve its non-id attributes verbatim'
+			);
+		}
+
+		$expected = array_map(
+			static fn ( int $id ): int => $source_id_to_dest_id[ $id ] ?? $id,
+			self::collect_media_shortcode_ids( $source_content )
+		);
+		$dest_ids = self::collect_media_shortcode_ids( $dest_content );
+
+		// In order, not as a multiset: galleries render in id order, so a
+		// reorder is a real regression.
+		$test->assertSame(
+			$expected,
+			$dest_ids,
+			'Dest shortcode ids must be the source ids rewritten to dest, in order'
+		);
+
+		// Every dest id resolves to a local attachment, so a source id left
+		// behind (high, non-local) or any garbage id is caught here too.
+		foreach ( $dest_ids as $dest_id ) {
+			$test->assertSame(
+				'attachment',
+				get_post_type( $dest_id ),
+				"Dest shortcode id {$dest_id} must be a local attachment"
+			);
+		}
+	}
+
+	/**
 	 * Collects non-empty block names from a parse_blocks() tree, recursing into
 	 * inner blocks. Freeform (null-name) blocks are skipped.
 	 *
@@ -452,6 +528,43 @@ final class Content_Parity_Comparator {
 	}
 
 	/**
+	 * Returns each live [gallery]/[playlist] shortcode's tag and parsed
+	 * attributes in document order, skipping escaped [[gallery]] literals as the
+	 * rewriter does.
+	 *
+	 * @param string $content Content to scan.
+	 * @return list<array{tag: string, atts: array<string, string>}>
+	 */
+	private static function collect_media_shortcodes( string $content ): array {
+		$count = preg_match_all(
+			'/' . get_shortcode_regex( array( 'gallery', 'playlist' ) ) . '/s',
+			$content,
+			$matches,
+			PREG_SET_ORDER
+		);
+
+		if ( ! is_int( $count ) || 0 === $count ) {
+			return array();
+		}
+
+		$shortcodes = array();
+		foreach ( $matches as $match ) {
+			// Escaped literal ([[gallery ...]]): not a live shortcode.
+			if ( '[' === $match[1] && ']' === $match[6] ) {
+				continue;
+			}
+
+			$atts         = shortcode_parse_atts( trim( $match[3] ) );
+			$shortcodes[] = array(
+				'tag'  => $match[2],
+				'atts' => is_array( $atts ) ? $atts : array(),
+			);
+		}
+
+		return $shortcodes;
+	}
+
+	/**
 	 * Returns a shortcode-attribute array with the id entry removed.
 	 *
 	 * @param array<string, string> $atts Parsed shortcode attributes.
@@ -459,6 +572,20 @@ final class Content_Parity_Comparator {
 	 */
 	private static function without_id( array $atts ): array {
 		unset( $atts['id'] );
+
+		return $atts;
+	}
+
+	/**
+	 * Returns a shortcode-attribute array with the id-bearing entries removed.
+	 *
+	 * @param array<string, string> $atts Parsed shortcode attributes.
+	 * @return array<string, string>
+	 */
+	private static function without_media_ids( array $atts ): array {
+		foreach ( self::MEDIA_SHORTCODE_ID_ATTRS as $attr ) {
+			unset( $atts[ $attr ] );
+		}
 
 		return $atts;
 	}
@@ -603,6 +730,34 @@ final class Content_Parity_Comparator {
 		);
 
 		return array_map( 'intval', $matches[1] );
+	}
+
+	/**
+	 * Returns the attachment ids found in the ids/include/exclude CSVs of every
+	 * live gallery/playlist shortcode, in document order. Non-numeric tokens are
+	 * skipped.
+	 *
+	 * @param string $content Content to scan.
+	 * @return list<int>
+	 */
+	private static function collect_media_shortcode_ids( string $content ): array {
+		$ids = array();
+
+		foreach ( self::collect_media_shortcodes( $content ) as $shortcode ) {
+			foreach ( self::MEDIA_SHORTCODE_ID_ATTRS as $attr ) {
+				if ( ! isset( $shortcode['atts'][ $attr ] ) ) {
+					continue;
+				}
+
+				foreach ( explode( ',', $shortcode['atts'][ $attr ] ) as $token ) {
+					if ( 1 === preg_match( '/^\s*(\d+)\s*$/', $token, $parts ) ) {
+						$ids[] = (int) $parts[1];
+					}
+				}
+			}
+		}
+
+		return $ids;
 	}
 
 	/**
