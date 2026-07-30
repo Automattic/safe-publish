@@ -1211,8 +1211,8 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	 * result when the transient is empty.
 	 */
 	public function test_ajax_auth_status_runs_probe_and_caches_result(): void {
-		// ARRANGE: Stub the probe HTTP request to return a 401 so we exercise
-		// the unauthorized branch end-to-end without seeding the cache.
+		// ARRANGE: Stub the probe to return a 401 Safe Publish rejection so we
+		// exercise the unauthorized branch end-to-end without seeding the cache.
 		$probe_filter = static function ( $preempt, array $_args, string $url ) {
 			if ( false !== $preempt ) {
 				return $preempt;
@@ -1220,7 +1220,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			if ( 1 === preg_match( '#/wp-json/wp/v2/posts\?#', $url ) ) {
 				return array(
 					'response' => array( 'code' => 401 ),
-					'body'     => '',
+					'body'     => '{"code":"safe_publish_auth_invalid"}',
 					'headers'  => array(),
 				);
 			}
@@ -1263,15 +1263,17 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that a cold-cache probe rejected with 401 writes exactly one
-	 * error-level CONNECTION_PROBE_FAILED row carrying the status and code.
+	 * Verifies that a cold-cache probe rejected with a 401 Safe Publish code
+	 * writes exactly one error-level CONNECTION_PROBE_FAILED row carrying the
+	 * status, code, and error code.
 	 */
 	public function test_cold_cache_unauthorized_probe_logs_failure(): void {
-		// ARRANGE: Stub the probe endpoint to reject with 401 and start cold.
+		// ARRANGE: Stub the probe to reject with a 401 Safe Publish code and
+		// start cold.
 		$probe_filter = $this->stub_probe_response(
 			array(
 				'response' => array( 'code' => 401 ),
-				'body'     => '',
+				'body'     => '{"code":"safe_publish_auth_invalid"}',
 				'headers'  => array(),
 			)
 		);
@@ -1288,7 +1290,8 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 		remove_filter( 'pre_http_request', $probe_filter, 1 );
 
-		// ASSERT: A single error-level row records the unauthorized outcome.
+		// ASSERT: A single error-level row records the unauthorized outcome and
+		// the bounded error code.
 		$rows = $this->connection_probe_failed_rows();
 		$this->assertCount( 1, $rows );
 		$this->assertSame( 'error', $rows[0]['level'] );
@@ -1297,6 +1300,53 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			$rows[0]['data']['probe_status']
 		);
 		$this->assertSame( 401, $rows[0]['data']['code'] );
+		$this->assertSame(
+			'safe_publish_auth_invalid',
+			$rows[0]['data']['error_code']
+		);
+	}
+
+	/**
+	 * Verifies that a cold-cache probe blocked upstream writes one error-level
+	 * row carrying the blocked status and the foreign gate's error code.
+	 */
+	public function test_cold_cache_blocked_probe_logs_failure(): void {
+		// ARRANGE: Stub the probe to reject with a 403 from an upstream gate
+		// carrying its own error code, and start cold.
+		$probe_filter = $this->stub_probe_response(
+			array(
+				'response' => array( 'code' => 403 ),
+				'body'     => '{"code":"forbidden_access"}',
+				'headers'  => array(),
+			)
+		);
+		$this->reset_auth_audit_log();
+		delete_site_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+		);
+
+		// ACT: Trigger the cached auth-status probe.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_auth_status' );
+
+		remove_filter( 'pre_http_request', $probe_filter, 1 );
+
+		// ASSERT: A single error-level row records the blocked outcome with the
+		// bounded foreign error code.
+		$rows = $this->connection_probe_failed_rows();
+		$this->assertCount( 1, $rows );
+		$this->assertSame( 'error', $rows[0]['level'] );
+		$this->assertSame(
+			VIP_Safe_Auth::STATUS_BLOCKED,
+			$rows[0]['data']['probe_status']
+		);
+		$this->assertSame( 403, $rows[0]['data']['code'] );
+		$this->assertSame(
+			'forbidden_access',
+			$rows[0]['data']['error_code']
+		);
 	}
 
 	/**

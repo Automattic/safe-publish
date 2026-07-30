@@ -136,6 +136,7 @@ class SourcePostsAPITest extends TestCase {
 		$statuses = array(
 			VIP_Safe_Auth::STATUS_AUTHORIZED,
 			VIP_Safe_Auth::STATUS_UNAUTHORIZED,
+			VIP_Safe_Auth::STATUS_BLOCKED,
 			VIP_Safe_Auth::STATUS_UNREACHABLE,
 			VIP_Safe_Auth::STATUS_URL_UNSET,
 		);
@@ -146,6 +147,109 @@ class SourcePostsAPITest extends TestCase {
 			$this->assertIsString( $description );
 			$this->assertNotSame( '', $description );
 		}
+	}
+
+	/**
+	 * Verifies that describe_auth_status returns the upstream-block message for
+	 * the blocked status.
+	 */
+	public function test_describe_auth_status_blocked_explains_upstream_block(): void {
+		// ARRANGE + ACT: Describe a blocked probe.
+		$message = Source_Posts_API::describe_auth_status(
+			VIP_Safe_Auth::STATUS_BLOCKED
+		);
+
+		// ASSERT: The message names the upstream restriction and the fix.
+		$this->assertStringContainsString( 'blocked the request', $message );
+		$this->assertStringContainsString( 'safe-publish/v1', $message );
+	}
+
+	/**
+	 * Verifies that an unauthorized probe with a connected-URL-mismatch code
+	 * yields the URL-mismatch guidance, distinct from the generic secret
+	 * message.
+	 */
+	public function test_describe_auth_status_unauthorized_url_mismatch(): void {
+		// ARRANGE + ACT: Describe the mismatch variant and the generic one.
+		$message = Source_Posts_API::describe_auth_status(
+			VIP_Safe_Auth::STATUS_UNAUTHORIZED,
+			'safe_publish_auth_site_url_mismatch'
+		);
+		$generic = Source_Posts_API::describe_auth_status(
+			VIP_Safe_Auth::STATUS_UNAUTHORIZED,
+			''
+		);
+
+		// ASSERT: The message addresses the connected-site URL and differs from
+		// the generic secret message.
+		$this->assertStringContainsString( 'connected-site URL', $message );
+		$this->assertNotSame( $generic, $message );
+	}
+
+	/**
+	 * Verifies that an unauthorized probe with an expired code yields the
+	 * clock-skew guidance, distinct from the generic secret message.
+	 */
+	public function test_describe_auth_status_unauthorized_expired(): void {
+		// ARRANGE + ACT: Describe the expired variant and the generic one.
+		$message = Source_Posts_API::describe_auth_status(
+			VIP_Safe_Auth::STATUS_UNAUTHORIZED,
+			'safe_publish_auth_expired'
+		);
+		$generic = Source_Posts_API::describe_auth_status(
+			VIP_Safe_Auth::STATUS_UNAUTHORIZED,
+			''
+		);
+
+		// ASSERT: The message addresses clock skew and differs from the generic
+		// secret message.
+		$this->assertStringContainsString( 'clock', $message );
+		$this->assertNotSame( $generic, $message );
+	}
+
+	/**
+	 * Verifies that an unauthorized probe with the invalid code or no code both
+	 * fall back to the shared-secret message.
+	 */
+	public function test_describe_auth_status_unauthorized_invalid_falls_back(): void {
+		// ARRANGE + ACT: Describe the invalid-signature and no-code variants.
+		$invalid = Source_Posts_API::describe_auth_status(
+			VIP_Safe_Auth::STATUS_UNAUTHORIZED,
+			'safe_publish_auth_invalid'
+		);
+		$empty   = Source_Posts_API::describe_auth_status(
+			VIP_Safe_Auth::STATUS_UNAUTHORIZED,
+			''
+		);
+
+		// ASSERT: Both yield the same shared-secret message.
+		$this->assertStringContainsString(
+			'SAFE_PUBLISH_SHARED_SECRET',
+			$invalid
+		);
+		$this->assertSame( $empty, $invalid );
+	}
+
+	/**
+	 * Verifies that an unreachable probe carrying a Safe Publish config code
+	 * yields the not-fully-configured message, distinct from the generic
+	 * unreachable message.
+	 */
+	public function test_describe_auth_status_unreachable_misconfigured(): void {
+		// ARRANGE + ACT: Describe a 500-config unreachable and a generic one.
+		$configured = Source_Posts_API::describe_auth_status(
+			VIP_Safe_Auth::STATUS_UNREACHABLE,
+			'safe_publish_auth_no_secret'
+		);
+		$generic    = Source_Posts_API::describe_auth_status(
+			VIP_Safe_Auth::STATUS_UNREACHABLE,
+			''
+		);
+
+		// ASSERT: The config variant names the misconfiguration and differs
+		// from the generic unreachable message.
+		$this->assertStringContainsString( 'not fully configured', $configured );
+		$this->assertNotSame( $generic, $configured );
 	}
 
 	/**

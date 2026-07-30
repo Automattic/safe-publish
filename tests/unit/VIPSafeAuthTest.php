@@ -417,11 +417,17 @@ class VIPSafeAuthTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that a 401 response from the source maps to unauthorized.
+	 * Verifies that a 401 carrying a Safe Publish authenticator code maps to
+	 * unauthorized with that error code preserved.
 	 */
 	public function test_test_authorization_returns_unauthorized_on_401(): void {
-		// ARRANGE: Stub a 401 HTTP response.
-		set_test_http_response( array( 'response' => array( 'code' => 401 ) ) );
+		// ARRANGE: Stub a 401 whose body is a genuine Safe Publish rejection.
+		set_test_http_response(
+			array(
+				'response' => array( 'code' => 401 ),
+				'body'     => '{"code":"safe_publish_auth_invalid","data":{"status":401}}',
+			)
+		);
 		$site_url    = 'https://example.com';
 		$auth_config = array(
 			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
@@ -430,17 +436,24 @@ class VIPSafeAuthTest extends TestCase {
 		// ACT: Probe the source.
 		$result = VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
 
-		// ASSERT: 401 maps to unauthorized with the response code preserved.
+		// ASSERT: A safe_publish_auth_* body classifies as unauthorized.
 		$this->assertSame( VIP_Safe_Auth::STATUS_UNAUTHORIZED, $result['status'] );
 		$this->assertSame( 401, $result['code'] );
+		$this->assertSame( 'safe_publish_auth_invalid', $result['error_code'] );
 	}
 
 	/**
-	 * Verifies that a 403 response from the source maps to unauthorized.
+	 * Verifies that a 403 carrying a Safe Publish authenticator code maps to
+	 * unauthorized with that error code preserved.
 	 */
 	public function test_test_authorization_returns_unauthorized_on_403(): void {
-		// ARRANGE: Stub a 403 HTTP response.
-		set_test_http_response( array( 'response' => array( 'code' => 403 ) ) );
+		// ARRANGE: Stub a 403 whose body is a genuine Safe Publish rejection.
+		set_test_http_response(
+			array(
+				'response' => array( 'code' => 403 ),
+				'body'     => '{"code":"safe_publish_auth_invalid","data":{"status":403}}',
+			)
+		);
 		$site_url    = 'https://example.com';
 		$auth_config = array(
 			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
@@ -449,9 +462,190 @@ class VIPSafeAuthTest extends TestCase {
 		// ACT: Probe the source.
 		$result = VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
 
-		// ASSERT: 403 maps to unauthorized with the response code preserved.
+		// ASSERT: A safe_publish_auth_* body classifies as unauthorized.
 		$this->assertSame( VIP_Safe_Auth::STATUS_UNAUTHORIZED, $result['status'] );
 		$this->assertSame( 403, $result['code'] );
+		$this->assertSame( 'safe_publish_auth_invalid', $result['error_code'] );
+	}
+
+	/**
+	 * Verifies that a 403 carrying a foreign body code is classified as
+	 * blocked, with the foreign code surfaced as the bounded error code.
+	 */
+	public function test_test_authorization_returns_blocked_on_403_foreign_body(): void {
+		// ARRANGE: Stub a 403 from an upstream gate with its own error code.
+		set_test_http_response(
+			array(
+				'response' => array( 'code' => 403 ),
+				'body'     => '{"code":"forbidden_access","message":"Blocked"}',
+			)
+		);
+		$site_url    = 'https://example.com';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		// ACT: Probe the source.
+		$result = VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
+
+		// ASSERT: A non-Safe-Publish code reads as an upstream block.
+		$this->assertSame( VIP_Safe_Auth::STATUS_BLOCKED, $result['status'] );
+		$this->assertSame( 403, $result['code'] );
+		$this->assertSame( 'forbidden_access', $result['error_code'] );
+	}
+
+	/**
+	 * Verifies that a 403 with an empty body is classified as blocked.
+	 */
+	public function test_test_authorization_returns_blocked_on_403_empty_body(): void {
+		// ARRANGE: Stub a 403 with no body, as a bare gate would return.
+		set_test_http_response(
+			array(
+				'response' => array( 'code' => 403 ),
+				'body'     => '',
+			)
+		);
+		$site_url    = 'https://example.com';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		// ACT: Probe the source.
+		$result = VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
+
+		// ASSERT: No body means no Safe Publish code, so it reads as blocked.
+		$this->assertSame( VIP_Safe_Auth::STATUS_BLOCKED, $result['status'] );
+		$this->assertSame( '', $result['error_code'] );
+	}
+
+	/**
+	 * Verifies that a 401 with a non-JSON body is classified as blocked.
+	 */
+	public function test_test_authorization_returns_blocked_on_401_non_json_body(): void {
+		// ARRANGE: Stub a 401 whose body is an HTML block page, not JSON.
+		set_test_http_response(
+			array(
+				'response' => array( 'code' => 401 ),
+				'body'     => '<html><body>Access denied</body></html>',
+			)
+		);
+		$site_url    = 'https://example.com';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		// ACT: Probe the source.
+		$result = VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
+
+		// ASSERT: An unparseable body yields no code, so it reads as blocked.
+		$this->assertSame( VIP_Safe_Auth::STATUS_BLOCKED, $result['status'] );
+		$this->assertSame( '', $result['error_code'] );
+	}
+
+	/**
+	 * Verifies that a 401 expired-timestamp code maps to unauthorized with the
+	 * expired error code preserved.
+	 */
+	public function test_test_authorization_surfaces_expired_error_code(): void {
+		// ARRANGE: Stub a 401 whose body reports an expired request timestamp.
+		set_test_http_response(
+			array(
+				'response' => array( 'code' => 401 ),
+				'body'     => '{"code":"safe_publish_auth_expired"}',
+			)
+		);
+		$site_url    = 'https://example.com';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		// ACT: Probe the source.
+		$result = VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
+
+		// ASSERT: The expired code rides along on an unauthorized verdict.
+		$this->assertSame( VIP_Safe_Auth::STATUS_UNAUTHORIZED, $result['status'] );
+		$this->assertSame( 'safe_publish_auth_expired', $result['error_code'] );
+	}
+
+	/**
+	 * Verifies that a 403 connected-URL-mismatch code maps to unauthorized with
+	 * the mismatch error code preserved.
+	 */
+	public function test_test_authorization_surfaces_site_url_mismatch_error_code(): void {
+		// ARRANGE: Stub a 403 whose body reports a connected-URL mismatch.
+		set_test_http_response(
+			array(
+				'response' => array( 'code' => 403 ),
+				'body'     => '{"code":"safe_publish_auth_site_url_mismatch"}',
+			)
+		);
+		$site_url    = 'https://example.com';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		// ACT: Probe the source.
+		$result = VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
+
+		// ASSERT: The mismatch code rides along on an unauthorized verdict.
+		$this->assertSame( VIP_Safe_Auth::STATUS_UNAUTHORIZED, $result['status'] );
+		$this->assertSame(
+			'safe_publish_auth_site_url_mismatch',
+			$result['error_code']
+		);
+	}
+
+	/**
+	 * Verifies that a 500 no-secret code stays unreachable but surfaces the
+	 * misconfiguration error code for the message layer.
+	 */
+	public function test_test_authorization_surfaces_misconfigured_error_code_on_500(): void {
+		// ARRANGE: Stub a 500 whose body reports a missing shared secret.
+		set_test_http_response(
+			array(
+				'response' => array( 'code' => 500 ),
+				'body'     => '{"code":"safe_publish_auth_no_secret"}',
+			)
+		);
+		$site_url    = 'https://example.com';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		// ACT: Probe the source.
+		$result = VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
+
+		// ASSERT: A reachable-but-misconfigured 500 keeps the unreachable
+		// status while carrying the config error code.
+		$this->assertSame( VIP_Safe_Auth::STATUS_UNREACHABLE, $result['status'] );
+		$this->assertSame( 'safe_publish_auth_no_secret', $result['error_code'] );
+	}
+
+	/**
+	 * Verifies that a junk, oversized body code is sanitized to the safe
+	 * character set and truncated to 64 characters.
+	 */
+	public function test_test_authorization_sanitizes_and_truncates_error_code(): void {
+		// ARRANGE: Stub a 403 whose code has disallowed characters and runs
+		// past the 64-character cap.
+		set_test_http_response(
+			array(
+				'response' => array( 'code' => 403 ),
+				'body'     => '{"code":"' . str_repeat( 'a', 70 ) . ' <b>"}',
+			)
+		);
+		$site_url    = 'https://example.com';
+		$auth_config = array(
+			'shared_secret' => 'test_secret_key_that_is_long_enough_for_validation',
+		);
+
+		// ACT: Probe the source.
+		$result = VIP_Safe_Auth::test_authorization( $site_url, $auth_config );
+
+		// ASSERT: Disallowed characters are stripped and the result is capped
+		// at 64 characters.
+		$this->assertSame( str_repeat( 'a', 64 ), $result['error_code'] );
+		$this->assertSame( VIP_Safe_Auth::STATUS_BLOCKED, $result['status'] );
 	}
 
 	/**
