@@ -107,13 +107,13 @@ const BulkRollbackPostModal = ( {
 	const failures = result?.entries.filter( entry => ! entry.outcome.success );
 
 	let summaryHeading = __( 'Roll back completed!', 'safe-publish' );
-	let summaryColor = '#008a20';
+	let summaryColor = 'var(--safe-publish-status-success)';
 	if ( result && 0 === result.successful ) {
 		summaryHeading = __( 'Roll back failed', 'safe-publish' );
-		summaryColor = '#d63638';
+		summaryColor = 'var(--safe-publish-status-error)';
 	} else if ( result && result.failed > 0 ) {
 		summaryHeading = __( 'Roll back completed with errors', 'safe-publish' );
-		summaryColor = '#996800';
+		summaryColor = 'var(--safe-publish-status-warning)';
 	}
 
 	return (
@@ -134,12 +134,12 @@ const BulkRollbackPostModal = ( {
 					</Text>
 					<VStack spacing="2">
 						{ deleteCount > 0 && (
-							<Text style={ { fontSize: '0.9em', color: '#666' } }>
+							<Text style={ { fontSize: '0.9em', color: 'var(--safe-publish-text-muted)' } }>
 								{ deletedLabel( deleteCount ) }
 							</Text>
 						) }
 						{ restoreCount > 0 && (
-							<Text style={ { fontSize: '0.9em', color: '#666' } }>
+							<Text style={ { fontSize: '0.9em', color: 'var(--safe-publish-text-muted)' } }>
 								{ restoredLabel( restoreCount ) }
 							</Text>
 						) }
@@ -151,7 +151,7 @@ const BulkRollbackPostModal = ( {
 				<VStack spacing="3">
 					<Text>{ __( 'Rolling back…', 'safe-publish' ) }</Text>
 					<ProgressBar value={ Math.round( ( completed / total ) * 100 ) } />
-					<Text style={ { fontSize: '0.8em', color: '#666' } }>
+					<Text style={ { fontSize: '0.8em', color: 'var(--safe-publish-text-muted)' } }>
 						{ sprintf(
 							/* translators: 1: completed count, 2: total count */
 							__( 'Rolled back %1$d of %2$d', 'safe-publish' ),

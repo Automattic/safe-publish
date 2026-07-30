@@ -261,7 +261,7 @@ final class History_Repository {
 	}
 
 	/**
-	 * Completes a session.
+	 * Completes a session, deriving its final status from item outcomes.
 	 *
 	 * @param int $session_id Session ID.
 	 */
@@ -272,13 +272,54 @@ final class History_Repository {
 		$wpdb->update(
 			Imports_Table::table_name(),
 			array(
-				'status'       => 'completed',
+				'status'       => $this->derive_session_status( $session_id ),
 				'ended_at_gmt' => current_time( 'mysql', true ),
 			),
 			array( 'id' => $session_id ),
 			array( '%s', '%s' ),
 			array( '%d' )
 		);
+	}
+
+	/**
+	 * Derives a session's final status from its item outcomes.
+	 *
+	 * A session with no failed items completes (this also covers the
+	 * zero-items case); with no successful items it fails; a mix is partial.
+	 *
+	 * @param int $session_id Session ID.
+	 * @return string One of 'completed', 'partial', 'failed'.
+	 */
+	private function derive_session_status( int $session_id ): string {
+		global $wpdb;
+
+		$table = Import_Items_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$counts = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT COALESCE(SUM(status IN ('success', 'updated')), 0)"
+					. ' AS success_count,'
+					. " COALESCE(SUM(status = 'error'), 0) AS failed_count"
+					. " FROM `{$table}` WHERE session_id = %d",
+				$session_id
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		$success_count = (int) ( $counts['success_count'] ?? 0 );
+		$failed_count  = (int) ( $counts['failed_count'] ?? 0 );
+
+		if ( 0 === $failed_count ) {
+			return 'completed';
+		}
+
+		if ( 0 === $success_count ) {
+			return 'failed';
+		}
+
+		return 'partial';
 	}
 
 	/**

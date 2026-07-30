@@ -75,8 +75,7 @@ const STATUS_VALUES: readonly string[] = [
 ];
 
 const STATUS_LABEL_SUGGESTIONS = STATUS_VALUES.map(
-	// value iterates the STATUS_VALUES allowlist.
-	// eslint-disable-next-line security/detect-object-injection
+	// eslint-disable-next-line security/detect-object-injection -- value iterates the STATUS_VALUES allowlist.
 	( value ) => PUBLISH_STATUS_LABELS[ value ] ?? value
 );
 
@@ -628,8 +627,7 @@ export function PostsDataView( {
 
 		const loadingMap: Record< number, { status: ImportSyncStatus } > = {};
 		sourceIds.forEach( ( id ) => {
-			// id iterates sourceIds, which are absint-validated server-side.
-			// eslint-disable-next-line security/detect-object-injection
+			// eslint-disable-next-line security/detect-object-injection -- id iterates sourceIds, which are absint-validated server-side.
 			loadingMap[ id ] = { status: 'loading' };
 		} );
 		setSyncStatuses( loadingMap );
@@ -777,9 +775,8 @@ export function PostsDataView( {
 				'string' === typeof token ? token : token.value
 			)
 			.map( ( label ) => {
-				// value iterates the STATUS_VALUES allowlist.
 				const match = STATUS_VALUES.find( ( value ) =>
-					// eslint-disable-next-line security/detect-object-injection
+					// eslint-disable-next-line security/detect-object-injection -- value iterates the STATUS_VALUES allowlist.
 					( PUBLISH_STATUS_LABELS[ value ] ?? value ) === label
 				);
 				return match ?? label;

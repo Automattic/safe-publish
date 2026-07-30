@@ -183,6 +183,14 @@ function wp_get_upload_dir(): array {
 	);
 }
 
+function wp_get_audio_extensions(): array {
+	return array( 'mp3', 'ogg', 'flac', 'm4a', 'wav' );
+}
+
+function wp_get_video_extensions(): array {
+	return array( 'mp4', 'm4v', 'webm', 'ogv', 'flv' );
+}
+
 function untrailingslashit( string $path ): string {
 	return rtrim( $path, '/\\' );
 }
