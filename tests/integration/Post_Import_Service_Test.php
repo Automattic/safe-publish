@@ -3302,8 +3302,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			Post_Import_Service::IMPORT_LOCK_KEY_PREFIX . $source_id,
 			1,
 			Post_Import_Service::IMPORT_LOCK_GROUP,
-			// IMPORT_LOCK_TTL is 300 seconds.
-			// phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined
+			// phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined -- IMPORT_LOCK_TTL is 300 seconds.
 			Post_Import_Service::IMPORT_LOCK_TTL
 		);
 
