@@ -516,27 +516,27 @@ describe( 'attentionIssueId', () => {
 
 describe( 'statusLabel', () => {
 	it( 'prefers the built-in label over the slug', () => {
-		// ARRANGE + ACT + ASSERT: a mapped status uses its friendly label.
+		// ARRANGE + ACT + ASSERT: A mapped status uses its friendly label.
 		expect( statusLabel( 'publish' ) ).toBe( 'Published' );
 		expect( statusLabel( 'pending' ) ).toBe( 'Pending Review' );
 	} );
 
 	it( 'titlecases an unmapped slug split on - and _', () => {
-		// ARRANGE: custom editorial-workflow statuses with both separators.
-		// ACT + ASSERT: each word is capitalized and joined with spaces.
+		// ARRANGE: Custom editorial-workflow statuses with both separators.
+		// ACT + ASSERT: Each word is capitalized and joined with spaces.
 		expect( statusLabel( 'in-progress' ) ).toBe( 'In Progress' );
 		expect( statusLabel( 'pitch' ) ).toBe( 'Pitch' );
 		expect( statusLabel( 'needs_review' ) ).toBe( 'Needs Review' );
 	} );
 
 	it( 'returns an empty string for an empty slug', () => {
-		// ARRANGE + ACT + ASSERT: nothing to titlecase.
+		// ARRANGE + ACT + ASSERT: Nothing to titlecase.
 		expect( statusLabel( '' ) ).toBe( '' );
 	} );
 
 	it( 'titlecases a prototype key name instead of returning a prototype member', () => {
-		// ARRANGE: a hostile source status matching an Object.prototype key.
-		// ACT + ASSERT: the lookup ignores inherited keys, so we get a plain
+		// ARRANGE: A hostile source status matching an Object.prototype key.
+		// ACT + ASSERT: The lookup ignores inherited keys, so we get a plain
 		// string (a React text child) rather than an object or function.
 		expect( statusLabel( '__proto__' ) ).toBe( 'Proto' );
 		expect( statusLabel( 'constructor' ) ).toBe( 'Constructor' );
@@ -546,7 +546,7 @@ describe( 'statusLabel', () => {
 
 describe( 'statusBadgeModifier', () => {
 	it( 'maps a built-in status to its literal modifier class', () => {
-		// ARRANGE + ACT + ASSERT: known statuses resolve from the table.
+		// ARRANGE + ACT + ASSERT: Known statuses resolve from the table.
 		expect( statusBadgeModifier( 'publish' ) ).toBe(
 			'safe-publish-status-badge--publish'
 		);
@@ -556,9 +556,9 @@ describe( 'statusBadgeModifier', () => {
 	} );
 
 	it( 'returns an empty string for any status not in the table', () => {
-		// ARRANGE: a custom status and a hostile value that must never reach a
+		// ARRANGE: A custom status and a hostile value that must never reach a
 		// className.
-		// ACT + ASSERT: neither yields a class, so nothing is interpolated.
+		// ACT + ASSERT: Neither yields a class, so nothing is interpolated.
 		expect( statusBadgeModifier( 'in-progress' ) ).toBe( '' );
 		expect( statusBadgeModifier( '"><script>alert(1)</script>' ) ).toBe(
 			''
@@ -566,8 +566,8 @@ describe( 'statusBadgeModifier', () => {
 	} );
 
 	it( 'returns an empty string for Object.prototype key names', () => {
-		// ARRANGE: hostile statuses matching inherited object keys.
-		// ACT + ASSERT: the own-key guard returns '', not a prototype member.
+		// ARRANGE: Hostile statuses matching inherited object keys.
+		// ACT + ASSERT: The own-key guard returns '', not a prototype member.
 		expect( statusBadgeModifier( '__proto__' ) ).toBe( '' );
 		expect( statusBadgeModifier( 'constructor' ) ).toBe( '' );
 		expect( statusBadgeModifier( 'toString' ) ).toBe( '' );
