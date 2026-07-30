@@ -253,15 +253,15 @@ class Source_Posts_API {
 	 *
 	 * HMAC authenticates the source's identity, not its honesty: a
 	 * compromised source could return malicious fields the destination
-	 * renders. We type-coerce here, and additionally lock down two fields
-	 * the destination interpolates into HTML attributes/CSS class names:
+	 * renders. We type-coerce here, and harden two fields a hostile value
+	 * could otherwise weaponize on render:
 	 *
 	 * - `link` is forced through esc_url_raw with an http/https-only
 	 *   protocol allowlist so a hostile `javascript:` URL can't become an
 	 *   active anchor href.
-	 * - `status` is clamped to the catalog's status allowlist so a hostile
-	 *   value can't escape the `safe-publish-status-badge--<status>` class
-	 *   template (React doesn't escape className contents).
+	 * - `status` is reduced to a `[a-z0-9_-]` slug via sanitize_key —
+	 *   defense in depth, since the client picks the badge class from a fixed
+	 *   table rather than interpolating this value.
 	 *
 	 * Items without an id are dropped for stable listing shape regardless of
 	 * source plugin version; an empty or whitespace-only title is replaced
@@ -292,10 +292,7 @@ class Source_Posts_API {
 			? ''
 			: esc_url_raw( $raw_link, array( 'http', 'https' ) );
 
-		$raw_status  = (string) ( $item['status'] ?? '' );
-		$safe_status = in_array( $raw_status, self::CATALOG_STATUS_ALLOWLIST, true )
-			? $raw_status
-			: '';
+		$safe_status = sanitize_key( (string) ( $item['status'] ?? '' ) );
 
 		return array(
 			'id'           => $id,
@@ -307,21 +304,6 @@ class Source_Posts_API {
 			'status'       => $safe_status,
 		);
 	}
-
-	/**
-	 * Post statuses the catalog endpoint may return. Mirrors
-	 * Catalog_REST_Controller::ALLOWED_STATUSES — duplicated here to keep
-	 * the destination from depending on the source-only controller class.
-	 *
-	 * @var string[]
-	 */
-	private const CATALOG_STATUS_ALLOWLIST = array(
-		'publish',
-		'draft',
-		'pending',
-		'private',
-		'future',
-	);
 
 	/**
 	 * Tests API connection.
