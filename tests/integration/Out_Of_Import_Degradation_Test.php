@@ -198,7 +198,7 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 	 * Verifies that recording a resolved outcome logs a reconcile info event.
 	 */
 	public function test_record_resolved_logs_info_event(): void {
-		// ARRANGE & ACT: record a resolved outcome.
+		// ARRANGE + ACT: Record a resolved outcome.
 		$this->logger->record(
 			Reconcile_Outcome::resolved(),
 			'unmapped_block_reference',
@@ -223,7 +223,7 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 	 * carrying the reason.
 	 */
 	public function test_record_target_absent_logs_warning_with_reason(): void {
-		// ARRANGE & ACT: record a target-absent outcome.
+		// ARRANGE + ACT: Record a target-absent outcome.
 		$this->logger->record(
 			Reconcile_Outcome::target_absent( 'Target post 700 is not imported.' ),
 			'unmapped_block_reference',
@@ -255,7 +255,7 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 	 * carrying the failure detail.
 	 */
 	public function test_record_write_failed_logs_error_with_detail(): void {
-		// ARRANGE & ACT: record a write-failed outcome.
+		// ARRANGE + ACT: Record a write-failed outcome.
 		$this->logger->record(
 			Reconcile_Outcome::write_failed( 'db write failed' ),
 			'nav_ref_rewrite_failed',
@@ -280,7 +280,7 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 	 * Verifies that recording an unresolved outcome logs a reconcile warning.
 	 */
 	public function test_record_unresolved_logs_warning_event(): void {
-		// ARRANGE & ACT: record an unresolved outcome.
+		// ARRANGE + ACT: Record an unresolved outcome.
 		$this->logger->record(
 			Reconcile_Outcome::unresolved( 'No matching reference found.' ),
 			'unmapped_block_reference',

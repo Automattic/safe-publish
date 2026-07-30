@@ -132,7 +132,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * single warning-level issue keyed by (post, type, target).
 	 */
 	public function test_unresolved_block_reference_opens_one_issue(): void {
-		// ARRANGE & ACT: import a post linking to a not-yet-imported source post.
+		// ARRANGE + ACT: Import a post linking to a not-yet-imported source post.
 		$result = $this->import_under(
 			self::BLOG_URL,
 			7100,
@@ -156,7 +156,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * distinct rows for the same post.
 	 */
 	public function test_two_unresolved_refs_open_two_rows(): void {
-		// ARRANGE & ACT: import a post linking to an unimported post and term.
+		// ARRANGE + ACT: Import a post linking to an unimported post and term.
 		$result = $this->import_under(
 			self::BLOG_URL,
 			7101,
@@ -181,7 +181,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * source ID open distinct rows rather than colliding on the identity key.
 	 */
 	public function test_same_source_id_post_and_term_open_distinct_rows(): void {
-		// ARRANGE & ACT: import a post linking to an unimported post and term
+		// ARRANGE + ACT: Import a post linking to an unimported post and term
 		// that share the same numeric source ID.
 		$result = $this->import_under(
 			self::BLOG_URL,
@@ -379,7 +379,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * two subsites of one host never collide in the listing.
 	 */
 	public function test_issues_scoped_by_subsite_identity(): void {
-		// ARRANGE & ACT: import the same unresolved reference under two subsites.
+		// ARRANGE + ACT: Import the same unresolved reference under two subsites.
 		$blog = $this->import_under(
 			self::BLOG_URL,
 			7105,

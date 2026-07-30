@@ -132,7 +132,7 @@ class Subsite_Source_Scoping_Test extends Source_Posts_API_Test_Base {
 	 * the existing post rather than creating a duplicate.
 	 */
 	public function test_reimport_within_subsite_updates_existing_post(): void {
-		// ARRANGE & ACT: import source ID 600 from /blog twice.
+		// ARRANGE + ACT: Import source ID 600 from /blog twice.
 		$source_id = 600;
 		$first     = $this->import_under(
 			self::BLOG_URL,
@@ -249,7 +249,7 @@ class Subsite_Source_Scoping_Test extends Source_Posts_API_Test_Base {
 	 * imports with the host-only identity, byte-identical to prior behavior.
 	 */
 	public function test_single_site_identity_stays_host_only(): void {
-		// ARRANGE & ACT: import under a path-less connection.
+		// ARRANGE + ACT: Import under a path-less connection.
 		$result = $this->import_under(
 			'https://source.example.com',
 			900,
@@ -269,7 +269,7 @@ class Subsite_Source_Scoping_Test extends Source_Posts_API_Test_Base {
 	 * the existing different-host multi-source behavior.
 	 */
 	public function test_distinct_hosts_remain_separately_scoped(): void {
-		// ARRANGE & ACT: import one source ID from two different hosts.
+		// ARRANGE + ACT: Import one source ID from two different hosts.
 		$source_id = 1000;
 		$first     = $this->import_under(
 			'https://source.example.com',

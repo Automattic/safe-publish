@@ -162,7 +162,7 @@ class TelemetryEventsTest extends TestCase {
 		// ARRANGE: the four bounded probe statuses.
 		$statuses = Telemetry_Events::CONNECTION_OUTCOME_ALLOWED;
 
-		// ACT & ASSERT: each status normalizes to itself.
+		// ACT + ASSERT: Each status normalizes to itself.
 		foreach ( $statuses as $status ) {
 			$this->assertSame(
 				$status,
