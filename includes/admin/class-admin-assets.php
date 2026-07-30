@@ -61,8 +61,7 @@ final class Admin_Assets {
 			return;
 		}
 
-		// Path is built from plugin_dir_path() and a hardcoded filename.
-		// phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
+		// phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable -- path is built from plugin_dir_path() and a hardcoded filename.
 		$asset_file = include $asset_file_path;
 
 		if (

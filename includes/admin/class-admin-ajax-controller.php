@@ -236,8 +236,7 @@ final class Admin_Ajax_Controller {
 		$source_site_url = sanitize_text_field(
 			wp_unslash( $_POST['source_site_url'] ?? '' )
 		);
-		// Allowlisted to a small enum by sanitize_state.
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- allowlisted to a small enum by sanitize_state.
 		$requested_state      = self::sanitize_state( $_POST['state'] ?? 'all' );
 		$focus_source_id      = absint( $_POST['focus_source_id'] ?? 0 );
 		$with_orphan_count    = 1 === absint( $_POST['with_orphan_count'] ?? 0 );
@@ -536,8 +535,7 @@ final class Admin_Ajax_Controller {
 		}
 		$this->verify_ajax_capability();
 
-		// Each element is downstream-sanitized via absint().
-		// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- each element is downstream-sanitized via absint().
 		$raw_item_ids   = (array) wp_unslash( $_POST['item_ids'] ?? array() );
 		$raw_source_ids = (array) wp_unslash(
 			$_POST['source_post_ids'] ?? array()
@@ -938,15 +936,13 @@ final class Admin_Ajax_Controller {
 	 *               list_failed_source_rows().
 	 */
 	private function build_local_listing_args(): array {
-		// Caller verified the nonce.
-		// phpcs:disable WordPress.Security.NonceVerification.Missing
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- caller verified the nonce.
 		$search = trim(
 			sanitize_text_field( wp_unslash( $_POST['search'] ?? '' ) )
 		);
 		$name   = sanitize_title( wp_unslash( $_POST['name'] ?? '' ) );
 
-		// sanitize_key_list() sanitizes each element.
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitize_key_list() sanitizes each element.
 		$raw_post_types = (array) wp_unslash( $_POST['post_types'] ?? array() );
 		$post_types     = array_values(
 			array_filter(
@@ -1037,8 +1033,7 @@ final class Admin_Ajax_Controller {
 	 * @return array Validated args for Source_Posts_API::fetch_posts.
 	 */
 	private function build_catalog_args(): array {
-		// Caller verified the nonce.
-		// phpcs:disable WordPress.Security.NonceVerification.Missing
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- caller verified the nonce.
 		$orderby_raw = sanitize_text_field( wp_unslash( $_POST['orderby'] ?? '' ) );
 		$order_raw   = strtolower( sanitize_text_field( wp_unslash( $_POST['order'] ?? '' ) ) );
 
@@ -1064,9 +1059,7 @@ final class Admin_Ajax_Controller {
 			$args['name'] = $name;
 		}
 
-		// Each element is reduced to the shared allowlist by normalize_statuses
-		// via sanitize_key, so the array as a whole is safe to pass through.
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- normalize_statuses() reduces each element to the shared allowlist via sanitize_key().
 		$statuses = self::normalize_statuses( wp_unslash( $_POST['status'] ?? array() ) );
 		if ( array() !== $statuses ) {
 			$args['status'] = $statuses;
@@ -1370,8 +1363,7 @@ final class Admin_Ajax_Controller {
 
 		$this->validate_auth_or_fail();
 
-		// JSON string not sanitized to preserve structure; validated after decode.
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON string not sanitized to preserve structure; validated after decode.
 		$posts_data_json = isset( $_POST['posts_data'] ) ? wp_unslash( $_POST['posts_data'] ) : '';
 
 		if ( empty( $posts_data_json ) ) {
@@ -1593,8 +1585,7 @@ final class Admin_Ajax_Controller {
 		}
 		$this->verify_ajax_capability( 'delete_posts' );
 
-		// Each element is downstream-sanitized via absint().
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- each element is downstream-sanitized via absint().
 		$raw_ids = (array) wp_unslash( $_POST['post_ids'] ?? array() );
 
 		$post_ids = array_values(

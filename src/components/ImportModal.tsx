@@ -136,7 +136,7 @@ const ImportModal = ( {
 				)
 			}</Text>
 			{ skippedCount > 0 && (
-				<Text style={ { color: '#996800' } }>
+				<Text style={ { color: 'var(--safe-publish-status-warning)' } }>
 					{ sprintf(
 						/* translators: %d is the number of skipped posts */
 						_n(
@@ -150,14 +150,14 @@ const ImportModal = ( {
 				</Text>
 			) }
 			{ ! isUpdate && (
-				<Text style={ { fontSize: '0.9em', color: '#666' } }>
+				<Text style={ { fontSize: '0.9em', color: 'var(--safe-publish-text-muted)' } }>
 					{ __(
 						'This will import the post content including images, links, and formatting.',
 						'safe-publish'
 					) }
 				</Text>
 			) }
-			{ error && <Text role="alert" style={ { color: '#d63638' } }>{ error }</Text> }
+			{ error && <Text role="alert" style={ { color: 'var(--safe-publish-status-error)' } }>{ error }</Text> }
 			<HStack justify="right">
 				<Button
 					__next40pxDefaultSize
