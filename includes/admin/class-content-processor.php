@@ -11,6 +11,7 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
+use Safe_Publish\Content\Shortcode_Media_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Reconcile_Outcome;
@@ -118,6 +119,13 @@ class Content_Processor {
 	private Shortcode_ID_Rewriter $shortcode_id_rewriter;
 
 	/**
+	 * Shortcode Media Rewriter instance.
+	 *
+	 * @var Shortcode_Media_Rewriter
+	 */
+	private Shortcode_Media_Rewriter $shortcode_media_rewriter;
+
+	/**
 	 * Stores temporarily disabled WordPress filters.
 	 *
 	 * @var array
@@ -149,18 +157,37 @@ class Content_Processor {
 	/**
 	 * Constructs the Content_Processor instance.
 	 *
-	 * @param Media_Importer          $media_importer          Media importer instance.
-	 * @param Content_Media_Processor $content_media_processor Content media processor instance.
-	 * @param Shortcode_ID_Rewriter   $shortcode_id_rewriter   Shortcode ID rewriter instance.
+	 * @param Media_Importer                $media_importer           Media importer.
+	 * @param Content_Media_Processor       $content_media_processor  Content media processor.
+	 * @param Shortcode_ID_Rewriter         $shortcode_id_rewriter    Shortcode ID rewriter.
+	 * @param Shortcode_Media_Rewriter|null $shortcode_media_rewriter Rewriter, or null.
 	 */
 	public function __construct(
 		Media_Importer $media_importer,
 		Content_Media_Processor $content_media_processor,
-		Shortcode_ID_Rewriter $shortcode_id_rewriter
+		Shortcode_ID_Rewriter $shortcode_id_rewriter,
+		?Shortcode_Media_Rewriter $shortcode_media_rewriter = null
 	) {
-		$this->media_importer          = $media_importer;
-		$this->content_media_processor = $content_media_processor;
-		$this->shortcode_id_rewriter   = $shortcode_id_rewriter;
+		$this->media_importer           = $media_importer;
+		$this->content_media_processor  = $content_media_processor;
+		$this->shortcode_id_rewriter    = $shortcode_id_rewriter;
+		$this->shortcode_media_rewriter = $shortcode_media_rewriter
+			?? self::default_shortcode_media_rewriter( $media_importer );
+	}
+
+	/**
+	 * Builds the shortcode media rewriter used when none is injected.
+	 *
+	 * @param Media_Importer $media_importer Importer the rewriter delegates to.
+	 * @return Shortcode_Media_Rewriter
+	 */
+	private static function default_shortcode_media_rewriter(
+		Media_Importer $media_importer
+	): Shortcode_Media_Rewriter {
+		return new Shortcode_Media_Rewriter(
+			static fn ( string $url, string $source_site_url ): string|false|null =>
+				$media_importer->import_source_media( $url, $source_site_url )
+		);
 	}
 
 	/**
@@ -218,11 +245,23 @@ class Content_Processor {
 		// embedded img src points at the dest attachment for lookup.
 		$processed_content = $this->shortcode_id_rewriter->rewrite_caption_ids( $processed_content );
 
+		// Import [audio]/[video] shortcode media before replace_source_urls(),
+		// so download failures are recorded rather than masked by the swap.
+		$processed_content = $this->shortcode_media_rewriter->rewrite_shortcode_media(
+			$processed_content,
+			$source_site_url
+		);
+
 		// Merge failures from content_media_processor (used in both the
 		// Gutenberg and non-Gutenberg paths).
 		$this->failed_media = self::merge_media_map(
 			$this->failed_media,
 			$this->content_media_processor->get_failed_media()
+		);
+
+		$this->failed_media = self::merge_media_map(
+			$this->failed_media,
+			$this->shortcode_media_rewriter->get_failed_media()
 		);
 
 		$this->unprocessable_media = self::merge_media_map(
@@ -238,6 +277,7 @@ class Content_Processor {
 
 		$this->content_media_processor->reset_failed_media();
 		$this->content_media_processor->reset_unprocessable_media();
+		$this->shortcode_media_rewriter->reset_failed_media();
 
 		return $this->replace_source_urls( $processed_content, $source_site_url );
 	}
