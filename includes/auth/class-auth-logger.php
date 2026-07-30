@@ -261,15 +261,21 @@ class Auth_Logger extends Logger {
 	/**
 	 * Logs a cached auth-status probe that did not authorize.
 	 *
-	 * @param string $status Probe status (unauthorized or unreachable).
-	 * @param int    $code   HTTP status code, or 0 if unavailable.
+	 * @param string $status     Non-authorized probe status.
+	 * @param int    $code       HTTP status code, or 0 if unavailable.
+	 * @param string $error_code Optional. Bounded body error code. Default ''.
 	 */
-	public function connection_probe_failed( string $status, int $code ): void {
+	public function connection_probe_failed(
+		string $status,
+		int $code,
+		string $error_code = ''
+	): void {
 		$this->log_failure(
 			Log_Events::CONNECTION_PROBE_FAILED,
 			array(
 				'probe_status' => $status,
 				'code'         => $code,
+				'error_code'   => $error_code,
 			)
 		);
 	}

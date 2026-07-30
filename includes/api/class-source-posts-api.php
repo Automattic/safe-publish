@@ -351,17 +351,24 @@ class Source_Posts_API {
 			'success'       => VIP_Safe_Auth::STATUS_AUTHORIZED === $status,
 			'status'        => $status,
 			'response_time' => round( ( $end_time - $start_time ) * 1000, 2 ),
-			'message'       => self::describe_auth_status( $status ),
+			'message'       => self::describe_auth_status(
+				$status,
+				$probe['error_code'] ?? ''
+			),
 		);
 	}
 
 	/**
 	 * Returns a human-readable message for an auth probe status.
 	 *
-	 * @param string $status Status from VIP_Safe_Auth::test_authorization().
+	 * @param string $status     Status from VIP_Safe_Auth::test_authorization().
+	 * @param string $error_code Optional. Bounded body error code from the probe. Default ''.
 	 * @return string Translated description for display.
 	 */
-	public static function describe_auth_status( string $status ): string {
+	public static function describe_auth_status(
+		string $status,
+		string $error_code = ''
+	): string {
 		switch ( $status ) {
 			case VIP_Safe_Auth::STATUS_AUTHORIZED:
 				return __(
@@ -369,15 +376,22 @@ class Source_Posts_API {
 					'safe-publish'
 				);
 			case VIP_Safe_Auth::STATUS_UNAUTHORIZED:
+				return self::describe_unauthorized( $error_code );
+			case VIP_Safe_Auth::STATUS_BLOCKED:
 				return __(
-					'Connected site rejected the shared secret. Verify SAFE_PUBLISH_SHARED_SECRET matches on both sites in wp-config.php.',
+					'The connected site blocked the request before Safe Publish could authenticate it. A security plugin, theme, or host rule is restricting the REST API — allowlist the wp/v2 and safe-publish/v1 namespaces for signed requests (they carry the X-Safe-Publish-Signature header).',
 					'safe-publish'
 				);
 			case VIP_Safe_Auth::STATUS_UNREACHABLE:
-				return __(
-					'Connected site could not be reached. Verify the URL and that the site is online.',
-					'safe-publish'
-				);
+				return 0 === strpos( $error_code, 'safe_publish_auth_' )
+					? __(
+						'The connected site was reached but is not fully configured — its Safe Publish shared secret or connected-site URL is not set. Complete the Safe Publish configuration on the connected site and retry.',
+						'safe-publish'
+					)
+					: __(
+						'Connected site could not be reached. Verify the URL and that the site is online.',
+						'safe-publish'
+					);
 			case VIP_Safe_Auth::STATUS_URL_UNSET:
 				return __(
 					'Connected site URL is not configured.',
@@ -385,6 +399,34 @@ class Source_Posts_API {
 				);
 			default:
 				return __( 'Unknown authentication status.', 'safe-publish' );
+		}
+	}
+
+	/**
+	 * Returns the message for an unauthorized probe, refined by the body error
+	 * code so a connected-URL mismatch or clock skew reads differently from a
+	 * real secret mismatch.
+	 *
+	 * @param string $error_code Bounded body error code from the probe.
+	 * @return string Translated description for display.
+	 */
+	private static function describe_unauthorized( string $error_code ): string {
+		switch ( $error_code ) {
+			case 'safe_publish_auth_site_url_mismatch':
+				return __(
+					"The connected site does not recognize this site's URL. On the connected site, set the connected-site URL to this site's home URL.",
+					'safe-publish'
+				);
+			case 'safe_publish_auth_expired':
+				return __(
+					'The request expired in transit, indicating a clock difference between the two sites. Synchronize their clocks (NTP) and retry.',
+					'safe-publish'
+				);
+			default:
+				return __(
+					'Connected site rejected the shared secret. Verify SAFE_PUBLISH_SHARED_SECRET matches on both sites in wp-config.php.',
+					'safe-publish'
+				);
 		}
 	}
 

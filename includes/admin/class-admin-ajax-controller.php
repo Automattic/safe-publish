@@ -1192,7 +1192,15 @@ final class Admin_Ajax_Controller {
 		}
 		$this->verify_ajax_capability();
 
-		wp_send_json_success( $this->get_cached_auth_status() );
+		$probe = $this->get_cached_auth_status();
+
+		// Render the message at request time so the cache stays pure probe data.
+		$probe['message'] = Source_Posts_API::describe_auth_status(
+			(string) ( $probe['status'] ?? '' ),
+			(string) ( $probe['error_code'] ?? '' )
+		);
+
+		wp_send_json_success( $probe );
 	}
 
 	/**
@@ -1222,11 +1230,13 @@ final class Admin_Ajax_Controller {
 		$status = (string) ( $result['status'] ?? '' );
 		if (
 			VIP_Safe_Auth::STATUS_UNAUTHORIZED === $status
+			|| VIP_Safe_Auth::STATUS_BLOCKED === $status
 			|| VIP_Safe_Auth::STATUS_UNREACHABLE === $status
 		) {
 			( new Auth_Logger() )->connection_probe_failed(
 				$status,
-				(int) ( $result['code'] ?? 0 )
+				(int) ( $result['code'] ?? 0 ),
+				(string) ( $result['error_code'] ?? '' )
 			);
 		}
 

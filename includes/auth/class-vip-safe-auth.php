@@ -34,11 +34,21 @@ final class VIP_Safe_Auth {
 	const STATUS_AUTHORIZED = 'authorized';
 
 	/**
-	 * Probe status: probed site rejected the credentials (HTTP 401/403).
+	 * Probe status: probed site rejected the credentials (HTTP 401/403 with a
+	 * Safe Publish authenticator error).
 	 *
 	 * @var string
 	 */
 	const STATUS_UNAUTHORIZED = 'unauthorized';
+
+	/**
+	 * Probe status: the probed site blocked the request upstream, before Safe
+	 * Publish's authenticator ran (e.g. a security plugin, theme, mu-plugin, or
+	 * WAF rule restricting the REST API).
+	 *
+	 * @var string
+	 */
+	const STATUS_BLOCKED = 'blocked';
 
 	/**
 	 * Probe status: probed site could not be reached (network failure or
@@ -117,15 +127,16 @@ final class VIP_Safe_Auth {
 	 * Probes the configured site to verify the shared secret is accepted.
 	 *
 	 * Returns `url_unset` for an empty URL or `unauthorized` if the format
-	 * check rejects the credentials. Otherwise, hits
-	 * `wp/v2/posts?context=edit&per_page=1` and inspects the response code:
-	 * 200 means the probed site accepts the HMAC signature and grants edit
-	 * context; 401/403 means the credentials are rejected; anything else is
-	 * treated as unreachable.
+	 * check rejects the credentials. Otherwise hits
+	 * `wp/v2/posts?context=edit&per_page=1` and classifies the response: 200
+	 * is authorized; a 401/403 carrying a safe_publish_auth_* body code is a
+	 * genuine rejection (`unauthorized`), any other 401/403 was blocked
+	 * upstream (`blocked`); any other code is `unreachable`. Non-200 results
+	 * include the bounded body `error_code`.
 	 *
 	 * @param string $site_url    Site URL to probe.
 	 * @param array  $auth_config Optional. Authentication configuration array. Default empty array.
-	 * @return array Probe result with `status`, optional `code`/`message`.
+	 * @return array Probe result: status, and optional code/error_code/message.
 	 */
 	public static function test_authorization( string $site_url, array $auth_config = array() ): array {
 		if ( '' === $site_url ) {
@@ -186,17 +197,52 @@ final class VIP_Safe_Auth {
 			);
 		}
 
+		// The body's error code separates a genuine Safe Publish rejection
+		// (safe_publish_auth_* prefix) from an upstream block.
+		$error_code = self::extract_error_code( $response );
+
 		if ( 401 === $code || 403 === $code ) {
+			$is_safe_publish = 0 === strpos( $error_code, 'safe_publish_auth_' );
+
 			return array(
-				'status' => self::STATUS_UNAUTHORIZED,
-				'code'   => $code,
+				'status'     => $is_safe_publish
+					? self::STATUS_UNAUTHORIZED
+					: self::STATUS_BLOCKED,
+				'code'       => $code,
+				'error_code' => $error_code,
 			);
 		}
 
 		return array(
-			'status' => self::STATUS_UNREACHABLE,
-			'code'   => $code,
+			'status'     => self::STATUS_UNREACHABLE,
+			'code'       => $code,
+			'error_code' => $error_code,
 		);
+	}
+
+	/**
+	 * Extracts a bounded, sanitized error code from a probe response body.
+	 *
+	 * The body is untrusted upstream input, so the decoded `code` is stripped
+	 * to a safe character set and truncated before use.
+	 *
+	 * @param array $response HTTP response array from the probe request.
+	 * @return string Sanitized error code, or empty string when absent.
+	 */
+	private static function extract_error_code( array $response ): string {
+		$decoded = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if (
+			! is_array( $decoded )
+			|| ! isset( $decoded['code'] )
+			|| ! is_string( $decoded['code'] )
+		) {
+			return '';
+		}
+
+		$sanitized = preg_replace( '/[^A-Za-z0-9_.:-]/', '', $decoded['code'] );
+
+		return substr( (string) $sanitized, 0, 64 );
 	}
 
 	/**

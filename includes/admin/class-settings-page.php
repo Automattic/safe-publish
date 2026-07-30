@@ -307,12 +307,15 @@ final class Settings_Page {
 					}
 
 					/**
-					 * Renders the cached auth probe status into the banner element.
+					 * Renders the auth probe result into the banner. The server
+					 * supplies the message; status only sets the notice level and
+					 * visibility.
 					 *
-					 * @param {HTMLElement} banner Banner container element.
-					 * @param {string}      status Probe status string from the AJAX response.
+					 * @param {HTMLElement} banner  Banner container element.
+					 * @param {string}      status  Probe status string.
+					 * @param {string}      message Server-rendered description.
 					 */
-					function renderAuthStatusBanner( banner, status ) {
+					function renderAuthStatusBanner( banner, status, message ) {
 						if ( 'authorized' === status ) {
 							banner.hidden    = true;
 							banner.className = 'safe-publish-auth-status-banner safe-publish-import-field-row';
@@ -320,17 +323,7 @@ final class Settings_Page {
 							return;
 						}
 
-						let level   = 'warning';
-						let message = '';
-
-						if ( 'unauthorized' === status ) {
-							level   = 'error';
-							message = "<?php echo esc_js( __( 'Connected site rejected the shared secret. Set SAFE_PUBLISH_SHARED_SECRET in wp-config.php on both sites to the same value (at least 16 characters).', 'safe-publish' ) ); ?>";
-						} else if ( 'unreachable' === status ) {
-							message = "<?php echo esc_js( __( 'Connected site could not be reached. Verify the connected site URL and that the site is online.', 'safe-publish' ) ); ?>";
-						} else {
-							message = "<?php echo esc_js( __( 'Connected site URL is not configured.', 'safe-publish' ) ); ?>";
-						}
+						const level = ( 'unauthorized' === status || 'blocked' === status ) ? 'error' : 'warning';
 
 						banner.hidden    = false;
 						banner.className = 'safe-publish-auth-status-banner safe-publish-import-field-row notice notice-' + level + ' inline';
@@ -348,8 +341,9 @@ final class Settings_Page {
 							return;
 						}
 
-						const ajaxUrl = "<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>";
-						const nonce   = "<?php echo esc_js( wp_create_nonce( 'safe_publish_ajax_nonce' ) ); ?>";
+						const ajaxUrl  = "<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>";
+						const nonce    = "<?php echo esc_js( wp_create_nonce( 'safe_publish_ajax_nonce' ) ); ?>";
+						const fallback = "<?php echo esc_js( __( 'Could not check the connection status. Reload the page to try again.', 'safe-publish' ) ); ?>";
 
 						const formData = new FormData();
 						formData.append( 'action', 'safe_publish_auth_status' );
@@ -359,13 +353,13 @@ final class Settings_Page {
 							.then( function ( r ) { return r.json(); } )
 							.then( function ( data ) {
 								if ( data && data.success && data.data && data.data.status ) {
-									renderAuthStatusBanner( banner, data.data.status );
+									renderAuthStatusBanner( banner, data.data.status, data.data.message );
 								} else {
-									renderAuthStatusBanner( banner, 'unreachable' );
+									renderAuthStatusBanner( banner, 'unreachable', fallback );
 								}
 							} )
 							.catch( function () {
-								renderAuthStatusBanner( banner, 'unreachable' );
+								renderAuthStatusBanner( banner, 'unreachable', fallback );
 							} );
 					}
 
