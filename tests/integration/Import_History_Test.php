@@ -243,7 +243,8 @@ class Import_History_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that session completion marks session as complete.
+	 * Verifies that completing a session with no items derives status
+	 * 'completed'.
 	 */
 	public function test_complete_session_updates_status(): void {
 		// ARRANGE: Create session.
@@ -257,6 +258,60 @@ class Import_History_Test extends Integration_Test_Case {
 		$this->assertSame( 'completed', $session['status'] );
 		$this->assertIsString( $session['ended_at_gmt'] );
 		$this->assertNotSame( '', $session['ended_at_gmt'] );
+	}
+
+	/**
+	 * Verifies that a session whose items all succeeded derives status
+	 * 'completed'.
+	 */
+	public function test_complete_session_all_succeeded_is_completed(): void {
+		// ARRANGE: Log only success/updated items.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$this->repository->log_import_action( $session_id, 1, 'P1', 'success', 101 );
+		$this->repository->log_import_action( $session_id, 2, 'P2', 'updated', 102 );
+
+		// ACT: Complete the session.
+		$this->repository->complete_session( $session_id );
+
+		// ASSERT: Status derives to completed.
+		$session = $this->repository->get_session( $session_id );
+		$this->assertSame( 'completed', $session['status'] );
+	}
+
+	/**
+	 * Verifies that a session mixing succeeded and failed items derives status
+	 * 'partial'.
+	 */
+	public function test_complete_session_mixed_is_partial(): void {
+		// ARRANGE: Log a mix of success/updated and error items.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$this->repository->log_import_action( $session_id, 1, 'P1', 'success', 101 );
+		$this->repository->log_import_action( $session_id, 2, 'P2', 'updated', 102 );
+		$this->repository->log_import_action( $session_id, 3, 'P3', 'error', null, 'Failed' );
+
+		// ACT: Complete the session.
+		$this->repository->complete_session( $session_id );
+
+		// ASSERT: Status derives to partial.
+		$session = $this->repository->get_session( $session_id );
+		$this->assertSame( 'partial', $session['status'] );
+	}
+
+	/**
+	 * Verifies that a session whose items all failed derives status 'failed'.
+	 */
+	public function test_complete_session_all_failed_is_failed(): void {
+		// ARRANGE: Log only error items.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$this->repository->log_import_action( $session_id, 1, 'P1', 'error', null, 'Failed 1' );
+		$this->repository->log_import_action( $session_id, 2, 'P2', 'error', null, 'Failed 2' );
+
+		// ACT: Complete the session.
+		$this->repository->complete_session( $session_id );
+
+		// ASSERT: Status derives to failed.
+		$session = $this->repository->get_session( $session_id );
+		$this->assertSame( 'failed', $session['status'] );
 	}
 
 	/**

@@ -93,12 +93,15 @@ class Content_Media_Processor {
 		while ( $processor->next_tag() ) {
 			switch ( $processor->get_tag() ) {
 				case 'IMG':
-					$this->import_and_replace_attr(
+					$attachment_id = $this->import_and_replace_attr(
 						$processor,
 						'src',
 						$source_site_url,
 						$block_name
 					);
+					if ( is_int( $attachment_id ) ) {
+						$this->rewrite_image_id_refs( $processor, $attachment_id );
+					}
 					$this->process_srcset_attr(
 						$processor,
 						$source_site_url,
@@ -234,6 +237,9 @@ class Content_Media_Processor {
 	 * @param bool                  $skip_if_not_media Leave the URL as a link instead of recording
 	 *                                                 a failure when the download is not media. For
 	 *                                                 ambiguous attributes such as anchor hrefs.
+	 * @return int|null Destination attachment ID on a successful import, null
+	 *                  when nothing was imported (third-party, already local, or
+	 *                  a failed download).
 	 */
 	private function import_and_replace_attr(
 		WP_HTML_Tag_Processor $processor,
@@ -241,25 +247,81 @@ class Content_Media_Processor {
 		string $source_site_url,
 		string $block_name = '',
 		bool $skip_if_not_media = false
-	): void {
+	): ?int {
 		$url = $processor->get_attribute( $attr_name );
 
 		if ( ! is_string( $url ) || '' === $url ) {
-			return;
+			return null;
 		}
 
-		$new_url = $this->media_importer
-			->import_source_media( $url, $source_site_url, $skip_if_not_media );
+		$imported_id = null;
+		$new_url     = $this->media_importer->import_source_media(
+			$url,
+			$source_site_url,
+			$skip_if_not_media,
+			$imported_id
+		);
 
 		if ( is_string( $new_url ) ) {
-			$new_url = Media_Importer::reapply_query_parameters(
-				$url,
-				$new_url
+			$processor->set_attribute(
+				$attr_name,
+				Media_Importer::reapply_query_parameters( $url, $new_url )
 			);
 
-			$processor->set_attribute( $attr_name, $new_url );
-		} elseif ( false === $new_url ) {
+			return $imported_id;
+		}
+
+		if ( false === $new_url ) {
 			$this->failed_media[ $url ] = $block_name;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Repoints an inline image's stale source-attachment ID references to the
+	 * destination attachment its src imported to.
+	 *
+	 * Core injects responsive srcset at render time only when the wp-image-{id}
+	 * class names an attachment whose files match the src basename; after import
+	 * the class and data-id still name the source, so srcset is dropped.
+	 * Rewrites an existing wp-image class token, and a present data-id only when
+	 * it names that same source attachment. Neither reference is fabricated.
+	 *
+	 * @param WP_HTML_Tag_Processor $processor     HTML processor positioned on the IMG tag.
+	 * @param int                   $attachment_id Destination attachment the src imported to.
+	 */
+	private function rewrite_image_id_refs(
+		WP_HTML_Tag_Processor $processor,
+		int $attachment_id
+	): void {
+		$pattern   = '/(?<![\w-])wp-image-(\d+)(?![\w-])/';
+		$class     = $processor->get_attribute( 'class' );
+		$source_id = 0;
+
+		if ( is_string( $class ) && 1 === preg_match( $pattern, $class, $matches ) ) {
+			$source_id = (int) $matches[1];
+
+			$new_class = preg_replace(
+				$pattern,
+				'wp-image-' . $attachment_id,
+				$class
+			);
+
+			if ( is_string( $new_class ) && $new_class !== $class ) {
+				$processor->set_attribute( 'class', $new_class );
+			}
+		}
+
+		// Rewrite data-id only when it names the same source attachment as the
+		// class, so a non-attachment data-id (e.g. a slider index) is left as-is.
+		$data_id = $processor->get_attribute( 'data-id' );
+		if (
+			$source_id > 0
+			&& $data_id === (string) $source_id
+			&& $data_id !== (string) $attachment_id
+		) {
+			$processor->set_attribute( 'data-id', (string) $attachment_id );
 		}
 	}
 

@@ -185,7 +185,7 @@ export function ExportHistory(): JSX.Element {
 	if ( error ) {
 		return (
 			<VStack>
-				<Text style={ { color: '#d63638' } }>
+				<Text style={ { color: 'var(--safe-publish-status-error)' } }>
 					{ /* translators: %s is the error message */
 					__( 'Error: %s', 'safe-publish' ).replace( '%s', error ) }
 				</Text>
