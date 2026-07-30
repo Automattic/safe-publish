@@ -84,6 +84,10 @@ If an `<a>` tag's `href` ends in a file extension allowed by WordPress, it is pr
 7. **Enrich**: The image's source library metadata — alt text, title, caption, and description — is applied to the new attachment. The source resolves each URL back to its attachment record (a capability core REST lacks) and returns the values alongside the post.
 8. **Replace**: Source URL replaced with the new attachment URL in content; previously stripped query parameters are reapplied.
 
+### Inline Image ID References
+
+An inline `<img>` carries two attachment-ID references alongside its URL — the `wp-image-{id}` class and the `data-id` attribute. Once the `src` is repointed at the destination file, both are rewritten from the source ID to the destination attachment ID (an existing reference only; neither is fabricated). This keeps WordPress' runtime responsive-image (`srcset`) output and editor media linkage working for migrated classic-editor and legacy-gallery images. Gutenberg `core/image` blocks are already repointed by their dedicated parser.
+
 ### Featured Image
 
 - Fetched separately via the `/wp-json/wp/v2/media/{id}` endpoint using the `featured_media` ID from the post response.
