@@ -57,15 +57,72 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
    - Reduce "Number of Posts" setting.
    - Import in smaller batches.
 
+#### "Could not be reached" but the site is online
+
+**Symptoms**: The connection test reports the site could not be reached, yet the site loads in a browser.
+
+**Solution**: If the message says the connected site was reached but is not fully configured, the far side responded but has no Safe Publish shared secret or connected-site URL set. Complete the Safe Publish configuration on that site and retry. Otherwise, work through the timeout steps above.
+
 #### "Unauthorized" or "403 Forbidden" error
 
-**Symptoms**: Authentication request rejected with 401 or 403 response
+**Symptoms**: Authentication request rejected with a 401 or 403 response
+
+A 401 or 403 has two distinct causes, and the Test Connection result tells them apart:
+
+- **Safe Publish rejected the request** — the response carries a `safe_publish_auth_*` code. This is a genuine credential problem: the shared secret does not match, the connected-site URL configured on the far side does not match this site, or the two sites' clocks have drifted.
+- **Something upstream blocked the request** — a security plugin, theme, mu-plugin, or host/WAF rule returned the response before Safe Publish's authenticator ran. It carries a foreign code such as `rest_forbidden`, or no JSON at all.
 
 **Solutions**:
 
-1. Verify Safe Publish is installed on the source site with **Sync Mode** set to `Export`.
-2. For basic auth, confirm the user has the `edit_posts` capability.
-3. Check server firewall rules aren't blocking incoming requests.
+1. **For a genuine Safe Publish rejection**:
+   - Verify `SAFE_PUBLISH_SHARED_SECRET` matches on both sites (case-sensitive, no stray spaces).
+   - On the connected site, set its connected-site URL to this site's home URL.
+   - If the message mentions a clock difference, synchronize both servers' clocks with NTP.
+   - Confirm Safe Publish is installed on the source site with **Sync Mode** set to `Export`.
+2. **For an upstream block**:
+   - Allowlist the `wp/v2` and `safe-publish/v1` REST namespaces for signed requests — they carry the `X-Safe-Publish-Signature` header.
+   - Review security-plugin, firewall, and host rules that restrict REST API access.
+   - See [The connected site blocks the request before Safe Publish can authenticate](#the-connected-site-blocks-the-request-before-safe-publish-can-authenticate) for host-side allowlisting options and a deferral snippet.
+
+#### The connected site blocks the request before Safe Publish can authenticate
+
+**Symptoms**: The connection test reports that the connected site blocked the request before Safe Publish could authenticate it. On the connected site, Safe Publish's **Audit Log** shows no `auth`-channel entry for the attempt.
+
+**Cause**: A security plugin, theme, mu-plugin, or WAF on the connected site gates the REST API — typically through the `rest_authentication_errors` filter — and rejects the request before Safe Publish's authenticator runs. When it uses that filter, WordPress core stops processing the request as soon as the filter returns an error, so the authenticator never sees it.
+
+**Fix**: Let Safe Publish's signed requests reach its own authenticator. It reads posts, pages, and media through core's `wp/v2` endpoints, and serves its catalog from `safe-publish/v1`, so both namespaces must be reachable. Its requests carry the `X-Safe-Publish-Signature` header. Use Option 1 when you cannot edit the gate, Option 2 when you can.
+
+**Option 1 — allowlist the REST namespaces.** In the gate's settings, allow the `wp/v2` and `safe-publish/v1` namespaces through. Use this for a third-party security plugin you can configure but not edit.
+
+**Option 2 — defer signed requests in code.** In a gate you control, return the incoming result unchanged for a signed request to those namespaces, so it reaches Safe Publish's own authenticator. Add the guard at the top of your `rest_authentication_errors` callback, before the code that blocks:
+
+```php
+add_filter(
+	'rest_authentication_errors',
+	static function ( $result ) {
+		// The REST route WordPress will dispatch, e.g. /wp/v2/posts.
+		$route = $GLOBALS['wp']->query_vars['rest_route'] ?? '';
+
+		$is_safe_publish_route = 0 === strpos( $route, '/wp/v2/' )
+			|| 0 === strpos( $route, '/safe-publish/v1/' );
+
+		// Defer Safe Publish's signed requests to its own authenticator.
+		if (
+			isset( $_SERVER['HTTP_X_SAFE_PUBLISH_SIGNATURE'] )
+			&& $is_safe_publish_route
+		) {
+			return $result;
+		}
+
+		// Your existing REST gate logic goes here, for example:
+		// return new WP_Error( 'rest_forbidden', 'REST API disabled.', array( 'status' => 401 ) );
+		return $result;
+	}
+);
+```
+
+> [!NOTE]
+> This does not expose private content: Safe Publish still validates the HMAC signature before serving edit-context or import data, so a forged or absent signature retrieves nothing beyond WordPress' default anonymous REST access. For unsigned requests, the allowlisted `wp/v2` namespace exposes only what WordPress already serves anonymously, including the author data at `wp/v2/users`.
 
 #### "REST API not found" error
 
@@ -81,9 +138,9 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
    - Source site must have permalinks enabled.
    - Go to Settings → Permalinks and save.
 
-3. **Disable conflicting plugins**:
-   - Some security plugins block REST API.
-   - Temporarily disable and test.
+3. **Disable or configure conflicting plugins**:
+   - Some security plugins block the REST API.
+   - Allowlist the `wp/v2` and `safe-publish/v1` namespaces for signed requests (they carry the `X-Safe-Publish-Signature` header), or temporarily disable the plugin and test.
 
 4. **Check .htaccess**:
    - Corrupted .htaccess can block REST API.

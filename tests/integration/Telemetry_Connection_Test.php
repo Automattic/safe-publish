@@ -32,8 +32,9 @@ use WP_Error;
  * Telemetry Connection Test.
  *
  * Verifies that the test-connection AJAX path emits connection_test_completed
- * with an outcome mapped from the auth probe's HTTP result: authorized on 200,
- * unauthorized on 401/403, and unreachable on a transport error.
+ * with an outcome mapped from the auth probe's result: authorized on 200,
+ * unauthorized on a 401/403 Safe Publish rejection, blocked on a 401/403
+ * upstream block, and unreachable on a transport error.
  */
 class Telemetry_Connection_Test extends WP_Ajax_UnitTestCase {
 
@@ -60,6 +61,14 @@ class Telemetry_Connection_Test extends WP_Ajax_UnitTestCase {
 	 * @var int|null
 	 */
 	private ?int $mock_response_code = 200;
+
+	/**
+	 * Body the mocked transport returns. Defaults to an empty JSON array, which
+	 * carries no safe_publish_auth_* code.
+	 *
+	 * @var string
+	 */
+	private string $mock_response_body = '[]';
 
 	/**
 	 * When true, the mocked transport returns a WP_Error to simulate an
@@ -147,7 +156,7 @@ class Telemetry_Connection_Test extends WP_Ajax_UnitTestCase {
 
 		return array(
 			'headers'  => array(),
-			'body'     => '[]',
+			'body'     => $this->mock_response_body,
 			'response' => array(
 				'code'    => $this->mock_response_code ?? 200,
 				'message' => '',
@@ -193,11 +202,12 @@ class Telemetry_Connection_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that a 401 probe emits the unauthorized outcome.
+	 * Verifies that a 401 Safe Publish rejection emits the unauthorized outcome.
 	 */
 	public function test_rejected_probe_emits_unauthorized_outcome(): void {
-		// ARRANGE: the connected site rejects the shared secret.
+		// ARRANGE: a 401 carrying a Safe Publish authenticator rejection.
 		$this->mock_response_code = 401;
+		$this->mock_response_body = '{"code":"safe_publish_auth_invalid"}';
 
 		// ACT: run the connection test.
 		$this->dispatch();
@@ -207,6 +217,25 @@ class Telemetry_Connection_Test extends WP_Ajax_UnitTestCase {
 		$this->assertCount( 1, $events );
 		$this->assertSame(
 			Telemetry_Events::CONNECTION_OUTCOME_UNAUTHORIZED,
+			$events[0]['properties']['outcome']
+		);
+	}
+
+	/**
+	 * Verifies that a 403 blocked upstream emits the blocked outcome.
+	 */
+	public function test_blocked_probe_emits_blocked_outcome(): void {
+		// ARRANGE: a 403 with no Safe Publish code, as an upstream gate returns.
+		$this->mock_response_code = 403;
+
+		// ACT: run the connection test.
+		$this->dispatch();
+
+		// ASSERT: outcome=blocked.
+		$events = $this->queue->events();
+		$this->assertCount( 1, $events );
+		$this->assertSame(
+			Telemetry_Events::CONNECTION_OUTCOME_BLOCKED,
 			$events[0]['properties']['outcome']
 		);
 	}

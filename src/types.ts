@@ -352,6 +352,7 @@ export interface ConnectionTestData {
 export type AuthStatus =
 	| 'authorized'
 	| 'unauthorized'
+	| 'blocked'
 	| 'unreachable'
 	| 'url_unset';
 

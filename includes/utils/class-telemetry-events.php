@@ -38,6 +38,7 @@ class Telemetry_Events {
 	// CONNECTION_OUTCOME_UNKNOWN so the property stays bounded.
 	const CONNECTION_OUTCOME_AUTHORIZED   = 'authorized';
 	const CONNECTION_OUTCOME_UNAUTHORIZED = 'unauthorized';
+	const CONNECTION_OUTCOME_BLOCKED      = 'blocked';
 	const CONNECTION_OUTCOME_UNREACHABLE  = 'unreachable';
 	const CONNECTION_OUTCOME_URL_UNSET    = 'url_unset';
 	const CONNECTION_OUTCOME_UNKNOWN      = 'unknown';
@@ -82,7 +83,7 @@ class Telemetry_Events {
 
 	/**
 	 * Allowed values for the connection_test_completed outcome property.
-	 * Mirrors the four VIP_Safe_Auth STATUS_* probe results; anything else
+	 * Mirrors the five VIP_Safe_Auth STATUS_* probe results; anything else
 	 * normalizes to CONNECTION_OUTCOME_UNKNOWN so an unbounded string can't
 	 * leak into telemetry.
 	 *
@@ -91,6 +92,7 @@ class Telemetry_Events {
 	const CONNECTION_OUTCOME_ALLOWED = array(
 		self::CONNECTION_OUTCOME_AUTHORIZED,
 		self::CONNECTION_OUTCOME_UNAUTHORIZED,
+		self::CONNECTION_OUTCOME_BLOCKED,
 		self::CONNECTION_OUTCOME_UNREACHABLE,
 		self::CONNECTION_OUTCOME_URL_UNSET,
 	);

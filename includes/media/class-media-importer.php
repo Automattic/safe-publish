@@ -74,12 +74,16 @@ class Media_Importer {
 	/**
 	 * Imports source media file to WordPress media library.
 	 *
-	 * @param string $media_url         Source media URL.
-	 * @param string $source_site_url   Source site URL for resolving relative URLs.
-	 * @param bool   $skip_if_not_media Return null (leave the URL unchanged)
-	 *                                  instead of false when the download is not
-	 *                                  an allowed upload type, for ambiguous URLs
-	 *                                  that may be a page link rather than media.
+	 * @param string   $media_url         Source media URL.
+	 * @param string   $source_site_url   Source site URL for resolving relative URLs.
+	 * @param bool     $skip_if_not_media Return null (leave the URL unchanged)
+	 *                                    instead of false when the download is not
+	 *                                    an allowed upload type, for ambiguous URLs
+	 *                                    that may be a page link rather than media.
+	 * @param int|null $imported_id       Set, by reference, to the destination
+	 *                                    attachment ID when a URL is returned; null
+	 *                                    otherwise. Meaningful only on a string
+	 *                                    return.
 	 * @return string|false|null New media URL on success, false on failure, null
 	 *                           when the URL belongs to a third-party domain, or
 	 *                           when it is not media and $skip_if_not_media is set.
@@ -87,8 +91,11 @@ class Media_Importer {
 	public function import_source_media(
 		string $media_url,
 		string $source_site_url,
-		bool $skip_if_not_media = false
+		bool $skip_if_not_media = false,
+		?int &$imported_id = null
 	): string|false|null {
+		$imported_id = null;
+
 		// Make URL absolute if it's relative.
 		if ( ! filter_var( $media_url, FILTER_VALIDATE_URL ) ) {
 			$media_url = rtrim( $source_site_url, '/' ) . '/' . ltrim( $media_url, '/' );
@@ -116,6 +123,7 @@ class Media_Importer {
 		// Check if we already imported this media.
 		$existing_attachment = $this->get_attachment_by_url( $media_url );
 		if ( $existing_attachment ) {
+			$imported_id = $existing_attachment;
 			return wp_get_attachment_url( $existing_attachment );
 		}
 
@@ -205,6 +213,8 @@ class Media_Importer {
 			$attachment_id,
 			$this->library_metadata_map[ $media_url ] ?? array()
 		);
+
+		$imported_id = $attachment_id;
 
 		return wp_get_attachment_url( $attachment_id );
 	}

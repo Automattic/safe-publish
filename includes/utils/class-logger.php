@@ -199,8 +199,7 @@ abstract class Logger {
 		$timestamp = function_exists( 'current_time' )
 			? current_time( 'mysql', true )
 			: gmdate( 'Y-m-d H:i:s' );
-		// Data only used for logging; escaped with esc_html() when output to HTML.
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- data only used for logging; escaped with esc_html() when output to HTML.
 		$site_url = function_exists( 'get_site_url' ) ? get_site_url() : ( $_SERVER['HTTP_HOST'] ?? 'unknown' );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___SERVER__HTTP_USER_AGENT__
 		$user_agent = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';

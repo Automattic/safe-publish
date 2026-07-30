@@ -187,7 +187,6 @@ function safe_publish_seeder_run( array $args ): void {
 	WP_CLI::success( "Seeded {$inserted} {$type}(s)." );
 }
 
-// $args is provided by WP-CLI eval-file.
 // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- $args is a WP-CLI global.
 safe_publish_seeder_run( $args ?? array() );
 

@@ -169,7 +169,7 @@ function HeaderBar( {
 				</>
 			) }
 			{ updateError && (
-				<Text style={ { color: '#d63638', whiteSpace: 'nowrap' } }>
+				<Text style={ { color: 'var(--safe-publish-status-error)', whiteSpace: 'nowrap' } }>
 					{ updateError }
 				</Text>
 			) }
@@ -188,7 +188,7 @@ function HeaderBar( {
 				</Button>
 			) }
 			{ updateSucceeded && ! isUpdating && (
-				<Text style={ { color: '#008a20', whiteSpace: 'nowrap' } }>
+				<Text style={ { color: 'var(--safe-publish-status-success)', whiteSpace: 'nowrap' } }>
 					{ successMessage }
 				</Text>
 			) }
@@ -266,8 +266,8 @@ function DiffBody( {
 						diffHtml && (
 							<div
 								style={ {
-									background: '#fafafa',
-									border: '1px solid #eee',
+									background: 'var(--safe-publish-diff-surface-bg)',
+									border: '1px solid var(--safe-publish-diff-surface-border)',
 									padding: 16,
 								} }
 								dangerouslySetInnerHTML={ {
@@ -347,8 +347,7 @@ function hasAnyNonContentDiff(
  *
  * @return {JSX.Element} Rendered modal content.
  */
-// Modal aggregates many independent rendering branches.
-// eslint-disable-next-line complexity
+// eslint-disable-next-line complexity -- modal aggregates many independent rendering branches.
 export default function PostDiffModal( {
 	items,
 	ajaxurl,
@@ -458,7 +457,7 @@ export default function PostDiffModal( {
 				</HStack>
 			) }
 
-			{ error && <Text style={ { color: '#d63638' } }>{ error }</Text> }
+			{ error && <Text style={ { color: 'var(--safe-publish-status-error)' } }>{ error }</Text> }
 
 			{ showDiffBody && (
 				<DiffBody
