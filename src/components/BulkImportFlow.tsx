@@ -224,13 +224,13 @@ export default function BulkImportFlow( {
 		null !== results && results.successful > 0 && results.failed > 0;
 
 	let summaryHeading = labels.completedHeading;
-	let summaryColor = '#008a20';
+	let summaryColor = 'var(--safe-publish-status-success)';
 	if ( allFailed ) {
 		summaryHeading = labels.failedHeading;
-		summaryColor = '#d63638';
+		summaryColor = 'var(--safe-publish-status-error)';
 	} else if ( partialFailure ) {
 		summaryHeading = labels.partialHeading;
-		summaryColor = '#996800';
+		summaryColor = 'var(--safe-publish-status-warning)';
 	}
 
 	let confirmHeading: string;
@@ -256,7 +256,7 @@ export default function BulkImportFlow( {
 				<>
 					<Text>{ confirmHeading }</Text>
 					{ skippedCount > 0 && (
-						<Text style={ { color: '#996800' } }>
+						<Text style={ { color: 'var(--safe-publish-status-warning)' } }>
 							{ sprintf(
 								/* translators: %d is the number of skipped posts */
 								_n(
@@ -269,7 +269,7 @@ export default function BulkImportFlow( {
 							) }
 						</Text>
 					) }
-					<Text style={ { fontSize: '0.9em', color: '#666' } }>
+					<Text style={ { fontSize: '0.9em', color: 'var(--safe-publish-text-muted)' } }>
 						{ labels.confirmDescription }
 					</Text>
 				</>
@@ -279,7 +279,7 @@ export default function BulkImportFlow( {
 				<VStack spacing="3" className="safe-publish-bulk-import-progress">
 					<Text>{ labels.processingHeading }</Text>
 					<ProgressBar value={ progress } />
-					<Text style={ { fontSize: '0.8em', color: '#666' } }>
+					<Text style={ { fontSize: '0.8em', color: 'var(--safe-publish-text-muted)' } }>
 						{ 100 === progress
 							? __( 'Batch completed!', 'safe-publish' )
 							: sprintf(
@@ -288,7 +288,7 @@ export default function BulkImportFlow( {
 									Math.round( progress )
 							  ) }
 					</Text>
-					<Text style={ { fontSize: '0.75em', color: '#999' } }>
+					<Text style={ { fontSize: '0.75em', color: 'var(--safe-publish-text-muted)' } }>
 						{
 							// eslint-disable-next-line @wordpress/valid-sprintf
 							sprintf( labels.processingFootnote, posts.length )
@@ -322,7 +322,7 @@ export default function BulkImportFlow( {
 								}
 							</Text>
 							{ results.successful > 0 && (
-								<Text style={ { fontSize: '0.9em', color: '#666' } }>
+								<Text style={ { fontSize: '0.9em', color: 'var(--safe-publish-text-muted)' } }>
 									{ ( () => {
 										const created = results.results.filter(
 											( entry ) => entry.success && ! entry.existing
@@ -401,7 +401,7 @@ export default function BulkImportFlow( {
 								</div>
 							) }
 							{ results.failed > 0 && (
-								<Text style={ { color: '#d63638' } }>
+								<Text style={ { color: 'var(--safe-publish-status-error)' } }>
 									{ sprintf(
 										/* translators: %d is the number of failed entries */
 										__( 'Failed: %d', 'safe-publish' ),
@@ -465,7 +465,7 @@ export default function BulkImportFlow( {
 					);
 				} )() }
 
-			{ error && <Text style={ { color: '#d63638' } }>{ error }</Text> }
+			{ error && <Text style={ { color: 'var(--safe-publish-status-error)' } }>{ error }</Text> }
 
 			<HStack justify="right">
 				<Button
