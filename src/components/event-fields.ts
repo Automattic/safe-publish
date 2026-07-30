@@ -78,8 +78,8 @@ export function getStatusLabel( item: ExportEvent ): string {
  * constant string.
  */
 const EVENT_LABELS: Record< string, string > = {
-	FEATURED_IMAGE_FETCH_FAILED: __( 'Featured image fetch failed', 'safe-publish' ),
-	FEATURED_IMAGE_SOURCE_MISSING: __( 'Featured image source missing', 'safe-publish' ),
+	SOURCE_MEDIA_FETCH_FAILED: __( 'Source media fetch failed', 'safe-publish' ),
+	SOURCE_MEDIA_URL_MISSING: __( 'Source media has no URL', 'safe-publish' ),
 	INVALID_ATTACHMENT_ID: __( 'Invalid attachment ID', 'safe-publish' ),
 	MEDIA_DOWNLOAD_FAILED: __( 'Media download failed', 'safe-publish' ),
 	MEDIA_SIDELOAD_FAILED: __( 'Media sideload failed', 'safe-publish' ),

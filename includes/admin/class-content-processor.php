@@ -198,11 +198,11 @@ class Content_Processor {
 	 *
 	 * @param string               $content         Post content to process.
 	 * @param string               $source_site_url Source site URL.
-	 * @param array<string, mixed> $context         Optional batch state. Recognized
-	 *                                              keys: `session_id_map` (bulk source
-	 *                                              => dest post IDs) and
-	 *                                              `library_metadata_map` (source URL =>
-	 *                                              library metadata).
+	 * @param array<string, mixed> $context         Optional batch state. Recognized keys:
+	 *                                              `session_id_map` (bulk source => dest post IDs),
+	 *                                              `library_metadata_map` (source URL => library
+	 *                                              metadata), and `auth_credentials` (source REST
+	 *                                              auth for shortcode ID resolution).
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
 	public function process_content(
@@ -245,6 +245,14 @@ class Content_Processor {
 		// embedded img src points at the dest attachment for lookup.
 		$processed_content = $this->shortcode_id_rewriter->rewrite_caption_ids( $processed_content );
 
+		// Rewrite gallery/playlist shortcode IDs, which the media pass can't
+		// reach: bare source attachment IDs with no URL to sideload from.
+		$processed_content = $this->rewrite_media_shortcode_ids(
+			$processed_content,
+			$source_site_url,
+			$context
+		);
+
 		// Import [audio]/[video] shortcode media before replace_source_urls(),
 		// so download failures are recorded rather than masked by the swap.
 		$processed_content = $this->shortcode_media_rewriter->rewrite_shortcode_media(
@@ -280,6 +288,67 @@ class Content_Processor {
 		$this->shortcode_media_rewriter->reset_failed_media();
 
 		return $this->replace_source_urls( $processed_content, $source_site_url );
+	}
+
+	/**
+	 * Rewrites gallery/playlist shortcode attachment IDs to their destination
+	 * IDs, sideloading the referenced source media by ID.
+	 *
+	 * A source ID that cannot be resolved (deleted on the source, or private
+	 * without auth) is left in place and recorded as an unmapped-reference
+	 * warning. A resolved URL that fails to download is recorded as a media
+	 * failure so the import aborts, consistent with every other failed
+	 * sideload.
+	 *
+	 * @param string               $content         Processed post content.
+	 * @param string               $source_site_url Source site URL.
+	 * @param array<string, mixed> $context         process_content() context;
+	 *                                              reads `auth_credentials`.
+	 * @return string Content with shortcode IDs rewritten.
+	 */
+	private function rewrite_media_shortcode_ids(
+		string $content,
+		string $source_site_url,
+		array $context
+	): string {
+		$auth = isset( $context['auth_credentials'] )
+			&& is_array( $context['auth_credentials'] )
+			? $context['auth_credentials']
+			: array();
+
+		$resolver = function ( int $source_id ) use ( $source_site_url, $auth ): int {
+			$dest_id = $this->media_importer->import_source_media_by_id(
+				$source_id,
+				$source_site_url,
+				$auth
+			);
+
+			if ( null === $dest_id ) {
+				$this->warnings[] = array(
+					'type'      => 'unmapped_shortcode_reference',
+					'source_id' => $source_id,
+				);
+
+				return 0;
+			}
+
+			if ( false === $dest_id ) {
+				$key                        = sprintf(
+					'gallery/playlist shortcode attachment ID %d',
+					$source_id
+				);
+				$this->failed_media[ $key ] = '';
+
+				return 0;
+			}
+
+			return $dest_id;
+		};
+
+		return $this->shortcode_id_rewriter->rewrite_media_shortcode_ids(
+			$content,
+			$resolver
+		);
 	}
 
 	/**

@@ -257,6 +257,49 @@ function absint( mixed $value ): int {
 	return abs( (int) $value );
 }
 
+/**
+ * Faithful port of WordPress core's get_shortcode_regex() for the given
+ * explicit tag names. Kept byte-identical to core so the rewriter's unit tests
+ * exercise the same matcher that runs against real WordPress at import time.
+ *
+ * @param array<int, string> $tagnames Shortcode tags to match.
+ * @return string Regular expression body (unanchored, no delimiters).
+ */
+function get_shortcode_regex( array $tagnames ): string {
+	$tagregexp = implode( '|', array_map( 'preg_quote', $tagnames ) );
+
+	// phpcs:disable Squiz.Strings.ConcatenationSpacing.PaddingFound
+	return '\\['                          // Opening bracket.
+		. '(\\[?)'                        // 1: Optional second opening bracket for escaping.
+		. "($tagregexp)"                  // 2: Shortcode name.
+		. '(?![\\w-])'                    // Not followed by word character or hyphen.
+		. '('                             // 3: Inside the opening shortcode tag.
+		.     '[^\\]\\/]*'                // Not a closing bracket or forward slash.
+		.     '(?:'
+		.         '\\/(?!\\])'            // A forward slash not followed by a closing bracket.
+		.         '[^\\]\\/]*'            // Not a closing bracket or forward slash.
+		.     ')*?'
+		. ')'
+		. '(?:'
+		.     '(\\/)'                     // 4: Self closing tag...
+		.     '\\]'                       // ...and closing bracket.
+		. '|'
+		.     '\\]'                       // Closing bracket.
+		.     '(?:'
+		.         '('                     // 5: Optionally, anything between the opening and closing tags.
+		.             '[^\\[]*+'          // Not an opening bracket.
+		.             '(?:'
+		.                 '\\[(?!\\/\\2\\])' // An opening bracket not followed by the closing tag.
+		.                 '[^\\[]*+'      // Not an opening bracket.
+		.             ')*+'
+		.         ')'
+		.         '\\[\\/\\2\\]'          // Closing shortcode tag.
+		.     ')?'
+		. ')'
+		. '(\\]?)';                       // 6: Optional second closing bracket for escaping.
+	// phpcs:enable Squiz.Strings.ConcatenationSpacing.PaddingFound
+}
+
 class WP_Error {
 	public function __construct(
 		private string $code = '',

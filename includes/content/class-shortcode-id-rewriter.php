@@ -17,15 +17,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Rewrites source attachment IDs referenced inside shortcode attributes.
  *
- * The URL rewrite pipeline handles `<img src>` but not shortcode attrs
- * like `[caption id="attachment_N"]`, so source IDs would otherwise
- * leak through to dest and render against the wrong (or no) attachment.
+ * The URL rewrite pipeline handles `<img src>` but not shortcode attrs, so
+ * source IDs would otherwise leak through to dest and render against the wrong
+ * (or no) attachment.
  *
- * Scope: caption-family (`[caption]`, `[wp_caption]`) — their embedded
- * `<img>` gives an `attachment_url_to_postid()` lookup target. Gallery-
- * family (`[gallery ids=...]`, `[playlist ids=...]`) carry bare source
- * IDs with no embedded URL and need source-ID tracking the importer
- * doesn't have yet; deferred to a follow-up.
+ * Two families, resolved differently:
+ *  - Caption (`[caption]`, `[wp_caption]`): the embedded `<img>` gives an
+ *    `attachment_url_to_postid()` lookup target.
+ *  - Gallery (`[gallery ids=...]`, `[playlist ids=...]`): bare source IDs with
+ *    no embedded URL, resolved through an injected source-ID => dest-ID
+ *    callable that sideloads the referenced media.
  */
 class Shortcode_ID_Rewriter {
 
@@ -104,7 +105,7 @@ class Shortcode_ID_Rewriter {
 		}
 
 		$new_attrs = preg_replace(
-			'/\b(id\s*=\s*["\']attachment_)\d+(["\'])/i',
+			'/(?<![\w-])(id\s*=\s*["\']attachment_)\d+(["\'])/i',
 			'${1}' . $attachment_id . '${2}',
 			$attrs,
 			1
@@ -115,5 +116,154 @@ class Shortcode_ID_Rewriter {
 		}
 
 		return '[' . $tag . $new_attrs . ']' . $body . '[/' . $tag . ']';
+	}
+
+	/**
+	 * Rewrites the source attachment IDs in `[gallery]` and `[playlist]`
+	 * shortcodes to their destination IDs, resolving each through $resolver.
+	 *
+	 * Only the CSV values of the `ids`, `include`, and `exclude` attributes are
+	 * touched; order, whitespace, quoting, and every other byte are preserved.
+	 * A token the resolver cannot map (it returns 0) is left in place. Each
+	 * distinct source ID is resolved once per run.
+	 *
+	 * @param string   $content  Post content with gallery/playlist shortcodes.
+	 * @param callable $resolver Source attachment ID => dest attachment ID, or 0
+	 *                           when unresolved.
+	 * @return string Content with the shortcode IDs rewritten.
+	 */
+	public function rewrite_media_shortcode_ids(
+		string $content,
+		callable $resolver
+	): string {
+		if ( '' === $content
+			|| ( false === stripos( $content, '[gallery' )
+				&& false === stripos( $content, '[playlist' ) )
+		) {
+			return $content;
+		}
+
+		$memo = array();
+
+		$result = preg_replace_callback(
+			'/' . get_shortcode_regex( array( 'gallery', 'playlist' ) ) . '/s',
+			function ( array $matches ) use ( $resolver, &$memo ): string {
+				// Escaped shortcode ([[gallery ...]]): leave the literal alone.
+				if ( '[' === $matches[1] && ']' === $matches[6] ) {
+					return $matches[0];
+				}
+
+				$attrs     = $matches[3];
+				$new_attrs = $this->rewrite_id_attr_csvs(
+					$attrs,
+					$resolver,
+					$memo
+				);
+
+				if ( $new_attrs === $attrs ) {
+					return $matches[0];
+				}
+
+				// Splice the rewritten attributes back in at their known offset
+				// (after the opening bracket, escape char, and tag name),
+				// leaving the rest of the match byte-for-byte.
+				$attrs_offset = 1 + strlen( $matches[1] ) + strlen( $matches[2] );
+
+				return substr_replace(
+					$matches[0],
+					$new_attrs,
+					$attrs_offset,
+					strlen( $attrs )
+				);
+			},
+			$content
+		);
+
+		return is_string( $result ) ? $result : $content;
+	}
+
+	/**
+	 * Rewrites the CSV values of the id-bearing shortcode attributes (`ids`,
+	 * `include`, `exclude`) within a shortcode's attribute string, preserving
+	 * the attribute name, separator, and quoting.
+	 *
+	 * Matches the quoted and unquoted attribute forms WordPress' shortcode
+	 * parser accepts, not quoted-only.
+	 *
+	 * @param string          $attrs    Shortcode attribute string.
+	 * @param callable        $resolver Source ID => dest ID resolver.
+	 * @param array<int, int> $memo     Source ID => resolved dest ID cache.
+	 * @return string Attribute string with the id CSVs rewritten.
+	 */
+	private function rewrite_id_attr_csvs(
+		string $attrs,
+		callable $resolver,
+		array &$memo
+	): string {
+		// Bare values end at whitespace; get_shortcode_regex() already stripped
+		// any `]` from $attrs.
+		$pattern = '/(?<![\w-])((?:ids|include|exclude)\s*=\s*)'
+			. '(?:"([^"]*)"|\'([^\']*)\'|([^\s\]]+))/i';
+
+		$result = preg_replace_callback(
+			$pattern,
+			function ( array $matches ) use ( $resolver, &$memo ): string {
+				if ( isset( $matches[2] ) && '' !== $matches[2] ) {
+					$csv   = $matches[2];
+					$quote = '"';
+				} elseif ( isset( $matches[3] ) && '' !== $matches[3] ) {
+					$csv   = $matches[3];
+					$quote = "'";
+				} elseif ( isset( $matches[4] ) && '' !== $matches[4] ) {
+					$csv   = $matches[4];
+					$quote = '';
+				} else {
+					return $matches[0];
+				}
+
+				return $matches[1] . $quote
+					. $this->rewrite_csv_ids( $csv, $resolver, $memo )
+					. $quote;
+			},
+			$attrs
+		);
+
+		return is_string( $result ) ? $result : $attrs;
+	}
+
+	/**
+	 * Rewrites each purely numeric token in a comma-separated ID list to its
+	 * resolved destination ID, leaving separators, whitespace, and any
+	 * non-numeric or unresolved token untouched.
+	 *
+	 * @param string          $csv      Comma-separated attachment ID list.
+	 * @param callable        $resolver Source ID => dest ID resolver.
+	 * @param array<int, int> $memo     Source ID => resolved dest ID cache.
+	 * @return string The rewritten list.
+	 */
+	private function rewrite_csv_ids(
+		string $csv,
+		callable $resolver,
+		array &$memo
+	): string {
+		$tokens = explode( ',', $csv );
+
+		foreach ( $tokens as $index => $token ) {
+			if ( 1 !== preg_match( '/^(\s*)(\d+)(\s*)$/', $token, $parts ) ) {
+				continue;
+			}
+
+			$source_id = (int) $parts[2];
+
+			if ( ! isset( $memo[ $source_id ] ) ) {
+				$memo[ $source_id ] = (int) call_user_func( $resolver, $source_id );
+			}
+
+			if ( $memo[ $source_id ] > 0 ) {
+				$tokens[ $index ] = $parts[1] . $memo[ $source_id ] . $parts[3];
+			}
+		}
+
+		return implode( ',', $tokens );
 	}
 }

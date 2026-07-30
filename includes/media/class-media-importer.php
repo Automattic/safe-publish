@@ -563,6 +563,81 @@ class Media_Importer {
 	}
 
 	/**
+	 * Resolves a source attachment ID to a downloadable URL via the source
+	 * media REST endpoint, sideloads it, and returns the destination
+	 * attachment ID.
+	 *
+	 * Shared by featured-image import and shortcode ID rewriting. A freshly
+	 * sideloaded attachment is enriched from the fetched record; a dedup hit on
+	 * a prior import is left untouched.
+	 *
+	 * @param int    $source_id        Source attachment ID.
+	 * @param string $source_site_url  Source site URL.
+	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
+	 * @return int|false|null Destination attachment ID on success, null when the
+	 *                        source record is unreachable or carries no
+	 *                        source_url (a dangling reference), false when the
+	 *                        resolved URL fails to sideload.
+	 */
+	public function import_source_media_by_id(
+		int $source_id,
+		string $source_site_url,
+		array $auth_credentials = array()
+	): int|false|null {
+		$media_api_url = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/media/' . $source_id;
+		if ( VIP_Safe_Auth::has_valid_credential_format( $auth_credentials ) ) {
+			$media_api_url = add_query_arg( 'context', 'edit', $media_api_url );
+		}
+
+		$response = $this->http_client->make_request(
+			$media_api_url,
+			Request_Actions::MEDIA_IMPORT,
+			$auth_credentials
+		);
+
+		if ( is_wp_error( $response ) ) {
+			$this->logger->source_media_fetch_failed(
+				$source_id,
+				$source_site_url,
+				$response->get_error_message()
+			);
+
+			return null;
+		}
+
+		$media_data = json_decode( wp_remote_retrieve_body( $response ), true );
+		$source_url = is_array( $media_data ) ? ( $media_data['source_url'] ?? null ) : null;
+
+		// A non-string source_url would fatal the string-typed sideload below;
+		// treat it as a missing URL.
+		if ( ! is_string( $source_url ) || '' === $source_url ) {
+			$this->logger->source_media_url_missing( $source_id, $source_site_url );
+
+			return null;
+		}
+
+		// Resolved by ID, so it is owned regardless of serving host.
+		$attachment_id = $this->import_owned_media_as_attachment(
+			$source_url,
+			$source_site_url
+		);
+
+		if ( false === $attachment_id ) {
+			return false;
+		}
+
+		// Enrich only a freshly sideloaded attachment, not a dedup hit.
+		if ( in_array( $attachment_id, $this->newly_created_attachment_ids, true ) ) {
+			$this->apply_library_metadata(
+				$attachment_id,
+				self::media_record_metadata( $media_data )
+			);
+		}
+
+		return $attachment_id;
+	}
+
+	/**
 	 * Imports featured image from source post.
 	 *
 	 * @param int    $featured_media_id Source featured media ID.
@@ -575,76 +650,33 @@ class Media_Importer {
 		string $source_site_url,
 		array $auth_credentials = array()
 	): int|false {
-		if ( empty( $featured_media_id ) || empty( $source_site_url ) ) {
+		if ( 0 === $featured_media_id || '' === $source_site_url ) {
 			return false;
 		}
 
 		// Check if we already imported this featured image.
 		$existing_attachment = $this->get_attachment_by_featured_media_id( $featured_media_id, $source_site_url );
-		if ( $existing_attachment ) {
+		if ( false !== $existing_attachment ) {
 			return $existing_attachment;
 		}
 
-		// Fetch media details. Edit context returns the raw library fields
-		// (title, caption, description); alt_text is plain in either context.
-		$media_api_url = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/media/' . $featured_media_id;
-		if ( VIP_Safe_Auth::has_valid_credential_format( $auth_credentials ) ) {
-			$media_api_url = add_query_arg( 'context', 'edit', $media_api_url );
-		}
-		$response = $this->http_client->make_request(
-			$media_api_url,
-			Request_Actions::MEDIA_IMPORT,
+		$attachment_id = $this->import_source_media_by_id(
+			$featured_media_id,
+			$source_site_url,
 			$auth_credentials
 		);
 
-		if ( is_wp_error( $response ) ) {
-			$this->logger->featured_image_fetch_failed(
-				$featured_media_id,
-				$source_site_url,
-				$response->get_error_message()
-			);
-
+		if ( ! is_int( $attachment_id ) ) {
 			return false;
 		}
 
-		$response_body = wp_remote_retrieve_body( $response );
-		$media_data    = json_decode( $response_body, true );
+		// get_attachment_by_featured_media_id() matches on both the source
+		// featured media ID and the origin site, so record the pair here.
+		update_post_meta( $attachment_id, Options::META_IMPORTED_FROM, $source_site_url );
+		update_post_meta( $attachment_id, Options::META_FEATURED_MEDIA_ID, $featured_media_id );
+		update_post_meta( $attachment_id, Options::META_MEDIA_TYPE, 'featured_image' );
 
-		if ( ! isset( $media_data['source_url'] ) || '' === $media_data['source_url'] ) {
-			$this->logger->featured_image_source_missing(
-				$featured_media_id,
-				$source_site_url
-			);
-
-			return false;
-		}
-
-		// Resolved by ID, so it is owned regardless of serving host.
-		$attachment_id = $this->import_owned_media_as_attachment(
-			$media_data['source_url'],
-			$source_site_url
-		);
-
-		if ( $attachment_id ) {
-			// get_attachment_by_featured_media_id() matches on both the source
-			// featured media ID and the origin site, so record the pair here.
-			update_post_meta( $attachment_id, Options::META_IMPORTED_FROM, $source_site_url );
-			update_post_meta( $attachment_id, Options::META_FEATURED_MEDIA_ID, $featured_media_id );
-			update_post_meta( $attachment_id, Options::META_MEDIA_TYPE, 'featured_image' );
-
-			// Apply the source library metadata only when this run sideloaded the
-			// attachment, so a dedup hit on a prior import is left untouched.
-			if ( in_array( $attachment_id, $this->newly_created_attachment_ids, true ) ) {
-				$this->apply_library_metadata(
-					$attachment_id,
-					self::media_record_metadata( $media_data )
-				);
-			}
-
-			return $attachment_id;
-		}
-
-		return false;
+		return $attachment_id;
 	}
 
 	/**

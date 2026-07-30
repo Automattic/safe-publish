@@ -203,6 +203,15 @@ export function renderWarningMessage( warning: Warning ): string {
 				warning.failed_post_ids.length,
 				warning.failed_post_ids.join( ', ' )
 			);
+		case 'unmapped_shortcode_reference':
+			return sprintf(
+				/* translators: %d: source attachment ID */
+				__(
+					"Gallery/playlist media %d isn't on this site. Its shortcode keeps the source ID.",
+					'safe-publish'
+				),
+				warning.source_id
+			);
 		default: {
 			const _exhaustive: never = warning;
 			return String( _exhaustive );
@@ -231,6 +240,8 @@ export function renderWarningShortLabel( warning: Warning ): string {
 				: __( 'unmapped block reference', 'safe-publish' );
 		case 'nav_ref_rewrite_failed':
 			return __( 'nav reference update failed', 'safe-publish' );
+		case 'unmapped_shortcode_reference':
+			return __( 'unmapped shortcode reference', 'safe-publish' );
 		default: {
 			const _exhaustive: never = warning;
 			return String( _exhaustive );
