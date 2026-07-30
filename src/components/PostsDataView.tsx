@@ -387,7 +387,8 @@ export function PostsDataView( {
 
 	const authStatus = useAuthStatus();
 	const isAuthorized = 'authorized' === authStatus;
-	const refreshBlocked = 'unauthorized' === authStatus;
+	const refreshBlocked =
+		'unauthorized' === authStatus || 'blocked' === authStatus;
 
 	const isCatalogPrimary = 'all' === state || 'available' === state;
 

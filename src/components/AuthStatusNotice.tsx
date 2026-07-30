@@ -49,6 +49,17 @@ function AuthStatusNotice( {
 		);
 	}
 
+	if ( 'blocked' === status ) {
+		return (
+			<Notice status="error" isDismissible={ false }>
+				{ __(
+					'Source site blocked the request before Safe Publish could authenticate it. A security plugin, theme, or host rule is restricting its REST API — allow signed requests to the wp/v2 and safe-publish/v1 routes.',
+					'safe-publish'
+				) }
+			</Notice>
+		);
+	}
+
 	if ( 'unreachable' === status ) {
 		return (
 			<Notice status="warning" isDismissible={ false }>
@@ -60,22 +71,27 @@ function AuthStatusNotice( {
 		);
 	}
 
-	// status === 'url_unset'
-	const url = settingsUrl ?? '/wp-admin/admin.php?page=safe-publish-settings';
+	if ( 'url_unset' === status ) {
+		const url =
+			settingsUrl ?? '/wp-admin/admin.php?page=safe-publish-settings';
 
-	return (
-		<Notice status="warning" isDismissible={ false }>
-			{ createInterpolateElement(
-				__(
-					'Source site URL is not configured. Set it on the <link>settings page</link> to enable imports.',
-					'safe-publish'
-				),
-				{
-					link: <a href={ url }>link</a>,
-				}
-			) }
-		</Notice>
-	);
+		return (
+			<Notice status="warning" isDismissible={ false }>
+				{ createInterpolateElement(
+					__(
+						'Source site URL is not configured. Set it on the <link>settings page</link> to enable imports.',
+						'safe-publish'
+					),
+					{
+						link: <a href={ url }>link</a>,
+					}
+				) }
+			</Notice>
+		);
+	}
+
+	// Any unrecognized status renders nothing rather than a wrong message.
+	return null;
 }
 
 export default AuthStatusNotice;
