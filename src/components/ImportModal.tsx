@@ -18,20 +18,21 @@ import {
 	__experimentalVStack as VStack,
 	Spinner,
 } from '@wordpress/components';
-import { __, sprintf } from '@wordpress/i18n';
+import { __, _n, sprintf } from '@wordpress/i18n';
 
 /**
  * Props for the ImportModal component.
  *
- * @property {number}   sourcePostId Source post ID to import or update.
- * @property {string}   title        Post title.
- * @property {string}   sourceLink   Source post permalink.
- * @property {string}   postType     Source post type slug.
- * @property {boolean}  isUpdate     True for the "Update" flow, false for "Import"; controls force_update + labels.
- * @property {string}   ajaxurl      WordPress admin-ajax URL.
- * @property {string}   nonce        AJAX nonce for the create-draft endpoint.
- * @property {Function} closeModal   Callback to close the modal.
- * @property {Function} onRefresh    Callback to refresh the posts list.
+ * @property {number}   sourcePostId   Source post ID to import or update.
+ * @property {string}   title          Post title.
+ * @property {string}   sourceLink     Source post permalink.
+ * @property {string}   postType       Source post type slug.
+ * @property {boolean}  isUpdate       True for the "Update" flow, false for "Import"; controls force_update + labels.
+ * @property {number}   [skippedCount] Ineligible selected rows dropped before import; sizes the skipped note.
+ * @property {string}   ajaxurl        WordPress admin-ajax URL.
+ * @property {string}   nonce          AJAX nonce for the create-draft endpoint.
+ * @property {Function} closeModal     Callback to close the modal.
+ * @property {Function} onRefresh      Callback to refresh the posts list.
  */
 interface ImportModalProps {
 	sourcePostId: number;
@@ -39,6 +40,7 @@ interface ImportModalProps {
 	sourceLink: string;
 	postType: string;
 	isUpdate: boolean;
+	skippedCount?: number;
 	ajaxurl: string;
 	nonce: string;
 	closeModal?: () => void;
@@ -56,6 +58,7 @@ const ImportModal = ( {
 	sourceLink,
 	postType,
 	isUpdate,
+	skippedCount = 0,
 	ajaxurl,
 	nonce,
 	closeModal,
@@ -114,7 +117,7 @@ const ImportModal = ( {
 							closeModal?.();
 						} }
 					>
-						{ __( 'Edit Post', 'safe-publish' ) }
+						{ __( 'Edit post', 'safe-publish' ) }
 					</Button>
 				</HStack>
 			</VStack>
@@ -132,6 +135,20 @@ const ImportModal = ( {
 					__( 'Import "%s" as a draft?', 'safe-publish' ), title
 				)
 			}</Text>
+			{ skippedCount > 0 && (
+				<Text style={ { color: '#996800' } }>
+					{ sprintf(
+						/* translators: %d is the number of skipped posts */
+						_n(
+							'%d selected post is already up to date or cannot be imported, so it will be skipped.',
+							'%d selected posts are already up to date or cannot be imported, so they will be skipped.',
+							skippedCount,
+							'safe-publish'
+						),
+						skippedCount
+					) }
+				</Text>
+			) }
 			{ ! isUpdate && (
 				<Text style={ { fontSize: '0.9em', color: '#666' } }>
 					{ __(

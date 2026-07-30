@@ -40,6 +40,15 @@ class MediaImporterTest extends TestCase {
 	}
 
 	/**
+	 * Resets the get_posts stub between tests.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		reset_test_get_posts_result();
+		parent::tearDown();
+	}
+
+	/**
 	 * Verifies that WebP MIME type is added to allowed uploads.
 	 */
 	public function test_add_webp_mime_type_adds_webp_to_allowed_types(): void {
@@ -287,6 +296,28 @@ class MediaImporterTest extends TestCase {
 
 		// ASSERT: null signals "skipped, not our domain" — not a failure.
 		$this->assertNull( $result );
+	}
+
+	/**
+	 * Verifies that import_owned_media_as_attachment sideloads media whose host
+	 * differs from the source site, while import_source_media_as_attachment
+	 * still skips it — the featured path is owned by provenance, not host.
+	 */
+	public function test_import_owned_media_as_attachment_bypasses_third_party_guard(): void {
+		// ARRANGE: an off-domain CDN URL, with a stubbed dedup hit so the owned
+		// path resolves to an existing attachment without a live download.
+		$source_site_url = 'https://source.example.com';
+		$media_url       = 'https://cdn.example.net/photo-123.jpg';
+		set_test_get_posts_result( array( (object) array( 'ID' => 4242 ) ) );
+
+		// ACT: call both entrypoints with the same off-domain URL.
+		$owned   = $this->importer->import_owned_media_as_attachment( $media_url, $source_site_url );
+		$guarded = $this->importer->import_source_media_as_attachment( $media_url, $source_site_url );
+
+		// ASSERT: the owned path bypasses the guard and returns the deduped
+		// attachment; the guarded path still returns null for the third party.
+		$this->assertSame( 4242, $owned );
+		$this->assertNull( $guarded );
 	}
 
 	/**

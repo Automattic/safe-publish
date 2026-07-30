@@ -6,49 +6,53 @@ import { describe, expect, it } from 'vitest';
 import {
 	detectSlugFromInput,
 	formatDateRangeLabel,
+	slugMatchesChip,
 	toCalendarDay,
 } from '@/components/filter-controls';
 
 describe( 'detectSlugFromInput', () => {
 	const SOURCE_URL = 'https://source.example.com';
 	const DEST_URL = 'https://destination.example.com';
+	const urls = { sourceUrl: SOURCE_URL, destinationUrl: DEST_URL };
 
 	it( 'should return null for a plain title search', () => {
 		// ARRANGE + ACT: input is plain text, not a URL.
-		const result = detectSlugFromInput( 'quarterly report', [ SOURCE_URL ] );
+		const result = detectSlugFromInput( 'quarterly report', urls );
 
 		// ASSERT: no slug detected.
 		expect( result ).toBeNull();
 	} );
 
-	it( 'should extract the slug from a full URL matching the validation host', () => {
-		// ARRANGE + ACT: matching host with a slug at the path's tail.
+	it( 'should tag a source-host URL with the source origin', () => {
+		// ARRANGE + ACT: full URL on the source host.
 		const result = detectSlugFromInput(
 			'https://source.example.com/2026/03/my-post/',
-			[ SOURCE_URL ]
+			urls
 		);
 
-		// ASSERT: returns the trailing slug.
-		expect( result ).toBe( 'my-post' );
+		// ASSERT: trailing slug, attributed to the source.
+		expect( result ).toEqual( { slug: 'my-post', origin: 'source' } );
 	} );
 
-	it( 'should accept any URL whose host matches one of several validation URLs', () => {
-		// ARRANGE + ACT: destination URL paste with both source + destination
-		// supplied for validation.
+	it( 'should tag a destination-host URL with the destination origin', () => {
+		// ARRANGE + ACT: full URL on the destination host.
 		const result = detectSlugFromInput(
 			'https://destination.example.com/2026/03/my-post/',
-			[ SOURCE_URL, DEST_URL ]
+			urls
 		);
 
-		// ASSERT: destination host matches, slug returned.
-		expect( result ).toBe( 'my-post' );
+		// ASSERT: trailing slug, attributed to the destination.
+		expect( result ).toEqual( {
+			slug: 'my-post',
+			origin: 'destination',
+		} );
 	} );
 
-	it( 'should return null for a full URL on a different host', () => {
-		// ARRANGE + ACT: URL host differs from every validation URL host.
+	it( 'should return null for a full URL on a foreign host', () => {
+		// ARRANGE + ACT: URL host matches neither connected site.
 		const result = detectSlugFromInput(
 			'https://other.example.com/my-post/',
-			[ SOURCE_URL, DEST_URL ]
+			urls
 		);
 
 		// ASSERT: cross-host pastes are rejected so we don't query for a
@@ -56,46 +60,120 @@ describe( 'detectSlugFromInput', () => {
 		expect( result ).toBeNull();
 	} );
 
-	it( 'should accept a bare absolute path without host validation', () => {
-		// ARRANGE + ACT: input is just a path, no host to check against.
-		const result = detectSlugFromInput( '/posts/my-post/', [ SOURCE_URL ] );
+	it( 'should ignore a leading www. when matching the source host', () => {
+		// ARRANGE + ACT: a browser-canonical www. permalink pasted against a
+		// bare-host source — the same site after a canonical redirect.
+		const result = detectSlugFromInput(
+			'https://www.source.example.com/my-post/',
+			urls
+		);
 
-		// ASSERT: returns the trailing slug.
-		expect( result ).toBe( 'my-post' );
+		// ASSERT: www. is dropped on both sides, so it attributes to the
+		// source instead of rejecting and falling back to a text search.
+		expect( result ).toEqual( { slug: 'my-post', origin: 'source' } );
+	} );
+
+	it( 'should ignore a leading www. on the connected host', () => {
+		// ARRANGE + ACT: source is stored with a leading www.; the pasted
+		// permalink omits it.
+		const result = detectSlugFromInput(
+			'https://source.example.com/my-post/',
+			{
+				sourceUrl: 'https://www.source.example.com',
+				destinationUrl: DEST_URL,
+			}
+		);
+
+		// ASSERT: www. is dropped on both sides, so the host still matches.
+		expect( result ).toEqual( { slug: 'my-post', origin: 'source' } );
+	} );
+
+	it( 'should tag a bare absolute path with the unknown origin', () => {
+		// ARRANGE + ACT: input is just a path, no host to attribute.
+		const result = detectSlugFromInput( '/posts/my-post/', urls );
+
+		// ASSERT: trailing slug, origin unknown (best-effort routing).
+		expect( result ).toEqual( { slug: 'my-post', origin: 'unknown' } );
+	} );
+
+	it( 'should treat a shared source/destination host as unknown origin', () => {
+		// ARRANGE + ACT: subdirectory multisite — both sites share a host and
+		// differ only by path, so the host can't attribute an origin.
+		const result = detectSlugFromInput(
+			'https://example.com/blog-b/my-post/',
+			{
+				sourceUrl: 'https://example.com/blog-a',
+				destinationUrl: 'https://example.com',
+			}
+		);
+
+		// ASSERT: slug still routes best-effort under the unknown origin.
+		expect( result ).toEqual( { slug: 'my-post', origin: 'unknown' } );
 	} );
 
 	it( 'should drop query strings and hashes when extracting the slug', () => {
 		// ARRANGE + ACT: URL has a tracking query and a hash.
 		const result = detectSlugFromInput(
 			'https://source.example.com/my-post/?utm=email#section',
-			[ SOURCE_URL ]
+			urls
 		);
 
 		// ASSERT: query/hash are ignored; pathname's last segment wins.
-		expect( result ).toBe( 'my-post' );
+		expect( result ).toEqual( { slug: 'my-post', origin: 'source' } );
 	} );
 
 	it( 'should return null for the site root', () => {
 		// ARRANGE + ACT: URL points to the homepage; no slug to extract.
 		const result = detectSlugFromInput(
 			'https://source.example.com/',
-			[ SOURCE_URL ]
+			urls
 		);
 
 		// ASSERT: empty path yields null.
 		expect( result ).toBeNull();
 	} );
 
-	it( 'should skip host validation when no validation URL is parseable', () => {
-		// ARRANGE + ACT: every supplied URL fails to parse, so the function
+	it( 'should skip host attribution when neither site URL is parseable', () => {
+		// ARRANGE + ACT: both connected URLs fail to parse, so the function
 		// falls through rather than blocking.
 		const result = detectSlugFromInput(
 			'https://source.example.com/my-post/',
-			[ 'not a url' ]
+			{ sourceUrl: 'not a url', destinationUrl: 'also not a url' }
 		);
 
-		// ASSERT: slug is still returned.
-		expect( result ).toBe( 'my-post' );
+		// ASSERT: slug is still returned under the unknown origin.
+		expect( result ).toEqual( { slug: 'my-post', origin: 'unknown' } );
+	} );
+} );
+
+describe( 'slugMatchesChip', () => {
+	it( 'should match a source slug on a catalog-primary chip', () => {
+		// ARRANGE + ACT + ASSERT: source origin routes to All/Available.
+		expect( slugMatchesChip( 'source', true ) ).toBe( true );
+	} );
+
+	it( 'should not match a source slug on a local-primary chip', () => {
+		// ARRANGE + ACT + ASSERT: source origin can't resolve on Up to
+		// date/Outdated.
+		expect( slugMatchesChip( 'source', false ) ).toBe( false );
+	} );
+
+	it( 'should match a destination slug on a local-primary chip', () => {
+		// ARRANGE + ACT + ASSERT: destination origin routes to Up to
+		// date/Outdated.
+		expect( slugMatchesChip( 'destination', false ) ).toBe( true );
+	} );
+
+	it( 'should not match a destination slug on a catalog-primary chip', () => {
+		// ARRANGE + ACT + ASSERT: destination origin can't resolve on
+		// All/Available.
+		expect( slugMatchesChip( 'destination', true ) ).toBe( false );
+	} );
+
+	it( 'should match an unknown origin on any chip', () => {
+		// ARRANGE + ACT + ASSERT: bare-path best-effort matches either column.
+		expect( slugMatchesChip( 'unknown', true ) ).toBe( true );
+		expect( slugMatchesChip( 'unknown', false ) ).toBe( true );
 	} );
 } );
 

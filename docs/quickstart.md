@@ -71,7 +71,7 @@ You have three ways to import content:
 
 - Select multiple posts using checkboxes.
 - Click **Import** in the bulk actions menu.
-- All selected posts will be imported as drafts.
+- Importable posts are imported as drafts. Posts that are already up to date or cannot be imported are skipped, and the confirmation shows how many.
 
 **3. Manage Already-Imported Posts**
 

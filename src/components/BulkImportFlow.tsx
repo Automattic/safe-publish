@@ -1,9 +1,8 @@
 /**
- * Shared confirmation + progress + results modal for bulk import-shaped
- * operations. Backs the Source Posts bulk Import action and the Imports
- * tab bulk Update action; both ultimately POST to
- * `safe_publish_bulk_import`, which inserts new posts and updates
- * existing ones based on whether the source id resolves to a local post.
+ * Confirmation, progress, and results modal for the Source Posts bulk
+ * Import action. POSTs to `safe_publish_bulk_import`, which inserts new
+ * posts and updates existing ones based on whether the source id resolves
+ * to a local post.
  *
  * @file This file defines the BulkImportFlow component.
  */
@@ -19,7 +18,7 @@ import {
 	__experimentalVStack as VStack,
 } from '@wordpress/components';
 import { useState } from '@wordpress/element';
-import { __, sprintf } from '@wordpress/i18n';
+import { __, _n, sprintf } from '@wordpress/i18n';
 
 import type {
 	ApiResponse,
@@ -44,11 +43,13 @@ export interface BulkImportFlowPost {
 }
 
 /**
- * Labels driving the modal's copy. Defaults are import-flavored; the
- * Update flow overrides verb-specific strings.
+ * Labels driving the modal's copy across its confirm, progress, and
+ * results phases. Defaults use drafts-oriented wording; callers override
+ * per string.
  */
 export interface BulkImportFlowLabels {
 	confirmQuestion: string;
+	confirmQuestionPartial: string;
 	confirmDescription: string;
 	processingHeading: string;
 	processingFootnote: string;
@@ -64,14 +65,16 @@ export interface BulkImportFlowLabels {
 /**
  * Props for the BulkImportFlow modal body.
  *
- * @property {BulkImportFlowPost[]}  posts     Pre-mapped row payload.
- * @property {Object}                context   Admin-ajax URL + nonce.
- * @property {Function}              onClose   Modal close callback.
- * @property {Function?}             onRefresh Called after a successful run.
- * @property {BulkImportFlowLabels?} labels    Optional copy overrides.
+ * @property {BulkImportFlowPost[]}  posts        Pre-mapped row payload.
+ * @property {number?}               skippedCount Ineligible selected rows dropped before import.
+ * @property {Object}                context      Admin-ajax URL + nonce.
+ * @property {Function}              onClose      Modal close callback.
+ * @property {Function?}             onRefresh    Called after a successful run.
+ * @property {BulkImportFlowLabels?} labels       Optional copy overrides.
  */
 export interface BulkImportFlowProps {
 	posts: BulkImportFlowPost[];
+	skippedCount?: number;
 	context: { ajaxurl: string; nonce: string };
 	onClose: () => void;
 	onRefresh?: () => void;
@@ -81,6 +84,11 @@ export interface BulkImportFlowProps {
 const DEFAULT_LABELS: BulkImportFlowLabels = {
 	/* translators: %d is the number of selected posts */
 	confirmQuestion: __( 'Import %d selected posts as drafts?', 'safe-publish' ),
+	/* translators: 1: importable count, 2: total selected count */
+	confirmQuestionPartial: __(
+		'Import %1$d of %2$d selected posts as drafts?',
+		'safe-publish'
+	),
 	confirmDescription: __(
 		'This will import all selected posts including their content, images, links, and formatting.',
 		'safe-publish'
@@ -164,6 +172,7 @@ async function postBulk(
  */
 export default function BulkImportFlow( {
 	posts,
+	skippedCount = 0,
 	context,
 	onClose,
 	onRefresh,
@@ -224,6 +233,19 @@ export default function BulkImportFlow( {
 		summaryColor = '#996800';
 	}
 
+	let confirmHeading: string;
+	if ( skippedCount > 0 ) {
+		// eslint-disable-next-line @wordpress/valid-sprintf
+		confirmHeading = sprintf(
+			labels.confirmQuestionPartial,
+			posts.length,
+			posts.length + skippedCount
+		);
+	} else {
+		// eslint-disable-next-line @wordpress/valid-sprintf
+		confirmHeading = sprintf( labels.confirmQuestion, posts.length );
+	}
+
 	return (
 		<VStack
 			spacing="5"
@@ -232,12 +254,21 @@ export default function BulkImportFlow( {
 		>
 			{ ! results && (
 				<>
-					<Text>
-						{
-							// eslint-disable-next-line @wordpress/valid-sprintf -- format string is a translated literal passed as a label.
-							sprintf( labels.confirmQuestion, posts.length )
-						}
-					</Text>
+					<Text>{ confirmHeading }</Text>
+					{ skippedCount > 0 && (
+						<Text style={ { color: '#996800' } }>
+							{ sprintf(
+								/* translators: %d is the number of skipped posts */
+								_n(
+									'%d selected post is already up to date or cannot be imported, so it will be skipped.',
+									'%d selected posts are already up to date or cannot be imported, so they will be skipped.',
+									skippedCount,
+									'safe-publish'
+								),
+								skippedCount
+							) }
+						</Text>
+					) }
 					<Text style={ { fontSize: '0.9em', color: '#666' } }>
 						{ labels.confirmDescription }
 					</Text>
@@ -259,7 +290,7 @@ export default function BulkImportFlow( {
 					</Text>
 					<Text style={ { fontSize: '0.75em', color: '#999' } }>
 						{
-							// eslint-disable-next-line @wordpress/valid-sprintf -- format string is a translated literal passed as a label.
+							// eslint-disable-next-line @wordpress/valid-sprintf
 							sprintf( labels.processingFootnote, posts.length )
 						}
 					</Text>
@@ -282,7 +313,7 @@ export default function BulkImportFlow( {
 							</Text>
 							<Text>
 								{
-									// eslint-disable-next-line @wordpress/valid-sprintf -- format string is a translated literal passed as a label.
+									// eslint-disable-next-line @wordpress/valid-sprintf
 									sprintf(
 										labels.totalSummary,
 										results.successful,
@@ -461,7 +492,7 @@ export default function BulkImportFlow( {
 								{ labels.loadingButton }
 							</>
 						) : (
-							// eslint-disable-next-line @wordpress/valid-sprintf -- format string is a translated literal passed as a label.
+							// eslint-disable-next-line @wordpress/valid-sprintf
 							sprintf( labels.primaryButton, posts.length )
 						) }
 					</Button>

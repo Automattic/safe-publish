@@ -154,7 +154,8 @@ class Content_Media_Processor {
 							$processor,
 							'href',
 							$source_site_url,
-							$block_name
+							$block_name,
+							true
 						);
 					}
 					break;
@@ -226,16 +227,20 @@ class Content_Media_Processor {
 	 * Imports a source URL from a single attribute and replaces it with the
 	 * local equivalent.
 	 *
-	 * @param WP_HTML_Tag_Processor $processor       HTML processor positioned on the current tag.
-	 * @param string                $attr_name       Attribute name (e.g. src, poster).
-	 * @param string                $source_site_url Source site URL.
-	 * @param string                $block_name      Originating block name, empty if none.
+	 * @param WP_HTML_Tag_Processor $processor         HTML processor positioned on the current tag.
+	 * @param string                $attr_name         Attribute name (e.g. src, poster).
+	 * @param string                $source_site_url   Source site URL.
+	 * @param string                $block_name        Originating block name, empty if none.
+	 * @param bool                  $skip_if_not_media Leave the URL as a link instead of recording
+	 *                                                 a failure when the download is not media. For
+	 *                                                 ambiguous attributes such as anchor hrefs.
 	 */
 	private function import_and_replace_attr(
 		WP_HTML_Tag_Processor $processor,
 		string $attr_name,
 		string $source_site_url,
-		string $block_name = ''
+		string $block_name = '',
+		bool $skip_if_not_media = false
 	): void {
 		$url = $processor->get_attribute( $attr_name );
 
@@ -244,7 +249,7 @@ class Content_Media_Processor {
 		}
 
 		$new_url = $this->media_importer
-			->import_source_media( $url, $source_site_url );
+			->import_source_media( $url, $source_site_url, $skip_if_not_media );
 
 		if ( is_string( $new_url ) ) {
 			$new_url = Media_Importer::reapply_query_parameters(

@@ -64,7 +64,7 @@ The following element/attribute combinations are processed:
 | `<embed>`  | `src`               |
 | `<object>` | `data`              |
 
-If an `<a>` tag ends in a file extension allowed by WordPress, it is processed in this step. Regular links are processed later.
+If an `<a>` tag's `href` ends in a file extension allowed by WordPress, it is processed as media in this step; its content then decides whether it is imported or kept as a link (step 6). Regular links are processed later.
 
 ### What Is Not Processed
 
@@ -80,14 +80,14 @@ If an `<a>` tag ends in a file extension allowed by WordPress, it is processed i
 3. **Filter**: Third-party domain URLs are left unchanged.
 4. **Deduplicate**: If the URL was already imported, the existing attachment URL is used, and download is skipped.
 5. **Download**: File fetched using WordPress core's `download_url()`; downloadability is verified at this point.
-6. **Import**: File type is validated and added to the media library via `media_handle_sideload()`.
+6. **Import**: The file type is classified from the downloaded content, not the URL extension — image, video, audio, and PDF are added to the media library via `media_handle_sideload()`; a media-looking URL that resolves to a page is kept as a link.
 7. **Enrich**: The image's source library metadata — alt text, title, caption, and description — is applied to the new attachment. The source resolves each URL back to its attachment record (a capability core REST lacks) and returns the values alongside the post.
 8. **Replace**: Source URL replaced with the new attachment URL in content; previously stripped query parameters are reapplied.
 
 ### Featured Image
 
 - Fetched separately via the `/wp-json/wp/v2/media/{id}` endpoint using the `featured_media` ID from the post response.
-- Uploaded to media library.
+- Uploaded to media library regardless of serving host — unlike content media (step 3), an off-domain featured image is still downloaded because it belongs to the source.
 - The source library metadata (alt text, title, caption, description) is applied to the destination attachment, fetched in edit context for the raw values.
 - Set as post thumbnail via `set_post_thumbnail()`.
 
@@ -283,6 +283,8 @@ wp post meta list <post-id> --fields=meta_key --format=csv \
 ### Internal body links may 404 or open the wrong page
 
 Internal links inside post body content (for example `<a href>` in paragraphs and lists) are migrated by host swap only: the source host is replaced with the destination host, but the path is preserved. If a linked page's destination slug or permalink differs from the source — a slug collision (such as `/about` becoming `/about-2` because the destination already has an `/about` page), a different permalink structure, or plain versus pretty permalinks — the link can return a 404 or resolve to a different page. Review internal links after migrating onto a site that already has content.
+
+A permalink stored in a custom or third-party block's attributes — for example a block that saves a post's own URL — is treated the same way: host-swapped, but not re-derived. Rewriting an arbitrary attribute that merely looks like a permalink could point it at the wrong content, so only blocks whose attributes carry an explicit, known entity reference are re-derived.
 
 Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink automatically — unless the target was a draft at import (see [below](#navigation-links-to-draft-targets-may-404-or-open-the-wrong-page)).
 

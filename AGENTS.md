@@ -38,13 +38,14 @@
 
 - Verify PHP files use strict typing, and use type hinting everywhere possible.
 - Prefer using `_` instead of `@psalm-suppress PossiblyUnusedParam`.
-- Use explicit checks, don't use empty().
+- Use explicit checks — don't use `empty()`, and don't coerce values with `!`. Reserve `!` for booleans and predicates; write an explicit comparison instead (`0 === $id`, `null === $post`), and for a multi-falsy union a type test (`! ( $result instanceof WP_Post )`, not `! $result`).
 
 ### Comments and docblocks
 
 - Write short and to the point comments; lengthy comments allowed only when they provide value.
 - Adhere to WordPress inline documentation standards.
 - Docblock summaries are plain prose; no backticks or Markdown.
+- In comments, capitalize the first word after a colon only when it begins prose — not a literal or code reference (quoted string, identifier, URL, and the like).
 
 ## Tests
 
