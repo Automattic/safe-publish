@@ -82,6 +82,47 @@ A 401 or 403 has two distinct causes, and the Test Connection result tells them 
 2. **For an upstream block**:
    - Allowlist the `wp/v2` and `safe-publish/v1` REST namespaces for signed requests — they carry the `X-Safe-Publish-Signature` header.
    - Review security-plugin, firewall, and host rules that restrict REST API access.
+   - See [The connected site blocks the request before Safe Publish can authenticate](#the-connected-site-blocks-the-request-before-safe-publish-can-authenticate) for host-side allowlisting options and a deferral snippet.
+
+#### The connected site blocks the request before Safe Publish can authenticate
+
+**Symptoms**: The connection test reports that the connected site blocked the request before Safe Publish could authenticate it. On the connected site, Safe Publish's **Audit Log** shows no `auth`-channel entry for the attempt.
+
+**Cause**: A security plugin, theme, mu-plugin, or WAF on the connected site gates the REST API — typically through the `rest_authentication_errors` filter — and rejects the request before Safe Publish's authenticator runs. When it uses that filter, WordPress core stops processing the request as soon as the filter returns an error, so the authenticator never sees it.
+
+**Fix**: Let Safe Publish's signed requests reach its own authenticator. It reads posts, pages, and media through core's `wp/v2` endpoints, and serves its catalog from `safe-publish/v1`, so both namespaces must be reachable. Its requests carry the `X-Safe-Publish-Signature` header. Use Option 1 when you cannot edit the gate, Option 2 when you can.
+
+**Option 1 — allowlist the REST namespaces.** In the gate's settings, allow the `wp/v2` and `safe-publish/v1` namespaces through. Use this for a third-party security plugin you can configure but not edit.
+
+**Option 2 — defer signed requests in code.** In a gate you control, return the incoming result unchanged for a signed request to those namespaces, so it reaches Safe Publish's own authenticator. Add the guard at the top of your `rest_authentication_errors` callback, before the code that blocks:
+
+```php
+add_filter(
+	'rest_authentication_errors',
+	static function ( $result ) {
+		// The REST route WordPress will dispatch, e.g. /wp/v2/posts.
+		$route = $GLOBALS['wp']->query_vars['rest_route'] ?? '';
+
+		$is_safe_publish_route = 0 === strpos( $route, '/wp/v2/' )
+			|| 0 === strpos( $route, '/safe-publish/v1/' );
+
+		// Defer Safe Publish's signed requests to its own authenticator.
+		if (
+			isset( $_SERVER['HTTP_X_SAFE_PUBLISH_SIGNATURE'] )
+			&& $is_safe_publish_route
+		) {
+			return $result;
+		}
+
+		// Your existing REST gate logic goes here, for example:
+		// return new WP_Error( 'rest_forbidden', 'REST API disabled.', array( 'status' => 401 ) );
+		return $result;
+	}
+);
+```
+
+> [!NOTE]
+> This does not expose private content: Safe Publish still validates the HMAC signature before serving edit-context or import data, so a forged or absent signature retrieves nothing beyond WordPress' default anonymous REST access. For unsigned requests, the allowlisted `wp/v2` namespace exposes only what WordPress already serves anonymously, including the author data at `wp/v2/users`.
 
 #### "REST API not found" error
 
