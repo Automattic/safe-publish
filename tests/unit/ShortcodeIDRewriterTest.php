@@ -261,6 +261,45 @@ class ShortcodeIDRewriterTest extends TestCase {
 	}
 
 	/**
+	 * Verifies that an unquoted ids CSV, a form WordPress' shortcode parser
+	 * accepts, is rewritten and left unquoted.
+	 */
+	public function test_unquoted_ids_rewritten(): void {
+		// ARRANGE: gallery with a bare, unquoted ids list.
+		$rewriter = $this->build_rewriter();
+		$resolver = $this->id_resolver(
+			array(
+				705 => 12,
+				704 => 13,
+			)
+		);
+		$content  = '[gallery ids=705,704 columns="3"]';
+
+		// ACT: rewrite the media shortcode IDs.
+		$result = $rewriter->rewrite_media_shortcode_ids( $content, $resolver );
+
+		// ASSERT: IDs mapped; the value stays unquoted, columns untouched.
+		$this->assertSame( '[gallery ids=12,13 columns="3"]', $result );
+	}
+
+	/**
+	 * Verifies that a single-quoted ids CSV is rewritten with its single quotes
+	 * preserved.
+	 */
+	public function test_single_quoted_ids_rewritten(): void {
+		// ARRANGE: gallery with single-quoted ids.
+		$rewriter = $this->build_rewriter();
+		$resolver = $this->id_resolver( array( 7 => 70 ) );
+		$content  = "[gallery ids='7']";
+
+		// ACT: rewrite the media shortcode IDs.
+		$result = $rewriter->rewrite_media_shortcode_ids( $content, $resolver );
+
+		// ASSERT: rewritten; single quoting preserved.
+		$this->assertSame( "[gallery ids='70']", $result );
+	}
+
+	/**
 	 * Verifies that ids, include, and exclude are all rewritten within one
 	 * shortcode.
 	 */

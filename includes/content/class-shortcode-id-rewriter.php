@@ -187,6 +187,9 @@ class Shortcode_ID_Rewriter {
 	 * `include`, `exclude`) within a shortcode's attribute string, preserving
 	 * the attribute name, separator, and quoting.
 	 *
+	 * Matches the quoted and unquoted attribute forms WordPress' shortcode
+	 * parser accepts, not quoted-only.
+	 *
 	 * @param string          $attrs    Shortcode attribute string.
 	 * @param callable        $resolver Source ID => dest ID resolver.
 	 * @param array<int, int> $memo     Source ID => resolved dest ID cache.
@@ -197,12 +200,30 @@ class Shortcode_ID_Rewriter {
 		callable $resolver,
 		array &$memo
 	): string {
-		$result = preg_replace_callback(
-			'/(?<![\w-])(ids|include|exclude)(\s*=\s*)(["\'])([^"\']*)\3/i',
-			function ( array $matches ) use ( $resolver, &$memo ): string {
-				$csv = $this->rewrite_csv_ids( $matches[4], $resolver, $memo );
+		// Bare values end at whitespace; get_shortcode_regex() already stripped
+		// any `]` from $attrs.
+		$pattern = '/(?<![\w-])((?:ids|include|exclude)\s*=\s*)'
+			. '(?:"([^"]*)"|\'([^\']*)\'|([^\s\]]+))/i';
 
-				return $matches[1] . $matches[2] . $matches[3] . $csv . $matches[3];
+		$result = preg_replace_callback(
+			$pattern,
+			function ( array $matches ) use ( $resolver, &$memo ): string {
+				if ( isset( $matches[2] ) && '' !== $matches[2] ) {
+					$csv   = $matches[2];
+					$quote = '"';
+				} elseif ( isset( $matches[3] ) && '' !== $matches[3] ) {
+					$csv   = $matches[3];
+					$quote = "'";
+				} elseif ( isset( $matches[4] ) && '' !== $matches[4] ) {
+					$csv   = $matches[4];
+					$quote = '';
+				} else {
+					return $matches[0];
+				}
+
+				return $matches[1] . $quote
+					. $this->rewrite_csv_ids( $csv, $resolver, $memo )
+					. $quote;
 			},
 			$attrs
 		);

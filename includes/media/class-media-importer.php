@@ -596,8 +596,11 @@ class Media_Importer {
 		}
 
 		$media_data = json_decode( wp_remote_retrieve_body( $response ), true );
+		$source_url = is_array( $media_data ) ? ( $media_data['source_url'] ?? null ) : null;
 
-		if ( ! isset( $media_data['source_url'] ) || '' === $media_data['source_url'] ) {
+		// A non-string source_url would fatal the string-typed sideload below;
+		// treat it as a missing URL.
+		if ( ! is_string( $source_url ) || '' === $source_url ) {
 			$this->logger->source_media_url_missing( $source_id, $source_site_url );
 
 			return null;
@@ -605,7 +608,7 @@ class Media_Importer {
 
 		// Resolved by ID, so it is owned regardless of serving host.
 		$attachment_id = $this->import_owned_media_as_attachment(
-			$media_data['source_url'],
+			$source_url,
 			$source_site_url
 		);
 

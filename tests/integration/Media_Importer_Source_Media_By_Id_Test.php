@@ -17,9 +17,9 @@ use WP_UnitTestCase;
 /**
  * Exercises the shared source-ID resolver that both featured-image import and
  * shortcode ID rewriting rely on, asserting its three outcomes: a resolved and
- * sideloaded attachment ID, null for a dangling reference (unreachable record
- * or a record with no source_url), and false for a resolved URL whose bytes
- * fail to download.
+ * sideloaded attachment ID, null for a dangling reference (unreachable record,
+ * or a record with a missing or non-string source_url), and false for a
+ * resolved URL whose bytes fail to download.
  */
 class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 
@@ -30,7 +30,8 @@ class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 
 	/**
 	 * Source media ID => the source_url its REST record serves. The missing-url
-	 * ID (9910002) is handled in the mock body, not here.
+	 * ID (9910002) and non-string-url ID (9910004) are handled in the mock body,
+	 * not here.
 	 *
 	 * @var array<int, string>
 	 */
@@ -62,6 +63,17 @@ class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 		if ( 9910002 === $source_media_id ) {
 			return array(
 				'id'         => $source_media_id,
+				'media_type' => 'image',
+				'mime_type'  => 'image/jpeg',
+				'alt_text'   => '',
+			);
+		}
+
+		if ( 9910004 === $source_media_id ) {
+			// Malformed record: a non-string source_url the guard must reject.
+			return array(
+				'id'         => $source_media_id,
+				'source_url' => array( 'unexpected' ),
 				'media_type' => 'image',
 				'mime_type'  => 'image/jpeg',
 				'alt_text'   => '',
@@ -156,6 +168,30 @@ class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 		}
 
 		// ASSERT: dangling reference signalled by null; nothing sideloaded.
+		$this->assertNull( $result );
+		$this->assert_no_new_attachments( $count );
+	}
+
+	/**
+	 * Verifies that a record whose source_url is a non-string (a malformed
+	 * source response) is treated as a dangling reference rather than fataling
+	 * the string-typed sideload: null is returned and nothing is created.
+	 */
+	public function test_non_string_source_url_returns_null(): void {
+		// ARRANGE: mock a record whose source_url is not a string.
+		$this->add_per_source_id_media_api_mock();
+		$count = $this->get_attachment_count();
+
+		$importer = new Media_Importer( new HTTP_Client() );
+
+		// ACT: attempt to resolve a record with a non-string source_url.
+		try {
+			$result = $importer->import_source_media_by_id( 9910004, self::SOURCE );
+		} finally {
+			$this->remove_per_source_id_media_api_mock();
+		}
+
+		// ASSERT: malformed URL treated as dangling; null, nothing sideloaded.
 		$this->assertNull( $result );
 		$this->assert_no_new_attachments( $count );
 	}
