@@ -1051,6 +1051,8 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 					'image/jpeg',
 					$featured_id,
 					self::$fixture->source_media_metadata( $ref['id'] ),
+					$source_id,
+					self::$fixture->dest_post_ids,
 					$this
 				);
 			}

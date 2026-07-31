@@ -25,7 +25,8 @@ use WP_UnitTestCase;
  *
  * Access control: the safe_publish_media field is populated only for Safe
  * Publish HMAC-authenticated single-item requests, and it resolves the post's
- * own media URLs to the raw library metadata on each attachment record.
+ * own media URLs to the raw library metadata and source parent on each
+ * attachment record.
  */
 class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 
@@ -213,8 +214,45 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 				'title'       => 'Library title',
 				'caption'     => 'Library caption',
 				'description' => 'Library description',
+				'parent'      => '0',
 			),
 			$media[ $image['url'] ] ?? null
+		);
+	}
+
+	/**
+	 * Verifies that the map reports each attachment's source parent post, the
+	 * value the destination re-parents its imported copy to.
+	 */
+	public function test_field_reports_source_parent(): void {
+		// ARRANGE: An attachment attached to one post, inlined in another.
+		$parent_post = self::factory()->post->create();
+		$this->assertIsInt( $parent_post );
+		$image = $this->seed_attachment( '2025/01/attached-image.jpg' );
+		wp_update_post(
+			array(
+				'ID'          => $image['id'],
+				'post_parent' => $parent_post,
+			)
+		);
+		$post_id = self::factory()->post->create(
+			array(
+				'post_content' => '<img src="' . $image['url'] . '" alt="x"/>',
+			)
+		);
+
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Dispatch the single-post request.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: The map reports the attachment's source parent post.
+		$media = $response->get_data()['safe_publish_media'];
+		$this->assertSame(
+			(string) $parent_post,
+			$media[ $image['url'] ]['parent'] ?? null
 		);
 	}
 
@@ -252,6 +290,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 				'title'       => 'Library title',
 				'caption'     => 'Library caption',
 				'description' => 'Library description',
+				'parent'      => '0',
 			),
 			$media[ $image['sized_url'] ] ?? null
 		);
@@ -324,6 +363,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 				'title'       => 'Standalone title',
 				'caption'     => 'Standalone caption',
 				'description' => 'Standalone description',
+				'parent'      => '0',
 			),
 			$media[ $standalone['url'] ] ?? null
 		);
@@ -367,6 +407,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 				'title'       => 'Library title',
 				'caption'     => 'Library caption',
 				'description' => 'Library description',
+				'parent'      => '0',
 			),
 			$media[ $image['sized_url'] ] ?? null
 		);
@@ -446,6 +487,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 				'title'       => 'Library title',
 				'caption'     => 'Library caption',
 				'description' => 'Library description',
+				'parent'      => '0',
 			),
 			$media[ $image['url'] ] ?? null
 		);

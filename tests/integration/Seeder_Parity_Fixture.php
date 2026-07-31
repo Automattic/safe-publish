@@ -615,14 +615,14 @@ final class Seeder_Parity_Fixture {
 	/**
 	 * Builds the wp/v2/media/{id} mock bodies (edit-context shape) for every
 	 * image referenced in the batch, so the featured-image fetch resolves a
-	 * source_url and the raw library fields.
+	 * source_url, the raw library fields, and the source parent post.
 	 *
 	 * @return array<int, array<string, mixed>> Media ID => REST body.
 	 */
 	private function build_source_media_bodies(): array {
 		$bodies = array();
 
-		foreach ( $this->image_refs_by_source_id as $refs ) {
+		foreach ( $this->image_refs_by_source_id as $owner_source_id => $refs ) {
 			foreach ( $refs as $ref ) {
 				$meta                 = $this->media_metadata_for_id( $ref['id'] );
 				$bodies[ $ref['id'] ] = array(
@@ -634,6 +634,8 @@ final class Seeder_Parity_Fixture {
 					'title'       => array( 'raw' => $meta['title'] ),
 					'caption'     => array( 'raw' => $meta['caption'] ),
 					'description' => array( 'raw' => $meta['description'] ),
+					// Source parent post; the by-id path reads it as `post`.
+					'post'        => $owner_source_id,
 				);
 			}
 		}
@@ -690,9 +692,11 @@ final class Seeder_Parity_Fixture {
 
 		$safe_publish_media = array();
 		foreach ( $image_refs as $ref ) {
+			// The owning post is this body's own source id, so the destination
+			// re-parents each inline image to it.
 			$safe_publish_media[ $ref['url'] ] = $this->media_metadata_for_id(
 				$ref['id']
-			);
+			) + array( 'parent' => (string) $source_id );
 		}
 
 		return array(
