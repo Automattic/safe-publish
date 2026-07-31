@@ -939,6 +939,39 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that a newly imported post lands as draft even when the queued
+	 * item carries a custom source status; insert hard-codes draft, so the
+	 * source status is never propagated.
+	 */
+	public function test_new_import_always_creates_draft(): void {
+		// ARRANGE: A queued item whose source status is a custom editorial
+		// status the engine must ignore.
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		$post_data  = array(
+			'id'        => 9500,
+			'title'     => 'Custom Status Source Post',
+			'content'   => '<p>Body.</p>',
+			'link'      => 'https://source.example.com/custom-status',
+			'post_type' => 'posts',
+			'status'    => 'pitch',
+		);
+
+		// ACT: Import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Created as draft.
+		$this->assertTrue( $result['success'], 'Import should succeed.' );
+		$this->assertSame(
+			'draft',
+			get_post_status( $result['post_id'] ),
+			'A new import must land as draft regardless of source status.'
+		);
+	}
+
+	/**
 	 * Verifies that slug, comment_status, ping_status, and menu_order are
 	 * updated when re-importing an existing post via the bulk path.
 	 */

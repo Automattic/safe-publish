@@ -20,9 +20,9 @@ use Safe_Publish\Tests\Integration\Mock_Catalog_Response_Trait;
  *
  * HMAC authenticates the source's identity, not its honesty. The
  * destination's normalize_listing_item must defend against payloads that
- * would otherwise be interpolated into the catalog UI's HTML attributes
- * or CSS class names. These tests pin the link-scheme and status-allowlist
- * clamping that prevents XSS / open-redirect via a compromised source.
+ * would otherwise be interpolated into the catalog UI. These tests pin the
+ * link-scheme allowlist (blocks a javascript: href) and the status slug
+ * sanitization (bounds the value to a CSS-class-safe token).
  */
 class Hostile_Source_Response_Test extends Integration_Test_Case {
 
@@ -47,13 +47,13 @@ class Hostile_Source_Response_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a hostile status value (one that would inject
-	 * arbitrary HTML attributes via the safe-publish-status-badge--<x>
-	 * className template) is clamped to an empty string.
+	 * Verifies that a hostile status value (one that would inject arbitrary
+	 * characters into the safe-publish-status-badge--<x> className) is reduced
+	 * to a safe [a-z0-9_-] token rather than reaching the destination raw.
 	 */
-	public function test_hostile_status_is_clamped_to_empty_string(): void {
-		// ARRANGE: Source returns a status value engineered to break out of
-		// the className attribute on the destination's React render.
+	public function test_hostile_status_is_sanitized_to_safe_token(): void {
+		// ARRANGE: Source returns a status carrying quotes, angle brackets, and
+		// a script payload — characters that must not survive to a className.
 		$this->mock_body = $this->envelope_with(
 			array(
 				'id'           => 1,
@@ -62,25 +62,29 @@ class Hostile_Source_Response_Test extends Integration_Test_Case {
 				'post_type'    => 'post',
 				'date_gmt'     => '2024-07-15T15:00:00Z',
 				'modified_gmt' => '2024-07-15T15:00:00Z',
-				'status'       => 'publish onmouseover=alert(1)',
+				'status'       => '"><script>alert(1)</script>',
 			)
 		);
 
-		// ACT: Fetch via the destination's API.
+		// ACT: Fetch the source posts.
 		$result = ( new Source_Posts_API( new HTTP_Client() ) )
 			->fetch_posts( $this->source_site_url );
 
-		// ASSERT: Status was not allowlisted, so the destination drops it.
+		// ASSERT: sanitize_key stripped every unsafe character to a bare token.
 		$this->assertIsArray( $result );
 		$this->assertCount( 1, $result['items'] );
-		$this->assertSame( '', $result['items'][0]['status'] );
+		$this->assertSame( 'scriptalert1script', $result['items'][0]['status'] );
+		$this->assertMatchesRegularExpression(
+			'/^[a-z0-9_-]*$/',
+			$result['items'][0]['status']
+		);
 	}
 
 	/**
-	 * Verifies that an allowlisted status value passes through unchanged.
+	 * Verifies that a built-in status value passes through unchanged.
 	 */
-	public function test_allowlisted_status_passes_through(): void {
-		// ARRANGE: Source returns an honest status.
+	public function test_builtin_status_passes_through(): void {
+		// ARRANGE: Source returns an honest built-in status.
 		$this->mock_body = $this->envelope_with(
 			array(
 				'id'           => 1,
@@ -101,6 +105,34 @@ class Hostile_Source_Response_Test extends Integration_Test_Case {
 		$this->assertIsArray( $result );
 		$this->assertCount( 1, $result['items'] );
 		$this->assertSame( 'draft', $result['items'][0]['status'] );
+	}
+
+	/**
+	 * Verifies that a legitimate custom status slug survives sanitization, so
+	 * custom-status posts keep their source status in the listing.
+	 */
+	public function test_custom_status_passes_through(): void {
+		// ARRANGE: Source returns a hyphenated editorial-workflow status.
+		$this->mock_body = $this->envelope_with(
+			array(
+				'id'           => 1,
+				'link'         => 'https://source.example.com/post',
+				'title'        => 'Custom status',
+				'post_type'    => 'post',
+				'date_gmt'     => '2024-07-15T15:00:00Z',
+				'modified_gmt' => '2024-07-15T15:00:00Z',
+				'status'       => 'in-progress',
+			)
+		);
+
+		// ACT: Fetch the source posts.
+		$result = ( new Source_Posts_API( new HTTP_Client() ) )
+			->fetch_posts( $this->source_site_url );
+
+		// ASSERT: The slug is already sanitize_key-safe, so it is preserved.
+		$this->assertIsArray( $result );
+		$this->assertCount( 1, $result['items'] );
+		$this->assertSame( 'in-progress', $result['items'][0]['status'] );
 	}
 
 	/**

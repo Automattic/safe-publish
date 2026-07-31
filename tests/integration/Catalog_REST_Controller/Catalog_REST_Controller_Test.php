@@ -273,22 +273,22 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that unknown statuses are dropped (not errors) and the
-	 * filter falls back to the full allowlist when no usable status remains
-	 * — matching the "no filter = show everything" UX of the toolbar.
+	 * Verifies that an unknown or internal status is dropped (not an error)
+	 * and the filter falls back to the listable set when nothing usable
+	 * remains — matching the "no filter = show everything" UX of the toolbar.
 	 */
-	public function test_unknown_status_falls_back_to_full_allowlist(): void {
+	public function test_unknown_status_falls_back_to_listable_set(): void {
 		// ARRANGE: One publish post and one draft; both should come back.
 		$publish_id = self::factory()->post->create( array( 'post_status' => 'publish' ) );
 		$draft_id   = self::factory()->post->create( array( 'post_status' => 'draft' ) );
 		$this->force_hmac_authenticated( true );
 
-		// ACT: Request a status not in the allowlist.
+		// ACT: Request an internal status that the catalog never lists.
 		$items = $this->dispatch_items(
 			array( 'status' => array( 'inherit' ) )
 		);
 
-		// ASSERT: Both allowlisted-status posts come back.
+		// ASSERT: Both listable-status posts come back.
 		$ids = array_column( $items, 'id' );
 		sort( $ids );
 		$expected = array( $publish_id, $draft_id );
@@ -298,10 +298,10 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 
 	/**
 	 * Verifies that omitting the status param entirely returns posts in
-	 * every allowlisted status, not just publish.
+	 * every listable status, not just publish.
 	 */
-	public function test_omitted_status_returns_all_allowlisted_statuses(): void {
-		// ARRANGE: One post in each allowlisted status that the factory can create directly.
+	public function test_omitted_status_returns_all_listable_statuses(): void {
+		// ARRANGE: One post in each built-in status the factory can create directly.
 		$publish_id = self::factory()->post->create( array( 'post_status' => 'publish' ) );
 		$draft_id   = self::factory()->post->create( array( 'post_status' => 'draft' ) );
 		$pending_id = self::factory()->post->create( array( 'post_status' => 'pending' ) );
@@ -317,6 +317,43 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$expected = array( $publish_id, $draft_id, $pending_id, $private_id );
 		sort( $expected );
 		$this->assertSame( $expected, $ids );
+	}
+
+	/**
+	 * Verifies that a post in a custom editorial-workflow status is listed by
+	 * default, while internal statuses (trash, auto-draft) stay excluded.
+	 */
+	public function test_custom_status_post_is_listed_by_default(): void {
+		// ARRANGE: A registered custom status with a post in it, plus a trashed
+		// and an auto-draft post that must never surface.
+		register_post_status(
+			'in-progress',
+			array(
+				'label'     => 'In progress',
+				'protected' => true,
+			)
+		);
+		$custom_id     = self::factory()->post->create(
+			array( 'post_status' => 'in-progress' )
+		);
+		$trashed_id    = self::factory()->post->create(
+			array( 'post_status' => 'trash' )
+		);
+		$auto_draft_id = self::factory()->post->create(
+			array( 'post_status' => 'auto-draft' )
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Dispatch without a status param, then drop the global status
+		// registration so it can't leak into later tests (WP has no
+		// unregister_post_status).
+		$ids = array_column( $this->dispatch_items(), 'id' );
+		unset( $GLOBALS['wp_post_statuses']['in-progress'] );
+
+		// ASSERT: Custom-status post is listed; internal statuses are not.
+		$this->assertContains( $custom_id, $ids );
+		$this->assertNotContains( $trashed_id, $ids );
+		$this->assertNotContains( $auto_draft_id, $ids );
 	}
 
 	/**
