@@ -439,21 +439,21 @@ Install [Query Monitor](https://wordpress.org/plugins/query-monitor/) for advanc
 
 Use the **Test Connection** button in settings to test authentication independently of imports.
 
-### Imports → Failures Tab
+### Imports → Needs attention Tab
 
-Check the **Imports → Failures** tab for:
+Check the **Imports → Needs attention** tab for:
 
 - Error messages recorded at import time
 - Source URL of each failed attempt
 - Timestamp of the attempt
 
-Recovery is fixing the underlying issue and re-importing from Source Posts. Once an item is no longer needed, use the **Remove** action (per-row or bulk) to clear it from the tab; this only deletes the record and does not affect the source.
+Recovery is fixing the underlying issue and re-importing from Source Posts. Once a failure is no longer needed, use the **Remove** action (per-row or bulk) to clear it from the tab; this only deletes the record and does not affect the source.
 
 ## Getting Help
 
 If you still can't resolve the issue:
 
-1. **Check the Imports → Failures tab** for detailed error messages.
+1. **Check the Imports → Needs attention tab** for detailed error messages.
 2. **Enable debug mode** and collect error logs.
 3. **Reproduce the issue** in a clean environment if possible.
 4. **Report the issue** via GitHub Issues with:
