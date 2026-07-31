@@ -41,7 +41,7 @@ describe( 'useResetSelectionOnQueryChange', () => {
 	} );
 
 	it( 'leaves the selection alone on the initial render', () => {
-		// ARRANGE & ACT: first mount, with no prior query to differ from.
+		// ARRANGE + ACT: First mount, with no prior query to differ from.
 		const reset = vi.fn();
 		renderHook( () => useResetSelectionOnQueryChange( 'all|', reset ) );
 

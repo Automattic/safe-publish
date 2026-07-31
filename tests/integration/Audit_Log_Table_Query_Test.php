@@ -58,12 +58,12 @@ class Audit_Log_Table_Query_Test extends Integration_Test_Case {
 	 * (IN-clause) match rather than failing or short-circuiting.
 	 */
 	public function test_get_events_accepts_channel_array(): void {
-		// ACT.
+		// ACT: Query two channels as an array.
 		$rows = Audit_Log_Table::get_events(
 			array( 'channel' => array( 'auth', 'export' ) )
 		);
 
-		// ASSERT.
+		// ASSERT: Rows from both channels return.
 		$this->assertCount( 3, $rows );
 		$channels = array_unique( array_column( $rows, 'channel' ) );
 		sort( $channels );
@@ -75,10 +75,10 @@ class Audit_Log_Table_Query_Test extends Integration_Test_Case {
 	 * existing callers that pass a single string).
 	 */
 	public function test_get_events_accepts_channel_string(): void {
-		// ACT.
+		// ACT: Query a single channel as a string.
 		$rows = Audit_Log_Table::get_events( array( 'channel' => 'export' ) );
 
-		// ASSERT.
+		// ASSERT: Only that channel's row returns.
 		$this->assertCount( 1, $rows );
 		$this->assertSame( 'export', $rows[0]['channel'] );
 	}
@@ -87,12 +87,12 @@ class Audit_Log_Table_Query_Test extends Integration_Test_Case {
 	 * Verifies that passing an array of levels filters via IN-clause.
 	 */
 	public function test_get_events_accepts_level_array(): void {
-		// ACT.
+		// ACT: Query the error level as an array.
 		$rows = Audit_Log_Table::get_events(
 			array( 'level' => array( 'error' ) )
 		);
 
-		// ASSERT.
+		// ASSERT: Only error-level rows return.
 		$this->assertCount( 2, $rows );
 		$levels = array_unique( array_column( $rows, 'level' ) );
 		$this->assertSame( array( 'error' ), $levels );
@@ -103,7 +103,7 @@ class Audit_Log_Table_Query_Test extends Integration_Test_Case {
 	 * given GMT datetime.
 	 */
 	public function test_get_events_after_gmt_filters_inclusively(): void {
-		// ACT.
+		// ACT: Filter from a GMT lower bound.
 		$rows = Audit_Log_Table::get_events(
 			array( 'after_gmt' => '2026-01-13 00:00:00' )
 		);
@@ -145,7 +145,7 @@ class Audit_Log_Table_Query_Test extends Integration_Test_Case {
 	 * get_events() so server-side pagination totals stay accurate.
 	 */
 	public function test_count_honors_array_and_date_filters(): void {
-		// ACT.
+		// ACT: Count with array and date filters.
 		$total = Audit_Log_Table::count(
 			array(
 				'channel'   => array( 'auth', 'import' ),
@@ -169,7 +169,7 @@ class Audit_Log_Table_Query_Test extends Integration_Test_Case {
 		Audit_Log_Table::insert( 'auth', 'info', 'FIRST', '2026-02-01 09:00:00', array() );
 		Audit_Log_Table::insert( 'auth', 'info', 'SECOND', '2026-02-01 09:00:00', array() );
 
-		// ACT.
+		// ACT: Fetch the auth channel rows.
 		$rows = Audit_Log_Table::get_events( array( 'channel' => 'auth' ) );
 
 		// ASSERT: the higher id (latest insert) sorts first.

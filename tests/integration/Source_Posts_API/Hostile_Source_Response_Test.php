@@ -66,7 +66,7 @@ class Hostile_Source_Response_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: Fetch via the destination's API.
+		// ACT: Fetch the source posts.
 		$result = ( new Source_Posts_API( new HTTP_Client() ) )
 			->fetch_posts( $this->source_site_url );
 
@@ -97,7 +97,7 @@ class Hostile_Source_Response_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: Fetch via the destination's API.
+		// ACT: Fetch the source posts.
 		$result = ( new Source_Posts_API( new HTTP_Client() ) )
 			->fetch_posts( $this->source_site_url );
 
@@ -125,7 +125,7 @@ class Hostile_Source_Response_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: Fetch via the destination's API.
+		// ACT: Fetch the source posts.
 		$result = ( new Source_Posts_API( new HTTP_Client() ) )
 			->fetch_posts( $this->source_site_url );
 
@@ -154,7 +154,7 @@ class Hostile_Source_Response_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT.
+		// ACT: Fetch the source posts.
 		$result = ( new Source_Posts_API( new HTTP_Client() ) )
 			->fetch_posts( $this->source_site_url );
 
@@ -169,7 +169,7 @@ class Hostile_Source_Response_Test extends Integration_Test_Case {
 	 * Verifies that http and https links pass through unchanged.
 	 */
 	public function test_http_and_https_links_pass_through(): void {
-		// ARRANGE.
+		// ARRANGE: Source returns an honest https link.
 		$this->mock_body = $this->envelope_with(
 			array(
 				'id'           => 1,
@@ -182,11 +182,11 @@ class Hostile_Source_Response_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT.
+		// ACT: Fetch the source posts.
 		$result = ( new Source_Posts_API( new HTTP_Client() ) )
 			->fetch_posts( $this->source_site_url );
 
-		// ASSERT.
+		// ASSERT: The link passes through unchanged.
 		$this->assertIsArray( $result );
 		$this->assertCount( 1, $result['items'] );
 		$this->assertSame(

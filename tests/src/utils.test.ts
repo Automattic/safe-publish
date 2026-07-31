@@ -500,14 +500,14 @@ describe( 'attentionIssueId', () => {
 		// the 4-column identity key guards against.
 		const postRef = makeIssue( { target_kind: 'post', target_ref: 42 } );
 		const termRef = makeIssue( { target_kind: 'term', target_ref: 42 } );
-		// ACT & ASSERT: the ids differ, so DataViews rows stay unique.
+		// ACT + ASSERT: The ids differ, so DataViews rows stay unique.
 		expect( attentionIssueId( postRef ) ).not.toBe(
 			attentionIssueId( termRef )
 		);
 	} );
 
 	it( 'is stable for the same identity', () => {
-		// ARRANGE & ACT: two issues with the same identity.
+		// ARRANGE + ACT: Two issues with the same identity.
 		const id = attentionIssueId( makeIssue( {} ) );
 		// ASSERT: the id is deterministic.
 		expect( id ).toBe( attentionIssueId( makeIssue( {} ) ) );

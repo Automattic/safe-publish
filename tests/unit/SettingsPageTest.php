@@ -79,4 +79,23 @@ class SettingsPageTest extends TestCase {
 		$this->assertStringContainsString( 'value="user-password"', $output );
 		$this->assertStringNotContainsString( 'Configured externally', $output );
 	}
+
+	/**
+	 * Verifies that the settings page markup no longer carries an inline
+	 * script; the behavior now ships as an enqueued file.
+	 */
+	public function test_render_emits_no_inline_script(): void {
+		// ARRANGE: Enable import mode so the full settings form renders.
+		set_test_option( Options::OPTION_CONNECTED_SITE_URL, 'https://source.example.com' );
+		set_test_option( Options::OPTION_SYNC_MODE, Options::SYNC_MODE_IMPORT );
+
+		// ACT: Render the settings page markup.
+		ob_start();
+		( new Settings_Page() )->render();
+		$output = (string) ob_get_clean();
+
+		// ASSERT: Neither a script tag nor the data global is printed.
+		$this->assertStringNotContainsString( '<script', $output );
+		$this->assertStringNotContainsString( 'safePublishSettingsData', $output );
+	}
 }
