@@ -16,6 +16,7 @@ use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
+use Safe_Publish\Utils\Reconcile_Logger;
 use Safe_Publish\Utils\Reconcile_Outcome;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
@@ -134,6 +135,15 @@ class Post_Import_Service {
 	 * @var string
 	 */
 	public const META_PARENT_RELINKED_AT = '_safe_publish_parent_relinked_at';
+
+	/**
+	 * Reconcile-log issue type for attachments parented to their source
+	 * parent's destination post. Audit-only; not a user-facing attention issue,
+	 * since an unattached attachment still renders by URL.
+	 *
+	 * @var string
+	 */
+	private const RECONCILE_ATTACHMENT_PARENT = 'attachment_parent_orphaned';
 
 	/**
 	 * Constructs the Post_Import_Service instance.
@@ -1908,6 +1918,170 @@ class Post_Import_Service {
 	}
 
 	/**
+	 * Parents this import's attachments to their source parent's destination
+	 * post. Cross-import orphan adoptions are audited via Reconcile_Logger;
+	 * never raises an attention issue, since an unattached attachment still
+	 * renders by URL.
+	 *
+	 * @param int    $dest_post_id    Destination post just persisted.
+	 * @param int    $source_post_id  Its source post ID.
+	 * @param string $source_site_url Path-bearing source identity for lookups.
+	 */
+	private function reconcile_import_attachment_parents(
+		int $dest_post_id,
+		int $source_post_id,
+		string $source_site_url
+	): void {
+		$this->adopt_orphaned_attachments( $dest_post_id, $source_post_id );
+		$this->resolve_new_attachment_parents(
+			$dest_post_id,
+			$source_post_id,
+			$source_site_url
+		);
+	}
+
+	/**
+	 * Adopts attachments left unattached by earlier imports whose recorded source
+	 * parent is this post, now that the parent has arrived. This run's own media
+	 * is parented by the forward pass and skipped here, keeping the reconcile
+	 * audit to genuine cross-import adoptions. Scoped to the connected source so
+	 * same-numbered posts from other sources never collide. Logs one reconcile
+	 * outcome when it adopts any.
+	 *
+	 * @param int $dest_post_id   Destination post to attach to.
+	 * @param int $source_post_id Its source post ID.
+	 */
+	private function adopt_orphaned_attachments(
+		int $dest_post_id,
+		int $source_post_id
+	): void {
+		if ( 0 === $source_post_id ) {
+			return;
+		}
+
+		$orphan_ids = get_posts(
+			array(
+				'post_type'        => 'attachment',
+				'post_status'      => 'any',
+				'post_parent'      => 0,
+				'posts_per_page'   => -1,
+				'fields'           => 'ids',
+				'suppress_filters' => false,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query'       => array(
+					'relation' => 'AND',
+					array(
+						'key'   => Options::META_SOURCE_ATTACHMENT_PARENT_ID,
+						'value' => $source_post_id,
+					),
+					// Attachments store the raw (un-normalized) connected URL as
+					// their origin, not the normalized post identity.
+					array(
+						'key'   => Options::META_IMPORTED_FROM,
+						'value' => $this->get_connected_source_url(),
+					),
+				),
+			)
+		);
+
+		$own_ids      = $this->media_importer->get_newly_created_attachment_ids();
+		$adopted      = false;
+		$write_failed = false;
+
+		foreach ( $orphan_ids as $orphan_id ) {
+			$orphan_id = (int) $orphan_id;
+
+			if ( in_array( $orphan_id, $own_ids, true ) ) {
+				continue;
+			}
+
+			if ( $this->persist_post_parent( $orphan_id, $dest_post_id ) ) {
+				clean_post_cache( $orphan_id );
+				$adopted = true;
+			} else {
+				$write_failed = true;
+			}
+		}
+
+		if ( ! $adopted && ! $write_failed ) {
+			return;
+		}
+
+		( new Reconcile_Logger() )->record(
+			$write_failed
+				? Reconcile_Outcome::write_failed(
+					'Failed to parent an orphaned attachment.'
+				)
+				: Reconcile_Outcome::resolved(),
+			self::RECONCILE_ATTACHMENT_PARENT,
+			$dest_post_id,
+			$source_post_id,
+			'post'
+		);
+	}
+
+	/**
+	 * Parents this run's freshly sideloaded attachments to their source parent's
+	 * destination post, whether that is the post being imported or another
+	 * already imported. Routine same-run parenting, so it is silent; the sweep
+	 * audits cross-import adoptions.
+	 *
+	 * @param int    $dest_post_id    The post being imported, the parent for its
+	 *                                own attached media without a lookup.
+	 * @param int    $source_post_id  Its source post ID.
+	 * @param string $source_site_url Path-bearing source identity for lookups.
+	 */
+	private function resolve_new_attachment_parents(
+		int $dest_post_id,
+		int $source_post_id,
+		string $source_site_url
+	): void {
+		$attachment_ids = $this->media_importer->get_newly_created_attachment_ids();
+
+		foreach ( $attachment_ids as $attachment_id ) {
+			$source_parent_id = (int) get_post_meta(
+				$attachment_id,
+				Options::META_SOURCE_ATTACHMENT_PARENT_ID,
+				true
+			);
+
+			if ( 0 === $source_parent_id ) {
+				continue;
+			}
+
+			$attachment = get_post( $attachment_id );
+
+			if (
+				! ( $attachment instanceof WP_Post )
+				|| 0 !== (int) $attachment->post_parent
+			) {
+				continue;
+			}
+
+			// Media attached to the post being imported is the common case;
+			// resolve it without a lookup. Otherwise map the source parent.
+			if ( $source_parent_id === $source_post_id ) {
+				$dest_parent_id = $dest_post_id;
+			} else {
+				$dest_parent = $this->find_imported_post(
+					$source_parent_id,
+					$source_site_url
+				);
+
+				if ( ! ( $dest_parent instanceof WP_Post ) ) {
+					continue;
+				}
+
+				$dest_parent_id = (int) $dest_parent->ID;
+			}
+
+			if ( $this->persist_post_parent( $attachment_id, $dest_parent_id ) ) {
+				clean_post_cache( $attachment_id );
+			}
+		}
+	}
+
+	/**
 	 * Finds the imported navigation menu for a source ID and identity.
 	 *
 	 * Queries wp_navigation explicitly because it is excluded from the
@@ -2235,6 +2409,12 @@ class Post_Import_Service {
 			);
 		}
 
+		$this->reconcile_import_attachment_parents(
+			$post_id,
+			(int) get_post_meta( $post_id, Options::META_SOURCE_POST_ID, true ),
+			Options::get_connected_site_url_with_path()
+		);
+
 		return $post_id;
 	}
 
@@ -2484,6 +2664,12 @@ class Post_Import_Service {
 				array( 'action' => 'terms_update_failed' )
 			);
 		}
+
+		$this->reconcile_import_attachment_parents(
+			$post_id,
+			$source_post_id,
+			$source_site_url
+		);
 
 		return $post_id;
 	}
