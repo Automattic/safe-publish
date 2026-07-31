@@ -380,6 +380,12 @@ html:has(body.toplevel_page_safe-publish) {
 	}
 }
 
+// Needs attention inbox: the Open | Ignored view toggle.
+.safe-publish-inbox-view-toggle {
+	margin-bottom: 16px;
+	max-width: 240px;
+}
+
 .safe-publish-manage-tabs {
 
 	.components-tab-panel__tab-content {

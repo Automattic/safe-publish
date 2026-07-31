@@ -387,7 +387,8 @@ describe( 'createNeedsAttentionActions', () => {
 		// ARRANGE: The Remove action.
 		const remove = createNeedsAttentionActions(
 			undefined,
-			RETRY_CONTEXT
+			RETRY_CONTEXT,
+			'open'
 		).find( ( a ) => a.id === 'remove-failure' );
 
 		// ACT + ASSERT: A failure row is eligible; a degradation is not.
@@ -398,8 +399,11 @@ describe( 'createNeedsAttentionActions', () => {
 	it( 'Verifies that Remove maps orphan and source-linked failures to their scopes', () => {
 		// ARRANGE: The Remove modal action and one orphan + one source-linked
 		// failure.
-		const remove = createNeedsAttentionActions( undefined, RETRY_CONTEXT )
-			.find( ( a ) => a.id === 'remove-failure' ) as ActionModal<
+		const remove = createNeedsAttentionActions(
+			undefined,
+			RETRY_CONTEXT,
+			'open'
+		).find( ( a ) => a.id === 'remove-failure' ) as ActionModal<
 			NeedsAttentionRow
 		>;
 
@@ -425,7 +429,8 @@ describe( 'createNeedsAttentionActions', () => {
 		// ARRANGE: The Retry action.
 		const retry = createNeedsAttentionActions(
 			undefined,
-			RETRY_CONTEXT
+			RETRY_CONTEXT,
+			'open'
 		).find( ( a ) => a.id === 'retry-degradation' );
 
 		// ACT + ASSERT: A retryable degradation is eligible; a guidance-only
@@ -449,7 +454,7 @@ describe( 'createNeedsAttentionActions', () => {
 		onRefresh: ( () => void ) | undefined,
 		context: NeedsAttentionActionsContext = RETRY_CONTEXT
 	): Action< NeedsAttentionRow > {
-		return createNeedsAttentionActions( onRefresh, context ).find(
+		return createNeedsAttentionActions( onRefresh, context, 'open' ).find(
 			( a ) => a.id === 'retry-degradation'
 		) as Action< NeedsAttentionRow >;
 	}
@@ -685,5 +690,117 @@ describe( 'createNeedsAttentionActions', () => {
 		expect( onNotice ).not.toHaveBeenCalledWith(
 			expect.objectContaining( { status: 'info' } )
 		);
+	} );
+
+	/**
+	 * Returns an inbox action by id from the given view's action set.
+	 */
+	function inboxAction(
+		id: string,
+		view: 'open' | 'ignored',
+		onRefresh: ( () => void ) | undefined = undefined,
+		context: NeedsAttentionActionsContext = RETRY_CONTEXT
+	): Action< NeedsAttentionRow > | undefined {
+		return createNeedsAttentionActions( onRefresh, context, view ).find(
+			( a ) => a.id === id
+		);
+	}
+
+	it( 'Verifies that Ignore is Open-only and eligible for both kinds', () => {
+		// ARRANGE: The Ignore action from each view.
+		const openIgnore = inboxAction( 'ignore-needs-attention', 'open' );
+		const ignoredIgnore = inboxAction(
+			'ignore-needs-attention',
+			'ignored'
+		);
+
+		// ACT + ASSERT: Present in Open for both kinds; absent in Ignored.
+		expect( openIgnore?.isEligible?.( buildFailure() ) ).toBe( true );
+		expect( openIgnore?.isEligible?.( buildDegradation() ) ).toBe( true );
+		expect( ignoredIgnore ).toBeUndefined();
+	} );
+
+	it( 'Verifies that the Ignored view offers Un-ignore and Remove but hides Retry', () => {
+		// ARRANGE: The Ignored view's action ids.
+		const ids = createNeedsAttentionActions(
+			undefined,
+			RETRY_CONTEXT,
+			'ignored'
+		).map( ( a ) => a.id );
+
+		// ASSERT: Un-ignore and Remove remain; Ignore and Retry are gone.
+		expect( ids ).toContain( 'unignore-needs-attention' );
+		expect( ids ).toContain( 'remove-failure' );
+		expect( ids ).not.toContain( 'retry-degradation' );
+		expect( ids ).not.toContain( 'ignore-needs-attention' );
+	} );
+
+	it( 'posts ignore descriptors for a mixed selection and refreshes', async () => {
+		// ARRANGE: A succeeding endpoint and a refresh spy.
+		const fetchMock = vi.fn().mockResolvedValue( {
+			json: () =>
+				Promise.resolve( { success: true, data: { updated: 3 } } ),
+		} );
+		vi.stubGlobal( 'fetch', fetchMock );
+		const onRefresh = vi.fn();
+
+		// ACT: Ignore an orphan failure, a source-linked failure, and a
+		// degradation together.
+		runCallback(
+			inboxAction(
+				'ignore-needs-attention',
+				'open',
+				onRefresh
+			) as Action< NeedsAttentionRow >,
+			[
+				buildFailure( { item_id: 7, source_post_id: null } ),
+				buildFailure( { item_id: 8, source_post_id: 20 } ),
+				buildDegradation(),
+			]
+		);
+
+		// ASSERT: It posts each descriptor with ignored=1 and refreshes.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		const body = fetchMock.mock.calls[ 0 ][ 1 ].body as FormData;
+		expect( body.get( 'action' ) ).toBe(
+			'safe_publish_set_needs_attention_ignored'
+		);
+		expect( body.get( 'ignored' ) ).toBe( '1' );
+		expect( JSON.parse( body.get( 'items' ) as string ) ).toEqual( [
+			{ kind: 'failure', item_id: 7, source_post_id: null },
+			{ kind: 'failure', item_id: 8, source_post_id: 20 },
+			{
+				kind: 'degradation',
+				affected_post_id: 1024,
+				issue_type: 'nav_ref_rewrite_failed',
+				target_ref: 8300,
+				target_kind: 'post',
+			},
+		] );
+	} );
+
+	it( 'posts un-ignore with ignored=0 from the Ignored view', async () => {
+		// ARRANGE: A succeeding endpoint and a refresh spy.
+		const fetchMock = vi.fn().mockResolvedValue( {
+			json: () =>
+				Promise.resolve( { success: true, data: { updated: 1 } } ),
+		} );
+		vi.stubGlobal( 'fetch', fetchMock );
+		const onRefresh = vi.fn();
+
+		// ACT: Un-ignore one degradation.
+		runCallback(
+			inboxAction(
+				'unignore-needs-attention',
+				'ignored',
+				onRefresh
+			) as Action< NeedsAttentionRow >,
+			[ buildDegradation() ]
+		);
+
+		// ASSERT: It posts with ignored=0 and refreshes.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		const body = fetchMock.mock.calls[ 0 ][ 1 ].body as FormData;
+		expect( body.get( 'ignored' ) ).toBe( '0' );
 	} );
 } );

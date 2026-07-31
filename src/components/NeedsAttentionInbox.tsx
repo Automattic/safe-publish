@@ -16,7 +16,13 @@ import {
 	getErrorMessage,
 	renderIssueMessage,
 } from '../utils';
-import { Button, Notice, Spinner } from '@wordpress/components';
+import {
+	Button,
+	Notice,
+	Spinner,
+	__experimentalToggleGroupControl as ToggleGroupControl,
+	__experimentalToggleGroupControlOption as ToggleGroupControlOption,
+} from '@wordpress/components';
 import { DataViews, View } from '@wordpress/dataviews';
 import { useCallback, useEffect, useRef, useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
@@ -26,6 +32,7 @@ import type {
 	DataViewsField,
 	NeedsAttentionResponse,
 	NeedsAttentionRow,
+	NeedsAttentionView,
 } from '../types';
 
 /**
@@ -79,13 +86,17 @@ const NeedsAttentionInbox = ( {
 		layout: { density: 'compact' },
 	} );
 
+	// Open (default) excludes ignored rows; Ignored shows only them. Drives a
+	// query param, mirroring how StateSelect drives the Posts query.
+	const [ viewMode, setViewMode ] = useState< NeedsAttentionView >( 'open' );
+
 	const [ items, setItems ] = useState< NeedsAttentionRow[] >( [] );
 	const [ hasMore, setHasMore ] = useState( false );
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ hasFetchedOnce, setHasFetchedOnce ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
-	// Retry outcomes get their own banner, separate from the list-load error.
-	const [ retryNotice, setRetryNotice ] = useState< ActionNotice | null >(
+	// Retry/ignore outcomes get their own banner, separate from list-load error.
+	const [ actionNotice, setActionNotice ] = useState< ActionNotice | null >(
 		null
 	);
 	// Degradations with a retry in flight, so the action drops concurrent
@@ -109,6 +120,7 @@ const NeedsAttentionInbox = ( {
 			'per_page',
 			String( view.perPage ?? DEFAULT_ITEMS_PER_PAGE )
 		);
+		formData.append( 'view', viewMode );
 
 		setIsLoading( true );
 		setError( null );
@@ -171,7 +183,15 @@ const NeedsAttentionInbox = ( {
 			} );
 
 		return () => controller.abort();
-	}, [ ajaxurl, nonce, view.page, view.perPage, refreshNonce, onCountChange ] );
+	}, [
+		ajaxurl,
+		nonce,
+		view.page,
+		view.perPage,
+		viewMode,
+		refreshNonce,
+		onCountChange,
+	] );
 
 	const setPage = useCallback(
 		( next: number ): void =>
@@ -274,12 +294,16 @@ const NeedsAttentionInbox = ( {
 		currentPage
 	);
 
-	const actions = createNeedsAttentionActions( refresh, {
-		ajaxurl,
-		nonce,
-		onNotice: setRetryNotice,
-		inFlight: inFlightRetries.current,
-	} );
+	const actions = createNeedsAttentionActions(
+		refresh,
+		{
+			ajaxurl,
+			nonce,
+			onNotice: setActionNotice,
+			inFlight: inFlightRetries.current,
+		},
+		viewMode
+	);
 
 	return (
 		<div
@@ -290,17 +314,45 @@ const NeedsAttentionInbox = ( {
 				} as React.CSSProperties
 			}
 		>
+			<div className="safe-publish-inbox-view-toggle">
+				<ToggleGroupControl
+					__nextHasNoMarginBottom
+					isBlock
+					hideLabelFromVision
+					label={ __( 'View', 'safe-publish' ) }
+					value={ viewMode }
+					onChange={ ( value ) => {
+						setViewMode(
+							'ignored' === value ? 'ignored' : 'open'
+						);
+						setView( ( current ) => ( {
+							...current,
+							page: 1,
+						} ) );
+						setActionNotice( null );
+					} }
+				>
+					<ToggleGroupControlOption
+						value="open"
+						label={ __( 'Open', 'safe-publish' ) }
+					/>
+					<ToggleGroupControlOption
+						value="ignored"
+						label={ __( 'Ignored', 'safe-publish' ) }
+					/>
+				</ToggleGroupControl>
+			</div>
 			{ error && (
 				<Notice status="error" onRemove={ () => setError( null ) }>
 					{ error }
 				</Notice>
 			) }
-			{ retryNotice && (
+			{ actionNotice && (
 				<Notice
-					status={ retryNotice.status }
-					onRemove={ () => setRetryNotice( null ) }
+					status={ actionNotice.status }
+					onRemove={ () => setActionNotice( null ) }
 				>
-					{ retryNotice.message }
+					{ actionNotice.message }
 				</Notice>
 			) }
 			{ isLoading && ! hasFetchedOnce && (
@@ -315,7 +367,14 @@ const NeedsAttentionInbox = ( {
 			) }
 			{ hasFetchedOnce && ! error && 0 === items.length && ! isLoading && (
 				<div className="safe-publish-no-data" role="status">
-					<p>{ __( 'Nothing needs attention.', 'safe-publish' ) }</p>
+					<p>
+						{ 'ignored' === viewMode
+							? __( 'No ignored items.', 'safe-publish' )
+							: __(
+									'Nothing needs attention.',
+									'safe-publish'
+							  ) }
+					</p>
 				</div>
 			) }
 			{ hasFetchedOnce && items.length > 0 && (

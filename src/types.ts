@@ -202,6 +202,18 @@ export interface NeedsAttentionResponse {
 }
 
 /**
+ * Inbox view: Open (active) excludes ignored rows; Ignored shows only them.
+ */
+export type NeedsAttentionView = 'open' | 'ignored';
+
+/**
+ * Envelope returned by safe_publish_set_needs_attention_ignored.
+ */
+export interface SetIgnoredResponse {
+	updated: number;
+}
+
+/**
  * Envelope returned by safe_publish_retry_attention_issue.
  *
  * Map the UI off the bounded `outcome`; `detail` is an internal, untranslated
