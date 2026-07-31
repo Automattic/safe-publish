@@ -19,14 +19,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Registers the safe_publish_media REST field so the destination can bring
- * each inline image's source library metadata (alt, title, caption,
- * description) and its source parent post when it sideloads the image.
+ * Registers two sibling REST fields the destination reads when it sideloads a
+ * post's media, both gated to HMAC-authenticated single-item requests. Each
+ * resolves what core REST cannot expose on its own:
  *
- * Inline images are referenced by bare URL, which core REST cannot resolve to
- * an attachment; the source does it here by scanning the post content and
- * mapping each of its media URLs to the raw attachment values. Populated only
- * for HMAC-authenticated single-item requests, the same gate as the author field.
+ * - safe_publish_media: source library metadata (alt, title, caption,
+ *   description) and source parent for each inline image, keyed by media URL,
+ *   which core cannot resolve to an attachment.
+ * - safe_publish_attached_media: the ordered { id, menu_order } set a bare
+ *   [gallery]/[playlist] renders, referenced by neither URL nor id and whose
+ *   menu_order the media REST omits.
  */
 class Source_Media_REST_Field {
 
@@ -36,6 +38,13 @@ class Source_Media_REST_Field {
 	 * @var string
 	 */
 	const FIELD_NAME = 'safe_publish_media';
+
+	/**
+	 * REST field name carrying the bare gallery/playlist attached-media set.
+	 *
+	 * @var string
+	 */
+	const ATTACHED_FIELD_NAME = 'safe_publish_attached_media';
 
 	/**
 	 * HMAC authenticator used to gate access to the field value.
@@ -83,6 +92,15 @@ class Source_Media_REST_Field {
 				'schema'       => null,
 			)
 		);
+
+		register_rest_field(
+			array_values( $post_types ),
+			self::ATTACHED_FIELD_NAME,
+			array(
+				'get_callback' => array( $this, 'get_attached_callback' ),
+				'schema'       => null,
+			)
+		);
 	}
 
 	/**
@@ -118,6 +136,195 @@ class Source_Media_REST_Field {
 		}
 
 		return $this->resolve_media_metadata( (string) $post->post_content );
+	}
+
+	/**
+	 * Returns the ordered { id, menu_order } attached-media set a bare
+	 * [gallery]/[playlist] renders, for HMAC-authenticated single-item requests,
+	 * and null otherwise so the field carries no data for other consumers.
+	 *
+	 * @param array           $post_array Post data as built by WP_REST_Posts_Controller.
+	 * @param string          $_attribute Field name (unused).
+	 * @param WP_REST_Request $request    Current REST request.
+	 * @return list<array{id: int, menu_order: int}>|null Attached-media set, or
+	 *         null when not HMAC-authenticated or not a single-item request.
+	 */
+	public function get_attached_callback(
+		array $post_array,
+		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		string $_attribute,
+		WP_REST_Request $request
+	): ?array {
+		if ( ! $this->authenticator->is_authenticated() ) {
+			return null;
+		}
+
+		if ( ! $this->is_single_item_request( $request ) ) {
+			return null;
+		}
+
+		$post_id = isset( $post_array['id'] ) ? (int) $post_array['id'] : 0;
+		$post    = $post_id > 0 ? get_post( $post_id ) : null;
+
+		if ( ! $post instanceof WP_Post ) {
+			return array();
+		}
+
+		return $this->resolve_attached_media( $post );
+	}
+
+	/**
+	 * Collects the attached children the post's bare gallery/playlist shortcodes
+	 * render, as an ordered { id, menu_order } list. Empty when no bare shortcode
+	 * is present, so the whole attached library is never returned.
+	 *
+	 * @param WP_Post $post Post being requested.
+	 * @return list<array{id: int, menu_order: int}> Ordered attached-media set.
+	 */
+	private function resolve_attached_media( WP_Post $post ): array {
+		$items = array();
+
+		foreach ( $this->bare_shortcode_mime_types( $post ) as $mime_type ) {
+			foreach ( $this->attached_children( $post->ID, $mime_type ) as $child ) {
+				$items[] = array(
+					'id'         => (int) $child->ID,
+					'menu_order' => (int) $child->menu_order,
+				);
+			}
+		}
+
+		return $items;
+	}
+
+	/**
+	 * Returns the attachment MIME types the post's bare gallery/playlist
+	 * shortcodes render: image for a bare gallery, audio or video (per its type)
+	 * for a bare playlist. Non-bare shortcodes are skipped.
+	 *
+	 * @param WP_Post $post Post whose content is scanned.
+	 * @return list<string> MIME type prefixes to collect, empty when none is bare.
+	 */
+	private function bare_shortcode_mime_types( WP_Post $post ): array {
+		$content = (string) $post->post_content;
+
+		if (
+			false === stripos( $content, '[gallery' )
+			&& false === stripos( $content, '[playlist' )
+		) {
+			return array();
+		}
+
+		$pattern = '/' . get_shortcode_regex( array( 'gallery', 'playlist' ) ) . '/s';
+
+		if ( 1 !== preg_match_all( $pattern, $content, $matches, PREG_SET_ORDER ) ) {
+			return array();
+		}
+
+		$mime_types = array();
+
+		foreach ( $matches as $match ) {
+			// Escaped [[gallery]] literal, not a live shortcode.
+			if ( '[' === $match[1] && ']' === $match[6] ) {
+				continue;
+			}
+
+			$atts = shortcode_parse_atts( $match[3] );
+			$atts = is_array( $atts ) ? $atts : array();
+
+			if ( ! $this->is_bare_own_shortcode( $atts, (int) $post->ID ) ) {
+				continue;
+			}
+
+			$mime_type = 'playlist' === $match[2]
+				? $this->playlist_mime_type( $atts )
+				: 'image';
+
+			if ( ! in_array( $mime_type, $mime_types, true ) ) {
+				$mime_types[] = $mime_type;
+			}
+		}
+
+		return $mime_types;
+	}
+
+	/**
+	 * Reports whether a gallery/playlist shortcode renders the post's own
+	 * attached media: no non-empty ids/include/exclude selector, and no id
+	 * naming a different post.
+	 *
+	 * @param array<string, string> $atts    Parsed shortcode attributes.
+	 * @param int                   $post_id Post the shortcode belongs to.
+	 * @return bool True when the shortcode is bare and self-referential.
+	 */
+	private function is_bare_own_shortcode( array $atts, int $post_id ): bool {
+		if (
+			$this->has_selector_att( $atts, 'ids' )
+			|| $this->has_selector_att( $atts, 'include' )
+			|| $this->has_selector_att( $atts, 'exclude' )
+		) {
+			return false;
+		}
+
+		return ! isset( $atts['id'] ) || (int) $atts['id'] === $post_id;
+	}
+
+	/**
+	 * Reports whether a shortcode selector attribute holds a non-empty value,
+	 * mirroring core's ! empty() gate on ids/include/exclude: an absent or empty
+	 * selector (including "0") leaves the shortcode bare.
+	 *
+	 * @param array<string, string> $atts Parsed shortcode attributes.
+	 * @param string                $key  Selector attribute name.
+	 * @return bool True when the attribute selects an explicit set.
+	 */
+	private function has_selector_att( array $atts, string $key ): bool {
+		return isset( $atts[ $key ] )
+			&& '' !== $atts[ $key ]
+			&& '0' !== $atts[ $key ];
+	}
+
+	/**
+	 * Returns the MIME type a playlist renders, mirroring wp_playlist_shortcode:
+	 * audio only when the type attribute is exactly audio (its default), video
+	 * for every other value.
+	 *
+	 * @param array<string, string> $atts Parsed shortcode attributes.
+	 * @return string 'audio' or 'video'.
+	 */
+	private function playlist_mime_type( array $atts ): string {
+		$type = isset( $atts['type'] ) ? (string) $atts['type'] : 'audio';
+
+		return 'audio' === $type ? 'audio' : 'video';
+	}
+
+	/**
+	 * Returns the post's attached children of a MIME type in the order a bare
+	 * gallery/playlist renders them (menu_order then ID), matching core's
+	 * get_children query.
+	 *
+	 * @param int    $post_id   Parent post ID.
+	 * @param string $mime_type Attachment MIME type prefix.
+	 * @return list<WP_Post> Attached children in render order.
+	 */
+	private function attached_children( int $post_id, string $mime_type ): array {
+		$children = get_children(
+			array(
+				'post_parent'    => $post_id,
+				'post_status'    => 'inherit',
+				'post_type'      => 'attachment',
+				'post_mime_type' => $mime_type,
+				'orderby'        => 'menu_order ID',
+				'order'          => 'ASC',
+				'numberposts'    => -1,
+			)
+		);
+
+		return array_values(
+			array_filter(
+				$children,
+				static fn ( $child ): bool => $child instanceof WP_Post
+			)
+		);
 	}
 
 	/**
