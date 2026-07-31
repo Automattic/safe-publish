@@ -133,15 +133,15 @@ class Error_Handling_Test extends Source_Posts_API_Test_Base {
 		// ARRANGE: Prepare edge case inputs.
 		$source_site_url = 'https://example.com';
 
-		// ACT & ASSERT: Test empty string.
+		// ACT + ASSERT: Test empty string.
 		$processed = $this->content_media_processor->process_content( '', $source_site_url );
 		$this->assertSame( '', $processed, 'Empty string should return empty string' );
 
-		// ACT & ASSERT: Test whitespace-only content.
+		// ACT + ASSERT: Test whitespace-only content.
 		$processed = $this->content_media_processor->process_content( '   ', $source_site_url );
 		$this->assertNotNull( $processed, 'Whitespace content should not return null' );
 
-		// ACT & ASSERT: Test newlines only.
+		// ACT + ASSERT: Test newlines only.
 		$processed = $this->content_media_processor->process_content( "\n\n", $source_site_url );
 		$this->assertNotNull( $processed, 'Newline content should not return null' );
 	}
