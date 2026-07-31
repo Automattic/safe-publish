@@ -1,6 +1,5 @@
 /**
- * Shared filter toolbar primitives used by the Manage listing and the
- * orphan-failures drawer.
+ * Shared filter toolbar primitives used by the Manage listing.
  *
  * @file This file defines shared filter toolbar primitives.
  */

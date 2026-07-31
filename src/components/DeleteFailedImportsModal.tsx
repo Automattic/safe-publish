@@ -1,9 +1,10 @@
 /**
  * Delete Failed Imports Modal component.
  *
- * Confirms removal of one or more failure rows from the items table. Used by
- * both the orphan-failures drawer and the Failed-chip Dismiss action; no
- * WordPress post is affected by either path.
+ * Confirms removal of one or more failure rows from the items table; no
+ * WordPress post is affected. Orphan failures are cleared by item id;
+ * source-linked failures clear every attempt for the source, so the inbox's
+ * deduped row doesn't re-surface a sibling on refresh.
  *
  * @file This file defines the DeleteFailedImportsModal component.
  */
@@ -21,20 +22,14 @@ import { useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
 /**
- * Minimal row shape needed by the modal. `id` carries either an items-table
- * row id or a source_post_id depending on the caller's `scope`.
+ * A failure row to remove. Orphans carry only an itemId; source-linked
+ * failures carry a sourcePostId so every attempt for the source is cleared.
  */
 export interface DeleteFailedImportsItem {
-	id: number;
+	itemId: number;
+	sourcePostId: number | null;
 	title: string;
 }
-
-/**
- * Delete scope. `items` targets specific items-table rows (drawer / orphan
- * failures). `sources` clears every failure attempt for the source_post_id,
- * so the listing's deduped row doesn't re-surface a sibling on refresh.
- */
-export type DeleteFailedImportsScope = 'items' | 'sources';
 
 /**
  * Props for the DeleteFailedImportsModal component.
@@ -43,7 +38,6 @@ interface DeleteFailedImportsModalProps {
 	items: DeleteFailedImportsItem[];
 	ajaxurl: string;
 	nonce: string;
-	scope?: DeleteFailedImportsScope;
 	closeModal?: () => void;
 	onRefresh?: () => void;
 }
@@ -57,7 +51,6 @@ const DeleteFailedImportsModal = ( {
 	items,
 	ajaxurl,
 	nonce,
-	scope = 'items',
 	closeModal,
 	onRefresh,
 }: DeleteFailedImportsModalProps ): JSX.Element => {
@@ -65,9 +58,6 @@ const DeleteFailedImportsModal = ( {
 	const [ error, setError ] = useState< string | null >( null );
 
 	const isBulk = items.length > 1;
-	// Dismiss (Failed chip) and Remove (orphan drawer) share this modal; the
-	// verb tracks the scope so each entry reads in its own voice.
-	const isDismiss = 'sources' === scope;
 
 	const handleDelete = (): void => {
 		setIsLoading( true );
@@ -76,11 +66,16 @@ const DeleteFailedImportsModal = ( {
 		const formData = new FormData();
 		formData.append( 'action', 'safe_publish_delete_failed_items' );
 		formData.append( 'nonce', nonce );
-		const idField =
-			'sources' === scope ? 'source_post_ids[]' : 'item_ids[]';
-		items.forEach( ( item ) =>
-			formData.append( idField, String( item.id ) )
-		);
+		items.forEach( ( item ) => {
+			if ( null !== item.sourcePostId ) {
+				formData.append(
+					'source_post_ids[]',
+					String( item.sourcePostId )
+				);
+			} else {
+				formData.append( 'item_ids[]', String( item.itemId ) );
+			}
+		} );
 
 		fetch( ajaxurl, {
 			method: 'POST',
@@ -93,9 +88,7 @@ const DeleteFailedImportsModal = ( {
 					setError(
 						getErrorMessage(
 							result,
-							isDismiss
-								? __( 'Failed to dismiss.', 'safe-publish' )
-								: __( 'Failed to remove.', 'safe-publish' )
+							__( 'Failed to remove.', 'safe-publish' )
 						)
 					);
 					setIsLoading( false );
@@ -116,45 +109,26 @@ const DeleteFailedImportsModal = ( {
 			} );
 	};
 
-	let confirmationText: string;
-	if ( isBulk ) {
-		confirmationText = isDismiss
-			? sprintf(
-					/* translators: %d: number of failed imports selected. */
-					__( 'Dismiss %d failed imports?', 'safe-publish' ),
-					items.length
-			  )
-			: sprintf(
-					/* translators: %d: number of failed imports selected. */
-					__( 'Remove %d failed imports?', 'safe-publish' ),
-					items.length
-			  );
-	} else {
-		confirmationText = isDismiss
-			? sprintf(
-					/* translators: %s: failed-import title. */
-					__( 'Dismiss "%s"?', 'safe-publish' ),
-					items[ 0 ].title
-			  )
-			: sprintf(
-					/* translators: %s: failed-import title. */
-					__( 'Remove "%s"?', 'safe-publish' ),
-					items[ 0 ].title
-			  );
-	}
-
-	const processingLabel = isDismiss
-		? __( 'Dismissing…', 'safe-publish' )
-		: __( 'Removing…', 'safe-publish' );
-	const actionLabel = isDismiss
-		? __( 'Dismiss', 'safe-publish' )
-		: __( 'Remove', 'safe-publish' );
+	const confirmationText = isBulk
+		? sprintf(
+				/* translators: %d: number of failed imports selected. */
+				__( 'Remove %d failed imports?', 'safe-publish' ),
+				items.length
+		  )
+		: sprintf(
+				/* translators: %s: failed-import title. */
+				__( 'Remove "%s"?', 'safe-publish' ),
+				items[ 0 ].title
+		  );
 
 	return (
 		<VStack spacing="5">
 			<Text>{ confirmationText }</Text>
 			{ error && (
-				<Text role="alert" style={ { color: 'var(--safe-publish-status-error)' } }>
+				<Text
+					role="alert"
+					style={ { color: 'var(--safe-publish-status-error)' } }
+				>
 					{ error }
 				</Text>
 			) }
@@ -177,10 +151,10 @@ const DeleteFailedImportsModal = ( {
 					{ isLoading ? (
 						<>
 							<Spinner />
-							{ processingLabel }
+							{ __( 'Removing…', 'safe-publish' ) }
 						</>
 					) : (
-						actionLabel
+						__( 'Remove', 'safe-publish' )
 					) }
 				</Button>
 			</HStack>

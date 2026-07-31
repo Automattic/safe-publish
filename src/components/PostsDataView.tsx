@@ -1,14 +1,12 @@
 /**
- * Unified Posts listing. The chip row picks the data source: All/Available
- * are catalog-primary; Imported/Outdated/Failed are local-primary.
+ * Unified Posts listing. The chip row picks the data source: All/Available are
+ * catalog-primary; Up to date/Outdated are local-primary.
  *
  * @file This file defines the PostsDataView component.
  */
-import { cancelCircleFilled, caution, help, update } from '@wordpress/icons';
+import { help, update } from '@wordpress/icons';
 
-import AttentionDrawer from './AttentionDrawer';
 import AuthStatusNotice from './AuthStatusNotice';
-import OrphanFailuresDrawer from './OrphanFailuresDrawer';
 import {
 	calendarRangeToUtcBounds,
 	DateRangeFilter,
@@ -98,13 +96,7 @@ const readPositiveIntParam = ( name: string ): number => {
  */
 const readInitialState = (): ChipState => {
 	const raw = new URLSearchParams( window.location.search ).get( 'state' );
-	const allowed: ChipState[] = [
-		'all',
-		'available',
-		'up-to-date',
-		'outdated',
-		'failed',
-	];
+	const allowed: ChipState[] = [ 'all', 'available', 'up-to-date', 'outdated' ];
 	return allowed.includes( raw as ChipState ) ? ( raw as ChipState ) : 'all';
 };
 
@@ -141,14 +133,10 @@ const computeOrderby = (
 /**
  * Computes which DataViews columns to show for a chip state.
  *
- * @param {boolean}   isCatalogPrimary Whether the chip is catalog-primary.
- * @param {ChipState} state            Active chip.
+ * @param {boolean} isCatalogPrimary Whether the chip is catalog-primary.
  * @return {string[]} Visible field ids.
  */
-const computeVisibleFields = (
-	isCatalogPrimary: boolean,
-	state: ChipState
-): string[] => {
+const computeVisibleFields = ( isCatalogPrimary: boolean ): string[] => {
 	if ( isCatalogPrimary ) {
 		return [
 			'date_gmt',
@@ -157,14 +145,7 @@ const computeVisibleFields = (
 			'source_status',
 		];
 	}
-	if ( 'failed' === state ) {
-		return [ 'import_date_gmt', 'local_state' ];
-	}
-	return [
-		'import_date_gmt',
-		'local_state',
-		'wp_post_status',
-	];
+	return [ 'import_date_gmt', 'local_state', 'wp_post_status' ];
 };
 
 /**
@@ -203,7 +184,6 @@ function StateSelect( {
 						value: 'outdated',
 						label: __( 'Outdated', 'safe-publish' ),
 					},
-					{ value: 'failed', label: __( 'Failed', 'safe-publish' ) },
 				] }
 				onChange={ ( next ) => onChange( next as ChipState ) }
 			/>
@@ -299,11 +279,12 @@ const getRowId = ( item: UnifiedPostRow ): string =>
  * @param {PostsDataViewProps} props Component props.
  * @return {JSX.Element} Rendered Posts listing.
  */
-// State-routed listing centralizes chip, filter, fetch, sync-status, drawer,
-// and focus-source flows in one component.
+// State-routed listing centralizes chip, filter, fetch, sync-status, and
+// focus-source flows in one component.
 // eslint-disable-next-line complexity
 export function PostsDataView( {
 	sourceSiteUrl,
+	onNeedsAttentionCountChange,
 }: PostsDataViewProps ): JSX.Element {
 	const [ state, setStateValue ] = useState< ChipState >( readInitialState );
 	const [ view, setView ] = useState< View >( {
@@ -324,14 +305,6 @@ export function PostsDataView( {
 	const [ rows, setRows ] = useState< UnifiedPostRow[] >( [] );
 	const [ selection, setSelection ] = useState< string[] >( [] );
 	const [ hasMore, setHasMore ] = useState( false );
-	const [ orphanCount, setOrphanCount ] = useState(
-		window.safePublishAdminData.orphanCount ?? 0
-	);
-	const [ attentionCount, setAttentionCount ] = useState(
-		window.safePublishAdminData.attentionCount ?? 0
-	);
-	const [ isOrphanDrawerOpen, setIsOrphanDrawerOpen ] = useState( false );
-	const [ isAttentionDrawerOpen, setIsAttentionDrawerOpen ] = useState( false );
 
 	const [ selectedPostType, setSelectedPostType ] = useState( 'post' );
 	const [ searchTerm, setSearchTerm ] = useState( '' );
@@ -383,6 +356,9 @@ export function PostsDataView( {
 		null
 	);
 	const abortRef = useRef< AbortController | null >( null );
+	// The Needs attention count changes only on mutations, so request it on
+	// first load and after a refresh — not on every filter/page/sort change.
+	const countRefreshedRef = useRef( -1 );
 
 	const authStatus = useAuthStatus();
 	const isAuthorized = 'authorized' === authStatus;
@@ -395,7 +371,6 @@ export function PostsDataView( {
 	// can't be looked up here; the render shows a switch-chips hint instead.
 	const slugChipMismatch =
 		null !== detection
-		&& 'failed' !== state
 		&& ! slugMatchesChip( detection.origin, isCatalogPrimary );
 
 	const handleChipChange = useCallback(
@@ -405,7 +380,7 @@ export function PostsDataView( {
 			setView( ( current ) => ( {
 				...( current ),
 				page: 1,
-				fields: computeVisibleFields( nextIsCatalog, next ),
+				fields: computeVisibleFields( nextIsCatalog ),
 				sort: {
 					field: nextIsCatalog ? 'date_gmt' : 'import_date_gmt',
 					direction: 'desc',
@@ -448,9 +423,7 @@ export function PostsDataView( {
 		);
 		formData.append( 'order', view.sort?.direction === 'asc' ? 'asc' : 'desc' );
 
-		// Failed's query doesn't join wp_posts, so name= can't filter — fall
-		// back to the raw text so the chip doesn't silently return everything.
-		if ( null !== detection && 'failed' !== state ) {
+		if ( null !== detection ) {
 			formData.append( 'name', detection.slug );
 		} else if ( '' !== debouncedSearch ) {
 			formData.append( 'search', debouncedSearch );
@@ -486,9 +459,9 @@ export function PostsDataView( {
 		if ( focusSourceId > 0 ) {
 			formData.append( 'focus_source_id', String( focusSourceId ) );
 		}
-		if ( ! hasFetchedOnce ) {
-			formData.append( 'with_orphan_count', '1' );
-			formData.append( 'with_attention_count', '1' );
+		const wantsCount = countRefreshedRef.current !== refreshNonce;
+		if ( wantsCount ) {
+			formData.append( 'with_needs_attention_count', '1' );
 		}
 
 		setIsLoading( true );
@@ -523,12 +496,14 @@ export function PostsDataView( {
 				setRows( data.items );
 				setHasMore( Boolean( data.has_more ) );
 
-				if ( typeof data.orphan_count === 'number' ) {
-					setOrphanCount( data.orphan_count );
-				}
-
-				if ( typeof data.attention_count === 'number' ) {
-					setAttentionCount( data.attention_count );
+				if (
+					wantsCount
+					&& typeof data.needs_attention_count === 'number'
+				) {
+					onNeedsAttentionCountChange?.(
+						data.needs_attention_count
+					);
+					countRefreshedRef.current = refreshNonce;
 				}
 
 				// Server resolves focus_source to a concrete state; swap the
@@ -995,70 +970,6 @@ export function PostsDataView( {
 		currentPage
 	);
 
-	const handleOrphanCountRefresh = useCallback( () => {
-		const formData = new FormData();
-		formData.append( 'action', 'safe_publish_list_posts' );
-		formData.append( 'nonce', window.safePublishAdminData.nonce );
-		formData.append( 'source_site_url', sourceSiteUrl );
-		formData.append( 'state', 'all' );
-		formData.append( 'page', '1' );
-		formData.append( 'per_page', '1' );
-		formData.append( 'post_type', selectedPostType );
-		formData.append( 'with_orphan_count', '1' );
-
-		fetch( window.safePublishAdminData.ajaxurl, {
-			method: 'POST',
-			body: formData,
-		} )
-			.then(
-				( response ) =>
-					response.json() as Promise< ApiResponse< PostsResponse > >
-			)
-			.then( ( result ) => {
-				if (
-					result.success
-					&& typeof result.data.orphan_count === 'number'
-				) {
-					setOrphanCount( result.data.orphan_count );
-				}
-			} )
-			.catch( () => {
-				/* leave count stale; next reload corrects */
-			} );
-	}, [ sourceSiteUrl, selectedPostType ] );
-
-	const handleAttentionCountRefresh = useCallback( () => {
-		const formData = new FormData();
-		formData.append( 'action', 'safe_publish_list_posts' );
-		formData.append( 'nonce', window.safePublishAdminData.nonce );
-		formData.append( 'source_site_url', sourceSiteUrl );
-		formData.append( 'state', 'all' );
-		formData.append( 'page', '1' );
-		formData.append( 'per_page', '1' );
-		formData.append( 'post_type', selectedPostType );
-		formData.append( 'with_attention_count', '1' );
-
-		fetch( window.safePublishAdminData.ajaxurl, {
-			method: 'POST',
-			body: formData,
-		} )
-			.then(
-				( response ) =>
-					response.json() as Promise< ApiResponse< PostsResponse > >
-			)
-			.then( ( result ) => {
-				if (
-					result.success
-					&& typeof result.data.attention_count === 'number'
-				) {
-					setAttentionCount( result.data.attention_count );
-				}
-			} )
-			.catch( () => {
-				/* leave count stale; next reload corrects */
-			} );
-	}, [ sourceSiteUrl, selectedPostType ] );
-
 	return (
 		<div
 			className="safe-publish-dataviews-wrapper safe-publish-dataviews-wrapper--approx-pagination"
@@ -1072,51 +983,13 @@ export function PostsDataView( {
 				status={ authStatus }
 				settingsUrl={ window.safePublishAdminData?.settingsUrl }
 			/>
-			{ ( attentionCount > 0 || orphanCount > 0 ) && (
-				<div className="safe-publish-issue-summary">
-					{ attentionCount > 0 && (
-						<Button
-							className="safe-publish-issue-summary__button safe-publish-issue-summary__button--warning"
-							variant="tertiary"
-							icon={ caution }
-							onClick={ () =>
-								setIsAttentionDrawerOpen( true )
-							}
-						>
-							{ sprintf(
-								/* translators: %d: open attention issues count */
-								__( 'Needs attention (%d)', 'safe-publish' ),
-								attentionCount
-							) }
-						</Button>
-					) }
-					{ orphanCount > 0 && (
-						<Button
-							className="safe-publish-issue-summary__button safe-publish-issue-summary__button--error"
-							variant="tertiary"
-							icon={ cancelCircleFilled }
-							onClick={ () => setIsOrphanDrawerOpen( true ) }
-						>
-							{ sprintf(
-								/* translators: %d: orphan failures count */
-								__( 'Orphan failures (%d)', 'safe-publish' ),
-								orphanCount
-							) }
-						</Button>
-					) }
-				</div>
-			) }
 			<div className="safe-publish-controls-row">
-				{ /* The items table doesn't snapshot post_type for error
-				rows, so the filter can't be honored on the Failed chip. */ }
-				{ 'failed' !== state && (
-					<PostTypeSelector
-						sourceSiteUrl={ sourceSiteUrl }
-						selectedPostType={ selectedPostType }
-						onPostTypeChange={ handlePostTypeChange }
-						onError={ setPostTypeError }
-					/>
-				) }
+				<PostTypeSelector
+					sourceSiteUrl={ sourceSiteUrl }
+					selectedPostType={ selectedPostType }
+					onPostTypeChange={ handlePostTypeChange }
+					onError={ setPostTypeError }
+				/>
 				<div className="safe-publish-control safe-publish-control--search">
 					<BaseControl
 						__nextHasNoMarginBottom
@@ -1253,7 +1126,7 @@ export function PostsDataView( {
 						role="status"
 						aria-live="polite"
 					>
-						<p>{ emptyStateCopy( state, detection?.slug ?? null ) }</p>
+						<p>{ emptyStateCopy( state ) }</p>
 					</div>
 			) }
 			{ ! slugChipMismatch && hasFetchedOnce && rows.length > 0 && (
@@ -1276,7 +1149,6 @@ export function PostsDataView( {
 							onNotice: setRollbackNotice,
 						},
 						syncStatuses,
-						state,
 						selectedCount
 					) }
 					header={
@@ -1289,22 +1161,6 @@ export function PostsDataView( {
 							onClick={ refresh }
 						/>
 					}
-				/>
-			) }
-			{ isOrphanDrawerOpen && (
-				<OrphanFailuresDrawer
-					ajaxurl={ window.safePublishAdminData.ajaxurl }
-					nonce={ window.safePublishAdminData.nonce }
-					onClose={ () => setIsOrphanDrawerOpen( false ) }
-					onRemoved={ handleOrphanCountRefresh }
-				/>
-			) }
-			{ isAttentionDrawerOpen && (
-				<AttentionDrawer
-					ajaxurl={ window.safePublishAdminData.ajaxurl }
-					nonce={ window.safePublishAdminData.nonce }
-					onClose={ () => setIsAttentionDrawerOpen( false ) }
-					onChanged={ handleAttentionCountRefresh }
 				/>
 			) }
 		</div>
@@ -1329,7 +1185,6 @@ function LocalStateCell( {
 		'available': __( 'Available', 'safe-publish' ),
 		'up-to-date': __( 'Up to date', 'safe-publish' ),
 		'outdated': __( 'Outdated', 'safe-publish' ),
-		'failed': __( 'Failed', 'safe-publish' ),
 	};
 	// eslint-disable-next-line security/detect-object-injection
 	const label = stateLabel[ item.local_state ];
@@ -1347,13 +1202,6 @@ function LocalStateCell( {
 			</span>
 		);
 	}
-
-	const failureDetail =
-		'failed' === item.local_state
-			&& null !== item.error_message
-			&& '' !== item.error_message
-			? item.error_message
-			: '';
 
 	const outdatedSince =
 		'outdated' === item.local_state && '' !== item.modified_gmt
@@ -1381,14 +1229,6 @@ function LocalStateCell( {
 				/>
 				{ label }
 			</span>
-			{ '' !== failureDetail && (
-				<span
-					className="safe-publish-history-badge"
-					title={ failureDetail }
-				>
-					{ failureDetail }
-				</span>
-			) }
 			{ '' !== outdatedSince && (
 				<span className="safe-publish-history-badge">
 					{ outdatedSince }
@@ -1408,17 +1248,8 @@ function LocalStateCell( {
  * Empty-state copy per chip.
  *
  * @param state Active chip.
- * @param slug  Detected URL slug, or null when the user typed plain text.
  */
-function emptyStateCopy( state: ChipState, slug: string | null ): string {
-	// Failed's query can't join wp_posts to match a slug; redirect the user
-	// at the moment they'd otherwise read "no results" as a bug.
-	if ( 'failed' === state && null !== slug ) {
-		return __(
-			"URL search isn't supported on Failed. Switch to All to find imported posts by URL.",
-			'safe-publish'
-		);
-	}
+function emptyStateCopy( state: ChipState ): string {
 	switch ( state ) {
 		case 'available':
 			return __(
@@ -1432,8 +1263,6 @@ function emptyStateCopy( state: ChipState, slug: string | null ): string {
 				'No outdated rows. Some rows may show "outdated" badges before they appear here — refresh to update.',
 				'safe-publish'
 			);
-		case 'failed':
-			return __( 'No failed imports.', 'safe-publish' );
 		default:
 			return __( 'No posts matched these filters.', 'safe-publish' );
 	}

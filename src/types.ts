@@ -27,11 +27,11 @@ export type JsonValue = JsonPrimitive | JsonArray | JsonObject;
 /**
  * Routing label for the unified Posts listing.
  *
- * Derived from the active-row rule per source_post_id. Imported / Outdated /
- * Failed each map to a chip; rolled-back and locally-deleted source posts
- * fold into Available with no surfaced distinction.
+ * Derived from the active-row rule per source_post_id. Up to date and Outdated
+ * each map to a chip; rolled-back, locally-deleted, and error-only source posts
+ * fold into Available. Failures surface in the Needs attention inbox, not here.
  */
-export type LocalState = 'available' | 'up-to-date' | 'outdated' | 'failed';
+export type LocalState = 'available' | 'up-to-date' | 'outdated';
 
 /**
  * Chip value, including 'all' which the local-state allowlist excludes.
@@ -42,7 +42,7 @@ export type ChipState = LocalState | 'all';
  * Per-row entry in the unified Posts listing.
  *
  * Whether the listing was assembled catalog-primary (state=all|available) or
- * local-primary (state=up-to-date|outdated|failed), the shape is the same — the
+ * local-primary (state=up-to-date|outdated), the shape is the same — the
  * controller normalizes both paths into this row before serializing.
  *
  * @property {number}      id                   Source post ID (or 0 when unknown).
@@ -60,7 +60,6 @@ export type ChipState = LocalState | 'all';
  * @property {number|null} item_id              Active items-table row id.
  * @property {number|null} post_id              Local post id when the post exists.
  * @property {string|null} import_date_gmt      Active item's import_date_gmt.
- * @property {string|null} error_message        Error message on Failed rows.
  * @property {boolean}     has_previous_content Whether the active item captured pre-update content
  *                                              for rollback restore.
  * @property {string}      edit_url             Local wp-admin edit URL when the post is present.
@@ -80,7 +79,6 @@ export interface UnifiedPostRow {
 	item_id: number | null;
 	post_id: number | null;
 	import_date_gmt: string | null;
-	error_message: string | null;
 	has_previous_content: boolean;
 	edit_url: string;
 }
@@ -92,8 +90,8 @@ export interface UnifiedPostRow {
  * when the endpoint resolved it; the frontend uses them to swap the active
  * chip + highlight the focused row in the rendered list.
  *
- * `orphan_count` is populated only when the request set with_orphan_count=1;
- * `attention_count` only when with_attention_count=1.
+ * `needs_attention_count` is populated only when the request set
+ * with_needs_attention_count=1.
  */
 export interface PostsResponse {
 	items: UnifiedPostRow[];
@@ -101,8 +99,7 @@ export interface PostsResponse {
 	state: ChipState;
 	focused_state?: LocalState;
 	focused_source_post_id?: number;
-	orphan_count?: number;
-	attention_count?: number;
+	needs_attention_count?: number;
 }
 
 /**
@@ -136,34 +133,6 @@ export interface SyncStatusBatchResponse {
 }
 
 /**
- * Orphan failure row — a failed import with no source_post_id, so it can't
- * fold under a unified Posts row. Surfaced via the drawer.
- *
- * @property {number} id              Items-table row id.
- * @property {number} session_id      Parent session id.
- * @property {string} title           Snapshotted attempted title.
- * @property {string} source_site_url Source site URL from the session.
- * @property {string} error_message   Failure reason recorded by the import.
- * @property {string} import_date_gmt MySQL datetime (UTC) of the attempt.
- */
-export interface OrphanFailure {
-	id: number;
-	session_id: number;
-	title: string;
-	source_site_url: string;
-	error_message: string;
-	import_date_gmt: string;
-}
-
-/**
- * Envelope returned by safe_publish_list_orphan_failures.
- */
-export interface OrphanFailuresResponse {
-	items: OrphanFailure[];
-	has_more: boolean;
-}
-
-/**
  * Tracked degradation issue types surfaced on the Needs attention tab.
  */
 export type AttentionIssueType =
@@ -192,11 +161,44 @@ export interface AttentionIssue {
 }
 
 /**
- * Envelope returned by safe_publish_list_attention_issues.
+ * A failure row in the Needs attention inbox: an import error, either orphan
+ * (no source_post_id) or the latest attempt for a source whose most recent row
+ * is still an error. `edit_url` is set only for a failed update whose
+ * destination post is still live.
  */
-export interface AttentionIssuesResponse {
-	items: AttentionIssue[];
+export interface InboxFailure {
+	kind: 'failure';
+	row_id: string;
+	item_id: number;
+	source_post_id: number | null;
+	title: string;
+	error_message: string;
+	import_date_gmt: string;
+	source_site_url: string;
+	edit_url: string;
+}
+
+/**
+ * A degradation row in the Needs attention inbox — an open attention issue
+ * carried through with a discriminant and a stable row id.
+ */
+export interface InboxDegradation extends AttentionIssue {
+	kind: 'degradation';
+	row_id: string;
+}
+
+/**
+ * Discriminated union of Needs attention inbox rows.
+ */
+export type NeedsAttentionRow = InboxFailure | InboxDegradation;
+
+/**
+ * Envelope returned by safe_publish_list_needs_attention.
+ */
+export interface NeedsAttentionResponse {
+	items: NeedsAttentionRow[];
 	has_more: boolean;
+	needs_attention_count: number;
 }
 
 /**
@@ -377,20 +379,22 @@ export interface DiffHtmlData {
  */
 export interface PostsDataViewProps {
 	sourceSiteUrl: string;
+	// Reports failures + open degradations after each list fetch, keeping the
+	// Manage tab label fresh.
+	onNeedsAttentionCountChange?: ( count: number ) => void;
 }
 
 /**
  * Admin data passed from PHP via wp_add_inline_script.
  *
- * @property {string}    ajaxurl          WordPress AJAX URL.
- * @property {string}    nonce            Security nonce for AJAX requests.
- * @property {string}    sourceSiteUrl    Source site URL.
- * @property {string}    settingsUrl      URL to the plugin settings page.
- * @property {string}    homeUrl          Destination home URL for slug detection.
- * @property {string}    containerId      Container element ID.
- * @property {ChipState} [initialState]   Chip state from ?state=... on load.
- * @property {number}    [orphanCount]    Orphan-failures count at server render.
- * @property {number}    [attentionCount] Open attention-issues count at render.
+ * @property {string}    ajaxurl               WordPress AJAX URL.
+ * @property {string}    nonce                 Security nonce for AJAX requests.
+ * @property {string}    sourceSiteUrl         Source site URL.
+ * @property {string}    settingsUrl           URL to the plugin settings page.
+ * @property {string}    homeUrl               Destination home URL for slug detection.
+ * @property {string}    containerId           Container element ID.
+ * @property {ChipState} [initialState]        Chip state from ?state=... on load.
+ * @property {number}    [needsAttentionCount] Failures + open degradations at render.
  */
 export interface AdminData {
 	ajaxurl: string;
@@ -400,8 +404,7 @@ export interface AdminData {
 	homeUrl?: string;
 	containerId: string;
 	initialState?: ChipState;
-	orphanCount?: number;
-	attentionCount?: number;
+	needsAttentionCount?: number;
 	knownChannels?: string[];
 	knownLevels?: string[];
 }
