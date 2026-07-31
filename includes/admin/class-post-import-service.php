@@ -838,15 +838,17 @@ class Post_Import_Service {
 	 * a WP_Error if content processing fails or if kses is enabled and
 	 * sanitization would modify the content.
 	 *
-	 * @param string                               $content              Raw post content.
-	 * @param array<int,int>                       $session_id_map       Bulk batch source => destination post IDs.
-	 * @param array<string, array<string, string>> $library_metadata_map Source URL => library metadata for sideloads.
+	 * @param string                                $content              Raw post content.
+	 * @param array<int,int>                        $session_id_map       Bulk batch source => destination post IDs.
+	 * @param array<string, array<string, string>>  $library_metadata_map Source URL => library metadata for sideloads.
+	 * @param list<array{id: int, menu_order: int}> $attached_media      Bare gallery/playlist attached-media set to import.
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
 	private function process_post_content(
 		string $content,
 		array $session_id_map = array(),
-		array $library_metadata_map = array()
+		array $library_metadata_map = array(),
+		array $attached_media = array()
 	): string|WP_Error {
 		$source_site_url = $this->get_connected_source_url();
 
@@ -860,6 +862,7 @@ class Post_Import_Service {
 			array(
 				'session_id_map'       => $session_id_map,
 				'library_metadata_map' => $library_metadata_map,
+				'attached_media'       => $attached_media,
 				// Threaded so shortcode ID resolution can read private/unattached
 				// source media that anonymous requests would 403 on.
 				'auth_credentials'     => Auth_Credential_Provider::get_credentials(),
@@ -2247,19 +2250,24 @@ class Post_Import_Service {
 			}
 		}
 
-		$fields['title']             = $fresh_result['title'];
-		$fields['featured_media_id'] = $fresh_result['featured_media'];
-		$fields['slug']              = $fresh_result['slug'];
-		$fields['comment_status']    = $fresh_result['comment_status'];
-		$fields['ping_status']       = $fresh_result['ping_status'];
-		$fields['menu_order']        = $fresh_result['menu_order'];
-		$fields['password']          = $fresh_result['password'];
-		$fields['source_parent_id']  = absint( $fresh_result['parent'] ?? 0 );
-		$fields['source_author']     = is_array( $fresh_result['source_author'] ?? null )
+		$fields['title']                 = $fresh_result['title'];
+		$fields['featured_media_id']     = $fresh_result['featured_media'];
+		$fields['slug']                  = $fresh_result['slug'];
+		$fields['comment_status']        = $fresh_result['comment_status'];
+		$fields['ping_status']           = $fresh_result['ping_status'];
+		$fields['menu_order']            = $fresh_result['menu_order'];
+		$fields['password']              = $fresh_result['password'];
+		$fields['source_parent_id']      = absint( $fresh_result['parent'] ?? 0 );
+		$fields['source_author']         = is_array( $fresh_result['source_author'] ?? null )
 			? $fresh_result['source_author']
 			: null;
-		$fields['source_media']      = is_array( $fresh_result['source_media'] ?? null )
+		$fields['source_media']          = is_array( $fresh_result['source_media'] ?? null )
 			? $fresh_result['source_media']
+			: array();
+		$fields['source_attached_media'] = is_array(
+			$fresh_result['source_attached_media'] ?? null
+		)
+			? $fresh_result['source_attached_media']
 			: array();
 
 		// Resolve the source author before any media processing so a failed
@@ -2336,7 +2344,8 @@ class Post_Import_Service {
 		$processed_content = $this->process_post_content(
 			$fresh_result['content'] ?? '',
 			$session_id_map,
-			$fields['source_media']
+			$fields['source_media'],
+			$fields['source_attached_media']
 		);
 
 		if ( is_wp_error( $processed_content ) ) {
