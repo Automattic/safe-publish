@@ -213,6 +213,10 @@ class Media_Importer {
 			$attachment_id,
 			$this->library_metadata_map[ $media_url ] ?? array()
 		);
+		$this->record_source_attachment_parent(
+			$attachment_id,
+			(int) ( $this->library_metadata_map[ $media_url ]['parent'] ?? 0 )
+		);
 
 		$imported_id = $attachment_id;
 
@@ -470,6 +474,10 @@ class Media_Importer {
 			$attachment_id,
 			$this->library_metadata_map[ $media_url ] ?? array()
 		);
+		$this->record_source_attachment_parent(
+			$attachment_id,
+			(int) ( $this->library_metadata_map[ $media_url ]['parent'] ?? 0 )
+		);
 
 		return $attachment_id;
 	}
@@ -482,6 +490,16 @@ class Media_Importer {
 	 */
 	public function reset_newly_created_attachment_ids(): void {
 		$this->newly_created_attachment_ids = array();
+	}
+
+	/**
+	 * Returns the IDs of attachments freshly sideloaded during the current run,
+	 * so the import can reconcile their source parents.
+	 *
+	 * @return int[]
+	 */
+	public function get_newly_created_attachment_ids(): array {
+		return $this->newly_created_attachment_ids;
 	}
 
 	/**
@@ -532,6 +550,33 @@ class Media_Importer {
 	}
 
 	/**
+	 * Records the source parent post ID on a sideloaded attachment, matching the
+	 * write/delete-on-zero contract of the post parent meta. The destination
+	 * re-parenting sweep reads it later.
+	 *
+	 * @param int $attachment_id    Sideloaded attachment.
+	 * @param int $source_parent_id Source parent post ID (0 = unattached).
+	 */
+	private function record_source_attachment_parent(
+		int $attachment_id,
+		int $source_parent_id
+	): void {
+		if ( 0 === $source_parent_id ) {
+			delete_post_meta(
+				$attachment_id,
+				Options::META_SOURCE_ATTACHMENT_PARENT_ID
+			);
+			return;
+		}
+
+		update_post_meta(
+			$attachment_id,
+			Options::META_SOURCE_ATTACHMENT_PARENT_ID,
+			$source_parent_id
+		);
+	}
+
+	/**
 	 * Extracts the library metadata from a wp/v2/media record fetched in edit
 	 * context. Title, caption, and description are unwrapped from their raw
 	 * value; alt_text is a plain string.
@@ -568,8 +613,8 @@ class Media_Importer {
 	 * attachment ID.
 	 *
 	 * Shared by featured-image import and shortcode ID rewriting. A freshly
-	 * sideloaded attachment is enriched from the fetched record; a dedup hit on
-	 * a prior import is left untouched.
+	 * sideloaded attachment is enriched from the fetched record and stamped with
+	 * its source parent; a dedup hit on a prior import is left untouched.
 	 *
 	 * @param int    $source_id        Source attachment ID.
 	 * @param string $source_site_url  Source site URL.
@@ -626,11 +671,16 @@ class Media_Importer {
 			return false;
 		}
 
-		// Enrich only a freshly sideloaded attachment, not a dedup hit.
+		// Enrich and record source state only for a freshly sideloaded
+		// attachment, not a dedup hit that already carries them.
 		if ( in_array( $attachment_id, $this->newly_created_attachment_ids, true ) ) {
 			$this->apply_library_metadata(
 				$attachment_id,
 				self::media_record_metadata( $media_data )
+			);
+			$this->record_source_attachment_parent(
+				$attachment_id,
+				(int) ( $media_data['post'] ?? 0 )
 			);
 		}
 

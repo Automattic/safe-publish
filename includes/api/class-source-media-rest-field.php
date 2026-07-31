@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Registers the safe_publish_media REST field so the destination can bring
  * each inline image's source library metadata (alt, title, caption,
- * description) when it sideloads the image.
+ * description) and its source parent post when it sideloads the image.
  *
  * Inline images are referenced by bare URL, which core REST cannot resolve to
  * an attachment; the source does it here by scanning the post content and
@@ -122,8 +122,8 @@ class Source_Media_REST_Field {
 
 	/**
 	 * Scans content for this site's media URLs and maps each that resolves to an
-	 * attachment to its raw library values. Keyed by the query-stripped URL to
-	 * match the destination's lookup at sideload time.
+	 * attachment to its raw library values and source parent post. Keyed by the
+	 * query-stripped URL to match the destination's lookup at sideload time.
 	 *
 	 * @param string $content Raw post content.
 	 * @return array<string, array<string, string>> Source URL => metadata.
@@ -187,6 +187,8 @@ class Source_Media_REST_Field {
 					$attachment_id,
 					'raw'
 				),
+				// Source parent post, so the destination can re-parent its copy.
+				'parent'      => (string) (int) wp_get_post_parent_id( $attachment_id ),
 			);
 		}
 
