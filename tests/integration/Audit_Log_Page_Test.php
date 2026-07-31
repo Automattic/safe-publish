@@ -61,7 +61,7 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 	 * a total count matching the rows that pass the active filters.
 	 */
 	public function test_response_returns_items_and_total(): void {
-		// ARRANGE.
+		// ARRANGE: Two rows on different channels.
 		Audit_Log_Table::insert( 'auth', 'info', 'REQUEST_AUTHENTICATED', '2026-03-01 10:00:00', array() );
 		Audit_Log_Table::insert( 'export', 'info', 'CONTENT_EXPORTED', '2026-03-02 11:00:00', array() );
 
@@ -69,10 +69,10 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 		);
 
-		// ACT.
+		// ACT: Dispatch the audit-events AJAX request.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_get_audit_events' );
 
-		// ASSERT.
+		// ASSERT: Both rows return, dated as ISO 8601.
 		$response = json_decode( $this->_last_response, true );
 		$this->assertTrue( $response['success'] );
 		$this->assertSame( 2, $response['data']['total'] );
@@ -88,7 +88,7 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 	 * named channels only.
 	 */
 	public function test_response_honors_channels_filter(): void {
-		// ARRANGE.
+		// ARRANGE: Three rows across three channels.
 		Audit_Log_Table::insert( 'auth', 'info', 'A', '2026-03-01 10:00:00', array() );
 		Audit_Log_Table::insert( 'export', 'info', 'B', '2026-03-02 11:00:00', array() );
 		Audit_Log_Table::insert( 'import', 'info', 'C', '2026-03-03 12:00:00', array() );
@@ -98,10 +98,10 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 			'channels' => array( 'auth', 'import' ),
 		);
 
-		// ACT.
+		// ACT: Dispatch the audit-events AJAX request.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_get_audit_events' );
 
-		// ASSERT.
+		// ASSERT: Only the two filtered channels return.
 		$response = json_decode( $this->_last_response, true );
 		$this->assertTrue( $response['success'] );
 		$this->assertSame( 2, $response['data']['total'] );
@@ -126,7 +126,7 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 			'levels' => array( 'warning' ),
 		);
 
-		// ACT.
+		// ACT: Dispatch the audit-events AJAX request.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_get_audit_events' );
 
 		// ASSERT: only the warning row passes the filter.
@@ -143,7 +143,7 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 	 * events strictly before midnight.
 	 */
 	public function test_before_calendar_day_is_inclusive(): void {
-		// ARRANGE.
+		// ARRANGE: Rows before, on, and after the picked day.
 		Audit_Log_Table::insert( 'auth', 'info', 'EARLY', '2026-03-01 10:00:00', array() );
 		Audit_Log_Table::insert( 'auth', 'info', 'EDGE', '2026-03-02 23:59:00', array() );
 		Audit_Log_Table::insert( 'auth', 'info', 'LATE', '2026-03-03 00:00:01', array() );
@@ -153,10 +153,10 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 			'before' => '2026-03-02',
 		);
 
-		// ACT.
+		// ACT: Dispatch the audit-events AJAX request.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_get_audit_events' );
 
-		// ASSERT.
+		// ASSERT: The picked day is included; later rows are not.
 		$response = json_decode( $this->_last_response, true );
 		$this->assertTrue( $response['success'] );
 		$this->assertSame( 2, $response['data']['total'] );
@@ -181,7 +181,7 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 			'per_page' => '9999',
 		);
 
-		// ACT.
+		// ACT: Dispatch the audit-events AJAX request.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_get_audit_events' );
 
 		// ASSERT: all three returned, but the request itself didn't crash
@@ -207,10 +207,10 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 		);
 
-		// ACT.
+		// ACT: Dispatch the audit-events AJAX request.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_get_audit_events' );
 
-		// ASSERT.
+		// ASSERT: The request is refused.
 		$response = json_decode( $this->_last_response, true );
 		$this->assertFalse( $response['success'] );
 	}
@@ -220,7 +220,7 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 	 * passed through to the SQL layer.
 	 */
 	public function test_malformed_calendar_day_is_dropped(): void {
-		// ARRANGE.
+		// ARRANGE: One row and a malformed after bound.
 		Audit_Log_Table::insert( 'auth', 'info', 'A', '2026-03-01 10:00:00', array() );
 
 		$_POST = array(
@@ -228,7 +228,7 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 			'after' => 'not-a-date',
 		);
 
-		// ACT.
+		// ACT: Dispatch the audit-events AJAX request.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_get_audit_events' );
 
 		// ASSERT: filter is ignored; the row still comes back.

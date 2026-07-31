@@ -22,7 +22,7 @@ class DatetimeSanitizerTest extends TestCase {
 	 * can use a single absent check.
 	 */
 	public function test_null_and_empty_input_return_null(): void {
-		// ACT + ASSERT.
+		// ACT + ASSERT: Null and empty input normalize to null.
 		$this->assertNull( Datetime_Sanitizer::sanitize_iso_datetime( null ) );
 		$this->assertNull( Datetime_Sanitizer::sanitize_iso_datetime( '' ) );
 	}
@@ -31,7 +31,7 @@ class DatetimeSanitizerTest extends TestCase {
 	 * Verifies that non-string inputs are rejected outright.
 	 */
 	public function test_non_string_input_returns_false(): void {
-		// ACT + ASSERT.
+		// ACT + ASSERT: Non-string inputs are rejected as false.
 		$this->assertFalse( Datetime_Sanitizer::sanitize_iso_datetime( 42 ) );
 		$this->assertFalse( Datetime_Sanitizer::sanitize_iso_datetime( array() ) );
 		$this->assertFalse( Datetime_Sanitizer::sanitize_iso_datetime( true ) );
@@ -42,10 +42,10 @@ class DatetimeSanitizerTest extends TestCase {
 	 * MySQL datetime in UTC.
 	 */
 	public function test_iso_datetime_with_z_suffix_parses(): void {
-		// ACT.
+		// ACT: Parse a UTC datetime with a Z suffix.
 		$result = Datetime_Sanitizer::sanitize_iso_datetime( '2026-06-10T15:30:00Z' );
 
-		// ASSERT.
+		// ASSERT: The result is the UTC MySQL datetime.
 		$this->assertSame( '2026-06-10 15:30:00', $result );
 	}
 
@@ -57,7 +57,7 @@ class DatetimeSanitizerTest extends TestCase {
 		// ACT: 10am EDT is 14:00 UTC.
 		$result = Datetime_Sanitizer::sanitize_iso_datetime( '2026-06-10T10:00:00-04:00' );
 
-		// ASSERT.
+		// ASSERT: The offset is normalized to UTC.
 		$this->assertSame( '2026-06-10 14:00:00', $result );
 	}
 
@@ -66,10 +66,10 @@ class DatetimeSanitizerTest extends TestCase {
 	 * helper trusts the caller's intent to send UTC datetimes.
 	 */
 	public function test_bare_iso_datetime_is_kept_verbatim(): void {
-		// ACT.
+		// ACT: Parse a zone-less datetime.
 		$result = Datetime_Sanitizer::sanitize_iso_datetime( '2026-06-10T15:30:00' );
 
-		// ASSERT.
+		// ASSERT: The time is kept verbatim.
 		$this->assertSame( '2026-06-10 15:30:00', $result );
 	}
 
@@ -78,10 +78,10 @@ class DatetimeSanitizerTest extends TestCase {
 	 * the start of that day.
 	 */
 	public function test_calendar_day_without_ceiling_returns_start_of_day(): void {
-		// ACT.
+		// ACT: Resolve a bare calendar day, no ceiling.
 		$result = Datetime_Sanitizer::sanitize_iso_datetime( '2026-06-10', false );
 
-		// ASSERT.
+		// ASSERT: The day resolves to its start.
 		$this->assertSame( '2026-06-10 00:00:00', $result );
 	}
 
@@ -91,10 +91,10 @@ class DatetimeSanitizerTest extends TestCase {
 	 * within the picked day.
 	 */
 	public function test_calendar_day_with_ceiling_returns_end_of_day(): void {
-		// ACT.
+		// ACT: Resolve a bare calendar day with a ceiling.
 		$result = Datetime_Sanitizer::sanitize_iso_datetime( '2026-06-10', true );
 
-		// ASSERT.
+		// ASSERT: The day resolves to its end.
 		$this->assertSame( '2026-06-10 23:59:59', $result );
 	}
 
@@ -104,7 +104,7 @@ class DatetimeSanitizerTest extends TestCase {
 	 * coerce 2026-13-01 to 2027-01-01.
 	 */
 	public function test_calendar_day_overflow_returns_false(): void {
-		// ACT + ASSERT.
+		// ACT + ASSERT: Calendar-day overflow is rejected as false.
 		$this->assertFalse( Datetime_Sanitizer::sanitize_iso_datetime( '2026-13-01' ) );
 		$this->assertFalse( Datetime_Sanitizer::sanitize_iso_datetime( '2026-02-30' ) );
 	}
@@ -114,7 +114,7 @@ class DatetimeSanitizerTest extends TestCase {
 	 * than null so callers can distinguish "absent" from "malformed".
 	 */
 	public function test_unparseable_string_returns_false(): void {
-		// ACT + ASSERT.
+		// ACT + ASSERT: Unparseable strings are rejected as false.
 		$this->assertFalse( Datetime_Sanitizer::sanitize_iso_datetime( 'not-a-date' ) );
 		$this->assertFalse( Datetime_Sanitizer::sanitize_iso_datetime( '2026/06/10' ) );
 	}
