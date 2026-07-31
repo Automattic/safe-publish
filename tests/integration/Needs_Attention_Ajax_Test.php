@@ -172,6 +172,124 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the ignore endpoint flags a failure and a degradation in one
+	 * bulk call, dropping both from the open sets.
+	 */
+	public function test_ignore_endpoint_flags_failure_and_degradation(): void {
+		// ARRANGE: A source-linked failure and a degradation.
+		$session = $this->create_session();
+		$this->seed_failure( $session, 500, 'Broken import' );
+		$post_id = self::factory()->post->create();
+		$this->open_degradation( $post_id, 8300 );
+
+		// ACT: Ignore both in one bulk call.
+		$response = $this->set_ignored( $this->both_descriptors( $post_id ), true );
+
+		// ASSERT: The endpoint reports both flagged and the open sets are empty.
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 2, $response['data']['updated'] );
+		$this->assertSame( 0, $this->history->count_failures() );
+		$this->assertSame( 1, $this->history->count_failures( true ) );
+		$this->assertSame(
+			0,
+			$this->attention->count_open_issues( self::SOURCE )
+		);
+		$this->assertSame(
+			1,
+			$this->attention->count_open_issues( self::SOURCE, true )
+		);
+	}
+
+	/**
+	 * Verifies that the un-ignore endpoint restores a previously ignored failure
+	 * and degradation to the open sets.
+	 */
+	public function test_unignore_endpoint_restores_both_kinds(): void {
+		// ARRANGE: A failure and a degradation, both already ignored.
+		$session = $this->create_session();
+		$this->seed_failure( $session, 500, 'Broken import' );
+		$post_id = self::factory()->post->create();
+		$this->open_degradation( $post_id, 8300 );
+		$this->ignore_both( $post_id );
+
+		// ACT: Un-ignore both in one call.
+		$response = $this->set_ignored(
+			$this->both_descriptors( $post_id ),
+			false
+		);
+
+		// ASSERT: Both are back in the open sets.
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 1, $this->history->count_failures() );
+		$this->assertSame( 0, $this->history->count_failures( true ) );
+		$this->assertSame(
+			1,
+			$this->attention->count_open_issues( self::SOURCE )
+		);
+	}
+
+	/**
+	 * Verifies that the ignored view lists only ignored rows while the tab count
+	 * keeps reporting the open total.
+	 */
+	public function test_list_ignored_view_excludes_from_count(): void {
+		// ARRANGE: An ignored failure and degradation, plus one still-open
+		// failure that stays in the count.
+		$session = $this->create_session();
+		$this->seed_failure( $session, 500, 'Ignored import' );
+		$post_id = self::factory()->post->create();
+		$this->open_degradation( $post_id, 8300 );
+		$this->ignore_both( $post_id );
+		$this->seed_failure( $session, 501, 'Still open' );
+
+		// ACT: Request the ignored view.
+		$response = $this->list_needs_attention( 1, 20, 'ignored' );
+
+		// ASSERT: It lists both ignored rows; the count reports the open failure.
+		$this->assertCount( 2, $response['data']['items'] );
+		$this->assertSame( 1, $response['data']['needs_attention_count'] );
+	}
+
+	/**
+	 * Descriptors for the shared source-linked failure and degradation.
+	 *
+	 * @param int $post_id Degradation's affected post id.
+	 * @return array[] Ignore/restore descriptors.
+	 */
+	private function both_descriptors( int $post_id ): array {
+		return array(
+			array(
+				'kind'           => 'failure',
+				'item_id'        => 0,
+				'source_post_id' => 500,
+			),
+			array(
+				'kind'             => 'degradation',
+				'affected_post_id' => $post_id,
+				'issue_type'       => 'nav_ref_rewrite_failed',
+				'target_ref'       => 8300,
+				'target_kind'      => 'post',
+			),
+		);
+	}
+
+	/**
+	 * Ignores the shared failure (source 500) and degradation via the repos.
+	 *
+	 * @param int $post_id Degradation's affected post id.
+	 */
+	private function ignore_both( int $post_id ): void {
+		$this->history->set_failed_items_ignored( array(), array( 500 ), true );
+		$this->attention->set_issue_ignored(
+			$post_id,
+			'nav_ref_rewrite_failed',
+			8300,
+			'post',
+			true
+		);
+	}
+
+	/**
 	 * Seeds three failures and three degradations for the connected source.
 	 */
 	private function seed_three_failures_and_degradations(): void {
@@ -205,8 +323,8 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 		int $session,
 		?int $source_post_id,
 		string $title
-	): void {
-		$this->history->log_import_action(
+	): int {
+		$id = $this->history->log_import_action(
 			$session,
 			$source_post_id,
 			$title,
@@ -214,6 +332,8 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 			null,
 			'Boom'
 		);
+
+		return is_int( $id ) ? $id : 0;
 	}
 
 	/**
@@ -239,18 +359,45 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 	/**
 	 * Dispatches the inbox endpoint and returns the decoded JSON response.
 	 *
-	 * @param int $page     1-indexed page number.
-	 * @param int $per_page Items per page.
+	 * @param int    $page     1-indexed page number.
+	 * @param int    $per_page Items per page.
+	 * @param string $view     'open' or 'ignored'.
 	 * @return array Decoded response.
 	 */
-	private function list_needs_attention( int $page = 1, int $per_page = 20 ): array {
+	private function list_needs_attention(
+		int $page = 1,
+		int $per_page = 20,
+		string $view = 'open'
+	): array {
 		$_POST = array(
 			'nonce'    => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 			'page'     => (string) $page,
 			'per_page' => (string) $per_page,
+			'view'     => $view,
 		);
 
 		$this->dispatch_ajax_expecting_die( 'safe_publish_list_needs_attention' );
+
+		return json_decode( $this->_last_response, true );
+	}
+
+	/**
+	 * Dispatches the ignore/restore endpoint and returns the decoded response.
+	 *
+	 * @param array[] $items   Row descriptors carrying their kind.
+	 * @param bool    $ignored True to ignore, false to restore.
+	 * @return array Decoded response.
+	 */
+	private function set_ignored( array $items, bool $ignored ): array {
+		$_POST = array(
+			'nonce'   => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'ignored' => $ignored ? '1' : '0',
+			'items'   => wp_json_encode( $items ),
+		);
+
+		$this->dispatch_ajax_expecting_die(
+			'safe_publish_set_needs_attention_ignored'
+		);
 
 		return json_decode( $this->_last_response, true );
 	}
