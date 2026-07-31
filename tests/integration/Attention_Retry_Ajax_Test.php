@@ -479,7 +479,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	private function list_issues(): array {
 		$_POST = array( 'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ) );
 
-		$this->dispatch_ajax_expecting_die( 'safe_publish_list_attention_issues' );
+		$this->dispatch_ajax_expecting_die( 'safe_publish_list_needs_attention' );
 
 		return json_decode( $this->_last_response, true );
 	}

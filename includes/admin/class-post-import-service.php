@@ -867,9 +867,9 @@ class Post_Import_Service {
 	 * Adds local-state routing fields and row-level metadata to each post.
 	 *
 	 * Emits `local_state`, `is_imported`, plus active-row fields (`item_id`,
-	 * `post_id`, `import_date_gmt`, `error_message`, `has_previous_content`,
-	 * `edit_url`). Lookups are batched into one items query plus one wp_posts
-	 * query for the whole page.
+	 * `post_id`, `import_date_gmt`, `has_previous_content`, `edit_url`).
+	 * Lookups are batched into one items query plus one wp_posts query for the
+	 * whole page.
 	 *
 	 * @param array $posts Posts array fetched from the source API, passed by reference.
 	 */
@@ -952,7 +952,6 @@ class Post_Import_Service {
 			$post['item_id']              = null;
 			$post['post_id']              = null;
 			$post['import_date_gmt']      = null;
-			$post['error_message']        = null;
 			$post['has_previous_content'] = false;
 			$post['edit_url']             = '';
 			return;
@@ -963,9 +962,6 @@ class Post_Import_Service {
 		$post['item_id']              = (int) $active_row['id'];
 		$post['post_id']              = $post_id > 0 ? $post_id : null;
 		$post['import_date_gmt']      = (string) ( $active_row['import_date_gmt'] ?? '' );
-		$post['error_message']        = isset( $active_row['error_message'] )
-			? (string) $active_row['error_message']
-			: null;
 		$post['has_previous_content'] = (bool) ( $active_row['has_previous_content'] ?? 0 );
 
 		if ( $local_post_present && $post_id > 0 ) {

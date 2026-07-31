@@ -117,17 +117,26 @@ final class Post_Import_Notice {
 		$successful = (int) ( $data['successful'] ?? 0 );
 		$failed     = (int) ( $data['failed'] ?? 0 );
 
-		// Route to Failed when nothing succeeded — Imported would be empty.
+		// Route to the Needs attention inbox when nothing succeeded — the
+		// Imported view would be empty.
 		$failures_only = 0 === $successful && $failed > 0;
 
-		$link = add_query_arg(
-			array(
-				'page'       => 'safe-publish',
-				'state'      => $failures_only ? 'failed' : 'up-to-date',
-				'session_id' => $session_id,
-			),
-			admin_url( 'admin.php' )
-		);
+		$link = $failures_only
+			? add_query_arg(
+				array(
+					'page' => 'safe-publish',
+					'tab'  => 'needs-attention',
+				),
+				admin_url( 'admin.php' )
+			)
+			: add_query_arg(
+				array(
+					'page'       => 'safe-publish',
+					'state'      => 'up-to-date',
+					'session_id' => $session_id,
+				),
+				admin_url( 'admin.php' )
+			);
 
 		$link_text = $failures_only
 			? __( 'View failures', 'safe-publish' )

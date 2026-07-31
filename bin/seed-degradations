@@ -11,8 +11,8 @@
 # Prefer running via `npm run seed:degradations` so wp-env resolves on PATH.
 #
 # Usage:
-#   bin/seed-degradations            Seed both drawers on the destination.
-#   bin/seed-degradations count=30   Also add 30 filler entries per drawer.
+#   bin/seed-degradations            Seed the Needs attention tab.
+#   bin/seed-degradations count=30   Also add 30 filler entries.
 #   bin/seed-degradations purge=1    Remove the seeded demo artifacts.
 
 set -e

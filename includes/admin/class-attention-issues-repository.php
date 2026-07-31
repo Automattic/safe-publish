@@ -192,25 +192,25 @@ final class Attention_Issues_Repository {
 	}
 
 	/**
-	 * Returns a page of open issues for a source identity, errors before
-	 * warnings.
+	 * Lists open issues for a source identity, errors before warnings.
 	 *
 	 * @param string $source_site_url Path-bearing source identity.
-	 * @param int    $page            1-indexed page number.
-	 * @param int    $per_page        Items per page.
-	 * @return array[] Open issue rows with detail decoded; one extra row is
-	 *                 returned so callers can detect a further page.
+	 * @param int    $offset          Row offset into the ordered set.
+	 * @param int    $limit           Maximum rows to return.
+	 * @return array[] Open issue rows with detail decoded.
 	 */
-	public function get_open_issues(
+	public function list_open_issues(
 		string $source_site_url,
-		int $page = 1,
-		int $per_page = 20
+		int $offset,
+		int $limit
 	): array {
+		if ( $limit < 1 ) {
+			return array();
+		}
+
 		global $wpdb;
 
-		$table  = Attention_Issues_Table::table_name();
-		$offset = max( 0, ( $page - 1 ) * $per_page );
-		$limit  = $per_page + 1;
+		$table = Attention_Issues_Table::table_name();
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
@@ -222,7 +222,7 @@ final class Attention_Issues_Repository {
 					. ' LIMIT %d OFFSET %d',
 				$source_site_url,
 				$limit,
-				$offset
+				max( 0, $offset )
 			),
 			ARRAY_A
 		);
