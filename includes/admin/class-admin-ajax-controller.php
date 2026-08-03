@@ -708,14 +708,13 @@ final class Admin_Ajax_Controller {
 	 * acknowledge, distinct from Remove which hard-deletes a failure row.
 	 *
 	 * Takes a JSON items array of descriptors carrying their kind: failures
-	 * route to the id/source scope, degradations to their identity. Gated at
-	 * edit_posts because ignoring is a reversible write, matching Retry.
+	 * route to the id/source scope, degradations to their identity.
 	 */
 	public function ajax_set_needs_attention_ignored(): void {
 		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
 			$this->send_session_expired_error();
 		}
-		$this->verify_ajax_capability( 'edit_posts' );
+		$this->verify_ajax_capability();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing
 		$ignored = 1 === absint( $_POST['ignored'] ?? 0 );

@@ -251,6 +251,32 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that ignoring is gated at manage_options: an editor, who has
+	 * edit_posts but not manage_options, is forbidden.
+	 */
+	public function test_set_ignored_requires_manage_options(): void {
+		// ARRANGE: An editor — edit_posts but not manage_options.
+		wp_set_current_user(
+			$this->factory()->user->create( array( 'role' => 'editor' ) )
+		);
+
+		// ACT: Attempt to ignore a row as the editor.
+		$response = $this->set_ignored(
+			array(
+				array(
+					'kind'           => 'failure',
+					'item_id'        => 0,
+					'source_post_id' => 500,
+				),
+			),
+			true
+		);
+
+		// ASSERT: Forbidden — ignoring manages plugin data, like Remove.
+		$this->assertFalse( $response['success'] );
+	}
+
+	/**
 	 * Descriptors for the shared source-linked failure and degradation.
 	 *
 	 * @param int $post_id Degradation's affected post id.
