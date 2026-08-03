@@ -602,17 +602,31 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	 * reconciliation runs.
 	 */
 	public function test_bulk_retry_rejects_over_cap(): void {
-		// ARRANGE: One more descriptor than the batch cap allows.
-		$items = array();
-		for ( $i = 0; $i <= Admin_Ajax_Controller::RETRY_ATTENTION_BATCH_MAX; $i++ ) {
+		// ARRANGE: A resolvable open issue, then padding one past the cap.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => $this->nav_link_content( 8804, 'post-type' ) )
+		);
+		$this->seed_target_post( 8804 );
+		$this->open_issue( $post_id, 'unmapped_block_reference', 8804, 'post' );
+
+		$items = array( $this->descriptor( $post_id, 8804, 'post' ) );
+		for ( $i = 0; $i < Admin_Ajax_Controller::RETRY_ATTENTION_BATCH_MAX; $i++ ) {
 			$items[] = $this->descriptor( 1, 1000 + $i, 'post' );
 		}
 
 		// ACT: Dispatch the over-cap batch.
 		$response = $this->bulk_retry( $items );
 
-		// ASSERT: Rejected.
+		// ASSERT: Rejected before any reconciliation ran; the issue is untouched.
 		$this->assertFalse( $response['success'] );
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unmapped_block_reference',
+				8804,
+				'post'
+			)
+		);
 	}
 
 	/**
