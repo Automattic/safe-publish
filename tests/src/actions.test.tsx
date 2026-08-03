@@ -338,6 +338,7 @@ function buildDegradation(
 		affected_title: 'Primary Menu',
 		affected_edit_url: '',
 		retryable: true,
+		resolvable: false,
 		...overrides,
 	};
 }
@@ -690,6 +691,52 @@ describe( 'createNeedsAttentionActions', () => {
 		expect( onNotice ).not.toHaveBeenCalledWith(
 			expect.objectContaining( { status: 'info' } )
 		);
+	} );
+
+	it( 'Verifies that Retry opts into bulk selection', () => {
+		// ACT + ASSERT: The Retry action supports bulk.
+		expect( retryAction( undefined ).supportsBulk ).toBe( true );
+	} );
+
+	it( 'posts a bulk retry and surfaces the aggregate outcome', async () => {
+		// ARRANGE: A bulk endpoint reporting one resolved and one still waiting.
+		const fetchMock = vi.fn().mockResolvedValue( {
+			json: () =>
+				Promise.resolve( {
+					success: true,
+					data: {
+						resolved: 1,
+						target_absent: 1,
+						write_failed: 0,
+						unresolved: 0,
+						skipped: 0,
+					},
+				} ),
+		} );
+		vi.stubGlobal( 'fetch', fetchMock );
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		// ACT: Retry two selected degradations at once.
+		runCallback( retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation( { affected_post_id: 1 } ),
+			buildDegradation( { affected_post_id: 2 } ),
+		] );
+
+		// ASSERT: It hits the bulk endpoint with both, then reports the
+		// aggregate as a warning because one target is still waiting.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		const body = fetchMock.mock.calls[ 0 ][ 1 ].body as FormData;
+		expect( body.get( 'action' ) ).toBe(
+			'safe_publish_bulk_retry_attention_issues'
+		);
+		expect(
+			JSON.parse( body.get( 'items' ) as string )
+		).toHaveLength( 2 );
+		expect( onNotice ).toHaveBeenLastCalledWith( {
+			status: 'warning',
+			message: '1 resolved, 1 waiting on import, 0 failed.',
+		} );
 	} );
 
 	/**

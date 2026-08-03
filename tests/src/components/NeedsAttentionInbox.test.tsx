@@ -2,7 +2,7 @@
  * Tests for the NeedsAttentionInbox component.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import NeedsAttentionInbox from '@/components/NeedsAttentionInbox';
 import type { NeedsAttentionRow } from '@/types';
@@ -78,6 +78,7 @@ const DEGRADATION: NeedsAttentionRow = {
 	affected_title: 'Primary Menu',
 	affected_edit_url: 'https://destination.example/wp-admin/post.php?post=1024',
 	retryable: true,
+	resolvable: false,
 };
 
 /**
@@ -169,6 +170,66 @@ describe( 'NeedsAttentionInbox', () => {
 		// ASSERT: The reported count drives the tab label, not the page size.
 		await waitFor( () =>
 			expect( onCountChange ).toHaveBeenCalledWith( 5 )
+		);
+	} );
+
+	it( 'Verifies that a resolvable degradation shows the resolvable-now badge', async () => {
+		// ARRANGE: A retryable degradation whose target is imported.
+		mockListResponse( [ { ...DEGRADATION, resolvable: true } ] );
+
+		// ACT: Render the inbox.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+			/>
+		);
+
+		// ASSERT: The resolvable-now badge appears.
+		expect(
+			await screen.findByText( 'Resolvable now' )
+		).toBeInTheDocument();
+	} );
+
+	it( 'Verifies that a degradation awaiting its target shows the waiting badge', async () => {
+		// ARRANGE: A retryable degradation whose target is not imported.
+		mockListResponse( [ { ...DEGRADATION, resolvable: false } ] );
+
+		// ACT: Render the inbox.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+			/>
+		);
+
+		// ASSERT: The waiting-on-import badge appears.
+		expect(
+			await screen.findByText( 'Waiting on import' )
+		).toBeInTheDocument();
+	} );
+
+	it( 'Verifies that the resolvable badge is gated to the Open view', async () => {
+		// ARRANGE: A resolvable degradation, returned in either view.
+		mockListResponse( [ { ...DEGRADATION, resolvable: true } ] );
+
+		// ACT: Render (Open by default), then switch to the Ignored view.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+			/>
+		);
+		expect(
+			await screen.findByText( 'Resolvable now' )
+		).toBeInTheDocument();
+		fireEvent.click( screen.getByRole( 'radio', { name: 'Ignored' } ) );
+
+		// ASSERT: The Ignored view drops the badge — no Retry lives there.
+		await waitFor( () =>
+			expect(
+				screen.queryByText( 'Resolvable now' )
+			).not.toBeInTheDocument()
 		);
 	} );
 

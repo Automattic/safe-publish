@@ -26,7 +26,9 @@ import { RETRY_PENDING_DELAY_MS } from './constants';
 import {
 	ApiResponse,
 	AttentionIssue,
+	BulkRetryAttentionResponse,
 	ImportSyncStatus,
+	InboxDegradation,
 	InboxFailure,
 	NeedsAttentionRow,
 	NeedsAttentionView,
@@ -470,11 +472,196 @@ const dispatchSetIgnored = (
 };
 
 /**
+ * Runs the self-verifying single-issue retry, then refreshes. Surfaces every
+ * outcome and drops a concurrent submit for the same issue.
+ *
+ * @param {InboxDegradation}             issue     Degradation to retry.
+ * @param {NeedsAttentionActionsContext} context   Admin-ajax URL, nonce, notice sink.
+ * @param {Function}                     onRefresh Callback to refresh the inbox.
+ */
+const dispatchSingleRetry = (
+	issue: InboxDegradation,
+	context: NeedsAttentionActionsContext,
+	onRefresh: ( () => void ) | undefined
+): void => {
+	// The button stays clickable, so guard against concurrent submits for the
+	// same issue.
+	const key = attentionIssueId( issue );
+	if ( context.inFlight?.has( key ) ) {
+		return;
+	}
+	context.inFlight?.add( key );
+
+	// Clear any prior outcome, then show "Retrying…" only if the request
+	// outlasts the delay, so fast retries skip the flash.
+	context.onNotice?.( null );
+	const pendingTimer = setTimeout( () => {
+		context.onNotice?.( {
+			status: 'info',
+			message: __( 'Retrying…', 'safe-publish' ),
+		} );
+	}, RETRY_PENDING_DELAY_MS );
+
+	const formData = new FormData();
+	formData.append( 'action', 'safe_publish_retry_attention_issue' );
+	formData.append( 'nonce', context.nonce );
+	formData.append( 'affected_post_id', String( issue.affected_post_id ) );
+	formData.append( 'issue_type', issue.issue_type );
+	formData.append( 'target_ref', String( issue.target_ref ) );
+	formData.append( 'target_kind', issue.target_kind );
+
+	void fetch( context.ajaxurl, { method: 'POST', body: formData } )
+		.then(
+			( response ) =>
+				response.json() as Promise<
+					ApiResponse< RetryAttentionIssueResponse >
+				>
+		)
+		.then( ( result ) => {
+			clearTimeout( pendingTimer );
+
+			if ( ! result.success ) {
+				context.onNotice?.( {
+					status: 'error',
+					message: getErrorMessage(
+						result,
+						__( 'Failed to retry.', 'safe-publish' )
+					),
+				} );
+				return;
+			}
+
+			// Reconciliation ran but the issue persists; map the outcome to a
+			// notice so the refetch doesn't read as a silent success.
+			if ( ! result.data.resolved ) {
+				context.onNotice?.(
+					retryOutcomeNotice( result.data.outcome, issue )
+				);
+				return;
+			}
+
+			// Resolved: Confirm it, since the row drops from the refetched list
+			// and would otherwise clear silently.
+			context.onNotice?.( {
+				status: 'success',
+				message: sprintf(
+					/* translators: %s: affected content title */
+					__( 'Resolved: %s', 'safe-publish' ),
+					attentionIssueLabel( issue )
+				),
+			} );
+		} )
+		.catch( () => {
+			clearTimeout( pendingTimer );
+			context.onNotice?.( {
+				status: 'error',
+				message: __( 'Network error while retrying.', 'safe-publish' ),
+			} );
+		} )
+		.finally( () => {
+			context.inFlight?.delete( key );
+			onRefresh?.();
+		} );
+};
+
+/**
+ * Sums a bulk retry's per-outcome counts into one notice: An error if any write
+ * failed, a warning if any target is still absent or unresolved, else success.
+ *
+ * @param {BulkRetryAttentionResponse} counts Per-outcome counts.
+ * @return {ActionNotice} Aggregate notice.
+ */
+const bulkRetryNotice = (
+	counts: BulkRetryAttentionResponse
+): ActionNotice => {
+	const message = sprintf(
+		/* translators: 1: resolved count, 2: waiting-on-import count, 3: failed count */
+		__(
+			'%1$d resolved, %2$d waiting on import, %3$d failed.',
+			'safe-publish'
+		),
+		counts.resolved,
+		counts.target_absent,
+		counts.write_failed + counts.unresolved
+	);
+
+	if ( counts.write_failed > 0 ) {
+		return { status: 'error', message };
+	}
+	if ( counts.target_absent + counts.unresolved > 0 ) {
+		return { status: 'warning', message };
+	}
+	return { status: 'success', message };
+};
+
+/**
+ * Retries the selected degradations in one batched request, then refreshes and
+ * surfaces the aggregate outcome.
+ *
+ * @param {InboxDegradation[]}           issues    Degradations to retry.
+ * @param {NeedsAttentionActionsContext} context   Admin-ajax URL, nonce, notice sink.
+ * @param {Function}                     onRefresh Callback to refresh the inbox.
+ */
+const dispatchBulkRetry = (
+	issues: InboxDegradation[],
+	context: NeedsAttentionActionsContext,
+	onRefresh: ( () => void ) | undefined
+): void => {
+	context.onNotice?.( null );
+
+	const formData = new FormData();
+	formData.append( 'action', 'safe_publish_bulk_retry_attention_issues' );
+	formData.append( 'nonce', context.nonce );
+	formData.append(
+		'items',
+		JSON.stringify(
+			issues.map( ( issue ) => ( {
+				affected_post_id: issue.affected_post_id,
+				issue_type: issue.issue_type,
+				target_ref: issue.target_ref,
+				target_kind: issue.target_kind,
+			} ) )
+		)
+	);
+
+	void fetch( context.ajaxurl, { method: 'POST', body: formData } )
+		.then(
+			( response ) =>
+				response.json() as Promise<
+					ApiResponse< BulkRetryAttentionResponse >
+				>
+		)
+		.then( ( result ) => {
+			context.onNotice?.(
+				result.success
+					? bulkRetryNotice( result.data )
+					: {
+							status: 'error',
+							message: getErrorMessage(
+								result,
+								__( 'Failed to retry.', 'safe-publish' )
+							),
+					  }
+			);
+		} )
+		.catch( () => {
+			context.onNotice?.( {
+				status: 'error',
+				message: __( 'Network error while retrying.', 'safe-publish' ),
+			} );
+		} )
+		.finally( () => {
+			onRefresh?.();
+		} );
+};
+
+/**
  * Creates the Needs attention inbox actions for the active view. Open: Remove
  * (failures), self-verifying Retry (retryable degradations), and Ignore (a
  * reversible acknowledge, both kinds). Ignored: Un-ignore (both kinds) plus
  * Remove for failures. Retry re-runs the real reconciliation then refreshes,
- * surfacing every outcome; concurrent submits for one issue are dropped.
+ * surfacing every outcome (an aggregate notice for a bulk run); concurrent
+ * submits for one issue are dropped.
  *
  * @param {Function}                     onRefresh Callback to refresh the inbox.
  * @param {NeedsAttentionActionsContext} context   Admin-ajax URL, nonce, notice sink.
@@ -522,97 +709,21 @@ export const createNeedsAttentionActions = (
 		label: __( 'Retry', 'safe-publish' ),
 		icon: update,
 		isPrimary: true,
+		supportsBulk: true,
 		isEligible: ( item ) => 'degradation' === item.kind && item.retryable,
 		callback: ( items ) => {
-			const issue = items[ 0 ];
-			if ( ! issue || 'degradation' !== issue.kind ) {
-				return;
-			}
-
-			// The button stays clickable, so guard against concurrent submits
-			// for the same issue.
-			const key = attentionIssueId( issue );
-			if ( context.inFlight?.has( key ) ) {
-				return;
-			}
-			context.inFlight?.add( key );
-
-			// Clear any prior outcome, then show "Retrying…" only if the
-			// request outlasts the delay, so fast retries skip the flash.
-			context.onNotice?.( null );
-			const pendingTimer = setTimeout( () => {
-				context.onNotice?.( {
-					status: 'info',
-					message: __( 'Retrying…', 'safe-publish' ),
-				} );
-			}, RETRY_PENDING_DELAY_MS );
-
-			const formData = new FormData();
-			formData.append( 'action', 'safe_publish_retry_attention_issue' );
-			formData.append( 'nonce', context.nonce );
-			formData.append(
-				'affected_post_id',
-				String( issue.affected_post_id )
+			const degradations = items.filter(
+				( item ): item is InboxDegradation =>
+					'degradation' === item.kind && item.retryable
 			);
-			formData.append( 'issue_type', issue.issue_type );
-			formData.append( 'target_ref', String( issue.target_ref ) );
-			formData.append( 'target_kind', issue.target_kind );
-
-			void fetch( context.ajaxurl, { method: 'POST', body: formData } )
-				.then(
-					( response ) =>
-						response.json() as Promise<
-							ApiResponse< RetryAttentionIssueResponse >
-						>
-				)
-				.then( ( result ) => {
-					clearTimeout( pendingTimer );
-
-					if ( ! result.success ) {
-						context.onNotice?.( {
-							status: 'error',
-							message: getErrorMessage(
-								result,
-								__( 'Failed to retry.', 'safe-publish' )
-							),
-						} );
-						return;
-					}
-
-					// Reconciliation ran but the issue persists; map the outcome
-					// to a notice so the refetch doesn't read as a silent success.
-					if ( ! result.data.resolved ) {
-						context.onNotice?.(
-							retryOutcomeNotice( result.data.outcome, issue )
-						);
-						return;
-					}
-
-					// Resolved: Confirm it, since the row drops from the
-					// refetched list and would otherwise clear silently.
-					context.onNotice?.( {
-						status: 'success',
-						message: sprintf(
-							/* translators: %s: affected content title */
-							__( 'Resolved: %s', 'safe-publish' ),
-							attentionIssueLabel( issue )
-						),
-					} );
-				} )
-				.catch( () => {
-					clearTimeout( pendingTimer );
-					context.onNotice?.( {
-						status: 'error',
-						message: __(
-							'Network error while retrying.',
-							'safe-publish'
-						),
-					} );
-				} )
-				.finally( () => {
-					context.inFlight?.delete( key );
-					onRefresh?.();
-				} );
+			if ( 0 === degradations.length ) {
+				return;
+			}
+			if ( 1 === degradations.length ) {
+				dispatchSingleRetry( degradations[ 0 ], context, onRefresh );
+				return;
+			}
+			dispatchBulkRetry( degradations, context, onRefresh );
 		},
 	};
 
