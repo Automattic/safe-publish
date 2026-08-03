@@ -44,6 +44,8 @@ The selected session does not appear as a filter — sessions are an internal gr
 
 Collects every post-import problem in one place: import **failures** (the import errored, so no local post exists — or a re-import of an already-imported post failed) and **degradations** (the post imported but left an unresolved reference to a block, term, parent, or navigation link). Failures are listed first. The tab label shows the current count of open failures plus degradations.
 
+An **Open | Ignored** toggle switches between the active list and items set aside with Ignore. Open (the default) excludes ignored items, and the tab count always reflects the Open set. The Ignored view offers Un-ignore to restore an item; Remove still applies there for failures.
+
 ### Columns
 
 | Column   | Description                                                                                                                                              |
@@ -56,12 +58,16 @@ Collects every post-import problem in one place: import **failures** (the import
 
 ### Actions
 
-| Action | Description                                                                                                           |
-| ------ | --------------------------------------------------------------------------------------------------------------------- |
-| Remove | Clears a failure's record. Supports bulk selection.                                                                   |
-| Retry  | Re-runs a degradation's reconciliation and reports whether it cleared. Available when the issue type is reconcilable. |
+| Action    | Description                                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remove    | Clears a failure's record. Supports bulk selection.                                                                                         |
+| Retry     | Re-runs a degradation's reconciliation and reports whether it cleared. Available when the issue type is reconcilable.                       |
+| Ignore    | Sets a failure or degradation aside without deleting it, dropping it from the Open view and the count. Reversible; supports bulk selection. |
+| Un-ignore | Restores an ignored item to the Open view. Shown in the Ignored view; supports bulk selection.                                              |
 
 Removing a failure only deletes its record; it has no effect on the source. Recovery is fixing the underlying issue (for example, creating a missing author on the destination) and re-importing the post from the Source Posts page. A later successful import for the same source drops its failure from the list automatically.
+
+**Ignore vs Remove.** Ignore is reversible: it hides a failure or degradation from the Open view and the tab count but keeps its record, so Un-ignore brings it back — and a fresh failed attempt, or re-detecting the same degradation, re-surfaces it in Open. Remove is permanent: it deletes a failure's record outright. Degradations have no Remove; they clear only by a successful Retry or re-import.
 
 ## Post-import notice
 

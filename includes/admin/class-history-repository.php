@@ -763,12 +763,20 @@ final class History_Repository {
 	 * whose most recent row for its source is still an error. Orphans (no
 	 * source_post_id) always qualify; a later success drops a source.
 	 *
+	 * The ignored_gmt column is NULL for an open failure and set once ignored;
+	 * $ignored=true selects the ignored set instead of the open one.
+	 *
+	 * @param bool $ignored Select ignored rows instead of open ones.
 	 * @return string WHERE fragment.
 	 */
-	private function failures_where_sql(): string {
+	private function failures_where_sql( bool $ignored ): string {
 		$items_table = Import_Items_Table::table_name();
+		$ignore_sql  = $ignored
+			? 'it.ignored_gmt IS NOT NULL'
+			: 'it.ignored_gmt IS NULL';
 
-		return "it.status = 'error' AND ( it.source_post_id IS NULL"
+		return "it.status = 'error' AND {$ignore_sql}"
+			. ' AND ( it.source_post_id IS NULL'
 			. " OR NOT EXISTS ( SELECT 1 FROM `{$items_table}` t2"
 			. ' WHERE t2.source_post_id = it.source_post_id'
 			. ' AND ( t2.import_date_gmt > it.import_date_gmt'
@@ -781,11 +789,16 @@ final class History_Repository {
 	 * individually; source-linked errors are deduped to the latest attempt.
 	 * Joined to the sessions table so each row carries source_site_url.
 	 *
-	 * @param int $offset Row offset into the ordered failure set.
-	 * @param int $limit  Maximum rows to return.
+	 * @param int  $offset  Row offset into the ordered failure set.
+	 * @param int  $limit   Maximum rows to return.
+	 * @param bool $ignored List the ignored set instead of the open one.
 	 * @return array[] Failure rows including source_site_url.
 	 */
-	public function list_failures( int $offset, int $limit ): array {
+	public function list_failures(
+		int $offset,
+		int $limit,
+		bool $ignored = false
+	): array {
 		if ( $limit < 1 ) {
 			return array();
 		}
@@ -794,7 +807,7 @@ final class History_Repository {
 
 		$items_table   = Import_Items_Table::table_name();
 		$imports_table = Imports_Table::table_name();
-		$where_sql     = $this->failures_where_sql();
+		$where_sql     = $this->failures_where_sql( $ignored );
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
@@ -821,14 +834,15 @@ final class History_Repository {
 	 * count matches list_failures exactly (an item with no session row can't
 	 * appear in either).
 	 *
+	 * @param bool $ignored Count the ignored set instead of the open one.
 	 * @return int Number of failure rows.
 	 */
-	public function count_failures(): int {
+	public function count_failures( bool $ignored = false ): int {
 		global $wpdb;
 
 		$items_table   = Import_Items_Table::table_name();
 		$imports_table = Imports_Table::table_name();
-		$where_sql     = $this->failures_where_sql();
+		$where_sql     = $this->failures_where_sql( $ignored );
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$count = $wpdb->get_var(
@@ -858,6 +872,82 @@ final class History_Repository {
 	): int {
 		global $wpdb;
 
+		$scope = $this->build_failed_items_scope( $item_ids, $source_post_ids );
+		if ( null === $scope ) {
+			return 0;
+		}
+
+		$items_table = Import_Items_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$deleted = $wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM `{$items_table}`"
+					. " WHERE status = 'error' AND ( {$scope['sql']} )",
+				...$scope['params']
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return false === $deleted ? 0 : (int) $deleted;
+	}
+
+	/**
+	 * Sets or clears ignored_gmt on failure rows, mirroring the remove scope:
+	 * orphans by item id, source-linked failures across every error attempt for
+	 * the source so the deduped row can't re-surface a sibling.
+	 *
+	 * @param int[] $item_ids        Item ids to flag (orphan failures).
+	 * @param int[] $source_post_ids Source post ids whose failures to flag.
+	 * @param bool  $ignored         True to ignore, false to restore.
+	 * @return int Number of rows updated.
+	 */
+	public function set_failed_items_ignored(
+		array $item_ids,
+		array $source_post_ids,
+		bool $ignored
+	): int {
+		global $wpdb;
+
+		$scope = $this->build_failed_items_scope( $item_ids, $source_post_ids );
+		if ( null === $scope ) {
+			return 0;
+		}
+
+		$items_table = Import_Items_Table::table_name();
+		$params      = array();
+		$set_sql     = 'ignored_gmt = NULL';
+		if ( $ignored ) {
+			$set_sql  = 'ignored_gmt = %s';
+			$params[] = current_time( 'mysql', true );
+		}
+		$params = array_merge( $params, $scope['params'] );
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$updated = $wpdb->query(
+			$wpdb->prepare(
+				"UPDATE `{$items_table}` SET {$set_sql}"
+					. " WHERE status = 'error' AND ( {$scope['sql']} )",
+				...$params
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return false === $updated ? 0 : (int) $updated;
+	}
+
+	/**
+	 * Normalizes item ids and source post ids into a shared WHERE scope for the
+	 * failure remove/ignore paths.
+	 *
+	 * @param int[] $item_ids        Item ids (orphan failures).
+	 * @param int[] $source_post_ids Source post ids.
+	 * @return array{sql: string, params: int[]}|null Scope, or null when empty.
+	 */
+	private function build_failed_items_scope(
+		array $item_ids,
+		array $source_post_ids
+	): ?array {
 		$positive = static fn( int $id ): bool => $id > 0;
 
 		$ids     = array_values(
@@ -872,12 +962,11 @@ final class History_Repository {
 		);
 
 		if ( 0 === count( $ids ) && 0 === count( $sources ) ) {
-			return 0;
+			return null;
 		}
 
-		$items_table = Import_Items_Table::table_name();
-		$clauses     = array();
-		$params      = array();
+		$clauses = array();
+		$params  = array();
 
 		if ( count( $ids ) > 0 ) {
 			$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
@@ -894,19 +983,10 @@ final class History_Repository {
 			$params       = array_merge( $params, $sources );
 		}
 
-		$scope_sql = implode( ' OR ', $clauses );
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$deleted = $wpdb->query(
-			$wpdb->prepare(
-				"DELETE FROM `{$items_table}`"
-					. " WHERE status = 'error' AND ( {$scope_sql} )",
-				...$params
-			)
+		return array(
+			'sql'    => implode( ' OR ', $clauses ),
+			'params' => $params,
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-
-		return false === $deleted ? 0 : (int) $deleted;
 	}
 
 	/**

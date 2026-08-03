@@ -731,6 +731,147 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that ignoring an orphan failure by item id hides it from the open
+	 * list and count and surfaces it under the ignored view; un-ignore restores.
+	 */
+	public function test_ignore_orphan_failure_round_trips(): void {
+		// ARRANGE: A single orphan failure.
+		$session = $this->create_session();
+		$item    = $this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => null,
+				'status'          => 'error',
+				'error_message'   => 'Orphan failure',
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+
+		// ACT: Ignore the orphan by its item id.
+		$ignored = $this->repository->set_failed_items_ignored(
+			array( $item ),
+			array(),
+			true
+		);
+
+		// ASSERT: It drops from the open list/count and appears under ignored.
+		$this->assertSame( 1, $ignored );
+		$this->assertSame( 0, $this->repository->count_failures() );
+		$this->assertSame( 1, $this->repository->count_failures( true ) );
+		$rows = $this->repository->list_failures( 0, 20, true );
+		$this->assertCount( 1, $rows );
+		$this->assertSame( $item, (int) $rows[0]['id'] );
+
+		// ACT: Un-ignore it.
+		$restored = $this->repository->set_failed_items_ignored(
+			array( $item ),
+			array(),
+			false
+		);
+
+		// ASSERT: It returns to the open list and clears from ignored.
+		$this->assertSame( 1, $restored );
+		$this->assertSame( 1, $this->repository->count_failures() );
+		$this->assertSame( 0, $this->repository->count_failures( true ) );
+	}
+
+	/**
+	 * Verifies that ignoring by source flags every error attempt for the source,
+	 * so the deduped listing can't re-surface an older sibling.
+	 */
+	public function test_ignore_by_source_flags_every_attempt(): void {
+		global $wpdb;
+
+		// ARRANGE: Two error attempts for one source, plus an unrelated one.
+		$session = $this->create_session();
+		$this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => 800,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-02-01 00:00:00',
+			)
+		);
+		$this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => 800,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-02-02 00:00:00',
+			)
+		);
+		$this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => 801,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-02-03 00:00:00',
+			)
+		);
+
+		// ACT: Ignore source 800.
+		$ignored = $this->repository->set_failed_items_ignored(
+			array(),
+			array( 800 ),
+			true
+		);
+
+		// ASSERT: Both 800 attempts carry the flag, so no sibling resurfaces;
+		// the open list keeps only 801 and 800 shows once under ignored.
+		$this->assertSame( 2, $ignored );
+
+		$table = Import_Items_Table::table_name();
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$flagged = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM `{$table}`"
+					. ' WHERE source_post_id = %d AND ignored_gmt IS NOT NULL',
+				800
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$this->assertSame( 2, $flagged );
+		$this->assertSame( 1, $this->repository->count_failures() );
+		$this->assertSame( 1, $this->repository->count_failures( true ) );
+	}
+
+	/**
+	 * Verifies that a fresh failed attempt after ignoring a source re-surfaces it
+	 * in the open view — a new unflagged error becomes the most recent row.
+	 */
+	public function test_new_failure_after_ignore_resurfaces_in_open(): void {
+		// ARRANGE: An ignored source-linked failure.
+		$session = $this->create_session();
+		$this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => 802,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-03-01 00:00:00',
+			)
+		);
+		$this->repository->set_failed_items_ignored(
+			array(),
+			array( 802 ),
+			true
+		);
+
+		// ACT: A later re-import for the same source fails afresh.
+		$this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => 802,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-03-02 00:00:00',
+			)
+		);
+
+		// ASSERT: The source is open again and no longer under ignored.
+		$this->assertSame( 1, $this->repository->count_failures() );
+		$this->assertSame( 0, $this->repository->count_failures( true ) );
+	}
+
+	/**
 	 * Verifies that update_source_modified_gmt_bulk fans out updates correctly.
 	 */
 	public function test_update_source_modified_gmt_bulk_writes_each_row(): void {

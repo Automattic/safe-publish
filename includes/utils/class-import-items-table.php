@@ -21,7 +21,7 @@ final class Import_Items_Table {
 	/**
 	 * Table schema version.
 	 */
-	private const VERSION = '1.1';
+	private const VERSION = '1.2';
 
 	/**
 	 * Option key used to track the installed table schema version.
@@ -84,6 +84,7 @@ final class Import_Items_Table {
 			rolled_back TINYINT(1) NOT NULL DEFAULT 0,
 			import_date_gmt DATETIME NOT NULL,
 			source_modified_gmt DATETIME NULL DEFAULT NULL,
+			ignored_gmt DATETIME NULL DEFAULT NULL,
 			PRIMARY KEY  (id),
 			KEY session_id_status (session_id, status),
 			KEY post_id_import_date (post_id, import_date_gmt),

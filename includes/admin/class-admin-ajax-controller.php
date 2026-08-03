@@ -73,6 +73,15 @@ final class Admin_Ajax_Controller {
 	const DELETE_FAILED_IMPORTS_BATCH_MAX = 100;
 
 	/**
+	 * Maximum number of inbox rows accepted by
+	 * ajax_set_needs_attention_ignored in a single call. Ignore is a light
+	 * UPDATE, but the cap keeps request time and statement size bounded.
+	 *
+	 * @var int
+	 */
+	const SET_IGNORED_BATCH_MAX = 100;
+
+	/**
 	 * Maximum number of post ids accepted by ajax_bulk_delete_posts in a
 	 * single call. Each trash op runs in PHP — keep the batch small enough
 	 * that the request finishes within a typical admin-ajax timeout.
@@ -179,6 +188,7 @@ final class Admin_Ajax_Controller {
 		add_action( 'wp_ajax_safe_publish_list_needs_attention', array( $this, 'ajax_list_needs_attention' ) );
 		add_action( 'wp_ajax_safe_publish_retry_attention_issue', array( $this, 'ajax_retry_attention_issue' ) );
 		add_action( 'wp_ajax_safe_publish_delete_failed_items', array( $this, 'ajax_delete_failed_items' ) );
+		add_action( 'wp_ajax_safe_publish_set_needs_attention_ignored', array( $this, 'ajax_set_needs_attention_ignored' ) );
 		add_action( 'wp_ajax_safe_publish_fetch_post_types', array( $this, 'ajax_fetch_post_types' ) );
 		add_action( 'wp_ajax_safe_publish_test_connection', array( $this, 'ajax_test_connection' ) );
 		add_action( 'wp_ajax_safe_publish_auth_status', array( $this, 'ajax_auth_status' ) );
@@ -295,26 +305,45 @@ final class Admin_Ajax_Controller {
 		}
 		// The inbox surfaces failure data and its Remove deletes it, so gate at
 		// manage_options — matching the Manage page and ajax_delete_failed_items.
-		// Retry is separately gated at edit_posts.
+		// Retry and Ignore are separately gated at edit_posts.
 		$this->verify_ajax_capability();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing
 		$page     = max( 1, absint( $_POST['page'] ?? 1 ) );
 		$per_page = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
+		$ignored  = 'ignored' === sanitize_key(
+			wp_unslash( $_POST['view'] ?? 'open' )
+		);
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		$offset          = ( $page - 1 ) * $per_page;
 		$source_site_url = Options::get_connected_site_url_with_path();
-		$failed_count    = $this->repository->count_failures();
-		$attention_count = $this->attention_issues->count_open_issues(
+
+		// The tab label always reflects the open (unignored) total, whichever
+		// view is being listed.
+		$open_failed    = $this->repository->count_failures();
+		$open_attention = $this->attention_issues->count_open_issues(
 			$source_site_url
 		);
+		$open_total     = $open_failed + $open_attention;
+
+		if ( $ignored ) {
+			$failed_count    = $this->repository->count_failures( true );
+			$attention_count = $this->attention_issues->count_open_issues(
+				$source_site_url,
+				true
+			);
+		} else {
+			$failed_count    = $open_failed;
+			$attention_count = $open_attention;
+		}
 
 		$items = $this->collect_needs_attention_page(
 			$offset,
 			$per_page,
 			$failed_count,
-			$source_site_url
+			$source_site_url,
+			$ignored
 		);
 
 		$total = $failed_count + $attention_count;
@@ -323,7 +352,7 @@ final class Admin_Ajax_Controller {
 			array(
 				'items'                 => $items,
 				'has_more'              => $offset + count( $items ) < $total,
-				'needs_attention_count' => $total,
+				'needs_attention_count' => $open_total,
 			)
 		);
 	}
@@ -337,26 +366,29 @@ final class Admin_Ajax_Controller {
 	 * @param int    $limit           Page size.
 	 * @param int    $failed_count    Total failures (the block boundary).
 	 * @param string $source_site_url Connected source identity.
+	 * @param bool   $ignored         Page the ignored set instead of the open one.
 	 * @return array[] Unified inbox rows.
 	 */
 	private function collect_needs_attention_page(
 		int $offset,
 		int $limit,
 		int $failed_count,
-		string $source_site_url
+		string $source_site_url,
+		bool $ignored
 	): array {
 		if ( $offset >= $failed_count ) {
 			return $this->format_attention_rows(
 				$this->attention_issues->list_open_issues(
 					$source_site_url,
 					$offset - $failed_count,
-					$limit
+					$limit,
+					$ignored
 				)
 			);
 		}
 
 		$items     = $this->format_failure_rows(
-			$this->repository->list_failures( $offset, $limit )
+			$this->repository->list_failures( $offset, $limit, $ignored )
 		);
 		$shortfall = $limit - count( $items );
 
@@ -368,7 +400,8 @@ final class Admin_Ajax_Controller {
 					$this->attention_issues->list_open_issues(
 						$source_site_url,
 						0,
-						$shortfall
+						$shortfall,
+						$ignored
 					)
 				)
 			);
@@ -668,6 +701,123 @@ final class Admin_Ajax_Controller {
 		);
 
 		wp_send_json_success( array( 'deleted' => $deleted ) );
+	}
+
+	/**
+	 * Ignores or restores inbox rows in bulk. Ignore is a reversible, soft
+	 * acknowledge, distinct from Remove which hard-deletes a failure row.
+	 *
+	 * Takes a JSON items array of descriptors carrying their kind: failures
+	 * route to the id/source scope, degradations to their identity.
+	 */
+	public function ajax_set_needs_attention_ignored(): void {
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
+		$this->verify_ajax_capability();
+
+		// phpcs:disable WordPress.Security.NonceVerification.Missing
+		$ignored = 1 === absint( $_POST['ignored'] ?? 0 );
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON decoded and each field sanitized in apply_needs_attention_ignored().
+		$raw_items = wp_unslash( $_POST['items'] ?? '' );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		$items = is_string( $raw_items ) ? json_decode( $raw_items, true ) : null;
+		if ( ! is_array( $items ) || 0 === count( $items ) ) {
+			wp_send_json_error( __( 'No items provided.', 'safe-publish' ) );
+		}
+
+		if ( count( $items ) > self::SET_IGNORED_BATCH_MAX ) {
+			wp_send_json_error(
+				sprintf(
+					/* translators: %d: maximum number of items per batch */
+					__(
+						'Ignoring is limited to %d items at a time.',
+						'safe-publish'
+					),
+					self::SET_IGNORED_BATCH_MAX
+				)
+			);
+		}
+
+		$updated = $this->apply_needs_attention_ignored( $items, $ignored );
+
+		wp_send_json_success( array( 'updated' => $updated ) );
+	}
+
+	/**
+	 * Applies an ignore/restore to a batch of inbox descriptors, routing each
+	 * by kind, and returns the number of rows changed.
+	 *
+	 * @param array[] $items   Descriptors, each carrying a 'kind'.
+	 * @param bool    $ignored True to ignore, false to restore.
+	 * @return int Rows updated across failures and degradations.
+	 */
+	private function apply_needs_attention_ignored(
+		array $items,
+		bool $ignored
+	): int {
+		$item_ids   = array();
+		$source_ids = array();
+		$updated    = 0;
+
+		foreach ( $items as $item ) {
+			if ( ! is_array( $item ) ) {
+				continue;
+			}
+
+			$kind = $item['kind'] ?? '';
+
+			if ( 'failure' === $kind ) {
+				$source_id = absint( $item['source_post_id'] ?? 0 );
+				if ( $source_id > 0 ) {
+					$source_ids[] = $source_id;
+				} else {
+					$item_ids[] = absint( $item['item_id'] ?? 0 );
+				}
+			} elseif ( 'degradation' === $kind ) {
+				$updated += $this->set_degradation_ignored( $item, $ignored );
+			}
+		}
+
+		if ( count( $item_ids ) > 0 || count( $source_ids ) > 0 ) {
+			$updated += $this->repository->set_failed_items_ignored(
+				$item_ids,
+				$source_ids,
+				$ignored
+			);
+		}
+
+		return $updated;
+	}
+
+	/**
+	 * Ignores or restores one degradation descriptor after validating its
+	 * target kind; an unknown identity harmlessly matches nothing.
+	 *
+	 * @param array $item    Degradation descriptor.
+	 * @param bool  $ignored True to ignore, false to restore.
+	 * @return int Rows updated (0 or 1).
+	 */
+	private function set_degradation_ignored( array $item, bool $ignored ): int {
+		$target_kind = sanitize_text_field(
+			(string) ( $item['target_kind'] ?? '' )
+		);
+		if ( ! in_array( $target_kind, array( 'post', 'term' ), true ) ) {
+			return 0;
+		}
+
+		$issue_type = sanitize_text_field(
+			(string) ( $item['issue_type'] ?? '' )
+		);
+
+		return $this->attention_issues->set_issue_ignored(
+			absint( $item['affected_post_id'] ?? 0 ),
+			$issue_type,
+			absint( $item['target_ref'] ?? 0 ),
+			$target_kind,
+			$ignored
+		);
 	}
 
 	/**
