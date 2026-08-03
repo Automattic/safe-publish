@@ -10,14 +10,15 @@
  *
  *   step=source   On the source site: upsert the demo pages (a parent/child
  *                 pair, a resolvable links page with its two targets, an
- *                 unresolvable links page, a reusable-block page, and
- *                 optionally a volume page when count>0). Prints page IDs for
- *                 the wrapper.
+ *                 unresolvable links page, a reusable-block page, a cross-post
+ *                 gallery page, and optionally a volume page when count>0).
+ *                 Prints page IDs for the wrapper.
  *   step=import   On the destination site: import the child (orphan fallback
- *                 on) for a parent_orphaned issue, and the links and
- *                 reusable-block pages for unmapped_block_reference issues, run
- *                 a no-id import for an orphan failure, and stage a
- *                 nav_ref_rewrite_failed issue.
+ *                 on) for a parent_orphaned issue, the links and reusable-block
+ *                 pages for unmapped_block_reference issues, the gallery page
+ *                 for an unmapped_gallery_reference issue, run a no-id import
+ *                 for an orphan failure, and stage a nav_ref_rewrite_failed
+ *                 issue.
  *
  * Pass purge=1 with either step to remove that side's seeded artifacts.
  * Pass count=N (seed only) to add N filler entries per drawer for pagination.
@@ -61,6 +62,8 @@ const SAFE_PUBLISH_DEMO_UNRESOLVABLE_TITLE  = 'Unresolvable Reference Demo';
 const SAFE_PUBLISH_DEMO_REUSABLE_SLUG       = 'sp-demo-reusable-block';
 const SAFE_PUBLISH_DEMO_REUSABLE_TITLE      = 'Reusable Block Demo';
 const SAFE_PUBLISH_DEMO_REUSABLE_REF        = 930001;
+const SAFE_PUBLISH_DEMO_GALLERY_SLUG        = 'sp-demo-gallery-reference';
+const SAFE_PUBLISH_DEMO_GALLERY_TITLE       = 'Cross-Post Gallery Demo';
 const SAFE_PUBLISH_DEMO_VOLUME_SLUG         = 'sp-demo-volume';
 const SAFE_PUBLISH_DEMO_VOLUME_TITLE        = 'Volume Demo';
 const SAFE_PUBLISH_DEMO_VOLUME_ORPHAN_TITLE = 'Volume orphan failure';
@@ -213,6 +216,18 @@ function safe_publish_demo_reusable_content(): string {
 }
 
 /**
+ * Builds a page whose [gallery id] points at a different, not-yet-imported
+ * source post, so the import opens a retryable unmapped_gallery_reference
+ * issue. Importing the target and retrying then resolves it.
+ *
+ * @param int $target_id Source ID of the referenced post.
+ * @return string Raw shortcode markup.
+ */
+function safe_publish_demo_gallery_content( int $target_id ): string {
+	return '[gallery id="' . $target_id . '"]';
+}
+
+/**
  * Builds a links page with the given number of navigation links to
  * deliberately unresolvable source IDs, used to fill a drawer past one page.
  *
@@ -254,6 +269,7 @@ function safe_publish_demo_run_source(
 			'references',
 			'references-unresolvable',
 			'reusable-block',
+			'gallery-reference',
 			'volume',
 			'target-a',
 			'target-b',
@@ -336,6 +352,14 @@ function safe_publish_demo_run_source(
 		$author_id,
 		safe_publish_demo_reusable_content()
 	);
+	$gallery_id      = safe_publish_demo_upsert_page(
+		'gallery-reference',
+		SAFE_PUBLISH_DEMO_GALLERY_SLUG,
+		SAFE_PUBLISH_DEMO_GALLERY_TITLE,
+		0,
+		$author_id,
+		safe_publish_demo_gallery_content( $target_a_id )
+	);
 
 	// Optional volume: one page with `count` filler links to push the drawer
 	// past a page. Removed when count is 0 so the count self-corrects.
@@ -363,6 +387,7 @@ function safe_publish_demo_run_source(
 	WP_CLI::log( 'SEED_REFERENCES_ID=' . $references_id );
 	WP_CLI::log( 'SEED_UNRESOLVABLE_ID=' . $unresolvable_id );
 	WP_CLI::log( 'SEED_REUSABLE_ID=' . $reusable_id );
+	WP_CLI::log( 'SEED_GALLERY_ID=' . $gallery_id );
 	WP_CLI::log( 'SEED_VOLUME_ID=' . $volume_id );
 }
 
@@ -475,17 +500,21 @@ function safe_publish_demo_delete_imported_pages(
 }
 
 /**
- * Counts the unmapped_block_reference warnings in an import result.
+ * Counts the warnings of a given type in an import result.
  *
- * @param array $result import_post() result.
- * @return int Number of unmapped reference warnings.
+ * @param array  $result import_post() result.
+ * @param string $type   Warning type to count.
+ * @return int Number of matching warnings.
  */
-function safe_publish_demo_count_unmapped( array $result ): int {
+function safe_publish_demo_count_unmapped(
+	array $result,
+	string $type = 'unmapped_block_reference'
+): int {
 	return count(
 		array_filter(
 			$result['warnings'] ?? array(),
-			static function ( array $warning ) {
-				return 'unmapped_block_reference' === ( $warning['type'] ?? '' );
+			static function ( array $warning ) use ( $type ) {
+				return ( $warning['type'] ?? '' ) === $type;
 			}
 		)
 	);
@@ -594,6 +623,7 @@ function safe_publish_demo_purge_destination(): void {
 		SAFE_PUBLISH_DEMO_REFERENCES_TITLE,
 		SAFE_PUBLISH_DEMO_UNRESOLVABLE_TITLE,
 		SAFE_PUBLISH_DEMO_REUSABLE_TITLE,
+		SAFE_PUBLISH_DEMO_GALLERY_TITLE,
 		SAFE_PUBLISH_DEMO_VOLUME_TITLE,
 		SAFE_PUBLISH_DEMO_NAV_REFERRER_TITLE,
 		SAFE_PUBLISH_DEMO_TARGET_A_TITLE,
@@ -635,15 +665,16 @@ function safe_publish_demo_run_import(
 	$references_id   = (int) ( $arguments['references_id'] ?? 0 );
 	$unresolvable_id = (int) ( $arguments['unresolvable_id'] ?? 0 );
 	$reusable_id     = (int) ( $arguments['reusable_id'] ?? 0 );
+	$gallery_id      = (int) ( $arguments['gallery_id'] ?? 0 );
 	$volume_id       = (int) ( $arguments['volume_id'] ?? 0 );
 	$count           = max( 0, (int) ( $arguments['count'] ?? 0 ) );
 	if (
 		$child_id <= 0 || $parent_id <= 0
 		|| $references_id <= 0 || $unresolvable_id <= 0
-		|| $reusable_id <= 0
+		|| $reusable_id <= 0 || $gallery_id <= 0
 	) {
 		WP_CLI::error(
-			'step=import requires child_id, parent_id, references_id, unresolvable_id, reusable_id.'
+			'step=import requires child_id, parent_id, references_id, unresolvable_id, reusable_id, gallery_id.'
 		);
 	}
 	if ( $count > 0 && $volume_id <= 0 ) {
@@ -775,6 +806,37 @@ function safe_publish_demo_run_import(
 			'Import of "' . SAFE_PUBLISH_DEMO_REUSABLE_TITLE . '" failed: '
 				. $reusable_result['error']
 		);
+	}
+
+	// Cross-post gallery page: its [gallery id] points at an unimported source
+	// post, so the import opens a retryable unmapped_gallery_reference issue.
+	$gallery_prefetch = $api->fetch_fresh_post( $gallery_id, 'page' );
+	$gallery_options  = is_wp_error( $gallery_prefetch )
+		? array()
+		: array( 'prefetched_fresh_result' => $gallery_prefetch );
+	$gallery_result   = $service->import_post(
+		array(
+			'id'        => $gallery_id,
+			'post_type' => 'page',
+			'title'     => SAFE_PUBLISH_DEMO_GALLERY_TITLE,
+			'link'      => rtrim( $source_site_url, '/' ) . '/?p=' . $gallery_id,
+		),
+		$session_id,
+		$gallery_options
+	);
+	if ( ! $gallery_result['success'] ) {
+		WP_CLI::error(
+			'Import of "' . SAFE_PUBLISH_DEMO_GALLERY_TITLE . '" failed: '
+				. $gallery_result['error']
+		);
+	}
+	if (
+		safe_publish_demo_count_unmapped(
+			$gallery_result,
+			'unmapped_gallery_reference'
+		) < 1
+	) {
+		WP_CLI::error( 'Expected an unmapped_gallery_reference warning; got none.' );
 	}
 
 	$service->import_post(

@@ -18,12 +18,13 @@ Re-running is idempotent: the counts hold steady, and dropping `count` back to i
 
 ## What Gets Seeded
 
-Six **degradations** — covering every issue type and both severities — plus one **orphan failure**:
+Seven **degradations** — covering every issue type and both severities — plus one **orphan failure**:
 
 | Affected page               | Issue type                            | Severity | Resolves via                                |
 | --------------------------- | ------------------------------------- | -------- | ------------------------------------------- |
 | Orphan Demo Child           | `parent_orphaned`                     | warning  | import **Orphan Demo Parent**, then Retry   |
 | Unmapped References Demo    | `unmapped_block_reference` (post, ×2) | warning  | import **Unmapped Target A** / **B**, Retry |
+| Cross-Post Gallery Demo     | `unmapped_gallery_reference` (post)   | warning  | import **Unmapped Target A**, then Retry    |
 | Unresolvable Reference Demo | `unmapped_block_reference` (term)     | warning  | never — points at a non-existent term       |
 | Nav Referrer Demo           | `nav_ref_rewrite_failed`              | error    | Retry alone                                 |
 | Reusable Block Demo         | `unmapped_block_reference` (reusable) | warning  | never — target block isn't seeded on source |
