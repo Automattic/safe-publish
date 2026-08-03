@@ -877,9 +877,9 @@ class Post_Import_Service {
 	 * Adds local-state routing fields and row-level metadata to each post.
 	 *
 	 * Emits `local_state`, `is_imported`, plus active-row fields (`item_id`,
-	 * `post_id`, `import_date_gmt`, `error_message`, `has_previous_content`,
-	 * `edit_url`). Lookups are batched into one items query plus one wp_posts
-	 * query for the whole page.
+	 * `post_id`, `import_date_gmt`, `has_previous_content`, `edit_url`).
+	 * Lookups are batched into one items query plus one wp_posts query for the
+	 * whole page.
 	 *
 	 * @param array $posts Posts array fetched from the source API, passed by reference.
 	 */
@@ -962,7 +962,6 @@ class Post_Import_Service {
 			$post['item_id']              = null;
 			$post['post_id']              = null;
 			$post['import_date_gmt']      = null;
-			$post['error_message']        = null;
 			$post['has_previous_content'] = false;
 			$post['edit_url']             = '';
 			return;
@@ -973,9 +972,6 @@ class Post_Import_Service {
 		$post['item_id']              = (int) $active_row['id'];
 		$post['post_id']              = $post_id > 0 ? $post_id : null;
 		$post['import_date_gmt']      = (string) ( $active_row['import_date_gmt'] ?? '' );
-		$post['error_message']        = isset( $active_row['error_message'] )
-			? (string) $active_row['error_message']
-			: null;
 		$post['has_previous_content'] = (bool) ( $active_row['has_previous_content'] ?? 0 );
 
 		if ( $local_post_present && $post_id > 0 ) {
@@ -1203,6 +1199,82 @@ class Post_Import_Service {
 		);
 
 		return ! empty( $existing_posts ) ? $existing_posts[0] : null;
+	}
+
+	/**
+	 * Reports per open degradation whether its target is imported, so a Retry
+	 * would reconcile it now. Batched, reusing each type's Retry lookup; a true
+	 * is a hint, not a guarantee, since Retry can still return write_failed.
+	 *
+	 * @param array[] $issue_rows      Open degradation rows, each carrying
+	 *                                 issue_type, target_ref, and target_kind.
+	 * @param string  $source_site_url Connected source identity scoping lookups.
+	 * @return array<int, bool> Resolvable flag keyed by each row's input index.
+	 */
+	public function degradation_resolvability(
+		array $issue_rows,
+		string $source_site_url
+	): array {
+		if ( array() === $issue_rows ) {
+			return array();
+		}
+
+		$parent_refs = array();
+		$post_refs   = array();
+		$term_refs   = array();
+		$classes     = array();
+
+		foreach ( $issue_rows as $index => $row ) {
+			$ref  = (int) ( $row['target_ref'] ?? 0 );
+			$type = (string) ( $row['issue_type'] ?? '' );
+			$kind = (string) ( $row['target_kind'] ?? '' );
+
+			if ( $ref <= 0 ) {
+				$classes[ $index ] = array( 'none', 0 );
+				continue;
+			}
+
+			// parent_orphaned mirrors find_imported_post; block/nav refs mirror
+			// resolve_target_ref (post or term meta).
+			if ( 'parent_orphaned' === $type ) {
+				$bucket              = 'parent';
+				$parent_refs[ $ref ] = true;
+			} elseif ( 'term' === $kind ) {
+				$bucket            = 'term';
+				$term_refs[ $ref ] = true;
+			} else {
+				$bucket            = 'post';
+				$post_refs[ $ref ] = true;
+			}
+
+			$classes[ $index ] = array( $bucket, $ref );
+		}
+
+		$target_maps = $this->content_processor->map_target_refs(
+			$post_refs,
+			$term_refs,
+			$source_site_url
+		);
+
+		$maps = array(
+			'parent' => array() === $parent_refs
+				? array()
+				: $this->fetch_imported_posts_by_source_ids(
+					array_keys( $parent_refs ),
+					$source_site_url
+				),
+			'post'   => $target_maps['post'],
+			'term'   => $target_maps['term'],
+		);
+
+		$resolvable = array();
+		foreach ( $classes as $index => $class ) {
+			list( $bucket, $ref ) = $class;
+			$resolvable[ $index ] = 'none' !== $bucket
+				&& isset( $maps[ $bucket ][ $ref ] );
+		}
+
+		return $resolvable;
 	}
 
 	/**

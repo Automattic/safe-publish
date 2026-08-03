@@ -192,37 +192,46 @@ final class Attention_Issues_Repository {
 	}
 
 	/**
-	 * Returns a page of open issues for a source identity, errors before
-	 * warnings.
+	 * Lists open issues for a source identity, errors before warnings.
+	 *
+	 * Ignore is orthogonal to the open/resolved status: ignored issues stay
+	 * open. $ignored=true selects the ignored subset instead of the active one.
 	 *
 	 * @param string $source_site_url Path-bearing source identity.
-	 * @param int    $page            1-indexed page number.
-	 * @param int    $per_page        Items per page.
-	 * @return array[] Open issue rows with detail decoded; one extra row is
-	 *                 returned so callers can detect a further page.
+	 * @param int    $offset          Row offset into the ordered set.
+	 * @param int    $limit           Maximum rows to return.
+	 * @param bool   $ignored         List the ignored subset instead of active.
+	 * @return array[] Open issue rows with detail decoded.
 	 */
-	public function get_open_issues(
+	public function list_open_issues(
 		string $source_site_url,
-		int $page = 1,
-		int $per_page = 20
+		int $offset,
+		int $limit,
+		bool $ignored = false
 	): array {
+		if ( $limit < 1 ) {
+			return array();
+		}
+
 		global $wpdb;
 
-		$table  = Attention_Issues_Table::table_name();
-		$offset = max( 0, ( $page - 1 ) * $per_page );
-		$limit  = $per_page + 1;
+		$table      = Attention_Issues_Table::table_name();
+		$ignore_sql = $ignored
+			? 'ignored_gmt IS NOT NULL'
+			: 'ignored_gmt IS NULL';
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT * FROM `{$table}`"
 					. " WHERE source_site_url = %s AND status = 'open'"
+					. " AND {$ignore_sql}"
 					. " ORDER BY FIELD(severity, 'error', 'warning'),"
 					. ' last_seen_gmt DESC, id DESC'
 					. ' LIMIT %d OFFSET %d',
 				$source_site_url,
 				$limit,
-				$offset
+				max( 0, $offset )
 			),
 			ARRAY_A
 		);
@@ -245,18 +254,26 @@ final class Attention_Issues_Repository {
 	 * Counts open issues for a source identity.
 	 *
 	 * @param string $source_site_url Path-bearing source identity.
+	 * @param bool   $ignored         Count the ignored subset instead of active.
 	 * @return int Number of open issue rows.
 	 */
-	public function count_open_issues( string $source_site_url ): int {
+	public function count_open_issues(
+		string $source_site_url,
+		bool $ignored = false
+	): int {
 		global $wpdb;
 
-		$table = Attention_Issues_Table::table_name();
+		$table      = Attention_Issues_Table::table_name();
+		$ignore_sql = $ignored
+			? 'ignored_gmt IS NOT NULL'
+			: 'ignored_gmt IS NULL';
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$count = $wpdb->get_var(
 			$wpdb->prepare(
 				"SELECT COUNT(*) FROM `{$table}`"
-					. " WHERE source_site_url = %s AND status = 'open'",
+					. " WHERE source_site_url = %s AND status = 'open'"
+					. " AND {$ignore_sql}",
 				$source_site_url
 			)
 		);
@@ -378,6 +395,44 @@ final class Attention_Issues_Repository {
 			array( '%s' ),
 			array( '%d', '%s', '%d', '%s' )
 		);
+	}
+
+	/**
+	 * Sets or clears ignored_gmt on a single issue, keyed by its full identity.
+	 *
+	 * @param int    $affected_post_id Destination post id.
+	 * @param string $issue_type       Issue type.
+	 * @param int    $target_ref       Source id of the target.
+	 * @param string $target_kind      'post' or 'term'.
+	 * @param bool   $ignored          True to ignore, false to restore.
+	 * @return int Number of rows updated.
+	 */
+	public function set_issue_ignored(
+		int $affected_post_id,
+		string $issue_type,
+		int $target_ref,
+		string $target_kind,
+		bool $ignored
+	): int {
+		global $wpdb;
+
+		$value = $ignored ? current_time( 'mysql', true ) : null;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$updated = $wpdb->update(
+			Attention_Issues_Table::table_name(),
+			array( 'ignored_gmt' => $value ),
+			array(
+				'affected_post_id' => $affected_post_id,
+				'issue_type'       => $issue_type,
+				'target_ref'       => $target_ref,
+				'target_kind'      => $target_kind,
+			),
+			array( '%s' ),
+			array( '%d', '%s', '%d', '%s' )
+		);
+
+		return false === $updated ? 0 : (int) $updated;
 	}
 
 	/**

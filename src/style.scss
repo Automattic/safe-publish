@@ -198,10 +198,6 @@
 		--safe-publish-badge-color: var(--safe-publish-status-success);
 	}
 
-	&--failed {
-		--safe-publish-badge-color: var(--safe-publish-status-error);
-	}
-
 	&--outdated {
 		--safe-publish-badge-color: var(--safe-publish-status-warning);
 	}
@@ -360,18 +356,61 @@ html:has(body.toplevel_page_safe-publish) {
 	white-space: nowrap;
 }
 
-.safe-publish-issue-summary {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 16px;
-	margin: 16px 0 16px 48px;
+// Needs attention inbox: the Type column tag and the Severity label.
+.safe-publish-inbox-type {
+	font-weight: 600;
 
-	.safe-publish-issue-summary__button--warning svg {
-		fill: var(--safe-publish-status-warning);
+	&--failure {
+		color: var(--safe-publish-status-error);
 	}
 
-	.safe-publish-issue-summary__button--error svg {
-		fill: var(--safe-publish-status-error);
+	&--degradation {
+		color: var(--safe-publish-status-warning);
+	}
+}
+
+.safe-publish-issue-severity {
+
+	&--error {
+		color: var(--safe-publish-status-error);
+	}
+
+	&--warning {
+		color: var(--safe-publish-status-warning);
+	}
+}
+
+// Needs attention inbox: The per-degradation resolvable-now hint badge.
+.safe-publish-inbox-resolvable {
+	display: inline-block;
+	margin-left: 8px;
+	padding: 0 6px;
+	border: 1px solid currentcolor;
+	border-radius: 9px;
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 16px;
+	white-space: nowrap;
+
+	&--ready {
+		color: var(--safe-publish-status-success);
+	}
+
+	&--waiting {
+		color: var(--safe-publish-text-muted);
+	}
+}
+
+// Needs attention inbox: the Open | Ignored view toggle.
+.safe-publish-inbox-view-toggle {
+	margin-bottom: 16px;
+	max-width: 240px;
+}
+
+.safe-publish-manage-tabs {
+
+	.components-tab-panel__tab-content {
+		padding-top: 16px;
 	}
 }
 
@@ -695,10 +734,6 @@ html:has(body.toplevel_page_safe-publish) {
 	max-width: 480px;
 	margin-left: 48px;
 	margin-top: 16px;
-}
-
-.safe-publish-failed-error {
-	color: var(--safe-publish-status-error);
 }
 
 .safe-publish-audit-channel {

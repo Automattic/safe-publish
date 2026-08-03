@@ -22,7 +22,7 @@ final class Attention_Issues_Table {
 	/**
 	 * Table schema version.
 	 */
-	private const VERSION = '1';
+	private const VERSION = '2';
 
 	/**
 	 * Option key used to track the installed table schema version.
@@ -79,6 +79,7 @@ final class Attention_Issues_Table {
 			first_detected_gmt DATETIME NOT NULL,
 			last_seen_gmt DATETIME NOT NULL,
 			status VARCHAR(10) NOT NULL DEFAULT 'open',
+			ignored_gmt DATETIME NULL DEFAULT NULL,
 			PRIMARY KEY  (id),
 			UNIQUE KEY issue_identity (affected_post_id, issue_type, target_ref, target_kind),
 			KEY source_status (source_site_url, status),

@@ -1,8 +1,8 @@
 # Seeding Import Degradations
 
-A development helper that populates the **Needs attention** and **orphan failures** drawers on the Safe Publish admin screen with realistic, import-produced degradations, so the drawers and their Retry / Remove actions can be exercised locally.
+A development helper that populates the **Needs attention** tab on the Safe Publish admin screen with realistic, import-produced failures and degradations, so the tab and its Retry / Remove actions can be exercised locally.
 
-Unlike [content seeding](content-seeding.md), which fills a site with importable content, this tool produces the post-import degradation rows the drawers surface. It drives the real import path on the destination, so the seeded rows behave exactly like production ones.
+Unlike [content seeding](content-seeding.md), which fills a site with importable content, this tool produces the post-import rows the tab surfaces. It drives the real import path on the destination, so the seeded rows behave exactly like production ones.
 
 It requires a running development environment (`npm run dev`) with both sites configured — the `afterStart` lifecycle script does this. `bin/seed-degradations.php` is the underlying WP-CLI script and should not be called directly; the `bin/seed-degradations` wrapper routes the source-side setup and the destination-side import to the correct wp-env containers.
 
@@ -10,15 +10,15 @@ It requires a running development environment (`npm run dev`) with both sites co
 
 | Command                                | Description                                       |
 | -------------------------------------- | ------------------------------------------------- |
-| `npm run seed:degradations`            | Seed both drawers on the destination site         |
-| `npm run seed:degradations -- count=N` | Also add N filler entries per drawer for paging   |
+| `npm run seed:degradations`            | Seed the Needs attention tab on the destination   |
+| `npm run seed:degradations -- count=N` | Also add N filler entries for paging              |
 | `npm run seed:degradations -- purge=1` | Remove every seeded demo artifact from both sites |
 
 Re-running is idempotent: the counts hold steady, and dropping `count` back to its default removes the filler without a purge.
 
 ## What Gets Seeded
 
-Six **Needs attention** issues — covering every issue type and both severities — plus one **orphan failure**:
+Six **degradations** — covering every issue type and both severities — plus one **orphan failure**:
 
 | Affected page               | Issue type                            | Severity | Resolves via                                |
 | --------------------------- | ------------------------------------- | -------- | ------------------------------------------- |
@@ -30,20 +30,21 @@ Six **Needs attention** issues — covering every issue type and both severities
 
 The orphan failure — titled "Import with no source ID" — comes from an import request with no source post id.
 
-The resolvable rows demonstrate the self-verifying Retry: import the named target (switch the post-type dropdown to **Pages**), then click **Retry** and the issue clears. The unresolvable term reference and the reusable-block reference both offer Retry but stay open no matter what — the term points at a non-existent term, and the demo's reusable-block target isn't seeded — for contrast.
+Each degradation carries a **Waiting on import** or **Resolvable now** badge. The resolvable rows start as **Waiting on import** and flip to **Resolvable now** once you import the named target (switch the post-type dropdown to **Pages**) — the cue to click **Retry**, which clears the issue. The unresolvable term reference and the reusable-block reference stay **Waiting on import** and never clear — the term points at a non-existent term, and the demo's reusable-block target isn't seeded — for contrast.
 
-## Exercising the Drawers
+## Exercising the Tab
 
 1. Run `npm run seed:degradations`.
-2. Open **Safe Publish** in the destination admin; the toolbar shows a **Needs attention** button and an **orphan failures** button.
-3. Open a drawer and use **Retry** (attention issues) or **Remove** (orphan failures) on the rows.
+2. Open **Safe Publish** in the destination admin; the **Needs attention** tab shows a count of the seeded rows.
+3. On the **Needs attention** tab, use **Retry** on degradations or **Remove** on failures.
 4. To watch an issue clear, import its listed target, then click **Retry**.
+5. Select several degradations and **Retry** them together to see the aggregate outcome notice.
 
-Pass `count=N` (for example `count=30`) to push each drawer past one page and exercise pagination.
+Pass `count=N` (for example `count=30`) to push the tab past one page and exercise pagination.
 
 ## Cleanup
 
-`npm run seed:degradations -- purge=1` removes every demo artifact from both sites — the source demo pages, the imported and staged destination pages (including the staged navigation menu), and the orphan-failure rows — leaving both drawers empty.
+`npm run seed:degradations -- purge=1` removes every demo artifact from both sites — the source demo pages, the imported and staged destination pages (including the staged navigation menu), and the orphan-failure rows — leaving the tab empty.
 
 ## Not for Production
 

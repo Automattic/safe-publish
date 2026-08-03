@@ -3,7 +3,7 @@
 The Imports admin page is the operator surface for everything that came in from a source site. It has two tabs sharing the same admin route:
 
 - **Posts** — the local posts that resulted from successful imports.
-- **Failures** — items whose import errored before a local post was created.
+- **Needs attention** — post-import problems: import failures and degradations.
 
 ## Posts tab
 
@@ -40,26 +40,36 @@ The page exposes the DataViews built-in search and filter chips: title search, L
 
 The selected session does not appear as a filter — sessions are an internal grouping concept, not a UI noun. The post-import notice deep-links into a session-filtered view via `?batch=N`, surfaced as a contextual pill the operator can clear.
 
-## Failures tab
+## Needs attention tab
 
-Lists items whose import errored. Failed items have no local WordPress post (the import did not complete), so the row only carries what the items table recorded plus the source URL from the parent session.
+Collects every post-import problem in one place: import **failures** (the import errored, so no local post exists — or a re-import of an already-imported post failed) and **degradations** (the post imported but left an unresolved reference to a block, term, parent, or navigation link). Failures are listed first. The tab label shows the current count of open failures plus degradations.
+
+An **Open | Ignored** toggle switches between the active list and items set aside with Ignore. Open (the default) excludes ignored items, and the tab count always reflects the Open set. The Ignored view offers Un-ignore to restore an item; Remove still applies there for failures.
 
 ### Columns
 
-| Column    | Description                                        |
-| --------- | -------------------------------------------------- |
-| Title     | Title of the post that was attempted.              |
-| Source    | URL of the source site the attempt came from.      |
-| Error     | Error message recorded at import time.             |
-| Attempted | When the import was attempted (`import_date_gmt`). |
+| Column   | Description                                                                                                                                              |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Content  | Title of the affected post, linked to its editor when a live destination post exists (degradations and failed updates; a first-import failure has none). |
+| Type     | **Failed** or **Degraded**.                                                                                                                              |
+| Detail   | The error message (failures), or the issue description with a **Resolvable now** / **Waiting on import** hint (degradations).                            |
+| Severity | **Error** or **Warning**.                                                                                                                                |
+| When     | When the failure was attempted or the degradation was first detected.                                                                                    |
 
 ### Actions
 
-| Action | Description                                                   |
-| ------ | ------------------------------------------------------------- |
-| Remove | Clears the failed item from the tab. Supports bulk selection. |
+| Action    | Description                                                                                                                                    |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remove    | Clears a failure's record. Supports bulk selection.                                                                                            |
+| Retry     | Re-runs a degradation's reconciliation and reports whether it cleared. Available when the issue type is reconcilable; supports bulk selection. |
+| Ignore    | Sets a failure or degradation aside without deleting it, dropping it from the Open view and the count. Reversible; supports bulk selection.    |
+| Un-ignore | Restores an ignored item to the Open view. Shown in the Ignored view; supports bulk selection.                                                 |
 
-Removing a failed item only deletes its record; it has no effect on the source. Recovery is fixing the underlying issue (for example, creating a missing author on the destination) and re-importing the post from the Source Posts page.
+**Resolvable now vs Waiting on import.** Each degradation carries a hint: **Resolvable now** means its target (parent, block, term, or menu) is already imported, so a Retry should reconcile it; **Waiting on import** means the target is still missing and a Retry would report it as absent. Importing a target does not auto-resolve the degradations that reference it, so the hint is how you find which ones to Retry — it is advisory, so Retry stays authoritative. Retrying several at once reports an aggregate: how many resolved, are still waiting, or failed.
+
+Removing a failure only deletes its record; it has no effect on the source. Recovery is fixing the underlying issue (for example, creating a missing author on the destination) and re-importing the post from the Source Posts page. A later successful import for the same source drops its failure from the list automatically.
+
+**Ignore vs Remove.** Ignore is reversible: it hides a failure or degradation from the Open view and the tab count but keeps its record, so Un-ignore brings it back — and a fresh failed attempt, or re-detecting the same degradation, re-surfaces it in Open. Remove is permanent: it deletes a failure's record outright. Degradations have no Remove; they clear only by a successful Retry or re-import.
 
 ## Post-import notice
 

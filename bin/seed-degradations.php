@@ -805,7 +805,7 @@ function safe_publish_demo_run_import(
 	$repository->complete_session( $session_id );
 
 	$attention_count = $attention_issues->count_open_issues( $source_site_url );
-	$orphan_count    = $repository->count_orphan_failures();
+	$failed_count    = $repository->count_failures();
 
 	if ( ! $child_result['success'] ) {
 		WP_CLI::error( 'Child import failed: ' . $child_result['error'] );
@@ -813,22 +813,22 @@ function safe_publish_demo_run_import(
 	if ( $unmapped_count < 1 ) {
 		WP_CLI::error( 'Expected unmapped_block_reference warnings; got none.' );
 	}
-	if ( $attention_count < 1 || $orphan_count < 1 ) {
+	if ( $attention_count < 1 || $failed_count < 1 ) {
 		WP_CLI::error(
 			sprintf(
-				'Expected both counts above zero (attention=%d, orphan=%d).',
+				'Expected both counts above zero (attention=%d, failed=%d).',
 				$attention_count,
-				$orphan_count
+				$failed_count
 			)
 		);
 	}
 
 	WP_CLI::success(
 		sprintf(
-			'Seeded attentionCount=%d (incl. %d unmapped refs), orphanCount=%d. Open %s',
+			'Seeded attentionCount=%d (incl. %d unmapped refs), failedCount=%d. Open %s',
 			$attention_count,
 			$unmapped_count,
-			$orphan_count,
+			$failed_count,
 			admin_url( 'admin.php?page=safe-publish' )
 		)
 	);

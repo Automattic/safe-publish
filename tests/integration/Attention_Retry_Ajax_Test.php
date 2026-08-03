@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Utils\Attention_Issues_Table;
 use Safe_Publish\Utils\Audit_Log_Table;
@@ -19,8 +20,9 @@ use WP_Ajax_UnitTestCase;
 /**
  * Exercises the controller glue for the attention-issue endpoints: retry type
  * dispatch, target_kind threading, the retryable allowlist, the capability
- * gate, and the list payload's reusable-block flag. The reconciliations
- * themselves are covered in Attention_Issues_Test.
+ * gate, the list payload's reusable-block and resolvable flags, and bulk retry
+ * aggregation. The reconciliations themselves are covered in
+ * Attention_Issues_Test.
  */
 class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 
@@ -472,6 +474,249 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that a post reference reads as resolvable only when its target is
+	 * imported on the destination.
+	 */
+	public function test_list_marks_post_targets_resolvable_by_presence(): void {
+		// ARRANGE: Two unmapped post references — one target present, one not.
+		$this->seed_target_post( 8801 );
+		$this->open_issue(
+			self::factory()->post->create(),
+			'unmapped_block_reference',
+			8801,
+			'post'
+		);
+		$this->open_issue(
+			self::factory()->post->create(),
+			'unmapped_block_reference',
+			8802,
+			'post'
+		);
+
+		// ACT: List the open issues.
+		$resolvable = $this->resolvable_by_target_ref( $this->list_issues() );
+
+		// ASSERT: Only the imported target reads as resolvable now.
+		$this->assertTrue( $resolvable[8801] );
+		$this->assertFalse( $resolvable[8802] );
+	}
+
+	/**
+	 * Verifies that a term reference reads as resolvable only when its target
+	 * term is imported on the destination.
+	 */
+	public function test_list_marks_term_targets_resolvable_by_presence(): void {
+		// ARRANGE: Two unmapped term references — one term present, one not.
+		$this->seed_target_term( 8811 );
+		$this->open_issue(
+			self::factory()->post->create(),
+			'unmapped_block_reference',
+			8811,
+			'term'
+		);
+		$this->open_issue(
+			self::factory()->post->create(),
+			'unmapped_block_reference',
+			8812,
+			'term'
+		);
+
+		// ACT: List the open issues.
+		$resolvable = $this->resolvable_by_target_ref( $this->list_issues() );
+
+		// ASSERT: Only the imported term reads as resolvable now.
+		$this->assertTrue( $resolvable[8811] );
+		$this->assertFalse( $resolvable[8812] );
+	}
+
+	/**
+	 * Verifies that an orphaned parent reads as resolvable only when the source
+	 * parent is imported, exercising the find_imported_post lookup.
+	 */
+	public function test_list_marks_parent_orphaned_resolvable_by_parent(): void {
+		// ARRANGE: Two orphaned children — one parent present, one not.
+		$this->seed_target_post( 8850 );
+		$this->open_issue(
+			self::factory()->post->create( array( 'post_type' => 'page' ) ),
+			'parent_orphaned',
+			8850,
+			'post'
+		);
+		$this->open_issue(
+			self::factory()->post->create( array( 'post_type' => 'page' ) ),
+			'parent_orphaned',
+			8851,
+			'post'
+		);
+
+		// ACT: List the open issues.
+		$resolvable = $this->resolvable_by_target_ref( $this->list_issues() );
+
+		// ASSERT: The child whose parent is imported is resolvable; the other
+		// waits.
+		$this->assertTrue( $resolvable[8850] );
+		$this->assertFalse( $resolvable[8851] );
+	}
+
+	/**
+	 * Verifies that a bulk retry runs each issue and aggregates the outcomes into
+	 * per-outcome counts.
+	 */
+	public function test_bulk_retry_aggregates_outcomes(): void {
+		// ARRANGE: Two resolvable block references and one whose target is absent.
+		$resolvable_a = self::factory()->post->create(
+			array( 'post_content' => $this->nav_link_content( 8801, 'post-type' ) )
+		);
+		$resolvable_b = self::factory()->post->create(
+			array( 'post_content' => $this->nav_link_content( 8802, 'post-type' ) )
+		);
+		$waiting      = self::factory()->post->create(
+			array( 'post_content' => $this->nav_link_content( 8803, 'post-type' ) )
+		);
+		$this->seed_target_post( 8801 );
+		$this->seed_target_post( 8802 );
+		$this->open_issue( $resolvable_a, 'unmapped_block_reference', 8801, 'post' );
+		$this->open_issue( $resolvable_b, 'unmapped_block_reference', 8802, 'post' );
+		$this->open_issue( $waiting, 'unmapped_block_reference', 8803, 'post' );
+
+		// ACT: Bulk-retry all three.
+		$response = $this->bulk_retry(
+			array(
+				$this->descriptor( $resolvable_a, 8801, 'post' ),
+				$this->descriptor( $resolvable_b, 8802, 'post' ),
+				$this->descriptor( $waiting, 8803, 'post' ),
+			)
+		);
+
+		// ASSERT: Two resolved, one still waiting on its absent target.
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 2, $response['data']['resolved'] );
+		$this->assertSame( 1, $response['data']['target_absent'] );
+		$this->assertSame( 0, $response['data']['write_failed'] );
+		$this->assertSame( 0, $response['data']['unresolved'] );
+		$this->assertSame( 0, $response['data']['skipped'] );
+	}
+
+	/**
+	 * Verifies that a batch larger than the cap is rejected before any
+	 * reconciliation runs.
+	 */
+	public function test_bulk_retry_rejects_over_cap(): void {
+		// ARRANGE: A resolvable open issue, then padding one past the cap.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => $this->nav_link_content( 8804, 'post-type' ) )
+		);
+		$this->seed_target_post( 8804 );
+		$this->open_issue( $post_id, 'unmapped_block_reference', 8804, 'post' );
+
+		$items = array( $this->descriptor( $post_id, 8804, 'post' ) );
+		for ( $i = 0; $i < Admin_Ajax_Controller::RETRY_ATTENTION_BATCH_MAX; $i++ ) {
+			$items[] = $this->descriptor( 1, 1000 + $i, 'post' );
+		}
+
+		// ACT: Dispatch the over-cap batch.
+		$response = $this->bulk_retry( $items );
+
+		// ASSERT: Rejected before any reconciliation ran; the issue is untouched.
+		$this->assertFalse( $response['success'] );
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unmapped_block_reference',
+				8804,
+				'post'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a user without edit_posts cannot bulk-retry.
+	 */
+	public function test_bulk_retry_rejects_user_without_edit_posts(): void {
+		// ARRANGE: An open issue and a subscriber-level user.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => $this->nav_link_content( 8801, 'post-type' ) )
+		);
+		$this->seed_target_post( 8801 );
+		$this->open_issue( $post_id, 'unmapped_block_reference', 8801, 'post' );
+		wp_set_current_user(
+			$this->factory()->user->create( array( 'role' => 'subscriber' ) )
+		);
+
+		// ACT: Bulk-retry as the subscriber.
+		$response = $this->bulk_retry(
+			array( $this->descriptor( $post_id, 8801, 'post' ) )
+		);
+
+		// ASSERT: Forbidden, and the issue is untouched.
+		$this->assertFalse( $response['success'] );
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unmapped_block_reference',
+				8801,
+				'post'
+			)
+		);
+	}
+
+	/**
+	 * Maps a list response's degradation rows to their resolvable flag, keyed by
+	 * target ref.
+	 *
+	 * @param array $response Decoded list response.
+	 * @return array<int, bool> Resolvable flag keyed by target ref.
+	 */
+	private function resolvable_by_target_ref( array $response ): array {
+		$map = array();
+		foreach ( $response['data']['items'] as $item ) {
+			$map[ (int) $item['target_ref'] ] = $item['resolvable'];
+		}
+
+		return $map;
+	}
+
+	/**
+	 * Builds an unmapped_block_reference retry descriptor.
+	 *
+	 * @param int    $affected_post_id Affected post id.
+	 * @param int    $target_ref       Source id of the target.
+	 * @param string $target_kind      'post' or 'term'.
+	 * @return array Retry descriptor.
+	 */
+	private function descriptor(
+		int $affected_post_id,
+		int $target_ref,
+		string $target_kind
+	): array {
+		return array(
+			'affected_post_id' => $affected_post_id,
+			'issue_type'       => 'unmapped_block_reference',
+			'target_ref'       => $target_ref,
+			'target_kind'      => $target_kind,
+		);
+	}
+
+	/**
+	 * Dispatches the bulk-retry endpoint and returns the decoded response.
+	 *
+	 * @param array[] $items Retry descriptors.
+	 * @return array Decoded response.
+	 */
+	private function bulk_retry( array $items ): array {
+		$_POST = array(
+			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'items' => wp_json_encode( $items ),
+		);
+
+		$this->dispatch_ajax_expecting_die(
+			'safe_publish_bulk_retry_attention_issues'
+		);
+
+		return json_decode( $this->_last_response, true );
+	}
+
+	/**
 	 * Dispatches the list endpoint and returns the decoded JSON response.
 	 *
 	 * @return array Decoded response.
@@ -479,7 +724,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	private function list_issues(): array {
 		$_POST = array( 'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ) );
 
-		$this->dispatch_ajax_expecting_die( 'safe_publish_list_attention_issues' );
+		$this->dispatch_ajax_expecting_die( 'safe_publish_list_needs_attention' );
 
 		return json_decode( $this->_last_response, true );
 	}

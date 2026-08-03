@@ -1529,6 +1529,38 @@ class Content_Processor {
 	}
 
 	/**
+	 * Resolves source refs to destination ids, one batch per kind, via the same
+	 * lookups repoint_block_reference uses so a resolvability check matches Retry.
+	 *
+	 * @param array<int, true> $post_refs       Set of source post ids (keys).
+	 * @param array<int, true> $term_refs       Set of source term ids (keys).
+	 * @param string           $source_site_url Source identity to scope by.
+	 * @return array{post: array<int, int>, term: array<int, int>} Source-id to
+	 *                                                              destination-id
+	 *                                                              maps per kind.
+	 */
+	public function map_target_refs(
+		array $post_refs,
+		array $term_refs,
+		string $source_site_url
+	): array {
+		$lookup_site_url = URL_Validator::normalize_site_url_with_path(
+			$source_site_url
+		);
+
+		return array(
+			'post' => $this->lookup_destination_post_ids(
+				$post_refs,
+				$lookup_site_url
+			),
+			'term' => $this->lookup_destination_term_ids(
+				$term_refs,
+				$lookup_site_url
+			),
+		);
+	}
+
+	/**
 	 * Recursively repoints registered id-bearing attrs whose value equals
 	 * $target_ref to $dest_id, honoring each attr's kind gating. When a rule
 	 * names a url_attr, the link url is re-derived from $dest_id too.

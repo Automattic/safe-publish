@@ -90,32 +90,31 @@ final class Admin_Page {
 		$initial_state  = isset( $_GET['state'] ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			? sanitize_key( (string) $_GET['state'] ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.ValidatedSanitizedInput.MissingUnslash
 			: 'all';
-		$allowed_states = array( 'all', 'available', 'up-to-date', 'outdated', 'failed' );
+		$allowed_states = array( 'all', 'available', 'up-to-date', 'outdated' );
 		if ( ! in_array( $initial_state, $allowed_states, true ) ) {
 			$initial_state = 'all';
 		}
 
-		$repository       = new History_Repository();
-		$orphan_count     = $repository->count_orphan_failures();
-		$attention_issues = new Attention_Issues_Repository();
-		$attention_count  = $attention_issues->count_open_issues(
-			Options::get_connected_site_url_with_path()
-		);
+		$repository            = new History_Repository();
+		$attention_issues      = new Attention_Issues_Repository();
+		$needs_attention_count = $repository->count_failures()
+			+ $attention_issues->count_open_issues(
+				Options::get_connected_site_url_with_path()
+			);
 
 		Admin_Assets::enqueue_bundle(
 			'posts',
 			'safe-publish-admin-posts-script',
 			'safe-publish-admin-posts-style',
 			array(
-				'ajaxurl'        => admin_url( 'admin-ajax.php' ),
-				'settingsUrl'    => admin_url( 'admin.php?page=safe-publish-settings' ),
-				'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
-				'sourceSiteUrl'  => $source_site_url,
-				'homeUrl'        => home_url(),
-				'containerId'    => 'safe-publish-posts-container',
-				'initialState'   => $initial_state,
-				'orphanCount'    => $orphan_count,
-				'attentionCount' => $attention_count,
+				'ajaxurl'             => admin_url( 'admin-ajax.php' ),
+				'settingsUrl'         => admin_url( 'admin.php?page=safe-publish-settings' ),
+				'nonce'               => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+				'sourceSiteUrl'       => $source_site_url,
+				'homeUrl'             => home_url(),
+				'containerId'         => 'safe-publish-posts-container',
+				'initialState'        => $initial_state,
+				'needsAttentionCount' => $needs_attention_count,
 			)
 		);
 	}

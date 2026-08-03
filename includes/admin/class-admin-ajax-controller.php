@@ -73,6 +73,15 @@ final class Admin_Ajax_Controller {
 	const DELETE_FAILED_IMPORTS_BATCH_MAX = 100;
 
 	/**
+	 * Maximum number of inbox rows accepted by
+	 * ajax_set_needs_attention_ignored in a single call. Ignore is a light
+	 * UPDATE, but the cap keeps request time and statement size bounded.
+	 *
+	 * @var int
+	 */
+	const SET_IGNORED_BATCH_MAX = 100;
+
+	/**
 	 * Maximum number of post ids accepted by ajax_bulk_delete_posts in a
 	 * single call. Each trash op runs in PHP — keep the batch small enough
 	 * that the request finishes within a typical admin-ajax timeout.
@@ -80,6 +89,16 @@ final class Admin_Ajax_Controller {
 	 * @var int
 	 */
 	const BULK_DELETE_POSTS_BATCH_MAX = 50;
+
+	/**
+	 * Maximum number of degradations accepted by
+	 * ajax_bulk_retry_attention_issues in a single call. Each retry re-runs a
+	 * real reconciliation (a nav retry re-rewrites every referencing post), so
+	 * the cap is tighter than the trash and ignore batches.
+	 *
+	 * @var int
+	 */
+	const RETRY_ATTENTION_BATCH_MAX = 25;
 
 	/**
 	 * Maximum number of source catalog pages scanned while filling one
@@ -176,10 +195,11 @@ final class Admin_Ajax_Controller {
 	 */
 	public function register_handlers(): void {
 		add_action( 'wp_ajax_safe_publish_list_posts', array( $this, 'ajax_list_posts' ) );
-		add_action( 'wp_ajax_safe_publish_list_orphan_failures', array( $this, 'ajax_list_orphan_failures' ) );
-		add_action( 'wp_ajax_safe_publish_list_attention_issues', array( $this, 'ajax_list_attention_issues' ) );
+		add_action( 'wp_ajax_safe_publish_list_needs_attention', array( $this, 'ajax_list_needs_attention' ) );
 		add_action( 'wp_ajax_safe_publish_retry_attention_issue', array( $this, 'ajax_retry_attention_issue' ) );
+		add_action( 'wp_ajax_safe_publish_bulk_retry_attention_issues', array( $this, 'ajax_bulk_retry_attention_issues' ) );
 		add_action( 'wp_ajax_safe_publish_delete_failed_items', array( $this, 'ajax_delete_failed_items' ) );
+		add_action( 'wp_ajax_safe_publish_set_needs_attention_ignored', array( $this, 'ajax_set_needs_attention_ignored' ) );
 		add_action( 'wp_ajax_safe_publish_fetch_post_types', array( $this, 'ajax_fetch_post_types' ) );
 		add_action( 'wp_ajax_safe_publish_test_connection', array( $this, 'ajax_test_connection' ) );
 		add_action( 'wp_ajax_safe_publish_auth_status', array( $this, 'ajax_auth_status' ) );
@@ -221,8 +241,8 @@ final class Admin_Ajax_Controller {
 	 * State-routed Posts listing endpoint.
 	 *
 	 * 'all'/'available' are catalog-primary (catalog fetch annotated with
-	 * local data). 'up-to-date'/'outdated'/'failed' are local-primary (items
-	 * aggregated by source_post_id, merged with source data via include=).
+	 * local data). 'up-to-date'/'outdated' are local-primary (items aggregated
+	 * by source_post_id, merged with source data via include=).
 	 * `focus_source_id` resolves to a concrete state echoed back in
 	 * `focused_state` so the frontend can swap its chip in one render.
 	 */
@@ -237,10 +257,11 @@ final class Admin_Ajax_Controller {
 			wp_unslash( $_POST['source_site_url'] ?? '' )
 		);
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- allowlisted to a small enum by sanitize_state.
-		$requested_state      = self::sanitize_state( $_POST['state'] ?? 'all' );
-		$focus_source_id      = absint( $_POST['focus_source_id'] ?? 0 );
-		$with_orphan_count    = 1 === absint( $_POST['with_orphan_count'] ?? 0 );
-		$with_attention_count = 1 === absint( $_POST['with_attention_count'] ?? 0 );
+		$requested_state            = self::sanitize_state( $_POST['state'] ?? 'all' );
+		$focus_source_id            = absint( $_POST['focus_source_id'] ?? 0 );
+		$with_needs_attention_count = 1 === absint(
+			$_POST['with_needs_attention_count'] ?? 0
+		);
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if ( '' === $source_site_url ) {
@@ -273,100 +294,242 @@ final class Admin_Ajax_Controller {
 			$payload['focused_state']          = $focused_state;
 			$payload['focused_source_post_id'] = $focus_source_id;
 		}
-		if ( $with_orphan_count ) {
-			$payload['orphan_count'] = $this->repository->count_orphan_failures();
-		}
-		if ( $with_attention_count ) {
-			$payload['attention_count'] = $this->attention_issues->count_open_issues(
-				Options::get_connected_site_url_with_path()
-			);
+		if ( $with_needs_attention_count ) {
+			$payload['needs_attention_count'] =
+				$this->repository->count_failures()
+				+ $this->attention_issues->count_open_issues(
+					Options::get_connected_site_url_with_path()
+				);
 		}
 
 		wp_send_json_success( $payload );
 	}
 
 	/**
-	 * Lists orphan failures (errors with no source_post_id) for the drawer.
+	 * Lists the Needs attention inbox: Failures then degradations, as one
+	 * server-paginated stream. Failures come first (errors before
+	 * degradations); a failed-update row carries an edit link to its live post.
 	 */
-	public function ajax_list_orphan_failures(): void {
+	public function ajax_list_needs_attention(): void {
 		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
 			$this->send_session_expired_error();
 		}
+		// The inbox surfaces failure data and its Remove deletes it, so gate at
+		// manage_options — matching the Manage page and ajax_delete_failed_items.
+		// Retry and Ignore are separately gated at edit_posts.
 		$this->verify_ajax_capability();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing
 		$page     = max( 1, absint( $_POST['page'] ?? 1 ) );
 		$per_page = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
+		$ignored  = 'ignored' === sanitize_key(
+			wp_unslash( $_POST['view'] ?? 'open' )
+		);
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$rows = $this->repository->list_orphan_failures( $page, $per_page );
+		$offset          = ( $page - 1 ) * $per_page;
+		$source_site_url = Options::get_connected_site_url_with_path();
 
-		$has_more = count( $rows ) > $per_page;
-		if ( $has_more ) {
-			$rows = array_slice( $rows, 0, $per_page );
+		// The tab label always reflects the open (unignored) total, whichever
+		// view is being listed.
+		$open_failed    = $this->repository->count_failures();
+		$open_attention = $this->attention_issues->count_open_issues(
+			$source_site_url
+		);
+		$open_total     = $open_failed + $open_attention;
+
+		if ( $ignored ) {
+			$failed_count    = $this->repository->count_failures( true );
+			$attention_count = $this->attention_issues->count_open_issues(
+				$source_site_url,
+				true
+			);
+		} else {
+			$failed_count    = $open_failed;
+			$attention_count = $open_attention;
 		}
 
-		$items = array_map(
-			static fn( array $row ): array => array(
-				'id'              => (int) $row['id'],
-				'session_id'      => (int) $row['session_id'],
-				'title'           => (string) $row['title'],
-				'source_site_url' => (string) $row['source_site_url'],
-				'error_message'   => (string) ( $row['error_message'] ?? '' ),
-				'import_date_gmt' => (string) $row['import_date_gmt'],
-			),
-			$rows
+		$items = $this->collect_needs_attention_page(
+			$offset,
+			$per_page,
+			$failed_count,
+			$source_site_url,
+			$ignored
 		);
+
+		$total = $failed_count + $attention_count;
 
 		wp_send_json_success(
 			array(
-				'items'    => $items,
-				'has_more' => $has_more,
+				'items'                 => $items,
+				'has_more'              => $offset + count( $items ) < $total,
+				'needs_attention_count' => $open_total,
 			)
 		);
 	}
 
 	/**
-	 * Lists open attention issues for the connected source, errors first.
+	 * Assembles one page of the concatenated inbox stream — the failures block
+	 * precedes the degradations block — via offset arithmetic over the two
+	 * source counts, so a page can straddle the boundary.
+	 *
+	 * @param int    $offset          Global row offset.
+	 * @param int    $limit           Page size.
+	 * @param int    $failed_count    Total failures (the block boundary).
+	 * @param string $source_site_url Connected source identity.
+	 * @param bool   $ignored         Page the ignored set instead of the open one.
+	 * @return array[] Unified inbox rows.
 	 */
-	public function ajax_list_attention_issues(): void {
-		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
-			$this->send_session_expired_error();
+	private function collect_needs_attention_page(
+		int $offset,
+		int $limit,
+		int $failed_count,
+		string $source_site_url,
+		bool $ignored
+	): array {
+		if ( $offset >= $failed_count ) {
+			return $this->format_attention_rows(
+				$this->attention_issues->list_open_issues(
+					$source_site_url,
+					$offset - $failed_count,
+					$limit,
+					$ignored
+				),
+				$source_site_url,
+				! $ignored
+			);
 		}
-		// The list and Retry act on imported content and Retry writes to it,
-		// so gate by the import capability. This becomes load-bearing under the
-		// editor-rollback roadmap; revisit alongside that gate change.
-		$this->verify_ajax_capability( 'edit_posts' );
 
-		// phpcs:disable WordPress.Security.NonceVerification.Missing
-		$page     = max( 1, absint( $_POST['page'] ?? 1 ) );
-		$per_page = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
-		// phpcs:enable WordPress.Security.NonceVerification.Missing
-
-		$source_site_url = Options::get_connected_site_url_with_path();
-
-		$rows = $this->attention_issues->get_open_issues(
-			$source_site_url,
-			$page,
-			$per_page
+		$items     = $this->format_failure_rows(
+			$this->repository->list_failures( $offset, $limit, $ignored )
 		);
+		$shortfall = $limit - count( $items );
 
-		$has_more = count( $rows ) > $per_page;
-		if ( $has_more ) {
-			$rows = array_slice( $rows, 0, $per_page );
+		if ( $shortfall > 0 ) {
+			// Failures ran out mid-page; fill from the degradations head.
+			$items = array_merge(
+				$items,
+				$this->format_attention_rows(
+					$this->attention_issues->list_open_issues(
+						$source_site_url,
+						0,
+						$shortfall,
+						$ignored
+					),
+					$source_site_url,
+					! $ignored
+				)
+			);
 		}
 
-		$items = array_map(
-			array( $this, 'format_attention_issue' ),
+		return $items;
+	}
+
+	/**
+	 * Shapes failure rows for the inbox. A failed update resolves an edit link
+	 * from its still-live destination post; a first-import failure has none.
+	 *
+	 * @param array[] $rows Failure rows from list_failures().
+	 * @return array[] Unified inbox rows of kind 'failure'.
+	 */
+	private function format_failure_rows( array $rows ): array {
+		$source_ids = array();
+		foreach ( $rows as $row ) {
+			$source_id = (int) ( $row['source_post_id'] ?? 0 );
+			if ( $source_id > 0 ) {
+				$source_ids[] = $source_id;
+			}
+		}
+
+		$active_by_source = 0 === count( $source_ids )
+			? array()
+			: $this->repository->get_active_items_by_source_ids( $source_ids );
+
+		return array_map(
+			function ( array $row ) use ( $active_by_source ): array {
+				$source_id  = (int) ( $row['source_post_id'] ?? 0 );
+				$item_id    = (int) $row['id'];
+				$active_row = $active_by_source[ $source_id ] ?? null;
+				$post_id    = null !== $active_row && isset( $active_row['post_id'] )
+					? (int) $active_row['post_id']
+					: 0;
+
+				return array(
+					'kind'            => 'failure',
+					'row_id'          => 'failure:' . $item_id,
+					'item_id'         => $item_id,
+					'source_post_id'  => $source_id > 0 ? $source_id : null,
+					'title'           => (string) $row['title'],
+					'error_message'   => (string) ( $row['error_message'] ?? '' ),
+					'import_date_gmt' => (string) $row['import_date_gmt'],
+					'source_site_url' => (string) $row['source_site_url'],
+					'edit_url'        => $this->live_edit_url( $post_id ),
+				);
+			},
 			$rows
 		);
+	}
 
-		wp_send_json_success(
-			array(
-				'items'    => $items,
-				'has_more' => $has_more,
-			)
-		);
+	/**
+	 * Shapes degradation rows for the inbox, computing the batched resolvable
+	 * hint only when the caller will show it.
+	 *
+	 * @param array[] $rows            Open issue rows from list_open_issues().
+	 * @param string  $source_site_url Connected source identity scoping lookups.
+	 * @param bool    $with_resolvable Compute the hint; the Ignored view skips it.
+	 * @return array[] Unified inbox rows of kind 'degradation'.
+	 */
+	private function format_attention_rows(
+		array $rows,
+		string $source_site_url,
+		bool $with_resolvable
+	): array {
+		$resolvable = array();
+		if ( $with_resolvable ) {
+			$resolvable = $this->post_import_service->degradation_resolvability(
+				$rows,
+				$source_site_url
+			);
+		}
+
+		$formatted = array();
+		foreach ( $rows as $index => $row ) {
+			$issue               = $this->format_attention_issue( $row );
+			$issue['kind']       = 'degradation';
+			$issue['resolvable'] = $resolvable[ $index ] ?? false;
+			$issue['row_id']     = sprintf(
+				'degradation:%d:%s:%d:%s',
+				$issue['affected_post_id'],
+				$issue['issue_type'],
+				$issue['target_ref'],
+				$issue['target_kind']
+			);
+			$formatted[]         = $issue;
+		}
+
+		return $formatted;
+	}
+
+	/**
+	 * Returns the edit URL for a destination post that is present and not
+	 * trashed, or an empty string.
+	 *
+	 * @param int $post_id Destination post id (0 when none).
+	 * @return string Edit URL, or empty string.
+	 */
+	private function live_edit_url( int $post_id ): string {
+		if ( $post_id < 1 ) {
+			return '';
+		}
+
+		$status = get_post_status( $post_id );
+		if ( false === $status || 'trash' === $status ) {
+			return '';
+		}
+
+		$edit_url = get_edit_post_link( $post_id, 'raw' );
+
+		return is_string( $edit_url ) ? $edit_url : '';
 	}
 
 	/**
@@ -430,6 +593,123 @@ final class Admin_Ajax_Controller {
 				'outcome'  => $outcome->type,
 				'detail'   => $outcome->detail,
 			)
+		);
+	}
+
+	/**
+	 * Retries a batch of degradations, serializing dispatch_retry over each and
+	 * aggregating the outcomes. Gated at edit_posts like the single retry;
+	 * over-cap batches are rejected, matching the other bulk handlers.
+	 */
+	public function ajax_bulk_retry_attention_issues(): void {
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
+		$this->verify_ajax_capability( 'edit_posts' );
+
+		// phpcs:disable WordPress.Security.NonceVerification.Missing
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON decoded and each field sanitized in validate_retry_descriptor().
+		$raw_items = wp_unslash( $_POST['items'] ?? '' );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		$items = is_string( $raw_items ) ? json_decode( $raw_items, true ) : null;
+		if ( ! is_array( $items ) || 0 === count( $items ) ) {
+			wp_send_json_error( __( 'No items provided.', 'safe-publish' ) );
+		}
+
+		if ( count( $items ) > self::RETRY_ATTENTION_BATCH_MAX ) {
+			wp_send_json_error(
+				sprintf(
+					/* translators: %d: maximum number of items per batch */
+					__(
+						'Retry is limited to %d items at a time.',
+						'safe-publish'
+					),
+					self::RETRY_ATTENTION_BATCH_MAX
+				)
+			);
+		}
+
+		wp_send_json_success( $this->run_bulk_retry( $items ) );
+	}
+
+	/**
+	 * Runs each descriptor's retry and tallies the outcomes. A descriptor whose
+	 * row is already gone — e.g. a sibling nav retry in this batch reconciled it
+	 * — counts as resolved; a malformed one counts as skipped.
+	 *
+	 * @param array[] $items Degradation identity descriptors.
+	 * @return array<string, int> Outcome counts.
+	 */
+	private function run_bulk_retry( array $items ): array {
+		$counts = array(
+			'resolved'      => 0,
+			'target_absent' => 0,
+			'write_failed'  => 0,
+			'unresolved'    => 0,
+			'skipped'       => 0,
+		);
+
+		foreach ( $items as $item ) {
+			$identity = $this->validate_retry_descriptor( $item );
+			if ( null === $identity ) {
+				++$counts['skipped'];
+				continue;
+			}
+
+			$issue = $this->attention_issues->get_issue(
+				$identity['affected_post_id'],
+				$identity['issue_type'],
+				$identity['target_ref'],
+				$identity['target_kind']
+			);
+
+			if ( null === $issue ) {
+				++$counts['resolved'];
+				continue;
+			}
+
+			$outcome = $this->dispatch_retry( $issue );
+			$this->record_reconcile_outcome( $issue, $outcome );
+			++$counts[ $outcome->type ];
+		}
+
+		return $counts;
+	}
+
+	/**
+	 * Validates one bulk-retry descriptor, returning its issue identity keyed by
+	 * field, or null when the type or kind is outside the retryable allowlist.
+	 *
+	 * @param mixed $item Raw descriptor.
+	 * @return array{affected_post_id: int, issue_type: string, target_ref: int, target_kind: string}|null
+	 */
+	private function validate_retry_descriptor( mixed $item ): ?array {
+		if ( ! is_array( $item ) ) {
+			return null;
+		}
+
+		$issue_type = sanitize_text_field(
+			(string) ( $item['issue_type'] ?? '' )
+		);
+		if (
+			! in_array( $issue_type, self::ATTENTION_ISSUE_RETRYABLE_TYPES, true )
+		) {
+			return null;
+		}
+
+		$target_kind = sanitize_text_field(
+			(string) ( $item['target_kind'] ?? '' )
+		);
+		if ( ! in_array( $target_kind, array( 'post', 'term' ), true ) ) {
+			return null;
+		}
+
+		return array(
+			'affected_post_id' => absint( $item['affected_post_id'] ?? 0 ),
+			'issue_type'       => $issue_type,
+			'target_ref'       => absint( $item['target_ref'] ?? 0 ),
+			'target_kind'      => $target_kind,
 		);
 	}
 
@@ -572,6 +852,123 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
+	 * Ignores or restores inbox rows in bulk. Ignore is a reversible, soft
+	 * acknowledge, distinct from Remove which hard-deletes a failure row.
+	 *
+	 * Takes a JSON items array of descriptors carrying their kind: failures
+	 * route to the id/source scope, degradations to their identity.
+	 */
+	public function ajax_set_needs_attention_ignored(): void {
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
+		$this->verify_ajax_capability();
+
+		// phpcs:disable WordPress.Security.NonceVerification.Missing
+		$ignored = 1 === absint( $_POST['ignored'] ?? 0 );
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON decoded and each field sanitized in apply_needs_attention_ignored().
+		$raw_items = wp_unslash( $_POST['items'] ?? '' );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		$items = is_string( $raw_items ) ? json_decode( $raw_items, true ) : null;
+		if ( ! is_array( $items ) || 0 === count( $items ) ) {
+			wp_send_json_error( __( 'No items provided.', 'safe-publish' ) );
+		}
+
+		if ( count( $items ) > self::SET_IGNORED_BATCH_MAX ) {
+			wp_send_json_error(
+				sprintf(
+					/* translators: %d: maximum number of items per batch */
+					__(
+						'Ignoring is limited to %d items at a time.',
+						'safe-publish'
+					),
+					self::SET_IGNORED_BATCH_MAX
+				)
+			);
+		}
+
+		$updated = $this->apply_needs_attention_ignored( $items, $ignored );
+
+		wp_send_json_success( array( 'updated' => $updated ) );
+	}
+
+	/**
+	 * Applies an ignore/restore to a batch of inbox descriptors, routing each
+	 * by kind, and returns the number of rows changed.
+	 *
+	 * @param array[] $items   Descriptors, each carrying a 'kind'.
+	 * @param bool    $ignored True to ignore, false to restore.
+	 * @return int Rows updated across failures and degradations.
+	 */
+	private function apply_needs_attention_ignored(
+		array $items,
+		bool $ignored
+	): int {
+		$item_ids   = array();
+		$source_ids = array();
+		$updated    = 0;
+
+		foreach ( $items as $item ) {
+			if ( ! is_array( $item ) ) {
+				continue;
+			}
+
+			$kind = $item['kind'] ?? '';
+
+			if ( 'failure' === $kind ) {
+				$source_id = absint( $item['source_post_id'] ?? 0 );
+				if ( $source_id > 0 ) {
+					$source_ids[] = $source_id;
+				} else {
+					$item_ids[] = absint( $item['item_id'] ?? 0 );
+				}
+			} elseif ( 'degradation' === $kind ) {
+				$updated += $this->set_degradation_ignored( $item, $ignored );
+			}
+		}
+
+		if ( count( $item_ids ) > 0 || count( $source_ids ) > 0 ) {
+			$updated += $this->repository->set_failed_items_ignored(
+				$item_ids,
+				$source_ids,
+				$ignored
+			);
+		}
+
+		return $updated;
+	}
+
+	/**
+	 * Ignores or restores one degradation descriptor after validating its
+	 * target kind; an unknown identity harmlessly matches nothing.
+	 *
+	 * @param array $item    Degradation descriptor.
+	 * @param bool  $ignored True to ignore, false to restore.
+	 * @return int Rows updated (0 or 1).
+	 */
+	private function set_degradation_ignored( array $item, bool $ignored ): int {
+		$target_kind = sanitize_text_field(
+			(string) ( $item['target_kind'] ?? '' )
+		);
+		if ( ! in_array( $target_kind, array( 'post', 'term' ), true ) ) {
+			return 0;
+		}
+
+		$issue_type = sanitize_text_field(
+			(string) ( $item['issue_type'] ?? '' )
+		);
+
+		return $this->attention_issues->set_issue_ignored(
+			absint( $item['affected_post_id'] ?? 0 ),
+			$issue_type,
+			absint( $item['target_ref'] ?? 0 ),
+			$target_kind,
+			$ignored
+		);
+	}
+
+	/**
 	 * Builds the catalog-primary payload for ajax_list_posts.
 	 *
 	 * @param string $source_site_url Source site URL.
@@ -711,7 +1108,7 @@ final class Admin_Ajax_Controller {
 	 * Builds the local-primary payload for ajax_list_posts.
 	 *
 	 * @param string $source_site_url Source site URL.
-	 * @param string $state           'up-to-date', 'outdated', or 'failed'.
+	 * @param string $state           'up-to-date' or 'outdated'.
 	 * @return array|\WP_Error Listing payload.
 	 */
 	private function list_posts_via_local(
@@ -723,22 +1120,13 @@ final class Admin_Ajax_Controller {
 		$per_page = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$args = $this->build_local_listing_args();
-
-		if ( 'failed' === $state ) {
-			$active_rows = $this->repository->list_failed_source_rows(
-				$page,
-				$per_page,
-				$args
-			);
-		} else {
-			$args['freshness'] = 'outdated' === $state ? 'outdated' : 'up-to-date';
-			$active_rows       = $this->repository->list_imported_source_rows(
-				$page,
-				$per_page,
-				$args
-			);
-		}
+		$args              = $this->build_local_listing_args();
+		$args['freshness'] = 'outdated' === $state ? 'outdated' : 'up-to-date';
+		$active_rows       = $this->repository->list_imported_source_rows(
+			$page,
+			$per_page,
+			$args
+		);
 
 		$has_more = count( $active_rows ) > $per_page;
 		if ( $has_more ) {
@@ -747,8 +1135,7 @@ final class Admin_Ajax_Controller {
 
 		$source_by_id = $this->fetch_source_data_for_active_rows(
 			$source_site_url,
-			$active_rows,
-			$state
+			$active_rows
 		);
 
 		$rows = array_map(
@@ -767,20 +1154,17 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Fetches source data for a page of active rows, grouped by the row's
-	 * post_type. Failed rows skip the fetch and reuse the snapshot title.
+	 * Fetches source data for a page of active rows, grouped by post_type.
 	 *
 	 * @param string $source_site_url Source site URL.
-	 * @param array  $active_rows     Rows from a list_*_source_rows() call.
-	 * @param string $state           Routing state.
+	 * @param array  $active_rows     Rows from list_imported_source_rows().
 	 * @return array<int, array> Map of source_post_id → source row.
 	 */
 	private function fetch_source_data_for_active_rows(
 		string $source_site_url,
-		array $active_rows,
-		string $state
+		array $active_rows
 	): array {
-		if ( 0 === count( $active_rows ) || 'failed' === $state ) {
+		if ( 0 === count( $active_rows ) ) {
 			return array();
 		}
 
@@ -841,7 +1225,6 @@ final class Admin_Ajax_Controller {
 			'item_id'              => $item['item_id'] ?? null,
 			'post_id'              => $item['post_id'] ?? null,
 			'import_date_gmt'      => $item['import_date_gmt'] ?? null,
-			'error_message'        => $item['error_message'] ?? null,
 			'has_previous_content' => (bool) ( $item['has_previous_content'] ?? false ),
 			'edit_url'             => (string) ( $item['edit_url'] ?? '' ),
 		);
@@ -871,12 +1254,9 @@ final class Admin_Ajax_Controller {
 			: null;
 		$import_date     = (string) ( $active_row['import_date_gmt'] ?? '' );
 		$source_modified = (string) ( $active_row['source_modified_gmt'] ?? '' );
-		$is_failed       = 'error' === (string) ( $active_row['status'] ?? '' );
-		$local_state     = $is_failed
-			? 'failed'
-			: ( '' !== $source_modified && $source_modified > $import_date
-				? 'outdated'
-				: 'up-to-date' );
+		$local_state     = '' !== $source_modified && $source_modified > $import_date
+			? 'outdated'
+			: 'up-to-date';
 		$edit_url        = $post_id > 0 ? get_edit_post_link( $post_id, 'raw' ) : null;
 
 		return array(
@@ -901,14 +1281,11 @@ final class Admin_Ajax_Controller {
 				? (string) ( $source['status'] ?? '' )
 				: '',
 			'local_state'          => $local_state,
-			'is_imported'          => 'failed' !== $local_state,
+			'is_imported'          => true,
 			'wp_post_status'       => $wp_post_status,
 			'item_id'              => isset( $active_row['id'] ) ? (int) $active_row['id'] : null,
 			'post_id'              => $post_id > 0 ? $post_id : null,
 			'import_date_gmt'      => '' !== $import_date ? $import_date : null,
-			'error_message'        => isset( $active_row['error_message'] )
-				? (string) $active_row['error_message']
-				: null,
 			'has_previous_content' => (bool) ( $active_row['has_previous_content'] ?? 0 ),
 			'edit_url'             => is_string( $edit_url ) ? $edit_url : '',
 		);
@@ -923,7 +1300,7 @@ final class Admin_Ajax_Controller {
 	 */
 	private static function sanitize_state( mixed $raw ): string {
 		$value   = is_scalar( $raw ) ? sanitize_key( (string) $raw ) : '';
-		$allowed = array( 'all', 'available', 'up-to-date', 'outdated', 'failed' );
+		$allowed = array( 'all', 'available', 'up-to-date', 'outdated' );
 
 		return in_array( $value, $allowed, true ) ? $value : 'all';
 	}
@@ -932,8 +1309,7 @@ final class Admin_Ajax_Controller {
 	 * Validates and normalizes the local-primary listing's search/filter/sort
 	 * params from the request.
 	 *
-	 * @return array Listing args for list_imported_source_rows() /
-	 *               list_failed_source_rows().
+	 * @return array Listing args for list_imported_source_rows().
 	 */
 	private function build_local_listing_args(): array {
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- caller verified the nonce.
@@ -1059,7 +1435,7 @@ final class Admin_Ajax_Controller {
 			$args['name'] = $name;
 		}
 
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- normalize_statuses() reduces each element to the shared allowlist via sanitize_key().
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- normalize_statuses() reduces each element to the filter allowlist via sanitize_key().
 		$statuses = self::normalize_statuses( wp_unslash( $_POST['status'] ?? array() ) );
 		if ( array() !== $statuses ) {
 			$args['status'] = $statuses;
@@ -1077,7 +1453,7 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Reduces a raw status param to the shared allowlist; unknown values
+	 * Reduces a raw status param to the filter allowlist; unknown values
 	 * are dropped silently so a fat-fingered request still yields a result.
 	 *
 	 * @param mixed $raw Raw status value (array or string).
@@ -1098,7 +1474,7 @@ final class Admin_Ajax_Controller {
 					static fn( string $v ): string => sanitize_key( $v ),
 					array_filter( $raw, 'is_string' )
 				),
-				Catalog_REST_Controller::ALLOWED_STATUSES
+				Catalog_REST_Controller::FILTER_STATUSES
 			)
 		);
 	}
@@ -1674,8 +2050,8 @@ final class Admin_Ajax_Controller {
 	 * `import_date_gmt`. Posts are batched by type so each post-type
 	 * group costs one signed catalog call.
 	 *
-	 * Catalog_REST_Controller::ALLOWED_STATUSES excludes 'trash', so a
-	 * trashed source post reads as `missing` here. Deliberate — trashed
+	 * The catalog lists only non-internal statuses, so a trashed source
+	 * post (status `trash`) reads as `missing` here. Deliberate — trashed
 	 * posts have no public surface, so sync-status treats them as deleted.
 	 */
 	public function ajax_sync_status_batch(): void {

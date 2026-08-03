@@ -41,7 +41,7 @@ class Extract_Source_Media_Test extends WP_UnitTestCase {
 	 * Verifies that an absent or non-array field yields an empty map.
 	 */
 	public function test_absent_or_non_array_field_yields_empty_map(): void {
-		// ARRANGE + ACT + ASSERT.
+		// ARRANGE + ACT + ASSERT: Absent/non-array yields an empty map.
 		$this->assertSame( array(), $this->extract( array() ) );
 		$this->assertSame(
 			array(),
@@ -69,7 +69,7 @@ class Extract_Source_Media_Test extends WP_UnitTestCase {
 			),
 		);
 
-		// ACT.
+		// ACT: Extract the media map.
 		$map = $this->extract( $data );
 
 		// ASSERT: Only the well-formed entry remains, its parent cast to string.
@@ -93,7 +93,7 @@ class Extract_Source_Media_Test extends WP_UnitTestCase {
 	 * alt/title/caption/description/parent shape.
 	 */
 	public function test_missing_subfields_coerce_to_empty_strings(): void {
-		// ARRANGE + ACT.
+		// ARRANGE + ACT: Extract an entry that sets only the title.
 		$map = $this->extract(
 			array(
 				'safe_publish_media' => array(
@@ -102,7 +102,7 @@ class Extract_Source_Media_Test extends WP_UnitTestCase {
 			)
 		);
 
-		// ASSERT.
+		// ASSERT: Missing subfields come back as empty strings.
 		$this->assertSame(
 			array(
 				'https://source.example.com/c.jpg' => array(

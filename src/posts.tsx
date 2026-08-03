@@ -1,15 +1,14 @@
 /**
  * Unified Posts admin entry point.
  *
- * Mounts the PostsDataView into the dashboard container when the DOM is
- * ready. The component owns its fetch lifecycle (chip-routed via
- * `safe_publish_list_posts`).
+ * Mounts the Manage tabs (Posts listing and Needs attention inbox) into the
+ * dashboard container when the DOM is ready.
  *
  * @file This file is the entry point for the unified Posts admin page.
  */
 import { createRoot } from 'react-dom/client';
 
-import { PostsDataView } from './components/PostsDataView';
+import { ManageTabs } from './components/ManageTabs';
 
 import './style.scss';
 
@@ -28,6 +27,6 @@ document.addEventListener( 'DOMContentLoaded', (): void => {
 	container.innerHTML = '';
 
 	createRoot( container ).render(
-		<PostsDataView sourceSiteUrl={ sourceSiteUrl } />
+		<ManageTabs sourceSiteUrl={ sourceSiteUrl } />
 	);
 } );

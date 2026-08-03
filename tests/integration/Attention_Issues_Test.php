@@ -132,7 +132,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * single warning-level issue keyed by (post, type, target).
 	 */
 	public function test_unresolved_block_reference_opens_one_issue(): void {
-		// ARRANGE & ACT: import a post linking to a not-yet-imported source post.
+		// ARRANGE + ACT: Import a post linking to a not-yet-imported source post.
 		$result = $this->import_under(
 			self::BLOG_URL,
 			7100,
@@ -156,7 +156,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * distinct rows for the same post.
 	 */
 	public function test_two_unresolved_refs_open_two_rows(): void {
-		// ARRANGE & ACT: import a post linking to an unimported post and term.
+		// ARRANGE + ACT: Import a post linking to an unimported post and term.
 		$result = $this->import_under(
 			self::BLOG_URL,
 			7101,
@@ -181,7 +181,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * source ID open distinct rows rather than colliding on the identity key.
 	 */
 	public function test_same_source_id_post_and_term_open_distinct_rows(): void {
-		// ARRANGE & ACT: import a post linking to an unimported post and term
+		// ARRANGE + ACT: Import a post linking to an unimported post and term
 		// that share the same numeric source ID.
 		$result = $this->import_under(
 			self::BLOG_URL,
@@ -379,7 +379,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * two subsites of one host never collide in the listing.
 	 */
 	public function test_issues_scoped_by_subsite_identity(): void {
-		// ARRANGE & ACT: import the same unresolved reference under two subsites.
+		// ARRANGE + ACT: Import the same unresolved reference under two subsites.
 		$blog = $this->import_under(
 			self::BLOG_URL,
 			7105,
@@ -1104,7 +1104,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * @return array[] Open issue rows.
 	 */
 	private function open_rows_for_source( string $source_site_url ): array {
-		$rows = $this->attention->get_open_issues( $source_site_url, 1, 100 );
+		$rows = $this->attention->list_open_issues( $source_site_url, 0, 100 );
 
 		usort(
 			$rows,
@@ -1452,6 +1452,165 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			$media_importer,
 			new Content_Media_Processor( $media_importer ),
 			new Shortcode_ID_Rewriter()
+		);
+	}
+
+	/**
+	 * Upserts the shared open degradation used by the ignore-lifecycle tests.
+	 *
+	 * @param string $severity Issue severity.
+	 */
+	private function upsert_test_issue( string $severity = 'warning' ): void {
+		$this->attention->upsert_issue(
+			4001,
+			'nav_ref_rewrite_failed',
+			7001,
+			'post',
+			$severity,
+			self::BLOG_URL
+		);
+	}
+
+	/**
+	 * Ignores or restores the shared test degradation identity.
+	 *
+	 * @param bool $ignored True to ignore, false to restore.
+	 * @return int Rows updated.
+	 */
+	private function set_test_issue_ignored( bool $ignored ): int {
+		return $this->attention->set_issue_ignored(
+			4001,
+			'nav_ref_rewrite_failed',
+			7001,
+			'post',
+			$ignored
+		);
+	}
+
+	/**
+	 * Verifies that ignoring an issue drops it from the open list and count and
+	 * surfaces it under the ignored view; un-ignore restores it.
+	 */
+	public function test_set_issue_ignored_moves_between_open_and_ignored(): void {
+		$url = self::BLOG_URL;
+
+		// ARRANGE: One open degradation for the source.
+		$this->upsert_test_issue();
+
+		// ACT: Ignore it.
+		$ignored = $this->set_test_issue_ignored( true );
+
+		// ASSERT: The open view drops it; the ignored view lists it.
+		$this->assertSame( 1, $ignored );
+		$this->assertSame( 0, $this->attention->count_open_issues( $url ) );
+		$this->assertSame(
+			1,
+			$this->attention->count_open_issues( $url, true )
+		);
+		$this->assertCount(
+			1,
+			$this->attention->list_open_issues( $url, 0, 20, true )
+		);
+		$this->assertCount(
+			0,
+			$this->attention->list_open_issues( $url, 0, 20 )
+		);
+
+		// ACT: Un-ignore it.
+		$restored = $this->set_test_issue_ignored( false );
+
+		// ASSERT: It returns to the open view.
+		$this->assertSame( 1, $restored );
+		$this->assertSame( 1, $this->attention->count_open_issues( $url ) );
+		$this->assertSame(
+			0,
+			$this->attention->count_open_issues( $url, true )
+		);
+	}
+
+	/**
+	 * Verifies that re-detecting an ignored issue keeps it ignored: upsert_issue
+	 * must not clear ignored_gmt.
+	 */
+	public function test_upsert_issue_preserves_ignored_gmt(): void {
+		$url = self::BLOG_URL;
+
+		// ARRANGE: An ignored degradation.
+		$this->upsert_test_issue();
+		$this->set_test_issue_ignored( true );
+
+		// ACT: Re-detect it — a later import upserts the same identity.
+		$this->upsert_test_issue( 'error' );
+
+		// ASSERT: It stays ignored, and the re-upsert took effect.
+		$this->assertSame( 0, $this->attention->count_open_issues( $url ) );
+		$this->assertSame(
+			1,
+			$this->attention->count_open_issues( $url, true )
+		);
+		$issue = $this->attention->get_issue(
+			4001,
+			'nav_ref_rewrite_failed',
+			7001,
+			'post'
+		);
+		$this->assertNotNull( $issue );
+		$this->assertSame( 'error', $issue['severity'] );
+	}
+
+	/**
+	 * Verifies that touch_issue preserves ignored_gmt: a retry that runs but does
+	 * not resolve the issue leaves it ignored.
+	 */
+	public function test_touch_issue_preserves_ignored_gmt(): void {
+		$url = self::BLOG_URL;
+
+		// ARRANGE: An ignored degradation.
+		$this->upsert_test_issue();
+		$this->set_test_issue_ignored( true );
+
+		// ACT: Touch it, as an unresolved retry would.
+		$this->attention->touch_issue(
+			4001,
+			'nav_ref_rewrite_failed',
+			7001,
+			'post'
+		);
+
+		// ASSERT: It stays ignored.
+		$this->assertSame( 0, $this->attention->count_open_issues( $url ) );
+		$this->assertSame(
+			1,
+			$this->attention->count_open_issues( $url, true )
+		);
+	}
+
+	/**
+	 * Verifies that resolve_issue removes an ignored issue outright.
+	 */
+	public function test_resolve_issue_removes_an_ignored_issue(): void {
+		$url = self::BLOG_URL;
+
+		// ARRANGE: An ignored degradation.
+		$this->upsert_test_issue();
+		$this->set_test_issue_ignored( true );
+
+		// ACT: Resolve it, as a successful retry would.
+		$this->attention->resolve_issue(
+			4001,
+			'nav_ref_rewrite_failed',
+			7001,
+			'post'
+		);
+
+		// ASSERT: The row is gone from both views.
+		$this->assertSame( 0, $this->attention->count_open_issues( $url ) );
+		$this->assertSame(
+			0,
+			$this->attention->count_open_issues( $url, true )
+		);
+		$this->assertNull(
+			$this->attention->get_issue( 4001, 'nav_ref_rewrite_failed', 7001 )
 		);
 	}
 }

@@ -25,10 +25,18 @@
   Documentation update (2026-06-03): Added the Sync Status column on both
   the Source Posts and Imports → Posts screens, noted that Update, Delete,
   and Rollback support bulk selection, recorded that failed imports can now
-  be removed from the Failures tab, and added the Test Connection button.
+  be removed from the Needs attention tab, and added the Test Connection button.
   Constant-backed connection settings are intentionally omitted from this
   VIP-facing draft; docs/concepts/authentication.md covers that implementation
   detail for non-VIP and local configuration.
+-->
+
+<!--
+  Documentation update (2026-08-03): Reworked the Needs attention description
+  for the reversible Ignore lifecycle — the Open | Ignored toggle and the
+  Ignore / Un-ignore actions — and for the degradation Resolvable now /
+  Waiting on import hint, with Retry now supporting bulk selection and a bulk
+  run reporting an aggregate outcome.
 -->
 
 # Safe Publish
@@ -140,7 +148,7 @@ Safe Publish imports the selected posts as a single unit and records the result 
 The **Imports** admin page is the operator surface for everything that came in from the source. It has two tabs:
 
 - **Posts** — local posts that resulted from successful imports. Each row offers Edit, Update (re-import from source), Diff (compare current local content with current source content), Delete, and Rollback. Update, Delete, and Rollback can also be applied to several selected rows at once; Diff is available per row only. A **Sync Status** column compares each row against the current source content and reports whether it is up to date, outdated, missing on the source, cannot be checked because the source request failed, or has an invalid timestamp.
-- **Failures** — items whose import errored before a local post was created. Each failed item can be removed from the tab once it is no longer needed; recovery is fixing the underlying issue and re-importing from the source catalog.
+- **Needs attention** — post-import problems in one place: failures (the import errored, so no local post was created, or a re-import of an existing post failed) and degradations (the post imported but left an unresolved block, term, parent, or navigation reference). An **Open | Ignored** toggle switches between the active list and items set aside with Ignore; the tab count always reflects the Open set. Each degradation carries a **Resolvable now** or **Waiting on import** hint, indicating whether its target is imported yet, so a Retry would reconcile it. The row actions are **Remove**, which permanently deletes a failure's record; **Retry**, which re-runs a degradation's reconciliation and reports whether it cleared; and **Ignore**, a reversible way to set a failure or degradation aside — it drops the row from the Open view and the count without deleting it, and **Un-ignore** restores it. Retry, Remove, and Ignore can each be applied to several selected rows at once, and a bulk Retry reports how many issues resolved, are still waiting on an import, or failed. Recovery for a failure is fixing the underlying issue and re-importing from the source catalog.
 
 ### Previewing changes with a diff
 

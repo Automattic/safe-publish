@@ -76,7 +76,7 @@ For local development, you'll need two WordPress sites to test import functional
 
 To populate the source or destination site with realistic test content for manual testing or import verification, see [Content Seeding](content-seeding.md).
 
-To seed the admin degradation drawers (Needs attention and orphan failures) for UI testing, see [Seeding Import Degradations](seeding-degradations.md).
+To seed the Needs attention tab for UI testing, see [Seeding Import Degradations](seeding-degradations.md).
 
 ### Code Quality
 
@@ -211,7 +211,7 @@ Playgrounds do not closely mirror production environments and are missing persis
 1. **Use two browser windows** - one for source site, one for destination.
 2. **Test with different post types** - posts, pages, custom types.
 3. **Test media import** - posts with multiple images.
-4. **Check the Imports page** - verify the Posts and Failures tabs reflect each attempt.
+4. **Check the Imports page** - verify the Posts and Needs attention tabs reflect each attempt.
 5. **Monitor network requests** - use browser DevTools.
 6. **Test error conditions** - invalid URLs, auth failures, etc.
 
