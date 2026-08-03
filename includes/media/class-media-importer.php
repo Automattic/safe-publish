@@ -11,6 +11,8 @@ namespace Safe_Publish\Media;
 
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Request_Actions;
+use Safe_Publish\API\Source_Media_REST_Field;
+use Safe_Publish\API\Source_Post_Type_Resolver;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Media\Media_Logger;
 use Safe_Publish\Utils\Options;
@@ -714,6 +716,60 @@ class Media_Importer {
 		}
 
 		return $attachment_id;
+	}
+
+	/**
+	 * Fetches a source post's attached media set of a given type: the ordered
+	 * { id, menu_order } list a cross-post [gallery id="B"]/[playlist id="B"]
+	 * renders. Reads the source's referenced-media enrichment field, since the
+	 * media REST omits menu_order. Any fetch or shape failure yields an empty
+	 * set so the caller degrades rather than aborts.
+	 *
+	 * @param int    $source_post_id   Referenced source post ID.
+	 * @param string $source_post_type Its post type slug, to resolve the REST base.
+	 * @param string $mime_group       Media type group: image, audio, or video.
+	 * @param string $source_site_url  Source site URL.
+	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
+	 * @return list<array{id: int, menu_order: int}> Ordered set, or empty.
+	 */
+	public function fetch_referenced_media_set(
+		int $source_post_id,
+		string $source_post_type,
+		string $mime_group,
+		string $source_site_url,
+		array $auth_credentials = array()
+	): array {
+		$rest_base = Source_Post_Type_Resolver::resolve_rest_base(
+			$source_post_type,
+			$source_site_url,
+			array( $this->http_client, 'make_request' ),
+			$auth_credentials
+		);
+
+		$url = trailingslashit( $source_site_url )
+			. 'wp-json/wp/v2/' . $rest_base . '/' . $source_post_id;
+		if ( VIP_Safe_Auth::has_valid_credential_format( $auth_credentials ) ) {
+			$url = add_query_arg( 'context', 'edit', $url );
+		}
+
+		$response = $this->http_client->make_request(
+			$url,
+			Request_Actions::IMPORT,
+			$auth_credentials
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return array();
+		}
+
+		$data  = json_decode( wp_remote_retrieve_body( $response ), true );
+		$field = is_array( $data )
+			? ( $data[ Source_Media_REST_Field::REFERENCED_FIELD_NAME ] ?? null )
+			: null;
+
+		return Source_Media_REST_Field::normalize_menu_order_set(
+			is_array( $field ) ? ( $field[ $mime_group ] ?? null ) : null
+		);
 	}
 
 	/**

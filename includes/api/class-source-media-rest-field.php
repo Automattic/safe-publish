@@ -19,8 +19,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Registers two sibling REST fields the destination reads when it sideloads a
- * post's media, both gated to HMAC-authenticated single-item requests. Each
+ * Registers three sibling REST fields the destination reads when it sideloads a
+ * post's media, all gated to HMAC-authenticated single-item requests. Each
  * resolves what core REST cannot expose on its own:
  *
  * - safe_publish_media: source library metadata (alt, title, caption,
@@ -29,6 +29,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  * - safe_publish_attached_media: the ordered { id, menu_order } set a bare
  *   [gallery]/[playlist] renders, referenced by neither URL nor id and whose
  *   menu_order the media REST omits.
+ * - safe_publish_referenced_media: the post's attached image/audio/video
+ *   children grouped by type, each an ordered { id, menu_order } set, so a
+ *   cross-post [gallery id="B"] elsewhere can pull the set B renders. Not
+ *   content-gated: the referencing post, not this one, renders the set.
  */
 class Source_Media_REST_Field {
 
@@ -45,6 +49,14 @@ class Source_Media_REST_Field {
 	 * @var string
 	 */
 	const ATTACHED_FIELD_NAME = 'safe_publish_attached_media';
+
+	/**
+	 * REST field name carrying a post's attached media grouped by type, for a
+	 * cross-post gallery/playlist reference to pull.
+	 *
+	 * @var string
+	 */
+	const REFERENCED_FIELD_NAME = 'safe_publish_referenced_media';
 
 	/**
 	 * HMAC authenticator used to gate access to the field value.
@@ -98,6 +110,15 @@ class Source_Media_REST_Field {
 			self::ATTACHED_FIELD_NAME,
 			array(
 				'get_callback' => array( $this, 'get_attached_callback' ),
+				'schema'       => null,
+			)
+		);
+
+		register_rest_field(
+			array_values( $post_types ),
+			self::REFERENCED_FIELD_NAME,
+			array(
+				'get_callback' => array( $this, 'get_referenced_callback' ),
 				'schema'       => null,
 			)
 		);
@@ -171,6 +192,104 @@ class Source_Media_REST_Field {
 		}
 
 		return $this->resolve_attached_media( $post );
+	}
+
+	/**
+	 * Returns the post's attached media grouped by type for HMAC-authenticated
+	 * single-item requests, and null otherwise. Serves a cross-post reference
+	 * on another post, so it is not content-gated.
+	 *
+	 * @param array           $post_array Post data as built by WP_REST_Posts_Controller.
+	 * @param string          $_attribute Field name (unused).
+	 * @param WP_REST_Request $request    Current REST request.
+	 * @return array<string, list<array{id: int, menu_order: int}>>|null Grouped
+	 *         attached media, or null when not HMAC-authenticated or not a
+	 *         single-item request.
+	 */
+	public function get_referenced_callback(
+		array $post_array,
+		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		string $_attribute,
+		WP_REST_Request $request
+	): ?array {
+		if ( ! $this->authenticator->is_authenticated() ) {
+			return null;
+		}
+
+		if ( ! $this->is_single_item_request( $request ) ) {
+			return null;
+		}
+
+		$post_id = isset( $post_array['id'] ) ? (int) $post_array['id'] : 0;
+		$post    = $post_id > 0 ? get_post( $post_id ) : null;
+
+		if ( ! $post instanceof WP_Post ) {
+			return array();
+		}
+
+		return $this->resolve_referenced_media( $post );
+	}
+
+	/**
+	 * Groups the post's attached image, audio, and video children into ordered
+	 * { id, menu_order } sets, keyed by media type. Empty types are omitted.
+	 *
+	 * @param WP_Post $post Post being requested.
+	 * @return array<string, list<array{id: int, menu_order: int}>> Grouped sets.
+	 */
+	private function resolve_referenced_media( WP_Post $post ): array {
+		$groups = array();
+
+		foreach ( array( 'image', 'audio', 'video' ) as $mime_type ) {
+			$items = array();
+
+			foreach ( $this->attached_children( $post->ID, $mime_type ) as $child ) {
+				$items[] = array(
+					'id'         => (int) $child->ID,
+					'menu_order' => (int) $child->menu_order,
+				);
+			}
+
+			if ( array() !== $items ) {
+				$groups[ $mime_type ] = $items;
+			}
+		}
+
+		return $groups;
+	}
+
+	/**
+	 * Normalizes a raw { id, menu_order } list decoded from an attached- or
+	 * referenced-media field, dropping malformed entries and any without a
+	 * positive id. The canonical validator for both consumer-side fields.
+	 *
+	 * @param mixed $items Raw list from a decoded REST field.
+	 * @return list<array{id: int, menu_order: int}> Validated set.
+	 */
+	public static function normalize_menu_order_set( mixed $items ): array {
+		if ( ! is_array( $items ) ) {
+			return array();
+		}
+
+		$set = array();
+
+		foreach ( $items as $item ) {
+			if ( ! is_array( $item ) ) {
+				continue;
+			}
+
+			$id = isset( $item['id'] ) ? absint( $item['id'] ) : 0;
+			if ( 0 === $id ) {
+				continue;
+			}
+
+			$set[] = array(
+				'id'         => $id,
+				'menu_order' => isset( $item['menu_order'] ) ? (int) $item['menu_order'] : 0,
+			);
+		}
+
+		return $set;
 	}
 
 	/**
