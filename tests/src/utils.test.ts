@@ -21,6 +21,7 @@ import type {
 	NavRefRewriteFailedWarning,
 	ParentOrphanedWarning,
 	UnmappedBlockReferenceWarning,
+	UnmappedGalleryReferenceWarning,
 	UnmappedShortcodeReferenceWarning,
 } from '@/types';
 
@@ -316,6 +317,19 @@ describe( 'renderWarningMessage', () => {
 		expect( message ).toContain( '705' );
 		expect( message ).toContain( 'Gallery/playlist' );
 	} );
+
+	it( 'should render the source post ID for unmapped_gallery_reference', () => {
+		// ARRANGE: An unresolved cross-post gallery/playlist reference.
+		const warning: UnmappedGalleryReferenceWarning = {
+			type: 'unmapped_gallery_reference',
+			source_id: 700,
+		};
+		// ACT: Render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: The source post ID and the gallery/playlist wording are present.
+		expect( message ).toContain( '700' );
+		expect( message ).toContain( 'source post' );
+	} );
 } );
 
 describe( 'renderWarningShortLabel', () => {
@@ -396,6 +410,18 @@ describe( 'renderWarningShortLabel', () => {
 		// ASSERT: short label is the comma-joinable string used in the bulk modal.
 		expect( label ).toBe( 'unmapped shortcode reference' );
 	} );
+
+	it( 'should return "unmapped gallery reference" for unmapped_gallery_reference', () => {
+		// ARRANGE: Any unmapped_gallery_reference warning.
+		const warning: UnmappedGalleryReferenceWarning = {
+			type: 'unmapped_gallery_reference',
+			source_id: 700,
+		};
+		// ACT: Render the short label.
+		const label = renderWarningShortLabel( warning );
+		// ASSERT: Short label is the comma-joinable string used in the bulk modal.
+		expect( label ).toBe( 'unmapped gallery reference' );
+	} );
 } );
 
 /**
@@ -474,6 +500,19 @@ describe( 'renderIssueMessage', () => {
 		const message = renderIssueMessage( issue );
 		// ASSERT: the menu ID and the retry hint are present.
 		expect( message ).toContain( '8300' );
+		expect( message ).toContain( 'Retry' );
+	} );
+
+	it( 'renders retry-oriented copy for an unmapped gallery reference', () => {
+		// ARRANGE: An unmapped cross-post gallery-reference issue.
+		const issue = makeIssue( {
+			issue_type: 'unmapped_gallery_reference',
+			target_ref: 700,
+		} );
+		// ACT: Render the message.
+		const message = renderIssueMessage( issue );
+		// ASSERT: The source post ID and the retry hint are present.
+		expect( message ).toContain( '700' );
 		expect( message ).toContain( 'Retry' );
 	} );
 
