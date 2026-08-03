@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
+use Safe_Publish\Utils\Options;
 use WP_Error;
 
 // Prevent direct access.
@@ -172,6 +173,9 @@ final class Session_Rollback_Service {
 	 * @return array{action: string, post_id: int, post_title: string}|WP_Error Result or error.
 	 */
 	private function delete_new_post( int $post_id, string $post_title ): array|WP_Error {
+		// Capture the media this post owns before the delete unlinks it.
+		$imported_media_ids = $this->imported_media_ids_for_parent( $post_id );
+
 		if ( ! wp_delete_post( $post_id, true ) ) {
 			return new WP_Error(
 				'delete_failed',
@@ -179,11 +183,51 @@ final class Session_Rollback_Service {
 			);
 		}
 
+		foreach ( $imported_media_ids as $attachment_id ) {
+			wp_delete_attachment( $attachment_id, true );
+		}
+
 		return array(
 			'action'     => 'deleted',
 			'post_id'    => $post_id,
 			'post_title' => $post_title,
 		);
+	}
+
+	/**
+	 * Returns the plugin-imported attachments a post owns.
+	 *
+	 * Ownership follows the parent regardless of the sideloading session; the
+	 * import-origin meta guard spares a user's own attachments parented here.
+	 *
+	 * @param int $post_id Post being rolled back.
+	 * @return int[] Owned, import-created attachment IDs.
+	 */
+	private function imported_media_ids_for_parent( int $post_id ): array {
+		$ids = get_posts(
+			array(
+				'post_type'        => 'attachment',
+				'post_status'      => 'any',
+				'post_parent'      => $post_id,
+				'posts_per_page'   => -1,
+				'fields'           => 'ids',
+				'suppress_filters' => false,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query'       => array(
+					'relation' => 'OR',
+					array(
+						'key'     => Options::META_ORIGINAL_URL,
+						'compare' => 'EXISTS',
+					),
+					array(
+						'key'     => Options::META_IMPORTED_FROM,
+						'compare' => 'EXISTS',
+					),
+				),
+			)
+		);
+
+		return array_map( 'intval', $ids );
 	}
 
 	/**

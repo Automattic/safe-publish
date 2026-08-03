@@ -14,6 +14,7 @@ use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
+use Safe_Publish\Utils\Options;
 use WP_Error;
 
 /**
@@ -146,6 +147,185 @@ class Session_Rollback_Test extends Integration_Test_Case {
 
 		// ASSERT: Verify second post deleted.
 		$this->assertNull( get_post( $post_id_2 ) );
+	}
+
+	/**
+	 * Verifies that rolling back a post deletes the plugin-imported media it
+	 * owns.
+	 */
+	public function test_rollback_item_deletes_owned_imported_media(): void {
+		// ARRANGE: An imported post owning one plugin-imported attachment.
+		$session_id    = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id       = $this->factory()->post->create( array( 'post_title' => 'Owner' ) );
+		$attachment_id = $this->seed_imported_attachment( $post_id );
+		$item_id       = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Owner',
+			'success',
+			$post_id
+		);
+
+		// ACT: Roll back the item.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The post and its owned media are both gone.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'deleted', $result['action'] );
+		$this->assertNull( get_post( $post_id ) );
+		$this->assertNull( get_post( $attachment_id ) );
+	}
+
+	/**
+	 * Verifies that rolling back a post never deletes media owned by a
+	 * different, surviving post, as when the rolled-back post's import pulled a
+	 * cross-post gallery set parented elsewhere.
+	 */
+	public function test_rollback_preserves_media_owned_by_surviving_post(): void {
+		// ARRANGE: Post A is rolled back; post B survives and owns its own
+		// media.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_a     = $this->factory()->post->create( array( 'post_title' => 'A' ) );
+		$post_b     = $this->factory()->post->create( array( 'post_title' => 'B' ) );
+		$b_media    = $this->seed_imported_attachment( $post_b );
+		$item_a     = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'A',
+			'success',
+			$post_a
+		);
+
+		// ACT: Roll back only A.
+		$this->rollback_service->rollback_item( $item_a );
+
+		// ASSERT: B and its media are untouched.
+		$this->assertNotNull( get_post( $post_b ) );
+		$this->assertNotNull( get_post( $b_media ) );
+	}
+
+	/**
+	 * Verifies that rolling back a post leaves a user's own (non-plugin)
+	 * attachment parented to it in place.
+	 */
+	public function test_rollback_preserves_non_plugin_media(): void {
+		// ARRANGE: A post owning an attachment with no import-origin meta.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create( array( 'post_title' => 'Owner' ) );
+		$user_media = $this->factory()->attachment->create(
+			array(
+				'post_parent'    => $post_id,
+				'post_mime_type' => 'image/jpeg',
+				'post_title'     => 'User Upload',
+			)
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Owner',
+			'success',
+			$post_id
+		);
+
+		// ACT: Roll back the post.
+		$this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The post is gone but the user's own attachment remains.
+		$this->assertNull( get_post( $post_id ) );
+		$this->assertNotNull( get_post( $user_media ) );
+	}
+
+	/**
+	 * Verifies that a session rollback deletes the plugin-imported media each
+	 * rolled-back post owns.
+	 */
+	public function test_rollback_session_deletes_owned_imported_media(): void {
+		// ARRANGE: Two imported posts, each owning a plugin-imported
+		// attachment.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_1     = $this->factory()->post->create( array( 'post_title' => 'Post 1' ) );
+		$post_2     = $this->factory()->post->create( array( 'post_title' => 'Post 2' ) );
+		$media_1    = $this->seed_imported_attachment( $post_1 );
+		$media_2    = $this->seed_imported_attachment( $post_2 );
+		$this->repository->log_import_action( $session_id, 1, 'Post 1', 'success', $post_1 );
+		$this->repository->log_import_action( $session_id, 2, 'Post 2', 'success', $post_2 );
+		$this->repository->complete_session( $session_id );
+
+		// ACT: Roll back the whole session.
+		$result = $this->rollback_service->rollback_session( $session_id );
+
+		// ASSERT: Both posts and both owned attachments are gone.
+		$this->assertIsArray( $result );
+		$this->assertSame( 2, $result['deleted_count'] );
+		$this->assertNull( get_post( $media_1 ) );
+		$this->assertNull( get_post( $media_2 ) );
+	}
+
+	/**
+	 * Verifies that restoring an updated post to its previous version keeps its
+	 * media, since a restore reverts content rather than removing the post.
+	 */
+	public function test_restore_previous_version_keeps_owned_media(): void {
+		// ARRANGE: An updated post owning imported media, logged with previous
+		// content so rollback restores it instead of deleting it.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create(
+			array(
+				'post_title'   => 'Updated',
+				'post_content' => 'New content.',
+			)
+		);
+		$media_id   = $this->seed_imported_attachment( $post_id );
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Updated',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => 'Old content.',
+				'action'           => 'updated_existing',
+			)
+		);
+
+		// ACT: Roll back the item, which restores the previous version.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The post is restored and its media is kept.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'restored', $result['action'] );
+		$this->assertNotNull( get_post( $media_id ) );
+	}
+
+	/**
+	 * Creates a plugin-imported attachment parented to a post.
+	 *
+	 * @param int $parent_id Owning post ID.
+	 * @return int Attachment ID carrying import-origin meta.
+	 */
+	private function seed_imported_attachment( int $parent_id ): int {
+		$attachment_id = $this->factory()->attachment->create(
+			array(
+				'post_parent'    => $parent_id,
+				'post_mime_type' => 'image/jpeg',
+				'post_title'     => 'Imported Image',
+			)
+		);
+		$this->assertIsInt( $attachment_id );
+
+		update_post_meta(
+			$attachment_id,
+			Options::META_ORIGINAL_URL,
+			'https://example.com/image.jpg'
+		);
+		update_post_meta(
+			$attachment_id,
+			Options::META_IMPORTED_FROM,
+			'https://example.com'
+		);
+
+		return $attachment_id;
 	}
 
 	/**
