@@ -61,13 +61,14 @@ final class Catalog_REST_Controller {
 	private const SEARCH_QUERY_FLAG = 'safe_publish_catalog_search';
 
 	/**
-	 * Post statuses the destination is allowed to filter against.
-	 * Public so the destination AJAX controller can validate before
-	 * round-tripping to the source.
+	 * Post statuses the filter dropdown offers. Public so the destination
+	 * AJAX controller can validate a filter selection. Narrower than what the
+	 * catalog lists — an unfiltered listing covers every non-internal status
+	 * (see resolve_statuses).
 	 *
 	 * @var string[]
 	 */
-	public const ALLOWED_STATUSES = array(
+	public const FILTER_STATUSES = array(
 		'publish',
 		'draft',
 		'pending',
@@ -348,7 +349,7 @@ final class Catalog_REST_Controller {
 	 * IDs); `has_more` is always false.
 	 *
 	 * @param string   $post_type Resolved post type slug.
-	 * @param string[] $statuses  Resolved status allowlist.
+	 * @param string[] $statuses  Resolved status list.
 	 * @param int[]    $ids       Source post IDs to look up (already sanitized).
 	 * @return WP_REST_Response Catalog envelope.
 	 */
@@ -596,23 +597,27 @@ final class Catalog_REST_Controller {
 	}
 
 	/**
-	 * Resolves and validates the status list against the allowlist.
+	 * Resolves and validates the requested status list.
 	 *
-	 * No status param (or one with no allowlisted entries) means "no
-	 * filter" — return every allowlisted status so the catalog's default
-	 * matches the UX of an empty FormTokenField in the destination's
-	 * toolbar. Matches WordPress admin's own "show everything" default.
+	 * No usable status param means "no filter": list every non-internal
+	 * content status, so custom editorial-workflow statuses are discoverable
+	 * alongside the built-ins. internal => false excludes trash, auto-draft,
+	 * and inherit while keeping custom statuses that show_in_admin_all_list
+	 * would hide. An explicit param intersects against that same set, falling
+	 * back to it when empty.
 	 *
 	 * @param mixed $raw Raw status param (array or string).
 	 * @return string[] Sanitized status list.
 	 */
 	private function resolve_statuses( mixed $raw ): array {
+		$listable = array_values( get_post_stati( array( 'internal' => false ) ) );
+
 		if ( is_string( $raw ) && '' !== $raw ) {
 			$raw = explode( ',', $raw );
 		}
 
 		if ( ! is_array( $raw ) || array() === $raw ) {
-			return self::ALLOWED_STATUSES;
+			return $listable;
 		}
 
 		$filtered = array_values(
@@ -621,11 +626,11 @@ final class Catalog_REST_Controller {
 					static fn( string $v ): string => sanitize_key( $v ),
 					array_filter( $raw, 'is_string' )
 				),
-				self::ALLOWED_STATUSES
+				$listable
 			)
 		);
 
-		return array() === $filtered ? self::ALLOWED_STATUSES : $filtered;
+		return array() === $filtered ? $listable : $filtered;
 	}
 
 	/**

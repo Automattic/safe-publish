@@ -13,6 +13,7 @@ namespace Safe_Publish\API;
 
 use Safe_Publish\Utils\Options;
 use WP_Error;
+use WP_Term;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -84,11 +85,11 @@ final class Meta_Terms_Manager {
 	 * Updates post terms (taxonomies) based on provided input.
 	 *
 	 * Accepts array or object; supports term IDs, slugs, names, or objects
-	 * with id/term_id, slug, name, source_term_id. Creates terms if they do
-	 * not exist. When `$source_site_url` is non-empty and an item carries a
-	 * `source_term_id`, records the source ID and URL on the resolved term
-	 * (both newly created and slug-matched) so later imports referencing the
-	 * term by source ID can remap to the destination term.
+	 * with id/term_id, slug, name, source_term_id. Reuses a matching term or
+	 * creates one as needed. When `$source_site_url` is non-empty and an item
+	 * carries a `source_term_id`, records the source ID and URL on the
+	 * resolved term (newly created or reused) so later imports referencing
+	 * the term by source ID can remap to the destination term.
 	 *
 	 * Returns true on success, or a WP_Error when a taxonomy does not exist on
 	 * this site, when a term cannot be created, or when assigning terms fails.
@@ -152,8 +153,9 @@ final class Meta_Terms_Manager {
 	}
 
 	/**
-	 * Resolves a single term item to a destination term ID, creating the term
-	 * when needed and writing source-term metadata when a source ID is known.
+	 * Resolves a single term item to a destination term ID, reusing an
+	 * existing same-named term or creating one, and writing source-term
+	 * metadata when a source ID is known.
 	 *
 	 * @param mixed  $item            Raw item: int, string, array, or object.
 	 * @param string $tax             Taxonomy slug (already validated).
@@ -187,33 +189,64 @@ final class Meta_Terms_Manager {
 			} elseif ( isset( $it['id'] ) ) {
 				$term_id = (int) $it['id'];
 			}
-			if ( ! $term_id ) {
+			if ( 0 === $term_id ) {
 				$term_slug = isset( $it['slug'] )
 					? sanitize_title( (string) $it['slug'] )
 					: '';
 				$term_name = isset( $it['name'] )
 					? trim( wp_strip_all_tags( (string) $it['name'] ) )
 					: $term_slug;
-				if ( ! $term_slug && $term_name ) {
+				if ( '' === $term_slug && '' !== $term_name ) {
 					$term_slug = sanitize_title( $term_name );
 				}
 			}
 		}
 
-		if ( ! $term_id && ( $term_slug || $term_name ) ) {
-			$existing = $term_slug ? get_term_by( 'slug', $term_slug, $tax ) : false;
-			if ( ! $existing && $term_name ) {
+		if ( $term_id > 0 ) {
+			// Trust a caller-supplied ID only if it resolves in this
+			// taxonomy; skip a foreign or stale one rather than assigning
+			// the wrong term.
+			$dest_term = get_term( $term_id, $tax );
+			if ( ! ( $dest_term instanceof WP_Term ) ) {
+				return 0;
+			}
+		}
+
+		if ( 0 === $term_id && ( '' !== $term_slug || '' !== $term_name ) ) {
+			$existing = '' !== $term_slug
+				? get_term_by( 'slug', $term_slug, $tax )
+				: false;
+
+			// Fall back to a name match when the slug misses (cross-site
+			// slug drift, flattened siblings). Unambiguous only while all
+			// terms sit at parent 0 — revisit when hierarchy adds parents.
+			if ( ! ( $existing instanceof WP_Term ) && '' !== $term_name ) {
+				$existing = get_term_by( 'name', $term_name, $tax );
+			}
+
+			if ( $existing instanceof WP_Term ) {
+				$term_id = (int) $existing->term_id;
+			} elseif ( '' !== $term_name ) {
 				$inserted = wp_insert_term(
 					$term_name,
 					$tax,
-					$term_slug ? array( 'slug' => $term_slug ) : array()
+					'' !== $term_slug ? array( 'slug' => $term_slug ) : array()
 				);
 				if ( is_wp_error( $inserted ) ) {
-					return $inserted;
+					// A concurrent insert can win the race with term_exists;
+					// recover the existing ID from its error data. Other
+					// codes are real failures.
+					if ( 'term_exists' === $inserted->get_error_code() ) {
+						$term_id = absint(
+							$inserted->get_error_data( 'term_exists' )
+						);
+					}
+					if ( 0 === $term_id ) {
+						return $inserted;
+					}
+				} else {
+					$term_id = (int) $inserted['term_id'];
 				}
-				$term_id = (int) $inserted['term_id'];
-			} elseif ( $existing && ! is_wp_error( $existing ) ) {
-				$term_id = (int) $existing->term_id;
 			}
 		}
 

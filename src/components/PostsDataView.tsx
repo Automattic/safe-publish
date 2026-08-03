@@ -28,7 +28,8 @@ import {
 	extractUrlPath,
 	formatBadgeTimestamp,
 	getErrorMessage,
-	PUBLISH_STATUS_LABELS,
+	statusBadgeModifier,
+	statusLabel,
 } from '../utils';
 import {
 	BaseControl,
@@ -62,7 +63,9 @@ import type {
 } from '../types';
 
 /**
- * Source-status filter allowlist; mirrors the catalog endpoint.
+ * Values the source-status filter dropdown offers; mirror
+ * Catalog_REST_Controller::FILTER_STATUSES. The catalog itself lists a wider
+ * set, so an unfiltered listing can show statuses not in this dropdown.
  */
 const STATUS_VALUES: readonly string[] = [
 	'publish',
@@ -72,10 +75,22 @@ const STATUS_VALUES: readonly string[] = [
 	'future',
 ];
 
-const STATUS_LABEL_SUGGESTIONS = STATUS_VALUES.map(
-	// eslint-disable-next-line security/detect-object-injection -- value iterates the STATUS_VALUES allowlist.
-	( value ) => PUBLISH_STATUS_LABELS[ value ] ?? value
-);
+const STATUS_LABEL_SUGGESTIONS = STATUS_VALUES.map( statusLabel );
+
+/**
+ * Composes the quiet status-badge className for a status slug.
+ *
+ * @param {string} status Post status slug.
+ * @return {string} Space-joined className.
+ */
+const statusBadgeClassName = ( status: string ): string =>
+	[
+		'safe-publish-status-badge',
+		'safe-publish-status-badge--quiet',
+		statusBadgeModifier( status ),
+	]
+		.filter( Boolean )
+		.join( ' ' );
 
 /**
  * Reads a URL search parameter as a positive integer.
@@ -750,9 +765,8 @@ export function PostsDataView( {
 				'string' === typeof token ? token : token.value
 			)
 			.map( ( label ) => {
-				const match = STATUS_VALUES.find( ( value ) =>
-					// eslint-disable-next-line security/detect-object-injection -- value iterates the STATUS_VALUES allowlist.
-					( PUBLISH_STATUS_LABELS[ value ] ?? value ) === label
+				const match = STATUS_VALUES.find(
+					( value ) => statusLabel( value ) === label
 				);
 				return match ?? label;
 			} )
@@ -842,25 +856,22 @@ export function PostsDataView( {
 				getValue: ( { item } ) =>
 					null === item.wp_post_status
 						? ''
-						: PUBLISH_STATUS_LABELS[ item.wp_post_status ]
-							?? item.wp_post_status,
+						: statusLabel( item.wp_post_status ),
 				render: ( { item } ) => {
 					if ( null === item.wp_post_status ) {
 						return <span>—</span>;
 					}
-					const label =
-						PUBLISH_STATUS_LABELS[ item.wp_post_status ]
-							?? item.wp_post_status;
-					const modifierClass = `safe-publish-status-badge--${ item.wp_post_status }`;
 					return (
 						<span
-							className={ `safe-publish-status-badge safe-publish-status-badge--quiet ${ modifierClass }` }
+							className={ statusBadgeClassName(
+								item.wp_post_status
+							) }
 						>
 							<span
 								className="safe-publish-status-badge__dot"
 								aria-hidden="true"
 							/>
-							{ label }
+							{ statusLabel( item.wp_post_status ) }
 						</span>
 					);
 				},
@@ -869,24 +880,20 @@ export function PostsDataView( {
 				id: 'source_status',
 				label: __( 'Source Status', 'safe-publish' ),
 				enableSorting: false,
-				getValue: ( { item } ) =>
-					PUBLISH_STATUS_LABELS[ item.status ] ?? item.status,
+				getValue: ( { item } ) => statusLabel( item.status ),
 				render: ( { item } ) => {
 					if ( '' === item.status ) {
 						return <span>—</span>;
 					}
-					const label =
-						PUBLISH_STATUS_LABELS[ item.status ] ?? item.status;
-					const modifierClass = `safe-publish-status-badge--${ item.status }`;
 					return (
 						<span
-							className={ `safe-publish-status-badge safe-publish-status-badge--quiet ${ modifierClass }` }
+							className={ statusBadgeClassName( item.status ) }
 						>
 							<span
 								className="safe-publish-status-badge__dot"
 								aria-hidden="true"
 							/>
-							{ label }
+							{ statusLabel( item.status ) }
 						</span>
 					);
 				},
@@ -956,11 +963,7 @@ export function PostsDataView( {
 	);
 
 	const tokenValues = useMemo(
-		() =>
-			selectedStatuses.map(
-				// eslint-disable-next-line security/detect-object-injection
-				( status ) => PUBLISH_STATUS_LABELS[ status ] ?? status
-			),
+		() => selectedStatuses.map( statusLabel ),
 		[ selectedStatuses ]
 	);
 

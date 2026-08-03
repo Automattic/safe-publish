@@ -20,6 +20,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Admin_Menu_Manager {
 
 	/**
+	 * Settings page hook suffix captured from add_submenu_page().
+	 *
+	 * @var string|null
+	 */
+	private ?string $settings_hook_suffix = null;
+
+	/**
 	 * Registers WordPress hooks for admin menu and assets.
 	 */
 	public function register(): void {
@@ -59,7 +66,7 @@ class Admin_Menu_Manager {
 	 * Registered at a later priority so it appears after other submenu items.
 	 */
 	public function add_settings_submenu(): void {
-		add_submenu_page(
+		$hook_suffix = add_submenu_page(
 			'safe-publish',
 			__( 'Safe Publish Settings', 'safe-publish' ),
 			__( 'Settings', 'safe-publish' ),
@@ -67,6 +74,10 @@ class Admin_Menu_Manager {
 			'safe-publish-settings',
 			array( $this, 'render_settings_page' )
 		);
+
+		if ( is_string( $hook_suffix ) ) {
+			$this->settings_hook_suffix = $hook_suffix;
+		}
 	}
 
 	/**
@@ -113,6 +124,11 @@ class Admin_Menu_Manager {
 			$admin_page = new Admin_Page();
 			$admin_page->enqueue_assets();
 			return;
+		}
+
+		if ( $hook_suffix === $this->settings_hook_suffix ) {
+			$settings_page = new Settings_Page();
+			$settings_page->enqueue_assets();
 		}
 	}
 }

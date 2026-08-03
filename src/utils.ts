@@ -105,15 +105,81 @@ export function formatBadgeTimestamp( dateString: string ): string {
 }
 
 /**
- * Display labels for publish statuses.
+ * Display labels for built-in publish statuses; access via statusLabel().
  */
-export const PUBLISH_STATUS_LABELS: Record< string, string > = {
+const PUBLISH_STATUS_LABELS: Record< string, string > = {
 	publish: __( 'Published', 'safe-publish' ),
 	draft:   __( 'Draft', 'safe-publish' ),
 	pending: __( 'Pending Review', 'safe-publish' ),
 	private: __( 'Private', 'safe-publish' ),
 	future:  __( 'Scheduled', 'safe-publish' ),
 };
+
+/**
+ * Own-key lookup that ignores inherited Object.prototype members, so a
+ * source-controlled key like `__proto__` or `constructor` resolves to
+ * undefined instead of a prototype object or function.
+ *
+ * @param {Record<string, string>} table Lookup table.
+ * @param {string}                 key   Candidate key.
+ *
+ * @return {string|undefined} Mapped value, or undefined when not an own key.
+ */
+function ownLookup(
+	table: Record< string, string >,
+	key: string
+): string | undefined {
+	return Object.prototype.hasOwnProperty.call( table, key )
+		// eslint-disable-next-line security/detect-object-injection -- key is an own property, verified by hasOwnProperty above.
+		? table[ key ]
+		: undefined;
+}
+
+/**
+ * Human label for a post status: the built-in label, else the slug
+ * titlecased (`in-progress` -> `In Progress`), since the destination can't
+ * know a custom status's registered label.
+ *
+ * @param {string} status Post status slug.
+ *
+ * @return {string} Display label.
+ */
+export function statusLabel( status: string ): string {
+	const builtin = ownLookup( PUBLISH_STATUS_LABELS, status );
+	if ( builtin !== undefined ) {
+		return builtin;
+	}
+	return status
+		.split( /[-_]/ )
+		.filter( ( word ) => word !== '' )
+		.map( ( word ) => word.charAt( 0 ).toUpperCase() + word.slice( 1 ) )
+		.join( ' ' );
+}
+
+/**
+ * Badge color modifier per built-in status. Selecting the class from this
+ * table of literals keeps a source-provided status out of the className; a
+ * status not listed here renders as a neutral badge.
+ */
+const STATUS_BADGE_MODIFIERS: Record< string, string > = {
+	publish: 'safe-publish-status-badge--publish',
+	draft:   'safe-publish-status-badge--draft',
+	pending: 'safe-publish-status-badge--pending',
+	private: 'safe-publish-status-badge--private',
+	future:  'safe-publish-status-badge--future',
+};
+
+/**
+ * Badge color modifier class for a status, or '' when it has no dedicated
+ * color (custom statuses render neutral).
+ *
+ * @param {string} status Post status slug.
+ *
+ * @return {string} Modifier class name, or empty string.
+ */
+export function statusBadgeModifier( status: string ): string {
+	return ownLookup( STATUS_BADGE_MODIFIERS, status ) ?? '';
+}
 
 /**
  * Renders an import warning as a long-form, user-facing message.

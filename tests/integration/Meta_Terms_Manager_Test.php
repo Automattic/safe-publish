@@ -283,6 +283,190 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that update_terms() reuses an existing non-hierarchical term
+	 * matched by name when the item's slug has drifted, instead of creating a
+	 * duplicate, and writes source meta on the reused term.
+	 */
+	public function test_update_terms_reuses_name_matched_tag_on_slug_drift(): void {
+		// ARRANGE: An existing tag whose slug differs from the imported item.
+		$existing_id     = self::factory()->term->create(
+			array(
+				'taxonomy' => 'post_tag',
+				'name'     => 'News',
+				'slug'     => 'news',
+			)
+		);
+		$source_term_id  = 4242;
+		$source_site_url = 'https://source.example.com';
+		$terms           = array(
+			'post_tag' => array(
+				array(
+					'slug'           => 'news-old',
+					'name'           => 'News',
+					'source_term_id' => $source_term_id,
+				),
+			),
+		);
+
+		// ACT: Import the item whose slug no longer matches the destination.
+		$result = $this->manager->update_terms(
+			$this->post_id,
+			$terms,
+			$source_site_url
+		);
+
+		// ASSERT: The existing tag is reused, no duplicate exists, meta written.
+		$this->assertTrue( $result );
+		$assigned = wp_get_post_terms(
+			$this->post_id,
+			'post_tag',
+			array( 'fields' => 'ids' )
+		);
+		$this->assertSame( array( $existing_id ), $assigned );
+		$named = get_terms(
+			array(
+				'taxonomy'   => 'post_tag',
+				'name'       => 'News',
+				'hide_empty' => false,
+				'fields'     => 'ids',
+			)
+		);
+		$this->assertSame( array( $existing_id ), $named );
+		$this->assertSame(
+			(string) $source_term_id,
+			(string) get_term_meta( $existing_id, Options::META_SOURCE_TERM_ID, true )
+		);
+		$this->assertSame(
+			$source_site_url,
+			get_term_meta( $existing_id, Options::META_SOURCE_TERM_URL, true )
+		);
+	}
+
+	/**
+	 * Verifies that update_terms() reuses the first hierarchical term when a
+	 * later item shares its name under a different slug (both flattened to
+	 * parent 0), instead of creating a duplicate sibling.
+	 */
+	public function test_update_terms_reuses_name_matched_hierarchical_sibling(): void {
+		// ARRANGE: Two items, same name, different slugs, no explicit parent.
+		$name  = 'Shared Cat ' . uniqid();
+		$terms = array(
+			'category' => array(
+				array(
+					'name' => $name,
+					'slug' => 'sibling-a',
+				),
+				array(
+					'name' => $name,
+					'slug' => 'sibling-b',
+				),
+			),
+		);
+
+		// ACT: Import both items in a single call.
+		$result = $this->manager->update_terms( $this->post_id, $terms );
+
+		// ASSERT: Exactly one term exists and the post resolves to it.
+		$this->assertTrue( $result );
+		$matches = get_terms(
+			array(
+				'taxonomy'   => 'category',
+				'name'       => $name,
+				'hide_empty' => false,
+				'fields'     => 'ids',
+			)
+		);
+		$this->assertSame( 1, count( $matches ) );
+		$assigned = wp_get_post_terms(
+			$this->post_id,
+			'category',
+			array( 'fields' => 'ids' )
+		);
+		$this->assertSame( $matches, $assigned );
+	}
+
+	/**
+	 * Verifies that update_terms() recovers the existing term ID from a
+	 * term_exists error (e.g. a concurrent insert winning the race) instead of
+	 * failing the whole import.
+	 */
+	public function test_update_terms_recovers_on_term_exists_error(): void {
+		// ARRANGE: A term to recover, plus a filter that forces
+		// wp_insert_term() to return term_exists carrying that term's ID.
+		$existing_id = self::factory()->term->create(
+			array( 'taxonomy' => 'category' )
+		);
+		$filter      = static function () use ( $existing_id ) {
+			return new WP_Error(
+				'term_exists',
+				'A term with the name provided already exists in this taxonomy.',
+				$existing_id
+			);
+		};
+		add_filter( 'pre_insert_term', $filter );
+
+		// A name that matches no term, so the lookups miss and the code
+		// reaches wp_insert_term() where the filter forces the collision.
+		$terms = array( 'category' => array( 'Racing Term ' . uniqid() ) );
+
+		// ACT: Import while the forced collision is in play.
+		$result = $this->manager->update_terms( $this->post_id, $terms );
+
+		remove_filter( 'pre_insert_term', $filter );
+
+		// ASSERT: The existing term is reused; no error surfaced.
+		$this->assertTrue( $result );
+		$assigned = wp_get_post_terms(
+			$this->post_id,
+			'category',
+			array( 'fields' => 'ids' )
+		);
+		$this->assertSame( array( $existing_id ), $assigned );
+	}
+
+	/**
+	 * Verifies that update_terms() skips a caller-supplied term ID that does
+	 * not resolve in the target taxonomy, assigning nothing and writing no
+	 * source meta onto the foreign term.
+	 */
+	public function test_update_terms_skips_foreign_term_id(): void {
+		// ARRANGE: A term that exists only in 'category', imported under
+		// 'post_tag' with source meta that must not land on the foreign term.
+		$category_id     = self::factory()->term->create(
+			array( 'taxonomy' => 'category' )
+		);
+		$source_site_url = 'https://source.example.com';
+		$terms           = array(
+			'post_tag' => array(
+				array(
+					'term_id'        => $category_id,
+					'source_term_id' => 4242,
+				),
+			),
+		);
+
+		// ACT: Attempt to assign the 'category' ID under 'post_tag'.
+		$result = $this->manager->update_terms(
+			$this->post_id,
+			$terms,
+			$source_site_url
+		);
+
+		// ASSERT: Nothing assigned, and no source meta written on the term.
+		$this->assertTrue( $result );
+		$assigned = wp_get_post_terms(
+			$this->post_id,
+			'post_tag',
+			array( 'fields' => 'ids' )
+		);
+		$this->assertSame( array(), $assigned );
+		$this->assertSame(
+			'',
+			(string) get_term_meta( $category_id, Options::META_SOURCE_TERM_ID, true )
+		);
+	}
+
+	/**
 	 * Verifies that update_meta() returns true when no meta is provided.
 	 */
 	public function test_update_meta_returns_true_for_empty_input(): void {

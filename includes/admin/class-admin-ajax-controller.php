@@ -1137,7 +1137,7 @@ final class Admin_Ajax_Controller {
 			$args['name'] = $name;
 		}
 
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- normalize_statuses() reduces each element to the shared allowlist via sanitize_key().
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- normalize_statuses() reduces each element to the filter allowlist via sanitize_key().
 		$statuses = self::normalize_statuses( wp_unslash( $_POST['status'] ?? array() ) );
 		if ( array() !== $statuses ) {
 			$args['status'] = $statuses;
@@ -1155,7 +1155,7 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Reduces a raw status param to the shared allowlist; unknown values
+	 * Reduces a raw status param to the filter allowlist; unknown values
 	 * are dropped silently so a fat-fingered request still yields a result.
 	 *
 	 * @param mixed $raw Raw status value (array or string).
@@ -1176,7 +1176,7 @@ final class Admin_Ajax_Controller {
 					static fn( string $v ): string => sanitize_key( $v ),
 					array_filter( $raw, 'is_string' )
 				),
-				Catalog_REST_Controller::ALLOWED_STATUSES
+				Catalog_REST_Controller::FILTER_STATUSES
 			)
 		);
 	}
@@ -1752,8 +1752,8 @@ final class Admin_Ajax_Controller {
 	 * `import_date_gmt`. Posts are batched by type so each post-type
 	 * group costs one signed catalog call.
 	 *
-	 * Catalog_REST_Controller::ALLOWED_STATUSES excludes 'trash', so a
-	 * trashed source post reads as `missing` here. Deliberate — trashed
+	 * The catalog lists only non-internal statuses, so a trashed source
+	 * post (status `trash`) reads as `missing` here. Deliberate — trashed
 	 * posts have no public surface, so sync-status treats them as deleted.
 	 */
 	public function ajax_sync_status_batch(): void {
