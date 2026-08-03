@@ -793,6 +793,50 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that a post with two bare shortcodes, a [gallery] and a
+	 * [playlist], collects both sets: the gallery's image children and the
+	 * playlist's audio children, covering the path where more than one shortcode
+	 * matches.
+	 */
+	public function test_attached_field_collects_across_two_bare_shortcodes(): void {
+		// ARRANGE: A post with a bare [gallery] and a bare [playlist], each
+		// with a child of the type it renders.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => "[gallery]\n[playlist]" )
+		);
+		$image   = $this->seed_attached_child(
+			$post_id,
+			'2025/01/pair-image.jpg',
+			'image/jpeg',
+			1
+		);
+		$audio   = $this->seed_attached_child(
+			$post_id,
+			'2025/01/pair-audio.mp3',
+			'audio/mpeg',
+			2
+		);
+
+		// ACT: Request the field.
+		$set = $this->attached_media_for( $post_id );
+
+		// ASSERT: The gallery's image and the playlist's audio are both returned.
+		$this->assertSame(
+			array(
+				array(
+					'id'         => $image,
+					'menu_order' => 1,
+				),
+				array(
+					'id'         => $audio,
+					'menu_order' => 2,
+				),
+			),
+			$set
+		);
+	}
+
+	/**
 	 * Verifies that a [gallery ids="..."] returns an empty set: the id-bearing
 	 * form is the shortcode-ID rewriter's domain, not this attached-set field.
 	 */

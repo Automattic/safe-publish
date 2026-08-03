@@ -215,8 +215,9 @@ class Source_Media_REST_Field {
 		}
 
 		$pattern = '/' . get_shortcode_regex( array( 'gallery', 'playlist' ) ) . '/s';
+		$count   = preg_match_all( $pattern, $content, $matches, PREG_SET_ORDER );
 
-		if ( 1 !== preg_match_all( $pattern, $content, $matches, PREG_SET_ORDER ) ) {
+		if ( ! is_int( $count ) || 0 === $count ) {
 			return array();
 		}
 
@@ -343,8 +344,9 @@ class Source_Media_REST_Field {
 		}
 
 		$pattern = '#https?://' . preg_quote( $host, '#' ) . '/[^\s"\'<>()]+#i';
+		$count   = preg_match_all( $pattern, $content, $matches );
 
-		if ( ! preg_match_all( $pattern, $content, $matches ) ) {
+		if ( ! is_int( $count ) || 0 === $count ) {
 			return array();
 		}
 
