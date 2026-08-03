@@ -421,6 +421,112 @@ class Shortcode_ID_Rewriter {
 	}
 
 	/**
+	 * Extracts the cross-post gallery/playlist references a post renders: each
+	 * live [gallery id="B"]/[playlist id="B"] whose singular id names another
+	 * post (not self) and carries no ids/include/exclude selector.
+	 *
+	 * Escaped literals, self references, and selector-bearing shortcodes are
+	 * skipped, matching rewrite_gallery_post_reference.
+	 *
+	 * @param string $content        Post content to scan.
+	 * @param int    $self_source_id Importing post's source ID; a matching id is
+	 *                               its own set, not a cross-post reference.
+	 * @return list<array{tag: string, type: string, source_id: int}> References.
+	 */
+	public function collect_cross_post_references(
+		string $content,
+		int $self_source_id
+	): array {
+		if ( '' === $content
+			|| ( false === stripos( $content, '[gallery' )
+				&& false === stripos( $content, '[playlist' ) )
+		) {
+			return array();
+		}
+
+		$count = preg_match_all(
+			'/' . get_shortcode_regex( array( 'gallery', 'playlist' ) ) . '/s',
+			$content,
+			$matches,
+			PREG_SET_ORDER
+		);
+
+		if ( ! is_int( $count ) || 0 === $count ) {
+			return array();
+		}
+
+		$refs = array();
+
+		foreach ( $matches as $match ) {
+			// Escaped [[gallery]] literal, not a live shortcode.
+			if ( '[' === $match[1] && ']' === ( $match[6] ?? '' ) ) {
+				continue;
+			}
+
+			$attrs = $match[3];
+
+			// Core ignores the singular id when an ids/include selector is set.
+			if ( self::has_id_list_selector( $attrs ) ) {
+				continue;
+			}
+
+			$source_id = self::singular_id_value( $attrs );
+
+			if ( $source_id <= 0 || $source_id === $self_source_id ) {
+				continue;
+			}
+
+			$refs[] = array(
+				'tag'       => $match[2],
+				'type'      => 'playlist' === $match[2]
+					? self::attr_value( $attrs, 'type' )
+					: '',
+				'source_id' => $source_id,
+			);
+		}
+
+		return $refs;
+	}
+
+	/**
+	 * Returns the numeric singular `id` attribute value, or 0 when absent or
+	 * not a bare integer. Matches the id form rewrite_id_attr rewrites.
+	 *
+	 * @param string $attrs Shortcode attribute string.
+	 * @return int Positive source post ID, or 0.
+	 */
+	private static function singular_id_value( string $attrs ): int {
+		if ( 1 !== preg_match(
+			'/(?<![\w-])id\s*=\s*(?:"(\d+)"|\'(\d+)\'|(\d+)(?![\w-]))/i',
+			$attrs,
+			$m
+		) ) {
+			return 0;
+		}
+
+		return (int) ( ( $m[1] ?? '' ) . ( $m[2] ?? '' ) . ( $m[3] ?? '' ) );
+	}
+
+	/**
+	 * Returns a shortcode attribute value across the quoted and unquoted forms
+	 * WordPress' parser accepts, or '' when absent.
+	 *
+	 * @param string $attrs Shortcode attribute string.
+	 * @param string $name  Attribute name.
+	 * @return string Attribute value, or ''.
+	 */
+	private static function attr_value( string $attrs, string $name ): string {
+		$pattern = '/(?<![\w-])' . preg_quote( $name, '/' )
+			. '\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s\]]+))/i';
+
+		if ( 1 !== preg_match( $pattern, $attrs, $m ) ) {
+			return '';
+		}
+
+		return ( $m[1] ?? '' ) . ( $m[2] ?? '' ) . ( $m[3] ?? '' );
+	}
+
+	/**
 	 * Rewrites or strips the singular `id` attribute in a shortcode's attribute
 	 * string. A self reference is stripped with its leading whitespace; another
 	 * post's id is resolved and rewritten in place, preserving quoting; an
