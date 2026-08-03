@@ -664,6 +664,7 @@ class Source_Posts_API {
 				'title'       => (string) ( $fields['title'] ?? '' ),
 				'caption'     => (string) ( $fields['caption'] ?? '' ),
 				'description' => (string) ( $fields['description'] ?? '' ),
+				'parent'      => (string) (int) ( $fields['parent'] ?? 0 ),
 			);
 		}
 

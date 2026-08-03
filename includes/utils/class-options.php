@@ -180,6 +180,15 @@ class Options {
 	const META_SOURCE_POST_PARENT_ID = '_safe_publish_source_post_parent_id';
 
 	/**
+	 * Private meta key storing the source parent post ID of an imported
+	 * attachment. Source state, not a pending flag: Kept after parenting so
+	 * re-sweeps stay idempotent.
+	 *
+	 * @var string
+	 */
+	const META_SOURCE_ATTACHMENT_PARENT_ID = '_safe_publish_source_attachment_parent_id';
+
+	/**
 	 * Term meta key storing the source term ID on imported destination terms.
 	 *
 	 * @var string

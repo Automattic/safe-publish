@@ -54,7 +54,7 @@ class Extract_Source_Media_Test extends WP_UnitTestCase {
 	 * dropped, while a well-formed entry survives with its fields cast to string.
 	 */
 	public function test_malformed_entries_are_dropped(): void {
-		// ARRANGE: one valid entry alongside a non-array value and an empty key.
+		// ARRANGE: One valid entry alongside a non-array value and an empty key.
 		$data = array(
 			'safe_publish_media' => array(
 				'https://source.example.com/a.jpg' => array(
@@ -62,6 +62,7 @@ class Extract_Source_Media_Test extends WP_UnitTestCase {
 					'title'       => 'T',
 					'caption'     => 'C',
 					'description' => 'D',
+					'parent'      => 15,
 				),
 				'https://source.example.com/b.jpg' => 'not-an-array',
 				''                                 => array( 'alt' => 'x' ),
@@ -71,7 +72,7 @@ class Extract_Source_Media_Test extends WP_UnitTestCase {
 		// ACT: Extract the media map.
 		$map = $this->extract( $data );
 
-		// ASSERT: only the well-formed entry remains.
+		// ASSERT: Only the well-formed entry remains, its parent cast to string.
 		$this->assertSame(
 			array(
 				'https://source.example.com/a.jpg' => array(
@@ -79,6 +80,7 @@ class Extract_Source_Media_Test extends WP_UnitTestCase {
 					'title'       => 'T',
 					'caption'     => 'C',
 					'description' => 'D',
+					'parent'      => '15',
 				),
 			),
 			$map
@@ -86,8 +88,9 @@ class Extract_Source_Media_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that missing sub-fields coerce to empty strings so the importer
-	 * always receives the full alt/title/caption/description shape.
+	 * Verifies that missing sub-fields coerce to empty strings and an absent
+	 * parent to '0', so the importer always receives the full
+	 * alt/title/caption/description/parent shape.
 	 */
 	public function test_missing_subfields_coerce_to_empty_strings(): void {
 		// ARRANGE + ACT: Extract an entry that sets only the title.
@@ -107,6 +110,7 @@ class Extract_Source_Media_Test extends WP_UnitTestCase {
 					'title'       => 'Only title',
 					'caption'     => '',
 					'description' => '',
+					'parent'      => '0',
 				),
 			),
 			$map
