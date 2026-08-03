@@ -415,6 +415,7 @@ function makeIssue( overrides: Partial< AttentionIssue > ): AttentionIssue {
 		affected_title: 'About',
 		affected_edit_url: '',
 		retryable: false,
+		resolvable: false,
 		...overrides,
 	};
 }

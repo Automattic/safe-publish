@@ -239,7 +239,20 @@ const NeedsAttentionInbox = ( {
 						{ item.error_message }
 					</span>
 				) : (
-					<span>{ renderIssueMessage( item ) }</span>
+					<span>
+						{ renderIssueMessage( item ) }
+						{ 'open' === viewMode && item.retryable && (
+							<span
+								className={ `safe-publish-inbox-resolvable safe-publish-inbox-resolvable--${
+									item.resolvable ? 'ready' : 'waiting'
+								}` }
+							>
+								{ item.resolvable
+									? __( 'Resolvable now', 'safe-publish' )
+									: __( 'Waiting on import', 'safe-publish' ) }
+							</span>
+						) }
+					</span>
 				),
 		},
 		{

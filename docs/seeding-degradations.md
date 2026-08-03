@@ -30,7 +30,7 @@ Six **degradations** — covering every issue type and both severities — plus 
 
 The orphan failure — titled "Import with no source ID" — comes from an import request with no source post id.
 
-The resolvable rows demonstrate the self-verifying Retry: import the named target (switch the post-type dropdown to **Pages**), then click **Retry** and the issue clears. The unresolvable term reference and the reusable-block reference both offer Retry but stay open no matter what — the term points at a non-existent term, and the demo's reusable-block target isn't seeded — for contrast.
+Each degradation carries a **Waiting on import** or **Resolvable now** badge. The resolvable rows start as **Waiting on import** and flip to **Resolvable now** once you import the named target (switch the post-type dropdown to **Pages**) — the cue to click **Retry**, which clears the issue. The unresolvable term reference and the reusable-block reference stay **Waiting on import** and never clear — the term points at a non-existent term, and the demo's reusable-block target isn't seeded — for contrast.
 
 ## Exercising the Tab
 
@@ -38,6 +38,7 @@ The resolvable rows demonstrate the self-verifying Retry: import the named targe
 2. Open **Safe Publish** in the destination admin; the **Needs attention** tab shows a count of the seeded rows.
 3. On the **Needs attention** tab, use **Retry** on degradations or **Remove** on failures.
 4. To watch an issue clear, import its listed target, then click **Retry**.
+5. Select several degradations and **Retry** them together to see the aggregate outcome notice.
 
 Pass `count=N` (for example `count=30`) to push the tab past one page and exercise pagination.
 

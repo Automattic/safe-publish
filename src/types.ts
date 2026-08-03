@@ -143,7 +143,8 @@ export type AttentionIssueType =
 /**
  * One open degradation issue, keyed by (affected_post_id, issue_type,
  * target_ref, target_kind). `retryable` is the server's signal that the row's
- * reconciliation can run.
+ * reconciliation can run; `resolvable` is the batched hint that its target is
+ * imported, so a Retry would reconcile it now.
  */
 export interface AttentionIssue {
 	affected_post_id: number;
@@ -158,6 +159,7 @@ export interface AttentionIssue {
 	affected_title: string;
 	affected_edit_url: string;
 	retryable: boolean;
+	resolvable: boolean;
 }
 
 /**
@@ -223,6 +225,18 @@ export interface RetryAttentionIssueResponse {
 	resolved: boolean;
 	outcome: 'resolved' | 'target_absent' | 'write_failed' | 'unresolved';
 	detail: string;
+}
+
+/**
+ * Envelope returned by safe_publish_bulk_retry_attention_issues: per-outcome
+ * counts across the batch. `skipped` is a malformed or unrecognized descriptor.
+ */
+export interface BulkRetryAttentionResponse {
+	resolved: number;
+	target_absent: number;
+	write_failed: number;
+	unresolved: number;
+	skipped: number;
 }
 
 /**
