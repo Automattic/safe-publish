@@ -395,7 +395,8 @@ final class Admin_Ajax_Controller {
 					$limit,
 					$ignored
 				),
-				$source_site_url
+				$source_site_url,
+				! $ignored
 			);
 		}
 
@@ -415,7 +416,8 @@ final class Admin_Ajax_Controller {
 						$shortfall,
 						$ignored
 					),
-					$source_site_url
+					$source_site_url,
+					! $ignored
 				)
 			);
 		}
@@ -469,20 +471,26 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Shapes degradation rows for the inbox, adding the batched resolvable hint.
+	 * Shapes degradation rows for the inbox, computing the batched resolvable
+	 * hint only when the caller will show it.
 	 *
 	 * @param array[] $rows            Open issue rows from list_open_issues().
 	 * @param string  $source_site_url Connected source identity scoping lookups.
+	 * @param bool    $with_resolvable Compute the hint; the Ignored view skips it.
 	 * @return array[] Unified inbox rows of kind 'degradation'.
 	 */
 	private function format_attention_rows(
 		array $rows,
-		string $source_site_url
+		string $source_site_url,
+		bool $with_resolvable
 	): array {
-		$resolvable = $this->post_import_service->degradation_resolvability(
-			$rows,
-			$source_site_url
-		);
+		$resolvable = array();
+		if ( $with_resolvable ) {
+			$resolvable = $this->post_import_service->degradation_resolvability(
+				$rows,
+				$source_site_url
+			);
+		}
 
 		$formatted = array();
 		foreach ( $rows as $index => $row ) {
