@@ -52,18 +52,20 @@ An **Open | Ignored** toggle switches between the active list and items set asid
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Content  | Title of the affected post, linked to its editor when a live destination post exists (degradations and failed updates; a first-import failure has none). |
 | Type     | **Failed** or **Degraded**.                                                                                                                              |
-| Detail   | The error message (failures) or the issue description (degradations).                                                                                    |
+| Detail   | The error message (failures), or the issue description with a **Resolvable now** / **Waiting on import** hint (degradations).                            |
 | Severity | **Error** or **Warning**.                                                                                                                                |
 | When     | When the failure was attempted or the degradation was first detected.                                                                                    |
 
 ### Actions
 
-| Action    | Description                                                                                                                                 |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Remove    | Clears a failure's record. Supports bulk selection.                                                                                         |
-| Retry     | Re-runs a degradation's reconciliation and reports whether it cleared. Available when the issue type is reconcilable.                       |
-| Ignore    | Sets a failure or degradation aside without deleting it, dropping it from the Open view and the count. Reversible; supports bulk selection. |
-| Un-ignore | Restores an ignored item to the Open view. Shown in the Ignored view; supports bulk selection.                                              |
+| Action    | Description                                                                                                                                    |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remove    | Clears a failure's record. Supports bulk selection.                                                                                            |
+| Retry     | Re-runs a degradation's reconciliation and reports whether it cleared. Available when the issue type is reconcilable; supports bulk selection. |
+| Ignore    | Sets a failure or degradation aside without deleting it, dropping it from the Open view and the count. Reversible; supports bulk selection.    |
+| Un-ignore | Restores an ignored item to the Open view. Shown in the Ignored view; supports bulk selection.                                                 |
+
+**Resolvable now vs Waiting on import.** Each degradation carries a hint: **Resolvable now** means its target (parent, block, term, or menu) is already imported, so a Retry should reconcile it; **Waiting on import** means the target is still missing and a Retry would report it as absent. Importing a target does not auto-resolve the degradations that reference it, so the hint is how you find which ones to Retry — it is advisory, so Retry stays authoritative. Retrying several at once reports an aggregate: how many resolved, are still waiting, or failed.
 
 Removing a failure only deletes its record; it has no effect on the source. Recovery is fixing the underlying issue (for example, creating a missing author on the destination) and re-importing the post from the Source Posts page. A later successful import for the same source drops its failure from the list automatically.
 
