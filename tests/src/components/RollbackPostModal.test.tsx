@@ -29,7 +29,6 @@ function buildRow( overrides: Partial< UnifiedPostRow > = {} ): UnifiedPostRow {
 		item_id: 100,
 		post_id: 1024,
 		import_date_gmt: '2024-03-15 10:30:00',
-		error_message: null,
 		has_previous_content: true,
 		edit_url: '',
 		...overrides,

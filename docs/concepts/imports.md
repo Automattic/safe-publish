@@ -3,7 +3,7 @@
 The Imports admin page is the operator surface for everything that came in from a source site. It has two tabs sharing the same admin route:
 
 - **Posts** — the local posts that resulted from successful imports.
-- **Failures** — items whose import errored before a local post was created.
+- **Needs attention** — post-import problems: import failures and degradations.
 
 ## Posts tab
 
@@ -40,26 +40,28 @@ The page exposes the DataViews built-in search and filter chips: title search, L
 
 The selected session does not appear as a filter — sessions are an internal grouping concept, not a UI noun. The post-import notice deep-links into a session-filtered view via `?batch=N`, surfaced as a contextual pill the operator can clear.
 
-## Failures tab
+## Needs attention tab
 
-Lists items whose import errored. Failed items have no local WordPress post (the import did not complete), so the row only carries what the items table recorded plus the source URL from the parent session.
+Collects every post-import problem in one place: import **failures** (the import errored, so no local post exists — or a re-import of an already-imported post failed) and **degradations** (the post imported but left an unresolved reference to a block, term, parent, or navigation link). Failures are listed first. The tab label shows the current count of open failures plus degradations.
 
 ### Columns
 
-| Column    | Description                                        |
-| --------- | -------------------------------------------------- |
-| Title     | Title of the post that was attempted.              |
-| Source    | URL of the source site the attempt came from.      |
-| Error     | Error message recorded at import time.             |
-| Attempted | When the import was attempted (`import_date_gmt`). |
+| Column   | Description                                                                                                                                              |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Content  | Title of the affected post, linked to its editor when a live destination post exists (degradations and failed updates; a first-import failure has none). |
+| Type     | **Failed** or **Degraded**.                                                                                                                              |
+| Detail   | The error message (failures) or the issue description (degradations).                                                                                    |
+| Severity | **Error** or **Warning**.                                                                                                                                |
+| When     | When the failure was attempted or the degradation was first detected.                                                                                    |
 
 ### Actions
 
-| Action | Description                                                   |
-| ------ | ------------------------------------------------------------- |
-| Remove | Clears the failed item from the tab. Supports bulk selection. |
+| Action | Description                                                                                                           |
+| ------ | --------------------------------------------------------------------------------------------------------------------- |
+| Remove | Clears a failure's record. Supports bulk selection.                                                                   |
+| Retry  | Re-runs a degradation's reconciliation and reports whether it cleared. Available when the issue type is reconcilable. |
 
-Removing a failed item only deletes its record; it has no effect on the source. Recovery is fixing the underlying issue (for example, creating a missing author on the destination) and re-importing the post from the Source Posts page.
+Removing a failure only deletes its record; it has no effect on the source. Recovery is fixing the underlying issue (for example, creating a missing author on the destination) and re-importing the post from the Source Posts page. A later successful import for the same source drops its failure from the list automatically.
 
 ## Post-import notice
 

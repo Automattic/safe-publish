@@ -1,22 +1,25 @@
 /**
- * Tests for the unified Posts action factory.
+ * Tests for the unified Posts and Needs attention action factories.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-	createAttentionIssueActions,
+	createNeedsAttentionActions,
 	createPostsActions,
+	type NeedsAttentionActionsContext,
 	type PostsActionsContext,
 } from '@/actions';
 import { RETRY_PENDING_DELAY_MS } from '@/constants';
 import BulkImportFlow from '@/components/BulkImportFlow';
 import BulkRollbackPostModal from '@/components/BulkRollbackPostModal';
+import DeleteFailedImportsModal from '@/components/DeleteFailedImportsModal';
 import ImportModal from '@/components/ImportModal';
 import RollbackPostModal from '@/components/RollbackPostModal';
 import type {
-	AttentionIssue,
-	ChipState,
 	ImportSyncStatus,
+	InboxDegradation,
+	InboxFailure,
 	LocalState,
+	NeedsAttentionRow,
 	UnifiedPostRow,
 } from '@/types';
 import type { Action, ActionModal } from '@wordpress/dataviews/build-types';
@@ -45,7 +48,6 @@ function buildRow( overrides: Partial< UnifiedPostRow > = {} ): UnifiedPostRow {
 		item_id: null,
 		post_id: null,
 		import_date_gmt: null,
-		error_message: null,
 		has_previous_content: false,
 		edit_url: '',
 		...overrides,
@@ -85,34 +87,25 @@ function getModalAction(
 }
 
 describe( 'createPostsActions per-state eligibility', () => {
-	const ALL_CHIP: ChipState = 'all';
-	const actions = createPostsActions( undefined, true, CONTEXT, {}, ALL_CHIP );
+	const actions = createPostsActions( undefined, true, CONTEXT, {} );
 
-	it( 'Verifies that Import covers available, failed-with-source, and outdated rows', () => {
-		// ARRANGE: the merged Import action and rows in each eligible state.
+	it( 'Verifies that Import covers available and outdated rows', () => {
+		// ARRANGE: The merged Import action and rows in each eligible state.
 		const importAction = actions.find( ( a ) => a.id === 'import' );
 
-		// ACT + ASSERT: available, failed-with-source, and outdated all show
-		// Sync. Outdated needs a non-up-to-date verdict to stay eligible;
-		// the default action set is built with an empty sync-statuses map.
+		// ACT + ASSERT: Available and outdated both show Import. Outdated needs
+		// a non-up-to-date verdict to stay eligible; the default action set is
+		// built with an empty sync-statuses map.
 		expect( importAction?.isEligible?.( buildRow() ) ).toBe( true );
 		expect(
 			importAction?.isEligible?.(
-				buildRow( {
-					local_state: 'failed',
-					is_imported: false,
-					wp_post_status: null,
-					item_id: 50,
-				} )
+				buildImportedRow( { local_state: 'outdated' } )
 			)
-		).toBe( true );
-		expect(
-			importAction?.isEligible?.( buildImportedRow( { local_state: 'outdated' } ) )
 		).toBe( true );
 	} );
 
-	it( 'Verifies that Import hides on up-to-date imported and orphan-failure rows', () => {
-		// ARRANGE: a sync-statuses map that reports up-to-date.
+	it( 'Verifies that Import hides on up-to-date imported rows', () => {
+		// ARRANGE: A sync-statuses map that reports up-to-date.
 		const statuses: Record< number, { status: ImportSyncStatus } > = {
 			10: { status: 'up-to-date' },
 		};
@@ -120,44 +113,27 @@ describe( 'createPostsActions per-state eligibility', () => {
 			undefined,
 			true,
 			CONTEXT,
-			statuses,
-			ALL_CHIP
+			statuses
 		).find( ( a ) => a.id === 'import' );
 
-		// ACT + ASSERT: up-to-date imported hides Sync; failed without a
-		// source_post_id (orphan) also hides — Sync needs a source endpoint.
+		// ACT + ASSERT: An up-to-date imported row hides Import.
 		expect( importAction?.isEligible?.( buildImportedRow() ) ).toBe( false );
-		expect(
-			importAction?.isEligible?.(
-				buildRow( {
-					local_state: 'failed',
-					source_post_id: null,
-					item_id: 50,
-				} )
-			)
-		).toBe( false );
 	} );
 
 	it( 'Verifies that Import is gated by authorization', () => {
-		// ARRANGE: an unauthorized action set.
-		const unauthorized = createPostsActions(
-			undefined,
-			false,
-			CONTEXT,
-			{},
-			ALL_CHIP
-		);
+		// ARRANGE: An unauthorized action set.
+		const unauthorized = createPostsActions( undefined, false, CONTEXT, {} );
 		const importAction = unauthorized.find( ( a ) => a.id === 'import' );
 
-		// ACT + ASSERT: even an Available row hides Import when unauthorized.
+		// ACT + ASSERT: Even an Available row hides Import when unauthorized.
 		expect( importAction?.isEligible?.( buildRow() ) ).toBe( false );
 	} );
 
 	it( 'Verifies that Edit appears only on imported/outdated rows with an edit_url', () => {
-		// ARRANGE: the Edit action under test.
+		// ARRANGE: The Edit action under test.
 		const editAction = actions.find( ( a ) => a.id === 'edit-post' );
 
-		// ACT + ASSERT: imported and outdated rows expose Edit; missing
+		// ACT + ASSERT: Imported and outdated rows expose Edit; missing
 		// edit_url or other states hide it.
 		expect( editAction?.isEligible?.( buildImportedRow() ) ).toBe( true );
 		expect(
@@ -172,7 +148,7 @@ describe( 'createPostsActions per-state eligibility', () => {
 	} );
 
 	it( 'Verifies that Compare on Imported only shows on a confirmed outdated verdict', () => {
-		// ARRANGE: imported rows shouldn't surface Compare until the async
+		// ARRANGE: Imported rows shouldn't surface Compare until the async
 		// sync check confirms a divergence — otherwise the action flashes
 		// then vanishes once the up-to-date verdict lands.
 		const compareLoading = actions.find( ( a ) => a.id === 'compare-post' );
@@ -180,34 +156,31 @@ describe( 'createPostsActions per-state eligibility', () => {
 			undefined,
 			true,
 			CONTEXT,
-			{ 10: { status: 'outdated' } },
-			ALL_CHIP
+			{ 10: { status: 'outdated' } }
 		).find( ( a ) => a.id === 'compare-post' );
-		const compareUpToDate = createPostsActions(
-			undefined,
-			true,
-			CONTEXT,
-			{ 10: { status: 'up-to-date' } },
-			ALL_CHIP
-		).find( ( a ) => a.id === 'compare-post' );
+		const compareUpToDate = createPostsActions( undefined, true, CONTEXT, {
+			10: { status: 'up-to-date' },
+		} ).find( ( a ) => a.id === 'compare-post' );
 
-		// ACT + ASSERT: imported + (no status / up-to-date) hides; imported +
+		// ACT + ASSERT: Imported + (no status / up-to-date) hides; imported +
 		// outdated verdict shows.
-		expect( compareLoading?.isEligible?.( buildImportedRow() ) ).toBe( false );
-		expect(
-			compareUpToDate?.isEligible?.( buildImportedRow() )
-		).toBe( false );
+		expect( compareLoading?.isEligible?.( buildImportedRow() ) ).toBe(
+			false
+		);
+		expect( compareUpToDate?.isEligible?.( buildImportedRow() ) ).toBe(
+			false
+		);
 		expect(
 			compareOutdatedVerdict?.isEligible?.( buildImportedRow() )
 		).toBe( true );
 	} );
 
 	it( 'Verifies that Compare always shows on server-confirmed outdated rows', () => {
-		// ARRANGE: a local_state='outdated' row needs no client verdict —
+		// ARRANGE: A local_state='outdated' row needs no client verdict —
 		// the server already flagged the divergence.
 		const compare = actions.find( ( a ) => a.id === 'compare-post' );
 
-		// ACT + ASSERT: outdated shows regardless of empty syncStatuses.
+		// ACT + ASSERT: Outdated shows regardless of empty syncStatuses.
 		expect(
 			compare?.isEligible?.(
 				buildImportedRow( { local_state: 'outdated' } )
@@ -215,58 +188,11 @@ describe( 'createPostsActions per-state eligibility', () => {
 		).toBe( true );
 	} );
 
-	it( 'Verifies that Dismiss is only present on the Failed chip', () => {
-		// ARRANGE: action sets for the All chip and the Failed chip.
-		const failedActions = createPostsActions(
-			undefined,
-			true,
-			CONTEXT,
-			{},
-			'failed'
-		);
-
-		// ACT + ASSERT: Dismiss is absent off-chip and present on-chip.
-		expect(
-			actions.find( ( a ) => a.id === 'dismiss-failure' )
-		).toBeUndefined();
-		expect(
-			failedActions.find( ( a ) => a.id === 'dismiss-failure' )
-		).toBeDefined();
-	} );
-
-	it( 'Verifies that Dismiss is eligible only on failed rows with a source_post_id', () => {
-		// ARRANGE: the Dismiss action from the Failed-chip action set.
-		// Dismiss clears by source_post_id (not item_id) so older failure
-		// siblings don't re-surface on refresh.
-		const dismiss = createPostsActions(
-			undefined,
-			true,
-			CONTEXT,
-			{},
-			'failed'
-		).find( ( a ) => a.id === 'dismiss-failure' );
-
-		// ACT + ASSERT: failed-with-source exposes Dismiss; orphan failures
-		// or non-failed rows hide it.
-		expect(
-			dismiss?.isEligible?.(
-				buildRow( { local_state: 'failed', source_post_id: 10 } )
-			)
-		).toBe( true );
-		expect(
-			dismiss?.isEligible?.(
-				buildRow( { local_state: 'failed', source_post_id: null } )
-			)
-		).toBe( false );
-		expect( dismiss?.isEligible?.( buildImportedRow() ) ).toBe( false );
-		expect( dismiss?.isEligible?.( buildRow() ) ).toBe( false );
-	} );
-
 	it( 'Verifies that Rollback requires imported/outdated state and an item_id', () => {
-		// ARRANGE: the Rollback action.
+		// ARRANGE: The Rollback action.
 		const rollback = actions.find( ( a ) => a.id === 'rollback' );
 
-		// ACT + ASSERT: imported with an item_id shows; missing item_id
+		// ACT + ASSERT: Imported with an item_id shows; missing item_id
 		// or wrong state hides.
 		expect( rollback?.isEligible?.( buildImportedRow() ) ).toBe( true );
 		expect(
@@ -276,16 +202,16 @@ describe( 'createPostsActions per-state eligibility', () => {
 	} );
 
 	it( 'Verifies that single vs bulk rollback selects the matching modal', () => {
-		// ARRANGE: the Rollback action.
+		// ARRANGE: The Rollback action.
 		const rollback = getModalAction( actions, 'rollback' );
 
-		// ACT + ASSERT: a single selection routes to RollbackPostModal.
+		// ACT + ASSERT: A single selection routes to RollbackPostModal.
 		const single = rollback.RenderModal( {
 			items: [ buildImportedRow() ],
 		} );
 		expect( single.type ).toBe( RollbackPostModal );
 
-		// ACT + ASSERT: a multi selection routes to BulkRollbackPostModal.
+		// ACT + ASSERT: A multi selection routes to BulkRollbackPostModal.
 		const bulk = rollback.RenderModal( {
 			items: [
 				buildImportedRow( { id: 1, source_post_id: 1 } ),
@@ -296,20 +222,19 @@ describe( 'createPostsActions per-state eligibility', () => {
 	} );
 
 	it( 'Verifies that the notice sink reaches only the single-item rollback modal', () => {
-		// ARRANGE: an action set whose context carries a notice sink.
+		// ARRANGE: An action set whose context carries a notice sink.
 		const onNotice = vi.fn();
 		const rollback = getModalAction(
 			createPostsActions(
 				undefined,
 				true,
 				{ ...CONTEXT, onNotice },
-				{},
-				ALL_CHIP
+				{}
 			),
 			'rollback'
 		);
 
-		// ACT: render the single-item and bulk rollback modals.
+		// ACT: Render the single-item and bulk rollback modals.
 		const single = rollback.RenderModal( { items: [ buildImportedRow() ] } );
 		const bulk = rollback.RenderModal( {
 			items: [
@@ -318,7 +243,7 @@ describe( 'createPostsActions per-state eligibility', () => {
 			],
 		} );
 
-		// ASSERT: the single modal receives the sink; bulk is left untouched.
+		// ASSERT: The single modal receives the sink; bulk is left untouched.
 		expect( ( single.props as { onNotice?: unknown } ).onNotice ).toBe(
 			onNotice
 		);
@@ -328,14 +253,14 @@ describe( 'createPostsActions per-state eligibility', () => {
 	} );
 
 	it( 'Verifies that bulk Import reports the skipped count to the batch modal', () => {
-		// ARRANGE: five rows selected, three of them handed to the modal as
+		// ARRANGE: Five rows selected, three of them handed to the modal as
 		// import-eligible.
 		const importAction = getModalAction(
-			createPostsActions( undefined, true, CONTEXT, {}, ALL_CHIP, 5 ),
+			createPostsActions( undefined, true, CONTEXT, {}, 5 ),
 			'import'
 		);
 
-		// ACT: render the batch modal for the three eligible rows.
+		// ACT: Render the batch modal for the three eligible rows.
 		const modal = importAction.RenderModal( {
 			items: [
 				buildRow( { id: 1, source_post_id: 1 } ),
@@ -344,7 +269,7 @@ describe( 'createPostsActions per-state eligibility', () => {
 			],
 		} );
 
-		// ASSERT: the batch modal is told the two remaining rows were skipped.
+		// ASSERT: The batch modal is told the two remaining rows were skipped.
 		expect( modal.type ).toBe( BulkImportFlow );
 		expect(
 			( modal.props as { skippedCount?: number } ).skippedCount
@@ -352,14 +277,14 @@ describe( 'createPostsActions per-state eligibility', () => {
 	} );
 
 	it( 'Verifies that bulk Import clamps the skipped count at zero', () => {
-		// ARRANGE: a stale selected count lower than the eligible rows handed
+		// ARRANGE: A stale selected count lower than the eligible rows handed
 		// to the modal, which must not yield a negative skipped count.
 		const importAction = getModalAction(
-			createPostsActions( undefined, true, CONTEXT, {}, ALL_CHIP, 1 ),
+			createPostsActions( undefined, true, CONTEXT, {}, 1 ),
 			'import'
 		);
 
-		// ACT: render the batch modal for two eligible rows.
+		// ACT: Render the batch modal for two eligible rows.
 		const modal = importAction.RenderModal( {
 			items: [
 				buildRow( { id: 1, source_post_id: 1 } ),
@@ -367,7 +292,7 @@ describe( 'createPostsActions per-state eligibility', () => {
 			],
 		} );
 
-		// ASSERT: the skipped count floors at zero rather than going negative.
+		// ASSERT: The skipped count floors at zero rather than going negative.
 		expect( modal.type ).toBe( BulkImportFlow );
 		expect(
 			( modal.props as { skippedCount?: number } ).skippedCount
@@ -375,16 +300,16 @@ describe( 'createPostsActions per-state eligibility', () => {
 	} );
 
 	it( 'Verifies that a lone eligible row routes to the single modal with the skipped count', () => {
-		// ARRANGE: four rows selected but only one is import-eligible.
+		// ARRANGE: Four rows selected but only one is import-eligible.
 		const importAction = getModalAction(
-			createPostsActions( undefined, true, CONTEXT, {}, ALL_CHIP, 4 ),
+			createPostsActions( undefined, true, CONTEXT, {}, 4 ),
 			'import'
 		);
 
-		// ACT: render the modal for the single eligible row.
+		// ACT: Render the modal for the single eligible row.
 		const modal = importAction.RenderModal( { items: [ buildRow() ] } );
 
-		// ASSERT: the single-post modal is used and reports the three dropped rows.
+		// ASSERT: The single-post modal is used and reports the three dropped rows.
 		expect( modal.type ).toBe( ImportModal );
 		expect(
 			( modal.props as { skippedCount?: number } ).skippedCount
@@ -393,10 +318,14 @@ describe( 'createPostsActions per-state eligibility', () => {
 } );
 
 /**
- * Builds an AttentionIssue fixture; tests override fields to match the case.
+ * Builds a degradation inbox row; tests override fields to match the case.
  */
-function buildIssue( overrides: Partial< AttentionIssue > = {} ): AttentionIssue {
+function buildDegradation(
+	overrides: Partial< InboxDegradation > = {}
+): InboxDegradation {
 	return {
+		kind: 'degradation',
+		row_id: 'degradation:1024:nav_ref_rewrite_failed:8300:post',
 		affected_post_id: 1024,
 		issue_type: 'nav_ref_rewrite_failed',
 		target_ref: 8300,
@@ -414,64 +343,135 @@ function buildIssue( overrides: Partial< AttentionIssue > = {} ): AttentionIssue
 }
 
 /**
+ * Builds a failure inbox row; tests override fields to match the case.
+ */
+function buildFailure( overrides: Partial< InboxFailure > = {} ): InboxFailure {
+	return {
+		kind: 'failure',
+		row_id: 'failure:42',
+		item_id: 42,
+		source_post_id: 10,
+		title: 'Broken import',
+		error_message: 'Boom',
+		import_date_gmt: '2024-03-15 10:30:00',
+		source_site_url: 'https://source.example.com',
+		edit_url: '',
+		...overrides,
+	};
+}
+
+/**
  * Invokes a DataViews action callback regardless of its declared arity.
  */
 function runCallback(
-	action: Action< AttentionIssue >,
-	items: AttentionIssue[]
+	action: Action< NeedsAttentionRow >,
+	items: NeedsAttentionRow[]
 ): void {
 	(
-		action as unknown as { callback: ( rows: AttentionIssue[] ) => void }
+		action as unknown as { callback: ( rows: NeedsAttentionRow[] ) => void }
 	).callback( items );
 }
 
-describe( 'createAttentionIssueActions', () => {
+describe( 'createNeedsAttentionActions', () => {
 	afterEach( () => {
 		vi.unstubAllGlobals();
 		vi.useRealTimers();
 	} );
 
-	it( 'shows Retry only for retryable issues', () => {
-		// ARRANGE: the Retry action.
-		const retry = createAttentionIssueActions( undefined, {
-			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
-			nonce: 'test-nonce',
-		} )[ 0 ];
+	const RETRY_CONTEXT: NeedsAttentionActionsContext = {
+		ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+		nonce: 'test-nonce',
+	};
 
-		// ACT + ASSERT: a retryable issue is eligible; a guidance-only one isn't.
-		expect( retry.isEligible?.( buildIssue( { retryable: true } ) ) ).toBe(
-			true
-		);
+	it( 'Verifies that Remove targets failures, not degradations', () => {
+		// ARRANGE: The Remove action.
+		const remove = createNeedsAttentionActions(
+			undefined,
+			RETRY_CONTEXT
+		).find( ( a ) => a.id === 'remove-failure' );
+
+		// ACT + ASSERT: A failure row is eligible; a degradation is not.
+		expect( remove?.isEligible?.( buildFailure() ) ).toBe( true );
+		expect( remove?.isEligible?.( buildDegradation() ) ).toBe( false );
+	} );
+
+	it( 'Verifies that Remove maps orphan and source-linked failures to their scopes', () => {
+		// ARRANGE: The Remove modal action and one orphan + one source-linked
+		// failure.
+		const remove = createNeedsAttentionActions( undefined, RETRY_CONTEXT )
+			.find( ( a ) => a.id === 'remove-failure' ) as ActionModal<
+			NeedsAttentionRow
+		>;
+
+		// ACT: Render the confirmation modal for both.
+		const modal = remove.RenderModal( {
+			items: [
+				buildFailure( { item_id: 7, source_post_id: null } ),
+				buildFailure( { item_id: 8, source_post_id: 20 } ),
+			],
+		} );
+
+		// ASSERT: It hands the modal each failure with its item id and source.
+		expect( modal.type ).toBe( DeleteFailedImportsModal );
 		expect(
-			retry.isEligible?.(
-				buildIssue( {
+			( modal.props as { items: unknown } ).items
+		).toEqual( [
+			{ itemId: 7, sourcePostId: null, title: 'Broken import' },
+			{ itemId: 8, sourcePostId: 20, title: 'Broken import' },
+		] );
+	} );
+
+	it( 'Verifies that Retry shows only for retryable degradations', () => {
+		// ARRANGE: The Retry action.
+		const retry = createNeedsAttentionActions(
+			undefined,
+			RETRY_CONTEXT
+		).find( ( a ) => a.id === 'retry-degradation' );
+
+		// ACT + ASSERT: A retryable degradation is eligible; a guidance-only
+		// one and a failure are not.
+		expect( retry?.isEligible?.( buildDegradation() ) ).toBe( true );
+		expect(
+			retry?.isEligible?.(
+				buildDegradation( {
 					issue_type: 'unmapped_block_reference',
 					retryable: false,
 				} )
 			)
 		).toBe( false );
+		expect( retry?.isEligible?.( buildFailure() ) ).toBe( false );
 	} );
 
+	/**
+	 * Returns the Retry action from a fresh inbox action set.
+	 */
+	function retryAction(
+		onRefresh: ( () => void ) | undefined,
+		context: NeedsAttentionActionsContext = RETRY_CONTEXT
+	): Action< NeedsAttentionRow > {
+		return createNeedsAttentionActions( onRefresh, context ).find(
+			( a ) => a.id === 'retry-degradation'
+		) as Action< NeedsAttentionRow >;
+	}
+
 	it( 'posts the retry request and refreshes on success', async () => {
-		// ARRANGE: a succeeding endpoint and a refresh spy.
+		// ARRANGE: A succeeding endpoint and a refresh spy.
 		const fetchMock = vi.fn().mockResolvedValue( {
-			json: () => Promise.resolve( { success: true, data: { resolved: true } } ),
+			json: () =>
+				Promise.resolve( { success: true, data: { resolved: true } } ),
 		} );
 		vi.stubGlobal( 'fetch', fetchMock );
 		const onRefresh = vi.fn();
 
-		const retry = createAttentionIssueActions( onRefresh, {
-			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
-			nonce: 'test-nonce',
-		} )[ 0 ];
+		// ACT: Run the Retry callback for one degradation.
+		runCallback( retryAction( onRefresh ), [ buildDegradation() ] );
 
-		// ACT: run the Retry callback for one issue.
-		runCallback( retry, [ buildIssue() ] );
-
-		// ASSERT: it posts the issue identity and refreshes the listing.
+		// ASSERT: It posts the issue identity and refreshes the listing.
 		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
 		const body = fetchMock.mock.calls[ 0 ][ 1 ].body as FormData;
-		expect( body.get( 'action' ) ).toBe( 'safe_publish_retry_attention_issue' );
+		expect( body.get( 'action' ) ).toBe(
+			'safe_publish_retry_attention_issue'
+		);
 		expect( body.get( 'affected_post_id' ) ).toBe( '1024' );
 		expect( body.get( 'issue_type' ) ).toBe( 'nav_ref_rewrite_failed' );
 		expect( body.get( 'target_ref' ) ).toBe( '8300' );
@@ -479,27 +479,22 @@ describe( 'createAttentionIssueActions', () => {
 	} );
 
 	it( 'surfaces an error notice and still refreshes on a failed retry', async () => {
-		// ARRANGE: an endpoint that rejects the retry and a notice sink.
+		// ARRANGE: An endpoint that rejects the retry and a notice sink.
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockResolvedValue( {
-				json: () =>
-					Promise.resolve( { success: false, error: 'Nope.' } ),
+				json: () => Promise.resolve( { success: false, error: 'Nope.' } ),
 			} )
 		);
 		const onRefresh = vi.fn();
 		const onNotice = vi.fn();
 
-		const retry = createAttentionIssueActions( onRefresh, {
-			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
-			nonce: 'test-nonce',
-			onNotice,
-		} )[ 0 ];
+		// ACT: Run the Retry callback.
+		runCallback( retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation(),
+		] );
 
-		// ACT: run the Retry callback.
-		runCallback( retry, [ buildIssue() ] );
-
-		// ASSERT: an error notice is surfaced and the listing still refreshes.
+		// ASSERT: An error notice is surfaced and the listing still refreshes.
 		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
 		expect( onNotice ).toHaveBeenCalledWith( {
 			status: 'error',
@@ -508,7 +503,7 @@ describe( 'createAttentionIssueActions', () => {
 	} );
 
 	it( 'maps an unresolved outcome to a still-needs-attention warning', async () => {
-		// ARRANGE: a reconciliation that ran but left the issue open.
+		// ARRANGE: A reconciliation that ran but left the issue open.
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockResolvedValue( {
@@ -526,22 +521,16 @@ describe( 'createAttentionIssueActions', () => {
 		const onRefresh = vi.fn();
 		const onNotice = vi.fn();
 
-		const retry = createAttentionIssueActions( onRefresh, {
-			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
-			nonce: 'test-nonce',
-			onNotice,
-		} )[ 0 ];
-
-		// ACT: retry an unmapped reference the run couldn't clear.
-		runCallback( retry, [
-			buildIssue( {
+		// ACT: Retry an unmapped reference the run couldn't clear.
+		runCallback( retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation( {
 				issue_type: 'unmapped_block_reference',
 				target_ref: 5,
 				target_kind: 'post',
 			} ),
 		] );
 
-		// ASSERT: a still-needs-attention warning is surfaced and the listing
+		// ASSERT: A still-needs-attention warning is surfaced and the listing
 		// still refreshes.
 		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
 		expect( onNotice ).toHaveBeenCalledWith(
@@ -553,7 +542,7 @@ describe( 'createAttentionIssueActions', () => {
 	} );
 
 	it( 'maps a target_absent outcome to actionable import guidance', async () => {
-		// ARRANGE: a reconciliation whose target still isn't on this site.
+		// ARRANGE: A reconciliation whose target still isn't on this site.
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockResolvedValue( {
@@ -571,22 +560,16 @@ describe( 'createAttentionIssueActions', () => {
 		const onRefresh = vi.fn();
 		const onNotice = vi.fn();
 
-		const retry = createAttentionIssueActions( onRefresh, {
-			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
-			nonce: 'test-nonce',
-			onNotice,
-		} )[ 0 ];
-
-		// ACT: retry an unmapped reference whose dependency isn't imported yet.
-		runCallback( retry, [
-			buildIssue( {
+		// ACT: Retry an unmapped reference whose dependency isn't imported yet.
+		runCallback( retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation( {
 				issue_type: 'unmapped_block_reference',
 				target_ref: 5,
 				target_kind: 'post',
 			} ),
 		] );
 
-		// ASSERT: the import-then-retry guidance is surfaced as a warning,
+		// ASSERT: The import-then-retry guidance is surfaced as a warning,
 		// distinct from the generic still-needs-attention copy.
 		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
 		const notice = onNotice.mock.calls.at( -1 )?.[ 0 ];
@@ -596,7 +579,7 @@ describe( 'createAttentionIssueActions', () => {
 	} );
 
 	it( 'maps a write_failed outcome to an error notice', async () => {
-		// ARRANGE: a reconciliation whose write failed.
+		// ARRANGE: A reconciliation whose write failed.
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockResolvedValue( {
@@ -614,16 +597,12 @@ describe( 'createAttentionIssueActions', () => {
 		const onRefresh = vi.fn();
 		const onNotice = vi.fn();
 
-		const retry = createAttentionIssueActions( onRefresh, {
-			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
-			nonce: 'test-nonce',
-			onNotice,
-		} )[ 0 ];
+		// ACT: Retry a degradation whose reconciliation write failed.
+		runCallback( retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation( { affected_title: 'Primary Menu' } ),
+		] );
 
-		// ACT: retry an issue whose reconciliation write failed.
-		runCallback( retry, [ buildIssue( { affected_title: 'Primary Menu' } ) ] );
-
-		// ASSERT: a hard error notice is surfaced, not a soft warning.
+		// ASSERT: A hard error notice is surfaced, not a soft warning.
 		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
 		expect( onNotice ).toHaveBeenCalledWith( {
 			status: 'error',
@@ -632,31 +611,30 @@ describe( 'createAttentionIssueActions', () => {
 	} );
 
 	it( 'holds the in-flight notice back until the delay elapses', () => {
-		// ARRANGE: a retry whose response never settles, so it stays in flight.
+		// ARRANGE: A retry whose response never settles, so it stays in flight.
 		vi.useFakeTimers();
-		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockReturnValue( new Promise( () => {} ) )
+		);
 		const onNotice = vi.fn();
 
-		const retry = createAttentionIssueActions( vi.fn(), {
-			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
-			nonce: 'test-nonce',
-			onNotice,
-		} )[ 0 ];
+		// ACT: Run the Retry callback.
+		runCallback( retryAction( vi.fn(), { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation(),
+		] );
 
-		// ACT: run the Retry callback.
-		runCallback( retry, [ buildIssue() ] );
-
-		// ASSERT: the banner clears at once, but "Retrying…" waits out the
+		// ASSERT: The banner clears at once, but "Retrying…" waits out the
 		// delay so a fast retry never flashes it.
 		expect( onNotice ).toHaveBeenCalledWith( null );
 		expect( onNotice ).not.toHaveBeenCalledWith(
 			expect.objectContaining( { status: 'info' } )
 		);
 
-		// ACT: let the delay elapse.
+		// ACT: Let the delay elapse.
 		vi.advanceTimersByTime( RETRY_PENDING_DELAY_MS );
 
-		// ASSERT: only now does the in-flight notice appear.
+		// ASSERT: Only now does the in-flight notice appear.
 		expect( onNotice ).toHaveBeenCalledWith( {
 			status: 'info',
 			message: 'Retrying…',
@@ -664,28 +642,24 @@ describe( 'createAttentionIssueActions', () => {
 	} );
 
 	it( 'ignores a second retry for the same issue while one is in flight', () => {
-		// ARRANGE: a retry that stays in flight, plus a shared in-flight set.
+		// ARRANGE: A retry that stays in flight, plus a shared in-flight set.
 		vi.useFakeTimers();
 		const fetchMock = vi.fn().mockReturnValue( new Promise( () => {} ) );
 		vi.stubGlobal( 'fetch', fetchMock );
 		const inFlight = new Set< string >();
 
-		const retry = createAttentionIssueActions( vi.fn(), {
-			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
-			nonce: 'test-nonce',
-			inFlight,
-		} )[ 0 ];
+		const retry = retryAction( vi.fn(), { ...RETRY_CONTEXT, inFlight } );
 
-		// ACT: click twice before the first request settles.
-		runCallback( retry, [ buildIssue() ] );
-		runCallback( retry, [ buildIssue() ] );
+		// ACT: Click twice before the first request settles.
+		runCallback( retry, [ buildDegradation() ] );
+		runCallback( retry, [ buildDegradation() ] );
 
-		// ASSERT: only the first submit fired a request.
+		// ASSERT: Only the first submit fired a request.
 		expect( fetchMock ).toHaveBeenCalledTimes( 1 );
 	} );
 
 	it( 'confirms resolution with a success notice naming the content', async () => {
-		// ARRANGE: a retry that resolves the issue.
+		// ARRANGE: A retry that resolves the issue.
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockResolvedValue( {
@@ -696,16 +670,12 @@ describe( 'createAttentionIssueActions', () => {
 		const onRefresh = vi.fn();
 		const onNotice = vi.fn();
 
-		const retry = createAttentionIssueActions( onRefresh, {
-			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
-			nonce: 'test-nonce',
-			onNotice,
-		} )[ 0 ];
+		// ACT: Retry a degradation that clears.
+		runCallback( retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation( { affected_title: 'Primary Menu' } ),
+		] );
 
-		// ACT: retry an issue that clears.
-		runCallback( retry, [ buildIssue( { affected_title: 'Primary Menu' } ) ] );
-
-		// ASSERT: the outcome confirms the fix by name, and the quick resolve
+		// ASSERT: The outcome confirms the fix by name, and the quick resolve
 		// never flashed the in-flight notice.
 		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
 		expect( onNotice ).toHaveBeenLastCalledWith( {

@@ -25,7 +25,7 @@
   Documentation update (2026-06-03): Added the Sync Status column on both
   the Source Posts and Imports → Posts screens, noted that Update, Delete,
   and Rollback support bulk selection, recorded that failed imports can now
-  be removed from the Failures tab, and added the Test Connection button.
+  be removed from the Needs attention tab, and added the Test Connection button.
   Constant-backed connection settings are intentionally omitted from this
   VIP-facing draft; docs/concepts/authentication.md covers that implementation
   detail for non-VIP and local configuration.
@@ -140,7 +140,7 @@ Safe Publish imports the selected posts as a single unit and records the result 
 The **Imports** admin page is the operator surface for everything that came in from the source. It has two tabs:
 
 - **Posts** — local posts that resulted from successful imports. Each row offers Edit, Update (re-import from source), Diff (compare current local content with current source content), Delete, and Rollback. Update, Delete, and Rollback can also be applied to several selected rows at once; Diff is available per row only. A **Sync Status** column compares each row against the current source content and reports whether it is up to date, outdated, missing on the source, cannot be checked because the source request failed, or has an invalid timestamp.
-- **Failures** — items whose import errored before a local post was created. Each failed item can be removed from the tab once it is no longer needed; recovery is fixing the underlying issue and re-importing from the source catalog.
+- **Needs attention** — post-import problems in one place: failures (the import errored, so no local post was created, or a re-import of an existing post failed) and degradations (the post imported but left an unresolved block, term, parent, or navigation reference). A failure can be removed once it is no longer needed; a degradation offers Retry, which re-runs its reconciliation and reports whether it cleared. Recovery for a failure is fixing the underlying issue and re-importing from the source catalog.
 
 ### Previewing changes with a diff
 

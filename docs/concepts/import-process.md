@@ -212,7 +212,7 @@ Custom taxonomies must be registered with `'show_in_rest' => true` on the source
   - User who performed import
   - Import status (success, updated, or error)
   - Error message (if failed)
-- Import recorded in the imports and import items tables (one session row, one item per processed post). The Imports page surfaces this data; the imported posts list on its Posts tab and the failed items on its Failures tab.
+- Import recorded in the imports and import items tables (one session row, one item per processed post). The Imports page surfaces this data; the imported posts list on its Posts tab and post-import problems on its Needs attention tab.
 
 See [Imports](imports.md) for more details.
 
@@ -223,7 +223,7 @@ Bulk imports process multiple posts sequentially:
 1. Each post goes through all stages individually.
 2. Failures in one post don't stop others.
 3. Results aggregated and reported.
-4. Imports table updated for each post; failed items appear on the Imports page Failures tab.
+4. Imports table updated for each post; failed items appear on the Imports page Needs attention tab.
 
 ### Performance
 
@@ -244,7 +244,7 @@ Bulk imports process multiple posts sequentially:
 Errors are reported in multiple places:
 
 1. **Admin notice**: Immediate feedback in UI
-2. **Imports → Failures tab**: Logged for later review
+2. **Imports → Needs attention tab**: Logged for later review
 3. **JavaScript console**: Detailed debugging info
 4. **PHP error log**: Server-side errors
 

@@ -45,7 +45,7 @@ See the [Quickstart Guide](docs/quickstart.md) for detailed instructions.
   - [Authentication](docs/concepts/authentication.md) - Setting up secure connections
   - [Content Validation](docs/concepts/validation.md) - Understanding validation checks
   - [Import Process](docs/concepts/import-process.md) - How imports work step-by-step
-  - [Imports](docs/concepts/imports.md) - Managing imported content and failed imports
+  - [Imports](docs/concepts/imports.md) - Managing imported content and post-import problems
   - [Exports](docs/concepts/exports.md) - Reviewing outbound export events
 - **[Extending](docs/extending/index.md)** - Customize the plugin
   - [Hooks and Filters](docs/extending/hooks.md) - Available WordPress hooks

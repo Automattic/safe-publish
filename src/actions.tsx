@@ -24,9 +24,9 @@ import { RETRY_PENDING_DELAY_MS } from './constants';
 import {
 	ApiResponse,
 	AttentionIssue,
-	ChipState,
 	ImportSyncStatus,
-	OrphanFailure,
+	InboxFailure,
+	NeedsAttentionRow,
 	RetryAttentionIssueResponse,
 	UnifiedPostRow,
 } from './types';
@@ -49,14 +49,6 @@ export interface PostsActionsContext {
 }
 
 /**
- * Auth context for the orphan-failures drawer's Remove action.
- */
-export interface OrphanFailuresActionsContext {
-	ajaxurl: string;
-	nonce: string;
-}
-
-/**
  * Returns true when the row supports rollback (had an import event whose
  * active item is success/updated and the local post still resolves).
  *
@@ -70,16 +62,14 @@ const isRollbackEligible = ( item: UnifiedPostRow ): boolean =>
 /**
  * Creates DataViews actions for the unified Manage listing. Import covers
  * first-time create, re-import (update), and retry against a single source
- * endpoint; per-state eligibility: 'available'/'failed' → Import;
- * 'up-to-date'/'outdated' → Compare, Import, Edit, Trash, Rollback
- * (Compare/Import hide on up-to-date); 'failed' on the Failed chip also
- * exposes Dismiss. Mixed bulk selections rely on per-item isEligible.
+ * endpoint; per-state eligibility: 'available' → Import; 'up-to-date'/'outdated'
+ * → Compare, Import, Edit, Trash, Rollback (Compare/Import hide on up-to-date).
+ * Mixed bulk selections rely on per-item isEligible.
  *
  * @param {Function}            onRefresh       Listing refresh callback.
  * @param {boolean}             isAuthorized    Whether the source authorizes imports.
  * @param {PostsActionsContext} context         Admin-ajax URL, nonce, notice sink.
  * @param {Object}              syncStatuses    Per-row sync entries keyed by source post id.
- * @param {ChipState}           chipState       Current chip; gates Failed-only actions.
  * @param {number}              [selectedCount] Selected rows; sizes the bulk-import skipped count.
  *
  * @return {Action<UnifiedPostRow>[]} Array of DataViews actions.
@@ -89,7 +79,6 @@ export const createPostsActions = (
 	isAuthorized: boolean,
 	context: PostsActionsContext,
 	syncStatuses: Record< number, { status: ImportSyncStatus } >,
-	chipState: ChipState,
 	selectedCount = 0
 ): Action< UnifiedPostRow >[] => {
 	const actions: Action< UnifiedPostRow >[] = [
@@ -135,7 +124,6 @@ export const createPostsActions = (
 				&& null !== item.source_post_id
 				&& (
 					'available' === item.local_state
-					|| 'failed' === item.local_state
 					|| 'outdated' === item.local_state
 					|| (
 						'up-to-date' === item.local_state
@@ -290,73 +278,8 @@ export const createPostsActions = (
 	},
 	];
 
-	// Failed-chip only so Dismiss reads as failure cleanup, not deletion.
-	if ( 'failed' === chipState ) {
-		actions.push( {
-			id: 'dismiss-failure',
-			label: __( 'Dismiss', 'safe-publish' ),
-			icon: trash,
-			isDestructive: true,
-			isPrimary: true,
-			// The listing dedupes failures by source_post_id, so dismiss
-			// has to clear by source — otherwise older failure siblings
-			// re-surface on refresh.
-			isEligible: ( item ) =>
-				'failed' === item.local_state && null !== item.source_post_id,
-			hideModalHeader: true,
-			modalFocusOnMount: 'firstContentElement',
-			supportsBulk: true,
-			RenderModal: ( { items, closeModal } ) => (
-				<DeleteFailedImportsModal
-					items={ items.map( ( item ) => ( {
-						id: item.source_post_id ?? 0,
-						title: item.title,
-					} ) ) }
-					ajaxurl={ context.ajaxurl }
-					nonce={ context.nonce }
-					scope="sources"
-					closeModal={ closeModal }
-					onRefresh={ onRefresh }
-				/>
-			),
-		} );
-	}
-
 	return actions;
 };
-
-/**
- * Creates the drawer's Remove action for orphan failures.
- *
- * @param {Function}                     onRefresh Callback to refresh the drawer.
- * @param {OrphanFailuresActionsContext} context   Admin-ajax URL + nonce.
- *
- * @return {Action<OrphanFailure>[]} Array of DataViews actions.
- */
-export const createOrphanFailuresActions = (
-	onRefresh: ( () => void ) | undefined,
-	context: OrphanFailuresActionsContext
-): Action< OrphanFailure >[] => [
-	{
-		id: 'remove-orphan-failure',
-		label: __( 'Remove', 'safe-publish' ),
-		icon: trash,
-		isDestructive: true,
-		isPrimary: true,
-		hideModalHeader: true,
-		modalFocusOnMount: 'firstContentElement',
-		supportsBulk: true,
-		RenderModal: ( { items, closeModal } ) => (
-			<DeleteFailedImportsModal
-				items={ items }
-				ajaxurl={ context.ajaxurl }
-				nonce={ context.nonce }
-				closeModal={ closeModal }
-				onRefresh={ onRefresh }
-			/>
-		),
-	},
-];
 
 /**
  * A banner shown for an action outcome: in-flight (info), succeeded (success),
@@ -368,13 +291,13 @@ export interface ActionNotice {
 }
 
 /**
- * Auth + notice context for the Needs attention drawer's Retry action.
+ * Auth + notice context for the Needs attention inbox actions.
  */
-export interface AttentionIssueActionsContext {
+export interface NeedsAttentionActionsContext {
 	ajaxurl: string;
 	nonce: string;
 	onNotice?: ( notice: ActionNotice | null ) => void;
-	// Keys of issues with a retry in flight, to drop concurrent submits.
+	// Keys of degradations with a retry in flight, to drop concurrent submits.
 	inFlight?: Set< string >;
 }
 
@@ -419,33 +342,60 @@ const retryOutcomeNotice = (
 };
 
 /**
- * Creates the drawer's Retry action for attention issues.
+ * Creates the Needs attention inbox actions: Remove for failures and a
+ * self-verifying Retry for degradations whose reconciliation is callable today.
+ * Retry re-runs the real reconciliation, then refreshes so the row clears or
+ * stays on the actual result; every outcome — resolved, still open, or failed —
+ * surfaces a notice, so a run never reads as a silent success. Concurrent
+ * submits for the same issue are ignored while one is in flight.
  *
- * Eligible only for issues whose reconciliation is callable today; it re-runs
- * the real reconciliation, which is self-verifying, then refreshes the listing
- * so the row clears or stays based on the actual result. Every outcome —
- * resolved, still open, or failed — surfaces a notice, so a run never reads as
- * a silent success. Concurrent submits for the same issue are ignored while one
- * is in flight.
+ * @param {Function}                     onRefresh Callback to refresh the inbox.
+ * @param {NeedsAttentionActionsContext} context   Admin-ajax URL, nonce, notice sink.
  *
- * @param {Function}                     onRefresh Callback to refresh the drawer.
- * @param {AttentionIssueActionsContext} context   Admin-ajax URL, nonce, notice sink.
- *
- * @return {Action<AttentionIssue>[]} Array of DataViews actions.
+ * @return {Action<NeedsAttentionRow>[]} Array of DataViews actions.
  */
-export const createAttentionIssueActions = (
+export const createNeedsAttentionActions = (
 	onRefresh: ( () => void ) | undefined,
-	context: AttentionIssueActionsContext
-): Action< AttentionIssue >[] => [
+	context: NeedsAttentionActionsContext
+): Action< NeedsAttentionRow >[] => [
 	{
-		id: 'retry-attention-issue',
+		id: 'remove-failure',
+		label: __( 'Remove', 'safe-publish' ),
+		icon: trash,
+		isDestructive: true,
+		isPrimary: true,
+		hideModalHeader: true,
+		modalFocusOnMount: 'firstContentElement',
+		supportsBulk: true,
+		isEligible: ( item ) => 'failure' === item.kind,
+		RenderModal: ( { items, closeModal } ) => (
+			<DeleteFailedImportsModal
+				items={ items
+					.filter(
+						( item ): item is InboxFailure =>
+							'failure' === item.kind
+					)
+					.map( ( item ) => ( {
+						itemId: item.item_id,
+						sourcePostId: item.source_post_id,
+						title: item.title,
+					} ) ) }
+				ajaxurl={ context.ajaxurl }
+				nonce={ context.nonce }
+				closeModal={ closeModal }
+				onRefresh={ onRefresh }
+			/>
+		),
+	},
+	{
+		id: 'retry-degradation',
 		label: __( 'Retry', 'safe-publish' ),
 		icon: update,
 		isPrimary: true,
-		isEligible: ( item ) => item.retryable,
+		isEligible: ( item ) => 'degradation' === item.kind && item.retryable,
 		callback: ( items ) => {
 			const issue = items[ 0 ];
-			if ( ! issue ) {
+			if ( ! issue || 'degradation' !== issue.kind ) {
 				return;
 			}
 
@@ -508,7 +458,7 @@ export const createAttentionIssueActions = (
 						return;
 					}
 
-					// Resolved: confirm it, since the row drops from the
+					// Resolved: Confirm it, since the row drops from the
 					// refetched list and would otherwise clear silently.
 					context.onNotice?.( {
 						status: 'success',

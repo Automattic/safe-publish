@@ -105,4 +105,4 @@ When `fresh=1` is passed, a `purge=1` step runs before the batches to wipe previ
 
 ## See Also
 
-To seed the admin degradation drawers (Needs attention and orphan failures) instead of content, see [Seeding Import Degradations](seeding-degradations.md).
+To seed the Needs attention tab instead of content, see [Seeding Import Degradations](seeding-degradations.md).

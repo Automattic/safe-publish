@@ -95,17 +95,20 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that the most-recent error row routes to failed.
+	 * Verifies that a success followed by a newer error resolves to the
+	 * success row's state, not failed.
 	 */
-	public function test_resolves_failed_when_most_recent_is_error(): void {
-		// ARRANGE: a prior success followed by a later error event.
+	public function test_resolves_success_state_when_a_newer_row_is_error(): void {
+		// ARRANGE: A real imported post whose success row is followed by a
+		// newer error attempt for the same source.
+		$post_id = self::factory()->post->create();
 		$session = $this->create_session();
 		$this->insert_item(
 			array(
 				'session_id'      => $session,
 				'source_post_id'  => 101,
 				'status'          => 'success',
-				'post_id'         => 555,
+				'post_id'         => $post_id,
 				'import_date_gmt' => '2026-01-01 00:00:00',
 			)
 		);
@@ -119,11 +122,34 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: resolve the source post's routing state.
+		// ACT: Resolve the source post's routing state.
 		$state = $this->repository->resolve_source_post_state( 101 );
 
-		// ASSERT: the most-recent event wins and routes to Failed.
-		$this->assertSame( 'failed', $state );
+		// ASSERT: The latest non-error row wins; the error never routes Posts.
+		$this->assertSame( 'up-to-date', $state );
+	}
+
+	/**
+	 * Verifies that a source whose only row is an error resolves to available.
+	 */
+	public function test_resolves_available_when_only_row_is_error(): void {
+		// ARRANGE: A single error row with no prior success for the source.
+		$session = $this->create_session();
+		$this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => 106,
+				'status'          => 'error',
+				'error_message'   => 'First-import failure',
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+
+		// ACT: Resolve the source post's routing state.
+		$state = $this->repository->resolve_source_post_state( 106 );
+
+		// ASSERT: An error-only source is not imported; it stays available.
+		$this->assertSame( 'available', $state );
 	}
 
 	/**
@@ -301,6 +327,75 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that list_imported_source_rows keeps a success row that has a
+	 * newer error sibling, so a failed re-import doesn't hide the post.
+	 */
+	public function test_list_imported_source_rows_keeps_success_with_newer_error(): void {
+		// ARRANGE: An imported post whose later re-import errored.
+		$post_id = self::factory()->post->create();
+		$session = $this->create_session();
+		$this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => 950,
+				'status'          => 'success',
+				'post_id'         => $post_id,
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+		$this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => 950,
+				'status'          => 'error',
+				'error_message'   => 'Re-import failed',
+				'import_date_gmt' => '2026-02-01 00:00:00',
+			)
+		);
+
+		// ACT: List the imported source rows.
+		$rows = $this->repository->list_imported_source_rows();
+
+		// ASSERT: The success row survives its newer error sibling.
+		$this->assertCount( 1, $rows );
+		$this->assertSame( 950, (int) $rows[0]['source_post_id'] );
+		$this->assertSame( 'success', (string) $rows[0]['status'] );
+	}
+
+	/**
+	 * Verifies that get_active_items_by_source_ids returns the latest non-error
+	 * row per source, so a newer error can't become the active row.
+	 */
+	public function test_get_active_items_by_source_ids_ignores_newer_error(): void {
+		// ARRANGE: A success followed by a newer error for the same source.
+		$session = $this->create_session();
+		$this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => 960,
+				'status'          => 'success',
+				'post_id'         => 111,
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+		$this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => 960,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-02-01 00:00:00',
+			)
+		);
+
+		// ACT: Fetch the active rows for the source.
+		$active = $this->repository->get_active_items_by_source_ids( array( 960 ) );
+
+		// ASSERT: The success row is the active row, not the newer error.
+		$this->assertArrayHasKey( 960, $active );
+		$this->assertSame( 'success', (string) $active[960]['status'] );
+	}
+
+	/**
 	 * Verifies that list_imported_source_rows partitions on the freshness arg.
 	 */
 	public function test_list_imported_source_rows_freshness_filters_by_stored_modified_time(): void {
@@ -399,10 +494,11 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that list_failed_source_rows excludes orphan failures.
+	 * Verifies that list_failures returns both orphan and source-linked
+	 * failures.
 	 */
-	public function test_list_failed_source_rows_excludes_orphans(): void {
-		// ARRANGE: one failed row with a source_post_id, one orphan failure.
+	public function test_list_failures_returns_orphan_and_source_linked(): void {
+		// ARRANGE: One source-linked failure and one newer orphan failure.
 		$session = $this->create_session();
 		$this->insert_item(
 			array(
@@ -423,20 +519,20 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: list the failed source rows.
-		$rows = $this->repository->list_failed_source_rows();
+		// ACT: List the inbox failures (newest first).
+		$rows = $this->repository->list_failures( 0, 20 );
 
-		// ASSERT: orphans are excluded; the source-known row passes through.
-		$this->assertCount( 1, $rows );
-		$this->assertSame( 400, (int) $rows[0]['source_post_id'] );
+		// ASSERT: The orphan and the source-linked row are both listed.
+		$this->assertCount( 2, $rows );
+		$this->assertNull( $rows[0]['source_post_id'] );
+		$this->assertSame( 400, (int) $rows[1]['source_post_id'] );
 	}
 
 	/**
-	 * Verifies that count_orphan_failures only counts rows without
-	 * a source_post_id.
+	 * Verifies that count_failures counts orphan and source-linked failures.
 	 */
-	public function test_count_orphan_failures_only_counts_orphans(): void {
-		// ARRANGE: one source-known failure plus two orphans.
+	public function test_count_failures_counts_orphan_and_source_linked(): void {
+		// ARRANGE: One source-linked failure plus two orphans.
 		$session = $this->create_session();
 		$this->insert_item(
 			array(
@@ -463,12 +559,82 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: count the orphan failures.
-		$count = $this->repository->count_orphan_failures();
+		// ACT: Count the inbox failures.
+		$count = $this->repository->count_failures();
 
-		// ASSERT: the count covers only the two orphans, not the
-		// source-known failure.
-		$this->assertSame( 2, $count );
+		// ASSERT: Every failure is counted, orphan or source-linked.
+		$this->assertSame( 3, $count );
+	}
+
+	/**
+	 * Verifies that a success followed by a newer error surfaces in
+	 * list_failures even though Posts routes the source to a success state.
+	 */
+	public function test_list_failures_includes_source_hidden_from_posts(): void {
+		// ARRANGE: A real imported post whose success is followed by a newer
+		// error for the same source.
+		$post_id = self::factory()->post->create();
+		$session = $this->create_session();
+		$this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => 900,
+				'status'          => 'success',
+				'post_id'         => $post_id,
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+		$this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => 900,
+				'status'          => 'error',
+				'error_message'   => 'Update failed',
+				'import_date_gmt' => '2026-02-01 00:00:00',
+			)
+		);
+
+		// ACT: Resolve the Posts state and list the inbox failures.
+		$state = $this->repository->resolve_source_post_state( 900 );
+		$rows  = $this->repository->list_failures( 0, 20 );
+
+		// ASSERT: Posts hides the failure, but the inbox surfaces it.
+		$this->assertSame( 'up-to-date', $state );
+		$this->assertCount( 1, $rows );
+		$this->assertSame( 900, (int) $rows[0]['source_post_id'] );
+	}
+
+	/**
+	 * Verifies that a later success removes a source from list_failures.
+	 */
+	public function test_list_failures_excludes_source_with_later_success(): void {
+		// ARRANGE: An error followed by a newer success for the same source.
+		$post_id = self::factory()->post->create();
+		$session = $this->create_session();
+		$this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => 901,
+				'status'          => 'error',
+				'error_message'   => 'First attempt failed',
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+		$this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => 901,
+				'status'          => 'success',
+				'post_id'         => $post_id,
+				'import_date_gmt' => '2026-02-01 00:00:00',
+			)
+		);
+
+		// ACT: List the inbox failures.
+		$rows = $this->repository->list_failures( 0, 20 );
+
+		// ASSERT: The resolved source no longer appears as a failure.
+		$this->assertCount( 0, $rows );
 	}
 
 	/**

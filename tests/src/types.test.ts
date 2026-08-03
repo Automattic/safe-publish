@@ -22,7 +22,6 @@ describe( 'Type validation', () => {
 			item_id: null,
 			post_id: null,
 			import_date_gmt: null,
-			error_message: null,
 			has_previous_content: false,
 			edit_url: '',
 		};

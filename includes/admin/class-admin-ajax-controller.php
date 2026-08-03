@@ -176,8 +176,7 @@ final class Admin_Ajax_Controller {
 	 */
 	public function register_handlers(): void {
 		add_action( 'wp_ajax_safe_publish_list_posts', array( $this, 'ajax_list_posts' ) );
-		add_action( 'wp_ajax_safe_publish_list_orphan_failures', array( $this, 'ajax_list_orphan_failures' ) );
-		add_action( 'wp_ajax_safe_publish_list_attention_issues', array( $this, 'ajax_list_attention_issues' ) );
+		add_action( 'wp_ajax_safe_publish_list_needs_attention', array( $this, 'ajax_list_needs_attention' ) );
 		add_action( 'wp_ajax_safe_publish_retry_attention_issue', array( $this, 'ajax_retry_attention_issue' ) );
 		add_action( 'wp_ajax_safe_publish_delete_failed_items', array( $this, 'ajax_delete_failed_items' ) );
 		add_action( 'wp_ajax_safe_publish_fetch_post_types', array( $this, 'ajax_fetch_post_types' ) );
@@ -221,8 +220,8 @@ final class Admin_Ajax_Controller {
 	 * State-routed Posts listing endpoint.
 	 *
 	 * 'all'/'available' are catalog-primary (catalog fetch annotated with
-	 * local data). 'up-to-date'/'outdated'/'failed' are local-primary (items
-	 * aggregated by source_post_id, merged with source data via include=).
+	 * local data). 'up-to-date'/'outdated' are local-primary (items aggregated
+	 * by source_post_id, merged with source data via include=).
 	 * `focus_source_id` resolves to a concrete state echoed back in
 	 * `focused_state` so the frontend can swap its chip in one render.
 	 */
@@ -237,10 +236,11 @@ final class Admin_Ajax_Controller {
 			wp_unslash( $_POST['source_site_url'] ?? '' )
 		);
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- allowlisted to a small enum by sanitize_state.
-		$requested_state      = self::sanitize_state( $_POST['state'] ?? 'all' );
-		$focus_source_id      = absint( $_POST['focus_source_id'] ?? 0 );
-		$with_orphan_count    = 1 === absint( $_POST['with_orphan_count'] ?? 0 );
-		$with_attention_count = 1 === absint( $_POST['with_attention_count'] ?? 0 );
+		$requested_state            = self::sanitize_state( $_POST['state'] ?? 'all' );
+		$focus_source_id            = absint( $_POST['focus_source_id'] ?? 0 );
+		$with_needs_attention_count = 1 === absint(
+			$_POST['with_needs_attention_count'] ?? 0
+		);
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if ( '' === $source_site_url ) {
@@ -273,25 +273,29 @@ final class Admin_Ajax_Controller {
 			$payload['focused_state']          = $focused_state;
 			$payload['focused_source_post_id'] = $focus_source_id;
 		}
-		if ( $with_orphan_count ) {
-			$payload['orphan_count'] = $this->repository->count_orphan_failures();
-		}
-		if ( $with_attention_count ) {
-			$payload['attention_count'] = $this->attention_issues->count_open_issues(
-				Options::get_connected_site_url_with_path()
-			);
+		if ( $with_needs_attention_count ) {
+			$payload['needs_attention_count'] =
+				$this->repository->count_failures()
+				+ $this->attention_issues->count_open_issues(
+					Options::get_connected_site_url_with_path()
+				);
 		}
 
 		wp_send_json_success( $payload );
 	}
 
 	/**
-	 * Lists orphan failures (errors with no source_post_id) for the drawer.
+	 * Lists the Needs attention inbox: Failures then degradations, as one
+	 * server-paginated stream. Failures come first (errors before
+	 * degradations); a failed-update row carries an edit link to its live post.
 	 */
-	public function ajax_list_orphan_failures(): void {
+	public function ajax_list_needs_attention(): void {
 		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
 			$this->send_session_expired_error();
 		}
+		// The inbox surfaces failure data and its Remove deletes it, so gate at
+		// manage_options — matching the Manage page and ajax_delete_failed_items.
+		// Retry is separately gated at edit_posts.
 		$this->verify_ajax_capability();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing
@@ -299,74 +303,169 @@ final class Admin_Ajax_Controller {
 		$per_page = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$rows = $this->repository->list_orphan_failures( $page, $per_page );
-
-		$has_more = count( $rows ) > $per_page;
-		if ( $has_more ) {
-			$rows = array_slice( $rows, 0, $per_page );
-		}
-
-		$items = array_map(
-			static fn( array $row ): array => array(
-				'id'              => (int) $row['id'],
-				'session_id'      => (int) $row['session_id'],
-				'title'           => (string) $row['title'],
-				'source_site_url' => (string) $row['source_site_url'],
-				'error_message'   => (string) ( $row['error_message'] ?? '' ),
-				'import_date_gmt' => (string) $row['import_date_gmt'],
-			),
-			$rows
+		$offset          = ( $page - 1 ) * $per_page;
+		$source_site_url = Options::get_connected_site_url_with_path();
+		$failed_count    = $this->repository->count_failures();
+		$attention_count = $this->attention_issues->count_open_issues(
+			$source_site_url
 		);
+
+		$items = $this->collect_needs_attention_page(
+			$offset,
+			$per_page,
+			$failed_count,
+			$source_site_url
+		);
+
+		$total = $failed_count + $attention_count;
 
 		wp_send_json_success(
 			array(
-				'items'    => $items,
-				'has_more' => $has_more,
+				'items'                 => $items,
+				'has_more'              => $offset + count( $items ) < $total,
+				'needs_attention_count' => $total,
 			)
 		);
 	}
 
 	/**
-	 * Lists open attention issues for the connected source, errors first.
+	 * Assembles one page of the concatenated inbox stream — the failures block
+	 * precedes the degradations block — via offset arithmetic over the two
+	 * source counts, so a page can straddle the boundary.
+	 *
+	 * @param int    $offset          Global row offset.
+	 * @param int    $limit           Page size.
+	 * @param int    $failed_count    Total failures (the block boundary).
+	 * @param string $source_site_url Connected source identity.
+	 * @return array[] Unified inbox rows.
 	 */
-	public function ajax_list_attention_issues(): void {
-		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
-			$this->send_session_expired_error();
+	private function collect_needs_attention_page(
+		int $offset,
+		int $limit,
+		int $failed_count,
+		string $source_site_url
+	): array {
+		if ( $offset >= $failed_count ) {
+			return $this->format_attention_rows(
+				$this->attention_issues->list_open_issues(
+					$source_site_url,
+					$offset - $failed_count,
+					$limit
+				)
+			);
 		}
-		// The list and Retry act on imported content and Retry writes to it,
-		// so gate by the import capability. This becomes load-bearing under the
-		// editor-rollback roadmap; revisit alongside that gate change.
-		$this->verify_ajax_capability( 'edit_posts' );
 
-		// phpcs:disable WordPress.Security.NonceVerification.Missing
-		$page     = max( 1, absint( $_POST['page'] ?? 1 ) );
-		$per_page = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
-		// phpcs:enable WordPress.Security.NonceVerification.Missing
-
-		$source_site_url = Options::get_connected_site_url_with_path();
-
-		$rows = $this->attention_issues->get_open_issues(
-			$source_site_url,
-			$page,
-			$per_page
+		$items     = $this->format_failure_rows(
+			$this->repository->list_failures( $offset, $limit )
 		);
+		$shortfall = $limit - count( $items );
 
-		$has_more = count( $rows ) > $per_page;
-		if ( $has_more ) {
-			$rows = array_slice( $rows, 0, $per_page );
+		if ( $shortfall > 0 ) {
+			// Failures ran out mid-page; fill from the degradations head.
+			$items = array_merge(
+				$items,
+				$this->format_attention_rows(
+					$this->attention_issues->list_open_issues(
+						$source_site_url,
+						0,
+						$shortfall
+					)
+				)
+			);
 		}
 
-		$items = array_map(
-			array( $this, 'format_attention_issue' ),
+		return $items;
+	}
+
+	/**
+	 * Shapes failure rows for the inbox. A failed update resolves an edit link
+	 * from its still-live destination post; a first-import failure has none.
+	 *
+	 * @param array[] $rows Failure rows from list_failures().
+	 * @return array[] Unified inbox rows of kind 'failure'.
+	 */
+	private function format_failure_rows( array $rows ): array {
+		$source_ids = array();
+		foreach ( $rows as $row ) {
+			$source_id = (int) ( $row['source_post_id'] ?? 0 );
+			if ( $source_id > 0 ) {
+				$source_ids[] = $source_id;
+			}
+		}
+
+		$active_by_source = 0 === count( $source_ids )
+			? array()
+			: $this->repository->get_active_items_by_source_ids( $source_ids );
+
+		return array_map(
+			function ( array $row ) use ( $active_by_source ): array {
+				$source_id  = (int) ( $row['source_post_id'] ?? 0 );
+				$item_id    = (int) $row['id'];
+				$active_row = $active_by_source[ $source_id ] ?? null;
+				$post_id    = null !== $active_row && isset( $active_row['post_id'] )
+					? (int) $active_row['post_id']
+					: 0;
+
+				return array(
+					'kind'            => 'failure',
+					'row_id'          => 'failure:' . $item_id,
+					'item_id'         => $item_id,
+					'source_post_id'  => $source_id > 0 ? $source_id : null,
+					'title'           => (string) $row['title'],
+					'error_message'   => (string) ( $row['error_message'] ?? '' ),
+					'import_date_gmt' => (string) $row['import_date_gmt'],
+					'source_site_url' => (string) $row['source_site_url'],
+					'edit_url'        => $this->live_edit_url( $post_id ),
+				);
+			},
 			$rows
 		);
+	}
 
-		wp_send_json_success(
-			array(
-				'items'    => $items,
-				'has_more' => $has_more,
-			)
+	/**
+	 * Shapes degradation rows for the inbox, reusing the single-issue formatter.
+	 *
+	 * @param array[] $rows Open issue rows from list_open_issues().
+	 * @return array[] Unified inbox rows of kind 'degradation'.
+	 */
+	private function format_attention_rows( array $rows ): array {
+		return array_map(
+			function ( array $row ): array {
+				$issue           = $this->format_attention_issue( $row );
+				$issue['kind']   = 'degradation';
+				$issue['row_id'] = sprintf(
+					'degradation:%d:%s:%d:%s',
+					$issue['affected_post_id'],
+					$issue['issue_type'],
+					$issue['target_ref'],
+					$issue['target_kind']
+				);
+				return $issue;
+			},
+			$rows
 		);
+	}
+
+	/**
+	 * Returns the edit URL for a destination post that is present and not
+	 * trashed, or an empty string.
+	 *
+	 * @param int $post_id Destination post id (0 when none).
+	 * @return string Edit URL, or empty string.
+	 */
+	private function live_edit_url( int $post_id ): string {
+		if ( $post_id < 1 ) {
+			return '';
+		}
+
+		$status = get_post_status( $post_id );
+		if ( false === $status || 'trash' === $status ) {
+			return '';
+		}
+
+		$edit_url = get_edit_post_link( $post_id, 'raw' );
+
+		return is_string( $edit_url ) ? $edit_url : '';
 	}
 
 	/**
@@ -711,7 +810,7 @@ final class Admin_Ajax_Controller {
 	 * Builds the local-primary payload for ajax_list_posts.
 	 *
 	 * @param string $source_site_url Source site URL.
-	 * @param string $state           'up-to-date', 'outdated', or 'failed'.
+	 * @param string $state           'up-to-date' or 'outdated'.
 	 * @return array|\WP_Error Listing payload.
 	 */
 	private function list_posts_via_local(
@@ -723,22 +822,13 @@ final class Admin_Ajax_Controller {
 		$per_page = max( 1, min( 100, absint( $_POST['per_page'] ?? 20 ) ) );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$args = $this->build_local_listing_args();
-
-		if ( 'failed' === $state ) {
-			$active_rows = $this->repository->list_failed_source_rows(
-				$page,
-				$per_page,
-				$args
-			);
-		} else {
-			$args['freshness'] = 'outdated' === $state ? 'outdated' : 'up-to-date';
-			$active_rows       = $this->repository->list_imported_source_rows(
-				$page,
-				$per_page,
-				$args
-			);
-		}
+		$args              = $this->build_local_listing_args();
+		$args['freshness'] = 'outdated' === $state ? 'outdated' : 'up-to-date';
+		$active_rows       = $this->repository->list_imported_source_rows(
+			$page,
+			$per_page,
+			$args
+		);
 
 		$has_more = count( $active_rows ) > $per_page;
 		if ( $has_more ) {
@@ -747,8 +837,7 @@ final class Admin_Ajax_Controller {
 
 		$source_by_id = $this->fetch_source_data_for_active_rows(
 			$source_site_url,
-			$active_rows,
-			$state
+			$active_rows
 		);
 
 		$rows = array_map(
@@ -767,20 +856,17 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Fetches source data for a page of active rows, grouped by the row's
-	 * post_type. Failed rows skip the fetch and reuse the snapshot title.
+	 * Fetches source data for a page of active rows, grouped by post_type.
 	 *
 	 * @param string $source_site_url Source site URL.
-	 * @param array  $active_rows     Rows from a list_*_source_rows() call.
-	 * @param string $state           Routing state.
+	 * @param array  $active_rows     Rows from list_imported_source_rows().
 	 * @return array<int, array> Map of source_post_id → source row.
 	 */
 	private function fetch_source_data_for_active_rows(
 		string $source_site_url,
-		array $active_rows,
-		string $state
+		array $active_rows
 	): array {
-		if ( 0 === count( $active_rows ) || 'failed' === $state ) {
+		if ( 0 === count( $active_rows ) ) {
 			return array();
 		}
 
@@ -841,7 +927,6 @@ final class Admin_Ajax_Controller {
 			'item_id'              => $item['item_id'] ?? null,
 			'post_id'              => $item['post_id'] ?? null,
 			'import_date_gmt'      => $item['import_date_gmt'] ?? null,
-			'error_message'        => $item['error_message'] ?? null,
 			'has_previous_content' => (bool) ( $item['has_previous_content'] ?? false ),
 			'edit_url'             => (string) ( $item['edit_url'] ?? '' ),
 		);
@@ -871,12 +956,9 @@ final class Admin_Ajax_Controller {
 			: null;
 		$import_date     = (string) ( $active_row['import_date_gmt'] ?? '' );
 		$source_modified = (string) ( $active_row['source_modified_gmt'] ?? '' );
-		$is_failed       = 'error' === (string) ( $active_row['status'] ?? '' );
-		$local_state     = $is_failed
-			? 'failed'
-			: ( '' !== $source_modified && $source_modified > $import_date
-				? 'outdated'
-				: 'up-to-date' );
+		$local_state     = '' !== $source_modified && $source_modified > $import_date
+			? 'outdated'
+			: 'up-to-date';
 		$edit_url        = $post_id > 0 ? get_edit_post_link( $post_id, 'raw' ) : null;
 
 		return array(
@@ -901,14 +983,11 @@ final class Admin_Ajax_Controller {
 				? (string) ( $source['status'] ?? '' )
 				: '',
 			'local_state'          => $local_state,
-			'is_imported'          => 'failed' !== $local_state,
+			'is_imported'          => true,
 			'wp_post_status'       => $wp_post_status,
 			'item_id'              => isset( $active_row['id'] ) ? (int) $active_row['id'] : null,
 			'post_id'              => $post_id > 0 ? $post_id : null,
 			'import_date_gmt'      => '' !== $import_date ? $import_date : null,
-			'error_message'        => isset( $active_row['error_message'] )
-				? (string) $active_row['error_message']
-				: null,
 			'has_previous_content' => (bool) ( $active_row['has_previous_content'] ?? 0 ),
 			'edit_url'             => is_string( $edit_url ) ? $edit_url : '',
 		);
@@ -923,7 +1002,7 @@ final class Admin_Ajax_Controller {
 	 */
 	private static function sanitize_state( mixed $raw ): string {
 		$value   = is_scalar( $raw ) ? sanitize_key( (string) $raw ) : '';
-		$allowed = array( 'all', 'available', 'up-to-date', 'outdated', 'failed' );
+		$allowed = array( 'all', 'available', 'up-to-date', 'outdated' );
 
 		return in_array( $value, $allowed, true ) ? $value : 'all';
 	}
@@ -932,8 +1011,7 @@ final class Admin_Ajax_Controller {
 	 * Validates and normalizes the local-primary listing's search/filter/sort
 	 * params from the request.
 	 *
-	 * @return array Listing args for list_imported_source_rows() /
-	 *               list_failed_source_rows().
+	 * @return array Listing args for list_imported_source_rows().
 	 */
 	private function build_local_listing_args(): array {
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- caller verified the nonce.

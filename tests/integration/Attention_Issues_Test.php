@@ -1104,7 +1104,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * @return array[] Open issue rows.
 	 */
 	private function open_rows_for_source( string $source_site_url ): array {
-		$rows = $this->attention->get_open_issues( $source_site_url, 1, 100 );
+		$rows = $this->attention->list_open_issues( $source_site_url, 0, 100 );
 
 		usort(
 			$rows,
