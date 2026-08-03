@@ -42,6 +42,14 @@ class Content_Processor {
 	public const META_REF_REPOINTED_AT = '_safe_publish_block_ref_repointed_at';
 
 	/**
+	 * Post meta recording the unix timestamp at which a stale gallery/playlist
+	 * post reference was repointed in place by a retry.
+	 *
+	 * @var string
+	 */
+	public const META_GALLERY_REF_REPOINTED_AT = '_safe_publish_gallery_ref_repointed_at';
+
+	/**
 	 * Block-name => list of post-ID attrs, optionally gated on sibling attrs
 	 * (e.g. core/navigation-link.id only when kind=post-type) and optionally
 	 * naming a url_attr to re-derive from the resolved destination id.
@@ -202,8 +210,10 @@ class Content_Processor {
 	 *                                              `session_id_map` (bulk source => dest post IDs),
 	 *                                              `library_metadata_map` (source URL => library
 	 *                                              metadata), `attached_media` (bare gallery/playlist
-	 *                                              attached-media set), and `auth_credentials`
-	 *                                              (source REST auth for shortcode ID resolution).
+	 *                                              attached-media set), `source_post_id` (importing
+	 *                                              post's source ID, for the gallery id self check),
+	 *                                              and `auth_credentials` (source REST auth for
+	 *                                              shortcode ID resolution).
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
 	public function process_content(
@@ -249,6 +259,13 @@ class Content_Processor {
 		// Rewrite gallery/playlist shortcode IDs, which the media pass can't
 		// reach: bare source attachment IDs with no URL to sideload from.
 		$processed_content = $this->rewrite_media_shortcode_ids(
+			$processed_content,
+			$source_site_url,
+			$context
+		);
+
+		// Remap or strip the singular gallery/playlist `id` post reference.
+		$processed_content = $this->rewrite_gallery_post_references(
 			$processed_content,
 			$source_site_url,
 			$context
@@ -352,6 +369,71 @@ class Content_Processor {
 		return $this->shortcode_id_rewriter->rewrite_media_shortcode_ids(
 			$content,
 			$resolver
+		);
+	}
+
+	/**
+	 * Remaps the singular gallery/playlist `id` post reference to its
+	 * destination, or strips it when it names the importing post's own set.
+	 *
+	 * The reference is resolved like a block reference: the in-batch session
+	 * map first, then a source-scoped lookup for a post imported in an earlier
+	 * session. An unresolved reference is left in place and recorded as a
+	 * retryable warning so a later retry can remap it.
+	 *
+	 * @param string               $content         Processed post content.
+	 * @param string               $source_site_url Source site URL.
+	 * @param array<string, mixed> $context         process_content() context; reads
+	 *                                              `session_id_map` and `source_post_id`.
+	 * @return string Content with the singular id reference rewritten.
+	 */
+	private function rewrite_gallery_post_references(
+		string $content,
+		string $source_site_url,
+		array $context
+	): string {
+		$session_id_map = isset( $context['session_id_map'] )
+			&& is_array( $context['session_id_map'] )
+			? $context['session_id_map']
+			: array();
+
+		$self_source_id = isset( $context['source_post_id'] )
+			? (int) $context['source_post_id']
+			: 0;
+
+		$lookup_site_url = URL_Validator::normalize_site_url_with_path(
+			$source_site_url
+		);
+
+		$resolver = function ( int $source_id ) use (
+			$session_id_map,
+			$lookup_site_url
+		): int {
+			if ( isset( $session_id_map[ $source_id ] ) ) {
+				return (int) $session_id_map[ $source_id ];
+			}
+
+			$map = $this->lookup_destination_post_ids(
+				array( $source_id => true ),
+				$lookup_site_url
+			);
+
+			if ( isset( $map[ $source_id ] ) ) {
+				return (int) $map[ $source_id ];
+			}
+
+			$this->warnings[] = array(
+				'type'      => 'unmapped_gallery_reference',
+				'source_id' => $source_id,
+			);
+
+			return 0;
+		};
+
+		return $this->shortcode_id_rewriter->rewrite_gallery_post_reference(
+			$content,
+			$resolver,
+			$self_source_id
 		);
 	}
 
@@ -1560,6 +1642,98 @@ class Content_Processor {
 
 		clean_post_cache( $affected_post_id );
 		update_post_meta( $affected_post_id, self::META_REF_REPOINTED_AT, time() );
+
+		return Reconcile_Outcome::resolved();
+	}
+
+	/**
+	 * Repoints one stale gallery/playlist `id` post reference to its now-
+	 * resolvable destination, rewriting the persisted content in place.
+	 *
+	 * Targeted counterpart to the import-time remap: it rewrites only the `id`
+	 * matching $target_ref and persists without a revision or post_modified
+	 * bump.
+	 *
+	 * @param int    $affected_post_id Post holding the stale reference.
+	 * @param int    $target_ref       Source post ID to repoint.
+	 * @param string $source_site_url  Source identity scoping the lookup.
+	 * @return Reconcile_Outcome Resolved when repointed; target_absent,
+	 *                           write_failed, or unresolved otherwise.
+	 */
+	public function repoint_gallery_reference(
+		int $affected_post_id,
+		int $target_ref,
+		string $source_site_url
+	): Reconcile_Outcome {
+		if ( $target_ref <= 0 ) {
+			return Reconcile_Outcome::unresolved( 'Invalid target reference.' );
+		}
+
+		$dest_id = $this->resolve_target_ref(
+			$target_ref,
+			'post',
+			$source_site_url
+		);
+
+		if ( 0 === $dest_id ) {
+			return Reconcile_Outcome::target_absent(
+				sprintf(
+					'Target post %d is not imported on the destination.',
+					$target_ref
+				)
+			);
+		}
+
+		$post = get_post( $affected_post_id );
+
+		if ( ! $post instanceof WP_Post || '' === $post->post_content ) {
+			return Reconcile_Outcome::unresolved(
+				'Affected post is missing or has no content.'
+			);
+		}
+
+		// Resolve only the target ref (self=0, so nothing is stripped). The
+		// matched flag — not a text diff — drives resolution, so a dest id
+		// equal to the source id still resolves.
+		$matched  = false;
+		$resolver = static function ( int $source_id ) use ( $target_ref, $dest_id, &$matched ): int {
+			if ( $source_id !== $target_ref ) {
+				return 0;
+			}
+
+			$matched = true;
+			return $dest_id;
+		};
+
+		$new_content = $this->shortcode_id_rewriter->rewrite_gallery_post_reference(
+			$post->post_content,
+			$resolver,
+			0
+		);
+
+		if ( ! $matched ) {
+			return Reconcile_Outcome::unresolved(
+				'No matching reference found in the post content.'
+			);
+		}
+
+		// Ref already correct (dest id equals the source id): Nothing to persist.
+		if ( $new_content === $post->post_content ) {
+			return Reconcile_Outcome::resolved();
+		}
+
+		if ( ! $this->persist_repointed_content( $affected_post_id, $new_content ) ) {
+			return Reconcile_Outcome::write_failed(
+				'Failed to persist the repointed content.'
+			);
+		}
+
+		clean_post_cache( $affected_post_id );
+		update_post_meta(
+			$affected_post_id,
+			self::META_GALLERY_REF_REPOINTED_AT,
+			time()
+		);
 
 		return Reconcile_Outcome::resolved();
 	}
