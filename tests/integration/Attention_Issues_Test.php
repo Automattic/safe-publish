@@ -1542,12 +1542,20 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		// ACT: Re-detect it — a later import upserts the same identity.
 		$this->upsert_test_issue( 'error' );
 
-		// ASSERT: It stays ignored, absent from the open view.
+		// ASSERT: It stays ignored, and the re-upsert took effect.
 		$this->assertSame( 0, $this->attention->count_open_issues( $url ) );
 		$this->assertSame(
 			1,
 			$this->attention->count_open_issues( $url, true )
 		);
+		$issue = $this->attention->get_issue(
+			4001,
+			'nav_ref_rewrite_failed',
+			7001,
+			'post'
+		);
+		$this->assertNotNull( $issue );
+		$this->assertSame( 'error', $issue['severity'] );
 	}
 
 	/**
