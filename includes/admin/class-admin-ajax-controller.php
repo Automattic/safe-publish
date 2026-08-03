@@ -91,6 +91,16 @@ final class Admin_Ajax_Controller {
 	const BULK_DELETE_POSTS_BATCH_MAX = 50;
 
 	/**
+	 * Maximum number of degradations accepted by
+	 * ajax_bulk_retry_attention_issues in a single call. Each retry re-runs a
+	 * real reconciliation (a nav retry re-rewrites every referencing post), so
+	 * the cap is tighter than the trash and ignore batches.
+	 *
+	 * @var int
+	 */
+	const RETRY_ATTENTION_BATCH_MAX = 25;
+
+	/**
 	 * Maximum number of source catalog pages scanned while filling one
 	 * Available page, bounding worst-case latency when non-imported rows are
 	 * sparse. If the scan hits this cap before the page fills, has_more stays
@@ -187,6 +197,7 @@ final class Admin_Ajax_Controller {
 		add_action( 'wp_ajax_safe_publish_list_posts', array( $this, 'ajax_list_posts' ) );
 		add_action( 'wp_ajax_safe_publish_list_needs_attention', array( $this, 'ajax_list_needs_attention' ) );
 		add_action( 'wp_ajax_safe_publish_retry_attention_issue', array( $this, 'ajax_retry_attention_issue' ) );
+		add_action( 'wp_ajax_safe_publish_bulk_retry_attention_issues', array( $this, 'ajax_bulk_retry_attention_issues' ) );
 		add_action( 'wp_ajax_safe_publish_delete_failed_items', array( $this, 'ajax_delete_failed_items' ) );
 		add_action( 'wp_ajax_safe_publish_set_needs_attention_ignored', array( $this, 'ajax_set_needs_attention_ignored' ) );
 		add_action( 'wp_ajax_safe_publish_fetch_post_types', array( $this, 'ajax_fetch_post_types' ) );
@@ -383,7 +394,8 @@ final class Admin_Ajax_Controller {
 					$offset - $failed_count,
 					$limit,
 					$ignored
-				)
+				),
+				$source_site_url
 			);
 		}
 
@@ -402,7 +414,8 @@ final class Admin_Ajax_Controller {
 						0,
 						$shortfall,
 						$ignored
-					)
+					),
+					$source_site_url
 				)
 			);
 		}
@@ -456,27 +469,37 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Shapes degradation rows for the inbox, reusing the single-issue formatter.
+	 * Shapes degradation rows for the inbox, adding the batched resolvable hint.
 	 *
-	 * @param array[] $rows Open issue rows from list_open_issues().
+	 * @param array[] $rows            Open issue rows from list_open_issues().
+	 * @param string  $source_site_url Connected source identity scoping lookups.
 	 * @return array[] Unified inbox rows of kind 'degradation'.
 	 */
-	private function format_attention_rows( array $rows ): array {
-		return array_map(
-			function ( array $row ): array {
-				$issue           = $this->format_attention_issue( $row );
-				$issue['kind']   = 'degradation';
-				$issue['row_id'] = sprintf(
-					'degradation:%d:%s:%d:%s',
-					$issue['affected_post_id'],
-					$issue['issue_type'],
-					$issue['target_ref'],
-					$issue['target_kind']
-				);
-				return $issue;
-			},
-			$rows
+	private function format_attention_rows(
+		array $rows,
+		string $source_site_url
+	): array {
+		$resolvable = $this->post_import_service->degradation_resolvability(
+			$rows,
+			$source_site_url
 		);
+
+		$formatted = array();
+		foreach ( $rows as $index => $row ) {
+			$issue               = $this->format_attention_issue( $row );
+			$issue['kind']       = 'degradation';
+			$issue['resolvable'] = $resolvable[ $index ] ?? false;
+			$issue['row_id']     = sprintf(
+				'degradation:%d:%s:%d:%s',
+				$issue['affected_post_id'],
+				$issue['issue_type'],
+				$issue['target_ref'],
+				$issue['target_kind']
+			);
+			$formatted[]         = $issue;
+		}
+
+		return $formatted;
 	}
 
 	/**
@@ -562,6 +585,123 @@ final class Admin_Ajax_Controller {
 				'outcome'  => $outcome->type,
 				'detail'   => $outcome->detail,
 			)
+		);
+	}
+
+	/**
+	 * Retries a batch of degradations, serializing dispatch_retry over each and
+	 * aggregating the outcomes. Gated at edit_posts like the single retry;
+	 * over-cap batches are rejected, matching the other bulk handlers.
+	 */
+	public function ajax_bulk_retry_attention_issues(): void {
+		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
+			$this->send_session_expired_error();
+		}
+		$this->verify_ajax_capability( 'edit_posts' );
+
+		// phpcs:disable WordPress.Security.NonceVerification.Missing
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON decoded and each field sanitized in validate_retry_descriptor().
+		$raw_items = wp_unslash( $_POST['items'] ?? '' );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		$items = is_string( $raw_items ) ? json_decode( $raw_items, true ) : null;
+		if ( ! is_array( $items ) || 0 === count( $items ) ) {
+			wp_send_json_error( __( 'No items provided.', 'safe-publish' ) );
+		}
+
+		if ( count( $items ) > self::RETRY_ATTENTION_BATCH_MAX ) {
+			wp_send_json_error(
+				sprintf(
+					/* translators: %d: maximum number of items per batch */
+					__(
+						'Retry is limited to %d items at a time.',
+						'safe-publish'
+					),
+					self::RETRY_ATTENTION_BATCH_MAX
+				)
+			);
+		}
+
+		wp_send_json_success( $this->run_bulk_retry( $items ) );
+	}
+
+	/**
+	 * Runs each descriptor's retry and tallies the outcomes. A descriptor whose
+	 * row is already gone — e.g. a sibling nav retry in this batch reconciled it
+	 * — counts as resolved; a malformed one counts as skipped.
+	 *
+	 * @param array[] $items Degradation identity descriptors.
+	 * @return array<string, int> Outcome counts.
+	 */
+	private function run_bulk_retry( array $items ): array {
+		$counts = array(
+			'resolved'      => 0,
+			'target_absent' => 0,
+			'write_failed'  => 0,
+			'unresolved'    => 0,
+			'skipped'       => 0,
+		);
+
+		foreach ( $items as $item ) {
+			$identity = $this->validate_retry_descriptor( $item );
+			if ( null === $identity ) {
+				++$counts['skipped'];
+				continue;
+			}
+
+			$issue = $this->attention_issues->get_issue(
+				$identity['affected_post_id'],
+				$identity['issue_type'],
+				$identity['target_ref'],
+				$identity['target_kind']
+			);
+
+			if ( null === $issue ) {
+				++$counts['resolved'];
+				continue;
+			}
+
+			$outcome = $this->dispatch_retry( $issue );
+			$this->record_reconcile_outcome( $issue, $outcome );
+			++$counts[ $outcome->type ];
+		}
+
+		return $counts;
+	}
+
+	/**
+	 * Validates one bulk-retry descriptor, returning its issue identity keyed by
+	 * field, or null when the type or kind is outside the retryable allowlist.
+	 *
+	 * @param mixed $item Raw descriptor.
+	 * @return array{affected_post_id: int, issue_type: string, target_ref: int, target_kind: string}|null
+	 */
+	private function validate_retry_descriptor( mixed $item ): ?array {
+		if ( ! is_array( $item ) ) {
+			return null;
+		}
+
+		$issue_type = sanitize_text_field(
+			(string) ( $item['issue_type'] ?? '' )
+		);
+		if (
+			! in_array( $issue_type, self::ATTENTION_ISSUE_RETRYABLE_TYPES, true )
+		) {
+			return null;
+		}
+
+		$target_kind = sanitize_text_field(
+			(string) ( $item['target_kind'] ?? '' )
+		);
+		if ( ! in_array( $target_kind, array( 'post', 'term' ), true ) ) {
+			return null;
+		}
+
+		return array(
+			'affected_post_id' => absint( $item['affected_post_id'] ?? 0 ),
+			'issue_type'       => $issue_type,
+			'target_ref'       => absint( $item['target_ref'] ?? 0 ),
+			'target_kind'      => $target_kind,
 		);
 	}
 
