@@ -298,6 +298,10 @@ class HMAC_Authenticator {
 			header( 'X-Safe-Publish-Auth: success' );
 		}
 
+		// An HMAC request has no logged-in user, so core skips nocache headers;
+		// force them so a cache-fronting edge cannot store the response.
+		add_filter( 'rest_send_nocache_headers', '__return_true' );
+
 		// Set up user context and permissions for wp/v2 routes only.
 		// Safe Publish source endpoints (/safe-publish/v1/) check the auth flag
 		// in their own permission callbacks.
