@@ -13,6 +13,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Content\Shortcode_Media_Rewriter;
 use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Reconcile_Outcome;
 use Safe_Publish\Validators\URL_Validator;
@@ -264,9 +265,24 @@ class Content_Processor {
 			$context
 		);
 
+		// Collect cross-post gallery/playlist references before the id remap
+		// rewrites their source ids to destination ids.
+		$referenced = $this->shortcode_id_rewriter->collect_cross_post_references(
+			$processed_content,
+			isset( $context['source_post_id'] ) ? (int) $context['source_post_id'] : 0
+		);
+
 		// Remap or strip the singular gallery/playlist `id` post reference.
 		$processed_content = $this->rewrite_gallery_post_references(
 			$processed_content,
+			$source_site_url,
+			$context
+		);
+
+		// Pull each referenced post's rendered set so the remapped shortcode
+		// fills on the destination.
+		$this->import_referenced_media_sets(
+			$referenced,
 			$source_site_url,
 			$context
 		);
@@ -409,25 +425,20 @@ class Content_Processor {
 			$session_id_map,
 			$lookup_site_url
 		): int {
-			if ( isset( $session_id_map[ $source_id ] ) ) {
-				return (int) $session_id_map[ $source_id ];
-			}
-
-			$map = $this->lookup_destination_post_ids(
-				array( $source_id => true ),
+			$dest_id = $this->resolve_gallery_post_reference(
+				$source_id,
+				$session_id_map,
 				$lookup_site_url
 			);
 
-			if ( isset( $map[ $source_id ] ) ) {
-				return (int) $map[ $source_id ];
+			if ( 0 === $dest_id ) {
+				$this->warnings[] = array(
+					'type'      => 'unmapped_gallery_reference',
+					'source_id' => $source_id,
+				);
 			}
 
-			$this->warnings[] = array(
-				'type'      => 'unmapped_gallery_reference',
-				'source_id' => $source_id,
-			);
-
-			return 0;
+			return $dest_id;
 		};
 
 		return $this->shortcode_id_rewriter->rewrite_gallery_post_reference(
@@ -435,6 +446,223 @@ class Content_Processor {
 			$resolver,
 			$self_source_id
 		);
+	}
+
+	/**
+	 * Resolves a cross-post gallery/playlist source id to its destination post
+	 * id via the in-batch session map, then a source-scoped lookup.
+	 *
+	 * @param int            $source_id       Referenced source post ID.
+	 * @param array<int,int> $session_id_map  In-batch source => dest post IDs.
+	 * @param string         $lookup_site_url Path-bearing source identity.
+	 * @return int Destination post ID, or 0 when not imported.
+	 */
+	private function resolve_gallery_post_reference(
+		int $source_id,
+		array $session_id_map,
+		string $lookup_site_url
+	): int {
+		if ( isset( $session_id_map[ $source_id ] ) ) {
+			return (int) $session_id_map[ $source_id ];
+		}
+
+		$map = $this->lookup_destination_post_ids(
+			array( $source_id => true ),
+			$lookup_site_url
+		);
+
+		return isset( $map[ $source_id ] ) ? (int) $map[ $source_id ] : 0;
+	}
+
+	/**
+	 * Pulls the rendered set each cross-post [gallery id="B"]/[playlist id="B"]
+	 * reference imports, so the remapped shortcode fills on the destination.
+	 *
+	 * B is resolved like the id remap; an unimported B is skipped, having
+	 * already been recorded as a retryable warning by the remap. Each pulled
+	 * item records its source parent, which the persist-time forward pass
+	 * parents to dest-B.
+	 *
+	 * @param list<array{tag: string, type: string, source_id: int}> $referenced      Collected references.
+	 * @param string                                                 $source_site_url Source site URL.
+	 * @param array<string, mixed>                                   $context         process_content() context.
+	 */
+	private function import_referenced_media_sets(
+		array $referenced,
+		string $source_site_url,
+		array $context
+	): void {
+		if ( array() === $referenced ) {
+			return;
+		}
+
+		$session_id_map = isset( $context['session_id_map'] )
+			&& is_array( $context['session_id_map'] )
+			? $context['session_id_map']
+			: array();
+
+		$auth = isset( $context['auth_credentials'] )
+			&& is_array( $context['auth_credentials'] )
+			? $context['auth_credentials']
+			: array();
+
+		$lookup_site_url = URL_Validator::normalize_site_url_with_path(
+			$source_site_url
+		);
+
+		foreach ( $referenced as $ref ) {
+			$dest_id = $this->resolve_gallery_post_reference(
+				$ref['source_id'],
+				$session_id_map,
+				$lookup_site_url
+			);
+
+			if ( 0 === $dest_id ) {
+				continue;
+			}
+
+			$this->pull_referenced_set(
+				$ref,
+				$dest_id,
+				$source_site_url,
+				$auth,
+				false
+			);
+		}
+	}
+
+	/**
+	 * Sideloads a referenced post's rendered set for one shortcode, applying
+	 * the source menu_order. A dangling or failed item is skipped, not fatal.
+	 * $parent_to_dest parents each item to the referenced post, for the retry
+	 * path that runs outside the persist-time forward pass.
+	 *
+	 * @param array{tag: string, type: string, source_id: int} $ref             Collected reference.
+	 * @param int                                              $dest_post_id    Destination referenced post.
+	 * @param string                                           $source_site_url Source site URL.
+	 * @param array                                            $auth            Source REST auth credentials.
+	 * @param bool                                             $parent_to_dest  Parent each item to dest.
+	 */
+	private function pull_referenced_set(
+		array $ref,
+		int $dest_post_id,
+		string $source_site_url,
+		array $auth,
+		bool $parent_to_dest
+	): void {
+		$dest_post = get_post( $dest_post_id );
+
+		if ( ! ( $dest_post instanceof WP_Post ) ) {
+			return;
+		}
+
+		// Import preserves the post type slug, so B's source REST base resolves
+		// from the destination post's type.
+		$set = $this->media_importer->fetch_referenced_media_set(
+			$ref['source_id'],
+			$dest_post->post_type,
+			self::reference_mime_group( $ref ),
+			$source_site_url,
+			$auth
+		);
+
+		foreach ( $set as $item ) {
+			$dest_id = $this->media_importer->import_source_media_by_id(
+				$item['id'],
+				$source_site_url,
+				$auth
+			);
+
+			if ( ! is_int( $dest_id ) ) {
+				continue;
+			}
+
+			$this->apply_referenced_menu_order( $dest_id, $item['menu_order'] );
+
+			if ( $parent_to_dest ) {
+				$this->parent_attachment( $dest_id, $dest_post_id );
+			}
+		}
+	}
+
+	/**
+	 * Maps a collected reference to the attachment media type its shortcode
+	 * renders: image for a gallery, audio or video for a playlist. Mirrors
+	 * wp_playlist_shortcode, coercing any non-audio playlist type to video.
+	 *
+	 * @param array{tag: string, type: string, source_id: int} $ref Collected reference.
+	 * @return string Media type group: image, audio, or video.
+	 */
+	private static function reference_mime_group( array $ref ): string {
+		if ( 'playlist' !== $ref['tag'] ) {
+			return 'image';
+		}
+
+		$type = '' === $ref['type'] ? 'audio' : $ref['type'];
+
+		return 'audio' === $type ? 'audio' : 'video';
+	}
+
+	/**
+	 * Applies a pulled item's source menu_order to its destination attachment,
+	 * so a dedup hit from an earlier import still renders in the referenced
+	 * post's order. A direct write, made only when the order differs, so it
+	 * creates no revision or timestamp churn.
+	 *
+	 * @param int $attachment_id Destination attachment.
+	 * @param int $menu_order    Source menu_order to apply.
+	 */
+	private function apply_referenced_menu_order(
+		int $attachment_id,
+		int $menu_order
+	): void {
+		$attachment = get_post( $attachment_id );
+
+		if (
+			! ( $attachment instanceof WP_Post )
+			|| (int) $attachment->menu_order === $menu_order
+		) {
+			return;
+		}
+
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->update(
+			$wpdb->posts,
+			array( 'menu_order' => $menu_order ),
+			array( 'ID' => $attachment_id )
+		);
+		clean_post_cache( $attachment_id );
+	}
+
+	/**
+	 * Parents a freshly pulled attachment to the referenced post via a direct
+	 * write, so it creates no revision and no timestamp churn. Only unattached
+	 * media is parented, leaving a dedup hit already parented alone.
+	 *
+	 * @param int $attachment_id Attachment to parent.
+	 * @param int $parent_id     Destination referenced post.
+	 */
+	private function parent_attachment( int $attachment_id, int $parent_id ): void {
+		$attachment = get_post( $attachment_id );
+
+		if (
+			! ( $attachment instanceof WP_Post )
+			|| 0 !== (int) $attachment->post_parent
+		) {
+			return;
+		}
+
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->update(
+			$wpdb->posts,
+			array( 'post_parent' => $parent_id ),
+			array( 'ID' => $attachment_id )
+		);
+		clean_post_cache( $attachment_id );
 	}
 
 	/**
@@ -1717,6 +1945,15 @@ class Content_Processor {
 			);
 		}
 
+		// B is now imported; pull the set the reference renders and parent it
+		// to dest-B.
+		$this->pull_referenced_sets_for_retry(
+			$post->post_content,
+			$target_ref,
+			$dest_id,
+			$source_site_url
+		);
+
 		// Ref already correct (dest id equals the source id): Nothing to persist.
 		if ( $new_content === $post->post_content ) {
 			return Reconcile_Outcome::resolved();
@@ -1736,6 +1973,44 @@ class Content_Processor {
 		);
 
 		return Reconcile_Outcome::resolved();
+	}
+
+	/**
+	 * Pulls and parents the rendered set for every reference to a now-imported
+	 * post, for the retry. Auth is read directly, since the retry runs outside
+	 * an import session's threaded context.
+	 *
+	 * @param string $content         Affected post content, before the repoint.
+	 * @param int    $target_ref      Source post ID being repointed.
+	 * @param int    $dest_post_id    Its destination post ID.
+	 * @param string $source_site_url Source site URL.
+	 */
+	private function pull_referenced_sets_for_retry(
+		string $content,
+		int $target_ref,
+		int $dest_post_id,
+		string $source_site_url
+	): void {
+		$auth = Auth_Credential_Provider::get_credentials();
+
+		$references = $this->shortcode_id_rewriter->collect_cross_post_references(
+			$content,
+			0
+		);
+
+		foreach ( $references as $ref ) {
+			if ( $ref['source_id'] !== $target_ref ) {
+				continue;
+			}
+
+			$this->pull_referenced_set(
+				$ref,
+				$dest_post_id,
+				$source_site_url,
+				$auth,
+				true
+			);
+		}
 	}
 
 	/**

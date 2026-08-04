@@ -846,4 +846,179 @@ class ShortcodeIDRewriterTest extends TestCase {
 			)
 		);
 	}
+
+	/**
+	 * Verifies that a cross-post gallery reference is collected with its tag
+	 * and source id, and no playlist type.
+	 */
+	public function test_collect_returns_cross_post_gallery_reference(): void {
+		// ARRANGE: A gallery referencing another post.
+		$rewriter = $this->build_rewriter();
+
+		// ACT: Collect references, self = 700.
+		$refs = $rewriter->collect_cross_post_references( '[gallery id="500"]', 700 );
+
+		// ASSERT: One gallery reference to source post 500.
+		$this->assertSame(
+			array(
+				array(
+					'tag'       => 'gallery',
+					'type'      => '',
+					'source_id' => 500,
+				),
+			),
+			$refs
+		);
+	}
+
+	/**
+	 * Verifies that a playlist reference carries its type, so the consumer
+	 * pulls the matching media group.
+	 */
+	public function test_collect_reads_playlist_type(): void {
+		// ARRANGE: A video playlist referencing another post.
+		$rewriter = $this->build_rewriter();
+
+		// ACT: Collect references.
+		$refs = $rewriter->collect_cross_post_references(
+			'[playlist type="video" id="55"]',
+			0
+		);
+
+		// ASSERT: The playlist reference carries type "video".
+		$this->assertSame(
+			array(
+				array(
+					'tag'       => 'playlist',
+					'type'      => 'video',
+					'source_id' => 55,
+				),
+			),
+			$refs
+		);
+	}
+
+	/**
+	 * Verifies that a reference naming the importing post's own set is not
+	 * collected, since it is not a cross-post reference.
+	 */
+	public function test_collect_skips_self_reference(): void {
+		// ARRANGE + ACT: The id equals the importing post's source id.
+		$refs = $this->build_rewriter()->collect_cross_post_references(
+			'[gallery id="700"]',
+			700
+		);
+
+		// ASSERT: No references collected.
+		$this->assertSame( array(), $refs );
+	}
+
+	/**
+	 * Verifies that a shortcode with an ids/include selector is skipped, since
+	 * core ignores its singular id.
+	 */
+	public function test_collect_skips_reference_with_ids_selector(): void {
+		// ARRANGE + ACT: An ids selector accompanies the singular id.
+		$refs = $this->build_rewriter()->collect_cross_post_references(
+			'[gallery ids="1,2" id="500"]',
+			0
+		);
+
+		// ASSERT: No references collected.
+		$this->assertSame( array(), $refs );
+	}
+
+	/**
+	 * Verifies that an escaped [[gallery]] literal is not collected.
+	 */
+	public function test_collect_skips_escaped_literal(): void {
+		// ARRANGE + ACT: An escaped literal referencing a post.
+		$refs = $this->build_rewriter()->collect_cross_post_references(
+			'[[gallery id="5"]]',
+			0
+		);
+
+		// ASSERT: No references collected.
+		$this->assertSame( array(), $refs );
+	}
+
+	/**
+	 * Verifies that a data-id attribute is not mistaken for the singular id.
+	 */
+	public function test_collect_ignores_data_id(): void {
+		// ARRANGE + ACT: A data-id precedes the real id.
+		$refs = $this->build_rewriter()->collect_cross_post_references(
+			'[gallery data-id="9" id="5"]',
+			0
+		);
+
+		// ASSERT: The real id is collected, not the data-id.
+		$this->assertSame( 5, $refs[0]['source_id'] );
+	}
+
+	/**
+	 * Verifies that unquoted and single-quoted id values are collected,
+	 * matching the forms the singular-id rewrite accepts.
+	 */
+	public function test_collect_reads_unquoted_and_single_quoted_id(): void {
+		// ARRANGE + ACT: An unquoted id and a single-quoted id.
+		$unquoted = $this->build_rewriter()->collect_cross_post_references(
+			'[gallery id=5]',
+			0
+		);
+		$single   = $this->build_rewriter()->collect_cross_post_references(
+			"[gallery id='7']",
+			0
+		);
+
+		// ASSERT: Both are collected with their numeric source id.
+		$this->assertSame( 5, $unquoted[0]['source_id'] );
+		$this->assertSame( 7, $single[0]['source_id'] );
+	}
+
+	/**
+	 * Verifies that multiple cross-post references are each collected.
+	 */
+	public function test_collect_multiple_references(): void {
+		// ARRANGE + ACT: A gallery and a playlist reference in one post.
+		$refs = $this->build_rewriter()->collect_cross_post_references(
+			'[gallery id="10"] and [playlist id="20"]',
+			0
+		);
+
+		// ASSERT: Both references collected in order.
+		$this->assertSame( array( 10, 20 ), array_column( $refs, 'source_id' ) );
+		$this->assertSame(
+			array( 'gallery', 'playlist' ),
+			array_column( $refs, 'tag' )
+		);
+	}
+
+	/**
+	 * Verifies that content without a live gallery/playlist collects nothing.
+	 */
+	public function test_collect_empty_without_shortcodes(): void {
+		// ARRANGE + ACT: Prose with no gallery/playlist shortcode.
+		$refs = $this->build_rewriter()->collect_cross_post_references(
+			'<p>No shortcodes here.</p>',
+			0
+		);
+
+		// ASSERT: No references collected.
+		$this->assertSame( array(), $refs );
+	}
+
+	/**
+	 * Verifies that a zero or non-numeric id is not collected.
+	 */
+	public function test_collect_skips_zero_and_non_numeric_id(): void {
+		// ARRANGE + ACT: A zero id and a non-numeric id.
+		$refs = $this->build_rewriter()->collect_cross_post_references(
+			'[gallery id="0"] [playlist id="abc"]',
+			0
+		);
+
+		// ASSERT: Neither is collected.
+		$this->assertSame( array(), $refs );
+	}
 }

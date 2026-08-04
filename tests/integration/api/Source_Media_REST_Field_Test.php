@@ -985,4 +985,159 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 		$this->assertArrayHasKey( 'safe_publish_attached_media', $data );
 		$this->assertNull( $data['safe_publish_attached_media'] );
 	}
+
+	/**
+	 * Dispatches an HMAC-authenticated single-post request and returns the
+	 * safe_publish_referenced_media field value.
+	 *
+	 * @param int $post_id Post to request.
+	 * @return mixed Field value.
+	 */
+	private function referenced_media_for( int $post_id ): mixed {
+		$this->force_hmac_authenticated( true );
+
+		return $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		)->get_data()['safe_publish_referenced_media'] ?? null;
+	}
+
+	/**
+	 * Verifies that the referenced field groups a post's attached image, audio,
+	 * and video children into ordered sets keyed by media type.
+	 */
+	public function test_referenced_field_groups_children_by_type(): void {
+		// ARRANGE: A post with one attached child of each media type.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => 'Plain content.' )
+		);
+		$image   = $this->seed_attached_child( $post_id, '2025/01/ref.jpg', 'image/jpeg', 1 );
+		$audio   = $this->seed_attached_child( $post_id, '2025/01/ref.mp3', 'audio/mpeg', 1 );
+		$video   = $this->seed_attached_child( $post_id, '2025/01/ref.mp4', 'video/mp4', 1 );
+
+		// ACT: Request the field.
+		$set = $this->referenced_media_for( $post_id );
+
+		// ASSERT: Each type is grouped as its own ordered set.
+		$this->assertSame(
+			array(
+				'image' => array(
+					array(
+						'id'         => $image,
+						'menu_order' => 1,
+					),
+				),
+				'audio' => array(
+					array(
+						'id'         => $audio,
+						'menu_order' => 1,
+					),
+				),
+				'video' => array(
+					array(
+						'id'         => $video,
+						'menu_order' => 1,
+					),
+				),
+			),
+			$set
+		);
+	}
+
+	/**
+	 * Verifies that the referenced field exposes a post's attached media even
+	 * when the post has no bare shortcode, the case where the content-gated
+	 * attached-media field is empty. The referencing post renders the set.
+	 */
+	public function test_referenced_field_returned_without_bare_shortcode(): void {
+		// ARRANGE: A post with an attached image but no gallery/playlist.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => 'Just text.' )
+		);
+		$image   = $this->seed_attached_child(
+			$post_id,
+			'2025/01/lib.jpg',
+			'image/jpeg',
+			3
+		);
+
+		// ACT + ASSERT: The referenced field still exposes the attached image.
+		$this->assertSame(
+			array(
+				'image' => array(
+					array(
+						'id'         => $image,
+						'menu_order' => 3,
+					),
+				),
+			),
+			$this->referenced_media_for( $post_id )
+		);
+	}
+
+	/**
+	 * Verifies that the referenced field orders each group by menu_order, not
+	 * creation order.
+	 */
+	public function test_referenced_field_orders_images_by_menu_order(): void {
+		// ARRANGE: The lower-ID image carries the higher menu_order.
+		$post_id = self::factory()->post->create( array( 'post_content' => 'x' ) );
+		$second  = $this->seed_attached_child( $post_id, '2025/01/r2.jpg', 'image/jpeg', 2 );
+		$first   = $this->seed_attached_child( $post_id, '2025/01/r1.jpg', 'image/jpeg', 1 );
+
+		// ACT: Request the field.
+		$set = $this->referenced_media_for( $post_id );
+
+		// ASSERT: Ordered by menu_order, so the later-created image sorts
+		// first.
+		$this->assertIsArray( $set );
+		$this->assertSame(
+			array(
+				array(
+					'id'         => $first,
+					'menu_order' => 1,
+				),
+				array(
+					'id'         => $second,
+					'menu_order' => 2,
+				),
+			),
+			$set['image']
+		);
+	}
+
+	/**
+	 * Verifies that a type with no attached children is omitted from the
+	 * grouped set.
+	 */
+	public function test_referenced_field_omits_empty_groups(): void {
+		// ARRANGE: A post with only an image child.
+		$post_id = self::factory()->post->create( array( 'post_content' => 'x' ) );
+		$this->seed_attached_child( $post_id, '2025/01/only.jpg', 'image/jpeg', 1 );
+
+		// ACT: Request the field.
+		$set = $this->referenced_media_for( $post_id );
+
+		// ASSERT: Only the image group is present.
+		$this->assertIsArray( $set );
+		$this->assertSame( array( 'image' ), array_keys( $set ) );
+	}
+
+	/**
+	 * Verifies that the referenced field is null for requests not authenticated
+	 * by Safe Publish HMAC.
+	 */
+	public function test_referenced_field_is_null_for_non_hmac_request(): void {
+		// ARRANGE: A post with an attached image, no HMAC auth.
+		$post_id = self::factory()->post->create( array( 'post_content' => 'x' ) );
+		$this->seed_attached_child( $post_id, '2025/01/x.jpg', 'image/jpeg', 1 );
+
+		// ACT: Dispatch a public single-post request.
+		$data = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		)->get_data();
+
+		// ASSERT: Field present (registered) but null.
+		$this->assertArrayHasKey( 'safe_publish_referenced_media', $data );
+		$this->assertNull( $data['safe_publish_referenced_media'] );
+	}
 }
