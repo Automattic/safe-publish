@@ -186,12 +186,15 @@ final class Session_Rollback_Service {
 
 		foreach ( $imported_media_ids as $attachment_id ) {
 			// A surviving post may still show media parented here, since import
-			// deduplicates by source URL. The delete is irreversible.
+			// deduplicates by source URL; skip those and delete only what this
+			// post solely owns.
 			if ( $this->attachment_used_by_other_post( $attachment_id ) ) {
 				continue;
 			}
 
-			wp_delete_attachment( $attachment_id, true );
+			// Defer to the site's MEDIA_TRASH setting rather than forcing, so
+			// a wrong deletion stays recoverable where media trash is on.
+			wp_delete_attachment( $attachment_id, false );
 		}
 
 		return array(
