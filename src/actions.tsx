@@ -22,7 +22,10 @@ import DeletePostModal from './components/DeletePostModal';
 import ImportModal from './components/ImportModal';
 import PostDiffModal from './components/PostDiffModal';
 import RollbackPostModal from './components/RollbackPostModal';
-import { RETRY_PENDING_DELAY_MS } from './constants';
+import {
+	RETRY_ATTENTION_BATCH_MAX,
+	RETRY_PENDING_DELAY_MS,
+} from './constants';
 import {
 	ApiResponse,
 	AttentionIssue,
@@ -433,6 +436,16 @@ const dispatchSetIgnored = (
 				return;
 			}
 
+			if ( 0 === result.data.updated ) {
+				context.onNotice?.( {
+					status: 'info',
+					message: ignored
+						? __( 'No matching items to ignore.', 'safe-publish' )
+						: __( 'No matching items to restore.', 'safe-publish' ),
+				} );
+				return;
+			}
+
 			context.onNotice?.( {
 				status: 'success',
 				message: ignored
@@ -566,15 +579,19 @@ const dispatchSingleRetry = (
 
 /**
  * Sums a bulk retry's per-outcome counts into one notice: An error if any write
- * failed, a warning if any target is still absent or unresolved, else success.
+ * failed, a warning if any are unresolved, target-absent, or skipped, else
+ * success.
  *
- * @param {BulkRetryAttentionResponse} counts Per-outcome counts.
+ * @param {BulkRetryAttentionResponse} counts                Per-outcome counts.
+ * @param {number}                     [skippedNonRetryable] Rows dropped as non-retryable.
  * @return {ActionNotice} Aggregate notice.
  */
 const bulkRetryNotice = (
-	counts: BulkRetryAttentionResponse
+	counts: BulkRetryAttentionResponse,
+	skippedNonRetryable = 0
 ): ActionNotice => {
-	const message = sprintf(
+	const skipped = counts.skipped + skippedNonRetryable;
+	let message = sprintf(
 		/* translators: 1: resolved count, 2: waiting-on-import count, 3: failed count */
 		__(
 			'%1$d resolved, %2$d waiting on import, %3$d failed.',
@@ -585,63 +602,151 @@ const bulkRetryNotice = (
 		counts.write_failed + counts.unresolved
 	);
 
+	if ( skipped > 0 ) {
+		message = sprintf(
+			/* translators: 1: retry outcome summary, 2: skipped count */
+			__( '%1$s %2$d skipped.', 'safe-publish' ),
+			message,
+			skipped
+		);
+	}
+
 	if ( counts.write_failed > 0 ) {
 		return { status: 'error', message };
 	}
-	if ( counts.target_absent + counts.unresolved > 0 ) {
+	if ( counts.target_absent + counts.unresolved + skipped > 0 ) {
 		return { status: 'warning', message };
 	}
 	return { status: 'success', message };
 };
 
 /**
- * Retries the selected degradations in one batched request, then refreshes and
- * surfaces the aggregate outcome.
+ * Aggregate counts across bulk-retry batches, or the first batch's failure.
+ */
+type BulkRetryBatchesResult =
+	| { ok: true; totals: BulkRetryAttentionResponse }
+	| { ok: false; message: string };
+
+/**
+ * POSTs bulk-retry descriptors one batch at a time, summing the per-outcome
+ * counts. Stops at the first batch the server rejects, returning its message;
+ * earlier batches stay applied.
  *
- * @param {InboxDegradation[]}           issues    Degradations to retry.
- * @param {NeedsAttentionActionsContext} context   Admin-ajax URL, nonce, notice sink.
- * @param {Function}                     onRefresh Callback to refresh the inbox.
+ * @param {InboxDegradation[][]}         batches Issue batches, each within the cap.
+ * @param {NeedsAttentionActionsContext} context Admin-ajax URL, nonce, notice sink.
+ * @return {Promise<BulkRetryBatchesResult>} Aggregate counts, or a failure message.
+ */
+const postBulkRetryBatches = async (
+	batches: InboxDegradation[][],
+	context: NeedsAttentionActionsContext
+): Promise< BulkRetryBatchesResult > => {
+	const totals: BulkRetryAttentionResponse = {
+		resolved: 0,
+		target_absent: 0,
+		write_failed: 0,
+		unresolved: 0,
+		skipped: 0,
+	};
+
+	// Post the batches sequentially: each awaits the previous so the run stays
+	// within the server's per-request cap and reconciliations can't overlap.
+	/* eslint-disable no-await-in-loop -- sequential by design. */
+	for ( const batch of batches ) {
+		const formData = new FormData();
+		formData.append(
+			'action',
+			'safe_publish_bulk_retry_attention_issues'
+		);
+		formData.append( 'nonce', context.nonce );
+		formData.append(
+			'items',
+			JSON.stringify(
+				batch.map( ( issue ) => ( {
+					affected_post_id: issue.affected_post_id,
+					issue_type: issue.issue_type,
+					target_ref: issue.target_ref,
+					target_kind: issue.target_kind,
+				} ) )
+			)
+		);
+
+		const response = await fetch( context.ajaxurl, {
+			method: 'POST',
+			body: formData,
+		} );
+		const result = ( await response.json() ) as ApiResponse<
+			BulkRetryAttentionResponse
+		>;
+
+		if ( ! result.success ) {
+			return {
+				ok: false,
+				message: getErrorMessage(
+					result,
+					__( 'Failed to retry.', 'safe-publish' )
+				),
+			};
+		}
+
+		totals.resolved += result.data.resolved;
+		totals.target_absent += result.data.target_absent;
+		totals.write_failed += result.data.write_failed;
+		totals.unresolved += result.data.unresolved;
+		totals.skipped += result.data.skipped;
+	}
+	/* eslint-enable no-await-in-loop */
+
+	return { ok: true, totals };
+};
+
+/**
+ * Retries the selected degradations, slicing them into sequential batches
+ * within the server cap, then refreshes and surfaces the aggregate outcome.
+ * Drops a concurrent submit for any issue already in flight.
+ *
+ * @param {InboxDegradation[]}           issues                Degradations to retry.
+ * @param {NeedsAttentionActionsContext} context               Admin-ajax URL, nonce, notice sink.
+ * @param {Function}                     onRefresh             Callback to refresh the inbox.
+ * @param {number}                       [skippedNonRetryable] Selected rows dropped as non-retryable.
  */
 const dispatchBulkRetry = (
 	issues: InboxDegradation[],
 	context: NeedsAttentionActionsContext,
-	onRefresh: ( () => void ) | undefined
+	onRefresh: ( () => void ) | undefined,
+	skippedNonRetryable = 0
 ): void => {
+	// Drop a double-submit: reuse the per-issue in-flight set, so an overlapping
+	// retry for any of these issues is skipped.
+	const keys = issues.map( attentionIssueId );
+	if ( keys.some( ( key ) => context.inFlight?.has( key ) ) ) {
+		return;
+	}
+	keys.forEach( ( key ) => context.inFlight?.add( key ) );
+
 	context.onNotice?.( null );
+	const pendingTimer = setTimeout( () => {
+		context.onNotice?.( {
+			status: 'info',
+			message: __( 'Retrying…', 'safe-publish' ),
+		} );
+	}, RETRY_PENDING_DELAY_MS );
 
-	const formData = new FormData();
-	formData.append( 'action', 'safe_publish_bulk_retry_attention_issues' );
-	formData.append( 'nonce', context.nonce );
-	formData.append(
-		'items',
-		JSON.stringify(
-			issues.map( ( issue ) => ( {
-				affected_post_id: issue.affected_post_id,
-				issue_type: issue.issue_type,
-				target_ref: issue.target_ref,
-				target_kind: issue.target_kind,
-			} ) )
-		)
-	);
+	// The server caps each request, so slice a large select-all into batches.
+	const batches: InboxDegradation[][] = [];
+	for (
+		let start = 0;
+		start < issues.length;
+		start += RETRY_ATTENTION_BATCH_MAX
+	) {
+		batches.push( issues.slice( start, start + RETRY_ATTENTION_BATCH_MAX ) );
+	}
 
-	void fetch( context.ajaxurl, { method: 'POST', body: formData } )
-		.then(
-			( response ) =>
-				response.json() as Promise<
-					ApiResponse< BulkRetryAttentionResponse >
-				>
-		)
+	void postBulkRetryBatches( batches, context )
 		.then( ( result ) => {
 			context.onNotice?.(
-				result.success
-					? bulkRetryNotice( result.data )
-					: {
-							status: 'error',
-							message: getErrorMessage(
-								result,
-								__( 'Failed to retry.', 'safe-publish' )
-							),
-					  }
+				result.ok
+					? bulkRetryNotice( result.totals, skippedNonRetryable )
+					: { status: 'error', message: result.message }
 			);
 		} )
 		.catch( () => {
@@ -651,6 +756,8 @@ const dispatchBulkRetry = (
 			} );
 		} )
 		.finally( () => {
+			clearTimeout( pendingTimer );
+			keys.forEach( ( key ) => context.inFlight?.delete( key ) );
 			onRefresh?.();
 		} );
 };
@@ -719,11 +826,12 @@ export const createNeedsAttentionActions = (
 			if ( 0 === degradations.length ) {
 				return;
 			}
-			if ( 1 === degradations.length ) {
+			const skipped = items.length - degradations.length;
+			if ( 1 === degradations.length && 0 === skipped ) {
 				dispatchSingleRetry( degradations[ 0 ], context, onRefresh );
 				return;
 			}
-			dispatchBulkRetry( degradations, context, onRefresh );
+			dispatchBulkRetry( degradations, context, onRefresh, skipped );
 		},
 	};
 

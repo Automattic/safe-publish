@@ -315,9 +315,6 @@ final class Admin_Ajax_Controller {
 		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
 			$this->send_session_expired_error();
 		}
-		// The inbox surfaces failure data and its Remove deletes it, so gate at
-		// manage_options — matching the Manage page and ajax_delete_failed_items.
-		// Retry and Ignore are separately gated at edit_posts.
 		$this->verify_ajax_capability();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing

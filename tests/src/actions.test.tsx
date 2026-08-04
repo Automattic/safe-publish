@@ -8,13 +8,17 @@ import {
 	type NeedsAttentionActionsContext,
 	type PostsActionsContext,
 } from '@/actions';
-import { RETRY_PENDING_DELAY_MS } from '@/constants';
+import {
+	RETRY_ATTENTION_BATCH_MAX,
+	RETRY_PENDING_DELAY_MS,
+} from '@/constants';
 import BulkImportFlow from '@/components/BulkImportFlow';
 import BulkRollbackPostModal from '@/components/BulkRollbackPostModal';
 import DeleteFailedImportsModal from '@/components/DeleteFailedImportsModal';
 import ImportModal from '@/components/ImportModal';
 import RollbackPostModal from '@/components/RollbackPostModal';
 import type {
+	BulkRetryAttentionResponse,
 	ImportSyncStatus,
 	InboxDegradation,
 	InboxFailure,
@@ -371,6 +375,22 @@ function runCallback(
 	(
 		action as unknown as { callback: ( rows: NeedsAttentionRow[] ) => void }
 	).callback( items );
+}
+
+/**
+ * Builds a bulk-retry response payload; tests override individual counts.
+ */
+function bulkCounts(
+	over: Partial< BulkRetryAttentionResponse > = {}
+): BulkRetryAttentionResponse {
+	return {
+		resolved: 0,
+		target_absent: 0,
+		write_failed: 0,
+		unresolved: 0,
+		skipped: 0,
+		...over,
+	};
 }
 
 describe( 'createNeedsAttentionActions', () => {
@@ -739,6 +759,226 @@ describe( 'createNeedsAttentionActions', () => {
 		} );
 	} );
 
+	it( 'ignores a second bulk retry while one is in flight', () => {
+		// ARRANGE: A bulk retry that never settles, plus a shared in-flight set.
+		vi.useFakeTimers();
+		const fetchMock = vi.fn().mockReturnValue( new Promise( () => {} ) );
+		vi.stubGlobal( 'fetch', fetchMock );
+		const inFlight = new Set< string >();
+		const selection = [
+			buildDegradation( { affected_post_id: 1 } ),
+			buildDegradation( { affected_post_id: 2 } ),
+		];
+
+		// ACT: Click the bulk retry twice before the first request settles.
+		const retry = retryAction( vi.fn(), { ...RETRY_CONTEXT, inFlight } );
+		runCallback( retry, selection );
+		runCallback( retry, selection );
+
+		// ASSERT: Only the first submit fired a request.
+		expect( fetchMock ).toHaveBeenCalledTimes( 1 );
+	} );
+
+	it( 'reports rows dropped as non-retryable in the bulk notice', async () => {
+		// ARRANGE: A bulk endpoint that resolves both retried degradations.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: () =>
+					Promise.resolve( {
+						success: true,
+						data: bulkCounts( { resolved: 2 } ),
+					} ),
+			} )
+		);
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		// ACT: Select two retryable degradations plus a failure, then Retry.
+		runCallback( retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation( { affected_post_id: 1 } ),
+			buildDegradation( { affected_post_id: 2 } ),
+			buildFailure(),
+		] );
+
+		// ASSERT: The failure surfaces as skipped, not silently dropped.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		const notice = onNotice.mock.calls.at( -1 )?.[ 0 ];
+		expect( notice.status ).toBe( 'warning' );
+		expect( notice.message ).toContain( '1 skipped' );
+	} );
+
+	it( 'slices a bulk retry over the cap into sequential batches', async () => {
+		// ARRANGE: A bulk endpoint answering each batch with its own count.
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce( {
+				json: () =>
+					Promise.resolve( {
+						success: true,
+						data: bulkCounts( {
+							resolved: RETRY_ATTENTION_BATCH_MAX,
+						} ),
+					} ),
+				} )
+			.mockResolvedValueOnce( {
+				json: () =>
+					Promise.resolve( {
+						success: true,
+						data: bulkCounts( { resolved: 1 } ),
+					} ),
+				} );
+		vi.stubGlobal( 'fetch', fetchMock );
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		// ACT: Retry one degradation past the per-request cap.
+		const many = Array.from(
+			{ length: RETRY_ATTENTION_BATCH_MAX + 1 },
+			( _, index ) => buildDegradation( { affected_post_id: index + 1 } )
+		);
+		runCallback(
+			retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ),
+			many
+		);
+
+		// ASSERT: Two requests, sized cap then 1, with the counts summed.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		expect( fetchMock ).toHaveBeenCalledTimes( 2 );
+		const batch = ( call: number ): unknown[] =>
+			JSON.parse(
+				( fetchMock.mock.calls[ call ][ 1 ].body as FormData ).get(
+					'items'
+				) as string
+			);
+		expect( batch( 0 ) ).toHaveLength( RETRY_ATTENTION_BATCH_MAX );
+		expect( batch( 1 ) ).toHaveLength( 1 );
+		expect( onNotice ).toHaveBeenLastCalledWith( {
+			status: 'success',
+			message: `${ RETRY_ATTENTION_BATCH_MAX + 1 } resolved, 0 waiting on import, 0 failed.`,
+		} );
+	} );
+
+	it( 'routes a lone retryable degradation with skipped rows to the bulk path', async () => {
+		// ARRANGE: A bulk endpoint that resolves the one retried degradation.
+		const fetchMock = vi.fn().mockResolvedValue( {
+			json: () =>
+				Promise.resolve( {
+					success: true,
+					data: bulkCounts( { resolved: 1 } ),
+				} ),
+		} );
+		vi.stubGlobal( 'fetch', fetchMock );
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		// ACT: Select one retryable degradation plus a failure, then Retry.
+		runCallback( retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation(),
+			buildFailure(),
+		] );
+
+		// ASSERT: It takes the bulk path and reports the failure as skipped,
+		// rather than the single retry that would drop it silently.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		const body = fetchMock.mock.calls[ 0 ][ 1 ].body as FormData;
+		expect( body.get( 'action' ) ).toBe(
+			'safe_publish_bulk_retry_attention_issues'
+		);
+		const notice = onNotice.mock.calls.at( -1 )?.[ 0 ];
+		expect( notice.status ).toBe( 'warning' );
+		expect( notice.message ).toContain( '1 skipped' );
+	} );
+
+	it( 'surfaces an error when a later batch is rejected after earlier ones ran', async () => {
+		// ARRANGE: The first batch resolves; the server rejects the second.
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce( {
+				json: () =>
+					Promise.resolve( {
+						success: true,
+						data: bulkCounts( {
+							resolved: RETRY_ATTENTION_BATCH_MAX,
+						} ),
+					} ),
+			} )
+			.mockResolvedValueOnce( {
+				json: () =>
+					Promise.resolve( {
+						success: false,
+						data: 'Retry is limited.',
+					} ),
+			} );
+		vi.stubGlobal( 'fetch', fetchMock );
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		// ACT: Retry one past the cap, so it splits into two batches.
+		const many = Array.from(
+			{ length: RETRY_ATTENTION_BATCH_MAX + 1 },
+			( _, index ) => buildDegradation( { affected_post_id: index + 1 } )
+		);
+		runCallback(
+			retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ),
+			many
+		);
+
+		// ASSERT: The first batch ran, and the rejected second surfaces an error.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		expect( fetchMock ).toHaveBeenCalledTimes( 2 );
+		expect( onNotice.mock.calls.at( -1 )?.[ 0 ].status ).toBe( 'error' );
+	} );
+
+	it( 'flags a bulk retry as an error when a write failed', async () => {
+		// ARRANGE: A bulk endpoint reporting one write failure.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: () =>
+					Promise.resolve( {
+						success: true,
+						data: bulkCounts( { resolved: 1, write_failed: 1 } ),
+					} ),
+			} )
+		);
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		// ACT: Retry two degradations; one write fails server-side.
+		runCallback( retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation( { affected_post_id: 1 } ),
+			buildDegradation( { affected_post_id: 2 } ),
+		] );
+
+		// ASSERT: A write failure makes the aggregate an error, not a warning.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		expect( onNotice.mock.calls.at( -1 )?.[ 0 ].status ).toBe( 'error' );
+	} );
+
+	it( 'surfaces a network error when the bulk request throws', async () => {
+		// ARRANGE: A bulk endpoint whose request rejects before reaching the server.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockRejectedValue( new Error( 'offline' ) )
+		);
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		// ACT: Retry two degradations while the network is down.
+		runCallback( retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation( { affected_post_id: 1 } ),
+			buildDegradation( { affected_post_id: 2 } ),
+		] );
+
+		// ASSERT: A network-error notice is surfaced, and it still refreshes.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		expect( onNotice ).toHaveBeenLastCalledWith( {
+			status: 'error',
+			message: 'Network error while retrying.',
+		} );
+	} );
+
 	/**
 	 * Returns an inbox action by id from the given view's action set.
 	 */
@@ -849,5 +1089,32 @@ describe( 'createNeedsAttentionActions', () => {
 		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
 		const body = fetchMock.mock.calls[ 0 ][ 1 ].body as FormData;
 		expect( body.get( 'ignored' ) ).toBe( '0' );
+	} );
+
+	it( 'reports a no-op ignore as info, not a false success', async () => {
+		// ARRANGE: An ignore endpoint that matched no rows (a stale selection).
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: () =>
+					Promise.resolve( { success: true, data: { updated: 0 } } ),
+			} )
+		);
+		const onNotice = vi.fn();
+		const ignore = inboxAction( 'ignore-needs-attention', 'open', vi.fn(), {
+			...RETRY_CONTEXT,
+			onNotice,
+		} ) as Action< NeedsAttentionRow >;
+
+		// ACT: Ignore a row the server no longer finds.
+		runCallback( ignore, [ buildDegradation() ] );
+
+		// ASSERT: An info notice, not a success that overstates the no-op.
+		await vi.waitFor( () =>
+			expect( onNotice ).toHaveBeenCalledWith( {
+				status: 'info',
+				message: 'No matching items to ignore.',
+			} )
+		);
 	} );
 } );
