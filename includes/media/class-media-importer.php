@@ -503,6 +503,35 @@ class Media_Importer {
 	}
 
 	/**
+	 * Applies a source menu_order to an attachment this run freshly sideloaded,
+	 * so a bare [gallery]/[playlist] renders its set in the source order. The
+	 * media REST omits menu_order, so the caller supplies it. A dedup hit from a
+	 * prior import is left untouched, and the default 0 needs no write.
+	 *
+	 * @param int $attachment_id Destination attachment ID.
+	 * @param int $menu_order    Source menu_order to apply.
+	 */
+	public function set_new_attachment_menu_order(
+		int $attachment_id,
+		int $menu_order
+	): void {
+		if ( 0 === $menu_order ) {
+			return;
+		}
+
+		if ( ! in_array( $attachment_id, $this->newly_created_attachment_ids, true ) ) {
+			return;
+		}
+
+		wp_update_post(
+			array(
+				'ID'         => $attachment_id,
+				'menu_order' => $menu_order,
+			)
+		);
+	}
+
+	/**
 	 * Sets the library metadata map applied while sideloading this import's media.
 	 *
 	 * @param array<string, array<string, string>> $map Source URL => metadata.

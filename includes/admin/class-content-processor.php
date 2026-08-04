@@ -201,8 +201,9 @@ class Content_Processor {
 	 * @param array<string, mixed> $context         Optional batch state. Recognized keys:
 	 *                                              `session_id_map` (bulk source => dest post IDs),
 	 *                                              `library_metadata_map` (source URL => library
-	 *                                              metadata), and `auth_credentials` (source REST
-	 *                                              auth for shortcode ID resolution).
+	 *                                              metadata), `attached_media` (bare gallery/playlist
+	 *                                              attached-media set), and `auth_credentials`
+	 *                                              (source REST auth for shortcode ID resolution).
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
 	public function process_content(
@@ -252,6 +253,9 @@ class Content_Processor {
 			$source_site_url,
 			$context
 		);
+
+		// Import the bare [gallery]/[playlist] attached set (no rewrite).
+		$this->import_attached_media_set( $context, $source_site_url );
 
 		// Import [audio]/[video] shortcode media before replace_source_urls(),
 		// so download failures are recorded rather than masked by the swap.
@@ -349,6 +353,64 @@ class Content_Processor {
 			$content,
 			$resolver
 		);
+	}
+
+	/**
+	 * Imports the attached-media set a bare [gallery]/[playlist] renders,
+	 * sideloading each item by source id. That records its source parent, which
+	 * the import resolves to this post at persist time, and applies the source
+	 * menu_order so the set renders in order. No content is rewritten: once
+	 * parented, core renders the shortcode from the post's children.
+	 *
+	 * A dangling source ref (null) or a failed sideload (false) is skipped rather
+	 * than aborting the post, unlike the [gallery ids=] path; the media importer
+	 * already logs a failed sideload.
+	 *
+	 * @param array<string, mixed> $context         process_content() context; reads
+	 *                                              `attached_media` and `auth_credentials`.
+	 * @param string               $source_site_url Source site URL.
+	 */
+	private function import_attached_media_set(
+		array $context,
+		string $source_site_url
+	): void {
+		$attached_media = isset( $context['attached_media'] )
+			&& is_array( $context['attached_media'] )
+			? $context['attached_media']
+			: array();
+
+		if ( array() === $attached_media ) {
+			return;
+		}
+
+		$auth = isset( $context['auth_credentials'] )
+			&& is_array( $context['auth_credentials'] )
+			? $context['auth_credentials']
+			: array();
+
+		foreach ( $attached_media as $item ) {
+			$source_id = isset( $item['id'] ) ? (int) $item['id'] : 0;
+
+			if ( 0 === $source_id ) {
+				continue;
+			}
+
+			$dest_id = $this->media_importer->import_source_media_by_id(
+				$source_id,
+				$source_site_url,
+				$auth
+			);
+
+			if ( ! is_int( $dest_id ) ) {
+				continue;
+			}
+
+			$menu_order = isset( $item['menu_order'] ) ? (int) $item['menu_order'] : 0;
+			$this->media_importer->set_new_attachment_menu_order(
+				$dest_id,
+				$menu_order
+			);
+		}
 	}
 
 	/**

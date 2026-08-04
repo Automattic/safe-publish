@@ -68,10 +68,10 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 
 	/**
 	 * Source post IDs for the bespoke edge-case pages (non-ASCII, empty, embed,
-	 * footnotes, reusable-block, and the gallery/playlist shortcodes). Same high
-	 * range, distinct from every other base. All seed as pages so the
-	 * category-less body never picks up the default category that WordPress
-	 * auto-assigns to a post.
+	 * footnotes, reusable-block, the gallery/playlist shortcodes, and the bare
+	 * gallery/playlist). Same high range, distinct from every other base. All
+	 * seed as pages so the category-less body never picks up the default category
+	 * that WordPress auto-assigns to a post.
 	 */
 	private const EDGE_NON_ASCII_SOURCE_ID          = 9200001;
 	private const EDGE_EMPTY_SOURCE_ID              = 9200002;
@@ -80,6 +80,8 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	private const EDGE_REUSABLE_BLOCK_SOURCE_ID     = 9200005;
 	private const EDGE_GALLERY_SHORTCODE_SOURCE_ID  = 9200006;
 	private const EDGE_PLAYLIST_SHORTCODE_SOURCE_ID = 9200007;
+	private const EDGE_BARE_GALLERY_SOURCE_ID       = 9200008;
+	private const EDGE_BARE_PLAYLIST_SOURCE_ID      = 9200009;
 
 	/**
 	 * Source attachment IDs the gallery-shortcode edge page references, spread
@@ -102,6 +104,22 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	 * @var list<int>
 	 */
 	private const PLAYLIST_SHORTCODE_MEDIA_IDS = array( 9600005 );
+
+	/**
+	 * Source attachment IDs the bare-gallery edge page's attached image set is
+	 * seeded from, in the same 9600xxx shortcode-media range.
+	 *
+	 * @var list<int>
+	 */
+	private const BARE_GALLERY_MEDIA_IDS = array( 9600006, 9600007 );
+
+	/**
+	 * Source attachment ID the bare-playlist edge page's attached video set is
+	 * seeded from.
+	 *
+	 * @var list<int>
+	 */
+	private const BARE_PLAYLIST_MEDIA_IDS = array( 9600008 );
 
 	/**
 	 * Provider host of the embed edge page's url. Distinct from
@@ -300,6 +318,20 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				'source_id'      => self::EDGE_PLAYLIST_SHORTCODE_SOURCE_ID,
 				'author_user_id' => $page_author_id,
 				'media_ids'      => self::PLAYLIST_SHORTCODE_MEDIA_IDS,
+			),
+			array(
+				'kind'           => 'bare_gallery',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_BARE_GALLERY_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+				'media_ids'      => self::BARE_GALLERY_MEDIA_IDS,
+			),
+			array(
+				'kind'           => 'bare_playlist',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_BARE_PLAYLIST_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+				'media_ids'      => self::BARE_PLAYLIST_MEDIA_IDS,
 			),
 		);
 	}
@@ -1052,11 +1084,52 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 					$featured_id,
 					self::$fixture->source_media_metadata( $ref['id'] ),
 					$source_id,
+					0,
 					self::$fixture->dest_post_ids,
 					$this
 				);
 			}
 		}
+	}
+
+	/**
+	 * Verifies that each image/video a bare [gallery]/[playlist] renders is
+	 * imported, parented to its destination edge post, and carries its source
+	 * menu_order — the ordered attached set core needs to render the bare
+	 * shortcode. Guards against a vacuous pass by requiring both a gallery-set
+	 * image and a playlist-set video.
+	 */
+	public function test_bare_shortcode_attached_set_imported(): void {
+		// ARRANGE + ACT: Batch already imported.
+		$gallery_checked  = false;
+		$playlist_checked = false;
+
+		// ASSERT: Each attached-set item lands parented and menu_order-ordered.
+		foreach ( self::$fixture->bare_shortcode_media_refs as $ref ) {
+			Post_Parity_Asserter::assert_imported_attachment_for_source_url(
+				$ref['url'],
+				self::SOURCE_BASE_URL,
+				$ref['mime'],
+				null,
+				self::$fixture->source_media_metadata( $ref['id'] ),
+				$ref['parent'],
+				$ref['menu_order'],
+				self::$fixture->dest_post_ids,
+				$this
+			);
+
+			$gallery_checked  = $gallery_checked || 'image/jpeg' === $ref['mime'];
+			$playlist_checked = $playlist_checked || 'video/mp4' === $ref['mime'];
+		}
+
+		$this->assertTrue(
+			$gallery_checked,
+			'Batch should seed a bare-gallery image to verify'
+		);
+		$this->assertTrue(
+			$playlist_checked,
+			'Batch should seed a bare-playlist video to verify'
+		);
 	}
 
 	/**
