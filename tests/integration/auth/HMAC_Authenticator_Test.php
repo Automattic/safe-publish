@@ -503,6 +503,52 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that authenticating a wp/v2 read forces REST nocache headers,
+	 * so a cache-fronting edge cannot store the edit-context response.
+	 */
+	public function test_authenticated_wp_v2_read_forces_nocache_headers(): void {
+		// ARRANGE: A signed read; no logged-in user backs an HMAC request.
+		$request = $this->build_signed_request( 'GET', '/wp/v2/posts/1', '' );
+
+		// ACT: Authenticate the request.
+		$this->authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT: The nocache filter is registered despite no user; the headers
+		// core then emits are the strong no-store, private form.
+		$this->assertFalse( is_user_logged_in() );
+		$this->assertNotFalse(
+			has_filter(
+				'rest_send_nocache_headers',
+				array( $this->authenticator, 'force_rest_nocache_headers' )
+			)
+		);
+		$cache_control = wp_get_nocache_headers()['Cache-Control'];
+		$this->assertStringContainsString( 'no-store', $cache_control );
+		$this->assertStringContainsString( 'private', $cache_control );
+	}
+
+	/**
+	 * Verifies that authenticating a safe-publish/v1 catalog request forces
+	 * REST nocache headers too — the common-path filter covers it, unlike the
+	 * wp/v2-only authenticated context setup.
+	 */
+	public function test_authenticated_catalog_request_forces_nocache_headers(): void {
+		// ARRANGE: A signed catalog request on /safe-publish/v1/.
+		$request = $this->build_signed_request( 'GET', '/safe-publish/v1/catalog/posts', '' );
+
+		// ACT: Authenticate the request.
+		$this->authenticator->authenticate_request( null, null, $request );
+
+		// ASSERT: The common-path filter covers the catalog, not just wp/v2 reads.
+		$this->assertNotFalse(
+			has_filter(
+				'rest_send_nocache_headers',
+				array( $this->authenticator, 'force_rest_nocache_headers' )
+			)
+		);
+	}
+
+	/**
 	 * Builds a properly signed WP_REST_Request.
 	 *
 	 * @param string      $method    HTTP method.
