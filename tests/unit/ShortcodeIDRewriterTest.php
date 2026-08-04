@@ -727,4 +727,123 @@ class ShortcodeIDRewriterTest extends TestCase {
 		// ASSERT: The malformed token is left verbatim.
 		$this->assertSame( '[gallery id=5abc]', $result );
 	}
+
+	/**
+	 * Verifies that collect_shortcode_attachment_ids gathers the ids CSV of a
+	 * gallery, across quoting styles.
+	 */
+	public function test_collect_gathers_gallery_ids(): void {
+		// ARRANGE: galleries with the three ids quoting forms.
+		$rewriter = $this->build_rewriter();
+
+		// ACT + ASSERT: each quoting form yields the numeric tokens.
+		$this->assertSame(
+			array( 10, 20, 30 ),
+			$rewriter->collect_shortcode_attachment_ids( '[gallery ids="10,20,30"]' )
+		);
+		$this->assertSame(
+			array( 10, 20 ),
+			$rewriter->collect_shortcode_attachment_ids( '[gallery ids=10,20]' )
+		);
+		$this->assertSame(
+			array( 7 ),
+			$rewriter->collect_shortcode_attachment_ids( "[playlist ids='7']" )
+		);
+	}
+
+	/**
+	 * Verifies that include is collected but exclude is omitted, since exclude
+	 * removes an attachment from the set rather than referencing it.
+	 */
+	public function test_collect_includes_include_omits_exclude(): void {
+		// ARRANGE: a shortcode carrying all three id-bearing attributes.
+		$rewriter = $this->build_rewriter();
+
+		// ACT: collect the referenced IDs.
+		$ids = $rewriter->collect_shortcode_attachment_ids(
+			'[gallery ids="1,2" include="3" exclude="4"]'
+		);
+
+		// ASSERT: ids and include are gathered; exclude is left out.
+		$this->assertSame( array( 1, 2, 3 ), $ids );
+	}
+
+	/**
+	 * Verifies that the singular id post reference is not collected, being a
+	 * post ID rather than an attachment list.
+	 */
+	public function test_collect_ignores_singular_post_id(): void {
+		// ARRANGE: a gallery referencing a parent post by id.
+		$rewriter = $this->build_rewriter();
+
+		// ACT + ASSERT: the singular id yields nothing.
+		$this->assertSame(
+			array(),
+			$rewriter->collect_shortcode_attachment_ids( '[gallery id="123"]' )
+		);
+	}
+
+	/**
+	 * Verifies that an id repeated across shortcodes is collected once.
+	 */
+	public function test_collect_deduplicates_ids(): void {
+		// ARRANGE: the same id appears in a gallery and a playlist.
+		$rewriter = $this->build_rewriter();
+
+		// ACT: collect across both shortcodes.
+		$ids = $rewriter->collect_shortcode_attachment_ids(
+			'[gallery ids="7"] and [playlist ids="7,8"]'
+		);
+
+		// ASSERT: the shared id appears once.
+		$this->assertSame( array( 7, 8 ), $ids );
+	}
+
+	/**
+	 * Verifies that a similarly named attribute such as data-ids is not
+	 * mistaken for the ids attribute.
+	 */
+	public function test_collect_ignores_similar_named_attribute(): void {
+		// ARRANGE: a real ids attribute alongside a data-ids attribute.
+		$rewriter = $this->build_rewriter();
+
+		// ACT: collect the referenced IDs.
+		$ids = $rewriter->collect_shortcode_attachment_ids(
+			'[gallery ids="1" data-ids="9"]'
+		);
+
+		// ASSERT: only the real ids attribute is read.
+		$this->assertSame( array( 1 ), $ids );
+	}
+
+	/**
+	 * Verifies that an escaped [[gallery]] literal contributes no IDs.
+	 */
+	public function test_collect_skips_escaped_shortcode(): void {
+		// ARRANGE: an escaped gallery literal.
+		$rewriter = $this->build_rewriter();
+
+		// ACT + ASSERT: the escaped literal is not read.
+		$this->assertSame(
+			array(),
+			$rewriter->collect_shortcode_attachment_ids( '[[gallery ids="1"]]' )
+		);
+	}
+
+	/**
+	 * Verifies that content without a gallery or playlist shortcode yields no
+	 * IDs.
+	 */
+	public function test_collect_returns_empty_without_media_shortcodes(): void {
+		// ARRANGE: prose plus a caption, but no gallery/playlist.
+		$rewriter = $this->build_rewriter();
+
+		// ACT + ASSERT: nothing to collect.
+		$this->assertSame(
+			array(),
+			$rewriter->collect_shortcode_attachment_ids(
+				'<p>Text</p>[caption id="attachment_1"]<img src="x" />[/caption]'
+			)
+		);
+	}
 }

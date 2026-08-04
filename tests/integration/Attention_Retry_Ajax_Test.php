@@ -702,6 +702,79 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that a malformed descriptor is counted as skipped while a valid
+	 * descriptor in the same batch still runs.
+	 */
+	public function test_bulk_retry_counts_a_malformed_descriptor_as_skipped(): void {
+		// ARRANGE: One resolvable issue; the batch also carries a bad-kind row.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => $this->nav_link_content( 8801, 'post-type' ) )
+		);
+		$this->seed_target_post( 8801 );
+		$this->open_issue( $post_id, 'unmapped_block_reference', 8801, 'post' );
+
+		// ACT: Bulk-retry the valid descriptor plus one with an unknown kind.
+		$response = $this->bulk_retry(
+			array(
+				$this->descriptor( $post_id, 8801, 'post' ),
+				array(
+					'affected_post_id' => $post_id,
+					'issue_type'       => 'unmapped_block_reference',
+					'target_ref'       => 9999,
+					'target_kind'      => 'bogus',
+				),
+			)
+		);
+
+		// ASSERT: The valid one resolved; the malformed one was skipped.
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 1, $response['data']['resolved'] );
+		$this->assertSame( 1, $response['data']['skipped'] );
+	}
+
+	/**
+	 * Verifies that a well-formed descriptor whose issue is already gone counts
+	 * as resolved, not skipped.
+	 */
+	public function test_bulk_retry_counts_a_missing_issue_as_resolved(): void {
+		// ARRANGE: A post with no open issue for the retried identity.
+		$post_id = self::factory()->post->create();
+
+		// ACT: Bulk-retry a descriptor whose row does not exist.
+		$response = $this->bulk_retry(
+			array( $this->descriptor( $post_id, 8801, 'post' ) )
+		);
+
+		// ASSERT: The vanished row is treated as already resolved.
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 1, $response['data']['resolved'] );
+		$this->assertSame( 0, $response['data']['skipped'] );
+	}
+
+	/**
+	 * Verifies that a reconciliation that runs but cannot clear its issue
+	 * counts as unresolved.
+	 */
+	public function test_bulk_retry_counts_an_unresolved_outcome(): void {
+		// ARRANGE: The target is importable, but the post holds no matching ref.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => 'No navigation block here.' )
+		);
+		$this->seed_target_post( 9700 );
+		$this->open_issue( $post_id, 'unmapped_block_reference', 9700, 'post' );
+
+		// ACT: Bulk-retry the issue whose reference is absent from the content.
+		$response = $this->bulk_retry(
+			array( $this->descriptor( $post_id, 9700, 'post' ) )
+		);
+
+		// ASSERT: It reconciled without clearing, counting as unresolved.
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 1, $response['data']['unresolved'] );
+		$this->assertSame( 0, $response['data']['resolved'] );
+	}
+
+	/**
 	 * Maps a list response's degradation rows to their resolvable flag, keyed by
 	 * target ref.
 	 *

@@ -2,19 +2,27 @@
  * Tests for the NeedsAttentionInbox component.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import NeedsAttentionInbox from '@/components/NeedsAttentionInbox';
 import type { NeedsAttentionRow } from '@/types';
 
+const dv = vi.hoisted( () => ( {
+	view: undefined as unknown,
+	onChangeView: undefined as ( ( next: unknown ) => void ) | undefined,
+} ) );
+
 // DataViews pulls in @wordpress/private-apis, which cannot unlock in the test
 // env. Stub it with a minimal renderer that exercises each field's render and
-// each row's eligible actions.
+// each row's eligible actions, and captures view/onChangeView so a test can
+// drive a view change.
 vi.mock( '@wordpress/dataviews', () => ( {
 	DataViews: ( {
 		data,
 		fields,
 		actions = [],
+		view,
+		onChangeView,
 	}: {
 		data: NeedsAttentionRow[];
 		fields: Array< {
@@ -26,29 +34,36 @@ vi.mock( '@wordpress/dataviews', () => ( {
 			label: string;
 			isEligible?: ( item: NeedsAttentionRow ) => boolean;
 		} >;
-	} ): JSX.Element => (
-		<div>
-			{ data.map( ( item ) => (
-				<div key={ item.row_id }>
-					{ fields.map( ( field ) => (
-						<span key={ field.id }>
-							{ field.render ? field.render( { item } ) : null }
-						</span>
-					) ) }
-					{ actions
-						.filter(
-							( action ) =>
-								! action.isEligible || action.isEligible( item )
-						)
-						.map( ( action ) => (
-							<button key={ action.id } type="button">
-								{ action.label }
-							</button>
+		view: unknown;
+		onChangeView: ( next: unknown ) => void;
+	} ): JSX.Element => {
+		dv.view = view;
+		dv.onChangeView = onChangeView;
+		return (
+			<div>
+				{ data.map( ( item ) => (
+					<div key={ item.row_id }>
+						{ fields.map( ( field ) => (
+							<span key={ field.id }>
+								{ field.render ? field.render( { item } ) : null }
+							</span>
 						) ) }
-				</div>
-			) ) }
-		</div>
-	),
+						{ actions
+							.filter(
+								( action ) =>
+									! action.isEligible ||
+									action.isEligible( item )
+							)
+							.map( ( action ) => (
+								<button key={ action.id } type="button">
+									{ action.label }
+								</button>
+							) ) }
+					</div>
+				) ) }
+			</div>
+		);
+	},
 } ) );
 
 const FAILURE: NeedsAttentionRow = {
@@ -249,5 +264,77 @@ describe( 'NeedsAttentionInbox', () => {
 		expect(
 			await screen.findByText( 'Nothing needs attention.' )
 		).toBeInTheDocument();
+	} );
+
+	it( 'Verifies that toggling views clears the old rows before the refetch', async () => {
+		// ARRANGE: The open view loads a degradation; the ignored refetch hangs.
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce( {
+				json: () =>
+					Promise.resolve( {
+						success: true,
+						data: {
+							items: [ DEGRADATION ],
+							has_more: false,
+							needs_attention_count: 1,
+						},
+					} ),
+				} )
+			.mockReturnValue( new Promise( () => {} ) );
+		vi.stubGlobal( 'fetch', fetchMock );
+
+		// ACT: Render (open), then switch to Ignored — whose fetch never settles.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+			/>
+		);
+		expect( await screen.findByText( 'Primary Menu' ) ).toBeInTheDocument();
+		fireEvent.click( screen.getByRole( 'radio', { name: 'Ignored' } ) );
+
+		// ASSERT: The old row is dropped at once, not left actionable mid-fetch.
+		await waitFor( () =>
+			expect( screen.queryByText( 'Primary Menu' ) ).not.toBeInTheDocument()
+		);
+	} );
+
+	it( 'Verifies that raising the page size refetches from page 1', async () => {
+		// ARRANGE: Every fetch returns a row so pages never empty.
+		const fetchMock = vi.fn().mockResolvedValue( {
+			json: () =>
+				Promise.resolve( {
+					success: true,
+					data: {
+						items: [ DEGRADATION ],
+						has_more: true,
+						needs_attention_count: 50,
+					},
+				} ),
+		} );
+		vi.stubGlobal( 'fetch', fetchMock );
+		const fetchedPage = (): string =>
+			( fetchMock.mock.calls.at( -1 )![ 1 ].body as FormData ).get(
+				'page'
+			) as string;
+
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+			/>
+		);
+		await screen.findByText( 'Primary Menu' );
+
+		// ACT: Page forward, then raise the page size.
+		act( () => dv.onChangeView?.( { ...( dv.view as object ), page: 2 } ) );
+		await waitFor( () => expect( fetchedPage() ).toBe( '2' ) );
+		act( () =>
+			dv.onChangeView?.( { ...( dv.view as object ), perPage: 50 } )
+		);
+
+		// ASSERT: The per-page change resets the offset to page 1.
+		await waitFor( () => expect( fetchedPage() ).toBe( '1' ) );
 	} );
 } );
