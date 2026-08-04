@@ -205,6 +205,97 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that rolling back a post keeps an attachment parented to it that
+	 * a surviving post still shows inline, since import deduplicates media by
+	 * source URL across posts.
+	 */
+	public function test_rollback_keeps_media_inlined_by_surviving_post(): void {
+		// ARRANGE: X is parented to A but also embedded inline in surviving B.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_a     = $this->factory()->post->create( array( 'post_title' => 'A' ) );
+		$shared_x   = $this->seed_imported_attachment( $post_a );
+		$post_b     = $this->factory()->post->create(
+			array(
+				'post_title'   => 'B',
+				'post_content' => '<img src="' . wp_get_attachment_url( $shared_x ) . '">',
+			)
+		);
+		$item_a     = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'A',
+			'success',
+			$post_a
+		);
+
+		// ACT: Roll back only A.
+		$this->rollback_service->rollback_item( $item_a );
+
+		// ASSERT: A is gone, but B keeps its inlined image.
+		$this->assertNull( get_post( $post_a ) );
+		$this->assertNotNull( get_post( $post_b ) );
+		$this->assertNotNull( get_post( $shared_x ) );
+	}
+
+	/**
+	 * Verifies that rolling back a post keeps an attachment a surviving post's
+	 * gallery shortcode still lists by ID, the cross-post gallery case.
+	 */
+	public function test_rollback_keeps_media_in_surviving_gallery(): void {
+		// ARRANGE: X is parented to A; surviving B renders it in a gallery.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_a     = $this->factory()->post->create( array( 'post_title' => 'A' ) );
+		$shared_x   = $this->seed_imported_attachment( $post_a );
+		$post_b     = $this->factory()->post->create(
+			array(
+				'post_title'   => 'B',
+				'post_content' => '[gallery ids="' . $shared_x . '"]',
+			)
+		);
+		$item_a     = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'A',
+			'success',
+			$post_a
+		);
+
+		// ACT: Roll back only A.
+		$this->rollback_service->rollback_item( $item_a );
+
+		// ASSERT: B keeps the gallery's attachment.
+		$this->assertNotNull( get_post( $post_b ) );
+		$this->assertNotNull( get_post( $shared_x ) );
+	}
+
+	/**
+	 * Verifies that rolling back a post keeps an attachment a surviving post
+	 * uses as its featured image.
+	 */
+	public function test_rollback_keeps_media_featured_by_surviving_post(): void {
+		// ARRANGE: X is parented to A but is surviving B's featured image.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_a     = $this->factory()->post->create( array( 'post_title' => 'A' ) );
+		$shared_x   = $this->seed_imported_attachment( $post_a );
+		$post_b     = $this->factory()->post->create( array( 'post_title' => 'B' ) );
+		set_post_thumbnail( $post_b, $shared_x );
+		$item_a = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'A',
+			'success',
+			$post_a
+		);
+
+		// ACT: Roll back only A.
+		$this->rollback_service->rollback_item( $item_a );
+
+		// ASSERT: B keeps its featured image.
+		$this->assertNotNull( get_post( $post_b ) );
+		$this->assertNotNull( get_post( $shared_x ) );
+	}
+
+	/**
 	 * Verifies that rolling back a post leaves a user's own (non-plugin)
 	 * attachment parented to it in place.
 	 */
@@ -314,6 +405,13 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		);
 		$this->assertIsInt( $attachment_id );
 
+		// A per-attachment file so wp_get_attachment_url() resolves and the
+		// content-usage check has a distinct path stem to match on.
+		update_post_meta(
+			$attachment_id,
+			'_wp_attached_file',
+			"2026/08/imported-{$attachment_id}.jpg"
+		);
 		update_post_meta(
 			$attachment_id,
 			Options::META_ORIGINAL_URL,

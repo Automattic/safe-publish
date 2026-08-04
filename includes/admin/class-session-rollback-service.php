@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
+use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Utils\Options;
 use WP_Error;
 
@@ -184,6 +185,12 @@ final class Session_Rollback_Service {
 		}
 
 		foreach ( $imported_media_ids as $attachment_id ) {
+			// A surviving post may still show media parented here, since import
+			// deduplicates by source URL. The delete is irreversible.
+			if ( $this->attachment_used_by_other_post( $attachment_id ) ) {
+				continue;
+			}
+
 			wp_delete_attachment( $attachment_id, true );
 		}
 
@@ -228,6 +235,124 @@ final class Session_Rollback_Service {
 		);
 
 		return array_map( 'intval', $ids );
+	}
+
+	/**
+	 * Reports whether a surviving post still shows the attachment, across the
+	 * three ways an import can make a post reference one: inline in content,
+	 * as a featured image, or by ID in a gallery or playlist shortcode.
+	 *
+	 * @param int $attachment_id Attachment considered for deletion.
+	 * @return bool True when another post references it.
+	 */
+	private function attachment_used_by_other_post( int $attachment_id ): bool {
+		return $this->used_as_featured_image( $attachment_id )
+			|| $this->used_in_post_content( $attachment_id )
+			|| $this->used_in_media_shortcode( $attachment_id );
+	}
+
+	/**
+	 * Reports whether any post uses the attachment as its featured image.
+	 *
+	 * @param int $attachment_id Attachment ID.
+	 * @return bool True when a post's thumbnail points at it.
+	 */
+	private function used_as_featured_image( int $attachment_id ): bool {
+		$posts = get_posts(
+			array(
+				'post_type'        => 'any',
+				'post_status'      => 'any',
+				'posts_per_page'   => 1,
+				'fields'           => 'ids',
+				'suppress_filters' => false,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query'       => array(
+					array(
+						'key'   => '_thumbnail_id',
+						'value' => (string) $attachment_id,
+					),
+				),
+			)
+		);
+
+		return array() !== $posts;
+	}
+
+	/**
+	 * Reports whether any post's content references the attachment's file,
+	 * sized variants included, by matching the upload-relative path stem.
+	 *
+	 * @param int $attachment_id Attachment ID.
+	 * @return bool True when a post's content contains the file URL.
+	 */
+	private function used_in_post_content( int $attachment_id ): bool {
+		$file = get_post_meta( $attachment_id, '_wp_attached_file', true );
+
+		if ( ! is_string( $file ) || '' === $file ) {
+			return false;
+		}
+
+		// Drop the extension so sized variants (image-300x200.jpg) match too.
+		$stem = preg_replace( '/\.[^.\/]+$/', '', $file );
+
+		if ( ! is_string( $stem ) || '' === $stem ) {
+			return false;
+		}
+
+		global $wpdb;
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$match = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT ID FROM {$wpdb->posts}
+				 WHERE post_content LIKE %s
+					 AND post_status NOT IN ( 'auto-draft', 'trash', 'inherit' )
+				 LIMIT 1",
+				'%' . $wpdb->esc_like( $stem ) . '%'
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return null !== $match;
+	}
+
+	/**
+	 * Reports whether any post's gallery or playlist shortcode lists the
+	 * attachment by ID.
+	 *
+	 * @param int $attachment_id Attachment ID.
+	 * @return bool True when a shortcode references it.
+	 */
+	private function used_in_media_shortcode( int $attachment_id ): bool {
+		global $wpdb;
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$contents = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT post_content FROM {$wpdb->posts}
+				 WHERE post_status NOT IN ( 'auto-draft', 'trash', 'inherit' )
+					 AND ( post_content LIKE %s OR post_content LIKE %s )",
+				'%' . $wpdb->esc_like( '[gallery' ) . '%',
+				'%' . $wpdb->esc_like( '[playlist' ) . '%'
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		if ( array() === $contents ) {
+			return false;
+		}
+
+		$rewriter = new Shortcode_ID_Rewriter();
+
+		foreach ( $contents as $content ) {
+			$ids = $rewriter->collect_shortcode_attachment_ids( (string) $content );
+
+			if ( in_array( $attachment_id, $ids, true ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
