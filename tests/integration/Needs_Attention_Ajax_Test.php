@@ -277,6 +277,27 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that Remove deletes a failure that is currently ignored,
+	 * clearing it from both the open and ignored sets.
+	 */
+	public function test_remove_deletes_an_ignored_failure(): void {
+		// ARRANGE: A source-linked failure that has been ignored.
+		$session = $this->create_session();
+		$this->seed_failure( $session, 500, 'Broken import' );
+		$this->history->set_failed_items_ignored( array(), array( 500 ), true );
+		$this->assertSame( 1, $this->history->count_failures( true ) );
+
+		// ACT: Remove the ignored failure by its source id.
+		$response = $this->remove_failures( array(), array( 500 ) );
+
+		// ASSERT: It is deleted from both the open and ignored sets.
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 1, $response['data']['deleted'] );
+		$this->assertSame( 0, $this->history->count_failures() );
+		$this->assertSame( 0, $this->history->count_failures( true ) );
+	}
+
+	/**
 	 * Descriptors for the shared source-linked failure and degradation.
 	 *
 	 * @param int $post_id Degradation's affected post id.
@@ -424,6 +445,28 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 		$this->dispatch_ajax_expecting_die(
 			'safe_publish_set_needs_attention_ignored'
 		);
+
+		return json_decode( $this->_last_response, true );
+	}
+
+	/**
+	 * Dispatches the failure-removal endpoint and returns the decoded response.
+	 *
+	 * @param int[] $item_ids        Failure row ids (orphans).
+	 * @param int[] $source_post_ids Source post ids whose failures to remove.
+	 * @return array Decoded response.
+	 */
+	private function remove_failures(
+		array $item_ids,
+		array $source_post_ids
+	): array {
+		$_POST = array(
+			'nonce'           => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'item_ids'        => array_map( 'strval', $item_ids ),
+			'source_post_ids' => array_map( 'strval', $source_post_ids ),
+		);
+
+		$this->dispatch_ajax_expecting_die( 'safe_publish_delete_failed_items' );
 
 		return json_decode( $this->_last_response, true );
 	}
