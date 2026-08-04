@@ -137,6 +137,7 @@ export interface SyncStatusBatchResponse {
  */
 export type AttentionIssueType =
 	| 'unmapped_block_reference'
+	| 'unmapped_gallery_reference'
 	| 'nav_ref_rewrite_failed'
 	| 'parent_orphaned';
 
@@ -318,6 +319,16 @@ export interface UnmappedShortcodeReferenceWarning {
 }
 
 /**
+ * Surfaced when a [gallery] or [playlist] shortcode references another source
+ * post by id and that post is not on the destination, so the id was left at the
+ * source value. Importing the post and retrying remaps the reference.
+ */
+export interface UnmappedGalleryReferenceWarning {
+	type: 'unmapped_gallery_reference';
+	source_id: number;
+}
+
+/**
  * Discriminated union of all import warning types.
  */
 export type Warning =
@@ -325,7 +336,8 @@ export type Warning =
 	| ParentOrphanedWarning
 	| UnmappedBlockReferenceWarning
 	| NavRefRewriteFailedWarning
-	| UnmappedShortcodeReferenceWarning;
+	| UnmappedShortcodeReferenceWarning
+	| UnmappedGalleryReferenceWarning;
 
 /**
  * Response from create draft post operation.

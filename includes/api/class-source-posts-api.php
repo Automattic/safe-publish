@@ -606,6 +606,10 @@ class Source_Posts_API {
 
 		$post_data['source_media'] = self::extract_source_media( $data );
 
+		$post_data['source_attached_media'] = self::extract_source_attached_media(
+			$data
+		);
+
 		return $post_data;
 	}
 
@@ -760,6 +764,47 @@ class Source_Posts_API {
 				? (bool) $record['assigned']
 				: true,
 		);
+	}
+
+	/**
+	 * Extracts the safe_publish_attached_media list from a REST response: the
+	 * ordered { id, menu_order } set a bare gallery/playlist renders. Rebuilds
+	 * each entry from whitelisted integer fields, dropping any without a
+	 * positive id.
+	 *
+	 * @param array $data Decoded REST response for a single post.
+	 * @return list<array{id: int, menu_order: int}> Ordered attached-media set.
+	 */
+	private static function extract_source_attached_media( array $data ): array {
+		if (
+			! isset( $data['safe_publish_attached_media'] )
+			|| ! is_array( $data['safe_publish_attached_media'] )
+		) {
+			return array();
+		}
+
+		$set = array();
+
+		foreach ( $data['safe_publish_attached_media'] as $item ) {
+			if ( ! is_array( $item ) ) {
+				continue;
+			}
+
+			$id = isset( $item['id'] ) ? absint( $item['id'] ) : 0;
+
+			if ( 0 === $id ) {
+				continue;
+			}
+
+			$set[] = array(
+				'id'         => $id,
+				'menu_order' => isset( $item['menu_order'] )
+					? (int) $item['menu_order']
+					: 0,
+			);
+		}
+
+		return $set;
 	}
 
 	/**

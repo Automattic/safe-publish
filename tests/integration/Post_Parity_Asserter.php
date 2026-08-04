@@ -289,6 +289,18 @@ final class Post_Parity_Asserter {
 	);
 
 	/**
+	 * Attachment-post columns propagated from source only for the bare
+	 * gallery/playlist attached set, and left at the WordPress default (0) for
+	 * inline and featured sideloads. Value-checked against $expected_menu_order in
+	 * assert_imported_attachment_for_source_url().
+	 *
+	 * @var array<string, string>
+	 */
+	private const ATTACHMENT_CONDITIONALLY_PROPAGATED_COLUMNS = array(
+		'menu_order' => 'source menu_order; propagated only for the bare gallery/playlist set',
+	);
+
+	/**
 	 * Attachment-post columns whose parity check is deferred. Reverse-asserted
 	 * to the WordPress default in assert_attachment_deferred_columns_default()
 	 * so the test fails when a future PR starts propagating one of them.
@@ -1180,6 +1192,7 @@ final class Post_Parity_Asserter {
 	 * @param int|null              $featured_source_media_id Source featured-media ID, or null for inline-only.
 	 * @param array<string, string> $expected_metadata Source alt/title/caption/description to value-check.
 	 * @param int                   $expected_source_parent_id Source parent post ID (0 = unattached).
+	 * @param int                   $expected_menu_order      Source menu_order (0 unless the bare gallery/playlist set).
 	 * @param array<int, int>       $source_id_to_dest_id      Source post ID => dest post ID.
 	 * @param TestCase              $test                     Active test case.
 	 * @return WP_Post Dest attachment post.
@@ -1191,6 +1204,7 @@ final class Post_Parity_Asserter {
 		?int $featured_source_media_id,
 		array $expected_metadata,
 		int $expected_source_parent_id,
+		int $expected_menu_order,
 		array $source_id_to_dest_id,
 		TestCase $test
 	): WP_Post {
@@ -1203,6 +1217,11 @@ final class Post_Parity_Asserter {
 			$expected_source_parent_id,
 			$source_id_to_dest_id,
 			$test
+		);
+		$test->assertSame(
+			$expected_menu_order,
+			(int) $dest->menu_order,
+			"Dest attachment {$dest->ID} menu_order should match the source order"
 		);
 		self::assert_attachment_propagated_columns( $dest, $expected_metadata, $test );
 		self::assert_attachment_deferred_columns_default( $dest, $test );
@@ -1247,6 +1266,7 @@ final class Post_Parity_Asserter {
 		$classified = array_merge(
 			array( 'post_mime_type', 'post_type', 'post_parent' ),
 			array_keys( self::ATTACHMENT_PROPAGATED_COLUMNS ),
+			array_keys( self::ATTACHMENT_CONDITIONALLY_PROPAGATED_COLUMNS ),
 			array_keys( self::ATTACHMENT_DIVERGENCE_REGISTRY ),
 			array_keys( self::ATTACHMENT_DEFERRED_REGISTRY )
 		);
@@ -1262,7 +1282,6 @@ final class Post_Parity_Asserter {
 			'to_ping',
 			'pinged',
 			'post_content_filtered',
-			'menu_order',
 			'comment_count',
 		);
 

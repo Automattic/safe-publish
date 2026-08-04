@@ -572,4 +572,417 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 			'safe_publish_media must not be registered on attachment responses.'
 		);
 	}
+
+	/**
+	 * Creates an attachment attached to a parent post with a MIME type and
+	 * menu_order, seeding a child a bare gallery/playlist would render.
+	 *
+	 * @param int    $parent_id  Parent post the attachment belongs to.
+	 * @param string $file       Uploads-relative file path.
+	 * @param string $mime_type  Attachment MIME type.
+	 * @param int    $menu_order Attachment menu_order.
+	 * @return int Attachment ID.
+	 */
+	private function seed_attached_child(
+		int $parent_id,
+		string $file,
+		string $mime_type,
+		int $menu_order
+	): int {
+		$attachment_id = self::factory()->attachment->create_object(
+			array(
+				'file'           => $file,
+				'post_parent'    => $parent_id,
+				'post_mime_type' => $mime_type,
+				'post_type'      => 'attachment',
+				'post_status'    => 'inherit',
+				'menu_order'     => $menu_order,
+			)
+		);
+
+		$this->assertIsInt( $attachment_id );
+
+		return $attachment_id;
+	}
+
+	/**
+	 * Dispatches an HMAC-authenticated single-post request and returns the
+	 * safe_publish_attached_media field value.
+	 *
+	 * @param int $post_id Post to request.
+	 * @return mixed Field value.
+	 */
+	private function attached_media_for( int $post_id ): mixed {
+		$this->force_hmac_authenticated( true );
+
+		return $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		)->get_data()['safe_publish_attached_media'] ?? null;
+	}
+
+	/**
+	 * Verifies that a bare [gallery] lists the post's attached image children as
+	 * { id, menu_order } records in render order (menu_order then ID), not
+	 * creation order.
+	 */
+	public function test_attached_field_lists_bare_gallery_children_in_order(): void {
+		// ARRANGE: A bare [gallery] with two images seeded so the lower-ID one
+		// carries the higher menu_order, proving menu_order drives the order.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => 'Intro [gallery] outro' )
+		);
+		$second  = $this->seed_attached_child(
+			$post_id,
+			'2025/01/g-second.jpg',
+			'image/jpeg',
+			2
+		);
+		$first   = $this->seed_attached_child(
+			$post_id,
+			'2025/01/g-first.jpg',
+			'image/jpeg',
+			1
+		);
+
+		// ACT: Request the field.
+		$set = $this->attached_media_for( $post_id );
+
+		// ASSERT: Both images, ordered by menu_order, each carrying its order.
+		$this->assertSame(
+			array(
+				array(
+					'id'         => $first,
+					'menu_order' => 1,
+				),
+				array(
+					'id'         => $second,
+					'menu_order' => 2,
+				),
+			),
+			$set
+		);
+	}
+
+	/**
+	 * Verifies that a bare [gallery] collects only image children, skipping an
+	 * attached audio file that the gallery would not render.
+	 */
+	public function test_attached_field_gallery_excludes_non_image_children(): void {
+		// ARRANGE: A bare [gallery] with one image and one audio child attached.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => '[gallery]' )
+		);
+		$image   = $this->seed_attached_child(
+			$post_id,
+			'2025/01/only.jpg',
+			'image/jpeg',
+			1
+		);
+		$this->seed_attached_child( $post_id, '2025/01/skip.mp3', 'audio/mpeg', 2 );
+
+		// ACT: Request the field.
+		$set = $this->attached_media_for( $post_id );
+
+		// ASSERT: Only the image child is returned.
+		$this->assertSame(
+			array(
+				array(
+					'id'         => $image,
+					'menu_order' => 1,
+				),
+			),
+			$set
+		);
+	}
+
+	/**
+	 * Verifies that a bare [playlist] collects the post's audio children (the
+	 * shortcode default), skipping an attached image.
+	 */
+	public function test_attached_field_lists_bare_playlist_audio_children(): void {
+		// ARRANGE: A bare [playlist] with an audio child and an image child.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => '[playlist]' )
+		);
+		$audio   = $this->seed_attached_child(
+			$post_id,
+			'2025/01/song.mp3',
+			'audio/mpeg',
+			1
+		);
+		$this->seed_attached_child( $post_id, '2025/01/cover.jpg', 'image/jpeg', 2 );
+
+		// ACT: Request the field.
+		$set = $this->attached_media_for( $post_id );
+
+		// ASSERT: Only the audio child is returned.
+		$this->assertSame(
+			array(
+				array(
+					'id'         => $audio,
+					'menu_order' => 1,
+				),
+			),
+			$set
+		);
+	}
+
+	/**
+	 * Verifies that a bare [playlist type="video"] collects the post's video
+	 * children instead of audio.
+	 */
+	public function test_attached_field_playlist_type_video_lists_video_children(): void {
+		// ARRANGE: A [playlist type="video"] with a video and an audio child.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => '[playlist type="video"]' )
+		);
+		$video   = $this->seed_attached_child(
+			$post_id,
+			'2025/01/clip.mp4',
+			'video/mp4',
+			1
+		);
+		$this->seed_attached_child( $post_id, '2025/01/audio.mp3', 'audio/mpeg', 2 );
+
+		// ACT: Request the field.
+		$set = $this->attached_media_for( $post_id );
+
+		// ASSERT: Only the video child is returned.
+		$this->assertSame(
+			array(
+				array(
+					'id'         => $video,
+					'menu_order' => 1,
+				),
+			),
+			$set
+		);
+	}
+
+	/**
+	 * Verifies that a [playlist] with a non-audio type collects video children,
+	 * mirroring wp_playlist_shortcode's coercion of any non-audio type to video.
+	 */
+	public function test_attached_field_playlist_non_audio_type_collects_video(): void {
+		// ARRANGE: A [playlist] with an unrecognized type, plus video and audio
+		// children; core renders such a playlist as video.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => '[playlist type="jazz"]' )
+		);
+		$video   = $this->seed_attached_child(
+			$post_id,
+			'2025/01/reel.mp4',
+			'video/mp4',
+			1
+		);
+		$this->seed_attached_child( $post_id, '2025/01/track.mp3', 'audio/mpeg', 2 );
+
+		// ACT: Request the field.
+		$set = $this->attached_media_for( $post_id );
+
+		// ASSERT: Only the video child is returned.
+		$this->assertSame(
+			array(
+				array(
+					'id'         => $video,
+					'menu_order' => 1,
+				),
+			),
+			$set
+		);
+	}
+
+	/**
+	 * Verifies that a post with two bare shortcodes, a [gallery] and a
+	 * [playlist], collects both sets: the gallery's image children and the
+	 * playlist's audio children, covering the path where more than one shortcode
+	 * matches.
+	 */
+	public function test_attached_field_collects_across_two_bare_shortcodes(): void {
+		// ARRANGE: A post with a bare [gallery] and a bare [playlist], each
+		// with a child of the type it renders.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => "[gallery]\n[playlist]" )
+		);
+		$image   = $this->seed_attached_child(
+			$post_id,
+			'2025/01/pair-image.jpg',
+			'image/jpeg',
+			1
+		);
+		$audio   = $this->seed_attached_child(
+			$post_id,
+			'2025/01/pair-audio.mp3',
+			'audio/mpeg',
+			2
+		);
+
+		// ACT: Request the field.
+		$set = $this->attached_media_for( $post_id );
+
+		// ASSERT: The gallery's image and the playlist's audio are both returned.
+		$this->assertSame(
+			array(
+				array(
+					'id'         => $image,
+					'menu_order' => 1,
+				),
+				array(
+					'id'         => $audio,
+					'menu_order' => 2,
+				),
+			),
+			$set
+		);
+	}
+
+	/**
+	 * Verifies that a [gallery ids="..."] returns an empty set: the id-bearing
+	 * form is the shortcode-ID rewriter's domain, not this attached-set field.
+	 */
+	public function test_attached_field_empty_for_ids_gallery(): void {
+		// ARRANGE: A [gallery ids=...] with an attached image the field must
+		// not pull in.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => '[gallery ids="10,11"]' )
+		);
+		$this->seed_attached_child( $post_id, '2025/01/lib.jpg', 'image/jpeg', 1 );
+
+		// ACT + ASSERT: The field returns an empty set.
+		$this->assertSame( array(), $this->attached_media_for( $post_id ) );
+	}
+
+	/**
+	 * Verifies that an empty selector attribute (ids="") leaves the shortcode
+	 * bare, mirroring core's ! empty() gate, so the attached set is exposed.
+	 */
+	public function test_attached_field_treats_empty_ids_as_bare(): void {
+		// ARRANGE: A [gallery ids=""] whose empty selector core treats as bare.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => '[gallery ids=""]' )
+		);
+		$image   = $this->seed_attached_child(
+			$post_id,
+			'2025/01/empty-ids.jpg',
+			'image/jpeg',
+			1
+		);
+
+		// ACT: Request the field.
+		$set = $this->attached_media_for( $post_id );
+
+		// ASSERT: The own image is returned.
+		$this->assertSame(
+			array(
+				array(
+					'id'         => $image,
+					'menu_order' => 1,
+				),
+			),
+			$set
+		);
+	}
+
+	/**
+	 * Verifies that a [gallery id="B"] naming another post returns an empty set,
+	 * since the field only exposes a post's own attached media.
+	 */
+	public function test_attached_field_empty_for_cross_post_gallery(): void {
+		// ARRANGE: A cross-post gallery plus an own attached image.
+		$other   = self::factory()->post->create();
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => '[gallery id="' . $other . '"]' )
+		);
+		$this->seed_attached_child( $post_id, '2025/01/own.jpg', 'image/jpeg', 1 );
+
+		// ACT + ASSERT: The field returns an empty set.
+		$this->assertSame( array(), $this->attached_media_for( $post_id ) );
+	}
+
+	/**
+	 * Verifies that a [gallery id="SELF"] naming the post itself is treated as
+	 * bare and lists the post's own attached images.
+	 */
+	public function test_attached_field_treats_self_id_gallery_as_bare(): void {
+		// ARRANGE: Create the post, then set content referencing its own ID.
+		$post_id = self::factory()->post->create();
+		$this->assertIsInt( $post_id );
+		wp_update_post(
+			array(
+				'ID'           => $post_id,
+				'post_content' => '[gallery id="' . $post_id . '"]',
+			)
+		);
+		$image = $this->seed_attached_child(
+			$post_id,
+			'2025/01/self.jpg',
+			'image/jpeg',
+			1
+		);
+
+		// ACT: Request the field.
+		$set = $this->attached_media_for( $post_id );
+
+		// ASSERT: The own image is returned.
+		$this->assertSame(
+			array(
+				array(
+					'id'         => $image,
+					'menu_order' => 1,
+				),
+			),
+			$set
+		);
+	}
+
+	/**
+	 * Verifies that an escaped [[gallery]] literal, which renders as text rather
+	 * than a live gallery, exposes no attached media.
+	 */
+	public function test_attached_field_ignores_escaped_gallery(): void {
+		// ARRANGE: An escaped [[gallery]] plus an attached image the field must
+		// not expose.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => '[[gallery]]' )
+		);
+		$this->seed_attached_child( $post_id, '2025/01/escaped.jpg', 'image/jpeg', 1 );
+
+		// ACT + ASSERT: The field returns an empty set.
+		$this->assertSame( array(), $this->attached_media_for( $post_id ) );
+	}
+
+	/**
+	 * Verifies that a post without a bare gallery/playlist returns an empty set,
+	 * so the whole attached library is never exposed.
+	 */
+	public function test_attached_field_empty_without_bare_shortcode(): void {
+		// ARRANGE: Plain content plus an attached image, no shortcode.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => 'Just text, no shortcodes.' )
+		);
+		$this->seed_attached_child( $post_id, '2025/01/lib.jpg', 'image/jpeg', 1 );
+
+		// ACT + ASSERT: The field returns an empty set.
+		$this->assertSame( array(), $this->attached_media_for( $post_id ) );
+	}
+
+	/**
+	 * Verifies that the attached-media field is null for requests not
+	 * authenticated by Safe Publish HMAC.
+	 */
+	public function test_attached_field_is_null_for_non_hmac_request(): void {
+		// ARRANGE: A bare-gallery post, no HMAC auth.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => '[gallery]' )
+		);
+
+		// ACT: Dispatch a public single-post request.
+		$data = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		)->get_data();
+
+		// ASSERT: Field present (registered) but null.
+		$this->assertArrayHasKey( 'safe_publish_attached_media', $data );
+		$this->assertNull( $data['safe_publish_attached_media'] );
+	}
 }

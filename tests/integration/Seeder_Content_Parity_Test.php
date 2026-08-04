@@ -68,10 +68,10 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 
 	/**
 	 * Source post IDs for the bespoke edge-case pages (non-ASCII, empty, embed,
-	 * footnotes, reusable-block, and the gallery/playlist shortcodes). Same high
-	 * range, distinct from every other base. All seed as pages so the
-	 * category-less body never picks up the default category that WordPress
-	 * auto-assigns to a post.
+	 * footnotes, reusable-block, cross-post gallery, the gallery/playlist
+	 * shortcodes, and the bare gallery/playlist). Same high range, distinct from
+	 * every other base. All seed as pages so the category-less body never picks
+	 * up the default category that WordPress auto-assigns to a post.
 	 */
 	private const EDGE_NON_ASCII_SOURCE_ID          = 9200001;
 	private const EDGE_EMPTY_SOURCE_ID              = 9200002;
@@ -80,6 +80,9 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	private const EDGE_REUSABLE_BLOCK_SOURCE_ID     = 9200005;
 	private const EDGE_GALLERY_SHORTCODE_SOURCE_ID  = 9200006;
 	private const EDGE_PLAYLIST_SHORTCODE_SOURCE_ID = 9200007;
+	private const EDGE_BARE_GALLERY_SOURCE_ID       = 9200008;
+	private const EDGE_BARE_PLAYLIST_SOURCE_ID      = 9200009;
+	private const EDGE_CROSS_POST_GALLERY_SOURCE_ID = 9200010;
 
 	/**
 	 * Source attachment IDs the gallery-shortcode edge page references, spread
@@ -102,6 +105,22 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	 * @var list<int>
 	 */
 	private const PLAYLIST_SHORTCODE_MEDIA_IDS = array( 9600005 );
+
+	/**
+	 * Source attachment IDs the bare-gallery edge page's attached image set is
+	 * seeded from, in the same 9600xxx shortcode-media range.
+	 *
+	 * @var list<int>
+	 */
+	private const BARE_GALLERY_MEDIA_IDS = array( 9600006, 9600007 );
+
+	/**
+	 * Source attachment ID the bare-playlist edge page's attached video set is
+	 * seeded from.
+	 *
+	 * @var list<int>
+	 */
+	private const BARE_PLAYLIST_MEDIA_IDS = array( 9600008 );
 
 	/**
 	 * Provider host of the embed edge page's url. Distinct from
@@ -260,7 +279,8 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	 * empty-content page, an embed page (a core/embed block with an external
 	 * provider url), a footnotes page (a core/footnotes block plus matching
 	 * footnotes meta), a reusable-block page (a core/block referencing an
-	 * unimported wp_block), and gallery/playlist shortcode pages (bare source
+	 * unimported wp_block), a cross-post gallery page (a [gallery id] referencing
+	 * an unimported post), and gallery/playlist shortcode pages (bare source
 	 * attachment IDs the rewriter resolves and rewrites). All seed as pages so
 	 * the category-less body never picks up WordPress' default category, and all
 	 * stay top-level on default scalars; the fixture supplies their content.
@@ -301,6 +321,12 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				'author_user_id' => $page_author_id,
 			),
 			array(
+				'kind'           => 'cross_post_gallery',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_CROSS_POST_GALLERY_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+			),
+			array(
 				'kind'           => 'gallery_shortcode',
 				'endpoint'       => 'pages',
 				'source_id'      => self::EDGE_GALLERY_SHORTCODE_SOURCE_ID,
@@ -313,6 +339,20 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 				'source_id'      => self::EDGE_PLAYLIST_SHORTCODE_SOURCE_ID,
 				'author_user_id' => $page_author_id,
 				'media_ids'      => self::PLAYLIST_SHORTCODE_MEDIA_IDS,
+			),
+			array(
+				'kind'           => 'bare_gallery',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_BARE_GALLERY_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+				'media_ids'      => self::BARE_GALLERY_MEDIA_IDS,
+			),
+			array(
+				'kind'           => 'bare_playlist',
+				'endpoint'       => 'pages',
+				'source_id'      => self::EDGE_BARE_PLAYLIST_SOURCE_ID,
+				'author_user_id' => $page_author_id,
+				'media_ids'      => self::BARE_PLAYLIST_MEDIA_IDS,
 			),
 		);
 	}
@@ -1090,11 +1130,52 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 					$featured_id,
 					self::$fixture->source_media_metadata( $ref['id'] ),
 					$source_id,
+					0,
 					self::$fixture->dest_post_ids,
 					$this
 				);
 			}
 		}
+	}
+
+	/**
+	 * Verifies that each image/video a bare [gallery]/[playlist] renders is
+	 * imported, parented to its destination edge post, and carries its source
+	 * menu_order — the ordered attached set core needs to render the bare
+	 * shortcode. Guards against a vacuous pass by requiring both a gallery-set
+	 * image and a playlist-set video.
+	 */
+	public function test_bare_shortcode_attached_set_imported(): void {
+		// ARRANGE + ACT: Batch already imported.
+		$gallery_checked  = false;
+		$playlist_checked = false;
+
+		// ASSERT: Each attached-set item lands parented and menu_order-ordered.
+		foreach ( self::$fixture->bare_shortcode_media_refs as $ref ) {
+			Post_Parity_Asserter::assert_imported_attachment_for_source_url(
+				$ref['url'],
+				self::SOURCE_BASE_URL,
+				$ref['mime'],
+				null,
+				self::$fixture->source_media_metadata( $ref['id'] ),
+				$ref['parent'],
+				$ref['menu_order'],
+				self::$fixture->dest_post_ids,
+				$this
+			);
+
+			$gallery_checked  = $gallery_checked || 'image/jpeg' === $ref['mime'];
+			$playlist_checked = $playlist_checked || 'video/mp4' === $ref['mime'];
+		}
+
+		$this->assertTrue(
+			$gallery_checked,
+			'Batch should seed a bare-gallery image to verify'
+		);
+		$this->assertTrue(
+			$playlist_checked,
+			'Batch should seed a bare-playlist video to verify'
+		);
 	}
 
 	/**
@@ -1328,23 +1409,27 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that no imported post other than the reusable-block edge raised an
-	 * import warning, reverse-asserting that the clean batch, including the empty,
-	 * non-ASCII, embed, and footnotes edge pages, triggers no degradation. The
-	 * reusable-block page's degradation is asserted by
-	 * test_reusable_block_edge_surfaces_degradation.
+	 * Verifies that no imported post other than the reusable-block and cross-post
+	 * gallery edges raised an import warning, reverse-asserting that the clean
+	 * batch, including the empty, non-ASCII, embed, and footnotes edge pages,
+	 * triggers no degradation. Those two pages' degradations are asserted by
+	 * test_reusable_block_edge_surfaces_degradation and
+	 * test_cross_post_gallery_edge_surfaces_degradation.
 	 */
 	public function test_import_raised_no_warnings(): void {
 		// ARRANGE + ACT: batch already imported.
-		// ASSERT: warnings captured for every imported post; only the
-		// reusable-block edge degrades, every other post is warning-free.
+		// ASSERT: Warnings captured for every imported post; only the reusable-
+		// block and cross-post gallery edges degrade, every other is warning-free.
 		$this->assertSame(
 			array_keys( self::$fixture->dest_post_ids ),
 			array_keys( self::$fixture->warnings_by_source_id ),
 			'Warnings should be captured for every imported post'
 		);
 		foreach ( self::$fixture->warnings_by_source_id as $source_id => $warnings ) {
-			if ( self::EDGE_REUSABLE_BLOCK_SOURCE_ID === $source_id ) {
+			if (
+				self::EDGE_REUSABLE_BLOCK_SOURCE_ID === $source_id
+				|| self::EDGE_CROSS_POST_GALLERY_SOURCE_ID === $source_id
+			) {
 				continue;
 			}
 			$this->assertSame(
@@ -1415,6 +1500,61 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 			'<!-- wp:block {"ref":' . $ref . '} /-->',
 			(string) get_post( $dest_id )->post_content,
 			'Dest content should preserve the unresolved core/block ref'
+		);
+	}
+
+	/**
+	 * Verifies that the cross-post gallery edge page surfaces a retryable
+	 * unmapped_gallery_reference degradation: the import raises the warning
+	 * carrying the referenced source post id, opens a retryable attention issue
+	 * keyed to it, and leaves the shortcode id in place since this batch does not
+	 * import the referenced post.
+	 */
+	public function test_cross_post_gallery_edge_surfaces_degradation(): void {
+		// ARRANGE + ACT: Batch imported; locate the cross-post gallery edge page.
+		$this->assertArrayHasKey(
+			self::EDGE_CROSS_POST_GALLERY_SOURCE_ID,
+			self::$fixture->dest_post_ids,
+			'Cross-post gallery edge page should import to a dest post'
+		);
+		$dest_id = self::$fixture->dest_post_ids[ self::EDGE_CROSS_POST_GALLERY_SOURCE_ID ];
+		$ref     = Seeder_Parity_Fixture::CROSS_POST_GALLERY_SOURCE_REF;
+
+		// ASSERT: The import raised exactly the unmapped gallery reference.
+		$this->assertSame(
+			array(
+				array(
+					'type'      => 'unmapped_gallery_reference',
+					'source_id' => $ref,
+				),
+			),
+			self::$fixture->warnings_by_source_id[ self::EDGE_CROSS_POST_GALLERY_SOURCE_ID ],
+			'Cross-post gallery edge import should raise one unmapped gallery reference'
+		);
+
+		// ASSERT: A retryable attention issue is keyed to the referenced post.
+		$issue = ( new Attention_Issues_Repository() )->get_issue(
+			$dest_id,
+			'unmapped_gallery_reference',
+			$ref,
+			'post'
+		);
+		$this->assertNotNull(
+			$issue,
+			'Cross-post gallery degradation should open an attention issue'
+		);
+		$this->assertSame( 'warning', $issue['severity'] );
+		$this->assertContains(
+			'unmapped_gallery_reference',
+			Admin_Ajax_Controller::ATTENTION_ISSUE_RETRYABLE_TYPES,
+			'Gallery-reference issue must be retryable'
+		);
+
+		// ASSERT: The shortcode id is left in place on the destination.
+		$this->assertStringContainsString(
+			'[gallery id="' . $ref . '"]',
+			(string) get_post( $dest_id )->post_content,
+			'Dest content should preserve the unresolved gallery id'
 		);
 	}
 }
