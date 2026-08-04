@@ -342,6 +342,9 @@ const NeedsAttentionInbox = ( {
 							...current,
 							page: 1,
 						} ) );
+						// Drop the old rows so none stays actionable during the
+						// refetch.
+						setItems( [] );
 						setActionNotice( null );
 					} }
 				>
@@ -396,7 +399,12 @@ const NeedsAttentionInbox = ( {
 					data={ items }
 					fields={ fields }
 					view={ view }
-					onChangeView={ ( next: View ) => setView( next ) }
+					onChangeView={ ( next: View ) =>
+						setView( {
+							...next,
+							page: next.perPage !== view.perPage ? 1 : next.page,
+						} )
+					}
 					paginationInfo={ paginationInfo }
 					defaultLayouts={ { [ LAYOUT_TABLE ]: {} } }
 					actions={ actions }
