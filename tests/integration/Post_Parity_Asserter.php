@@ -245,13 +245,17 @@ final class Post_Parity_Asserter {
 	private const DEFERRED_META = array();
 
 	/**
-	 * Taxonomies whose term assignments are verified for parity. Aligned with
-	 * the seeder's term_config(); extend alongside it when new taxonomies are
-	 * added.
+	 * Taxonomies whose term assignments are verified for parity: the seeder's
+	 * flat category/post_tag plus the hierarchical seeder_section the parity
+	 * suite registers to exercise term trees.
 	 *
 	 * @var list<string>
 	 */
-	private const TERM_TAXONOMIES_CHECKED = array( 'category', 'post_tag' );
+	private const TERM_TAXONOMIES_CHECKED = array(
+		'category',
+		'post_tag',
+		'seeder_section',
+	);
 
 	/**
 	 * Attachment-post columns expected to differ between source media and the
@@ -900,16 +904,15 @@ final class Post_Parity_Asserter {
 	}
 
 	/**
-	 * Asserts that every taxonomy assignment in the source body has a
-	 * matching dest term and that the dest post is assigned to it.
+	 * Asserts that every source taxonomy assignment resolves to a dest term
+	 * whose parent maps to the dest ancestor of its source parent and whose
+	 * description matches source, and that assigned terms are attached to the
+	 * post while ancestors are created but not attached.
 	 *
-	 * Source assignments come from `_embedded['wp:term']`, where each entry
-	 * carries a taxonomy and a name. The importer resolves dest terms by
-	 * slug (`sanitize_title( name )`) and creates the term if missing. This
-	 * helper also reverse-asserts that dest terms land with parent=0 and
-	 * description='' to lock in the importer's default-create behavior — a
-	 * future change that propagates parent or description must update this
-	 * assertion alongside the import code.
+	 * Source records come from safe_publish_terms when present (carrying
+	 * parent, description, and the assigned flag), and from
+	 * _embedded['wp:term'] otherwise — the flat fallback yields parent 0 and an
+	 * empty description.
 	 *
 	 * @param array<string, mixed> $source_body Source REST response body.
 	 * @param WP_Post              $dest_post   Imported destination post.
@@ -920,51 +923,77 @@ final class Post_Parity_Asserter {
 		WP_Post $dest_post,
 		TestCase $test
 	): void {
-		$source_assignments = self::source_term_assignments( $source_body );
+		foreach ( self::source_term_assignments( $source_body ) as $taxonomy => $records ) {
+			$dest_by_source_id = array();
+			$resolved          = array();
 
-		foreach ( $source_assignments as $taxonomy => $names ) {
-			foreach ( $names as $name ) {
-				$slug = sanitize_title( $name );
-				$term = get_term_by( 'slug', $slug, $taxonomy );
-
+			foreach ( $records as $record ) {
+				$term = get_term_by( 'slug', $record['slug'], $taxonomy );
 				$test->assertNotFalse(
 					$term,
-					"Source term '{$name}' (slug '{$slug}') should exist"
-					. " on dest in taxonomy '{$taxonomy}'"
+					"Source term '{$record['name']}' (slug '{$record['slug']}')"
+					. " should exist on dest in taxonomy '{$taxonomy}'"
 				);
 
+				$resolved[] = array(
+					'record' => $record,
+					'term'   => $term,
+				);
+				if ( $record['source_id'] > 0 ) {
+					$dest_by_source_id[ $record['source_id'] ] = (int) $term->term_id;
+				}
+			}
+
+			foreach ( $resolved as $entry ) {
+				$record = $entry['record'];
+				$term   = $entry['term'];
+
 				$test->assertSame(
-					$name,
+					$record['name'],
 					(string) $term->name,
-					"Dest term '{$slug}' in '{$taxonomy}' should keep its"
-					. ' source name'
-				);
-				$test->assertSame(
-					0,
-					(int) $term->parent,
-					"Dest term '{$slug}' in '{$taxonomy}' should have"
-					. ' parent=0 (importer default)'
-				);
-				$test->assertSame(
-					'',
-					(string) $term->description,
-					"Dest term '{$slug}' in '{$taxonomy}' should have"
-					. ' empty description (importer default)'
+					"Dest term '{$record['slug']}' in '{$taxonomy}' should keep"
+					. ' its source name'
 				);
 
-				$test->assertTrue(
-					has_term( $term->term_id, $taxonomy, $dest_post ),
-					"Dest post should be assigned term '{$slug}' in"
-					. " '{$taxonomy}'"
+				$expected_parent = $record['parent'] > 0
+					? ( $dest_by_source_id[ $record['parent'] ] ?? 0 )
+					: 0;
+				$test->assertSame(
+					$expected_parent,
+					(int) $term->parent,
+					"Dest term '{$record['slug']}' in '{$taxonomy}' should map to"
+					. ' the dest ID of its source parent'
 				);
+
+				$test->assertSame(
+					wp_kses_post( $record['description'] ),
+					(string) $term->description,
+					"Dest term '{$record['slug']}' in '{$taxonomy}' should carry"
+					. ' the source description'
+				);
+
+				if ( $record['assigned'] ) {
+					$test->assertTrue(
+						has_term( (int) $term->term_id, $taxonomy, $dest_post ),
+						"Dest post should be assigned term '{$record['slug']}' in"
+						. " '{$taxonomy}'"
+					);
+				} else {
+					$test->assertFalse(
+						has_term( (int) $term->term_id, $taxonomy, $dest_post ),
+						'Dest post should not be assigned ancestor'
+						. " '{$record['slug']}' in '{$taxonomy}'"
+					);
+				}
 			}
 		}
 	}
 
 	/**
-	 * Asserts that every dest term assignment in a checked taxonomy traces
-	 * back to a source assignment. Fails loudly if the importer ever attaches
-	 * a term the source didn't ask for.
+	 * Asserts that every dest term attached to the post in a checked taxonomy
+	 * traces back to an assigned source record. Fails loudly if the importer
+	 * ever attaches a term the source didn't ask for, including an ancestor
+	 * that should be created but not attached.
 	 *
 	 * @param array<string, mixed> $source_body Source REST response body.
 	 * @param WP_Post              $dest_post   Imported destination post.
@@ -975,13 +1004,14 @@ final class Post_Parity_Asserter {
 		WP_Post $dest_post,
 		TestCase $test
 	): void {
-		$source_slugs_by_taxonomy = array();
+		$assigned_slugs_by_taxonomy = array();
 		foreach (
-			self::source_term_assignments( $source_body ) as $taxonomy => $names
+			self::source_term_assignments( $source_body ) as $taxonomy => $records
 		) {
-			foreach ( $names as $name ) {
-				$source_slugs_by_taxonomy[ $taxonomy ][ sanitize_title( $name ) ]
-					= true;
+			foreach ( $records as $record ) {
+				if ( $record['assigned'] ) {
+					$assigned_slugs_by_taxonomy[ $taxonomy ][ $record['slug'] ] = true;
+				}
 			}
 		}
 
@@ -998,22 +1028,73 @@ final class Post_Parity_Asserter {
 			foreach ( (array) $dest_terms as $term ) {
 				$test->assertArrayHasKey(
 					$term->slug,
-					$source_slugs_by_taxonomy[ $taxonomy ] ?? array(),
+					$assigned_slugs_by_taxonomy[ $taxonomy ] ?? array(),
 					"Dest post has term '{$term->slug}' in '{$taxonomy}'"
-					. ' with no matching source assignment'
+					. ' with no matching assigned source record'
 				);
 			}
 		}
 	}
 
 	/**
-	 * Reads _embedded['wp:term'] and returns a flat taxonomy => list of
-	 * names map.
+	 * Returns source term assignments keyed by taxonomy, preferring the richer
+	 * safe_publish_terms field and falling back to the flat
+	 * _embedded['wp:term'] payload when the field is absent.
 	 *
 	 * @param array<string, mixed> $source_body Source REST response body.
-	 * @return array<string, list<string>>
+	 * @return array<string, list<array{source_id: int, name: string, slug: string, parent: int, description: string, assigned: bool}>>
 	 */
 	private static function source_term_assignments( array $source_body ): array {
+		$field = $source_body['safe_publish_terms'] ?? null;
+
+		return is_array( $field )
+			? self::term_records_from_field( $field )
+			: self::term_records_from_embed( $source_body );
+	}
+
+	/**
+	 * Normalizes the safe_publish_terms field into per-taxonomy source records.
+	 *
+	 * @param array<string, mixed> $field safe_publish_terms field.
+	 * @return array<string, list<array{source_id: int, name: string, slug: string, parent: int, description: string, assigned: bool}>>
+	 */
+	private static function term_records_from_field( array $field ): array {
+		$assignments = array();
+
+		foreach ( $field as $taxonomy => $records ) {
+			if ( ! is_string( $taxonomy ) || ! is_array( $records ) ) {
+				continue;
+			}
+			foreach ( $records as $record ) {
+				if ( ! is_array( $record ) ) {
+					continue;
+				}
+				$name = (string) ( $record['name'] ?? '' );
+				$slug = (string) ( $record['slug'] ?? '' );
+
+				$assignments[ $taxonomy ][] = array(
+					'source_id'   => (int) ( $record['id'] ?? 0 ),
+					'name'        => $name,
+					'slug'        => sanitize_title( '' !== $slug ? $slug : $name ),
+					'parent'      => (int) ( $record['parent'] ?? 0 ),
+					'description' => (string) ( $record['description'] ?? '' ),
+					'assigned'    => ! array_key_exists( 'assigned', $record )
+						|| (bool) $record['assigned'],
+				);
+			}
+		}
+
+		return $assignments;
+	}
+
+	/**
+	 * Reads _embedded['wp:term'] into flat source records: assigned, parent 0,
+	 * and no description, mirroring the importer's pre-field behavior.
+	 *
+	 * @param array<string, mixed> $source_body Source REST response body.
+	 * @return array<string, list<array{source_id: int, name: string, slug: string, parent: int, description: string, assigned: bool}>>
+	 */
+	private static function term_records_from_embed( array $source_body ): array {
 		$assignments = array();
 		$embedded    = $source_body['_embedded']['wp:term'] ?? array();
 
@@ -1024,7 +1105,14 @@ final class Post_Parity_Asserter {
 				if ( '' === $taxonomy || '' === $name ) {
 					continue;
 				}
-				$assignments[ $taxonomy ][] = $name;
+				$assignments[ $taxonomy ][] = array(
+					'source_id'   => (int) ( $term['id'] ?? 0 ),
+					'name'        => $name,
+					'slug'        => sanitize_title( $name ),
+					'parent'      => 0,
+					'description' => '',
+					'assigned'    => true,
+				);
 			}
 		}
 

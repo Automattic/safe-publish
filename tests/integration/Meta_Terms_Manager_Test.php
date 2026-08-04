@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests\Integration;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Utils\Options;
 use WP_Error;
+use WP_Term;
 
 /**
  * Meta Terms Manager Test Class.
@@ -464,6 +465,306 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 			'',
 			(string) get_term_meta( $category_id, Options::META_SOURCE_TERM_ID, true )
 		);
+	}
+
+	/**
+	 * Verifies that update_terms() creates a hierarchical tree parent-first,
+	 * wiring each term to its mapped destination parent, and attaches only the
+	 * assigned leaf while its ancestors are created but not assigned.
+	 */
+	public function test_update_terms_builds_hierarchy_with_mapped_parents(): void {
+		// ARRANGE: A three-level source tree, records deliberately out of
+		// order; only the leaf is assigned.
+		$suffix = uniqid();
+		$terms  = array(
+			'category' => array(
+				array(
+					'source_term_id' => 100,
+					'name'           => "Root {$suffix}",
+					'slug'           => "root-{$suffix}",
+					'parent'         => 0,
+					'assigned'       => false,
+				),
+				array(
+					'source_term_id' => 102,
+					'name'           => "Leaf {$suffix}",
+					'slug'           => "leaf-{$suffix}",
+					'parent'         => 101,
+					'assigned'       => true,
+				),
+				array(
+					'source_term_id' => 101,
+					'name'           => "Child {$suffix}",
+					'slug'           => "child-{$suffix}",
+					'parent'         => 100,
+					'assigned'       => false,
+				),
+			),
+		);
+
+		// ACT: Import the tree.
+		$result = $this->manager->update_terms( $this->post_id, $terms );
+
+		// ASSERT: Every term created with the mapped destination parent.
+		$this->assertTrue( $result );
+		$root  = get_term_by( 'slug', "root-{$suffix}", 'category' );
+		$child = get_term_by( 'slug', "child-{$suffix}", 'category' );
+		$leaf  = get_term_by( 'slug', "leaf-{$suffix}", 'category' );
+		$this->assertInstanceOf( WP_Term::class, $root );
+		$this->assertInstanceOf( WP_Term::class, $child );
+		$this->assertInstanceOf( WP_Term::class, $leaf );
+		$this->assertSame( 0, (int) $root->parent );
+		$this->assertSame( (int) $root->term_id, (int) $child->parent );
+		$this->assertSame( (int) $child->term_id, (int) $leaf->parent );
+
+		// ASSERT: Only the leaf is attached; ancestors are created but
+		// unassigned.
+		$assigned = wp_get_post_terms(
+			$this->post_id,
+			'category',
+			array( 'fields' => 'ids' )
+		);
+		$this->assertSame( array( (int) $leaf->term_id ), $assigned );
+	}
+
+	/**
+	 * Verifies that update_terms() sets the source description on a term it
+	 * creates.
+	 */
+	public function test_update_terms_sets_description_on_create(): void {
+		// ARRANGE: A new term carrying a description.
+		$suffix      = uniqid();
+		$description = 'A seeded category description.';
+		$terms       = array(
+			'category' => array(
+				array(
+					'name'        => "Described {$suffix}",
+					'slug'        => "described-{$suffix}",
+					'description' => $description,
+				),
+			),
+		);
+
+		// ACT: Import the term.
+		$result = $this->manager->update_terms( $this->post_id, $terms );
+
+		// ASSERT: The created term carries the description.
+		$this->assertTrue( $result );
+		$term = get_term_by( 'slug', "described-{$suffix}", 'category' );
+		$this->assertInstanceOf( WP_Term::class, $term );
+		$this->assertSame( $description, $term->description );
+	}
+
+	/**
+	 * Verifies that update_terms() strips unsafe markup from a term description
+	 * a compromised source could inject, while keeping safe formatting.
+	 *
+	 * Drops core's pre_term_description kses filter first so the term is stored
+	 * as it would be for an unfiltered_html importer on a web request — the
+	 * case where wp_insert_term alone would keep the raw markup and only this
+	 * importer's own sanitization stands between the source and stored XSS.
+	 */
+	public function test_update_terms_sanitizes_term_description_on_create(): void {
+		// ARRANGE: A new term whose description carries a script payload, with
+		// core's term-description kses removed to expose our sanitization.
+		remove_filter( 'pre_term_description', 'wp_filter_kses' );
+		$suffix = uniqid();
+		$terms  = array(
+			'category' => array(
+				array(
+					'name'        => "Xss {$suffix}",
+					'slug'        => "xss-{$suffix}",
+					'description' => 'Safe <strong>text</strong>'
+						. '<script>alert(1)</script>',
+				),
+			),
+		);
+
+		// ACT: Import the term.
+		$result = $this->manager->update_terms( $this->post_id, $terms );
+		add_filter( 'pre_term_description', 'wp_filter_kses' );
+
+		// ASSERT: The script is stripped while safe markup survives.
+		$this->assertTrue( $result );
+		$term = get_term_by( 'slug', "xss-{$suffix}", 'category' );
+		$this->assertInstanceOf( WP_Term::class, $term );
+		$this->assertStringNotContainsString( '<script>', $term->description );
+		$this->assertStringContainsString(
+			'<strong>text</strong>',
+			$term->description
+		);
+	}
+
+	/**
+	 * Verifies that update_terms() reuses a term by its source identity (source
+	 * ID plus site URL) even when the record's slug and name have drifted,
+	 * rather than creating a duplicate.
+	 */
+	public function test_update_terms_reuses_term_by_source_identity(): void {
+		// ARRANGE: An existing destination term already tagged with a source
+		// identity, and a re-import of that source term with a changed
+		// slug/name.
+		$source_site_url = 'https://source.example.com';
+		$source_term_id  = 7788;
+		$existing_id     = self::factory()->term->create(
+			array(
+				'taxonomy' => 'category',
+				'name'     => 'Original Name',
+				'slug'     => 'original-slug',
+			)
+		);
+		update_term_meta( $existing_id, Options::META_SOURCE_TERM_ID, $source_term_id );
+		update_term_meta( $existing_id, Options::META_SOURCE_TERM_URL, $source_site_url );
+
+		$terms = array(
+			'category' => array(
+				array(
+					'source_term_id' => $source_term_id,
+					'name'           => 'Renamed On Source',
+					'slug'           => 'renamed-on-source',
+					'parent'         => 0,
+					'assigned'       => true,
+				),
+			),
+		);
+
+		// ACT: Import the renamed record under the same source identity.
+		$result = $this->manager->update_terms(
+			$this->post_id,
+			$terms,
+			$source_site_url
+		);
+
+		// ASSERT: The existing term is reused; no term is created for the new
+		// slug.
+		$this->assertTrue( $result );
+		$assigned = wp_get_post_terms(
+			$this->post_id,
+			'category',
+			array( 'fields' => 'ids' )
+		);
+		$this->assertSame( array( $existing_id ), $assigned );
+		$this->assertFalse(
+			get_term_by( 'slug', 'renamed-on-source', 'category' )
+		);
+	}
+
+	/**
+	 * Verifies that update_terms() keeps two same-named terms under different
+	 * parents distinct, the regression guard against merging legitimate
+	 * siblings once hierarchy adds parents.
+	 */
+	public function test_update_terms_keeps_same_name_siblings_under_different_parents(): void {
+		// ARRANGE: Two same-named leaves, each under a different parent.
+		$suffix = uniqid();
+		$name   = "News {$suffix}";
+		$terms  = array(
+			'category' => array(
+				array(
+					'source_term_id' => 10,
+					'name'           => "Sports {$suffix}",
+					'slug'           => "sports-{$suffix}",
+					'parent'         => 0,
+					'assigned'       => false,
+				),
+				array(
+					'source_term_id' => 20,
+					'name'           => "Tech {$suffix}",
+					'slug'           => "tech-{$suffix}",
+					'parent'         => 0,
+					'assigned'       => false,
+				),
+				array(
+					'source_term_id' => 11,
+					'name'           => $name,
+					'slug'           => "news-sports-{$suffix}",
+					'parent'         => 10,
+					'assigned'       => true,
+				),
+				array(
+					'source_term_id' => 21,
+					'name'           => $name,
+					'slug'           => "news-tech-{$suffix}",
+					'parent'         => 20,
+					'assigned'       => true,
+				),
+			),
+		);
+
+		// ACT: Import both trees in one call.
+		$result = $this->manager->update_terms( $this->post_id, $terms );
+
+		// ASSERT: Two distinct terms of the same name exist, one under each
+		// parent.
+		$this->assertTrue( $result );
+		$news = get_terms(
+			array(
+				'taxonomy'   => 'category',
+				'name'       => $name,
+				'hide_empty' => false,
+			)
+		);
+		$this->assertIsArray( $news );
+		$this->assertSame( 2, count( $news ) );
+
+		$sports         = get_term_by( 'slug', "sports-{$suffix}", 'category' );
+		$tech           = get_term_by( 'slug', "tech-{$suffix}", 'category' );
+		$actual_parents = array( (int) $news[0]->parent, (int) $news[1]->parent );
+		sort( $actual_parents );
+		$expected_parents = array( (int) $sports->term_id, (int) $tech->term_id );
+		sort( $expected_parents );
+		$this->assertSame( $expected_parents, $actual_parents );
+	}
+
+	/**
+	 * Verifies that update_terms() reuses a pre-existing term matched by slug
+	 * as-is, leaving its parent unchanged, so this create-only pass never
+	 * re-parents a term an operator may have edited on the destination.
+	 */
+	public function test_update_terms_does_not_reparent_existing_term(): void {
+		// ARRANGE: An existing top-level term, and a source tree that would
+		// place that same term under a new parent.
+		$suffix      = uniqid();
+		$existing_id = self::factory()->term->create(
+			array(
+				'taxonomy' => 'category',
+				'name'     => "Existing {$suffix}",
+				'slug'     => "existing-{$suffix}",
+			)
+		);
+		$terms       = array(
+			'category' => array(
+				array(
+					'source_term_id' => 30,
+					'name'           => "New Parent {$suffix}",
+					'slug'           => "new-parent-{$suffix}",
+					'parent'         => 0,
+					'assigned'       => false,
+				),
+				array(
+					'source_term_id' => 31,
+					'name'           => "Existing {$suffix}",
+					'slug'           => "existing-{$suffix}",
+					'parent'         => 30,
+					'assigned'       => true,
+				),
+			),
+		);
+
+		// ACT: Import the tree.
+		$result = $this->manager->update_terms( $this->post_id, $terms );
+
+		// ASSERT: The existing term is reused unchanged, still top-level.
+		$this->assertTrue( $result );
+		$term = get_term( $existing_id, 'category' );
+		$this->assertInstanceOf( WP_Term::class, $term );
+		$this->assertSame( 0, (int) $term->parent );
+		$assigned = wp_get_post_terms(
+			$this->post_id,
+			'category',
+			array( 'fields' => 'ids' )
+		);
+		$this->assertSame( array( $existing_id ), $assigned );
 	}
 
 	/**

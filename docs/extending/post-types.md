@@ -92,6 +92,8 @@ register_taxonomy( 'genre', 'book', [
 ] );
 ```
 
+A hierarchical taxonomy's structure and term descriptions transfer with the terms.
+
 ## Hierarchical Post Types
 
 Hierarchical post types (like pages) can be imported, and parent-child relationships are mapped across sites. A child post's source parent is matched to its destination counterpart through the `safe_publish_source_post_id` meta lookup, so the parent must already be imported — or be part of the same bulk batch — when the child imports. By default an unresolved parent aborts the import; the `safe_publish_import_allow_orphans` filter relaxes this, importing the child as a top-level post with a warning. See [Parent Resolution](../concepts/import-process.md#parent-resolution) for full details.

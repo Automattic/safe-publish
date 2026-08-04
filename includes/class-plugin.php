@@ -35,6 +35,7 @@ use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\API\Safe_Publish_API;
 use Safe_Publish\API\Source_Author_REST_Field;
 use Safe_Publish\API\Source_Media_REST_Field;
+use Safe_Publish\API\Source_Terms_REST_Field;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
@@ -120,7 +121,11 @@ final class Plugin {
 			true
 		);
 
-		if ( $can_export && ! empty( $connected_site_url ) ) {
+		if (
+			$can_export
+			&& is_string( $connected_site_url )
+			&& '' !== $connected_site_url
+		) {
 			$auth_manager = new Auth_Manager();
 			$auth_manager->init();
 
@@ -135,6 +140,12 @@ final class Plugin {
 			);
 
 			$source_media_field->init();
+
+			$source_terms_field = new Source_Terms_REST_Field(
+				$auth_manager->get_authenticator()
+			);
+
+			$source_terms_field->init();
 
 			$catalog_controller = new Catalog_REST_Controller(
 				$auth_manager->get_authenticator(),

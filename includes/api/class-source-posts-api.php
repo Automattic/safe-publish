@@ -592,7 +592,12 @@ class Source_Posts_API {
 		// A filter may return a non-array; downstream needs an array.
 		$post_data['meta'] = is_array( $filtered_meta ) ? $filtered_meta : array();
 
-		$post_data['terms'] = self::extract_embedded_terms( $data );
+		// Prefer the safe_publish_terms field; fall back to the embedded
+		// wp:term payload when the source has not upgraded to send it.
+		$source_terms       = self::extract_source_terms( $data );
+		$post_data['terms'] = null !== $source_terms
+			? $source_terms
+			: self::extract_embedded_terms( $data );
 
 		// `null` distinguishes "source did not provide the field" (older plugin
 		// version on the source) from "field present but author cannot be
@@ -673,6 +678,92 @@ class Source_Posts_API {
 		}
 
 		return $map;
+	}
+
+	/**
+	 * Extracts the safe_publish_terms map from a REST response, or null when
+	 * the field is absent (an older plugin version on the source), so the
+	 * caller can fall back to the embedded wp:term payload.
+	 *
+	 * The record id and parent are source term IDs; the resolver maps them
+	 * through its source-ID map rather than trusting them as destination IDs.
+	 *
+	 * @param array $data Decoded REST response for a single post.
+	 * @return array<string, list<array{source_term_id:int, name:string, slug:string, parent:int, description:string, assigned:bool}>>|null
+	 *         Taxonomy => term records, or null when the field is absent.
+	 */
+	private static function extract_source_terms( array $data ): ?array {
+		if ( ! array_key_exists( 'safe_publish_terms', $data ) ) {
+			return null;
+		}
+
+		$raw = $data['safe_publish_terms'];
+
+		if ( ! is_array( $raw ) ) {
+			return null;
+		}
+
+		$terms = array();
+
+		foreach ( $raw as $taxonomy => $records ) {
+			$tax = is_string( $taxonomy ) ? sanitize_key( $taxonomy ) : '';
+
+			if ( '' === $tax || ! is_array( $records ) ) {
+				continue;
+			}
+
+			$list = array();
+
+			foreach ( $records as $record ) {
+				$normalized = self::normalize_source_term_record( $record );
+				if ( null !== $normalized ) {
+					$list[] = $normalized;
+				}
+			}
+
+			if ( array() !== $list ) {
+				$terms[ $tax ] = $list;
+			}
+		}
+
+		return $terms;
+	}
+
+	/**
+	 * Normalizes one safe_publish_terms record, or null when it carries neither
+	 * a name nor a slug to resolve by.
+	 *
+	 * @param mixed $record Raw term record.
+	 * @return array{source_term_id:int, name:string, slug:string, parent:int, description:string, assigned:bool}|null
+	 */
+	private static function normalize_source_term_record( mixed $record ): ?array {
+		if ( ! is_array( $record ) ) {
+			return null;
+		}
+
+		$name = isset( $record['name'] )
+			? trim( wp_strip_all_tags( (string) $record['name'] ) )
+			: '';
+		$slug = isset( $record['slug'] )
+			? sanitize_title( (string) $record['slug'] )
+			: '';
+
+		if ( '' === $name && '' === $slug ) {
+			return null;
+		}
+
+		return array(
+			'source_term_id' => isset( $record['id'] ) ? absint( $record['id'] ) : 0,
+			'name'           => $name,
+			'slug'           => $slug,
+			'parent'         => isset( $record['parent'] ) ? absint( $record['parent'] ) : 0,
+			'description'    => isset( $record['description'] )
+				? (string) $record['description']
+				: '',
+			'assigned'       => array_key_exists( 'assigned', $record )
+				? (bool) $record['assigned']
+				: true,
+		);
 	}
 
 	/**
