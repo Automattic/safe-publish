@@ -118,6 +118,7 @@ final class Admin_Ajax_Controller {
 	 */
 	const ATTENTION_ISSUE_RETRYABLE_TYPES = array(
 		'unmapped_block_reference',
+		'unmapped_gallery_reference',
 		'nav_ref_rewrite_failed',
 		'parent_orphaned',
 	);
@@ -757,6 +758,12 @@ final class Admin_Ajax_Controller {
 					$affected_post_id,
 					$target_ref,
 					$target_kind,
+					$source_site_url
+				);
+			case 'unmapped_gallery_reference':
+				return $this->post_import_service->retry_gallery_ref_remap(
+					$affected_post_id,
+					$target_ref,
 					$source_site_url
 				);
 			case 'parent_orphaned':

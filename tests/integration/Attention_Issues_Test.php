@@ -152,6 +152,227 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that importing a post whose [gallery id] points at a not-yet-
+	 * imported source post opens a single warning-level gallery-reference issue.
+	 */
+	public function test_unresolved_gallery_reference_opens_one_issue(): void {
+		// ARRANGE + ACT: Import a post whose gallery references source post 700.
+		$result = $this->import_under(
+			self::BLOG_URL,
+			7300,
+			array( 'content' => '[gallery id="700"]' )
+		);
+
+		// ASSERT: Exactly one open issue, keyed and scoped as expected.
+		$this->assertTrue( $result['success'] );
+		$rows = $this->open_rows_for_source( self::BLOG_URL );
+		$this->assertCount( 1, $rows );
+		$this->assertSame( $result['post_id'], (int) $rows[0]['affected_post_id'] );
+		$this->assertSame( 'unmapped_gallery_reference', $rows[0]['issue_type'] );
+		$this->assertSame( 700, (int) $rows[0]['target_ref'] );
+		$this->assertSame( 'post', $rows[0]['target_kind'] );
+		$this->assertSame( 'warning', $rows[0]['severity'] );
+	}
+
+	/**
+	 * Verifies that re-importing a post whose gallery reference now resolves
+	 * clears the issue through the generic warning reconciler.
+	 */
+	public function test_reimport_resolving_gallery_reference_resolves_issue(): void {
+		// ARRANGE: Import a post whose gallery references a not-yet-imported post.
+		$this->import_under(
+			self::BLOG_URL,
+			7305,
+			array( 'content' => '[gallery id="9700"]' )
+		);
+		$this->assertCount( 1, $this->open_rows_for_source( self::BLOG_URL ) );
+
+		// ACT: Make the target resolvable, then re-import the same post.
+		$this->seed_target_post( 9700, self::BLOG_URL );
+		$this->import_under(
+			self::BLOG_URL,
+			7305,
+			array( 'content' => '[gallery id="9700"]' )
+		);
+
+		// ASSERT: The row is resolved.
+		$this->assertCount( 0, $this->open_rows_for_source( self::BLOG_URL ) );
+	}
+
+	/**
+	 * Verifies that retrying an unmapped gallery reference repoints the
+	 * shortcode id in place to the destination, clears the issue, and writes
+	 * without a revision or a post_modified bump.
+	 */
+	public function test_gallery_ref_retry_repoints_in_place_and_clears_issue(): void {
+		// ARRANGE: Import a post whose gallery references a not-yet-imported
+		// post.
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7301,
+			array( 'content' => '[gallery id="9700"]' )
+		);
+		$post_id = $result['post_id'];
+		$this->assertCount( 1, $this->open_rows_for_source( self::BLOG_URL ) );
+
+		// ARRANGE: The target becomes available; capture the pre-retry state.
+		$dest_id  = $this->seed_target_post( 9700, self::BLOG_URL );
+		$modified = get_post_field( 'post_modified', $post_id );
+		$before   = count( wp_get_post_revisions( $post_id ) );
+
+		// ACT: Retry the remap.
+		$outcome = $this->import_service->retry_gallery_ref_remap(
+			$post_id,
+			9700,
+			self::BLOG_URL
+		);
+
+		// ASSERT: Resolved, the shortcode now holds the destination id.
+		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
+		$this->assertStringContainsString(
+			'[gallery id="' . $dest_id . '"]',
+			(string) get_post_field( 'post_content', $post_id )
+		);
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unmapped_gallery_reference',
+				9700,
+				'post'
+			)
+		);
+
+		// ASSERT: A system touch-up — no revision, post_modified intact.
+		$this->assertSame( $before, count( wp_get_post_revisions( $post_id ) ) );
+		$this->assertSame(
+			$modified,
+			get_post_field( 'post_modified', $post_id )
+		);
+	}
+
+	/**
+	 * Verifies that retrying a gallery reference while its target is still
+	 * absent keeps the issue and leaves the shortcode unchanged.
+	 */
+	public function test_gallery_ref_retry_keeps_issue_when_target_absent(): void {
+		// ARRANGE: An open gallery-reference issue whose target is not importable.
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7302,
+			array( 'content' => '[gallery id="9700"]' )
+		);
+		$post_id = $result['post_id'];
+
+		// ACT: Retry without the target present.
+		$outcome = $this->import_service->retry_gallery_ref_remap(
+			$post_id,
+			9700,
+			self::BLOG_URL
+		);
+
+		// ASSERT: Target-absent, the issue stays, the shortcode is intact.
+		$this->assertSame( Reconcile_Outcome::TARGET_ABSENT, $outcome->type );
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unmapped_gallery_reference',
+				9700,
+				'post'
+			)
+		);
+		$this->assertStringContainsString(
+			'[gallery id="9700"]',
+			(string) get_post_field( 'post_content', $post_id )
+		);
+	}
+
+	/**
+	 * Verifies that a retry resolves the issue even when the target's dest id
+	 * equals its source id, a numeric collision that leaves the shortcode text
+	 * unchanged, so the ref-found signal (not a text diff) drives resolution.
+	 */
+	public function test_gallery_ref_retry_resolves_when_dest_id_equals_source(): void {
+		// ARRANGE: A target whose dest id equals its own source ref, and an
+		// affected post referencing that id.
+		$dest_id = self::factory()->post->create( array( 'post_type' => 'page' ) );
+		$this->assertIsInt( $dest_id );
+		update_post_meta( $dest_id, Options::META_SOURCE_POST_ID, $dest_id );
+		update_post_meta( $dest_id, Options::META_SOURCE_SITE_URL, self::BLOG_URL );
+
+		$affected = self::factory()->post->create(
+			array( 'post_content' => '[gallery id="' . $dest_id . '"]' )
+		);
+		$this->assertIsInt( $affected );
+		$this->attention->upsert_issue(
+			$affected,
+			'unmapped_gallery_reference',
+			$dest_id,
+			'post',
+			'warning',
+			self::BLOG_URL
+		);
+
+		// ACT: Retry; source ref already equals the dest id, so no text changes.
+		$outcome = $this->import_service->retry_gallery_ref_remap(
+			$affected,
+			$dest_id,
+			self::BLOG_URL
+		);
+
+		// ASSERT: Resolved despite no rewrite.
+		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
+		$this->assertNull(
+			$this->attention->get_issue(
+				$affected,
+				'unmapped_gallery_reference',
+				$dest_id,
+				'post'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that retrying a stale gallery issue whose post no longer holds
+	 * the reference returns unresolved and keeps the row, even with the target
+	 * present.
+	 */
+	public function test_gallery_ref_retry_unresolved_when_content_lacks_ref(): void {
+		// ARRANGE: The target is present, but the affected post's content holds no
+		// matching gallery reference (e.g. the shortcode was since edited out).
+		$affected = self::factory()->post->create(
+			array( 'post_content' => 'No gallery here.' )
+		);
+		$this->assertIsInt( $affected );
+		$this->seed_target_post( 9700, self::BLOG_URL );
+		$this->attention->upsert_issue(
+			$affected,
+			'unmapped_gallery_reference',
+			9700,
+			'post',
+			'warning',
+			self::BLOG_URL
+		);
+
+		// ACT: Retry through the endpoint's service method.
+		$outcome = $this->import_service->retry_gallery_ref_remap(
+			$affected,
+			9700,
+			self::BLOG_URL
+		);
+
+		// ASSERT: Unresolved, and the issue stays open.
+		$this->assertSame( Reconcile_Outcome::UNRESOLVED, $outcome->type );
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$affected,
+				'unmapped_gallery_reference',
+				9700,
+				'post'
+			)
+		);
+	}
+
+	/**
 	 * Verifies that two unresolved references to different targets open two
 	 * distinct rows for the same post.
 	 */

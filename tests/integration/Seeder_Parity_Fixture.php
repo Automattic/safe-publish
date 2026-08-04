@@ -71,6 +71,13 @@ final class Seeder_Parity_Fixture {
 	public const REUSABLE_BLOCK_SOURCE_REF = 9300001;
 
 	/**
+	 * Source post ID referenced by the cross-post gallery edge body's [gallery
+	 * id]. This batch does not import the target post, so the reference
+	 * surfaces as a retryable unmapped_gallery_reference degradation.
+	 */
+	public const CROSS_POST_GALLERY_SOURCE_REF = 9300002;
+
+	/**
 	 * Source REST bodies keyed by source post ID.
 	 *
 	 * @var array<int, array<string, mixed>>
@@ -142,7 +149,7 @@ final class Seeder_Parity_Fixture {
 	 * @param int                                                                                                                                                  $media_id_base   Source media IDs start one past this value.
 	 * @param int                                                                                                                                                  $admin_user_id   User the import runs as; owns sideloaded media.
 	 * @param list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool, author_user_id: int, parent_links: array<int, int>}> $slices One descriptor per post-type slice in the batch. parent_links maps a child's 1-based slice index to its parent's.
-	 * @param list<array{kind: string, endpoint: string, source_id: int, author_user_id: int, media_ids?: list<int>}>                                              $edge_cases One descriptor per bespoke edge-case body ('non_ascii', 'empty', 'embed', 'footnotes', 'reusable_block', 'gallery_shortcode', 'playlist_shortcode', 'bare_gallery', 'bare_playlist'); each seeds a single top-level post. The shortcode kinds sideload the media_ids they reference; the rest are image-free.
+	 * @param list<array{kind: string, endpoint: string, source_id: int, author_user_id: int, media_ids?: list<int>}>                                              $edge_cases One descriptor per bespoke edge-case body ('non_ascii', 'empty', 'embed', 'footnotes', 'reusable_block', 'cross_post_gallery', 'gallery_shortcode', 'playlist_shortcode', 'bare_gallery', 'bare_playlist'); each seeds a single top-level post. The shortcode kinds sideload the media_ids they reference; the rest are image-free.
 	 */
 	public function __construct(
 		private string $source_base_url,
@@ -476,17 +483,20 @@ final class Seeder_Parity_Fixture {
 	 * footnotes meta (a JSON-encoded string, not an array). The 'reusable_block'
 	 * body carries a core/block whose ref names a source wp_block this batch does
 	 * not import, exercising the retryable unmapped-reference degradation. The
-	 * 'gallery_shortcode' body spreads media_ids across a classic [gallery]'s
-	 * ids, include, and exclude attributes and 'playlist_shortcode' carries them
-	 * in a [playlist]'s ids, exercising the rewriter end-to-end for every
-	 * id-bearing attribute. The 'bare_gallery' and 'bare_playlist' bodies carry a
-	 * bare [gallery]/[playlist] with no ids, whose attached set the destination
-	 * imports from the enrichment field and re-parents.
+	 * 'cross_post_gallery' body carries a [gallery id] naming a different source
+	 * post this batch does not import, exercising the retryable
+	 * unmapped_gallery_reference degradation. The 'gallery_shortcode' body spreads
+	 * media_ids across a classic [gallery]'s ids, include, and exclude attributes
+	 * and 'playlist_shortcode' carries them in a [playlist]'s ids, exercising the
+	 * rewriter end-to-end for every id-bearing attribute. The 'bare_gallery' and
+	 * 'bare_playlist' bodies carry a bare [gallery]/[playlist] with no ids, whose
+	 * attached set the destination imports from the enrichment field and
+	 * re-parents.
 	 *
 	 * @param string $kind      Edge-case kind: 'non_ascii', 'empty', 'embed',
-	 *                          'footnotes', 'reusable_block', 'gallery_shortcode',
-	 *                          'playlist_shortcode', 'bare_gallery', or
-	 *                          'bare_playlist'.
+	 *                          'footnotes', 'reusable_block', 'cross_post_gallery',
+	 *                          'gallery_shortcode', 'playlist_shortcode',
+	 *                          'bare_gallery', or 'bare_playlist'.
 	 * @param string $endpoint  REST endpoint the body is served from.
 	 * @param int[]  $media_ids Source attachment IDs for the shortcode kinds.
 	 * @return array<string, mixed> Generator-shaped payload.
@@ -546,6 +556,17 @@ final class Seeder_Parity_Fixture {
 				'content' => '<!-- wp:block {"ref":'
 					. self::REUSABLE_BLOCK_SOURCE_REF . '} /-->',
 				'excerpt' => 'Excerpt for the reusable-block edge case.',
+			);
+		}
+
+		if ( 'cross_post_gallery' === $kind ) {
+			return $base + array(
+				'title'   => 'Edge case cross-post gallery',
+				'slug'    => 'edge-cross-post-gallery',
+				'link'    => $this->source_base_url . '/edge-cross-post-gallery',
+				'content' => '[gallery id="'
+					. self::CROSS_POST_GALLERY_SOURCE_REF . '"]',
+				'excerpt' => 'Excerpt for the cross-post-gallery edge case.',
 			);
 		}
 

@@ -107,6 +107,47 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that retrying an unmapped gallery reference dispatches the
+	 * gallery remap, rewrites the shortcode id in place, and resolves the issue.
+	 */
+	public function test_retry_unmapped_gallery_reference_dispatches_and_resolves(): void {
+		// ARRANGE: A post whose [gallery id] points at a now-present source
+		// post, and the open issue.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => '[gallery id="9700"]' )
+		);
+		$dest_id = $this->seed_target_post( 9700 );
+		$this->open_issue( $post_id, 'unmapped_gallery_reference', 9700, 'post' );
+
+		// ACT: Retry through the endpoint.
+		$response = $this->retry(
+			array(
+				'affected_post_id' => (string) $post_id,
+				'issue_type'       => 'unmapped_gallery_reference',
+				'target_ref'       => '9700',
+				'target_kind'      => 'post',
+			)
+		);
+
+		// ASSERT: Resolved, the row is gone, and the shortcode holds the dest
+		// id — proving the dispatch routed to the gallery remap.
+		$this->assertTrue( $response['data']['resolved'] );
+		$this->assertSame( 'resolved', $response['data']['outcome'] );
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unmapped_gallery_reference',
+				9700,
+				'post'
+			)
+		);
+		$this->assertStringContainsString(
+			'[gallery id="' . $dest_id . '"]',
+			(string) get_post_field( 'post_content', $post_id )
+		);
+	}
+
+	/**
 	 * Verifies that retrying an orphaned parent dispatches the parent re-link,
 	 * setting post_parent and resolving the issue.
 	 */

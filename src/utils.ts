@@ -278,6 +278,15 @@ export function renderWarningMessage( warning: Warning ): string {
 				),
 				warning.source_id
 			);
+		case 'unmapped_gallery_reference':
+			return sprintf(
+				/* translators: %d: source post ID */
+				__(
+					"Gallery/playlist source post %d isn't on this site. Import it, then retry from Needs attention.",
+					'safe-publish'
+				),
+				warning.source_id
+			);
 		default: {
 			const _exhaustive: never = warning;
 			return String( _exhaustive );
@@ -308,6 +317,8 @@ export function renderWarningShortLabel( warning: Warning ): string {
 			return __( 'nav reference update failed', 'safe-publish' );
 		case 'unmapped_shortcode_reference':
 			return __( 'unmapped shortcode reference', 'safe-publish' );
+		case 'unmapped_gallery_reference':
+			return __( 'unmapped gallery reference', 'safe-publish' );
 		default: {
 			const _exhaustive: never = warning;
 			return String( _exhaustive );
@@ -367,6 +378,15 @@ export function renderIssueMessage( issue: AttentionIssue ): string {
 				/* translators: %d: source navigation menu ID */
 				__(
 					"This page's link to menu %d couldn't be updated automatically. Retry to re-attempt it.",
+					'safe-publish'
+				),
+				issue.target_ref
+			);
+		case 'unmapped_gallery_reference':
+			return sprintf(
+				/* translators: %d: source post ID */
+				__(
+					"Gallery/playlist source post %d isn't on this site yet. Import it, then Retry.",
 					'safe-publish'
 				),
 				issue.target_ref
