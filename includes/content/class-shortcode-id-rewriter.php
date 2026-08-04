@@ -21,12 +21,15 @@ if ( ! defined( 'ABSPATH' ) ) {
  * source IDs would otherwise leak through to dest and render against the wrong
  * (or no) attachment.
  *
- * Two families, resolved differently:
+ * Three families, resolved differently:
  *  - Caption (`[caption]`, `[wp_caption]`): the embedded `<img>` gives an
  *    `attachment_url_to_postid()` lookup target.
- *  - Gallery (`[gallery ids=...]`, `[playlist ids=...]`): bare source IDs with
- *    no embedded URL, resolved through an injected source-ID => dest-ID
- *    callable that sideloads the referenced media.
+ *  - Gallery/playlist attachment lists (`ids`, `include`, `exclude`): bare
+ *    source attachment IDs with no embedded URL, resolved through an injected
+ *    source-ID => dest-ID callable that sideloads the referenced media.
+ *  - Gallery/playlist post reference (the singular `id`): a source POST whose
+ *    attached media the shortcode renders, remapped to its destination post, or
+ *    stripped when it names the importing post's own set.
  */
 class Shortcode_ID_Rewriter {
 
@@ -265,5 +268,250 @@ class Shortcode_ID_Rewriter {
 		}
 
 		return implode( ',', $tokens );
+	}
+
+	/**
+	 * Collects the attachment IDs a content's gallery and playlist shortcodes
+	 * reference through their ids and include attributes.
+	 *
+	 * The `exclude` attribute is omitted: it removes an attachment from the
+	 * rendered set rather than referencing it.
+	 *
+	 * @param string $content Content to scan.
+	 * @return int[] Referenced attachment IDs, deduplicated.
+	 */
+	public function collect_shortcode_attachment_ids( string $content ): array {
+		if ( '' === $content
+			|| ( false === stripos( $content, '[gallery' )
+				&& false === stripos( $content, '[playlist' ) )
+		) {
+			return array();
+		}
+
+		if ( false === preg_match_all(
+			'/' . get_shortcode_regex( array( 'gallery', 'playlist' ) ) . '/s',
+			$content,
+			$shortcodes,
+			PREG_SET_ORDER
+		) ) {
+			return array();
+		}
+
+		$ids = array();
+
+		foreach ( $shortcodes as $shortcode ) {
+			// Escaped shortcode ([[gallery ...]]): not rendered, so skip.
+			if ( '[' === $shortcode[1] && ']' === $shortcode[6] ) {
+				continue;
+			}
+
+			$this->collect_id_attr_csvs( $shortcode[3], $ids );
+		}
+
+		return array_values( array_unique( $ids ) );
+	}
+
+	/**
+	 * Extracts the numeric tokens from the ids and include attribute CSVs
+	 * within a shortcode's attribute string.
+	 *
+	 * @param string $attrs Shortcode attribute string.
+	 * @param int[]  $ids   Collected IDs, appended to by reference.
+	 */
+	private function collect_id_attr_csvs( string $attrs, array &$ids ): void {
+		$pattern = '/(?<![\w-])(?:ids|include)\s*=\s*'
+			. '(?:"([^"]*)"|\'([^\']*)\'|([^\s\]]+))/i';
+
+		if ( 1 > preg_match_all( $pattern, $attrs, $selectors, PREG_SET_ORDER ) ) {
+			return;
+		}
+
+		foreach ( $selectors as $selector ) {
+			$csv = $selector[1];
+			if ( '' === $csv && isset( $selector[2] ) ) {
+				$csv = $selector[2];
+			}
+			if ( '' === $csv && isset( $selector[3] ) ) {
+				$csv = $selector[3];
+			}
+
+			foreach ( explode( ',', $csv ) as $token ) {
+				$token = trim( $token );
+				if ( '' !== $token && ctype_digit( $token ) ) {
+					$ids[] = (int) $token;
+				}
+			}
+		}
+	}
+
+	/**
+	 * Remaps the singular gallery/playlist `id` post reference to its
+	 * destination, or strips it when it names the importing post's own set.
+	 *
+	 * `[gallery id="B"]` renders another post B's attached media. A cross-post
+	 * reference is resolved through $resolver and rewritten in place; an
+	 * unresolvable id (resolver returns 0) is left for a later retry. An id
+	 * equal to $self_source_id is stripped so core's current-post default
+	 * renders the imported attached set. The `ids`/`include`/`exclude`
+	 * attachment lists are left to rewrite_media_shortcode_ids().
+	 *
+	 * @param string   $content        Post content with gallery/playlist shortcodes.
+	 * @param callable $resolver       Source post ID => dest post ID, or 0 when
+	 *                                 unresolved.
+	 * @param int      $self_source_id Importing post's source ID; an id equal to it
+	 *                                 is stripped, not remapped.
+	 * @return string Content with the singular id references rewritten.
+	 */
+	public function rewrite_gallery_post_reference(
+		string $content,
+		callable $resolver,
+		int $self_source_id
+	): string {
+		if ( '' === $content
+			|| ( false === stripos( $content, '[gallery' )
+				&& false === stripos( $content, '[playlist' ) )
+		) {
+			return $content;
+		}
+
+		$memo = array();
+
+		$result = preg_replace_callback(
+			'/' . get_shortcode_regex( array( 'gallery', 'playlist' ) ) . '/s',
+			function ( array $matches ) use ( $resolver, $self_source_id, &$memo ): string {
+				// Escaped shortcode ([[gallery ...]]): Leave the literal alone.
+				if ( '[' === $matches[1] && ']' === $matches[6] ) {
+					return $matches[0];
+				}
+
+				$attrs = $matches[3];
+
+				// Core ignores the singular id when an ids/include selector is
+				// present, so a post reference there is inert.
+				if ( self::has_id_list_selector( $attrs ) ) {
+					return $matches[0];
+				}
+
+				$new_attrs = $this->rewrite_id_attr(
+					$attrs,
+					$resolver,
+					$self_source_id,
+					$memo
+				);
+
+				if ( $new_attrs === $attrs ) {
+					return $matches[0];
+				}
+
+				// Splice the rewritten attrs back at their offset (after the
+				// bracket, escape char, and tag name), rest byte-for-byte.
+				$attrs_offset = 1 + strlen( $matches[1] ) + strlen( $matches[2] );
+
+				return substr_replace(
+					$matches[0],
+					$new_attrs,
+					$attrs_offset,
+					strlen( $attrs )
+				);
+			},
+			$content
+		);
+
+		return is_string( $result ) ? $result : $content;
+	}
+
+	/**
+	 * Rewrites or strips the singular `id` attribute in a shortcode's attribute
+	 * string. A self reference is stripped with its leading whitespace; another
+	 * post's id is resolved and rewritten in place, preserving quoting; an
+	 * unresolvable id is left untouched.
+	 *
+	 * @param string          $attrs          Shortcode attribute string.
+	 * @param callable        $resolver       Source post ID => dest post ID.
+	 * @param int             $self_source_id Importing post's own source ID.
+	 * @param array<int, int> $memo           Source ID => resolved dest ID cache.
+	 * @return string Attribute string with the id reference rewritten or stripped.
+	 */
+	private function rewrite_id_attr(
+		string $attrs,
+		callable $resolver,
+		int $self_source_id,
+		array &$memo
+	): string {
+		$pattern = '/(\s*)(?<![\w-])(id\s*=\s*)(?:"(\d+)"|\'(\d+)\'|(\d+)(?![\w-]))/i';
+
+		$result = preg_replace_callback(
+			$pattern,
+			function ( array $matches ) use ( $resolver, $self_source_id, &$memo ): string {
+				if ( isset( $matches[3] ) && '' !== $matches[3] ) {
+					$source_id = (int) $matches[3];
+					$quote     = '"';
+				} elseif ( isset( $matches[4] ) && '' !== $matches[4] ) {
+					$source_id = (int) $matches[4];
+					$quote     = "'";
+				} elseif ( isset( $matches[5] ) && '' !== $matches[5] ) {
+					$source_id = (int) $matches[5];
+					$quote     = '';
+				} else {
+					return $matches[0];
+				}
+
+				if ( $source_id <= 0 ) {
+					return $matches[0];
+				}
+
+				// Self reference: Strip the redundant id so core's current-post
+				// default renders the imported attached set.
+				if ( $source_id === $self_source_id ) {
+					return '';
+				}
+
+				if ( ! isset( $memo[ $source_id ] ) ) {
+					$memo[ $source_id ] = (int) call_user_func( $resolver, $source_id );
+				}
+
+				if ( $memo[ $source_id ] <= 0 ) {
+					return $matches[0];
+				}
+
+				return $matches[1] . $matches[2] . $quote . $memo[ $source_id ] . $quote;
+			},
+			$attrs,
+			1
+		);
+
+		return is_string( $result ) ? $result : $attrs;
+	}
+
+	/**
+	 * Whether the attributes carry a non-empty ids or include selector, which
+	 * makes core render that explicit set and ignore the singular id. Mirrors
+	 * core's ! empty() gate; exclude is not gated, as core still honors id in
+	 * the exclude branch.
+	 *
+	 * @param string $attrs Shortcode attribute string.
+	 * @return bool True when ids or include selects an explicit set.
+	 */
+	private static function has_id_list_selector( string $attrs ): bool {
+		$count = preg_match_all(
+			'/(?<![\w-])(?:ids|include)\s*=\s*'
+				. '(?:"([^"]*)"|\'([^\']*)\'|([^\s\]]+))/i',
+			$attrs,
+			$matches,
+			PREG_SET_ORDER
+		);
+
+		if ( ! is_int( $count ) || 0 === $count ) {
+			return false;
+		}
+
+		foreach ( $matches as $match ) {
+			$value = ( $match[1] ?? '' ) . ( $match[2] ?? '' ) . ( $match[3] ?? '' );
+			if ( '' !== $value && '0' !== $value ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

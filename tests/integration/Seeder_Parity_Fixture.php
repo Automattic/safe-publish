@@ -51,6 +51,12 @@ final class Seeder_Parity_Fixture {
 	private const NON_DEFAULT_PASSWORD = 'Seeded-P@ssw0rd_42';
 
 	/**
+	 * MP4 fixture path relative to the tests directory, served as the bytes for a
+	 * bare [playlist] video child. The image byte mock only serves images.
+	 */
+	private const MP4_FIXTURE = '/fixtures/media/test-tiny.mp4';
+
+	/**
 	 * Anchor UUID linking the footnotes edge body's in-text reference to its
 	 * meta entry, as WordPress does. ASCII and slash-free so the meta JSON
 	 * round-trips verbatim through update_post_meta().
@@ -63,6 +69,13 @@ final class Seeder_Parity_Fixture {
 	 * as a retryable unmapped_block_reference degradation.
 	 */
 	public const REUSABLE_BLOCK_SOURCE_REF = 9300001;
+
+	/**
+	 * Source post ID referenced by the cross-post gallery edge body's [gallery
+	 * id]. This batch does not import the target post, so the reference
+	 * surfaces as a retryable unmapped_gallery_reference degradation.
+	 */
+	public const CROSS_POST_GALLERY_SOURCE_REF = 9300002;
 
 	/**
 	 * Source REST bodies keyed by source post ID.
@@ -88,6 +101,15 @@ final class Seeder_Parity_Fixture {
 	 * @var list<array{id: int, url: string}>
 	 */
 	public array $shortcode_media_refs = array();
+
+	/**
+	 * Attachments seeded as the children a bare [gallery]/[playlist] renders, as
+	 * `array{ id, url, menu_order, mime, parent }`. Kept apart so the bare-set
+	 * parity assertions can check each landed parented and ordered.
+	 *
+	 * @var list<array{id: int, url: string, menu_order: int, mime: string, parent: int}>
+	 */
+	public array $bare_shortcode_media_refs = array();
 
 	/**
 	 * Source post ID => destination post ID after the import.
@@ -127,7 +149,7 @@ final class Seeder_Parity_Fixture {
 	 * @param int                                                                                                                                                  $media_id_base   Source media IDs start one past this value.
 	 * @param int                                                                                                                                                  $admin_user_id   User the import runs as; owns sideloaded media.
 	 * @param list<array{type: string, endpoint: string, count: int, source_id_base: int, assign_terms: bool, author_user_id: int, parent_links: array<int, int>}> $slices One descriptor per post-type slice in the batch. parent_links maps a child's 1-based slice index to its parent's.
-	 * @param list<array{kind: string, endpoint: string, source_id: int, author_user_id: int, media_ids?: list<int>}>                                              $edge_cases One descriptor per bespoke edge-case body ('non_ascii', 'empty', 'embed', 'footnotes', 'reusable_block', 'gallery_shortcode', 'playlist_shortcode'); each seeds a single top-level post. The shortcode kinds sideload the media_ids they reference; the rest are image-free.
+	 * @param list<array{kind: string, endpoint: string, source_id: int, author_user_id: int, media_ids?: list<int>}>                                              $edge_cases One descriptor per bespoke edge-case body ('non_ascii', 'empty', 'embed', 'footnotes', 'reusable_block', 'cross_post_gallery', 'gallery_shortcode', 'playlist_shortcode', 'bare_gallery', 'bare_playlist'); each seeds a single top-level post. The shortcode kinds sideload the media_ids they reference; the rest are image-free.
 	 */
 	public function __construct(
 		private string $source_base_url,
@@ -328,16 +350,37 @@ final class Seeder_Parity_Fixture {
 		foreach ( $this->edge_cases as $edge ) {
 			$source_id = $edge['source_id'];
 			$media_ids = $edge['media_ids'] ?? array();
+			$kind      = $edge['kind'];
 
-			$this->register_shortcode_media_bodies( $media_ids );
+			$attached_media = array();
+
+			if ( 'bare_gallery' === $kind ) {
+				$attached_media = $this->register_bare_shortcode_media_bodies(
+					$media_ids,
+					$source_id,
+					'image/jpeg',
+					'jpg'
+				);
+			} elseif ( 'bare_playlist' === $kind ) {
+				$attached_media = $this->register_bare_shortcode_media_bodies(
+					$media_ids,
+					$source_id,
+					'video/mp4',
+					'mp4'
+				);
+			} else {
+				$this->register_shortcode_media_bodies( $media_ids );
+			}
 
 			$this->endpoint_by_source_id[ $source_id ] = $edge['endpoint'];
 			$this->source_rest_bodies[ $source_id ]    = $this->payload_to_rest_body(
 				$source_id,
-				$this->edge_case_payload( $edge['kind'], $edge['endpoint'], $media_ids ),
+				$this->edge_case_payload( $kind, $edge['endpoint'], $media_ids ),
 				$edge['author_user_id'],
 				0,
-				$this->default_scalars()
+				$this->default_scalars(),
+				array(),
+				$attached_media
 			);
 		}
 	}
@@ -369,6 +412,63 @@ final class Seeder_Parity_Fixture {
 	}
 
 	/**
+	 * Registers a wp/v2/media/{id} mock body for each child a bare
+	 * [gallery]/[playlist] renders, carrying full library metadata and the edge
+	 * post as its source parent so the destination sideloads, enriches, and
+	 * re-parents it. Assigns each a 1-based menu_order (which the media REST
+	 * omits) and returns the { id, menu_order } list for the enrichment field.
+	 *
+	 * @param int[]  $media_ids        Source attachment IDs the shortcode renders.
+	 * @param int    $parent_source_id Edge post the media is attached to.
+	 * @param string $mime             Attachment MIME type served for the set.
+	 * @param string $ext              File extension the byte mock serves.
+	 * @return list<array{id: int, menu_order: int}> Attached-media enrichment list.
+	 */
+	private function register_bare_shortcode_media_bodies(
+		array $media_ids,
+		int $parent_source_id,
+		string $mime,
+		string $ext
+	): array {
+		$attached_media = array();
+		$menu_order     = 0;
+
+		foreach ( $media_ids as $media_id ) {
+			$url  = $this->source_media_url( $media_id, $ext );
+			$meta = $this->media_metadata_for_id( $media_id );
+			++$menu_order;
+
+			$this->source_media_bodies[ $media_id ] = array(
+				'id'          => $media_id,
+				'source_url'  => $url,
+				'media_type'  => str_starts_with( $mime, 'image/' ) ? 'image' : 'file',
+				'mime_type'   => $mime,
+				'alt_text'    => $meta['alt'],
+				'title'       => array( 'raw' => $meta['title'] ),
+				'caption'     => array( 'raw' => $meta['caption'] ),
+				'description' => array( 'raw' => $meta['description'] ),
+				// Source parent post; the by-id path reads it as `post`.
+				'post'        => $parent_source_id,
+			);
+
+			$this->bare_shortcode_media_refs[] = array(
+				'id'         => $media_id,
+				'url'        => $url,
+				'menu_order' => $menu_order,
+				'mime'       => $mime,
+				'parent'     => $parent_source_id,
+			);
+
+			$attached_media[] = array(
+				'id'         => $media_id,
+				'menu_order' => $menu_order,
+			);
+		}
+
+		return $attached_media;
+	}
+
+	/**
 	 * Builds the generator-shaped payload for an edge-case kind.
 	 *
 	 * The 'non_ascii' body carries accented Latin and CJK in the title plus the
@@ -383,14 +483,20 @@ final class Seeder_Parity_Fixture {
 	 * footnotes meta (a JSON-encoded string, not an array). The 'reusable_block'
 	 * body carries a core/block whose ref names a source wp_block this batch does
 	 * not import, exercising the retryable unmapped-reference degradation. The
-	 * 'gallery_shortcode' body spreads media_ids across a classic [gallery]'s
-	 * ids, include, and exclude attributes and 'playlist_shortcode' carries them
-	 * in a [playlist]'s ids, exercising the rewriter end-to-end for every
-	 * id-bearing attribute.
+	 * 'cross_post_gallery' body carries a [gallery id] naming a different source
+	 * post this batch does not import, exercising the retryable
+	 * unmapped_gallery_reference degradation. The 'gallery_shortcode' body spreads
+	 * media_ids across a classic [gallery]'s ids, include, and exclude attributes
+	 * and 'playlist_shortcode' carries them in a [playlist]'s ids, exercising the
+	 * rewriter end-to-end for every id-bearing attribute. The 'bare_gallery' and
+	 * 'bare_playlist' bodies carry a bare [gallery]/[playlist] with no ids, whose
+	 * attached set the destination imports from the enrichment field and
+	 * re-parents.
 	 *
 	 * @param string $kind      Edge-case kind: 'non_ascii', 'empty', 'embed',
-	 *                          'footnotes', 'reusable_block', 'gallery_shortcode',
-	 *                          or 'playlist_shortcode'.
+	 *                          'footnotes', 'reusable_block', 'cross_post_gallery',
+	 *                          'gallery_shortcode', 'playlist_shortcode',
+	 *                          'bare_gallery', or 'bare_playlist'.
 	 * @param string $endpoint  REST endpoint the body is served from.
 	 * @param int[]  $media_ids Source attachment IDs for the shortcode kinds.
 	 * @return array<string, mixed> Generator-shaped payload.
@@ -450,6 +556,17 @@ final class Seeder_Parity_Fixture {
 				'content' => '<!-- wp:block {"ref":'
 					. self::REUSABLE_BLOCK_SOURCE_REF . '} /-->',
 				'excerpt' => 'Excerpt for the reusable-block edge case.',
+			);
+		}
+
+		if ( 'cross_post_gallery' === $kind ) {
+			return $base + array(
+				'title'   => 'Edge case cross-post gallery',
+				'slug'    => 'edge-cross-post-gallery',
+				'link'    => $this->source_base_url . '/edge-cross-post-gallery',
+				'content' => '[gallery id="'
+					. self::CROSS_POST_GALLERY_SOURCE_REF . '"]',
+				'excerpt' => 'Excerpt for the cross-post-gallery edge case.',
 			);
 		}
 
@@ -516,6 +633,26 @@ final class Seeder_Parity_Fixture {
 			);
 		}
 
+		if ( 'bare_gallery' === $kind ) {
+			return $base + array(
+				'title'   => 'Edge case bare gallery',
+				'slug'    => 'edge-bare-gallery',
+				'link'    => $this->source_base_url . '/edge-bare-gallery',
+				'content' => '[gallery]',
+				'excerpt' => 'Excerpt for the bare-gallery edge case.',
+			);
+		}
+
+		if ( 'bare_playlist' === $kind ) {
+			return $base + array(
+				'title'   => 'Edge case bare playlist',
+				'slug'    => 'edge-bare-playlist',
+				'link'    => $this->source_base_url . '/edge-bare-playlist',
+				'content' => '[playlist type="video"]',
+				'excerpt' => 'Excerpt for the bare-playlist edge case.',
+			);
+		}
+
 		return $base + array(
 			'title'   => "Café \u{65e5}\u{672c}\u{8a9e} Tîtle &amp; Sübtitle &mdash; Fin",
 			'slug'    => "café-\u{65e5}\u{672c}\u{8a9e}-slug",
@@ -543,6 +680,7 @@ final class Seeder_Parity_Fixture {
 		$this->add_per_source_id_post_api_mock();
 		$this->add_per_source_id_media_api_mock();
 		$this->add_image_byte_response_mock();
+		$this->add_bare_media_byte_mock();
 
 		try {
 			$service = $this->build_import_service();
@@ -570,10 +708,118 @@ final class Seeder_Parity_Fixture {
 					: array();
 			}
 		} finally {
+			$this->remove_bare_media_byte_mock();
 			$this->remove_image_byte_response_mock();
 			$this->remove_per_source_id_media_api_mock();
 			$this->remove_per_source_id_post_api_mock();
 		}
+	}
+
+	/**
+	 * Registers the mp4 byte mock for bare [playlist] video children: a
+	 * pre_http_request filter serving the fixture bytes and a prefilter that
+	 * populates the empty temp file download_url() leaves behind. Runs alongside
+	 * the image byte mock, which only serves images.
+	 */
+	private function add_bare_media_byte_mock(): void {
+		add_filter( 'pre_http_request', array( $this, 'serve_mp4_bytes' ), 1, 3 );
+		add_filter(
+			'wp_handle_sideload_prefilter',
+			array( $this, 'fill_empty_mp4_temp' ),
+			10,
+			1
+		);
+	}
+
+	/**
+	 * Removes the filters registered by add_bare_media_byte_mock().
+	 */
+	private function remove_bare_media_byte_mock(): void {
+		remove_filter( 'pre_http_request', array( $this, 'serve_mp4_bytes' ), 1 );
+		remove_filter(
+			'wp_handle_sideload_prefilter',
+			array( $this, 'fill_empty_mp4_temp' ),
+			10
+		);
+	}
+
+	/**
+	 * Serves the mp4 fixture bytes for a .mp4 URL; other URLs fall through to the
+	 * image byte mock.
+	 *
+	 * @param false|array|\WP_Error $preempt Preemptive return value.
+	 * @param array                 $args    HTTP arguments.
+	 * @param string                $url     Request URL.
+	 * @return false|array|\WP_Error
+	 */
+	public function serve_mp4_bytes(
+		false|array|\WP_Error $preempt,
+		array $args,
+		string $url
+	): false|array|\WP_Error {
+		if ( false !== $preempt ) {
+			return $preempt;
+		}
+
+		$extension = strtolower(
+			pathinfo( (string) wp_parse_url( $url, PHP_URL_PATH ), PATHINFO_EXTENSION )
+		);
+
+		if ( 'mp4' !== $extension ) {
+			return $preempt;
+		}
+
+		// phpcs:ignore WordPressVIPMinimum.Performance.FetchingRemoteData.FileGetContentsUnknown
+		$bytes = (string) file_get_contents( dirname( __DIR__ ) . self::MP4_FIXTURE );
+		$this->populate_download_temp( $args, $bytes );
+
+		return array(
+			'headers'       => array(
+				'content-type'   => 'video/mp4',
+				'content-length' => (string) strlen( $bytes ),
+			),
+			'body'          => $bytes,
+			'response'      => array(
+				'code'    => 200,
+				'message' => 'OK',
+			),
+			'cookies'       => array(),
+			'filename'      => null,
+			'http_response' => null,
+		);
+	}
+
+	/**
+	 * Populates the empty temp file download_url() leaves behind for an mp4
+	 * sideload with the fixture bytes.
+	 *
+	 * @param array $file File array with 'tmp_name' and 'name' keys.
+	 * @return array File array.
+	 */
+	public function fill_empty_mp4_temp( array $file ): array {
+		$temp_path = $file['tmp_name'] ?? '';
+
+		if (
+			! is_string( $temp_path )
+			|| ! file_exists( $temp_path )
+			|| filesize( $temp_path ) > 0
+		) {
+			return $file;
+		}
+
+		if ( 'mp4' !== strtolower( pathinfo( $file['name'] ?? '', PATHINFO_EXTENSION ) ) ) {
+			return $file;
+		}
+
+		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_file_put_contents
+		file_put_contents(
+			$temp_path,
+			// phpcs:ignore WordPressVIPMinimum.Performance.FetchingRemoteData.FileGetContentsUnknown
+			(string) file_get_contents( dirname( __DIR__ ) . self::MP4_FIXTURE )
+		);
+		clearstatcache( true, $temp_path );
+
+		return $file;
 	}
 
 	/**
@@ -610,6 +856,20 @@ final class Seeder_Parity_Fixture {
 		return $this->source_base_url
 			. '/wp-content/uploads/2025/01/seeded-image-'
 			. $source_media_id . '.jpg';
+	}
+
+	/**
+	 * Builds the source-side URL for a bare-shortcode media child of a given
+	 * extension, kept clear of the inline-image URL namespace.
+	 *
+	 * @param int    $source_media_id Source media ID.
+	 * @param string $ext             File extension (e.g. 'jpg', 'mp4').
+	 * @return string Absolute URL under the source uploads path.
+	 */
+	private function source_media_url( int $source_media_id, string $ext ): string {
+		return $this->source_base_url
+			. '/wp-content/uploads/2025/01/seeded-media-'
+			. $source_media_id . '.' . $ext;
 	}
 
 	/**
@@ -678,6 +938,7 @@ final class Seeder_Parity_Fixture {
 	 * @param int                                                                                   $source_parent_id Source parent post ID; 0 for top-level.
 	 * @param array{comment_status: string, ping_status: string, menu_order: int, password: string} $scalars Status-family column values.
 	 * @param list<array{id: int, url: string}>                                                     $image_refs Image refs seeding safe_publish_media; empty for edge cases.
+	 * @param list<array{id: int, menu_order: int}>                                                 $attached_media safe_publish_attached_media set; only bare-shortcode edges.
 	 * @return array<string, mixed>
 	 */
 	private function payload_to_rest_body(
@@ -686,7 +947,8 @@ final class Seeder_Parity_Fixture {
 		int $author_user_id,
 		int $source_parent_id,
 		array $scalars,
-		array $image_refs = array()
+		array $image_refs = array(),
+		array $attached_media = array()
 	): array {
 		$author = get_userdata( $author_user_id );
 
@@ -700,33 +962,34 @@ final class Seeder_Parity_Fixture {
 		}
 
 		return array(
-			'id'                  => $source_id,
-			'title'               => array( 'raw' => $payload['title'] ),
-			'featured_media'      => $payload['featured_media'],
-			'content'             => array( 'raw' => $payload['content'] ),
-			'excerpt'             => array( 'raw' => $payload['excerpt'] ),
-			'link'                => $payload['link'],
+			'id'                          => $source_id,
+			'title'                       => array( 'raw' => $payload['title'] ),
+			'featured_media'              => $payload['featured_media'],
+			'content'                     => array( 'raw' => $payload['content'] ),
+			'excerpt'                     => array( 'raw' => $payload['excerpt'] ),
+			'link'                        => $payload['link'],
 			// Synthetic source guid the importer ignores; lets the parity suite
 			// assert the dest regenerates its own (DIVERGENCE_REGISTRY 'guid').
-			'guid'                => $this->source_base_url . '/?p=' . $source_id,
-			'slug'                => $payload['slug'],
-			'type'                => $payload['post_type'],
-			'status'              => $payload['status'],
-			'date'                => $payload['date'],
-			'date_gmt'            => $payload['date'],
-			'comment_status'      => $scalars['comment_status'],
-			'ping_status'         => $scalars['ping_status'],
-			'menu_order'          => $scalars['menu_order'],
-			'password'            => $scalars['password'],
-			'parent'              => $source_parent_id,
-			'meta'                => $payload['meta'],
-			'safe_publish_author' => array(
+			'guid'                        => $this->source_base_url . '/?p=' . $source_id,
+			'slug'                        => $payload['slug'],
+			'type'                        => $payload['post_type'],
+			'status'                      => $payload['status'],
+			'date'                        => $payload['date'],
+			'date_gmt'                    => $payload['date'],
+			'comment_status'              => $scalars['comment_status'],
+			'ping_status'                 => $scalars['ping_status'],
+			'menu_order'                  => $scalars['menu_order'],
+			'password'                    => $scalars['password'],
+			'parent'                      => $source_parent_id,
+			'meta'                        => $payload['meta'],
+			'safe_publish_author'         => array(
 				'email'        => false !== $author ? (string) $author->user_email : '',
 				'login'        => false !== $author ? (string) $author->user_login : '',
 				'display_name' => false !== $author ? (string) $author->display_name : '',
 			),
-			'safe_publish_media'  => $safe_publish_media,
-			'_embedded'           => array(
+			'safe_publish_media'          => $safe_publish_media,
+			'safe_publish_attached_media' => $attached_media,
+			'_embedded'                   => array(
 				'wp:term' => $this->embedded_terms( $payload['terms'] ),
 			),
 		);

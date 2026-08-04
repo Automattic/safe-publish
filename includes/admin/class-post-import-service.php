@@ -125,6 +125,7 @@ class Post_Import_Service {
 	 */
 	private const ATTENTION_POST_ISSUE_TYPES = array(
 		'unmapped_block_reference',
+		'unmapped_gallery_reference',
 		'parent_orphaned',
 	);
 
@@ -838,15 +839,19 @@ class Post_Import_Service {
 	 * a WP_Error if content processing fails or if kses is enabled and
 	 * sanitization would modify the content.
 	 *
-	 * @param string                               $content              Raw post content.
-	 * @param array<int,int>                       $session_id_map       Bulk batch source => destination post IDs.
-	 * @param array<string, array<string, string>> $library_metadata_map Source URL => library metadata for sideloads.
+	 * @param string                                $content              Raw post content.
+	 * @param array<int,int>                        $session_id_map       Bulk batch source => destination post IDs.
+	 * @param array<string, array<string, string>>  $library_metadata_map Source URL => library metadata for sideloads.
+	 * @param list<array{id: int, menu_order: int}> $attached_media      Bare gallery/playlist attached-media set to import.
+	 * @param int                                   $source_post_id       Importing post's source ID, for the gallery id self check.
 	 * @return string|WP_Error Processed content, or WP_Error on failure.
 	 */
 	private function process_post_content(
 		string $content,
 		array $session_id_map = array(),
-		array $library_metadata_map = array()
+		array $library_metadata_map = array(),
+		array $attached_media = array(),
+		int $source_post_id = 0
 	): string|WP_Error {
 		$source_site_url = $this->get_connected_source_url();
 
@@ -860,6 +865,8 @@ class Post_Import_Service {
 			array(
 				'session_id_map'       => $session_id_map,
 				'library_metadata_map' => $library_metadata_map,
+				'attached_media'       => $attached_media,
+				'source_post_id'       => $source_post_id,
 				// Threaded so shortcode ID resolution can read private/unattached
 				// source media that anonymous requests would 403 on.
 				'auth_credentials'     => Auth_Credential_Provider::get_credentials(),
@@ -1731,6 +1738,18 @@ class Post_Import_Service {
 			);
 		}
 
+		if ( 'unmapped_gallery_reference' === $type ) {
+			return array(
+				'issue_type'  => $type,
+				'target_ref'  => (int) $warning['source_id'],
+				'target_kind' => 'post',
+				'severity'    => 'warning',
+				'detail'      => array(
+					'source_id' => (int) $warning['source_id'],
+				),
+			);
+		}
+
 		if ( 'parent_orphaned' === $type ) {
 			return array(
 				'issue_type'  => $type,
@@ -1843,6 +1862,41 @@ class Post_Import_Service {
 			'unmapped_block_reference',
 			$target_ref,
 			$target_kind
+		);
+
+		return $outcome;
+	}
+
+	/**
+	 * Repoints one stale gallery/playlist `id` post reference in place and
+	 * resolves its issue on success.
+	 *
+	 * Self-verifying: the issue clears only when the target post now resolves
+	 * and the reference was rewritten; otherwise the row stays, with last_seen
+	 * refreshed.
+	 *
+	 * @param int    $affected_post_id Post holding the reference.
+	 * @param int    $target_ref       Source post ID to repoint.
+	 * @param string $source_site_url  Path-bearing source identity.
+	 * @return Reconcile_Outcome The reconciliation outcome.
+	 */
+	public function retry_gallery_ref_remap(
+		int $affected_post_id,
+		int $target_ref,
+		string $source_site_url
+	): Reconcile_Outcome {
+		$outcome = $this->content_processor->repoint_gallery_reference(
+			$affected_post_id,
+			$target_ref,
+			$source_site_url
+		);
+
+		$this->resolve_or_touch(
+			$outcome->is_resolved(),
+			$affected_post_id,
+			'unmapped_gallery_reference',
+			$target_ref,
+			'post'
 		);
 
 		return $outcome;
@@ -2247,19 +2301,24 @@ class Post_Import_Service {
 			}
 		}
 
-		$fields['title']             = $fresh_result['title'];
-		$fields['featured_media_id'] = $fresh_result['featured_media'];
-		$fields['slug']              = $fresh_result['slug'];
-		$fields['comment_status']    = $fresh_result['comment_status'];
-		$fields['ping_status']       = $fresh_result['ping_status'];
-		$fields['menu_order']        = $fresh_result['menu_order'];
-		$fields['password']          = $fresh_result['password'];
-		$fields['source_parent_id']  = absint( $fresh_result['parent'] ?? 0 );
-		$fields['source_author']     = is_array( $fresh_result['source_author'] ?? null )
+		$fields['title']                 = $fresh_result['title'];
+		$fields['featured_media_id']     = $fresh_result['featured_media'];
+		$fields['slug']                  = $fresh_result['slug'];
+		$fields['comment_status']        = $fresh_result['comment_status'];
+		$fields['ping_status']           = $fresh_result['ping_status'];
+		$fields['menu_order']            = $fresh_result['menu_order'];
+		$fields['password']              = $fresh_result['password'];
+		$fields['source_parent_id']      = absint( $fresh_result['parent'] ?? 0 );
+		$fields['source_author']         = is_array( $fresh_result['source_author'] ?? null )
 			? $fresh_result['source_author']
 			: null;
-		$fields['source_media']      = is_array( $fresh_result['source_media'] ?? null )
+		$fields['source_media']          = is_array( $fresh_result['source_media'] ?? null )
 			? $fresh_result['source_media']
+			: array();
+		$fields['source_attached_media'] = is_array(
+			$fresh_result['source_attached_media'] ?? null
+		)
+			? $fresh_result['source_attached_media']
 			: array();
 
 		// Resolve the source author before any media processing so a failed
@@ -2336,7 +2395,9 @@ class Post_Import_Service {
 		$processed_content = $this->process_post_content(
 			$fresh_result['content'] ?? '',
 			$session_id_map,
-			$fields['source_media']
+			$fields['source_media'],
+			$fields['source_attached_media'],
+			(int) ( $fields['source_post_id'] ?? 0 )
 		);
 
 		if ( is_wp_error( $processed_content ) ) {

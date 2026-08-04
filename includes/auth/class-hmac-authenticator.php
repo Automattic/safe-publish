@@ -131,6 +131,17 @@ class HMAC_Authenticator {
 	}
 
 	/**
+	 * Forces REST nocache headers on an authenticated response. Uses a named
+	 * callback, not the shared '__return_true', so a plugin removing that
+	 * shared callback cannot strip this one.
+	 *
+	 * @return bool Always true.
+	 */
+	public function force_rest_nocache_headers(): bool {
+		return true;
+	}
+
+	/**
 	 * Authenticates a request using shared secret HMAC validation.
 	 *
 	 * Validates timestamp, content hash, and HMAC-SHA256 signature in sequence.
@@ -297,6 +308,13 @@ class HMAC_Authenticator {
 		if ( ! headers_sent() ) {
 			header( 'X-Safe-Publish-Auth: success' );
 		}
+
+		// An HMAC request has no logged-in user, so core skips nocache headers;
+		// force them so a cache-fronting edge cannot store the response.
+		add_filter(
+			'rest_send_nocache_headers',
+			array( $this, 'force_rest_nocache_headers' )
+		);
 
 		// Set up user context and permissions for wp/v2 routes only.
 		// Safe Publish source endpoints (/safe-publish/v1/) check the auth flag

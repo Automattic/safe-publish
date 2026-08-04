@@ -246,7 +246,7 @@ class ShortcodeIDRewriterTest extends TestCase {
 				705 => 12,
 				704 => 13,
 				703 => 14,
-			) 
+			)
 		);
 		$content  = '[gallery ids="705,704,703" columns="3" link="file"]';
 
@@ -473,5 +473,377 @@ class ShortcodeIDRewriterTest extends TestCase {
 
 		// ASSERT: only the real ids attribute is rewritten.
 		$this->assertSame( '[gallery ids="50" data-ids="9"]', $result );
+	}
+
+	/**
+	 * Verifies that a cross-post gallery id is remapped to its destination post
+	 * id, leaving the rest of the shortcode intact.
+	 */
+	public function test_gallery_post_id_remapped_to_dest(): void {
+		// ARRANGE: A gallery referencing another post by id.
+		$rewriter = $this->build_rewriter();
+		$resolver = $this->id_resolver( array( 123 => 999 ) );
+		$content  = '[gallery id="123" columns="3"]';
+
+		// ACT: Rewrite the singular post reference; the post is not self.
+		$result = $rewriter->rewrite_gallery_post_reference( $content, $resolver, 0 );
+
+		// ASSERT: The id maps to dest; other attributes are byte-identical.
+		$this->assertSame( '[gallery id="999" columns="3"]', $result );
+	}
+
+	/**
+	 * Verifies that a playlist post reference is remapped and its type attribute
+	 * preserved.
+	 */
+	public function test_playlist_post_id_remapped_type_preserved(): void {
+		// ARRANGE: A video playlist referencing another post.
+		$rewriter = $this->build_rewriter();
+		$resolver = $this->id_resolver( array( 55 => 88 ) );
+		$content  = '[playlist type="video" id="55"]';
+
+		// ACT: Rewrite the singular post reference.
+		$result = $rewriter->rewrite_gallery_post_reference( $content, $resolver, 0 );
+
+		// ASSERT: Id remapped; type preserved.
+		$this->assertSame( '[playlist type="video" id="88"]', $result );
+	}
+
+	/**
+	 * Verifies that a gallery id naming the importing post's own set is
+	 * stripped so the shortcode falls back to core's current-post default,
+	 * without consulting the resolver.
+	 */
+	public function test_self_post_id_stripped_to_bare(): void {
+		// ARRANGE: An explicit self reference and a resolver that would map it.
+		$rewriter = $this->build_rewriter();
+		$calls    = array();
+		$resolver = $this->id_resolver( array( 7001 => 7001 ), $calls );
+		$content  = '[gallery id="7001"]';
+
+		// ACT: Rewrite with self = 7001.
+		$result = $rewriter->rewrite_gallery_post_reference( $content, $resolver, 7001 );
+
+		// ASSERT: The id is stripped, and the resolver was never consulted.
+		$this->assertSame( '[gallery]', $result );
+		$this->assertSame( array(), $calls );
+	}
+
+	/**
+	 * Verifies that stripping a self id preserves the shortcode's other
+	 * attributes and their spacing, whether the id leads or trails.
+	 */
+	public function test_self_post_id_strip_preserves_other_attrs(): void {
+		// ARRANGE: A resolver that maps nothing (self is stripped, not mapped).
+		$rewriter = $this->build_rewriter();
+		$resolver = $this->id_resolver( array() );
+
+		// ACT + ASSERT: Trailing id stripped, leaving the leading attribute.
+		$this->assertSame(
+			'[gallery columns="3"]',
+			$rewriter->rewrite_gallery_post_reference(
+				'[gallery columns="3" id="7001"]',
+				$resolver,
+				7001
+			)
+		);
+
+		// ACT + ASSERT: Leading id stripped, leaving the trailing attribute.
+		$this->assertSame(
+			'[gallery columns="3"]',
+			$rewriter->rewrite_gallery_post_reference(
+				'[gallery id="7001" columns="3"]',
+				$resolver,
+				7001
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a cross-post id the resolver cannot map is left in place.
+	 */
+	public function test_unresolved_post_id_left_in_place(): void {
+		// ARRANGE: A resolver that maps nothing.
+		$rewriter = $this->build_rewriter();
+		$resolver = $this->id_resolver( array() );
+		$content  = '[gallery id="404"]';
+
+		// ACT: Rewrite; 404 is neither self nor resolvable.
+		$result = $rewriter->rewrite_gallery_post_reference( $content, $resolver, 7001 );
+
+		// ASSERT: The shortcode is byte-for-byte unchanged.
+		$this->assertSame( '[gallery id="404"]', $result );
+	}
+
+	/**
+	 * Verifies that the attachment-list attributes (ids/include/exclude) are
+	 * not touched by the singular post-reference rewrite.
+	 */
+	public function test_attachment_lists_untouched_by_post_reference(): void {
+		// ARRANGE: A resolver that would map the numbers if they were consulted.
+		$rewriter = $this->build_rewriter();
+		$calls    = array();
+		$resolver = $this->id_resolver(
+			array(
+				1 => 91,
+				2 => 92,
+				3 => 93,
+			),
+			$calls
+		);
+		$content  = '[gallery ids="1,2" include="3"]';
+
+		// ACT: Rewrite the singular post reference.
+		$result = $rewriter->rewrite_gallery_post_reference( $content, $resolver, 0 );
+
+		// ASSERT: No id attribute present, so nothing changes and the resolver
+		// is never consulted.
+		$this->assertSame( '[gallery ids="1,2" include="3"]', $result );
+		$this->assertSame( array(), $calls );
+	}
+
+	/**
+	 * Verifies that a data-id attribute is not mistaken for the singular id.
+	 */
+	public function test_data_id_not_mistaken_for_post_id(): void {
+		// ARRANGE: A data-id precedes the real id.
+		$rewriter = $this->build_rewriter();
+		$resolver = $this->id_resolver( array( 5 => 50 ) );
+		$content  = '[gallery data-id="9" id="5"]';
+
+		// ACT: Rewrite the singular post reference.
+		$result = $rewriter->rewrite_gallery_post_reference( $content, $resolver, 0 );
+
+		// ASSERT: The real id is remapped; data-id is left untouched.
+		$this->assertSame( '[gallery data-id="9" id="50"]', $result );
+	}
+
+	/**
+	 * Verifies that a cross-post id repeated across shortcodes is resolved only
+	 * once per run.
+	 */
+	public function test_repeated_post_id_resolved_once(): void {
+		// ARRANGE: The same post id appears in a gallery and a playlist.
+		$rewriter = $this->build_rewriter();
+		$calls    = array();
+		$resolver = $this->id_resolver( array( 7 => 70 ), $calls );
+		$content  = '[gallery id="7"] and [playlist id="7"]';
+
+		// ACT: Rewrite the singular post references.
+		$result = $rewriter->rewrite_gallery_post_reference( $content, $resolver, 0 );
+
+		// ASSERT: Both rewritten, but the resolver ran once for id 7.
+		$this->assertSame( '[gallery id="70"] and [playlist id="70"]', $result );
+		$this->assertSame( array( 7 ), $calls );
+	}
+
+	/**
+	 * Verifies that a deliberately escaped [[gallery]] literal is left untouched.
+	 */
+	public function test_escaped_shortcode_post_reference_untouched(): void {
+		// ARRANGE: An escaped gallery literal referencing a post.
+		$rewriter = $this->build_rewriter();
+		$resolver = $this->id_resolver( array( 5 => 50 ) );
+		$content  = '[[gallery id="5"]]';
+
+		// ACT: Rewrite the singular post reference.
+		$result = $rewriter->rewrite_gallery_post_reference( $content, $resolver, 0 );
+
+		// ASSERT: The escaped literal is preserved verbatim.
+		$this->assertSame( '[[gallery id="5"]]', $result );
+	}
+
+	/**
+	 * Verifies that unquoted and single-quoted id values are remapped with
+	 * their quoting style preserved.
+	 */
+	public function test_unquoted_and_single_quoted_post_id_remapped(): void {
+		// ARRANGE: A resolver mapping the referenced post.
+		$rewriter = $this->build_rewriter();
+		$resolver = $this->id_resolver( array( 5 => 99 ) );
+
+		// ACT + ASSERT: Unquoted value stays unquoted.
+		$this->assertSame(
+			'[gallery id=99]',
+			$rewriter->rewrite_gallery_post_reference( '[gallery id=5]', $resolver, 0 )
+		);
+
+		// ACT + ASSERT: Single-quoted value keeps single quotes.
+		$this->assertSame(
+			"[gallery id='99']",
+			$rewriter->rewrite_gallery_post_reference( "[gallery id='5']", $resolver, 0 )
+		);
+	}
+
+	/**
+	 * Verifies that the singular id is left untouched when an ids/include
+	 * selector is present, since core renders that set and ignores the id.
+	 */
+	public function test_id_with_ids_selector_left_untouched(): void {
+		// ARRANGE: A resolver that would map the id if it were consulted.
+		$rewriter = $this->build_rewriter();
+		$calls    = array();
+		$resolver = $this->id_resolver( array( 909 => 42 ), $calls );
+		$content  = '[gallery ids="1,2" id="909"]';
+
+		// ACT: Rewrite the singular post reference.
+		$result = $rewriter->rewrite_gallery_post_reference( $content, $resolver, 0 );
+
+		// ASSERT: The shortcode is unchanged and the resolver was never consulted.
+		$this->assertSame( '[gallery ids="1,2" id="909"]', $result );
+		$this->assertSame( array(), $calls );
+	}
+
+	/**
+	 * Verifies that an exclude selector does not suppress the id remap, since
+	 * core still renders the id's children minus the exclusions.
+	 */
+	public function test_id_with_exclude_selector_still_remapped(): void {
+		// ARRANGE: A gallery excluding one attachment while referencing a post.
+		$rewriter = $this->build_rewriter();
+		$resolver = $this->id_resolver( array( 909 => 42 ) );
+		$content  = '[gallery id="909" exclude="3"]';
+
+		// ACT: Rewrite the singular post reference.
+		$result = $rewriter->rewrite_gallery_post_reference( $content, $resolver, 0 );
+
+		// ASSERT: The id is remapped; exclude is preserved.
+		$this->assertSame( '[gallery id="42" exclude="3"]', $result );
+	}
+
+	/**
+	 * Verifies that an unquoted id whose value is not a bare integer (a numeric
+	 * prefix followed by letters) is left untouched, matching the CSV rewriter.
+	 */
+	public function test_unquoted_id_with_trailing_word_left_untouched(): void {
+		// ARRANGE: A malformed unquoted id value.
+		$rewriter = $this->build_rewriter();
+		$resolver = $this->id_resolver( array( 5 => 900 ) );
+		$content  = '[gallery id=5abc]';
+
+		// ACT: Rewrite the singular post reference.
+		$result = $rewriter->rewrite_gallery_post_reference( $content, $resolver, 0 );
+
+		// ASSERT: The malformed token is left verbatim.
+		$this->assertSame( '[gallery id=5abc]', $result );
+	}
+
+	/**
+	 * Verifies that collect_shortcode_attachment_ids gathers the ids CSV of a
+	 * gallery, across quoting styles.
+	 */
+	public function test_collect_gathers_gallery_ids(): void {
+		// ARRANGE: galleries with the three ids quoting forms.
+		$rewriter = $this->build_rewriter();
+
+		// ACT + ASSERT: each quoting form yields the numeric tokens.
+		$this->assertSame(
+			array( 10, 20, 30 ),
+			$rewriter->collect_shortcode_attachment_ids( '[gallery ids="10,20,30"]' )
+		);
+		$this->assertSame(
+			array( 10, 20 ),
+			$rewriter->collect_shortcode_attachment_ids( '[gallery ids=10,20]' )
+		);
+		$this->assertSame(
+			array( 7 ),
+			$rewriter->collect_shortcode_attachment_ids( "[playlist ids='7']" )
+		);
+	}
+
+	/**
+	 * Verifies that include is collected but exclude is omitted, since exclude
+	 * removes an attachment from the set rather than referencing it.
+	 */
+	public function test_collect_includes_include_omits_exclude(): void {
+		// ARRANGE: a shortcode carrying all three id-bearing attributes.
+		$rewriter = $this->build_rewriter();
+
+		// ACT: collect the referenced IDs.
+		$ids = $rewriter->collect_shortcode_attachment_ids(
+			'[gallery ids="1,2" include="3" exclude="4"]'
+		);
+
+		// ASSERT: ids and include are gathered; exclude is left out.
+		$this->assertSame( array( 1, 2, 3 ), $ids );
+	}
+
+	/**
+	 * Verifies that the singular id post reference is not collected, being a
+	 * post ID rather than an attachment list.
+	 */
+	public function test_collect_ignores_singular_post_id(): void {
+		// ARRANGE: a gallery referencing a parent post by id.
+		$rewriter = $this->build_rewriter();
+
+		// ACT + ASSERT: the singular id yields nothing.
+		$this->assertSame(
+			array(),
+			$rewriter->collect_shortcode_attachment_ids( '[gallery id="123"]' )
+		);
+	}
+
+	/**
+	 * Verifies that an id repeated across shortcodes is collected once.
+	 */
+	public function test_collect_deduplicates_ids(): void {
+		// ARRANGE: the same id appears in a gallery and a playlist.
+		$rewriter = $this->build_rewriter();
+
+		// ACT: collect across both shortcodes.
+		$ids = $rewriter->collect_shortcode_attachment_ids(
+			'[gallery ids="7"] and [playlist ids="7,8"]'
+		);
+
+		// ASSERT: the shared id appears once.
+		$this->assertSame( array( 7, 8 ), $ids );
+	}
+
+	/**
+	 * Verifies that a similarly named attribute such as data-ids is not
+	 * mistaken for the ids attribute.
+	 */
+	public function test_collect_ignores_similar_named_attribute(): void {
+		// ARRANGE: a real ids attribute alongside a data-ids attribute.
+		$rewriter = $this->build_rewriter();
+
+		// ACT: collect the referenced IDs.
+		$ids = $rewriter->collect_shortcode_attachment_ids(
+			'[gallery ids="1" data-ids="9"]'
+		);
+
+		// ASSERT: only the real ids attribute is read.
+		$this->assertSame( array( 1 ), $ids );
+	}
+
+	/**
+	 * Verifies that an escaped [[gallery]] literal contributes no IDs.
+	 */
+	public function test_collect_skips_escaped_shortcode(): void {
+		// ARRANGE: an escaped gallery literal.
+		$rewriter = $this->build_rewriter();
+
+		// ACT + ASSERT: the escaped literal is not read.
+		$this->assertSame(
+			array(),
+			$rewriter->collect_shortcode_attachment_ids( '[[gallery ids="1"]]' )
+		);
+	}
+
+	/**
+	 * Verifies that content without a gallery or playlist shortcode yields no
+	 * IDs.
+	 */
+	public function test_collect_returns_empty_without_media_shortcodes(): void {
+		// ARRANGE: prose plus a caption, but no gallery/playlist.
+		$rewriter = $this->build_rewriter();
+
+		// ACT + ASSERT: nothing to collect.
+		$this->assertSame(
+			array(),
+			$rewriter->collect_shortcode_attachment_ids(
+				'<p>Text</p>[caption id="attachment_1"]<img src="x" />[/caption]'
+			)
+		);
 	}
 }
