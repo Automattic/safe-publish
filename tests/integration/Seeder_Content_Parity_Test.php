@@ -166,6 +166,18 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 			self::SOURCE_BASE_URL
 		);
 
+		// A hierarchical taxonomy on posts so the batch exercises a real term
+		// tree; the flat core taxonomies alone can't prove parent mapping.
+		register_taxonomy(
+			Seeder_Parity_Fixture::SECTION_TAXONOMY,
+			'post',
+			array(
+				'hierarchical' => true,
+				'public'       => true,
+				'show_in_rest' => true,
+			)
+		);
+
 		self::$fixture = new Seeder_Parity_Fixture(
 			self::SOURCE_BASE_URL,
 			self::REFERENCE_TIME,
@@ -183,6 +195,7 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	 */
 	public static function wpTearDownAfterClass(): void {
 		self::$fixture->cleanup();
+		unregister_taxonomy( Seeder_Parity_Fixture::SECTION_TAXONOMY );
 		self::delete_user( self::$admin_user_id );
 		self::delete_user( self::$page_author_id );
 		delete_option( Options::OPTION_CONNECTED_SITE_URL );
@@ -990,30 +1003,55 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that for each source taxonomy assignment, the dest post is
-	 * assigned a matching term and that the dest term lands with the
-	 * importer's default parent (0) and description ('').
+	 * Verifies that each source taxonomy assignment resolves to a dest term
+	 * whose parent maps to the dest ancestor of its source parent and whose
+	 * description matches source. Guards against a vacuous pass by requiring
+	 * the batch to exercise a hierarchical taxonomy with an unassigned,
+	 * described ancestor.
 	 */
 	public function test_term_assignments_parity(): void {
 		// ARRANGE + ACT: batch already imported.
-		// ASSERT: each dest post has the source term assignments.
+		// ASSERT: each dest post has the source term assignments, with mapped
+		// parents and propagated descriptions.
+		$hierarchy_checked = false;
 		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$body = self::$fixture->source_rest_bodies[ $source_id ];
 			Post_Parity_Asserter::assert_term_assignments(
-				self::$fixture->source_rest_bodies[ $source_id ],
+				$body,
 				get_post( $dest_id ),
 				$this
 			);
+
+			$section = $body['safe_publish_terms'][ Seeder_Parity_Fixture::SECTION_TAXONOMY ]
+				?? array();
+			foreach ( $section as $record ) {
+				if (
+					false === $record['assigned']
+					&& $record['parent'] > 0
+					&& '' !== $record['description']
+				) {
+					$hierarchy_checked = true;
+				}
+			}
 		}
+
+		$this->assertTrue(
+			$hierarchy_checked,
+			'Batch should seed a hierarchical taxonomy with an unassigned,'
+			. ' described ancestor so the parent/description checks are not vacuous'
+		);
 	}
 
 	/**
-	 * Verifies that every dest term assignment in the checked taxonomies
-	 * (category, post_tag) traces back to a source assignment. Locks in the
-	 * importer's behavior of attaching only the terms the source asked for.
+	 * Verifies that every dest term attached to a post in the checked
+	 * taxonomies (category, post_tag, seeder_section) traces back to an
+	 * assigned source record, so the importer attaches only the terms the
+	 * source asked for and leaves ancestors unattached.
 	 */
 	public function test_no_unmodeled_term_assignments(): void {
 		// ARRANGE + ACT: batch already imported.
-		// ASSERT: every dest term assignment traces to a source one.
+		// ASSERT: every dest term assignment traces to an assigned source
+		// record.
 		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
 			Post_Parity_Asserter::assert_no_unmodeled_term_assignments(
 				self::$fixture->source_rest_bodies[ $source_id ],

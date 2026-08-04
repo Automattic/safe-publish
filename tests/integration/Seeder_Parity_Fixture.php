@@ -65,6 +65,27 @@ final class Seeder_Parity_Fixture {
 	public const REUSABLE_BLOCK_SOURCE_REF = 9300001;
 
 	/**
+	 * Hierarchical taxonomy the parity suite registers so the batch exercises a
+	 * real term tree end to end. Carried only on the post slice.
+	 */
+	public const SECTION_TAXONOMY = 'seeder_section';
+
+	/**
+	 * Source term IDs for the three-level section tree stamped on the post
+	 * slice's safe_publish_terms field. Only the leaf is assigned; the root and
+	 * child travel as unassigned ancestors.
+	 */
+	private const SECTION_ROOT_SOURCE_ID  = 9700001;
+	private const SECTION_CHILD_SOURCE_ID = 9700002;
+	private const SECTION_LEAF_SOURCE_ID  = 9700003;
+
+	/**
+	 * Base for the synthetic source term IDs stamped on the flat category and
+	 * post_tag records, offset per taxonomy so the two never collide.
+	 */
+	private const FLAT_TERM_SOURCE_ID_BASE = 9700100;
+
+	/**
 	 * Source REST bodies keyed by source post ID.
 	 *
 	 * @var array<int, array<string, mixed>>
@@ -185,6 +206,18 @@ final class Seeder_Parity_Fixture {
 				}
 			}
 		}
+
+		$section_terms = get_terms(
+			array(
+				'taxonomy'   => self::SECTION_TAXONOMY,
+				'hide_empty' => false,
+			)
+		);
+		if ( is_array( $section_terms ) ) {
+			foreach ( $section_terms as $term ) {
+				wp_delete_term( $term->term_id, self::SECTION_TAXONOMY );
+			}
+		}
 	}
 
 	/**
@@ -272,7 +305,8 @@ final class Seeder_Parity_Fixture {
 					$slice['author_user_id'],
 					$source_parent_id,
 					$this->scalars_for_index( $i ),
-					$image_refs
+					$image_refs,
+					'post' === $slice['type']
 				);
 			}
 		}
@@ -666,11 +700,12 @@ final class Seeder_Parity_Fixture {
 	 * Wraps a generator payload into a full REST response body.
 	 *
 	 * Mirrors the shape of a real wp/v2 post response: title/content/excerpt are
-	 * wrapped in [ 'raw' => ... ], taxonomy assignments land under
-	 * _embedded['wp:term'], the plugin's safe_publish_author block is stamped
-	 * with the slice's author, and parent carries the source parent ID (0 for
-	 * top-level). The status-family scalars come from the caller so the batch
-	 * exercises non-default comment/ping/password/menu_order values.
+	 * wrapped in [ 'raw' => ... ], taxonomy assignments land under both
+	 * _embedded['wp:term'] and the richer safe_publish_terms field, the
+	 * plugin's safe_publish_author block is stamped with the slice's author,
+	 * and parent carries the source parent ID (0 for top-level). The
+	 * status-family scalars come from the caller so the batch exercises
+	 * non-default comment/ping/password/menu_order values.
 	 *
 	 * @param int                                                                                   $source_id        Source post ID.
 	 * @param array<string, mixed>                                                                  $payload          Generator payload.
@@ -678,6 +713,7 @@ final class Seeder_Parity_Fixture {
 	 * @param int                                                                                   $source_parent_id Source parent post ID; 0 for top-level.
 	 * @param array{comment_status: string, ping_status: string, menu_order: int, password: string} $scalars Status-family column values.
 	 * @param list<array{id: int, url: string}>                                                     $image_refs Image refs seeding safe_publish_media; empty for edge cases.
+	 * @param bool                                                                                  $include_hierarchy Whether to append the hierarchical section tree.
 	 * @return array<string, mixed>
 	 */
 	private function payload_to_rest_body(
@@ -686,7 +722,8 @@ final class Seeder_Parity_Fixture {
 		int $author_user_id,
 		int $source_parent_id,
 		array $scalars,
-		array $image_refs = array()
+		array $image_refs = array(),
+		bool $include_hierarchy = false
 	): array {
 		$author = get_userdata( $author_user_id );
 
@@ -699,7 +736,7 @@ final class Seeder_Parity_Fixture {
 			) + array( 'parent' => (string) $source_id );
 		}
 
-		return array(
+		$body = array(
 			'id'                  => $source_id,
 			'title'               => array( 'raw' => $payload['title'] ),
 			'featured_media'      => $payload['featured_media'],
@@ -728,6 +765,112 @@ final class Seeder_Parity_Fixture {
 			'safe_publish_media'  => $safe_publish_media,
 			'_embedded'           => array(
 				'wp:term' => $this->embedded_terms( $payload['terms'] ),
+			),
+		);
+
+		// Omit the field when there is nothing to carry so those posts exercise
+		// the embedded-terms fallback, as a source on the older plugin would.
+		$safe_publish_terms = $this->build_safe_publish_terms(
+			$payload['terms'],
+			$include_hierarchy
+		);
+		if ( array() !== $safe_publish_terms ) {
+			$body['safe_publish_terms'] = $safe_publish_terms;
+		}
+
+		return $body;
+	}
+
+	/**
+	 * Builds the safe_publish_terms field for a body: each flat
+	 * category/post_tag assignment as an assigned, described record, plus the
+	 * hierarchical section tree when requested.
+	 *
+	 * @param array<string, list<string>> $term_assignments  Taxonomy => term values.
+	 * @param bool                        $include_hierarchy Whether to append the section tree.
+	 * @return array<string, list<array{id: int, name: string, slug: string, parent: int, description: string, assigned: bool}>>
+	 */
+	private function build_safe_publish_terms(
+		array $term_assignments,
+		bool $include_hierarchy
+	): array {
+		$field = array();
+
+		foreach ( $term_assignments as $taxonomy => $values ) {
+			$records = array();
+			foreach ( $values as $value ) {
+				$records[] = array(
+					'id'          => $this->flat_term_source_id( $taxonomy, $value ),
+					'name'        => $value,
+					'slug'        => sanitize_title( $value ),
+					'parent'      => 0,
+					'description' => "Term description for {$value}",
+					'assigned'    => true,
+				);
+			}
+			if ( array() !== $records ) {
+				$field[ $taxonomy ] = $records;
+			}
+		}
+
+		if ( $include_hierarchy ) {
+			$field[ self::SECTION_TAXONOMY ] = $this->section_tree_records();
+		}
+
+		return $field;
+	}
+
+	/**
+	 * Returns a stable source term ID for a flat term value, keyed on its
+	 * position in term_config() so the same term reuses one destination term
+	 * across the batch.
+	 *
+	 * @param string $taxonomy Taxonomy slug.
+	 * @param string $value    Term value (name or slug per term_config()).
+	 * @return int Synthetic source term ID.
+	 */
+	private function flat_term_source_id( string $taxonomy, string $value ): int {
+		$terms  = Content_Generator::term_config()[ $taxonomy ]['terms'] ?? array();
+		$index  = array_search( $value, $terms, true );
+		$offset = 'category' === $taxonomy ? 0 : 100;
+
+		return self::FLAT_TERM_SOURCE_ID_BASE
+			+ $offset
+			+ ( false === $index ? 0 : (int) $index )
+			+ 1;
+	}
+
+	/**
+	 * Returns the three-level section tree: a root, a child under it, and an
+	 * assigned leaf under the child, each carrying a description.
+	 *
+	 * @return list<array{id: int, name: string, slug: string, parent: int, description: string, assigned: bool}>
+	 */
+	private function section_tree_records(): array {
+		return array(
+			array(
+				'id'          => self::SECTION_ROOT_SOURCE_ID,
+				'name'        => 'Root Section',
+				'slug'        => 'root-section',
+				'parent'      => 0,
+				'description' => 'The top-level section.',
+				'assigned'    => false,
+			),
+			array(
+				'id'          => self::SECTION_CHILD_SOURCE_ID,
+				'name'        => 'Child Section',
+				'slug'        => 'child-section',
+				'parent'      => self::SECTION_ROOT_SOURCE_ID,
+				'description' => 'A mid-level section under the root.',
+				'assigned'    => false,
+			),
+			array(
+				'id'          => self::SECTION_LEAF_SOURCE_ID,
+				'name'        => 'Leaf Section',
+				'slug'        => 'leaf-section',
+				'parent'      => self::SECTION_CHILD_SOURCE_ID,
+				'description' => 'The assigned leaf section.',
+				'assigned'    => true,
 			),
 		);
 	}
