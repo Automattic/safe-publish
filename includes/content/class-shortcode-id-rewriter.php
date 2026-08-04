@@ -271,6 +271,80 @@ class Shortcode_ID_Rewriter {
 	}
 
 	/**
+	 * Collects the attachment IDs a content's gallery and playlist shortcodes
+	 * reference through their ids and include attributes.
+	 *
+	 * The `exclude` attribute is omitted: it removes an attachment from the
+	 * rendered set rather than referencing it.
+	 *
+	 * @param string $content Content to scan.
+	 * @return int[] Referenced attachment IDs, deduplicated.
+	 */
+	public function collect_shortcode_attachment_ids( string $content ): array {
+		if ( '' === $content
+			|| ( false === stripos( $content, '[gallery' )
+				&& false === stripos( $content, '[playlist' ) )
+		) {
+			return array();
+		}
+
+		if ( false === preg_match_all(
+			'/' . get_shortcode_regex( array( 'gallery', 'playlist' ) ) . '/s',
+			$content,
+			$shortcodes,
+			PREG_SET_ORDER
+		) ) {
+			return array();
+		}
+
+		$ids = array();
+
+		foreach ( $shortcodes as $shortcode ) {
+			// Escaped shortcode ([[gallery ...]]): not rendered, so skip.
+			if ( '[' === $shortcode[1] && ']' === $shortcode[6] ) {
+				continue;
+			}
+
+			$this->collect_id_attr_csvs( $shortcode[3], $ids );
+		}
+
+		return array_values( array_unique( $ids ) );
+	}
+
+	/**
+	 * Extracts the numeric tokens from the ids and include attribute CSVs
+	 * within a shortcode's attribute string.
+	 *
+	 * @param string $attrs Shortcode attribute string.
+	 * @param int[]  $ids   Collected IDs, appended to by reference.
+	 */
+	private function collect_id_attr_csvs( string $attrs, array &$ids ): void {
+		$pattern = '/(?<![\w-])(?:ids|include)\s*=\s*'
+			. '(?:"([^"]*)"|\'([^\']*)\'|([^\s\]]+))/i';
+
+		if ( 1 > preg_match_all( $pattern, $attrs, $selectors, PREG_SET_ORDER ) ) {
+			return;
+		}
+
+		foreach ( $selectors as $selector ) {
+			$csv = $selector[1];
+			if ( '' === $csv && isset( $selector[2] ) ) {
+				$csv = $selector[2];
+			}
+			if ( '' === $csv && isset( $selector[3] ) ) {
+				$csv = $selector[3];
+			}
+
+			foreach ( explode( ',', $csv ) as $token ) {
+				$token = trim( $token );
+				if ( '' !== $token && ctype_digit( $token ) ) {
+					$ids[] = (int) $token;
+				}
+			}
+		}
+	}
+
+	/**
 	 * Remaps the singular gallery/playlist `id` post reference to its
 	 * destination, or strips it when it names the importing post's own set.
 	 *
