@@ -516,7 +516,12 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ASSERT: The nocache filter is registered despite no user; the headers
 		// core then emits are the strong no-store, private form.
 		$this->assertFalse( is_user_logged_in() );
-		$this->assertNotFalse( has_filter( 'rest_send_nocache_headers', '__return_true' ) );
+		$this->assertNotFalse(
+			has_filter(
+				'rest_send_nocache_headers',
+				array( $this->authenticator, 'force_rest_nocache_headers' )
+			)
+		);
 		$cache_control = wp_get_nocache_headers()['Cache-Control'];
 		$this->assertStringContainsString( 'no-store', $cache_control );
 		$this->assertStringContainsString( 'private', $cache_control );
@@ -535,7 +540,12 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		$this->authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: The common-path filter covers the catalog, not just wp/v2 reads.
-		$this->assertNotFalse( has_filter( 'rest_send_nocache_headers', '__return_true' ) );
+		$this->assertNotFalse(
+			has_filter(
+				'rest_send_nocache_headers',
+				array( $this->authenticator, 'force_rest_nocache_headers' )
+			)
+		);
 	}
 
 	/**
