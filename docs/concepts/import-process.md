@@ -196,7 +196,7 @@ ACF and Secure Custom Fields (SCF) values are regular post meta. Migrate them wi
 
 ### Terms
 
-Source terms (categories, tags, and custom taxonomies) are synced. Terms that don't exist on the destination are created automatically.
+Source terms (categories, tags, and custom taxonomies) are synced, with their descriptions and hierarchy; terms missing on the destination are created automatically. The import sets a parent and description only on terms it creates, so a term that already exists on the destination is reused unchanged.
 
 Custom taxonomies must be registered with `'show_in_rest' => true` on the source site and must exist on the destination site — a missing custom taxonomy causes the import to fail.
 
