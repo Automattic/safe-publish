@@ -10,7 +10,7 @@
   - [Content Validation](concepts/validation.md) - How content is validated before import
   - [Import Process](concepts/import-process.md) - Understanding the content import workflow
   - [Imports](concepts/imports.md) - Managing imported content and failed imports
-  - [Exports](concepts/exports.md) - Reviewing outbound export events
+  - [Audit Log](concepts/audit-log.md) - Reviewing logged events, including exports
 
 - [Extending](extending/index.md)
   - [Hooks and Filters](extending/hooks.md) - Available WordPress hooks
