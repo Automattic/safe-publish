@@ -45,7 +45,7 @@
 - Write short and to the point comments; lengthy comments allowed only when they provide value.
 - Adhere to WordPress inline documentation standards.
 - Docblock summaries are plain prose; no backticks or Markdown.
-- In comments, capitalize the first word after a colon only when it begins prose — not a literal or code reference (quoted string, identifier, URL, and the like).
+- In comments, capitalize the first word after a colon only when it begins prose — not a code reference such as an identifier or function name (`()` optional, camelCase included), a tag, attribute, slug, or enum value, a quoted string, URL, type shape, or literal. Apply this at every colon followed by a space (not `10:30` or `https://`); for a list, judge by the items — `image, audio, or video` stays lowercase, `Scheme and host only` capitalizes.
 
 ## Tests
 
