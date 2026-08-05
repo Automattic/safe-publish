@@ -18,7 +18,7 @@ use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
 
 /**
- * Exercises the controller glue for the attention-issue endpoints: retry type
+ * Exercises the controller glue for the attention-issue endpoints: Retry type
  * dispatch, target_kind threading, the retryable allowlist, the capability
  * gate, the list payload's reusable-block and resolvable flags, and bulk retry
  * aggregation. The reconciliations themselves are covered in
@@ -72,7 +72,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	 * repoint, resolves the issue, and reports a resolved outcome.
 	 */
 	public function test_retry_unmapped_block_reference_dispatches_and_resolves(): void {
-		// ARRANGE: a post with a stale post-type ref, its now-present target, and
+		// ARRANGE: A post with a stale post-type ref, its now-present target, and
 		// the open issue.
 		$post_id = self::factory()->post->create(
 			array( 'post_content' => $this->nav_link_content( 9700, 'post-type' ) )
@@ -80,7 +80,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 		$this->seed_target_post( 9700 );
 		$this->open_issue( $post_id, 'unmapped_block_reference', 9700, 'post' );
 
-		// ACT: retry through the endpoint.
+		// ACT: Retry through the endpoint.
 		$response = $this->retry(
 			array(
 				'affected_post_id' => (string) $post_id,
@@ -90,7 +90,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: the endpoint reports a resolved outcome with no detail and
+		// ASSERT: The endpoint reports a resolved outcome with no detail and
 		// the row is gone.
 		$this->assertTrue( $response['success'] );
 		$this->assertTrue( $response['data']['resolved'] );
@@ -152,7 +152,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	 * setting post_parent and resolving the issue.
 	 */
 	public function test_retry_parent_orphaned_dispatches_and_resolves(): void {
-		// ARRANGE: a top-level child page, its now-present source parent, and the
+		// ARRANGE: A top-level child page, its now-present source parent, and the
 		// open issue.
 		$child_id  = self::factory()->post->create(
 			array(
@@ -163,7 +163,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 		$parent_id = $this->seed_target_post( 9850 );
 		$this->open_issue( $child_id, 'parent_orphaned', 9850, 'post' );
 
-		// ACT: retry through the endpoint.
+		// ACT: Retry through the endpoint.
 		$response = $this->retry(
 			array(
 				'affected_post_id' => (string) $child_id,
@@ -173,7 +173,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: the parent is linked and the row is gone — proving the dispatch
+		// ASSERT: The parent is linked and the row is gone — proving the dispatch
 		// routed to the parent reconciliation, not the block one.
 		$this->assertTrue( $response['data']['resolved'] );
 		$this->assertSame(
@@ -190,7 +190,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	 * post and a term reference share a target_ref.
 	 */
 	public function test_retry_threads_target_kind_to_matching_row(): void {
-		// ARRANGE: a post holding both refs, both targets present, both issues
+		// ARRANGE: A post holding both refs, both targets present, both issues
 		// open.
 		$post_id = self::factory()->post->create(
 			array( 'post_content' => $this->two_kind_nav_content( 9042 ) )
@@ -200,7 +200,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 		$this->open_issue( $post_id, 'unmapped_block_reference', 9042, 'post' );
 		$this->open_issue( $post_id, 'unmapped_block_reference', 9042, 'term' );
 
-		// ACT: retry only the post kind.
+		// ACT: Retry only the post kind.
 		$response = $this->retry(
 			array(
 				'affected_post_id' => (string) $post_id,
@@ -210,7 +210,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: only the post row resolved; the term row stays.
+		// ASSERT: Only the post row resolved; the term row stays.
 		$this->assertTrue( $response['data']['resolved'] );
 		$this->assertNull(
 			$this->attention->get_issue(
@@ -234,7 +234,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	 * Verifies that an unrecognized issue type is rejected.
 	 */
 	public function test_retry_rejects_unknown_issue_type(): void {
-		// ACT: retry with a type outside the retryable allowlist.
+		// ACT: Retry with a type outside the retryable allowlist.
 		$response = $this->retry(
 			array(
 				'affected_post_id' => '1',
@@ -244,7 +244,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: rejected before any reconciliation runs.
+		// ASSERT: Rejected before any reconciliation runs.
 		$this->assertFalse( $response['success'] );
 	}
 
@@ -252,7 +252,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	 * Verifies that an invalid target_kind is rejected.
 	 */
 	public function test_retry_rejects_invalid_target_kind(): void {
-		// ACT: retry with a kind outside the post/term whitelist.
+		// ACT: Retry with a kind outside the post/term whitelist.
 		$response = $this->retry(
 			array(
 				'affected_post_id' => '1',
@@ -262,7 +262,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: rejected before any reconciliation runs.
+		// ASSERT: Rejected before any reconciliation runs.
 		$this->assertFalse( $response['success'] );
 	}
 
@@ -270,7 +270,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	 * Verifies that a user without edit_posts cannot retry.
 	 */
 	public function test_retry_rejects_user_without_edit_posts(): void {
-		// ARRANGE: an open issue and a subscriber-level user.
+		// ARRANGE: An open issue and a subscriber-level user.
 		$post_id = self::factory()->post->create(
 			array( 'post_content' => $this->nav_link_content( 9700, 'post-type' ) )
 		);
@@ -280,7 +280,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			$this->factory()->user->create( array( 'role' => 'subscriber' ) )
 		);
 
-		// ACT: retry as the subscriber.
+		// ACT: Retry as the subscriber.
 		$response = $this->retry(
 			array(
 				'affected_post_id' => (string) $post_id,
@@ -290,7 +290,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: forbidden, and the issue is untouched.
+		// ASSERT: Forbidden, and the issue is untouched.
 		$this->assertFalse( $response['success'] );
 		$this->assertNotNull(
 			$this->attention->get_issue(
@@ -307,14 +307,14 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	 * the issue type, completing the dual-write contract.
 	 */
 	public function test_retry_logs_reconcile_resolved_event(): void {
-		// ARRANGE: a resolvable block reference and its open issue.
+		// ARRANGE: A resolvable block reference and its open issue.
 		$post_id = self::factory()->post->create(
 			array( 'post_content' => $this->nav_link_content( 9700, 'post-type' ) )
 		);
 		$this->seed_target_post( 9700 );
 		$this->open_issue( $post_id, 'unmapped_block_reference', 9700, 'post' );
 
-		// ACT: retry through the endpoint.
+		// ACT: Retry through the endpoint.
 		$response = $this->retry(
 			array(
 				'affected_post_id' => (string) $post_id,
@@ -324,7 +324,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: resolved, and a reconcile info event names the issue type.
+		// ASSERT: Resolved, and a reconcile info event names the issue type.
 		$this->assertTrue( $response['data']['resolved'] );
 		$events = Audit_Log_Table::get_events(
 			array( 'channel' => 'reconcile' )
@@ -344,13 +344,13 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	 * instead of clearing the issue.
 	 */
 	public function test_target_absent_block_retry_logs_target_absent(): void {
-		// ARRANGE: a stale ref whose target was never imported.
+		// ARRANGE: A stale ref whose target was never imported.
 		$post_id = self::factory()->post->create(
 			array( 'post_content' => $this->nav_link_content( 9999, 'post-type' ) )
 		);
 		$this->open_issue( $post_id, 'unmapped_block_reference', 9999, 'post' );
 
-		// ACT: retry; the target is absent, so the issue stays open.
+		// ACT: Retry; the target is absent, so the issue stays open.
 		$response = $this->retry(
 			array(
 				'affected_post_id' => (string) $post_id,
@@ -360,7 +360,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: a target_absent outcome with a detail, and a reconcile
+		// ASSERT: A target_absent outcome with a detail, and a reconcile
 		// target-absent warning was recorded.
 		$this->assertFalse( $response['data']['resolved'] );
 		$this->assertSame( 'target_absent', $response['data']['outcome'] );
@@ -384,7 +384,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	 * records a reconcile unresolved warning.
 	 */
 	public function test_unresolved_block_retry_logs_unresolved(): void {
-		// ARRANGE: the target is importable, but the post content holds no
+		// ARRANGE: The target is importable, but the post content holds no
 		// matching reference.
 		$post_id = self::factory()->post->create(
 			array( 'post_content' => 'No navigation block here.' )
@@ -392,7 +392,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 		$this->seed_target_post( 9700 );
 		$this->open_issue( $post_id, 'unmapped_block_reference', 9700, 'post' );
 
-		// ACT: retry through the endpoint.
+		// ACT: Retry through the endpoint.
 		$response = $this->retry(
 			array(
 				'affected_post_id' => (string) $post_id,
@@ -402,7 +402,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: an unresolved outcome with a detail, and a plain reconcile
+		// ASSERT: An unresolved outcome with a detail, and a plain reconcile
 		// unresolved warning recorded.
 		$this->assertFalse( $response['data']['resolved'] );
 		$this->assertSame( 'unresolved', $response['data']['outcome'] );
@@ -426,7 +426,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	 * attempted.
 	 */
 	public function test_target_absent_nav_retry_logs_target_absent_not_error(): void {
-		// ARRANGE: an error-severity nav issue whose menu is absent, so the retry
+		// ARRANGE: An error-severity nav issue whose menu is absent, so the retry
 		// has nothing to reconcile and the row stays.
 		$post_id = self::factory()->post->create();
 		$this->attention->upsert_issue(
@@ -438,7 +438,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			self::SOURCE
 		);
 
-		// ACT: retry through the endpoint.
+		// ACT: Retry through the endpoint.
 		$response = $this->retry(
 			array(
 				'affected_post_id' => (string) $post_id,
@@ -448,7 +448,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: unresolved, no error event recorded, and a target-absent
+		// ASSERT: Unresolved, no error event recorded, and a target-absent
 		// warning recorded instead.
 		$this->assertFalse( $response['data']['resolved'] );
 		$this->assertCount(
@@ -479,7 +479,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	 * unmapped reference is not flagged.
 	 */
 	public function test_list_flags_reusable_block_reference(): void {
-		// ARRANGE: two open unmapped references — one core/block, one nav — each
+		// ARRANGE: Two open unmapped references — one core/block, one nav — each
 		// on its own affected post.
 		$reusable_post = self::factory()->post->create();
 		$nav_post      = self::factory()->post->create();
@@ -502,10 +502,10 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 			array( 'block' => 'core/navigation' )
 		);
 
-		// ACT: list the open issues.
+		// ACT: List the open issues.
 		$response = $this->list_issues();
 
-		// ASSERT: the flag distinguishes the reusable-block reference.
+		// ASSERT: The flag distinguishes the reusable-block reference.
 		$flags = array();
 		foreach ( $response['data']['items'] as $item ) {
 			$flags[ $item['affected_post_id'] ] = $item['target_is_reusable_block'];

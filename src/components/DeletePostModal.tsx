@@ -2,7 +2,7 @@
  * Delete Post Modal component.
  *
  * Confirmation modal for trashing one or many imported posts. Branches
- * on items.length: the single path hits safe_publish_delete_post; the
+ * on items.length: The single path hits safe_publish_delete_post; the
  * bulk path hits safe_publish_bulk_delete_posts with the full id list.
  *
  * @file This file defines the DeletePostModal component.

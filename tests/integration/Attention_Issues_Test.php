@@ -28,7 +28,7 @@ use Safe_Publish\Utils\Telemetry_Service;
 use WP_Error;
 
 /**
- * Exercises import-time detection: tracked degradations open one upserted issue
+ * Exercises import-time detection: Tracked degradations open one upserted issue
  * per (post, type, target), re-imports reconcile them, a forced nav rewrite
  * failure opens an error issue, Retry clears it, and issues stay scoped to the
  * path-bearing source identity.
@@ -139,7 +139,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			array( 'content' => $this->single_nav_link_content( 700 ) )
 		);
 
-		// ASSERT: exactly one open issue, keyed and scoped as expected.
+		// ASSERT: Exactly one open issue, keyed and scoped as expected.
 		$this->assertTrue( $result['success'] );
 		$rows = $this->open_rows_for_source( self::BLOG_URL );
 		$this->assertCount( 1, $rows );
@@ -384,7 +384,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			array( 'content' => $this->nav_block_content( 700, 701 ) )
 		);
 
-		// ASSERT: one row per target, distinguished by target_ref and kind.
+		// ASSERT: One row per target, distinguished by target_ref and kind.
 		$this->assertTrue( $result['success'] );
 		$rows = $this->open_rows_for_source( self::BLOG_URL );
 		$this->assertCount( 2, $rows );
@@ -410,7 +410,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			array( 'content' => $this->nav_block_content( 42, 42 ) )
 		);
 
-		// ASSERT: the shared number yields two rows, one per kind.
+		// ASSERT: The shared number yields two rows, one per kind.
 		$this->assertTrue( $result['success'] );
 		$rows = $this->open_rows_for_source( self::BLOG_URL );
 		$this->assertCount( 2, $rows );
@@ -428,7 +428,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * preserves first_detected_gmt without inserting a duplicate.
 	 */
 	public function test_redetected_ref_refreshes_without_duplicate(): void {
-		// ARRANGE: import once, then backdate last_seen so a refresh is visible.
+		// ARRANGE: Import once, then backdate last_seen so a refresh is visible.
 		$result  = $this->import_under(
 			self::BLOG_URL,
 			7102,
@@ -450,14 +450,14 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			'2000-01-01 00:00:00'
 		);
 
-		// ACT: re-import the same post with the same unresolved reference.
+		// ACT: Re-import the same post with the same unresolved reference.
 		$this->import_under(
 			self::BLOG_URL,
 			7102,
 			array( 'content' => $this->single_nav_link_content( 700 ) )
 		);
 
-		// ASSERT: still one row; last_seen refreshed; first_detected preserved.
+		// ASSERT: Still one row; last_seen refreshed; first_detected preserved.
 		$this->assertCount( 1, $this->open_rows_for_source( self::BLOG_URL ) );
 		$after = $this->attention->get_issue(
 			$post_id,
@@ -476,7 +476,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * Verifies that a re-import whose reference now resolves clears the issue.
 	 */
 	public function test_reimport_resolving_ref_resolves_issue(): void {
-		// ARRANGE: import with an unresolved reference, opening an issue.
+		// ARRANGE: Import with an unresolved reference, opening an issue.
 		$result = $this->import_under(
 			self::BLOG_URL,
 			7103,
@@ -484,7 +484,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		);
 		$this->assertCount( 1, $this->open_rows_for_source( self::BLOG_URL ) );
 
-		// ACT: make the target resolvable, then re-import the same post.
+		// ACT: Make the target resolvable, then re-import the same post.
 		$this->seed_target_post( 700, self::BLOG_URL );
 		$this->import_under(
 			self::BLOG_URL,
@@ -492,7 +492,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			array( 'content' => $this->single_nav_link_content( 700 ) )
 		);
 
-		// ASSERT: the row is resolved.
+		// ASSERT: The row is resolved.
 		$this->assertCount( 0, $this->open_rows_for_source( self::BLOG_URL ) );
 		$this->assertNull(
 			$this->attention->get_issue(
@@ -508,7 +508,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * so a gone post leaves no unfixable rows behind without touching others.
 	 */
 	public function test_deleting_affected_post_clears_only_its_issues(): void {
-		// ARRANGE: two imported posts, each with an unresolved reference.
+		// ARRANGE: Two imported posts, each with an unresolved reference.
 		$deleted = $this->import_under(
 			self::BLOG_URL,
 			7107,
@@ -521,10 +521,10 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		);
 		$this->assertCount( 2, $this->open_rows_for_source( self::BLOG_URL ) );
 
-		// ACT: permanently delete the first post.
+		// ACT: Permanently delete the first post.
 		wp_delete_post( $deleted['post_id'], true );
 
-		// ASSERT: its row is gone; the other post's row survives.
+		// ASSERT: Its row is gone; the other post's row survives.
 		$rows = $this->open_rows_for_source( self::BLOG_URL );
 		$this->assertCount( 1, $rows );
 		$this->assertSame( $kept['post_id'], (int) $rows[0]['affected_post_id'] );
@@ -535,10 +535,10 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * orphan fallback is enabled.
 	 */
 	public function test_orphaned_parent_opens_issue_when_enabled(): void {
-		// ARRANGE: allow orphan imports for this test only.
+		// ARRANGE: Allow orphan imports for this test only.
 		add_filter( 'safe_publish_import_allow_orphans', '__return_true' );
 
-		// ACT: import a child page whose source parent is not on the destination.
+		// ACT: Import a child page whose source parent is not on the destination.
 		$result = $this->import_under(
 			self::BLOG_URL,
 			8100,
@@ -548,7 +548,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 
 		remove_filter( 'safe_publish_import_allow_orphans', '__return_true' );
 
-		// ASSERT: a single warning issue keyed to the unresolved parent.
+		// ASSERT: A single warning issue keyed to the unresolved parent.
 		$this->assertTrue( $result['success'] );
 		$rows = $this->open_rows_for_source( self::BLOG_URL );
 		$this->assertCount( 1, $rows );
@@ -562,10 +562,10 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * degradation on the same import does.
 	 */
 	public function test_author_fallback_creates_no_issue_but_tracked_type_does(): void {
-		// ARRANGE: allow the author fallback (opt-in, off by default).
+		// ARRANGE: Allow the author fallback (opt-in, off by default).
 		add_filter( 'safe_publish_import_allow_author_fallback', '__return_true' );
 
-		// ACT: import with an unknown author and an unresolved reference.
+		// ACT: Import with an unknown author and an unresolved reference.
 		$result = $this->import_under(
 			self::BLOG_URL,
 			7104,
@@ -584,7 +584,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			'__return_true'
 		);
 
-		// ASSERT: the author fallback fired but only the tracked ref is an issue.
+		// ASSERT: The author fallback fired but only the tracked ref is an issue.
 		$this->assertTrue( $result['success'] );
 		$this->assertNotNull(
 			$this->find_warning( $result['warnings'], 'author_fallback_applied' )
@@ -612,7 +612,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			array( 'content' => $this->single_nav_link_content( 700 ) )
 		);
 
-		// ASSERT: each subsite lists only its own issue.
+		// ASSERT: Each subsite lists only its own issue.
 		$blog_rows = $this->open_rows_for_source( self::BLOG_URL );
 		$news_rows = $this->open_rows_for_source( self::NEWS_URL );
 
@@ -637,14 +637,14 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * re-runs the reconciliation to clear it.
 	 */
 	public function test_nav_rewrite_failure_opens_error_issue_and_retry_clears_it(): void {
-		// ARRANGE: a previously imported menu references menu 8300 by source ID.
+		// ARRANGE: A previously imported menu references menu 8300 by source ID.
 		$menu_a = $this->seed_referencing_post(
 			$this->nav_ref_block( 8300 ),
 			self::BLOG_URL,
 			8101
 		);
 
-		// ACT: import menu 8300 with a rewriter whose write fails.
+		// ACT: Import menu 8300 with a rewriter whose write fails.
 		$result = $this->import_under(
 			self::BLOG_URL,
 			8300,
@@ -653,7 +653,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			$this->build_import_service( $this->failing_rewriter() )
 		);
 
-		// ASSERT: an error-level issue is keyed to the still-stale menu.
+		// ASSERT: An error-level issue is keyed to the still-stale menu.
 		$this->assertTrue( $result['success'] );
 		$issue = $this->attention->get_issue(
 			$menu_a,
@@ -663,14 +663,14 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		$this->assertNotNull( $issue );
 		$this->assertSame( 'error', $issue['severity'] );
 
-		// ACT: retry through a succeeding rewriter.
+		// ACT: Retry through a succeeding rewriter.
 		$outcome = $this->import_service->retry_nav_ref_rewrite(
 			$menu_a,
 			8300,
 			self::BLOG_URL
 		);
 
-		// ASSERT: the outcome is resolved, the issue cleared, the ref repointed.
+		// ASSERT: The outcome is resolved, the issue cleared, the ref repointed.
 		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
 		$this->assertNull(
 			$this->attention->get_issue( $menu_a, 'nav_ref_rewrite_failed', 8300 )
@@ -686,7 +686,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * a write-failed outcome and keeps the error issue open.
 	 */
 	public function test_nav_retry_through_failing_rewriter_reports_write_failed(): void {
-		// ARRANGE: a referencing post and a menu imported with a failing rewriter,
+		// ARRANGE: A referencing post and a menu imported with a failing rewriter,
 		// opening the error issue keyed to the referencing post.
 		$menu_a  = $this->seed_referencing_post(
 			$this->nav_ref_block( 8300 ),
@@ -705,10 +705,10 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			$this->attention->get_issue( $menu_a, 'nav_ref_rewrite_failed', 8300 )
 		);
 
-		// ACT: retry through the same failing rewriter.
+		// ACT: Retry through the same failing rewriter.
 		$outcome = $service->retry_nav_ref_rewrite( $menu_a, 8300, self::BLOG_URL );
 
-		// ASSERT: the write failed and the issue stays open.
+		// ASSERT: The write failed and the issue stays open.
 		$this->assertSame( Reconcile_Outcome::WRITE_FAILED, $outcome->type );
 		$this->assertNotNull(
 			$this->attention->get_issue( $menu_a, 'nav_ref_rewrite_failed', 8300 )
@@ -721,7 +721,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * post_modified bump.
 	 */
 	public function test_block_ref_retry_repoints_in_place_and_clears_issue(): void {
-		// ARRANGE: import a post linking to a not-yet-imported source post.
+		// ARRANGE: Import a post linking to a not-yet-imported source post.
 		$result  = $this->import_under(
 			self::BLOG_URL,
 			7200,
@@ -730,12 +730,12 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		$post_id = $result['post_id'];
 		$this->assertCount( 1, $this->open_rows_for_source( self::BLOG_URL ) );
 
-		// ARRANGE: the target becomes available; capture the pre-retry state.
+		// ARRANGE: The target becomes available; capture the pre-retry state.
 		$dest_id  = $this->seed_target_post( 9700, self::BLOG_URL );
 		$modified = get_post_field( 'post_modified', $post_id );
 		$before   = count( wp_get_post_revisions( $post_id ) );
 
-		// ACT: retry the repoint.
+		// ACT: Retry the repoint.
 		$outcome = $this->import_service->retry_block_ref_repoint(
 			$post_id,
 			9700,
@@ -743,7 +743,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			self::BLOG_URL
 		);
 
-		// ASSERT: the outcome is resolved, the ref now holds the destination id.
+		// ASSERT: The outcome is resolved, the ref now holds the destination id.
 		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
 		$this->assertNull(
 			$this->attention->get_issue(
@@ -755,7 +755,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		);
 		$this->assertSame( array( $dest_id ), $this->nav_link_ids( $post_id ) );
 
-		// ASSERT: a system touch-up — no revision, post_modified intact.
+		// ASSERT: A system touch-up — no revision, post_modified intact.
 		$this->assertSame( $before, count( wp_get_post_revisions( $post_id ) ) );
 		$this->assertSame(
 			$modified,
@@ -768,7 +768,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * destination permalink, without bumping post_modified.
 	 */
 	public function test_block_ref_retry_rederives_post_link_url(): void {
-		// ARRANGE: pretty permalinks, plus an import linking to a not-yet
+		// ARRANGE: Pretty permalinks, plus an import linking to a not-yet
 		// imported source post (url left as the host-swapped source path).
 		$this->set_permalink_structure( '/%postname%/' );
 		$result  = $this->import_under(
@@ -778,12 +778,12 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		);
 		$post_id = $result['post_id'];
 
-		// ARRANGE: the target becomes available; capture the pre-retry state.
+		// ARRANGE: The target becomes available; capture the pre-retry state.
 		$dest_id   = $this->seed_target_post( 9710, self::BLOG_URL );
 		$permalink = (string) get_permalink( $dest_id );
 		$modified  = get_post_field( 'post_modified', $post_id );
 
-		// ACT: retry the repoint.
+		// ACT: Retry the repoint.
 		$this->import_service->retry_block_ref_repoint(
 			$post_id,
 			9710,
@@ -795,7 +795,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		$this->assertSame( array( $dest_id ), $this->nav_link_ids( $post_id ) );
 		$this->assertSame( array( $permalink ), $this->nav_link_urls( $post_id ) );
 
-		// ASSERT: a system touch-up — post_modified intact.
+		// ASSERT: A system touch-up — post_modified intact.
 		$this->assertSame(
 			$modified,
 			get_post_field( 'post_modified', $post_id )
@@ -803,11 +803,11 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that re-deriving a nav-link url on repoint is idempotent: a
+	 * Verifies that re-deriving a nav-link url on repoint is idempotent: A
 	 * second repoint to the same resolved target makes no write.
 	 */
 	public function test_block_ref_repoint_url_rederive_is_idempotent(): void {
-		// ARRANGE: pretty permalinks and an import linking to a not-yet-imported
+		// ARRANGE: Pretty permalinks and an import linking to a not-yet-imported
 		// source post; then make the target available.
 		$this->set_permalink_structure( '/%postname%/' );
 		$result    = $this->import_under(
@@ -819,7 +819,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		$dest_id   = $this->seed_target_post( 9711, self::BLOG_URL );
 		$processor = $this->content_processor();
 
-		// ACT: first repoint resolves and re-derives; second repeats.
+		// ACT: First repoint resolves and re-derives; second repeats.
 		$first  = $processor->repoint_block_reference(
 			$post_id,
 			9711,
@@ -833,7 +833,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			self::BLOG_URL
 		);
 
-		// ASSERT: the first repoint resolved; the second made no change.
+		// ASSERT: The first repoint resolved; the second made no change.
 		$this->assertSame( Reconcile_Outcome::RESOLVED, $first->type );
 		$this->assertSame( Reconcile_Outcome::UNRESOLVED, $second->type );
 		$this->assertSame( array( $dest_id ), $this->nav_link_ids( $post_id ) );
@@ -844,7 +844,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * nav-link in place and clears the issue.
 	 */
 	public function test_block_ref_retry_repoints_term_reference(): void {
-		// ARRANGE: import a post linking to a not-yet-imported source term.
+		// ARRANGE: Import a post linking to a not-yet-imported source term.
 		$result  = $this->import_under(
 			self::BLOG_URL,
 			7206,
@@ -855,7 +855,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		$this->assertCount( 1, $rows );
 		$this->assertSame( 'term', $rows[0]['target_kind'] );
 
-		// ACT: make the term available and retry.
+		// ACT: Make the term available and retry.
 		$term_dest = $this->seed_target_term( 9701, self::BLOG_URL );
 		$this->import_service->retry_block_ref_repoint(
 			$post_id,
@@ -864,7 +864,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			self::BLOG_URL
 		);
 
-		// ASSERT: the taxonomy link holds the destination term id; issue cleared.
+		// ASSERT: The taxonomy link holds the destination term id; issue cleared.
 		$this->assertSame( array( $term_dest ), $this->nav_link_ids( $post_id ) );
 		$this->assertNull(
 			$this->attention->get_issue(
@@ -881,7 +881,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * already-resolved sibling reference in the same post untouched.
 	 */
 	public function test_block_ref_retry_leaves_resolved_sibling_untouched(): void {
-		// ARRANGE: a sibling target resolvable at import, plus an unresolved one.
+		// ARRANGE: A sibling target resolvable at import, plus an unresolved one.
 		$sibling_dest = $this->seed_target_post( 9800, self::BLOG_URL );
 		$result       = $this->import_under(
 			self::BLOG_URL,
@@ -895,7 +895,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		$this->assertCount( 1, $rows );
 		$this->assertSame( 9700, (int) $rows[0]['target_ref'] );
 
-		// ACT: make 9700 resolvable and retry it.
+		// ACT: Make 9700 resolvable and retry it.
 		$dest_id = $this->seed_target_post( 9700, self::BLOG_URL );
 		$this->import_service->retry_block_ref_repoint(
 			$post_id,
@@ -924,7 +924,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * refreshes last_seen, and leaves the content unchanged.
 	 */
 	public function test_block_ref_retry_keeps_issue_when_target_absent(): void {
-		// ARRANGE: an open issue whose target is not importable.
+		// ARRANGE: An open issue whose target is not importable.
 		$result  = $this->import_under(
 			self::BLOG_URL,
 			7202,
@@ -938,7 +938,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			'2000-01-01 00:00:00'
 		);
 
-		// ACT: retry without the target present.
+		// ACT: Retry without the target present.
 		$outcome = $this->import_service->retry_block_ref_repoint(
 			$post_id,
 			9700,
@@ -946,7 +946,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			self::BLOG_URL
 		);
 
-		// ASSERT: the outcome is target-absent and the issue stays, last_seen
+		// ASSERT: The outcome is target-absent and the issue stays, last_seen
 		// refreshed, content intact.
 		$this->assertSame( Reconcile_Outcome::TARGET_ABSENT, $outcome->type );
 		$issue = $this->attention->get_issue(
@@ -965,7 +965,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * unchanged.
 	 */
 	public function test_block_ref_retry_persist_failure_keeps_issue(): void {
-		// ARRANGE: an open issue with the target now available.
+		// ARRANGE: An open issue with the target now available.
 		$result  = $this->import_under(
 			self::BLOG_URL,
 			7203,
@@ -974,7 +974,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		$post_id = $result['post_id'];
 		$this->seed_target_post( 9700, self::BLOG_URL );
 
-		// ACT: retry through a content processor whose write fails.
+		// ACT: Retry through a content processor whose write fails.
 		$service = $this->build_import_service(
 			new Navigation_Ref_Rewriter(),
 			$this->failing_content_processor()
@@ -986,7 +986,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			self::BLOG_URL
 		);
 
-		// ASSERT: the outcome is write-failed, the issue stays, content unchanged.
+		// ASSERT: The outcome is write-failed, the issue stays, content unchanged.
 		$this->assertSame( Reconcile_Outcome::WRITE_FAILED, $outcome->type );
 		$this->assertNotNull(
 			$this->attention->get_issue(
@@ -1004,7 +1004,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * only, so retrying one subsite never touches the other.
 	 */
 	public function test_block_ref_retry_scoped_to_subsite(): void {
-		// ARRANGE: the same unresolved ref imported under two subsites.
+		// ARRANGE: The same unresolved ref imported under two subsites.
 		$blog = $this->import_under(
 			self::BLOG_URL,
 			7204,
@@ -1016,11 +1016,11 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			array( 'content' => $this->single_nav_link_content( 9700 ) )
 		);
 
-		// ARRANGE: a distinct destination for the target under each subsite.
+		// ARRANGE: A distinct destination for the target under each subsite.
 		$blog_dest = $this->seed_target_post( 9700, self::BLOG_URL );
 		$this->seed_target_post( 9700, self::NEWS_URL );
 
-		// ACT: retry only the blog issue.
+		// ACT: Retry only the blog issue.
 		$this->import_service->retry_block_ref_repoint(
 			$blog['post_id'],
 			9700,
@@ -1028,7 +1028,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			self::BLOG_URL
 		);
 
-		// ASSERT: the blog post repointed to its own destination; the news post
+		// ASSERT: The blog post repointed to its own destination; the news post
 		// and its issue are untouched.
 		$this->assertSame(
 			array( $blog_dest ),
@@ -1050,7 +1050,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * retrying one kind resolves and repoints only that kind.
 	 */
 	public function test_block_ref_retry_resolves_only_matching_kind(): void {
-		// ARRANGE: a post and a term reference sharing one numeric source id.
+		// ARRANGE: A post and a term reference sharing one numeric source id.
 		$result  = $this->import_under(
 			self::BLOG_URL,
 			7205,
@@ -1059,11 +1059,11 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		$post_id = $result['post_id'];
 		$this->assertCount( 2, $this->open_rows_for_source( self::BLOG_URL ) );
 
-		// ARRANGE: both targets become available.
+		// ARRANGE: Both targets become available.
 		$post_dest = $this->seed_target_post( 9042, self::BLOG_URL );
 		$this->seed_target_term( 9042, self::BLOG_URL );
 
-		// ACT: retry only the post-kind reference.
+		// ACT: Retry only the post-kind reference.
 		$this->import_service->retry_block_ref_repoint(
 			$post_id,
 			9042,
@@ -1071,7 +1071,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			self::BLOG_URL
 		);
 
-		// ASSERT: only the post row resolved; the term row stays.
+		// ASSERT: Only the post row resolved; the term row stays.
 		$this->assertNull(
 			$this->attention->get_issue(
 				$post_id,
@@ -1089,7 +1089,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			)
 		);
 
-		// ASSERT: the post link repointed, the term link untouched.
+		// ASSERT: The post link repointed, the term link untouched.
 		$this->assertSame(
 			array( $post_dest, 9042 ),
 			$this->nav_link_ids( $post_id )
@@ -1101,7 +1101,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * is present, and keeps the issue while it is still absent.
 	 */
 	public function test_parent_relink_retry_sets_parent_and_clears_issue(): void {
-		// ARRANGE: allow orphan imports, then import a child whose parent is
+		// ARRANGE: Allow orphan imports, then import a child whose parent is
 		// absent.
 		add_filter( 'safe_publish_import_allow_orphans', '__return_true' );
 		$result = $this->import_under(
@@ -1114,21 +1114,21 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		$post_id = $result['post_id'];
 		$this->assertCount( 1, $this->open_rows_for_source( self::BLOG_URL ) );
 
-		// ACT: retry while the parent is still absent.
+		// ACT: Retry while the parent is still absent.
 		$outcome = $this->import_service->retry_parent_relink(
 			$post_id,
 			9850,
 			self::BLOG_URL
 		);
 
-		// ASSERT: the outcome is target-absent, the issue stays, post top-level.
+		// ASSERT: The outcome is target-absent, the issue stays, post top-level.
 		$this->assertSame( Reconcile_Outcome::TARGET_ABSENT, $outcome->type );
 		$this->assertNotNull(
 			$this->attention->get_issue( $post_id, 'parent_orphaned', 9850, 'post' )
 		);
 		$this->assertSame( 0, (int) get_post_field( 'post_parent', $post_id ) );
 
-		// ACT: make the parent available and retry again.
+		// ACT: Make the parent available and retry again.
 		$parent_id = $this->seed_target_post( 9850, self::BLOG_URL );
 		$outcome   = $this->import_service->retry_parent_relink(
 			$post_id,
@@ -1136,7 +1136,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			self::BLOG_URL
 		);
 
-		// ASSERT: the outcome is resolved, the parent linked, the issue cleared.
+		// ASSERT: The outcome is resolved, the parent linked, the issue cleared.
 		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
 		$this->assertSame(
 			$parent_id,
@@ -1152,7 +1152,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 * so a post and a term sharing a target_ref stay independent.
 	 */
 	public function test_resolve_issue_clears_only_the_matching_kind(): void {
-		// ARRANGE: two issues that differ only by target_kind.
+		// ARRANGE: Two issues that differ only by target_kind.
 		$this->attention->upsert_issue(
 			500,
 			'unmapped_block_reference',
@@ -1170,7 +1170,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			self::BLOG_URL
 		);
 
-		// ACT: resolve only the post-kind row.
+		// ACT: Resolve only the post-kind row.
 		$deleted = $this->attention->resolve_issue(
 			500,
 			'unmapped_block_reference',
@@ -1178,7 +1178,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			'post'
 		);
 
-		// ASSERT: exactly one row removed; the term row remains.
+		// ASSERT: Exactly one row removed; the term row remains.
 		$this->assertSame( 1, $deleted );
 		$this->assertNull(
 			$this->attention->get_issue(
@@ -1780,7 +1780,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that touch_issue preserves ignored_gmt: a retry that runs but does
+	 * Verifies that touch_issue preserves ignored_gmt: A retry that runs but does
 	 * not resolve the issue leaves it ignored.
 	 */
 	public function test_touch_issue_preserves_ignored_gmt(): void {

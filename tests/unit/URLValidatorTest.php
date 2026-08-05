@@ -186,13 +186,13 @@ class URLValidatorTest extends TestCase {
 	 * REST endpoints built on the result hit the right service.
 	 */
 	public function test_normalize_site_url_preserves_non_default_port(): void {
-		// ARRANGE: a URL with an explicit non-default port and a subsite path.
+		// ARRANGE: A URL with an explicit non-default port and a subsite path.
 		$url = 'http://example.com:8889/blog/some-post/';
 
-		// ACT: reduce to the site identity.
+		// ACT: Reduce to the site identity.
 		$identity = URL_Validator::normalize_site_url( $url );
 
-		// ASSERT: the port stays on the identity.
+		// ASSERT: The port stays on the identity.
 		$this->assertSame( 'http://example.com:8889', $identity );
 	}
 
@@ -201,13 +201,13 @@ class URLValidatorTest extends TestCase {
 	 * explicit port.
 	 */
 	public function test_normalize_site_url_omits_port_when_url_has_none(): void {
-		// ARRANGE: a URL on the default port.
+		// ARRANGE: A URL on the default port.
 		$url = 'https://example.com/2024/06/some-post/';
 
-		// ACT: reduce to the site identity.
+		// ACT: Reduce to the site identity.
 		$identity = URL_Validator::normalize_site_url( $url );
 
-		// ASSERT: scheme and host only.
+		// ASSERT: Scheme and host only.
 		$this->assertSame( 'https://example.com', $identity );
 	}
 
@@ -216,13 +216,13 @@ class URLValidatorTest extends TestCase {
 	 * identity remains.
 	 */
 	public function test_normalize_site_url_strips_path_query_and_fragment(): void {
-		// ARRANGE: a URL with path, query, and fragment.
+		// ARRANGE: A URL with path, query, and fragment.
 		$url = 'https://example.com:8443/path/to/post?foo=1#section';
 
-		// ACT: reduce to the site identity.
+		// ACT: Reduce to the site identity.
 		$identity = URL_Validator::normalize_site_url( $url );
 
-		// ASSERT: only scheme + host + port remains.
+		// ASSERT: Only scheme + host + port remains.
 		$this->assertSame( 'https://example.com:8443', $identity );
 	}
 
@@ -231,13 +231,13 @@ class URLValidatorTest extends TestCase {
 	 * source links through unguarded.
 	 */
 	public function test_normalize_site_url_returns_empty_for_empty_input(): void {
-		// ARRANGE: empty input.
+		// ARRANGE: Empty input.
 		$url = '';
 
-		// ACT: reduce to the site identity.
+		// ACT: Reduce to the site identity.
 		$identity = URL_Validator::normalize_site_url( $url );
 
-		// ASSERT: empty string out.
+		// ASSERT: Empty string out.
 		$this->assertSame( '', $identity );
 	}
 
@@ -246,13 +246,13 @@ class URLValidatorTest extends TestCase {
 	 * string.
 	 */
 	public function test_normalize_site_url_returns_empty_for_unparseable_input(): void {
-		// ARRANGE: a bare path with no scheme or host.
+		// ARRANGE: A bare path with no scheme or host.
 		$url = '/blog/some-post';
 
-		// ACT: reduce to the site identity.
+		// ACT: Reduce to the site identity.
 		$identity = URL_Validator::normalize_site_url( $url );
 
-		// ASSERT: empty string out.
+		// ASSERT: Empty string out.
 		$this->assertSame( '', $identity );
 	}
 
@@ -261,13 +261,13 @@ class URLValidatorTest extends TestCase {
 	 * subsites of one host scope to distinct values.
 	 */
 	public function test_normalize_site_url_with_path_keeps_subsite_path(): void {
-		// ARRANGE: a connection URL pointing at a subdirectory subsite.
+		// ARRANGE: A connection URL pointing at a subdirectory subsite.
 		$url = 'https://example.com/blog';
 
-		// ACT: reduce to the path-bearing identity.
+		// ACT: Reduce to the path-bearing identity.
 		$identity = URL_Validator::normalize_site_url_with_path( $url );
 
-		// ASSERT: scheme, host, and path remain.
+		// ASSERT: Scheme, host, and path remain.
 		$this->assertSame( 'https://example.com/blog', $identity );
 	}
 
@@ -276,13 +276,13 @@ class URLValidatorTest extends TestCase {
 	 * stored with or without it yields the same identity.
 	 */
 	public function test_normalize_site_url_with_path_strips_trailing_slash(): void {
-		// ARRANGE: a subsite connection URL with a trailing slash.
+		// ARRANGE: A subsite connection URL with a trailing slash.
 		$url = 'https://example.com/blog/';
 
-		// ACT: reduce to the path-bearing identity.
+		// ACT: Reduce to the path-bearing identity.
 		$identity = URL_Validator::normalize_site_url_with_path( $url );
 
-		// ASSERT: the trailing slash is gone.
+		// ASSERT: The trailing slash is gone.
 		$this->assertSame( 'https://example.com/blog', $identity );
 	}
 
@@ -290,13 +290,13 @@ class URLValidatorTest extends TestCase {
 	 * Verifies that an explicit non-default port survives alongside the path.
 	 */
 	public function test_normalize_site_url_with_path_preserves_port(): void {
-		// ARRANGE: a subsite connection on a non-default port.
+		// ARRANGE: A subsite connection on a non-default port.
 		$url = 'http://example.com:8889/blog/';
 
-		// ACT: reduce to the path-bearing identity.
+		// ACT: Reduce to the path-bearing identity.
 		$identity = URL_Validator::normalize_site_url_with_path( $url );
 
-		// ASSERT: port and path both remain.
+		// ASSERT: Port and path both remain.
 		$this->assertSame( 'http://example.com:8889/blog', $identity );
 	}
 
@@ -304,13 +304,13 @@ class URLValidatorTest extends TestCase {
 	 * Verifies that query and fragment are dropped while the path is kept.
 	 */
 	public function test_normalize_site_url_with_path_drops_query_and_fragment(): void {
-		// ARRANGE: a subsite URL carrying a query and fragment.
+		// ARRANGE: A subsite URL carrying a query and fragment.
 		$url = 'https://example.com/blog?foo=1#section';
 
-		// ACT: reduce to the path-bearing identity.
+		// ACT: Reduce to the path-bearing identity.
 		$identity = URL_Validator::normalize_site_url_with_path( $url );
 
-		// ASSERT: only scheme, host, and path remain.
+		// ASSERT: Only scheme, host, and path remain.
 		$this->assertSame( 'https://example.com/blog', $identity );
 	}
 
@@ -319,15 +319,15 @@ class URLValidatorTest extends TestCase {
 	 * single-site connections stay unaffected by the change.
 	 */
 	public function test_normalize_site_url_with_path_returns_host_only_when_no_path(): void {
-		// ARRANGE: a host-only connection, with and without a trailing slash.
+		// ARRANGE: A host-only connection, with and without a trailing slash.
 		$bare    = 'https://example.com';
 		$trailed = 'https://example.com/';
 
-		// ACT: reduce both to the path-bearing identity.
+		// ACT: Reduce both to the path-bearing identity.
 		$bare_identity    = URL_Validator::normalize_site_url_with_path( $bare );
 		$trailed_identity = URL_Validator::normalize_site_url_with_path( $trailed );
 
-		// ASSERT: both collapse to the host-only identity.
+		// ASSERT: Both collapse to the host-only identity.
 		$this->assertSame( 'https://example.com', $bare_identity );
 		$this->assertSame( 'https://example.com', $trailed_identity );
 	}
@@ -337,13 +337,13 @@ class URLValidatorTest extends TestCase {
 	 * an unconfigured connection through unguarded.
 	 */
 	public function test_normalize_site_url_with_path_returns_empty_for_empty_input(): void {
-		// ARRANGE: empty input.
+		// ARRANGE: Empty input.
 		$url = '';
 
-		// ACT: reduce to the path-bearing identity.
+		// ACT: Reduce to the path-bearing identity.
 		$identity = URL_Validator::normalize_site_url_with_path( $url );
 
-		// ASSERT: empty string out.
+		// ASSERT: Empty string out.
 		$this->assertSame( '', $identity );
 	}
 
@@ -352,13 +352,13 @@ class URLValidatorTest extends TestCase {
 	 * string.
 	 */
 	public function test_normalize_site_url_with_path_returns_empty_for_unparseable_input(): void {
-		// ARRANGE: a bare path with no scheme or host.
+		// ARRANGE: A bare path with no scheme or host.
 		$url = '/blog/some-post';
 
-		// ACT: reduce to the path-bearing identity.
+		// ACT: Reduce to the path-bearing identity.
 		$identity = URL_Validator::normalize_site_url_with_path( $url );
 
-		// ASSERT: empty string out.
+		// ASSERT: Empty string out.
 		$this->assertSame( '', $identity );
 	}
 }

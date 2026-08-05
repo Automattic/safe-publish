@@ -25,7 +25,7 @@ use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Telemetry_Service;
 
 /**
- * Guards the subsite ref-remap path: when the connected source URL carries a
+ * Guards the subsite ref-remap path: When the connected source URL carries a
  * subsite path (e.g. https://host/blog), block-ID references in imported
  * content must remap to destination IDs scoped to that subsite. The import
  * tags content with the path-bearing source identity, and the remap lookups
@@ -62,7 +62,7 @@ class Subsite_Block_Id_Remap_Test extends Source_Posts_API_Test_Base {
 	protected function setUp(): void {
 		parent::setUp();
 
-		// Simulate a subdirectory-subsite source: connection URL with a path.
+		// Simulate a subdirectory-subsite source: Connection URL with a path.
 		update_option(
 			Options::OPTION_CONNECTED_SITE_URL,
 			self::SUBSITE_SOURCE_URL

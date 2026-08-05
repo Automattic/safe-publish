@@ -23,7 +23,7 @@ use WP_UnitTestCase;
 /**
  * Source Media REST Field Test Class.
  *
- * Access control: the safe_publish_media field is populated only for Safe
+ * Access control: The safe_publish_media field is populated only for Safe
  * Publish HMAC-authenticated single-item requests, and it resolves the post's
  * own media URLs to the raw library metadata and source parent on each
  * attachment record.
@@ -166,18 +166,18 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	 * Publish HMAC, so no library metadata is exposed to public consumers.
 	 */
 	public function test_field_is_null_for_non_hmac_request(): void {
-		// ARRANGE: a post referencing a real attachment, no HMAC auth.
+		// ARRANGE: A post referencing a real attachment, no HMAC auth.
 		$image   = $this->seed_attachment( '2025/01/public-image.jpg' );
 		$post_id = self::factory()->post->create(
 			array( 'post_content' => '<img src="' . $image['url'] . '" alt="x"/>' )
 		);
 
-		// ACT: dispatch a public single-post request.
+		// ACT: Dispatch a public single-post request.
 		$response = $this->server->dispatch(
 			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
 		);
 
-		// ASSERT: field present (registered) but null.
+		// ASSERT: Field present (registered) but null.
 		$this->assertSame( 200, $response->get_status() );
 		$data = $response->get_data();
 		$this->assertArrayHasKey( 'safe_publish_media', $data );
@@ -189,7 +189,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	 * media URL to the raw library values on its attachment record.
 	 */
 	public function test_field_maps_inline_urls_to_library_metadata(): void {
-		// ARRANGE: a post embedding an attachment's URL.
+		// ARRANGE: A post embedding an attachment's URL.
 		$image   = $this->seed_attachment( '2025/01/inline-image.jpg' );
 		$post_id = self::factory()->post->create(
 			array(
@@ -200,12 +200,12 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 
 		$this->force_hmac_authenticated( true );
 
-		// ACT: dispatch the single-post request.
+		// ACT: Dispatch the single-post request.
 		$response = $this->server->dispatch(
 			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
 		);
 
-		// ASSERT: the URL maps to the raw library metadata.
+		// ASSERT: The URL maps to the raw library metadata.
 		$this->assertSame( 200, $response->get_status() );
 		$media = $response->get_data()['safe_publish_media'];
 		$this->assertSame(
@@ -262,7 +262,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	 * hits.
 	 */
 	public function test_field_maps_sized_inline_url_to_parent_metadata(): void {
-		// ARRANGE: an attachment with a registered -1024x683 rendition, inlined
+		// ARRANGE: An attachment with a registered -1024x683 rendition, inlined
 		// at that size.
 		$image   = $this->seed_attachment_with_size(
 			'2025/01/sized-image.jpg',
@@ -277,12 +277,12 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 
 		$this->force_hmac_authenticated( true );
 
-		// ACT: dispatch the single-post request.
+		// ACT: Dispatch the single-post request.
 		$response = $this->server->dispatch(
 			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
 		);
 
-		// ASSERT: the sized URL carries the parent's library metadata.
+		// ASSERT: The sized URL carries the parent's library metadata.
 		$media = $response->get_data()['safe_publish_media'];
 		$this->assertSame(
 			array(
@@ -302,7 +302,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	 * from an unrelated item.
 	 */
 	public function test_field_omits_sized_url_not_a_known_rendition(): void {
-		// ARRANGE: an attachment whose only registered size is -1024x683, but the
+		// ARRANGE: An attachment whose only registered size is -1024x683, but the
 		// post inlines a -2x3 URL that is not a real rendition of it.
 		$image   = $this->seed_attachment_with_size(
 			'2025/01/base.jpg',
@@ -315,12 +315,12 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 
 		$this->force_hmac_authenticated( true );
 
-		// ACT: dispatch the single-post request.
+		// ACT: Dispatch the single-post request.
 		$response = $this->server->dispatch(
 			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
 		);
 
-		// ASSERT: the base name matches an attachment, but -2x3 is not one of its
+		// ASSERT: The base name matches an attachment, but -2x3 is not one of its
 		// registered sizes, so the map is empty.
 		$this->assertSame(
 			array(),
@@ -334,7 +334,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	 * same-base parent.
 	 */
 	public function test_field_does_not_normalize_real_size_named_file(): void {
-		// ARRANGE: a parent photo.jpg and a distinct real file
+		// ARRANGE: A parent photo.jpg and a distinct real file
 		// photo-1920x1080.jpg whose name coincidentally looks like a rendition.
 		$this->seed_attachment( '2025/01/photo.jpg', 'Parent' );
 		$standalone = $this->seed_attachment(
@@ -350,12 +350,12 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 
 		$this->force_hmac_authenticated( true );
 
-		// ACT: dispatch the single-post request.
+		// ACT: Dispatch the single-post request.
 		$response = $this->server->dispatch(
 			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
 		);
 
-		// ASSERT: it resolves to its own record, not the photo.jpg parent's.
+		// ASSERT: It resolves to its own record, not the photo.jpg parent's.
 		$media = $response->get_data()['safe_publish_media'];
 		$this->assertSame(
 			array(
@@ -374,7 +374,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	 * parent library item, matching the documented inline coverage.
 	 */
 	public function test_field_maps_srcset_subsize_to_parent_metadata(): void {
-		// ARRANGE: an attachment referenced only through a srcset sub-size
+		// ARRANGE: An attachment referenced only through a srcset sub-size
 		// descriptor. Authoring as an admin keeps the srcset attribute, which
 		// the default kses allowlist would otherwise strip from stored content.
 		$image = $this->seed_attachment_with_size(
@@ -394,12 +394,12 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 
 		$this->force_hmac_authenticated( true );
 
-		// ACT: dispatch the single-post request.
+		// ACT: Dispatch the single-post request.
 		$response = $this->server->dispatch(
 			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
 		);
 
-		// ASSERT: the sub-size descriptor carries the parent's library metadata.
+		// ASSERT: The sub-size descriptor carries the parent's library metadata.
 		$media = $response->get_data()['safe_publish_media'];
 		$this->assertSame(
 			array(
@@ -418,7 +418,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	 * attachment lookup, so page and other non-media links cost no query.
 	 */
 	public function test_field_skips_lookup_for_non_uploads_urls(): void {
-		// ARRANGE: a post mixing an uploads image with same-host page links, and
+		// ARRANGE: A post mixing an uploads image with same-host page links, and
 		// a spy recording every URL that reaches attachment_url_to_postid().
 		$image     = $this->seed_attachment( '2025/01/scanned-image.jpg' );
 		$looked_up = array();
@@ -441,12 +441,12 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 
 		$this->force_hmac_authenticated( true );
 
-		// ACT: dispatch the single-post request.
+		// ACT: Dispatch the single-post request.
 		$this->server->dispatch(
 			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
 		);
 
-		// ASSERT: the uploads image was looked up; the page links never were.
+		// ASSERT: The uploads image was looked up; the page links never were.
 		$this->assertContains( $image['url'], $looked_up );
 		$this->assertNotContains( home_url( '/about' ), $looked_up );
 		$this->assertNotContains( home_url( '/contact' ), $looked_up );
@@ -457,7 +457,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	 * to its metadata, so the non-uploads skip never excludes a real attachment.
 	 */
 	public function test_field_resolves_metadata_under_relocated_uploads(): void {
-		// ARRANGE: move uploads to /media, then seed and inline an attachment
+		// ARRANGE: Move uploads to /media, then seed and inline an attachment
 		// that now lives under the relocated path.
 		add_filter(
 			'upload_dir',
@@ -474,12 +474,12 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 
 		$this->force_hmac_authenticated( true );
 
-		// ACT: dispatch the single-post request.
+		// ACT: Dispatch the single-post request.
 		$response = $this->server->dispatch(
 			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
 		);
 
-		// ASSERT: the relocated URL still carries the library metadata.
+		// ASSERT: The relocated URL still carries the library metadata.
 		$media = $response->get_data()['safe_publish_media'];
 		$this->assertSame(
 			array(
@@ -499,7 +499,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	 * host-anchored scan).
 	 */
 	public function test_field_omits_non_attachment_urls(): void {
-		// ARRANGE: a post with a same-host page, a same-host non-attachment file,
+		// ARRANGE: A post with a same-host page, a same-host non-attachment file,
 		// and a third-party image.
 		$post_id = self::factory()->post->create(
 			array(
@@ -512,12 +512,12 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 
 		$this->force_hmac_authenticated( true );
 
-		// ACT: dispatch the single-post request.
+		// ACT: Dispatch the single-post request.
 		$response = $this->server->dispatch(
 			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
 		);
 
-		// ASSERT: nothing resolved, so the map is empty.
+		// ASSERT: Nothing resolved, so the map is empty.
 		$this->assertSame( 200, $response->get_status() );
 		$this->assertSame(
 			array(),
@@ -530,7 +530,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	 * expose no library metadata.
 	 */
 	public function test_field_is_null_for_collection_request(): void {
-		// ARRANGE: a post and an authenticated request.
+		// ARRANGE: A post and an authenticated request.
 		$image = $this->seed_attachment( '2025/01/collection-image.jpg' );
 		self::factory()->post->create(
 			array( 'post_content' => '<img src="' . $image['url'] . '" alt="x"/>' )
@@ -538,12 +538,12 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 
 		$this->force_hmac_authenticated( true );
 
-		// ACT: dispatch the collection request.
+		// ACT: Dispatch the collection request.
 		$response = $this->server->dispatch(
 			new WP_REST_Request( 'GET', '/wp/v2/posts' )
 		);
 
-		// ASSERT: every row carries a null field.
+		// ASSERT: Every row carries a null field.
 		$this->assertSame( 200, $response->get_status() );
 		foreach ( $response->get_data() as $row ) {
 			$this->assertNull( $row['safe_publish_media'] );
@@ -554,17 +554,17 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	 * Verifies that the field is not registered on attachment responses.
 	 */
 	public function test_field_is_not_registered_on_attachments(): void {
-		// ARRANGE: an attachment and an authenticated request.
+		// ARRANGE: An attachment and an authenticated request.
 		$image = $this->seed_attachment( '2025/01/attachment-image.jpg' );
 
 		$this->force_hmac_authenticated( true );
 
-		// ACT: dispatch the single-attachment request.
+		// ACT: Dispatch the single-attachment request.
 		$response = $this->server->dispatch(
 			new WP_REST_Request( 'GET', '/wp/v2/media/' . $image['id'] )
 		);
 
-		// ASSERT: the field key is absent.
+		// ASSERT: The field key is absent.
 		$this->assertSame( 200, $response->get_status() );
 		$this->assertArrayNotHasKey(
 			'safe_publish_media',
@@ -794,7 +794,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 
 	/**
 	 * Verifies that a post with two bare shortcodes, a [gallery] and a
-	 * [playlist], collects both sets: the gallery's image children and the
+	 * [playlist], collects both sets: The gallery's image children and the
 	 * playlist's audio children, covering the path where more than one shortcode
 	 * matches.
 	 */
@@ -837,7 +837,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that a [gallery ids="..."] returns an empty set: the id-bearing
+	 * Verifies that a [gallery ids="..."] returns an empty set: The id-bearing
 	 * form is the shortcode-ID rewriter's domain, not this attached-set field.
 	 */
 	public function test_attached_field_empty_for_ids_gallery(): void {

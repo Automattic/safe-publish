@@ -18,7 +18,7 @@ use WP_Error;
 use WP_HTML_Tag_Processor;
 
 /**
- * Exercises Content_Media_Processor's inline-image ID rewriting: after a
+ * Exercises Content_Media_Processor's inline-image ID rewriting: After a
  * successful src import, an existing wp-image-{n} class token and data-id
  * attribute are repointed at the destination attachment, restoring core's
  * runtime srcset injection. Covers the classic/inner-HTML path (including a
@@ -86,15 +86,15 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 	 * preserved.
 	 */
 	public function test_rewrites_stale_wp_image_class_to_dest_id(): void {
-		// ARRANGE: an inline image whose class names the source attachment.
+		// ARRANGE: An inline image whose class names the source attachment.
 		$html = '<p><img src="' . self::SOURCE . '/photo.jpg"'
 			. ' class="alignnone size-large wp-image-900705"/></p>';
 
-		// ACT: import the src and rewrite the ID references.
+		// ACT: Import the src and rewrite the ID references.
 		$result  = $this->processor->process_content( $html, self::SOURCE, '' );
 		$dest_id = $this->dest_id_of( $result );
 
-		// ASSERT: only the wp-image token changed; the rest is preserved in order.
+		// ASSERT: Only the wp-image token changed; the rest is preserved in order.
 		$this->assertGreaterThan( 0, $dest_id );
 		$this->assertNotSame( 900705, $dest_id );
 		$this->assertSame(
@@ -108,15 +108,15 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 	 * attachment alongside the class.
 	 */
 	public function test_rewrites_present_data_id_to_dest_id(): void {
-		// ARRANGE: an inline image carrying both a wp-image class and a data-id.
+		// ARRANGE: An inline image carrying both a wp-image class and a data-id.
 		$html = '<img src="' . self::SOURCE . '/photo.jpg"'
 			. ' data-id="900705" class="wp-image-900705"/>';
 
-		// ACT: import the src and rewrite the ID references.
+		// ACT: Import the src and rewrite the ID references.
 		$result  = $this->processor->process_content( $html, self::SOURCE, '' );
 		$dest_id = $this->dest_id_of( $result );
 
-		// ASSERT: both the class and the data-id point at the destination.
+		// ASSERT: Both the class and the data-id point at the destination.
 		$this->assertGreaterThan( 0, $dest_id );
 		$this->assertSame(
 			"wp-image-{$dest_id}",
@@ -133,14 +133,14 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 	 * that no data-id is fabricated.
 	 */
 	public function test_absent_data_id_is_not_fabricated(): void {
-		// ARRANGE: an inline image with a wp-image class but no data-id.
+		// ARRANGE: An inline image with a wp-image class but no data-id.
 		$html = '<img src="' . self::SOURCE . '/photo.jpg" class="wp-image-900705"/>';
 
-		// ACT: import the src and rewrite the ID references.
+		// ACT: Import the src and rewrite the ID references.
 		$result  = $this->processor->process_content( $html, self::SOURCE, '' );
 		$dest_id = $this->dest_id_of( $result );
 
-		// ASSERT: the class is repointed and no data-id was added.
+		// ASSERT: The class is repointed and no data-id was added.
 		$this->assertSame(
 			"wp-image-{$dest_id}",
 			$this->first_img_attr( $result, 'class' )
@@ -154,15 +154,15 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 	 * reference is rewritten.
 	 */
 	public function test_data_id_not_matching_class_is_left_intact(): void {
-		// ARRANGE: the class names attachment 900705, but data-id is unrelated.
+		// ARRANGE: The class names attachment 900705, but data-id is unrelated.
 		$html = '<img src="' . self::SOURCE . '/photo.jpg"'
 			. ' data-id="2" class="wp-image-900705"/>';
 
-		// ACT: import the src and rewrite the ID references.
+		// ACT: Import the src and rewrite the ID references.
 		$result  = $this->processor->process_content( $html, self::SOURCE, '' );
 		$dest_id = $this->dest_id_of( $result );
 
-		// ASSERT: the class is repointed, but the unrelated data-id is preserved.
+		// ASSERT: The class is repointed, but the unrelated data-id is preserved.
 		$this->assertSame(
 			"wp-image-{$dest_id}",
 			$this->first_img_attr( $result, 'class' )
@@ -175,15 +175,15 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 	 * its class and data-id untouched and creates no attachment.
 	 */
 	public function test_third_party_src_leaves_id_refs_untouched(): void {
-		// ARRANGE: an inline image served from a third-party domain.
+		// ARRANGE: An inline image served from a third-party domain.
 		$html   = '<img src="' . self::THIRD_PARTY . '/photo.jpg"'
 			. ' data-id="900705" class="wp-image-900705"/>';
 		$before = $this->get_attachment_count();
 
-		// ACT: run the processor.
+		// ACT: Run the processor.
 		$result = $this->processor->process_content( $html, self::SOURCE, '' );
 
-		// ASSERT: nothing imported and the stale references are preserved.
+		// ASSERT: Nothing imported and the stale references are preserved.
 		$this->assertSame( $before, $this->get_attachment_count() );
 		$this->assertSame( 'wp-image-900705', $this->first_img_attr( $result, 'class' ) );
 		$this->assertSame( '900705', $this->first_img_attr( $result, 'data-id' ) );
@@ -194,7 +194,7 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 	 * the class and data-id untouched and records the source URL as a failure.
 	 */
 	public function test_failed_import_leaves_id_refs_untouched(): void {
-		// ARRANGE: an inline image whose download is forced to fail.
+		// ARRANGE: An inline image whose download is forced to fail.
 		$broken = self::SOURCE . '/broken.jpg';
 		$html   = '<img src="' . $broken . '" data-id="900705" class="wp-image-900705"/>';
 
@@ -207,13 +207,13 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 		add_filter( 'pre_http_request', $fail, 0, 3 );
 
 		try {
-			// ACT: run the processor.
+			// ACT: Run the processor.
 			$result = $this->processor->process_content( $html, self::SOURCE, '' );
 		} finally {
 			remove_filter( 'pre_http_request', $fail, 0 );
 		}
 
-		// ASSERT: the references are preserved and the URL is a recorded failure.
+		// ASSERT: The references are preserved and the URL is a recorded failure.
 		$this->assertSame( 'wp-image-900705', $this->first_img_attr( $result, 'class' ) );
 		$this->assertSame( '900705', $this->first_img_attr( $result, 'data-id' ) );
 		$this->assertArrayHasKey( $broken, $this->processor->get_failed_media() );
@@ -225,7 +225,7 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 	 * not double-processed.
 	 */
 	public function test_already_local_src_leaves_class_untouched(): void {
-		// ARRANGE: import a source image, then reference its now-local URL from a
+		// ARRANGE: Import a source image, then reference its now-local URL from a
 		// second image still carrying a stale class — the shape a core/image
 		// already fixed by process_image_block() presents to the classic pass.
 		$seed      = $this->processor->process_content(
@@ -237,10 +237,10 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 		$local_id  = $this->media_importer->get_attachment_id_from_url( $local_src );
 		$html      = '<img src="' . $local_src . '" class="wp-image-900705"/>';
 
-		// ACT: run the processor over the already-local image.
+		// ACT: Run the processor over the already-local image.
 		$result = $this->processor->process_content( $html, self::SOURCE, '' );
 
-		// ASSERT: the src resolves to a real attachment, yet the stale class is
+		// ASSERT: The src resolves to a real attachment, yet the stale class is
 		// left untouched because the importer skips an already-local src.
 		$this->assertGreaterThan( 0, $local_id );
 		$this->assertSame( 'wp-image-900705', $this->first_img_attr( $result, 'class' ) );
@@ -251,14 +251,14 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 	 * after its src is imported.
 	 */
 	public function test_missing_wp_image_class_is_not_fabricated(): void {
-		// ARRANGE: an inline image with no class attribute at all.
+		// ARRANGE: An inline image with no class attribute at all.
 		$html = '<img src="' . self::SOURCE . '/photo.jpg" alt="Seeded"/>';
 
-		// ACT: import the src and rewrite the ID references.
+		// ACT: Import the src and rewrite the ID references.
 		$result  = $this->processor->process_content( $html, self::SOURCE, '' );
 		$dest_id = $this->dest_id_of( $result );
 
-		// ASSERT: the src imported but no class or wp-image token was introduced.
+		// ASSERT: The src imported but no class or wp-image token was introduced.
 		$this->assertGreaterThan( 0, $dest_id );
 		$this->assertStringNotContainsString( 'wp-image-', $result );
 		$this->assertStringNotContainsString( 'class=', $result );
@@ -269,16 +269,16 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 	 * own destination attachment.
 	 */
 	public function test_multiple_images_are_each_mapped_independently(): void {
-		// ARRANGE: two inline images with distinct sources and stale classes.
+		// ARRANGE: Two inline images with distinct sources and stale classes.
 		$html = '<img src="' . self::SOURCE . '/a.jpg" class="wp-image-900705"/>'
 			. '<img src="' . self::SOURCE . '/b.jpg" class="wp-image-900706"/>';
 
-		// ACT: import both and rewrite their ID references.
+		// ACT: Import both and rewrite their ID references.
 		$result  = $this->processor->process_content( $html, self::SOURCE, '' );
 		$srcs    = $this->img_attrs( $result, 'src' );
 		$classes = $this->img_attrs( $result, 'class' );
 
-		// ASSERT: each class names the attachment resolved from its own src, and
+		// ASSERT: Each class names the attachment resolved from its own src, and
 		// the two resolve to different attachments.
 		$dest_a = $this->media_importer->get_attachment_id_from_url( (string) $srcs[0] );
 		$dest_b = $this->media_importer->get_attachment_id_from_url( (string) $srcs[1] );
@@ -295,17 +295,17 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 	 * attachment is created.
 	 */
 	public function test_deduplicated_image_still_repointed(): void {
-		// ARRANGE: the same source image referenced twice, each with a stale class.
+		// ARRANGE: The same source image referenced twice, each with a stale class.
 		$html   = '<img src="' . self::SOURCE . '/dup.jpg" class="wp-image-900705"/>'
 			. '<img src="' . self::SOURCE . '/dup.jpg" class="wp-image-900705"/>';
 		$before = $this->get_attachment_count();
 
-		// ACT: the first occurrence sideloads, the second dedups; rewrite both.
+		// ACT: The first occurrence sideloads, the second dedups; rewrite both.
 		$result  = $this->processor->process_content( $html, self::SOURCE, '' );
 		$srcs    = $this->img_attrs( $result, 'src' );
 		$classes = $this->img_attrs( $result, 'class' );
 
-		// ASSERT: one attachment created, and both classes name it.
+		// ASSERT: One attachment created, and both classes name it.
 		$this->assertSame( $before + 1, $this->get_attachment_count() );
 		$dest_id = $this->media_importer->get_attachment_id_from_url( (string) $srcs[0] );
 		$this->assertGreaterThan( 0, $dest_id );
@@ -319,7 +319,7 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 	 * parent attrs.ids is left untouched (out of scope).
 	 */
 	public function test_legacy_v1_gallery_inner_images_repointed(): void {
-		// ARRANGE: a pre-5.9 gallery block whose images live in its innerHTML,
+		// ARRANGE: A pre-5.9 gallery block whose images live in its innerHTML,
 		// carrying data-id and wp-image classes, with no inner image blocks.
 		$gallery = '<!-- wp:gallery {"ids":[900705,900706],"linkTo":"none"} -->' . "\n"
 			. '<figure class="wp-block-gallery columns-2 is-cropped">'
@@ -333,7 +333,7 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 			. '</ul></figure>' . "\n"
 			. '<!-- /wp:gallery -->';
 
-		// ACT: run the full processing pipeline.
+		// ACT: Run the full processing pipeline.
 		$result  = (string) $this->content_processor->process_content(
 			$gallery,
 			self::SOURCE
@@ -342,7 +342,7 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 		$classes = $this->img_attrs( $result, 'class' );
 		$data    = $this->img_attrs( $result, 'data-id' );
 
-		// ASSERT: both inner images are repointed at their destination.
+		// ASSERT: Both inner images are repointed at their destination.
 		$dest_a = $this->media_importer->get_attachment_id_from_url( (string) $srcs[0] );
 		$dest_b = $this->media_importer->get_attachment_id_from_url( (string) $srcs[1] );
 		$this->assertGreaterThan( 0, $dest_a );
@@ -352,17 +352,17 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 		$this->assertSame( (string) $dest_a, $data[0] );
 		$this->assertSame( (string) $dest_b, $data[1] );
 
-		// ASSERT: the parent gallery ids attr is left as-is.
+		// ASSERT: The parent gallery ids attr is left as-is.
 		$this->assertStringContainsString( '"ids":[900705,900706]', $result );
 	}
 
 	/**
-	 * Verifies the end-to-end payoff: once the class is repointed, core's
+	 * Verifies the end-to-end payoff: Once the class is repointed, core's
 	 * wp_filter_content_tags() injects a srcset referencing the destination
 	 * attachment's sizes, whereas the same src with a stale class gets none.
 	 */
 	public function test_repointed_class_restores_runtime_srcset(): void {
-		// ARRANGE: import an inline image, then give its destination attachment
+		// ARRANGE: Import an inline image, then give its destination attachment
 		// synthetic sub-sizes so core has srcset candidates to offer.
 		$html     = '<img src="' . self::SOURCE . '/photo.jpg" class="wp-image-900888"/>';
 		$result   = $this->processor->process_content( $html, self::SOURCE, '' );
@@ -370,14 +370,14 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 		$dest_src = (string) $this->first_img_attr( $result, 'src' );
 		$stem     = $this->give_synthetic_sizes( $dest_id );
 
-		// ACT: run the repointed image and a stale-class control through core's
+		// ACT: Run the repointed image and a stale-class control through core's
 		// content-tag filter.
 		$repointed = wp_filter_content_tags( $result );
 		$control   = wp_filter_content_tags(
 			'<img src="' . $dest_src . '" class="wp-image-900888"/>'
 		);
 
-		// ASSERT: the repointed image gains a srcset naming a dest size; the
+		// ASSERT: The repointed image gains a srcset naming a dest size; the
 		// stale-class control gains none.
 		$this->assertStringContainsString( 'srcset=', $repointed );
 		$this->assertStringContainsString( "{$stem}-1024x768", $repointed );

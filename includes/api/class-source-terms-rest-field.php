@@ -121,7 +121,7 @@ class Source_Terms_REST_Field {
 	}
 
 	/**
-	 * Builds the taxonomy => term-records map: assigned terms plus each
+	 * Builds the taxonomy => term-records map: Assigned terms plus each
 	 * hierarchical term's ancestors (assigned=false), de-duplicated by term id.
 	 *
 	 * @param WP_Post $post Post whose terms are collected.

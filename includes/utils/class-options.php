@@ -82,21 +82,21 @@ class Options {
 	const CONSTANT_SYNC_MODE = 'SAFE_PUBLISH_SYNC_MODE';
 
 	/**
-	 * Sync mode value: this site exports content.
+	 * Sync mode value: This site exports content.
 	 *
 	 * @var string
 	 */
 	const SYNC_MODE_EXPORT = 'export';
 
 	/**
-	 * Sync mode value: this site imports content.
+	 * Sync mode value: This site imports content.
 	 *
 	 * @var string
 	 */
 	const SYNC_MODE_IMPORT = 'import';
 
 	/**
-	 * Sync mode value: this site can export and import content.
+	 * Sync mode value: This site can export and import content.
 	 *
 	 * @var string
 	 */

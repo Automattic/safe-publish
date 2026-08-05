@@ -28,7 +28,7 @@ use Safe_Publish\Utils\Telemetry_Service;
 /**
  * Modified Field Test Class.
  *
- * Cross-system contract: the source-side preparer emits modified_gmt as a
+ * Cross-system contract: The source-side preparer emits modified_gmt as a
  * Z-marked GMT timestamp so destination-side comparisons stay correct across
  * timezones.
  */
@@ -177,7 +177,7 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 	 * routing label; a meta marker without history routes to Available.
 	 */
 	public function test_no_history_routes_to_available_when_items_row_missing(): void {
-		// ARRANGE: a local post with the meta marker but no items row.
+		// ARRANGE: A local post with the meta marker but no items row.
 		$local_post_id = self::factory()->post->create(
 			array(
 				'post_status' => 'publish',
@@ -198,10 +198,10 @@ class Modified_Field_Test extends Source_Posts_API_Test_Base {
 			),
 		);
 
-		// ACT: annotate the catalog row.
+		// ACT: Annotate the catalog row.
 		$this->import_service->annotate_posts_with_import_status( $posts );
 
-		// ASSERT: the active-row rule folds the row into Available; no items
+		// ASSERT: The active-row rule folds the row into Available; no items
 		// row means no routing label and no history badge.
 		$this->assertFalse( $posts[0]['is_imported'] );
 		$this->assertSame( 'available', $posts[0]['local_state'] );

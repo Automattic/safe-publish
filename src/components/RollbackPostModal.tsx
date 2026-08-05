@@ -2,7 +2,7 @@
  * Rollback Post Modal component.
  *
  * Confirms rolling back the most recent import event for a Manage listing
- * row: a created post is permanently deleted, an updated post is restored to
+ * row: A created post is permanently deleted, an updated post is restored to
  * its previous version.
  *
  * @file This file defines the RollbackPostModal component.

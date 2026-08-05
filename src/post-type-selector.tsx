@@ -187,7 +187,7 @@ export function PostTypeSelector( {
 	}, [ error, onError ] );
 
 	// Generate options for the select control.
-	// Use slug (not rest_base) as the option value: the catalog endpoint
+	// Use slug (not rest_base) as the option value: The catalog endpoint
 	// expects the WP post type slug, and centralizing on slug avoids the
 	// slug/rest_base translation gap for custom CPTs.
 	const selectOptions = postTypes.map( postType => ( {

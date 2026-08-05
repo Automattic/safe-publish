@@ -24,7 +24,7 @@ class AvailableCatalogFillTest extends TestCase {
 	 * imported rows, and reports has_more when a non-imported row remains.
 	 */
 	public function test_fills_requested_page_across_catalog_pages_and_flags_more(): void {
-		// ARRANGE: three catalog pages whose imported rows thin each page, so a
+		// ARRANGE: Three catalog pages whose imported rows thin each page, so a
 		// 3-row Available page only fills by pulling all three.
 		$api        = new Fake_Catalog_Source_Posts_API();
 		$api->pages = array(
@@ -36,17 +36,17 @@ class AvailableCatalogFillTest extends TestCase {
 		$import                      = new Fake_Import_Status_Service();
 		$import->imported_source_ids = array( 1, 2, 4, 8, 9 );
 
-		// ACT: request the first Available page of three.
+		// ACT: Request the first Available page of three.
 		$result = $this->list_available( $api, $import, 1, 3 );
 
-		// ASSERT: the page holds the first three non-imported ids in order.
+		// ASSERT: The page holds the first three non-imported ids in order.
 		$this->assertSame( array( 3, 5, 6 ), $this->ids( $result ) );
 
-		// ASSERT: a fourth non-imported row (id 7) remains, so has_more is
+		// ASSERT: A fourth non-imported row (id 7) remains, so has_more is
 		// true.
 		$this->assertTrue( $result['has_more'] );
 
-		// ASSERT: three fetches were needed, each at the source max page size.
+		// ASSERT: Three fetches were needed, each at the source max page size.
 		$this->assertSame(
 			array(
 				Catalog_REST_Controller::MAX_PER_PAGE,
@@ -62,7 +62,7 @@ class AvailableCatalogFillTest extends TestCase {
 	 * non-imported row beyond the requested page.
 	 */
 	public function test_reports_no_more_when_source_exhausts_without_surplus(): void {
-		// ARRANGE: the source runs out on page two with no surplus row.
+		// ARRANGE: The source runs out on page two with no surplus row.
 		$api        = new Fake_Catalog_Source_Posts_API();
 		$api->pages = array(
 			1 => $this->page( array( 1, 2, 3 ), true ),
@@ -72,10 +72,10 @@ class AvailableCatalogFillTest extends TestCase {
 		$import                      = new Fake_Import_Status_Service();
 		$import->imported_source_ids = array( 1, 4 );
 
-		// ACT: request a 3-row Available page.
+		// ACT: Request a 3-row Available page.
 		$result = $this->list_available( $api, $import, 1, 3 );
 
-		// ASSERT: the three non-imported rows fill the page with none to spare.
+		// ASSERT: The three non-imported rows fill the page with none to spare.
 		$this->assertSame( array( 2, 3, 5 ), $this->ids( $result ) );
 		$this->assertFalse( $result['has_more'] );
 		$this->assertSame( 2, count( $api->requested_per_pages ) );
@@ -86,7 +86,7 @@ class AvailableCatalogFillTest extends TestCase {
 	 * too sparse, returning an empty page that still reports has_more.
 	 */
 	public function test_caps_the_scan_when_non_imported_rows_are_too_sparse(): void {
-		// ARRANGE: every page is fully imported and the source always claims
+		// ARRANGE: Every page is fully imported and the source always claims
 		// more, so the page can never fill.
 		$api               = new Fake_Catalog_Source_Posts_API();
 		$api->default_page = $this->page( array( 1, 2 ), true );
@@ -94,10 +94,10 @@ class AvailableCatalogFillTest extends TestCase {
 		$import                    = new Fake_Import_Status_Service();
 		$import->mark_all_imported = true;
 
-		// ACT: request a page that can never be filled.
+		// ACT: Request a page that can never be filled.
 		$result = $this->list_available( $api, $import, 1, 3 );
 
-		// ASSERT: the scan stops at the cap and returns an empty page.
+		// ASSERT: The scan stops at the cap and returns an empty page.
 		$this->assertSame( array(), $result['items'] );
 		$this->assertSame(
 			Admin_Ajax_Controller::AVAILABLE_FILL_MAX_FETCHES,
@@ -112,7 +112,7 @@ class AvailableCatalogFillTest extends TestCase {
 	 * Verifies that a later page returns its own window of non-imported rows.
 	 */
 	public function test_returns_the_requested_window_for_a_later_page(): void {
-		// ARRANGE: six non-imported rows spread across two catalog pages.
+		// ARRANGE: Six non-imported rows spread across two catalog pages.
 		$api        = new Fake_Catalog_Source_Posts_API();
 		$api->pages = array(
 			1 => $this->page( array( 10, 11, 12, 13 ), true ),
@@ -121,10 +121,10 @@ class AvailableCatalogFillTest extends TestCase {
 
 		$import = new Fake_Import_Status_Service();
 
-		// ACT: request the second page of two.
+		// ACT: Request the second page of two.
 		$result = $this->list_available( $api, $import, 2, 2 );
 
-		// ASSERT: the window is the third and fourth non-imported rows.
+		// ASSERT: The window is the third and fourth non-imported rows.
 		$this->assertSame( array( 12, 13 ), $this->ids( $result ) );
 		$this->assertTrue( $result['has_more'] );
 	}

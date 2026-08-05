@@ -166,16 +166,16 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 	 * id attr repointed at the destination attachment.
 	 */
 	public function test_remaps_cover_image_id(): void {
-		// ARRANGE: a cover block whose background image and id reference the source.
+		// ARRANGE: A cover block whose background image and id reference the source.
 		$source_id = 900001;
 		$url       = self::SOURCE . '/bg.jpg';
 		$content   = $this->cover_block( $url, $source_id );
 		$before    = $this->get_attachment_count();
 
-		// ACT: run the full processing pipeline.
+		// ACT: Run the full processing pipeline.
 		$result = (string) $this->processor->process_content( $content, self::SOURCE );
 
-		// ASSERT: exactly one attachment, and url + id both point at it.
+		// ASSERT: Exactly one attachment, and url + id both point at it.
 		$this->assertSame( $before + 1, $this->get_attachment_count() );
 		$attrs = $this->block_attrs( $result, 'core/cover' );
 		$this->assertStringContainsString( 'wp-content/uploads', (string) $attrs['url'] );
@@ -193,17 +193,17 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 	 * repointed, while its DOM-only fileId anchor id is left untouched.
 	 */
 	public function test_remaps_file_id_and_preserves_fileid(): void {
-		// ARRANGE: a file block with a source href, id, and an anchor DOM id.
+		// ARRANGE: A file block with a source href, id, and an anchor DOM id.
 		$source_id = 900002;
 		$href      = self::SOURCE . '/doc.jpg';
 		$file_id   = 'wp-block-file--media-abc123';
 		$content   = $this->file_block( $href, $source_id, $file_id );
 		$before    = $this->get_attachment_count();
 
-		// ACT: run the full processing pipeline.
+		// ACT: Run the full processing pipeline.
 		$result = (string) $this->processor->process_content( $content, self::SOURCE );
 
-		// ASSERT: one attachment; href + id point at it; fileId anchor id kept.
+		// ASSERT: One attachment; href + id point at it; fileId anchor id kept.
 		$this->assertSame( $before + 1, $this->get_attachment_count() );
 		$attrs = $this->block_attrs( $result, 'core/file' );
 		$this->assertStringContainsString( 'wp-content/uploads', (string) $attrs['href'] );
@@ -221,16 +221,16 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 	 * innerHTML rather than stored in the block, has its mediaId repointed.
 	 */
 	public function test_remaps_media_text_image_media_id(): void {
-		// ARRANGE: a media-text block with an image in its media figure.
+		// ARRANGE: A media-text block with an image in its media figure.
 		$source_id = 900003;
 		$src       = self::SOURCE . '/photo.jpg';
 		$content   = $this->media_text_block( $src, $source_id, 'image' );
 		$before    = $this->get_attachment_count();
 
-		// ACT: run the full processing pipeline.
+		// ACT: Run the full processing pipeline.
 		$result = (string) $this->processor->process_content( $content, self::SOURCE );
 
-		// ASSERT: one attachment; mediaId points at the swapped media src.
+		// ASSERT: One attachment; mediaId points at the swapped media src.
 		$this->assertSame( $before + 1, $this->get_attachment_count() );
 		$attrs   = $this->block_attrs( $result, 'core/media-text' );
 		$new_src = $this->first_media_src( $result );
@@ -250,16 +250,16 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 	 * element, has its mediaId repointed — covering the video extraction branch.
 	 */
 	public function test_remaps_media_text_video_media_id(): void {
-		// ARRANGE: a media-text block with a video in its media figure.
+		// ARRANGE: A media-text block with a video in its media figure.
 		$source_id = 900004;
 		$src       = self::SOURCE . '/clip.mp4';
 		$content   = $this->media_text_block( $src, $source_id, 'video' );
 		$before    = $this->get_attachment_count();
 
-		// ACT: run the full processing pipeline.
+		// ACT: Run the full processing pipeline.
 		$result = (string) $this->processor->process_content( $content, self::SOURCE );
 
-		// ASSERT: one attachment; mediaId points at the swapped video src.
+		// ASSERT: One attachment; mediaId points at the swapped video src.
 		$this->assertSame( $before + 1, $this->get_attachment_count() );
 		$attrs   = $this->block_attrs( $result, 'core/media-text' );
 		$new_src = $this->first_media_src( $result );
@@ -272,20 +272,20 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 	}
 
 	/**
-	 * Verifies that a third-party cover background is left untouched: no
+	 * Verifies that a third-party cover background is left untouched: No
 	 * attachment is created, and the id and url are unchanged.
 	 */
 	public function test_leaves_third_party_cover_untouched(): void {
-		// ARRANGE: a cover block whose background lives on a third-party domain.
+		// ARRANGE: A cover block whose background lives on a third-party domain.
 		$source_id = 900005;
 		$url       = self::THIRD_PARTY . '/bg.jpg';
 		$content   = $this->cover_block( $url, $source_id );
 		$before    = $this->get_attachment_count();
 
-		// ACT: run the full processing pipeline.
+		// ACT: Run the full processing pipeline.
 		$result = (string) $this->processor->process_content( $content, self::SOURCE );
 
-		// ASSERT: no import, and both attrs are preserved verbatim.
+		// ASSERT: No import, and both attrs are preserved verbatim.
 		$this->assertSame( $before, $this->get_attachment_count() );
 		$attrs = $this->block_attrs( $result, 'core/cover' );
 		$this->assertSame( $source_id, $attrs['id'] );
@@ -298,7 +298,7 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 	 * source url as a media failure rather than writing a bogus attachment id.
 	 */
 	public function test_failed_file_import_leaves_id_untouched(): void {
-		// ARRANGE: a file block whose href is forced to fail on download.
+		// ARRANGE: A file block whose href is forced to fail on download.
 		$source_id = 900006;
 		$href      = self::SOURCE . '/broken.jpg';
 		$content   = $this->file_block( $href, $source_id, 'wp-block-file--media-xyz' );
@@ -314,13 +314,13 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 		$before = $this->get_attachment_count();
 
 		try {
-			// ACT: run the full processing pipeline.
+			// ACT: Run the full processing pipeline.
 			$result = (string) $this->processor->process_content( $content, self::SOURCE );
 		} finally {
 			remove_filter( 'pre_http_request', $fail, 5 );
 		}
 
-		// ASSERT: no attachment; id preserved; the source url is a recorded failure.
+		// ASSERT: No attachment; id preserved; the source url is a recorded failure.
 		$this->assertSame( $before, $this->get_attachment_count() );
 		$attrs = $this->block_attrs( $result, 'core/file' );
 		$this->assertSame( $source_id, $attrs['id'] );
@@ -334,14 +334,14 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 	 * keeps its url attr and inner img src consistent when the source shares the
 	 * destination's hostname.
 	 *
-	 * Reproduces the block-recovery bug: the attribute pass imports the source
+	 * Reproduces the block-recovery bug: The attribute pass imports the source
 	 * background and rewrites the inner img src to the local upload URL, then the
 	 * inner-HTML pass re-imports that already-local URL because the third-party
 	 * guard compares hostnames only. That duplicated the attachment and left the
 	 * url attr and img src pointing at different files, failing block validation.
 	 */
 	public function test_cover_same_host_imports_once_and_stays_consistent(): void {
-		// ARRANGE: a source sharing the destination hostname (same-domain
+		// ARRANGE: A source sharing the destination hostname (same-domain
 		// multisite, or same host on a different port), with a cover background
 		// served from a theme path so the attribute pass imports it.
 		$origin      = $this->origin( get_site_url() );
@@ -359,13 +359,13 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 		$before = $this->get_attachment_count();
 
 		try {
-			// ACT: run the full processing pipeline.
+			// ACT: Run the full processing pipeline.
 			$result = (string) $this->processor->process_content( $content, $source_site );
 		} finally {
 			remove_filter( 'pre_http_request', $serve, 5 );
 		}
 
-		// ASSERT: exactly one attachment, and the url attr and img src both
+		// ASSERT: Exactly one attachment, and the url attr and img src both
 		// resolve to it — no split-brain that trips block recovery.
 		$this->assertSame( $before + 1, $this->get_attachment_count(), 'Cover background must import exactly once' );
 		$attrs   = $this->block_attrs( $result, 'core/cover' );
@@ -386,11 +386,11 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 	 * Verifies that media on the destination host but a different port is still
 	 * imported, not mistaken for already-local media and skipped.
 	 *
-	 * Guards the full-URL match in is_local_media_url: a path-only check would
+	 * Guards the full-URL match in is_local_media_url: A path-only check would
 	 * treat this uploads-shaped source URL as local and leave it unrewritten.
 	 */
 	public function test_same_host_different_port_media_is_imported_not_skipped(): void {
-		// ARRANGE: a cover background on the destination host but a different
+		// ARRANGE: A cover background on the destination host but a different
 		// port, under an uploads-shaped path that a path-only check would
 		// misread as already-local.
 		$dest_origin = $this->origin( get_site_url() );
@@ -408,13 +408,13 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 		$before = $this->get_attachment_count();
 
 		try {
-			// ACT: run the full processing pipeline.
+			// ACT: Run the full processing pipeline.
 			$result = (string) $this->processor->process_content( $content, $source_site );
 		} finally {
 			remove_filter( 'pre_http_request', $serve, 5 );
 		}
 
-		// ASSERT: the different-port media was imported and localized to this
+		// ASSERT: The different-port media was imported and localized to this
 		// site's uploads, not left pointing at the source.
 		$this->assertSame( $before + 1, $this->get_attachment_count(), 'Different-port media must be imported' );
 		$attrs = $this->block_attrs( $result, 'core/cover' );

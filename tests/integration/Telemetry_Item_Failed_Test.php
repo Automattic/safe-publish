@@ -118,7 +118,7 @@ class Telemetry_Item_Failed_Test extends Integration_Test_Case {
 	 * session_type=single.
 	 */
 	public function test_validation_failure_emits_event_with_session_type_single(): void {
-		// ARRANGE: a single-import session and a payload missing the title.
+		// ARRANGE: A single-import session and a payload missing the title.
 		$session_id = $this->create_session( 'single' );
 
 		// ACT: import_post() with an empty title triggers validation_failed.
@@ -132,7 +132,7 @@ class Telemetry_Item_Failed_Test extends Integration_Test_Case {
 			$session_id
 		);
 
-		// ASSERT: one event with the expected error_code + session_type.
+		// ASSERT: One event with the expected error_code + session_type.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame(
@@ -156,10 +156,10 @@ class Telemetry_Item_Failed_Test extends Integration_Test_Case {
 	 * cluster in batch runs.
 	 */
 	public function test_validation_failure_in_bulk_session_reports_bulk(): void {
-		// ARRANGE: a bulk session.
+		// ARRANGE: A bulk session.
 		$session_id = $this->create_session( 'bulk' );
 
-		// ACT: validation failure inside a bulk session.
+		// ACT: Validation failure inside a bulk session.
 		$this->import_service->import_post(
 			array(
 				'id'        => 67890,
@@ -185,7 +185,7 @@ class Telemetry_Item_Failed_Test extends Integration_Test_Case {
 	 * writing audit history, so there is no failure to report.
 	 */
 	public function test_no_event_when_no_session(): void {
-		// ARRANGE: no session.
+		// ARRANGE: No session.
 
 		// ACT: import_post() called without a session id.
 		$this->import_service->import_post(
@@ -197,7 +197,7 @@ class Telemetry_Item_Failed_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ASSERT: no telemetry emitted.
+		// ASSERT: No telemetry emitted.
 		$this->assertSame( array(), $this->queue->events() );
 	}
 
@@ -207,7 +207,7 @@ class Telemetry_Item_Failed_Test extends Integration_Test_Case {
 	 * unknown fallback.
 	 */
 	public function test_oversized_fresh_fetch_reports_size_error_code(): void {
-		// ARRANGE: a session, a connected source, and a response over the cap.
+		// ARRANGE: A session, a connected source, and a response over the cap.
 		$session_id = $this->create_session( 'single' );
 		update_option(
 			Options::OPTION_CONNECTED_SITE_URL,
@@ -224,7 +224,7 @@ class Telemetry_Item_Failed_Test extends Integration_Test_Case {
 			3
 		);
 
-		// ACT: import a valid post whose fresh-content fetch exceeds the cap.
+		// ACT: Import a valid post whose fresh-content fetch exceeds the cap.
 		$this->import_service->import_post(
 			array(
 				'id'        => 4242,
@@ -235,7 +235,7 @@ class Telemetry_Item_Failed_Test extends Integration_Test_Case {
 			$session_id
 		);
 
-		// ASSERT: the size-specific code reaches telemetry.
+		// ASSERT: The size-specific code reaches telemetry.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame(

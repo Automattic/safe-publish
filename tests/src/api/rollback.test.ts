@@ -39,13 +39,13 @@ function buildRow( overrides: Partial< UnifiedPostRow > = {} ): UnifiedPostRow {
 
 describe( 'isRollbackRestore', () => {
 	it( 'Verifies that rows without captured prior content delete on rollback', () => {
-		// ARRANGE + ACT + ASSERT: a fresh creation has no previous content;
+		// ARRANGE + ACT + ASSERT: A fresh creation has no previous content;
 		// rolling it back deletes the local post.
 		expect( isRollbackRestore( buildRow() ) ).toBe( false );
 	} );
 
 	it( 'Verifies that rows with captured prior content restore on rollback', () => {
-		// ARRANGE + ACT + ASSERT: an updated row carries the snapshot, so
+		// ARRANGE + ACT + ASSERT: An updated row carries the snapshot, so
 		// rolling it back restores the previous content.
 		expect(
 			isRollbackRestore( buildRow( { has_previous_content: true } ) )
@@ -63,15 +63,15 @@ describe( 'rollbackItem', () => {
 	} );
 
 	it( 'Verifies that the request mirrors the single-item endpoint contract', async () => {
-		// ARRANGE: a successful endpoint response.
+		// ARRANGE: A successful endpoint response.
 		( global.fetch as any ).mockResolvedValue( {
 			json: async () => ( { success: true, data: { action: 'deleted' } } ),
 		} );
 
-		// ACT: roll back a single item.
+		// ACT: Roll back a single item.
 		await rollbackItem( 100, AJAX_URL, NONCE );
 
-		// ASSERT: the request carries the action, nonce, and item id the
+		// ASSERT: The request carries the action, nonce, and item id the
 		// admin-ajax endpoint expects.
 		const [ url, options ] = ( global.fetch as any ).mock.calls[ 0 ];
 		expect( url ).toBe( AJAX_URL );
@@ -82,7 +82,7 @@ describe( 'rollbackItem', () => {
 	} );
 
 	it( 'Verifies that the server-reported action and message are returned on success', async () => {
-		// ARRANGE: the endpoint reports a restore with its confirmation message.
+		// ARRANGE: The endpoint reports a restore with its confirmation message.
 		( global.fetch as any ).mockResolvedValue( {
 			json: async () => ( {
 				success: true,
@@ -93,10 +93,10 @@ describe( 'rollbackItem', () => {
 			} ),
 		} );
 
-		// ACT: roll back the item.
+		// ACT: Roll back the item.
 		const outcome = await rollbackItem( 100, AJAX_URL, NONCE );
 
-		// ASSERT: the outcome surfaces the server-reported action and message.
+		// ASSERT: The outcome surfaces the server-reported action and message.
 		expect( outcome ).toEqual( {
 			success: true,
 			action: 'restored',
@@ -105,26 +105,26 @@ describe( 'rollbackItem', () => {
 	} );
 
 	it( 'Verifies that the server error message surfaces on failure', async () => {
-		// ARRANGE: the endpoint rejects the request with a message payload.
+		// ARRANGE: The endpoint rejects the request with a message payload.
 		( global.fetch as any ).mockResolvedValue( {
 			json: async () => ( { success: false, data: 'Invalid item ID' } ),
 		} );
 
-		// ACT: attempt the rollback.
+		// ACT: Attempt the rollback.
 		const outcome = await rollbackItem( 0, AJAX_URL, NONCE );
 
-		// ASSERT: the failure outcome carries the server's message.
+		// ASSERT: The failure outcome carries the server's message.
 		expect( outcome ).toEqual( { success: false, error: 'Invalid item ID' } );
 	} );
 
 	it( 'Verifies that a network error becomes a failure outcome', async () => {
-		// ARRANGE: fetch rejects at the network layer.
+		// ARRANGE: Fetch rejects at the network layer.
 		( global.fetch as any ).mockRejectedValue( new Error( 'Network down' ) );
 
-		// ACT: attempt the rollback.
+		// ACT: Attempt the rollback.
 		const outcome = await rollbackItem( 100, AJAX_URL, NONCE );
 
-		// ASSERT: the rejection is reported as a failure outcome, not thrown.
+		// ASSERT: The rejection is reported as a failure outcome, not thrown.
 		expect( outcome ).toEqual( { success: false, error: 'Network down' } );
 	} );
 } );
@@ -139,13 +139,13 @@ describe( 'rollbackItems', () => {
 	} );
 
 	it( 'Verifies that each item is processed and progress advances once per item', async () => {
-		// ARRANGE: every endpoint call succeeds; capture progress notifications.
+		// ARRANGE: Every endpoint call succeeds; capture progress notifications.
 		( global.fetch as any ).mockResolvedValue( {
 			json: async () => ( { success: true, data: { action: 'deleted' } } ),
 		} );
 		const progress: Array< [ number, number ] > = [];
 
-		// ACT: roll back three items.
+		// ACT: Roll back three items.
 		const result = await rollbackItems(
 			[
 				buildRow( { item_id: 1 } ),
@@ -157,7 +157,7 @@ describe( 'rollbackItems', () => {
 			( done, total ) => progress.push( [ done, total ] )
 		);
 
-		// ASSERT: aggregate counters reflect three successes and progress
+		// ASSERT: Aggregate counters reflect three successes and progress
 		// advanced once per item in order.
 		expect( result.total ).toBe( 3 );
 		expect( result.successful ).toBe( 3 );
@@ -171,7 +171,7 @@ describe( 'rollbackItems', () => {
 	} );
 
 	it( 'Verifies that a mid-list failure does not abort the remainder', async () => {
-		// ARRANGE: the middle call fails; the others succeed.
+		// ARRANGE: The middle call fails; the others succeed.
 		( global.fetch as any )
 			.mockResolvedValueOnce( {
 				json: async () =>
@@ -189,7 +189,7 @@ describe( 'rollbackItems', () => {
 					( { success: true, data: { action: 'restored' } } ),
 			} );
 
-		// ACT: roll back three items.
+		// ACT: Roll back three items.
 		const result = await rollbackItems(
 			[
 				buildRow( { item_id: 1, title: 'A' } ),
@@ -200,7 +200,7 @@ describe( 'rollbackItems', () => {
 			NONCE
 		);
 
-		// ASSERT: the loop continues past the failed item and the failed
+		// ASSERT: The loop continues past the failed item and the failed
 		// entry surfaces the server's message keyed to the right row.
 		expect( result.successful ).toBe( 2 );
 		expect( result.failed ).toBe( 1 );
@@ -213,16 +213,16 @@ describe( 'rollbackItems', () => {
 	} );
 
 	it( 'Verifies that a null item_id row is failed without hitting the endpoint', async () => {
-		// ARRANGE: a row whose active items-table id is null.
+		// ARRANGE: A row whose active items-table id is null.
 
-		// ACT: attempt to roll the orphan row back.
+		// ACT: Attempt to roll the orphan row back.
 		const result = await rollbackItems(
 			[ buildRow( { item_id: null, title: 'Orphan' } ) ],
 			AJAX_URL,
 			NONCE
 		);
 
-		// ASSERT: no network request runs and the row is reported as failed.
+		// ASSERT: No network request runs and the row is reported as failed.
 		expect( global.fetch ).not.toHaveBeenCalled();
 		expect( result.failed ).toBe( 1 );
 		expect( result.entries[ 0 ].outcome.success ).toBe( false );

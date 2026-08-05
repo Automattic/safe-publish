@@ -28,29 +28,29 @@ const baseEvent: ExportEvent = {
 
 describe( 'getUserLabel', () => {
 	it( 'should return the display name when actor is a logged-in user', () => {
-		// ARRANGE: event with a positive user id and a display name.
+		// ARRANGE: Event with a positive user id and a display name.
 		const event: ExportEvent = {
 			...baseEvent,
 			actor_user_id: 42,
 			actor_display_name: 'Alex',
 		};
 
-		// ACT: derive the user column label.
+		// ACT: Derive the user column label.
 		const result = getUserLabel( event );
 
-		// ASSERT: display name passes through unchanged.
+		// ASSERT: Display name passes through unchanged.
 		expect( result ).toBe( 'Alex' );
 	} );
 
 	it( 'should fall back to "User #ID" when display name is empty', () => {
-		// ARRANGE: positive user id but no captured display name.
+		// ARRANGE: Positive user id but no captured display name.
 		const event: ExportEvent = {
 			...baseEvent,
 			actor_user_id: 42,
 			actor_display_name: '',
 		};
 
-		// ACT: derive the user column label.
+		// ACT: Derive the user column label.
 		const result = getUserLabel( event );
 
 		// ASSERT: sprintf renders the numeric fallback.
@@ -58,26 +58,26 @@ describe( 'getUserLabel', () => {
 	} );
 
 	it( 'should label system actors with their source', () => {
-		// ARRANGE: system-triggered event (actor_user_id = 0).
+		// ARRANGE: System-triggered event (actor_user_id = 0).
 		const event: ExportEvent = { ...baseEvent, actor_user_id: 0, actor_source: 'cron' };
 
-		// ACT: derive the user column label.
+		// ACT: Derive the user column label.
 		const result = getUserLabel( event );
 
-		// ASSERT: system actors render with their invocation source.
+		// ASSERT: System actors render with their invocation source.
 		expect( result ).toBe( 'System (cron)' );
 	} );
 } );
 
 describe( 'getDestinationLabel', () => {
 	it( 'should return the URL when destination_site_url is set', () => {
-		// ARRANGE: event with a destination URL.
+		// ARRANGE: Event with a destination URL.
 		const event: ExportEvent = {
 			...baseEvent,
 			destination_site_url: 'https://destination.test',
 		};
 
-		// ACT: derive the destination column label.
+		// ACT: Derive the destination column label.
 		const result = getDestinationLabel( event );
 
 		// ASSERT: URL passes through unchanged.
@@ -85,85 +85,85 @@ describe( 'getDestinationLabel', () => {
 	} );
 
 	it( 'should fall back to "Unknown destination" when URL is empty', () => {
-		// ARRANGE: event with no destination URL recorded.
+		// ARRANGE: Event with no destination URL recorded.
 		const event: ExportEvent = { ...baseEvent, destination_site_url: '' };
 
-		// ACT: derive the destination column label.
+		// ACT: Derive the destination column label.
 		const result = getDestinationLabel( event );
 
-		// ASSERT: empty URL falls back to the localized label.
+		// ASSERT: Empty URL falls back to the localized label.
 		expect( result ).toBe( 'Unknown destination' );
 	} );
 } );
 
 describe( 'getStatusLabel', () => {
 	it( 'should return "Failed" for error-level events', () => {
-		// ARRANGE: error-level event.
+		// ARRANGE: Error-level event.
 		const event: ExportEvent = { ...baseEvent, level: 'error' };
 
-		// ACT: derive the status column label.
+		// ACT: Derive the status column label.
 		const result = getStatusLabel( event );
 
-		// ASSERT: error level renders as "Failed".
+		// ASSERT: Error level renders as "Failed".
 		expect( result ).toBe( 'Failed' );
 	} );
 
 	it( 'should return "Exported" for info-level events', () => {
-		// ARRANGE: info-level event.
+		// ARRANGE: Info-level event.
 		const event: ExportEvent = { ...baseEvent, level: 'info' };
 
-		// ACT: derive the status column label.
+		// ACT: Derive the status column label.
 		const result = getStatusLabel( event );
 
-		// ASSERT: info level renders as "Exported".
+		// ASSERT: Info level renders as "Exported".
 		expect( result ).toBe( 'Exported' );
 	} );
 } );
 
 describe( 'getEventLabel', () => {
 	it( 'should return the mapped label for a known event code', () => {
-		// ARRANGE: a known Log_Events code.
+		// ARRANGE: A known Log_Events code.
 		const event = 'ITEM_ROLLBACK_FAILED';
 
-		// ACT: derive the event column label.
+		// ACT: Derive the event column label.
 		const result = getEventLabel( event );
 
-		// ASSERT: the code maps to its human-readable label.
+		// ASSERT: The code maps to its human-readable label.
 		expect( result ).toBe( 'Item rollback failed' );
 	} );
 
 	it( 'should fall back to the raw code for an unknown event', () => {
-		// ARRANGE: a code with no mapping.
+		// ARRANGE: A code with no mapping.
 		const event = 'NOT_A_REAL_EVENT';
 
-		// ACT: derive the event column label.
+		// ACT: Derive the event column label.
 		const result = getEventLabel( event );
 
-		// ASSERT: unmapped codes pass through unchanged.
+		// ASSERT: Unmapped codes pass through unchanged.
 		expect( result ).toBe( 'NOT_A_REAL_EVENT' );
 	} );
 } );
 
 describe( 'getChannelLabel', () => {
 	it( 'should return the mapped label for a known channel', () => {
-		// ARRANGE: a known channel slug.
+		// ARRANGE: A known channel slug.
 		const channel = 'media';
 
-		// ACT: derive the channel column label.
+		// ACT: Derive the channel column label.
 		const result = getChannelLabel( channel );
 
-		// ASSERT: the slug maps to its human-readable label.
+		// ASSERT: The slug maps to its human-readable label.
 		expect( result ).toBe( 'Media' );
 	} );
 
 	it( 'should fall back to the raw slug for an unknown channel', () => {
-		// ARRANGE: a slug with no mapping.
+		// ARRANGE: A slug with no mapping.
 		const channel = 'not_a_channel';
 
-		// ACT: derive the channel column label.
+		// ACT: Derive the channel column label.
 		const result = getChannelLabel( channel );
 
-		// ASSERT: unmapped slugs pass through unchanged.
+		// ASSERT: Unmapped slugs pass through unchanged.
 		expect( result ).toBe( 'not_a_channel' );
 	} );
 } );

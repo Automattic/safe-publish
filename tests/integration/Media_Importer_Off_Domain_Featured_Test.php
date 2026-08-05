@@ -117,13 +117,13 @@ class Media_Importer_Off_Domain_Featured_Test extends WP_UnitTestCase {
 		int $media_id,
 		string $canonical_url
 	): void {
-		// ARRANGE: mock the media record and the image bytes.
+		// ARRANGE: Mock the media record and the image bytes.
 		$this->add_per_source_id_media_api_mock();
 		$this->add_image_byte_response_mock();
 
 		$importer = new Media_Importer( new HTTP_Client() );
 
-		// ACT: import the featured image resolved by its source ID.
+		// ACT: Import the featured image resolved by its source ID.
 		try {
 			$attachment_id = $importer->import_featured_image( $media_id, $source_site );
 		} finally {
@@ -131,7 +131,7 @@ class Media_Importer_Off_Domain_Featured_Test extends WP_UnitTestCase {
 			$this->remove_per_source_id_media_api_mock();
 		}
 
-		// ASSERT: a real attachment was created, tagged with the canonical
+		// ASSERT: A real attachment was created, tagged with the canonical
 		// source URL and the featured-media ID.
 		$this->assertIsInt( $attachment_id );
 		$this->assertGreaterThan( 0, $attachment_id );
@@ -151,13 +151,13 @@ class Media_Importer_Off_Domain_Featured_Test extends WP_UnitTestCase {
 	 * existing attachment without creating a duplicate.
 	 */
 	public function test_reimporting_same_featured_id_dedupes(): void {
-		// ARRANGE: mock the record and bytes for a single off-domain image.
+		// ARRANGE: Mock the record and bytes for a single off-domain image.
 		$this->add_per_source_id_media_api_mock();
 		$this->add_image_byte_response_mock();
 
 		$importer = new Media_Importer( new HTTP_Client() );
 
-		// ACT: import the same featured ID twice, counting attachments between.
+		// ACT: Import the same featured ID twice, counting attachments between.
 		try {
 			$first  = $importer->import_featured_image( 9800006, 'https://source.example.com' );
 			$count  = $this->get_attachment_count();
@@ -167,7 +167,7 @@ class Media_Importer_Off_Domain_Featured_Test extends WP_UnitTestCase {
 			$this->remove_per_source_id_media_api_mock();
 		}
 
-		// ASSERT: the second import reuses the first attachment; no new row.
+		// ASSERT: The second import reuses the first attachment; no new row.
 		$this->assertIsInt( $first );
 		$this->assertSame( $first, $second );
 		$this->assert_no_new_attachments( $count );
@@ -178,14 +178,14 @@ class Media_Importer_Off_Domain_Featured_Test extends WP_UnitTestCase {
 	 * returning false, leaving no attachment behind.
 	 */
 	public function test_unfetchable_featured_image_returns_false(): void {
-		// ARRANGE: resolve the media record but fail the byte download.
+		// ARRANGE: Resolve the media record but fail the byte download.
 		$this->add_per_source_id_media_api_mock();
 		add_filter( 'pre_http_request', array( $this, 'fail_image_byte_download' ), 1, 3 );
 		$count = $this->get_attachment_count();
 
 		$importer = new Media_Importer( new HTTP_Client() );
 
-		// ACT: import a featured image whose bytes cannot be downloaded.
+		// ACT: Import a featured image whose bytes cannot be downloaded.
 		try {
 			$attachment_id = $importer->import_featured_image( 9800005, 'https://source.example.com' );
 		} finally {
@@ -193,7 +193,7 @@ class Media_Importer_Off_Domain_Featured_Test extends WP_UnitTestCase {
 			$this->remove_per_source_id_media_api_mock();
 		}
 
-		// ASSERT: the import aborts and creates nothing.
+		// ASSERT: The import aborts and creates nothing.
 		$this->assertFalse( $attachment_id );
 		$this->assert_no_new_attachments( $count );
 	}

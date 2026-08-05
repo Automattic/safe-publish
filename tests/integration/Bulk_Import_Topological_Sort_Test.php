@@ -328,14 +328,14 @@ class Bulk_Import_Topological_Sort_Test extends WP_Ajax_UnitTestCase {
 	 * even when the referring page is listed first.
 	 */
 	public function test_reusable_block_target_imports_before_referrer(): void {
-		// ARRANGE: a reusable block (810) and a page (820) whose core/block
+		// ARRANGE: A reusable block (810) and a page (820) whose core/block
 		// references it, with the page listed first in request order.
 		$this->source_payloads = array(
 			810 => array( 'type' => 'wp_block' ),
 			820 => array( 'content' => '<!-- wp:block {"ref":810} /-->' ),
 		);
 
-		// ACT: dispatch with the referring page first.
+		// ACT: Dispatch with the referring page first.
 		$data = $this->dispatch_bulk_import(
 			array(
 				$this->payload_entry( 820, 'pages' ),
@@ -343,13 +343,13 @@ class Bulk_Import_Topological_Sort_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: both succeed and the block is processed ahead of its referrer.
+		// ASSERT: Both succeed and the block is processed ahead of its referrer.
 		$this->assertSame( 2, $data['successful'] );
 		$this->assertSame( 0, $data['failed'] );
 		$this->assertSame( 810, $data['results'][0]['source_post_id'] );
 		$this->assertSame( 820, $data['results'][1]['source_post_id'] );
 
-		// ASSERT: the page's core/block ref resolved in-batch to the block's
+		// ASSERT: The page's core/block ref resolved in-batch to the block's
 		// destination ID, with no unmapped-reference warning.
 		$block_dest = (int) $data['results'][0]['post_id'];
 		$page_dest  = (int) $data['results'][1]['post_id'];

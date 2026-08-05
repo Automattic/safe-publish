@@ -183,7 +183,7 @@ final class Plugin {
 	 * Registers the plugin's admin screens with VIP Pendo telemetry.
 	 *
 	 * Registered here rather than in a menu class because the screens span
-	 * both admin modes: the import-mode menu lives in Admin_Menu_Manager while
+	 * both admin modes: The import-mode menu lives in Admin_Menu_Manager while
 	 * the export-only top-level page lives in this class, so neither owns the
 	 * full list. The "Source Posts" submenu reuses the `safe-publish` slug, so
 	 * it shares the top-level hook suffix and needs no separate entry. The

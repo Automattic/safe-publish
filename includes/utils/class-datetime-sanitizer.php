@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Shared datetime helpers: validates an ISO 8601 or bare-calendar-day value
+ * Shared datetime helpers: Validates an ISO 8601 or bare-calendar-day value
  * into a MySQL datetime, and formats a MySQL GMT timestamp as ISO 8601.
  */
 class Datetime_Sanitizer {

@@ -178,7 +178,7 @@ class Telemetry_Single_Import_Test extends WP_Ajax_UnitTestCase {
 	 * outcome new and no warnings.
 	 */
 	public function test_new_import_emits_outcome_new(): void {
-		// ARRANGE: one mocked source post.
+		// ARRANGE: One mocked source post.
 		$this->source_payloads = array( 50 => array() );
 
 		$_POST = array(
@@ -189,10 +189,10 @@ class Telemetry_Single_Import_Test extends WP_Ajax_UnitTestCase {
 			'post_type'      => 'pages',
 		);
 
-		// ACT: dispatch the single import.
+		// ACT: Dispatch the single import.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
 
-		// ASSERT: one event with outcome=new and warning_count=0.
+		// ASSERT: One event with outcome=new and warning_count=0.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame(
@@ -211,7 +211,7 @@ class Telemetry_Single_Import_Test extends WP_Ajax_UnitTestCase {
 	 * single_import_completed with outcome updated.
 	 */
 	public function test_repeat_import_emits_outcome_updated(): void {
-		// ARRANGE: import a post once, then re-import the same source ID
+		// ARRANGE: Import a post once, then re-import the same source ID
 		// with force_update so the existing-post path runs.
 		$this->source_payloads = array( 60 => array() );
 
@@ -229,10 +229,10 @@ class Telemetry_Single_Import_Test extends WP_Ajax_UnitTestCase {
 
 		$_POST['force_update'] = 'true';
 
-		// ACT: re-import the same source post.
+		// ACT: Re-import the same source post.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
 
-		// ASSERT: outcome=updated on the second run.
+		// ASSERT: Outcome=updated on the second run.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame(

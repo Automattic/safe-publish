@@ -30,7 +30,7 @@ use Safe_Publish\Utils\Telemetry_Service;
  *
  * The identity is derived from the connection, not the post permalink, so the
  * subsites (e.g. /blog and /news) tag content with distinct path-bearing
- * identities. Overlapping source IDs no longer collide: lookups, re-imports,
+ * identities. Overlapping source IDs no longer collide: Lookups, re-imports,
  * block-ID/term remaps, and parent resolution each resolve per subsite.
  */
 class Subsite_Source_Scoping_Test extends Source_Posts_API_Test_Base {
@@ -93,10 +93,10 @@ class Subsite_Source_Scoping_Test extends Source_Posts_API_Test_Base {
 	 * identity, instead of the second import overwriting the first.
 	 */
 	public function test_overlapping_ids_across_subsites_create_distinct_posts(): void {
-		// ARRANGE: the same source post ID lives on both subsites.
+		// ARRANGE: The same source post ID lives on both subsites.
 		$source_id = 500;
 
-		// ACT: import it from /blog, then from /news.
+		// ACT: Import it from /blog, then from /news.
 		$blog = $this->import_under(
 			self::BLOG_URL,
 			$source_id,
@@ -108,7 +108,7 @@ class Subsite_Source_Scoping_Test extends Source_Posts_API_Test_Base {
 			array( 'title' => 'News 500' )
 		);
 
-		// ASSERT: two new posts, each scoped to its subsite.
+		// ASSERT: Two new posts, each scoped to its subsite.
 		$this->assertTrue( $blog['success'] );
 		$this->assertTrue( $news['success'] );
 		$this->assertFalse(
@@ -145,7 +145,7 @@ class Subsite_Source_Scoping_Test extends Source_Posts_API_Test_Base {
 			array( 'title' => 'Second' )
 		);
 
-		// ASSERT: the second import updates the first post in place.
+		// ASSERT: The second import updates the first post in place.
 		$this->assertTrue( $first['success'] );
 		$this->assertTrue( $second['success'] );
 		$this->assertFalse( $first['existing'] );
@@ -169,7 +169,7 @@ class Subsite_Source_Scoping_Test extends Source_Posts_API_Test_Base {
 	 * from a different subsite.
 	 */
 	public function test_block_id_references_remap_to_the_matching_subsite(): void {
-		// ARRANGE: a /blog and a /news target sharing one source post ID, and
+		// ARRANGE: A /blog and a /news target sharing one source post ID, and
 		// likewise one source term ID.
 		$post_source_id = 700;
 		$term_source_id = 701;
@@ -179,7 +179,7 @@ class Subsite_Source_Scoping_Test extends Source_Posts_API_Test_Base {
 		$blog_term = $this->seed_target_term( $term_source_id, self::BLOG_URL );
 		$news_term = $this->seed_target_term( $term_source_id, self::NEWS_URL );
 
-		// ACT: import a /blog post whose nav content references the source IDs.
+		// ACT: Import a /blog post whose nav content references the source IDs.
 		$result = $this->import_under(
 			self::BLOG_URL,
 			7100,
@@ -191,7 +191,7 @@ class Subsite_Source_Scoping_Test extends Source_Posts_API_Test_Base {
 			)
 		);
 
-		// ASSERT: references resolve to the /blog targets only.
+		// ASSERT: References resolve to the /blog targets only.
 		$this->assertTrue( $result['success'] );
 		$saved = (string) get_post_field( 'post_content', $result['post_id'] );
 
@@ -214,7 +214,7 @@ class Subsite_Source_Scoping_Test extends Source_Posts_API_Test_Base {
 	 * the importing subsite when both subsites hold the same source parent ID.
 	 */
 	public function test_parent_resolution_scopes_to_the_matching_subsite(): void {
-		// ARRANGE: a /blog and a /news parent sharing one source parent ID.
+		// ARRANGE: A /blog and a /news parent sharing one source parent ID.
 		$parent_source_id = 800;
 
 		$blog_parent = $this->seed_target_post(
@@ -228,7 +228,7 @@ class Subsite_Source_Scoping_Test extends Source_Posts_API_Test_Base {
 			'page'
 		);
 
-		// ACT: import a /blog child page whose source parent is that ID.
+		// ACT: Import a /blog child page whose source parent is that ID.
 		$result = $this->import_under(
 			self::BLOG_URL,
 			8100,
@@ -236,7 +236,7 @@ class Subsite_Source_Scoping_Test extends Source_Posts_API_Test_Base {
 			'pages'
 		);
 
-		// ASSERT: the child is reparented to the /blog parent.
+		// ASSERT: The child is reparented to the /blog parent.
 		$this->assertTrue( $result['success'] );
 		$this->assertSame(
 			$blog_parent,
@@ -256,7 +256,7 @@ class Subsite_Source_Scoping_Test extends Source_Posts_API_Test_Base {
 			array( 'title' => 'Plain' )
 		);
 
-		// ASSERT: the stored identity is the bare host, as before the change.
+		// ASSERT: The stored identity is the bare host, as before the change.
 		$this->assertTrue( $result['success'] );
 		$this->assertSame(
 			'https://source.example.com',
@@ -282,7 +282,7 @@ class Subsite_Source_Scoping_Test extends Source_Posts_API_Test_Base {
 			array( 'title' => 'Host B' )
 		);
 
-		// ASSERT: distinct posts, each tagged with its own host.
+		// ASSERT: Distinct posts, each tagged with its own host.
 		$this->assertNotSame( $first['post_id'], $second['post_id'] );
 		$this->assertSame(
 			'https://source.example.com',

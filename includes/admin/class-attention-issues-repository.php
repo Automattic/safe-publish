@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Stores and reconciles the current set of open degradation issues.
  *
- * State projection, not an event log: one upserted row per identity
+ * State projection, not an event log: One upserted row per identity
  * (affected_post_id, issue_type, target_ref, target_kind). Detection upserts
  * on a still-open degradation and resolves (deletes) the row once the
  * underlying reconciliation succeeds, so reads are a plain SELECT of open
@@ -125,7 +125,7 @@ final class Attention_Issues_Repository {
 	/**
 	 * Reconciles open issues that share one target ref across many posts.
 	 *
-	 * Used by the navigation rewriter: posts whose write failed stay open;
+	 * Used by the navigation rewriter: Posts whose write failed stay open;
 	 * every other open issue for the target is resolved, because those posts now
 	 * reference it correctly or no longer reference it at all.
 	 *
@@ -175,7 +175,7 @@ final class Attention_Issues_Repository {
 	/**
 	 * Deletes every issue attached to a destination post.
 	 *
-	 * Wired to post deletion: a hard-deleted post can never be re-imported to
+	 * Wired to post deletion: A hard-deleted post can never be re-imported to
 	 * reconcile its issues, so they would otherwise linger unfixably.
 	 *
 	 * @param int $affected_post_id Destination post id.
@@ -194,7 +194,7 @@ final class Attention_Issues_Repository {
 	/**
 	 * Lists open issues for a source identity, errors before warnings.
 	 *
-	 * Ignore is orthogonal to the open/resolved status: ignored issues stay
+	 * Ignore is orthogonal to the open/resolved status: Ignored issues stay
 	 * open. $ignored=true selects the ignored subset instead of the active one.
 	 *
 	 * @param string $source_site_url Path-bearing source identity.

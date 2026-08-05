@@ -16,7 +16,7 @@ use Safe_Publish\Utils\Options;
 /**
  * Settings Logger Test Class.
  *
- * Invariant: the Basic Auth password event must never carry a previous or
+ * Invariant: The Basic Auth password event must never carry a previous or
  * new value, not even indirectly (e.g. as a length or hash).
  */
 class Settings_Logger_Test extends Integration_Test_Case {

@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Enqueues a built admin bundle plus the shared style/data wiring.
  *
  * The Manage, Exports, and Audit Log admin pages each enqueue the same
- * shape: one entry script, the design tokens, the shared compiled
+ * shape: One entry script, the design tokens, the shared compiled
  * stylesheet, the static admin stylesheet, and an inline
  * `window.safePublishAdminData = {...}` for the React side. This helper
  * centralizes that wiring so a new page can opt in by calling

@@ -23,16 +23,16 @@ if ( ! defined( 'ABSPATH' ) ) {
  * post's media, all gated to HMAC-authenticated single-item requests. Each
  * resolves what core REST cannot expose on its own:
  *
- * - safe_publish_media: source library metadata (alt, title, caption,
+ * - safe_publish_media: Source library metadata (alt, title, caption,
  *   description) and source parent for each inline image, keyed by media URL,
  *   which core cannot resolve to an attachment.
- * - safe_publish_attached_media: the ordered { id, menu_order } set a bare
+ * - safe_publish_attached_media: The ordered { id, menu_order } set a bare
  *   [gallery]/[playlist] renders, referenced by neither URL nor id and whose
  *   menu_order the media REST omits.
- * - safe_publish_referenced_media: the post's attached image/audio/video
+ * - safe_publish_referenced_media: The post's attached image/audio/video
  *   children grouped by type, each an ordered { id, menu_order } set, so a
  *   cross-post [gallery id="B"] elsewhere can pull the set B renders. Not
- *   content-gated: the referencing post, not this one, renders the set.
+ *   content-gated: The referencing post, not this one, renders the set.
  */
 class Source_Media_REST_Field {
 
@@ -369,7 +369,7 @@ class Source_Media_REST_Field {
 
 	/**
 	 * Reports whether a gallery/playlist shortcode renders the post's own
-	 * attached media: no non-empty ids/include/exclude selector, and no id
+	 * attached media: No non-empty ids/include/exclude selector, and no id
 	 * naming a different post.
 	 *
 	 * @param array<string, string> $atts    Parsed shortcode attributes.
@@ -390,7 +390,7 @@ class Source_Media_REST_Field {
 
 	/**
 	 * Reports whether a shortcode selector attribute holds a non-empty value,
-	 * mirroring core's ! empty() gate on ids/include/exclude: an absent or empty
+	 * mirroring core's ! empty() gate on ids/include/exclude: An absent or empty
 	 * selector (including "0") leaves the shortcode bare.
 	 *
 	 * @param array<string, string> $atts Parsed shortcode attributes.

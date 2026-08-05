@@ -785,7 +785,7 @@ final class Diff_Renderer {
 			$excerpt = $matches[1];
 		}
 
-		// Normalize whitespace: collapse internal newlines/spaces to single spaces.
+		// Normalize whitespace: Collapse internal newlines/spaces to single spaces.
 		$excerpt = str_replace( array( "\r\n", "\r" ), "\n", $excerpt );
 		$excerpt = preg_replace( '/\s+/', ' ', $excerpt );
 

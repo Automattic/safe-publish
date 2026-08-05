@@ -516,7 +516,7 @@ class Cross_Post_Gallery_Media_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Seeds an attachment already imported for a post: parented to it and
+	 * Seeds an attachment already imported for a post: Parented to it and
 	 * carrying the source origin URL, so a later pull dedups onto it.
 	 *
 	 * @param int    $parent_id  Owning destination post.

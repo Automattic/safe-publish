@@ -251,7 +251,7 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that ignoring is gated at manage_options: an editor, who has
+	 * Verifies that ignoring is gated at manage_options: An editor, who has
 	 * edit_posts but not manage_options, is forbidden.
 	 */
 	public function test_set_ignored_requires_manage_options(): void {

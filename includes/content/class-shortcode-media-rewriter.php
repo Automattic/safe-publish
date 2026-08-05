@@ -151,7 +151,7 @@ class Shortcode_Media_Rewriter {
 		array $allowed,
 		string $source_site_url
 	): string {
-		// preg_quote each name: the codec list is filterable, so treat the
+		// preg_quote each name: The codec list is filterable, so treat the
 		// attribute names as literals rather than trust them in the pattern.
 		$names = implode(
 			'|',
@@ -215,7 +215,7 @@ class Shortcode_Media_Rewriter {
 			$this->failed_media[ $value ] = '';
 		}
 
-		// null: third-party or already-local — leave the URL as-is.
+		// null: Third-party or already-local — leave the URL as-is.
 		return $matches[0];
 	}
 }

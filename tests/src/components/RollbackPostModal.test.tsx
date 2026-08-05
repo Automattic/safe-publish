@@ -41,7 +41,7 @@ afterEach( () => {
 
 describe( 'RollbackPostModal', () => {
 	it( 'Verifies that a successful rollback surfaces the server message as a success notice', async () => {
-		// ARRANGE: the endpoint restores the post and returns its confirmation.
+		// ARRANGE: The endpoint restores the post and returns its confirmation.
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockResolvedValue( {
@@ -58,7 +58,7 @@ describe( 'RollbackPostModal', () => {
 		const onRefresh = vi.fn();
 		const closeModal = vi.fn();
 
-		// ACT: render the modal and confirm the rollback.
+		// ACT: Render the modal and confirm the rollback.
 		render(
 			<RollbackPostModal
 				items={ [ buildRow() ] }
@@ -71,7 +71,7 @@ describe( 'RollbackPostModal', () => {
 		);
 		fireEvent.click( screen.getByRole( 'button', { name: 'Roll back' } ) );
 
-		// ASSERT: the server message surfaces as a success notice, then the
+		// ASSERT: The server message surfaces as a success notice, then the
 		// listing refreshes and the modal closes.
 		await waitFor( () =>
 			expect( onNotice ).toHaveBeenCalledWith( {
@@ -84,7 +84,7 @@ describe( 'RollbackPostModal', () => {
 	} );
 
 	it( 'Verifies that a failed rollback shows the error in-modal without a notice', async () => {
-		// ARRANGE: the endpoint rejects the rollback with a message.
+		// ARRANGE: The endpoint rejects the rollback with a message.
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockResolvedValue( {
@@ -98,7 +98,7 @@ describe( 'RollbackPostModal', () => {
 		const onRefresh = vi.fn();
 		const closeModal = vi.fn();
 
-		// ACT: render the modal and attempt the rollback.
+		// ACT: Render the modal and attempt the rollback.
 		render(
 			<RollbackPostModal
 				items={ [ buildRow() ] }
@@ -111,7 +111,7 @@ describe( 'RollbackPostModal', () => {
 		);
 		fireEvent.click( screen.getByRole( 'button', { name: 'Roll back' } ) );
 
-		// ASSERT: the failure stays in the modal — no notice, no refresh, no
+		// ASSERT: The failure stays in the modal — no notice, no refresh, no
 		// close, so the operator can read the error and retry or cancel.
 		expect(
 			await screen.findByText( 'The post no longer exists' )

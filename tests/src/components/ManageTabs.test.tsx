@@ -6,7 +6,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import type { AdminData } from '@/types';
 
-// Stub the heavy panels so this focuses on tab wiring: both must stay mounted
+// Stub the heavy panels so this focuses on tab wiring: Both must stay mounted
 // (toggled via `hidden`), and either may drive the count.
 let reportPostsCount: ( ( n: number ) => void ) | undefined;
 vi.mock( '@/components/PostsDataView', () => ( {

@@ -22,7 +22,7 @@ use WP_HTML_Tag_Processor;
  * shortcode parity are checked structurally (names, balance, attributes), not
  * for per-block semantic equivalence.
  *
- * Out of scope: block-gallery `attrs.ids` and `data-id` (not seeded today),
+ * Out of scope: Block-gallery `attrs.ids` and `data-id` (not seeded today),
  * per-block semantic equivalence.
  */
 final class Content_Parity_Comparator {
@@ -74,7 +74,7 @@ final class Content_Parity_Comparator {
 	private const MEDIA_SHORTCODE_ID_ATTRS = array( 'ids', 'include', 'exclude' );
 
 	/**
-	 * Asserts URL parity per (tag, attr) bucket: source URLs map through the
+	 * Asserts URL parity per (tag, attr) bucket: Source URLs map through the
 	 * sideload map and the resulting multiset must equal the dest multiset.
 	 * URLs absent from the map round-trip unchanged.
 	 *
@@ -144,7 +144,7 @@ final class Content_Parity_Comparator {
 	}
 
 	/**
-	 * Asserts embed-block url parity: each core/embed (and legacy core-embed/*)
+	 * Asserts embed-block url parity: Each core/embed (and legacy core-embed/*)
 	 * block's url attribute maps through the sideload map and the resulting
 	 * multiset must equal the dest multiset. External provider URLs are absent
 	 * from the map, so this reverse-asserts the importer leaves them verbatim.
@@ -326,7 +326,7 @@ final class Content_Parity_Comparator {
 	 * caption verbatim apart from rewriting its attachment id, so dest must keep
 	 * the same caption count, balanced open/close tags (no half-tag leftovers),
 	 * and identical non-id attributes. Count parity doubles as a reverse-
-	 * assertion: a future importer that transformed captions into blocks would
+	 * assertion: A future importer that transformed captions into blocks would
 	 * drop the dest count and fail here, forcing an explicit decision.
 	 *
 	 * @param string   $source_content Source post_content.
@@ -422,7 +422,7 @@ final class Content_Parity_Comparator {
 		);
 		$dest_ids = self::collect_media_shortcode_ids( $dest_content );
 
-		// In order, not as a multiset: galleries render in id order, so a
+		// In order, not as a multiset: Galleries render in id order, so a
 		// reorder is a real regression.
 		$test->assertSame(
 			$expected,
@@ -549,7 +549,7 @@ final class Content_Parity_Comparator {
 
 		$shortcodes = array();
 		foreach ( $matches as $match ) {
-			// Escaped literal ([[gallery ...]]): not a live shortcode.
+			// Escaped literal ([[gallery ...]]): Not a live shortcode.
 			if ( '[' === $match[1] && ']' === $match[6] ) {
 				continue;
 			}

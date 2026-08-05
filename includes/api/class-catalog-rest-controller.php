@@ -26,7 +26,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Source-side REST controller backing the destination's browsable posts
  * catalog.
  *
- * Owns the query semantics for the catalog UI: title-only search with slug
+ * Owns the query semantics for the catalog UI: Title-only search with slug
  * fallback, status/date filters, indexed sort primitives, and Previous /
  * Next pagination via `has_more` (no SQL_CALC_FOUND_ROWS).
  *

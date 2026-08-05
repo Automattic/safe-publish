@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * import snapshot.
  *
  * Anchored on the items table's `import_date_gmt`, not the local post's
- * `post_modified_gmt`: the latter tracks destination editorial activity
+ * `post_modified_gmt`: The latter tracks destination editorial activity
  * and is the MySQL zero-date for fresh drafts, which `strtotime` reads
  * as year 0000 instead of failing — silently flagging fresh imports as
  * outdated.

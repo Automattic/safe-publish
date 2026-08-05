@@ -22,7 +22,7 @@ use WP_Error;
  * repointed at the destination attachment, that third-party URLs are left as-is,
  * and that download failures are recorded.
  *
- * The 3-argument constructor is used deliberately: Content_Processor defaults the
+ * The 3-argument constructor is used deliberately: content_Processor defaults the
  * shortcode media rewriter to wrap its injected Media_Importer, so this exercises
  * the real production wiring.
  */
@@ -75,15 +75,15 @@ class Content_Processor_Shortcode_Media_Test extends Integration_Test_Case {
 	 * Verifies that an [audio] src URL is sideloaded and localized.
 	 */
 	public function test_audio_shortcode_src_imported(): void {
-		// ARRANGE: classic content with an [audio] shortcode on the source host.
+		// ARRANGE: Classic content with an [audio] shortcode on the source host.
 		$url     = self::SOURCE . '/podcast.jpg';
 		$content = '[audio src="' . $url . '"]';
 		$before  = $this->get_attachment_count();
 
-		// ACT: run the full processing pipeline.
+		// ACT: Run the full processing pipeline.
 		$result = (string) $this->processor->process_content( $content, self::SOURCE );
 
-		// ASSERT: one attachment created; src localized; no failures.
+		// ASSERT: One attachment created; src localized; no failures.
 		$this->assertSame( $before + 1, $this->get_attachment_count() );
 		$this->assertStringContainsString( 'wp-content/uploads', $result );
 		$this->assertStringNotContainsString( $url, $result );
@@ -95,16 +95,16 @@ class Content_Processor_Shortcode_Media_Test extends Integration_Test_Case {
 	 * sideloaded and localized.
 	 */
 	public function test_video_shortcode_src_and_poster_imported(): void {
-		// ARRANGE: a [video] shortcode with a source src and poster.
+		// ARRANGE: A [video] shortcode with a source src and poster.
 		$src     = self::SOURCE . '/clip.mp4';
 		$poster  = self::SOURCE . '/thumb.jpg';
 		$content = '[video src="' . $src . '" poster="' . $poster . '"]';
 		$before  = $this->get_attachment_count();
 
-		// ACT: run the full processing pipeline.
+		// ACT: Run the full processing pipeline.
 		$result = (string) $this->processor->process_content( $content, self::SOURCE );
 
-		// ASSERT: two attachments; both URLs localized; no failures.
+		// ASSERT: Two attachments; both URLs localized; no failures.
 		$this->assertSame( $before + 2, $this->get_attachment_count() );
 		$this->assertStringContainsString( 'wp-content/uploads', $result );
 		$this->assertStringNotContainsString( $src, $result );
@@ -117,15 +117,15 @@ class Content_Processor_Shortcode_Media_Test extends Integration_Test_Case {
 	 * nothing.
 	 */
 	public function test_third_party_video_shortcode_left_untouched(): void {
-		// ARRANGE: a [video] whose src is a third-party embed.
+		// ARRANGE: A [video] whose src is a third-party embed.
 		$url     = 'https://www.youtube.com/watch?v=abcd1234';
 		$content = '[video src="' . $url . '"]';
 		$before  = $this->get_attachment_count();
 
-		// ACT: run the full processing pipeline.
+		// ACT: Run the full processing pipeline.
 		$result = (string) $this->processor->process_content( $content, self::SOURCE );
 
-		// ASSERT: nothing imported; the third-party URL is preserved.
+		// ASSERT: Nothing imported; the third-party URL is preserved.
 		$this->assertSame( $before, $this->get_attachment_count() );
 		$this->assertStringContainsString( $url, $result );
 		$this->assertSame( array(), $this->processor->get_failed_media() );
@@ -136,7 +136,7 @@ class Content_Processor_Shortcode_Media_Test extends Integration_Test_Case {
 	 * the import aborts rather than persisting a host-swapped dead URL.
 	 */
 	public function test_failed_shortcode_media_recorded(): void {
-		// ARRANGE: an [audio] src forced to fail on download.
+		// ARRANGE: An [audio] src forced to fail on download.
 		$url     = self::SOURCE . '/broken.jpg';
 		$content = '[audio src="' . $url . '"]';
 
@@ -150,13 +150,13 @@ class Content_Processor_Shortcode_Media_Test extends Integration_Test_Case {
 		$before = $this->get_attachment_count();
 
 		try {
-			// ACT: run the full processing pipeline.
+			// ACT: Run the full processing pipeline.
 			$this->processor->process_content( $content, self::SOURCE );
 		} finally {
 			remove_filter( 'pre_http_request', $fail, 5 );
 		}
 
-		// ASSERT: no attachment; the source URL is a recorded failure.
+		// ASSERT: No attachment; the source URL is a recorded failure.
 		$this->assertSame( $before, $this->get_attachment_count() );
 		$this->assertArrayHasKey( $url, $this->processor->get_failed_media() );
 	}
@@ -166,16 +166,16 @@ class Content_Processor_Shortcode_Media_Test extends Integration_Test_Case {
 	 * top-level pass, which runs on the serialized block output.
 	 */
 	public function test_shortcode_in_gutenberg_content_imported(): void {
-		// ARRANGE: block content with a top-level (freeform) [audio] shortcode.
+		// ARRANGE: Block content with a top-level (freeform) [audio] shortcode.
 		$url     = self::SOURCE . '/episode.jpg';
 		$content = "<!-- wp:paragraph -->\n<p>Intro</p>\n<!-- /wp:paragraph -->\n"
 			. '[audio src="' . $url . '"]';
 		$before  = $this->get_attachment_count();
 
-		// ACT: run the full processing pipeline.
+		// ACT: Run the full processing pipeline.
 		$result = (string) $this->processor->process_content( $content, self::SOURCE );
 
-		// ASSERT: the shortcode media was imported and localized.
+		// ASSERT: The shortcode media was imported and localized.
 		$this->assertSame( $before + 1, $this->get_attachment_count() );
 		$this->assertStringContainsString( 'wp-content/uploads', $result );
 		$this->assertStringNotContainsString( $url, $result );

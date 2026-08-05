@@ -480,7 +480,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * other unresolved block ref.
 	 */
 	public function test_core_block_ref_surfaces_as_unmapped_reference(): void {
-		// ARRANGE: a paragraph, a core/navigation carrying its own ref, and one
+		// ARRANGE: A paragraph, a core/navigation carrying its own ref, and one
 		// core/block. No source URLs and neither ref resolves on the
 		// destination, so the only warnings come from the ref scan.
 		$source_site_url = 'https://source.example.com';
@@ -493,10 +493,10 @@ class Content_Processor_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: process the document.
+		// ACT: Process the document.
 		$this->processor->process_content( $content, $source_site_url );
 
-		// ASSERT: both refs surface as unmapped references, distinguished by
+		// ASSERT: Both refs surface as unmapped references, distinguished by
 		// block name; core/block is not treated specially.
 		$this->assertSame(
 			array(
@@ -523,15 +523,15 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * ref scan never false-flags ordinary blocks.
 	 */
 	public function test_blocks_without_id_refs_raise_no_warning(): void {
-		// ARRANGE: common blocks, no id-bearing refs, no source URLs.
+		// ARRANGE: Common blocks, no id-bearing refs, no source URLs.
 		$source_site_url = 'https://source.example.com';
 		$content         = '<!-- wp:paragraph --><p>Text.</p><!-- /wp:paragraph -->'
 			. '<!-- wp:heading --><h2>Heading</h2><!-- /wp:heading -->';
 
-		// ACT: process the document.
+		// ACT: Process the document.
 		$this->processor->process_content( $content, $source_site_url );
 
-		// ASSERT: no warnings at all.
+		// ASSERT: No warnings at all.
 		$this->assertSame(
 			array(),
 			$this->processor->get_warnings(),
@@ -1550,7 +1550,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 *
 	 * Custom blocks commonly store a post's own permalink in an attr (e.g. a
 	 * "postLink" holding https://source.example.com/?p=123). The generic attrs
-	 * walk must not sideload it: it is an HTML page, not a media file, and
+	 * walk must not sideload it: It is an HTML page, not a media file, and
 	 * downloading it fails and aborts the whole import.
 	 */
 	public function test_process_custom_block_skips_source_permalink_in_attrs(): void {
@@ -1642,7 +1642,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * Verifies that a source image served at an extensionless URL that also
 	 * omits its Content-Type header is sideloaded rather than aborting.
 	 *
-	 * Exercises the import_source_media_as_attachment() path: without a header,
+	 * Exercises the import_source_media_as_attachment() path: Without a header,
 	 * download_url() cannot recover an extension, so the type must come from the
 	 * downloaded bytes.
 	 */
@@ -1781,7 +1781,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * Verifies that a custom block attr holding a source URL whose path ends in
 	 * an uploadable extension but resolves to an HTML page is kept as a link.
 	 *
-	 * Exercises the replace_urls_in_attrs() path: the downloaded bytes are
+	 * Exercises the replace_urls_in_attrs() path: The downloaded bytes are
 	 * HTML, so the attr is left as a link instead of aborting the import.
 	 */
 	public function test_process_media_looking_page_link_in_custom_attr_is_kept_as_link(): void {
@@ -1943,7 +1943,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * while the URL was still host-swapped to the destination.
 	 */
 	public function test_process_top_level_classic_media_mixed_with_block_is_imported(): void {
-		// ARRANGE: a block followed by top-level classic HTML with a
+		// ARRANGE: A block followed by top-level classic HTML with a
 		// source-site image.
 		$source_site_url = 'https://source.example.com';
 		$image_url       = 'https://source.example.com/classic-photo.jpg';
@@ -1953,17 +1953,17 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		$attachments_before = $this->get_attachment_count();
 
-		// ACT: process the mixed document through the Gutenberg path.
+		// ACT: Process the mixed document through the Gutenberg path.
 		$processed = $this->processor->process_content( $content, $source_site_url );
 
-		// ASSERT: exactly one attachment was created for the classic image.
+		// ASSERT: Exactly one attachment was created for the classic image.
 		$this->assertSame(
 			$attachments_before + 1,
 			$this->get_attachment_count(),
 			'Classic media should be sideloaded as one attachment'
 		);
 
-		// ASSERT: the source URL is replaced by a local upload URL.
+		// ASSERT: The source URL is replaced by a local upload URL.
 		$this->assertStringNotContainsString(
 			$image_url,
 			$processed,
@@ -1975,7 +1975,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'Local upload URL should be present'
 		);
 
-		// ASSERT: the block and the classic text around the image survive.
+		// ASSERT: The block and the classic text around the image survive.
 		$this->assertStringContainsString(
 			'<!-- wp:paragraph -->',
 			$processed,
@@ -1987,7 +1987,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'Classic markup around the image should be preserved'
 		);
 
-		// ASSERT: nothing recorded as failed or unprocessable.
+		// ASSERT: Nothing recorded as failed or unprocessable.
 		$this->assertSame(
 			array(),
 			$this->processor->get_failed_media(),
@@ -2009,7 +2009,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * at a file that was never copied.
 	 */
 	public function test_process_delimited_freeform_media_is_imported_and_rewritten(): void {
-		// ARRANGE: a delimited core/freeform block with a source-site image.
+		// ARRANGE: A delimited core/freeform block with a source-site image.
 		$source_site_url = 'https://source.example.com';
 		$image_url       = 'https://source.example.com/freeform-photo.jpg';
 		$content         = '<!-- wp:freeform -->'
@@ -2018,17 +2018,17 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		$attachments_before = $this->get_attachment_count();
 
-		// ACT: process the freeform block through the Gutenberg path.
+		// ACT: Process the freeform block through the Gutenberg path.
 		$processed = $this->processor->process_content( $content, $source_site_url );
 
-		// ASSERT: exactly one attachment was created.
+		// ASSERT: Exactly one attachment was created.
 		$this->assertSame(
 			$attachments_before + 1,
 			$this->get_attachment_count(),
 			'Freeform media should be sideloaded as one attachment'
 		);
 
-		// ASSERT: the upload URL survives serialization from innerContent, so
+		// ASSERT: The upload URL survives serialization from innerContent, so
 		// the host-swapped source path is not what remains.
 		$this->assertStringContainsString(
 			'wp-content/uploads',
@@ -2041,7 +2041,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'Output must not keep the host-swapped source path'
 		);
 
-		// ASSERT: no media failures were recorded.
+		// ASSERT: No media failures were recorded.
 		$this->assertSame(
 			array(),
 			$this->processor->get_failed_media(),
@@ -2058,7 +2058,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * host-swapped URL pointing at a file that was never copied.
 	 */
 	public function test_process_custom_block_media_in_inner_html_is_rewritten(): void {
-		// ARRANGE: a custom block with a source-site image only in innerHTML.
+		// ARRANGE: A custom block with a source-site image only in innerHTML.
 		$source_site_url = 'https://source.example.com';
 		$image_url       = 'https://source.example.com/card.jpg';
 		$content         = '<!-- wp:my-plugin/card -->'
@@ -2069,17 +2069,17 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		$attachments_before = $this->get_attachment_count();
 
-		// ACT: process the custom block through the Gutenberg path.
+		// ACT: Process the custom block through the Gutenberg path.
 		$processed = $this->processor->process_content( $content, $source_site_url );
 
-		// ASSERT: exactly one attachment was created.
+		// ASSERT: Exactly one attachment was created.
 		$this->assertSame(
 			$attachments_before + 1,
 			$this->get_attachment_count(),
 			'Custom-block innerHTML media should be sideloaded as one attachment'
 		);
 
-		// ASSERT: the upload URL survives serialization from innerContent, so
+		// ASSERT: The upload URL survives serialization from innerContent, so
 		// the host-swapped source path is not what remains.
 		$this->assertStringContainsString(
 			'wp-content/uploads',
@@ -2097,7 +2097,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'Source image URL should be replaced'
 		);
 
-		// ASSERT: no media failures were recorded.
+		// ASSERT: No media failures were recorded.
 		$this->assertSame(
 			array(),
 			$this->processor->get_failed_media(),
@@ -2114,7 +2114,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * never copied.
 	 */
 	public function test_process_paragraph_inline_media_is_rewritten(): void {
-		// ARRANGE: a paragraph block with an inline source-site image.
+		// ARRANGE: A paragraph block with an inline source-site image.
 		$source_site_url = 'https://source.example.com';
 		$image_url       = 'https://source.example.com/inline.jpg';
 		$content         = '<!-- wp:paragraph --><p>Text '
@@ -2123,17 +2123,17 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		$attachments_before = $this->get_attachment_count();
 
-		// ACT: process the paragraph through the Gutenberg path.
+		// ACT: Process the paragraph through the Gutenberg path.
 		$processed = $this->processor->process_content( $content, $source_site_url );
 
-		// ASSERT: exactly one attachment was created.
+		// ASSERT: Exactly one attachment was created.
 		$this->assertSame(
 			$attachments_before + 1,
 			$this->get_attachment_count(),
 			'Inline paragraph media should be sideloaded as one attachment'
 		);
 
-		// ASSERT: the upload URL survives serialization from innerContent.
+		// ASSERT: The upload URL survives serialization from innerContent.
 		$this->assertStringContainsString(
 			'wp-content/uploads',
 			$processed,
@@ -2145,7 +2145,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'Output must not keep the host-swapped source path'
 		);
 
-		// ASSERT: no media failures were recorded.
+		// ASSERT: No media failures were recorded.
 		$this->assertSame(
 			array(),
 			$this->processor->get_failed_media(),
@@ -2158,7 +2158,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * its URL rewritten to the local upload.
 	 */
 	public function test_process_html_block_media_is_rewritten(): void {
-		// ARRANGE: a core/html block containing a source-site image.
+		// ARRANGE: A core/html block containing a source-site image.
 		$source_site_url = 'https://source.example.com';
 		$image_url       = 'https://source.example.com/htmlblock.jpg';
 		$content         = '<!-- wp:html -->'
@@ -2167,17 +2167,17 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		$attachments_before = $this->get_attachment_count();
 
-		// ACT: process the html block through the Gutenberg path.
+		// ACT: Process the html block through the Gutenberg path.
 		$processed = $this->processor->process_content( $content, $source_site_url );
 
-		// ASSERT: exactly one attachment was created.
+		// ASSERT: Exactly one attachment was created.
 		$this->assertSame(
 			$attachments_before + 1,
 			$this->get_attachment_count(),
 			'HTML-block media should be sideloaded as one attachment'
 		);
 
-		// ASSERT: the upload URL survives serialization from innerContent.
+		// ASSERT: The upload URL survives serialization from innerContent.
 		$this->assertStringContainsString(
 			'wp-content/uploads',
 			$processed,
@@ -2189,7 +2189,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'Output must not keep the host-swapped source path'
 		);
 
-		// ASSERT: no media failures were recorded.
+		// ASSERT: No media failures were recorded.
 		$this->assertSame(
 			array(),
 			$this->processor->get_failed_media(),
@@ -2202,7 +2202,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * is imported and its URL rewritten to the local upload.
 	 */
 	public function test_process_embed_block_media_is_rewritten(): void {
-		// ARRANGE: an embed block whose innerHTML carries a source-site image.
+		// ARRANGE: An embed block whose innerHTML carries a source-site image.
 		$source_site_url = 'https://source.example.com';
 		$image_url       = 'https://source.example.com/embed-thumb.jpg';
 		$content         = '<!-- wp:embed -->'
@@ -2213,17 +2213,17 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		$attachments_before = $this->get_attachment_count();
 
-		// ACT: process the embed block through the Gutenberg path.
+		// ACT: Process the embed block through the Gutenberg path.
 		$processed = $this->processor->process_content( $content, $source_site_url );
 
-		// ASSERT: exactly one attachment was created.
+		// ASSERT: Exactly one attachment was created.
 		$this->assertSame(
 			$attachments_before + 1,
 			$this->get_attachment_count(),
 			'Embed-block media should be sideloaded as one attachment'
 		);
 
-		// ASSERT: the upload URL survives serialization from innerContent.
+		// ASSERT: The upload URL survives serialization from innerContent.
 		$this->assertStringContainsString(
 			'wp-content/uploads',
 			$processed,
@@ -2235,7 +2235,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'Output must not keep the host-swapped source path'
 		);
 
-		// ASSERT: no media failures were recorded.
+		// ASSERT: No media failures were recorded.
 		$this->assertSame(
 			array(),
 			$this->processor->get_failed_media(),

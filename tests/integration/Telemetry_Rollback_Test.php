@@ -86,7 +86,7 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 	 * fires rollback_performed with scope=session and outcome=success.
 	 */
 	public function test_session_rollback_fires_with_session_scope(): void {
-		// ARRANGE: a bulk session with one successful new-post item.
+		// ARRANGE: A bulk session with one successful new-post item.
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
@@ -108,10 +108,10 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 			'session_id' => $session_id,
 		);
 
-		// ACT: dispatch the session rollback.
+		// ACT: Dispatch the session rollback.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_rollback_session' );
 
-		// ASSERT: one rollback_performed event with the session scope and
+		// ASSERT: One rollback_performed event with the session scope and
 		// the success outcome derived from a clean deletion.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
@@ -138,16 +138,16 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 	 * the item-level path's WP_Error handling instead of going silent.
 	 */
 	public function test_session_rollback_failure_fires_with_failed_outcome(): void {
-		// ARRANGE: a session_id that does not exist in the repository.
+		// ARRANGE: A session_id that does not exist in the repository.
 		$_POST = array(
 			'nonce'      => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 			'session_id' => 999999,
 		);
 
-		// ACT: dispatch the session rollback against the missing session.
+		// ACT: Dispatch the session rollback against the missing session.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_rollback_session' );
 
-		// ASSERT: scope=session, failed_count=1, outcome=failed.
+		// ASSERT: Scope=session, failed_count=1, outcome=failed.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame(
@@ -173,16 +173,16 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 	 * broken undo doesn't go silent.
 	 */
 	public function test_item_rollback_failure_fires_with_failed_outcome(): void {
-		// ARRANGE: an item_id that does not exist in the repository.
+		// ARRANGE: An item_id that does not exist in the repository.
 		$_POST = array(
 			'nonce'   => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 			'item_id' => 999999,
 		);
 
-		// ACT: dispatch the item rollback against the missing item.
+		// ACT: Dispatch the item rollback against the missing item.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_rollback_item' );
 
-		// ASSERT: scope=item, failed_count=1, outcome=failed.
+		// ASSERT: Scope=item, failed_count=1, outcome=failed.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame(
@@ -207,7 +207,7 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 	 * rollback_performed with scope=item and deleted_count=1.
 	 */
 	public function test_item_rollback_fires_with_item_scope(): void {
-		// ARRANGE: a session with one successful new-post item.
+		// ARRANGE: A session with one successful new-post item.
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'single'
@@ -229,10 +229,10 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 			'item_id' => $item_id,
 		);
 
-		// ACT: dispatch the item rollback.
+		// ACT: Dispatch the item rollback.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_rollback_item' );
 
-		// ASSERT: scope=item, deleted_count=1, outcome=success.
+		// ASSERT: Scope=item, deleted_count=1, outcome=success.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame(

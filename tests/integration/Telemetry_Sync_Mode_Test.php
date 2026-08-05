@@ -42,7 +42,7 @@ class Telemetry_Sync_Mode_Test extends WP_UnitTestCase {
 
 		delete_option( Options::OPTION_SYNC_MODE );
 
-		// Deterministic isolation: strip any handlers the full-plugin bootstrap
+		// Deterministic isolation: Strip any handlers the full-plugin bootstrap
 		// registered on these hooks so the queue-backed bridge is the only one.
 		remove_all_actions( 'add_option_' . Options::OPTION_SYNC_MODE );
 		remove_all_actions( 'update_option_' . Options::OPTION_SYNC_MODE );
@@ -67,12 +67,12 @@ class Telemetry_Sync_Mode_Test extends WP_UnitTestCase {
 	 * previous mode and flags the first configuration.
 	 */
 	public function test_first_configuration_reports_unconfigured_previous(): void {
-		// ARRANGE: a fresh install with no sync-mode row (setUp deleted it).
+		// ARRANGE: A fresh install with no sync-mode row (setUp deleted it).
 
-		// ACT: the operator picks import mode for the first time.
+		// ACT: The operator picks import mode for the first time.
 		add_option( Options::OPTION_SYNC_MODE, 'import' );
 
-		// ASSERT: one event, previous mode is the bounded unconfigured fallback,
+		// ASSERT: One event, previous mode is the bounded unconfigured fallback,
 		// new mode is import, and the first-configuration flag is set.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
@@ -93,14 +93,14 @@ class Telemetry_Sync_Mode_Test extends WP_UnitTestCase {
 	 * modes and clears the first-configuration flag.
 	 */
 	public function test_mode_switch_reports_previous_and_new(): void {
-		// ARRANGE: an already-configured import site.
+		// ARRANGE: An already-configured import site.
 		add_option( Options::OPTION_SYNC_MODE, 'import' );
 		$this->queue->clear();
 
-		// ACT: the operator switches to bidirectional.
+		// ACT: The operator switches to bidirectional.
 		update_option( Options::OPTION_SYNC_MODE, 'bidirectional' );
 
-		// ASSERT: one event carrying the transition, not a first configuration.
+		// ASSERT: One event carrying the transition, not a first configuration.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame( 'import', $events[0]['properties']['previous_mode'] );
@@ -116,14 +116,14 @@ class Telemetry_Sync_Mode_Test extends WP_UnitTestCase {
 	 * fires no update_option hook when the value is unchanged.
 	 */
 	public function test_noop_save_emits_nothing(): void {
-		// ARRANGE: an already-configured import site.
+		// ARRANGE: An already-configured import site.
 		add_option( Options::OPTION_SYNC_MODE, 'import' );
 		$this->queue->clear();
 
-		// ACT: save the identical mode again.
+		// ACT: Save the identical mode again.
 		update_option( Options::OPTION_SYNC_MODE, 'import' );
 
-		// ASSERT: no event, so the funnel isn't polluted by no-op saves.
+		// ASSERT: No event, so the funnel isn't polluted by no-op saves.
 		$this->assertCount( 0, $this->queue->events() );
 	}
 
@@ -132,13 +132,13 @@ class Telemetry_Sync_Mode_Test extends WP_UnitTestCase {
 	 * so the funnel isn't marked configured before a mode is chosen.
 	 */
 	public function test_unselected_mode_on_first_save_emits_nothing(): void {
-		// ARRANGE: a fresh install with no sync-mode row (setUp deleted it).
+		// ARRANGE: A fresh install with no sync-mode row (setUp deleted it).
 
-		// ACT: the settings form is saved with no mode selected, which creates
+		// ACT: The settings form is saved with no mode selected, which creates
 		// the option row with the empty default.
 		add_option( Options::OPTION_SYNC_MODE, '' );
 
-		// ASSERT: no event, since an unselected mode is not a configuration.
+		// ASSERT: No event, since an unselected mode is not a configuration.
 		$this->assertCount( 0, $this->queue->events() );
 	}
 
@@ -148,14 +148,14 @@ class Telemetry_Sync_Mode_Test extends WP_UnitTestCase {
 	 * than by the add-vs-update hook.
 	 */
 	public function test_first_real_selection_after_empty_row_is_flagged_first(): void {
-		// ARRANGE: an empty sync-mode row left by a mode-less save.
+		// ARRANGE: An empty sync-mode row left by a mode-less save.
 		add_option( Options::OPTION_SYNC_MODE, '' );
 		$this->queue->clear();
 
-		// ACT: the operator picks import for the first time.
+		// ACT: The operator picks import for the first time.
 		update_option( Options::OPTION_SYNC_MODE, 'import' );
 
-		// ASSERT: one event, flagged as the first configuration.
+		// ASSERT: One event, flagged as the first configuration.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame(

@@ -269,7 +269,7 @@ class Content_Processing_Test extends Source_Posts_API_Test_Base {
 		$this->assertStringNotContainsString( 'wp-video-shortcode', $processed_content );
 		$this->assertStringNotContainsString( 'wp-audio-shortcode', $processed_content );
 
-		// ASSERT: Verify images were actually imported (2 images: header + footer).
+		// ASSERT: Verify images were actually imported (2 images: Header + footer).
 		$attachments_after = $this->get_attachment_count();
 		$this->assertSame(
 			$attachments_before + 2,

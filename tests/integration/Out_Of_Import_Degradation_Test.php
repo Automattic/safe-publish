@@ -58,7 +58,7 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 	 * log and the issues store, and that resolving it clears both.
 	 */
 	public function test_unresolved_logs_warning_then_resolves(): void {
-		// ARRANGE: a destination post tagged with its path-bearing source.
+		// ARRANGE: A destination post tagged with its path-bearing source.
 		$source_site_url = 'https://example.com/blog';
 		$post_id         = self::factory()->post->create();
 		update_post_meta(
@@ -78,7 +78,7 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 		$target_ref  = 4242;
 		$target_kind = 'post';
 
-		// ACT: the producer logs a warning and opens the issue.
+		// ACT: The producer logs a warning and opens the issue.
 		$this->logger->unresolved(
 			$issue_type,
 			$post_id,
@@ -94,7 +94,7 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 			$stored_source
 		);
 
-		// ASSERT: the audit log holds the reconcile warning, tagged by type.
+		// ASSERT: The audit log holds the reconcile warning, tagged by type.
 		$warnings = Audit_Log_Table::get_events(
 			array(
 				'channel' => 'reconcile',
@@ -108,13 +108,13 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 		);
 		$this->assertSame( $issue_type, $warnings[0]['data']['issue_type'] );
 
-		// ASSERT: the issue is open and scoped to the source identity.
+		// ASSERT: The issue is open and scoped to the source identity.
 		$issue = $this->issues->get_issue( $post_id, $issue_type, $target_ref );
 		$this->assertIsArray( $issue );
 		$this->assertSame( 'warning', $issue['severity'] );
 		$this->assertSame( $source_site_url, $issue['source_site_url'] );
 
-		// ACT: the reconciliation succeeded, so log info and clear the issue.
+		// ACT: The reconciliation succeeded, so log info and clear the issue.
 		$this->logger->resolved(
 			$issue_type,
 			$post_id,
@@ -128,7 +128,7 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 			$target_kind
 		);
 
-		// ASSERT: one row cleared, an info event recorded, no issue remains.
+		// ASSERT: One row cleared, an info event recorded, no issue remains.
 		$this->assertSame( 1, $cleared );
 		$info = Audit_Log_Table::get_events(
 			array(
@@ -148,7 +148,7 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 	 * opens an error-severity issue.
 	 */
 	public function test_failed_write_logs_error_and_opens_error_issue(): void {
-		// ARRANGE: a destination post tagged with its source identity.
+		// ARRANGE: A destination post tagged with its source identity.
 		$source_site_url = 'https://example.com/blog';
 		$post_id         = self::factory()->post->create();
 		update_post_meta(
@@ -161,7 +161,7 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 		$target_ref  = 4242;
 		$target_kind = 'post';
 
-		// ACT: the write failed, so log an error and open an error issue.
+		// ACT: The write failed, so log an error and open an error issue.
 		$this->logger->failed(
 			$issue_type,
 			$post_id,
@@ -178,7 +178,7 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 			$source_site_url
 		);
 
-		// ASSERT: the audit log holds the reconcile error event.
+		// ASSERT: The audit log holds the reconcile error event.
 		$errors = Audit_Log_Table::get_events(
 			array(
 				'channel' => 'reconcile',
@@ -188,7 +188,7 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 		$this->assertCount( 1, $errors );
 		$this->assertSame( Log_Events::RECONCILE_FAILED, $errors[0]['event'] );
 
-		// ASSERT: the issue is open at error severity.
+		// ASSERT: The issue is open at error severity.
 		$issue = $this->issues->get_issue( $post_id, $issue_type, $target_ref );
 		$this->assertIsArray( $issue );
 		$this->assertSame( 'error', $issue['severity'] );
@@ -207,7 +207,7 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 			'post'
 		);
 
-		// ASSERT: one info event names the resolved reconcile.
+		// ASSERT: One info event names the resolved reconcile.
 		$events = Audit_Log_Table::get_events(
 			array(
 				'channel' => 'reconcile',
@@ -232,7 +232,7 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 			'post'
 		);
 
-		// ASSERT: one warning event names the target-absent reconcile and reason.
+		// ASSERT: One warning event names the target-absent reconcile and reason.
 		$events = Audit_Log_Table::get_events(
 			array(
 				'channel' => 'reconcile',
@@ -264,7 +264,7 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 			'post'
 		);
 
-		// ASSERT: one error event names the failed reconcile and detail.
+		// ASSERT: One error event names the failed reconcile and detail.
 		$events = Audit_Log_Table::get_events(
 			array(
 				'channel' => 'reconcile',
@@ -289,7 +289,7 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 			'post'
 		);
 
-		// ASSERT: one warning event names the unresolved reconcile.
+		// ASSERT: One warning event names the unresolved reconcile.
 		$events = Audit_Log_Table::get_events(
 			array(
 				'channel' => 'reconcile',

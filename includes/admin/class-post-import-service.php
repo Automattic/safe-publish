@@ -187,10 +187,10 @@ class Post_Import_Service {
 	 *                             - 'prefetched_fresh_result' (array|null, default null):
 	 *                               pre-fetched fetch_fresh_post() response; skips the
 	 *                               in-pipeline fetch in the bulk two-pass flow.
-	 *                             - 'batch_fresh_data' (array|null, default null): map of
+	 *                             - 'batch_fresh_data' (array|null, default null): Map of
 	 *                               source ID => pass-1 fresh data for the current bulk batch;
 	 *                               drives parent resolution's in-batch detection.
-	 *                             - 'session_id_map' (array<int,int>, default empty): source
+	 *                             - 'session_id_map' (array<int,int>, default empty): Source
 	 *                               post ID => destination post ID accumulated during pass 2
 	 *                               of the bulk batch; feeds block-attribute ID remapping
 	 *                               for later items (e.g. wp_navigation links).
@@ -1628,7 +1628,7 @@ class Post_Import_Service {
 	 * menu, recording a warning when a matched post could not be updated and
 	 * reconciling the menu's attention issues from the per-post outcome.
 	 *
-	 * No-op for non-navigation imports. Best-effort: a rewrite failure
+	 * No-op for non-navigation imports. Best-effort: A rewrite failure
 	 * surfaces the still-stale post IDs as a warning rather than failing the
 	 * menu import.
 	 *
@@ -1679,7 +1679,7 @@ class Post_Import_Service {
 	 * Records the attention issues attached to a freshly imported post.
 	 *
 	 * Reconciles the post's open block-reference and orphaned-parent issues
-	 * against its finalized import warnings: unresolved refs are upserted, and
+	 * against its finalized import warnings: Unresolved refs are upserted, and
 	 * any that now resolve are cleared. Navigation rewrite failures are recorded
 	 * separately, keyed to the referencing posts.
 	 *
@@ -1770,7 +1770,7 @@ class Post_Import_Service {
 	/**
 	 * Re-runs the navigation rewriter for a menu and reconciles its issues.
 	 *
-	 * Self-verifying retry: re-attempts every post referencing the menu, so an
+	 * Self-verifying retry: Re-attempts every post referencing the menu, so an
 	 * issue clears precisely when its post no longer fails the rewrite.
 	 *
 	 * @param int    $affected_post_id Referencing post whose issue was retried.
@@ -1834,7 +1834,7 @@ class Post_Import_Service {
 	 * Repoints one stale block reference in place and resolves its issue on
 	 * success.
 	 *
-	 * Self-verifying: the issue clears only when the target now resolves and the
+	 * Self-verifying: The issue clears only when the target now resolves and the
 	 * post was repointed; otherwise the row stays, with last_seen refreshed.
 	 *
 	 * @param int    $affected_post_id Post holding the reference.
@@ -1871,7 +1871,7 @@ class Post_Import_Service {
 	 * Repoints one stale gallery/playlist `id` post reference in place and
 	 * resolves its issue on success.
 	 *
-	 * Self-verifying: the issue clears only when the target post now resolves
+	 * Self-verifying: The issue clears only when the target post now resolves
 	 * and the reference was rewritten; otherwise the row stays, with last_seen
 	 * refreshed.
 	 *
@@ -2669,7 +2669,7 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Rolls back a failed update: restores the post to its pre-update state and
+	 * Rolls back a failed update: Restores the post to its pre-update state and
 	 * deletes any media sideloaded during the failed attempt.
 	 *
 	 * @param int   $post_id  Post ID.
@@ -2877,7 +2877,7 @@ class Post_Import_Service {
 	 * the image before the post exists in the DB, so a download failure does not
 	 * leave the post in a partially-written state.
 	 *
-	 * Returns 0 when there is nothing to import: either no featured media ID is
+	 * Returns 0 when there is nothing to import: Either no featured media ID is
 	 * set, or the connected source site is not configured. Returns the
 	 * attachment ID (> 0) on a successful import, and false when a media ID is
 	 * set against a configured source but the sideload fails. The source media

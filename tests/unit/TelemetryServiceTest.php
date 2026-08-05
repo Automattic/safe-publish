@@ -28,14 +28,14 @@ class TelemetryServiceTest extends TestCase {
 	 * and properties exactly as passed.
 	 */
 	public function test_record_event_pushes_to_injected_queue(): void {
-		// ARRANGE: a fresh queue and a service prefixed with safe_publish_.
+		// ARRANGE: A fresh queue and a service prefixed with safe_publish_.
 		$queue   = new Telemetry_Event_Queue();
 		$service = new Telemetry_Service(
 			array( 'plugin_version' => '0.0.4' ),
 			$queue
 		);
 
-		// ACT: record a single event with properties.
+		// ACT: Record a single event with properties.
 		$service->record_event(
 			'bulk_import_completed',
 			array(
@@ -45,7 +45,7 @@ class TelemetryServiceTest extends TestCase {
 			)
 		);
 
-		// ASSERT: the queue captured the event name without the prefix and
+		// ASSERT: The queue captured the event name without the prefix and
 		// the exact properties array.
 		$events = $queue->events();
 		$this->assertCount( 1, $events );
@@ -64,16 +64,16 @@ class TelemetryServiceTest extends TestCase {
 	 * Verifies that multiple events queue in insertion order.
 	 */
 	public function test_queue_preserves_insertion_order(): void {
-		// ARRANGE: a service with a queue.
+		// ARRANGE: A service with a queue.
 		$queue   = new Telemetry_Event_Queue();
 		$service = new Telemetry_Service( array(), $queue );
 
-		// ACT: record three events.
+		// ACT: Record three events.
 		$service->record_event( 'first' );
 		$service->record_event( 'second' );
 		$service->record_event( 'third' );
 
-		// ASSERT: events appear in the order they were recorded.
+		// ASSERT: Events appear in the order they were recorded.
 		$events = $queue->events();
 		$this->assertCount( 3, $events );
 		$this->assertSame( 'first', $events[0]['event'] );
@@ -87,14 +87,14 @@ class TelemetryServiceTest extends TestCase {
 	 * tests hit this path.
 	 */
 	public function test_record_event_no_ops_without_queue_or_vip_class(): void {
-		// ARRANGE: a service with no queue. The VIP class is not loaded in
+		// ARRANGE: A service with no queue. The VIP class is not loaded in
 		// unit tests, so the wrapper takes the no-op branch.
 		$service = new Telemetry_Service();
 
-		// ACT: record an event that has nowhere to go.
+		// ACT: Record an event that has nowhere to go.
 		$service->record_event( 'bulk_import_completed', array( 'batch_size' => 1 ) );
 
-		// ASSERT: no exception was thrown.
+		// ASSERT: No exception was thrown.
 		$this->assertTrue( true );
 	}
 
@@ -103,16 +103,16 @@ class TelemetryServiceTest extends TestCase {
 	 * service's state.
 	 */
 	public function test_queue_clear_empties_recorded_events(): void {
-		// ARRANGE: a queue with a recorded event.
+		// ARRANGE: A queue with a recorded event.
 		$queue   = new Telemetry_Event_Queue();
 		$service = new Telemetry_Service( array(), $queue );
 		$service->record_event( 'first' );
 
-		// ACT: clear the queue and record another event.
+		// ACT: Clear the queue and record another event.
 		$queue->clear();
 		$service->record_event( 'second' );
 
-		// ASSERT: only the post-clear event remains.
+		// ASSERT: Only the post-clear event remains.
 		$events = $queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame( 'second', $events[0]['event'] );

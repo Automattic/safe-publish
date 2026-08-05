@@ -136,7 +136,7 @@ function ownLookup(
 }
 
 /**
- * Human label for a post status: the built-in label, else the slug
+ * Human label for a post status: The built-in label, else the slug
  * titlecased (`in-progress` -> `In Progress`), since the destination can't
  * know a custom status's registered label.
  *
@@ -328,7 +328,7 @@ export function renderWarningShortLabel( warning: Warning ): string {
 
 /**
  * Renders an open attention issue as a user-facing sentence pointing at the
- * fix: import the referenced content, then Retry.
+ * fix: Import the referenced content, then Retry.
  *
  * @param {AttentionIssue} issue Issue to render.
  *
@@ -416,7 +416,7 @@ export function attentionIssueId( issue: AttentionIssue ): string {
 }
 
 /**
- * Display label for an issue's affected content: its title, or a post-id
+ * Display label for an issue's affected content: Its title, or a post-id
  * fallback when the title is empty.
  *
  * @param {AttentionIssue} issue Issue row.

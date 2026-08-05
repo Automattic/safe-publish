@@ -8,12 +8,12 @@
  * session with access to the target WordPress install. It runs in two steps,
  * each in a different wp-env container:
  *
- *   step=source   On the source site: upsert the demo pages (a parent/child
+ *   step=source   On the source site: Upsert the demo pages (a parent/child
  *                 pair, a resolvable links page with its two targets, an
  *                 unresolvable links page, a reusable-block page, a cross-post
  *                 gallery page, and optionally a volume page when count>0).
  *                 Prints page IDs for the wrapper.
- *   step=import   On the destination site: import the child (orphan fallback
+ *   step=import   On the destination site: Import the child (orphan fallback
  *                 on) for a parent_orphaned issue, the links and reusable-block
  *                 pages for unmapped_block_reference issues, the gallery page
  *                 for an unmapped_gallery_reference issue, run a no-id import
@@ -249,7 +249,7 @@ function safe_publish_demo_volume_content( int $count ): string {
 }
 
 /**
- * Runs the source-side step: upsert the demo pages, or remove them on purge.
+ * Runs the source-side step: Upsert the demo pages, or remove them on purge.
  *
  * @param array<string, string> $arguments Parsed CLI arguments.
  * @param bool                  $is_purge  Whether to delete the demo pages.
@@ -361,7 +361,7 @@ function safe_publish_demo_run_source(
 		safe_publish_demo_gallery_content( $target_a_id )
 	);
 
-	// Optional volume: one page with `count` filler links to push the drawer
+	// Optional volume: One page with `count` filler links to push the drawer
 	// past a page. Removed when count is 0 so the count self-corrects.
 	$count     = max( 0, (int) ( $arguments['count'] ?? 0 ) );
 	$volume_id = 0;
@@ -535,7 +535,7 @@ function safe_publish_demo_seed_nav_failure(
 ): void {
 	$nav_id = SAFE_PUBLISH_DEMO_NAV_SOURCE_ID;
 
-	// Referrer page: content the rewriter matches, plus the source-url meta its
+	// Referrer page: Content the rewriter matches, plus the source-url meta its
 	// candidate query requires.
 	$referrer = wp_insert_post(
 		array(
@@ -611,7 +611,7 @@ function safe_publish_demo_seed_nav_failure(
 }
 
 /**
- * Removes the destination demo artifacts: orphan-failure rows plus the imported
+ * Removes the destination demo artifacts: Orphan-failure rows plus the imported
  * and staged demo pages (deleting a page clears its attention issues through
  * the plugin's post-delete hook).
  */
@@ -641,7 +641,7 @@ function safe_publish_demo_purge_destination(): void {
 }
 
 /**
- * Runs the destination-side step: imports and stages the demo content that
+ * Runs the destination-side step: Imports and stages the demo content that
  * populates the attention and orphan-failure drawers, or purges it.
  *
  * @param array<string, string> $arguments Parsed CLI arguments.
@@ -784,7 +784,7 @@ function safe_publish_demo_run_import(
 		$unmapped_count += safe_publish_demo_count_unmapped( $reference_result );
 	}
 
-	// Reusable-block page: its core/block references an unimported wp_block, so
+	// Reusable-block page: Its core/block references an unimported wp_block, so
 	// the import opens a retryable unmapped_block_reference issue flagged as a
 	// reusable block.
 	$reusable_prefetch = $api->fetch_fresh_post( $reusable_id, 'page' );
@@ -808,7 +808,7 @@ function safe_publish_demo_run_import(
 		);
 	}
 
-	// Cross-post gallery page: its [gallery id] points at an unimported source
+	// Cross-post gallery page: Its [gallery id] points at an unimported source
 	// post, so the import opens a retryable unmapped_gallery_reference issue.
 	$gallery_prefetch = $api->fetch_fresh_post( $gallery_id, 'page' );
 	$gallery_options  = is_wp_error( $gallery_prefetch )
@@ -850,7 +850,7 @@ function safe_publish_demo_run_import(
 	// Error-severity nav_ref_rewrite_failed (resolves on Retry).
 	safe_publish_demo_seed_nav_failure( $attention_issues, $source_site_url );
 
-	// Volume filler: add `count` orphan failures to span the orphan drawer
+	// Volume filler: Add `count` orphan failures to span the orphan drawer
 	// (the volume page above already added the attention-side filler).
 	if ( $count > 0 ) {
 		for ( $i = 1; $i <= $count; $i++ ) {

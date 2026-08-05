@@ -46,61 +46,61 @@ describe( 'calendarRangeToUtcBounds', () => {
 	}
 
 	it( 'returns nulls when both inputs are null', () => {
-		// ACT: convert with both bounds unset.
+		// ACT: Convert with both bounds unset.
 		const result = calendarRangeToUtcBounds( null, null );
 
-		// ASSERT: both UTC bounds come back null.
+		// ASSERT: Both UTC bounds come back null.
 		expect( result.afterUtc ).toBeNull();
 		expect( result.beforeUtc ).toBeNull();
 	} );
 
 	it( 'maps the after bound to site-local midnight in UTC', () => {
-		// ARRANGE: site zone = UTC so local midnight is UTC midnight.
+		// ARRANGE: Site zone = UTC so local midnight is UTC midnight.
 		withSiteTimezone( 'UTC', 0, () => {
-			// ACT: convert a single after bound.
+			// ACT: Convert a single after bound.
 			const { afterUtc } = calendarRangeToUtcBounds( '2026-06-10', null );
 
-			// ASSERT: the picked day's 00:00 lands at the same UTC moment.
+			// ASSERT: The picked day's 00:00 lands at the same UTC moment.
 			expect( afterUtc ).toBe( '2026-06-10T00:00:00Z' );
 		} );
 	} );
 
 	it( 'maps the before bound to site-local 23:59:59 in UTC', () => {
-		// ARRANGE: site zone = UTC so end-of-day is UTC 23:59:59.
+		// ARRANGE: Site zone = UTC so end-of-day is UTC 23:59:59.
 		withSiteTimezone( 'UTC', 0, () => {
-			// ACT: convert a single before bound.
+			// ACT: Convert a single before bound.
 			const { beforeUtc } = calendarRangeToUtcBounds( null, '2026-06-10' );
 
-			// ASSERT: the picked day's 23:59:59 lands at the same UTC moment.
+			// ASSERT: The picked day's 23:59:59 lands at the same UTC moment.
 			expect( beforeUtc ).toBe( '2026-06-10T23:59:59Z' );
 		} );
 	} );
 
 	it( 'anchors a same-day pick to a full site-local day in UTC', () => {
-		// ARRANGE: pick 2026-06-10 on both bounds with site zone NY (EDT,
+		// ARRANGE: Pick 2026-06-10 on both bounds with site zone NY (EDT,
 		// UTC-4 in June). The local day spans UTC 04:00 → next-day 03:59:59.
 		withSiteTimezone( 'America/New_York', -5, () => {
-			// ACT: convert the same picked day on both bounds.
+			// ACT: Convert the same picked day on both bounds.
 			const { afterUtc, beforeUtc } = calendarRangeToUtcBounds(
 				'2026-06-10',
 				'2026-06-10'
 			);
 
-			// ASSERT: bounds straddle the full NY-local day, expressed in UTC.
+			// ASSERT: Bounds straddle the full NY-local day, expressed in UTC.
 			expect( afterUtc ).toBe( '2026-06-10T04:00:00Z' );
 			expect( beforeUtc ).toBe( '2026-06-11T03:59:59Z' );
 		} );
 	} );
 
 	it( 'follows the site zone across daylight saving, not a fixed offset', () => {
-		// ARRANGE: two picks across the DST boundary in NY — EST (UTC-5) in
+		// ARRANGE: Two picks across the DST boundary in NY — EST (UTC-5) in
 		// January and EDT (UTC-4) in July.
 		withSiteTimezone( 'America/New_York', -5, () => {
-			// ACT: convert one winter pick and one summer pick.
+			// ACT: Convert one winter pick and one summer pick.
 			const winter = calendarRangeToUtcBounds( '2026-01-15', null );
 			const summer = calendarRangeToUtcBounds( '2026-07-15', null );
 
-			// ASSERT: identical picker input resolves to different UTC offsets.
+			// ASSERT: Identical picker input resolves to different UTC offsets.
 			expect( winter.afterUtc ).toBe( '2026-01-15T05:00:00Z' );
 			expect( summer.afterUtc ).toBe( '2026-07-15T04:00:00Z' );
 		} );

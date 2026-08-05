@@ -79,13 +79,13 @@ class PluginTest extends TestCase {
 	 * allowed-screens list, preserving any screens registered by other sources.
 	 */
 	public function test_register_pendo_screens_appends_plugin_screens(): void {
-		// ARRANGE: an existing allow-list from another telemetry consumer.
+		// ARRANGE: An existing allow-list from another telemetry consumer.
 		$existing = array( 'plugins.php' );
 
-		// ACT: register the plugin's admin screens.
+		// ACT: Register the plugin's admin screens.
 		$result = $this->plugin->register_pendo_screens( $existing );
 
-		// ASSERT: the original screen is kept and every plugin screen is added.
+		// ASSERT: The original screen is kept and every plugin screen is added.
 		$this->assertSame(
 			array(
 				'plugins.php',

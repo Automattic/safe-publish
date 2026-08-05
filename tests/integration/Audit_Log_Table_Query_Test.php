@@ -108,7 +108,7 @@ class Audit_Log_Table_Query_Test extends Integration_Test_Case {
 			array( 'after_gmt' => '2026-01-13 00:00:00' )
 		);
 
-		// ASSERT: the 2026-01-13 and 2026-01-14 rows remain.
+		// ASSERT: The 2026-01-13 and 2026-01-14 rows remain.
 		$this->assertCount( 2, $rows );
 		$events = array_column( $rows, 'event' );
 		sort( $events );
@@ -124,15 +124,15 @@ class Audit_Log_Table_Query_Test extends Integration_Test_Case {
 	 * "through this calendar day".
 	 */
 	public function test_get_events_before_gmt_filters_inclusively(): void {
-		// ARRANGE: insert an event at exactly the bound moment.
+		// ARRANGE: Insert an event at exactly the bound moment.
 		Audit_Log_Table::insert( 'auth', 'info', 'EDGE', '2026-01-12 23:59:59', array() );
 
-		// ACT: pass end-of-day 2026-01-12 to capture through that day.
+		// ACT: Pass end-of-day 2026-01-12 to capture through that day.
 		$rows = Audit_Log_Table::get_events(
 			array( 'before_gmt' => '2026-01-12 23:59:59' )
 		);
 
-		// ASSERT: rows on/before 2026-01-12 are included, including the
+		// ASSERT: Rows on/before 2026-01-12 are included, including the
 		// 12:00:00 event AND the bound-edge EDGE event; 2026-01-13 is not.
 		$events = array_column( $rows, 'event' );
 		$this->assertContains( 'EDGE', $events );
@@ -164,7 +164,7 @@ class Audit_Log_Table_Query_Test extends Integration_Test_Case {
 	 * the same row appear on adjacent pages.
 	 */
 	public function test_get_events_orders_ties_deterministically(): void {
-		// ARRANGE: insert two rows sharing a timestamp.
+		// ARRANGE: Insert two rows sharing a timestamp.
 		Audit_Log_Table::clear( 'auth' );
 		Audit_Log_Table::insert( 'auth', 'info', 'FIRST', '2026-02-01 09:00:00', array() );
 		Audit_Log_Table::insert( 'auth', 'info', 'SECOND', '2026-02-01 09:00:00', array() );
@@ -172,7 +172,7 @@ class Audit_Log_Table_Query_Test extends Integration_Test_Case {
 		// ACT: Fetch the auth channel rows.
 		$rows = Audit_Log_Table::get_events( array( 'channel' => 'auth' ) );
 
-		// ASSERT: the higher id (latest insert) sorts first.
+		// ASSERT: The higher id (latest insert) sorts first.
 		$this->assertCount( 2, $rows );
 		$this->assertSame( 'SECOND', $rows[0]['event'] );
 		$this->assertSame( 'FIRST', $rows[1]['event'] );

@@ -36,18 +36,18 @@ class SettingsPageTest extends TestCase {
 	 * @preserveGlobalState disabled
 	 */
 	public function test_render_hides_externally_configured_password(): void {
-		// ARRANGE: define the password constant and import-mode settings.
+		// ARRANGE: Define the password constant and import-mode settings.
 		define( 'SAFE_PUBLISH_BASIC_AUTH_PASSWORD', 'constant-password' );
 		set_test_option( Options::OPTION_CONNECTED_SITE_URL, 'https://source.example.com' );
 		set_test_option( Options::OPTION_SYNC_MODE, Options::SYNC_MODE_IMPORT );
 		set_test_option( Options::OPTION_BASIC_AUTH_USERNAME, 'editor' );
 
-		// ACT: render the settings page markup.
+		// ACT: Render the settings page markup.
 		ob_start();
 		( new Settings_Page() )->render();
 		$output = (string) ob_get_clean();
 
-		// ASSERT: the constant value is replaced with an external placeholder.
+		// ASSERT: The constant value is replaced with an external placeholder.
 		$this->assertStringContainsString( 'Configured externally', $output );
 		$this->assertStringContainsString( 'data-configured-externally="1"', $output );
 		$this->assertStringNotContainsString( 'constant-password', $output );
@@ -61,17 +61,17 @@ class SettingsPageTest extends TestCase {
 	 * Verifies that stored user-entered passwords still render into the form.
 	 */
 	public function test_render_keeps_user_entered_password_editable(): void {
-		// ARRANGE: store import-mode settings and a saved Basic Auth password.
+		// ARRANGE: Store import-mode settings and a saved Basic Auth password.
 		set_test_option( Options::OPTION_CONNECTED_SITE_URL, 'https://source.example.com' );
 		set_test_option( Options::OPTION_SYNC_MODE, Options::SYNC_MODE_IMPORT );
 		set_test_option( Options::OPTION_BASIC_AUTH_PASSWORD, 'user-password' );
 
-		// ACT: render the settings page markup.
+		// ACT: Render the settings page markup.
 		ob_start();
 		( new Settings_Page() )->render();
 		$output = (string) ob_get_clean();
 
-		// ASSERT: the stored password remains editable in the settings form.
+		// ASSERT: The stored password remains editable in the settings form.
 		$this->assertStringContainsString(
 			'name="safe_publish_basic_auth_password"',
 			$output

@@ -15,7 +15,7 @@ namespace Safe_Publish\Utils;
  * Reconciliation re-runs a repair on a degraded cross-reference and records the
  * outcome. Producers (Retry today, any out-of-import producer later) log it
  * here for admins and update the user-facing issues store. The audit entry
- * records one outcome per reconciliation, not a per-row mirror: a target-scoped
+ * records one outcome per reconciliation, not a per-row mirror: A target-scoped
  * reconciliation settles several issue rows but logs once. Scope every issue by
  * the affected post's stored META_SOURCE_SITE_URL, the path-bearing source
  * identity.

@@ -271,7 +271,7 @@ class MediaImporterTest extends TestCase {
 	 * does not match the source site, without recording a failure.
 	 */
 	public function test_import_source_media_returns_null_for_third_party_domain(): void {
-		// ARRANGE: media on a CDN that is unrelated to the source site.
+		// ARRANGE: Media on a CDN that is unrelated to the source site.
 		$source_site_url = 'https://source.example.com';
 		$media_url       = 'https://third-party.example.com/photo-123.jpg';
 
@@ -287,7 +287,7 @@ class MediaImporterTest extends TestCase {
 	 * URL whose domain does not match the source site.
 	 */
 	public function test_import_source_media_as_attachment_returns_null_for_third_party_domain(): void {
-		// ARRANGE: video file hosted on an unrelated CDN.
+		// ARRANGE: Video file hosted on an unrelated CDN.
 		$source_site_url = 'https://source.example.com';
 		$media_url       = 'https://third-party.example.com/clip.mp4';
 
@@ -304,17 +304,17 @@ class MediaImporterTest extends TestCase {
 	 * still skips it — the featured path is owned by provenance, not host.
 	 */
 	public function test_import_owned_media_as_attachment_bypasses_third_party_guard(): void {
-		// ARRANGE: an off-domain CDN URL, with a stubbed dedup hit so the owned
+		// ARRANGE: An off-domain CDN URL, with a stubbed dedup hit so the owned
 		// path resolves to an existing attachment without a live download.
 		$source_site_url = 'https://source.example.com';
 		$media_url       = 'https://cdn.example.net/photo-123.jpg';
 		set_test_get_posts_result( array( (object) array( 'ID' => 4242 ) ) );
 
-		// ACT: call both entrypoints with the same off-domain URL.
+		// ACT: Call both entrypoints with the same off-domain URL.
 		$owned   = $this->importer->import_owned_media_as_attachment( $media_url, $source_site_url );
 		$guarded = $this->importer->import_source_media_as_attachment( $media_url, $source_site_url );
 
-		// ASSERT: the owned path bypasses the guard and returns the deduped
+		// ASSERT: The owned path bypasses the guard and returns the deduped
 		// attachment; the guarded path still returns null for the third party.
 		$this->assertSame( 4242, $owned );
 		$this->assertNull( $guarded );

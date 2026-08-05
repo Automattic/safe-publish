@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * their children within a single batch, so the destination parent post exists
  * by the time its child looks it up.
  *
- * Cycles terminate the algorithm naturally: any node that never reaches
+ * Cycles terminate the algorithm naturally: Any node that never reaches
  * in-degree zero is returned in the leftover bucket so the caller can route
  * those items through the normal unresolvable-parent path.
  */

@@ -719,7 +719,7 @@ class Media_Importer {
 	}
 
 	/**
-	 * Fetches a source post's attached media set of a given type: the ordered
+	 * Fetches a source post's attached media set of a given type: The ordered
 	 * { id, menu_order } list a cross-post [gallery id="B"]/[playlist id="B"]
 	 * renders. Reads the source's referenced-media enrichment field, since the
 	 * media REST omits menu_order. Any fetch or shape failure yields an empty

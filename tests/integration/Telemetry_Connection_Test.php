@@ -32,7 +32,7 @@ use WP_Error;
  * Telemetry Connection Test.
  *
  * Verifies that the test-connection AJAX path emits connection_test_completed
- * with an outcome mapped from the auth probe's result: authorized on 200,
+ * with an outcome mapped from the auth probe's result: Authorized on 200,
  * unauthorized on a 401/403 Safe Publish rejection, blocked on a 401/403
  * upstream block, and unreachable on a transport error.
  */
@@ -182,13 +182,13 @@ class Telemetry_Connection_Test extends WP_Ajax_UnitTestCase {
 	 * Verifies that a 200 probe emits the authorized outcome.
 	 */
 	public function test_authorized_probe_emits_authorized_outcome(): void {
-		// ARRANGE: the connected site grants edit context.
+		// ARRANGE: The connected site grants edit context.
 		$this->mock_response_code = 200;
 
-		// ACT: run the connection test.
+		// ACT: Run the connection test.
 		$this->dispatch();
 
-		// ASSERT: one event with outcome=authorized.
+		// ASSERT: One event with outcome=authorized.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame(
@@ -205,14 +205,14 @@ class Telemetry_Connection_Test extends WP_Ajax_UnitTestCase {
 	 * Verifies that a 401 Safe Publish rejection emits the unauthorized outcome.
 	 */
 	public function test_rejected_probe_emits_unauthorized_outcome(): void {
-		// ARRANGE: a 401 carrying a Safe Publish authenticator rejection.
+		// ARRANGE: A 401 carrying a Safe Publish authenticator rejection.
 		$this->mock_response_code = 401;
 		$this->mock_response_body = '{"code":"safe_publish_auth_invalid"}';
 
-		// ACT: run the connection test.
+		// ACT: Run the connection test.
 		$this->dispatch();
 
-		// ASSERT: outcome=unauthorized.
+		// ASSERT: Outcome=unauthorized.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame(
@@ -225,13 +225,13 @@ class Telemetry_Connection_Test extends WP_Ajax_UnitTestCase {
 	 * Verifies that a 403 blocked upstream emits the blocked outcome.
 	 */
 	public function test_blocked_probe_emits_blocked_outcome(): void {
-		// ARRANGE: a 403 with no Safe Publish code, as an upstream gate returns.
+		// ARRANGE: A 403 with no Safe Publish code, as an upstream gate returns.
 		$this->mock_response_code = 403;
 
-		// ACT: run the connection test.
+		// ACT: Run the connection test.
 		$this->dispatch();
 
-		// ASSERT: outcome=blocked.
+		// ASSERT: Outcome=blocked.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame(
@@ -244,13 +244,13 @@ class Telemetry_Connection_Test extends WP_Ajax_UnitTestCase {
 	 * Verifies that a transport error emits the unreachable outcome.
 	 */
 	public function test_transport_error_emits_unreachable_outcome(): void {
-		// ARRANGE: the connected site can't be reached.
+		// ARRANGE: The connected site can't be reached.
 		$this->force_transport_error = true;
 
-		// ACT: run the connection test.
+		// ACT: Run the connection test.
 		$this->dispatch();
 
-		// ASSERT: outcome=unreachable.
+		// ASSERT: Outcome=unreachable.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame(

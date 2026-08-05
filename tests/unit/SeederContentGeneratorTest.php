@@ -61,10 +61,10 @@ class SeederContentGeneratorTest extends TestCase {
 	 * Verifies that the constructor rejects invalid editor values.
 	 */
 	public function test_constructor_throws_on_invalid_editor(): void {
-		// ARRANGE: an unsupported editor value.
+		// ARRANGE: An unsupported editor value.
 		$this->expectException( InvalidArgumentException::class );
 
-		// ACT + ASSERT: construction throws.
+		// ACT + ASSERT: Construction throws.
 		$this->build_generator( editor: 'invalid' );
 	}
 
@@ -72,10 +72,10 @@ class SeederContentGeneratorTest extends TestCase {
 	 * Verifies that the constructor rejects invalid image mode values.
 	 */
 	public function test_constructor_throws_on_invalid_images_mode(): void {
-		// ARRANGE: an unsupported image mode.
+		// ARRANGE: An unsupported image mode.
 		$this->expectException( InvalidArgumentException::class );
 
-		// ACT + ASSERT: construction throws.
+		// ACT + ASSERT: Construction throws.
 		$this->build_generator( images_mode: 'invalid' );
 	}
 
@@ -84,10 +84,10 @@ class SeederContentGeneratorTest extends TestCase {
 	 * configured as gutenberg.
 	 */
 	public function test_resolve_editor_returns_true_for_gutenberg(): void {
-		// ARRANGE: generator in gutenberg mode.
+		// ARRANGE: Generator in gutenberg mode.
 		$generator = $this->build_generator( editor: 'gutenberg' );
 
-		// ACT + ASSERT: every index uses the block editor.
+		// ACT + ASSERT: Every index uses the block editor.
 		$this->assertTrue( $generator->resolve_editor( 1 ) );
 		$this->assertTrue( $generator->resolve_editor( 5 ) );
 		$this->assertTrue( $generator->resolve_editor( 100 ) );
@@ -98,10 +98,10 @@ class SeederContentGeneratorTest extends TestCase {
 	 * configured as classic.
 	 */
 	public function test_resolve_editor_returns_false_for_classic(): void {
-		// ARRANGE: generator in classic mode.
+		// ARRANGE: Generator in classic mode.
 		$generator = $this->build_generator( editor: 'classic' );
 
-		// ACT + ASSERT: every index uses the classic editor.
+		// ACT + ASSERT: Every index uses the classic editor.
 		$this->assertFalse( $generator->resolve_editor( 1 ) );
 		$this->assertFalse( $generator->resolve_editor( 5 ) );
 		$this->assertFalse( $generator->resolve_editor( 100 ) );
@@ -112,10 +112,10 @@ class SeederContentGeneratorTest extends TestCase {
 	 * the block editor in mixed mode.
 	 */
 	public function test_resolve_editor_rotates_in_mixed_mode(): void {
-		// ARRANGE: generator in mixed mode.
+		// ARRANGE: Generator in mixed mode.
 		$generator = $this->build_generator( editor: 'mixed' );
 
-		// ACT + ASSERT: indices divisible by 3 fall back to classic.
+		// ACT + ASSERT: Indices divisible by 3 fall back to classic.
 		$this->assertTrue( $generator->resolve_editor( 1 ) );
 		$this->assertTrue( $generator->resolve_editor( 2 ) );
 		$this->assertFalse( $generator->resolve_editor( 3 ) );
@@ -135,10 +135,10 @@ class SeederContentGeneratorTest extends TestCase {
 	public function test_resolve_image_mode_passes_through_concrete_modes(
 		string $mode
 	): void {
-		// ARRANGE: generator configured with a concrete mode.
+		// ARRANGE: Generator configured with a concrete mode.
 		$generator = $this->build_generator( images_mode: $mode );
 
-		// ACT + ASSERT: the same mode is returned regardless of index.
+		// ACT + ASSERT: The same mode is returned regardless of index.
 		$this->assertSame( $mode, $generator->resolve_image_mode( 1 ) );
 		$this->assertSame( $mode, $generator->resolve_image_mode( 7 ) );
 	}
@@ -161,10 +161,10 @@ class SeederContentGeneratorTest extends TestCase {
 	 * auto mode starting from index 1.
 	 */
 	public function test_resolve_image_mode_rotates_in_auto_mode(): void {
-		// ARRANGE: generator in auto mode.
+		// ARRANGE: Generator in auto mode.
 		$generator = $this->build_generator( images_mode: 'auto' );
 
-		// ACT + ASSERT: the rotation cycles every three indices.
+		// ACT + ASSERT: The rotation cycles every three indices.
 		$this->assertSame( '1', $generator->resolve_image_mode( 1 ) );
 		$this->assertSame( '2', $generator->resolve_image_mode( 2 ) );
 		$this->assertSame( '2-resized', $generator->resolve_image_mode( 3 ) );
@@ -178,10 +178,10 @@ class SeederContentGeneratorTest extends TestCase {
 	 * multiples of 5 or 6.
 	 */
 	public function test_resolve_status_publish_by_default(): void {
-		// ARRANGE: any generator.
+		// ARRANGE: Any generator.
 		$generator = $this->build_generator();
 
-		// ACT + ASSERT: non-rotating indices stay on publish.
+		// ACT + ASSERT: Non-rotating indices stay on publish.
 		$this->assertSame( 'publish', $generator->resolve_status( 1 ) );
 		$this->assertSame( 'publish', $generator->resolve_status( 2 ) );
 		$this->assertSame( 'publish', $generator->resolve_status( 7 ) );
@@ -192,10 +192,10 @@ class SeederContentGeneratorTest extends TestCase {
 	 * also divisible by 6.
 	 */
 	public function test_resolve_status_draft_every_fifth(): void {
-		// ARRANGE: any generator.
+		// ARRANGE: Any generator.
 		$generator = $this->build_generator();
 
-		// ACT + ASSERT: indices 5, 10, 25 land on draft.
+		// ACT + ASSERT: Indices 5, 10, 25 land on draft.
 		$this->assertSame( 'draft', $generator->resolve_status( 5 ) );
 		$this->assertSame( 'draft', $generator->resolve_status( 10 ) );
 		$this->assertSame( 'draft', $generator->resolve_status( 25 ) );
@@ -206,7 +206,7 @@ class SeederContentGeneratorTest extends TestCase {
 	 * takes priority over the draft rotation.
 	 */
 	public function test_resolve_status_private_every_sixth(): void {
-		// ARRANGE: any generator.
+		// ARRANGE: Any generator.
 		$generator = $this->build_generator();
 
 		// ACT + ASSERT: 6 and 12 are private; 30 (also divisible by 5) wins
@@ -221,19 +221,19 @@ class SeederContentGeneratorTest extends TestCase {
 	 * a fixed reference time.
 	 */
 	public function test_resolve_date_is_deterministic(): void {
-		// ARRANGE: a batch of 10 starting at index 1.
+		// ARRANGE: A batch of 10 starting at index 1.
 		$generator = $this->build_generator(
 			count: 10,
 			start: 1,
 		);
 
-		// ACT: derive the date for the first (oldest) index.
+		// ACT: Derive the date for the first (oldest) index.
 		$date_first = $generator->resolve_date( 1 );
 
-		// ACT: derive the date for the last (newest) index.
+		// ACT: Derive the date for the last (newest) index.
 		$date_last = $generator->resolve_date( 10 );
 
-		// ASSERT: oldest is 81 days back (round( 9 * 90 / 10 )) from the
+		// ASSERT: Oldest is 81 days back (round( 9 * 90 / 10 )) from the
 		// 2025-01-01 reference time, newest is the reference itself.
 		$this->assertSame( '2024-10-12 00:00:00', $date_first );
 		$this->assertSame( '2025-01-01 00:00:00', $date_last );
@@ -244,17 +244,17 @@ class SeederContentGeneratorTest extends TestCase {
 	 * past when date_offset is set.
 	 */
 	public function test_resolve_date_applies_offset(): void {
-		// ARRANGE: same batch, with a 30-day offset.
+		// ARRANGE: Same batch, with a 30-day offset.
 		$generator = $this->build_generator(
 			count: 10,
 			start: 1,
 			date_offset: 30,
 		);
 
-		// ACT: derive the date for the newest index.
+		// ACT: Derive the date for the newest index.
 		$date_last = $generator->resolve_date( 10 );
 
-		// ASSERT: newest is 30 days back from the reference time.
+		// ASSERT: Newest is 30 days back from the reference time.
 		$this->assertSame( '2024-12-02 00:00:00', $date_last );
 	}
 
@@ -273,13 +273,13 @@ class SeederContentGeneratorTest extends TestCase {
 		int $img_count,
 		string $expected
 	): void {
-		// ARRANGE: any generator.
+		// ARRANGE: Any generator.
 		$generator = $this->build_generator();
 
-		// ACT: compute the label.
+		// ACT: Compute the label.
 		$label = $generator->image_label( $mode, $img_count );
 
-		// ASSERT: matches the expected encoding.
+		// ASSERT: Matches the expected encoding.
 		$this->assertSame( $expected, $label );
 	}
 
@@ -303,13 +303,13 @@ class SeederContentGeneratorTest extends TestCase {
 	 * and contains the type, index, and image label.
 	 */
 	public function test_title_for_gutenberg(): void {
-		// ARRANGE: a gutenberg generator.
+		// ARRANGE: A gutenberg generator.
 		$generator = $this->build_generator( editor: 'gutenberg' );
 
-		// ACT: build the title for index 1 with one image.
+		// ACT: Build the title for index 1 with one image.
 		$title = $generator->title( 1, true, '1', 1 );
 
-		// ASSERT: format matches the seeder's historical output.
+		// ASSERT: Format matches the seeder's historical output.
 		$this->assertSame( 'Post 1 - 1P', $title );
 	}
 
@@ -317,13 +317,13 @@ class SeederContentGeneratorTest extends TestCase {
 	 * Verifies that the title for a classic post includes the " C" marker.
 	 */
 	public function test_title_for_classic_includes_c_marker(): void {
-		// ARRANGE: any generator (mode doesn't affect title rendering).
+		// ARRANGE: Any generator (mode doesn't affect title rendering).
 		$generator = $this->build_generator();
 
-		// ACT: build the title with use_gutenberg=false.
+		// ACT: Build the title with use_gutenberg=false.
 		$title = $generator->title( 7, false, '2-resized', 2 );
 
-		// ASSERT: marker is present and resized images yield 2PR.
+		// ASSERT: Marker is present and resized images yield 2PR.
 		$this->assertSame( 'Post 7 C - 2PR', $title );
 	}
 
@@ -332,13 +332,13 @@ class SeederContentGeneratorTest extends TestCase {
 	 * space.
 	 */
 	public function test_title_includes_prefix_with_space(): void {
-		// ARRANGE: generator with a non-empty prefix.
+		// ARRANGE: Generator with a non-empty prefix.
 		$generator = $this->build_generator( prefix: 'Run2' );
 
-		// ACT: build the title for index 1.
+		// ACT: Build the title for index 1.
 		$title = $generator->title( 1, true, '1', 1 );
 
-		// ASSERT: prefix is followed by a single space then the rest.
+		// ASSERT: Prefix is followed by a single space then the rest.
 		$this->assertSame( 'Run2 Post 1 - 1P', $title );
 	}
 
@@ -346,13 +346,13 @@ class SeederContentGeneratorTest extends TestCase {
 	 * Verifies that the slug encodes type and index in the seeder's format.
 	 */
 	public function test_slug_format(): void {
-		// ARRANGE: a page generator.
+		// ARRANGE: A page generator.
 		$generator = $this->build_generator( type: 'page' );
 
-		// ACT: build the slug for index 3.
+		// ACT: Build the slug for index 3.
 		$slug = $generator->slug( 3 );
 
-		// ASSERT: slug uses the seeder-{type}-{index} convention.
+		// ASSERT: Slug uses the seeder-{type}-{index} convention.
 		$this->assertSame( 'seeder-page-3', $slug );
 	}
 
@@ -360,13 +360,13 @@ class SeederContentGeneratorTest extends TestCase {
 	 * Verifies that the excerpt encodes type and index.
 	 */
 	public function test_excerpt_format(): void {
-		// ARRANGE: a post generator.
+		// ARRANGE: A post generator.
 		$generator = $this->build_generator();
 
-		// ACT: build the excerpt for index 12.
+		// ACT: Build the excerpt for index 12.
 		$excerpt = $generator->excerpt( 12 );
 
-		// ASSERT: standard sentence form.
+		// ASSERT: Standard sentence form.
 		$this->assertSame(
 			'Excerpt for seeded post number 12.',
 			$excerpt
@@ -378,18 +378,18 @@ class SeederContentGeneratorTest extends TestCase {
 	 * list blocks even when no images are provided.
 	 */
 	public function test_gutenberg_content_with_no_images(): void {
-		// ARRANGE: any generator and an empty image_refs.
+		// ARRANGE: Any generator and an empty image_refs.
 		$generator = $this->build_generator();
 
-		// ACT: build content with no image references.
+		// ACT: Build content with no image references.
 		$content = $generator->gutenberg_content( 1, array() );
 
-		// ASSERT: structural block comments are present.
+		// ASSERT: Structural block comments are present.
 		$this->assertStringContainsString( '<!-- wp:heading', $content );
 		$this->assertStringContainsString( '<!-- wp:paragraph', $content );
 		$this->assertStringContainsString( '<!-- wp:list', $content );
 
-		// ASSERT: no image block was rendered.
+		// ASSERT: No image block was rendered.
 		$this->assertStringNotContainsString( '<!-- wp:image', $content );
 	}
 
@@ -399,7 +399,7 @@ class SeederContentGeneratorTest extends TestCase {
 	 * non-empty alt.
 	 */
 	public function test_gutenberg_content_embeds_image_blocks(): void {
-		// ARRANGE: two image references.
+		// ARRANGE: Two image references.
 		$generator = $this->build_generator();
 		$refs      = array(
 			array(
@@ -412,10 +412,10 @@ class SeederContentGeneratorTest extends TestCase {
 			),
 		);
 
-		// ACT: build content with both images.
+		// ACT: Build content with both images.
 		$content = $generator->gutenberg_content( 5, $refs );
 
-		// ASSERT: each image's id and url appear in expected block syntax.
+		// ASSERT: Each image's id and url appear in expected block syntax.
 		$this->assertStringContainsString( '"id":100', $content );
 		$this->assertStringContainsString( '"id":101', $content );
 		$this->assertStringContainsString(
@@ -437,7 +437,7 @@ class SeederContentGeneratorTest extends TestCase {
 	 * shortcode and leaves subsequent images inline.
 	 */
 	public function test_classic_content_caption_vs_inline(): void {
-		// ARRANGE: two image references.
+		// ARRANGE: Two image references.
 		$generator = $this->build_generator();
 		$refs      = array(
 			array(
@@ -450,10 +450,10 @@ class SeederContentGeneratorTest extends TestCase {
 			),
 		);
 
-		// ACT: build content with both images.
+		// ACT: Build content with both images.
 		$content = $generator->classic_content( 3, $refs );
 
-		// ASSERT: first image is wrapped in a [caption] shortcode bound to
+		// ASSERT: First image is wrapped in a [caption] shortcode bound to
 		// its attachment id.
 		$this->assertStringContainsString(
 			'[caption id="attachment_200" align="aligncenter" width="800"]',
@@ -464,7 +464,7 @@ class SeederContentGeneratorTest extends TestCase {
 			$content
 		);
 
-		// ASSERT: second image appears inline (no shortcode wrap).
+		// ASSERT: Second image appears inline (no shortcode wrap).
 		$this->assertStringContainsString(
 			'<p><img src="https://source.example.com/b.jpg"',
 			$content
@@ -476,22 +476,22 @@ class SeederContentGeneratorTest extends TestCase {
 	 * and a rotating priority within the documented range.
 	 */
 	public function test_meta_values_structure(): void {
-		// ARRANGE: any generator.
+		// ARRANGE: Any generator.
 		$generator = $this->build_generator();
 
-		// ACT: collect meta values for a sample index.
+		// ACT: Collect meta values for a sample index.
 		$meta = $generator->meta_values( 3 );
 
-		// ASSERT: tag key uses the published constant.
+		// ASSERT: Tag key uses the published constant.
 		$this->assertSame(
 			'1',
 			$meta[ Content_Generator::SEEDER_META_KEY ]
 		);
 
-		// ASSERT: color rotates through the documented palette.
+		// ASSERT: Color rotates through the documented palette.
 		$this->assertSame( 'yellow', $meta['seeder_color'] );
 
-		// ASSERT: priority stays within 1..10.
+		// ASSERT: Priority stays within 1..10.
 		$this->assertSame( 4, $meta['seeder_priority'] );
 	}
 
@@ -500,17 +500,17 @@ class SeederContentGeneratorTest extends TestCase {
 	 * seeder_priority across 1..10.
 	 */
 	public function test_meta_values_rotate(): void {
-		// ARRANGE: any generator.
+		// ARRANGE: Any generator.
 		$generator = $this->build_generator();
 
-		// ACT + ASSERT: colors cycle every four indices.
+		// ACT + ASSERT: Colors cycle every four indices.
 		$this->assertSame( 'green', $generator->meta_values( 1 )['seeder_color'] );
 		$this->assertSame( 'blue', $generator->meta_values( 2 )['seeder_color'] );
 		$this->assertSame( 'yellow', $generator->meta_values( 3 )['seeder_color'] );
 		$this->assertSame( 'red', $generator->meta_values( 4 )['seeder_color'] );
 		$this->assertSame( 'green', $generator->meta_values( 5 )['seeder_color'] );
 
-		// ACT + ASSERT: priority cycles every ten indices, offset by 1.
+		// ACT + ASSERT: Priority cycles every ten indices, offset by 1.
 		$this->assertSame( 2, $generator->meta_values( 1 )['seeder_priority'] );
 		$this->assertSame( 10, $generator->meta_values( 9 )['seeder_priority'] );
 		$this->assertSame( 1, $generator->meta_values( 10 )['seeder_priority'] );
@@ -521,17 +521,17 @@ class SeederContentGeneratorTest extends TestCase {
 	 * uses the published names/slugs from term_config().
 	 */
 	public function test_term_assignments_returns_two_per_taxonomy(): void {
-		// ARRANGE: any generator.
+		// ARRANGE: Any generator.
 		$generator = $this->build_generator();
 
-		// ACT: collect term assignments for index 1.
+		// ACT: Collect term assignments for index 1.
 		$terms = $generator->term_assignments( 1 );
 
-		// ASSERT: both seeded taxonomies are present with exactly two terms.
+		// ASSERT: Both seeded taxonomies are present with exactly two terms.
 		$this->assertCount( 2, $terms['category'] );
 		$this->assertCount( 2, $terms['post_tag'] );
 
-		// ASSERT: values match the term_config() entries (category by name,
+		// ASSERT: Values match the term_config() entries (category by name,
 		// post_tag by slug).
 		$this->assertSame(
 			array( 'Seeder Category B', 'Seeder Category C' ),
@@ -548,14 +548,14 @@ class SeederContentGeneratorTest extends TestCase {
 	 * lookup fields.
 	 */
 	public function test_term_config_shape(): void {
-		// ARRANGE + ACT: read the static config.
+		// ARRANGE + ACT: Read the static config.
 		$config = Content_Generator::term_config();
 
-		// ASSERT: categories look up by name; tags look up by slug.
+		// ASSERT: Categories look up by name; tags look up by slug.
 		$this->assertSame( 'name', $config['category']['field'] );
 		$this->assertSame( 'slug', $config['post_tag']['field'] );
 
-		// ASSERT: published term counts match documented values.
+		// ASSERT: Published term counts match documented values.
 		$this->assertCount( 3, $config['category']['terms'] );
 		$this->assertCount( 4, $config['post_tag']['terms'] );
 	}
@@ -565,7 +565,7 @@ class SeederContentGeneratorTest extends TestCase {
 	 * and the featured_media is the first image's id.
 	 */
 	public function test_generate_returns_complete_payload(): void {
-		// ARRANGE: a gutenberg generator and one image.
+		// ARRANGE: A gutenberg generator and one image.
 		$generator = $this->build_generator( editor: 'gutenberg' );
 		$refs      = array(
 			array(
@@ -574,10 +574,10 @@ class SeederContentGeneratorTest extends TestCase {
 			),
 		);
 
-		// ACT: generate the payload for index 1.
+		// ACT: Generate the payload for index 1.
 		$payload = $generator->generate( 1, $refs );
 
-		// ASSERT: keys match the documented payload structure.
+		// ASSERT: Keys match the documented payload structure.
 		$this->assertSame( 'Post 1 - 1P', $payload['title'] );
 		$this->assertSame( 'seeder-post-1', $payload['slug'] );
 		$this->assertSame(
@@ -598,19 +598,19 @@ class SeederContentGeneratorTest extends TestCase {
 	 * resolved editor for that index is classic.
 	 */
 	public function test_generate_uses_classic_content_for_classic_editor(): void {
-		// ARRANGE: classic editor generator.
+		// ARRANGE: Classic editor generator.
 		$generator = $this->build_generator( editor: 'classic' );
 
-		// ACT: generate the payload for index 1 with no images.
+		// ACT: Generate the payload for index 1 with no images.
 		$payload = $generator->generate( 1, array() );
 
-		// ASSERT: classic content has no block comments.
+		// ASSERT: Classic content has no block comments.
 		$this->assertStringNotContainsString(
 			'<!-- wp:',
 			$payload['content']
 		);
 
-		// ASSERT: title carries the classic marker.
+		// ASSERT: Title carries the classic marker.
 		$this->assertStringContainsString( ' C - ', $payload['title'] );
 	}
 
@@ -619,10 +619,10 @@ class SeederContentGeneratorTest extends TestCase {
 	 * are provided.
 	 */
 	public function test_generate_featured_media_zero_with_no_images(): void {
-		// ARRANGE: any generator, empty image_refs.
+		// ARRANGE: Any generator, empty image_refs.
 		$generator = $this->build_generator();
 
-		// ACT: generate the payload.
+		// ACT: Generate the payload.
 		$payload = $generator->generate( 1, array() );
 
 		// ASSERT: featured_media defaults to 0.
@@ -634,15 +634,15 @@ class SeederContentGeneratorTest extends TestCase {
 	 * post that's publish at rev 0 lands on a different status at rev 1.
 	 */
 	public function test_resolve_status_shifts_with_revision(): void {
-		// ARRANGE: any generator.
+		// ARRANGE: Any generator.
 		$generator = $this->build_generator();
 
-		// ACT + ASSERT: index 4 is publish at rev 0 but draft at rev 1
+		// ACT + ASSERT: Index 4 is publish at rev 0 but draft at rev 1
 		// because (4 + 1) is divisible by 5.
 		$this->assertSame( 'publish', $generator->resolve_status( 4 ) );
 		$this->assertSame( 'draft', $generator->resolve_status( 4, 1 ) );
 
-		// ACT + ASSERT: index 5 is draft at rev 0 but private at rev 1
+		// ACT + ASSERT: Index 5 is draft at rev 0 but private at rev 1
 		// because (5 + 1) is divisible by 6.
 		$this->assertSame( 'draft', $generator->resolve_status( 5 ) );
 		$this->assertSame( 'private', $generator->resolve_status( 5, 1 ) );
@@ -653,21 +653,21 @@ class SeederContentGeneratorTest extends TestCase {
 	 * color/priority by (index + revision) when revision is positive.
 	 */
 	public function test_meta_values_with_revision(): void {
-		// ARRANGE: any generator, plus the no-revision baseline at the
+		// ARRANGE: Any generator, plus the no-revision baseline at the
 		// matching post-revision index (5 = 3 + 2).
 		$generator = $this->build_generator();
 		$baseline  = $generator->meta_values( 5 );
 
-		// ACT: collect meta for index 3 at revision 2.
+		// ACT: Collect meta for index 3 at revision 2.
 		$meta = $generator->meta_values( 3, 2 );
 
-		// ASSERT: revision is recorded as a string.
+		// ASSERT: Revision is recorded as a string.
 		$this->assertSame(
 			'2',
 			$meta[ Content_Generator::REVISION_META_KEY ]
 		);
 
-		// ASSERT: color/priority are rotated relative to (index + revision),
+		// ASSERT: Color/priority are rotated relative to (index + revision),
 		// matching what meta_values( 5, 0 ) returns.
 		$this->assertSame( $baseline['seeder_color'], $meta['seeder_color'] );
 		$this->assertSame(
@@ -681,14 +681,14 @@ class SeederContentGeneratorTest extends TestCase {
 	 * the no-revision call, preserving create-mode behavior.
 	 */
 	public function test_meta_values_zero_revision_matches_no_revision(): void {
-		// ARRANGE: any generator.
+		// ARRANGE: Any generator.
 		$generator = $this->build_generator();
 
-		// ACT: build with explicit revision 0 and without.
+		// ACT: Build with explicit revision 0 and without.
 		$with_zero = $generator->meta_values( 3, 0 );
 		$without   = $generator->meta_values( 3 );
 
-		// ASSERT: identical, and no revision meta key was added.
+		// ASSERT: Identical, and no revision meta key was added.
 		$this->assertSame( $without, $with_zero );
 		$this->assertArrayNotHasKey(
 			Content_Generator::REVISION_META_KEY,
@@ -701,14 +701,14 @@ class SeederContentGeneratorTest extends TestCase {
 	 * non-zero revision picks a different pair of terms per taxonomy.
 	 */
 	public function test_term_assignments_shifts_with_revision(): void {
-		// ARRANGE: any generator.
+		// ARRANGE: Any generator.
 		$generator = $this->build_generator();
 
-		// ACT: collect assignments for index 1 at revision 2.
+		// ACT: Collect assignments for index 1 at revision 2.
 		$at_rev_2 = $generator->term_assignments( 1, 2 );
 		$baseline = $generator->term_assignments( 3 );
 
-		// ASSERT: matches what index 3 (i.e. 1 + 2) would produce at rev 0.
+		// ASSERT: Matches what index 3 (i.e. 1 + 2) would produce at rev 0.
 		$this->assertSame( $baseline, $at_rev_2 );
 	}
 
@@ -717,7 +717,7 @@ class SeederContentGeneratorTest extends TestCase {
 	 * for well-formed seeder slugs.
 	 */
 	public function test_extract_index_from_slug_valid(): void {
-		// ARRANGE + ACT + ASSERT: standard seeder slugs round-trip.
+		// ARRANGE + ACT + ASSERT: Standard seeder slugs round-trip.
 		$this->assertSame(
 			3,
 			Content_Generator::extract_index_from_slug( 'seeder-post-3' )
@@ -737,7 +737,7 @@ class SeederContentGeneratorTest extends TestCase {
 	 * don't look like seeder output.
 	 */
 	public function test_extract_index_from_slug_invalid(): void {
-		// ARRANGE + ACT + ASSERT: missing prefix or trailing number.
+		// ARRANGE + ACT + ASSERT: Missing prefix or trailing number.
 		$this->assertNull(
 			Content_Generator::extract_index_from_slug( 'hello-world' )
 		);
@@ -754,16 +754,16 @@ class SeederContentGeneratorTest extends TestCase {
 	 * revision suffix idempotently for titles and excerpts.
 	 */
 	public function test_apply_revision_suffix(): void {
-		// ARRANGE: a title without an existing suffix.
+		// ARRANGE: A title without an existing suffix.
 		$title = 'Run2 Post 1 - 1P';
 
-		// ACT + ASSERT: positive revision appends the suffix.
+		// ACT + ASSERT: Positive revision appends the suffix.
 		$this->assertSame(
 			'Run2 Post 1 - 1P (rev 1)',
 			Content_Generator::apply_revision_suffix( $title, 1 )
 		);
 
-		// ACT + ASSERT: re-applying replaces an existing suffix instead of
+		// ACT + ASSERT: Re-applying replaces an existing suffix instead of
 		// stacking it.
 		$existing = 'Run2 Post 1 - 1P (rev 1)';
 		$this->assertSame(
@@ -771,7 +771,7 @@ class SeederContentGeneratorTest extends TestCase {
 			Content_Generator::apply_revision_suffix( $existing, 5 )
 		);
 
-		// ACT + ASSERT: revision 0 strips any existing suffix.
+		// ACT + ASSERT: Revision 0 strips any existing suffix.
 		$this->assertSame(
 			'Run2 Post 1 - 1P',
 			Content_Generator::apply_revision_suffix( $existing, 0 )
@@ -783,13 +783,13 @@ class SeederContentGeneratorTest extends TestCase {
 	 * the revision note block idempotently.
 	 */
 	public function test_apply_revision_to_content(): void {
-		// ARRANGE: a small Gutenberg snippet.
+		// ARRANGE: A small Gutenberg snippet.
 		$base = "<!-- wp:paragraph -->\n<p>Body.</p>\n<!-- /wp:paragraph -->";
 
-		// ACT: apply revision 1.
+		// ACT: Apply revision 1.
 		$first = Content_Generator::apply_revision_to_content( $base, 1 );
 
-		// ASSERT: the marker block and revision label appear once.
+		// ASSERT: The marker block and revision label appear once.
 		$this->assertStringContainsString( '<!-- seeder-rev-note -->', $first );
 		$this->assertStringContainsString( 'Revision 1 update notice.', $first );
 		$this->assertSame(
@@ -797,10 +797,10 @@ class SeederContentGeneratorTest extends TestCase {
 			substr_count( $first, '<!-- seeder-rev-note -->' )
 		);
 
-		// ACT: re-apply at revision 4.
+		// ACT: Re-apply at revision 4.
 		$second = Content_Generator::apply_revision_to_content( $first, 4 );
 
-		// ASSERT: still one marker block, now labelled revision 4.
+		// ASSERT: Still one marker block, now labelled revision 4.
 		$this->assertStringContainsString( 'Revision 4 update notice.', $second );
 		$this->assertStringNotContainsString(
 			'Revision 1 update notice.',
@@ -811,10 +811,10 @@ class SeederContentGeneratorTest extends TestCase {
 			substr_count( $second, '<!-- seeder-rev-note -->' )
 		);
 
-		// ACT: strip with revision 0.
+		// ACT: Strip with revision 0.
 		$stripped = Content_Generator::apply_revision_to_content( $second, 0 );
 
-		// ASSERT: no marker block remains and the original body is intact.
+		// ASSERT: No marker block remains and the original body is intact.
 		$this->assertStringNotContainsString(
 			'<!-- seeder-rev-note -->',
 			$stripped

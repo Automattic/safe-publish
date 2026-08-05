@@ -18,7 +18,7 @@ use WP_UnitTestCase;
 /**
  * Auth Server Log Test.
  *
- * Verifies the auth channel's split server-log routing: reclassified 4xx
+ * Verifies the auth channel's split server-log routing: Reclassified 4xx
  * rejections record an error-level audit row without a server-log line, while
  * the two config-missing faults (HTTP 500) still emit one. Each test drives a
  * real Auth_Logger through an anonymous subclass that captures server-log

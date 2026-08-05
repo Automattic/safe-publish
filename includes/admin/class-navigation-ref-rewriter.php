@@ -28,7 +28,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * inter-nav references when one menu is imported before another it embeds.
  *
  * Writes post_content directly via $wpdb instead of wp_update_post so the
- * reconciliation neither bumps post_modified nor creates a revision: it is a
+ * reconciliation neither bumps post_modified nor creates a revision: It is a
  * system-touched correction, not a user edit. The per-post audit meta is the
  * only trace of the change precisely because no revision is created — do not
  * switch to wp_update_post without revisiting that trade-off.
@@ -52,7 +52,7 @@ class Navigation_Ref_Rewriter {
 	 * Repoints destination posts that reference a freshly imported menu by its
 	 * source ID to the menu's destination ID.
 	 *
-	 * Refuses to act when the source site URL is empty: without it the
+	 * Refuses to act when the source site URL is empty: Without it the
 	 * candidate query cannot scope to the originating site, and an unscoped
 	 * rewrite could corrupt refs on posts imported from a different source
 	 * that happen to share the numeric ID.
@@ -108,7 +108,7 @@ class Navigation_Ref_Rewriter {
 	/**
 	 * Finds imported posts whose content references the given source menu ID.
 	 *
-	 * The LIKE prefilter is a coarse net: it also matches longer IDs sharing
+	 * The LIKE prefilter is a coarse net: It also matches longer IDs sharing
 	 * the prefix (42 matches 420) and ignores externally produced spacing
 	 * variants such as {"ref": 42} or {"ref":"42"}. The exact match in the
 	 * block walk discards over-matches, and spacing variants never reach it.

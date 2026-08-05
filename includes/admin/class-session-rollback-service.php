@@ -156,7 +156,7 @@ final class Session_Rollback_Service {
 		}
 
 		if ( 'updated' === $status ) {
-			// No previous content stored: just delete the post.
+			// No previous content stored: Just delete the post.
 			return $this->delete_new_post( $post_id, $post->post_title );
 		}
 
@@ -242,7 +242,7 @@ final class Session_Rollback_Service {
 
 	/**
 	 * Reports whether a surviving post still shows the attachment, across the
-	 * three ways an import can make a post reference one: inline in content,
+	 * three ways an import can make a post reference one: Inline in content,
 	 * as a featured image, or by ID in a gallery or playlist shortcode.
 	 *
 	 * @param int $attachment_id Attachment considered for deletion.

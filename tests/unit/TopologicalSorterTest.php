@@ -21,11 +21,11 @@ class TopologicalSorterTest extends TestCase {
 	 * Verifies that an empty map returns empty sorted and leftover lists.
 	 */
 	public function test_empty_input_returns_empty_lists(): void {
-		// ARRANGE: empty parent map.
-		// ACT: run the sort.
+		// ARRANGE: Empty parent map.
+		// ACT: Run the sort.
 		$result = Topological_Sorter::sort( array() );
 
-		// ASSERT: both buckets are empty.
+		// ASSERT: Both buckets are empty.
 		$this->assertSame( array(), $result['sorted'] );
 		$this->assertSame( array(), $result['leftover'] );
 	}
@@ -34,17 +34,17 @@ class TopologicalSorterTest extends TestCase {
 	 * Verifies that a flat set of roots preserves input order.
 	 */
 	public function test_flat_roots_preserve_input_order(): void {
-		// ARRANGE: three top-level nodes.
+		// ARRANGE: Three top-level nodes.
 		$map = array(
 			3 => 0,
 			1 => 0,
 			2 => 0,
 		);
 
-		// ACT: run the sort.
+		// ACT: Run the sort.
 		$result = Topological_Sorter::sort( $map );
 
-		// ASSERT: order follows the input keys.
+		// ASSERT: Order follows the input keys.
 		$this->assertSame( array( 3, 1, 2 ), $result['sorted'] );
 		$this->assertSame( array(), $result['leftover'] );
 	}
@@ -54,16 +54,16 @@ class TopologicalSorterTest extends TestCase {
 	 * first in the input.
 	 */
 	public function test_reverse_order_input_sorts_parent_before_child(): void {
-		// ARRANGE: child listed before its parent in the input.
+		// ARRANGE: Child listed before its parent in the input.
 		$map = array(
 			20 => 10,
 			10 => 0,
 		);
 
-		// ACT: run the sort.
+		// ACT: Run the sort.
 		$result = Topological_Sorter::sort( $map );
 
-		// ASSERT: parent comes first.
+		// ASSERT: Parent comes first.
 		$this->assertSame( array( 10, 20 ), $result['sorted'] );
 		$this->assertSame( array(), $result['leftover'] );
 	}
@@ -80,10 +80,10 @@ class TopologicalSorterTest extends TestCase {
 			20 => 10,
 		);
 
-		// ACT: run the sort.
+		// ACT: Run the sort.
 		$result = Topological_Sorter::sort( $map );
 
-		// ASSERT: dependency order.
+		// ASSERT: Dependency order.
 		$this->assertSame( array( 10, 20, 30, 40 ), $result['sorted'] );
 		$this->assertSame( array(), $result['leftover'] );
 	}
@@ -92,7 +92,7 @@ class TopologicalSorterTest extends TestCase {
 	 * Verifies that a wide tree puts the parent first and siblings after.
 	 */
 	public function test_wide_tree_orders_parent_then_siblings(): void {
-		// ARRANGE: one parent with three children.
+		// ARRANGE: One parent with three children.
 		$map = array(
 			10 => 1,
 			20 => 1,
@@ -100,10 +100,10 @@ class TopologicalSorterTest extends TestCase {
 			1  => 0,
 		);
 
-		// ACT: run the sort.
+		// ACT: Run the sort.
 		$result = Topological_Sorter::sort( $map );
 
-		// ASSERT: parent first, siblings follow input order.
+		// ASSERT: Parent first, siblings follow input order.
 		$this->assertSame( array( 1, 10, 20, 30 ), $result['sorted'] );
 		$this->assertSame( array(), $result['leftover'] );
 	}
@@ -119,10 +119,10 @@ class TopologicalSorterTest extends TestCase {
 			60 => 0,
 		);
 
-		// ACT: run the sort.
+		// ACT: Run the sort.
 		$result = Topological_Sorter::sort( $map );
 
-		// ASSERT: both nodes ordered as roots in input order.
+		// ASSERT: Both nodes ordered as roots in input order.
 		$this->assertSame( array( 50, 60 ), $result['sorted'] );
 		$this->assertSame( array(), $result['leftover'] );
 	}
@@ -137,10 +137,10 @@ class TopologicalSorterTest extends TestCase {
 			2 => 1,
 		);
 
-		// ACT: run the sort.
+		// ACT: Run the sort.
 		$result = Topological_Sorter::sort( $map );
 
-		// ASSERT: nothing ordered, both members leftover in input order.
+		// ASSERT: Nothing ordered, both members leftover in input order.
 		$this->assertSame( array(), $result['sorted'] );
 		$this->assertSame( array( 1, 2 ), $result['leftover'] );
 	}
@@ -157,10 +157,10 @@ class TopologicalSorterTest extends TestCase {
 			99 => 0,
 		);
 
-		// ACT: run the sort.
+		// ACT: Run the sort.
 		$result = Topological_Sorter::sort( $map );
 
-		// ASSERT: only the acyclic root sorts; cycle members are leftover.
+		// ASSERT: Only the acyclic root sorts; cycle members are leftover.
 		$this->assertSame( array( 99 ), $result['sorted'] );
 		$this->assertSame( array( 1, 2 ), $result['leftover'] );
 	}

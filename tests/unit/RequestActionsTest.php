@@ -15,7 +15,7 @@ use Safe_Publish\API\Request_Actions;
 /**
  * Request_Actions Test.
  *
- * Validates the action vocabulary contract: known constants pass is_valid(),
+ * Validates the action vocabulary contract: Known constants pass is_valid(),
  * unknown values fall through, and only the two import-shaped actions count
  * as exports.
  */

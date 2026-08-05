@@ -18,7 +18,7 @@ use WP_Post;
  * Schema-driven asserter for source-to-destination post parity.
  *
  * Models every wp_posts column, every dest meta key, every term assignment,
- * and every sideloaded-attachment field explicitly: each is either checked
+ * and every sideloaded-attachment field explicitly: Each is either checked
  * for parity, delegated to Content_Parity_Comparator for URL/ID-aware
  * checks, listed in a divergence / plugin-added / propagated registry with the
  * documented reason, or listed as deferred (covered in a later test phase). The
@@ -33,7 +33,7 @@ final class Post_Parity_Asserter {
 	 * Canonical list of wp_posts columns the asserter classifies.
 	 *
 	 * Updated when WordPress changes the schema. Each column must appear in
-	 * exactly one of: identity / content / status / misc / author / parent
+	 * exactly one of: Identity / content / status / misc / author / parent
 	 * rules, the content body comparator bucket, the divergence registry, or
 	 * the deferred registry.
 	 *
@@ -170,7 +170,7 @@ final class Post_Parity_Asserter {
 
 	/**
 	 * Author column checked via assert_author_columns(), not a direct column
-	 * copy: the source side is the safe_publish_author block, the dest a
+	 * copy: The source side is the safe_publish_author block, the dest a
 	 * resolved numeric post_author.
 	 *
 	 * @var array<string, string>
@@ -181,7 +181,7 @@ final class Post_Parity_Asserter {
 
 	/**
 	 * Parent column checked via assert_parent_columns(), not a direct column
-	 * copy: the importer resolves the source parent to a dest post ID, and only
+	 * copy: The importer resolves the source parent to a dest post ID, and only
 	 * for hierarchical types.
 	 *
 	 * @var array<string, string>
@@ -245,7 +245,7 @@ final class Post_Parity_Asserter {
 	private const DEFERRED_META = array();
 
 	/**
-	 * Taxonomies whose term assignments are verified for parity: the seeder's
+	 * Taxonomies whose term assignments are verified for parity: The seeder's
 	 * flat category/post_tag plus the hierarchical seeder_section the parity
 	 * suite registers to exercise term trees.
 	 *
@@ -571,7 +571,7 @@ final class Post_Parity_Asserter {
 	}
 
 	/**
-	 * Asserts the dest post_parent matches the source parent: a child resolves
+	 * Asserts the dest post_parent matches the source parent: A child resolves
 	 * to the dest ID its source parent imported to; posts and top-level pages
 	 * keep post_parent 0. Mirrors the importer's resolve_source_parent(), which
 	 * resolves a parent only for hierarchical types with a non-zero source
@@ -754,7 +754,7 @@ final class Post_Parity_Asserter {
 
 	/**
 	 * Asserts that the dest post's _thumbnail_id meta tracks the source's
-	 * featured_media: present and resolving to a featured-source attachment
+	 * featured_media: Present and resolving to a featured-source attachment
 	 * when the source had one, absent or 0 otherwise.
 	 *
 	 * @param array<string, mixed> $source_body Source REST response body.
@@ -811,7 +811,7 @@ final class Post_Parity_Asserter {
 
 	/**
 	 * Asserts that the dest post's META_SOURCE_POST_PARENT_ID tracks the source
-	 * parent: present and equal to the source parent ID on a hierarchical post
+	 * parent: Present and equal to the source parent ID on a hierarchical post
 	 * with a non-zero source parent, absent otherwise. Mirrors the importer's
 	 * write_source_parent_meta().
 	 *
@@ -856,7 +856,7 @@ final class Post_Parity_Asserter {
 
 	/**
 	 * Asserts that every meta key present on the destination post is
-	 * classified: a key from the source body's meta field, a plugin-added
+	 * classified: A key from the source body's meta field, a plugin-added
 	 * key, an allowed WordPress default, or a deferred key reserved for a
 	 * later phase. Fails loudly when an unmodeled key appears so the
 	 * registries stay synced with what the import pipeline actually writes.
@@ -1639,7 +1639,7 @@ final class Post_Parity_Asserter {
 
 	/**
 	 * Asserts that every meta key present on the dest attachment is
-	 * classified: a plugin-added or propagated key, a WP-default divergent key,
+	 * classified: A plugin-added or propagated key, a WP-default divergent key,
 	 * or a deferred key. Inline-only attachments are not allowed to carry
 	 * featured-specific plugin meta; featured-sourced ones are.
 	 *
