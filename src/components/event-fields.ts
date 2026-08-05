@@ -10,28 +10,18 @@
 
 import { __, sprintf } from '@wordpress/i18n';
 
-import type { ActorSource } from '../types';
-
-/**
- * Actor fields carried by audit events, so getUserLabel can produce a
- * consistent user label from any event that has them.
- */
-interface ActorFields {
-	actor_user_id: number;
-	actor_display_name: string;
-	actor_source: ActorSource;
-}
+import type { AuditEvent } from '../types';
 
 /**
  * Returns the display label for the user column.
  *
  * Used by both `getValue` and `render` so search matches displayed text.
  *
- * @param {ActorFields} item Event carrying actor fields.
+ * @param {AuditEvent} item Event carrying actor fields.
  *
  * @return {string} Human-readable actor label.
  */
-export function getUserLabel( item: ActorFields ): string {
+export function getUserLabel( item: AuditEvent ): string {
 	if ( item.actor_user_id > 0 ) {
 		return item.actor_display_name || sprintf(
 			/* translators: %d is the WordPress user ID. */
