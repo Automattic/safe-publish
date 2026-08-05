@@ -493,7 +493,7 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			array()
 		);
 
-		// ASSERT: current.title is the raw post_title, untouched by wptexturize.
+		// ASSERT: Current.title is the raw post_title, untouched by wptexturize.
 		$this->assertIsArray( $result );
 		$this->assertSame(
 			'Heading -- Subheading',
@@ -702,7 +702,7 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	 * Verifies that diff-preview permission resolves a source post ID to a
 	 * local post before checking capabilities.
 	 *
-	 * Regression: the callback used to treat the source ID as a local ID,
+	 * Regression: The callback used to treat the source ID as a local ID,
 	 * 404'ing every authorized request. Dispatches through the REST server
 	 * so route-wiring regressions also surface.
 	 */

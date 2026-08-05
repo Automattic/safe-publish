@@ -13,7 +13,7 @@
 
 declare( strict_types = 1 );
 
-// Belt-and-braces: bail out anywhere this file ever ends up that isn't a
+// Belt-and-braces: Bail out anywhere this file ever ends up that isn't a
 // development environment. The repository excludes this file from the
 // release zip, but a defensive guard keeps the behavior local even if it
 // gets dropped into a non-dev install by hand.
@@ -33,7 +33,7 @@ if (
  * Desktop, `host.docker.internal` resolves into the 192.168.x range and
  * would otherwise be blocked. We opt that one host back in via the
  * documented filter so cross-container media downloads succeed. The
- * allowlist is intentionally a single value: with `WP_HOME` set to
+ * allowlist is intentionally a single value: With `WP_HOME` set to
  * `host.docker.internal`, nothing legitimate in this stack should be
  * issuing safe HTTP calls against `localhost` or `127.0.0.1`. If one
  * shows up, that's a misconfiguration to surface rather than paper over.

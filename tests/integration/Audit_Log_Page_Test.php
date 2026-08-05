@@ -116,7 +116,7 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 	 * filter contract.
 	 */
 	public function test_response_honors_warning_level_filter(): void {
-		// ARRANGE: one row per level on a single channel.
+		// ARRANGE: One row per level on a single channel.
 		Audit_Log_Table::insert( 'import', 'info', 'A', '2026-03-01 10:00:00', array() );
 		Audit_Log_Table::insert( 'import', 'warning', 'B', '2026-03-02 11:00:00', array() );
 		Audit_Log_Table::insert( 'import', 'error', 'C', '2026-03-03 12:00:00', array() );
@@ -129,7 +129,7 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Dispatch the audit-events AJAX request.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_get_audit_events' );
 
-		// ASSERT: only the warning row passes the filter.
+		// ASSERT: Only the warning row passes the filter.
 		$response = json_decode( $this->_last_response, true );
 		$this->assertTrue( $response['success'] );
 		$this->assertSame( 1, $response['data']['total'] );
@@ -171,7 +171,7 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 	 * limit so a caller can't request unbounded results.
 	 */
 	public function test_per_page_is_capped(): void {
-		// ARRANGE: insert 3 rows; request a wildly oversized page.
+		// ARRANGE: Insert 3 rows; request a wildly oversized page.
 		Audit_Log_Table::insert( 'auth', 'info', 'A', '2026-03-01 10:00:00', array() );
 		Audit_Log_Table::insert( 'auth', 'info', 'B', '2026-03-02 11:00:00', array() );
 		Audit_Log_Table::insert( 'auth', 'info', 'C', '2026-03-03 12:00:00', array() );
@@ -184,7 +184,7 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Dispatch the audit-events AJAX request.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_get_audit_events' );
 
-		// ASSERT: all three returned, but the request itself didn't crash
+		// ASSERT: All three returned, but the request itself didn't crash
 		// and the response shape is intact.
 		$response = json_decode( $this->_last_response, true );
 		$this->assertTrue( $response['success'] );
@@ -197,7 +197,7 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 	 * expose audit data to unprivileged callers.
 	 */
 	public function test_non_admin_is_forbidden(): void {
-		// ARRANGE: swap the admin set up in setUp() for a subscriber.
+		// ARRANGE: Swap the admin set up in setUp() for a subscriber.
 		$subscriber_id = $this->factory()->user->create(
 			array( 'role' => 'subscriber' )
 		);
@@ -231,7 +231,7 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Dispatch the audit-events AJAX request.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_get_audit_events' );
 
-		// ASSERT: filter is ignored; the row still comes back.
+		// ASSERT: Filter is ignored; the row still comes back.
 		$response = json_decode( $this->_last_response, true );
 		$this->assertTrue( $response['success'] );
 		$this->assertSame( 1, $response['data']['total'] );

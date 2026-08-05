@@ -108,7 +108,7 @@ final class Source_Post_Type_Resolver {
 
 		// The catalog endpoint returns a JSON list. A non-list body — a REST
 		// error envelope ({code, ...}) or anything else — is treated as a
-		// transient failure: return empty without memoizing so a later call
+		// transient failure: Return empty without memoizing so a later call
 		// can retry.
 		if ( ! is_array( $data ) || ! array_is_list( $data ) ) {
 			return array();

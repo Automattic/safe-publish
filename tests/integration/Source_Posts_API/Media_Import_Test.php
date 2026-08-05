@@ -19,7 +19,7 @@ class Media_Import_Test extends Source_Posts_API_Test_Base {
 	/**
 	 * Verifies that media is successfully imported and URL is replaced.
 	 *
-	 * Tests the complete import workflow: download from mocked HTTP, create
+	 * Tests the complete import workflow: Download from mocked HTTP, create
 	 * attachment, replace source URL with local WordPress URL.
 	 */
 	public function test_successful_media_import_creates_attachment(): void {

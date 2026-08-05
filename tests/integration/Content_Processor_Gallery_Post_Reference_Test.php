@@ -19,7 +19,7 @@ use Safe_Publish\Utils\Options;
 
 /**
  * Drives the singular gallery/playlist `id` post-reference rewrite via the
- * public process_content() entry point: a cross-post id resolves against the
+ * public process_content() entry point: A cross-post id resolves against the
  * in-batch session map and a prior DB import, an unresolved id is left in place
  * and warned, and a self id is stripped to the bare shortcode.
  */

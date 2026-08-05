@@ -16,7 +16,7 @@ use WP_UnitTestCase;
 
 /**
  * Exercises the shared source-ID resolver that both featured-image import and
- * shortcode ID rewriting rely on, asserting its three outcomes: a resolved and
+ * shortcode ID rewriting rely on, asserting its three outcomes: A resolved and
  * sideloaded attachment ID, null for a dangling reference (unreachable record,
  * or a record with a missing or non-string source_url), and false for a
  * resolved URL whose bytes fail to download.
@@ -70,7 +70,7 @@ class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 		}
 
 		if ( 9910004 === $source_media_id ) {
-			// Malformed record: a non-string source_url the guard must reject.
+			// Malformed record: A non-string source_url the guard must reject.
 			return array(
 				'id'         => $source_media_id,
 				'source_url' => array( 'unexpected' ),
@@ -98,13 +98,13 @@ class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 	 * tagged with the canonical source URL.
 	 */
 	public function test_resolves_source_id_to_dest_attachment(): void {
-		// ARRANGE: mock the media record and the image bytes.
+		// ARRANGE: Mock the media record and the image bytes.
 		$this->add_per_source_id_media_api_mock();
 		$this->add_image_byte_response_mock();
 
 		$importer = new Media_Importer( new HTTP_Client() );
 
-		// ACT: resolve the source ID to a destination attachment.
+		// ACT: Resolve the source ID to a destination attachment.
 		try {
 			$attachment_id = $importer->import_source_media_by_id( 9910001, self::SOURCE );
 		} finally {
@@ -112,7 +112,7 @@ class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 			$this->remove_per_source_id_media_api_mock();
 		}
 
-		// ASSERT: a real attachment was created for the canonical source URL.
+		// ASSERT: A real attachment was created for the canonical source URL.
 		$this->assertIsInt( $attachment_id );
 		$this->assertGreaterThan( 0, $attachment_id );
 		$this->assertSame( 'attachment', get_post_type( $attachment_id ) );
@@ -127,13 +127,13 @@ class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 	 * attachment instead of creating a duplicate.
 	 */
 	public function test_repeat_id_dedupes(): void {
-		// ARRANGE: mock the record and bytes for a single image.
+		// ARRANGE: Mock the record and bytes for a single image.
 		$this->add_per_source_id_media_api_mock();
 		$this->add_image_byte_response_mock();
 
 		$importer = new Media_Importer( new HTTP_Client() );
 
-		// ACT: resolve the same source ID twice, counting attachments between.
+		// ACT: Resolve the same source ID twice, counting attachments between.
 		try {
 			$first  = $importer->import_source_media_by_id( 9910001, self::SOURCE );
 			$count  = $this->get_attachment_count();
@@ -143,7 +143,7 @@ class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 			$this->remove_per_source_id_media_api_mock();
 		}
 
-		// ASSERT: the second resolution reuses the first attachment; no new row.
+		// ASSERT: The second resolution reuses the first attachment; no new row.
 		$this->assertIsInt( $first );
 		$this->assertSame( $first, $second );
 		$this->assert_no_new_attachments( $count );
@@ -154,20 +154,20 @@ class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 	 * reference: null is returned and no attachment is created.
 	 */
 	public function test_missing_source_url_returns_null(): void {
-		// ARRANGE: mock a record that lacks source_url.
+		// ARRANGE: Mock a record that lacks source_url.
 		$this->add_per_source_id_media_api_mock();
 		$count = $this->get_attachment_count();
 
 		$importer = new Media_Importer( new HTTP_Client() );
 
-		// ACT: attempt to resolve the ID with no downloadable URL.
+		// ACT: Attempt to resolve the ID with no downloadable URL.
 		try {
 			$result = $importer->import_source_media_by_id( 9910002, self::SOURCE );
 		} finally {
 			$this->remove_per_source_id_media_api_mock();
 		}
 
-		// ASSERT: dangling reference signalled by null; nothing sideloaded.
+		// ASSERT: Dangling reference signalled by null; nothing sideloaded.
 		$this->assertNull( $result );
 		$this->assert_no_new_attachments( $count );
 	}
@@ -178,20 +178,20 @@ class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 	 * the string-typed sideload: null is returned and nothing is created.
 	 */
 	public function test_non_string_source_url_returns_null(): void {
-		// ARRANGE: mock a record whose source_url is not a string.
+		// ARRANGE: Mock a record whose source_url is not a string.
 		$this->add_per_source_id_media_api_mock();
 		$count = $this->get_attachment_count();
 
 		$importer = new Media_Importer( new HTTP_Client() );
 
-		// ACT: attempt to resolve a record with a non-string source_url.
+		// ACT: Attempt to resolve a record with a non-string source_url.
 		try {
 			$result = $importer->import_source_media_by_id( 9910004, self::SOURCE );
 		} finally {
 			$this->remove_per_source_id_media_api_mock();
 		}
 
-		// ASSERT: malformed URL treated as dangling; null, nothing sideloaded.
+		// ASSERT: Malformed URL treated as dangling; null, nothing sideloaded.
 		$this->assertNull( $result );
 		$this->assert_no_new_attachments( $count );
 	}
@@ -201,20 +201,20 @@ class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 	 * dangling reference and returns null.
 	 */
 	public function test_fetch_error_returns_null(): void {
-		// ARRANGE: no mock registered for this ID, so the request errors.
+		// ARRANGE: No mock registered for this ID, so the request errors.
 		$this->add_per_source_id_media_api_mock();
 		$count = $this->get_attachment_count();
 
 		$importer = new Media_Importer( new HTTP_Client() );
 
-		// ACT: attempt to resolve an unregistered source ID.
+		// ACT: Attempt to resolve an unregistered source ID.
 		try {
 			$result = $importer->import_source_media_by_id( 9999999, self::SOURCE );
 		} finally {
 			$this->remove_per_source_id_media_api_mock();
 		}
 
-		// ASSERT: unreachable record signalled by null; nothing sideloaded.
+		// ASSERT: Unreachable record signalled by null; nothing sideloaded.
 		$this->assertNull( $result );
 		$this->assert_no_new_attachments( $count );
 	}
@@ -224,14 +224,14 @@ class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 	 * distinguishing a genuine sideload failure from a dangling reference.
 	 */
 	public function test_sideload_failure_returns_false(): void {
-		// ARRANGE: resolve the media record but fail the byte download.
+		// ARRANGE: Resolve the media record but fail the byte download.
 		$this->add_per_source_id_media_api_mock();
 		add_filter( 'pre_http_request', array( $this, 'fail_image_byte_download' ), 1, 3 );
 		$count = $this->get_attachment_count();
 
 		$importer = new Media_Importer( new HTTP_Client() );
 
-		// ACT: resolve a source ID whose bytes cannot be downloaded.
+		// ACT: Resolve a source ID whose bytes cannot be downloaded.
 		try {
 			$result = $importer->import_source_media_by_id( 9910003, self::SOURCE );
 		} finally {
@@ -239,7 +239,7 @@ class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 			$this->remove_per_source_id_media_api_mock();
 		}
 
-		// ASSERT: genuine sideload failure signalled by false; nothing created.
+		// ASSERT: Genuine sideload failure signalled by false; nothing created.
 		$this->assertFalse( $result );
 		$this->assert_no_new_attachments( $count );
 	}

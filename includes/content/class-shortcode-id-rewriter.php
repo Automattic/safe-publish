@@ -22,12 +22,12 @@ if ( ! defined( 'ABSPATH' ) ) {
  * (or no) attachment.
  *
  * Three families, resolved differently:
- *  - Caption (`[caption]`, `[wp_caption]`): the embedded `<img>` gives an
+ *  - Caption (`[caption]`, `[wp_caption]`): The embedded `<img>` gives an
  *    `attachment_url_to_postid()` lookup target.
- *  - Gallery/playlist attachment lists (`ids`, `include`, `exclude`): bare
+ *  - Gallery/playlist attachment lists (`ids`, `include`, `exclude`): Bare
  *    source attachment IDs with no embedded URL, resolved through an injected
  *    source-ID => dest-ID callable that sideloads the referenced media.
- *  - Gallery/playlist post reference (the singular `id`): a source POST whose
+ *  - Gallery/playlist post reference (the singular `id`): A source POST whose
  *    attached media the shortcode renders, remapped to its destination post, or
  *    stripped when it names the importing post's own set.
  */
@@ -151,7 +151,7 @@ class Shortcode_ID_Rewriter {
 		$result = preg_replace_callback(
 			'/' . get_shortcode_regex( array( 'gallery', 'playlist' ) ) . '/s',
 			function ( array $matches ) use ( $resolver, &$memo ): string {
-				// Escaped shortcode ([[gallery ...]]): leave the literal alone.
+				// Escaped shortcode ([[gallery ...]]): Leave the literal alone.
 				if ( '[' === $matches[1] && ']' === $matches[6] ) {
 					return $matches[0];
 				}
@@ -274,7 +274,7 @@ class Shortcode_ID_Rewriter {
 	 * Collects the attachment IDs a content's gallery and playlist shortcodes
 	 * reference through their ids and include attributes.
 	 *
-	 * The `exclude` attribute is omitted: it removes an attachment from the
+	 * The `exclude` attribute is omitted: It removes an attachment from the
 	 * rendered set rather than referencing it.
 	 *
 	 * @param string $content Content to scan.
@@ -300,7 +300,7 @@ class Shortcode_ID_Rewriter {
 		$ids = array();
 
 		foreach ( $shortcodes as $shortcode ) {
-			// Escaped shortcode ([[gallery ...]]): not rendered, so skip.
+			// Escaped shortcode ([[gallery ...]]): Not rendered, so skip.
 			if ( '[' === $shortcode[1] && ']' === $shortcode[6] ) {
 				continue;
 			}
@@ -421,7 +421,7 @@ class Shortcode_ID_Rewriter {
 	}
 
 	/**
-	 * Extracts the cross-post gallery/playlist references a post renders: each
+	 * Extracts the cross-post gallery/playlist references a post renders: Each
 	 * live [gallery id="B"]/[playlist id="B"] whose singular id names another
 	 * post (not self) and carries no ids/include/exclude selector.
 	 *

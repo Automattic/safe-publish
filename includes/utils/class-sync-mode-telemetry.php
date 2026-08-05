@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * configuration moment itself, turning the onboarding funnel (installed ->
  * configured) and later mode switches into a measurable signal.
  *
- * Self-registers its own option hooks, mirroring Settings_Logger: settings
+ * Self-registers its own option hooks, mirroring Settings_Logger: Settings
  * flow through the Settings API's options.php form and no domain class owns
  * the save path to call this from. WP fires add_option_<name> only on first
  * creation and update_option_<name> only when the value actually changes, so

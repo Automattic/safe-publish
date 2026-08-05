@@ -27,7 +27,7 @@ use WP_Error;
 
 /**
  * Exercises the safe_publish_source_fetch_query_args and
- * safe_publish_source_post_meta filters: their invocation contracts, that a
+ * safe_publish_source_post_meta filters: Their invocation contracts, that a
  * mutated query string reaches the request URL, and that mutated meta reaches
  * postmeta. Also runs the documented ACF/SCF recipe end to end.
  */
@@ -357,7 +357,7 @@ class Meta_Extension_Filters_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies the contract the documented complex-field recipe depends on: that
+	 * Verifies the contract the documented complex-field recipe depends on: That
 	 * Safe Publish's meta write fires WordPress' added_post_meta action — so the
 	 * recipe's cleanup handler runs — and preserves the stashed payload intact.
 	 *

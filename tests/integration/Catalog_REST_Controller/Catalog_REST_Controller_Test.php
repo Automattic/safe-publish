@@ -475,7 +475,7 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 
 	/**
 	 * Verifies that the title-only search override is scoped to the catalog's
-	 * own query: a nested WP_Query with `s` set that fires while the filter is
+	 * own query: A nested WP_Query with `s` set that fires while the filter is
 	 * registered keeps WP's default multi-column search.
 	 */
 	public function test_search_override_does_not_leak_into_nested_query(): void {

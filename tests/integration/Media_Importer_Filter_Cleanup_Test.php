@@ -63,12 +63,12 @@ class Media_Importer_Filter_Cleanup_Test extends WP_UnitTestCase {
 	 * registered, leaving no hook behind for later uploads in the request.
 	 */
 	public function test_failed_sideload_removes_webp_filetype_filter(): void {
-		// ARRANGE: a same-host media URL whose download will fail.
+		// ARRANGE: A same-host media URL whose download will fail.
 		add_filter( 'pre_http_request', array( $this, 'fail_download' ), 1, 3 );
 		$importer  = new Media_Importer( new HTTP_Client() );
 		$media_url = self::SOURCE_URL . '/wp-content/uploads/2025/01/broken.jpg';
 
-		// ACT: attempt the sideload, which aborts at the download step.
+		// ACT: Attempt the sideload, which aborts at the download step.
 		try {
 			$result = $importer->import_source_media_as_attachment(
 				$media_url,
@@ -78,7 +78,7 @@ class Media_Importer_Filter_Cleanup_Test extends WP_UnitTestCase {
 			remove_filter( 'pre_http_request', array( $this, 'fail_download' ), 1 );
 		}
 
-		// ASSERT: the sideload failed and its filetype filter was removed.
+		// ASSERT: The sideload failed and its filetype filter was removed.
 		$this->assertFalse( $result );
 		$this->assertFalse(
 			has_filter(
@@ -122,12 +122,12 @@ class Media_Importer_Filter_Cleanup_Test extends WP_UnitTestCase {
 	 * that branch.
 	 */
 	public function test_unsupported_file_type_removes_webp_filetype_filter(): void {
-		// ARRANGE: a same-host URL that downloads but is not an allowed type.
+		// ARRANGE: A same-host URL that downloads but is not an allowed type.
 		add_filter( 'pre_http_request', array( $this, 'succeed_download' ), 1, 3 );
 		$importer  = new Media_Importer( new HTTP_Client() );
 		$media_url = self::SOURCE_URL . '/wp-content/uploads/2025/01/report.xyz';
 
-		// ACT: attempt the sideload, which aborts at the file-type check.
+		// ACT: Attempt the sideload, which aborts at the file-type check.
 		try {
 			$result = $importer->import_source_media_as_attachment(
 				$media_url,
@@ -137,7 +137,7 @@ class Media_Importer_Filter_Cleanup_Test extends WP_UnitTestCase {
 			remove_filter( 'pre_http_request', array( $this, 'succeed_download' ), 1 );
 		}
 
-		// ASSERT: the sideload failed and its filetype filter was removed.
+		// ASSERT: The sideload failed and its filetype filter was removed.
 		$this->assertFalse( $result );
 		$this->assertFalse(
 			has_filter(
@@ -153,20 +153,20 @@ class Media_Importer_Filter_Cleanup_Test extends WP_UnitTestCase {
 	 * registered, which the shared '__return_false' callback would have.
 	 */
 	public function test_sideload_preserves_foreign_big_image_filter(): void {
-		// ARRANGE: a foreign big-image filter and mocked image bytes.
+		// ARRANGE: A foreign big-image filter and mocked image bytes.
 		add_filter( 'big_image_size_threshold', '__return_false' );
 		$this->add_image_byte_response_mock();
 		$importer  = new Media_Importer( new HTTP_Client() );
 		$media_url = self::SOURCE_URL . '/wp-content/uploads/2025/01/photo.jpg';
 
 		try {
-			// ACT: sideload the image.
+			// ACT: Sideload the image.
 			$result = $importer->import_source_media_as_attachment(
 				$media_url,
 				self::SOURCE_URL
 			);
 
-			// ASSERT: succeeded, our callback gone, foreign filter kept.
+			// ASSERT: Succeeded, our callback gone, foreign filter kept.
 			$this->assertIsInt( $result );
 			$this->assertFalse(
 				has_filter(

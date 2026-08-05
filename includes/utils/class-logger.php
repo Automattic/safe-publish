@@ -12,7 +12,7 @@ namespace Safe_Publish\Utils;
 /**
  * Abstract base logger for Safe Publish events.
  *
- * Two independent axes govern an event: its audit-DB level (info, warning,
+ * Two independent axes govern an event: Its audit-DB level (info, warning,
  * error) and whether it also reaches the server error log. Only log_error
  * writes to the server log, and only as a PII-free skeleton; log_failure
  * stores an error-level audit row without touching the server log. Subclasses
@@ -42,7 +42,7 @@ abstract class Logger {
 	}
 
 	/**
-	 * Logs a degradation event: the operation completed but left a degraded,
+	 * Logs a degradation event: The operation completed but left a degraded,
 	 * user-remediable result such as an unresolved reference.
 	 *
 	 * @param string $event Event type.
@@ -56,7 +56,7 @@ abstract class Logger {
 	 * Logs an operator-actionable fault to the audit database (level error)
 	 * and, as a PII-free skeleton, to the server error log.
 	 *
-	 * For faults worth surfacing beyond the audit trail: missing config,
+	 * For faults worth surfacing beyond the audit trail: Missing config,
 	 * failed rollback, unexpected exception. Expected domain failures use
 	 * log_failure.
 	 *
@@ -135,7 +135,7 @@ abstract class Logger {
 	/**
 	 * Projects the full log data down to a PII-free server-log skeleton.
 	 *
-	 * Allowlist only: forensic scalars and a fixed set of non-identifying
+	 * Allowlist only: Forensic scalars and a fixed set of non-identifying
 	 * context keys. Free-text messages, actor display name, request URI, user
 	 * agent, and site URL stay in the audit DB, never the server log.
 	 *

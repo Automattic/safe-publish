@@ -450,10 +450,10 @@ class Content_Media_Processor {
 			$content
 		) ?? $content;
 
-		// Loose regex: anchored to a media/embed tag, then looks for
+		// Loose regex: Anchored to a media/embed tag, then looks for
 		// src/poster/srcset/data within the same tag. Uses [^<>]*? (stops at
 		// tag boundaries) so it can match inside malformed tags. Link
-		// elements are excluded: applying the file-extension filter in a
+		// elements are excluded: Applying the file-extension filter in a
 		// regex context is impractical and would false-positive on page links.
 		$pattern = '~<(?:img|video|audio|source|embed|object)\b'
 			. '[^<>]*?\s(?:src|poster|srcset|data)\s*=\s*'

@@ -2,7 +2,7 @@
 /**
  * Import rollback integration tests
  *
- * Tests the abort-and-undo behavior when an import step fails: orphaned
+ * Tests the abort-and-undo behavior when an import step fails: Orphaned
  * attachment cleanup, featured image failures, tracking meta failures,
  * custom meta failures, and term failures.
  *
@@ -406,7 +406,7 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 		$this->assertFalse( $result['success'], 'Re-import should fail when the featured image cannot be imported.' );
 		$this->assertStringContainsString( 'featured image', $result['error'] );
 
-		// ASSERT: Post fields and tracking meta must be unchanged: the import
+		// ASSERT: Post fields and tracking meta must be unchanged: The import
 		// aborted before any DB write.
 		$this->assertSame( $original_title, get_post_field( 'post_title', $post_id ), 'Title must be unchanged after failed update.' );
 		$this->assertSame( $original_content, get_post_field( 'post_content', $post_id ), 'Content must be unchanged after failed update.' );

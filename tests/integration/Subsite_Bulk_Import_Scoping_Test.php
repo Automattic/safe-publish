@@ -13,7 +13,7 @@ use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
 
 /**
- * Guards the bulk-import path for a subsite connection: imports must be tagged
+ * Guards the bulk-import path for a subsite connection: Imports must be tagged
  * with the path-bearing source identity, and in-batch parent resolution must
  * scope by it. Mirrors the single-import scoping coverage so both paths stay in
  * step.
@@ -53,13 +53,13 @@ class Subsite_Bulk_Import_Scoping_Test extends WP_Ajax_UnitTestCase {
 	 * scoped by it.
 	 */
 	public function test_bulk_import_from_subsite_tags_identity_and_resolves_parent(): void {
-		// ARRANGE: a parent page (10) and its child (20).
+		// ARRANGE: A parent page (10) and its child (20).
 		$this->source_payloads = array(
 			10 => array( 'parent' => 0 ),
 			20 => array( 'parent' => 10 ),
 		);
 
-		// ACT: dispatch the bulk import.
+		// ACT: Dispatch the bulk import.
 		$data = $this->dispatch_bulk_import(
 			array(
 				$this->payload_entry( 10 ),
@@ -67,7 +67,7 @@ class Subsite_Bulk_Import_Scoping_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 
-		// ASSERT: both succeed, are tagged with the subsite identity, and the
+		// ASSERT: Both succeed, are tagged with the subsite identity, and the
 		// child is reparented to the in-batch parent.
 		$this->assertSame( 2, $data['successful'] );
 		$this->assertSame( 0, $data['failed'] );

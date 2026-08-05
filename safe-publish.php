@@ -8,7 +8,7 @@
  * Description: Enables content transfer from non-production to production environments.
  * Author: WPVIP
  * Author URI: https://wpvip.com
- * Text Domain: safe-publish
+ * Text Domain: Safe-publish
  * Version: 0.7.0
  * Requires at least: 6.8
  * Requires PHP: 8.2

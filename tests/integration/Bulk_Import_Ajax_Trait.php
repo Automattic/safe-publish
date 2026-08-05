@@ -14,7 +14,7 @@ use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
 
 /**
- * Scaffolding for driving the safe_publish_bulk_import AJAX action: table, auth,
+ * Scaffolding for driving the safe_publish_bulk_import AJAX action: Table, auth,
  * and user setup, the per-source-id mock body, and request dispatch. Host
  * classes pass the connection URL and may register source payloads via
  * $source_payloads. Combine with WP_Ajax_UnitTestCase, Ajax_Die_Continue_Trait,

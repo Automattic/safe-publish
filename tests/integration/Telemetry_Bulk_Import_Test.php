@@ -180,7 +180,7 @@ class Telemetry_Bulk_Import_Test extends WP_Ajax_UnitTestCase {
 	 * has_failures=false.
 	 */
 	public function test_clean_batch_emits_completed_event_with_no_failures(): void {
-		// ARRANGE: two source payloads that will both import successfully.
+		// ARRANGE: Two source payloads that will both import successfully.
 		$this->source_payloads = array(
 			10 => array(),
 			20 => array(),
@@ -206,10 +206,10 @@ class Telemetry_Bulk_Import_Test extends WP_Ajax_UnitTestCase {
 			),
 		);
 
-		// ACT: dispatch the bulk import.
+		// ACT: Dispatch the bulk import.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_import' );
 
-		// ASSERT: one bulk_import_completed event with matching counts.
+		// ASSERT: One bulk_import_completed event with matching counts.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame( Telemetry_Events::BULK_IMPORT_COMPLETED, $events[0]['event'] );
@@ -224,7 +224,7 @@ class Telemetry_Bulk_Import_Test extends WP_Ajax_UnitTestCase {
 	 * number of items that erred during the batch.
 	 */
 	public function test_mixed_batch_reports_failed_count_and_has_failures(): void {
-		// ARRANGE: one mocked source (will succeed) and one unmocked id
+		// ARRANGE: One mocked source (will succeed) and one unmocked id
 		// (will fail at the fetch step), so the batch sees one success
 		// and one failure.
 		$this->source_payloads = array(
@@ -251,10 +251,10 @@ class Telemetry_Bulk_Import_Test extends WP_Ajax_UnitTestCase {
 			),
 		);
 
-		// ACT: dispatch the bulk import.
+		// ACT: Dispatch the bulk import.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_import' );
 
-		// ASSERT: the completion event reports the partial batch
+		// ASSERT: The completion event reports the partial batch
 		// correctly. Per-item failures also fire on the same queue, so
 		// filter to the completion event before asserting.
 		$completion_events = array_values(

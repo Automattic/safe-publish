@@ -37,16 +37,16 @@ class ShortcodeMediaRewriterTest extends TestCase {
 	 * Verifies that an [audio] src URL is rewritten to its destination URL.
 	 */
 	public function test_audio_src_rewritten(): void {
-		// ARRANGE: an [audio] shortcode whose src the importer resolves.
+		// ARRANGE: An [audio] shortcode whose src the importer resolves.
 		$rewriter = $this->build_rewriter(
 			array( self::SOURCE . '/a.mp3' => 'https://dest.example.com/a.mp3' )
 		);
 		$content  = '[audio src="' . self::SOURCE . '/a.mp3"]';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_shortcode_media( $content, self::SOURCE );
 
-		// ASSERT: the destination URL replaces the source URL.
+		// ASSERT: The destination URL replaces the source URL.
 		$this->assertSame(
 			'[audio src="https://dest.example.com/a.mp3"]',
 			$result
@@ -61,17 +61,17 @@ class ShortcodeMediaRewriterTest extends TestCase {
 	 * @param string $attr Codec attribute name.
 	 */
 	public function test_audio_codec_attrs_rewritten( string $attr ): void {
-		// ARRANGE: an [audio] shortcode carrying one codec attribute.
+		// ARRANGE: An [audio] shortcode carrying one codec attribute.
 		$source   = self::SOURCE . '/a.' . $attr;
 		$rewriter = $this->build_rewriter(
 			array( $source => 'https://dest.example.com/a.' . $attr )
 		);
 		$content  = sprintf( '[audio %s="%s"]', $attr, $source );
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_shortcode_media( $content, self::SOURCE );
 
-		// ASSERT: the codec attribute now points at the destination.
+		// ASSERT: The codec attribute now points at the destination.
 		$this->assertSame(
 			sprintf(
 				'[audio %s="https://dest.example.com/a.%s"]',
@@ -101,7 +101,7 @@ class ShortcodeMediaRewriterTest extends TestCase {
 	 * Verifies that [video] src and poster URLs are both rewritten.
 	 */
 	public function test_video_src_and_poster_rewritten(): void {
-		// ARRANGE: a [video] shortcode with src and poster URLs.
+		// ARRANGE: A [video] shortcode with src and poster URLs.
 		$rewriter = $this->build_rewriter(
 			array(
 				self::SOURCE . '/v.mp4'     => 'https://dest.example.com/v.mp4',
@@ -111,10 +111,10 @@ class ShortcodeMediaRewriterTest extends TestCase {
 		$content  = '[video src="' . self::SOURCE . '/v.mp4" poster="'
 			. self::SOURCE . '/thumb.jpg"]';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_shortcode_media( $content, self::SOURCE );
 
-		// ASSERT: both URLs are repointed at the destination.
+		// ASSERT: Both URLs are repointed at the destination.
 		$this->assertSame(
 			'[video src="https://dest.example.com/v.mp4" poster='
 				. '"https://dest.example.com/thumb.jpg"]',
@@ -130,17 +130,17 @@ class ShortcodeMediaRewriterTest extends TestCase {
 	 * @param string $attr Codec attribute name.
 	 */
 	public function test_video_codec_attrs_rewritten( string $attr ): void {
-		// ARRANGE: a [video] shortcode carrying one codec attribute.
+		// ARRANGE: A [video] shortcode carrying one codec attribute.
 		$source   = self::SOURCE . '/v.' . $attr;
 		$rewriter = $this->build_rewriter(
 			array( $source => 'https://dest.example.com/v.' . $attr )
 		);
 		$content  = sprintf( '[video %s="%s"]', $attr, $source );
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_shortcode_media( $content, self::SOURCE );
 
-		// ASSERT: the codec attribute now points at the destination.
+		// ASSERT: The codec attribute now points at the destination.
 		$this->assertSame(
 			sprintf(
 				'[video %s="https://dest.example.com/v.%s"]',
@@ -184,10 +184,10 @@ class ShortcodeMediaRewriterTest extends TestCase {
 			. self::SOURCE . '/x.mp4"]'
 			. '[video mp3="' . self::SOURCE . '/x.mp3"]';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_shortcode_media( $content, self::SOURCE );
 
-		// ASSERT: out-of-scope attributes are byte-for-byte unchanged.
+		// ASSERT: Out-of-scope attributes are byte-for-byte unchanged.
 		$this->assertSame( $content, $result );
 	}
 
@@ -199,10 +199,10 @@ class ShortcodeMediaRewriterTest extends TestCase {
 		$rewriter = $this->build_rewriter();
 		$content  = '[video src="https://youtube.com/watch?v=abc"]';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_shortcode_media( $content, self::SOURCE );
 
-		// ASSERT: content is byte-for-byte unchanged.
+		// ASSERT: Content is byte-for-byte unchanged.
 		$this->assertSame( $content, $result );
 	}
 
@@ -216,7 +216,7 @@ class ShortcodeMediaRewriterTest extends TestCase {
 		$rewriter = $this->build_rewriter( array( $source => false ) );
 		$content  = '[audio src="' . $source . '"]';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_shortcode_media( $content, self::SOURCE );
 
 		// ASSERT: URL stays put and the failure is exposed via the getter.
@@ -232,17 +232,17 @@ class ShortcodeMediaRewriterTest extends TestCase {
 	 * when its URL would otherwise resolve.
 	 */
 	public function test_escaped_shortcode_untouched(): void {
-		// ARRANGE: escaped shortcode wrapping a resolvable URL.
+		// ARRANGE: Escaped shortcode wrapping a resolvable URL.
 		$source   = self::SOURCE . '/a.mp3';
 		$rewriter = $this->build_rewriter(
 			array( $source => 'https://dest.example.com/a.mp3' )
 		);
 		$content  = '[[audio src="' . $source . '"]]';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_shortcode_media( $content, self::SOURCE );
 
-		// ASSERT: content is byte-for-byte unchanged.
+		// ASSERT: Content is byte-for-byte unchanged.
 		$this->assertSame( $content, $result );
 	}
 
@@ -250,7 +250,7 @@ class ShortcodeMediaRewriterTest extends TestCase {
 	 * Verifies that multiple shortcodes in the same content are each handled.
 	 */
 	public function test_multiple_shortcodes_all_handled(): void {
-		// ARRANGE: an [audio] and a [video] with distinct destinations.
+		// ARRANGE: An [audio] and a [video] with distinct destinations.
 		$rewriter = $this->build_rewriter(
 			array(
 				self::SOURCE . '/a.mp3' => 'https://dest.example.com/a.mp3',
@@ -260,10 +260,10 @@ class ShortcodeMediaRewriterTest extends TestCase {
 		$content  = '[audio src="' . self::SOURCE . '/a.mp3"] between '
 			. '[video src="' . self::SOURCE . '/v.mp4"]';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_shortcode_media( $content, self::SOURCE );
 
-		// ASSERT: both source URLs are gone, both destinations present.
+		// ASSERT: Both source URLs are gone, both destinations present.
 		$this->assertStringContainsString(
 			'src="https://dest.example.com/a.mp3"',
 			$result
@@ -280,17 +280,17 @@ class ShortcodeMediaRewriterTest extends TestCase {
 	 * style is preserved.
 	 */
 	public function test_single_quoted_attrs_supported(): void {
-		// ARRANGE: single-quoted src.
+		// ARRANGE: Single-quoted src.
 		$source   = self::SOURCE . '/a.mp3';
 		$rewriter = $this->build_rewriter(
 			array( $source => 'https://dest.example.com/a.mp3' )
 		);
 		$content  = "[audio src='" . $source . "']";
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_shortcode_media( $content, self::SOURCE );
 
-		// ASSERT: value replaced, single quotes preserved.
+		// ASSERT: Value replaced, single quotes preserved.
 		$this->assertSame(
 			"[audio src='https://dest.example.com/a.mp3']",
 			$result
@@ -302,17 +302,17 @@ class ShortcodeMediaRewriterTest extends TestCase {
 	 * opening tag and leaves the closing tag intact.
 	 */
 	public function test_enclosing_form_rewrites_opening_tag(): void {
-		// ARRANGE: enclosing [video] with fallback text.
+		// ARRANGE: Enclosing [video] with fallback text.
 		$source   = self::SOURCE . '/v.mp4';
 		$rewriter = $this->build_rewriter(
 			array( $source => 'https://dest.example.com/v.mp4' )
 		);
 		$content  = '[video src="' . $source . '"]Fallback.[/video]';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_shortcode_media( $content, self::SOURCE );
 
-		// ASSERT: opening src repointed, body and closing tag preserved.
+		// ASSERT: Opening src repointed, body and closing tag preserved.
 		$this->assertSame(
 			'[video src="https://dest.example.com/v.mp4"]Fallback.[/video]',
 			$result
@@ -331,10 +331,10 @@ class ShortcodeMediaRewriterTest extends TestCase {
 		);
 		$content  = '[video src="' . $source . '"]';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_shortcode_media( $content, self::SOURCE );
 
-		// ASSERT: the query parameter is restored on the destination URL.
+		// ASSERT: The query parameter is restored on the destination URL.
 		$this->assertSame(
 			'[video src="https://dest.example.com/v.mp4?t=30"]',
 			$result
@@ -346,16 +346,16 @@ class ShortcodeMediaRewriterTest extends TestCase {
 	 * unchanged.
 	 */
 	public function test_content_without_shortcodes_unchanged(): void {
-		// ARRANGE: prose with an unrelated shortcode and a bare URL.
+		// ARRANGE: Prose with an unrelated shortcode and a bare URL.
 		$rewriter = $this->build_rewriter(
 			array( self::SOURCE . '/a.mp3' => 'https://dest.example.com/a.mp3' )
 		);
 		$content  = '<p>Hello.</p>[gallery ids="1,2"] ' . self::SOURCE . '/a.mp3';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_shortcode_media( $content, self::SOURCE );
 
-		// ASSERT: content is byte-for-byte unchanged.
+		// ASSERT: Content is byte-for-byte unchanged.
 		$this->assertSame( $content, $result );
 	}
 
@@ -363,10 +363,10 @@ class ShortcodeMediaRewriterTest extends TestCase {
 	 * Verifies that empty content short-circuits cleanly.
 	 */
 	public function test_empty_content_unchanged(): void {
-		// ARRANGE + ACT: empty input.
+		// ARRANGE + ACT: Empty input.
 		$result = $this->build_rewriter()->rewrite_shortcode_media( '', self::SOURCE );
 
-		// ASSERT: empty output.
+		// ASSERT: Empty output.
 		$this->assertSame( '', $result );
 	}
 }

@@ -534,7 +534,7 @@ final class Admin_Ajax_Controller {
 	 * Re-runs an issue's reconciliation and reports its outcome and whether it
 	 * cleared.
 	 *
-	 * Self-verifying: the row is resolved or refreshed by the reconciliation
+	 * Self-verifying: The row is resolved or refreshed by the reconciliation
 	 * itself, so the response reflects the issue's state after the real work
 	 * ran.
 	 */
@@ -859,7 +859,7 @@ final class Admin_Ajax_Controller {
 	 * Ignores or restores inbox rows in bulk. Ignore is a reversible, soft
 	 * acknowledge, distinct from Remove which hard-deletes a failure row.
 	 *
-	 * Takes a JSON items array of descriptors carrying their kind: failures
+	 * Takes a JSON items array of descriptors carrying their kind: Failures
 	 * route to the id/source scope, degradations to their identity.
 	 */
 	public function ajax_set_needs_attention_ignored(): void {
@@ -1663,7 +1663,7 @@ final class Admin_Ajax_Controller {
 			wp_send_json_error( $post_type->get_error_message() );
 		}
 
-		// Force-update confirmation prompt is HTTP UX, not import logic: if the
+		// Force-update confirmation prompt is HTTP UX, not import logic: If the
 		// post is already imported and the caller hasn't opted into updating,
 		// return the prompt response instead of running the import.
 		$imported_post = $this->post_import_service->find_imported_post(
@@ -1741,7 +1741,7 @@ final class Admin_Ajax_Controller {
 	 * Handles AJAX request for bulk importing posts.
 	 *
 	 * Runs in two passes so parent-child relationships are preserved across a
-	 * batch: pass 1 fetches each post's fresh REST payload without writing to
+	 * batch: Pass 1 fetches each post's fresh REST payload without writing to
 	 * the DB, and pass 2 processes the batch in topological order so a source
 	 * parent is imported before its children.
 	 */
@@ -1780,7 +1780,7 @@ final class Admin_Ajax_Controller {
 
 		$session_id = $session_result;
 
-		// Pass 1: fetch each post's REST payload without touching the DB. The
+		// Pass 1: Fetch each post's REST payload without touching the DB. The
 		// payload is the same source of truth used by pass 2, so prefetched
 		// posts skip the in-pipeline fetch when they're processed.
 		$batch_fresh_data = array();
@@ -1825,7 +1825,7 @@ final class Admin_Ajax_Controller {
 		$successful = 0;
 		$failed     = 0;
 
-		// Pass 2: process in topological order, then append items whose pass-1
+		// Pass 2: Process in topological order, then append items whose pass-1
 		// fetch failed (or was skipped) in request order — import_post() will
 		// re-fetch them and surface the underlying failure.
 		foreach ( $sorted_order as $source_id ) {
@@ -2241,9 +2241,9 @@ final class Admin_Ajax_Controller {
 	 * Orders dependent types around the posts that reference them so the
 	 * referenced side populates the session ID map first.
 	 *
-	 * Reusable blocks (wp_block) move to the front: a post's core/block ref
+	 * Reusable blocks (wp_block) move to the front: A post's core/block ref
 	 * must resolve against an already-imported block. Navigation menus
-	 * (wp_navigation) move to the back: they reference pages via
+	 * (wp_navigation) move to the back: They reference pages via
 	 * core/navigation-link `id`, so those pages must import first. Every other
 	 * type keeps its topological position.
 	 *

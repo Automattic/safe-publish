@@ -28,7 +28,7 @@ use WP_Error;
 /**
  * Media Source URL Derivation Test Class.
  *
- * Guards VIPCMS-1987: on a subdirectory-multisite source the media import must
+ * Guards VIPCMS-1987: On a subdirectory-multisite source the media import must
  * derive the source REST root from the configured connection URL (which carries
  * the subsite path, e.g. https://host/blog), not from the per-post
  * source_link via host-only parsing. The destination here is a single site; the
@@ -88,7 +88,7 @@ class Media_Source_Url_Derivation_Test extends Source_Posts_API_Test_Base {
 			3
 		);
 
-		// Simulate a subdirectory-subsite source: connection URL with a path.
+		// Simulate a subdirectory-subsite source: Connection URL with a path.
 		update_option(
 			Options::OPTION_CONNECTED_SITE_URL,
 			self::SUBSITE_SOURCE_URL

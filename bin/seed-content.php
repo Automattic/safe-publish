@@ -355,7 +355,7 @@ function safe_publish_seeder_update_content(
 		return;
 	}
 
-	// One generator covers every post: the methods we call below don't read
+	// One generator covers every post: The methods we call below don't read
 	// any of the configuration-bound state.
 	$generator = new Content_Generator(
 		'post',

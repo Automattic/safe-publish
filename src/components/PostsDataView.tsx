@@ -279,7 +279,7 @@ function SearchHelpButton(): JSX.Element {
 }
 
 /**
- * Stable DataViews row id: source post id when present, else the local
+ * Stable DataViews row id: Source post id when present, else the local
  * item id or row id.
  *
  * @param {UnifiedPostRow} item Row to identify.
@@ -357,7 +357,7 @@ export function PostsDataView( {
 		[]
 	);
 
-	// Sizes the bulk-import "N skipped" notice: selected rows minus the
+	// Sizes the bulk-import "N skipped" notice: Selected rows minus the
 	// import-eligible subset DataViews hands the modal.
 	const selectedCount = useMemo( () => {
 		const ids = new Set( selection );

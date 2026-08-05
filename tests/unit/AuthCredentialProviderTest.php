@@ -85,14 +85,14 @@ class AuthCredentialProviderTest extends TestCase {
 	 * password options are set.
 	 */
 	public function test_includes_basic_auth_when_both_credentials_configured(): void {
-		// ARRANGE: store both Basic Auth option values.
+		// ARRANGE: Store both Basic Auth option values.
 		set_test_option( Options::OPTION_BASIC_AUTH_USERNAME, 'editor' );
 		set_test_option( Options::OPTION_BASIC_AUTH_PASSWORD, 's3cr3t!' );
 
-		// ACT: assemble credentials from the configured options.
+		// ACT: Assemble credentials from the configured options.
 		$credentials = Auth_Credential_Provider::get_credentials();
 
-		// ASSERT: the stored username and password are included.
+		// ASSERT: The stored username and password are included.
 		$this->assertArrayHasKey( 'username', $credentials );
 		$this->assertArrayHasKey( 'password', $credentials );
 		$this->assertSame( 'editor', $credentials['username'] );
@@ -107,14 +107,14 @@ class AuthCredentialProviderTest extends TestCase {
 	 * @preserveGlobalState disabled
 	 */
 	public function test_includes_basic_auth_when_both_constants_configured(): void {
-		// ARRANGE: define both Basic Auth constants.
+		// ARRANGE: Define both Basic Auth constants.
 		define( 'SAFE_PUBLISH_BASIC_AUTH_USERNAME', 'publisher' );
 		define( 'SAFE_PUBLISH_BASIC_AUTH_PASSWORD', 'constant-password' );
 
-		// ACT: assemble credentials from the configured constants.
+		// ACT: Assemble credentials from the configured constants.
 		$credentials = Auth_Credential_Provider::get_credentials();
 
-		// ASSERT: the constant username and password are included.
+		// ASSERT: The constant username and password are included.
 		$this->assertArrayHasKey( 'username', $credentials );
 		$this->assertArrayHasKey( 'password', $credentials );
 		$this->assertSame( 'publisher', $credentials['username'] );
@@ -176,13 +176,13 @@ class AuthCredentialProviderTest extends TestCase {
 	 * @preserveGlobalState disabled
 	 */
 	public function test_reads_shared_secret_from_env_var(): void {
-		// ARRANGE: provide the secret only through the environment variable.
+		// ARRANGE: Provide the secret only through the environment variable.
 		set_test_env( 'SAFE_PUBLISH_SHARED_SECRET', 'env-shared-secret-value-1234' );
 
-		// ACT: assemble the credentials.
+		// ACT: Assemble the credentials.
 		$credentials = Auth_Credential_Provider::get_credentials();
 
-		// ASSERT: the environment value is used as the shared secret.
+		// ASSERT: The environment value is used as the shared secret.
 		$this->assertArrayHasKey( 'shared_secret', $credentials );
 		$this->assertSame( 'env-shared-secret-value-1234', $credentials['shared_secret'] );
 	}
@@ -195,16 +195,16 @@ class AuthCredentialProviderTest extends TestCase {
 	 * @preserveGlobalState disabled
 	 */
 	public function test_constant_takes_precedence_over_env_var(): void {
-		// ARRANGE: set the constant and environment variable to different values.
+		// ARRANGE: Set the constant and environment variable to different values.
 		set_test_env( 'SAFE_PUBLISH_SHARED_SECRET', 'env-shared-secret-value-1234' );
 		if ( ! defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ) {
 			define( 'SAFE_PUBLISH_SHARED_SECRET', 'constant-shared-secret-value' );
 		}
 
-		// ACT: assemble the credentials.
+		// ACT: Assemble the credentials.
 		$credentials = Auth_Credential_Provider::get_credentials();
 
-		// ASSERT: the constant wins over the environment variable.
+		// ASSERT: The constant wins over the environment variable.
 		$this->assertSame( 'constant-shared-secret-value', $credentials['shared_secret'] );
 	}
 }

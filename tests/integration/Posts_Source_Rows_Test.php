@@ -87,10 +87,10 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	 * Verifies that resolve_source_post_state reports available with no history.
 	 */
 	public function test_resolves_available_when_no_history_exists(): void {
-		// ACT: resolve a source post id that has never been imported.
+		// ACT: Resolve a source post id that has never been imported.
 		$state = $this->repository->resolve_source_post_state( 42 );
 
-		// ASSERT: the resolver returns Available with no history badge.
+		// ASSERT: The resolver returns Available with no history badge.
 		$this->assertSame( 'available', $state );
 	}
 
@@ -156,7 +156,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	 * Verifies that a rolled-back most-recent row routes to available.
 	 */
 	public function test_resolves_available_when_most_recent_is_rolled_back(): void {
-		// ARRANGE: a single success row that was later rolled back.
+		// ARRANGE: A single success row that was later rolled back.
 		$session = $this->create_session();
 		$this->insert_item(
 			array(
@@ -169,10 +169,10 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: resolve the source post's routing state.
+		// ACT: Resolve the source post's routing state.
 		$state = $this->repository->resolve_source_post_state( 102 );
 
-		// ASSERT: a rolled-back active row folds into Available.
+		// ASSERT: A rolled-back active row folds into Available.
 		$this->assertSame( 'available', $state );
 	}
 
@@ -180,7 +180,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	 * Verifies that a deleted-locally source post folds into available.
 	 */
 	public function test_resolves_available_when_local_post_missing(): void {
-		// ARRANGE: a success row pointing at a wp_posts id that doesn't exist.
+		// ARRANGE: A success row pointing at a wp_posts id that doesn't exist.
 		$session = $this->create_session();
 		$this->insert_item(
 			array(
@@ -192,10 +192,10 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: resolve the source post's routing state.
+		// ACT: Resolve the source post's routing state.
 		$state = $this->repository->resolve_source_post_state( 103 );
 
-		// ASSERT: a missing local post folds into Available with the
+		// ASSERT: A missing local post folds into Available with the
 		// deleted_locally badge.
 		$this->assertSame( 'available', $state );
 	}
@@ -205,7 +205,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	 * Outdated.
 	 */
 	public function test_resolves_outdated_when_source_modified_exceeds_import_date(): void {
-		// ARRANGE: a local post whose source_modified_gmt is newer than its
+		// ARRANGE: A local post whose source_modified_gmt is newer than its
 		// import_date_gmt.
 		$post_id = self::factory()->post->create( array( 'post_status' => 'draft' ) );
 		$session = $this->create_session();
@@ -220,10 +220,10 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: resolve the source post's routing state.
+		// ACT: Resolve the source post's routing state.
 		$state = $this->repository->resolve_source_post_state( 104 );
 
-		// ASSERT: the stored source_modified_gmt drives the Outdated verdict.
+		// ASSERT: The stored source_modified_gmt drives the Outdated verdict.
 		$this->assertSame( 'outdated', $state );
 	}
 
@@ -231,7 +231,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	 * Verifies that a trashed local post folds into available.
 	 */
 	public function test_treats_trashed_post_as_deleted_locally(): void {
-		// ARRANGE: an imported post whose local copy has been trashed.
+		// ARRANGE: An imported post whose local copy has been trashed.
 		$post_id = self::factory()->post->create();
 		wp_trash_post( $post_id );
 
@@ -246,10 +246,10 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: resolve the source post's routing state.
+		// ACT: Resolve the source post's routing state.
 		$state = $this->repository->resolve_source_post_state( 105 );
 
-		// ASSERT: trash counts as deleted_locally, not Imported.
+		// ASSERT: Trash counts as deleted_locally, not Imported.
 		$this->assertSame( 'available', $state );
 	}
 
@@ -257,16 +257,16 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	 * Verifies that a rolled-back active row folds into Available.
 	 */
 	public function test_derive_active_state_rolled_back_folds_to_available(): void {
-		// ARRANGE: an active row whose rolled_back flag is set.
+		// ARRANGE: An active row whose rolled_back flag is set.
 		$active_row = array(
 			'rolled_back' => 1,
 			'status'      => 'success',
 		);
 
-		// ACT: derive the routing state from the row.
+		// ACT: Derive the routing state from the row.
 		$state = History_Repository::derive_active_state( $active_row, true );
 
-		// ASSERT: rolled-back rows route to Available regardless of post presence.
+		// ASSERT: Rolled-back rows route to Available regardless of post presence.
 		$this->assertSame( 'available', $state );
 	}
 
@@ -274,7 +274,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	 * Verifies that a success row whose local post is gone folds into Available.
 	 */
 	public function test_derive_active_state_deleted_locally_folds_to_available(): void {
-		// ARRANGE: a success row whose local post is no longer present.
+		// ARRANGE: A success row whose local post is no longer present.
 		$active_row = array(
 			'rolled_back'         => 0,
 			'status'              => 'success',
@@ -283,10 +283,10 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			'source_modified_gmt' => '2026-01-01 00:00:00',
 		);
 
-		// ACT: derive the routing state with local_post_present=false.
+		// ACT: Derive the routing state with local_post_present=false.
 		$state = History_Repository::derive_active_state( $active_row, false );
 
-		// ASSERT: missing local post routes to Available.
+		// ASSERT: Missing local post routes to Available.
 		$this->assertSame( 'available', $state );
 	}
 
@@ -294,7 +294,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	 * Verifies that list_imported_source_rows aggregates by source_post_id.
 	 */
 	public function test_list_imported_source_rows_returns_one_row_per_source_id(): void {
-		// ARRANGE: two events for the same source_post_id; expect one row.
+		// ARRANGE: Two events for the same source_post_id; expect one row.
 		$post_id = self::factory()->post->create();
 		$session = $this->create_session();
 		$this->insert_item(
@@ -316,10 +316,10 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: list the imported source rows.
+		// ACT: List the imported source rows.
 		$rows = $this->repository->list_imported_source_rows();
 
-		// ASSERT: the active-row rule collapses the two events to one row,
+		// ASSERT: The active-row rule collapses the two events to one row,
 		// carrying the latest event's status.
 		$this->assertCount( 1, $rows );
 		$this->assertSame( 200, (int) $rows[0]['source_post_id'] );
@@ -399,7 +399,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	 * Verifies that list_imported_source_rows partitions on the freshness arg.
 	 */
 	public function test_list_imported_source_rows_freshness_filters_by_stored_modified_time(): void {
-		// ARRANGE: one fresh and one stale imported row.
+		// ARRANGE: One fresh and one stale imported row.
 		$fresh_post = self::factory()->post->create();
 		$stale_post = self::factory()->post->create();
 		$session    = $this->create_session();
@@ -424,7 +424,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT + ASSERT: outdated filter returns only the stale row.
+		// ACT + ASSERT: Outdated filter returns only the stale row.
 		$outdated = $this->repository->list_imported_source_rows(
 			1,
 			20,
@@ -433,7 +433,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		$this->assertCount( 1, $outdated );
 		$this->assertSame( 301, (int) $outdated[0]['source_post_id'] );
 
-		// ACT + ASSERT: up-to-date filter returns only the fresh row.
+		// ACT + ASSERT: Up-to-date filter returns only the fresh row.
 		$fresh = $this->repository->list_imported_source_rows(
 			1,
 			20,
@@ -442,7 +442,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		$this->assertCount( 1, $fresh );
 		$this->assertSame( 300, (int) $fresh[0]['source_post_id'] );
 
-		// ACT + ASSERT: default (any) returns both — guards the umbrella path.
+		// ACT + ASSERT: Default (any) returns both — guards the umbrella path.
 		$both = $this->repository->list_imported_source_rows( 1, 20 );
 		$this->assertCount( 2, $both );
 	}
@@ -452,7 +452,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	 * when a name arg is provided.
 	 */
 	public function test_list_imported_source_rows_filters_by_post_name(): void {
-		// ARRANGE: two imported posts with distinct slugs on the destination.
+		// ARRANGE: Two imported posts with distinct slugs on the destination.
 		$alpha_post = self::factory()->post->create( array( 'post_name' => 'alpha' ) );
 		$beta_post  = self::factory()->post->create( array( 'post_name' => 'beta' ) );
 		$session    = $this->create_session();
@@ -475,7 +475,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT + ASSERT: matching slug returns the one corresponding row.
+		// ACT + ASSERT: Matching slug returns the one corresponding row.
 		$matched = $this->repository->list_imported_source_rows(
 			1,
 			20,
@@ -484,7 +484,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		$this->assertCount( 1, $matched );
 		$this->assertSame( 701, (int) $matched[0]['source_post_id'] );
 
-		// ACT + ASSERT: unknown slug returns nothing (rather than the full list).
+		// ACT + ASSERT: Unknown slug returns nothing (rather than the full list).
 		$miss = $this->repository->list_imported_source_rows(
 			1,
 			20,
@@ -642,7 +642,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	 * source_post_id but leaves non-error rows untouched.
 	 */
 	public function test_delete_failed_items_removes_error_rows_but_not_others(): void {
-		// ARRANGE: one error row with a source_post_id, one orphan error, one
+		// ARRANGE: One error row with a source_post_id, one orphan error, one
 		// non-error row that should be left alone.
 		$session     = $this->create_session();
 		$source_err  = $this->insert_item(
@@ -671,12 +671,12 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: try to delete all three.
+		// ACT: Try to delete all three.
 		$deleted = $this->repository->delete_failed_items(
 			array( $source_err, $orphan_err, $success_row )
 		);
 
-		// ASSERT: both error rows go; the success row is untouched.
+		// ASSERT: Both error rows go; the success row is untouched.
 		$this->assertSame( 2, $deleted );
 		$this->assertNull( $this->repository->get_item( $source_err ) );
 		$this->assertNull( $this->repository->get_item( $orphan_err ) );
@@ -689,7 +689,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	 * sibling on refresh.
 	 */
 	public function test_delete_failed_items_by_source_clears_all_attempts(): void {
-		// ARRANGE: two failure rows for the same source_post_id, plus an
+		// ARRANGE: Two failure rows for the same source_post_id, plus an
 		// unrelated failure that must be left alone.
 		$session = $this->create_session();
 		$older   = $this->insert_item(
@@ -717,13 +717,13 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: dismiss source 800 — both its attempts should go.
+		// ACT: Dismiss source 800 — both its attempts should go.
 		$deleted = $this->repository->delete_failed_items(
 			array(),
 			array( 800 )
 		);
 
-		// ASSERT: both 800 rows gone; 801 untouched.
+		// ASSERT: Both 800 rows gone; 801 untouched.
 		$this->assertSame( 2, $deleted );
 		$this->assertNull( $this->repository->get_item( $older ) );
 		$this->assertNull( $this->repository->get_item( $newer ) );
@@ -875,7 +875,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	 * Verifies that update_source_modified_gmt_bulk fans out updates correctly.
 	 */
 	public function test_update_source_modified_gmt_bulk_writes_each_row(): void {
-		// ARRANGE: two imported rows with stale source_modified_gmt values.
+		// ARRANGE: Two imported rows with stale source_modified_gmt values.
 		$session = $this->create_session();
 		$item_a  = $this->insert_item(
 			array(
@@ -896,7 +896,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: flush a batch update with one value per item.
+		// ACT: Flush a batch update with one value per item.
 		$this->repository->update_source_modified_gmt_bulk(
 			array(
 				$item_a => '2026-04-01 00:00:00',
@@ -904,7 +904,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ASSERT: each row picks up its mapped value via the CASE-WHEN UPDATE.
+		// ASSERT: Each row picks up its mapped value via the CASE-WHEN UPDATE.
 		$row_a = $this->repository->get_item( $item_a );
 		$row_b = $this->repository->get_item( $item_b );
 		$this->assertNotNull( $row_a );

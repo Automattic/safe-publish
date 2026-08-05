@@ -92,7 +92,7 @@ class Content_Processor_Shortcode_Id_Rewrite_Test extends Integration_Test_Case 
 	 * warnings or failures.
 	 */
 	public function test_gallery_and_playlist_ids_rewritten_to_dest(): void {
-		// ARRANGE: a resolver that maps every referenced source ID.
+		// ARRANGE: A resolver that maps every referenced source ID.
 		$processor = $this->build_processor(
 			array(
 				705 => 12,
@@ -103,10 +103,10 @@ class Content_Processor_Shortcode_Id_Rewrite_Test extends Integration_Test_Case 
 		$content   = "[gallery ids=\"705,704\" columns=\"2\"]\n"
 			. '[playlist type="audio" ids="555"]';
 
-		// ACT: process the content.
+		// ACT: Process the content.
 		$result = $processor->process_content( $content, self::SOURCE );
 
-		// ASSERT: both shortcodes carry dest IDs; nothing warned or failed.
+		// ASSERT: Both shortcodes carry dest IDs; nothing warned or failed.
 		$this->assertStringContainsString( '[gallery ids="12,13" columns="2"]', $result );
 		$this->assertStringContainsString( '[playlist type="audio" ids="88"]', $result );
 		$this->assertSame( array(), $processor->get_warnings() );
@@ -119,14 +119,14 @@ class Content_Processor_Shortcode_Id_Rewrite_Test extends Integration_Test_Case 
 	 * without failing the import.
 	 */
 	public function test_unresolved_id_is_left_and_warned(): void {
-		// ARRANGE: the referenced ID resolves to null (dangling).
+		// ARRANGE: The referenced ID resolves to null (dangling).
 		$processor = $this->build_processor( array( 705 => null ) );
 		$content   = '[gallery ids="705"]';
 
-		// ACT: process the content.
+		// ACT: Process the content.
 		$result = $processor->process_content( $content, self::SOURCE );
 
-		// ASSERT: the ID is untouched and a warning is recorded; no failure.
+		// ASSERT: The ID is untouched and a warning is recorded; no failure.
 		$this->assertStringContainsString( '[gallery ids="705"]', $result );
 		$this->assertSame( array(), $processor->get_failed_media() );
 		$this->assertSame(
@@ -145,14 +145,14 @@ class Content_Processor_Shortcode_Id_Rewrite_Test extends Integration_Test_Case 
 	 * recorded as a failed media file so the import aborts downstream.
 	 */
 	public function test_sideload_failure_recorded_as_failed_media(): void {
-		// ARRANGE: the referenced ID resolves but its sideload fails.
+		// ARRANGE: The referenced ID resolves but its sideload fails.
 		$processor = $this->build_processor( array( 705 => false ) );
 		$content   = '[gallery ids="705"]';
 
-		// ACT: process the content.
+		// ACT: Process the content.
 		$result = $processor->process_content( $content, self::SOURCE );
 
-		// ASSERT: the ID is left in place and a media failure is recorded.
+		// ASSERT: The ID is left in place and a media failure is recorded.
 		$this->assertStringContainsString( '[gallery ids="705"]', $result );
 		$this->assertSame( array(), $processor->get_warnings() );
 		$this->assertNotSame( array(), $processor->get_failed_media() );
@@ -167,14 +167,14 @@ class Content_Processor_Shortcode_Id_Rewrite_Test extends Integration_Test_Case 
 	 * in both. Resolver memoization is asserted in the rewriter unit test.
 	 */
 	public function test_shared_id_rewritten_in_both_shortcodes(): void {
-		// ARRANGE: the same ID appears in a gallery and a playlist.
+		// ARRANGE: The same ID appears in a gallery and a playlist.
 		$processor = $this->build_processor( array( 7 => 70 ) );
 		$content   = '[gallery ids="7"][playlist ids="7"]';
 
-		// ACT: process the content.
+		// ACT: Process the content.
 		$result = $processor->process_content( $content, self::SOURCE );
 
-		// ASSERT: the shared ID is rewritten in both shortcodes.
+		// ASSERT: The shared ID is rewritten in both shortcodes.
 		$this->assertStringContainsString( '[gallery ids="70"]', $result );
 		$this->assertStringContainsString( '[playlist ids="70"]', $result );
 	}

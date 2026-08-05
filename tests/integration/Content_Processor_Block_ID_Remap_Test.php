@@ -201,7 +201,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			array( 'session_id_map' => array( $source_id => 99999 ) )
 		);
 
-		// ASSERT: Id stayed at the source ID and no warning was raised.
+		// ASSERT: id stayed at the source ID and no warning was raised.
 		$this->assertStringContainsString( '"id":' . $source_id . ',', (string) $result );
 		$this->assertSame( array(), $this->processor->get_warnings() );
 	}
@@ -211,7 +211,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * host-swapped but never ID-remapped, even when the source post resolves.
 	 */
 	public function test_custom_block_permalink_attr_not_remapped(): void {
-		// ARRANGE: a resolvable source->dest mapping plus a custom block that
+		// ARRANGE: A resolvable source->dest mapping plus a custom block that
 		// stores the source permalink in an arbitrary attr.
 		$dest_post = self::factory()->post->create( array( 'post_type' => 'page' ) );
 		$source_id = 99023;
@@ -227,14 +227,14 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			. '<div class="wp-block-my-plugin-group"></div>'
 			. '<!-- /wp:my-plugin/group -->';
 
-		// ACT: process with the mapping also offered via the session map.
+		// ACT: Process with the mapping also offered via the session map.
 		$result = (string) $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
 			array( 'session_id_map' => array( $source_id => $dest_post ) )
 		);
 
-		// ASSERT: host swapped to the destination, but the source id is kept
+		// ASSERT: Host swapped to the destination, but the source id is kept
 		// (not remapped to the dest post) and no unmapped-ref warning raised.
 		$post_link = null;
 		foreach ( parse_blocks( $result ) as $block ) {
@@ -312,7 +312,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * referenced source wp_block resolves to an in-batch import.
 	 */
 	public function test_remaps_reusable_block_ref_via_session_map(): void {
-		// ARRANGE: a destination wp_block standing in for the freshly imported
+		// ARRANGE: A destination wp_block standing in for the freshly imported
 		// reusable block, and a core/block referencing the source's ID for it.
 		$dest_block = self::factory()->post->create(
 			array( 'post_type' => 'wp_block' )
@@ -320,7 +320,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 		$source_id  = 99030;
 		$content    = '<!-- wp:block {"ref":' . $source_id . '} /-->';
 
-		// ACT: process with the session map carrying the mapping.
+		// ACT: Process with the session map carrying the mapping.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -339,7 +339,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * the lookup must not rely on 'any'.
 	 */
 	public function test_remaps_reusable_block_ref_via_postmeta_fallback(): void {
-		// ARRANGE: a destination wp_block carrying the source-tracking meta from
+		// ARRANGE: A destination wp_block carrying the source-tracking meta from
 		// a prior-session import.
 		$dest_block = self::factory()->post->create(
 			array( 'post_type' => 'wp_block' )
@@ -354,7 +354,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 
 		$content = '<!-- wp:block {"ref":' . $source_id . '} /-->';
 
-		// ACT: empty session map — the lookup must find the wp_block via postmeta.
+		// ACT: Empty session map — the lookup must find the wp_block via postmeta.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -373,11 +373,11 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * missing reusable-block target folds into the retryable degradation.
 	 */
 	public function test_reusable_block_ref_unmapped_when_target_absent(): void {
-		// ARRANGE: a core/block whose source wp_block is not on the destination.
+		// ARRANGE: A core/block whose source wp_block is not on the destination.
 		$source_id = 99032;
 		$content   = '<!-- wp:block {"ref":' . $source_id . '} /-->';
 
-		// ACT: process with no mapping available.
+		// ACT: Process with no mapping available.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -447,7 +447,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * permalink when a slug collision moves the imported page to a new path.
 	 */
 	public function test_rederives_post_link_url_on_slug_collision(): void {
-		// ARRANGE: a pre-existing page owns /about, so the imported page lands
+		// ARRANGE: A pre-existing page owns /about, so the imported page lands
 		// at /about-2; a nav-link references it via the session map.
 		$this->set_permalink_structure( '/%postname%/' );
 		self::factory()->post->create(
@@ -467,7 +467,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			array( $this->post_link( $source_id, self::SOURCE_SITE_URL . '/about' ) )
 		);
 
-		// ACT: process with the session map resolving the source id.
+		// ACT: Process with the session map resolving the source id.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -488,7 +488,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * the submenu registry entries carry url_attr.
 	 */
 	public function test_rederives_submenu_url_on_slug_collision(): void {
-		// ARRANGE: a collision sends the imported page to /about-2; a submenu
+		// ARRANGE: A collision sends the imported page to /about-2; a submenu
 		// links to it via the session map.
 		$this->set_permalink_structure( '/%postname%/' );
 		self::factory()->post->create(
@@ -518,14 +518,14 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: run process_content.
+		// ACT: Run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
 			array( 'session_id_map' => array( $source_id => $dest_post ) )
 		);
 
-		// ASSERT: submenu url re-derived to the destination permalink.
+		// ASSERT: Submenu url re-derived to the destination permalink.
 		$permalink = (string) get_permalink( $dest_post );
 		$this->assertStringContainsString( '/about-2/', $permalink );
 		$this->assertSame(
@@ -539,7 +539,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * re-derived.
 	 */
 	public function test_preserves_fragment_when_rederiving_url(): void {
-		// ARRANGE: a nav-link to /about#team whose target lands at /about-2.
+		// ARRANGE: A nav-link to /about#team whose target lands at /about-2.
 		$this->set_permalink_structure( '/%postname%/' );
 		self::factory()->post->create(
 			array(
@@ -563,14 +563,14 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: run process_content.
+		// ACT: Run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
 			array( 'session_id_map' => array( $source_id => $dest_post ) )
 		);
 
-		// ASSERT: destination permalink with the original fragment re-appended.
+		// ASSERT: Destination permalink with the original fragment re-appended.
 		$expected = (string) get_permalink( $dest_post ) . '#team';
 		$this->assertSame(
 			$expected,
@@ -583,7 +583,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * is re-derived.
 	 */
 	public function test_preserves_portable_query_when_rederiving_url(): void {
-		// ARRANGE: a colliding nav-link carrying a tracking param.
+		// ARRANGE: A colliding nav-link carrying a tracking param.
 		$this->set_permalink_structure( '/%postname%/' );
 		self::factory()->post->create(
 			array(
@@ -607,14 +607,14 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: run process_content.
+		// ACT: Run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
 			array( 'session_id_map' => array( $source_id => $dest_post ) )
 		);
 
-		// ASSERT: destination permalink with the tracking param retained.
+		// ASSERT: Destination permalink with the tracking param retained.
 		$expected = (string) get_permalink( $dest_post ) . '?utm=spring';
 		$this->assertSame(
 			$expected,
@@ -627,7 +627,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * permalink source's stale id cannot override the re-derived path.
 	 */
 	public function test_drops_identity_query_when_rederiving_url(): void {
-		// ARRANGE: a colliding nav-link whose url carries a source page_id.
+		// ARRANGE: A colliding nav-link whose url carries a source page_id.
 		$this->set_permalink_structure( '/%postname%/' );
 		self::factory()->post->create(
 			array(
@@ -651,14 +651,14 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: run process_content.
+		// ACT: Run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
 			array( 'session_id_map' => array( $source_id => $dest_post ) )
 		);
 
-		// ASSERT: clean destination permalink, identity query dropped.
+		// ASSERT: Clean destination permalink, identity query dropped.
 		$permalink = (string) get_permalink( $dest_post );
 		$this->assertStringContainsString( '/about-2/', $permalink );
 		$this->assertSame(
@@ -672,7 +672,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * plugins emit for the homepage) is preserved, not treated as an identity.
 	 */
 	public function test_preserves_language_query_on_bare_root_url(): void {
-		// ARRANGE: a colliding nav-link whose url is a bare root plus ?lang.
+		// ARRANGE: A colliding nav-link whose url is a bare root plus ?lang.
 		$this->set_permalink_structure( '/%postname%/' );
 		self::factory()->post->create(
 			array(
@@ -696,14 +696,14 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: run process_content.
+		// ACT: Run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
 			array( 'session_id_map' => array( $source_id => $dest_post ) )
 		);
 
-		// ASSERT: language param retained on the re-derived permalink.
+		// ASSERT: Language param retained on the re-derived permalink.
 		$expected = (string) get_permalink( $dest_post ) . '?lang=de';
 		$this->assertSame(
 			$expected,
@@ -716,7 +716,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * the unconditional re-derive against dropping the fragment.
 	 */
 	public function test_preserves_fragment_on_non_colliding_link(): void {
-		// ARRANGE: a single /contact page, so no collision occurs.
+		// ARRANGE: A single /contact page, so no collision occurs.
 		$this->set_permalink_structure( '/%postname%/' );
 		$dest_post = self::factory()->post->create(
 			array(
@@ -734,14 +734,14 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: run process_content.
+		// ACT: Run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
 			array( 'session_id_map' => array( $source_id => $dest_post ) )
 		);
 
-		// ASSERT: same path, fragment intact.
+		// ASSERT: Same path, fragment intact.
 		$permalink = (string) get_permalink( $dest_post );
 		$this->assertStringContainsString( '/contact/', $permalink );
 		$this->assertSame(
@@ -754,7 +754,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * Verifies that a taxonomy nav-link url is re-derived via get_term_link.
 	 */
 	public function test_rederives_taxonomy_link_url_via_term_link(): void {
-		// ARRANGE: pretty permalinks with category permastructs registered, so
+		// ARRANGE: Pretty permalinks with category permastructs registered, so
 		// get_term_link yields a path; plus a term with paired source meta.
 		$this->set_permalink_structure( '/%postname%/' );
 		create_initial_taxonomies();
@@ -777,7 +777,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: run process_content.
+		// ACT: Run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -798,7 +798,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * get_term_link returns WP_Error) keeps its original url.
 	 */
 	public function test_leaves_url_when_term_link_errors(): void {
-		// ARRANGE: paired meta pointing at a term id that does not exist, so
+		// ARRANGE: Paired meta pointing at a term id that does not exist, so
 		// the id resolves but get_term_link errors.
 		$this->set_permalink_structure( '/%postname%/' );
 		$phantom_term = 99990001;
@@ -818,7 +818,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: run process_content.
+		// ACT: Run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -837,7 +837,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * untouched — neither id nor url is re-derived.
 	 */
 	public function test_leaves_url_for_different_source_scope(): void {
-		// ARRANGE: a destination post scoped to a DIFFERENT source site.
+		// ARRANGE: A destination post scoped to a DIFFERENT source site.
 		$this->set_permalink_structure( '/%postname%/' );
 		$dest_post = self::factory()->post->create( array( 'post_type' => 'page' ) );
 		$source_id = 99016;
@@ -851,7 +851,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			array( $this->post_link( $source_id, self::SOURCE_SITE_URL . '/about' ) )
 		);
 
-		// ACT: process under the SOURCE_SITE_URL scope.
+		// ACT: Process under the SOURCE_SITE_URL scope.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -871,7 +871,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * the canonical ?page_id form, the correct address there.
 	 */
 	public function test_rederives_url_on_plain_permalink_dest(): void {
-		// ARRANGE: plain permalink structure; a resolvable session mapping.
+		// ARRANGE: Plain permalink structure; a resolvable session mapping.
 		$this->set_permalink_structure( '' );
 		$dest_post = self::factory()->post->create( array( 'post_type' => 'page' ) );
 		$source_id = 99017;
@@ -879,7 +879,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			array( $this->post_link( $source_id, self::SOURCE_SITE_URL . '/about' ) )
 		);
 
-		// ACT: run process_content.
+		// ACT: Run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -900,7 +900,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * final), deferring correction.
 	 */
 	public function test_defers_draft_post_target(): void {
-		// ARRANGE: pretty permalinks; the target post is a draft.
+		// ARRANGE: Pretty permalinks; the target post is a draft.
 		$this->set_permalink_structure( '/%postname%/' );
 		$dest_post = self::factory()->post->create(
 			array(
@@ -913,7 +913,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			array( $this->post_link( $source_id, self::SOURCE_SITE_URL . '/about' ) )
 		);
 
-		// ACT: run process_content.
+		// ACT: Run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
@@ -933,7 +933,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	 * dynamically from the destination term's taxonomy.
 	 */
 	public function test_drops_custom_taxonomy_identity_query(): void {
-		// ARRANGE: a custom taxonomy with a query var and a destination term in
+		// ARRANGE: A custom taxonomy with a query var and a destination term in
 		// it carrying paired source meta.
 		register_taxonomy(
 			'sp_topic',
@@ -968,14 +968,14 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: run process_content.
+		// ACT: Run process_content.
 		$result = $this->processor->process_content(
 			$content,
 			self::SOURCE_SITE_URL,
 			array()
 		);
 
-		// ASSERT: the source's custom query var is gone; url is the term link.
+		// ASSERT: The source's custom query var is gone; url is the term link.
 		$url = (string) $this->first_nav_link_url( (string) $result );
 		$this->assertStringNotContainsString( 'sp_topic=news', $url );
 		$this->assertSame( get_term_link( $dest_term ), $url );

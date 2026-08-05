@@ -537,7 +537,7 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 	 * "Sync check failed" the user can't act on.
 	 */
 	public function test_reports_up_to_date_when_source_modified_gmt_is_blank(): void {
-		// ARRANGE: imported row with a never-saved-draft style source timestamp.
+		// ARRANGE: Imported row with a never-saved-draft style source timestamp.
 		$source_id = 4007;
 		$this->seed_imported_post( $source_id, '2024-01-01 12:00:00' );
 		$this->source_modified_gmt[ $source_id ] = '';
@@ -546,10 +546,10 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 			array( 'source_ids' => array( (string) $source_id ) )
 		);
 
-		// ACT: dispatch the batch.
+		// ACT: Dispatch the batch.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
 
-		// ASSERT: empty timestamp folds into up-to-date, not invalid.
+		// ASSERT: Empty timestamp folds into up-to-date, not invalid.
 		$response = $this->decode_response();
 		$this->assertTrue( $response['success'] );
 		$this->assertSame(

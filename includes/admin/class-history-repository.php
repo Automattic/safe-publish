@@ -519,7 +519,7 @@ final class History_Repository {
 	}
 
 	/**
-	 * Bulk variant of get_active_item_for_source(): one query per page
+	 * Bulk variant of get_active_item_for_source(): One query per page
 	 * instead of N. Backed by the (source_post_id, import_date_gmt) index.
 	 *
 	 * @param int[] $source_ids Source post IDs to look up.
@@ -990,7 +990,7 @@ final class History_Repository {
 	}
 
 	/**
-	 * Bulk variant of get_item_for_post(): returns the most recent active item
+	 * Bulk variant of get_item_for_post(): Returns the most recent active item
 	 * row for each provided post ID, keyed by post_id.
 	 *
 	 * Drives the Manage listing — one query for the whole page

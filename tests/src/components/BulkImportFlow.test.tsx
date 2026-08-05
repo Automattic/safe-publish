@@ -20,7 +20,7 @@ const POSTS: BulkImportFlowPost[] = [
 
 describe( 'BulkImportFlow skipped-selection notice', () => {
 	it( 'Verifies that a mixed selection shows the N-of-M heading and a plural skipped notice', () => {
-		// ARRANGE + ACT: two importable posts out of five selected.
+		// ARRANGE + ACT: Two importable posts out of five selected.
 		render(
 			<BulkImportFlow
 				posts={ POSTS }
@@ -30,7 +30,7 @@ describe( 'BulkImportFlow skipped-selection notice', () => {
 			/>
 		);
 
-		// ASSERT: the heading reconciles both counts and the notice explains
+		// ASSERT: The heading reconciles both counts and the notice explains
 		// the three dropped rows.
 		expect(
 			screen.getByText( 'Import 2 of 5 selected posts as drafts?' )
@@ -43,7 +43,7 @@ describe( 'BulkImportFlow skipped-selection notice', () => {
 	} );
 
 	it( 'Verifies that a single skipped row reads in the singular', () => {
-		// ARRANGE + ACT: two importable posts, a single dropped row.
+		// ARRANGE + ACT: Two importable posts, a single dropped row.
 		render(
 			<BulkImportFlow
 				posts={ POSTS }
@@ -53,7 +53,7 @@ describe( 'BulkImportFlow skipped-selection notice', () => {
 			/>
 		);
 
-		// ASSERT: the notice uses the singular form.
+		// ASSERT: The notice uses the singular form.
 		expect(
 			screen.getByText(
 				'1 selected post is already up to date or cannot be imported, so it will be skipped.'
@@ -62,12 +62,12 @@ describe( 'BulkImportFlow skipped-selection notice', () => {
 	} );
 
 	it( 'Verifies that a fully eligible selection shows the plain heading and no skipped notice', () => {
-		// ARRANGE + ACT: nothing skipped.
+		// ARRANGE + ACT: Nothing skipped.
 		render(
 			<BulkImportFlow posts={ POSTS } context={ CONTEXT } onClose={ () => {} } />
 		);
 
-		// ASSERT: the plain heading shows and no skipped copy renders.
+		// ASSERT: The plain heading shows and no skipped copy renders.
 		expect(
 			screen.getByText( 'Import 2 selected posts as drafts?' )
 		).toBeInTheDocument();

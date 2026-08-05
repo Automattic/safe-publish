@@ -287,7 +287,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 			);
 		}
 
-		// Single-post endpoint used by fetch_fresh_post(): return a post object.
+		// Single-post endpoint used by fetch_fresh_post(): Return a post object.
 		if ( preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
 			$current_user = wp_get_current_user();
 
@@ -323,7 +323,7 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 			);
 		}
 
-		// Catalog endpoint: return the { items, has_more } envelope using
+		// Catalog endpoint: Return the { items, has_more } envelope using
 		// the source-side listing payload shape.
 		return array(
 			'headers'  => array(),

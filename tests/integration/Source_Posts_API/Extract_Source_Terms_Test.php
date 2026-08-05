@@ -132,7 +132,7 @@ class Extract_Source_Terms_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that malformed entries are dropped: a non-array taxonomy value,
+	 * Verifies that malformed entries are dropped: A non-array taxonomy value,
 	 * an empty taxonomy key, a non-array record, and a record with neither name
 	 * nor slug, leaving only the well-formed record.
 	 */

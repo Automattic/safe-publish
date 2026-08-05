@@ -99,7 +99,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 	 * timestamp is written, and post_modified is left untouched.
 	 */
 	public function test_rewrites_stale_ref_and_preserves_post_modified(): void {
-		// ARRANGE: an imported page that still references the source menu ID.
+		// ARRANGE: An imported page that still references the source menu ID.
 		$post_id         = $this->seed_referencing_post(
 			$this->nav_ref_block( 99001 ),
 			self::SOURCE_A,
@@ -107,14 +107,14 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 		);
 		$modified_before = get_post( $post_id )->post_modified;
 
-		// ACT: rewrite refs to 99001 onto destination menu 50001.
+		// ACT: Rewrite refs to 99001 onto destination menu 50001.
 		$result = ( new Navigation_Ref_Rewriter() )->rewrite_cross_refs(
 			99001,
 			50001,
 			self::SOURCE_A
 		);
 
-		// ASSERT: one rewrite, content repointed, timestamp set, modified kept.
+		// ASSERT: One rewrite, content repointed, timestamp set, modified kept.
 		$this->assertSame( 1, $result['rewritten'] );
 		$this->assertSame( array(), $result['failed'] );
 
@@ -138,7 +138,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 	 * so two destinations sharing a numeric source ID do not collide.
 	 */
 	public function test_skips_posts_from_a_different_source(): void {
-		// ARRANGE: two posts hold the same ref but were imported from
+		// ARRANGE: Two posts hold the same ref but were imported from
 		// different sources.
 		$source_a_post = $this->seed_referencing_post(
 			$this->nav_ref_block( 99002 ),
@@ -151,14 +151,14 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			91003
 		);
 
-		// ACT: rewrite under source A only.
+		// ACT: Rewrite under source A only.
 		$result = ( new Navigation_Ref_Rewriter() )->rewrite_cross_refs(
 			99002,
 			50002,
 			self::SOURCE_A
 		);
 
-		// ASSERT: source A repointed; source B left untouched.
+		// ASSERT: Source A repointed; source B left untouched.
 		$this->assertSame( 1, $result['rewritten'] );
 		$this->assertStringContainsString(
 			'"ref":50002',
@@ -175,7 +175,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 	 * subsites of one host sharing a numeric source ID do not collide.
 	 */
 	public function test_skips_posts_from_a_different_subsite(): void {
-		// ARRANGE: two posts hold the same ref but were imported from two
+		// ARRANGE: Two posts hold the same ref but were imported from two
 		// subsites of the same host.
 		$blog_url  = self::SOURCE_A . '/blog';
 		$news_url  = self::SOURCE_A . '/news';
@@ -190,14 +190,14 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			91010
 		);
 
-		// ACT: rewrite under the /blog subsite only.
+		// ACT: Rewrite under the /blog subsite only.
 		$result = ( new Navigation_Ref_Rewriter() )->rewrite_cross_refs(
 			99008,
 			50008,
 			$blog_url
 		);
 
-		// ASSERT: the /blog post is repointed; /news is left untouched.
+		// ASSERT: The /blog post is repointed; /news is left untouched.
 		$this->assertSame( 1, $result['rewritten'] );
 		$this->assertStringContainsString(
 			'"ref":50008',
@@ -213,7 +213,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 	 * Verifies that auto-draft posts are excluded from the candidate query.
 	 */
 	public function test_skips_auto_draft_posts(): void {
-		// ARRANGE: an auto-draft that would otherwise match.
+		// ARRANGE: An auto-draft that would otherwise match.
 		$post_id = $this->seed_referencing_post(
 			$this->nav_ref_block( 99003 ),
 			self::SOURCE_A,
@@ -229,7 +229,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			self::SOURCE_A
 		);
 
-		// ASSERT: nothing rewritten; content unchanged.
+		// ASSERT: Nothing rewritten; content unchanged.
 		$this->assertSame( 0, $result['rewritten'] );
 		$this->assertStringContainsString(
 			'"ref":99003',
@@ -242,7 +242,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 	 * user-trashed import is not silently rewritten.
 	 */
 	public function test_skips_trashed_posts(): void {
-		// ARRANGE: a trashed post that would otherwise match.
+		// ARRANGE: A trashed post that would otherwise match.
 		$post_id = $this->seed_referencing_post(
 			$this->nav_ref_block( 99007 ),
 			self::SOURCE_A,
@@ -258,7 +258,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			self::SOURCE_A
 		);
 
-		// ASSERT: nothing rewritten; content unchanged.
+		// ASSERT: Nothing rewritten; content unchanged.
 		$this->assertSame( 0, $result['rewritten'] );
 		$this->assertStringContainsString(
 			'"ref":99007',
@@ -271,7 +271,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 	 * rewritten via the recursive walk.
 	 */
 	public function test_rewrites_nested_navigation_block(): void {
-		// ARRANGE: the navigation block sits inside a group container.
+		// ARRANGE: The navigation block sits inside a group container.
 		$content = '<!-- wp:group {"layout":{"type":"constrained"}} -->'
 			. '<div class="wp-block-group">'
 			. $this->nav_ref_block( 99004 )
@@ -289,7 +289,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			self::SOURCE_A
 		);
 
-		// ASSERT: the nested ref was repointed.
+		// ASSERT: The nested ref was repointed.
 		$this->assertSame( 1, $result['rewritten'] );
 		$post = get_post( $post_id );
 		$this->assertStringContainsString( '"ref":50004', $post->post_content );
@@ -301,7 +301,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 	 * otherwise matching post untouched.
 	 */
 	public function test_empty_source_url_rewrites_nothing(): void {
-		// ARRANGE: a post whose own source URL is empty, so only the guard —
+		// ARRANGE: A post whose own source URL is empty, so only the guard —
 		// not the query's scoping — keeps it from being rewritten.
 		$post_id = $this->seed_referencing_post(
 			$this->nav_ref_block( 99005 ),
@@ -309,14 +309,14 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			91006
 		);
 
-		// ACT: opt out of scoping.
+		// ACT: Opt out of scoping.
 		$result = ( new Navigation_Ref_Rewriter() )->rewrite_cross_refs(
 			99005,
 			50005,
 			''
 		);
 
-		// ASSERT: no rewrite, post untouched.
+		// ASSERT: No rewrite, post untouched.
 		$this->assertSame( 0, $result['rewritten'] );
 		$this->assertSame( array(), $result['failed'] );
 		$this->assertStringContainsString(
@@ -330,7 +330,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 	 * left unchanged, rather than silently dropped.
 	 */
 	public function test_reports_failed_posts_without_modifying_them(): void {
-		// ARRANGE: a matching post and a rewriter whose write always fails.
+		// ARRANGE: A matching post and a rewriter whose write always fails.
 		$post_id          = $this->seed_referencing_post(
 			$this->nav_ref_block( 99006 ),
 			self::SOURCE_A,
@@ -345,7 +345,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			self::SOURCE_A
 		);
 
-		// ASSERT: the post is reported failed, not rewritten, and untouched.
+		// ASSERT: The post is reported failed, not rewritten, and untouched.
 		$this->assertSame( 0, $result['rewritten'] );
 		$this->assertSame( array( $post_id ), $result['failed'] );
 		$this->assertStringContainsString(
@@ -368,7 +368,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 	 * in-batch inter-nav case.
 	 */
 	public function test_menu_import_repoints_referencing_navigation(): void {
-		// ARRANGE: a previously imported menu A embedding menu B (source 8200).
+		// ARRANGE: A previously imported menu A embedding menu B (source 8200).
 		$menu_a = $this->seed_referencing_post(
 			$this->nav_ref_block( 8200 ),
 			self::SOURCE_A,
@@ -376,7 +376,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			'wp_navigation'
 		);
 
-		// ACT: import menu B (source 8200) through the full import path.
+		// ACT: Import menu B (source 8200) through the full import path.
 		$result = $this->build_import_service( new Navigation_Ref_Rewriter() )
 			->import_post(
 				array(
@@ -387,7 +387,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 				)
 			);
 
-		// ASSERT: import succeeded and menu A now points at menu B's dest ID.
+		// ASSERT: Import succeeded and menu A now points at menu B's dest ID.
 		$this->assertTrue( $result['success'] );
 		$this->assertStringContainsString(
 			'"ref":' . (int) $result['post_id'],
@@ -404,7 +404,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 	 * naming the still-stale post, without failing the import.
 	 */
 	public function test_menu_import_surfaces_warning_on_rewrite_failure(): void {
-		// ARRANGE: a referencing menu and an import service whose rewriter
+		// ARRANGE: A referencing menu and an import service whose rewriter
 		// fails to persist.
 		$menu_a = $this->seed_referencing_post(
 			$this->nav_ref_block( 8300 ),
@@ -413,7 +413,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			'wp_navigation'
 		);
 
-		// ACT: import the referenced menu (source 8300).
+		// ACT: Import the referenced menu (source 8300).
 		$result = $this->build_import_service( $this->failing_rewriter() )
 			->import_post(
 				array(
@@ -424,7 +424,7 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 				)
 			);
 
-		// ASSERT: import still succeeds, and a warning names the stale post.
+		// ASSERT: Import still succeeds, and a warning names the stale post.
 		$this->assertTrue( $result['success'] );
 		$warning = $this->find_warning(
 			$result['warnings'],

@@ -28,7 +28,7 @@ export const SEARCH_DEBOUNCE_MS = 400;
 // quickly clear without flashing a transient banner first.
 export const RETRY_PENDING_DELAY_MS = 400;
 
-// Mirrors the server's RETRY_ATTENTION_BATCH_MAX: the most degradations one
+// Mirrors the server's RETRY_ATTENTION_BATCH_MAX: The most degradations one
 // bulk-retry request accepts.
 export const RETRY_ATTENTION_BATCH_MAX = 25;
 

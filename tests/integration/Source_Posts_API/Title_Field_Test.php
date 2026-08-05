@@ -16,7 +16,7 @@ use Safe_Publish\API\HTTP_Client;
 /**
  * Title Field Test Class.
  *
- * UI/security contract: titles are emitted as plain text (HTML entities
+ * UI/security contract: Titles are emitted as plain text (HTML entities
  * decoded, tags stripped) so the destination listing UI can render them
  * directly without raw entity markup or smuggled tags.
  */
@@ -71,7 +71,7 @@ class Title_Field_Test extends Source_Posts_API_Test_Base {
 	 * to their literal characters in the listing payload.
 	 */
 	public function test_prepared_title_decodes_numeric_entities(): void {
-		// ARRANGE + ACT: en-dash stored as &#8211; in post_title.
+		// ARRANGE + ACT: En-dash stored as &#8211; in post_title.
 		$title = $this->prepared_title_for( 'Post 19 &#8211; 1P' );
 
 		// ASSERT: Listing UI receives the literal en-dash.
@@ -83,7 +83,7 @@ class Title_Field_Test extends Source_Posts_API_Test_Base {
 	 * case for ampersands in titles.
 	 */
 	public function test_prepared_title_decodes_named_entities(): void {
-		// ARRANGE + ACT: ampersand stored as &amp; in post_title.
+		// ARRANGE + ACT: Ampersand stored as &amp; in post_title.
 		$title = $this->prepared_title_for( 'Tom &amp; Jerry' );
 
 		// ASSERT: Listing UI receives the literal ampersand.
@@ -98,7 +98,7 @@ class Title_Field_Test extends Source_Posts_API_Test_Base {
 	 * later render as HTML.
 	 */
 	public function test_prepared_title_strips_tags_after_decoding_entities(): void {
-		// ARRANGE + ACT: encoded script tag stored in post_title.
+		// ARRANGE + ACT: Encoded script tag stored in post_title.
 		$title = $this->prepared_title_for(
 			'Title &lt;script&gt;alert(1)&lt;/script&gt;'
 		);

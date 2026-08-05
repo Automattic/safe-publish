@@ -164,7 +164,7 @@ export interface AttentionIssue {
 }
 
 /**
- * A failure row in the Needs attention inbox: an import error, either orphan
+ * A failure row in the Needs attention inbox: An import error, either orphan
  * (no source_post_id) or the latest attempt for a source whose most recent row
  * is still an error. `edit_url` is set only for a failed update whose
  * destination post is still live.
@@ -229,7 +229,7 @@ export interface RetryAttentionIssueResponse {
 }
 
 /**
- * Envelope returned by safe_publish_bulk_retry_attention_issues: per-outcome
+ * Envelope returned by safe_publish_bulk_retry_attention_issues: Per-outcome
  * counts across the batch. `skipped` is a malformed or unrecognized descriptor.
  */
 export interface BulkRetryAttentionResponse {

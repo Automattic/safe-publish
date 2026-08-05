@@ -30,13 +30,13 @@ function renderReset( initialKey: string ): {
 
 describe( 'useResetSelectionOnQueryChange', () => {
 	it( 'clears the selection when the query key changes', () => {
-		// ARRANGE: mount under one query key.
+		// ARRANGE: Mount under one query key.
 		const { reset, rerender } = renderReset( 'all|' );
 
-		// ACT: the query changes, e.g. the user switches chip.
+		// ACT: The query changes, e.g. the user switches chip.
 		rerender( 'imported|' );
 
-		// ASSERT: the selection is cleared exactly once, on the change.
+		// ASSERT: The selection is cleared exactly once, on the change.
 		expect( reset ).toHaveBeenCalledTimes( 1 );
 	} );
 
@@ -45,25 +45,25 @@ describe( 'useResetSelectionOnQueryChange', () => {
 		const reset = vi.fn();
 		renderHook( () => useResetSelectionOnQueryChange( 'all|', reset ) );
 
-		// ASSERT: nothing clears before the query actually changes.
+		// ASSERT: Nothing clears before the query actually changes.
 		expect( reset ).not.toHaveBeenCalled();
 	} );
 
 	it( 'preserves the selection while the query key holds', () => {
-		// ARRANGE: mount under a stable key — the paging- and sort-only case,
+		// ARRANGE: Mount under a stable key — the paging- and sort-only case,
 		// which never changes the key.
 		const { reset, rerender } = renderReset( 'all|' );
 
-		// ACT: re-render twice without changing the key.
+		// ACT: Re-render twice without changing the key.
 		rerender( 'all|' );
 		rerender( 'all|' );
 
-		// ASSERT: an unchanged query never clears the selection.
+		// ASSERT: An unchanged query never clears the selection.
 		expect( reset ).not.toHaveBeenCalled();
 	} );
 
 	it( 'ignores an unstable reset identity between real changes', () => {
-		// ARRANGE: a fresh reset closure every render, so a key-independent
+		// ARRANGE: A fresh reset closure every render, so a key-independent
 		// trigger would fire on every re-render.
 		const reset = vi.fn();
 		const { rerender } = renderHook(
@@ -72,11 +72,11 @@ describe( 'useResetSelectionOnQueryChange', () => {
 			{ initialProps: { queryKey: 'a' } }
 		);
 
-		// ACT: a same-key render, then one genuine change.
+		// ACT: A same-key render, then one genuine change.
 		rerender( { queryKey: 'a' } );
 		rerender( { queryKey: 'b' } );
 
-		// ASSERT: only the real transition clears; the changing callback
+		// ASSERT: Only the real transition clears; the changing callback
 		// identity leaks no extra clears.
 		expect( reset ).toHaveBeenCalledTimes( 1 );
 	} );

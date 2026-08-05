@@ -526,7 +526,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	 * Verifies that the featured image is imported when bulk re-importing an
 	 * existing post.
 	 *
-	 * This guards the update path in handle_imported_post(): if the
+	 * This guards the update path in handle_imported_post(): If the
 	 * set_post_thumbnail() call were accidentally removed there, the thumbnail
 	 * would silently stop being set on re-import and no other test would catch it.
 	 */
@@ -1350,7 +1350,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Verifies that find_imported_post() scopes by source site URL when one is
-	 * passed: a destination post imported from a different source isn't
+	 * passed: A destination post imported from a different source isn't
 	 * returned even when the source post ID matches.
 	 */
 	public function test_find_imported_post_scopes_by_source_site_url(): void {
@@ -2709,7 +2709,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that the orphan fallback filter relaxes resolution: the post
+	 * Verifies that the orphan fallback filter relaxes resolution: The post
 	 * imports as top-level and records a parent_orphaned warning with
 	 * reason 'not_imported' and a null title.
 	 */

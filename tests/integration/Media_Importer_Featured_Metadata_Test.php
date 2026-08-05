@@ -105,7 +105,7 @@ class Media_Importer_Featured_Metadata_Test extends WP_UnitTestCase {
 	 * the importer's per-field sanitization applied.
 	 */
 	public function test_featured_image_by_id_applies_library_metadata(): void {
-		// ARRANGE: run as admin and mock the media record, image bytes, and URL.
+		// ARRANGE: Run as admin and mock the media record, image bytes, and URL.
 		wp_set_current_user(
 			self::factory()->user->create( array( 'role' => 'administrator' ) )
 		);
@@ -115,7 +115,7 @@ class Media_Importer_Featured_Metadata_Test extends WP_UnitTestCase {
 
 		$importer = new Media_Importer( new HTTP_Client() );
 
-		// ACT: import the featured image with valid credentials so the fetch
+		// ACT: Import the featured image with valid credentials so the fetch
 		// uses edit context.
 		try {
 			$attachment_id = $importer->import_featured_image(
@@ -133,7 +133,7 @@ class Media_Importer_Featured_Metadata_Test extends WP_UnitTestCase {
 			$this->remove_per_source_id_media_api_mock();
 		}
 
-		// ASSERT: the attachment carries the sanitized source metadata, fetched
+		// ASSERT: The attachment carries the sanitized source metadata, fetched
 		// in edit context.
 		$this->assertIsInt( $attachment_id );
 		$this->assertGreaterThan( 0, $attachment_id );
@@ -153,11 +153,11 @@ class Media_Importer_Featured_Metadata_Test extends WP_UnitTestCase {
 
 	/**
 	 * Verifies that a media record with no library metadata leaves the
-	 * attachment on WordPress' native upload defaults: no alt meta row, a
+	 * attachment on WordPress' native upload defaults: No alt meta row, a
 	 * filename-derived title, and empty caption and description.
 	 */
 	public function test_empty_source_metadata_leaves_native_defaults(): void {
-		// ARRANGE: run as admin and mock a metadata-less record plus its bytes.
+		// ARRANGE: Run as admin and mock a metadata-less record plus its bytes.
 		wp_set_current_user(
 			self::factory()->user->create( array( 'role' => 'administrator' ) )
 		);
@@ -166,7 +166,7 @@ class Media_Importer_Featured_Metadata_Test extends WP_UnitTestCase {
 
 		$importer = new Media_Importer( new HTTP_Client() );
 
-		// ACT: import the featured image.
+		// ACT: Import the featured image.
 		try {
 			$attachment_id = $importer->import_featured_image(
 				self::EMPTY_MEDIA_ID,
@@ -178,7 +178,7 @@ class Media_Importer_Featured_Metadata_Test extends WP_UnitTestCase {
 			$this->remove_per_source_id_media_api_mock();
 		}
 
-		// ASSERT: nothing was written; the attachment keeps native defaults.
+		// ASSERT: Nothing was written; the attachment keeps native defaults.
 		$this->assertIsInt( $attachment_id );
 		$this->assertGreaterThan( 0, $attachment_id );
 		$this->assertFalse(

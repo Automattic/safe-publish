@@ -70,12 +70,12 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 	 * on the import channel with the failure payload and auto-captured actor.
 	 */
 	public function test_single_import_failure_emits_import_channel_audit_event(): void {
-		// ARRANGE: a single-import session; an empty title fails validation
+		// ARRANGE: A single-import session; an empty title fails validation
 		// before any HTTP round-trip.
 		$session_id = $this->create_session( 'single' );
 		$user_id    = get_current_user_id();
 
-		// ACT: import a post with a missing title.
+		// ACT: Import a post with a missing title.
 		$this->import_service->import_post(
 			array(
 				'id'        => 4321,
@@ -86,7 +86,7 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 			$session_id
 		);
 
-		// ASSERT: one error-level import event carries the failure payload.
+		// ASSERT: One error-level import event carries the failure payload.
 		$events = $this->failed_events();
 		$this->assertCount( 1, $events );
 
@@ -100,7 +100,7 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 		$this->assertSame( 4321, $event['data']['source_post_id'] );
 		$this->assertSame( $session_id, $event['data']['session_id'] );
 
-		// ASSERT: the actor is auto-captured from the current user.
+		// ASSERT: The actor is auto-captured from the current user.
 		$this->assertSame( $user_id, $event['data']['actor_user_id'] );
 		$this->assertNotSame( '', $event['data']['actor_source'] );
 	}
@@ -110,10 +110,10 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 	 * shared choke point covers the single and bulk paths alike.
 	 */
 	public function test_bulk_import_failure_emits_import_channel_audit_event(): void {
-		// ARRANGE: a bulk-import session.
+		// ARRANGE: A bulk-import session.
 		$session_id = $this->create_session( 'bulk' );
 
-		// ACT: a validation failure inside the bulk session.
+		// ACT: A validation failure inside the bulk session.
 		$this->import_service->import_post(
 			array(
 				'id'        => 8765,
@@ -124,7 +124,7 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 			$session_id
 		);
 
-		// ASSERT: the event is recorded for the bulk path too.
+		// ASSERT: The event is recorded for the bulk path too.
 		$events = $this->failed_events();
 		$this->assertCount( 1, $events );
 		$this->assertSame( 'validation_failed', $events[0]['data']['error_code'] );
@@ -137,10 +137,10 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 	 * emission scoped to actual failures.
 	 */
 	public function test_successful_import_emits_no_failure_event(): void {
-		// ARRANGE: a bulk session and a well-formed post.
+		// ARRANGE: A bulk session and a well-formed post.
 		$session_id = $this->create_session( 'bulk' );
 
-		// ACT: import a valid post that succeeds.
+		// ACT: Import a valid post that succeeds.
 		$result = $this->import_service->import_post(
 			array(
 				'id'        => 7007,
@@ -151,7 +151,7 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 			$session_id
 		);
 
-		// ASSERT: the import succeeded and emitted no failure event.
+		// ASSERT: The import succeeded and emitted no failure event.
 		$this->assertTrue( $result['success'] );
 		$this->assertCount( 0, $this->failed_events() );
 	}
@@ -161,12 +161,12 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 	 * unexpected_exception action instead of an empty or unknown code.
 	 */
 	public function test_exception_path_records_unexpected_exception_action(): void {
-		// ARRANGE: a service whose source API throws, exercising the import
+		// ARRANGE: A service whose source API throws, exercising the import
 		// service's catch-all exception path.
 		$session_id = $this->create_session( 'bulk' );
 		$service    = $this->build_import_service( $this->throwing_source_posts_api() );
 
-		// ACT: import a well-formed post; the fetch throws.
+		// ACT: Import a well-formed post; the fetch throws.
 		$service->import_post(
 			array(
 				'id'        => 5150,
@@ -177,7 +177,7 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 			$session_id
 		);
 
-		// ASSERT: the failure is classified, not left empty or unknown.
+		// ASSERT: The failure is classified, not left empty or unknown.
 		$events = $this->failed_events();
 		$this->assertCount( 1, $events );
 		$this->assertSame( 'error', $events[0]['level'] );
@@ -190,12 +190,12 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 	 * and parent_id in the event payload.
 	 */
 	public function test_parent_not_resolved_event_includes_reason_and_parent_id(): void {
-		// ARRANGE: a hierarchical page whose source parent is not imported here,
+		// ARRANGE: A hierarchical page whose source parent is not imported here,
 		// so parent resolution aborts with a structured reason.
 		$session_id                          = $this->create_session( 'bulk' );
 		$this->mock_post_overrides['parent'] = 909;
 
-		// ACT: import the child page.
+		// ACT: Import the child page.
 		$this->import_service->import_post(
 			array(
 				'id'        => 6060,
@@ -206,7 +206,7 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 			$session_id
 		);
 
-		// ASSERT: the event carries the parent-resolution detail.
+		// ASSERT: The event carries the parent-resolution detail.
 		$events = $this->failed_events();
 		$this->assertCount( 1, $events );
 		$this->assertSame( 'parent_not_resolved', $events[0]['data']['error_code'] );
@@ -219,7 +219,7 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 	 * log, keeping expected domain failures in the audit DB alone.
 	 */
 	public function test_item_failed_routes_unexpected_codes_to_server_log(): void {
-		// ARRANGE: an import logger capturing server-log skeletons.
+		// ARRANGE: An import logger capturing server-log skeletons.
 		$logger = new class() extends Import_Logger {
 
 			/**
@@ -244,11 +244,11 @@ class Audit_Log_Import_Item_Failed_Test extends Source_Posts_API_Test_Base {
 			}
 		};
 
-		// ACT: an expected domain failure, then an unexpected exception.
+		// ACT: An expected domain failure, then an unexpected exception.
 		$logger->item_failed( 101, 202, 'validation_failed', 'Bad title.' );
 		$logger->item_failed( 101, 202, 'unexpected_exception', 'Boom.' );
 
-		// ASSERT: only the unexpected exception reached the server log.
+		// ASSERT: Only the unexpected exception reached the server log.
 		$this->assertCount( 1, $logger->server_log_skeletons );
 		$this->assertSame(
 			'unexpected_exception',

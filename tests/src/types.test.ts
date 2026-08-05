@@ -6,7 +6,7 @@ import type { UnifiedPostRow } from '@/types';
 
 describe( 'Type validation', () => {
 	describe( 'UnifiedPostRow type', () => {
-		// ARRANGE: a fully-populated catalog-primary row used as a baseline.
+		// ARRANGE: A fully-populated catalog-primary row used as a baseline.
 		const baseRow: UnifiedPostRow = {
 			id: 1,
 			source_post_id: 1,
@@ -27,7 +27,7 @@ describe( 'Type validation', () => {
 		};
 
 		it( 'Verifies that the source-primary row shape is well-typed', () => {
-			// ACT + ASSERT: confirm the baseline row carries its identity fields
+			// ACT + ASSERT: Confirm the baseline row carries its identity fields
 			// and starts at the Available state.
 			expect( baseRow.id ).toBe( 1 );
 			expect( baseRow.source_post_id ).toBe( 1 );
@@ -35,7 +35,7 @@ describe( 'Type validation', () => {
 		} );
 
 		it( 'Verifies that imported routing carries local metadata', () => {
-			// ARRANGE: an imported row with item-table metadata threaded through.
+			// ARRANGE: An imported row with item-table metadata threaded through.
 			const importedRow: UnifiedPostRow = {
 				...baseRow,
 				local_state: 'up-to-date',
@@ -47,7 +47,7 @@ describe( 'Type validation', () => {
 				edit_url: 'https://destination.example/wp-admin/post.php?post=1024',
 			};
 
-			// ASSERT: routing label flips, is_imported follows, and the active
+			// ASSERT: Routing label flips, is_imported follows, and the active
 			// items-row id surfaces for downstream actions.
 			expect( importedRow.local_state ).toBe( 'up-to-date' );
 			expect( importedRow.is_imported ).toBe( true );

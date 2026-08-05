@@ -52,7 +52,7 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * attachment_N rewritten to the dest attachment ID.
 	 */
 	public function test_caption_id_rewrites_to_dest_attachment_id(): void {
-		// ARRANGE: caption with embedded img the lookup resolves.
+		// ARRANGE: Caption with embedded img the lookup resolves.
 		$rewriter = $this->build_rewriter(
 			array( 'http://dest.example.com/image.jpg' => 42 )
 		);
@@ -60,10 +60,10 @@ class ShortcodeIDRewriterTest extends TestCase {
 			. '<img src="http://dest.example.com/image.jpg" alt="x" />'
 			. ' Caption.[/caption]';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_caption_ids( $content );
 
-		// ASSERT: the source ID is replaced with the dest ID.
+		// ASSERT: The source ID is replaced with the dest ID.
 		$this->assertStringContainsString( 'id="attachment_42"', $result );
 		$this->assertStringNotContainsString( 'attachment_5001', $result );
 	}
@@ -80,10 +80,10 @@ class ShortcodeIDRewriterTest extends TestCase {
 		$content  = '[wp_caption id="attachment_99" align="left"]'
 			. '<img src="http://dest.example.com/image.jpg" />[/wp_caption]';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_caption_ids( $content );
 
-		// ASSERT: the source ID is replaced with the dest ID.
+		// ASSERT: The source ID is replaced with the dest ID.
 		$this->assertStringContainsString( 'id="attachment_7"', $result );
 	}
 
@@ -92,17 +92,17 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * attribute when it precedes it, so only the real id is rewritten.
 	 */
 	public function test_caption_data_id_not_mistaken_for_id(): void {
-		// ARRANGE: a data-id="attachment_N" appears before the real id.
+		// ARRANGE: A data-id="attachment_N" appears before the real id.
 		$rewriter = $this->build_rewriter(
 			array( 'http://dest.example.com/x.jpg' => 42 )
 		);
 		$content  = '[caption data-id="attachment_9" align="center" id="attachment_5"]'
 			. '<img src="http://dest.example.com/x.jpg" />[/caption]';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_caption_ids( $content );
 
-		// ASSERT: the real id is rewritten; data-id is left untouched.
+		// ASSERT: The real id is rewritten; data-id is left untouched.
 		$this->assertStringContainsString( 'id="attachment_42"', $result );
 		$this->assertStringContainsString( 'data-id="attachment_9"', $result );
 	}
@@ -112,15 +112,15 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * untouched.
 	 */
 	public function test_unresolvable_img_leaves_caption_id_unchanged(): void {
-		// ARRANGE: lookup returns 0 for the third-party URL.
+		// ARRANGE: Lookup returns 0 for the third-party URL.
 		$rewriter = $this->build_rewriter();
 		$content  = '[caption id="attachment_5001" align="aligncenter"]'
 			. '<img src="http://third-party.example.com/x.jpg" />[/caption]';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_caption_ids( $content );
 
-		// ASSERT: content is byte-for-byte unchanged.
+		// ASSERT: Content is byte-for-byte unchanged.
 		$this->assertSame( $content, $result );
 	}
 
@@ -129,16 +129,16 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * to look up against).
 	 */
 	public function test_caption_without_img_left_unchanged(): void {
-		// ARRANGE: caption body has no img.
+		// ARRANGE: Caption body has no img.
 		$rewriter = $this->build_rewriter(
 			array( 'http://dest.example.com/image.jpg' => 42 )
 		);
 		$content  = '[caption id="attachment_5001"]Just text.[/caption]';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_caption_ids( $content );
 
-		// ASSERT: content is byte-for-byte unchanged.
+		// ASSERT: Content is byte-for-byte unchanged.
 		$this->assertSame( $content, $result );
 	}
 
@@ -154,10 +154,10 @@ class ShortcodeIDRewriterTest extends TestCase {
 		$content  = '[caption align="aligncenter" width="800" id="attachment_5001"]'
 			. '<img src="http://dest.example.com/image.jpg" />[/caption]';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_caption_ids( $content );
 
-		// ASSERT: the source ID is replaced regardless of position.
+		// ASSERT: The source ID is replaced regardless of position.
 		$this->assertStringContainsString( 'id="attachment_99"', $result );
 	}
 
@@ -166,17 +166,17 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * same as double-quoted ones.
 	 */
 	public function test_single_quoted_attributes_supported(): void {
-		// ARRANGE: shortcode uses single quotes throughout.
+		// ARRANGE: Shortcode uses single quotes throughout.
 		$rewriter = $this->build_rewriter(
 			array( 'http://dest.example.com/image.jpg' => 12 )
 		);
 		$content  = "[caption id='attachment_5001' align='aligncenter']"
 			. "<img src='http://dest.example.com/image.jpg' />[/caption]";
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_caption_ids( $content );
 
-		// ASSERT: the source ID is replaced; quoting style preserved.
+		// ASSERT: The source ID is replaced; quoting style preserved.
 		$this->assertStringContainsString( "id='attachment_12'", $result );
 	}
 
@@ -185,7 +185,7 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * rewritten independently.
 	 */
 	public function test_multiple_captions_all_rewritten(): void {
-		// ARRANGE: two captions pointing at different dest IDs.
+		// ARRANGE: Two captions pointing at different dest IDs.
 		$rewriter = $this->build_rewriter(
 			array(
 				'http://dest.example.com/a.jpg' => 1,
@@ -198,10 +198,10 @@ class ShortcodeIDRewriterTest extends TestCase {
 			. '[caption id="attachment_5002"]'
 			. '<img src="http://dest.example.com/b.jpg" />[/caption]';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_caption_ids( $content );
 
-		// ASSERT: both source IDs are rewritten to their dest counterparts.
+		// ASSERT: Both source IDs are rewritten to their dest counterparts.
 		$this->assertStringContainsString( 'id="attachment_1"', $result );
 		$this->assertStringContainsString( 'id="attachment_2"', $result );
 		$this->assertStringNotContainsString( 'attachment_5001', $result );
@@ -212,14 +212,14 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * Verifies that content with no caption shortcodes is returned unchanged.
 	 */
 	public function test_content_without_captions_unchanged(): void {
-		// ARRANGE: prose only, with an img but no caption wrapper.
+		// ARRANGE: Prose only, with an img but no caption wrapper.
 		$rewriter = $this->build_rewriter();
 		$content  = '<p>Hello.</p><img src="http://example.com/x.jpg" />';
 
-		// ACT: run the rewriter.
+		// ACT: Run the rewriter.
 		$result = $rewriter->rewrite_caption_ids( $content );
 
-		// ASSERT: content is byte-for-byte unchanged.
+		// ASSERT: Content is byte-for-byte unchanged.
 		$this->assertSame( $content, $result );
 	}
 
@@ -227,10 +227,10 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * Verifies that empty content short-circuits cleanly.
 	 */
 	public function test_empty_content_unchanged(): void {
-		// ARRANGE + ACT: empty input.
+		// ARRANGE + ACT: Empty input.
 		$result = $this->build_rewriter()->rewrite_caption_ids( '' );
 
-		// ASSERT: empty output.
+		// ASSERT: Empty output.
 		$this->assertSame( '', $result );
 	}
 
@@ -239,7 +239,7 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * its dest ID in order, leaving the other attributes untouched.
 	 */
 	public function test_gallery_ids_rewritten_in_order(): void {
-		// ARRANGE: gallery with three source IDs and unrelated attributes.
+		// ARRANGE: Gallery with three source IDs and unrelated attributes.
 		$rewriter = $this->build_rewriter();
 		$resolver = $this->id_resolver(
 			array(
@@ -250,7 +250,7 @@ class ShortcodeIDRewriterTest extends TestCase {
 		);
 		$content  = '[gallery ids="705,704,703" columns="3" link="file"]';
 
-		// ACT: rewrite the media shortcode IDs.
+		// ACT: Rewrite the media shortcode IDs.
 		$result = $rewriter->rewrite_media_shortcode_ids( $content, $resolver );
 
 		// ASSERT: IDs map to dest in order; other attributes are byte-identical.
@@ -265,7 +265,7 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * accepts, is rewritten and left unquoted.
 	 */
 	public function test_unquoted_ids_rewritten(): void {
-		// ARRANGE: gallery with a bare, unquoted ids list.
+		// ARRANGE: Gallery with a bare, unquoted ids list.
 		$rewriter = $this->build_rewriter();
 		$resolver = $this->id_resolver(
 			array(
@@ -275,7 +275,7 @@ class ShortcodeIDRewriterTest extends TestCase {
 		);
 		$content  = '[gallery ids=705,704 columns="3"]';
 
-		// ACT: rewrite the media shortcode IDs.
+		// ACT: Rewrite the media shortcode IDs.
 		$result = $rewriter->rewrite_media_shortcode_ids( $content, $resolver );
 
 		// ASSERT: IDs mapped; the value stays unquoted, columns untouched.
@@ -287,15 +287,15 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * preserved.
 	 */
 	public function test_single_quoted_ids_rewritten(): void {
-		// ARRANGE: gallery with single-quoted ids.
+		// ARRANGE: Gallery with single-quoted ids.
 		$rewriter = $this->build_rewriter();
 		$resolver = $this->id_resolver( array( 7 => 70 ) );
 		$content  = "[gallery ids='7']";
 
-		// ACT: rewrite the media shortcode IDs.
+		// ACT: Rewrite the media shortcode IDs.
 		$result = $rewriter->rewrite_media_shortcode_ids( $content, $resolver );
 
-		// ASSERT: rewritten; single quoting preserved.
+		// ASSERT: Rewritten; single quoting preserved.
 		$this->assertSame( "[gallery ids='70']", $result );
 	}
 
@@ -304,7 +304,7 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * shortcode.
 	 */
 	public function test_include_and_exclude_rewritten(): void {
-		// ARRANGE: shortcode carrying all three id-bearing attributes.
+		// ARRANGE: Shortcode carrying all three id-bearing attributes.
 		$rewriter = $this->build_rewriter();
 		$resolver = $this->id_resolver(
 			array(
@@ -316,10 +316,10 @@ class ShortcodeIDRewriterTest extends TestCase {
 		);
 		$content  = '[gallery ids="1,2" include="3" exclude="4"]';
 
-		// ACT: rewrite the media shortcode IDs.
+		// ACT: Rewrite the media shortcode IDs.
 		$result = $rewriter->rewrite_media_shortcode_ids( $content, $resolver );
 
-		// ASSERT: every id-bearing attribute is rewritten.
+		// ASSERT: Every id-bearing attribute is rewritten.
 		$this->assertSame(
 			'[gallery ids="91,92" include="93" exclude="94"]',
 			$result
@@ -331,15 +331,15 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * place while its resolvable siblings are rewritten.
 	 */
 	public function test_unresolved_id_left_in_place(): void {
-		// ARRANGE: only the middle ID resolves.
+		// ARRANGE: Only the middle ID resolves.
 		$rewriter = $this->build_rewriter();
 		$resolver = $this->id_resolver( array( 20 => 200 ) );
 		$content  = '[gallery ids="10,20,30"]';
 
-		// ACT: rewrite the media shortcode IDs.
+		// ACT: Rewrite the media shortcode IDs.
 		$result = $rewriter->rewrite_media_shortcode_ids( $content, $resolver );
 
-		// ASSERT: resolved token changes, unresolved tokens stay verbatim.
+		// ASSERT: Resolved token changes, unresolved tokens stay verbatim.
 		$this->assertSame( '[gallery ids="10,200,30"]', $result );
 	}
 
@@ -348,7 +348,7 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * numeric tokens are rewritten, spacing and non-numeric tokens preserved.
 	 */
 	public function test_whitespace_and_non_numeric_tokens_handled(): void {
-		// ARRANGE: padded CSV with a stray non-numeric token.
+		// ARRANGE: Padded CSV with a stray non-numeric token.
 		$rewriter = $this->build_rewriter();
 		$resolver = $this->id_resolver(
 			array(
@@ -359,10 +359,10 @@ class ShortcodeIDRewriterTest extends TestCase {
 		);
 		$content  = '[gallery ids="1, 2, foo, 3"]';
 
-		// ACT: rewrite the media shortcode IDs.
+		// ACT: Rewrite the media shortcode IDs.
 		$result = $rewriter->rewrite_media_shortcode_ids( $content, $resolver );
 
-		// ASSERT: numeric tokens rewritten; spacing and the word token kept.
+		// ASSERT: Numeric tokens rewritten; spacing and the word token kept.
 		$this->assertSame( '[gallery ids="5, 6, foo, 7"]', $result );
 	}
 
@@ -371,12 +371,12 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * is preserved.
 	 */
 	public function test_playlist_ids_rewritten_type_preserved(): void {
-		// ARRANGE: an audio playlist.
+		// ARRANGE: An audio playlist.
 		$rewriter = $this->build_rewriter();
 		$resolver = $this->id_resolver( array( 55 => 88 ) );
 		$content  = '[playlist type="audio" ids="55"]';
 
-		// ACT: rewrite the media shortcode IDs.
+		// ACT: Rewrite the media shortcode IDs.
 		$result = $rewriter->rewrite_media_shortcode_ids( $content, $resolver );
 
 		// ASSERT: ids rewritten; type preserved.
@@ -388,15 +388,15 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * is left untouched.
 	 */
 	public function test_post_id_attribute_left_untouched(): void {
-		// ARRANGE: gallery referencing a parent post by id.
+		// ARRANGE: Gallery referencing a parent post by id.
 		$rewriter = $this->build_rewriter();
 		$resolver = $this->id_resolver( array( 123 => 999 ) );
 		$content  = '[gallery id="123"]';
 
-		// ACT: rewrite the media shortcode IDs.
+		// ACT: Rewrite the media shortcode IDs.
 		$result = $rewriter->rewrite_media_shortcode_ids( $content, $resolver );
 
-		// ASSERT: the id attribute is not a media-ID list, so it is unchanged.
+		// ASSERT: The id attribute is not a media-ID list, so it is unchanged.
 		$this->assertSame( '[gallery id="123"]', $result );
 	}
 
@@ -405,15 +405,15 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * unchanged.
 	 */
 	public function test_content_without_media_shortcodes_unchanged(): void {
-		// ARRANGE: prose plus a caption shortcode, but no gallery/playlist.
+		// ARRANGE: Prose plus a caption shortcode, but no gallery/playlist.
 		$rewriter = $this->build_rewriter();
 		$resolver = $this->id_resolver( array( 1 => 2 ) );
 		$content  = '<p>Text</p>[caption id="attachment_1"]<img src="x" />[/caption]';
 
-		// ACT: rewrite the media shortcode IDs.
+		// ACT: Rewrite the media shortcode IDs.
 		$result = $rewriter->rewrite_media_shortcode_ids( $content, $resolver );
 
-		// ASSERT: content is byte-for-byte unchanged.
+		// ASSERT: Content is byte-for-byte unchanged.
 		$this->assertSame( $content, $result );
 	}
 
@@ -422,16 +422,16 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * once per run.
 	 */
 	public function test_repeated_id_resolved_once(): void {
-		// ARRANGE: the same source ID appears in two shortcodes.
+		// ARRANGE: The same source ID appears in two shortcodes.
 		$rewriter = $this->build_rewriter();
 		$calls    = array();
 		$resolver = $this->id_resolver( array( 7 => 70 ), $calls );
 		$content  = '[gallery ids="7"] and [playlist ids="7"]';
 
-		// ACT: rewrite the media shortcode IDs.
+		// ACT: Rewrite the media shortcode IDs.
 		$result = $rewriter->rewrite_media_shortcode_ids( $content, $resolver );
 
-		// ASSERT: both rewritten, but the resolver ran once for ID 7.
+		// ASSERT: Both rewritten, but the resolver ran once for ID 7.
 		$this->assertSame( '[gallery ids="70"] and [playlist ids="70"]', $result );
 		$this->assertSame( array( 7 ), $calls );
 	}
@@ -441,15 +441,15 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * untouched.
 	 */
 	public function test_escaped_shortcode_left_untouched(): void {
-		// ARRANGE: an escaped gallery literal.
+		// ARRANGE: An escaped gallery literal.
 		$rewriter = $this->build_rewriter();
 		$resolver = $this->id_resolver( array( 1 => 9 ) );
 		$content  = '[[gallery ids="1"]]';
 
-		// ACT: rewrite the media shortcode IDs.
+		// ACT: Rewrite the media shortcode IDs.
 		$result = $rewriter->rewrite_media_shortcode_ids( $content, $resolver );
 
-		// ASSERT: the escaped literal is preserved verbatim.
+		// ASSERT: The escaped literal is preserved verbatim.
 		$this->assertSame( '[[gallery ids="1"]]', $result );
 	}
 
@@ -458,7 +458,7 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * (e.g. a hyphen-prefixed data-ids) is not mistaken for the ids attribute.
 	 */
 	public function test_similar_named_attribute_not_rewritten(): void {
-		// ARRANGE: a real ids attribute alongside a data-ids attribute.
+		// ARRANGE: A real ids attribute alongside a data-ids attribute.
 		$rewriter = $this->build_rewriter();
 		$resolver = $this->id_resolver(
 			array(
@@ -468,10 +468,10 @@ class ShortcodeIDRewriterTest extends TestCase {
 		);
 		$content  = '[gallery ids="1" data-ids="9"]';
 
-		// ACT: rewrite the media shortcode IDs.
+		// ACT: Rewrite the media shortcode IDs.
 		$result = $rewriter->rewrite_media_shortcode_ids( $content, $resolver );
 
-		// ASSERT: only the real ids attribute is rewritten.
+		// ASSERT: Only the real ids attribute is rewritten.
 		$this->assertSame( '[gallery ids="50" data-ids="9"]', $result );
 	}
 
@@ -505,7 +505,7 @@ class ShortcodeIDRewriterTest extends TestCase {
 		// ACT: Rewrite the singular post reference.
 		$result = $rewriter->rewrite_gallery_post_reference( $content, $resolver, 0 );
 
-		// ASSERT: Id remapped; type preserved.
+		// ASSERT: id remapped; type preserved.
 		$this->assertSame( '[playlist type="video" id="88"]', $result );
 	}
 
@@ -733,10 +733,10 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * gallery, across quoting styles.
 	 */
 	public function test_collect_gathers_gallery_ids(): void {
-		// ARRANGE: galleries with the three ids quoting forms.
+		// ARRANGE: Galleries with the three ids quoting forms.
 		$rewriter = $this->build_rewriter();
 
-		// ACT + ASSERT: each quoting form yields the numeric tokens.
+		// ACT + ASSERT: Each quoting form yields the numeric tokens.
 		$this->assertSame(
 			array( 10, 20, 30 ),
 			$rewriter->collect_shortcode_attachment_ids( '[gallery ids="10,20,30"]' )
@@ -756,10 +756,10 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * removes an attachment from the set rather than referencing it.
 	 */
 	public function test_collect_includes_include_omits_exclude(): void {
-		// ARRANGE: a shortcode carrying all three id-bearing attributes.
+		// ARRANGE: A shortcode carrying all three id-bearing attributes.
 		$rewriter = $this->build_rewriter();
 
-		// ACT: collect the referenced IDs.
+		// ACT: Collect the referenced IDs.
 		$ids = $rewriter->collect_shortcode_attachment_ids(
 			'[gallery ids="1,2" include="3" exclude="4"]'
 		);
@@ -773,10 +773,10 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * post ID rather than an attachment list.
 	 */
 	public function test_collect_ignores_singular_post_id(): void {
-		// ARRANGE: a gallery referencing a parent post by id.
+		// ARRANGE: A gallery referencing a parent post by id.
 		$rewriter = $this->build_rewriter();
 
-		// ACT + ASSERT: the singular id yields nothing.
+		// ACT + ASSERT: The singular id yields nothing.
 		$this->assertSame(
 			array(),
 			$rewriter->collect_shortcode_attachment_ids( '[gallery id="123"]' )
@@ -787,15 +787,15 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * Verifies that an id repeated across shortcodes is collected once.
 	 */
 	public function test_collect_deduplicates_ids(): void {
-		// ARRANGE: the same id appears in a gallery and a playlist.
+		// ARRANGE: The same id appears in a gallery and a playlist.
 		$rewriter = $this->build_rewriter();
 
-		// ACT: collect across both shortcodes.
+		// ACT: Collect across both shortcodes.
 		$ids = $rewriter->collect_shortcode_attachment_ids(
 			'[gallery ids="7"] and [playlist ids="7,8"]'
 		);
 
-		// ASSERT: the shared id appears once.
+		// ASSERT: The shared id appears once.
 		$this->assertSame( array( 7, 8 ), $ids );
 	}
 
@@ -804,15 +804,15 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * mistaken for the ids attribute.
 	 */
 	public function test_collect_ignores_similar_named_attribute(): void {
-		// ARRANGE: a real ids attribute alongside a data-ids attribute.
+		// ARRANGE: A real ids attribute alongside a data-ids attribute.
 		$rewriter = $this->build_rewriter();
 
-		// ACT: collect the referenced IDs.
+		// ACT: Collect the referenced IDs.
 		$ids = $rewriter->collect_shortcode_attachment_ids(
 			'[gallery ids="1" data-ids="9"]'
 		);
 
-		// ASSERT: only the real ids attribute is read.
+		// ASSERT: Only the real ids attribute is read.
 		$this->assertSame( array( 1 ), $ids );
 	}
 
@@ -820,10 +820,10 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * Verifies that an escaped [[gallery]] literal contributes no IDs.
 	 */
 	public function test_collect_skips_escaped_shortcode(): void {
-		// ARRANGE: an escaped gallery literal.
+		// ARRANGE: An escaped gallery literal.
 		$rewriter = $this->build_rewriter();
 
-		// ACT + ASSERT: the escaped literal is not read.
+		// ACT + ASSERT: The escaped literal is not read.
 		$this->assertSame(
 			array(),
 			$rewriter->collect_shortcode_attachment_ids( '[[gallery ids="1"]]' )
@@ -835,10 +835,10 @@ class ShortcodeIDRewriterTest extends TestCase {
 	 * IDs.
 	 */
 	public function test_collect_returns_empty_without_media_shortcodes(): void {
-		// ARRANGE: prose plus a caption, but no gallery/playlist.
+		// ARRANGE: Prose plus a caption, but no gallery/playlist.
 		$rewriter = $this->build_rewriter();
 
-		// ACT + ASSERT: nothing to collect.
+		// ACT + ASSERT: Nothing to collect.
 		$this->assertSame(
 			array(),
 			$rewriter->collect_shortcode_attachment_ids(

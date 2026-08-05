@@ -53,7 +53,7 @@ class Media_Processor_Matching_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Data provider: content where the media URL should be found and replaced.
+	 * Data provider: Content where the media URL should be found and replaced.
 	 *
 	 * @return array<string, array{string, string}>
 	 */
@@ -274,7 +274,7 @@ class Media_Processor_Matching_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Data provider: content where the URL must NOT be touched.
+	 * Data provider: Content where the URL must NOT be touched.
 	 *
 	 * @return array<string, array{string, string}>
 	 */
@@ -509,7 +509,7 @@ class Media_Processor_Matching_Test extends Source_Posts_API_Test_Base {
 	 * quote) is recorded as a failure so the caller can surface a warning.
 	 */
 	public function test_malformed_html_records_missed_url_as_failure(): void {
-		// ARRANGE: Img with unclosed quote — regex cannot match.
+		// ARRANGE: img with unclosed quote — regex cannot match.
 		$source_site_url = 'https://example.com';
 		$url             = 'https://example.com/photo.jpg';
 		$content         = '<img src="' . $url;
@@ -654,7 +654,7 @@ class Media_Processor_Matching_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Data provider: content with source-domain media URLs in non-media
+	 * Data provider: Content with source-domain media URLs in non-media
 	 * contexts that must NOT trigger a detection false positive.
 	 *
 	 * @return array<string, array{string, string}>

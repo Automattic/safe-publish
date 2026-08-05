@@ -236,7 +236,7 @@ export function formatDateRangeLabel(
 }
 
 /**
- * One side of the date-range popover: a labeled DatePicker with a Clear
+ * One side of the date-range popover: A labeled DatePicker with a Clear
  * button that only renders when the bound is set.
  *
  * @param {Object}    props               Component props.
@@ -291,7 +291,7 @@ function DateRangeColumn( {
 }
 
 /**
- * Date-range filter: a labeled dropdown whose popover holds two date
+ * Date-range filter: A labeled dropdown whose popover holds two date
  * pickers, one for the after bound and one for the before bound. Each
  * column constrains the other so the range can't invert.
  *

@@ -26,7 +26,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class VIP_Safe_Auth {
 
 	/**
-	 * Probe status: probed site accepted the credentials and granted edit
+	 * Probe status: Probed site accepted the credentials and granted edit
 	 * context.
 	 *
 	 * @var string
@@ -34,7 +34,7 @@ final class VIP_Safe_Auth {
 	const STATUS_AUTHORIZED = 'authorized';
 
 	/**
-	 * Probe status: probed site rejected the credentials (HTTP 401/403 with a
+	 * Probe status: Probed site rejected the credentials (HTTP 401/403 with a
 	 * Safe Publish authenticator error).
 	 *
 	 * @var string
@@ -42,7 +42,7 @@ final class VIP_Safe_Auth {
 	const STATUS_UNAUTHORIZED = 'unauthorized';
 
 	/**
-	 * Probe status: the probed site blocked the request upstream, before Safe
+	 * Probe status: The probed site blocked the request upstream, before Safe
 	 * Publish's authenticator ran (e.g. a security plugin, theme, mu-plugin, or
 	 * WAF rule restricting the REST API).
 	 *
@@ -51,7 +51,7 @@ final class VIP_Safe_Auth {
 	const STATUS_BLOCKED = 'blocked';
 
 	/**
-	 * Probe status: probed site could not be reached (network failure or
+	 * Probe status: Probed site could not be reached (network failure or
 	 * unexpected response code).
 	 *
 	 * @var string
@@ -59,7 +59,7 @@ final class VIP_Safe_Auth {
 	const STATUS_UNREACHABLE = 'unreachable';
 
 	/**
-	 * Probe status: site URL to probe is not configured.
+	 * Probe status: Site URL to probe is not configured.
 	 *
 	 * @var string
 	 */

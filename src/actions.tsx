@@ -291,7 +291,7 @@ export const createPostsActions = (
 };
 
 /**
- * A banner shown for an action outcome: in-flight (info), succeeded (success),
+ * A banner shown for an action outcome: In-flight (info), succeeded (success),
  * failed (error), or completed without resolving the issue (warning).
  */
 export interface ActionNotice {
@@ -648,7 +648,7 @@ const postBulkRetryBatches = async (
 		skipped: 0,
 	};
 
-	// Post the batches sequentially: each awaits the previous so the run stays
+	// Post the batches sequentially: Each awaits the previous so the run stays
 	// within the server's per-request cap and reconciliations can't overlap.
 	/* eslint-disable no-await-in-loop -- sequential by design. */
 	for ( const batch of batches ) {
@@ -715,7 +715,7 @@ const dispatchBulkRetry = (
 	onRefresh: ( () => void ) | undefined,
 	skippedNonRetryable = 0
 ): void => {
-	// Drop a double-submit: reuse the per-issue in-flight set, so an overlapping
+	// Drop a double-submit: Reuse the per-issue in-flight set, so an overlapping
 	// retry for any of these issues is skipped.
 	const keys = issues.map( attentionIssueId );
 	if ( keys.some( ( key ) => context.inFlight?.has( key ) ) ) {

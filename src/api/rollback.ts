@@ -14,7 +14,7 @@ import { __ } from '@wordpress/i18n';
 import type { ApiResponse, UnifiedPostRow } from '../types';
 
 /**
- * Action the server performs when rolling back an item: a newly created post
+ * Action the server performs when rolling back an item: A newly created post
  * is deleted, an updated post is restored to its previous version.
  */
 export type RollbackAction = 'deleted' | 'restored';
@@ -58,7 +58,7 @@ export interface BulkRollbackResult {
 /**
  * Predicts whether rolling back an item restores its previous version (true)
  * or permanently deletes a newly created post (false). Mirrors the server's
- * Session_Rollback_Service: only fresh creations (no captured previous
+ * Session_Rollback_Service: Only fresh creations (no captured previous
  * content) get deleted; every other eligible row restores.
  *
  * @param {UnifiedPostRow} item Unified Posts listing row.
@@ -163,7 +163,7 @@ export const rollbackItems = async (
 				),
 			};
 		} else {
-			// Sequential by design: rolling back one item at a time keeps
+			// Sequential by design: Rolling back one item at a time keeps
 			// server-side post hooks from interleaving and yields
 			// deterministic progress.
 			// eslint-disable-next-line no-await-in-loop

@@ -55,7 +55,7 @@ class Content_Processor {
 	 * (e.g. core/navigation-link.id only when kind=post-type) and optionally
 	 * naming a url_attr to re-derive from the resolved destination id.
 	 *
-	 * Deliberately curated: only attrs known to hold a source post/term
+	 * Deliberately curated: Only attrs known to hold a source post/term
 	 * reference are remapped; a permalink in any other attr is host-swapped
 	 * only, by design.
 	 *
@@ -258,7 +258,7 @@ class Content_Processor {
 		$processed_content = $this->shortcode_id_rewriter->rewrite_caption_ids( $processed_content );
 
 		// Rewrite gallery/playlist shortcode IDs, which the media pass can't
-		// reach: bare source attachment IDs with no URL to sideload from.
+		// reach: Bare source attachment IDs with no URL to sideload from.
 		$processed_content = $this->rewrite_media_shortcode_ids(
 			$processed_content,
 			$source_site_url,
@@ -392,7 +392,7 @@ class Content_Processor {
 	 * Remaps the singular gallery/playlist `id` post reference to its
 	 * destination, or strips it when it names the importing post's own set.
 	 *
-	 * The reference is resolved like a block reference: the in-batch session
+	 * The reference is resolved like a block reference: The in-batch session
 	 * map first, then a source-scoped lookup for a post imported in an earlier
 	 * session. An unresolved reference is left in place and recorded as a
 	 * retryable warning so a later retry can remap it.
@@ -669,7 +669,7 @@ class Content_Processor {
 	 * Imports the attached-media set a bare [gallery]/[playlist] renders,
 	 * sideloading each item by source id. That records its source parent, which
 	 * the import resolves to this post at persist time, and applies the source
-	 * menu_order so the set renders in order. No content is rewritten: once
+	 * menu_order so the set renders in order. No content is rewritten: Once
 	 * parented, core renders the shortcode from the post's children.
 	 *
 	 * A dangling source ref (null) or a failed sideload (false) is skipped rather
@@ -1336,7 +1336,7 @@ class Content_Processor {
 	 * Imports a block's source media and points its attachment-id attr at the
 	 * new destination attachment.
 	 *
-	 * The media URL is resolved by the caller because its location varies: it is
+	 * The media URL is resolved by the caller because its location varies: It is
 	 * a block attr for most blocks (src, url, href) but is sourced from innerHTML
 	 * for core/media-text, whose mediaUrl attr is not stored in the block. A
 	 * third-party (null) or failed (false) import leaves the attrs untouched.
@@ -1746,7 +1746,7 @@ class Content_Processor {
 	/**
 	 * Rewrites post-/term-ID block attrs from source to destination IDs.
 	 *
-	 * Two-pass: collect unresolved IDs, bulk-lookup per kind, apply on a
+	 * Two-pass: Collect unresolved IDs, bulk-lookup per kind, apply on a
 	 * second walk. Unmapped IDs stay in place with a warning. For nav-link and
 	 * submenu blocks the link url is re-derived from the resolved destination
 	 * id; replace_source_urls still swaps the host for any url left untouched.
@@ -1791,7 +1791,7 @@ class Content_Processor {
 	 * Repoints one stale block reference in a post to its now-resolvable
 	 * destination ID.
 	 *
-	 * Targeted counterpart to the import-time remap: it repoints only the attrs
+	 * Targeted counterpart to the import-time remap: It repoints only the attrs
 	 * matching $target_ref and $target_kind, leaving resolved siblings
 	 * untouched, and persists without a revision or post_modified bump. Link
 	 * urls are re-derived alongside the ID where the block rule carries one.
@@ -1878,7 +1878,7 @@ class Content_Processor {
 	 * Repoints one stale gallery/playlist `id` post reference to its now-
 	 * resolvable destination, rewriting the persisted content in place.
 	 *
-	 * Targeted counterpart to the import-time remap: it rewrites only the `id`
+	 * Targeted counterpart to the import-time remap: It rewrites only the `id`
 	 * matching $target_ref and persists without a revision or post_modified
 	 * bump.
 	 *
@@ -2297,7 +2297,7 @@ class Content_Processor {
 						'value' => $source_site_url,
 					),
 				),
-				// Not 'any': it omits exclude_from_search post types.
+				// Not 'any': It omits exclude_from_search post types.
 				'post_type'              => array_keys( get_post_types() ),
 				'post_status'            => 'any',
 				'posts_per_page'         => count( $ids ),
@@ -2391,7 +2391,7 @@ class Content_Processor {
 	}
 
 	/**
-	 * Second-pass walk: applies the post/term ID maps to the block tree.
+	 * Second-pass walk: Applies the post/term ID maps to the block tree.
 	 * Unmapped references are left untouched and recorded as warnings so the
 	 * admin can fix them up after publishing dependencies.
 	 *
@@ -2518,7 +2518,7 @@ class Content_Processor {
 	 * The source url's query is carried over with post/term identity vars
 	 * removed (so a plain-permalink source's stale id cannot override the new
 	 * path) and its fragment preserved. Draft, pending, and auto-draft post
-	 * targets are left alone: their slug is not final, so re-deriving would
+	 * targets are left alone: Their slug is not final, so re-deriving would
 	 * store a temporary url.
 	 *
 	 * @param array<string, mixed> $attrs    Block attrs.

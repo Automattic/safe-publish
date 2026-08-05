@@ -31,7 +31,7 @@ use WP_Term;
  * service so parity tests can run read-only assertions against the result.
  *
  * Lives outside the TestCase hierarchy so it can seed a class-wide fixture from
- * wpSetUpBeforeClass(): the WordPress test framework wraps each test method in a
+ * wpSetUpBeforeClass(): The WordPress test framework wraps each test method in a
  * rolled-back transaction, so the single import must be committed before the
  * per-method transactions begin. It drives Post_Import_Service directly rather
  * than the AJAX controller — transport and two-pass orchestration are covered
@@ -751,7 +751,7 @@ final class Seeder_Parity_Fixture {
 	}
 
 	/**
-	 * Registers the mp4 byte mock for bare [playlist] video children: a
+	 * Registers the mp4 byte mock for bare [playlist] video children: A
 	 * pre_http_request filter serving the fixture bytes and a prefilter that
 	 * populates the empty temp file download_url() leaves behind. Runs alongside
 	 * the image byte mock, which only serves images.
@@ -1046,7 +1046,7 @@ final class Seeder_Parity_Fixture {
 	}
 
 	/**
-	 * Builds the safe_publish_terms field for a body: each flat
+	 * Builds the safe_publish_terms field for a body: Each flat
 	 * category/post_tag assignment as an assigned, described record, plus the
 	 * hierarchical section tree when requested.
 	 *
@@ -1105,7 +1105,7 @@ final class Seeder_Parity_Fixture {
 	}
 
 	/**
-	 * Returns the three-level section tree: a root, a child under it, and an
+	 * Returns the three-level section tree: A root, a child under it, and an
 	 * assigned leaf under the child, each carrying a description.
 	 *
 	 * @return list<array{id: int, name: string, slug: string, parent: int, description: string, assigned: bool}>

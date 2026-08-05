@@ -42,7 +42,7 @@ describe( 'useStepBackWhenPageEmpties', () => {
 		// ARRANGE + ACT: An empty page 2 settles with no error.
 		const setPage = renderStepBack();
 
-		// ASSERT: the listing drops to page 1, exactly once.
+		// ASSERT: The listing drops to page 1, exactly once.
 		expect( setPage ).toHaveBeenCalledTimes( 1 );
 		expect( setPage ).toHaveBeenCalledWith( 1 );
 	} );
@@ -51,7 +51,7 @@ describe( 'useStepBackWhenPageEmpties', () => {
 		// ARRANGE + ACT: An empty page 3 settles.
 		const setPage = renderStepBack( { page: 3 } );
 
-		// ASSERT: it retreats to page 2, not all the way to page 1.
+		// ASSERT: It retreats to page 2, not all the way to page 1.
 		expect( setPage ).toHaveBeenCalledWith( 2 );
 	} );
 
@@ -60,7 +60,7 @@ describe( 'useStepBackWhenPageEmpties', () => {
 		const explicit = renderStepBack( { page: 1 } );
 		const implicit = renderStepBack( { page: undefined } );
 
-		// ASSERT: page 1 is the floor; no step-back fires.
+		// ASSERT: Page 1 is the floor; no step-back fires.
 		expect( explicit ).not.toHaveBeenCalled();
 		expect( implicit ).not.toHaveBeenCalled();
 	} );
@@ -69,7 +69,7 @@ describe( 'useStepBackWhenPageEmpties', () => {
 		// ARRANGE + ACT: The empty result is not yet settled.
 		const setPage = renderStepBack( { isLoading: true } );
 
-		// ASSERT: no step-back until the fetch settles.
+		// ASSERT: No step-back until the fetch settles.
 		expect( setPage ).not.toHaveBeenCalled();
 	} );
 
@@ -77,7 +77,7 @@ describe( 'useStepBackWhenPageEmpties', () => {
 		// ARRANGE + ACT: The page is empty only because the fetch failed.
 		const setPage = renderStepBack( { fetchError: 'Network error.' } );
 
-		// ASSERT: no step-back fires on a failed fetch.
+		// ASSERT: No step-back fires on a failed fetch.
 		expect( setPage ).not.toHaveBeenCalled();
 	} );
 
@@ -85,7 +85,7 @@ describe( 'useStepBackWhenPageEmpties', () => {
 		// ARRANGE + ACT: A settled page that is not empty.
 		const setPage = renderStepBack( { isEmpty: false } );
 
-		// ASSERT: there is nothing to step back from.
+		// ASSERT: There is nothing to step back from.
 		expect( setPage ).not.toHaveBeenCalled();
 	} );
 
@@ -93,7 +93,7 @@ describe( 'useStepBackWhenPageEmpties', () => {
 		// ARRANGE + ACT: Initial mount, no fetch has completed yet.
 		const setPage = renderStepBack( { hasFetchedOnce: false } );
 
-		// ASSERT: the guard waits for real data before moving the page.
+		// ASSERT: The guard waits for real data before moving the page.
 		expect( setPage ).not.toHaveBeenCalled();
 	} );
 } );

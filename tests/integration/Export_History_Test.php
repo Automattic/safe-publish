@@ -17,7 +17,7 @@ use WP_Ajax_UnitTestCase;
 /**
  * Export History Test Class.
  *
- * Cross-system contract: timestamps are stored as GMT and emitted as ISO
+ * Cross-system contract: Timestamps are stored as GMT and emitted as ISO
  * 8601 with an explicit Z marker so the React display can render them in
  * browser-local time.
  */

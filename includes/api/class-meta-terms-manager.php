@@ -337,7 +337,7 @@ final class Meta_Terms_Manager {
 	}
 
 	/**
-	 * Resolves one record to a destination term ID: a trusted destination ID,
+	 * Resolves one record to a destination term ID: A trusted destination ID,
 	 * an existing match, or a newly created term. Writes source-term metadata
 	 * on the resolved term when a source ID and site URL are known.
 	 *
@@ -395,7 +395,7 @@ final class Meta_Terms_Manager {
 	}
 
 	/**
-	 * Finds an existing destination term for a record, in priority: source-term
+	 * Finds an existing destination term for a record, in priority: Source-term
 	 * identity (source ID + URL meta), slug, then name under the resolved
 	 * destination parent. The name match is parent-scoped so same-named
 	 * siblings under different parents stay distinct.

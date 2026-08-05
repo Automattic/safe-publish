@@ -22,7 +22,7 @@ class DatetimeSanitizerTest extends TestCase {
 	 * can use a single absent check.
 	 */
 	public function test_null_and_empty_input_return_null(): void {
-		// ACT + ASSERT: Null and empty input normalize to null.
+		// ACT + ASSERT: null and empty input normalize to null.
 		$this->assertNull( Datetime_Sanitizer::sanitize_iso_datetime( null ) );
 		$this->assertNull( Datetime_Sanitizer::sanitize_iso_datetime( '' ) );
 	}

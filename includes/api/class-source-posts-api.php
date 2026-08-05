@@ -251,7 +251,7 @@ class Source_Posts_API {
 	/**
 	 * Shape-validates a single listing item received from the source.
 	 *
-	 * HMAC authenticates the source's identity, not its honesty: a
+	 * HMAC authenticates the source's identity, not its honesty: A
 	 * compromised source could return malicious fields the destination
 	 * renders. We type-coerce here, and harden two fields a hostile value
 	 * could otherwise weaponize on render:
@@ -566,7 +566,7 @@ class Source_Posts_API {
 			$post_data['link'] = esc_url_raw( $data['link'] );
 		}
 
-		// HTML fields: sanitized at the import point with modification
+		// HTML fields: Sanitized at the import point with modification
 		// detection to prevent silent data loss during migration.
 		$post_data['content'] = $data['content']['raw'];
 		$post_data['excerpt'] = $data['excerpt']['raw'];
@@ -767,7 +767,7 @@ class Source_Posts_API {
 	}
 
 	/**
-	 * Extracts the safe_publish_attached_media list from a REST response: the
+	 * Extracts the safe_publish_attached_media list from a REST response: The
 	 * ordered { id, menu_order } set a bare gallery/playlist renders.
 	 *
 	 * @param array $data Decoded REST response for a single post.

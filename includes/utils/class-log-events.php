@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * the payload shape per event.
  *
  * A channel is a producer subsystem (auth, media import, reference
- * reconciliation), not a content type: imported structures such as tags or
+ * reconciliation), not a content type: Imported structures such as tags or
  * categories record degradations as import-channel events and attention-issue
  * types, not new channels.
  */

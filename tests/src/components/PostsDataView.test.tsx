@@ -63,16 +63,16 @@ afterEach( () => {
 
 describe( 'PostsDataView URL search routing', () => {
 	it( 'should hint to switch chips when a destination link is pasted on a catalog-primary chip', async () => {
-		// ARRANGE: mount on the default All chip (catalog-primary).
+		// ARRANGE: Mount on the default All chip (catalog-primary).
 		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
 
-		// ACT: paste a destination-host permalink; the debounce then routes it
+		// ACT: Paste a destination-host permalink; the debounce then routes it
 		// by matching the home_url() host, not the browser origin.
 		fireEvent.change( searchInput(), {
 			target: { value: `${ DEST_URL }/2026/03/my-post/` },
 		} );
 
-		// ASSERT: the listing hints toward the destination chips rather than
+		// ASSERT: The listing hints toward the destination chips rather than
 		// running a doomed lookup on the wrong slug column.
 		expect(
 			await screen.findByText(
@@ -82,15 +82,15 @@ describe( 'PostsDataView URL search routing', () => {
 	} );
 
 	it( 'should route a source link to a slug lookup on a catalog-primary chip', async () => {
-		// ARRANGE: mount on the default All chip (catalog-primary).
+		// ARRANGE: Mount on the default All chip (catalog-primary).
 		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
 
-		// ACT: paste a source-host permalink; the debounce then routes it.
+		// ACT: Paste a source-host permalink; the debounce then routes it.
 		fireEvent.change( searchInput(), {
 			target: { value: `${ SOURCE_URL }/2026/03/my-post/` },
 		} );
 
-		// ASSERT: the source slug is sent as an exact name= lookup.
+		// ASSERT: The source slug is sent as an exact name= lookup.
 		await waitFor( () => {
 			const names = fetchMock.mock.calls.map( ( call ) =>
 				( call[ 1 ] as { body: FormData } ).body.get( 'name' )
@@ -98,7 +98,7 @@ describe( 'PostsDataView URL search routing', () => {
 			expect( names ).toContain( 'my-post' );
 		} );
 
-		// ASSERT: a matching chip shows no switch hint.
+		// ASSERT: A matching chip shows no switch hint.
 		expect( screen.queryByText( /Switch to/ ) ).not.toBeInTheDocument();
 	} );
 } );
