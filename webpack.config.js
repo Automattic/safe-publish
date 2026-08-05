@@ -6,7 +6,6 @@ module.exports = {
 	entry: {
 		posts: path.resolve( process.cwd(), 'src', 'posts.tsx' ),
 		'audit-log': path.resolve( process.cwd(), 'src', 'audit-log.tsx' ),
-		'exports': path.resolve( process.cwd(), 'src', 'exports.tsx' ),
 	},
 	resolve: {
 		...defaultConfig.resolve,

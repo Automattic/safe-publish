@@ -15,7 +15,6 @@ use Safe_Publish\Admin\Import_Mode_Admin_Handler;
 use Safe_Publish\Admin\Admin_Menu_Manager;
 use Safe_Publish\Admin\Audit_Log_Page;
 use Safe_Publish\Admin\Content_Processor;
-use Safe_Publish\Admin\Exports_Page;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Import_Actions_Ajax_Handler;
 use Safe_Publish\Admin\Navigation_Ref_Rewriter;
@@ -175,7 +174,7 @@ final class Plugin {
 		if ( $can_import ) {
 			$this->init_full_admin();
 		} else {
-			$this->init_settings_only_admin( $can_export );
+			$this->init_settings_only_admin();
 		}
 	}
 
@@ -187,10 +186,10 @@ final class Plugin {
 	 * the export-only top-level page lives in this class, so neither owns the
 	 * full list. The "Source Posts" submenu reuses the `safe-publish` slug, so
 	 * it shares the top-level hook suffix and needs no separate entry. The
-	 * Exports submenu resolves to `safe-publish_page_safe-publish-exports` in
-	 * both modes because WordPress builds the suffix from the sanitized parent
-	 * menu title ("Safe Publish"), not the parent slug. Screens absent in the
-	 * active mode simply never match the current hook suffix.
+	 * Audit Log submenu resolves to `safe-publish_page_safe-publish-audit-log`
+	 * in both modes because WordPress builds the suffix from the sanitized
+	 * parent menu title ("Safe Publish"), not the parent slug. Screens absent
+	 * in the active mode simply never match the current hook suffix.
 	 *
 	 * @param string[] $allowed_screens Hook suffixes where Pendo is enabled.
 	 * @return string[] Filtered list including the plugin's admin screens.
@@ -202,7 +201,6 @@ final class Plugin {
 				'toplevel_page_safe-publish',
 				'toplevel_page_safe-publish-settings',
 				'safe-publish_page_safe-publish-settings',
-				'safe-publish_page_safe-publish-exports',
 				'safe-publish_page_safe-publish-audit-log',
 			)
 		);
@@ -351,7 +349,6 @@ final class Plugin {
 		$attention_issues = new Attention_Issues_Repository();
 		$rollback_service = new Session_Rollback_Service( $repository );
 
-		$exports_page   = new Exports_Page();
 		$audit_log_page = new Audit_Log_Page();
 
 		$import_actions = new Import_Actions_Ajax_Handler(
@@ -383,7 +380,6 @@ final class Plugin {
 
 		return new Import_Mode_Admin_Handler(
 			$menu_manager,
-			$exports_page,
 			$audit_log_page,
 			$import_actions,
 			$ajax_controller,
@@ -394,15 +390,9 @@ final class Plugin {
 	/**
 	 * Initializes the settings-only admin UI for export-only and unconfigured
 	 * modes.
-	 *
-	 * @param bool $can_export Whether the site is configured to export content.
 	 */
-	private function init_settings_only_admin( bool $can_export = false ): void {
+	private function init_settings_only_admin(): void {
 		add_action( 'admin_menu', array( $this, 'add_settings_only_admin_menu' ) );
-
-		if ( $can_export ) {
-			( new Exports_Page() )->init_export_only();
-		}
 
 		( new Audit_Log_Page() )->init_settings_only();
 	}
