@@ -9,18 +9,20 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Utils;
 
+use Safe_Publish\Validators\URL_Validator;
+
 /**
  * Manages the custom table that stores one row per import session.
  *
- * Handles table creation only; reads and writes are performed by
- * History_Repository.
+ * Handles table creation and one-time data migrations; reads and writes are
+ * performed by History_Repository.
  */
 final class Imports_Table {
 
 	/**
 	 * Table schema version.
 	 */
-	private const VERSION = '1.0';
+	private const VERSION = '1.1';
 
 	/**
 	 * Option key used to track the installed table schema version.
@@ -89,12 +91,55 @@ final class Imports_Table {
 			ended_at_gmt DATETIME NULL DEFAULT NULL,
 			created_at_gmt DATETIME NOT NULL,
 			PRIMARY KEY  (id),
-			KEY created_at_gmt (created_at_gmt)
+			KEY created_at_gmt (created_at_gmt),
+			KEY source_site_url (source_site_url)
 		) {$charset};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		dbDelta( $sql );
 
+		self::normalize_source_site_urls();
+
 		update_option( self::VERSION_OPTION, self::VERSION, false );
+	}
+
+	/**
+	 * Rewrites stored source identities to their normalized path-bearing form.
+	 *
+	 * Sessions once recorded the raw connection option while post meta and
+	 * degradations recorded the normalized identity. A trailing slash in the
+	 * option was enough to stop the two from comparing equal.
+	 *
+	 * Self-checking: It normalizes each distinct stored value and rewrites
+	 * only what differs, so a repeat run or a reset version option is safe.
+	 */
+	private static function normalize_source_site_urls(): void {
+		global $wpdb;
+
+		$table = self::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$stored = $wpdb->get_col(
+			"SELECT DISTINCT source_site_url FROM `{$table}`"
+		);
+
+		foreach ( $stored as $value ) {
+			$value      = (string) $value;
+			$normalized = URL_Validator::normalize_site_url_with_path( $value );
+
+			// An unparseable value normalizes to '' and is left alone.
+			if ( '' === $normalized || $normalized === $value ) {
+				continue;
+			}
+
+			$wpdb->update(
+				$table,
+				array( 'source_site_url' => $normalized ),
+				array( 'source_site_url' => $value ),
+				array( '%s' ),
+				array( '%s' )
+			);
+		}
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 	}
 }
