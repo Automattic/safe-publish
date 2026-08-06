@@ -98,9 +98,11 @@ final class Imports_Table {
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		dbDelta( $sql );
 
-		self::normalize_source_site_urls();
-
-		update_option( self::VERSION_OPTION, self::VERSION, false );
+		// Record the version only on success, so a database error leaves the
+		// migration to retry instead of marking it complete.
+		if ( self::normalize_source_site_urls() ) {
+			update_option( self::VERSION_OPTION, self::VERSION, false );
+		}
 	}
 
 	/**
@@ -112,8 +114,11 @@ final class Imports_Table {
 	 *
 	 * Self-checking: It normalizes each distinct stored value and rewrites
 	 * only what differs, so a repeat run or a reset version option is safe.
+	 *
+	 * @return bool True when the table was left fully normalized, false on a
+	 *              database error so the caller can retry.
 	 */
-	private static function normalize_source_site_urls(): void {
+	private static function normalize_source_site_urls(): bool {
 		global $wpdb;
 
 		$table = self::table_name();
@@ -122,6 +127,14 @@ final class Imports_Table {
 		$stored = $wpdb->get_col(
 			"SELECT DISTINCT source_site_url FROM `{$table}`"
 		);
+
+		// An empty read means either an empty table or a failed query;
+		// last_error separates the two.
+		if ( '' !== $wpdb->last_error ) {
+			return false;
+		}
+
+		$succeeded = true;
 
 		foreach ( $stored as $value ) {
 			$value      = (string) $value;
@@ -132,14 +145,22 @@ final class Imports_Table {
 				continue;
 			}
 
-			$wpdb->update(
+			$updated = $wpdb->update(
 				$table,
 				array( 'source_site_url' => $normalized ),
 				array( 'source_site_url' => $value ),
 				array( '%s' ),
 				array( '%s' )
 			);
+
+			// Carry on so one bad value cannot block the rest; the caller
+			// retries the whole pass.
+			if ( false === $updated ) {
+				$succeeded = false;
+			}
 		}
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return $succeeded;
 	}
 }

@@ -19,6 +19,13 @@ use Safe_Publish\Utils\Imports_Table;
 class Imports_Source_Identity_Test extends Integration_Test_Case {
 
 	/**
+	 * Option key tracking the installed table schema version, spelled out
+	 * independently of the production constant so a change has to be
+	 * deliberate.
+	 */
+	private const VERSION_OPTION = 'safe_publish_imports_version';
+
+	/**
 	 * History repository instance.
 	 *
 	 * @var History_Repository
@@ -33,6 +40,18 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 		parent::setUp();
 
 		$this->repository = new History_Repository();
+	}
+
+	/**
+	 * Tear down test environment.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		global $wpdb;
+
+		$wpdb->suppress_errors( false );
+
+		parent::tearDown();
 	}
 
 	/**
@@ -161,6 +180,58 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a completed migration records the schema version.
+	 */
+	public function test_completed_migration_records_the_schema_version(): void {
+		// ARRANGE: No recorded version, as on an install yet to migrate.
+		delete_option( self::VERSION_OPTION );
+
+		// ACT: Run the migration.
+		Imports_Table::create_table();
+
+		// ASSERT: The version was recorded.
+		$this->assertNotFalse( get_option( self::VERSION_OPTION ) );
+	}
+
+	/**
+	 * Verifies that a failed backfill leaves the schema version unrecorded, so
+	 * the migration is retried rather than marked complete over stale rows.
+	 */
+	public function test_failed_backfill_leaves_the_version_unrecorded(): void {
+		// ARRANGE: A legacy row, no recorded version, and writes to the
+		// imports table forced to fail.
+		$session_id = $this->insert_legacy_row( 'https://example.com/blog/' );
+		delete_option( self::VERSION_OPTION );
+		$this->fail_imports_table_queries( 'UPDATE' );
+
+		// ACT: Run the migration.
+		Imports_Table::create_table();
+
+		// ASSERT: The version stayed unrecorded and the row was not rewritten.
+		$this->assertFalse( get_option( self::VERSION_OPTION ) );
+		$this->assertSame(
+			'https://example.com/blog/',
+			$this->stored_url( $session_id )
+		);
+	}
+
+	/**
+	 * Verifies that a failed read leaves the schema version unrecorded, so an
+	 * unreadable table is not mistaken for an already-normalized one.
+	 */
+	public function test_failed_backfill_read_leaves_the_version_unrecorded(): void {
+		// ARRANGE: No recorded version and the backfill's read forced to fail.
+		delete_option( self::VERSION_OPTION );
+		$this->fail_imports_table_queries( 'SELECT' );
+
+		// ACT: Run the migration.
+		Imports_Table::create_table();
+
+		// ASSERT: The version stayed unrecorded.
+		$this->assertFalse( get_option( self::VERSION_OPTION ) );
+	}
+
+	/**
 	 * Verifies that the upgrade adds the index that source-scoped queries
 	 * rely on.
 	 */
@@ -241,6 +312,35 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 	 */
 	private function stored_url( int $session_id ): string {
 		return (string) $this->stored_row( $session_id )['source_site_url'];
+	}
+
+	/**
+	 * Forces the imports table's statements of one kind to fail, standing in
+	 * for a database error during the backfill.
+	 *
+	 * @param string $statement Leading SQL keyword to break, e.g. UPDATE.
+	 */
+	private function fail_imports_table_queries( string $statement ): void {
+		global $wpdb;
+
+		$table = Imports_Table::table_name();
+
+		$wpdb->suppress_errors( true );
+
+		add_filter(
+			'query',
+			static function ( $query ) use ( $statement, $table ): string {
+				$query = (string) $query;
+
+				if ( 0 !== stripos( ltrim( $query ), $statement )
+					|| false === strpos( $query, $table )
+				) {
+					return $query;
+				}
+
+				return "SELECT no_such_column FROM `{$table}`";
+			}
+		);
 	}
 
 	/**
