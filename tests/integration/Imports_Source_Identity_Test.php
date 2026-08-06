@@ -115,6 +115,29 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the backfill rewrites every distinct legacy value, not
+	 * just the first one it finds.
+	 */
+	public function test_backfill_rewrites_every_distinct_legacy_value(): void {
+		// ARRANGE: Two connections' rows, both stored denormalized.
+		$blog_id = $this->insert_legacy_row( 'https://example.com/blog/' );
+		$news_id = $this->insert_legacy_row( 'https://example.test/news/?x=1' );
+
+		// ACT: Run the migration.
+		Imports_Table::create_table();
+
+		// ASSERT: Both were normalized, query string included.
+		$this->assertSame(
+			'https://example.com/blog',
+			$this->stored_url( $blog_id )
+		);
+		$this->assertSame(
+			'https://example.test/news',
+			$this->stored_url( $news_id )
+		);
+	}
+
+	/**
 	 * Verifies that the backfill leaves an already-normalized identity and an
 	 * unparseable one alone.
 	 */
