@@ -201,13 +201,18 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that the inbox exposes target_slug and scopes row_id by it, so
-	 * two slug-keyed degradations on one post stay separate rows in the client.
+	 * Verifies that the inbox exposes each slug-keyed degradation's slug and
+	 * unattached terms, and scopes row_id by the slug so two of them on one
+	 * post stay separate rows in the client.
 	 */
 	public function test_list_exposes_slug_scoped_degradation_rows(): void {
 		// ARRANGE: One post carrying two degradations that differ only by slug.
 		$post_id = self::factory()->post->create();
-		foreach ( array( 'genre', 'mood' ) as $slug ) {
+		$seeded  = array(
+			'genre' => array( 'Jazz' ),
+			'mood'  => array( 'Calm' ),
+		);
+		foreach ( $seeded as $slug => $terms ) {
 			$this->attention->upsert_issue(
 				$post_id,
 				'unregistered_taxonomy',
@@ -215,7 +220,10 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 				'taxonomy',
 				'warning',
 				self::SOURCE,
-				array(),
+				array(
+					'taxonomy' => $slug,
+					'terms'    => $terms,
+				),
 				$slug
 			);
 		}
@@ -223,16 +231,16 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 		// ACT: List the open inbox.
 		$response = $this->list_needs_attention();
 
-		// ASSERT: Both rows arrive, each carrying its slug and a distinct id.
+		// ASSERT: Both rows arrive with their own slug, terms, and row id.
 		$this->assertTrue( $response['success'] );
 		$rows = $response['data']['items'];
 		$this->assertCount( 2, $rows );
-		$slugs = array_map(
-			static fn( array $row ): string => $row['target_slug'],
-			$rows
-		);
-		sort( $slugs );
-		$this->assertSame( array( 'genre', 'mood' ), $slugs );
+		$terms_by_slug = array();
+		foreach ( $rows as $row ) {
+			$terms_by_slug[ $row['target_slug'] ] = $row['target_terms'];
+		}
+		ksort( $terms_by_slug );
+		$this->assertSame( $seeded, $terms_by_slug );
 		$this->assertNotSame( $rows[0]['row_id'], $rows[1]['row_id'] );
 	}
 

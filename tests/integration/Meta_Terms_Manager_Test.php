@@ -45,7 +45,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that update_terms() returns true when no terms are provided.
+	 * Verifies that update_terms() skips nothing when no terms are provided.
 	 */
 	public function test_update_terms_returns_true_for_empty_input(): void {
 		// ARRANGE: Empty terms input.
@@ -54,30 +54,30 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		// ACT: Call with empty terms.
 		$result = $this->manager->update_terms( $this->post_id, $terms );
 
-		// ASSERT: Returns true without error.
-		$this->assertTrue( $result );
+		// ASSERT: Reports no skipped taxonomies.
+		$this->assertSame( array(), $result );
 	}
 
 	/**
-	 * Verifies that update_terms() returns a WP_Error when the taxonomy does
-	 * not exist on this site.
+	 * Verifies that update_terms() reports an unregistered taxonomy with its
+	 * term names instead of failing.
 	 */
-	public function test_update_terms_returns_error_for_unknown_taxonomy(): void {
+	public function test_update_terms_reports_unregistered_taxonomy(): void {
 		// ARRANGE: Terms keyed by a taxonomy that is not registered.
 		$terms = array( 'nonexistent_taxonomy_xyz' => array( 'Some Term' ) );
 
-		// ACT: Attempt to assign terms for an unknown taxonomy.
+		// ACT: Attempt to assign terms for an unregistered taxonomy.
 		$result = $this->manager->update_terms( $this->post_id, $terms );
 
-		// ASSERT: Returns a WP_Error with the expected error code.
-		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'unknown_taxonomy', $result->get_error_code() );
-		$this->assertStringContainsString( 'nonexistent_taxonomy_xyz', $result->get_error_message() );
+		// ASSERT: The taxonomy is reported as skipped, carrying its term names.
+		$this->assertSame(
+			array( 'nonexistent_taxonomy_xyz' => array( 'Some Term' ) ),
+			$result
+		);
 	}
 
 	/**
-	 * Verifies that update_terms() returns true and assigns an existing
-	 * category term.
+	 * Verifies that update_terms() assigns an existing category term.
 	 */
 	public function test_update_terms_assigns_existing_term(): void {
 		// ARRANGE: Create a category term to assign.
@@ -87,15 +87,14 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		// ACT: Assign the existing term to the post.
 		$result = $this->manager->update_terms( $this->post_id, $terms );
 
-		// ASSERT: Returns true and the term is assigned.
-		$this->assertTrue( $result );
+		// ASSERT: Nothing skipped and the term is assigned.
+		$this->assertSame( array(), $result );
 		$assigned = wp_get_post_terms( $this->post_id, 'category', array( 'fields' => 'ids' ) );
 		$this->assertSame( array( $term_id ), $assigned );
 	}
 
 	/**
-	 * Verifies that update_terms() returns true and creates a new term when it
-	 * does not exist.
+	 * Verifies that update_terms() creates a new term when it does not exist.
 	 */
 	public function test_update_terms_creates_and_assigns_new_term(): void {
 		// ARRANGE: Terms with a name that does not yet exist in the taxonomy.
@@ -105,8 +104,8 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		// ACT: Assign a term that must be created first.
 		$result = $this->manager->update_terms( $this->post_id, $terms );
 
-		// ASSERT: Returns true and a new term is assigned.
-		$this->assertTrue( $result );
+		// ASSERT: Nothing skipped and a new term is assigned.
+		$this->assertSame( array(), $result );
 		$assigned = wp_get_post_terms( $this->post_id, 'category', array( 'fields' => 'names' ) );
 		$this->assertSame( array( $term_name ), $assigned );
 	}
@@ -160,7 +159,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: Term created and paired source meta written.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$dest_term_ids = wp_get_post_terms(
 			$this->post_id,
 			'category',
@@ -214,7 +213,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: Existing term assigned; source meta now present on it.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$assigned = wp_get_post_terms(
 			$this->post_id,
 			'category',
@@ -252,7 +251,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		$result = $this->manager->update_terms( $this->post_id, $terms );
 
 		// ASSERT: Term created, no source meta written.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$ids = wp_get_post_terms( $this->post_id, 'category', array( 'fields' => 'ids' ) );
 		$this->assertIsArray( $ids );
 		$this->assertSame( 1, count( $ids ) );
@@ -263,10 +262,25 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that update_terms() stops at the first unknown taxonomy even
-	 * when multiple are supplied.
+	 * Verifies that update_terms() drops a taxonomy key that sanitizes to an
+	 * empty string rather than reporting a nameless skipped taxonomy.
 	 */
-	public function test_update_terms_stops_at_first_unknown_taxonomy(): void {
+	public function test_update_terms_drops_unnameable_taxonomy_key(): void {
+		// ARRANGE: A source key with nothing sanitize_key() would keep.
+		$terms = array( '!!!' => array( 'Some Term' ) );
+
+		// ACT: Run the update.
+		$result = $this->manager->update_terms( $this->post_id, $terms );
+
+		// ASSERT: Nothing is reported, so no nameless degradation is opened.
+		$this->assertSame( array(), $result );
+	}
+
+	/**
+	 * Verifies that update_terms() keeps processing the registered taxonomies
+	 * after skipping an unregistered one that precedes them.
+	 */
+	public function test_update_terms_continues_past_unregistered_taxonomy(): void {
 		// ARRANGE: Mix of valid and invalid taxonomies; invalid one comes first.
 		$terms = array(
 			'bad_taxonomy_xyz' => array( 'Term A' ),
@@ -276,11 +290,51 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		// ACT: Call with mixed taxonomies.
 		$result = $this->manager->update_terms( $this->post_id, $terms );
 
-		// ASSERT: Fails on the unknown taxonomy; the new category term was not created.
-		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'unknown_taxonomy', $result->get_error_code() );
+		// ASSERT: Only the unregistered taxonomy is skipped; category applies.
+		$this->assertSame(
+			array( 'bad_taxonomy_xyz' => array( 'Term A' ) ),
+			$result
+		);
 		$assigned_names = wp_get_post_terms( $this->post_id, 'category', array( 'fields' => 'names' ) );
-		$this->assertNotContains( 'Brand New Category Term', $assigned_names );
+		$this->assertContains( 'Brand New Category Term', $assigned_names );
+	}
+
+	/**
+	 * Verifies that update_terms() leaves the destination's existing terms for
+	 * an unregistered taxonomy untouched, so a skip cannot delete assignments.
+	 */
+	public function test_update_terms_preserves_terms_of_unregistered_taxonomy(): void {
+		// ARRANGE: A post holding a term in a taxonomy that is then unregistered.
+		register_taxonomy( 'temp_taxonomy_xyz', 'post' );
+		wp_set_object_terms( $this->post_id, 'Kept Term', 'temp_taxonomy_xyz' );
+		$before = wp_get_object_terms(
+			$this->post_id,
+			'temp_taxonomy_xyz',
+			array( 'fields' => 'ids' )
+		);
+		unregister_taxonomy( 'temp_taxonomy_xyz' );
+
+		// ACT: Re-import terms for the now-unregistered taxonomy.
+		$result = $this->manager->update_terms(
+			$this->post_id,
+			array( 'temp_taxonomy_xyz' => array( 'Replacement Term' ) )
+		);
+
+		// ASSERT: The taxonomy is reported skipped and its assignments survive.
+		$this->assertSame(
+			array( 'temp_taxonomy_xyz' => array( 'Replacement Term' ) ),
+			$result
+		);
+		register_taxonomy( 'temp_taxonomy_xyz', 'post' );
+		$this->assertSame(
+			$before,
+			wp_get_object_terms(
+				$this->post_id,
+				'temp_taxonomy_xyz',
+				array( 'fields' => 'ids' )
+			)
+		);
+		unregister_taxonomy( 'temp_taxonomy_xyz' );
 	}
 
 	/**
@@ -317,7 +371,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: The existing tag is reused, no duplicate exists, meta written.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$assigned = wp_get_post_terms(
 			$this->post_id,
 			'post_tag',
@@ -368,7 +422,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		$result = $this->manager->update_terms( $this->post_id, $terms );
 
 		// ASSERT: Exactly one term exists and the post resolves to it.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$matches = get_terms(
 			array(
 				'taxonomy'   => 'category',
@@ -416,7 +470,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		remove_filter( 'pre_insert_term', $filter );
 
 		// ASSERT: The existing term is reused; no error surfaced.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$assigned = wp_get_post_terms(
 			$this->post_id,
 			'category',
@@ -454,7 +508,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: Nothing assigned, and no source meta written on the term.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$assigned = wp_get_post_terms(
 			$this->post_id,
 			'post_tag',
@@ -506,7 +560,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		$result = $this->manager->update_terms( $this->post_id, $terms );
 
 		// ASSERT: Every term created with the mapped destination parent.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$root  = get_term_by( 'slug', "root-{$suffix}", 'category' );
 		$child = get_term_by( 'slug', "child-{$suffix}", 'category' );
 		$leaf  = get_term_by( 'slug', "leaf-{$suffix}", 'category' );
@@ -549,7 +603,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		$result = $this->manager->update_terms( $this->post_id, $terms );
 
 		// ASSERT: The created term carries the description.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$term = get_term_by( 'slug', "described-{$suffix}", 'category' );
 		$this->assertInstanceOf( WP_Term::class, $term );
 		$this->assertSame( $description, $term->description );
@@ -585,7 +639,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		add_filter( 'pre_term_description', 'wp_filter_kses' );
 
 		// ASSERT: The script is stripped while safe markup survives.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$term = get_term_by( 'slug', "xss-{$suffix}", 'category' );
 		$this->assertInstanceOf( WP_Term::class, $term );
 		$this->assertStringNotContainsString( '<script>', $term->description );
@@ -637,7 +691,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 
 		// ASSERT: The existing term is reused; no term is created for the new
 		// slug.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$assigned = wp_get_post_terms(
 			$this->post_id,
 			'category',
@@ -696,7 +750,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 
 		// ASSERT: Two distinct terms of the same name exist, one under each
 		// parent.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$news = get_terms(
 			array(
 				'taxonomy'   => 'category',
@@ -755,7 +809,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		$result = $this->manager->update_terms( $this->post_id, $terms );
 
 		// ASSERT: The existing term is reused unchanged, still top-level.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$term = get_term( $existing_id, 'category' );
 		$this->assertInstanceOf( WP_Term::class, $term );
 		$this->assertSame( 0, (int) $term->parent );
