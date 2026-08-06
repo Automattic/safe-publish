@@ -64,6 +64,7 @@ const SAFE_PUBLISH_DEMO_REUSABLE_TITLE      = 'Reusable Block Demo';
 const SAFE_PUBLISH_DEMO_REUSABLE_REF        = 930001;
 const SAFE_PUBLISH_DEMO_GALLERY_SLUG        = 'sp-demo-gallery-reference';
 const SAFE_PUBLISH_DEMO_GALLERY_TITLE       = 'Cross-Post Gallery Demo';
+const SAFE_PUBLISH_DEMO_TAXONOMY            = 'sp_demo_genre';
 const SAFE_PUBLISH_DEMO_VOLUME_SLUG         = 'sp-demo-volume';
 const SAFE_PUBLISH_DEMO_VOLUME_TITLE        = 'Volume Demo';
 const SAFE_PUBLISH_DEMO_VOLUME_ORPHAN_TITLE = 'Volume orphan failure';
@@ -759,7 +760,28 @@ function safe_publish_demo_run_import(
 	$unmapped_count = 0;
 	foreach ( $reference_pages as $reference_page ) {
 		$reference_prefetch = $api->fetch_fresh_post( $reference_page['id'], 'page' );
-		$reference_options  = is_wp_error( $reference_prefetch )
+
+		// Give the unresolvable page a taxonomy the destination does not
+		// register, so its import also opens an unregistered_taxonomy issue.
+		// Injected rather than seeded, since the source site registers no
+		// custom taxonomy to serve over REST.
+		if (
+			SAFE_PUBLISH_DEMO_UNRESOLVABLE_TITLE === $reference_page['title']
+			&& is_array( $reference_prefetch )
+		) {
+			$reference_prefetch['terms'][ SAFE_PUBLISH_DEMO_TAXONOMY ] = array(
+				array(
+					'name' => 'Jazz',
+					'slug' => 'jazz',
+				),
+				array(
+					'name' => 'Blues',
+					'slug' => 'blues',
+				),
+			);
+		}
+
+		$reference_options = is_wp_error( $reference_prefetch )
 			? array()
 			: array( 'prefetched_fresh_result' => $reference_prefetch );
 
@@ -779,6 +801,16 @@ function safe_publish_demo_run_import(
 				'Import of "' . $reference_page['title'] . '" failed: '
 					. $reference_result['error']
 			);
+		}
+
+		if (
+			SAFE_PUBLISH_DEMO_UNRESOLVABLE_TITLE === $reference_page['title']
+			&& safe_publish_demo_count_unmapped(
+				$reference_result,
+				'unregistered_taxonomy'
+			) < 1
+		) {
+			WP_CLI::error( 'Expected an unregistered_taxonomy warning; got none.' );
 		}
 
 		$unmapped_count += safe_publish_demo_count_unmapped( $reference_result );

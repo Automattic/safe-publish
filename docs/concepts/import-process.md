@@ -200,7 +200,7 @@ Source terms (categories, tags, and custom taxonomies) are synced, with their de
 
 Re-importing replaces a taxonomy's terms with the source's, so terms removed on the source are removed on the destination — including when the source post is left with none. Terms added on the destination by hand do not survive a re-import.
 
-Custom taxonomies must be registered with `'show_in_rest' => true` on the source site and must exist on the destination site — a missing custom taxonomy causes the import to fail.
+Custom taxonomies must be registered with `'show_in_rest' => true` on the source site. A taxonomy that is not registered on the destination is skipped: the post imports without those term assignments, and the gap is recorded as a degradation on the **Needs attention** tab. Registering the taxonomy and re-importing the post attaches the terms and clears the degradation.
 
 ## Stage 5: Track
 
