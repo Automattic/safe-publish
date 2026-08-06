@@ -124,6 +124,19 @@ final class Admin_Ajax_Controller {
 	);
 
 	/**
+	 * Every target kind an attention issue can carry. The retry paths accept
+	 * the narrower ('post', 'term') set, since each retryable type keys to an
+	 * id; kind-agnostic actions like Ignore accept all of them.
+	 *
+	 * @var string[]
+	 */
+	private const ATTENTION_ISSUE_TARGET_KINDS = array(
+		'post',
+		'term',
+		'taxonomy',
+	);
+
+	/**
 	 * Source Posts API instance.
 	 *
 	 * @var Source_Posts_API
@@ -496,11 +509,12 @@ final class Admin_Ajax_Controller {
 			$issue['kind']       = 'degradation';
 			$issue['resolvable'] = $resolvable[ $index ] ?? false;
 			$issue['row_id']     = sprintf(
-				'degradation:%d:%s:%d:%s',
+				'degradation:%d:%s:%d:%s:%s',
 				$issue['affected_post_id'],
 				$issue['issue_type'],
 				$issue['target_ref'],
-				$issue['target_kind']
+				$issue['target_kind'],
+				$issue['target_slug']
 			);
 			$formatted[]         = $issue;
 		}
@@ -676,8 +690,10 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Validates one bulk-retry descriptor, returning its issue identity keyed by
-	 * field, or null when the type or kind is outside the retryable allowlist.
+	 * Validates one bulk-retry descriptor, returning the identity fields a
+	 * retryable issue is keyed by — all of them id-keyed, so the lookup takes
+	 * the default empty slug — or null when the type or kind is outside the
+	 * retryable allowlist.
 	 *
 	 * @param mixed $item Raw descriptor.
 	 * @return array{affected_post_id: int, issue_type: string, target_ref: int, target_kind: string}|null
@@ -794,6 +810,7 @@ final class Admin_Ajax_Controller {
 			'issue_type'               => (string) $row['issue_type'],
 			'target_ref'               => (int) $row['target_ref'],
 			'target_kind'              => (string) $row['target_kind'],
+			'target_slug'              => (string) $row['target_slug'],
 			'target_is_reusable_block' => $is_reusable_block,
 			'severity'                 => (string) $row['severity'],
 			'source_site_url'          => (string) $row['source_site_url'],
@@ -955,7 +972,9 @@ final class Admin_Ajax_Controller {
 		$target_kind = sanitize_text_field(
 			(string) ( $item['target_kind'] ?? '' )
 		);
-		if ( ! in_array( $target_kind, array( 'post', 'term' ), true ) ) {
+		if (
+			! in_array( $target_kind, self::ATTENTION_ISSUE_TARGET_KINDS, true )
+		) {
 			return 0;
 		}
 
@@ -968,6 +987,7 @@ final class Admin_Ajax_Controller {
 			$issue_type,
 			absint( $item['target_ref'] ?? 0 ),
 			$target_kind,
+			sanitize_text_field( (string) ( $item['target_slug'] ?? '' ) ),
 			$ignored
 		);
 	}

@@ -329,11 +329,12 @@ function buildDegradation(
 ): InboxDegradation {
 	return {
 		kind: 'degradation',
-		row_id: 'degradation:1024:nav_ref_rewrite_failed:8300:post',
+		row_id: 'degradation:1024:nav_ref_rewrite_failed:8300:post:',
 		affected_post_id: 1024,
 		issue_type: 'nav_ref_rewrite_failed',
 		target_ref: 8300,
 		target_kind: 'post',
+		target_slug: '',
 		target_is_reusable_block: false,
 		severity: 'error',
 		source_site_url: 'https://source.example.com',
@@ -1062,6 +1063,7 @@ describe( 'createNeedsAttentionActions', () => {
 				issue_type: 'nav_ref_rewrite_failed',
 				target_ref: 8300,
 				target_kind: 'post',
+				target_slug: '',
 			},
 		] );
 	} );

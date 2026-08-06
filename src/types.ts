@@ -143,15 +143,18 @@ export type AttentionIssueType =
 
 /**
  * One open degradation issue, keyed by (affected_post_id, issue_type,
- * target_ref, target_kind). `retryable` is the server's signal that the row's
- * reconciliation can run; `resolvable` is the batched hint that its target is
- * imported, so a Retry would reconcile it now.
+ * target_ref, target_kind, target_slug). An id-keyed issue carries
+ * `target_ref`; a string-keyed one carries `target_slug` with `target_ref` 0.
+ * `retryable` is the server's signal that the row's reconciliation can run;
+ * `resolvable` is the batched hint that its target is imported, so a Retry
+ * would reconcile it now.
  */
 export interface AttentionIssue {
 	affected_post_id: number;
 	issue_type: AttentionIssueType;
 	target_ref: number;
-	target_kind: 'post' | 'term';
+	target_kind: 'post' | 'term' | 'taxonomy';
+	target_slug: string;
 	target_is_reusable_block: boolean;
 	severity: 'warning' | 'error';
 	source_site_url: string;

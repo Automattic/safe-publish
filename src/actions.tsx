@@ -362,6 +362,7 @@ type IgnoreDescriptor =
 			issue_type: string;
 			target_ref: number;
 			target_kind: string;
+			target_slug: string;
 	  };
 
 /**
@@ -386,6 +387,7 @@ const buildIgnoreDescriptors = (
 					issue_type: item.issue_type,
 					target_ref: item.target_ref,
 					target_kind: item.target_kind,
+					target_slug: item.target_slug,
 			  }
 	);
 

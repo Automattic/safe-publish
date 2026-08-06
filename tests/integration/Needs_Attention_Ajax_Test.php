@@ -201,6 +201,88 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the inbox exposes target_slug and scopes row_id by it, so
+	 * two slug-keyed degradations on one post stay separate rows in the client.
+	 */
+	public function test_list_exposes_slug_scoped_degradation_rows(): void {
+		// ARRANGE: One post carrying two degradations that differ only by slug.
+		$post_id = self::factory()->post->create();
+		foreach ( array( 'genre', 'mood' ) as $slug ) {
+			$this->attention->upsert_issue(
+				$post_id,
+				'unregistered_taxonomy',
+				0,
+				'taxonomy',
+				'warning',
+				self::SOURCE,
+				array(),
+				$slug
+			);
+		}
+
+		// ACT: List the open inbox.
+		$response = $this->list_needs_attention();
+
+		// ASSERT: Both rows arrive, each carrying its slug and a distinct id.
+		$this->assertTrue( $response['success'] );
+		$rows = $response['data']['items'];
+		$this->assertCount( 2, $rows );
+		$slugs = array_map(
+			static fn( array $row ): string => $row['target_slug'],
+			$rows
+		);
+		sort( $slugs );
+		$this->assertSame( array( 'genre', 'mood' ), $slugs );
+		$this->assertNotSame( $rows[0]['row_id'], $rows[1]['row_id'] );
+	}
+
+	/**
+	 * Verifies that the ignore endpoint accepts a slug-keyed degradation, whose
+	 * target kind falls outside the narrower set the retry paths take.
+	 */
+	public function test_ignore_endpoint_flags_a_slug_keyed_degradation(): void {
+		// ARRANGE: A degradation keyed by a slug rather than an id.
+		$post_id = self::factory()->post->create();
+		$this->attention->upsert_issue(
+			$post_id,
+			'unregistered_taxonomy',
+			0,
+			'taxonomy',
+			'warning',
+			self::SOURCE,
+			array(),
+			'genre'
+		);
+
+		// ACT: Ignore it by its full identity.
+		$response = $this->set_ignored(
+			array(
+				array(
+					'kind'             => 'degradation',
+					'affected_post_id' => $post_id,
+					'issue_type'       => 'unregistered_taxonomy',
+					'target_ref'       => 0,
+					'target_kind'      => 'taxonomy',
+					'target_slug'      => 'genre',
+				),
+			),
+			true
+		);
+
+		// ASSERT: The row moved to the ignored set.
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 1, $response['data']['updated'] );
+		$this->assertSame(
+			0,
+			$this->attention->count_open_issues( self::SOURCE )
+		);
+		$this->assertSame(
+			1,
+			$this->attention->count_open_issues( self::SOURCE, true )
+		);
+	}
+
+	/**
 	 * Verifies that the un-ignore endpoint restores a previously ignored failure
 	 * and degradation to the open sets.
 	 */
@@ -332,6 +414,7 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 			'nav_ref_rewrite_failed',
 			8300,
 			'post',
+			'',
 			true
 		);
 	}

@@ -1148,6 +1148,141 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that reconciling a post carrying two slug-keyed issues of one
+	 * type opens two rows, which a shared zero target_ref alone would collide.
+	 */
+	public function test_reconcile_opens_one_row_per_slug(): void {
+		// ARRANGE: Two issues differing only by target_slug.
+		$current = array(
+			$this->slug_issue( 'genre' ),
+			$this->slug_issue( 'mood' ),
+		);
+
+		// ACT: Reconcile them onto one post.
+		$this->attention->reconcile_post_issues(
+			600,
+			self::BLOG_URL,
+			array( 'unregistered_taxonomy' ),
+			$current
+		);
+
+		// ASSERT: Both rows are open and carry their own slug.
+		$this->assertSame(
+			2,
+			$this->attention->count_open_issues( self::BLOG_URL )
+		);
+		foreach ( array( 'genre', 'mood' ) as $slug ) {
+			$issue = $this->attention->get_issue(
+				600,
+				'unregistered_taxonomy',
+				0,
+				'taxonomy',
+				$slug
+			);
+			$this->assertNotNull( $issue );
+			$this->assertSame( $slug, $issue['target_slug'] );
+		}
+	}
+
+	/**
+	 * Verifies that a re-import dropping one of two slug-keyed issues clears
+	 * exactly that row and leaves the other open.
+	 */
+	public function test_reconcile_clears_only_the_dropped_slug(): void {
+		// ARRANGE: A post reconciled with two slug-keyed issues.
+		$this->attention->reconcile_post_issues(
+			600,
+			self::BLOG_URL,
+			array( 'unregistered_taxonomy' ),
+			array( $this->slug_issue( 'genre' ), $this->slug_issue( 'mood' ) )
+		);
+
+		// ACT: Reconcile again with only one of them still present.
+		$this->attention->reconcile_post_issues(
+			600,
+			self::BLOG_URL,
+			array( 'unregistered_taxonomy' ),
+			array( $this->slug_issue( 'genre' ) )
+		);
+
+		// ASSERT: The dropped slug's row is gone; the kept one stays.
+		$this->assertSame(
+			1,
+			$this->attention->count_open_issues( self::BLOG_URL )
+		);
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				600,
+				'unregistered_taxonomy',
+				0,
+				'taxonomy',
+				'genre'
+			)
+		);
+		$this->assertNull(
+			$this->attention->get_issue(
+				600,
+				'unregistered_taxonomy',
+				0,
+				'taxonomy',
+				'mood'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that ignoring a slug-keyed issue sets aside only that row, so
+	 * siblings sharing its post, type, and target_ref stay open.
+	 */
+	public function test_set_issue_ignored_targets_one_slug(): void {
+		// ARRANGE: Two slug-keyed issues on one post.
+		$this->attention->reconcile_post_issues(
+			600,
+			self::BLOG_URL,
+			array( 'unregistered_taxonomy' ),
+			array( $this->slug_issue( 'genre' ), $this->slug_issue( 'mood' ) )
+		);
+
+		// ACT: Ignore one of them.
+		$updated = $this->attention->set_issue_ignored(
+			600,
+			'unregistered_taxonomy',
+			0,
+			'taxonomy',
+			'genre',
+			true
+		);
+
+		// ASSERT: One row moved to the ignored view; the sibling stays open.
+		$this->assertSame( 1, $updated );
+		$this->assertSame(
+			1,
+			$this->attention->count_open_issues( self::BLOG_URL )
+		);
+		$this->assertSame(
+			1,
+			$this->attention->count_open_issues( self::BLOG_URL, true )
+		);
+	}
+
+	/**
+	 * Builds a slug-keyed issue record for reconcile_post_issues().
+	 *
+	 * @param string $slug Taxonomy slug the issue keys to.
+	 * @return array Issue record.
+	 */
+	private function slug_issue( string $slug ): array {
+		return array(
+			'issue_type'  => 'unregistered_taxonomy',
+			'target_ref'  => 0,
+			'target_kind' => 'taxonomy',
+			'target_slug' => $slug,
+			'severity'    => 'warning',
+			'detail'      => array( 'taxonomy' => $slug ),
+		);
+	}
+
+	/**
 	 * Verifies that resolve_issue removes only the row matching the full identity,
 	 * so a post and a term sharing a target_ref stay independent.
 	 */
@@ -1704,6 +1839,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			'nav_ref_rewrite_failed',
 			7001,
 			'post',
+			'',
 			$ignored
 		);
 	}
