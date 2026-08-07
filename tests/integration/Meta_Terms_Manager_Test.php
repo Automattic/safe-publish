@@ -892,4 +892,171 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 			$result->get_error_message()
 		);
 	}
+
+	/**
+	 * Verifies that a run re-importing one term tree across several posts
+	 * resolves it with a bounded number of termmeta queries, instead of an
+	 * identity lookup plus a meta re-write per term per post.
+	 */
+	public function test_update_terms_batches_shared_term_lookups(): void {
+		// ARRANGE: Five posts importing the same three-term hierarchy, already
+		// created by a first pass so the measured run is a steady-state
+		// re-import — the case the per-term N+1 hit hardest.
+		$source_site_url = 'https://source.example.com';
+		$suffix          = uniqid();
+		$terms           = array(
+			'category' => array(
+				array(
+					'source_term_id' => 8801,
+					'name'           => "Root {$suffix}",
+					'slug'           => "root-{$suffix}",
+					'parent'         => 0,
+					'assigned'       => true,
+				),
+				array(
+					'source_term_id' => 8802,
+					'name'           => "Child {$suffix}",
+					'slug'           => "child-{$suffix}",
+					'parent'         => 8801,
+					'assigned'       => true,
+				),
+				array(
+					'source_term_id' => 8803,
+					'name'           => "Leaf {$suffix}",
+					'slug'           => "leaf-{$suffix}",
+					'parent'         => 8802,
+					'assigned'       => true,
+				),
+			),
+		);
+
+		$post_ids = self::factory()->post->create_many( 5 );
+
+		$warmup = new Meta_Terms_Manager();
+		foreach ( $post_ids as $post_id ) {
+			$warmup->update_terms( $post_id, $terms, $source_site_url );
+		}
+
+		$queries = 0;
+		$counter = static function ( $query ) use ( &$queries ) {
+			if ( false !== stripos( (string) $query, 'termmeta' ) ) {
+				++$queries;
+			}
+
+			return $query;
+		};
+		add_filter( 'query', $counter );
+
+		// ACT: Re-import the tree across every post through one manager, as a
+		// bulk batch does.
+		$manager = new Meta_Terms_Manager();
+		foreach ( $post_ids as $post_id ) {
+			$this->assertTrue(
+				$manager->update_terms( $post_id, $terms, $source_site_url )
+			);
+		}
+
+		remove_filter( 'query', $counter );
+
+		// ASSERT: The per-term baseline is 3 termmeta queries x 3 terms x 5
+		// posts = 45; batching the identity lookup and memoizing it for the
+		// run brings the whole run down to 1, with headroom for a cold
+		// termmeta cache.
+		$this->assertLessThan( 5, $queries );
+
+		// ASSERT: Every post resolved to the same three terms, so the memo
+		// returned what the per-term lookup did.
+		$expected = get_terms(
+			array(
+				'taxonomy'   => 'category',
+				'slug'       => array(
+					"root-{$suffix}",
+					"child-{$suffix}",
+					"leaf-{$suffix}",
+				),
+				'hide_empty' => false,
+				'fields'     => 'ids',
+			)
+		);
+		$this->assertIsArray( $expected );
+		$this->assertCount( 3, $expected );
+
+		$expected_ids = array_map( 'intval', $expected );
+		sort( $expected_ids );
+
+		foreach ( $post_ids as $post_id ) {
+			$assigned = wp_get_post_terms(
+				$post_id,
+				'category',
+				array( 'fields' => 'ids' )
+			);
+			$this->assertIsArray( $assigned );
+
+			$assigned_ids = array_map( 'intval', $assigned );
+			sort( $assigned_ids );
+
+			$this->assertSame( $expected_ids, $assigned_ids );
+		}
+	}
+
+	/**
+	 * Verifies that update_terms() re-resolves a source identity whose
+	 * memoized term was deleted mid-run, rather than assigning a term ID that
+	 * no longer exists.
+	 */
+	public function test_update_terms_reresolves_deleted_memoized_term(): void {
+		// ARRANGE: A first import memoizes the source identity, then the term
+		// it resolved to is deleted.
+		$source_site_url = 'https://source.example.com';
+		$suffix          = uniqid();
+		$terms           = array(
+			'category' => array(
+				array(
+					'source_term_id' => 9911,
+					'name'           => "Memo {$suffix}",
+					'slug'           => "memo-{$suffix}",
+					'parent'         => 0,
+					'assigned'       => true,
+				),
+			),
+		);
+
+		$this->assertTrue(
+			$this->manager->update_terms(
+				$this->post_id,
+				$terms,
+				$source_site_url
+			)
+		);
+
+		$created = get_term_by( 'slug', "memo-{$suffix}", 'category' );
+		$this->assertInstanceOf( WP_Term::class, $created );
+		wp_delete_term( (int) $created->term_id, 'category' );
+
+		// ACT: Re-import the same identity through the same manager, whose
+		// memo still points at the deleted term.
+		$second_post = self::factory()->post->create();
+		$result      = $this->manager->update_terms(
+			$second_post,
+			$terms,
+			$source_site_url
+		);
+
+		// ASSERT: A fresh term was created and assigned, not the stale ID.
+		$this->assertTrue( $result );
+		$recreated = get_term_by( 'slug', "memo-{$suffix}", 'category' );
+		$this->assertInstanceOf( WP_Term::class, $recreated );
+		$this->assertNotSame(
+			(int) $created->term_id,
+			(int) $recreated->term_id
+		);
+		$this->assertSame(
+			array( (int) $recreated->term_id ),
+			wp_get_post_terms(
+				$second_post,
+				'category',
+				array( 'fields' => 'ids' )
+			)
+		);
+	}
 }
