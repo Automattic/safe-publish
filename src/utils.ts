@@ -400,7 +400,8 @@ export function renderIssueMessage( issue: AttentionIssue ): string {
 
 /**
  * Stable client id for an attention issue, matching its full identity key so a
- * post and a term reference sharing a target_ref stay distinct.
+ * post and a term reference sharing a target_ref — or two slug-keyed issues of
+ * one type on one post — stay distinct.
  *
  * @param {AttentionIssue} issue Issue row.
  *
@@ -412,6 +413,7 @@ export function attentionIssueId( issue: AttentionIssue ): string {
 		issue.issue_type,
 		issue.target_ref,
 		issue.target_kind,
+		issue.target_slug,
 	].join( ':' );
 }
 

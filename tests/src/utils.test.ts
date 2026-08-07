@@ -433,6 +433,7 @@ function makeIssue( overrides: Partial< AttentionIssue > ): AttentionIssue {
 		issue_type: 'unmapped_block_reference',
 		target_ref: 700,
 		target_kind: 'post',
+		target_slug: '',
 		target_is_reusable_block: false,
 		severity: 'warning',
 		source_site_url: 'https://source.example.com',
@@ -537,13 +538,30 @@ describe( 'renderIssueMessage', () => {
 describe( 'attentionIssueId', () => {
 	it( 'keeps a post and a term reference sharing a target_ref distinct', () => {
 		// ARRANGE: Same post, same source ref, different kind — the collision
-		// the 4-column identity key guards against.
+		// the identity key guards against.
 		const postRef = makeIssue( { target_kind: 'post', target_ref: 42 } );
 		const termRef = makeIssue( { target_kind: 'term', target_ref: 42 } );
 		// ACT + ASSERT: The ids differ, so DataViews rows stay unique.
 		expect( attentionIssueId( postRef ) ).not.toBe(
 			attentionIssueId( termRef )
 		);
+	} );
+
+	it( 'keeps two slug-keyed issues of one type distinct', () => {
+		// ARRANGE: Same post, same type, no target_ref — distinguished only by
+		// the slug, which a zero target_ref alone would collide.
+		const genre = makeIssue( {
+			target_ref: 0,
+			target_kind: 'taxonomy',
+			target_slug: 'genre',
+		} );
+		const mood = makeIssue( {
+			target_ref: 0,
+			target_kind: 'taxonomy',
+			target_slug: 'mood',
+		} );
+		// ACT + ASSERT: The ids differ, so both rows render.
+		expect( attentionIssueId( genre ) ).not.toBe( attentionIssueId( mood ) );
 	} );
 
 	it( 'is stable for the same identity', () => {

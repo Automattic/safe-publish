@@ -20,10 +20,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Stores and reconciles the current set of open degradation issues.
  *
  * State projection, not an event log: One upserted row per identity
- * (affected_post_id, issue_type, target_ref, target_kind). Detection upserts
- * on a still-open degradation and resolves (deletes) the row once the
- * underlying reconciliation succeeds, so reads are a plain SELECT of open
- * rows.
+ * (affected_post_id, issue_type, target_ref, target_kind, target_slug).
+ * Detection upserts on a still-open degradation and resolves (deletes) the row
+ * once the underlying reconciliation succeeds, so reads are a plain SELECT of
+ * open rows.
  */
 final class Attention_Issues_Repository {
 
@@ -32,11 +32,14 @@ final class Attention_Issues_Repository {
 	 *
 	 * @param int    $affected_post_id Destination post the issue is attached to.
 	 * @param string $issue_type       One of the tracked issue types.
-	 * @param int    $target_ref       Source id of the unresolved target.
-	 * @param string $target_kind      'post' or 'term'.
+	 * @param int    $target_ref       Source id of the unresolved target; 0 when
+	 *                                 the target is keyed by a string.
+	 * @param string $target_kind      'post', 'term', or 'taxonomy'.
 	 * @param string $severity         'warning' or 'error'.
 	 * @param string $source_site_url  Path-bearing source identity.
 	 * @param array  $detail           Small render payload, stored as JSON.
+	 * @param string $target_slug      String key of the unresolved target; empty
+	 *                                 when the target is keyed by an id.
 	 */
 	public function upsert_issue(
 		int $affected_post_id,
@@ -45,7 +48,8 @@ final class Attention_Issues_Repository {
 		string $target_kind,
 		string $severity,
 		string $source_site_url,
-		array $detail = array()
+		array $detail = array(),
+		string $target_slug = ''
 	): void {
 		global $wpdb;
 
@@ -53,15 +57,16 @@ final class Attention_Issues_Repository {
 		$now    = current_time( 'mysql', true );
 		$detail = $this->encode_detail( $detail );
 
-		// target_kind is part of the key, so the UPDATE clause omits it.
+		// target_kind and target_slug are part of the key, so the UPDATE clause
+		// omits them.
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$wpdb->query(
 			$wpdb->prepare(
 				"INSERT INTO `{$table}`"
 					. ' (affected_post_id, issue_type, target_ref, target_kind,'
-					. ' severity, source_site_url, detail, first_detected_gmt,'
-					. ' last_seen_gmt, status)'
-					. " VALUES (%d, %s, %d, %s, %s, %s, %s, %s, %s, 'open')"
+					. ' target_slug, severity, source_site_url, detail,'
+					. ' first_detected_gmt, last_seen_gmt, status)'
+					. " VALUES (%d, %s, %d, %s, %s, %s, %s, %s, %s, %s, 'open')"
 					. ' ON DUPLICATE KEY UPDATE'
 					. ' severity = %s, source_site_url = %s,'
 					. " detail = %s, last_seen_gmt = %s, status = 'open'",
@@ -69,6 +74,7 @@ final class Attention_Issues_Repository {
 				$issue_type,
 				$target_ref,
 				$target_kind,
+				$target_slug,
 				$severity,
 				$source_site_url,
 				$detail,
@@ -95,7 +101,8 @@ final class Attention_Issues_Repository {
 	 * @param string[] $managed_types    Issue types this reconcile owns.
 	 * @param array[]  $current          Issues to keep open; each carries
 	 *                                   issue_type, target_ref, target_kind,
-	 *                                   severity, and an optional detail array.
+	 *                                   severity, an optional target_slug, and
+	 *                                   an optional detail array.
 	 */
 	public function reconcile_post_issues(
 		int $affected_post_id,
@@ -111,7 +118,8 @@ final class Attention_Issues_Repository {
 				$issue['target_kind'],
 				$issue['severity'],
 				$source_site_url,
-				$issue['detail'] ?? array()
+				$issue['detail'] ?? array(),
+				$issue['target_slug'] ?? ''
 			);
 		}
 
@@ -287,24 +295,34 @@ final class Attention_Issues_Repository {
 	 *
 	 * Pass $target_kind to disambiguate a post and a term that share a
 	 * target_ref; leave it null to match the first row regardless of kind.
+	 * $target_slug, by contrast, always matches exactly.
 	 *
 	 * @param int         $affected_post_id Destination post id.
 	 * @param string      $issue_type       Issue type.
 	 * @param int         $target_ref       Source id of the target.
-	 * @param string|null $target_kind      'post', 'term', or null to match any.
+	 * @param string|null $target_kind      'post', 'term', 'taxonomy', or null to
+	 *                                      match any.
+	 * @param string      $target_slug      String key of the target.
 	 * @return array|null Issue row with detail decoded, or null when absent.
 	 */
 	public function get_issue(
 		int $affected_post_id,
 		string $issue_type,
 		int $target_ref,
-		?string $target_kind = null
+		?string $target_kind = null,
+		string $target_slug = ''
 	): ?array {
 		global $wpdb;
 
 		$table  = Attention_Issues_Table::table_name();
-		$where  = 'affected_post_id = %d AND issue_type = %s AND target_ref = %d';
-		$params = array( $affected_post_id, $issue_type, $target_ref );
+		$where  = 'affected_post_id = %d AND issue_type = %s AND target_ref = %d'
+			. ' AND target_slug = %s';
+		$params = array(
+			$affected_post_id,
+			$issue_type,
+			$target_ref,
+			$target_slug,
+		);
 
 		if ( null !== $target_kind ) {
 			$where   .= ' AND target_kind = %s';
@@ -339,14 +357,16 @@ final class Attention_Issues_Repository {
 	 * @param int    $affected_post_id Destination post id.
 	 * @param string $issue_type       Issue type.
 	 * @param int    $target_ref       Source id of the target.
-	 * @param string $target_kind      'post' or 'term'.
+	 * @param string $target_kind      'post', 'term', or 'taxonomy'.
+	 * @param string $target_slug      String key of the target.
 	 * @return int Number of rows deleted.
 	 */
 	public function resolve_issue(
 		int $affected_post_id,
 		string $issue_type,
 		int $target_ref,
-		string $target_kind
+		string $target_kind,
+		string $target_slug = ''
 	): int {
 		global $wpdb;
 
@@ -358,8 +378,9 @@ final class Attention_Issues_Repository {
 				'issue_type'       => $issue_type,
 				'target_ref'       => $target_ref,
 				'target_kind'      => $target_kind,
+				'target_slug'      => $target_slug,
 			),
-			array( '%d', '%s', '%d', '%s' )
+			array( '%d', '%s', '%d', '%s', '%s' )
 		);
 
 		return false === $deleted ? 0 : (int) $deleted;
@@ -372,13 +393,15 @@ final class Attention_Issues_Repository {
 	 * @param int    $affected_post_id Destination post id.
 	 * @param string $issue_type       Issue type.
 	 * @param int    $target_ref       Source id of the target.
-	 * @param string $target_kind      'post' or 'term'.
+	 * @param string $target_kind      'post', 'term', or 'taxonomy'.
+	 * @param string $target_slug      String key of the target.
 	 */
 	public function touch_issue(
 		int $affected_post_id,
 		string $issue_type,
 		int $target_ref,
-		string $target_kind
+		string $target_kind,
+		string $target_slug = ''
 	): void {
 		global $wpdb;
 
@@ -391,9 +414,10 @@ final class Attention_Issues_Repository {
 				'issue_type'       => $issue_type,
 				'target_ref'       => $target_ref,
 				'target_kind'      => $target_kind,
+				'target_slug'      => $target_slug,
 			),
 			array( '%s' ),
-			array( '%d', '%s', '%d', '%s' )
+			array( '%d', '%s', '%d', '%s', '%s' )
 		);
 	}
 
@@ -403,7 +427,8 @@ final class Attention_Issues_Repository {
 	 * @param int    $affected_post_id Destination post id.
 	 * @param string $issue_type       Issue type.
 	 * @param int    $target_ref       Source id of the target.
-	 * @param string $target_kind      'post' or 'term'.
+	 * @param string $target_kind      'post', 'term', or 'taxonomy'.
+	 * @param string $target_slug      String key of the target.
 	 * @param bool   $ignored          True to ignore, false to restore.
 	 * @return int Number of rows updated.
 	 */
@@ -412,6 +437,7 @@ final class Attention_Issues_Repository {
 		string $issue_type,
 		int $target_ref,
 		string $target_kind,
+		string $target_slug,
 		bool $ignored
 	): int {
 		global $wpdb;
@@ -427,9 +453,10 @@ final class Attention_Issues_Repository {
 				'issue_type'       => $issue_type,
 				'target_ref'       => $target_ref,
 				'target_kind'      => $target_kind,
+				'target_slug'      => $target_slug,
 			),
 			array( '%s' ),
-			array( '%d', '%s', '%d', '%s' )
+			array( '%d', '%s', '%d', '%s', '%s' )
 		);
 
 		return false === $updated ? 0 : (int) $updated;
@@ -468,12 +495,14 @@ final class Attention_Issues_Repository {
 		if ( count( $current ) > 0 ) {
 			$tuples = array();
 			foreach ( $current as $issue ) {
-				$tuples[] = '(%s, %d, %s)';
+				$tuples[] = '(%s, %d, %s, %s)';
 				$params[] = $issue['issue_type'];
 				$params[] = (int) $issue['target_ref'];
 				$params[] = $issue['target_kind'];
+				$params[] = $issue['target_slug'] ?? '';
 			}
-			$where .= ' AND (issue_type, target_ref, target_kind) NOT IN ('
+			$where .=
+				' AND (issue_type, target_ref, target_kind, target_slug) NOT IN ('
 				. implode( ', ', $tuples ) . ')';
 		}
 
