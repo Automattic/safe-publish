@@ -97,10 +97,9 @@ final class Admin_Page {
 
 		$repository            = new History_Repository();
 		$attention_issues      = new Attention_Issues_Repository();
-		$needs_attention_count = $repository->count_failures()
-			+ $attention_issues->count_open_issues(
-				Options::get_connected_site_url_with_path()
-			);
+		$connected_url         = Options::get_connected_site_url_with_path();
+		$needs_attention_count = $repository->count_failures( $connected_url )
+			+ $attention_issues->count_open_issues( $connected_url );
 
 		Admin_Assets::enqueue_bundle(
 			'posts',

@@ -309,11 +309,11 @@ final class Admin_Ajax_Controller {
 			$payload['focused_source_post_id'] = $focus_source_id;
 		}
 		if ( $with_needs_attention_count ) {
+			$connected_url = Options::get_connected_site_url_with_path();
+
 			$payload['needs_attention_count'] =
-				$this->repository->count_failures()
-				+ $this->attention_issues->count_open_issues(
-					Options::get_connected_site_url_with_path()
-				);
+				$this->repository->count_failures( $connected_url )
+				+ $this->attention_issues->count_open_issues( $connected_url );
 		}
 
 		wp_send_json_success( $payload );
@@ -343,14 +343,17 @@ final class Admin_Ajax_Controller {
 
 		// The tab label always reflects the open (unignored) total, whichever
 		// view is being listed.
-		$open_failed    = $this->repository->count_failures();
+		$open_failed    = $this->repository->count_failures( $source_site_url );
 		$open_attention = $this->attention_issues->count_open_issues(
 			$source_site_url
 		);
 		$open_total     = $open_failed + $open_attention;
 
 		if ( $ignored ) {
-			$failed_count    = $this->repository->count_failures( true );
+			$failed_count    = $this->repository->count_failures(
+				$source_site_url,
+				true
+			);
 			$attention_count = $this->attention_issues->count_open_issues(
 				$source_site_url,
 				true
@@ -412,7 +415,13 @@ final class Admin_Ajax_Controller {
 		}
 
 		$items     = $this->format_failure_rows(
-			$this->repository->list_failures( $offset, $limit, $ignored )
+			$this->repository->list_failures(
+				$source_site_url,
+				$offset,
+				$limit,
+				$ignored
+			),
+			$source_site_url
 		);
 		$shortfall = $limit - count( $items );
 
@@ -440,10 +449,14 @@ final class Admin_Ajax_Controller {
 	 * Shapes failure rows for the inbox. A failed update resolves an edit link
 	 * from its still-live destination post; a first-import failure has none.
 	 *
-	 * @param array[] $rows Failure rows from list_failures().
+	 * @param array[] $rows            Failure rows from list_failures().
+	 * @param string  $source_site_url Connected source scoping the lookup.
 	 * @return array[] Unified inbox rows of kind 'failure'.
 	 */
-	private function format_failure_rows( array $rows ): array {
+	private function format_failure_rows(
+		array $rows,
+		string $source_site_url
+	): array {
 		$source_ids = array();
 		foreach ( $rows as $row ) {
 			$source_id = (int) ( $row['source_post_id'] ?? 0 );
@@ -454,7 +467,10 @@ final class Admin_Ajax_Controller {
 
 		$active_by_source = 0 === count( $source_ids )
 			? array()
-			: $this->repository->get_active_items_by_source_ids( $source_ids );
+			: $this->repository->get_active_items_by_source_ids(
+				$source_ids,
+				$source_site_url
+			);
 
 		return array_map(
 			function ( array $row ) use ( $active_by_source ): array {
@@ -870,7 +886,8 @@ final class Admin_Ajax_Controller {
 
 		$deleted = $this->repository->delete_failed_items(
 			$item_ids,
-			$source_post_ids
+			$source_post_ids,
+			Options::get_connected_site_url_with_path()
 		);
 
 		wp_send_json_success( array( 'deleted' => $deleted ) );
@@ -957,7 +974,8 @@ final class Admin_Ajax_Controller {
 			$updated += $this->repository->set_failed_items_ignored(
 				$item_ids,
 				$source_ids,
-				$ignored
+				$ignored,
+				Options::get_connected_site_url_with_path()
 			);
 		}
 

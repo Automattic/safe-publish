@@ -902,9 +902,14 @@ class Post_Import_Service {
 			)
 		);
 
+		// Passing null keeps the annotation unscoped, matching the Posts tab
+		// listing it annotates; both are scoped in a follow-up.
 		$active_by_source_id = 0 === count( $source_ids )
 			? array()
-			: $this->repository->get_active_items_by_source_ids( $source_ids );
+			: $this->repository->get_active_items_by_source_ids(
+				$source_ids,
+				null
+			);
 
 		$post_ids_to_check = array_values(
 			array_filter(
