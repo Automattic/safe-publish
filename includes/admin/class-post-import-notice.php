@@ -83,7 +83,6 @@ final class Post_Import_Notice {
 	 */
 	private const PLUGIN_SCREEN_IDS = array(
 		'toplevel_page_safe-publish',
-		'safe-publish_page_safe-publish-exports',
 		'safe-publish_page_safe-publish-settings',
 	);
 

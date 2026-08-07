@@ -1,38 +1,27 @@
 /**
- * Pure helpers for rendering audit and export event columns in DataViews.
+ * Pure helpers for rendering audit event columns in DataViews.
  *
  * Centralized so column configs can share the same text between
  * `getValue` (search) and `render` (display), and so the helpers can
  * be unit-tested in isolation from the React tree.
  *
- * @file This file defines audit and export event column helpers.
+ * @file This file defines audit event column helpers.
  */
 
 import { __, sprintf } from '@wordpress/i18n';
 
-import type { ActorSource, ExportEvent } from '../types';
-
-/**
- * Subset of fields any audit-derived event surfaces so callers can render
- * a consistent actor label whether the source is an ExportEvent or a
- * generic AuditEvent.
- */
-interface ActorFields {
-	actor_user_id: number;
-	actor_display_name: string;
-	actor_source: ActorSource;
-}
+import type { AuditEvent } from '../types';
 
 /**
  * Returns the display label for the user column.
  *
  * Used by both `getValue` and `render` so search matches displayed text.
  *
- * @param {ActorFields} item Event carrying actor fields.
+ * @param {AuditEvent} item Event carrying actor fields.
  *
  * @return {string} Human-readable actor label.
  */
-export function getUserLabel( item: ActorFields ): string {
+export function getUserLabel( item: AuditEvent ): string {
 	if ( item.actor_user_id > 0 ) {
 		return item.actor_display_name || sprintf(
 			/* translators: %d is the WordPress user ID. */
@@ -46,31 +35,6 @@ export function getUserLabel( item: ActorFields ): string {
 		__( 'System (%s)', 'safe-publish' ),
 		item.actor_source
 	);
-}
-
-/**
- * Returns the display label for the destination column.
- *
- * @param {ExportEvent} item Export event.
- *
- * @return {string} Destination URL or fallback label.
- */
-export function getDestinationLabel( item: ExportEvent ): string {
-	return item.destination_site_url ||
-		__( 'Unknown destination', 'safe-publish' );
-}
-
-/**
- * Returns the display label for the status column.
- *
- * @param {ExportEvent} item Export event.
- *
- * @return {string} Localized status label.
- */
-export function getStatusLabel( item: ExportEvent ): string {
-	return 'error' === item.level
-		? __( 'Failed', 'safe-publish' )
-		: __( 'Exported', 'safe-publish' );
 }
 
 /**
