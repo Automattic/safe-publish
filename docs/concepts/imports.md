@@ -9,6 +9,8 @@ The Imports admin page is the operator surface for everything that came in from 
 
 Lists imported posts. Each row joins the local post (title, status, edit URL) with the most recent items-table row for the same post (import date, rollback eligibility).
 
+The tab is scoped to the connected source site, so only posts imported from that site are listed and matched against the source catalog. Changing the connection hides the previous site's rows without deleting them; reconnecting brings them back.
+
 ### Columns
 
 | Column        | Description                                               |
