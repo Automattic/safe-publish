@@ -22,9 +22,11 @@ trait Mock_Post_API_Trait {
 	 *
 	 * Keys: title, featured_media, content, excerpt, meta, terms, slug,
 	 *       comment_status, ping_status, menu_order, password, parent,
-	 *       safe_publish_author, acf.
-	 * Terms: array keyed by taxonomy slug with arrays of term names as values.
+	 *       safe_publish_author, safe_publish_terms, acf.
+	 * Terms: array keyed by taxonomy slug with arrays of term names as values,
+	 *        emitted as the embedded wp:term payload.
 	 * safe_publish_author: array {email, login, display_name}.
+	 * safe_publish_terms: taxonomy => term records, emitted verbatim.
 	 *
 	 * @var array<string, mixed>
 	 */
@@ -63,6 +65,11 @@ trait Mock_Post_API_Trait {
 		// Top-level acf object, mirroring ACF/SCF's Show in REST API output.
 		if ( isset( $this->mock_post_overrides['acf'] ) ) {
 			$body['acf'] = $this->mock_post_overrides['acf'];
+		}
+
+		if ( isset( $this->mock_post_overrides['safe_publish_terms'] ) ) {
+			$body['safe_publish_terms'] =
+				$this->mock_post_overrides['safe_publish_terms'];
 		}
 
 		if ( ! empty( $this->mock_post_overrides['terms'] ) ) {

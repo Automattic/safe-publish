@@ -687,6 +687,8 @@ class Source_Posts_API {
 	 *
 	 * The record id and parent are source term IDs; the resolver maps them
 	 * through its source-ID map rather than trusting them as destination IDs.
+	 * A taxonomy the source sent empty is preserved as an empty list, the
+	 * signal to clear it on the destination.
 	 *
 	 * @param array $data Decoded REST response for a single post.
 	 * @return array<string, list<array{source_term_id:int, name:string, slug:string, parent:int, description:string, assigned:bool}>>|null
@@ -709,6 +711,13 @@ class Source_Posts_API {
 			$tax = is_string( $taxonomy ) ? sanitize_key( $taxonomy ) : '';
 
 			if ( '' === $tax || ! is_array( $records ) ) {
+				continue;
+			}
+
+			// Gated on the raw records: Records that all fail normalization
+			// must drop the taxonomy, not read as a clear.
+			if ( array() === $records ) {
+				$terms[ $tax ] = array();
 				continue;
 			}
 

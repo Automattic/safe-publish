@@ -28,6 +28,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Meta_Terms_Manager {
 
 	/**
+	 * Destination term IDs resolved by source identity, keyed by source site
+	 * URL plus taxonomy, then by source term ID. A 0 records a confirmed miss
+	 * so the run does not re-query it.
+	 *
+	 * One instance serves a whole import run, and a bulk batch imports every
+	 * post in a single request, so a term shared across posts resolves once.
+	 *
+	 * @var array<string, array<int, int>>
+	 */
+	private array $source_term_ids = array();
+
+	/**
 	 * Updates post meta based on provided input.
 	 *
 	 * Accepts array or object; keys are meta keys, values are meta values.
@@ -89,10 +101,11 @@ final class Meta_Terms_Manager {
 	 * source ID), description, and assigned. Per taxonomy the records are
 	 * ordered parent-first, resolved to destination terms (reusing a match or
 	 * creating one with the mapped parent and description), and the assigned
-	 * terms are set on the post; ancestors are created but not attached. When
-	 * `$source_site_url` is non-empty and an item carries a source_term_id, the
-	 * source ID and URL are recorded on the resolved term so later imports can
-	 * remap by source identity.
+	 * terms are set on the post; ancestors are created but not attached. A
+	 * taxonomy sent as an empty list is cleared on the post, so a removal on
+	 * the source propagates. When `$source_site_url` is non-empty and an item
+	 * carries a source_term_id, the source ID and URL are recorded on the
+	 * resolved term so later imports can remap by source identity.
 	 *
 	 * Returns true on success, or a WP_Error when a taxonomy does not exist on
 	 * this site, when a term cannot be created, or when assigning terms fails.
@@ -162,10 +175,20 @@ final class Meta_Terms_Manager {
 		array $items,
 		string $source_site_url
 	): true|WP_Error {
+		// Gated on the raw items: A resolution failure also ends with no
+		// assigned IDs, and must keep the existing terms.
+		if ( array() === $items ) {
+			$result = wp_set_post_terms( $post_id, array(), $tax, false );
+
+			return is_wp_error( $result ) ? $result : true;
+		}
+
 		$records = array();
 		foreach ( $items as $item ) {
 			$records[] = $this->normalize_term_record( $item );
 		}
+
+		$this->prime_source_term_ids( $records, $tax, $source_site_url );
 
 		$source_to_dest = array();
 		$assigned_ids   = array();
@@ -192,6 +215,12 @@ final class Meta_Terms_Manager {
 
 			if ( $record['source_term_id'] > 0 ) {
 				$source_to_dest[ $record['source_term_id'] ] = $dest_id;
+				$this->remember_source_term(
+					$record['source_term_id'],
+					$dest_id,
+					$tax,
+					$source_site_url
+				);
 			}
 
 			if ( $record['assigned'] ) {
@@ -413,29 +442,14 @@ final class Meta_Terms_Manager {
 		string $source_site_url
 	): int {
 		if ( $record['source_term_id'] > 0 && '' !== $source_site_url ) {
-			$by_source = get_terms(
-				array(
-					'taxonomy'   => $tax,
-					'hide_empty' => false,
-					'number'     => 1,
-					'fields'     => 'ids',
-					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-					'meta_query' => array(
-						'relation' => 'AND',
-						array(
-							'key'   => Options::META_SOURCE_TERM_ID,
-							'value' => $record['source_term_id'],
-						),
-						array(
-							'key'   => Options::META_SOURCE_TERM_URL,
-							'value' => $source_site_url,
-						),
-					),
-				)
+			$by_source = $this->find_term_by_source_identity(
+				$record['source_term_id'],
+				$tax,
+				$source_site_url
 			);
 
-			if ( is_array( $by_source ) && array() !== $by_source ) {
-				return (int) $by_source[0];
+			if ( $by_source > 0 ) {
+				return $by_source;
 			}
 		}
 
@@ -464,6 +478,203 @@ final class Meta_Terms_Manager {
 		}
 
 		return 0;
+	}
+
+	/**
+	 * Builds the memo key. Scoped by taxonomy too, so a source term ID cannot
+	 * resolve to a term of another taxonomy.
+	 *
+	 * @param string $tax             Taxonomy slug.
+	 * @param string $source_site_url Source site URL.
+	 * @return string Memo key.
+	 */
+	private function source_term_key(
+		string $tax,
+		string $source_site_url
+	): string {
+		return $source_site_url . '|' . $tax;
+	}
+
+	/**
+	 * Memoizes a resolved identity so later posts in the run skip the lookup.
+	 * write_source_term_meta() has already put the identity on the term.
+	 *
+	 * @param int    $source_term_id  Source term ID.
+	 * @param int    $term_id         Destination term ID it resolved to.
+	 * @param string $tax             Taxonomy slug.
+	 * @param string $source_site_url Source site URL; '' skips the memo.
+	 */
+	private function remember_source_term(
+		int $source_term_id,
+		int $term_id,
+		string $tax,
+		string $source_site_url
+	): void {
+		if ( '' === $source_site_url ) {
+			return;
+		}
+
+		$key = $this->source_term_key( $tax, $source_site_url );
+
+		$this->source_term_ids[ $key ][ $source_term_id ] = $term_id;
+	}
+
+	/**
+	 * Resolves in one query every source identity the records will look up.
+	 * Records carrying a destination ID are skipped: They never reach the
+	 * identity lookup.
+	 *
+	 * @param list<array{source_term_id:int, parent:int, name:string, slug:string, description:string, assigned:bool, dest_id:int}> $records Working records.
+	 * @param string                                                                                                                $tax             Taxonomy slug.
+	 * @param string                                                                                                                $source_site_url Source site URL scoping the identity match.
+	 */
+	private function prime_source_term_ids(
+		array $records,
+		string $tax,
+		string $source_site_url
+	): void {
+		if ( '' === $source_site_url ) {
+			return;
+		}
+
+		$key    = $this->source_term_key( $tax, $source_site_url );
+		$known  = $this->source_term_ids[ $key ] ?? array();
+		$wanted = array();
+
+		foreach ( $records as $record ) {
+			if ( 0 !== $record['dest_id'] || 0 === $record['source_term_id'] ) {
+				continue;
+			}
+
+			if ( ! isset( $known[ $record['source_term_id'] ] ) ) {
+				$wanted[ $record['source_term_id'] ] = true;
+			}
+		}
+
+		if ( array() === $wanted ) {
+			return;
+		}
+
+		$this->query_source_term_ids(
+			array_keys( $wanted ),
+			$tax,
+			$source_site_url
+		);
+	}
+
+	/**
+	 * Returns the destination term carrying a source identity, or 0 when none
+	 * does. Queries only for an identity the run has not resolved yet.
+	 *
+	 * @param int    $source_term_id  Source term ID.
+	 * @param string $tax             Taxonomy slug.
+	 * @param string $source_site_url Source site URL scoping the match.
+	 * @return int Destination term ID, or 0 when no match.
+	 */
+	private function find_term_by_source_identity(
+		int $source_term_id,
+		string $tax,
+		string $source_site_url
+	): int {
+		$key    = $this->source_term_key( $tax, $source_site_url );
+		$memoed = $this->source_term_ids[ $key ][ $source_term_id ] ?? null;
+
+		// Confirm a memoized term still resolves: A stale hit would assign a
+		// term that no longer exists instead of falling through to slug/name.
+		// The term cache is already primed for it, so this rarely queries.
+		if (
+			null !== $memoed
+			&& ( 0 === $memoed || get_term( $memoed, $tax ) instanceof WP_Term )
+		) {
+			return $memoed;
+		}
+
+		$this->query_source_term_ids(
+			array( $source_term_id ),
+			$tax,
+			$source_site_url
+		);
+
+		return $this->source_term_ids[ $key ][ $source_term_id ] ?? 0;
+	}
+
+	/**
+	 * Looks up destination terms by source identity and memoizes each outcome,
+	 * a hit as the term ID and a miss as 0. Uncapped: A cap could drop a
+	 * source ID when another one matches several terms.
+	 *
+	 * @param int[]  $source_ids      Source term IDs to look up.
+	 * @param string $tax             Taxonomy slug.
+	 * @param string $source_site_url Source site URL scoping the match.
+	 */
+	private function query_source_term_ids(
+		array $source_ids,
+		string $tax,
+		string $source_site_url
+	): void {
+		if ( array() === $source_ids ) {
+			return;
+		}
+
+		$matches = get_terms(
+			array(
+				'taxonomy'   => $tax,
+				'hide_empty' => false,
+				'fields'     => 'ids',
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'meta_query' => array(
+					'relation' => 'AND',
+					array(
+						'key'     => Options::META_SOURCE_TERM_ID,
+						'value'   => $source_ids,
+						'compare' => 'IN',
+					),
+					array(
+						'key'   => Options::META_SOURCE_TERM_URL,
+						'value' => $source_site_url,
+					),
+				),
+			)
+		);
+
+		if ( ! is_array( $matches ) ) {
+			// A failed lookup must not memoize a miss; leave the identities
+			// unresolved so the next attempt retries.
+			return;
+		}
+
+		$resolved = array();
+
+		if ( array() !== $matches ) {
+			$term_ids = array_map( 'intval', $matches );
+
+			// One read for all matches; the map-back below and the later meta
+			// compare then hit cache.
+			update_termmeta_cache( $term_ids );
+
+			foreach ( $term_ids as $term_id ) {
+				$source_id = absint(
+					get_term_meta(
+						$term_id,
+						Options::META_SOURCE_TERM_ID,
+						true
+					)
+				);
+
+				// Ordered by name, so first-wins picks the same term the
+				// per-record lookup returned.
+				if ( $source_id > 0 && ! isset( $resolved[ $source_id ] ) ) {
+					$resolved[ $source_id ] = $term_id;
+				}
+			}
+		}
+
+		$key = $this->source_term_key( $tax, $source_site_url );
+
+		foreach ( $source_ids as $source_id ) {
+			$this->source_term_ids[ $key ][ $source_id ] =
+				$resolved[ $source_id ] ?? 0;
+		}
 	}
 
 	/**
@@ -528,7 +739,43 @@ final class Meta_Terms_Manager {
 			return;
 		}
 
-		update_term_meta( $term_id, Options::META_SOURCE_TERM_ID, $source_term_id );
-		update_term_meta( $term_id, Options::META_SOURCE_TERM_URL, $source_site_url );
+		$this->update_term_meta_if_changed(
+			$term_id,
+			Options::META_SOURCE_TERM_ID,
+			$source_term_id
+		);
+		$this->update_term_meta_if_changed(
+			$term_id,
+			Options::META_SOURCE_TERM_URL,
+			$source_site_url
+		);
+	}
+
+	/**
+	 * Writes term meta only when the stored value differs, mirroring core's own
+	 * no-op guard. Core compares strictly, so an int value never matches the
+	 * string it reads back and re-writes on every import.
+	 *
+	 * @param int        $term_id  Destination term ID.
+	 * @param string     $meta_key Meta key to write.
+	 * @param int|string $value    Value to store.
+	 */
+	private function update_term_meta_if_changed(
+		int $term_id,
+		string $meta_key,
+		int|string $value
+	): void {
+		$stored = get_term_meta( $term_id, $meta_key, false );
+
+		if (
+			is_array( $stored )
+			&& 1 === count( $stored )
+			&& is_scalar( $stored[0] )
+			&& (string) $stored[0] === (string) $value
+		) {
+			return;
+		}
+
+		update_term_meta( $term_id, $meta_key, $value );
 	}
 }

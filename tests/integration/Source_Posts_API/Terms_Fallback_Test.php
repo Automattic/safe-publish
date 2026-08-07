@@ -18,6 +18,8 @@ use Safe_Publish\API\Source_Posts_API;
  * A source running an older plugin sends no safe_publish_terms field, so
  * fetch_fresh_post_content() must fall back to the minimal embedded wp:term
  * payload and keep importing terms flat, exactly as before the field existed.
+ * Only the field can carry a taxonomy as present but empty, so the fallback
+ * never reaches the importer's clear branch.
  */
 class Terms_Fallback_Test extends Source_Posts_API_Test_Base {
 
@@ -83,6 +85,68 @@ class Terms_Fallback_Test extends Source_Posts_API_Test_Base {
 				),
 			),
 			$result['terms']
+		);
+	}
+
+	/**
+	 * Verifies that an older source, which sends no safe_publish_terms field,
+	 * never yields an empty taxonomy, so the fallback path cannot clear terms.
+	 */
+	public function test_embedded_fallback_never_yields_an_empty_taxonomy(): void {
+		// ARRANGE: An embedded payload whose only taxonomy has no usable term.
+		$this->mock_post_overrides = array(
+			'terms' => array( 'post_tag' => array( '' ) ),
+		);
+
+		// ACT: Fetch the post.
+		$result = $this->api->fetch_fresh_post_content(
+			4242,
+			self::SOURCE_SITE_URL,
+			array(),
+			'post'
+		);
+
+		// ASSERT: The taxonomy is absent rather than empty.
+		$this->assertIsArray( $result );
+		$this->assertSame( array(), $result['terms'] );
+	}
+
+	/**
+	 * Verifies that a taxonomy the source sent empty survives the JSON round
+	 * trip as an empty list, reaching the importer as the signal to clear.
+	 */
+	public function test_empty_taxonomy_survives_the_fetch(): void {
+		// ARRANGE: A source sending post_tag present but empty, alongside a
+		// taxonomy that still carries a term.
+		$this->mock_post_overrides = array(
+			'safe_publish_terms' => array(
+				'post_tag' => array(),
+				'category' => array(
+					array(
+						'id'   => 7,
+						'name' => 'Kept',
+						'slug' => 'kept',
+					),
+				),
+			),
+		);
+
+		// ACT: Fetch the post.
+		$result = $this->api->fetch_fresh_post_content(
+			4242,
+			self::SOURCE_SITE_URL,
+			array(),
+			'post'
+		);
+
+		// ASSERT: The empty taxonomy arrives as an empty list, the populated
+		// one unaffected.
+		$this->assertIsArray( $result );
+		$this->assertArrayHasKey( 'post_tag', $result['terms'] );
+		$this->assertSame( array(), $result['terms']['post_tag'] );
+		$this->assertSame(
+			array( 'Kept' ),
+			array_column( $result['terms']['category'], 'name' )
 		);
 	}
 }

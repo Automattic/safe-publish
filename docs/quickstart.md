@@ -87,7 +87,7 @@ You have three ways to import content:
 
 ## Imports and exports
 
-The **Imports** page lists everything that came in from the source — see [Imports](concepts/imports.md). The **Exports** page lists events logged when your site serves posts to a destination — see [Exports](concepts/exports.md).
+The **Imports** page lists everything that came in from the source — see [Imports](concepts/imports.md). The **Audit Log** page lists logged events across every channel, including exports served to destinations — see [Audit Log](concepts/audit-log.md).
 
 ## Next Steps
 

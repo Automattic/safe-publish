@@ -210,7 +210,7 @@ Target coverage metrics:
 
 ### Excluded from Coverage
 
-- Entry point files (`index.tsx`, `imports.tsx`, `exports.tsx`)
+- Entry point files (`posts.tsx`, `audit-log.tsx`)
 - Test files
 - Build artifacts
 

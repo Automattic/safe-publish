@@ -3004,6 +3004,85 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that re-importing a post whose source dropped every term of a
+	 * taxonomy removes the stale destination terms, while a taxonomy the source
+	 * still populates is unaffected.
+	 */
+	public function test_reimport_clears_terms_emptied_on_the_source(): void {
+		// ARRANGE: A first import that assigns a tag and a category.
+		$this->mock_post_overrides = array(
+			'safe_publish_terms' => array(
+				'post_tag' => array(
+					array(
+						'id'   => 8801,
+						'name' => 'Doomed',
+						'slug' => 'doomed',
+					),
+				),
+				'category' => array(
+					array(
+						'id'   => 8802,
+						'name' => 'Kept',
+						'slug' => 'kept',
+					),
+				),
+			),
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+
+		$post_data = array(
+			'id'        => 9944,
+			'title'     => 'Terms Cleared',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/terms-cleared',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+		$this->assertSame(
+			array( 'Doomed' ),
+			wp_get_post_terms(
+				$first['post_id'],
+				'post_tag',
+				array( 'fields' => 'names' )
+			),
+			'First import should assign the source tag.'
+		);
+
+		// ARRANGE: The source post now has no tags, keeping its category.
+		$this->mock_post_overrides['safe_publish_terms']['post_tag'] = array();
+
+		// ACT: Re-import the same post.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: The emptied taxonomy is cleared, the populated one intact.
+		$this->assertTrue( $second['success'] );
+		$this->assertSame( $first['post_id'], $second['post_id'] );
+		$this->assertSame(
+			array(),
+			wp_get_post_terms(
+				$second['post_id'],
+				'post_tag',
+				array( 'fields' => 'ids' )
+			),
+			'Terms removed on the source must not survive a re-import.'
+		);
+		$this->assertSame(
+			array( 'Kept' ),
+			wp_get_post_terms(
+				$second['post_id'],
+				'category',
+				array( 'fields' => 'names' )
+			)
+		);
+	}
+
+	/**
 	 * Verifies that re-importing a previously-orphaned post links it to its
 	 * source parent once that parent has been imported on the destination.
 	 */

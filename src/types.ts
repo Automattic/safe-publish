@@ -505,22 +505,6 @@ export type ActorSource =
 	| 'unknown';
 
 /**
- * Represents a single export event from the audit log table.
- */
-export interface ExportEvent {
-	id: number;
-	date: string;
-	level: 'info' | 'error';
-	event: string;
-	actor_user_id: number;
-	actor_display_name: string;
-	actor_source: ActorSource;
-	destination_site_url: string;
-	post_ids: number[];
-	post_count: number;
-}
-
-/**
  * Represents a single audit log event of any channel.
  */
 export interface AuditEvent {
