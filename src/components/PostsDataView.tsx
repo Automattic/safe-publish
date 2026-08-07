@@ -1065,9 +1065,11 @@ export function PostsDataView( {
 					</Button>
 				) }
 			</div>
-			{ postTypeError && (
+			{ /* Equal text means the same backend error surfaced twice; show it
+				once. */ }
+			{ postTypeError && postTypeError !== fetchError && (
 				<Notice
-					className="safe-publish-post-type-error"
+					className="safe-publish-source-error"
 					status="error"
 					onRemove={ () => setPostTypeError( null ) }
 				>
@@ -1076,9 +1078,16 @@ export function PostsDataView( {
 			) }
 			{ ! slugChipMismatch && fetchError && (
 				<Notice
-					className="safe-publish-post-type-error"
+					className="safe-publish-source-error"
 					status="error"
-					onRemove={ () => setFetchError( null ) }
+					onRemove={ () => {
+						setFetchError( null );
+						// Clear the suppressed twin too, else it reappears on
+						// dismiss.
+						if ( postTypeError === fetchError ) {
+							setPostTypeError( null );
+						}
+					} }
 				>
 					{ fetchError }
 				</Notice>

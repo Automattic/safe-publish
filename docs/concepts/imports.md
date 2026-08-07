@@ -90,11 +90,9 @@ Imports remain backed by two custom tables. They are bookkeeping for the rollbac
 | `{$wpdb->prefix}safe_publish_imports`      | One row per import operation (session).         |
 | `{$wpdb->prefix}safe_publish_import_items` | One row per imported item (linked via session). |
 
-A future audit log will absorb per-item event capture; the Imports page will keep its current shape.
-
 ## Next Steps
 
-- [Exports](exports.md) — Reviewing outbound export events.
+- [Audit Log](audit-log.md) — Reviewing logged events, including exports.
 - [Import Process](import-process.md) — How imports run end-to-end.
 - [Authentication](authentication.md) — Setting up source/destination credentials.
 - [Troubleshooting](../troubleshooting.md) — Solving common issues.

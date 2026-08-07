@@ -33,11 +33,10 @@ All events carry the global properties set in `Plugin::init()` — `plugin_versi
 
 ## A. Frontend tagging reconciliation (Pendo UI)
 
-The code allowlist in `register_pendo_screens` is **correct** — it enables Pendo on all four real admin screens (`safe-publish`, `safe-publish-settings`, `safe-publish-exports`, `safe-publish-audit-log`, across both admin modes). The mismatches are entirely on the Pendo-tag side and must be fixed in the Pendo UI (the API/MCP is read-only):
+The code allowlist in `register_pendo_screens` is **correct** — it enables Pendo on all three real admin screens (`safe-publish`, `safe-publish-settings`, `safe-publish-audit-log`, across both admin modes). The mismatches are entirely on the Pendo-tag side and must be fixed in the Pendo UI (the API/MCP is read-only):
 
 1. **Dead page tag.** The tagged Page "Safe Publish > Imports" matches `admin.php?page=safe-publish-imports`, but no such slug exists in the plugin — the import UI lives on the main `safe-publish` (Manage) page, already tagged as "Safe Publish > Main". Re-point this rule to a real slug or delete it, along with its orphaned child feature "Safe Publish > Imports > Edit".
-2. **Missing page tags.** `safe-publish-exports` (Exports) and `safe-publish-audit-log` (Audit Log) are Pendo-enabled by the allowlist but have **no** Page tag, so their views are unattributed. Add a Page for each:
-   - Exports → `//*/wp-admin/admin.php?page=safe-publish-exports`
+2. **Missing page tag.** `safe-publish-audit-log` (Audit Log) is Pendo-enabled by the allowlist but has **no** Page tag, so its views are unattributed. Add a Page:
    - Audit Log → `//*/wp-admin/admin.php?page=safe-publish-audit-log`
 3. **Typo.** Rename the Feature "Safe Publish > Test **Conection**" → "Safe Publish > Test **Connection**".
 
@@ -69,7 +68,7 @@ None of the following can be created through the Pendo MCP/API (it exposes read-
 
 Every other plugin in this app (Remote Data Blocks, Parse.ly, Security Controls) has a Product Area; Safe Publish does not. Create one and add:
 
-- Pages: Safe Publish > Main, Settings, Exports (new), Audit Log (new)
+- Pages: Safe Publish > Main, Settings, Audit Log
 - Features: the existing Safe Publish button tags
 - Track events: all six `safe_publish_*` events
 
