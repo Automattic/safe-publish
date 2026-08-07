@@ -101,10 +101,11 @@ final class Meta_Terms_Manager {
 	 * source ID), description, and assigned. Per taxonomy the records are
 	 * ordered parent-first, resolved to destination terms (reusing a match or
 	 * creating one with the mapped parent and description), and the assigned
-	 * terms are set on the post; ancestors are created but not attached. When
-	 * `$source_site_url` is non-empty and an item carries a source_term_id, the
-	 * source ID and URL are recorded on the resolved term so later imports can
-	 * remap by source identity.
+	 * terms are set on the post; ancestors are created but not attached. A
+	 * taxonomy sent as an empty list is cleared on the post, so a removal on
+	 * the source propagates. When `$source_site_url` is non-empty and an item
+	 * carries a source_term_id, the source ID and URL are recorded on the
+	 * resolved term so later imports can remap by source identity.
 	 *
 	 * Returns true on success, or a WP_Error when a taxonomy does not exist on
 	 * this site, when a term cannot be created, or when assigning terms fails.
@@ -174,6 +175,14 @@ final class Meta_Terms_Manager {
 		array $items,
 		string $source_site_url
 	): true|WP_Error {
+		// Gated on the raw items: A resolution failure also ends with no
+		// assigned IDs, and must keep the existing terms.
+		if ( array() === $items ) {
+			$result = wp_set_post_terms( $post_id, array(), $tax, false );
+
+			return is_wp_error( $result ) ? $result : true;
+		}
+
 		$records = array();
 		foreach ( $items as $item ) {
 			$records[] = $this->normalize_term_record( $item );

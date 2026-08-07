@@ -1059,4 +1059,102 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 			)
 		);
 	}
+
+	/**
+	 * Verifies that update_terms() clears a taxonomy the source sent as an
+	 * empty list, the signal that its terms were removed on the source.
+	 */
+	public function test_update_terms_clears_taxonomy_sent_empty(): void {
+		// ARRANGE: A post carrying a tag, as a prior import left it.
+		wp_set_post_terms( $this->post_id, array( 'Stale Tag' ), 'post_tag' );
+		$this->assertSame(
+			array( 'Stale Tag' ),
+			wp_get_post_terms(
+				$this->post_id,
+				'post_tag',
+				array( 'fields' => 'names' )
+			)
+		);
+
+		// ACT: Update terms with the taxonomy present but empty.
+		$result = $this->manager->update_terms(
+			$this->post_id,
+			array( 'post_tag' => array() )
+		);
+
+		// ASSERT: The taxonomy is cleared.
+		$this->assertTrue( $result );
+		$this->assertSame(
+			array(),
+			wp_get_post_terms(
+				$this->post_id,
+				'post_tag',
+				array( 'fields' => 'ids' )
+			)
+		);
+	}
+
+	/**
+	 * Verifies that update_terms() leaves a taxonomy absent from the payload
+	 * untouched, so clearing is confined to what the source actually sent.
+	 */
+	public function test_update_terms_keeps_terms_of_absent_taxonomy(): void {
+		// ARRANGE: A post carrying a tag, with only category in the payload.
+		wp_set_post_terms( $this->post_id, array( 'Kept Tag' ), 'post_tag' );
+		$category_id = self::factory()->term->create(
+			array( 'taxonomy' => 'category' )
+		);
+
+		// ACT: Update terms with a payload that omits post_tag entirely.
+		$result = $this->manager->update_terms(
+			$this->post_id,
+			array( 'category' => array( array( 'term_id' => $category_id ) ) )
+		);
+
+		// ASSERT: The untouched taxonomy keeps its term.
+		$this->assertTrue( $result );
+		$this->assertSame(
+			array( 'Kept Tag' ),
+			wp_get_post_terms(
+				$this->post_id,
+				'post_tag',
+				array( 'fields' => 'names' )
+			)
+		);
+	}
+
+	/**
+	 * Verifies that update_terms() keeps existing terms when every item sent
+	 * fails to resolve, so a resolution failure never reads as a clear.
+	 */
+	public function test_update_terms_keeps_terms_when_no_item_resolves(): void {
+		// ARRANGE: A post carrying a tag, and items that cannot resolve: A
+		// term ID from another taxonomy, and a record with no name or slug.
+		wp_set_post_terms( $this->post_id, array( 'Kept Tag' ), 'post_tag' );
+		$foreign_id = self::factory()->term->create(
+			array( 'taxonomy' => 'category' )
+		);
+
+		// ACT: Update terms with those unresolvable items.
+		$result = $this->manager->update_terms(
+			$this->post_id,
+			array(
+				'post_tag' => array(
+					array( 'term_id' => $foreign_id ),
+					array( 'description' => 'No name or slug' ),
+				),
+			)
+		);
+
+		// ASSERT: Nothing resolved, and the existing term survives.
+		$this->assertTrue( $result );
+		$this->assertSame(
+			array( 'Kept Tag' ),
+			wp_get_post_terms(
+				$this->post_id,
+				'post_tag',
+				array( 'fields' => 'names' )
+			)
+		);
+	}
 }

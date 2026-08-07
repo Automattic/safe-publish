@@ -132,6 +132,44 @@ class Extract_Source_Terms_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that a taxonomy the source sent as an empty list survives as an
+	 * empty list, the signal the destination clears on.
+	 */
+	public function test_empty_taxonomy_is_preserved(): void {
+		// ARRANGE + ACT: Extract a field carrying one empty taxonomy.
+		$map = $this->extract(
+			array( 'safe_publish_terms' => array( 'post_tag' => array() ) )
+		);
+
+		// ASSERT: The key survives with an empty list.
+		$this->assertSame( array( 'post_tag' => array() ), $map );
+	}
+
+	/**
+	 * Verifies that a taxonomy is dropped rather than left empty when its
+	 * records all fail normalization or its value is not a list, so malformed
+	 * input never reads as a clear.
+	 */
+	public function test_all_malformed_records_drop_the_taxonomy(): void {
+		// ARRANGE + ACT: Extract records that carry neither a name nor a slug,
+		// and a taxonomy whose value is null rather than a list.
+		$map = $this->extract(
+			array(
+				'safe_publish_terms' => array(
+					'post_tag' => array(
+						array( 'id' => 9 ),
+						'not-an-array',
+					),
+					'category' => null,
+				),
+			)
+		);
+
+		// ASSERT: Both taxonomies are dropped, leaving nothing to clear.
+		$this->assertSame( array(), $map );
+	}
+
+	/**
 	 * Verifies that malformed entries are dropped: A non-array taxonomy value,
 	 * an empty taxonomy key, a non-array record, and a record with neither name
 	 * nor slug, leaving only the well-formed record.

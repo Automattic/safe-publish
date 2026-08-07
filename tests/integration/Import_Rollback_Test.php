@@ -738,6 +738,107 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that terms cleared because the source sent their taxonomy empty
+	 * are restored when a later taxonomy fails, so an aborted update never
+	 * leaves the clear applied.
+	 *
+	 * Uses a custom taxonomy: The snapshot's post fields carry post_category
+	 * and tags_input, so only a custom taxonomy relies on the snapshot's own
+	 * term restore.
+	 */
+	public function test_rollback_restores_cleared_terms(): void {
+		register_taxonomy( 'sp_rollback_topic', 'post' );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ARRANGE: Import a post with a custom-taxonomy term and a category.
+		$post_data = array(
+			'id'        => 9141,
+			'title'     => 'Post For Cleared Term Rollback',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/cleared-term-rollback',
+			'post_type' => 'posts',
+		);
+
+		$this->mock_post_overrides = array(
+			'safe_publish_terms' => array(
+				'sp_rollback_topic' => array(
+					array(
+						'id'   => 9241,
+						'name' => 'Doomed Topic',
+						'slug' => 'doomed-topic',
+					),
+				),
+				'category'          => array(
+					array(
+						'id'   => 9242,
+						'name' => 'Rollback Category',
+						'slug' => 'rollback-category',
+					),
+				),
+			),
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
+		$post_id = $first['post_id'];
+
+		$original_topics = wp_get_object_terms(
+			$post_id,
+			'sp_rollback_topic',
+			array( 'fields' => 'ids' )
+		);
+		$this->assertNotSame( array(), $original_topics );
+
+		// ARRANGE: The source empties the custom taxonomy, and the category
+		// that follows carries a term whose creation fails.
+		$this->mock_post_overrides['safe_publish_terms'] = array(
+			'sp_rollback_topic' => array(),
+			'category'          => array(
+				array(
+					'id'   => 9242,
+					'name' => 'Rollback Category',
+					'slug' => 'rollback-category',
+				),
+				array(
+					'id'   => 9243,
+					'name' => 'Uncreatable Term',
+					'slug' => 'uncreatable-term',
+				),
+			),
+		);
+
+		$filter = static fn() => new WP_Error(
+			'insert_term_failed',
+			'Simulated term insertion failure.'
+		);
+		add_filter( 'pre_insert_term', $filter );
+
+		// ACT: Re-import, clearing the custom taxonomy before category fails.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'pre_insert_term', $filter );
+
+		// ASSERT: The update failed and the cleared terms are back.
+		$this->assertFalse(
+			$result['success'],
+			'Update import should fail when a term cannot be created.'
+		);
+		$this->assertSame(
+			$original_topics,
+			wp_get_object_terms(
+				$post_id,
+				'sp_rollback_topic',
+				array( 'fields' => 'ids' )
+			),
+			'Cleared terms must be restored when the update is rolled back.'
+		);
+	}
+
+	/**
 	 * Verifies that the new featured-image attachment is deleted when the bulk
 	 * update path rolls back due to a custom meta failure, while the original
 	 * thumbnail is preserved.

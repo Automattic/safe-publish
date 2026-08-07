@@ -124,6 +124,9 @@ class Source_Terms_REST_Field {
 	 * Builds the taxonomy => term-records map: Assigned terms plus each
 	 * hierarchical term's ancestors (assigned=false), de-duplicated by term id.
 	 *
+	 * A taxonomy with no terms is emitted as an empty list, which the
+	 * destination clears; a WP_Error omits it instead, as undeterminable.
+	 *
 	 * @param WP_Post $post Post whose terms are collected.
 	 * @return array<string, list<array{id:int, name:string, slug:string, parent:int, description:string, assigned:bool}>>
 	 */
@@ -138,7 +141,12 @@ class Source_Terms_REST_Field {
 			$tax   = $taxonomy->name;
 			$terms = get_the_terms( $post, $tax );
 
+			if ( is_wp_error( $terms ) ) {
+				continue;
+			}
+
 			if ( ! is_array( $terms ) ) {
+				$map[ $tax ] = array();
 				continue;
 			}
 
@@ -159,9 +167,7 @@ class Source_Terms_REST_Field {
 				}
 			}
 
-			if ( array() !== $records ) {
-				$map[ $tax ] = array_values( $records );
-			}
+			$map[ $tax ] = array_values( $records );
 		}
 
 		return $map;
