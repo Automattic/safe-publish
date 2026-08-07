@@ -286,6 +286,7 @@ final class Admin_Ajax_Controller {
 		$state         = $requested_state;
 		if ( $focus_source_id > 0 ) {
 			$focused_state = $this->repository->resolve_source_post_state(
+				Options::get_connected_site_url_with_path(),
 				$focus_source_id
 			);
 			if ( 'all' !== $state && $focused_state !== $state ) {
@@ -468,8 +469,8 @@ final class Admin_Ajax_Controller {
 		$active_by_source = 0 === count( $source_ids )
 			? array()
 			: $this->repository->get_active_items_by_source_ids(
-				$source_ids,
-				$source_site_url
+				$source_site_url,
+				$source_ids
 			);
 
 		return array_map(
@@ -1153,7 +1154,10 @@ final class Admin_Ajax_Controller {
 	/**
 	 * Builds the local-primary payload for ajax_list_posts.
 	 *
-	 * @param string $source_site_url Source site URL.
+	 * Scoped to the stored connection rather than $source_site_url, which is
+	 * not normalized to the identity sessions are recorded under.
+	 *
+	 * @param string $source_site_url Source site URL to fetch from.
 	 * @param string $state           'up-to-date' or 'outdated'.
 	 * @return array|\WP_Error Listing payload.
 	 */
@@ -1169,6 +1173,7 @@ final class Admin_Ajax_Controller {
 		$args              = $this->build_local_listing_args();
 		$args['freshness'] = 'outdated' === $state ? 'outdated' : 'up-to-date';
 		$active_rows       = $this->repository->list_imported_source_rows(
+			Options::get_connected_site_url_with_path(),
 			$page,
 			$per_page,
 			$args

@@ -498,27 +498,38 @@ final class History_Repository {
 	}
 
 	/**
-	 * Looks up the most recent non-error item row for a given source post.
+	 * Looks up one source's most recent non-error item row for a given source
+	 * post. An empty $source_site_url matches only sessions recorded without
+	 * one.
 	 *
 	 * Only success and updated rows count, so a later error can't mask the
 	 * imported row and an error-only source reads as not imported. Ties on
 	 * import_date_gmt break by highest id.
 	 *
-	 * @param int $source_post_id Source post ID.
+	 * @param string $source_site_url Path-bearing source identity.
+	 * @param int    $source_post_id  Source post ID.
 	 * @return array|null Item row, or null when the source has no non-error row.
 	 */
-	public function get_active_item_for_source( int $source_post_id ): ?array {
+	public function get_active_item_for_source(
+		string $source_site_url,
+		int $source_post_id
+	): ?array {
 		global $wpdb;
 
-		$table = Import_Items_Table::table_name();
+		$table   = Import_Items_Table::table_name();
+		$imports = Imports_Table::table_name();
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$row = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT * FROM `{$table}` WHERE source_post_id = %d"
-					. " AND status IN ( 'success', 'updated' )"
-					. ' ORDER BY import_date_gmt DESC, id DESC LIMIT 1',
-				$source_post_id
+				"SELECT t.* FROM `{$table}` t"
+					. " INNER JOIN `{$imports}` s ON s.id = t.session_id"
+					. ' WHERE t.source_post_id = %d'
+					. " AND t.status IN ( 'success', 'updated' )"
+					. ' AND s.source_site_url = %s'
+					. ' ORDER BY t.import_date_gmt DESC, t.id DESC LIMIT 1',
+				$source_post_id,
+				$source_site_url
 			),
 			ARRAY_A
 		);
@@ -531,16 +542,17 @@ final class History_Repository {
 	 * Bulk variant of get_active_item_for_source(): One query per page
 	 * instead of N. Backed by the (source_post_id, import_date_gmt) index.
 	 *
-	 * Scoping restricts the dedup subquery to the same source too, so another
-	 * source's newer success can't hide this source's active row.
+	 * The dedup subquery is restricted to the same source too, so another
+	 * source's newer success can't hide this source's active row. An empty
+	 * $source_site_url matches only sessions recorded without one.
 	 *
-	 * @param int[]       $source_ids      Source post IDs to look up.
-	 * @param string|null $source_site_url Source identity to scope to; null matches any source.
+	 * @param string $source_site_url Path-bearing source identity.
+	 * @param int[]  $source_ids      Source post IDs to look up.
 	 * @return array<int, array> Map of source_post_id → latest non-error row.
 	 */
 	public function get_active_items_by_source_ids(
-		array $source_ids,
-		?string $source_site_url
+		string $source_site_url,
+		array $source_ids
 	): array {
 		if ( 0 === count( $source_ids ) ) {
 			return array();
@@ -549,40 +561,34 @@ final class History_Repository {
 		global $wpdb;
 
 		$table        = Import_Items_Table::table_name();
+		$imports      = Imports_Table::table_name();
 		$placeholders = implode( ', ', array_fill( 0, count( $source_ids ), '%d' ) );
 		$values       = array_values( $source_ids );
-		$s1_join      = '';
-		$s1_scope     = '';
-		$s2_join      = '';
-		$s2_scope     = '';
-
-		if ( null !== $source_site_url ) {
-			$imports  = Imports_Table::table_name();
-			$s1_join  = " INNER JOIN `{$imports}` s1 ON s1.id = t1.session_id";
-			$s1_scope = ' AND s1.source_site_url = %s';
-			$s2_join  = " INNER JOIN `{$imports}` s2 ON s2.id = t2.session_id";
-			$s2_scope = ' AND s2.source_site_url = s1.source_site_url';
-			$values[] = $source_site_url;
-		}
+		$values[]     = $source_site_url;
 
 		// NOT EXISTS picks the latest non-error row per source (ties broken by
 		// id); a newer error can't mask it. Served by source_post_id_import_date.
-		$sql = "SELECT t1.* FROM `{$table}` t1{$s1_join}"
-			. " WHERE t1.source_post_id IN ({$placeholders})"
-			. " AND t1.status IN ( 'success', 'updated' ){$s1_scope}"
-			. " AND NOT EXISTS ( SELECT 1 FROM `{$table}` t2{$s2_join}"
-			. ' WHERE t2.source_post_id = t1.source_post_id'
-			. " AND t2.status IN ( 'success', 'updated' ){$s2_scope}"
-			. ' AND ( t2.import_date_gmt > t1.import_date_gmt'
-			. ' OR ( t2.import_date_gmt = t1.import_date_gmt'
-			. ' AND t2.id > t1.id ) ) )';
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
-			$wpdb->prepare( $sql, ...$values ),
+			$wpdb->prepare(
+				"SELECT t1.* FROM `{$table}` t1"
+					. " INNER JOIN `{$imports}` s1 ON s1.id = t1.session_id"
+					. " WHERE t1.source_post_id IN ({$placeholders})"
+					. " AND t1.status IN ( 'success', 'updated' )"
+					. ' AND s1.source_site_url = %s'
+					. " AND NOT EXISTS ( SELECT 1 FROM `{$table}` t2"
+					. " INNER JOIN `{$imports}` s2 ON s2.id = t2.session_id"
+					. ' WHERE t2.source_post_id = t1.source_post_id'
+					. " AND t2.status IN ( 'success', 'updated' )"
+					. ' AND s2.source_site_url = s1.source_site_url'
+					. ' AND ( t2.import_date_gmt > t1.import_date_gmt'
+					. ' OR ( t2.import_date_gmt = t1.import_date_gmt'
+					. ' AND t2.id > t1.id ) ) )',
+				...$values
+			),
 			ARRAY_A
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
 		$by_source = array();
 		foreach ( is_array( $rows ) ? $rows : array() as $row ) {
@@ -639,14 +645,22 @@ final class History_Repository {
 	}
 
 	/**
-	 * Resolves the routing state for a single source post. Backs the
-	 * focus_source one-render chip swap on the listing endpoint.
+	 * Resolves the routing state for a single source post, scoped to one
+	 * source. Backs the focus_source one-render chip swap on the listing
+	 * endpoint.
 	 *
-	 * @param int $source_post_id Source post ID.
+	 * @param string $source_site_url Path-bearing source identity.
+	 * @param int    $source_post_id  Source post ID.
 	 * @return string One of 'available', 'up-to-date', 'outdated'.
 	 */
-	public function resolve_source_post_state( int $source_post_id ): string {
-		$row = $this->get_active_item_for_source( $source_post_id );
+	public function resolve_source_post_state(
+		string $source_site_url,
+		int $source_post_id
+	): string {
+		$row = $this->get_active_item_for_source(
+			$source_site_url,
+			$source_post_id
+		);
 
 		$post_id            = null !== $row && isset( $row['post_id'] )
 			? (int) $row['post_id']
@@ -662,13 +676,18 @@ final class History_Repository {
 	}
 
 	/**
-	 * Lists imported source-post rows per the active-row rule. Returns
-	 * per_page+1 rows so the caller can derive has_more without a count
-	 * query.
+	 * Lists one source's imported source-post rows per the active-row rule.
+	 * Returns per_page+1 rows so the caller can derive has_more without a
+	 * count query.
 	 *
-	 * @param int   $page     1-indexed page number.
-	 * @param int   $per_page Items per page.
-	 * @param array $args     {
+	 * The dedup subquery is restricted to the same source too, so another
+	 * source's newer import can't hide this source's active row. An empty
+	 * $source_site_url matches only sessions recorded without one.
+	 *
+	 * @param string $source_site_url Path-bearing source identity.
+	 * @param int    $page            1-indexed page number.
+	 * @param int    $per_page        Items per page.
+	 * @param array  $args            {
 	 *     Optional. Search/filter/sort criteria.
 	 *
 	 *     @type string   $search          Title substring to match.
@@ -686,16 +705,18 @@ final class History_Repository {
 	 * @return array[] Active item rows in display order.
 	 */
 	public function list_imported_source_rows(
+		string $source_site_url,
 		int $page = 1,
 		int $per_page = 20,
 		array $args = array()
 	): array {
 		global $wpdb;
 
-		$items_table = Import_Items_Table::table_name();
-		$posts_table = $wpdb->posts;
-		$offset      = max( 0, ( $page - 1 ) * $per_page );
-		$limit       = $per_page + 1;
+		$items_table   = Import_Items_Table::table_name();
+		$imports_table = Imports_Table::table_name();
+		$posts_table   = $wpdb->posts;
+		$offset        = max( 0, ( $page - 1 ) * $per_page );
+		$limit         = $per_page + 1;
 
 		$search          = isset( $args['search'] ) ? (string) $args['search'] : '';
 		$name            = isset( $args['name'] ) ? (string) $args['name'] : '';
@@ -717,8 +738,9 @@ final class History_Repository {
 			't1.rolled_back = 0',
 			't1.post_id IS NOT NULL',
 			"p.post_status != 'trash'",
+			's1.source_site_url = %s',
 		);
-		$params = array();
+		$params = array( $source_site_url );
 
 		if ( '' !== $search ) {
 			$where[]  = 't1.title LIKE %s';
@@ -770,10 +792,13 @@ final class History_Repository {
 					. ' p.post_status AS wp_post_status'
 					. " FROM `{$items_table}` t1"
 					. " INNER JOIN `{$posts_table}` p ON p.ID = t1.post_id"
+					. " INNER JOIN `{$imports_table}` s1 ON s1.id = t1.session_id"
 					. " WHERE {$where_sql}"
 					. " AND NOT EXISTS ( SELECT 1 FROM `{$items_table}` t2"
+					. " INNER JOIN `{$imports_table}` s2 ON s2.id = t2.session_id"
 					. ' WHERE t2.source_post_id = t1.source_post_id'
 					. " AND t2.status IN ( 'success', 'updated' )"
+					. ' AND s2.source_site_url = s1.source_site_url'
 					. ' AND ( t2.import_date_gmt > t1.import_date_gmt'
 					. ' OR ( t2.import_date_gmt = t1.import_date_gmt AND t2.id > t1.id ) ) )'
 					. " ORDER BY {$orderby} {$order}, t1.id DESC"

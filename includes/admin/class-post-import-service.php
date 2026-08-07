@@ -889,6 +889,9 @@ class Post_Import_Service {
 	 * Lookups are batched into one items query plus one wp_posts query for the
 	 * whole page.
 	 *
+	 * Resolution is scoped to the connected source, so an ID imported from a
+	 * previously connected one reads as not imported.
+	 *
 	 * @param array $posts Posts array fetched from the source API, passed by reference.
 	 */
 	public function annotate_posts_with_import_status( array &$posts ): void {
@@ -902,13 +905,11 @@ class Post_Import_Service {
 			)
 		);
 
-		// Passing null keeps the annotation unscoped, matching the Posts tab
-		// listing it annotates; both are scoped in a follow-up.
 		$active_by_source_id = 0 === count( $source_ids )
 			? array()
 			: $this->repository->get_active_items_by_source_ids(
-				$source_ids,
-				null
+				Options::get_connected_site_url_with_path(),
+				$source_ids
 			);
 
 		$post_ids_to_check = array_values(
