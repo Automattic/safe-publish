@@ -1005,7 +1005,8 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		// bulk batch does.
 		$manager = new Meta_Terms_Manager();
 		foreach ( $post_ids as $post_id ) {
-			$this->assertTrue(
+			$this->assertSame(
+				array(),
 				$manager->update_terms( $post_id, $terms, $source_site_url )
 			);
 		}
@@ -1075,7 +1076,8 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 			),
 		);
 
-		$this->assertTrue(
+		$this->assertSame(
+			array(),
 			$this->manager->update_terms(
 				$this->post_id,
 				$terms,
@@ -1097,7 +1099,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: A fresh term was created and assigned, not the stale ID.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$recreated = get_term_by( 'slug', "memo-{$suffix}", 'category' );
 		$this->assertInstanceOf( WP_Term::class, $recreated );
 		$this->assertNotSame(
@@ -1137,7 +1139,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: The taxonomy is cleared.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$this->assertSame(
 			array(),
 			wp_get_post_terms(
@@ -1166,7 +1168,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: The untouched taxonomy keeps its term.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$this->assertSame(
 			array( 'Kept Tag' ),
 			wp_get_post_terms(
@@ -1201,7 +1203,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: Nothing resolved, and the existing term survives.
-		$this->assertTrue( $result );
+		$this->assertSame( array(), $result );
 		$this->assertSame(
 			array( 'Kept Tag' ),
 			wp_get_post_terms(
