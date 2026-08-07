@@ -22,6 +22,16 @@ require_once __DIR__ . '/Integration_Test_Case.php';
 final class Posts_Source_Rows_Test extends Integration_Test_Case {
 
 	/**
+	 * Source identity most sessions are created under.
+	 */
+	private const SOURCE = 'https://source.test';
+
+	/**
+	 * A second source, for the cross-source scoping tests.
+	 */
+	private const OTHER_SOURCE = 'https://other.example.com';
+
+	/**
 	 * Subject under test.
 	 *
 	 * @var History_Repository
@@ -40,10 +50,13 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	/**
 	 * Inserts a session and returns its id.
 	 *
+	 * @param string $source_site_url Source the session imports from.
 	 * @return int Session id.
 	 */
-	private function create_session(): int {
-		$id = $this->repository->create_session( 'https://source.test', 'bulk' );
+	private function create_session(
+		string $source_site_url = self::SOURCE
+	): int {
+		$id = $this->repository->create_session( $source_site_url, 'bulk' );
 		return is_int( $id ) ? $id : 0;
 	}
 
@@ -388,11 +401,58 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		);
 
 		// ACT: Fetch the active rows for the source.
-		$active = $this->repository->get_active_items_by_source_ids( array( 960 ) );
+		$active = $this->repository->get_active_items_by_source_ids(
+			array( 960 ),
+			null
+		);
 
 		// ASSERT: The success row is the active row, not the newer error.
 		$this->assertArrayHasKey( 960, $active );
 		$this->assertSame( 'success', (string) $active[960]['status'] );
+	}
+
+	/**
+	 * Verifies that get_active_items_by_source_ids returns only the given
+	 * source's active row, and keeps its cross-source result when passed null.
+	 */
+	public function test_get_active_items_by_source_ids_scopes_by_source(): void {
+		// ARRANGE: One numeric source post id imported under two sources, the
+		// other source's import being the newer one.
+		$mine   = $this->create_session();
+		$theirs = $this->create_session( self::OTHER_SOURCE );
+		$this->insert_item(
+			array(
+				'session_id'      => $mine,
+				'source_post_id'  => 970,
+				'status'          => 'success',
+				'post_id'         => 111,
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+		$this->insert_item(
+			array(
+				'session_id'      => $theirs,
+				'source_post_id'  => 970,
+				'status'          => 'success',
+				'post_id'         => 222,
+				'import_date_gmt' => '2026-02-01 00:00:00',
+			)
+		);
+
+		// ACT: Look the source id up scoped, then unscoped.
+		$scoped   = $this->repository->get_active_items_by_source_ids(
+			array( 970 ),
+			self::SOURCE
+		);
+		$unscoped = $this->repository->get_active_items_by_source_ids(
+			array( 970 ),
+			null
+		);
+
+		// ASSERT: Scoped resolves this source's row; unscoped resolves the
+		// newest across sources, which the Posts tab depends on for now.
+		$this->assertSame( 111, (int) $scoped[970]['post_id'] );
+		$this->assertSame( 222, (int) $unscoped[970]['post_id'] );
 	}
 
 	/**
@@ -520,7 +580,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		);
 
 		// ACT: List the inbox failures (newest first).
-		$rows = $this->repository->list_failures( 0, 20 );
+		$rows = $this->repository->list_failures( self::SOURCE, 0, 20 );
 
 		// ASSERT: The orphan and the source-linked row are both listed.
 		$this->assertCount( 2, $rows );
@@ -560,7 +620,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		);
 
 		// ACT: Count the inbox failures.
-		$count = $this->repository->count_failures();
+		$count = $this->repository->count_failures( self::SOURCE );
 
 		// ASSERT: Every failure is counted, orphan or source-linked.
 		$this->assertSame( 3, $count );
@@ -596,7 +656,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 
 		// ACT: Resolve the Posts state and list the inbox failures.
 		$state = $this->repository->resolve_source_post_state( 900 );
-		$rows  = $this->repository->list_failures( 0, 20 );
+		$rows  = $this->repository->list_failures( self::SOURCE, 0, 20 );
 
 		// ASSERT: Posts hides the failure, but the inbox surfaces it.
 		$this->assertSame( 'up-to-date', $state );
@@ -631,10 +691,231 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		);
 
 		// ACT: List the inbox failures.
-		$rows = $this->repository->list_failures( 0, 20 );
+		$rows = $this->repository->list_failures( self::SOURCE, 0, 20 );
 
 		// ASSERT: The resolved source no longer appears as a failure.
 		$this->assertCount( 0, $rows );
+	}
+
+	/**
+	 * Verifies that list_failures and count_failures return only the failures
+	 * belonging to the source they are given.
+	 */
+	public function test_failures_are_scoped_to_the_given_source(): void {
+		// ARRANGE: A failure under the connected source, plus a source-linked
+		// and an orphan failure under another source.
+		$mine   = $this->create_session();
+		$theirs = $this->create_session( self::OTHER_SOURCE );
+		$this->insert_item(
+			array(
+				'session_id'      => $mine,
+				'source_post_id'  => 910,
+				'status'          => 'error',
+				'error_message'   => 'Mine',
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+		$this->insert_item(
+			array(
+				'session_id'      => $theirs,
+				'source_post_id'  => 911,
+				'status'          => 'error',
+				'error_message'   => 'Theirs',
+				'import_date_gmt' => '2026-01-02 00:00:00',
+			)
+		);
+		$this->insert_item(
+			array(
+				'session_id'      => $theirs,
+				'source_post_id'  => null,
+				'status'          => 'error',
+				'error_message'   => 'Their orphan',
+				'import_date_gmt' => '2026-01-03 00:00:00',
+			)
+		);
+
+		// ACT: List and count for the connected source.
+		$rows  = $this->repository->list_failures( self::SOURCE, 0, 20 );
+		$count = $this->repository->count_failures( self::SOURCE );
+
+		// ASSERT: The other source's rows, orphan included, stay out.
+		$this->assertCount( 1, $rows );
+		$this->assertSame( 910, (int) $rows[0]['source_post_id'] );
+		$this->assertSame( 1, $count );
+	}
+
+	/**
+	 * Statuses a newer cross-source row can carry, each of which used to
+	 * suppress this source's failure.
+	 *
+	 * @return array<string, array{string}> Status per case.
+	 */
+	public static function cross_source_newer_status_provider(): array {
+		return array(
+			'newer success' => array( 'success' ),
+			'newer error'   => array( 'error' ),
+		);
+	}
+
+	/**
+	 * Verifies that a newer row for the same numeric source post id under a
+	 * different source no longer hides this source's failure.
+	 *
+	 * @dataProvider cross_source_newer_status_provider
+	 *
+	 * @param string $other_status Status of the other source's newer row.
+	 */
+	public function test_cross_source_newer_row_does_not_mask_a_failure(
+		string $other_status
+	): void {
+		// ARRANGE: A failure for source post 960 under one source, and a newer
+		// row for the same numeric id under another.
+		$mine   = $this->create_session();
+		$theirs = $this->create_session( self::OTHER_SOURCE );
+		$this->insert_item(
+			array(
+				'session_id'      => $mine,
+				'source_post_id'  => 960,
+				'status'          => 'error',
+				'error_message'   => 'Mine failed',
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+		$this->insert_item(
+			array(
+				'session_id'      => $theirs,
+				'source_post_id'  => 960,
+				'status'          => $other_status,
+				'post_id'         => 'error' === $other_status ? null : 111,
+				'import_date_gmt' => '2026-02-01 00:00:00',
+			)
+		);
+
+		// ACT: List the failures for the first source.
+		$rows = $this->repository->list_failures( self::SOURCE, 0, 20 );
+
+		// ASSERT: The dedup only considers the same source, so it still shows.
+		$this->assertCount( 1, $rows );
+		$this->assertSame( 960, (int) $rows[0]['source_post_id'] );
+		$this->assertSame( self::SOURCE, (string) $rows[0]['source_site_url'] );
+	}
+
+	/**
+	 * Verifies that removing by source post id leaves another source's failure
+	 * for the same numeric id in place.
+	 */
+	public function test_delete_failed_items_by_source_stays_in_scope(): void {
+		// ARRANGE: The same numeric source post id fails under two sources.
+		$mine   = $this->create_session();
+		$theirs = $this->create_session( self::OTHER_SOURCE );
+		$ours   = $this->insert_item(
+			array(
+				'session_id'      => $mine,
+				'source_post_id'  => 930,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+		$other  = $this->insert_item(
+			array(
+				'session_id'      => $theirs,
+				'source_post_id'  => 930,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-01-02 00:00:00',
+			)
+		);
+
+		// ACT: Remove source 930 for the connected source only.
+		$deleted = $this->repository->delete_failed_items(
+			array(),
+			array( 930 ),
+			self::SOURCE
+		);
+
+		// ASSERT: The other source's row survives.
+		$this->assertSame( 1, $deleted );
+		$this->assertNull( $this->repository->get_item( $ours ) );
+		$this->assertNotNull( $this->repository->get_item( $other ) );
+	}
+
+	/**
+	 * Verifies that the source_post_id branch fails closed without a source,
+	 * so the default can't reach across sources; the item id branch still runs.
+	 */
+	public function test_delete_failed_items_without_a_source_skips_sources(): void {
+		// ARRANGE: One failure reachable by source post id, one by item id.
+		$session   = $this->create_session();
+		$by_source = $this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => 940,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+		$by_id     = $this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => null,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-01-02 00:00:00',
+			)
+		);
+
+		// ACT: Remove both without naming a source, as the seeder does.
+		$deleted = $this->repository->delete_failed_items(
+			array( $by_id ),
+			array( 940 )
+		);
+
+		// ASSERT: Only the item id branch acted.
+		$this->assertSame( 1, $deleted );
+		$this->assertNotNull( $this->repository->get_item( $by_source ) );
+		$this->assertNull( $this->repository->get_item( $by_id ) );
+	}
+
+	/**
+	 * Verifies that ignoring by source post id leaves another source's failure
+	 * for the same numeric id unflagged.
+	 */
+	public function test_ignore_by_source_stays_in_scope(): void {
+		// ARRANGE: The same numeric source post id fails under two sources.
+		$mine   = $this->create_session();
+		$theirs = $this->create_session( self::OTHER_SOURCE );
+		$this->insert_item(
+			array(
+				'session_id'      => $mine,
+				'source_post_id'  => 931,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+		$other = $this->insert_item(
+			array(
+				'session_id'      => $theirs,
+				'source_post_id'  => 931,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-01-02 00:00:00',
+			)
+		);
+
+		// ACT: Ignore source 931 for the connected source only.
+		$ignored = $this->repository->set_failed_items_ignored(
+			array(),
+			array( 931 ),
+			true,
+			self::SOURCE
+		);
+
+		// ASSERT: One row flagged, and the other source stays open.
+		$this->assertSame( 1, $ignored );
+		$other_row = $this->repository->get_item( $other );
+		$this->assertNotNull( $other_row );
+		$this->assertNull( $other_row['ignored_gmt'] );
+		$this->assertSame(
+			1,
+			$this->repository->count_failures( self::OTHER_SOURCE )
+		);
 	}
 
 	/**
@@ -720,7 +1001,8 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		// ACT: Dismiss source 800 — both its attempts should go.
 		$deleted = $this->repository->delete_failed_items(
 			array(),
-			array( 800 )
+			array( 800 ),
+			self::SOURCE
 		);
 
 		// ASSERT: Both 800 rows gone; 801 untouched.
@@ -756,9 +1038,15 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 
 		// ASSERT: It drops from the open list/count and appears under ignored.
 		$this->assertSame( 1, $ignored );
-		$this->assertSame( 0, $this->repository->count_failures() );
-		$this->assertSame( 1, $this->repository->count_failures( true ) );
-		$rows = $this->repository->list_failures( 0, 20, true );
+		$this->assertSame(
+			0,
+			$this->repository->count_failures( self::SOURCE )
+		);
+		$this->assertSame(
+			1,
+			$this->repository->count_failures( self::SOURCE, true )
+		);
+		$rows = $this->repository->list_failures( self::SOURCE, 0, 20, true );
 		$this->assertCount( 1, $rows );
 		$this->assertSame( $item, (int) $rows[0]['id'] );
 
@@ -771,8 +1059,14 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 
 		// ASSERT: It returns to the open list and clears from ignored.
 		$this->assertSame( 1, $restored );
-		$this->assertSame( 1, $this->repository->count_failures() );
-		$this->assertSame( 0, $this->repository->count_failures( true ) );
+		$this->assertSame(
+			1,
+			$this->repository->count_failures( self::SOURCE )
+		);
+		$this->assertSame(
+			0,
+			$this->repository->count_failures( self::SOURCE, true )
+		);
 	}
 
 	/**
@@ -813,7 +1107,8 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		$ignored = $this->repository->set_failed_items_ignored(
 			array(),
 			array( 800 ),
-			true
+			true,
+			self::SOURCE
 		);
 
 		// ASSERT: Both 800 attempts carry the flag, so no sibling resurfaces;
@@ -831,8 +1126,14 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$this->assertSame( 2, $flagged );
-		$this->assertSame( 1, $this->repository->count_failures() );
-		$this->assertSame( 1, $this->repository->count_failures( true ) );
+		$this->assertSame(
+			1,
+			$this->repository->count_failures( self::SOURCE )
+		);
+		$this->assertSame(
+			1,
+			$this->repository->count_failures( self::SOURCE, true )
+		);
 	}
 
 	/**
@@ -853,7 +1154,8 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		$this->repository->set_failed_items_ignored(
 			array(),
 			array( 802 ),
-			true
+			true,
+			self::SOURCE
 		);
 
 		// ACT: A later re-import for the same source fails afresh.
@@ -867,8 +1169,14 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: The source is open again and no longer under ignored.
-		$this->assertSame( 1, $this->repository->count_failures() );
-		$this->assertSame( 0, $this->repository->count_failures( true ) );
+		$this->assertSame(
+			1,
+			$this->repository->count_failures( self::SOURCE )
+		);
+		$this->assertSame(
+			0,
+			$this->repository->count_failures( self::SOURCE, true )
+		);
 	}
 
 	/**

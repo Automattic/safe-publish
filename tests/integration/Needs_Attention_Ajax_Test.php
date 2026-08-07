@@ -17,11 +17,13 @@ use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
+use WP_Error;
 
 /**
- * Verifies that safe_publish_list_needs_attention concatenates failures before
- * degradations into one server-paginated stream, reports the combined count,
- * and resolves a failed update's edit link from its live post.
+ * Verifies that safe_publish_list_needs_attention concatenates the connected
+ * source's failures before its degradations into one server-paginated stream,
+ * reports the combined count, and resolves a failed update's edit link from its
+ * live post.
  */
 class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 
@@ -31,6 +33,16 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 	 * Source identity the failures and degradations are scoped to.
 	 */
 	private const SOURCE = 'https://source.example.com';
+
+	/**
+	 * A previously connected source whose rows must stay out of the inbox.
+	 */
+	private const OTHER_SOURCE = 'https://old-source.example.com';
+
+	/**
+	 * Fallback shared secret used when no environment constant is defined.
+	 */
+	private const FALLBACK_SECRET = 'integration-test-secret-key-32chars-ok';
 
 	/**
 	 * History repository for seeding failure and success rows.
@@ -57,6 +69,10 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 		Import_Items_Table::create_table();
 		Attention_Issues_Table::create_table();
 		Audit_Log_Table::create_table();
+
+		if ( ! defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ) {
+			define( 'SAFE_PUBLISH_SHARED_SECRET', self::FALLBACK_SECRET );
+		}
 
 		$this->history   = new History_Repository();
 		$this->attention = new Attention_Issues_Repository();
@@ -188,8 +204,11 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 		// ASSERT: The endpoint reports both flagged and the open sets are empty.
 		$this->assertTrue( $response['success'] );
 		$this->assertSame( 2, $response['data']['updated'] );
-		$this->assertSame( 0, $this->history->count_failures() );
-		$this->assertSame( 1, $this->history->count_failures( true ) );
+		$this->assertSame( 0, $this->history->count_failures( self::SOURCE ) );
+		$this->assertSame(
+			1,
+			$this->history->count_failures( self::SOURCE, true )
+		);
 		$this->assertSame(
 			0,
 			$this->attention->count_open_issues( self::SOURCE )
@@ -310,8 +329,11 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 
 		// ASSERT: Both are back in the open sets.
 		$this->assertTrue( $response['success'] );
-		$this->assertSame( 1, $this->history->count_failures() );
-		$this->assertSame( 0, $this->history->count_failures( true ) );
+		$this->assertSame( 1, $this->history->count_failures( self::SOURCE ) );
+		$this->assertSame(
+			0,
+			$this->history->count_failures( self::SOURCE, true )
+		);
 		$this->assertSame(
 			1,
 			$this->attention->count_open_issues( self::SOURCE )
@@ -374,8 +396,16 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 		// ARRANGE: A source-linked failure that has been ignored.
 		$session = $this->create_session();
 		$this->seed_failure( $session, 500, 'Broken import' );
-		$this->history->set_failed_items_ignored( array(), array( 500 ), true );
-		$this->assertSame( 1, $this->history->count_failures( true ) );
+		$this->history->set_failed_items_ignored(
+			array(),
+			array( 500 ),
+			true,
+			self::SOURCE
+		);
+		$this->assertSame(
+			1,
+			$this->history->count_failures( self::SOURCE, true )
+		);
 
 		// ACT: Remove the ignored failure by its source id.
 		$response = $this->remove_failures( array(), array( 500 ) );
@@ -383,8 +413,244 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 		// ASSERT: It is deleted from both the open and ignored sets.
 		$this->assertTrue( $response['success'] );
 		$this->assertSame( 1, $response['data']['deleted'] );
-		$this->assertSame( 0, $this->history->count_failures() );
-		$this->assertSame( 0, $this->history->count_failures( true ) );
+		$this->assertSame( 0, $this->history->count_failures( self::SOURCE ) );
+		$this->assertSame(
+			0,
+			$this->history->count_failures( self::SOURCE, true )
+		);
+	}
+
+	/**
+	 * Verifies that the inbox and its badge report only the connected source's
+	 * failures, leaving a prior source's rows out.
+	 */
+	public function test_inbox_and_badge_exclude_another_source(): void {
+		// ARRANGE: One failure and one degradation for the connected source,
+		// plus a source-linked and an orphan failure under a prior source.
+		$this->seed_failure( $this->create_session(), 500, 'Broken import' );
+		$this->open_degradation( self::factory()->post->create(), 8300 );
+		$old = $this->create_session( self::OTHER_SOURCE );
+		$this->seed_failure( $old, 501, 'Prior source failure' );
+		$this->seed_failure( $old, null, 'Prior source orphan' );
+
+		// ACT: Request the inbox.
+		$response = $this->list_needs_attention();
+
+		// ASSERT: Only the connected source's two rows list and count.
+		$this->assertSame(
+			array( 'failure', 'degradation' ),
+			array_column( $response['data']['items'], 'kind' )
+		);
+		$this->assertSame( 2, $response['data']['needs_attention_count'] );
+		$this->assertFalse( $response['data']['has_more'] );
+	}
+
+	/**
+	 * Verifies that a newer row under another source for the same numeric
+	 * source post id no longer suppresses the connected source's failure.
+	 */
+	public function test_cross_source_newer_row_does_not_hide_a_failure(): void {
+		// ARRANGE: A failure for source post 500, then a later successful
+		// import of the same numeric id under a different source.
+		$this->seed_failure( $this->create_session(), 500, 'Broken import' );
+		$this->history->log_import_action(
+			$this->create_session( self::OTHER_SOURCE ),
+			500,
+			'Other source post',
+			'success',
+			self::factory()->post->create()
+		);
+
+		// ACT: Request the inbox.
+		$response = $this->list_needs_attention();
+
+		// ASSERT: The failure is still listed and counted.
+		$items = $response['data']['items'];
+		$this->assertCount( 1, $items );
+		$this->assertSame( 500, $items[0]['source_post_id'] );
+		$this->assertSame( 1, $response['data']['needs_attention_count'] );
+	}
+
+	/**
+	 * Verifies that a failure's edit link resolves against the connected
+	 * source, not a same-numbered post imported from another one.
+	 */
+	public function test_failure_edit_link_ignores_another_source_post(): void {
+		// ARRANGE: A failed re-import of source post 600 after a successful
+		// import, plus a newer import of the same numeric id elsewhere.
+		$session = $this->create_session();
+		$post_id = self::factory()->post->create();
+		$this->history->log_import_action(
+			$session,
+			600,
+			'Mine',
+			'success',
+			$post_id
+		);
+		$this->seed_failure( $session, 600, 'Mine' );
+		$this->history->log_import_action(
+			$this->create_session( self::OTHER_SOURCE ),
+			600,
+			'Theirs',
+			'success',
+			self::factory()->post->create()
+		);
+
+		// ACT: Request the inbox.
+		$response = $this->list_needs_attention();
+
+		// ASSERT: The link points at this source's post.
+		$this->assertStringContainsString(
+			'post=' . $post_id,
+			$response['data']['items'][0]['edit_url']
+		);
+	}
+
+	/**
+	 * Verifies that the Ignored view also leaves another source's ignored
+	 * failures out.
+	 */
+	public function test_ignored_view_excludes_another_source(): void {
+		// ARRANGE: An ignored failure under each source.
+		$this->seed_failure( $this->create_session(), 500, 'Mine ignored' );
+		$this->seed_failure(
+			$this->create_session( self::OTHER_SOURCE ),
+			501,
+			'Theirs ignored'
+		);
+		$this->history->set_failed_items_ignored(
+			array(),
+			array( 500 ),
+			true,
+			self::SOURCE
+		);
+		$this->history->set_failed_items_ignored(
+			array(),
+			array( 501 ),
+			true,
+			self::OTHER_SOURCE
+		);
+
+		// ACT: Request the Ignored view.
+		$response = $this->list_needs_attention( 1, 20, 'ignored' );
+
+		// ASSERT: Only the connected source's ignored failure is listed.
+		$items = $response['data']['items'];
+		$this->assertCount( 1, $items );
+		$this->assertSame( 'Mine ignored', $items[0]['title'] );
+	}
+
+	/**
+	 * Verifies that a disconnected install lists no failures and shows a zero
+	 * badge, matching how the degradations half already behaves.
+	 */
+	public function test_disconnected_install_shows_an_empty_inbox(): void {
+		// ARRANGE: A failure and a degradation, then the connection removed.
+		$this->seed_failure( $this->create_session(), 500, 'Broken import' );
+		$this->open_degradation( self::factory()->post->create(), 8300 );
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
+
+		// ACT: Request the inbox.
+		$response = $this->list_needs_attention();
+
+		// ASSERT: Nothing lists and the badge is zero.
+		$this->assertCount( 0, $response['data']['items'] );
+		$this->assertSame( 0, $response['data']['needs_attention_count'] );
+		$this->assertFalse( $response['data']['has_more'] );
+	}
+
+	/**
+	 * Verifies that the failure/degradation boundary math holds under scoped
+	 * counts when another source contributes failures the page must skip.
+	 */
+	public function test_pages_straddle_the_boundary_with_another_source(): void {
+		// ARRANGE: Three failures and three degradations for the connected
+		// source, plus two failures under another source.
+		$this->seed_three_failures_and_degradations();
+		$old = $this->create_session( self::OTHER_SOURCE );
+		$this->seed_failure( $old, 601, 'Theirs 1' );
+		$this->seed_failure( $old, 602, 'Theirs 2' );
+
+		// ACT: Request both pages of four rows.
+		$first  = $this->list_needs_attention( 1, 4 );
+		$second = $this->list_needs_attention( 2, 4 );
+
+		// ASSERT: The pages partition the connected source's six rows exactly.
+		$this->assertSame(
+			array( 'failure', 'failure', 'failure', 'degradation' ),
+			array_column( $first['data']['items'], 'kind' )
+		);
+		$this->assertTrue( $first['data']['has_more'] );
+		$this->assertSame(
+			array( 'degradation', 'degradation' ),
+			array_column( $second['data']['items'], 'kind' )
+		);
+		$this->assertFalse( $second['data']['has_more'] );
+		$this->assertSame( 6, $first['data']['needs_attention_count'] );
+	}
+
+	/**
+	 * Verifies that the Posts listing's needs-attention flag reports the same
+	 * connected-source total as the inbox badge.
+	 */
+	public function test_list_posts_count_flag_excludes_another_source(): void {
+		// ARRANGE: A failure and a degradation for the connected source, plus a
+		// failure under a prior one, behind a stubbed catalog.
+		$this->seed_failure( $this->create_session(), 500, 'Broken import' );
+		$this->open_degradation( self::factory()->post->create(), 8300 );
+		$this->seed_failure(
+			$this->create_session( self::OTHER_SOURCE ),
+			501,
+			'Prior source failure'
+		);
+		$stub = array( $this, 'stub_empty_catalog' );
+		add_filter( 'pre_http_request', $stub, 1, 3 );
+
+		try {
+			// ACT: Request the Posts listing with the count flag set.
+			$nonce = wp_create_nonce( 'safe_publish_ajax_nonce' );
+			$_POST = array(
+				'nonce'                      => $nonce,
+				'source_site_url'            => self::SOURCE,
+				'with_needs_attention_count' => '1',
+			);
+			$this->dispatch_ajax_expecting_die( 'safe_publish_list_posts' );
+			$response = json_decode( $this->_last_response, true );
+		} finally {
+			remove_filter( 'pre_http_request', $stub, 1 );
+		}
+
+		// ASSERT: The flag counts the connected source's two rows only.
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 2, $response['data']['needs_attention_count'] );
+	}
+
+	/**
+	 * Short-circuits every HTTP request with an empty catalog page.
+	 *
+	 * @param false|array|WP_Error $_preempt Filtered short-circuit value.
+	 * @param array                $_args    Request arguments.
+	 * @param string               $_url     Request URL.
+	 * @return array Faked HTTP response.
+	 */
+	public function stub_empty_catalog(
+		false|array|WP_Error $_preempt,
+		array $_args,
+		string $_url
+	): array {
+		return array(
+			'response' => array(
+				'code'    => 200,
+				'message' => 'OK',
+			),
+			'body'     => wp_json_encode(
+				array(
+					'items'    => array(),
+					'has_more' => false,
+				)
+			),
+			'headers'  => array(),
+		);
 	}
 
 	/**
@@ -416,7 +682,12 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 	 * @param int $post_id Degradation's affected post id.
 	 */
 	private function ignore_both( int $post_id ): void {
-		$this->history->set_failed_items_ignored( array(), array( 500 ), true );
+		$this->history->set_failed_items_ignored(
+			array(),
+			array( 500 ),
+			true,
+			self::SOURCE
+		);
 		$this->attention->set_issue_ignored(
 			$post_id,
 			'nav_ref_rewrite_failed',
@@ -441,12 +712,15 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Creates an import session for the connected source.
+	 * Creates an import session for a source.
 	 *
+	 * @param string $source_site_url Source the session imports from.
 	 * @return int Session id.
 	 */
-	private function create_session(): int {
-		$id = $this->history->create_session( self::SOURCE, 'bulk' );
+	private function create_session(
+		string $source_site_url = self::SOURCE
+	): int {
+		$id = $this->history->create_session( $source_site_url, 'bulk' );
 		return is_int( $id ) ? $id : 0;
 	}
 
@@ -513,6 +787,9 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 			'per_page' => (string) $per_page,
 			'view'     => $view,
 		);
+
+		// _handleAjax appends, so clear it to keep repeat calls decodable.
+		$this->_last_response = '';
 
 		$this->dispatch_ajax_expecting_die( 'safe_publish_list_needs_attention' );
 
