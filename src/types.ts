@@ -139,7 +139,8 @@ export type AttentionIssueType =
 	| 'unmapped_block_reference'
 	| 'unmapped_gallery_reference'
 	| 'nav_ref_rewrite_failed'
-	| 'parent_orphaned';
+	| 'parent_orphaned'
+	| 'unregistered_taxonomy';
 
 /**
  * One open degradation issue, keyed by (affected_post_id, issue_type,
@@ -147,7 +148,8 @@ export type AttentionIssueType =
  * `target_ref`; a string-keyed one carries `target_slug` with `target_ref` 0.
  * `retryable` is the server's signal that the row's reconciliation can run;
  * `resolvable` is the batched hint that its target is imported, so a Retry
- * would reconcile it now.
+ * would reconcile it now. `target_terms` names the source terms the issue left
+ * unattached, empty for types that attach none.
  */
 export interface AttentionIssue {
 	affected_post_id: number;
@@ -156,6 +158,7 @@ export interface AttentionIssue {
 	target_kind: 'post' | 'term' | 'taxonomy';
 	target_slug: string;
 	target_is_reusable_block: boolean;
+	target_terms: string[];
 	severity: 'warning' | 'error';
 	source_site_url: string;
 	first_detected_gmt: string;
@@ -332,6 +335,17 @@ export interface UnmappedGalleryReferenceWarning {
 }
 
 /**
+ * Surfaced when the source post carries a taxonomy the destination does not
+ * register. The post imports without those term assignments; only registering
+ * the taxonomy and re-importing can attach them.
+ */
+export interface UnregisteredTaxonomyWarning {
+	type: 'unregistered_taxonomy';
+	taxonomy: string;
+	terms: string[];
+}
+
+/**
  * Discriminated union of all import warning types.
  */
 export type Warning =
@@ -340,7 +354,8 @@ export type Warning =
 	| UnmappedBlockReferenceWarning
 	| NavRefRewriteFailedWarning
 	| UnmappedShortcodeReferenceWarning
-	| UnmappedGalleryReferenceWarning;
+	| UnmappedGalleryReferenceWarning
+	| UnregisteredTaxonomyWarning;
 
 /**
  * Response from create draft post operation.

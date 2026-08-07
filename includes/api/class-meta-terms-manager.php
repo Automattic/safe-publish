@@ -107,41 +107,41 @@ final class Meta_Terms_Manager {
 	 * carries a source_term_id, the source ID and URL are recorded on the
 	 * resolved term so later imports can remap by source identity.
 	 *
-	 * Returns true on success, or a WP_Error when a taxonomy does not exist on
-	 * this site, when a term cannot be created, or when assigning terms fails.
+	 * A taxonomy the destination does not register is skipped rather than
+	 * failing the post: Only a site admin registering it can fix that, so the
+	 * caller records it as a degradation and imports the rest.
 	 *
 	 * @param int          $post_id         Post ID to update terms for.
 	 * @param array|object $terms           Terms to set, keyed by taxonomy.
 	 * @param string       $source_site_url Source site URL paired with any
 	 *                                      source_term_id meta written. Empty
 	 *                                      string disables source-meta writes.
-	 * @return true|WP_Error True on success, WP_Error on failure.
+	 * @return array<string, string[]>|WP_Error Skipped taxonomy slugs mapped to
+	 *                                          the term names left unattached,
+	 *                                          or WP_Error when a term cannot be
+	 *                                          created or assigned.
 	 */
 	public function update_terms(
 		int $post_id,
 		array|object $terms,
 		string $source_site_url = ''
-	): true|WP_Error {
-		$terms_array = (array) $terms;
-		if ( array() === $terms_array ) {
-			return true;
-		}
+	): array|WP_Error {
+		$skipped = array();
 
-		foreach ( $terms_array as $raw_tax => $term_items ) {
-			$tax = sanitize_key( (string) $raw_tax );
+		foreach ( (array) $terms as $raw_tax => $term_items ) {
+			$tax   = sanitize_key( (string) $raw_tax );
+			$items = is_array( $term_items ) ? $term_items : (array) $term_items;
 
-			if ( ! taxonomy_exists( $tax ) ) {
-				return new WP_Error(
-					'unknown_taxonomy',
-					sprintf(
-						/* translators: %s: taxonomy name */
-						__( 'Taxonomy "%s" does not exist on this site.', 'safe-publish' ),
-						$tax
-					)
-				);
+			// An empty key identifies no taxonomy, so there is nothing to report.
+			if ( '' === $tax ) {
+				continue;
 			}
 
-			$items  = is_array( $term_items ) ? $term_items : (array) $term_items;
+			if ( ! taxonomy_exists( $tax ) ) {
+				$skipped[ $tax ] = $this->term_names( $items );
+				continue;
+			}
+
 			$result = $this->assign_taxonomy_terms(
 				$post_id,
 				$tax,
@@ -154,7 +154,29 @@ final class Meta_Terms_Manager {
 			}
 		}
 
-		return true;
+		return $skipped;
+	}
+
+	/**
+	 * Lists the display names of raw term items, for reporting terms that could
+	 * not be attached.
+	 *
+	 * @param array $items Raw term items for one taxonomy.
+	 * @return string[] Term names, skipping items that carry none.
+	 */
+	private function term_names( array $items ): array {
+		$names = array();
+
+		foreach ( $items as $item ) {
+			$record = $this->normalize_term_record( $item );
+			$name   = '' !== $record['name'] ? $record['name'] : $record['slug'];
+
+			if ( '' !== $name ) {
+				$names[] = $name;
+			}
+		}
+
+		return $names;
 	}
 
 	/**

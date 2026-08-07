@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
@@ -1144,6 +1145,165 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		);
 		$this->assertNull(
 			$this->attention->get_issue( $post_id, 'parent_orphaned', 9850, 'post' )
+		);
+	}
+
+	/**
+	 * Verifies that a post whose source carries an unregistered taxonomy still
+	 * imports, keeping its content and its registered taxonomies, and opens one
+	 * degradation for the taxonomy that was skipped.
+	 */
+	public function test_unregistered_taxonomy_imports_and_opens_an_issue(): void {
+		// ARRANGE + ACT: Import a post carrying one registered taxonomy and one
+		// the destination does not know.
+		$result = $this->import_under(
+			self::BLOG_URL,
+			9300,
+			array(
+				'content' => '<p>Body text.</p>',
+				'meta'    => array( 'my_field' => 'kept' ),
+				'terms'   => array(
+					'category' => array( 'Kept Category' ),
+					'sp_genre' => array( 'Jazz', 'Blues' ),
+				),
+			)
+		);
+
+		// ASSERT: The post imported with its content, meta, and known terms.
+		$this->assertTrue( $result['success'] );
+		$post_id = (int) $result['post_id'];
+		$this->assertStringContainsString(
+			'Body text.',
+			(string) get_post_field( 'post_content', $post_id )
+		);
+		$this->assertSame( 'kept', get_post_meta( $post_id, 'my_field', true ) );
+		$this->assertSame(
+			array( 'Kept Category' ),
+			wp_get_post_terms( $post_id, 'category', array( 'fields' => 'names' ) )
+		);
+
+		// ASSERT: One degradation names the skipped taxonomy and its terms.
+		$issue = $this->attention->get_issue(
+			$post_id,
+			'unregistered_taxonomy',
+			0,
+			'taxonomy',
+			'sp_genre'
+		);
+		$this->assertNotNull( $issue );
+		$this->assertSame( 'warning', $issue['severity'] );
+		$this->assertSame( 'sp_genre', $issue['detail']['taxonomy'] );
+		$this->assertSame( array( 'Jazz', 'Blues' ), $issue['detail']['terms'] );
+	}
+
+	/**
+	 * Verifies that two unregistered taxonomies on one post open two rows —
+	 * the collision a shared zero target_ref would otherwise cause.
+	 */
+	public function test_two_unregistered_taxonomies_open_two_rows(): void {
+		// ARRANGE + ACT: Import a post carrying two unknown taxonomies.
+		$result = $this->import_under(
+			self::BLOG_URL,
+			9301,
+			array(
+				'terms' => array(
+					'sp_genre' => array( 'Jazz' ),
+					'sp_mood'  => array( 'Calm' ),
+				),
+			)
+		);
+
+		// ASSERT: Both taxonomies opened their own row.
+		$this->assertTrue( $result['success'] );
+		$post_id = (int) $result['post_id'];
+		$this->assertSame(
+			2,
+			$this->attention->count_open_issues( self::BLOG_URL )
+		);
+		foreach ( array( 'sp_genre', 'sp_mood' ) as $slug ) {
+			$this->assertNotNull(
+				$this->attention->get_issue(
+					$post_id,
+					'unregistered_taxonomy',
+					0,
+					'taxonomy',
+					$slug
+				)
+			);
+		}
+	}
+
+	/**
+	 * Verifies that registering the taxonomy and re-importing attaches its
+	 * terms and clears the degradation, so the gap closes on the next import.
+	 */
+	public function test_registering_the_taxonomy_heals_on_re_import(): void {
+		// ARRANGE: A post imported while its taxonomy was unregistered.
+		$terms   = array( 'sp_genre' => array( 'Jazz' ) );
+		$first   = $this->import_under( self::BLOG_URL, 9302, array( 'terms' => $terms ) );
+		$post_id = (int) $first['post_id'];
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unregistered_taxonomy',
+				0,
+				'taxonomy',
+				'sp_genre'
+			)
+		);
+
+		// ACT: Register the taxonomy, then re-import the same post.
+		register_taxonomy( 'sp_genre', 'post' );
+		$this->import_under( self::BLOG_URL, 9302, array( 'terms' => $terms ) );
+		$attached = wp_get_post_terms(
+			$post_id,
+			'sp_genre',
+			array( 'fields' => 'names' )
+		);
+		unregister_taxonomy( 'sp_genre' );
+
+		// ASSERT: The term attached and the degradation cleared.
+		$this->assertSame( array( 'Jazz' ), $attached );
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unregistered_taxonomy',
+				0,
+				'taxonomy',
+				'sp_genre'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that an unregistered-taxonomy degradation is neither retryable
+	 * nor resolvable, since no import can register a taxonomy.
+	 */
+	public function test_unregistered_taxonomy_is_not_retryable_or_resolvable(): void {
+		// ARRANGE: One slug-keyed degradation.
+		$this->attention->upsert_issue(
+			700,
+			'unregistered_taxonomy',
+			0,
+			'taxonomy',
+			'warning',
+			self::BLOG_URL,
+			array( 'taxonomy' => 'sp_genre' ),
+			'sp_genre'
+		);
+		$rows = $this->attention->list_open_issues( self::BLOG_URL, 0, 10 );
+
+		// ACT: Ask the service whether an import could resolve it.
+		$resolvable = $this->import_service->degradation_resolvability(
+			$rows,
+			self::BLOG_URL
+		);
+
+		// ASSERT: Unresolvable, and outside the retryable allowlist.
+		$this->assertSame( array( false ), array_values( $resolvable ) );
+		$this->assertNotContains(
+			'unregistered_taxonomy',
+			Admin_Ajax_Controller::ATTENTION_ISSUE_RETRYABLE_TYPES
 		);
 	}
 

@@ -207,12 +207,13 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 	 */
 	public function test_sideloaded_attachments_cleaned_up_when_terms_update_fails(): void {
 		// ARRANGE: Fresh content includes a featured image so one attachment is
-		// sideloaded before wp_insert_post runs. An unknown taxonomy in the terms
-		// data triggers the failure after the post is written.
+		// sideloaded before wp_insert_post runs. A term that cannot be created
+		// triggers the failure after the post is written.
 		$this->mock_post_overrides = array(
 			'featured_media' => 100,
-			'terms'          => array( 'nonexistent_taxonomy_xyz' => array( 'Some Term' ) ),
+			'terms'          => array( 'category' => array( 'Uncreatable Term' ) ),
 		);
+		$filter                    = $this->fail_term_creation();
 
 		$session_id         = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 		$attachments_before = $this->get_attachment_count();
@@ -228,9 +229,11 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 		// ACT: Attempt to import the post.
 		$result = $this->import_service->import_post( $post_data, $session_id );
 
-		// ASSERT: Import failed due to the unknown taxonomy.
-		$this->assertFalse( $result['success'], 'Import should fail when a term taxonomy does not exist.' );
-		$this->assertStringContainsString( 'nonexistent_taxonomy_xyz', $result['error'] );
+		remove_filter( 'pre_insert_term', $filter );
+
+		// ASSERT: Import failed at the terms step.
+		$this->assertFalse( $result['success'], 'Import should fail when a term cannot be created.' );
+		$this->assertStringContainsString( 'Simulated term insertion failure.', $result['error'] );
 
 		// ASSERT: No post was created.
 		$this->assertSame(
@@ -628,10 +631,9 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 	 * Verifies that the post is fully rolled back when term assignment fails on
 	 * the bulk update path.
 	 *
-	 * An unknown taxonomy in the terms data causes
-	 * Meta_Terms_Manager::update_terms() to return a WP_Error. Post fields,
-	 * tracking meta, and custom meta must all be restored to their pre-update
-	 * values.
+	 * A term that cannot be created makes Meta_Terms_Manager::update_terms()
+	 * return a WP_Error. Post fields, tracking meta, and custom meta must all
+	 * be restored to their pre-update values.
 	 */
 	public function test_bulk_update_rolls_back_post_on_term_failure(): void {
 		$session_id = $this->repository->create_session(
@@ -676,32 +678,33 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 			array( 'fields' => 'ids' )
 		);
 
-		// ARRANGE: Fresh content returns updated fields, meta, and an unknown
-		// taxonomy to trigger term failure.
+		// ARRANGE: Fresh content returns updated fields, meta, and a term that
+		// cannot be created, to trigger term failure.
 		$this->mock_post_overrides = array(
 			'title'   => 'Updated Term Rollback Title',
 			'content' => '<p>Updated content.</p>',
 			'meta'    => array( 'my_field' => 'updated' ),
 			'terms'   => array(
-				'category'                  => array(
+				'category' => array(
 					'Rollback Test Category',
-				),
-				'nonexistent_taxonomy_term' => array(
-					'Some Term',
+					'Uncreatable Term',
 				),
 			),
 		);
+		$filter                    = $this->fail_term_creation();
 
 		// ACT: Re-import the same post (hits the update path).
 		$result = $this->import_service->import_post( $post_data, $session_id );
 
-		// ASSERT: Import must fail with a taxonomy error.
+		remove_filter( 'pre_insert_term', $filter );
+
+		// ASSERT: Import must fail at the terms step.
 		$this->assertFalse(
 			$result['success'],
-			'Update import should fail for unknown taxonomy.'
+			'Update import should fail when a term cannot be created.'
 		);
 		$this->assertStringContainsString(
-			'nonexistent_taxonomy_term',
+			'Simulated term insertion failure.',
 			$result['error']
 		);
 
@@ -986,30 +989,33 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 
 		// ARRANGE: Fresh content references a new inline image whose URL has
 		// never been imported before, so process_content() sideloads a new
-		// attachment. An unknown taxonomy then triggers a rollback.
+		// attachment. An uncreatable term then triggers a rollback.
 		$new_inline_url            = 'https://source.example.com/new-inline-image.jpg';
 		$this->mock_post_overrides = array(
 			'content' => '<p>Updated content '
 				. '<img src="' . $new_inline_url . '" alt="new">'
 				. '</p>',
 			'terms'   => array(
-				'category'                  => array(
+				'category' => array(
 					'Inline Media Cleanup Category',
+					'Uncreatable Term',
 				),
-				'nonexistent_taxonomy_term' => array( 'Some Term' ),
 			),
 		);
+		$filter                    = $this->fail_term_creation();
 
 		// ACT: Re-import the same post (hits the update path).
 		$result = $this->import_service->import_post( $post_data, $session_id );
 
-		// ASSERT: Import must fail with a taxonomy error.
+		remove_filter( 'pre_insert_term', $filter );
+
+		// ASSERT: Import must fail at the terms step.
 		$this->assertFalse(
 			$result['success'],
-			'Update import should fail for unknown taxonomy.'
+			'Update import should fail when a term cannot be created.'
 		);
 		$this->assertStringContainsString(
-			'nonexistent_taxonomy_term',
+			'Simulated term insertion failure.',
 			$result['error']
 		);
 
@@ -1080,5 +1086,23 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 			}
 			return $preempt;
 		};
+	}
+
+	/**
+	 * Blocks term creation for the rest of the test, the trigger these rollback
+	 * cases use to reach the terms-update failure path. Only terms that have to
+	 * be created fail; an existing one still resolves.
+	 *
+	 * @return Closure The filter, so the caller can remove it.
+	 */
+	private function fail_term_creation(): Closure {
+		$filter = static fn(): WP_Error => new WP_Error(
+			'insert_term_failed',
+			'Simulated term insertion failure.'
+		);
+
+		add_filter( 'pre_insert_term', $filter );
+
+		return $filter;
 	}
 }

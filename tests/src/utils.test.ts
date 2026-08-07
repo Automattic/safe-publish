@@ -23,6 +23,7 @@ import type {
 	UnmappedBlockReferenceWarning,
 	UnmappedGalleryReferenceWarning,
 	UnmappedShortcodeReferenceWarning,
+	UnregisteredTaxonomyWarning,
 } from '@/types';
 
 // Pin WP date settings so format/timezone-sensitive tests are deterministic.
@@ -330,6 +331,36 @@ describe( 'renderWarningMessage', () => {
 		expect( message ).toContain( '700' );
 		expect( message ).toContain( 'source post' );
 	} );
+
+	it( 'should name the taxonomy and its dropped terms for unregistered_taxonomy', () => {
+		// ARRANGE: A taxonomy the destination does not register.
+		const warning: UnregisteredTaxonomyWarning = {
+			type: 'unregistered_taxonomy',
+			taxonomy: 'sp_genre',
+			terms: [ 'Jazz', 'Blues' ],
+		};
+		// ACT: Render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: Names the taxonomy, lists the terms, and points at the fix.
+		expect( message ).toContain( 'sp_genre' );
+		expect( message ).toContain( 'Jazz, Blues' );
+		expect( message ).toContain( 'Register it' );
+	} );
+
+	it( 'should omit the term list for unregistered_taxonomy when none are known', () => {
+		// ARRANGE: An unregistered taxonomy whose items carried no names.
+		const warning: UnregisteredTaxonomyWarning = {
+			type: 'unregistered_taxonomy',
+			taxonomy: 'sp_genre',
+			terms: [],
+		};
+		// ACT: Render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: Still names the taxonomy and the fix, with no dangling list.
+		expect( message ).toContain( 'sp_genre' );
+		expect( message ).toContain( 'Register it' );
+		expect( message ).not.toContain( 'attached ()' );
+	} );
 } );
 
 describe( 'renderWarningShortLabel', () => {
@@ -422,6 +453,19 @@ describe( 'renderWarningShortLabel', () => {
 		// ASSERT: Short label is the comma-joinable string used in the bulk modal.
 		expect( label ).toBe( 'unmapped gallery reference' );
 	} );
+
+	it( 'should return "unregistered taxonomy" for unregistered_taxonomy', () => {
+		// ARRANGE: Any unregistered_taxonomy warning.
+		const warning: UnregisteredTaxonomyWarning = {
+			type: 'unregistered_taxonomy',
+			taxonomy: 'sp_genre',
+			terms: [ 'Jazz' ],
+		};
+		// ACT: Render the short label.
+		const label = renderWarningShortLabel( warning );
+		// ASSERT: Short label is the comma-joinable string used in the bulk modal.
+		expect( label ).toBe( 'unregistered taxonomy' );
+	} );
 } );
 
 /**
@@ -435,6 +479,7 @@ function makeIssue( overrides: Partial< AttentionIssue > ): AttentionIssue {
 		target_kind: 'post',
 		target_slug: '',
 		target_is_reusable_block: false,
+		target_terms: [],
 		severity: 'warning',
 		source_site_url: 'https://source.example.com',
 		first_detected_gmt: '2024-01-01 00:00:00',
@@ -532,6 +577,47 @@ describe( 'renderIssueMessage', () => {
 		expect( message ).toContain( 'Reusable block' );
 		expect( message ).toContain( 'Patterns' );
 		expect( message ).toContain( 'Retry' );
+	} );
+
+	it( 'names the terms an unregistered taxonomy left unattached', () => {
+		// ARRANGE: A slug-keyed issue carrying the terms it dropped.
+		const issue = makeIssue( {
+			issue_type: 'unregistered_taxonomy',
+			target_ref: 0,
+			target_kind: 'taxonomy',
+			target_slug: 'sp_genre',
+			target_terms: [ 'Jazz', 'Blues' ],
+		} );
+		// ACT: Render the message.
+		const message = renderIssueMessage( issue );
+		// ASSERT: Names the taxonomy, the dropped terms, and the fix.
+		expect( message ).toContain( 'sp_genre' );
+		expect( message ).toContain( 'Jazz, Blues' );
+		expect( message ).toContain( 'Register it' );
+	} );
+
+	it( 'points at registering the taxonomy, ignoring target_ref and Retry', () => {
+		// ARRANGE: One slug-keyed issue with no known terms, rendered at two
+		// different target_refs so the copy's independence from the id is
+		// asserted directly.
+		const slugKeyed = {
+			issue_type: 'unregistered_taxonomy' as const,
+			target_kind: 'taxonomy' as const,
+			target_slug: 'sp_genre',
+		};
+		// ACT: Render both.
+		const message = renderIssueMessage(
+			makeIssue( { ...slugKeyed, target_ref: 0 } )
+		);
+		const withOtherRef = renderIssueMessage(
+			makeIssue( { ...slugKeyed, target_ref: 999 } )
+		);
+		// ASSERT: Names the taxonomy and the real fix, never Retry, and the
+		// target_ref never reaches the copy.
+		expect( message ).toContain( 'sp_genre' );
+		expect( message ).toContain( 'Register it' );
+		expect( message ).not.toContain( 'Retry' );
+		expect( message ).toBe( withOtherRef );
 	} );
 } );
 

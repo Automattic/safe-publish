@@ -382,8 +382,8 @@ class Cross_Post_Gallery_Media_Test extends Integration_Test_Case {
 	 * pulled media is cleaned up with the aborted session and B is untouched.
 	 */
 	public function test_mid_import_abort_deletes_pulled_media_but_spares_b(): void {
-		// ARRANGE: B is imported; A references B but carries an unknown
-		// taxonomy that aborts A after B's set is pulled.
+		// ARRANGE: B is imported; A references B but carries a term that cannot
+		// be created, aborting A after B's set is pulled.
 		$dest_b             = $this->seed_imported_post( self::B_SOURCE );
 		$image_url          = $this->media_url( 8901 );
 		$this->media_bodies = array( 8901 => $this->media_body( 8901, $image_url ) );
@@ -395,12 +395,17 @@ class Cross_Post_Gallery_Media_Test extends Integration_Test_Case {
 			array(
 				array(
 					'id'       => 1,
-					'taxonomy' => 'nonexistent_taxonomy_xyz',
-					'name'     => 'Bad',
-					'slug'     => 'bad',
+					'taxonomy' => 'category',
+					'name'     => 'Uncreatable Term',
+					'slug'     => 'uncreatable-term',
 				),
 			),
 		);
+		$term_filter                    = static fn(): WP_Error => new WP_Error(
+			'insert_term_failed',
+			'Simulated term insertion failure.'
+		);
+		add_filter( 'pre_insert_term', $term_filter );
 		$this->post_bodies              = array(
 			self::A_SOURCE => $a_body,
 			self::B_SOURCE => $this->referenced_post_body(
@@ -415,7 +420,7 @@ class Cross_Post_Gallery_Media_Test extends Integration_Test_Case {
 			),
 		);
 
-		// ACT: Import A, which aborts on the unknown taxonomy.
+		// ACT: Import A, which aborts when its term cannot be created.
 		$result = $this->service->import_post(
 			array(
 				'id'        => self::A_SOURCE,
@@ -424,6 +429,8 @@ class Cross_Post_Gallery_Media_Test extends Integration_Test_Case {
 				'post_type' => 'posts',
 			)
 		);
+
+		remove_filter( 'pre_insert_term', $term_filter );
 
 		// ASSERT: The import failed.
 		$this->assertFalse( $result['success'] ?? true );

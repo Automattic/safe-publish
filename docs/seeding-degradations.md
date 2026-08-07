@@ -18,20 +18,21 @@ Re-running is idempotent: the counts hold steady, and dropping `count` back to i
 
 ## What Gets Seeded
 
-Seven **degradations** — covering every issue type and both severities — plus one **orphan failure**:
+Eight **degradations** — covering every issue type and both severities — plus one **orphan failure**:
 
-| Affected page               | Issue type                            | Severity | Resolves via                                |
-| --------------------------- | ------------------------------------- | -------- | ------------------------------------------- |
-| Orphan Demo Child           | `parent_orphaned`                     | warning  | import **Orphan Demo Parent**, then Retry   |
-| Unmapped References Demo    | `unmapped_block_reference` (post, ×2) | warning  | import **Unmapped Target A** / **B**, Retry |
-| Cross-Post Gallery Demo     | `unmapped_gallery_reference` (post)   | warning  | import **Unmapped Target A**, then Retry    |
-| Unresolvable Reference Demo | `unmapped_block_reference` (term)     | warning  | never — points at a non-existent term       |
-| Nav Referrer Demo           | `nav_ref_rewrite_failed`              | error    | Retry alone                                 |
-| Reusable Block Demo         | `unmapped_block_reference` (reusable) | warning  | never — target block isn't seeded on source |
+| Affected page               | Issue type                            | Severity | Resolves via                                  |
+| --------------------------- | ------------------------------------- | -------- | --------------------------------------------- |
+| Orphan Demo Child           | `parent_orphaned`                     | warning  | import **Orphan Demo Parent**, then Retry     |
+| Unmapped References Demo    | `unmapped_block_reference` (post, ×2) | warning  | import **Unmapped Target A** / **B**, Retry   |
+| Cross-Post Gallery Demo     | `unmapped_gallery_reference` (post)   | warning  | import **Unmapped Target A**, then Retry      |
+| Unresolvable Reference Demo | `unmapped_block_reference` (term)     | warning  | never — points at a non-existent term         |
+| Unresolvable Reference Demo | `unregistered_taxonomy`               | warning  | never — register the taxonomy, then re-import |
+| Nav Referrer Demo           | `nav_ref_rewrite_failed`              | error    | Retry alone                                   |
+| Reusable Block Demo         | `unmapped_block_reference` (reusable) | warning  | never — target block isn't seeded on source   |
 
 The orphan failure — titled "Import with no source ID" — comes from an import request with no source post id.
 
-Each degradation carries a **Waiting on import** or **Resolvable now** badge. The resolvable rows start as **Waiting on import** and flip to **Resolvable now** once you import the named target (switch the post-type dropdown to **Pages**) — the cue to click **Retry**, which clears the issue. The unresolvable term reference and the reusable-block reference stay **Waiting on import** and never clear — the term points at a non-existent term, and the demo's reusable-block target isn't seeded — for contrast.
+Each retryable degradation carries a **Waiting on import** or **Resolvable now** badge. The resolvable rows start as **Waiting on import** and flip to **Resolvable now** once you import the named target (switch the post-type dropdown to **Pages**) — the cue to click **Retry**, which clears the issue. The unresolvable term reference and the reusable-block reference stay **Waiting on import** and never clear — the term points at a non-existent term, and the demo's reusable-block target isn't seeded — for contrast. The `unregistered_taxonomy` row carries no badge and no **Retry** at all: no import can register a taxonomy, so only registering it on the destination and re-importing clears it.
 
 ## Exercising the Tab
 

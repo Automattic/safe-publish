@@ -804,6 +804,9 @@ final class Admin_Ajax_Controller {
 			? $row['detail']
 			: array();
 		$is_reusable_block = 'core/block' === ( $detail['block'] ?? '' );
+		$target_terms      = is_array( $detail['terms'] ?? null )
+			? array_values( array_map( 'strval', $detail['terms'] ) )
+			: array();
 
 		return array(
 			'affected_post_id'         => $affected_post_id,
@@ -812,6 +815,7 @@ final class Admin_Ajax_Controller {
 			'target_kind'              => (string) $row['target_kind'],
 			'target_slug'              => (string) $row['target_slug'],
 			'target_is_reusable_block' => $is_reusable_block,
+			'target_terms'             => $target_terms,
 			'severity'                 => (string) $row['severity'],
 			'source_site_url'          => (string) $row['source_site_url'],
 			'first_detected_gmt'       => (string) $row['first_detected_gmt'],

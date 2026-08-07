@@ -287,6 +287,25 @@ export function renderWarningMessage( warning: Warning ): string {
 				),
 				warning.source_id
 			);
+		case 'unregistered_taxonomy':
+			return warning.terms.length > 0
+				? sprintf(
+					/* translators: 1: taxonomy slug, 2: comma-separated term names */
+					__(
+						'Taxonomy "%1$s" is not registered on this site, so these terms were not attached: %2$s. Register it, then re-import this post.',
+						'safe-publish'
+					),
+					warning.taxonomy,
+					warning.terms.join( ', ' )
+				)
+				: sprintf(
+					/* translators: %s: taxonomy slug */
+					__(
+						'Taxonomy "%s" is not registered on this site, so its terms were not attached. Register it, then re-import this post.',
+						'safe-publish'
+					),
+					warning.taxonomy
+				);
 		default: {
 			const _exhaustive: never = warning;
 			return String( _exhaustive );
@@ -319,6 +338,8 @@ export function renderWarningShortLabel( warning: Warning ): string {
 			return __( 'unmapped shortcode reference', 'safe-publish' );
 		case 'unmapped_gallery_reference':
 			return __( 'unmapped gallery reference', 'safe-publish' );
+		case 'unregistered_taxonomy':
+			return __( 'unregistered taxonomy', 'safe-publish' );
 		default: {
 			const _exhaustive: never = warning;
 			return String( _exhaustive );
@@ -328,7 +349,8 @@ export function renderWarningShortLabel( warning: Warning ): string {
 
 /**
  * Renders an open attention issue as a user-facing sentence pointing at the
- * fix: Import the referenced content, then Retry.
+ * fix: Import the referenced content, then Retry — or, where no import can
+ * resolve it, the change the destination site needs.
  *
  * @param {AttentionIssue} issue Issue to render.
  *
@@ -391,6 +413,25 @@ export function renderIssueMessage( issue: AttentionIssue ): string {
 				),
 				issue.target_ref
 			);
+		case 'unregistered_taxonomy':
+			return issue.target_terms.length > 0
+				? sprintf(
+					/* translators: 1: taxonomy slug, 2: comma-separated term names */
+					__(
+						'Taxonomy "%1$s" is not registered on this site, so these terms were not attached: %2$s. Register it, then re-import this post.',
+						'safe-publish'
+					),
+					issue.target_slug,
+					issue.target_terms.join( ', ' )
+				)
+				: sprintf(
+					/* translators: %s: taxonomy slug */
+					__(
+						'Taxonomy "%s" is not registered on this site, so its terms were not attached. Register it, then re-import this post.',
+						'safe-publish'
+					),
+					issue.target_slug
+				);
 		default: {
 			const _exhaustive: never = issue.issue_type;
 			return String( _exhaustive );

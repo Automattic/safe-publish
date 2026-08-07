@@ -300,16 +300,19 @@ A navigation link or submenu whose target was a draft at import keeps the host-s
 
 Real source media-library images bring their alt text, title, caption, and description to the destination attachment, including images inserted at an intermediate size and responsive `srcset` sub-sizes. The exception is a file linked but not held in the source library, which has no source record to copy. See [Some sideloaded files carry no source library metadata](concepts/import-process.md#some-sideloaded-files-carry-no-source-library-metadata).
 
+#### Terms from a custom taxonomy are missing after import
+
+The taxonomy is not registered on the destination site, so its terms could not be attached. The post imports without them and the gap is recorded on the **Needs attention** tab, naming the taxonomy and the terms that were dropped. Register the taxonomy on the destination (see [Custom Post Types](extending/post-types.md)), then re-import the post: the terms attach and the degradation clears. This degradation offers no **Retry**, since no import can register a taxonomy.
+
 ### Validation Errors
 
-| Error code                 | Cause                                                  | Solution                                                 |
-| -------------------------- | ------------------------------------------------------ | -------------------------------------------------------- |
-| `invalid_url`              | URL not valid or accessible                            | Check URL format and ensure the site is reachable        |
-| `request_failed`           | HTTP request to the source site failed                 | Check network connectivity and site availability         |
-| `meta_update_failed`       | One or more post meta keys failed to save              | Check destination site database permissions              |
-| `unknown_taxonomy`         | A taxonomy from the source post does not exist locally | Register the taxonomy on the destination site            |
-| `source_author_unresolved` | Source post has no author or its author was deleted    | Restore the source author or attribute the post manually |
-| `source_author_not_found`  | Source author's email has no match on the destination  | Create a user with the same email on the destination     |
+| Error code                 | Cause                                                 | Solution                                                 |
+| -------------------------- | ----------------------------------------------------- | -------------------------------------------------------- |
+| `invalid_url`              | URL not valid or accessible                           | Check URL format and ensure the site is reachable        |
+| `request_failed`           | HTTP request to the source site failed                | Check network connectivity and site availability         |
+| `meta_update_failed`       | One or more post meta keys failed to save             | Check destination site database permissions              |
+| `source_author_unresolved` | Source post has no author or its author was deleted   | Restore the source author or attribute the post manually |
+| `source_author_not_found`  | Source author's email has no match on the destination | Create a user with the same email on the destination     |
 
 ### Performance Issues
 

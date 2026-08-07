@@ -127,6 +127,7 @@ class Post_Import_Service {
 		'unmapped_block_reference',
 		'unmapped_gallery_reference',
 		'parent_orphaned',
+		'unregistered_taxonomy',
 	);
 
 	/**
@@ -1383,6 +1384,8 @@ class Post_Import_Service {
 			'post_author'    => $fields['matched_author_id'],
 		);
 
+		$skipped_taxonomies = array();
+
 		$post_id = $this->persist_updated_post(
 			$post_args,
 			$featured_attachment_id,
@@ -1390,7 +1393,8 @@ class Post_Import_Service {
 			$fields['meta'],
 			$fields['terms'],
 			$fields['source_author'],
-			$fields['source_parent_id']
+			$fields['source_parent_id'],
+			$skipped_taxonomies
 		);
 
 		if ( is_wp_error( $post_id ) ) {
@@ -1415,6 +1419,7 @@ class Post_Import_Service {
 			);
 		}
 
+		$this->add_unregistered_taxonomy_warnings( $fields, $skipped_taxonomies );
 		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
 		$this->record_attention_issues( $fields, $post_id );
 
@@ -1553,7 +1558,8 @@ class Post_Import_Service {
 			return $this->build_error_result( $fields, $error_message );
 		}
 
-		$source_site_url = Options::get_connected_site_url_with_path();
+		$source_site_url    = Options::get_connected_site_url_with_path();
+		$skipped_taxonomies = array();
 
 		$post_id = $this->persist_new_post(
 			array(
@@ -1580,7 +1586,8 @@ class Post_Import_Service {
 			$fields['meta'],
 			$fields['terms'],
 			$fields['source_author'],
-			$fields['source_parent_id']
+			$fields['source_parent_id'],
+			$skipped_taxonomies
 		);
 
 		if ( is_wp_error( $post_id ) ) {
@@ -1605,6 +1612,7 @@ class Post_Import_Service {
 			);
 		}
 
+		$this->add_unregistered_taxonomy_warnings( $fields, $skipped_taxonomies );
 		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
 		$this->record_attention_issues( $fields, $post_id );
 
@@ -1712,11 +1720,34 @@ class Post_Import_Service {
 	}
 
 	/**
+	 * Records one warning per taxonomy the destination does not register.
+	 *
+	 * @param array $fields             Post fields; mutated to append warnings.
+	 * @param array $skipped_taxonomies Taxonomy slugs mapped to their unattached
+	 *                                  term names.
+	 */
+	private function add_unregistered_taxonomy_warnings(
+		array &$fields,
+		array $skipped_taxonomies
+	): void {
+		foreach ( $skipped_taxonomies as $taxonomy => $term_names ) {
+			$fields['warnings'][] = array(
+				'type'     => 'unregistered_taxonomy',
+				'taxonomy' => (string) $taxonomy,
+				'terms'    => $term_names,
+			);
+		}
+	}
+
+	/**
 	 * Translates a post-keyed import warning into an attention issue.
 	 *
-	 * Returns null for warnings that are not tracked as issues (author
-	 * fallbacks) or that are reconciled elsewhere (navigation rewrite
-	 * failures, which key to the referencing posts, not the imported one).
+	 * Each issue's detail preserves the originating warning's payload, so it
+	 * repeats fields the identity columns already carry.
+	 *
+	 * Returns null for warnings the inbox does not track (author fallbacks,
+	 * unmapped shortcode references) and for navigation rewrite failures,
+	 * which are reconciled against the referencing posts instead.
 	 *
 	 * @param array $warning Single import warning record.
 	 * @return array|null Issue fields, or null when the warning is not tracked.
@@ -1760,6 +1791,22 @@ class Post_Import_Service {
 					'parent_id'    => (int) $warning['source']['parent_id'],
 					'parent_title' => $warning['source']['parent_title'] ?? null,
 					'reason'       => (string) ( $warning['reason'] ?? '' ),
+				),
+			);
+		}
+
+		if ( 'unregistered_taxonomy' === $type ) {
+			$taxonomy = (string) $warning['taxonomy'];
+
+			return array(
+				'issue_type'  => $type,
+				'target_ref'  => 0,
+				'target_kind' => 'taxonomy',
+				'target_slug' => $taxonomy,
+				'severity'    => 'warning',
+				'detail'      => array(
+					'taxonomy' => $taxonomy,
+					'terms'    => $warning['terms'],
 				),
 			);
 		}
@@ -2455,6 +2502,9 @@ class Post_Import_Service {
 	 *                                             display_name) used to refresh diagnostic meta.
 	 * @param int          $source_parent_id       Source post's parent ID used to refresh the
 	 *                                             diagnostic parent meta on hierarchical posts.
+	 * @param array        $skipped_taxonomies     Receives the taxonomies the destination does
+	 *                                             not register, mapped to their unattached term
+	 *                                             names.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
 	 */
 	public function persist_updated_post(
@@ -2464,7 +2514,8 @@ class Post_Import_Service {
 		array|object $meta,
 		array|object $terms,
 		array $source_author,
-		int $source_parent_id
+		int $source_parent_id,
+		array &$skipped_taxonomies = array()
 	): int|WP_Error {
 		$post_id  = $post_args['ID'];
 		$snapshot = $this->capture_pre_update_state(
@@ -2541,6 +2592,8 @@ class Post_Import_Service {
 				array( 'action' => 'terms_update_failed' )
 			);
 		}
+
+		$skipped_taxonomies = $terms_result;
 
 		$this->reconcile_import_attachment_parents(
 			$post_id,
@@ -2698,6 +2751,9 @@ class Post_Import_Service {
 	 *                                             display_name) used to write diagnostic meta.
 	 * @param int          $source_parent_id       Source post's parent ID used to write the
 	 *                                             diagnostic parent meta on hierarchical posts.
+	 * @param array        $skipped_taxonomies     Receives the taxonomies the destination does
+	 *                                             not register, mapped to their unattached term
+	 *                                             names.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
 	 */
 	public function persist_new_post(
@@ -2706,7 +2762,8 @@ class Post_Import_Service {
 		array|object $meta,
 		array|object $terms,
 		array $source_author,
-		int $source_parent_id
+		int $source_parent_id,
+		array &$skipped_taxonomies = array()
 	): int|WP_Error {
 		$this->content_processor->disable_content_filters();
 		$post_id = wp_insert_post( $post_args );
@@ -2797,6 +2854,8 @@ class Post_Import_Service {
 				array( 'action' => 'terms_update_failed' )
 			);
 		}
+
+		$skipped_taxonomies = $terms_result;
 
 		$this->reconcile_import_attachment_parents(
 			$post_id,
