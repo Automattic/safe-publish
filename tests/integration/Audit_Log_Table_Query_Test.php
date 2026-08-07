@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\API\Export_Logger;
 use Safe_Publish\Utils\Audit_Log_Table;
 
 /**
@@ -176,5 +177,38 @@ class Audit_Log_Table_Query_Test extends Integration_Test_Case {
 		$this->assertCount( 2, $rows );
 		$this->assertSame( 'SECOND', $rows[0]['event'] );
 		$this->assertSame( 'FIRST', $rows[1]['event'] );
+	}
+
+	/**
+	 * Verifies that audit log timestamps are written as GMT regardless of the
+	 * site's configured timezone, so stored events are timezone-independent.
+	 */
+	public function test_audit_log_timestamps_are_stored_in_gmt(): void {
+		// ARRANGE: A non-UTC site timezone and a cleared export channel.
+		update_option( 'timezone_string', 'America/New_York' );
+		Audit_Log_Table::clear( 'export' );
+		$now = time();
+
+		// ACT: Log an export event through the shared Logger write path.
+		( new Export_Logger() )->content_exported(
+			'posts',
+			'https://destination.example/',
+			array()
+		);
+
+		// ASSERT: created_at_gmt parses as GMT — not shifted by the site offset.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel' => 'export',
+				'limit'   => 1,
+			)
+		);
+		$this->assertCount( 1, $events );
+
+		$stored = strtotime( $events[0]['created_at_gmt'] . ' UTC' );
+		$this->assertEqualsWithDelta( $now, $stored, 5 );
+
+		// CLEANUP: Restore the default site timezone.
+		delete_option( 'timezone_string' );
 	}
 }

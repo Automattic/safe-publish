@@ -22,10 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Registers the Audit Log submenu and the audit-events AJAX handler. The
  * page lists rows from all audit log channels with filtering by channel,
- * level, event substring, and date range. Gated to dev environments only
- * while per-post import lifecycle coverage is incomplete; the table
- * populates in every environment so the data can be inspected via direct
- * DB access.
+ * level, event substring, and date range.
  */
 final class Audit_Log_Page {
 
@@ -73,13 +70,9 @@ final class Audit_Log_Page {
 
 	/**
 	 * Registers the submenu under the safe-publish parent and the AJAX
-	 * handler, for import-enabled and bidirectional modes. Dev only.
+	 * handler, for import-enabled and bidirectional modes.
 	 */
 	public function init(): void {
-		if ( ! self::is_dev_environment() ) {
-			return;
-		}
-
 		add_action( 'admin_menu', array( $this, 'add_submenu_page' ), 19 );
 		add_action( 'admin_enqueue_scripts', array( $this, 'maybe_enqueue_assets' ) );
 		add_action( 'wp_ajax_safe_publish_get_audit_events', array( $this, 'ajax_get_audit_events' ) );
@@ -87,26 +80,12 @@ final class Audit_Log_Page {
 
 	/**
 	 * Registers the submenu under the settings-only parent and the AJAX
-	 * handler, for export-only and unconfigured modes. Dev only.
+	 * handler, for export-only and unconfigured modes.
 	 */
 	public function init_settings_only(): void {
-		if ( ! self::is_dev_environment() ) {
-			return;
-		}
-
 		add_action( 'admin_menu', array( $this, 'add_submenu_page_settings' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'maybe_enqueue_assets' ) );
 		add_action( 'wp_ajax_safe_publish_get_audit_events', array( $this, 'ajax_get_audit_events' ) );
-	}
-
-	/**
-	 * Whether the audit log UI should be available in this environment.
-	 *
-	 * @return bool True on dev installs (matches the value set in
-	 *              .wp-env.json and the safe-publish-local-dev mu-plugin).
-	 */
-	private static function is_dev_environment(): bool {
-		return 'development' === wp_get_environment_type();
 	}
 
 	/**
