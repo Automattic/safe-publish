@@ -11,6 +11,7 @@ namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Utils\Imports_Table;
+use WP_Error;
 
 /**
  * Exercises write-time normalization of the session source identity and the
@@ -87,6 +88,26 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 		// ASSERT: The original value survived the insert.
 		$this->assertIsInt( $session_id );
 		$this->assertSame( $raw, $this->stored_url( $session_id ) );
+	}
+
+	/**
+	 * Verifies that create_session refuses an empty source instead of recording
+	 * a session with no identity.
+	 */
+	public function test_create_session_rejects_an_empty_source(): void {
+		// ARRANGE: The row count to compare against.
+		$before = $this->count_sessions();
+
+		// ACT: Open a session with no source.
+		$result = $this->repository->create_session( '', 'single' );
+
+		// ASSERT: The call failed and inserted nothing.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'session_no_source_site_url',
+			$result->get_error_code()
+		);
+		$this->assertSame( $before, $this->count_sessions() );
 	}
 
 	/**
@@ -302,6 +323,21 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 		$this->assertIsArray( $row );
 
 		return $row;
+	}
+
+	/**
+	 * Counts the rows in the imports table.
+	 *
+	 * @return int Number of session rows.
+	 */
+	private function count_sessions(): int {
+		global $wpdb;
+
+		$table = Imports_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		return (int) $wpdb->get_var( "SELECT COUNT(*) FROM `{$table}`" );
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 	}
 
 	/**

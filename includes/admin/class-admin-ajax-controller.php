@@ -1685,6 +1685,7 @@ final class Admin_Ajax_Controller {
 		$this->verify_ajax_capability( 'edit_posts' );
 
 		$this->validate_auth_or_fail();
+		$this->validate_connection_or_fail();
 
 		$source_post_id = absint( $_POST['source_post_id'] ?? 0 );
 		$title          = sanitize_text_field( wp_unslash( $_POST['title'] ?? '' ) );
@@ -1800,6 +1801,7 @@ final class Admin_Ajax_Controller {
 		$this->verify_ajax_capability( 'edit_posts' );
 
 		$this->validate_auth_or_fail();
+		$this->validate_connection_or_fail();
 
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON string not sanitized to preserve structure; validated after decode.
 		$posts_data_json = isset( $_POST['posts_data'] ) ? wp_unslash( $_POST['posts_data'] ) : '';
@@ -2351,5 +2353,22 @@ final class Admin_Ajax_Controller {
 				401
 			);
 		}
+	}
+
+	/**
+	 * Sends a JSON error response when no source site is connected. Checks the
+	 * normalized identity, so an unparseable value is refused too.
+	 */
+	private function validate_connection_or_fail(): void {
+		if ( '' !== Options::get_connected_site_url_with_path() ) {
+			return;
+		}
+
+		wp_send_json_error(
+			__(
+				'No source site is connected. Configure a valid connected site URL in the settings page before importing.',
+				'safe-publish'
+			)
+		);
 	}
 }
