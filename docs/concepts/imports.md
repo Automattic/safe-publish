@@ -42,7 +42,7 @@ The selected session does not appear as a filter — sessions are an internal gr
 
 ## Needs attention tab
 
-Collects every post-import problem in one place: import **failures** (the import errored, so no local post exists — or a re-import of an already-imported post failed) and **degradations** (the post imported but something could not be carried over — an unresolved reference to a block, term, parent, or navigation link, or a taxonomy this site does not register). Failures are listed first. The tab label shows the current count of open failures plus degradations.
+Collects every post-import problem in one place: import **failures** (the import errored, so no local post exists — or a re-import of an already-imported post failed) and **degradations** (the post imported but something could not be carried over — an unresolved reference to a block, term, parent, or navigation link, a taxonomy this site does not register, or a term whose fields could not be updated to match the source). Failures are listed first. The tab label shows the current count of open failures plus degradations.
 
 An **Open | Ignored** toggle switches between the active list and items set aside with Ignore. Open (the default) excludes ignored items, and the tab count always reflects the Open set. The Ignored view offers Un-ignore to restore an item; Remove still applies there for failures.
 
