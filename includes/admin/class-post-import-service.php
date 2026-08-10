@@ -128,6 +128,7 @@ class Post_Import_Service {
 		'unmapped_gallery_reference',
 		'parent_orphaned',
 		'unregistered_taxonomy',
+		'term_field_conflict',
 	);
 
 	/**
@@ -1385,6 +1386,7 @@ class Post_Import_Service {
 		);
 
 		$skipped_taxonomies = array();
+		$term_outcome       = array();
 
 		$post_id = $this->persist_updated_post(
 			$post_args,
@@ -1394,7 +1396,8 @@ class Post_Import_Service {
 			$fields['terms'],
 			$fields['source_author'],
 			$fields['source_parent_id'],
-			$skipped_taxonomies
+			$skipped_taxonomies,
+			$term_outcome
 		);
 
 		if ( is_wp_error( $post_id ) ) {
@@ -1420,8 +1423,10 @@ class Post_Import_Service {
 		}
 
 		$this->add_unregistered_taxonomy_warnings( $fields, $skipped_taxonomies );
+		$this->add_term_conflict_warnings( $fields, $term_outcome );
 		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
 		$this->record_attention_issues( $fields, $post_id );
+		$this->resolve_term_conflict_issues( $term_outcome );
 
 		$this->log_import_if_session(
 			$session_id,
@@ -1560,6 +1565,7 @@ class Post_Import_Service {
 
 		$source_site_url    = Options::get_connected_site_url_with_path();
 		$skipped_taxonomies = array();
+		$term_outcome       = array();
 
 		$post_id = $this->persist_new_post(
 			array(
@@ -1587,7 +1593,8 @@ class Post_Import_Service {
 			$fields['terms'],
 			$fields['source_author'],
 			$fields['source_parent_id'],
-			$skipped_taxonomies
+			$skipped_taxonomies,
+			$term_outcome
 		);
 
 		if ( is_wp_error( $post_id ) ) {
@@ -1613,8 +1620,10 @@ class Post_Import_Service {
 		}
 
 		$this->add_unregistered_taxonomy_warnings( $fields, $skipped_taxonomies );
+		$this->add_term_conflict_warnings( $fields, $term_outcome );
 		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
 		$this->record_attention_issues( $fields, $post_id );
+		$this->resolve_term_conflict_issues( $term_outcome );
 
 		$this->log_import_if_session(
 			$session_id,
@@ -1740,6 +1749,60 @@ class Post_Import_Service {
 	}
 
 	/**
+	 * Records one warning per term field the import could not reconcile.
+	 *
+	 * Conflicts on one term share a row identity, so a term blocked on more
+	 * than one field surfaces the last of them.
+	 *
+	 * @param array $fields  Post fields; mutated to append warnings.
+	 * @param array $outcome Reconcile outcome collected by update_terms().
+	 */
+	private function add_term_conflict_warnings(
+		array &$fields,
+		array $outcome
+	): void {
+		foreach ( $outcome['conflicts'] ?? array() as $conflict ) {
+			$fields['warnings'][] = array(
+				'type'           => 'term_field_conflict',
+				'taxonomy'       => (string) $conflict['taxonomy'],
+				'term'           => (string) $conflict['term_name'],
+				'term_slug'      => (string) $conflict['term_slug'],
+				'field'          => (string) $conflict['field'],
+				'reason'         => (string) $conflict['reason'],
+				'source_term_id' => (int) $conflict['source_term_id'],
+			);
+		}
+	}
+
+	/**
+	 * Clears the conflict degradations of every term this import brought back
+	 * in line with the source.
+	 *
+	 * A term is shared, so once it matches the source again, the rows other
+	 * posts opened for it describe a state that no longer exists.
+	 *
+	 * @param array $outcome Reconcile outcome collected by update_terms().
+	 */
+	private function resolve_term_conflict_issues( array $outcome ): void {
+		$source_site_url = Options::get_connected_site_url_with_path();
+
+		if ( '' === $source_site_url ) {
+			return;
+		}
+
+		foreach ( $outcome['resolved'] ?? array() as $source_term_id ) {
+			$this->attention_issues->reconcile_target_issues(
+				'term_field_conflict',
+				(int) $source_term_id,
+				'term',
+				'warning',
+				$source_site_url,
+				array()
+			);
+		}
+	}
+
+	/**
 	 * Translates a post-keyed import warning into an attention issue.
 	 *
 	 * Each issue's detail preserves the originating warning's payload, so it
@@ -1807,6 +1870,26 @@ class Post_Import_Service {
 				'detail'      => array(
 					'taxonomy' => $taxonomy,
 					'terms'    => $warning['terms'],
+				),
+			);
+		}
+
+		if ( 'term_field_conflict' === $type ) {
+			// The slug keys the row too, so two conflicting terms of one post
+			// stay distinct without a source id, cut to the column's width.
+			$term_slug = substr( (string) $warning['term_slug'], 0, 100 );
+
+			return array(
+				'issue_type'  => $type,
+				'target_ref'  => (int) $warning['source_term_id'],
+				'target_kind' => 'term',
+				'target_slug' => $term_slug,
+				'severity'    => 'warning',
+				'detail'      => array(
+					'taxonomy' => (string) $warning['taxonomy'],
+					'terms'    => array( (string) $warning['term'] ),
+					'field'    => (string) $warning['field'],
+					'reason'   => (string) $warning['reason'],
 				),
 			);
 		}
@@ -2505,6 +2588,8 @@ class Post_Import_Service {
 	 * @param array        $skipped_taxonomies     Receives the taxonomies the destination does
 	 *                                             not register, mapped to their unattached term
 	 *                                             names.
+	 * @param array        $term_outcome           Receives the reconcile outcome for the
+	 *                                             post's terms.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
 	 */
 	public function persist_updated_post(
@@ -2515,7 +2600,8 @@ class Post_Import_Service {
 		array|object $terms,
 		array $source_author,
 		int $source_parent_id,
-		array &$skipped_taxonomies = array()
+		array &$skipped_taxonomies = array(),
+		array &$term_outcome = array()
 	): int|WP_Error {
 		$post_id  = $post_args['ID'];
 		$snapshot = $this->capture_pre_update_state(
@@ -2580,7 +2666,8 @@ class Post_Import_Service {
 		$terms_result = $this->meta_terms_manager->update_terms(
 			$post_id,
 			$terms,
-			Options::get_connected_site_url_with_path()
+			Options::get_connected_site_url_with_path(),
+			$term_outcome
 		);
 
 		if ( is_wp_error( $terms_result ) ) {
@@ -2754,6 +2841,8 @@ class Post_Import_Service {
 	 * @param array        $skipped_taxonomies     Receives the taxonomies the destination does
 	 *                                             not register, mapped to their unattached term
 	 *                                             names.
+	 * @param array        $term_outcome           Receives the reconcile outcome for the
+	 *                                             post's terms.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
 	 */
 	public function persist_new_post(
@@ -2763,7 +2852,8 @@ class Post_Import_Service {
 		array|object $terms,
 		array $source_author,
 		int $source_parent_id,
-		array &$skipped_taxonomies = array()
+		array &$skipped_taxonomies = array(),
+		array &$term_outcome = array()
 	): int|WP_Error {
 		$this->content_processor->disable_content_filters();
 		$post_id = wp_insert_post( $post_args );
@@ -2841,7 +2931,8 @@ class Post_Import_Service {
 		$terms_result = $this->meta_terms_manager->update_terms(
 			$post_id,
 			$terms,
-			$source_site_url
+			$source_site_url,
+			$term_outcome
 		);
 
 		if ( is_wp_error( $terms_result ) ) {

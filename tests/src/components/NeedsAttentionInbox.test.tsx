@@ -88,6 +88,7 @@ const DEGRADATION: NeedsAttentionRow = {
 	target_slug: '',
 	target_is_reusable_block: false,
 	target_terms: [],
+	target_reason: '',
 	severity: 'error',
 	source_site_url: 'https://source.example.com',
 	first_detected_gmt: '2024-03-15 10:30:00',
