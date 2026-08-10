@@ -1197,6 +1197,51 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that an unregistered taxonomy the source sends empty opens no
+	 * degradation on either the create or the re-import path, while a
+	 * registered taxonomy alongside it still imports.
+	 */
+	public function test_empty_unregistered_taxonomy_opens_no_issue(): void {
+		// ARRANGE: A registered taxonomy paired with an emptied unknown one.
+		$overrides = array(
+			'safe_publish_terms' => array(
+				'category' => array(
+					array(
+						'name' => 'Kept Category',
+						'slug' => 'kept-category',
+					),
+				),
+				'sp_genre' => array(),
+			),
+		);
+
+		// ACT: Import the post, then re-import it.
+		$created      = $this->import_under( self::BLOG_URL, 9303, $overrides );
+		$after_create = $this->attention->count_open_issues( self::BLOG_URL );
+		$updated      = $this->import_under( self::BLOG_URL, 9303, $overrides );
+
+		// ASSERT: Neither path opened a row, and the known term attached.
+		$this->assertTrue( $created['success'] );
+		$this->assertSame( 0, $after_create );
+		$this->assertSame(
+			(int) $created['post_id'],
+			(int) $updated['post_id']
+		);
+		$this->assertSame(
+			0,
+			$this->attention->count_open_issues( self::BLOG_URL )
+		);
+		$this->assertSame(
+			array( 'Kept Category' ),
+			wp_get_post_terms(
+				(int) $created['post_id'],
+				'category',
+				array( 'fields' => 'names' )
+			)
+		);
+	}
+
+	/**
 	 * Verifies that two unregistered taxonomies on one post open two rows —
 	 * the collision a shared zero target_ref would otherwise cause.
 	 */
