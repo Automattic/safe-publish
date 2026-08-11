@@ -831,6 +831,9 @@ final class Diff_Renderer {
 	 * description when the source sends them, and appending a note for every
 	 * shown difference the import would not apply.
 	 *
+	 * Covers the taxonomies the payload carries, since the import writes no
+	 * others.
+	 *
 	 * @param array $current  Current data.
 	 * @param array $incoming Incoming data.
 	 *
@@ -850,7 +853,11 @@ final class Diff_Renderer {
 			);
 		}
 
-		$local = $current['term_objects'] ?? array();
+		$local = array_intersect_key(
+			$current['term_objects'] ?? array(),
+			$records
+		);
+
 		$plans = ( new Meta_Terms_Manager() )->plan_terms(
 			$records,
 			Options::get_connected_site_url_with_path()
