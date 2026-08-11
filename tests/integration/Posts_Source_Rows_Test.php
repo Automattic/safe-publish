@@ -839,15 +839,129 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that the source_post_id branch fails closed without a source,
-	 * so the default can't reach across sources; the item id branch still runs.
+	 * Verifies that removing by item id leaves another source's failure in
+	 * place, so a stale listing can't delete a row the inbox no longer shows.
 	 */
-	public function test_delete_failed_items_without_a_source_skips_sources(): void {
-		// ARRANGE: One failure reachable by source post id, one by item id.
-		$session   = $this->create_session();
+	public function test_delete_failed_items_by_id_stays_in_scope(): void {
+		// ARRANGE: An orphan failure recorded under a previous source.
+		$theirs = $this->create_session( self::OTHER_SOURCE );
+		$other  = $this->insert_item(
+			array(
+				'session_id'      => $theirs,
+				'source_post_id'  => null,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+
+		// ACT: Remove it by item id while another source is connected.
+		$deleted = $this->repository->delete_failed_items(
+			array( $other ),
+			array(),
+			self::SOURCE
+		);
+
+		// ASSERT: Nothing is removed and the row survives.
+		$this->assertSame( 0, $deleted );
+		$this->assertNotNull( $this->repository->get_item( $other ) );
+	}
+
+	/**
+	 * Verifies that a mixed batch scopes both branches at once, the shape a
+	 * bulk Remove over an orphan and a source-linked row produces.
+	 */
+	public function test_delete_failed_items_mixed_batch_stays_in_scope(): void {
+		// ARRANGE: An orphan and a source-linked failure under each source.
+		$mine         = $this->create_session();
+		$theirs       = $this->create_session( self::OTHER_SOURCE );
+		$orphan       = $this->insert_item(
+			array(
+				'session_id'      => $mine,
+				'source_post_id'  => null,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+		$linked       = $this->insert_item(
+			array(
+				'session_id'      => $mine,
+				'source_post_id'  => 950,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-01-02 00:00:00',
+			)
+		);
+		$their_orphan = $this->insert_item(
+			array(
+				'session_id'      => $theirs,
+				'source_post_id'  => null,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-01-03 00:00:00',
+			)
+		);
+		$their_linked = $this->insert_item(
+			array(
+				'session_id'      => $theirs,
+				'source_post_id'  => 950,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-01-04 00:00:00',
+			)
+		);
+
+		// ACT: Remove both kinds, and both of the other source's ids too.
+		$deleted = $this->repository->delete_failed_items(
+			array( $orphan, $their_orphan ),
+			array( 950 ),
+			self::SOURCE
+		);
+
+		// ASSERT: Only the connected source's rows go.
+		$this->assertSame( 2, $deleted );
+		$this->assertNull( $this->repository->get_item( $orphan ) );
+		$this->assertNull( $this->repository->get_item( $linked ) );
+		$this->assertNotNull( $this->repository->get_item( $their_orphan ) );
+		$this->assertNotNull( $this->repository->get_item( $their_linked ) );
+	}
+
+	/**
+	 * Verifies that ignoring by item id leaves another source's failure open,
+	 * mirroring how removing by item id is scoped.
+	 */
+	public function test_ignore_by_id_stays_in_scope(): void {
+		// ARRANGE: An orphan failure recorded under a previous source.
+		$theirs = $this->create_session( self::OTHER_SOURCE );
+		$other  = $this->insert_item(
+			array(
+				'session_id'      => $theirs,
+				'source_post_id'  => null,
+				'status'          => 'error',
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+
+		// ACT: Ignore it by item id while another source is connected.
+		$ignored = $this->repository->set_failed_items_ignored(
+			array( $other ),
+			array(),
+			true,
+			self::SOURCE
+		);
+
+		// ASSERT: Nothing is flagged and the row stays open.
+		$this->assertSame( 0, $ignored );
+		$other_row = $this->repository->get_item( $other );
+		$this->assertNotNull( $other_row );
+		$this->assertNull( $other_row['ignored_gmt'] );
+	}
+
+	/**
+	 * Verifies that both branches reach every source when none is named, the
+	 * unscoped contract the seeder's demo reset depends on.
+	 */
+	public function test_delete_failed_items_without_a_source_reaches_all(): void {
+		// ARRANGE: One failure by source post id, one orphan, under two sources.
 		$by_source = $this->insert_item(
 			array(
-				'session_id'      => $session,
+				'session_id'      => $this->create_session(),
 				'source_post_id'  => 940,
 				'status'          => 'error',
 				'import_date_gmt' => '2026-01-01 00:00:00',
@@ -855,7 +969,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		);
 		$by_id     = $this->insert_item(
 			array(
-				'session_id'      => $session,
+				'session_id'      => $this->create_session( self::OTHER_SOURCE ),
 				'source_post_id'  => null,
 				'status'          => 'error',
 				'import_date_gmt' => '2026-01-02 00:00:00',
@@ -868,9 +982,9 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			array( 940 )
 		);
 
-		// ASSERT: Only the item id branch acted.
-		$this->assertSame( 1, $deleted );
-		$this->assertNotNull( $this->repository->get_item( $by_source ) );
+		// ASSERT: Both branches acted, regardless of source.
+		$this->assertSame( 2, $deleted );
+		$this->assertNull( $this->repository->get_item( $by_source ) );
 		$this->assertNull( $this->repository->get_item( $by_id ) );
 	}
 
