@@ -909,15 +909,15 @@ final class History_Repository {
 	 * listing only shows the most recent one, so dismissing must reach the
 	 * older siblings too or they re-surface on refresh.
 	 *
-	 * @param int[]  $item_ids        Item ids to delete (orphan failures).
-	 * @param int[]  $source_post_ids Source post ids whose failures to delete.
-	 * @param string $source_site_url Source scoping the source_post_ids branch.
+	 * @param int[]       $item_ids        Item ids to delete (orphan failures).
+	 * @param int[]       $source_post_ids Source post ids whose failures to delete.
+	 * @param string|null $source_site_url Source identity to scope to; null matches any source.
 	 * @return int Number of rows removed.
 	 */
 	public function delete_failed_items(
 		array $item_ids,
 		array $source_post_ids = array(),
-		string $source_site_url = ''
+		?string $source_site_url = null
 	): int {
 		global $wpdb;
 
@@ -950,17 +950,17 @@ final class History_Repository {
 	 * orphans by item id, source-linked failures across every error attempt for
 	 * the source post so the deduped row can't re-surface a sibling.
 	 *
-	 * @param int[]  $item_ids        Item ids to flag (orphan failures).
-	 * @param int[]  $source_post_ids Source post ids whose failures to flag.
-	 * @param bool   $ignored         True to ignore, false to restore.
-	 * @param string $source_site_url Source scoping the source_post_ids branch.
+	 * @param int[]       $item_ids        Item ids to flag (orphan failures).
+	 * @param int[]       $source_post_ids Source post ids whose failures to flag.
+	 * @param bool        $ignored         True to ignore, false to restore.
+	 * @param string|null $source_site_url Source identity to scope to; null matches any source.
 	 * @return int Number of rows updated.
 	 */
 	public function set_failed_items_ignored(
 		array $item_ids,
 		array $source_post_ids,
 		bool $ignored,
-		string $source_site_url = ''
+		?string $source_site_url = null
 	): int {
 		global $wpdb;
 
@@ -999,19 +999,19 @@ final class History_Repository {
 	 * Normalizes item ids and source post ids into a shared WHERE scope for the
 	 * failure remove/ignore paths.
 	 *
-	 * Item ids are unique, so only the source_post_id branch is scoped to the
-	 * source; an empty $source_site_url leaves that branch matching only
-	 * sessions recorded without one.
+	 * Both branches carry the source scope, so neither can reach a row the
+	 * inbox does not list. An empty $source_site_url matches only sessions
+	 * recorded without one; null leaves both branches unscoped.
 	 *
-	 * @param int[]  $item_ids        Item ids (orphan failures).
-	 * @param int[]  $source_post_ids Source post ids.
-	 * @param string $source_site_url Path-bearing source identity.
+	 * @param int[]       $item_ids        Item ids (orphan failures).
+	 * @param int[]       $source_post_ids Source post ids.
+	 * @param string|null $source_site_url Source identity to scope to; null matches any source.
 	 * @return array{sql: string, params: list<int|string>}|null Scope, or null when empty.
 	 */
 	private function build_failed_items_scope(
 		array $item_ids,
 		array $source_post_ids,
-		string $source_site_url
+		?string $source_site_url
 	): ?array {
 		$positive = static fn( int $id ): bool => $id > 0;
 
@@ -1031,13 +1031,20 @@ final class History_Repository {
 		}
 
 		$imports_table = Imports_Table::table_name();
+		$session_sql   = null === $source_site_url
+			? ''
+			: " AND session_id IN ( SELECT id FROM `{$imports_table}`"
+				. ' WHERE source_site_url = %s )';
 		$clauses       = array();
 		$params        = array();
 
 		if ( count( $ids ) > 0 ) {
 			$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
-			$clauses[]    = "id IN ({$placeholders})";
+			$clauses[]    = "( id IN ({$placeholders}){$session_sql} )";
 			$params       = array_merge( $params, $ids );
+			if ( null !== $source_site_url ) {
+				$params[] = $source_site_url;
+			}
 		}
 
 		if ( count( $sources ) > 0 ) {
@@ -1046,10 +1053,11 @@ final class History_Repository {
 				array_fill( 0, count( $sources ), '%d' )
 			);
 			$clauses[]    = "( source_post_id IN ({$placeholders})"
-				. " AND session_id IN ( SELECT id FROM `{$imports_table}`"
-				. ' WHERE source_site_url = %s ) )';
+				. "{$session_sql} )";
 			$params       = array_merge( $params, $sources );
-			$params[]     = $source_site_url;
+			if ( null !== $source_site_url ) {
+				$params[] = $source_site_url;
+			}
 		}
 
 		return array(
