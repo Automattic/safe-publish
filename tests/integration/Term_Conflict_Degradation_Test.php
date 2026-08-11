@@ -170,7 +170,8 @@ class Term_Conflict_Degradation_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Verifies that a reconciled term keeps its new fields when a later term
-	 * fails and the post is rolled back, since other posts already share it.
+	 * fails and the post is rolled back, since other posts already share it,
+	 * and that the conflicts it clears up after are resolved all the same.
 	 */
 	public function test_reconciled_term_survives_a_post_rollback(): void {
 		// ARRANGE: A post carrying one imported category.
@@ -184,6 +185,19 @@ class Term_Conflict_Degradation_Test extends Source_Posts_API_Test_Base {
 		$first = $this->import();
 		$this->assertTrue( $first['success'] );
 		$post_id = (int) $first['post_id'];
+
+		// ARRANGE: Another post holds an open conflict for the same term.
+		$sibling_post_id = self::factory()->post->create();
+		$this->attention_issues->upsert_issue(
+			$sibling_post_id,
+			'term_field_conflict',
+			self::SOURCE_TERM_ID,
+			'term',
+			'warning',
+			Options::get_connected_site_url_with_path(),
+			array(),
+			'news'
+		);
 
 		// ARRANGE: The source renames the term and adds one that cannot be
 		// created, so the import aborts after the rename is written.
@@ -213,13 +227,15 @@ class Term_Conflict_Degradation_Test extends Source_Posts_API_Test_Base {
 		$second = $this->import();
 		remove_filter( 'pre_insert_term', $fail );
 
-		// ASSERT: The post rolled back, the shared term kept its new name.
+		// ASSERT: The post rolled back, the shared term kept its new name, and
+		// the other post's conflict no longer describes it.
 		$this->assertFalse( $second['success'] );
 		$this->assertStringContainsString(
 			'First revision.',
 			$this->dest_post( $post_id )->post_content
 		);
 		$this->assertSame( 'Updates', $this->dest_term()->name );
+		$this->assertNull( $this->conflict_issue( $sibling_post_id ) );
 	}
 
 	/**

@@ -199,10 +199,10 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a description the source cleared is annotated, since the
-	 * import leaves an emptied field alone rather than clearing it.
+	 * Verifies that a description the source cleared shows unannotated, since
+	 * the import clears the destination to match.
 	 */
-	public function test_cleared_source_description_is_annotated(): void {
+	public function test_cleared_source_description_is_not_annotated(): void {
 		// ARRANGE: An imported term carrying a description.
 		$this->import_terms(
 			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) )
@@ -213,19 +213,16 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 			array( $this->record( 101, 'News', 'news', 0, '' ) )
 		);
 
-		// ASSERT: The difference shows and says the destination keeps it.
+		// ASSERT: The difference shows, with no note, as the import applies it.
 		$this->assertStringContainsString( 'Desk', $html );
-		$this->assertSame(
-			array( 'News (category): description not updated on import' ),
-			$this->notes( $html )
-		);
+		$this->assertSame( array(), $this->notes( $html ) );
 	}
 
 	/**
-	 * Verifies that a parent the source dropped is annotated, since the import
-	 * never flattens a term to the root.
+	 * Verifies that a parent the source dropped shows unannotated, since the
+	 * import flattens the destination term to the root to match.
 	 */
-	public function test_cleared_source_parent_is_annotated(): void {
+	public function test_cleared_source_parent_is_not_annotated(): void {
 		// ARRANGE: An imported term under an imported parent.
 		$this->import_terms(
 			array(
@@ -239,12 +236,10 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 			array( $this->record( 101, 'News', 'news', 0, '' ) )
 		);
 
-		// ASSERT: The dropped parent shows and is annotated.
+		// ASSERT: The dropped parent shows, with no note, as the import applies
+		// it.
 		$this->assertStringContainsString( 'Politics', $html );
-		$this->assertSame(
-			array( 'News (category): parent not updated on import' ),
-			$this->notes( $html )
-		);
+		$this->assertSame( array(), $this->notes( $html ) );
 	}
 
 	/**
