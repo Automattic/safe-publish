@@ -25,6 +25,7 @@ use Safe_Publish\Tests\Integration\Source_Posts_API\Source_Posts_API_Test_Base;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Telemetry_Service;
 use WP_Error;
+use WP_Post;
 
 /**
  * Post Import Service Test Class.
@@ -1349,9 +1350,8 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that find_imported_post() scopes by source site URL when one is
-	 * passed: A destination post imported from a different source isn't
-	 * returned even when the source post ID matches.
+	 * Verifies that find_imported_post() always scopes by source site URL, so
+	 * neither another source's post nor an empty identity resolves.
 	 */
 	public function test_find_imported_post_scopes_by_source_site_url(): void {
 		// ARRANGE: A destination post tagged with source A.
@@ -1380,11 +1380,140 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		);
 		$this->assertNull( $wrong_source );
 
-		// ACT + ASSERT: Unscoped lookup (empty URL) still returns the post —
-		// preserves backward compat for callers that don't know the URL.
-		$unscoped = $this->import_service->find_imported_post( 5000, '' );
-		$this->assertNotNull( $unscoped );
-		$this->assertSame( $dest_id, $unscoped->ID );
+		// ACT + ASSERT: An empty identity resolves nothing.
+		$this->assertNull( $this->import_service->find_imported_post( 5000, '' ) );
+	}
+
+	/**
+	 * Verifies that fetch_imported_posts_by_source_ids() always scopes by
+	 * source site URL, so neither another source's post nor an empty identity
+	 * resolves.
+	 */
+	public function test_fetch_imported_posts_by_source_ids_scopes_by_source_site_url(): void {
+		// ARRANGE: A destination post tagged with source A.
+		$dest_id = self::factory()->post->create();
+		update_post_meta( $dest_id, Options::META_SOURCE_POST_ID, 5100 );
+		update_post_meta(
+			$dest_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source-a.example.com'
+		);
+
+		// ACT + ASSERT: Same-source lookup maps the source ID to the post.
+		$same_source = $this->import_service->fetch_imported_posts_by_source_ids(
+			array( 5100 ),
+			'https://source-a.example.com'
+		);
+		$this->assertArrayHasKey( 5100, $same_source );
+		$this->assertSame( $dest_id, $same_source[5100]->ID );
+
+		// ACT + ASSERT: Different-source lookup maps nothing.
+		$this->assertSame(
+			array(),
+			$this->import_service->fetch_imported_posts_by_source_ids(
+				array( 5100 ),
+				'https://source-b.example.com'
+			)
+		);
+
+		// ACT + ASSERT: An empty identity maps nothing either.
+		$this->assertSame(
+			array(),
+			$this->import_service->fetch_imported_posts_by_source_ids(
+				array( 5100 ),
+				''
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a first import with no connected source fails without
+	 * creating a post, so an empty identity cannot reach the insert.
+	 */
+	public function test_import_without_connection_creates_no_post(): void {
+		// ARRANGE: Drop the connection the base class configures.
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
+
+		// ACT: Import a source post that has no local counterpart.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => 5200,
+				'title'     => 'Unconnected Import',
+				'content'   => '<p>Stale snapshot content.</p>',
+				'link'      => 'https://source-a.example.com/unconnected',
+				'post_type' => 'posts',
+			)
+		);
+
+		// ASSERT: The import fails on the fresh-content fetch.
+		$this->assertFalse( $result['success'] );
+
+		// ASSERT: No post carries the source ID.
+		$this->assertSame( array(), $this->posts_for_source_id( 5200 ) );
+	}
+
+	/**
+	 * Verifies that a re-import with no connected source leaves a post imported
+	 * from another source untouched, rather than updating it as its own.
+	 */
+	public function test_import_without_connection_leaves_other_source_post_alone(): void {
+		// ARRANGE: A post from source A holding the source ID, and no
+		// connection configured.
+		$dest_id = self::factory()->post->create(
+			array(
+				'post_title'   => 'Source A Post',
+				'post_content' => '<p>Source A content.</p>',
+			)
+		);
+		update_post_meta( $dest_id, Options::META_SOURCE_POST_ID, 5300 );
+		update_post_meta(
+			$dest_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source-a.example.com'
+		);
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
+
+		// ACT: Import the same source ID.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => 5300,
+				'title'     => 'Overwriting Import',
+				'content'   => '<p>Incoming content.</p>',
+				'link'      => 'https://source-b.example.com/overwriting',
+				'post_type' => 'posts',
+			)
+		);
+
+		// ASSERT: The import fails and source A's post is the only one for the
+		// source ID, with its title and content intact.
+		$this->assertFalse( $result['success'] );
+		$this->assertSame( array( $dest_id ), $this->posts_for_source_id( 5300 ) );
+
+		$dest_post = get_post( $dest_id );
+		$this->assertInstanceOf( WP_Post::class, $dest_post );
+		$this->assertSame( 'Source A Post', $dest_post->post_title );
+		$this->assertSame( '<p>Source A content.</p>', $dest_post->post_content );
+	}
+
+	/**
+	 * Returns the IDs of posts tagged with a source post ID.
+	 *
+	 * @param int $source_id Source post ID stored in post meta.
+	 * @return int[] Matching post IDs.
+	 */
+	private function posts_for_source_id( int $source_id ): array {
+		return get_posts(
+			array(
+				'fields'           => 'ids',
+				'post_type'        => 'any',
+				'post_status'      => 'any',
+				'posts_per_page'   => 5,
+				'suppress_filters' => false,
+				'meta_key'         => Options::META_SOURCE_POST_ID,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'meta_value'       => (string) $source_id,
+			)
+		);
 	}
 
 	/**
@@ -3472,15 +3601,16 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	 * cache, TTL expiry).
 	 */
 	public function test_persist_new_post_discards_concurrent_duplicate(): void {
-		// ARRANGE: A sibling post already exists for this source post ID,
-		// standing in for the winner of a concurrent race.
+		// ARRANGE: A sibling post already exists for this source post ID and
+		// identity, standing in for the winner of a concurrent race.
 		$source_id = 9101;
 		$winner_id = self::factory()->post->create(
 			array(
 				'post_title'  => 'Concurrent winner',
 				'post_status' => 'draft',
 				'meta_input'  => array(
-					Options::META_SOURCE_POST_ID => $source_id,
+					Options::META_SOURCE_POST_ID  => $source_id,
+					Options::META_SOURCE_SITE_URL => 'https://source.example.com',
 				),
 			)
 		);
@@ -3495,9 +3625,10 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 				'post_status'  => 'draft',
 				'post_type'    => 'post',
 				'meta_input'   => array(
-					Options::META_SOURCE_POST_ID => $source_id,
-					Options::META_SOURCE_LINK    => 'https://source.example.com/loser',
-					Options::META_IMPORTED_FROM  => Options::META_IMPORTED_FROM_VALUE,
+					Options::META_SOURCE_POST_ID  => $source_id,
+					Options::META_SOURCE_SITE_URL => 'https://source.example.com',
+					Options::META_SOURCE_LINK     => 'https://source.example.com/loser',
+					Options::META_IMPORTED_FROM   => Options::META_IMPORTED_FROM_VALUE,
 				),
 			),
 			0,
@@ -3542,6 +3673,55 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			'Loser must be force-deleted, leaving only the winner.'
 		);
 		$this->assertSame( $winner_id, $siblings[0]->ID );
+	}
+
+	/**
+	 * Verifies that the concurrent-duplicate check still discards the loser
+	 * when both siblings carry an empty source site identity, so scoping the
+	 * lookup by value doesn't disable the safety net.
+	 */
+	public function test_persist_new_post_discards_duplicate_with_empty_identity(): void {
+		// ARRANGE: A winner holding this source post ID and an empty identity.
+		$source_id = 9301;
+		$winner_id = self::factory()->post->create(
+			array(
+				'post_title'  => 'Empty identity winner',
+				'post_status' => 'draft',
+				'meta_input'  => array(
+					Options::META_SOURCE_POST_ID  => $source_id,
+					Options::META_SOURCE_SITE_URL => '',
+				),
+			)
+		);
+
+		// ACT: Persist a sibling for the same source post ID, also without an
+		// identity.
+		$result = $this->import_service->persist_new_post(
+			array(
+				'post_title'   => 'Empty identity loser',
+				'post_content' => '',
+				'post_status'  => 'draft',
+				'post_type'    => 'post',
+				'meta_input'   => array(
+					Options::META_SOURCE_POST_ID  => $source_id,
+					Options::META_SOURCE_SITE_URL => '',
+					Options::META_IMPORTED_FROM   => Options::META_IMPORTED_FROM_VALUE,
+				),
+			),
+			0,
+			array(),
+			array(),
+			array(),
+			0
+		);
+
+		// ASSERT: The loser is discarded in favor of the winner.
+		$this->assertWPError( $result );
+		$this->assertSame( 'duplicate_import', $result->get_error_code() );
+		$this->assertSame(
+			array( $winner_id ),
+			$this->posts_for_source_id( $source_id )
+		);
 	}
 
 	/**
