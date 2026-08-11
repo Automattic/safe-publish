@@ -202,11 +202,11 @@ Re-importing also keeps an already-imported term's name, description, and parent
 
 A term that cannot be updated — because the new name is already taken, or the new parent cannot be resolved on the destination — keeps its current values, and the post still imports. The gap is recorded as a degradation on the **Needs attention** tab naming the term. Resolving the clash and re-importing any post that uses the term updates it and clears the degradation for every post that reported it.
 
-The **Compare** action shows all of this before an import runs: each term's parent and description are compared alongside its name, and any term difference the import would not apply is noted under the comparison, naming the term and the field it affects.
+The **Compare** action shows all of this before an import runs: each term's parent and description are compared alongside its name. Any difference the import would not apply is noted under the comparison — a term difference names the term and the field it affects, and a taxonomy this site does not register names the taxonomy.
 
 Re-importing replaces a taxonomy's terms with the source's, so terms removed on the source are removed on the destination — including when the source post is left with none. Terms added on the destination by hand do not survive a re-import. Only the taxonomies the source sends are touched: one the destination registers and the source omits is left alone, and the comparison does not report it as a removal.
 
-Custom taxonomies must be registered with `'show_in_rest' => true` on the source site. A taxonomy that is not registered on the destination is skipped: the post imports without those term assignments, and the gap is recorded as a degradation on the **Needs attention** tab. The comparison notes it, so the gap is visible before an import runs. Registering the taxonomy and re-importing the post attaches the terms and clears the degradation.
+Custom taxonomies must be registered with `'show_in_rest' => true` on the source site. A taxonomy that is not registered on the destination is skipped: the post imports without those term assignments, and the gap is recorded as a degradation on the **Needs attention** tab. Registering the taxonomy and re-importing the post attaches the terms and clears the degradation.
 
 ## Stage 5: Track
 
