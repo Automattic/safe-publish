@@ -1308,6 +1308,19 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that a term field conflict is not retryable, since a term's
+	 * desired values live on the source and only reach the destination through
+	 * an import.
+	 */
+	public function test_term_field_conflict_is_not_retryable(): void {
+		// ASSERT: Outside the retryable allowlist.
+		$this->assertNotContains(
+			'term_field_conflict',
+			Admin_Ajax_Controller::ATTENTION_ISSUE_RETRYABLE_TYPES
+		);
+	}
+
+	/**
 	 * Verifies that reconciling a post carrying two slug-keyed issues of one
 	 * type opens two rows, which a shared zero target_ref alone would collide.
 	 */
