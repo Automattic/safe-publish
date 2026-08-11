@@ -200,10 +200,10 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a description the source cleared is annotated, since the
-	 * import leaves an emptied field alone rather than clearing it.
+	 * Verifies that a description the source cleared shows unannotated, since
+	 * the import clears the destination to match.
 	 */
-	public function test_cleared_source_description_is_annotated(): void {
+	public function test_cleared_source_description_is_not_annotated(): void {
 		// ARRANGE: An imported term carrying a description.
 		$this->import_terms(
 			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) )
@@ -214,19 +214,17 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 			array( $this->record( 101, 'News', 'news', 0, '' ) )
 		);
 
-		// ASSERT: The difference shows and says the destination keeps it.
+		// ASSERT: The lost description shows, unannotated, as the import clears it.
+		$this->assertStringContainsString( 'News (category) description', $html );
 		$this->assertStringContainsString( 'Desk', $html );
-		$this->assertSame(
-			array( 'News (category): description not updated on import' ),
-			$this->notes( $html )
-		);
+		$this->assertSame( array(), $this->notes( $html ) );
 	}
 
 	/**
-	 * Verifies that a parent the source dropped is annotated, since the import
-	 * never flattens a term to the root.
+	 * Verifies that a parent the source dropped shows unannotated, since the
+	 * import flattens the destination term to the root to match.
 	 */
-	public function test_cleared_source_parent_is_annotated(): void {
+	public function test_cleared_source_parent_is_not_annotated(): void {
 		// ARRANGE: An imported term under an imported parent.
 		$this->import_terms(
 			array(
@@ -240,12 +238,10 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 			array( $this->record( 101, 'News', 'news', 0, '' ) )
 		);
 
-		// ASSERT: The dropped parent shows and is annotated.
+		// ASSERT: The lost parent shows, unannotated, as the import flattens it.
+		$this->assertStringContainsString( 'News (category) parent', $html );
 		$this->assertStringContainsString( 'Politics', $html );
-		$this->assertSame(
-			array( 'News (category): parent not updated on import' ),
-			$this->notes( $html )
-		);
+		$this->assertSame( array(), $this->notes( $html ) );
 	}
 
 	/**
@@ -503,10 +499,11 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	 * intact, since the gate reads the terms the post carries from that side.
 	 */
 	public function test_notes_survive_scoping_the_current_side(): void {
-		// ARRANGE: A post carrying an imported term with a description and a
-		// post format.
+		// ARRANGE: A post carrying a term imported from another source, which the
+		// origin gate keeps the import from reconciling, and a post format.
 		$this->import_terms(
-			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) )
+			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) ),
+			self::OTHER_SOURCE
 		);
 		$this->assign_post_format();
 

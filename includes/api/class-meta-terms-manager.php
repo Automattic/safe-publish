@@ -248,8 +248,9 @@ final class Meta_Terms_Manager {
 		$plans          = array();
 
 		foreach ( $this->order_parent_first( $records ) as $record ) {
-			$dest_parent_id = $record['parent'] > 0
-				? ( $source_to_dest[ $record['parent'] ] ?? 0 )
+			$source_parent  = $record['parent'] ?? 0;
+			$dest_parent_id = $source_parent > 0
+				? ( $source_to_dest[ $source_parent ] ?? 0 )
 				: 0;
 
 			$plan = $this->plan_term(
@@ -278,10 +279,10 @@ final class Meta_Terms_Manager {
 	 * blocked. A record with no pair would be created with the source's fields;
 	 * one naming a destination term is assigned as is, never reconciled.
 	 *
-	 * @param array{source_term_id:int, parent:int, name:string, slug:string, description:string, assigned:bool, dest_id:int} $record Working record.
-	 * @param string                                                                                                          $tax             Taxonomy slug.
-	 * @param int                                                                                                             $dest_parent_id  Resolved destination parent term ID, 0, or PARENT_PENDING.
-	 * @param string                                                                                                          $source_site_url Source site URL.
+	 * @param array{source_term_id:int, parent:?int, name:string, slug:string, description:?string, assigned:bool, dest_id:int} $record Working record.
+	 * @param string                                                                                                            $tax             Taxonomy slug.
+	 * @param int                                                                                                               $dest_parent_id  Resolved destination parent term ID, 0, or PARENT_PENDING.
+	 * @param string                                                                                                            $source_site_url Source site URL.
 	 * @return array{record:array, term:WP_Term|null, eligible:bool, changes:string[], blocked:array<string, string>}
 	 */
 	private function plan_term(
@@ -406,8 +407,9 @@ final class Meta_Terms_Manager {
 		$assigned_ids   = array();
 
 		foreach ( $this->order_parent_first( $records ) as $record ) {
-			$dest_parent_id = $record['parent'] > 0
-				? ( $source_to_dest[ $record['parent'] ] ?? 0 )
+			$source_parent  = $record['parent'] ?? 0;
+			$dest_parent_id = $source_parent > 0
+				? ( $source_to_dest[ $source_parent ] ?? 0 )
 				: 0;
 
 			$dest_id = $this->resolve_term(
@@ -460,18 +462,20 @@ final class Meta_Terms_Manager {
 	/**
 	 * Normalizes a raw term item to a working record. A numeric or id/term_id
 	 * item is a caller-supplied destination ID (dest_id); every other field
-	 * describes a source term to reuse or create.
+	 * describes a source term to reuse or create. An absent parent or
+	 * description stays null, distinct from the root and the empty string a
+	 * current source sends.
 	 *
 	 * @param mixed $item Raw item: int, string, array, or object.
-	 * @return array{source_term_id:int, parent:int, name:string, slug:string, description:string, assigned:bool, dest_id:int}
+	 * @return array{source_term_id:int, parent:?int, name:string, slug:string, description:?string, assigned:bool, dest_id:int}
 	 */
 	private function normalize_term_record( mixed $item ): array {
 		$record = array(
 			'source_term_id' => 0,
-			'parent'         => 0,
+			'parent'         => null,
 			'name'           => '',
 			'slug'           => '',
-			'description'    => '',
+			'description'    => null,
 			'assigned'       => true,
 			'dest_id'        => 0,
 		);
@@ -495,10 +499,12 @@ final class Meta_Terms_Manager {
 		$record['source_term_id'] = isset( $it['source_term_id'] )
 			? absint( $it['source_term_id'] )
 			: 0;
-		$record['parent']         = isset( $it['parent'] ) ? absint( $it['parent'] ) : 0;
+		$record['parent']         = isset( $it['parent'] )
+			? absint( $it['parent'] )
+			: null;
 		$record['description']    = isset( $it['description'] )
 			? (string) $it['description']
-			: '';
+			: null;
 		$record['assigned']       = array_key_exists( 'assigned', $it )
 			? (bool) $it['assigned']
 			: true;
@@ -530,8 +536,8 @@ final class Meta_Terms_Manager {
 	 * chain from an untrusted source can't overflow the stack. A missing parent
 	 * or a cycle leaves the term to resolve as a root.
 	 *
-	 * @param list<array{source_term_id:int, parent:int, name:string, slug:string, description:string, assigned:bool, dest_id:int}> $records Working records.
-	 * @return list<array{source_term_id:int, parent:int, name:string, slug:string, description:string, assigned:bool, dest_id:int}>
+	 * @param list<array{source_term_id:int, parent:?int, name:string, slug:string, description:?string, assigned:bool, dest_id:int}> $records Working records.
+	 * @return list<array{source_term_id:int, parent:?int, name:string, slug:string, description:?string, assigned:bool, dest_id:int}>
 	 */
 	private function order_parent_first( array $records ): array {
 		$index_by_source_id = array();
@@ -561,7 +567,7 @@ final class Meta_Terms_Manager {
 				$on_chain[ $index ] = true;
 				$chain[]            = $index;
 
-				$parent = $records[ $index ]['parent'];
+				$parent = $records[ $index ]['parent'] ?? 0;
 				if ( $parent <= 0 || ! isset( $index_by_source_id[ $parent ] ) ) {
 					break;
 				}
@@ -585,11 +591,11 @@ final class Meta_Terms_Manager {
 	 * source-term metadata on the resolved term when a source ID and site URL
 	 * are known.
 	 *
-	 * @param array{source_term_id:int, parent:int, name:string, slug:string, description:string, assigned:bool, dest_id:int} $record Working record.
-	 * @param string                                                                                                          $tax             Taxonomy slug (already validated).
-	 * @param int                                                                                                             $dest_parent_id  Resolved destination parent term ID, or 0.
-	 * @param string                                                                                                          $source_site_url Source site URL for paired meta writes.
-	 * @param array                                                                                                           $outcome         Receives the reconcile outcome.
+	 * @param array{source_term_id:int, parent:?int, name:string, slug:string, description:?string, assigned:bool, dest_id:int} $record Working record.
+	 * @param string                                                                                                            $tax             Taxonomy slug (already validated).
+	 * @param int                                                                                                               $dest_parent_id  Resolved destination parent term ID, or 0.
+	 * @param string                                                                                                            $source_site_url Source site URL for paired meta writes.
+	 * @param array                                                                                                             $outcome         Receives the reconcile outcome.
 	 * @return int|WP_Error Destination term ID (0 when unresolvable), or WP_Error
 	 *                      on insert failure.
 	 */
@@ -662,10 +668,10 @@ final class Meta_Terms_Manager {
 	 * destination parent. The name match is parent-scoped so same-named
 	 * siblings under different parents stay distinct.
 	 *
-	 * @param array{source_term_id:int, parent:int, name:string, slug:string, description:string, assigned:bool, dest_id:int} $record Working record.
-	 * @param string                                                                                                          $tax             Taxonomy slug.
-	 * @param int                                                                                                             $dest_parent_id  Resolved destination parent term ID.
-	 * @param string                                                                                                          $source_site_url Source site URL scoping the identity match.
+	 * @param array{source_term_id:int, parent:?int, name:string, slug:string, description:?string, assigned:bool, dest_id:int} $record Working record.
+	 * @param string                                                                                                            $tax             Taxonomy slug.
+	 * @param int                                                                                                               $dest_parent_id  Resolved destination parent term ID.
+	 * @param string                                                                                                            $source_site_url Source site URL scoping the identity match.
 	 * @return int Destination term ID, or 0 when no match.
 	 */
 	private function find_existing_term(
@@ -722,21 +728,25 @@ final class Meta_Terms_Manager {
 	 * same source is touched; every other one is reused unchanged, including
 	 * the authoring site's own in a two-way setup. The slug is never
 	 * reconciled, keeping destination URLs stable and leaving the dedup
-	 * fallback intact. A field the record does not carry is left alone rather
-	 * than cleared, since a source running an older plugin version sends
-	 * neither description nor parent.
+	 * fallback intact.
+	 *
+	 * A field the record omits is left alone, since a source running an older
+	 * plugin version sends neither description nor parent. A field it sends
+	 * empty is applied: A cleared description clears, and a source root
+	 * flattens the term, so an inverted hierarchy converges rather than
+	 * deadlocking on the loop guard.
 	 *
 	 * A field that cannot be written is collected as a conflict and skipped, so
 	 * the post still imports. The write is deliberately independent of the
 	 * post's rollback: Other posts already share the term, so undoing it is not
 	 * safe.
 	 *
-	 * @param int                                                                                                             $term_id Matched destination term ID.
-	 * @param array{source_term_id:int, parent:int, name:string, slug:string, description:string, assigned:bool, dest_id:int} $record          Working record.
-	 * @param string                                                                                                          $tax             Taxonomy slug.
-	 * @param int                                                                                                             $dest_parent_id  Resolved destination parent term ID, or 0.
-	 * @param string                                                                                                          $source_site_url Source site URL scoping the origin gate.
-	 * @param array                                                                                                           $outcome         Receives the reconcile outcome.
+	 * @param int                                                                                                               $term_id Matched destination term ID.
+	 * @param array{source_term_id:int, parent:?int, name:string, slug:string, description:?string, assigned:bool, dest_id:int} $record          Working record.
+	 * @param string                                                                                                            $tax             Taxonomy slug.
+	 * @param int                                                                                                               $dest_parent_id  Resolved destination parent term ID, or 0.
+	 * @param string                                                                                                            $source_site_url Source site URL scoping the origin gate.
+	 * @param array                                                                                                             $outcome         Receives the reconcile outcome.
 	 */
 	private function reconcile_term_fields(
 		int $term_id,
@@ -786,7 +796,9 @@ final class Meta_Terms_Manager {
 		);
 
 		if ( array() !== $changes ) {
-			$updated = wp_update_term( $term_id, $tax, $changes );
+			// Core unslashes as it saves, so an unslashed backslash would be
+			// dropped and the compare would never converge.
+			$updated = wp_update_term( $term_id, $tax, wp_slash( $changes ) );
 
 			if ( is_wp_error( $updated ) ) {
 				$found[] = $this->term_conflict(
@@ -816,10 +828,10 @@ final class Meta_Terms_Manager {
 	 * Collects the term fields the record changes, resolving the parent first
 	 * so the name is checked against the siblings the term will end up among.
 	 *
-	 * @param WP_Term                                                                                                         $term Term being reconciled.
-	 * @param array{source_term_id:int, parent:int, name:string, slug:string, description:string, assigned:bool, dest_id:int} $record         Working record.
-	 * @param int                                                                                                             $dest_parent_id Resolved destination parent term ID, or 0.
-	 * @param array                                                                                                           $conflicts      Receives the fields left unwritten.
+	 * @param WP_Term                                                                                                           $term Term being reconciled.
+	 * @param array{source_term_id:int, parent:?int, name:string, slug:string, description:?string, assigned:bool, dest_id:int} $record         Working record.
+	 * @param int                                                                                                               $dest_parent_id Resolved destination parent term ID, or 0.
+	 * @param array                                                                                                             $conflicts      Receives the fields left unwritten.
 	 * @return array<string, string|int> wp_update_term() arguments; empty when
 	 *                                   nothing changed.
 	 */
@@ -861,7 +873,7 @@ final class Meta_Terms_Manager {
 			}
 		}
 
-		if ( '' !== $record['description'] ) {
+		if ( null !== $record['description'] ) {
 			$description = wp_kses_post( $record['description'] );
 
 			$narrowed = self::narrow_description( $record['description'] );
@@ -895,14 +907,15 @@ final class Meta_Terms_Manager {
 	/**
 	 * Resolves the parent to re-parent the term to, or null to leave it as is.
 	 *
-	 * A source root never flattens an existing destination parent, and a parent
-	 * that cannot be mapped degrades rather than dropping the term to the root.
+	 * A source root flattens the term, while a parent the record omits leaves
+	 * the destination hierarchy alone. A parent that cannot be mapped degrades
+	 * rather than dropping the term to the root.
 	 *
-	 * @param WP_Term                                                                                                         $term Term being reconciled.
-	 * @param array{source_term_id:int, parent:int, name:string, slug:string, description:string, assigned:bool, dest_id:int} $record         Working record.
-	 * @param int                                                                                                             $dest_parent_id Resolved destination parent term ID, or 0.
-	 * @param array                                                                                                           $conflicts      Receives an unresolvable or looping parent.
-	 * @return int|null New parent term ID, or null when the parent stands.
+	 * @param WP_Term                                                                                                           $term Term being reconciled.
+	 * @param array{source_term_id:int, parent:?int, name:string, slug:string, description:?string, assigned:bool, dest_id:int} $record         Working record.
+	 * @param int                                                                                                               $dest_parent_id Resolved destination parent term ID, 0, or PARENT_PENDING.
+	 * @param array                                                                                                             $conflicts      Receives an unresolvable or looping parent.
+	 * @return int|null New parent term ID, PARENT_PENDING, or null when the parent stands.
 	 */
 	private function reconciled_parent(
 		WP_Term $term,
@@ -912,8 +925,13 @@ final class Meta_Terms_Manager {
 	): ?int {
 		$tax = (string) $term->taxonomy;
 
-		if ( 0 === $record['parent'] || ! is_taxonomy_hierarchical( $tax ) ) {
+		if ( null === $record['parent'] || ! is_taxonomy_hierarchical( $tax ) ) {
 			return null;
+		}
+
+		if ( 0 === $record['parent'] ) {
+			// A term already at the top level needs no write.
+			return 0 !== (int) $term->parent ? 0 : null;
 		}
 
 		// The import creates the parent before it reaches this term, so the
@@ -960,9 +978,13 @@ final class Meta_Terms_Manager {
 	}
 
 	/**
-	 * Reports whether another term already holds the name, mirroring the
-	 * duplicate rule wp_insert_term() enforces: Unique per taxonomy when flat,
-	 * per parent when hierarchical.
+	 * Reports whether another term already holds the name: Per taxonomy when
+	 * flat, per parent when hierarchical.
+	 *
+	 * Deliberately stricter than wp_update_term(), whose only uniqueness gate
+	 * is a slug check the reconcile never trips. Same-named siblings are legal,
+	 * but they would leave the name fallback in find_existing_term() picking
+	 * between them arbitrarily, so the rename degrades instead.
 	 *
 	 * @param string  $name      Name the term would take.
 	 * @param WP_Term $term      Term being reconciled.
@@ -1082,9 +1104,9 @@ final class Meta_Terms_Manager {
 	 * Records carrying a destination ID are skipped: They never reach the
 	 * identity lookup.
 	 *
-	 * @param list<array{source_term_id:int, parent:int, name:string, slug:string, description:string, assigned:bool, dest_id:int}> $records Working records.
-	 * @param string                                                                                                                $tax             Taxonomy slug.
-	 * @param string                                                                                                                $source_site_url Source site URL scoping the identity match.
+	 * @param list<array{source_term_id:int, parent:?int, name:string, slug:string, description:?string, assigned:bool, dest_id:int}> $records Working records.
+	 * @param string                                                                                                                  $tax             Taxonomy slug.
+	 * @param string                                                                                                                  $source_site_url Source site URL scoping the identity match.
 	 */
 	private function prime_source_term_ids(
 		array $records,
@@ -1240,10 +1262,15 @@ final class Meta_Terms_Manager {
 	 * description, marking it with its origin, and recovering the existing ID
 	 * when a concurrent insert wins the term_exists race.
 	 *
-	 * @param array{source_term_id:int, parent:int, name:string, slug:string, description:string, assigned:bool, dest_id:int} $record Working record.
-	 * @param string                                                                                                          $tax             Taxonomy slug.
-	 * @param int                                                                                                             $dest_parent_id  Resolved destination parent term ID, or 0.
-	 * @param string                                                                                                          $source_site_url Source site URL recorded as the term's origin.
+	 * Only a term core reports as created is marked: Its second recovery path
+	 * returns an older duplicate as a success, and deliberately skips the
+	 * created_term action, so the marker cannot land on a term this plugin did
+	 * not create.
+	 *
+	 * @param array{source_term_id:int, parent:?int, name:string, slug:string, description:?string, assigned:bool, dest_id:int} $record Working record.
+	 * @param string                                                                                                            $tax             Taxonomy slug.
+	 * @param int                                                                                                               $dest_parent_id  Resolved destination parent term ID, or 0.
+	 * @param string                                                                                                            $source_site_url Source site URL recorded as the term's origin.
 	 * @return int|WP_Error Destination term ID, or WP_Error on insert failure.
 	 */
 	private function create_term(
@@ -1252,18 +1279,30 @@ final class Meta_Terms_Manager {
 		int $dest_parent_id,
 		string $source_site_url
 	): int|WP_Error {
-		$args = array();
+		$args        = array();
+		$description = $record['description'] ?? '';
 		if ( '' !== $record['slug'] ) {
 			$args['slug'] = $record['slug'];
 		}
 		if ( $dest_parent_id > 0 ) {
 			$args['parent'] = $dest_parent_id;
 		}
-		if ( '' !== $record['description'] ) {
-			$args['description'] = wp_kses_post( $record['description'] );
+		if ( '' !== $description ) {
+			$args['description'] = wp_kses_post( $description );
 		}
 
-		$inserted = wp_insert_term( $record['name'], $tax, $args );
+		$created_ids = array();
+		$capture     = static function ( int $created_id ) use ( &$created_ids ): void {
+			$created_ids[] = $created_id;
+		};
+
+		add_action( 'created_term', $capture );
+		$inserted = wp_insert_term(
+			wp_slash( $record['name'] ),
+			$tax,
+			wp_slash( $args )
+		);
+		remove_action( 'created_term', $capture );
 
 		if ( is_wp_error( $inserted ) ) {
 			// A concurrent insert can win the race with term_exists; recover
@@ -1282,7 +1321,9 @@ final class Meta_Terms_Manager {
 
 		$term_id = (int) $inserted['term_id'];
 
-		$this->mark_term_origin( $term_id, $source_site_url );
+		if ( in_array( $term_id, $created_ids, true ) ) {
+			$this->mark_term_origin( $term_id, $source_site_url );
+		}
 
 		return $term_id;
 	}

@@ -1400,6 +1400,10 @@ class Post_Import_Service {
 			$term_outcome
 		);
 
+		// Ahead of the error return: The term writes it clears up after survive
+		// the rollback.
+		$this->resolve_term_conflict_issues( $term_outcome );
+
 		if ( is_wp_error( $post_id ) ) {
 			$error_data = $post_id->get_error_data();
 			$action     = is_array( $error_data ) && isset( $error_data['action'] )
@@ -1426,7 +1430,6 @@ class Post_Import_Service {
 		$this->add_term_conflict_warnings( $fields, $term_outcome );
 		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
 		$this->record_attention_issues( $fields, $post_id );
-		$this->resolve_term_conflict_issues( $term_outcome );
 
 		$this->log_import_if_session(
 			$session_id,
@@ -1597,6 +1600,10 @@ class Post_Import_Service {
 			$term_outcome
 		);
 
+		// Ahead of the error return: The term writes it clears up after survive
+		// the rollback.
+		$this->resolve_term_conflict_issues( $term_outcome );
+
 		if ( is_wp_error( $post_id ) ) {
 			$error_data = $post_id->get_error_data();
 			$action     = is_array( $error_data ) && isset( $error_data['action'] )
@@ -1623,7 +1630,6 @@ class Post_Import_Service {
 		$this->add_term_conflict_warnings( $fields, $term_outcome );
 		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
 		$this->record_attention_issues( $fields, $post_id );
-		$this->resolve_term_conflict_issues( $term_outcome );
 
 		$this->log_import_if_session(
 			$session_id,
