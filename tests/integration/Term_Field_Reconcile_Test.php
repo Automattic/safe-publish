@@ -319,7 +319,7 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 
 		// ACT: Re-import from a source that sends neither field.
 		$conflicts = $this->import_terms(
-			array( $this->record( 501, 'News', 'news', 0, '' ) )
+			array( $this->record( 501, 'News', 'news', null, null ) )
 		);
 
 		// ASSERT: The description and the parent both stand.
@@ -327,6 +327,209 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 		$this->assertSame( 'Description', $term->description );
 		$this->assertSame( $parent_id, $term->parent );
 		$this->assertSame( array(), $conflicts );
+	}
+
+	/**
+	 * Verifies that a description the source cleared is cleared on the
+	 * destination, since a current source sends the empty string.
+	 */
+	public function test_cleared_description_is_propagated(): void {
+		// ARRANGE: An imported term carrying a description.
+		$this->import_terms(
+			array( $this->record( 501, 'News', 'news', 0, 'Description' ) )
+		);
+
+		// ACT: The source clears it.
+		$conflicts = $this->import_terms(
+			array( $this->record( 501, 'News', 'news', 0, '' ) )
+		);
+
+		// ASSERT: The destination description is empty too.
+		$this->assertSame( '', $this->term_by_slug( 'news' )->description );
+		$this->assertSame( array(), $conflicts );
+	}
+
+	/**
+	 * Verifies that a term the source moved to the top level is flattened on
+	 * the destination.
+	 */
+	public function test_source_root_flattens_the_term(): void {
+		// ARRANGE: An imported child term.
+		$this->import_terms(
+			array(
+				$this->record( 500, 'Section', 'section', 0, '', false ),
+				$this->record( 501, 'News', 'news', 500, '' ),
+			)
+		);
+		$this->assertNotSame( 0, $this->term_by_slug( 'news' )->parent );
+
+		// ACT: The source moves it to the top level.
+		$conflicts = $this->import_terms(
+			array( $this->record( 501, 'News', 'news', 0, '' ) )
+		);
+
+		// ASSERT: The destination term is a root, with no conflict recorded.
+		$this->assertSame( 0, $this->term_by_slug( 'news' )->parent );
+		$this->assertSame( array(), $conflicts );
+	}
+
+	/**
+	 * Verifies that a hierarchy the source inverted converges in one import,
+	 * rather than deadlocking on the loop guard.
+	 */
+	public function test_inverted_hierarchy_converges(): void {
+		// ARRANGE: An imported chain of Section, then News beneath it.
+		$this->import_terms(
+			array(
+				$this->record( 500, 'Section', 'section', 0, '', false ),
+				$this->record( 501, 'News', 'news', 500, '' ),
+			)
+		);
+
+		// ACT: The source swaps the two, so News becomes the root.
+		$conflicts = $this->import_terms(
+			array(
+				$this->record( 501, 'News', 'news', 0, '', false ),
+				$this->record( 500, 'Section', 'section', 501, '' ),
+			)
+		);
+
+		// ASSERT: The destination follows the source both ways.
+		$news = $this->term_by_slug( 'news' );
+		$this->assertSame( 0, $news->parent );
+		$this->assertSame(
+			(int) $news->term_id,
+			$this->term_by_slug( 'section' )->parent
+		);
+		$this->assertSame( array(), $conflicts );
+	}
+
+	/**
+	 * Verifies that a backslash in a name or description survives the write and
+	 * is not rewritten by every later import.
+	 */
+	public function test_backslashes_survive_the_write(): void {
+		// ARRANGE: A term whose name and description carry backslashes.
+		$record = $this->record(
+			501,
+			'App\Models',
+			'app-models',
+			0,
+			'Path: C:\builds\out'
+		);
+		$this->import_terms( array( $record ) );
+
+		// ASSERT: Created verbatim.
+		$term = $this->term_by_slug( 'app-models' );
+		$this->assertSame( 'App\Models', $term->name );
+		$this->assertSame( 'Path: C:\builds\out', $term->description );
+
+		// ACT: Re-import the identical record.
+		$this->term_updates = 0;
+		$this->import_terms( array( $record ) );
+
+		// ASSERT: Both fields stand, and the compare converged.
+		$term = $this->term_by_slug( 'app-models' );
+		$this->assertSame( 'App\Models', $term->name );
+		$this->assertSame( 'Path: C:\builds\out', $term->description );
+		$this->assertSame( 0, $this->term_updates );
+	}
+
+	/**
+	 * Verifies that a rename that only changes case is applied, since the
+	 * database name compare that guards it is case-insensitive.
+	 */
+	public function test_case_only_rename_is_applied(): void {
+		// ARRANGE: An imported term.
+		$this->import_terms(
+			array( $this->record( 501, 'News', 'news', 0, '' ) )
+		);
+
+		// ACT: The source upper-cases the name.
+		$conflicts = $this->import_terms(
+			array( $this->record( 501, 'NEWS', 'news', 0, '' ) )
+		);
+
+		// ASSERT: The rename landed, and the term did not block itself.
+		$this->assertSame( 'NEWS', $this->term_by_slug( 'news' )->name );
+		$this->assertSame( array(), $conflicts );
+	}
+
+	/**
+	 * Verifies that a case-only rename onto a name another term holds is still
+	 * refused: The term itself also matches the case-insensitive lookup, so the
+	 * blocker is only visible when the lookup reaches past the first match.
+	 */
+	public function test_case_only_rename_onto_a_taken_name_conflicts(): void {
+		// ARRANGE: An imported tag, and another tag holding the target name in
+		// a different case under its own slug.
+		$this->import_terms(
+			array( $this->record( 501, 'News', 'news', 0, '' ) ),
+			self::SOURCE,
+			'post_tag'
+		);
+		$blocking = wp_insert_term(
+			'NEWS',
+			'post_tag',
+			array( 'slug' => 'news-blocking' )
+		);
+		$this->assertIsArray( $blocking );
+
+		// ACT: The source upper-cases the imported tag's name.
+		$conflicts = $this->import_terms(
+			array( $this->record( 501, 'NEWS', 'news', 0, '' ) ),
+			self::SOURCE,
+			'post_tag'
+		);
+
+		// ASSERT: The name stands and the clash is reported.
+		$this->assertSame(
+			'News',
+			$this->term_by_slug( 'news', 'post_tag' )->name
+		);
+		$this->assertSame( 1, count( $conflicts ) );
+		$this->assertSame( 'name_taken', $conflicts[0]['reason'] );
+	}
+
+	/**
+	 * Verifies that a term core recovers as a pre-existing duplicate is not
+	 * marked as plugin-created, so a later import does not reconcile it.
+	 */
+	public function test_duplicate_recovery_is_not_marked(): void {
+		// ARRANGE: A hand-authored term, with core's late duplicate check
+		// pointed at it to stand in for the insert race it guards.
+		$existing = wp_insert_term(
+			'Hand Written',
+			'category',
+			array( 'slug' => 'hand-written' )
+		);
+		$this->assertIsArray( $existing );
+		$existing_id = (int) $existing['term_id'];
+
+		$duplicate = get_term( $existing_id, 'category' );
+		$this->assertInstanceOf( WP_Term::class, $duplicate );
+		$race = static fn() => $duplicate;
+		add_filter( 'wp_insert_term_duplicate_term_check', $race );
+
+		// ACT: Import a term whose insert core resolves to the existing one.
+		$this->import_terms(
+			array( $this->record( 501, 'News', 'news', 0, 'From source' ) )
+		);
+		remove_filter( 'wp_insert_term_duplicate_term_check', $race );
+
+		// ASSERT: The recovered term carries no origin marker.
+		$this->assertSame( '', $this->origin_marker( $existing_id ) );
+
+		// ACT: Re-import with changed fields, now matched by source identity.
+		$this->import_terms(
+			array( $this->record( 501, 'Renamed', 'news', 0, 'Rewritten' ) )
+		);
+
+		// ASSERT: The hand-authored term is still reused unchanged.
+		$term = get_term( $existing_id, 'category' );
+		$this->assertInstanceOf( WP_Term::class, $term );
+		$this->assertSame( 'Hand Written', $term->name );
+		$this->assertSame( '', $term->description );
 	}
 
 	/**
@@ -404,10 +607,11 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: The source moves the root under its own child.
+		// ACT: The source moves the root under its own child, whose own parent
+		// the payload omits.
 		$conflicts = $this->import_terms(
 			array(
-				$this->record( 501, 'News', 'news', 0, '', false ),
+				$this->record( 501, 'News', 'news', null, '', false ),
 				$this->record( 500, 'Section', 'section', 501, '' ),
 			)
 		);
@@ -538,32 +742,42 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Builds one source term record.
+	 * Builds one source term record. A null parent or description omits the
+	 * key, standing in for a source that does not send it; 0 and the empty
+	 * string are what a current source sends.
 	 *
-	 * @param int    $source_term_id Source term ID.
-	 * @param string $name           Term name.
-	 * @param string $slug           Term slug.
-	 * @param int    $parent_id      Source parent term ID.
-	 * @param string $description    Term description.
-	 * @param bool   $assigned       Whether the post carries the term.
+	 * @param int         $source_term_id Source term ID.
+	 * @param string      $name           Term name.
+	 * @param string      $slug           Term slug.
+	 * @param int|null    $parent_id      Source parent term ID, or null to omit.
+	 * @param string|null $description    Term description, or null to omit.
+	 * @param bool        $assigned       Whether the post carries the term.
 	 * @return array<string, string|int|bool> Source term record.
 	 */
 	private function record(
 		int $source_term_id,
 		string $name,
 		string $slug,
-		int $parent_id,
-		string $description,
+		?int $parent_id,
+		?string $description,
 		bool $assigned = true
 	): array {
-		return array(
+		$record = array(
 			'source_term_id' => $source_term_id,
 			'name'           => $name,
 			'slug'           => $slug,
-			'parent'         => $parent_id,
-			'description'    => $description,
 			'assigned'       => $assigned,
 		);
+
+		if ( null !== $parent_id ) {
+			$record['parent'] = $parent_id;
+		}
+
+		if ( null !== $description ) {
+			$record['description'] = $description;
+		}
+
+		return $record;
 	}
 
 	/**
