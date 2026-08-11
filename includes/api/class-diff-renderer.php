@@ -876,7 +876,10 @@ final class Diff_Renderer {
 			return '';
 		}
 
-		$notes = $this->build_term_notes( $plans, $this->local_term_ids( $local ) );
+		$notes = array_merge(
+			$this->build_term_notes( $plans, $this->local_term_ids( $local ) ),
+			$this->unregistered_taxonomy_notes( $records )
+		);
 
 		return $html . $this->build_term_notes_html( $notes );
 	}
@@ -1216,6 +1219,34 @@ final class Diff_Renderer {
 			__( '%s not updated on import', 'safe-publish' ),
 			$label
 		);
+	}
+
+	/**
+	 * Lists a note for every payload taxonomy the destination does not
+	 * register and the import skips whole.
+	 *
+	 * @param array $records Source term records by taxonomy.
+	 *
+	 * @return string[] Note lines.
+	 */
+	private function unregistered_taxonomy_notes( array $records ): array {
+		$notes = array();
+
+		foreach ( array_keys( $records ) as $taxonomy ) {
+			// Matches the slug the import checks.
+			$tax = sanitize_key( (string) $taxonomy );
+
+			if ( '' === $tax || taxonomy_exists( $tax ) ) {
+				continue;
+			}
+
+			$notes[] = $tax . ': ' . __(
+				'not imported — taxonomy not registered',
+				'safe-publish'
+			);
+		}
+
+		return $notes;
 	}
 
 	/**

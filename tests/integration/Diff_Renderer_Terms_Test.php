@@ -563,6 +563,36 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that an incoming taxonomy the destination does not register
+	 * still shows, annotated as one the import will not apply.
+	 */
+	public function test_unregistered_incoming_taxonomy_is_annotated(): void {
+		// ARRANGE: An imported category the source matches.
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) )
+		);
+
+		// ACT: The source also sends a taxonomy this site does not register.
+		$html = $this->render_term_map(
+			array(
+				'category'    => array(
+					$this->record( 101, 'News', 'news', 0, 'Desk' ),
+				),
+				'nowhere_tax' => array(
+					$this->record( 900, 'Ghost', 'ghost', 0, '' ),
+				),
+			)
+		);
+
+		// ASSERT: Its term shows, annotated by taxonomy.
+		$this->assertStringContainsString( 'Ghost', $html );
+		$this->assertSame(
+			array( 'nowhere_tax: not imported — taxonomy not registered' ),
+			$this->notes( $html )
+		);
+	}
+
+	/**
 	 * Renders the diff and returns its taxonomies section.
 	 *
 	 * @param array $categories Source category records.
