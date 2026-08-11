@@ -853,6 +853,8 @@ final class Diff_Renderer {
 			);
 		}
 
+		$records = $this->drop_empty_unregistered_taxonomies( $records );
+
 		$local = array_intersect_key(
 			$current['term_objects'] ?? array(),
 			$records
@@ -882,6 +884,24 @@ final class Diff_Renderer {
 		);
 
 		return $html . $this->build_term_notes_html( $notes );
+	}
+
+	/**
+	 * Drops a payload taxonomy the destination does not register and the
+	 * source sent empty, which the import neither attaches nor reports.
+	 *
+	 * @param array $records Source term records by taxonomy.
+	 *
+	 * @return array Records left to compare.
+	 */
+	private function drop_empty_unregistered_taxonomies( array $records ): array {
+		return array_filter(
+			$records,
+			static fn( mixed $items, string|int $taxonomy ): bool =>
+				array() !== $items
+				|| taxonomy_exists( sanitize_key( (string) $taxonomy ) ),
+			ARRAY_FILTER_USE_BOTH
+		);
 	}
 
 	/**

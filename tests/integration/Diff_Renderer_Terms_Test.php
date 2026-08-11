@@ -593,6 +593,30 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that an unregistered taxonomy the source sent empty is left out
+	 * entirely, since the import neither attaches nor reports it.
+	 */
+	public function test_empty_unregistered_taxonomy_is_left_out(): void {
+		// ARRANGE: An imported category the source matches.
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) )
+		);
+
+		// ACT: The source also sends an unregistered taxonomy with no terms.
+		$html = $this->render_term_map(
+			array(
+				'category'    => array(
+					$this->record( 101, 'News', 'news', 0, 'Desk' ),
+				),
+				'nowhere_tax' => array(),
+			)
+		);
+
+		// ASSERT: Nothing differs, so the section is omitted.
+		$this->assertSame( '', $html );
+	}
+
+	/**
 	 * Renders the diff and returns its taxonomies section.
 	 *
 	 * @param array $categories Source category records.
