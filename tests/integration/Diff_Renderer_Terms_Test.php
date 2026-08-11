@@ -213,7 +213,8 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 			array( $this->record( 101, 'News', 'news', 0, '' ) )
 		);
 
-		// ASSERT: The difference shows, with no note, as the import applies it.
+		// ASSERT: The lost description shows, unannotated, as the import clears it.
+		$this->assertStringContainsString( 'News (category) description', $html );
 		$this->assertStringContainsString( 'Desk', $html );
 		$this->assertSame( array(), $this->notes( $html ) );
 	}
@@ -236,8 +237,8 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 			array( $this->record( 101, 'News', 'news', 0, '' ) )
 		);
 
-		// ASSERT: The dropped parent shows, with no note, as the import applies
-		// it.
+		// ASSERT: The lost parent shows, unannotated, as the import flattens it.
+		$this->assertStringContainsString( 'News (category) parent', $html );
 		$this->assertStringContainsString( 'Politics', $html );
 		$this->assertSame( array(), $this->notes( $html ) );
 	}
