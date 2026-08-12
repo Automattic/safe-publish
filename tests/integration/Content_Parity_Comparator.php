@@ -524,10 +524,13 @@ final class Content_Parity_Comparator {
 	}
 
 	/**
-	 * Returns a block's attributes without the two the importer rewrites by
-	 * design, sorted so a reordered key does not fail the compare. Both are
-	 * asserted elsewhere: id by assert_attachment_id_parity(), url by
-	 * assert_url_parity() and assert_embed_url_parity().
+	 * Returns a block's attributes without the two the importer rewrites, sorted
+	 * so a reordered key does not fail the compare. id is covered by
+	 * assert_attachment_id_parity(); url by assert_embed_url_parity() on an
+	 * embed, and has no source counterpart on a media block.
+	 *
+	 * mediaId, href, and gallery ids are rewritten too but stay in the compare:
+	 * Unseeded today, and covered by nothing else.
 	 *
 	 * @param array<string, mixed> $block Parsed block.
 	 * @return array<string, mixed> Comparable attributes.
