@@ -3828,4 +3828,93 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		$this->assertNotNull( $post );
 		$this->assertSame( '', $post->post_title );
 	}
+
+	/**
+	 * Verifies that backslashes survive the write on both the create and the
+	 * update path, and that a re-import does not strip them progressively.
+	 *
+	 * Covers the block attribute case too: Core escapes a quote or a non-ASCII
+	 * character in an attribute as \uXXXX, so an unslashed write turns the
+	 * value into literal "u0022" text without breaking the JSON.
+	 */
+	public function test_backslashes_survive_the_write(): void {
+		// ARRANGE: A source post whose title, excerpt, content, meta, and one
+		// block attribute all carry backslashes.
+		$title    = 'Windows path A\B';
+		$excerpt  = 'Backslash sample: C:\builds\out.';
+		$content  = '<!-- wp:paragraph '
+			. '{"metadata":{"name":"Caf\u00e9 \u0022notes\u0022"}} -->' . "\n"
+			. '<p>namespace App\Models; $re = "\d+";</p>' . "\n"
+			. '<!-- /wp:paragraph -->';
+		$meta     = array( 'custom_field' => 'C:\builds\out' );
+		$expected = array( $title, $excerpt, $content );
+
+		$this->mock_post_overrides = array(
+			'title'   => $title,
+			'excerpt' => $excerpt,
+			'content' => $content,
+			'meta'    => $meta,
+		);
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+
+		$post_data = array(
+			'id'        => 9600,
+			'title'     => $title,
+			'link'      => 'https://source.example.com/backslashes',
+			'post_type' => 'posts',
+			'meta'      => $meta,
+		);
+
+		// ACT: Import the post, creating it.
+		$created = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Every field is stored byte for byte.
+		$this->assertTrue( $created['success'], 'Create import should succeed.' );
+		$post_id = $created['post_id'];
+		$this->assertSame( $expected, $this->stored_fields( $post_id ) );
+		$this->assertSame(
+			$meta['custom_field'],
+			get_post_meta( $post_id, 'custom_field', true )
+		);
+
+		// ASSERT: The block attribute decodes to its real value.
+		$blocks = parse_blocks( (string) get_post_field( 'post_content', $post_id ) );
+		$this->assertSame(
+			'Café "notes"',
+			$blocks[0]['attrs']['metadata']['name']
+		);
+
+		// ACT: Re-import the identical payload, hitting the update path.
+		$updated = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: The update succeeds and nothing was stripped a second time.
+		$this->assertTrue( $updated['success'], 'Update import should succeed.' );
+		$this->assertSame( $post_id, $updated['post_id'] );
+		$this->assertSame( $expected, $this->stored_fields( $post_id ) );
+		$this->assertSame(
+			$meta['custom_field'],
+			get_post_meta( $post_id, 'custom_field', true )
+		);
+	}
+
+	/**
+	 * Reads the stored title, excerpt, and content of a post.
+	 *
+	 * @param int $post_id Destination post ID.
+	 * @return list<string> Title, excerpt, and content, in that order.
+	 */
+	private function stored_fields( int $post_id ): array {
+		$post = get_post( $post_id );
+		$this->assertNotNull( $post );
+
+		return array(
+			$post->post_title,
+			$post->post_excerpt,
+			$post->post_content,
+		);
+	}
 }
