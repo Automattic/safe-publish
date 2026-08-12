@@ -117,7 +117,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 				'Response too large.'
 			);
 		};
-		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
 
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
@@ -169,7 +168,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$make_request = static function ( $_url, $_action, $_credentials ) use ( $upstream_message ) {
 			return new WP_Error( 'http_request_failed', $upstream_message );
 		};
-		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
 
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
@@ -237,7 +235,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 				),
 			);
 		};
-		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
 
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
@@ -369,7 +366,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		};
 
 		// Set required options.
-		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
 
 		// Create request.
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
@@ -474,10 +470,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			);
 		};
 
-		update_option(
-			'safe_publish_connected_site_url',
-			'https://example.com'
-		);
 
 		$request = new WP_REST_Request(
 			'POST',
@@ -546,10 +538,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			'https://example.com'
 		);
 
-		update_option(
-			'safe_publish_connected_site_url',
-			'https://example.com'
-		);
 
 		// Record requested URLs to prove the source post is addressed by
 		// rest_base (sp_movies), not the slug (sp_movie).
@@ -787,7 +775,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			'Fixture should be private before exercising the endpoint'
 		);
 		wp_set_current_user( $this->admin_user_id );
-		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
 
 		$stub_source_fetch = static fn() => array(
 			'response' => array( 'code' => 200 ),
@@ -881,10 +868,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			);
 		};
 
-		update_option(
-			'safe_publish_connected_site_url',
-			'https://example.com'
-		);
 
 		$request = new WP_REST_Request(
 			'POST',
