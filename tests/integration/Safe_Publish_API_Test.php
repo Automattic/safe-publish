@@ -667,6 +667,62 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that with no source connected the diff-preview endpoint names the
+	 * missing connection instead of reporting the imported post as unmatched.
+	 */
+	public function test_diff_preview_endpoint_reports_missing_connection(): void {
+		// ARRANGE: An imported post the fixture tagged, then the connection is
+		// cleared.
+		wp_set_current_user( $this->admin_user_id );
+		delete_option( 'safe_publish_connected_site_url' );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'content', wp_json_encode( array( 'title' => 'New Title' ) ) );
+		$request->set_param( 'postType', 'post' );
+
+		// ACT: Dispatch through REST server.
+		$response = $this->server->dispatch( $request );
+
+		// ASSERT: The refusal points at the settings page rather than claiming
+		// the post is not imported.
+		$this->assertInstanceOf( WP_REST_Response::class, $response );
+		$this->assertSame( 500, $response->get_status() );
+		$data = $response->get_data();
+		$this->assertSame( 'no_connected_site_url', $data['code'] );
+		$this->assertStringContainsString(
+			'settings page',
+			strtolower( (string) $data['message'] )
+		);
+	}
+
+	/**
+	 * Verifies that a connected site URL with no parseable identity is refused
+	 * like a missing connection, rather than resolving nothing downstream.
+	 */
+	public function test_diff_preview_endpoint_reports_unparseable_connection(): void {
+		// ARRANGE: A connection saved without a scheme.
+		wp_set_current_user( $this->admin_user_id );
+		update_option( 'safe_publish_connected_site_url', 'example.com/blog' );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'content', wp_json_encode( array( 'title' => 'New Title' ) ) );
+		$request->set_param( 'postType', 'post' );
+
+		// ACT: Dispatch through REST server.
+		$response = $this->server->dispatch( $request );
+
+		// ASSERT: Same refusal as an unset connection.
+		$this->assertInstanceOf( WP_REST_Response::class, $response );
+		$this->assertSame( 500, $response->get_status() );
+		$this->assertSame(
+			'no_connected_site_url',
+			$response->get_data()['code']
+		);
+	}
+
+	/**
 	 * Verifies that the diff-preview endpoint returns 403 when no local post
 	 * matches the source post ID, and the user lacks the edit_others_posts capability.
 	 */
