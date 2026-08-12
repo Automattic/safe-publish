@@ -626,6 +626,95 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that Remove cannot delete another source's orphan failure, the
+	 * row id being the only handle a stale listing has on one.
+	 */
+	public function test_remove_by_item_id_leaves_another_source_intact(): void {
+		// ARRANGE: An orphan failure recorded under a previous source.
+		$item_id = $this->seed_failure(
+			$this->create_session( self::OTHER_SOURCE ),
+			null,
+			'Prior source orphan'
+		);
+
+		// ACT: Remove it by row id, as a stale tab would.
+		$response = $this->remove_failures( array( $item_id ), array() );
+
+		// ASSERT: Nothing is deleted and the row survives for a reconnect.
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 0, $response['data']['deleted'] );
+		$this->assertSame(
+			1,
+			$this->history->count_failures( self::OTHER_SOURCE )
+		);
+	}
+
+	/**
+	 * Verifies that Ignore cannot flag another source's orphan failure, which
+	 * routes by row id for the same reason Remove does.
+	 */
+	public function test_ignore_by_item_id_leaves_another_source_open(): void {
+		// ARRANGE: An orphan failure recorded under a previous source.
+		$item_id = $this->seed_failure(
+			$this->create_session( self::OTHER_SOURCE ),
+			null,
+			'Prior source orphan'
+		);
+
+		// ACT: Ignore it by row id, as a stale tab would.
+		$response = $this->set_ignored(
+			array(
+				array(
+					'kind'           => 'failure',
+					'item_id'        => $item_id,
+					'source_post_id' => 0,
+				),
+			),
+			true
+		);
+
+		// ASSERT: Nothing is flagged and the row stays in the other source's
+		// open set.
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 0, $response['data']['updated'] );
+		$this->assertSame(
+			1,
+			$this->history->count_failures( self::OTHER_SOURCE )
+		);
+		$this->assertSame(
+			0,
+			$this->history->count_failures( self::OTHER_SOURCE, true )
+		);
+	}
+
+	/**
+	 * Verifies that changing the connection hides a source's rows and
+	 * reconnecting brings them back, the round trip the docs promise.
+	 */
+	public function test_reconnecting_a_source_restores_its_rows(): void {
+		// ARRANGE: A failure and a degradation for the connected source.
+		$this->seed_failure( $this->create_session(), 500, 'Broken import' );
+		$this->open_degradation( self::factory()->post->create(), 8300 );
+
+		// ACT: List the inbox, switch the connection away, and reconnect.
+		$connected = $this->list_needs_attention();
+		update_option( Options::OPTION_CONNECTED_SITE_URL, self::OTHER_SOURCE );
+		$switched = $this->list_needs_attention();
+		update_option( Options::OPTION_CONNECTED_SITE_URL, self::SOURCE );
+		$restored = $this->list_needs_attention();
+
+		// ASSERT: Both rows leave the inbox and the badge, then return.
+		$this->assertCount( 2, $connected['data']['items'] );
+		$this->assertCount( 0, $switched['data']['items'] );
+		$this->assertSame( 0, $switched['data']['needs_attention_count'] );
+		$this->assertSame(
+			array( 'failure', 'degradation' ),
+			array_column( $restored['data']['items'], 'kind' )
+		);
+		$this->assertSame( 2, $restored['data']['needs_attention_count'] );
+	}
+
+	/**
 	 * Short-circuits every HTTP request with an empty catalog page.
 	 *
 	 * @param false|array|WP_Error $_preempt Filtered short-circuit value.
