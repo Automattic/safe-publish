@@ -18,9 +18,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Persistent admin notice surfaced after a bulk import completes.
  *
  * Stores a per-user transient with the just-finished session's id and counts,
- * then renders a notice on subsequent admin page loads with a deep-link into
- * the Manage page filtered to that session. Dismiss is best-effort (the X is
- * native WP behavior plus an AJAX cleanup).
+ * then renders an outcome-styled notice on subsequent plugin page loads,
+ * linking to the Needs attention inbox when nothing succeeded and to the
+ * up-to-date imports otherwise. Dismiss is best-effort (the X is native WP
+ * behavior plus an AJAX cleanup).
  */
 final class Post_Import_Notice {
 
@@ -105,19 +106,13 @@ final class Post_Import_Notice {
 			return;
 		}
 
-		// Auto-dismiss once the user reaches the Manage page.
-		if ( 'toplevel_page_safe-publish' === $screen->id ) {
-			delete_transient( self::transient_key( $user_id ) );
-			return;
-		}
-
 		$session_id = (int) $data['session_id'];
 		$total      = (int) ( $data['total'] ?? 0 );
 		$successful = (int) ( $data['successful'] ?? 0 );
 		$failed     = (int) ( $data['failed'] ?? 0 );
 
 		// Route to the Needs attention inbox when nothing succeeded — the
-		// Imported view would be empty.
+		// Up to date view would be empty.
 		$failures_only = 0 === $successful && $failed > 0;
 
 		$link = $failures_only
@@ -141,6 +136,16 @@ final class Post_Import_Notice {
 			? __( 'View failures', 'safe-publish' )
 			: __( 'View imports', 'safe-publish' );
 
+		$severity = 'notice-info';
+		if ( $failures_only ) {
+			$severity = 'notice-error';
+		} elseif ( $failed > 0 ) {
+			$severity = 'notice-warning';
+		}
+
+		$classes = 'notice ' . $severity
+			. ' is-dismissible safe-publish-post-import-notice';
+
 		$message = sprintf(
 			/* translators: 1: successful count, 2: total count */
 			__( 'Last import: %1$d of %2$d posts imported.', 'safe-publish' ),
@@ -160,7 +165,7 @@ final class Post_Import_Notice {
 
 		?>
 		<div
-			class="notice notice-info is-dismissible safe-publish-post-import-notice"
+			class="<?php echo esc_attr( $classes ); ?>"
 			data-safe-publish-nonce="<?php echo esc_attr( $nonce ); ?>"
 		>
 			<p>
