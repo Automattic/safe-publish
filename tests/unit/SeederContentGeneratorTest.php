@@ -357,7 +357,8 @@ class SeederContentGeneratorTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that the excerpt encodes type and index.
+	 * Verifies that the excerpt encodes type and index, and carries a
+	 * backslash sample.
 	 */
 	public function test_excerpt_format(): void {
 		// ARRANGE: A post generator.
@@ -368,7 +369,7 @@ class SeederContentGeneratorTest extends TestCase {
 
 		// ASSERT: Standard sentence form.
 		$this->assertSame(
-			'Excerpt for seeded post number 12.',
+			'Excerpt for seeded post number 12. Backslash sample: C:\builds\out.',
 			$excerpt
 		);
 	}
