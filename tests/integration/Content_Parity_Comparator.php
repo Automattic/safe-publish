@@ -529,8 +529,8 @@ final class Content_Parity_Comparator {
 	 * assert_attachment_id_parity(); url by assert_embed_url_parity() on an
 	 * embed, and has no source counterpart on a media block.
 	 *
-	 * mediaId, href, and gallery ids are rewritten too but stay in the compare:
-	 * Unseeded today, and covered by nothing else.
+	 * The mediaId, href, and gallery ids are rewritten too but stay in the
+	 * compare: Unseeded today, and covered by nothing else.
 	 *
 	 * @param array<string, mixed> $block Parsed block.
 	 * @return array<string, mixed> Comparable attributes.
