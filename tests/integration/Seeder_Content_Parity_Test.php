@@ -572,6 +572,31 @@ class Seeder_Content_Parity_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that every imported post carries the source block attribute
+	 * values, apart from the id and url the importer rewrites.
+	 */
+	public function test_block_attribute_parity(): void {
+		// ARRANGE + ACT: Batch already imported.
+		$compared = 0;
+
+		// ASSERT: Each dest post's block attributes match source.
+		foreach ( self::$fixture->dest_post_ids as $source_id => $dest_id ) {
+			$compared += Content_Parity_Comparator::assert_block_attribute_parity(
+				$this->source_content( $source_id ),
+				(string) get_post( $dest_id )->post_content,
+				$this
+			);
+		}
+
+		// ASSERT: Attributes were actually compared, so the loop was not vacuous.
+		$this->assertGreaterThan(
+			0,
+			$compared,
+			'Batch should seed blocks carrying attributes to verify'
+		);
+	}
+
+	/**
 	 * Verifies caption-shortcode parity for every imported post: Dest preserves
 	 * the source caption count, keeps the tags balanced, and carries identical
 	 * non-id attributes.

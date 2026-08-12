@@ -18,9 +18,9 @@ use WP_HTML_Tag_Processor;
  * Companion to Post_Parity_Asserter: post_content can't be checked with
  * assertSame() because the importer rewrites every media URL and Gutenberg
  * attachment-ID reference. Positive checks lock the rewrites; reverse
- * assertions lock documented gaps and safety invariants. Block-structural and
- * shortcode parity are checked structurally (names, balance, attributes), not
- * for per-block semantic equivalence.
+ * assertions lock documented gaps and safety invariants. Block names, balance,
+ * and attribute values are all compared, the values verbatim apart from the id
+ * and url the importer rewrites; per-block semantic equivalence is not.
  *
  * Out of scope: Block-gallery `attrs.ids` and `data-id` (not seeded today),
  * per-block semantic equivalence.
@@ -439,6 +439,110 @@ final class Content_Parity_Comparator {
 				"Dest shortcode id {$dest_id} must be a local attachment"
 			);
 		}
+	}
+
+	/**
+	 * Asserts that every block attribute survives the import verbatim, walking
+	 * source and dest in parallel.
+	 *
+	 * The delimiter stores attributes as JSON, where core escapes a quote or a
+	 * non-ASCII character as \uXXXX. A degraded value stays valid JSON, so no
+	 * structural assertion catches it.
+	 *
+	 * @param string   $source_content Source post_content.
+	 * @param string   $dest_content   Imported dest post_content.
+	 * @param TestCase $test           Active test case.
+	 * @return int Blocks that carried a comparable attribute, for the caller's
+	 *             vacuous-pass guard.
+	 */
+	public static function assert_block_attribute_parity(
+		string $source_content,
+		string $dest_content,
+		TestCase $test
+	): int {
+		if ( '' === trim( $source_content ) ) {
+			return 0;
+		}
+
+		return self::assert_attrs_match(
+			parse_blocks( $source_content ),
+			parse_blocks( $dest_content ),
+			$test
+		);
+	}
+
+	/**
+	 * Compares one level of two parsed block trees, then recurses.
+	 *
+	 * @param array<array-key, array<string, mixed>> $source_blocks Source level.
+	 * @param array<array-key, array<string, mixed>> $dest_blocks   Dest level.
+	 * @param TestCase                               $test          Active test case.
+	 * @return int Blocks that carried a comparable attribute.
+	 */
+	private static function assert_attrs_match(
+		array $source_blocks,
+		array $dest_blocks,
+		TestCase $test
+	): int {
+		$compared = 0;
+
+		$test->assertCount(
+			count( $source_blocks ),
+			$dest_blocks,
+			'Dest must carry the same block count as source at each level'
+		);
+
+		foreach ( $source_blocks as $index => $source_block ) {
+			$dest_block   = $dest_blocks[ $index ];
+			$name         = $source_block['blockName'] ?? null;
+			$source_attrs = self::comparable_attrs( $source_block );
+			$compared    += array() === $source_attrs ? 0 : 1;
+
+			$test->assertSame(
+				$name,
+				$dest_block['blockName'] ?? null,
+				'Dest must carry the source blocks in order'
+			);
+
+			$test->assertSame(
+				$source_attrs,
+				self::comparable_attrs( $dest_block ),
+				sprintf(
+					'Block %s must keep its source attribute values',
+					is_string( $name ) && '' !== $name ? $name : 'freeform'
+				)
+			);
+
+			$compared += self::assert_attrs_match(
+				$source_block['innerBlocks'] ?? array(),
+				$dest_block['innerBlocks'] ?? array(),
+				$test
+			);
+		}
+
+		return $compared;
+	}
+
+	/**
+	 * Returns a block's attributes without the two the importer rewrites by
+	 * design, sorted so a reordered key does not fail the compare. Both are
+	 * asserted elsewhere: id by assert_attachment_id_parity(), url by
+	 * assert_url_parity() and assert_embed_url_parity().
+	 *
+	 * @param array<string, mixed> $block Parsed block.
+	 * @return array<string, mixed> Comparable attributes.
+	 */
+	private static function comparable_attrs( array $block ): array {
+		$attrs = $block['attrs'] ?? array();
+
+		if ( ! is_array( $attrs ) ) {
+			return array();
+		}
+
+		unset( $attrs['id'], $attrs['url'] );
+		ksort( $attrs );
+
+		return $attrs;
 	}
 
 	/**
