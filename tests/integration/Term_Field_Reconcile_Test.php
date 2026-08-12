@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\API\Meta_Terms_Manager;
+use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\Utils\Options;
 use WP_Error;
 use WP_Term;
@@ -323,6 +324,51 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: The description and the parent both stand.
+		$term = $this->term_by_slug( 'news' );
+		$this->assertSame( 'Description', $term->description );
+		$this->assertSame( $parent_id, $term->parent );
+		$this->assertSame( array(), $conflicts );
+	}
+
+	/**
+	 * Verifies that the embedded fallback, which an older source's payload
+	 * reaches the reconcile through, carries neither field. It is what puts a
+	 * record that omits them in front of the reconcile.
+	 */
+	public function test_embedded_fallback_omits_both_fields(): void {
+		// ARRANGE: An imported child term with a description.
+		$this->import_terms(
+			array(
+				$this->record( 500, 'Section', 'section', 0, '', false ),
+				$this->record( 501, 'News', 'news', 500, 'Description' ),
+			)
+		);
+		$parent_id = (int) $this->term_by_slug( 'section' )->term_id;
+
+		// ACT: Re-import the term as the embedded payload extracts it.
+		$terms = Source_Posts_API::extract_embedded_terms(
+			array(
+				'_embedded' => array(
+					'wp:term' => array(
+						array(
+							array(
+								'id'       => 501,
+								'name'     => 'News',
+								'slug'     => 'news',
+								'taxonomy' => 'category',
+							),
+						),
+					),
+				),
+			)
+		);
+
+		$conflicts = $this->import_terms( $terms['category'] );
+
+		// ASSERT: Neither key is extracted, so both destination values stand.
+		$this->assertArrayNotHasKey( 'parent', $terms['category'][0] );
+		$this->assertArrayNotHasKey( 'description', $terms['category'][0] );
+
 		$term = $this->term_by_slug( 'news' );
 		$this->assertSame( 'Description', $term->description );
 		$this->assertSame( $parent_id, $term->parent );
