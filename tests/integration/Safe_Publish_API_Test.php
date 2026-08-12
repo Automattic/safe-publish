@@ -667,6 +667,45 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the diff-preview endpoint returns the source failure under
+	 * WordPress' error shape, so the reason reaches the client instead of a
+	 * body it can read no message from.
+	 */
+	public function test_diff_preview_endpoint_surfaces_the_source_failure_reason(): void {
+		// ARRANGE: Every source request fails with a specific transport error.
+		wp_set_current_user( $this->admin_user_id );
+
+		$upstream_message = 'cURL error 7: Failed to connect to source host.';
+		$failing_request  = static fn() => new WP_Error(
+			'http_request_failed',
+			$upstream_message
+		);
+		add_filter( 'pre_http_request', $failing_request );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+
+		try {
+			// ACT: Dispatch through REST server.
+			$response = $this->server->dispatch( $request );
+
+			// ASSERT: The body carries the code and the upstream reason.
+			$this->assertInstanceOf( WP_REST_Response::class, $response );
+			$this->assertSame( 500, $response->get_status() );
+
+			$data = $response->get_data();
+			$this->assertSame( 'source_fetch_failed', $data['code'] );
+			$this->assertStringContainsString(
+				$upstream_message,
+				(string) $data['message']
+			);
+		} finally {
+			remove_filter( 'pre_http_request', $failing_request );
+		}
+	}
+
+	/**
 	 * Verifies that with no source connected the diff-preview endpoint names the
 	 * missing connection instead of reporting the imported post as unmatched.
 	 */

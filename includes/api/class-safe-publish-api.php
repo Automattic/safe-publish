@@ -14,7 +14,6 @@ use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use WP_Error;
 use WP_REST_Request;
-use WP_REST_Response;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -157,22 +156,13 @@ final class Safe_Publish_API extends REST_Base {
 	 *
 	 * @param WP_REST_Request $req REST request object.
 	 *
-	 * @return array|WP_REST_Response Array on success, WP_REST_Response with error on failure.
+	 * @return array|WP_Error Diff payload, or the renderer's error.
 	 */
-	public function render_diff( WP_REST_Request $req ): array|WP_REST_Response {
-		$result = $this->diff_renderer->render_diff(
+	public function render_diff( WP_REST_Request $req ): array|WP_Error {
+		return $this->diff_renderer->render_diff(
 			$req,
 			array( $this, 'make_request' ),
 			Auth_Credential_Provider::get_credentials()
 		);
-
-		if ( is_wp_error( $result ) ) {
-			return new WP_REST_Response(
-				array( 'error' => $result->get_error_message() ),
-				$result->get_error_data()['status'] ?? 500
-			);
-		}
-
-		return $result;
 	}
 }
