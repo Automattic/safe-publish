@@ -40,7 +40,7 @@ Update, Delete, and Rollback support bulk selection; Diff is single-row only. Ro
 
 The page exposes the DataViews built-in search and filter chips: title search, Local Status (multi-select), Type (multi-select). Filtering is server-side over the full dataset, so a search applies to every imported post, not just the current page.
 
-The selected session does not appear as a filter — sessions are an internal grouping concept, not a UI noun. The post-import notice deep-links into a session-filtered view via `?batch=N`, surfaced as a contextual pill the operator can clear.
+The selected session does not appear as a filter — sessions are an internal grouping concept, not a UI noun.
 
 ## Needs attention tab
 
@@ -77,11 +77,13 @@ Removing a failure only deletes its record; it has no effect on the source. Reco
 
 ## Post-import notice
 
-After a bulk import completes, an admin notice surfaces a deep-link to the just-finished batch:
+After a bulk import completes, an admin notice summarizes the batch on the next Safe Publish page load:
 
 > Last import: 47 of 50 posts imported. 3 failed. **View imports**
 
-The link opens the Imports → Posts tab with `?batch=N` applied as a contextual filter. The pill above the listing identifies the active batch and offers a Clear action that drops the filter and the URL parameter.
+Severity tracks the outcome: error when nothing succeeded, warning when successes and failures were mixed, informational when every post imported.
+
+When nothing succeeded the link reads **View failures** and opens the Needs attention tab, since the Posts tab would have nothing to show. Otherwise it opens the Posts tab filtered to Up to date.
 
 The notice persists for one hour or until the operator dismisses it.
 
