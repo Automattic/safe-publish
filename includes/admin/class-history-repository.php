@@ -531,10 +531,17 @@ final class History_Repository {
 	 * Bulk variant of get_active_item_for_source(): One query per page
 	 * instead of N. Backed by the (source_post_id, import_date_gmt) index.
 	 *
-	 * @param int[] $source_ids Source post IDs to look up.
+	 * Scoping restricts the dedup subquery to the same source too, so another
+	 * source's newer success can't hide this source's active row.
+	 *
+	 * @param int[]       $source_ids      Source post IDs to look up.
+	 * @param string|null $source_site_url Source identity to scope to; null matches any source.
 	 * @return array<int, array> Map of source_post_id → latest non-error row.
 	 */
-	public function get_active_items_by_source_ids( array $source_ids ): array {
+	public function get_active_items_by_source_ids(
+		array $source_ids,
+		?string $source_site_url
+	): array {
 		if ( 0 === count( $source_ids ) ) {
 			return array();
 		}
@@ -544,25 +551,38 @@ final class History_Repository {
 		$table        = Import_Items_Table::table_name();
 		$placeholders = implode( ', ', array_fill( 0, count( $source_ids ), '%d' ) );
 		$values       = array_values( $source_ids );
+		$s1_join      = '';
+		$s1_scope     = '';
+		$s2_join      = '';
+		$s2_scope     = '';
+
+		if ( null !== $source_site_url ) {
+			$imports  = Imports_Table::table_name();
+			$s1_join  = " INNER JOIN `{$imports}` s1 ON s1.id = t1.session_id";
+			$s1_scope = ' AND s1.source_site_url = %s';
+			$s2_join  = " INNER JOIN `{$imports}` s2 ON s2.id = t2.session_id";
+			$s2_scope = ' AND s2.source_site_url = s1.source_site_url';
+			$values[] = $source_site_url;
+		}
 
 		// NOT EXISTS picks the latest non-error row per source (ties broken by
 		// id); a newer error can't mask it. Served by source_post_id_import_date.
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$sql = "SELECT t1.* FROM `{$table}` t1{$s1_join}"
+			. " WHERE t1.source_post_id IN ({$placeholders})"
+			. " AND t1.status IN ( 'success', 'updated' ){$s1_scope}"
+			. " AND NOT EXISTS ( SELECT 1 FROM `{$table}` t2{$s2_join}"
+			. ' WHERE t2.source_post_id = t1.source_post_id'
+			. " AND t2.status IN ( 'success', 'updated' ){$s2_scope}"
+			. ' AND ( t2.import_date_gmt > t1.import_date_gmt'
+			. ' OR ( t2.import_date_gmt = t1.import_date_gmt'
+			. ' AND t2.id > t1.id ) ) )';
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT t1.* FROM `{$table}` t1"
-					. " WHERE t1.source_post_id IN ({$placeholders})"
-					. " AND t1.status IN ( 'success', 'updated' )"
-					. " AND NOT EXISTS ( SELECT 1 FROM `{$table}` t2"
-					. ' WHERE t2.source_post_id = t1.source_post_id'
-					. " AND t2.status IN ( 'success', 'updated' )"
-					. ' AND ( t2.import_date_gmt > t1.import_date_gmt'
-					. ' OR ( t2.import_date_gmt = t1.import_date_gmt AND t2.id > t1.id ) ) )',
-				...$values
-			),
+			$wpdb->prepare( $sql, ...$values ),
 			ARRAY_A
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
 		$by_source = array();
 		foreach ( is_array( $rows ) ? $rows : array() as $row ) {
@@ -769,41 +789,51 @@ final class History_Repository {
 
 	/**
 	 * WHERE fragment (alias it) selecting the inbox's failure rows: Any error
-	 * whose most recent row for its source is still an error. Orphans (no
-	 * source_post_id) always qualify; a later success drops a source.
+	 * with no later row for the same source post on the same source site.
+	 * Orphans (no source_post_id) always qualify.
 	 *
 	 * The ignored_gmt column is NULL for an open failure and set once ignored;
 	 * $ignored=true selects the ignored set instead of the open one.
+	 *
+	 * Carries one %s placeholder: callers join the imports table as alias s and
+	 * pass $source_site_url first to prepare().
 	 *
 	 * @param bool $ignored Select ignored rows instead of open ones.
 	 * @return string WHERE fragment.
 	 */
 	private function failures_where_sql( bool $ignored ): string {
-		$items_table = Import_Items_Table::table_name();
-		$ignore_sql  = $ignored
+		$items_table   = Import_Items_Table::table_name();
+		$imports_table = Imports_Table::table_name();
+		$ignore_sql    = $ignored
 			? 'it.ignored_gmt IS NOT NULL'
 			: 'it.ignored_gmt IS NULL';
 
 		return "it.status = 'error' AND {$ignore_sql}"
+			. ' AND s.source_site_url = %s'
 			. ' AND ( it.source_post_id IS NULL'
 			. " OR NOT EXISTS ( SELECT 1 FROM `{$items_table}` t2"
+			. " INNER JOIN `{$imports_table}` s2 ON s2.id = t2.session_id"
 			. ' WHERE t2.source_post_id = it.source_post_id'
+			. ' AND s2.source_site_url = s.source_site_url'
 			. ' AND ( t2.import_date_gmt > it.import_date_gmt'
 			. ' OR ( t2.import_date_gmt = it.import_date_gmt'
 			. ' AND t2.id > it.id ) ) ) )';
 	}
 
 	/**
-	 * Lists failure rows for the Needs attention inbox. Orphans are listed
-	 * individually; source-linked errors are deduped to the latest attempt.
-	 * Joined to the sessions table so each row carries source_site_url.
+	 * Lists one source's failure rows for the Needs attention inbox. Orphans
+	 * are listed individually; source-linked errors are deduped to the latest
+	 * attempt. An empty $source_site_url matches only sessions recorded
+	 * without one.
 	 *
-	 * @param int  $offset  Row offset into the ordered failure set.
-	 * @param int  $limit   Maximum rows to return.
-	 * @param bool $ignored List the ignored set instead of the open one.
+	 * @param string $source_site_url Path-bearing source identity.
+	 * @param int    $offset          Row offset into the ordered failure set.
+	 * @param int    $limit           Maximum rows to return.
+	 * @param bool   $ignored         List ignored rows instead of open ones.
 	 * @return array[] Failure rows including source_site_url.
 	 */
 	public function list_failures(
+		string $source_site_url,
 		int $offset,
 		int $limit,
 		bool $ignored = false
@@ -828,6 +858,7 @@ final class History_Repository {
 					. " WHERE {$where_sql}"
 					. ' ORDER BY it.import_date_gmt DESC, it.id DESC'
 					. ' LIMIT %d OFFSET %d',
+				$source_site_url,
 				$limit,
 				max( 0, $offset )
 			),
@@ -839,27 +870,34 @@ final class History_Repository {
 	}
 
 	/**
-	 * Counts the failure rows the inbox lists. Joins the sessions table so the
-	 * count matches list_failures exactly (an item with no session row can't
-	 * appear in either).
+	 * Counts the failure rows the inbox lists for one source. Joins the
+	 * sessions table so the count matches list_failures exactly (an item with
+	 * no session row can't appear in either).
 	 *
-	 * @param bool $ignored Count the ignored set instead of the open one.
+	 * @param string $source_site_url Path-bearing source identity.
+	 * @param bool   $ignored         Count ignored rows instead of open ones.
 	 * @return int Number of failure rows.
 	 */
-	public function count_failures( bool $ignored = false ): int {
+	public function count_failures(
+		string $source_site_url,
+		bool $ignored = false
+	): int {
 		global $wpdb;
 
 		$items_table   = Import_Items_Table::table_name();
 		$imports_table = Imports_Table::table_name();
 		$where_sql     = $this->failures_where_sql( $ignored );
 
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$count = $wpdb->get_var(
-			"SELECT COUNT(*) FROM `{$items_table}` it"
-				. " INNER JOIN `{$imports_table}` s ON s.id = it.session_id"
-				. " WHERE {$where_sql}"
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM `{$items_table}` it"
+					. " INNER JOIN `{$imports_table}` s ON s.id = it.session_id"
+					. " WHERE {$where_sql}",
+				$source_site_url
+			)
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
 		return null === $count ? 0 : (int) $count;
 	}
@@ -867,21 +905,27 @@ final class History_Repository {
 	/**
 	 * Deletes failure rows by id and/or source_post_id. Scoped to status =
 	 * 'error' so it can't reach success/updated rows. The source_post_id
-	 * path clears every prior failure attempt for a given source — the
+	 * path clears every prior failure attempt for a given source post — the
 	 * listing only shows the most recent one, so dismissing must reach the
 	 * older siblings too or they re-surface on refresh.
 	 *
-	 * @param int[] $item_ids        Item ids to delete (orphan failures).
-	 * @param int[] $source_post_ids Source post ids whose failures to delete.
+	 * @param int[]       $item_ids        Item ids to delete (orphan failures).
+	 * @param int[]       $source_post_ids Source post ids whose failures to delete.
+	 * @param string|null $source_site_url Source identity to scope to; null matches any source.
 	 * @return int Number of rows removed.
 	 */
 	public function delete_failed_items(
 		array $item_ids,
-		array $source_post_ids = array()
+		array $source_post_ids = array(),
+		?string $source_site_url = null
 	): int {
 		global $wpdb;
 
-		$scope = $this->build_failed_items_scope( $item_ids, $source_post_ids );
+		$scope = $this->build_failed_items_scope(
+			$item_ids,
+			$source_post_ids,
+			$source_site_url
+		);
 		if ( null === $scope ) {
 			return 0;
 		}
@@ -904,21 +948,27 @@ final class History_Repository {
 	/**
 	 * Sets or clears ignored_gmt on failure rows, mirroring the remove scope:
 	 * orphans by item id, source-linked failures across every error attempt for
-	 * the source so the deduped row can't re-surface a sibling.
+	 * the source post so the deduped row can't re-surface a sibling.
 	 *
-	 * @param int[] $item_ids        Item ids to flag (orphan failures).
-	 * @param int[] $source_post_ids Source post ids whose failures to flag.
-	 * @param bool  $ignored         True to ignore, false to restore.
+	 * @param int[]       $item_ids        Item ids to flag (orphan failures).
+	 * @param int[]       $source_post_ids Source post ids whose failures to flag.
+	 * @param bool        $ignored         True to ignore, false to restore.
+	 * @param string|null $source_site_url Source identity to scope to; null matches any source.
 	 * @return int Number of rows updated.
 	 */
 	public function set_failed_items_ignored(
 		array $item_ids,
 		array $source_post_ids,
-		bool $ignored
+		bool $ignored,
+		?string $source_site_url = null
 	): int {
 		global $wpdb;
 
-		$scope = $this->build_failed_items_scope( $item_ids, $source_post_ids );
+		$scope = $this->build_failed_items_scope(
+			$item_ids,
+			$source_post_ids,
+			$source_site_url
+		);
 		if ( null === $scope ) {
 			return 0;
 		}
@@ -949,13 +999,19 @@ final class History_Repository {
 	 * Normalizes item ids and source post ids into a shared WHERE scope for the
 	 * failure remove/ignore paths.
 	 *
-	 * @param int[] $item_ids        Item ids (orphan failures).
-	 * @param int[] $source_post_ids Source post ids.
-	 * @return array{sql: string, params: int[]}|null Scope, or null when empty.
+	 * Both branches carry the source scope, so neither can reach a row the
+	 * inbox does not list. An empty $source_site_url matches only sessions
+	 * recorded without one; null leaves both branches unscoped.
+	 *
+	 * @param int[]       $item_ids        Item ids (orphan failures).
+	 * @param int[]       $source_post_ids Source post ids.
+	 * @param string|null $source_site_url Source identity to scope to; null matches any source.
+	 * @return array{sql: string, params: list<int|string>}|null Scope, or null when empty.
 	 */
 	private function build_failed_items_scope(
 		array $item_ids,
-		array $source_post_ids
+		array $source_post_ids,
+		?string $source_site_url
 	): ?array {
 		$positive = static fn( int $id ): bool => $id > 0;
 
@@ -974,13 +1030,21 @@ final class History_Repository {
 			return null;
 		}
 
-		$clauses = array();
-		$params  = array();
+		$imports_table = Imports_Table::table_name();
+		$session_sql   = null === $source_site_url
+			? ''
+			: " AND session_id IN ( SELECT id FROM `{$imports_table}`"
+				. ' WHERE source_site_url = %s )';
+		$clauses       = array();
+		$params        = array();
 
 		if ( count( $ids ) > 0 ) {
 			$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
-			$clauses[]    = "id IN ({$placeholders})";
+			$clauses[]    = "( id IN ({$placeholders}){$session_sql} )";
 			$params       = array_merge( $params, $ids );
+			if ( null !== $source_site_url ) {
+				$params[] = $source_site_url;
+			}
 		}
 
 		if ( count( $sources ) > 0 ) {
@@ -988,8 +1052,12 @@ final class History_Repository {
 				',',
 				array_fill( 0, count( $sources ), '%d' )
 			);
-			$clauses[]    = "source_post_id IN ({$placeholders})";
+			$clauses[]    = "( source_post_id IN ({$placeholders})"
+				. "{$session_sql} )";
 			$params       = array_merge( $params, $sources );
+			if ( null !== $source_site_url ) {
+				$params[] = $source_site_url;
+			}
 		}
 
 		return array(
