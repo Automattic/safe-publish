@@ -101,7 +101,10 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	 */
 	public function test_resolves_available_when_no_history_exists(): void {
 		// ACT: Resolve a source post id that has never been imported.
-		$state = $this->repository->resolve_source_post_state( 42 );
+		$state = $this->repository->resolve_source_post_state(
+			self::SOURCE,
+			42
+		);
 
 		// ASSERT: The resolver returns Available with no history badge.
 		$this->assertSame( 'available', $state );
@@ -136,7 +139,10 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		);
 
 		// ACT: Resolve the source post's routing state.
-		$state = $this->repository->resolve_source_post_state( 101 );
+		$state = $this->repository->resolve_source_post_state(
+			self::SOURCE,
+			101
+		);
 
 		// ASSERT: The latest non-error row wins; the error never routes Posts.
 		$this->assertSame( 'up-to-date', $state );
@@ -159,7 +165,10 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		);
 
 		// ACT: Resolve the source post's routing state.
-		$state = $this->repository->resolve_source_post_state( 106 );
+		$state = $this->repository->resolve_source_post_state(
+			self::SOURCE,
+			106
+		);
 
 		// ASSERT: An error-only source is not imported; it stays available.
 		$this->assertSame( 'available', $state );
@@ -183,7 +192,10 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		);
 
 		// ACT: Resolve the source post's routing state.
-		$state = $this->repository->resolve_source_post_state( 102 );
+		$state = $this->repository->resolve_source_post_state(
+			self::SOURCE,
+			102
+		);
 
 		// ASSERT: A rolled-back active row folds into Available.
 		$this->assertSame( 'available', $state );
@@ -206,7 +218,10 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		);
 
 		// ACT: Resolve the source post's routing state.
-		$state = $this->repository->resolve_source_post_state( 103 );
+		$state = $this->repository->resolve_source_post_state(
+			self::SOURCE,
+			103
+		);
 
 		// ASSERT: A missing local post folds into Available with the
 		// deleted_locally badge.
@@ -234,7 +249,10 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		);
 
 		// ACT: Resolve the source post's routing state.
-		$state = $this->repository->resolve_source_post_state( 104 );
+		$state = $this->repository->resolve_source_post_state(
+			self::SOURCE,
+			104
+		);
 
 		// ASSERT: The stored source_modified_gmt drives the Outdated verdict.
 		$this->assertSame( 'outdated', $state );
@@ -260,7 +278,10 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		);
 
 		// ACT: Resolve the source post's routing state.
-		$state = $this->repository->resolve_source_post_state( 105 );
+		$state = $this->repository->resolve_source_post_state(
+			self::SOURCE,
+			105
+		);
 
 		// ASSERT: Trash counts as deleted_locally, not Imported.
 		$this->assertSame( 'available', $state );
@@ -330,7 +351,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		);
 
 		// ACT: List the imported source rows.
-		$rows = $this->repository->list_imported_source_rows();
+		$rows = $this->repository->list_imported_source_rows( self::SOURCE );
 
 		// ASSERT: The active-row rule collapses the two events to one row,
 		// carrying the latest event's status.
@@ -367,7 +388,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		);
 
 		// ACT: List the imported source rows.
-		$rows = $this->repository->list_imported_source_rows();
+		$rows = $this->repository->list_imported_source_rows( self::SOURCE );
 
 		// ASSERT: The success row survives its newer error sibling.
 		$this->assertCount( 1, $rows );
@@ -402,8 +423,8 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 
 		// ACT: Fetch the active rows for the source.
 		$active = $this->repository->get_active_items_by_source_ids(
-			array( 960 ),
-			null
+			self::SOURCE,
+			array( 960 )
 		);
 
 		// ASSERT: The success row is the active row, not the newer error.
@@ -413,7 +434,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that get_active_items_by_source_ids returns only the given
-	 * source's active row, and keeps its cross-source result when passed null.
+	 * source's active row.
 	 */
 	public function test_get_active_items_by_source_ids_scopes_by_source(): void {
 		// ARRANGE: One numeric source post id imported under two sources, the
@@ -439,20 +460,164 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ACT: Look the source id up scoped, then unscoped.
-		$scoped   = $this->repository->get_active_items_by_source_ids(
-			array( 970 ),
-			self::SOURCE
-		);
-		$unscoped = $this->repository->get_active_items_by_source_ids(
-			array( 970 ),
-			null
+		// ACT: Look the source id up under the connected source.
+		$scoped = $this->repository->get_active_items_by_source_ids(
+			self::SOURCE,
+			array( 970 )
 		);
 
-		// ASSERT: Scoped resolves this source's row; unscoped resolves the
-		// newest across sources, which the Posts tab depends on for now.
+		// ASSERT: This source's row wins over the other source's newer one.
 		$this->assertSame( 111, (int) $scoped[970]['post_id'] );
-		$this->assertSame( 222, (int) $unscoped[970]['post_id'] );
+	}
+
+	/**
+	 * Verifies that list_imported_source_rows lists only the given source's
+	 * imported posts.
+	 */
+	public function test_list_imported_source_rows_scopes_by_source(): void {
+		// ARRANGE: One post imported under each source.
+		$mine          = self::factory()->post->create();
+		$theirs        = self::factory()->post->create();
+		$other_session = $this->create_session( self::OTHER_SOURCE );
+		$this->insert_item(
+			array(
+				'session_id'      => $this->create_session(),
+				'source_post_id'  => 980,
+				'status'          => 'success',
+				'post_id'         => $mine,
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+		$this->insert_item(
+			array(
+				'session_id'      => $other_session,
+				'source_post_id'  => 981,
+				'status'          => 'success',
+				'post_id'         => $theirs,
+				'import_date_gmt' => '2026-01-02 00:00:00',
+			)
+		);
+
+		// ACT: List the rows for the connected source.
+		$rows = $this->repository->list_imported_source_rows( self::SOURCE );
+
+		// ASSERT: The other source's import stays out.
+		$this->assertCount( 1, $rows );
+		$this->assertSame( 980, (int) $rows[0]['source_post_id'] );
+	}
+
+	/**
+	 * Verifies that a newer import of the same numeric source post id under
+	 * another source does not hide this source's row from the listing.
+	 */
+	public function test_list_imported_source_rows_cross_source_newer_does_not_mask(): void {
+		// ARRANGE: One numeric id imported under two sources, the other
+		// source's import being the newer one.
+		$mine          = self::factory()->post->create();
+		$theirs        = self::factory()->post->create();
+		$other_session = $this->create_session( self::OTHER_SOURCE );
+		$this->insert_item(
+			array(
+				'session_id'      => $this->create_session(),
+				'source_post_id'  => 982,
+				'status'          => 'success',
+				'post_id'         => $mine,
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+		$this->insert_item(
+			array(
+				'session_id'      => $other_session,
+				'source_post_id'  => 982,
+				'status'          => 'success',
+				'post_id'         => $theirs,
+				'import_date_gmt' => '2026-02-01 00:00:00',
+			)
+		);
+
+		// ACT: List the rows for the connected source.
+		$rows = $this->repository->list_imported_source_rows( self::SOURCE );
+
+		// ASSERT: The dedup only considers this source, so its row survives.
+		$this->assertCount( 1, $rows );
+		$this->assertSame( $mine, (int) $rows[0]['post_id'] );
+	}
+
+	/**
+	 * Verifies that resolve_source_post_state reports available for a source
+	 * post id imported only under another source.
+	 */
+	public function test_resolve_source_post_state_scopes_by_source(): void {
+		// ARRANGE: A successful import of source post 983 under another source.
+		$other_session = $this->create_session( self::OTHER_SOURCE );
+		$this->insert_item(
+			array(
+				'session_id'      => $other_session,
+				'source_post_id'  => 983,
+				'status'          => 'success',
+				'post_id'         => self::factory()->post->create(),
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+
+		// ACT: Resolve the state under each source.
+		$mine   = $this->repository->resolve_source_post_state(
+			self::SOURCE,
+			983
+		);
+		$theirs = $this->repository->resolve_source_post_state(
+			self::OTHER_SOURCE,
+			983
+		);
+
+		// ASSERT: Only the source that imported it reports it as imported.
+		$this->assertSame( 'available', $mine );
+		$this->assertSame( 'up-to-date', $theirs );
+	}
+
+	/**
+	 * Verifies that an empty source identity matches only sessions recorded
+	 * without one, rather than widening to every source.
+	 */
+	public function test_empty_source_matches_only_sessions_without_one(): void {
+		// ARRANGE: The same numeric id imported under a session recorded
+		// with no source, then under a named source whose newer row reads
+		// as outdated, so widening the scope would change every answer.
+		$anon  = self::factory()->post->create();
+		$named = self::factory()->post->create();
+		$this->insert_item(
+			array(
+				'session_id'      => $this->create_session( '' ),
+				'source_post_id'  => 984,
+				'status'          => 'success',
+				'post_id'         => $anon,
+				'import_date_gmt' => '2026-01-01 00:00:00',
+			)
+		);
+		$this->insert_item(
+			array(
+				'session_id'          => $this->create_session(),
+				'source_post_id'      => 984,
+				'status'              => 'success',
+				'post_id'             => $named,
+				'import_date_gmt'     => '2026-02-01 00:00:00',
+				'source_modified_gmt' => '2026-03-01 00:00:00',
+			)
+		);
+
+		// ACT: Read all three surfaces under the empty identity.
+		$rows   = $this->repository->list_imported_source_rows( '' );
+		$active = $this->repository->get_active_items_by_source_ids(
+			'',
+			array( 984 )
+		);
+		$state  = $this->repository->resolve_source_post_state( '', 984 );
+
+		// ASSERT: Only the empty-identity session's row resolves.
+		$this->assertCount( 1, $rows );
+		$this->assertSame( $anon, (int) $rows[0]['post_id'] );
+		$this->assertSame( $anon, (int) $active[984]['post_id'] );
+		$this->assertSame( 'up-to-date', $state );
 	}
 
 	/**
@@ -486,6 +651,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 
 		// ACT + ASSERT: Outdated filter returns only the stale row.
 		$outdated = $this->repository->list_imported_source_rows(
+			self::SOURCE,
 			1,
 			20,
 			array( 'freshness' => 'outdated' )
@@ -495,6 +661,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 
 		// ACT + ASSERT: Up-to-date filter returns only the fresh row.
 		$fresh = $this->repository->list_imported_source_rows(
+			self::SOURCE,
 			1,
 			20,
 			array( 'freshness' => 'up-to-date' )
@@ -503,7 +670,11 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		$this->assertSame( 300, (int) $fresh[0]['source_post_id'] );
 
 		// ACT + ASSERT: Default (any) returns both — guards the umbrella path.
-		$both = $this->repository->list_imported_source_rows( 1, 20 );
+		$both = $this->repository->list_imported_source_rows(
+			self::SOURCE,
+			1,
+			20
+		);
 		$this->assertCount( 2, $both );
 	}
 
@@ -537,6 +708,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 
 		// ACT + ASSERT: Matching slug returns the one corresponding row.
 		$matched = $this->repository->list_imported_source_rows(
+			self::SOURCE,
 			1,
 			20,
 			array( 'name' => 'beta' )
@@ -546,6 +718,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 
 		// ACT + ASSERT: Unknown slug returns nothing (rather than the full list).
 		$miss = $this->repository->list_imported_source_rows(
+			self::SOURCE,
 			1,
 			20,
 			array( 'name' => 'gamma' )
@@ -655,7 +828,10 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		);
 
 		// ACT: Resolve the Posts state and list the inbox failures.
-		$state = $this->repository->resolve_source_post_state( 900 );
+		$state = $this->repository->resolve_source_post_state(
+			self::SOURCE,
+			900
+		);
 		$rows  = $this->repository->list_failures( self::SOURCE, 0, 20 );
 
 		// ASSERT: Posts hides the failure, but the inbox surfaces it.
