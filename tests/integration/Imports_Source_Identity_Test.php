@@ -10,11 +10,13 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\Admin\History_Repository;
+use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 
 /**
- * Exercises write-time normalization of the session source identity and the
- * backfill that rewrites values stored before it.
+ * Exercises write-time normalization of the session source identity, the
+ * backfill that rewrites values stored before it, and the purge of sessions
+ * recorded without a source.
  */
 class Imports_Source_Identity_Test extends Integration_Test_Case {
 
@@ -49,6 +51,9 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 	protected function tearDown(): void {
 		global $wpdb;
 
+		// Dropped before the base class truncates, so a forced failure cannot
+		// reach its cleanup queries.
+		remove_all_filters( 'query' );
 		$wpdb->suppress_errors( false );
 
 		parent::tearDown();
@@ -202,7 +207,7 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 		// imports table forced to fail.
 		$session_id = $this->insert_legacy_row( 'https://example.com/blog/' );
 		delete_option( self::VERSION_OPTION );
-		$this->fail_imports_table_queries( 'UPDATE' );
+		$this->fail_table_queries( 'UPDATE' );
 
 		// ACT: Run the migration.
 		Imports_Table::create_table();
@@ -222,7 +227,132 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 	public function test_failed_backfill_read_leaves_the_version_unrecorded(): void {
 		// ARRANGE: No recorded version and the backfill's read forced to fail.
 		delete_option( self::VERSION_OPTION );
-		$this->fail_imports_table_queries( 'SELECT' );
+		$this->fail_table_queries( 'SELECT' );
+
+		// ACT: Run the migration.
+		Imports_Table::create_table();
+
+		// ASSERT: The version stayed unrecorded.
+		$this->assertFalse( get_option( self::VERSION_OPTION ) );
+	}
+
+	/**
+	 * Verifies that the purge removes a session recorded without a source
+	 * along with its items.
+	 */
+	public function test_purge_removes_a_session_recorded_without_a_source(): void {
+		// ARRANGE: An empty-identity session whose items are all failures.
+		$session_id = $this->insert_legacy_row( '' );
+		$this->insert_item( array( 'session_id' => $session_id ) );
+		$this->insert_item( array( 'session_id' => $session_id ) );
+
+		// ACT: Run the table's migration entry point.
+		Imports_Table::create_table();
+
+		// ASSERT: The session and both of its items are gone.
+		$this->assertFalse( $this->session_exists( $session_id ) );
+		$this->assertSame( 0, $this->item_count( $session_id ) );
+	}
+
+	/**
+	 * Verifies that the purge removes a session recorded without a source that
+	 * logged no items, as one abandoned before its first item would be.
+	 */
+	public function test_purge_removes_a_session_without_a_source_or_items(): void {
+		// ARRANGE: An empty-identity session with nothing recorded under it.
+		$session_id = $this->insert_legacy_row( '' );
+
+		// ACT: Run the table's migration entry point.
+		Imports_Table::create_table();
+
+		// ASSERT: The session is gone.
+		$this->assertFalse( $this->session_exists( $session_id ) );
+	}
+
+	/**
+	 * Verifies that the purge keeps a session recorded without a source when it
+	 * holds a success or an update, so the delete cannot reach recorded work.
+	 */
+	public function test_purge_keeps_a_session_without_a_source_holding_work(): void {
+		// ARRANGE: Two empty-identity sessions, one holding a success and one
+		// an update, each alongside a failure.
+		$success_id = $this->insert_legacy_row( '' );
+		$updated_id = $this->insert_legacy_row( '' );
+		$this->insert_item( array( 'session_id' => $success_id ) );
+		$this->insert_item(
+			array(
+				'session_id' => $success_id,
+				'status'     => 'success',
+				'post_id'    => 4242,
+			)
+		);
+		$this->insert_item( array( 'session_id' => $updated_id ) );
+		$this->insert_item(
+			array(
+				'session_id' => $updated_id,
+				'status'     => 'updated',
+				'post_id'    => 4243,
+			)
+		);
+
+		// ACT: Run the table's migration entry point.
+		Imports_Table::create_table();
+
+		// ASSERT: Both sessions survived with every item, failures included.
+		$this->assertTrue( $this->session_exists( $success_id ) );
+		$this->assertSame( 2, $this->item_count( $success_id ) );
+		$this->assertTrue( $this->session_exists( $updated_id ) );
+		$this->assertSame( 2, $this->item_count( $updated_id ) );
+	}
+
+	/**
+	 * Verifies that the purge leaves a session carrying a source identity
+	 * alone, even when its only item is a failure.
+	 */
+	public function test_purge_leaves_a_session_carrying_a_source_identity(): void {
+		// ARRANGE: A named-source session whose only item is a failure.
+		$session_id = $this->insert_legacy_row( 'https://example.com/blog' );
+		$this->insert_item( array( 'session_id' => $session_id ) );
+
+		// ACT: Run the table's migration entry point.
+		Imports_Table::create_table();
+
+		// ASSERT: Both the session and its failure survived.
+		$this->assertTrue( $this->session_exists( $session_id ) );
+		$this->assertSame( 1, $this->item_count( $session_id ) );
+	}
+
+	/**
+	 * Verifies that a failed purge leaves the schema version unrecorded, so the
+	 * migration is retried rather than marked complete over rows it kept.
+	 */
+	public function test_failed_purge_leaves_the_version_unrecorded(): void {
+		// ARRANGE: An empty-identity session of failures, no recorded version,
+		// and deletes against the imports table forced to fail.
+		$session_id = $this->insert_legacy_row( '' );
+		$this->insert_item( array( 'session_id' => $session_id ) );
+		delete_option( self::VERSION_OPTION );
+		$this->fail_table_queries( 'DELETE' );
+
+		// ACT: Run the migration.
+		Imports_Table::create_table();
+
+		// ASSERT: The version stayed unrecorded and the session survived. Its
+		// items went first, so the failure left none of them orphaned.
+		$this->assertFalse( get_option( self::VERSION_OPTION ) );
+		$this->assertTrue( $this->session_exists( $session_id ) );
+		$this->assertSame( 0, $this->item_count( $session_id ) );
+	}
+
+	/**
+	 * Verifies that a failed purge read leaves the schema version unrecorded,
+	 * so an unreadable items table is not mistaken for nothing to purge.
+	 */
+	public function test_failed_purge_read_leaves_the_version_unrecorded(): void {
+		// ARRANGE: No recorded version and only the purge's read of the items
+		// table forced to fail, leaving the backfill's own read intact.
+		delete_option( self::VERSION_OPTION );
+		$this->fail_table_queries( 'SELECT', Import_Items_Table::table_name() );
 
 		// ACT: Run the migration.
 		Imports_Table::create_table();
@@ -279,6 +409,86 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Inserts an items-table row for a session, defaulting to a failure.
+	 *
+	 * @param array $overrides Field overrides.
+	 * @return int Item id.
+	 */
+	private function insert_item( array $overrides ): int {
+		global $wpdb;
+
+		$defaults = array(
+			'session_id'           => 0,
+			'title'                => 'Legacy item',
+			'source_post_id'       => null,
+			'status'               => 'error',
+			'post_id'              => null,
+			'error_message'        => 'Import failed',
+			'content_changes'      => null,
+			'warnings'             => null,
+			'has_previous_content' => 0,
+			'rolled_back'          => 0,
+			'import_date_gmt'      => '2026-01-02 03:04:05',
+			'source_modified_gmt'  => null,
+		);
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->insert(
+			Import_Items_Table::table_name(),
+			array_merge( $defaults, $overrides ),
+			array( '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%s', '%d', '%d', '%s', '%s' )
+		);
+
+		return (int) $wpdb->insert_id;
+	}
+
+	/**
+	 * Reports whether a session row is still present.
+	 *
+	 * @param int $session_id Session ID.
+	 * @return bool True when the row exists.
+	 */
+	private function session_exists( int $session_id ): bool {
+		global $wpdb;
+
+		$table = Imports_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$found = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM `{$table}` WHERE id = %d",
+				$session_id
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return 0 < (int) $found;
+	}
+
+	/**
+	 * Counts a session's item rows.
+	 *
+	 * @param int $session_id Session ID.
+	 * @return int Number of item rows.
+	 */
+	private function item_count( int $session_id ): int {
+		global $wpdb;
+
+		$table = Import_Items_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$count = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM `{$table}` WHERE session_id = %d",
+				$session_id
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return (int) $count;
+	}
+
+	/**
 	 * Reads a session row straight from the table.
 	 *
 	 * @param int $session_id Session ID.
@@ -315,15 +525,19 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Forces the imports table's statements of one kind to fail, standing in
-	 * for a database error during the backfill.
+	 * Forces one table's statements of one kind to fail, standing in for a
+	 * database error during the migration.
 	 *
-	 * @param string $statement Leading SQL keyword to break, e.g. UPDATE.
+	 * @param string      $statement Leading SQL keyword to break, e.g. UPDATE.
+	 * @param string|null $table     Table to break; defaults to imports.
 	 */
-	private function fail_imports_table_queries( string $statement ): void {
+	private function fail_table_queries(
+		string $statement,
+		?string $table = null
+	): void {
 		global $wpdb;
 
-		$table = Imports_Table::table_name();
+		$table ??= Imports_Table::table_name();
 
 		$wpdb->suppress_errors( true );
 
