@@ -140,7 +140,8 @@ export type AttentionIssueType =
 	| 'unmapped_gallery_reference'
 	| 'nav_ref_rewrite_failed'
 	| 'parent_orphaned'
-	| 'unregistered_taxonomy';
+	| 'unregistered_taxonomy'
+	| 'term_field_conflict';
 
 /**
  * One open degradation issue, keyed by (affected_post_id, issue_type,
@@ -148,8 +149,9 @@ export type AttentionIssueType =
  * `target_ref`; a string-keyed one carries `target_slug` with `target_ref` 0.
  * `retryable` is the server's signal that the row's reconciliation can run;
  * `resolvable` is the batched hint that its target is imported, so a Retry
- * would reconcile it now. `target_terms` names the source terms the issue left
- * unattached, empty for types that attach none.
+ * would reconcile it now. `target_terms` names the terms the issue left
+ * unattached or unreconciled, empty for types that name none; `target_reason`
+ * carries why, for types that distinguish several.
  */
 export interface AttentionIssue {
 	affected_post_id: number;
@@ -159,6 +161,7 @@ export interface AttentionIssue {
 	target_slug: string;
 	target_is_reusable_block: boolean;
 	target_terms: string[];
+	target_reason: string;
 	severity: 'warning' | 'error';
 	source_site_url: string;
 	first_detected_gmt: string;
@@ -346,6 +349,21 @@ export interface UnregisteredTaxonomyWarning {
 }
 
 /**
+ * Surfaced when an existing term the plugin created could not be updated to the
+ * source's current name, description, or parent. The term keeps its current
+ * values; `reason` says what blocked the write.
+ */
+export interface TermFieldConflictWarning {
+	type: 'term_field_conflict';
+	taxonomy: string;
+	term: string;
+	term_slug: string;
+	field: string;
+	reason: string;
+	source_term_id: number;
+}
+
+/**
  * Discriminated union of all import warning types.
  */
 export type Warning =
@@ -355,7 +373,8 @@ export type Warning =
 	| NavRefRewriteFailedWarning
 	| UnmappedShortcodeReferenceWarning
 	| UnmappedGalleryReferenceWarning
-	| UnregisteredTaxonomyWarning;
+	| UnregisteredTaxonomyWarning
+	| TermFieldConflictWarning;
 
 /**
  * Response from create draft post operation.
