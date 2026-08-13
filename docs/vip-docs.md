@@ -67,7 +67,7 @@ The plugin uses a small set of terms consistently throughout its interface and t
 - **Sync mode** — a per-site setting that determines whether a site acts as a source (`export`), a destination (`import`), or both (`bidirectional`).
 - **Catalog** — the list of posts available on the source site, served through a REST API endpoint and browsed from the destination.
 - **Import** — a single import operation and the unit of rollback. One import covers every post moved in one action, whether that is a single post or a bulk run.
-- **Compare** — a side-by-side or inline comparison of the incoming content against the current content on the destination, shown for an already-imported post before it is updated.
+- **Compare** — a side-by-side comparison of the incoming content against the current content on the destination, shown for an already-imported post before it is updated.
 - **Rollback** — reversing an import or an individual item. Rolling back a created post deletes it; rolling back an updated post restores the content that existed before the update.
 
 ## Requirements
