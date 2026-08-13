@@ -43,7 +43,7 @@
 
 Safe Publish moves editorial content from a source WordPress site to a destination site over an authenticated connection, preserving the content's structure and format as closely as possible. It is built for teams that draft, stage, or review content on one environment and need to publish that content to another without exporting databases or copying files by hand.
 
-Safe Publish provides a controlled path to move content from the source to the destination via the WordPress Admin dashboard, previews exactly what will change with a side-by-side diff, imports one post or many in a single operation, and rolls back any import that was not wanted. Every action is recorded in an audit log, and each import — whether it moved one post or many — can be reversed as a unit. Separate imports are reversed independently of one another.
+Safe Publish provides a controlled path to move content from the source to the destination via the WordPress Admin dashboard, previews exactly what an update will change with a side-by-side diff, imports one post or many in a single operation, and rolls back any import that was not wanted. Every action is recorded in an audit log, and each import — whether it moved one post or many — can be reversed as a unit. Separate imports are reversed independently of one another.
 
 This page covers connecting two sites, browsing and importing content, previewing diffs, rolling back imports, how media and audit logging behave. Full developer documentation and the source code are available on GitHub.
 
