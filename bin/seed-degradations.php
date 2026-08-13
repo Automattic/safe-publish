@@ -899,7 +899,7 @@ function safe_publish_demo_run_import(
 	$repository->complete_session( $session_id );
 
 	$attention_count = $attention_issues->count_open_issues( $source_site_url );
-	$failed_count    = $repository->count_failures();
+	$failed_count    = $repository->count_failures( $source_site_url );
 
 	if ( ! $child_result['success'] ) {
 		WP_CLI::error( 'Child import failed: ' . $child_result['error'] );

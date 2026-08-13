@@ -9,6 +9,8 @@ The Imports admin page is the operator surface for everything that came in from 
 
 Lists imported posts. Each row joins the local post (title, status, edit URL) with the most recent items-table row for the same post (import date, rollback eligibility).
 
+The tab is scoped to the connected source site, so import state is resolved against that site alone: a source post ID imported under a previous connection reads as not imported. Changing the connection hides the previous site's rows without deleting them; reconnecting brings them back.
+
 ### Columns
 
 | Column        | Description                                               |
@@ -44,6 +46,8 @@ The selected session does not appear as a filter — sessions are an internal gr
 
 Collects every post-import problem in one place: import **failures** (the import errored, so no local post exists — or a re-import of an already-imported post failed) and **degradations** (the post imported but something could not be carried over — an unresolved reference to a block, term, parent, or navigation link, a taxonomy this site does not register, or a term whose fields could not be updated to match the source). Failures are listed first. The tab label shows the current count of open failures plus degradations.
 
+The tab is scoped to the connected source site, so only that site's failures and degradations are listed and counted. Changing the connection hides the previous site's rows without deleting them; reconnecting brings them back.
+
 An **Open | Ignored** toggle switches between the active list and items set aside with Ignore. Open (the default) excludes ignored items, and the tab count always reflects the Open set. The Ignored view offers Un-ignore to restore an item; Remove still applies there for failures.
 
 ### Columns
@@ -67,7 +71,7 @@ An **Open | Ignored** toggle switches between the active list and items set asid
 
 **Resolvable now vs Waiting on import.** Each degradation whose target an import can supply carries a hint: **Resolvable now** means its target (parent, block, term, or menu) is already imported, so a Retry should reconcile it; **Waiting on import** means the target is still missing and a Retry would report it as absent. Importing a target does not auto-resolve the degradations that reference it, so the hint is how you find which ones to Retry — it is advisory, so Retry stays authoritative. Retrying several at once reports an aggregate: how many resolved, are still waiting, or failed.
 
-Removing a failure only deletes its record; it has no effect on the source. Recovery is fixing the underlying issue (for example, creating a missing author on the destination) and re-importing the post from the Source Posts page. A later successful import for the same source drops its failure from the list automatically.
+Removing a failure only deletes its record; it has no effect on the source. Recovery is fixing the underlying issue (for example, creating a missing author on the destination) and re-importing the post from the Source Posts page. Any later import attempt for the same post on the same source site drops the earlier failure from the list automatically.
 
 **Ignore vs Remove.** Ignore is reversible: it hides a failure or degradation from the Open view and the tab count but keeps its record, so Un-ignore brings it back — and a fresh failed attempt, or re-detecting the same degradation, re-surfaces it in Open. Remove is permanent: it deletes a failure's record outright. Degradations have no Remove; they clear only by a successful Retry or re-import.
 
