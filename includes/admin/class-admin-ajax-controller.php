@@ -833,6 +833,7 @@ final class Admin_Ajax_Controller {
 			'target_slug'              => (string) $row['target_slug'],
 			'target_is_reusable_block' => $is_reusable_block,
 			'target_terms'             => $target_terms,
+			'target_reason'            => (string) ( $detail['reason'] ?? '' ),
 			'severity'                 => (string) $row['severity'],
 			'source_site_url'          => (string) $row['source_site_url'],
 			'first_detected_gmt'       => (string) $row['first_detected_gmt'],

@@ -44,7 +44,7 @@ The selected session does not appear as a filter — sessions are an internal gr
 
 ## Needs attention tab
 
-Collects every post-import problem in one place: import **failures** (the import errored, so no local post exists — or a re-import of an already-imported post failed) and **degradations** (the post imported but something could not be carried over — an unresolved reference to a block, term, parent, or navigation link, or a taxonomy this site does not register). Failures are listed first. The tab label shows the current count of open failures plus degradations.
+Collects every post-import problem in one place: import **failures** (the import errored, so no local post exists — or a re-import of an already-imported post failed) and **degradations** (the post imported but something could not be carried over — an unresolved reference to a block, term, parent, or navigation link, a taxonomy this site does not register, or a term whose fields could not be updated to match the source). Failures are listed first. The tab label shows the current count of open failures plus degradations.
 
 The tab is scoped to the connected source site, so only that site's failures and degradations are listed and counted. Changing the connection hides the previous site's rows without deleting them; reconnecting brings them back.
 

@@ -182,6 +182,56 @@ export function statusBadgeModifier( status: string ): string {
 }
 
 /**
+ * Renders a term the import could not reconcile, pointing at the destination
+ * change that unblocks it.
+ *
+ * @param {string} term   Destination term name.
+ * @param {string} reason What blocked the write.
+ *
+ * @return {string} Localized message text.
+ */
+function renderTermConflictMessage( term: string, reason: string ): string {
+	switch ( reason ) {
+		case 'name_taken':
+			return sprintf(
+				/* translators: %s: destination term name */
+				__(
+					'Term "%s" kept its current name: another term on this site already uses the source\'s new one. Rename or remove that term, then re-import this post.',
+					'safe-publish'
+				),
+				term
+			);
+		case 'parent_unresolved':
+			return sprintf(
+				/* translators: %s: destination term name */
+				__(
+					'Term "%s" kept its current parent: the parent it moved under on the source is not on this site yet. Re-import this post once it is.',
+					'safe-publish'
+				),
+				term
+			);
+		case 'parent_loop':
+			return sprintf(
+				/* translators: %s: destination term name */
+				__(
+					'Term "%s" kept its current parent: the source moves it under one of its own children. Fix the hierarchy on this site, then re-import this post.',
+					'safe-publish'
+				),
+				term
+			);
+		default:
+			return sprintf(
+				/* translators: %s: destination term name */
+				__(
+					'Term "%s" could not be updated to match the source. Check it on this site, then re-import this post.',
+					'safe-publish'
+				),
+				term
+			);
+	}
+}
+
+/**
  * Renders an import warning as a long-form, user-facing message.
  *
  * @param {Warning} warning Warning to render.
@@ -306,6 +356,8 @@ export function renderWarningMessage( warning: Warning ): string {
 					),
 					warning.taxonomy
 				);
+		case 'term_field_conflict':
+			return renderTermConflictMessage( warning.term, warning.reason );
 		default: {
 			const _exhaustive: never = warning;
 			return String( _exhaustive );
@@ -340,6 +392,8 @@ export function renderWarningShortLabel( warning: Warning ): string {
 			return __( 'unmapped gallery reference', 'safe-publish' );
 		case 'unregistered_taxonomy':
 			return __( 'unregistered taxonomy', 'safe-publish' );
+		case 'term_field_conflict':
+			return __( 'term not reconciled', 'safe-publish' );
 		default: {
 			const _exhaustive: never = warning;
 			return String( _exhaustive );
@@ -432,6 +486,11 @@ export function renderIssueMessage( issue: AttentionIssue ): string {
 					),
 					issue.target_slug
 				);
+		case 'term_field_conflict':
+			return renderTermConflictMessage(
+				issue.target_terms[ 0 ] ?? issue.target_slug,
+				issue.target_reason
+			);
 		default: {
 			const _exhaustive: never = issue.issue_type;
 			return String( _exhaustive );

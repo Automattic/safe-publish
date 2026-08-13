@@ -24,6 +24,7 @@ import type {
 	UnmappedGalleryReferenceWarning,
 	UnmappedShortcodeReferenceWarning,
 	UnregisteredTaxonomyWarning,
+	TermFieldConflictWarning,
 } from '@/types';
 
 // Pin WP date settings so format/timezone-sensitive tests are deterministic.
@@ -361,6 +362,25 @@ describe( 'renderWarningMessage', () => {
 		expect( message ).toContain( 'Register it' );
 		expect( message ).not.toContain( 'attached ()' );
 	} );
+
+	it( 'should name the term and the blocked rename for term_field_conflict', () => {
+		// ARRANGE: A term whose rename the destination already holds.
+		const warning: TermFieldConflictWarning = {
+			type: 'term_field_conflict',
+			taxonomy: 'category',
+			term: 'News',
+			term_slug: 'news',
+			field: 'name',
+			reason: 'name_taken',
+			source_term_id: 501,
+		};
+		// ACT: Render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: Names the term, what it kept, and the fix.
+		expect( message ).toContain( 'News' );
+		expect( message ).toContain( 'kept its current name' );
+		expect( message ).toContain( 'Rename or remove that term' );
+	} );
 } );
 
 describe( 'renderWarningShortLabel', () => {
@@ -466,6 +486,23 @@ describe( 'renderWarningShortLabel', () => {
 		// ASSERT: Short label is the comma-joinable string used in the bulk modal.
 		expect( label ).toBe( 'unregistered taxonomy' );
 	} );
+
+	it( 'should return "term not reconciled" for term_field_conflict', () => {
+		// ARRANGE: Any term_field_conflict warning.
+		const warning: TermFieldConflictWarning = {
+			type: 'term_field_conflict',
+			taxonomy: 'category',
+			term: 'News',
+			term_slug: 'news',
+			field: 'parent',
+			reason: 'parent_unresolved',
+			source_term_id: 501,
+		};
+		// ACT: Render the short label.
+		const label = renderWarningShortLabel( warning );
+		// ASSERT: Short label is the comma-joinable string used in the bulk modal.
+		expect( label ).toBe( 'term not reconciled' );
+	} );
 } );
 
 /**
@@ -480,6 +517,7 @@ function makeIssue( overrides: Partial< AttentionIssue > ): AttentionIssue {
 		target_slug: '',
 		target_is_reusable_block: false,
 		target_terms: [],
+		target_reason: '',
 		severity: 'warning',
 		source_site_url: 'https://source.example.com',
 		first_detected_gmt: '2024-01-01 00:00:00',
@@ -618,6 +656,57 @@ describe( 'renderIssueMessage', () => {
 		expect( message ).toContain( 'Register it' );
 		expect( message ).not.toContain( 'Retry' );
 		expect( message ).toBe( withOtherRef );
+	} );
+
+	it( 'tells each term conflict reason apart, never offering Retry', () => {
+		// ARRANGE: One conflicted term, rendered at each recorded reason.
+		const conflict = {
+			issue_type: 'term_field_conflict' as const,
+			target_ref: 501,
+			target_kind: 'term' as const,
+			target_slug: 'news',
+			target_terms: [ 'News' ],
+		};
+		// ACT: Render every reason, plus an unrecognized one.
+		const taken = renderIssueMessage(
+			makeIssue( { ...conflict, target_reason: 'name_taken' } )
+		);
+		const unresolved = renderIssueMessage(
+			makeIssue( { ...conflict, target_reason: 'parent_unresolved' } )
+		);
+		const loop = renderIssueMessage(
+			makeIssue( { ...conflict, target_reason: 'parent_loop' } )
+		);
+		const failed = renderIssueMessage(
+			makeIssue( { ...conflict, target_reason: 'update_failed' } )
+		);
+		// ASSERT: Each names the term and its own fix, and none offers Retry,
+		// which cannot reconcile a term field.
+		expect( taken ).toContain( 'Rename or remove that term' );
+		expect( unresolved ).toContain( 'not on this site' );
+		expect( loop ).toContain( 'its own children' );
+		expect( failed ).toContain( 'could not be updated' );
+		for ( const message of [ taken, unresolved, loop, failed ] ) {
+			expect( message ).toContain( 'News' );
+			expect( message ).not.toContain( 'Retry' );
+		}
+	} );
+
+	it( 'falls back to the term slug when the name is not recorded', () => {
+		// ARRANGE: A conflict row stored before its detail carried a name.
+		const issue = makeIssue( {
+			issue_type: 'term_field_conflict',
+			target_ref: 501,
+			target_kind: 'term',
+			target_slug: 'news',
+			target_terms: [],
+			target_reason: 'name_taken',
+		} );
+		// ACT: Render the message.
+		const message = renderIssueMessage( issue );
+		// ASSERT: The row still names its term, never an empty quote.
+		expect( message ).toContain( 'news' );
+		expect( message ).not.toContain( '""' );
 	} );
 } );
 
