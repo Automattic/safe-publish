@@ -93,6 +93,10 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 
 		update_post_meta( $this->post_id, 'safe_publish_source_post_id', self::SOURCE_POST_ID );
 		update_post_meta( $this->post_id, 'safe_publish_source_site_url', 'https://example.com' );
+
+		// Connect to the source the fixture is tagged with; source-scoped
+		// lookups resolve nothing otherwise.
+		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
 	}
 
 	/**
@@ -113,7 +117,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 				'Response too large.'
 			);
 		};
-		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
 
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
@@ -164,7 +167,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$make_request = static function ( $_url, $_action, $_credentials ) use ( $upstream_message ) {
 			return new WP_Error( 'http_request_failed', $upstream_message );
 		};
-		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
 
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
@@ -231,7 +233,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 				),
 			);
 		};
-		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
 
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
@@ -262,9 +263,8 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that find_local_post scopes the Compare lookup by source site:
-	 * a post imported from a different source with the same source ID and post
-	 * type is not returned for the connected source.
+	 * Verifies that find_local_post always scopes the Compare lookup by source
+	 * site, so neither another source's post nor an empty identity resolves.
 	 */
 	public function test_find_local_post_scopes_by_source_site_url(): void {
 		// ARRANGE: Two posts share a source ID and post type but were imported
@@ -317,14 +317,13 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		);
 		$this->assertInstanceOf( WP_Error::class, $wrong_source );
 
-		// ACT + ASSERT: An empty URL opts out of scoping and still resolves a
-		// post, preserving the unscoped lookup behavior.
-		$unscoped = $renderer->find_local_post(
+		// ACT + ASSERT: An empty identity resolves nothing.
+		$empty_identity = $renderer->find_local_post(
 			self::SOURCE_POST_ID,
 			'post',
 			''
 		);
-		$this->assertInstanceOf( WP_Post::class, $unscoped );
+		$this->assertInstanceOf( WP_Error::class, $empty_identity );
 	}
 
 	/**
@@ -364,7 +363,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		};
 
 		// Set required options.
-		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
 
 		// Create request.
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
@@ -468,10 +466,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			);
 		};
 
-		update_option(
-			'safe_publish_connected_site_url',
-			'https://example.com'
-		);
 
 		$request = new WP_REST_Request(
 			'POST',
@@ -539,10 +533,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			'https://example.com'
 		);
 
-		update_option(
-			'safe_publish_connected_site_url',
-			'https://example.com'
-		);
 
 		// Record requested URLs to prove the source post is addressed by
 		// rest_base (sp_movies), not the slug (sp_movie).
@@ -701,10 +691,9 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	 * so route-wiring regressions also surface.
 	 */
 	public function test_diff_preview_permission_resolves_source_id_to_local_post(): void {
-		// ARRANGE: Authenticate, configure source URL, and stub the source fetch
-		// so render_diff can complete after the permission callback grants access.
+		// ARRANGE: Authenticate and stub the source fetch so render_diff can
+		// complete after the permission callback grants access.
 		wp_set_current_user( $this->admin_user_id );
-		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
 
 		$stub_source_fetch = static fn() => array(
 			'response' => array( 'code' => 200 ),
@@ -780,7 +769,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			'Fixture should be private before exercising the endpoint'
 		);
 		wp_set_current_user( $this->admin_user_id );
-		update_option( 'safe_publish_connected_site_url', 'https://example.com' );
 
 		$stub_source_fetch = static fn() => array(
 			'response' => array( 'code' => 200 ),
@@ -874,10 +862,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			);
 		};
 
-		update_option(
-			'safe_publish_connected_site_url',
-			'https://example.com'
-		);
 
 		$request = new WP_REST_Request(
 			'POST',

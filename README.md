@@ -8,7 +8,7 @@
 ## Features
 
 - **Secure Authentication**: Support for shared secret tokens and basic authentication
-- **Content Preview**: View and compare content before importing with side-by-side diff view
+- **Content Preview**: Compare an imported post against the current source content before updating it, with side-by-side diff view
 - **Bulk Import**: Import multiple posts at once with progress tracking
 - **Media Handling**: Automatically imports featured images and inline images
 - **Block Preservation**: Maintains Gutenberg block formatting and structure
