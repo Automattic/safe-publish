@@ -1429,6 +1429,8 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	/**
 	 * Verifies that a first import with no connected source fails without
 	 * creating a post, so an empty identity cannot reach the insert.
+	 *
+	 * Locks the fresh-content fetch guard rather than the identity scoping.
 	 */
 	public function test_import_without_connection_creates_no_post(): void {
 		// ARRANGE: Drop the connection the base class configures.
@@ -1455,6 +1457,8 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	/**
 	 * Verifies that a re-import with no connected source leaves a post imported
 	 * from another source untouched, rather than updating it as its own.
+	 *
+	 * Locks the same fetch guard.
 	 */
 	public function test_import_without_connection_leaves_other_source_post_alone(): void {
 		// ARRANGE: A post from source A holding the source ID, and no

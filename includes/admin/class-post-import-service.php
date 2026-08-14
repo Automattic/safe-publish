@@ -517,7 +517,7 @@ class Post_Import_Service {
 	 * @param int        $source_parent_id Source post's parent ID. 0 means
 	 *                                     top-level on the source.
 	 * @param string     $post_type        Destination post type slug.
-	 * @param string     $source_site_url  Source site URL for scoping the lookup; '' skips it.
+	 * @param string     $source_site_url  Source site identity of the import.
 	 * @param array|null $batch_fresh_data Map of source ID => pass-1 fresh
 	 *                                     data for posts in the current bulk
 	 *                                     batch. Null for single-import.
@@ -2825,6 +2825,9 @@ class Post_Import_Service {
 	 * Handles wp_insert_post, thumbnail, custom meta, and terms. On meta or
 	 * terms failure the post and any sideloaded media are cleaned up. Used by
 	 * both single and bulk import paths.
+	 *
+	 * meta_input must carry META_SOURCE_SITE_URL: The concurrent-duplicate
+	 * lookup compares it by value, so an absent row matches no sibling.
 	 *
 	 * @param array        $post_args              Arguments for wp_insert_post() (including meta_input).
 	 * @param int          $featured_attachment_id Sideloaded featured image attachment ID (0 = none).

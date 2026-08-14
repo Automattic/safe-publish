@@ -53,6 +53,7 @@
 - Implement tight assertions, prefer using `assertSame()` over `assertEquals()`.
 - Structure test bodies with `// ARRANGE:`, `// ACT:`, and `// ASSERT:` comments, with a short description.
 - When creating tests, temporarily mutate them to verify they fail when they should.
+- When adding or hoisting shared setup, delete it and re-run: if nothing fails, no test depends on it. Have a positive-asserting test depend on it — denial assertions (403, 404, empty result) can pass for the wrong reason.
 
 ## PRs
 
