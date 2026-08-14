@@ -68,8 +68,14 @@ final class Meta_Terms_Manager {
 			$failed_keys = array();
 
 			foreach ( $meta_array as $meta_key => $meta_value ) {
-				$key    = sanitize_text_field( (string) $meta_key );
-				$result = update_post_meta( $post_id, $key, $meta_value );
+				$key = sanitize_text_field( (string) $meta_key );
+				// Slashed only for the write: The compare below reads the
+				// stored value back unslashed.
+				$result = update_post_meta(
+					$post_id,
+					$key,
+					wp_slash( $meta_value )
+				);
 
 				if ( false === $result ) {
 					// update_post_meta() returns false both on failure and

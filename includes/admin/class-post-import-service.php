@@ -2607,7 +2607,8 @@ class Post_Import_Service {
 		);
 
 		$this->content_processor->disable_content_filters();
-		$result = wp_update_post( $post_args );
+		// Core unslashes as it saves.
+		$result = wp_update_post( wp_slash( $post_args ) );
 		$this->content_processor->restore_content_filters();
 
 		if ( is_wp_error( $result ) ) {
@@ -2775,13 +2776,15 @@ class Post_Import_Service {
 		int $post_id,
 		array $snapshot
 	): void {
-		wp_update_post( $snapshot['post_fields'] );
+		// The snapshot holds raw database reads, so it needs re-slashing on the
+		// way back in.
+		wp_update_post( wp_slash( $snapshot['post_fields'] ) );
 
 		foreach ( $snapshot['tracking_meta'] as $key => $value ) {
 			if ( '' === $value ) {
 				delete_post_meta( $post_id, $key );
 			} else {
-				update_post_meta( $post_id, $key, $value );
+				update_post_meta( $post_id, $key, wp_slash( $value ) );
 			}
 		}
 
@@ -2795,7 +2798,7 @@ class Post_Import_Service {
 			if ( '' === $value ) {
 				delete_post_meta( $post_id, $key );
 			} else {
-				update_post_meta( $post_id, $key, $value );
+				update_post_meta( $post_id, $key, wp_slash( $value ) );
 			}
 		}
 
@@ -2855,7 +2858,7 @@ class Post_Import_Service {
 		array &$term_outcome = array()
 	): int|WP_Error {
 		$this->content_processor->disable_content_filters();
-		$post_id = wp_insert_post( $post_args );
+		$post_id = wp_insert_post( wp_slash( $post_args ) );
 		$this->content_processor->restore_content_filters();
 
 		if ( is_wp_error( $post_id ) ) {
