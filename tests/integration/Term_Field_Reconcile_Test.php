@@ -672,6 +672,40 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a write core refuses names every field it carried, so the
+	 * degradation reports all of them rather than the first.
+	 */
+	public function test_failed_write_names_every_field_it_carried(): void {
+		// ARRANGE: An imported term the source is about to rename and rewrite.
+		$this->import_terms(
+			array( $this->record( 501, 'News', 'news', 0, 'Old description' ) )
+		);
+
+		// ARRANGE: Core refuses every term write from here on. The test harness
+		// restores hooks, so the filter goes after this test.
+		add_filter( 'pre_term_name', '__return_empty_string' );
+
+		// ACT: Re-import with both the name and the description changed.
+		$conflicts = $this->import_terms(
+			array(
+				$this->record( 501, 'Updates', 'news', 0, 'New description' ),
+			)
+		);
+
+		// ASSERT: One conflict names both fields.
+		$this->assertSame( 1, count( $conflicts ) );
+		$this->assertSame( 'update_failed', $conflicts[0]->reason );
+		$this->assertSame( 'name, description', $conflicts[0]->field );
+		$this->assertSame( 'News', $conflicts[0]->term_name );
+		$this->assertSame( 501, $conflicts[0]->source_term_id );
+
+		// ASSERT: Neither field was written.
+		$term = $this->term_by_slug( 'news' );
+		$this->assertSame( 'News', $term->name );
+		$this->assertSame( 'Old description', $term->description );
+	}
+
+	/**
 	 * Verifies that a term already reconciled in the run is not written again
 	 * by a later post, even when it drifted in between.
 	 */
