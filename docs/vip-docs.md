@@ -152,7 +152,7 @@ The **Imports** admin page is the operator surface for everything that came in f
 
 ### Previewing changes with Compare
 
-The Compare action on the Imports → Posts tab compares the current local post with the current source content, covering the title, content, excerpt, featured image, metadata, and taxonomy terms, including each term's parent and description. It is shown side by side, and for block-editor content the diff is computed block by block so editors can see exactly which blocks were added, removed, or changed. A term difference the import would not apply is noted under the comparison, naming the term and the field it affects. The modal also offers an Update button that re-imports the post from the source.
+The Compare action on the Imports → Posts tab compares the current local post with the current source content, covering the title, content, excerpt, featured image, metadata, and taxonomy terms, including each term's parent and description. It is shown side by side, and for block-editor content the diff is computed block by block so editors can see exactly which blocks were added, removed, or changed. Any term difference shown that the import would not apply is noted under the comparison, naming the term and the field it affects. The modal also offers an Update button that re-imports the post from the source.
 
 ### Rolling back imports
 

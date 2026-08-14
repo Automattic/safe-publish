@@ -155,7 +155,7 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: Both parents show, and the move is not annotated.
-		$this->assertStringContainsString( 'News (category) parent', $html );
+		$this->assertStringContainsString( 'news (category) parent', $html );
 		$this->assertStringContainsString( 'Politics', $html );
 		$this->assertStringContainsString( 'World', $html );
 		$this->assertSame( array(), $this->notes( $html ) );
@@ -191,8 +191,8 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		// ASSERT: Each term is named once, with the field that will not move.
 		$this->assertSame(
 			array(
-				'News (category): description not updated on import',
-				'Sports (category): description not updated on import',
+				'news (category): description not updated on import',
+				'sports (category): description not updated on import',
 			),
 			$this->notes( $html )
 		);
@@ -214,7 +214,7 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: The lost description shows, unannotated, as the import clears it.
-		$this->assertStringContainsString( 'News (category) description', $html );
+		$this->assertStringContainsString( 'news (category) description', $html );
 		$this->assertStringContainsString( 'Desk', $html );
 		$this->assertSame( array(), $this->notes( $html ) );
 	}
@@ -238,7 +238,7 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: The lost parent shows, unannotated, as the import flattens it.
-		$this->assertStringContainsString( 'News (category) parent', $html );
+		$this->assertStringContainsString( 'news (category) parent', $html );
 		$this->assertStringContainsString( 'Politics', $html );
 		$this->assertSame( array(), $this->notes( $html ) );
 	}
@@ -268,7 +268,7 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 
 		// ASSERT: The rename shows, hedged on the clash.
 		$this->assertSame(
-			array( 'News (category): may not apply — name taken' ),
+			array( 'news (category): may not apply — name taken' ),
 			$this->notes( $html )
 		);
 	}
@@ -301,8 +301,8 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		// ASSERT: The two notes are told apart by taxonomy.
 		$this->assertSame(
 			array(
-				'News (category): description not updated on import',
-				'News (post_tag): description not updated on import',
+				'news (category): description not updated on import',
+				'news (post_tag): description not updated on import',
 			),
 			$this->notes( $html )
 		);
@@ -379,8 +379,8 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 
 		// ASSERT: The unassigned ancestor never reads as an added term.
 		$this->assertSame( '', $unchanged );
-		$this->assertStringContainsString( 'category: News', $changed );
-		$this->assertStringNotContainsString( 'News, Politics', $changed );
+		$this->assertStringContainsString( 'category: News (news)', $changed );
+		$this->assertStringNotContainsString( 'News (news), Politics (politics)', $changed );
 	}
 
 	/**
@@ -448,6 +448,206 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		$this->assertSame( 'Desk', $term->description );
 		$this->assertSame( 0, (int) $term->parent );
 		$this->assertFalse( get_term_by( 'slug', 'politics', 'category' ) );
+	}
+
+	/**
+	 * Verifies that a note keys on the slug both sides render, so a blocked
+	 * rename of a term the post does not carry names something the table
+	 * shows.
+	 */
+	public function test_note_names_a_term_the_comparison_shows(): void {
+		// ARRANGE: An imported term detached from the post, and another already
+		// holding the name the source renames it to.
+		$this->import_terms(
+			array( $this->record( 101, 'Local News', 'news', 0, '' ) )
+		);
+		wp_set_post_terms( $this->post_id, array(), 'category' );
+		self::factory()->term->create(
+			array(
+				'taxonomy' => 'category',
+				'name'     => 'Updates',
+				'slug'     => 'updates',
+			)
+		);
+
+		// ACT: The source renames it onto the taken name.
+		$html = $this->render_taxonomies(
+			array( $this->record( 101, 'Updates', 'news', 0, '' ) )
+		);
+
+		// ASSERT: The note names the slug the incoming side shows; the
+		// destination name appears nowhere.
+		$this->assertStringContainsString( 'Updates (news)', $html );
+		$this->assertStringNotContainsString( 'Local News', $html );
+		$this->assertSame(
+			array( 'news (category): may not apply — name taken' ),
+			$this->notes( $html )
+		);
+	}
+
+	/**
+	 * Verifies that two terms sharing a name in one taxonomy are keyed apart, so
+	 * each shown difference keeps its own note.
+	 */
+	public function test_same_named_terms_keep_their_own_notes(): void {
+		// ARRANGE: Two hand-authored terms named alike under different parents,
+		// both on the post, both described locally.
+		$parents = array();
+		foreach ( array(
+			'Politics' => 'politics',
+			'Sports'   => 'sports',
+		) as $name => $slug ) {
+			$parents[ $slug ] = self::factory()->term->create(
+				array(
+					'taxonomy' => 'category',
+					'name'     => $name,
+					'slug'     => $slug,
+				)
+			);
+		}
+
+		$children = array();
+		foreach ( array(
+			'politics-news' => 'politics',
+			'sports-news'   => 'sports',
+		) as $slug => $parent ) {
+			$child_id = self::factory()->term->create(
+				array(
+					'taxonomy'    => 'category',
+					'name'        => 'News',
+					'slug'        => $slug,
+					'parent'      => $parents[ $parent ],
+					'description' => 'Local',
+				)
+			);
+
+			// Core allows the shared name only because the parents differ.
+			$this->assertIsInt( $child_id );
+
+			$children[] = $child_id;
+		}
+
+		wp_set_post_terms( $this->post_id, $children, 'category' );
+
+		// ACT: The source rewrites both descriptions.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 100, 'Politics', 'politics', 0, '', false ),
+				$this->record( 200, 'Sports', 'sports', 0, '', false ),
+				$this->record( 101, 'News', 'politics-news', 100, 'Desk' ),
+				$this->record( 201, 'News', 'sports-news', 200, 'Field' ),
+			)
+		);
+
+		// ASSERT: Both differences are annotated, the terms told apart by slug.
+		$this->assertSame(
+			array(
+				'politics-news (category): description not updated on import',
+				'sports-news (category): description not updated on import',
+			),
+			$this->notes( $html )
+		);
+	}
+
+	/**
+	 * Verifies that a rename does not report the term's untouched description as
+	 * changed, since both sides key the line by slug.
+	 */
+	public function test_rename_leaves_an_unchanged_description_paired(): void {
+		// ARRANGE: An imported term carrying a description.
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) )
+		);
+
+		// ACT: The source renames it and leaves the description alone.
+		$html = $this->render_taxonomies(
+			array( $this->record( 101, 'Updates', 'news', 0, 'Desk' ) )
+		);
+
+		// ASSERT: The rename shows, and no changed line is the description.
+		$changed = $this->changed_lines( $html );
+		$this->assertNotSame( array(), $changed, 'The rename should show' );
+		$this->assertSame(
+			array(),
+			array_values(
+				array_filter(
+					$changed,
+					static fn( string $line ): bool => str_contains( $line, 'description' )
+				)
+			),
+			'The untouched description should not read as a change'
+		);
+	}
+
+	/**
+	 * Verifies that a parent renamed on the source is not reported as a parent
+	 * the import leaves alone, since the import applies the rename.
+	 */
+	public function test_applied_parent_rename_is_not_annotated(): void {
+		// ARRANGE: An imported term under an imported ancestor.
+		$this->import_terms(
+			array(
+				$this->record( 100, 'Politics', 'politics', 0, '', false ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+
+		// ACT: The source renames the ancestor.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 100, 'National Politics', 'politics', 0, '', false ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+
+		// ASSERT: The ancestor's new name shows unannotated, as the import
+		// applies the rename. Core word-diffs the line, so read it back with the
+		// markup stripped.
+		$this->assertStringContainsString(
+			'National Politics (politics)',
+			implode( "\n", $this->changed_lines( $html ) )
+		);
+		$this->assertSame( array(), $this->notes( $html ) );
+	}
+
+	/**
+	 * Verifies that a parent rename another term blocks is annotated on the
+	 * parent, whose slug the line carries, not on the term below it.
+	 */
+	public function test_blocked_parent_rename_is_annotated_on_the_parent(): void {
+		// ARRANGE: An imported term under an imported ancestor, and another term
+		// already holding the name the source renames the ancestor to.
+		$this->import_terms(
+			array(
+				$this->record( 100, 'Politics', 'politics', 0, '', false ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+		self::factory()->term->create(
+			array(
+				'taxonomy' => 'category',
+				'name'     => 'National Politics',
+				'slug'     => 'national-politics',
+			)
+		);
+
+		// ACT: The source renames the ancestor onto the taken name.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 100, 'National Politics', 'politics', 0, '', false ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+
+		// ASSERT: The note names the ancestor, not the term whose line shows it.
+		$this->assertStringContainsString(
+			'National Politics (politics)',
+			implode( "\n", $this->changed_lines( $html ) )
+		);
+		$this->assertSame(
+			array( 'politics (category): may not apply — name taken' ),
+			$this->notes( $html )
+		);
 	}
 
 	/**
@@ -532,6 +732,29 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		return array_map(
 			static fn( string $item ): string => html_entity_decode( $item, ENT_QUOTES ),
 			$items[1]
+		);
+	}
+
+	/**
+	 * Reads the lines a rendered diff marks as changed, on either side.
+	 *
+	 * @param string $html Taxonomies diff HTML.
+	 * @return string[] Changed line texts.
+	 */
+	private function changed_lines( string $html ): array {
+		$cells = array();
+		preg_match_all(
+			"#<td class='diff-(?:added|deleted)line'>(.*?)</td>#s",
+			$html,
+			$cells
+		);
+
+		return array_map(
+			static fn( string $cell ): string => html_entity_decode(
+				wp_strip_all_tags( $cell ),
+				ENT_QUOTES
+			),
+			$cells[1]
 		);
 	}
 
