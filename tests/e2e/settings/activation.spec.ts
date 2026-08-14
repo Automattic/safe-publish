@@ -5,7 +5,7 @@ test.describe( 'plugin activation', () => {
 		await admin.visitAdminPage( '/' );
 
 		const safePublishMenu = page.locator(
-			'#toplevel_page_safe-publish'
+			'#toplevel_page_safe-publish-settings'
 		);
 		await expect( safePublishMenu ).toBeVisible();
 	} );
