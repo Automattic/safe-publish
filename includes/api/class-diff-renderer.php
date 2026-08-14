@@ -155,8 +155,7 @@ final class Diff_Renderer {
 	 *
 	 * @param int    $source_post_id  Source post ID to search for.
 	 * @param string $post_type       Post type to search.
-	 * @param string $source_site_url Source site URL the import was tagged
-	 *                                with; pass '' to skip the scope filter.
+	 * @param string $source_site_url Source site identity of the import.
 	 *
 	 * @return WP_Post|WP_Error Post object on success, WP_Error if not found.
 	 */
@@ -165,25 +164,20 @@ final class Diff_Renderer {
 		string $post_type,
 		string $source_site_url
 	): WP_Post|WP_Error {
-		$meta_query = array(
-			array(
-				'key'   => Options::META_SOURCE_POST_ID,
-				'value' => $source_post_id,
-			),
-		);
-
-		if ( '' !== $source_site_url ) {
-			$meta_query['relation'] = 'AND';
-			$meta_query[]           = array(
-				'key'   => Options::META_SOURCE_SITE_URL,
-				'value' => $source_site_url,
-			);
-		}
-
 		$query = new WP_Query(
 			array(
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'     => $meta_query,
+				'meta_query'     => array(
+					'relation' => 'AND',
+					array(
+						'key'   => Options::META_SOURCE_POST_ID,
+						'value' => $source_post_id,
+					),
+					array(
+						'key'   => Options::META_SOURCE_SITE_URL,
+						'value' => $source_site_url,
+					),
+				),
 				'post_type'      => $post_type,
 				'post_status'    => 'any',
 				'posts_per_page' => 1,
