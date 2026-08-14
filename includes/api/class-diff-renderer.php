@@ -925,10 +925,10 @@ final class Diff_Renderer {
 
 	/**
 	 * Renders term fields for diff comparison: one summary line per taxonomy,
-	 * then a line per term carrying a parent or a description. Both sides are
-	 * ordered the same way so only real differences show.
+	 * then a line per term carrying a parent or a description. Terms are keyed
+	 * and ordered by slug.
 	 *
-	 * @param array<string, list<array{name:string, parent:string, description:string}>> $by_tax Display fields by taxonomy.
+	 * @param array<string, list<array{name:string, slug:string, parent:string, description:string}>> $by_tax Display fields by taxonomy.
 	 *
 	 * @return string Text representation.
 	 */
@@ -941,14 +941,19 @@ final class Diff_Renderer {
 			usort(
 				$terms,
 				static fn( array $a, array $b ): int =>
-					strcasecmp( $a['name'], $b['name'] )
+					strcmp( $a['slug'], $b['slug'] )
 			);
 
-			$names   = wp_list_pluck( $terms, 'name' );
-			$lines[] = $taxonomy . ': ' . implode( ', ', $names );
+			$labels = array();
 
 			foreach ( $terms as $term ) {
-				$key = $this->term_key( $term['name'], (string) $taxonomy );
+				$labels[] = $this->term_label( $term['name'], $term['slug'] );
+			}
+
+			$lines[] = $taxonomy . ': ' . implode( ', ', $labels );
+
+			foreach ( $terms as $term ) {
+				$key = $this->term_key( $term['slug'], (string) $taxonomy );
 
 				if ( '' !== $term['parent'] ) {
 					$lines[] = $key . ' parent: ' . $term['parent'];
@@ -968,7 +973,7 @@ final class Diff_Renderer {
 	 *
 	 * @param array<string, WP_Term[]> $term_objects Local terms by taxonomy.
 	 *
-	 * @return array<string, list<array{name:string, parent:string, description:string}>>
+	 * @return array<string, list<array{name:string, slug:string, parent:string, description:string}>>
 	 */
 	private function current_term_fields( array $term_objects ): array {
 		$by_tax = array();
@@ -994,16 +999,14 @@ final class Diff_Renderer {
 	 * @param array $records Source term records by taxonomy.
 	 * @param array $plans   Per-taxonomy term plans from Meta_Terms_Manager.
 	 *
-	 * @return array<string, list<array{name:string, parent:string, description:string}>>
+	 * @return array<string, list<array{name:string, slug:string, parent:string, description:string}>>
 	 */
 	private function incoming_term_fields( array $records, array $plans ): array {
 		$by_tax = array();
 
 		foreach ( $records as $taxonomy => $items ) {
-			$names  = $this->source_term_names( $items );
-			$stored = $this->paired_descriptions(
-				$plans[ (string) $taxonomy ] ?? array()
-			);
+			$paired = $this->paired_terms( $plans[ (string) $taxonomy ] ?? array() );
+			$index  = $this->source_term_index( $items, $paired );
 			$fields = array();
 
 			foreach ( $items as $item ) {
@@ -1013,8 +1016,8 @@ final class Diff_Renderer {
 
 				$fields[] = $this->record_display_fields(
 					$item,
-					$names,
-					$stored[ absint( $item['source_term_id'] ?? 0 ) ] ?? null
+					$index,
+					$paired[ absint( $item['source_term_id'] ?? 0 ) ] ?? null
 				);
 			}
 
@@ -1025,46 +1028,57 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Maps source term IDs to the description the destination term they pair
-	 * with already holds.
+	 * Maps source term IDs to the destination term they pair with.
 	 *
 	 * @param array $entries Plan entries for one taxonomy.
 	 *
-	 * @return array<int, string> Source term ID mapped to stored description.
+	 * @return array<int, WP_Term> Source term ID mapped to destination term.
 	 */
-	private function paired_descriptions( array $entries ): array {
-		$stored = array();
+	private function paired_terms( array $entries ): array {
+		$paired = array();
 
 		foreach ( $entries as $entry ) {
 			$source_term_id = (int) $entry['record']['source_term_id'];
 
 			if ( $source_term_id > 0 && $entry['term'] instanceof WP_Term ) {
-				$stored[ $source_term_id ] = (string) $entry['term']->description;
+				$paired[ $source_term_id ] = $entry['term'];
 			}
 		}
 
-		return $stored;
+		return $paired;
 	}
 
 	/**
-	 * Maps source term IDs to names, so a record's parent can be named.
+	 * Maps source term IDs to the source's name and the slug the destination
+	 * identifies the term by, so both sides name a parent alike.
 	 *
-	 * @param array $items Source term records for one taxonomy.
+	 * @param array               $items  Source term records for one taxonomy.
+	 * @param array<int, WP_Term> $paired Destination terms by source term ID.
 	 *
-	 * @return array<int, string> Source term ID mapped to name.
+	 * @return array<int, array{name:string, slug:string}>
 	 */
-	private function source_term_names( array $items ): array {
-		$names = array();
+	private function source_term_index( array $items, array $paired ): array {
+		$index = array();
 
 		foreach ( $items as $item ) {
 			$id = absint( $item['source_term_id'] ?? 0 );
 
-			if ( $id > 0 && ! isset( $names[ $id ] ) ) {
-				$names[ $id ] = (string) ( $item['name'] ?? '' );
+			if ( 0 === $id || isset( $index[ $id ] ) ) {
+				continue;
 			}
+
+			$name = (string) ( $item['name'] ?? '' );
+			$slug = isset( $paired[ $id ] )
+				? (string) $paired[ $id ]->slug
+				: (string) ( $item['slug'] ?? '' );
+
+			$index[ $id ] = array(
+				'name' => $name,
+				'slug' => '' !== $slug ? $slug : sanitize_title( $name ),
+			);
 		}
 
-		return $names;
+		return $index;
 	}
 
 	/**
@@ -1072,7 +1086,7 @@ final class Diff_Renderer {
 	 *
 	 * @param WP_Term $term Local term.
 	 *
-	 * @return array{name:string, parent:string, description:string}
+	 * @return array{name:string, slug:string, parent:string, description:string}
 	 */
 	private function term_display_fields( WP_Term $term ): array {
 		$parent = (int) $term->parent > 0
@@ -1081,7 +1095,10 @@ final class Diff_Renderer {
 
 		return array(
 			'name'        => (string) $term->name,
-			'parent'      => $parent instanceof WP_Term ? (string) $parent->name : '',
+			'slug'        => (string) $term->slug,
+			'parent'      => $parent instanceof WP_Term
+				? $this->term_label( (string) $parent->name, (string) $parent->slug )
+				: '',
 			'description' => $this->collapse_whitespace( (string) $term->description ),
 		);
 	}
@@ -1090,19 +1107,21 @@ final class Diff_Renderer {
 	 * Renders one source record's display fields, showing the description in
 	 * the form the destination would store it in.
 	 *
-	 * @param array              $record Source term record.
-	 * @param array<int, string> $names  Source term ID mapped to name.
-	 * @param string|null        $stored Description the paired destination term
-	 *                                   holds, or null when none pairs.
+	 * @param array                                       $record Source term record.
+	 * @param array<int, array{name:string, slug:string}> $index Source term ID mapped to name and slug.
+	 * @param WP_Term|null                                $pair   Destination term the record pairs with,
+	 *                                                            or null when none does.
 	 *
-	 * @return array{name:string, parent:string, description:string}
+	 * @return array{name:string, slug:string, parent:string, description:string}
 	 */
 	private function record_display_fields(
 		array $record,
-		array $names,
-		?string $stored
+		array $index,
+		?WP_Term $pair
 	): array {
-		$parent      = absint( $record['parent'] ?? 0 );
+		$id          = absint( $record['source_term_id'] ?? 0 );
+		$name        = (string) ( $record['name'] ?? '' );
+		$stored      = $pair instanceof WP_Term ? (string) $pair->description : null;
 		$source      = (string) ( $record['description'] ?? '' );
 		$description = wp_kses_post( $source );
 
@@ -1120,9 +1139,54 @@ final class Diff_Renderer {
 		}
 
 		return array(
-			'name'        => (string) ( $record['name'] ?? '' ),
-			'parent'      => $names[ $parent ] ?? '',
+			'name'        => $name,
+			'slug'        => $this->record_slug( $record, $index, $id ),
+			'parent'      => $this->parent_label(
+				absint( $record['parent'] ?? 0 ),
+				$index
+			),
 			'description' => $this->collapse_whitespace( $description ),
+		);
+	}
+
+	/**
+	 * Reads the slug a record is identified by: the paired destination term's,
+	 * falling back to the source's own for a term the import would create.
+	 *
+	 * @param array                                       $record Source term record.
+	 * @param array<int, array{name:string, slug:string}> $index  Source term ID mapped to name and slug.
+	 * @param int                                         $id     Source term ID.
+	 *
+	 * @return string Slug.
+	 */
+	private function record_slug( array $record, array $index, int $id ): string {
+		$slug = (string) ( $index[ $id ]['slug'] ?? '' );
+
+		if ( '' === $slug ) {
+			$slug = (string) ( $record['slug'] ?? '' );
+		}
+
+		return '' !== $slug
+			? $slug
+			: sanitize_title( (string) ( $record['name'] ?? '' ) );
+	}
+
+	/**
+	 * Names the parent a record sends, or '' when the records name none.
+	 *
+	 * @param int                                         $source_parent_id Source parent term ID.
+	 * @param array<int, array{name:string, slug:string}> $index            Source term ID mapped to name and slug.
+	 *
+	 * @return string Parent label.
+	 */
+	private function parent_label( int $source_parent_id, array $index ): string {
+		if ( ! isset( $index[ $source_parent_id ] ) ) {
+			return '';
+		}
+
+		return $this->term_label(
+			$index[ $source_parent_id ]['name'],
+			$index[ $source_parent_id ]['slug']
 		);
 	}
 
@@ -1139,7 +1203,10 @@ final class Diff_Renderer {
 		$notes = array();
 
 		foreach ( $plans as $taxonomy => $entries ) {
-			$names = $this->source_term_names( wp_list_pluck( $entries, 'record' ) );
+			$records   = wp_list_pluck( $entries, 'record' );
+			$paired    = $this->paired_terms( $entries );
+			$index     = $this->source_term_index( $records, $paired );
+			$by_source = $this->entries_by_source( $entries );
 
 			foreach ( $entries as $entry ) {
 				if ( ! ( $entry['term'] instanceof WP_Term ) ) {
@@ -1148,6 +1215,8 @@ final class Diff_Renderer {
 
 				$record = $entry['record'];
 
+				// An unassigned ancestor has no line of its own; a rename of it
+				// is annotated through the child whose parent line shows it.
 				if ( false === $record['assigned'] ) {
 					continue;
 				}
@@ -1155,10 +1224,10 @@ final class Diff_Renderer {
 				$current  = $this->term_display_fields( $entry['term'] );
 				$incoming = $this->record_display_fields(
 					$record,
-					$names,
-					(string) $entry['term']->description
+					$index,
+					$entry['term']
 				);
-				$key      = $this->term_key( $current['name'], (string) $taxonomy );
+				$key      = $this->term_key( $current['slug'], (string) $taxonomy );
 
 				// The current side only renders terms the post carries, so a
 				// term it is about to gain shows no destination values.
@@ -1181,30 +1250,117 @@ final class Diff_Renderer {
 						continue;
 					}
 
+					$blocked = (string) ( $entry['blocked'][ $field ] ?? '' );
+
+					// Nothing blocks the move, so the line differs only because
+					// the parent itself is renamed.
+					if ( 'parent' === $field && '' === $blocked ) {
+						$parent_note = $this->renamed_parent_note(
+							absint( $record['parent'] ?? 0 ),
+							$by_source,
+							(string) $taxonomy
+						);
+
+						if ( '' !== $parent_note ) {
+							$notes[] = $parent_note;
+						}
+
+						continue;
+					}
+
 					$notes[] = $key . ': ' . $this->term_note_message(
 						$field,
-						(string) ( $entry['blocked'][ $field ] ?? '' )
+						$blocked
 					);
 				}
 			}
 		}
 
-		// Two source terms can pair with one destination term, which would
-		// otherwise repeat a note verbatim.
+		// Two records can produce one note: several children naming the same
+		// parent, or two source terms pairing with one destination term.
 		return array_values( array_unique( $notes ) );
 	}
 
 	/**
-	 * Builds the identifier joining a note to its diff lines. The taxonomy is
-	 * part of it, so terms of the same name stay distinct.
+	 * Indexes the plan entries by source term ID, so a record's parent can be
+	 * looked up.
 	 *
-	 * @param string $name     Term name.
+	 * @param array $entries Plan entries for one taxonomy.
+	 *
+	 * @return array<int, array{record:array, term:WP_Term|null, eligible:bool, changes:string[], blocked:array<string, string>}>
+	 */
+	private function entries_by_source( array $entries ): array {
+		$by_source = array();
+
+		foreach ( $entries as $entry ) {
+			$source_term_id = (int) $entry['record']['source_term_id'];
+
+			if ( $source_term_id > 0 ) {
+				$by_source[ $source_term_id ] = $entry;
+			}
+		}
+
+		return $by_source;
+	}
+
+	/**
+	 * Annotates a parent line that differs only because the parent itself is
+	 * renamed, keyed to that parent rather than to the term whose line shows it.
+	 * Returns '' when the rename applies, since the line then matches.
+	 *
+	 * @param int    $source_parent_id Source parent term ID.
+	 * @param array  $by_source        Plan entries by source term ID.
+	 * @param string $taxonomy         Taxonomy slug.
+	 *
+	 * @return string Note line, or '' when the difference needs none.
+	 */
+	private function renamed_parent_note(
+		int $source_parent_id,
+		array $by_source,
+		string $taxonomy
+	): string {
+		$entry = $by_source[ $source_parent_id ] ?? null;
+
+		if ( null === $entry || ! ( $entry['term'] instanceof WP_Term ) ) {
+			return '';
+		}
+
+		if ( in_array( 'name', $entry['changes'], true ) ) {
+			return '';
+		}
+
+		return $this->term_key( (string) $entry['term']->slug, $taxonomy )
+			. ': ' . $this->term_note_message(
+				'name',
+				(string) ( $entry['blocked']['name'] ?? '' )
+			);
+	}
+
+	/**
+	 * Builds the identifier joining a term's lines to its notes: the slug, which
+	 * the import never rewrites, plus the taxonomy, so a renamed term keys alike
+	 * on both sides and terms sharing a slug across taxonomies stay distinct.
+	 *
+	 * @param string $slug     Term slug.
 	 * @param string $taxonomy Taxonomy slug.
 	 *
 	 * @return string Note key.
 	 */
-	private function term_key( string $name, string $taxonomy ): string {
-		return $name . ' (' . $taxonomy . ')';
+	private function term_key( string $slug, string $taxonomy ): string {
+		return $slug . ' (' . $taxonomy . ')';
+	}
+
+	/**
+	 * Names a term shown as a value, in a summary line or as another term's
+	 * parent.
+	 *
+	 * @param string $name Term name.
+	 * @param string $slug Term slug.
+	 *
+	 * @return string Term label.
+	 */
+	private function term_label( string $name, string $slug ): string {
+		return $name . ' (' . $slug . ')';
 	}
 
 	/**
