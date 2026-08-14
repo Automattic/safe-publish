@@ -111,6 +111,45 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that create_session refuses a whitespace-only source, which
+	 * carries no more identity than an empty one.
+	 */
+	public function test_create_session_rejects_a_whitespace_only_source(): void {
+		// ARRANGE: The row count to compare against.
+		$before = $this->count_sessions();
+
+		// ACT: Open a session for a source that is only whitespace.
+		$result = $this->repository->create_session( "  \t ", 'single' );
+
+		// ASSERT: The call failed and inserted nothing.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'session_no_source_site_url',
+			$result->get_error_code()
+		);
+		$this->assertSame( $before, $this->count_sessions() );
+	}
+
+	/**
+	 * Verifies that create_session stores a padded source as the identity it
+	 * normalizes to, without the surrounding whitespace.
+	 */
+	public function test_create_session_trims_a_padded_source(): void {
+		// ACT: Open a session for a connection URL stored with padding.
+		$session_id = $this->repository->create_session(
+			'  https://example.com/blog  ',
+			'single'
+		);
+
+		// ASSERT: The stored identity carries no padding.
+		$this->assertIsInt( $session_id );
+		$this->assertSame(
+			'https://example.com/blog',
+			$this->stored_url( $session_id )
+		);
+	}
+
+	/**
 	 * Verifies that the backfill rewrites a row stored before write-time
 	 * normalization existed.
 	 */

@@ -858,6 +858,44 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the create draft endpoint refuses an import when the
+	 * connected site URL parses but carries a scheme the source requests would
+	 * reject, so no session records an unusable identity.
+	 */
+	public function test_ajax_create_draft_refuses_non_http_connection(): void {
+		// ARRANGE: A connection with a parseable host but an unusable scheme.
+		update_option(
+			Options::OPTION_CONNECTED_SITE_URL,
+			'javascript://source.example.com'
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '8014',
+			'title'          => 'Disallowed Scheme Import',
+			'source_link'    => 'https://source.example.com/disallowed-scheme',
+			'post_type'      => 'post',
+		);
+
+		// ACT: Trigger the create draft AJAX handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: The import is refused and no session carries the scheme.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertFalse(
+			$response['success'],
+			'Should refuse an import with a non-HTTP connected site URL'
+		);
+		$this->assertSame(
+			0,
+			$this->count_all_sessions(),
+			'No session row should exist after a refused import'
+		);
+	}
+
+	/**
 	 * Verifies that the create draft endpoint refuses an import when no source
 	 * site is connected even though a post imported from a previous source
 	 * carries the requested source post ID, so the confirmation prompt cannot

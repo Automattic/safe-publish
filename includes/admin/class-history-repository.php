@@ -48,7 +48,7 @@ final class History_Repository {
 	 * @param string $source_site_url Source site URL, normalized to the
 	 *                                path-bearing identity before storage.
 	 * @param string $session_type    Type of import (single, bulk).
-	 * @return int|WP_Error Session ID, or error on an empty source or a failed
+	 * @return int|WP_Error Session ID, or error on a blank source or a failed
 	 *                      insert.
 	 */
 	public function create_session(
@@ -56,6 +56,8 @@ final class History_Repository {
 		string $session_type = 'bulk'
 	): int|WP_Error {
 		global $wpdb;
+
+		$source_site_url = trim( $source_site_url );
 
 		if ( '' === $source_site_url ) {
 			return new WP_Error(
