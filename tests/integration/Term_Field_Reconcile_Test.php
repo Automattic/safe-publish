@@ -12,6 +12,8 @@ namespace Safe_Publish\Tests\Integration;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Term_Conflict;
+use Safe_Publish\Utils\Term_Reconcile_Report;
 use WP_Error;
 use WP_Term;
 
@@ -534,7 +536,7 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 			$this->term_by_slug( 'news', 'post_tag' )->name
 		);
 		$this->assertSame( 1, count( $conflicts ) );
-		$this->assertSame( 'name_taken', $conflicts[0]['reason'] );
+		$this->assertSame( 'name_taken', $conflicts[0]->reason );
 	}
 
 	/**
@@ -607,10 +609,10 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 		$term = $this->term_by_slug( 'news', 'post_tag' );
 		$this->assertSame( 'News', $term->name );
 		$this->assertSame( 1, count( $conflicts ) );
-		$this->assertSame( 'name', $conflicts[0]['field'] );
-		$this->assertSame( 'name_taken', $conflicts[0]['reason'] );
-		$this->assertSame( 'News', $conflicts[0]['term_name'] );
-		$this->assertSame( 501, $conflicts[0]['source_term_id'] );
+		$this->assertSame( 'name', $conflicts[0]->field );
+		$this->assertSame( 'name_taken', $conflicts[0]->reason );
+		$this->assertSame( 'News', $conflicts[0]->term_name );
+		$this->assertSame( 501, $conflicts[0]->source_term_id );
 	}
 
 	/**
@@ -635,9 +637,9 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 		// ASSERT: The term keeps its parent and the miss is reported.
 		$this->assertSame( $parent_id, $this->term_by_slug( 'news' )->parent );
 		$this->assertSame( 1, count( $conflicts ) );
-		$this->assertSame( 'parent', $conflicts[0]['field'] );
-		$this->assertSame( 'parent_unresolved', $conflicts[0]['reason'] );
-		$this->assertSame( 'News', $conflicts[0]['term_name'] );
+		$this->assertSame( 'parent', $conflicts[0]->field );
+		$this->assertSame( 'parent_unresolved', $conflicts[0]->reason );
+		$this->assertSame( 'News', $conflicts[0]->term_name );
 	}
 
 	/**
@@ -665,8 +667,8 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 		// ASSERT: The root stays at the top and the loop is reported.
 		$this->assertSame( 0, $this->term_by_slug( 'section' )->parent );
 		$this->assertSame( 1, count( $conflicts ) );
-		$this->assertSame( 'parent', $conflicts[0]['field'] );
-		$this->assertSame( 'parent_loop', $conflicts[0]['reason'] );
+		$this->assertSame( 'parent', $conflicts[0]->field );
+		$this->assertSame( 'parent_loop', $conflicts[0]->reason );
 	}
 
 	/**
@@ -747,7 +749,7 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 		$this->assertSame( 1, $this->term_updates );
 		$this->assertSame( 1, count( $first ) );
 		$this->assertSame( 1, count( $second ) );
-		$this->assertSame( 'name_taken', $second[0]['reason'] );
+		$this->assertSame( 'name_taken', $second[0]->reason );
 		$this->assertSame(
 			'Shared',
 			$this->term_by_slug( 'news', 'post_tag' )->description
@@ -762,7 +764,7 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 	 * @param string   $source_site_url Source the import runs for.
 	 * @param string   $taxonomy        Taxonomy slug.
 	 * @param int|null $post_id         Post to assign to; defaults to the shared post.
-	 * @return array<int, array<string, string|int>> Collected conflicts.
+	 * @return list<Term_Conflict> Collected conflicts.
 	 */
 	private function import_terms(
 		array $records,
@@ -770,13 +772,13 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 		string $taxonomy = 'category',
 		?int $post_id = null
 	): array {
-		$outcome = array();
+		$report = new Term_Reconcile_Report();
 
 		$result = $this->manager->update_terms(
 			$post_id ?? $this->post_id,
 			array( $taxonomy => $records ),
 			$source_site_url,
-			$outcome
+			$report
 		);
 
 		$this->assertIsArray(
@@ -784,7 +786,7 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 			'Terms should import without erroring.'
 		);
 
-		return $outcome['conflicts'];
+		return $report->conflicts();
 	}
 
 	/**
