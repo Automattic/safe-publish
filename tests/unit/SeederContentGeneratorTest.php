@@ -395,6 +395,25 @@ class SeederContentGeneratorTest extends TestCase {
 	}
 
 	/**
+	 * Verifies that gutenberg content carries the backslash-bearing block
+	 * attribute the parity suite relies on.
+	 */
+	public function test_gutenberg_content_carries_escaped_attribute(): void {
+		// ARRANGE: Any generator and an empty image_refs.
+		$generator = $this->build_generator();
+
+		// ACT: Build content with no image references.
+		$content = $generator->gutenberg_content( 1, array() );
+
+		// ASSERT: The attribute keeps core's \uXXXX escapes verbatim, so an
+		// unslashed write corrupts it detectably.
+		$this->assertStringContainsString(
+			'{"metadata":{"name":"Caf\u00e9 \u0022notes\u0022"}}',
+			$content
+		);
+	}
+
+	/**
 	 * Verifies that gutenberg content embeds an image block per image_ref,
 	 * referencing the caller-provided id and url verbatim and the fixed
 	 * non-empty alt.
