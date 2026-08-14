@@ -24,6 +24,8 @@ badge before it moves into the Outdated view on the next listing refresh. A
 failed live comparison shows **Sync check failed**; there is no Unknown local
 state.
 
+The tab is scoped to the connected source site, so import state is resolved against that site alone: a source post ID imported under a previous connection reads as not imported. Changing the connection hides the previous site's rows without deleting them; reconnecting brings them back.
+
 ### Columns
 
 The visible columns depend on the selected Local State:
@@ -80,11 +82,16 @@ This tab collects two kinds of post-import problem:
 - **Failures** — the import errored. A first import has no destination post; a
   failed re-import can still link to the existing destination post.
 - **Degradations** — the post imported, but a reference, relationship, or
-  taxonomy could not be carried over completely.
+  taxonomy could not be carried over completely, or an existing term's fields
+  could not be reconciled with the source.
 
 Failures are listed before degradations. The tab label shows the number of open
 items. Use **Open | Ignored** to switch between active items and items set aside
 with Ignore.
+
+The tab is scoped to the connected source site. Changing the connection hides
+the previous site's failures and degradations without deleting them;
+reconnecting brings them back.
 
 ### Columns
 
@@ -113,6 +120,11 @@ automatically retry existing degradations.
 Removing a failure affects only its history record. To recover, fix the cause
 and import the source post again from the Posts tab. A later successful import
 for the same source removes its previous failure from the list automatically.
+
+Ignore is reversible: a fresh failed attempt or re-detecting the same
+degradation returns the item to Open. Remove permanently deletes a failure
+record. Degradations do not offer Remove; they clear after a successful Retry
+or re-import.
 
 ## Post-import notice
 
