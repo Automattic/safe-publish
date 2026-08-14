@@ -126,7 +126,8 @@ final class Meta_Terms_Manager {
 	 * A taxonomy the destination does not register is skipped rather than
 	 * failing the post: Only a site admin registering it can fix that, so the
 	 * caller records it as a degradation and imports the rest. A term field
-	 * that cannot be reconciled degrades the same way.
+	 * that cannot be reconciled degrades the same way. A taxonomy sent empty
+	 * carries nothing to attach, so it is skipped without a degradation.
 	 *
 	 * @param int          $post_id         Post ID to update terms for.
 	 * @param array|object $terms           Terms to set, keyed by taxonomy.
@@ -164,7 +165,10 @@ final class Meta_Terms_Manager {
 			}
 
 			if ( ! taxonomy_exists( $tax ) ) {
-				$skipped[ $tax ] = $this->term_names( $items );
+				// An empty list leaves nothing unattached, so there is no loss.
+				if ( array() !== $items ) {
+					$skipped[ $tax ] = $this->term_names( $items );
+				}
 				continue;
 			}
 
