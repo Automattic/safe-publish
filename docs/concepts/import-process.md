@@ -202,7 +202,7 @@ Re-importing also keeps an already-imported term's name, description, and parent
 
 A field that cannot be updated — because the new name is already taken, or the new parent cannot be resolved on the destination — keeps its current value, and the post still imports. Each field is handled on its own, so a blocked rename does not hold back the description. The gap is recorded as a degradation on the **Needs attention** tab naming the term. Resolving the clash and re-importing any post that uses the term updates it and clears the degradation for every post that reported it.
 
-The **Compare** action shows all of this before an import runs: each term's parent and description are compared alongside its name, and any difference the import would not apply is noted under the comparison, naming the term and the field it affects.
+The **Compare** action shows all of this before a re-import runs: each term's parent and description are compared alongside its name, and any difference the import would not apply is noted under the comparison, naming the term and the field it affects.
 
 Re-importing replaces a taxonomy's terms with the source's, so terms removed on the source are removed on the destination — including when the source post is left with none. Terms added on the destination by hand do not survive a re-import.
 
