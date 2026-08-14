@@ -1,6 +1,6 @@
 # Local Development
 
-This repository includes tools for starting a local development environment using [`@wordpress/env`](https://developer.wordpress.org/block-editor/reference-guides/packages/packages-env/), which requires Docker and Docker Compose. In addition, both `npm` and `composer` are required to install the local dependencies.
+This repository includes tools for starting a local development environment using [`@wordpress/env`](https://developer.wordpress.org/block-editor/reference-guides/packages/packages-env/), which requires Docker and Docker Compose. Node.js 24, npm, and Composer are required to install the local dependencies. The repository's `.nvmrc` selects Node.js 24 when using nvm.
 
 ## Set up
 
@@ -37,6 +37,27 @@ Both WordPress environments are served on `host.docker.internal` (admin user: `a
 
 The same hostname is used from your browser and from inside either container, so cross-container HTTP calls and HMAC validation both line up against the same canonical URL.
 
+### How the two-site environment works
+
+`wp-env` normally creates a development environment and a test environment.
+Safe Publish uses both as regular WordPress sites so the complete transfer can
+be exercised locally:
+
+| Role        | `wp-env` environment | CLI target  | Default port | Sync mode |
+| ----------- | -------------------- | ----------- | ------------ | --------- |
+| Destination | Development          | `cli`       | 8888         | Import    |
+| Source      | Tests                | `tests-cli` | 8889         | Export    |
+
+Starting the environment runs the `afterStart` lifecycle script configured in
+`.wp-env.json`. The script, `bin/setup-env`, assigns each site's sync mode,
+connects the sites to each other, sets their shared authentication secret, and
+configures their canonical URLs and permalinks.
+
+Commands such as `npm run seed:full` use wrapper scripts that select the
+appropriate CLI target. Source seeding runs against `tests-cli`, while
+destination seeding runs against `cli`. You do not need to start or configure a
+second `wp-env` process manually.
+
 Stop the development environment with `Ctrl+C` and resume it by running the same command. You can also manually stop the environment with `npm run dev:stop`. Stopping the environment optionally stops the WordPress containers but preserves their state.
 
 ### Worktrees
@@ -47,10 +68,13 @@ To run additional checkouts (e.g. `git worktree` siblings) alongside the main on
 bin/setup-worktree
 ```
 
-The script installs dependencies and prints the next free `WP_ENV_PORT` and `WP_ENV_TESTS_PORT` pair (8890/8891 for the first worktree, 8892/8893 for the next, and so on). Then start wp-env with the printed values:
+The script installs dependencies, assigns the next free `WP_ENV_PORT` and
+`WP_ENV_TESTS_PORT` pair (8890/8891 for the first worktree, 8892/8893 for the
+next, and so on), and records the pair in `.devports`. Start the environment
+normally; the development scripts load those ports automatically:
 
 ```sh
-WP_ENV_PORT=8890 WP_ENV_TESTS_PORT=8891 npm run dev
+npm run dev
 ```
 
 When you're done with a worktree, tear it down so containers and volumes don't orphan:
@@ -146,23 +170,43 @@ npm run dev:destroy
 The development environment includes:
 
 - **Xdebug** for PHP debugging (port 9003)
-- **Node.js debugging port** for JavaScript debugging
 
 **Enable WordPress debug mode:**
 
-Add to `wp-config.php` in your local environment:
+Create the git-ignored `.wp-env.override.json` file in the repository root so
+the settings apply inside the wp-env containers:
 
-```php
-define( 'WP_DEBUG', true );
-define( 'WP_DEBUG_LOG', true );
-define( 'WP_DEBUG_DISPLAY', false );
-define( 'SCRIPT_DEBUG', true );
+```json
+{
+	"config": {
+		"WP_DEBUG": true,
+		"WP_DEBUG_LOG": true,
+		"WP_DEBUG_DISPLAY": false,
+		"SCRIPT_DEBUG": true
+	},
+	"env": {
+		"tests": {
+			"config": {
+				"WP_DEBUG": true,
+				"WP_DEBUG_LOG": true,
+				"WP_DEBUG_DISPLAY": false,
+				"SCRIPT_DEBUG": true
+			}
+		}
+	}
+}
 ```
+
+Restart the environment after changing the override.
 
 **View debug logs:**
 
 ```sh
-tail -f wp-content/debug.log
+# Destination site
+npx wp-env run cli -- tail -f /var/www/html/wp-content/debug.log
+
+# Source site
+npx wp-env run tests-cli -- tail -f /var/www/html/wp-content/debug.log
 ```
 
 **VSCode users:** You can rename `.vscode/launch.json.example` to `.vscode/launch.json` to enable Xdebug debugging in the editor.
@@ -211,7 +255,7 @@ Playgrounds do not closely mirror production environments and are missing persis
 1. **Use two browser windows** - one for source site, one for destination.
 2. **Test with different post types** - posts, pages, custom types.
 3. **Test media import** - posts with multiple images.
-4. **Check the Imports page** - verify the Posts and Needs attention tabs reflect each attempt.
+4. **Check the Manage page** - verify the Posts and Needs attention tabs reflect each attempt.
 5. **Monitor network requests** - use browser DevTools.
 6. **Test error conditions** - invalid URLs, auth failures, etc.
 

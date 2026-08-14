@@ -8,21 +8,26 @@ Before importing content, Safe Publish performs several validation checks to ens
 
 **What it checks:**
 
-- Source site URL is properly formatted.
-- URL uses HTTPS (required for production domains; HTTP is allowed for local development domains like `.test`, `.local`, `.dev`).
-- Domain is accessible and responds to requests.
-- Site is a WordPress installation with REST API enabled.
+- Source site URL is properly formatted and includes a host.
+- URL uses the `http` or `https` scheme.
+- The host is not a literal localhost name or a private/reserved IP address.
+
+URL validation checks only the configured value. The subsequent connection test
+checks whether the site is reachable, runs WordPress, exposes the required REST
+API routes, and accepts Safe Publish authentication.
 
 **Common failures:**
 
 - Invalid URL format (missing protocol, malformed)
-- HTTP instead of HTTPS (on production domains)
+- Unsupported URL scheme
+- A localhost or private/reserved IP literal
 - Site not accessible (DNS issues, firewall, down)
 - Non-WordPress site or REST API disabled
 
 **How to fix:**
 
-- Ensure URL includes `https://` protocol.
+- Include `https://` outside local development. The validator also accepts
+  `http://`, but it does not provide transport encryption.
 - Verify the site is accessible in a browser.
 - Check REST API: visit `https://your-site.com/wp-json`.
 
@@ -30,16 +35,16 @@ Before importing content, Safe Publish performs several validation checks to ens
 
 **What it checks:**
 
-- Credentials are provided (shared secret or basic auth).
+- A shared secret is configured on both sites.
 - Authentication succeeds with the source site.
-- User has required permissions (for basic auth).
+- Optional Basic Authentication credentials pass any upstream access gate.
 
 **Common failures:**
 
 - Missing or incorrect shared secret
 - Mismatched secrets between sites
 - Wrong username/password
-- User lacks required permissions
+- Basic Authentication is required by the source but missing or incorrect
 
 **How to fix:**
 
@@ -51,17 +56,20 @@ Before importing content, Safe Publish performs several validation checks to ens
 
 **What it checks:**
 
-- Post data structure is valid JSON.
-- Required fields are present (`id`, `title`).
+- The response is a non-empty JSON object.
+- Required raw edit-context fields are present (`title`, `content`, `excerpt`).
+- The source post has a positive ID and a non-empty title.
 - Post type is supported.
-- Content is not empty.
+
+Empty post content is valid and does not by itself block an import.
 
 **Common failures:**
 
 - Malformed JSON response
 - Missing required fields
 - Unsupported post type
-- Empty or corrupted content
+- Missing raw edit-context fields, usually because authentication or edit
+  permissions failed
 
 **How to fix:**
 
@@ -90,7 +98,14 @@ Kses sanitization can be opted into via the [`safe_publish_import_kses`](../exte
 
 ### 5. Media Validation
 
-Media is validated during the import process itself, not as a separate pre-import step. Failed media does not block the import — the post is still created and the original source URL is preserved. A link that looks like media but resolves to a page (for example an HTML page at a `.pdf` URL) is kept as a link, not downloaded or counted as a failure.
+Media is validated during the import process itself, not as a separate
+pre-import step. A failed inline-media or featured-image import aborts the post
+import. Attachments created earlier in the same attempt are cleaned up; an
+existing destination post is left unchanged.
+
+A link that looks like media but resolves to a page (for example, an HTML page
+at a `.pdf` URL) is kept as a link. That case is not treated as a failed media
+download.
 
 **What it checks (at import time):**
 
@@ -114,5 +129,5 @@ For a list of validation error codes and solutions, see the [Troubleshooting gui
 ## Next Steps
 
 - [Import Process](import-process.md) - Learn how content is imported
-- [Imports](imports.md) - Manage and review your imports
+- [Managing Imports](imports.md) - Browse and review your imports
 - [Troubleshooting](../troubleshooting.md) - Solve common issues

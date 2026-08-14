@@ -44,6 +44,6 @@ Audit log rows may contain destination URLs and post IDs. They do not contain po
 
 ## Next Steps
 
-- [Imports](imports.md) — Managing imported content and failed imports.
+- [Managing Imports](imports.md) — Browsing source content and reviewing imports.
 - [Authentication](authentication.md) — Setting up source/destination credentials.
 - [Troubleshooting](../troubleshooting.md) — Solving common issues.

@@ -3,16 +3,16 @@
 > [!WARNING]
 > This plugin is currently in Beta, and breaking changes could occur with any update. DO NOT USE IT ON PRODUCTION ENVIRONMENTS.
 
-**Safe Publish** is a WordPress plugin that allows editors to securely promote content from non-production environments (staging, development) to production. It provides a user-friendly interface for browsing, previewing, and importing posts, pages, and custom post types while preserving all formatting, media, and metadata.
+**Safe Publish** is a WordPress plugin that allows editors to securely promote content from non-production environments (staging, development) to production. It provides a user-friendly interface for browsing, comparing, and importing posts, pages, and custom post types while preserving supported formatting, media, and REST-exposed metadata.
 
 ## Features
 
-- **Secure Authentication**: Support for shared secret tokens and basic authentication
+- **Secure Authentication**: Required HMAC shared secret with optional basic authentication
 - **Content Preview**: View and compare content before importing with side-by-side diff view
 - **Bulk Import**: Import multiple posts at once with progress tracking
 - **Media Handling**: Automatically imports featured images and inline images
 - **Block Preservation**: Maintains Gutenberg block formatting and structure
-- **Imports page**: Manage imported posts, review failures, and roll back batches
+- **Manage page**: Browse source content, manage imports, review failures, and roll back changes
 - **Post Type Support**: Works with posts, pages, and custom post types
 - **VIP-Safe**: Built with WordPress VIP best practices and coding standards
 
@@ -31,7 +31,7 @@ Safe Publish is ideal for:
 - **PHP**: 8.2 or higher
 - **WordPress**: 6.8 or higher
 - **cURL**: PHP cURL extension with SSL support
-- **HTTPS**: Required for secure communication between sites
+- **Site URLs**: HTTP or HTTPS; use HTTPS outside local development
 - Administrator privileges on both source and destination sites
 
 ## Installation
@@ -45,7 +45,7 @@ See the [Quickstart Guide](docs/quickstart.md) for detailed instructions.
   - [Authentication](docs/concepts/authentication.md) - Setting up secure connections
   - [Content Validation](docs/concepts/validation.md) - Understanding validation checks
   - [Import Process](docs/concepts/import-process.md) - How imports work step-by-step
-  - [Imports](docs/concepts/imports.md) - Managing imported content and post-import problems
+  - [Managing Imports](docs/concepts/imports.md) - Browsing source content and managing imports
   - [Audit Log](docs/concepts/audit-log.md) - Reviewing logged events, including exports
 - **[Extending](docs/extending/index.md)** - Customize the plugin
   - [Hooks and Filters](docs/extending/hooks.md) - Available WordPress hooks
