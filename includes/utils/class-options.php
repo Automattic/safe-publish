@@ -203,6 +203,15 @@ class Options {
 	const META_SOURCE_TERM_URL = 'safe_publish_source_term_url';
 
 	/**
+	 * Term meta key marking a plugin-created term with its origin source.
+	 * Written once at creation, unlike the mutable pair above, so it gates
+	 * which terms an import may overwrite.
+	 *
+	 * @var string
+	 */
+	const META_TERM_ORIGIN_URL = 'safe_publish_term_origin_url';
+
+	/**
 	 * WordPress settings-API group slug shared by all plugin options.
 	 *
 	 * @var string

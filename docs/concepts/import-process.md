@@ -196,7 +196,11 @@ ACF and Secure Custom Fields (SCF) values are regular post meta. Migrate them wi
 
 ### Terms
 
-Source terms (categories, tags, and custom taxonomies) are synced, with their descriptions and hierarchy; terms missing on the destination are created automatically. The import sets a parent and description only on terms it creates, so a term that already exists on the destination is reused unchanged.
+Source terms (categories, tags, and custom taxonomies) are synced, with their descriptions and hierarchy; terms missing on the destination are created automatically.
+
+Re-importing also keeps an already-imported term's name, description, and parent current with the source: an edit made on the destination to a term Safe Publish created is overwritten on the next import. Only terms Safe Publish created for the connected source are updated, so a term authored on the destination or imported from another source is reused untouched. In a two-way setup, neither site overwrites the other's terms. Slugs never change, so destination URLs stay stable. Clearing a description or moving a term to the top level on the source carries over as well; a source running an older plugin version sends neither field, and both are then left as they are.
+
+A field that cannot be updated — because the new name is already taken, or the new parent cannot be resolved on the destination — keeps its current value, and the post still imports. Each field is handled on its own, so a blocked rename does not hold back the description. The gap is recorded as a degradation on the **Needs attention** tab naming the term. Resolving the clash and re-importing any post that uses the term updates it and clears the degradation for every post that reported it.
 
 Re-importing replaces a taxonomy's terms with the source's, so terms removed on the source are removed on the destination — including when the source post is left with none. Terms added on the destination by hand do not survive a re-import.
 
