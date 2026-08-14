@@ -517,7 +517,7 @@ class Post_Import_Service {
 	 * @param int        $source_parent_id Source post's parent ID. 0 means
 	 *                                     top-level on the source.
 	 * @param string     $post_type        Destination post type slug.
-	 * @param string     $source_site_url  Source site URL for scoping the lookup; '' skips it.
+	 * @param string     $source_site_url  Source site identity of the import.
 	 * @param array|null $batch_fresh_data Map of source ID => pass-1 fresh
 	 *                                     data for posts in the current bulk
 	 *                                     batch. Null for single-import.
@@ -1044,8 +1044,7 @@ class Post_Import_Service {
 	 * subsequent `get_post_meta` reads inside the indexing loop are cache hits.
 	 *
 	 * @param int[]  $source_ids      Source post IDs to look up.
-	 * @param string $source_site_url Source site URL that imports were tagged
-	 *                                with; pass '' to skip the scope filter.
+	 * @param string $source_site_url Source site identity of the imports.
 	 * @return array<int, WP_Post> Map keyed by source post ID.
 	 */
 	public function fetch_imported_posts_by_source_ids(
@@ -1056,26 +1055,21 @@ class Post_Import_Service {
 			return array();
 		}
 
-		$meta_query = array(
-			array(
-				'key'     => Options::META_SOURCE_POST_ID,
-				'value'   => $source_ids,
-				'compare' => 'IN',
-			),
-		);
-
-		if ( '' !== $source_site_url ) {
-			$meta_query['relation'] = 'AND';
-			$meta_query[]           = array(
-				'key'   => Options::META_SOURCE_SITE_URL,
-				'value' => $source_site_url,
-			);
-		}
-
 		$imported_posts = get_posts(
 			array(
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'             => $meta_query,
+				'meta_query'             => array(
+					'relation' => 'AND',
+					array(
+						'key'     => Options::META_SOURCE_POST_ID,
+						'value'   => $source_ids,
+						'compare' => 'IN',
+					),
+					array(
+						'key'   => Options::META_SOURCE_SITE_URL,
+						'value' => $source_site_url,
+					),
+				),
 				'post_type'              => 'any',
 				'post_status'            => 'any',
 				'posts_per_page'         => count( $source_ids ),
@@ -1114,10 +1108,11 @@ class Post_Import_Service {
 	 * Bypasses the WP_Query result cache so this lookup sees INSERTs
 	 * committed by parallel requests.
 	 *
+	 * Compares the identity by value, so empty-identity siblings still match.
+	 *
 	 * @param int    $source_post_id   Source post ID stored in postmeta.
 	 * @param int    $just_inserted_id Post ID returned by wp_insert_post().
-	 * @param string $source_site_url  Source site URL to scope the lookup by;
-	 *                                 '' skips the scope filter.
+	 * @param string $source_site_url  Source site identity of the new insert.
 	 * @return WP_Post|null Winning sibling, or null when the just-inserted
 	 *                      post wins (lowest ID) or no sibling exists.
 	 */
@@ -1126,25 +1121,20 @@ class Post_Import_Service {
 		int $just_inserted_id,
 		string $source_site_url
 	): ?WP_Post {
-		$meta_query = array(
-			array(
-				'key'   => Options::META_SOURCE_POST_ID,
-				'value' => $source_post_id,
-			),
-		);
-
-		if ( '' !== $source_site_url ) {
-			$meta_query['relation'] = 'AND';
-			$meta_query[]           = array(
-				'key'   => Options::META_SOURCE_SITE_URL,
-				'value' => $source_site_url,
-			);
-		}
-
 		$oldest = get_posts(
 			array(
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'             => $meta_query,
+				'meta_query'             => array(
+					'relation' => 'AND',
+					array(
+						'key'   => Options::META_SOURCE_POST_ID,
+						'value' => $source_post_id,
+					),
+					array(
+						'key'   => Options::META_SOURCE_SITE_URL,
+						'value' => $source_site_url,
+					),
+				),
 				'post_type'              => 'any',
 				'post_status'            => 'any',
 				'posts_per_page'         => 1,
@@ -1175,33 +1165,27 @@ class Post_Import_Service {
 	 * destination's post type up-front.
 	 *
 	 * @param int    $source_post_id  Source post ID stored in post meta.
-	 * @param string $source_site_url Source site URL the import was tagged
-	 *                                with; pass '' to skip the scope filter.
+	 * @param string $source_site_url Source site identity of the import.
 	 * @return WP_Post|null Imported post or null if not found.
 	 */
 	public function find_imported_post(
 		int $source_post_id,
 		string $source_site_url
 	): ?WP_Post {
-		$meta_query = array(
-			array(
-				'key'   => Options::META_SOURCE_POST_ID,
-				'value' => $source_post_id,
-			),
-		);
-
-		if ( '' !== $source_site_url ) {
-			$meta_query['relation'] = 'AND';
-			$meta_query[]           = array(
-				'key'   => Options::META_SOURCE_SITE_URL,
-				'value' => $source_site_url,
-			);
-		}
-
 		$existing_posts = get_posts(
 			array(
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'       => $meta_query,
+				'meta_query'       => array(
+					'relation' => 'AND',
+					array(
+						'key'   => Options::META_SOURCE_POST_ID,
+						'value' => $source_post_id,
+					),
+					array(
+						'key'   => Options::META_SOURCE_SITE_URL,
+						'value' => $source_site_url,
+					),
+				),
 				// Source post IDs identify a source-side post irrespective of
 				// type, so look across all post types.
 				'post_type'        => 'any',
@@ -2623,7 +2607,8 @@ class Post_Import_Service {
 		);
 
 		$this->content_processor->disable_content_filters();
-		$result = wp_update_post( $post_args );
+		// Core unslashes as it saves.
+		$result = wp_update_post( wp_slash( $post_args ) );
 		$this->content_processor->restore_content_filters();
 
 		if ( is_wp_error( $result ) ) {
@@ -2791,13 +2776,15 @@ class Post_Import_Service {
 		int $post_id,
 		array $snapshot
 	): void {
-		wp_update_post( $snapshot['post_fields'] );
+		// The snapshot holds raw database reads, so it needs re-slashing on the
+		// way back in.
+		wp_update_post( wp_slash( $snapshot['post_fields'] ) );
 
 		foreach ( $snapshot['tracking_meta'] as $key => $value ) {
 			if ( '' === $value ) {
 				delete_post_meta( $post_id, $key );
 			} else {
-				update_post_meta( $post_id, $key, $value );
+				update_post_meta( $post_id, $key, wp_slash( $value ) );
 			}
 		}
 
@@ -2811,7 +2798,7 @@ class Post_Import_Service {
 			if ( '' === $value ) {
 				delete_post_meta( $post_id, $key );
 			} else {
-				update_post_meta( $post_id, $key, $value );
+				update_post_meta( $post_id, $key, wp_slash( $value ) );
 			}
 		}
 
@@ -2842,6 +2829,9 @@ class Post_Import_Service {
 	 * terms failure the post and any sideloaded media are cleaned up. Used by
 	 * both single and bulk import paths.
 	 *
+	 * meta_input must carry META_SOURCE_SITE_URL: The concurrent-duplicate
+	 * lookup compares it by value, so an absent row matches no sibling.
+	 *
 	 * @param array        $post_args              Arguments for wp_insert_post() (including meta_input).
 	 * @param int          $featured_attachment_id Sideloaded featured image attachment ID (0 = none).
 	 * @param array|object $meta                   Meta data.
@@ -2868,7 +2858,7 @@ class Post_Import_Service {
 		array &$term_outcome = array()
 	): int|WP_Error {
 		$this->content_processor->disable_content_filters();
-		$post_id = wp_insert_post( $post_args );
+		$post_id = wp_insert_post( wp_slash( $post_args ) );
 		$this->content_processor->restore_content_filters();
 
 		if ( is_wp_error( $post_id ) ) {
