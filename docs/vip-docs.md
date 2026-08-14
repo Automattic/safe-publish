@@ -152,7 +152,7 @@ The **Imports** admin page is the operator surface for everything that came in f
 
 ### Previewing changes with a diff
 
-The Diff action on the Imports → Posts tab compares the current local post with the current source content, covering the title, content, excerpt, featured image, metadata, and taxonomy terms. It can be viewed inline or side by side, and for block-editor content the diff is computed block by block so editors can see exactly which blocks were added, removed, or changed. The modal also offers an Update button that re-imports the post from the source.
+The Diff action on the Imports → Posts tab compares the current local post with the current source content, covering the title, content, excerpt, featured image, metadata, and taxonomy terms. It is shown side by side, and for block-editor content the diff is computed block by block so editors can see exactly which blocks were added, removed, or changed. The modal also offers an Update button that re-imports the post from the source.
 
 ### Rolling back imports
 
