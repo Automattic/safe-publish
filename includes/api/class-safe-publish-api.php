@@ -71,17 +71,6 @@ final class Safe_Publish_API extends REST_Base {
 						'type'     => 'string',
 						'default'  => 'post',
 					),
-					'mode'     => array(
-						'required' => false,
-						'type'     => 'string',
-						'enum'     => array( 'split', 'inline' ),
-						'default'  => 'split',
-					),
-					'cleanup'  => array(
-						'required' => false,
-						'type'     => 'boolean',
-						'default'  => true,
-					),
 				),
 				'callback'            => array( $this, 'render_diff' ),
 			)

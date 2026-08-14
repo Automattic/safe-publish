@@ -118,7 +118,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'post' );
-		$request->set_param( 'mode', 'split' );
 
 		// ACT: Render the diff.
 		$renderer = new Diff_Renderer();
@@ -170,7 +169,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'post' );
-		$request->set_param( 'mode', 'split' );
 
 		// ACT: Render the diff.
 		$renderer = new Diff_Renderer();
@@ -238,7 +236,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'post' );
-		$request->set_param( 'mode', 'split' );
 
 		// ACT: Render the diff.
 		$renderer = new Diff_Renderer();
@@ -373,7 +370,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'post' );
-		$request->set_param( 'mode', 'split' );
 
 		// ACT: Test Diff_Renderer directly with mock callable.
 		$renderer = new Diff_Renderer();
@@ -483,7 +479,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		);
 		$request->set_param( 'postId', self::SOURCE_POST_ID + 1 );
 		$request->set_param( 'postType', 'post' );
-		$request->set_param( 'mode', 'split' );
 
 		// ACT: Render the diff.
 		$renderer = new Diff_Renderer();
@@ -605,7 +600,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		);
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'sp_movie' );
-		$request->set_param( 'mode', 'split' );
 
 		// ACT: Render the diff with the recording callable.
 		$renderer = new Diff_Renderer();
@@ -891,7 +885,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		);
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'post' );
-		$request->set_param( 'mode', 'split' );
 
 		// ACT: Render the diff.
 		$renderer = new Diff_Renderer();
