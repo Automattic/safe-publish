@@ -26,15 +26,15 @@ The **Sync Status** column compares each imported post against the current sourc
 
 ### Actions
 
-| Action   | Description                                                                |
-| -------- | -------------------------------------------------------------------------- |
-| Edit     | Opens the local post in the WordPress editor.                              |
-| Update   | Re-imports the post from the source, overwriting local content.            |
-| Diff     | Shows the difference between the pre-import snapshot and the current post. |
-| Delete   | Moves the local post to trash.                                             |
-| Rollback | Reverts the most recent import — restores updates, deletes new creations.  |
+| Action   | Description                                                               |
+| -------- | ------------------------------------------------------------------------- |
+| Edit     | Opens the local post in the WordPress editor.                             |
+| Update   | Re-imports the post from the source, overwriting local content.           |
+| Compare  | Compares the local post with the current source content.                  |
+| Delete   | Moves the local post to trash.                                            |
+| Rollback | Reverts the most recent import — restores updates, deletes new creations. |
 
-Update, Delete, and Rollback support bulk selection; Diff is single-row only. Rollback eligibility tracks the items-table status: only `success` and `updated` rows that have not already been rolled back can be reverted.
+Update, Delete, and Rollback support bulk selection; Compare is single-row only. Rollback eligibility tracks the items-table status: only `success` and `updated` rows that have not already been rolled back can be reverted.
 
 ### Filtering
 

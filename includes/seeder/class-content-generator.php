@@ -368,7 +368,8 @@ class Content_Generator {
 	 * @return string Post excerpt.
 	 */
 	public function excerpt( int $index ): string {
-		return "Excerpt for seeded {$this->type} number {$index}.";
+		return "Excerpt for seeded {$this->type} number {$index}. "
+			. 'Backslash sample: C:\builds\out.';
 	}
 
 	/**
@@ -390,6 +391,14 @@ class Content_Generator {
 		$content .= "\n\n<!-- wp:paragraph -->\n"
 			. '<p>Second paragraph with additional content for testing the '
 			. "import process and URL rewriting.</p>\n"
+			. '<!-- /wp:paragraph -->';
+
+		// Backslashes an import must preserve: In the body, and in the \uXXXX
+		// escapes core writes for a quote or non-ASCII in a block attribute.
+		$content .= "\n\n<!-- wp:paragraph "
+			. "{\"metadata\":{\"name\":\"Caf\\u00e9 \\u0022notes\\u0022\"}} -->\n"
+			. '<p>Regex <code>/\d+/</code> and path <code>C:\builds\out</code>.'
+			. "</p>\n"
 			. '<!-- /wp:paragraph -->';
 
 		foreach ( $image_refs as $image ) {
@@ -432,6 +441,8 @@ class Content_Generator {
 			. 'It uses the classic editor.</p>';
 		$content .= "\n<p>Second paragraph with additional content for testing "
 			. 'the import process and URL rewriting.</p>';
+		$content .= "\n" . '<p>Regex <code>/\d+/</code> and path '
+			. '<code>C:\builds\out</code>.</p>';
 
 		$first = true;
 
