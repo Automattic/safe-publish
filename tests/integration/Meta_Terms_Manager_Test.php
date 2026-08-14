@@ -277,6 +277,27 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that update_terms() reports an unregistered taxonomy carrying
+	 * terms but omits one sent empty, which leaves nothing unattached.
+	 */
+	public function test_update_terms_omits_an_empty_taxonomy(): void {
+		// ARRANGE: Two unregistered taxonomies, one emptied, one with a term.
+		$terms = array(
+			'empty_taxonomy_xyz' => array(),
+			'bad_taxonomy_xyz'   => array( 'Term A' ),
+		);
+
+		// ACT: Run the update.
+		$result = $this->manager->update_terms( $this->post_id, $terms );
+
+		// ASSERT: Only the taxonomy that lost a term is reported.
+		$this->assertSame(
+			array( 'bad_taxonomy_xyz' => array( 'Term A' ) ),
+			$result
+		);
+	}
+
+	/**
 	 * Verifies that update_terms() keeps processing the registered taxonomies
 	 * after skipping an unregistered one that precedes them.
 	 */

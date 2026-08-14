@@ -32,61 +32,50 @@ define( 'SAFE_PUBLISH_PLUGIN_FILE', __FILE__ );
 define( 'SAFE_PUBLISH_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SAFE_PUBLISH_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
-// Autoloader for classes.
+// Autoloader for plugin symbols using WordPress filename conventions.
 spl_autoload_register(
-	function ( $class_name ): void {
-		// Only autoload Safe_Publish classes.
-		if ( 0 !== strpos( $class_name, 'Safe_Publish\\' ) ) {
-				return;
+	static function ( string $class_name ): void {
+		$namespace = 'Safe_Publish\\';
+
+		if ( ! str_starts_with( $class_name, $namespace ) ) {
+			return;
 		}
 
-		// Convert namespace to file path.
-		$class_path = str_replace( 'Safe_Publish\\', '', $class_name );
-		$class_path = str_replace( '\\', '/', $class_path );
-		$class_path = strtolower( $class_path );
-		$class_path = str_replace( '_', '-', $class_path );
+		$relative_path = substr( $class_name, strlen( $namespace ) );
+		$relative_path = strtolower(
+			str_replace( array( '\\', '_' ), array( '/', '-' ), $relative_path )
+		);
+		$separator     = strrpos( $relative_path, '/' );
+		$directory     = false === $separator
+			? ''
+			: substr( $relative_path, 0, $separator + 1 );
+		$symbol_name   = false === $separator
+			? $relative_path
+			: substr( $relative_path, $separator + 1 );
+		$includes_path = realpath( SAFE_PUBLISH_PLUGIN_DIR . 'includes' );
 
-		// Map class names to file paths.
-		$file_path = SAFE_PUBLISH_PLUGIN_DIR . 'includes/';
-
-		// Handle specific namespace mappings.
-		if ( 0 === strpos( $class_path, 'admin/' ) ) {
-			$file_path .= 'admin/class-' . str_replace( 'admin/', '', $class_path ) . '.php';
-		} elseif ( 0 === strpos( $class_path, 'api/' ) ) {
-			$file_path .= 'api/class-' . str_replace( 'api/', '', $class_path ) . '.php';
-		} elseif ( 0 === strpos( $class_path, 'auth/' ) ) {
-			$file_path .= 'auth/class-' . str_replace( 'auth/', '', $class_path ) . '.php';
-		} elseif ( 0 === strpos( $class_path, 'media/' ) ) {
-			$file_path .= 'media/class-' . str_replace( 'media/', '', $class_path ) . '.php';
-		} elseif ( 0 === strpos( $class_path, 'content/' ) ) {
-			$file_path .= 'content/class-' . str_replace( 'content/', '', $class_path ) . '.php';
-		} elseif ( 0 === strpos( $class_path, 'utils/' ) ) {
-			$file_path .= 'utils/class-' . str_replace( 'utils/', '', $class_path ) . '.php';
-		} elseif ( 0 === strpos( $class_path, 'seeder/' ) ) {
-			$file_path .= 'seeder/class-' . str_replace( 'seeder/', '', $class_path ) . '.php';
-		} elseif ( 0 === strpos( $class_path, 'validators/' ) ) {
-			$file_path .= 'validators/class-' . str_replace( 'validators/', '', $class_path ) . '.php';
-		} else {
-			$file_path .= 'class-' . $class_path . '.php';
+		if ( false === $includes_path ) {
+			return;
 		}
 
-		// VIP-safe file inclusion with proper validation.
-		// Ensure the file path is within the plugin directory for security.
-		$real_plugin_dir = realpath( SAFE_PUBLISH_PLUGIN_DIR );
-		$real_file_path  = realpath( $file_path );
+		$includes_prefix = $includes_path . DIRECTORY_SEPARATOR;
+		$directory       = str_replace( '/', DIRECTORY_SEPARATOR, $directory );
 
-		// Try trait prefix if class prefix doesn't resolve.
-		if ( ! $real_file_path ) {
-			$file_path      = str_replace( '/class-', '/trait-', $file_path );
+		foreach ( array( 'class-', 'trait-' ) as $prefix ) {
+			$file_path      = $includes_prefix . $directory . $prefix
+				. $symbol_name . '.php';
 			$real_file_path = realpath( $file_path );
-		}
 
-		// Validate that the file exists and is within the plugin directory.
-		if ( $real_file_path
-			&& 0 === strpos( $real_file_path, $real_plugin_dir )
-		) {
-			// phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable -- Safe file inclusion within plugin directory with validation
-			require_once $file_path;
+			if (
+				false === $real_file_path
+				|| ! str_starts_with( $real_file_path, $includes_prefix )
+			) {
+				continue;
+			}
+
+			// phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable -- Validated path within the includes directory.
+			require_once $real_file_path;
+			return;
 		}
 	}
 );

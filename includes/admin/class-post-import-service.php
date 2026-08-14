@@ -517,7 +517,7 @@ class Post_Import_Service {
 	 * @param int        $source_parent_id Source post's parent ID. 0 means
 	 *                                     top-level on the source.
 	 * @param string     $post_type        Destination post type slug.
-	 * @param string     $source_site_url  Source site URL for scoping the lookup; '' skips it.
+	 * @param string     $source_site_url  Source site identity of the import.
 	 * @param array|null $batch_fresh_data Map of source ID => pass-1 fresh
 	 *                                     data for posts in the current bulk
 	 *                                     batch. Null for single-import.
@@ -2607,7 +2607,8 @@ class Post_Import_Service {
 		);
 
 		$this->content_processor->disable_content_filters();
-		$result = wp_update_post( $post_args );
+		// Core unslashes as it saves.
+		$result = wp_update_post( wp_slash( $post_args ) );
 		$this->content_processor->restore_content_filters();
 
 		if ( is_wp_error( $result ) ) {
@@ -2775,13 +2776,15 @@ class Post_Import_Service {
 		int $post_id,
 		array $snapshot
 	): void {
-		wp_update_post( $snapshot['post_fields'] );
+		// The snapshot holds raw database reads, so it needs re-slashing on the
+		// way back in.
+		wp_update_post( wp_slash( $snapshot['post_fields'] ) );
 
 		foreach ( $snapshot['tracking_meta'] as $key => $value ) {
 			if ( '' === $value ) {
 				delete_post_meta( $post_id, $key );
 			} else {
-				update_post_meta( $post_id, $key, $value );
+				update_post_meta( $post_id, $key, wp_slash( $value ) );
 			}
 		}
 
@@ -2795,7 +2798,7 @@ class Post_Import_Service {
 			if ( '' === $value ) {
 				delete_post_meta( $post_id, $key );
 			} else {
-				update_post_meta( $post_id, $key, $value );
+				update_post_meta( $post_id, $key, wp_slash( $value ) );
 			}
 		}
 
@@ -2826,6 +2829,9 @@ class Post_Import_Service {
 	 * terms failure the post and any sideloaded media are cleaned up. Used by
 	 * both single and bulk import paths.
 	 *
+	 * meta_input must carry META_SOURCE_SITE_URL: The concurrent-duplicate
+	 * lookup compares it by value, so an absent row matches no sibling.
+	 *
 	 * @param array        $post_args              Arguments for wp_insert_post() (including meta_input).
 	 * @param int          $featured_attachment_id Sideloaded featured image attachment ID (0 = none).
 	 * @param array|object $meta                   Meta data.
@@ -2852,7 +2858,7 @@ class Post_Import_Service {
 		array &$term_outcome = array()
 	): int|WP_Error {
 		$this->content_processor->disable_content_filters();
-		$post_id = wp_insert_post( $post_args );
+		$post_id = wp_insert_post( wp_slash( $post_args ) );
 		$this->content_processor->restore_content_filters();
 
 		if ( is_wp_error( $post_id ) ) {

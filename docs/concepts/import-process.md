@@ -204,7 +204,7 @@ A field that cannot be updated — because the new name is already taken, or the
 
 Re-importing replaces a taxonomy's terms with the source's, so terms removed on the source are removed on the destination — including when the source post is left with none. Terms added on the destination by hand do not survive a re-import.
 
-Custom taxonomies must be registered with `'show_in_rest' => true` on the source site. A taxonomy that is not registered on the destination is skipped: the post imports without those term assignments, and the gap is recorded as a degradation on the **Needs attention** tab. Registering the taxonomy and re-importing the post attaches the terms and clears the degradation.
+Custom taxonomies must be registered with `'show_in_rest' => true` on the source site. A taxonomy that is not registered on the destination is skipped: the post imports without those term assignments, and the gap is recorded as a degradation on the **Needs attention** tab. Registering the taxonomy and re-importing the post attaches the terms and clears the degradation. When the source post has no terms in that taxonomy, nothing is lost and no degradation is recorded.
 
 ## Stage 5: Track
 
