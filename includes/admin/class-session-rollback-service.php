@@ -408,7 +408,9 @@ final class Session_Rollback_Service {
 			$restore_data['post_password'] = $changes['previous_password'];
 		}
 
-		$updated = wp_update_post( $restore_data, true );
+		// The history record holds raw database reads, so it needs re-slashing
+		// on the way back in.
+		$updated = wp_update_post( wp_slash( $restore_data ), true );
 
 		if ( is_wp_error( $updated ) ) {
 			return new WP_Error(
@@ -443,7 +445,7 @@ final class Session_Rollback_Service {
 		}
 
 		foreach ( $changes['previous_meta'] as $meta_key => $meta_value ) {
-			update_post_meta( $post_id, $meta_key, $meta_value );
+			update_post_meta( $post_id, $meta_key, wp_slash( $meta_value ) );
 		}
 	}
 

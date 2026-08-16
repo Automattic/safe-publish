@@ -58,8 +58,7 @@ final class Seeder_Parity_Fixture {
 
 	/**
 	 * Anchor UUID linking the footnotes edge body's in-text reference to its
-	 * meta entry, as WordPress does. ASCII and slash-free so the meta JSON
-	 * round-trips verbatim through update_post_meta().
+	 * meta entry, as WordPress does.
 	 */
 	private const FOOTNOTE_ANCHOR_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 

@@ -357,7 +357,8 @@ class SeederContentGeneratorTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that the excerpt encodes type and index.
+	 * Verifies that the excerpt encodes type and index, and carries a
+	 * backslash sample.
 	 */
 	public function test_excerpt_format(): void {
 		// ARRANGE: A post generator.
@@ -368,7 +369,7 @@ class SeederContentGeneratorTest extends TestCase {
 
 		// ASSERT: Standard sentence form.
 		$this->assertSame(
-			'Excerpt for seeded post number 12.',
+			'Excerpt for seeded post number 12. Backslash sample: C:\builds\out.',
 			$excerpt
 		);
 	}
@@ -391,6 +392,25 @@ class SeederContentGeneratorTest extends TestCase {
 
 		// ASSERT: No image block was rendered.
 		$this->assertStringNotContainsString( '<!-- wp:image', $content );
+	}
+
+	/**
+	 * Verifies that gutenberg content carries the backslash-bearing block
+	 * attribute the parity suite relies on.
+	 */
+	public function test_gutenberg_content_carries_escaped_attribute(): void {
+		// ARRANGE: Any generator and an empty image_refs.
+		$generator = $this->build_generator();
+
+		// ACT: Build content with no image references.
+		$content = $generator->gutenberg_content( 1, array() );
+
+		// ASSERT: The attribute keeps core's \uXXXX escapes verbatim, so an
+		// unslashed write corrupts it detectably.
+		$this->assertStringContainsString(
+			'{"metadata":{"name":"Caf\u00e9 \u0022notes\u0022"}}',
+			$content
+		);
 	}
 
 	/**

@@ -405,6 +405,31 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that with no source connected the check returns no statuses,
+	 * instead of resolving the previously connected source's posts and
+	 * reporting them unreachable.
+	 */
+	public function test_returns_no_statuses_without_a_connection(): void {
+		// ARRANGE: An imported post, then the connection is cleared.
+		$source_id = 4006;
+		$this->seed_imported_post( $source_id, '2024-01-01 12:00:00' );
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
+
+		$this->authenticate_request(
+			array( 'source_ids' => array( (string) $source_id ) )
+		);
+
+		// ACT: Dispatch.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_sync_status_batch' );
+
+		// ASSERT: Empty status map, and no catalog call was attempted.
+		$response = $this->decode_response();
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( array(), $response['data']['statuses'] );
+		$this->assertSame( 0, $this->catalog_request_count );
+	}
+
+	/**
 	 * Verifies that a mixed-type batch issues one signed source request per
 	 * post type — pages and posts can't be queried in a single catalog call.
 	 */

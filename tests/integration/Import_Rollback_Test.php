@@ -1027,6 +1027,75 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that a rollback restores backslashes verbatim.
+	 *
+	 * The snapshot holds raw database reads, so the restore has to re-slash it.
+	 */
+	public function test_rollback_restores_backslashes(): void {
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ARRANGE: Import a post whose fields and meta carry backslashes.
+		$title   = 'Windows path A\B';
+		$excerpt = 'Backslash sample: C:\builds\out.';
+		$content = '<p>namespace App\Models; $re = "\d+";</p>';
+		$meta    = array( 'my_field' => 'C:\builds\out' );
+
+		$post_data = array(
+			'id'        => 9150,
+			'title'     => $title,
+			'link'      => 'https://source.example.com/backslash-rollback',
+			'post_type' => 'posts',
+			'meta'      => $meta,
+		);
+
+		$this->mock_post_overrides = array(
+			'title'   => $title,
+			'excerpt' => $excerpt,
+			'content' => $content,
+			'meta'    => $meta,
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
+		$post_id = $first['post_id'];
+
+		// ARRANGE: The next fetch changes the fields and adds a term that
+		// cannot be created, so the update aborts after the post write.
+		$this->mock_post_overrides = array(
+			'title'   => 'Updated title',
+			'excerpt' => 'Updated excerpt.',
+			'content' => '<p>Updated content.</p>',
+			'meta'    => array( 'my_field' => 'updated' ),
+			'terms'   => array( 'category' => array( 'Uncreatable Term' ) ),
+		);
+		$filter                    = $this->fail_term_creation();
+
+		// ACT: Re-import, which fails at the terms step and rolls back.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'pre_insert_term', $filter );
+
+		// ASSERT: The update failed, so a rollback ran.
+		$this->assertFalse(
+			$result['success'],
+			'Update import should fail when a term cannot be created.'
+		);
+
+		// ASSERT: Every restored field still carries its backslashes.
+		$post = get_post( $post_id );
+		$this->assertNotNull( $post );
+		$this->assertSame( $title, $post->post_title );
+		$this->assertSame( $excerpt, $post->post_excerpt );
+		$this->assertSame( $content, $post->post_content );
+		$this->assertSame(
+			$meta['my_field'],
+			get_post_meta( $post_id, 'my_field', true )
+		);
+	}
+	/**
 	 * Returns a pre_http_request filter that intercepts the wp/v2/media JSON
 	 * endpoint for a specific media ID and returns a distinct source_url.
 	 *
