@@ -41,7 +41,7 @@ beforeEach( () => {
 			datetimeAbbreviated: 'M j, Y g:i a',
 		},
 		timezone: {
-			offset:          -4,
+			offset:          '-4',
 			offsetFormatted: '-4',
 			string:          'America/New_York',
 			abbr:            'EDT',

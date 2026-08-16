@@ -7,8 +7,6 @@
  * @file This file defines the BulkImportFlow component.
  */
 
-import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
-import { getErrorMessage, renderWarningShortLabel } from '../utils';
 import {
 	Button,
 	ProgressBar,
@@ -19,6 +17,9 @@ import {
 } from '@wordpress/components';
 import { useState } from '@wordpress/element';
 import { __, _n, sprintf } from '@wordpress/i18n';
+
+import { getErrorMessage, renderWarningShortLabel } from '../utils';
+import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
 
 import type {
 	ApiResponse,

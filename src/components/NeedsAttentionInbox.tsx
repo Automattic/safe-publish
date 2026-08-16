@@ -5,17 +5,6 @@
  *
  * @file This file defines the NeedsAttentionInbox component.
  */
-import { update } from '@wordpress/icons';
-
-import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
-import { createNeedsAttentionActions, type ActionNotice } from '../actions';
-import { DEFAULT_ITEMS_PER_PAGE, LAYOUT_TABLE } from '../constants';
-import {
-	attentionIssueLabel,
-	formatDateTime,
-	getErrorMessage,
-	renderIssueMessage,
-} from '../utils';
 import {
 	Button,
 	Notice,
@@ -26,6 +15,17 @@ import {
 import { DataViews, View } from '@wordpress/dataviews';
 import { useCallback, useEffect, useRef, useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
+import { update } from '@wordpress/icons';
+
+import { createNeedsAttentionActions, type ActionNotice } from '../actions';
+import { DEFAULT_ITEMS_PER_PAGE, LAYOUT_TABLE } from '../constants';
+import {
+	attentionIssueLabel,
+	formatDateTime,
+	getErrorMessage,
+	renderIssueMessage,
+} from '../utils';
+import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 
 import type {
 	ApiResponse,

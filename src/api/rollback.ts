@@ -8,8 +8,9 @@
  * @file This file defines the rollback API helpers for the Safe Publish plugin.
  */
 
-import { getErrorMessage } from '../utils';
 import { __ } from '@wordpress/i18n';
+
+import { getErrorMessage } from '../utils';
 
 import type { ApiResponse, UnifiedPostRow } from '../types';
 

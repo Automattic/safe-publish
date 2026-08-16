@@ -9,8 +9,6 @@
  * @file This file defines the DeleteFailedImportsModal component.
  */
 
-import { ApiResponse } from '../types';
-import { getErrorMessage } from '../utils';
 import {
 	Button,
 	__experimentalText as Text,
@@ -20,6 +18,9 @@ import {
 } from '@wordpress/components';
 import { useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
+
+import { ApiResponse } from '../types';
+import { getErrorMessage } from '../utils';
 
 /**
  * A failure row to remove. Orphans carry only an itemId; source-linked

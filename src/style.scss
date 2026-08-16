@@ -668,6 +668,7 @@ html:has(body.toplevel_page_safe-publish) {
 	color: var(--wp-admin-theme-color);
 }
 
+/* stylelint-disable-next-line no-descending-specificity */
 .safe-publish-dataviews-wrapper .dataviews-title-field a:hover {
 	text-decoration: underline;
 }

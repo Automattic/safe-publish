@@ -8,10 +8,11 @@
  * @file This file defines the AuthStatusNotice component.
  */
 
-import { AuthStatus } from '../types';
 import { Notice } from '@wordpress/components';
 import { createInterpolateElement } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
+
+import { AuthStatus } from '../types';
 
 /**
  * Props for the AuthStatusNotice component.

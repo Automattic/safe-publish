@@ -10,11 +10,6 @@
  */
 
 import {
-	isRollbackRestore,
-	rollbackItems,
-	type BulkRollbackResult,
-} from '../api/rollback';
-import {
 	Button,
 	__experimentalText as Text,
 	__experimentalHStack as HStack,
@@ -24,6 +19,12 @@ import {
 } from '@wordpress/components';
 import { useState } from '@wordpress/element';
 import { __, _n, sprintf } from '@wordpress/i18n';
+
+import {
+	isRollbackRestore,
+	rollbackItems,
+	type BulkRollbackResult,
+} from '../api/rollback';
 
 import type { UnifiedPostRow } from '../types';
 

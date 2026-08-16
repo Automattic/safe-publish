@@ -3,8 +3,7 @@
  * DateRangeFilter consumer.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { getSettings, setSettings } from '@wordpress/date';
-import type { DateSettings } from '@wordpress/date/build-types/types';
+import { getSettings, setSettings, type DateSettings } from '@wordpress/date';
 
 import { calendarRangeToUtcBounds } from '@/components/filter-controls';
 
@@ -36,7 +35,7 @@ describe( 'calendarRangeToUtcBounds', () => {
 		setSettings( {
 			...originalSettings,
 			timezone: {
-				offset,
+				offset: String( offset ),
 				offsetFormatted: String( offset ),
 				string: zone,
 				abbr: zone,

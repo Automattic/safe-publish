@@ -8,9 +8,6 @@
  * @file This file defines the ImportModal component.
  */
 
-import { useImportPost } from './hooks/useImportPost';
-import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
-import { renderWarningMessage } from '../utils';
 import {
 	Button,
 	__experimentalText as Text,
@@ -19,6 +16,10 @@ import {
 	Spinner,
 } from '@wordpress/components';
 import { __, _n, sprintf } from '@wordpress/i18n';
+
+import { renderWarningMessage } from '../utils';
+import { useImportPost } from './hooks/useImportPost';
+import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
 
 /**
  * Props for the ImportModal component.
