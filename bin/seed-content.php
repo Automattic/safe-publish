@@ -147,15 +147,18 @@ function safe_publish_seeder_run( array $args ): void {
 
 		$payload = $generator->generate( $i, $image_refs );
 
+		// Core unslashes as it saves.
 		$post_id = wp_insert_post(
-			array(
-				'post_title'   => $payload['title'],
-				'post_name'    => $payload['slug'],
-				'post_content' => $payload['content'],
-				'post_excerpt' => $payload['excerpt'],
-				'post_status'  => $payload['status'],
-				'post_type'    => $payload['post_type'],
-				'post_date'    => $payload['date'],
+			wp_slash(
+				array(
+					'post_title'   => $payload['title'],
+					'post_name'    => $payload['slug'],
+					'post_content' => $payload['content'],
+					'post_excerpt' => $payload['excerpt'],
+					'post_status'  => $payload['status'],
+					'post_type'    => $payload['post_type'],
+					'post_date'    => $payload['date'],
+				)
 			),
 			true
 		);
@@ -169,7 +172,7 @@ function safe_publish_seeder_run( array $args ): void {
 		}
 
 		foreach ( $payload['meta'] as $key => $value ) {
-			update_post_meta( $post_id, $key, $value );
+			update_post_meta( $post_id, $key, wp_slash( $value ) );
 		}
 
 		safe_publish_seeder_apply_term_assignments(
@@ -400,21 +403,26 @@ function safe_publish_seeder_update_content(
 		$new_rev     = $revision_arg > 0 ? $revision_arg : $current_rev + 1;
 
 		$result = wp_update_post(
-			array(
-				'ID'           => $post_id,
-				'post_title'   => Content_Generator::apply_revision_suffix(
-					$post->post_title,
-					$new_rev
-				),
-				'post_excerpt' => Content_Generator::apply_revision_suffix(
-					$post->post_excerpt,
-					$new_rev
-				),
-				'post_content' => Content_Generator::apply_revision_to_content(
-					$post->post_content,
-					$new_rev
-				),
-				'post_status'  => $generator->resolve_status( $index, $new_rev ),
+			wp_slash(
+				array(
+					'ID'           => $post_id,
+					'post_title'   => Content_Generator::apply_revision_suffix(
+						$post->post_title,
+						$new_rev
+					),
+					'post_excerpt' => Content_Generator::apply_revision_suffix(
+						$post->post_excerpt,
+						$new_rev
+					),
+					'post_content' => Content_Generator::apply_revision_to_content(
+						$post->post_content,
+						$new_rev
+					),
+					'post_status'  => $generator->resolve_status(
+						$index,
+						$new_rev
+					),
+				)
 			),
 			true
 		);
@@ -429,7 +437,7 @@ function safe_publish_seeder_update_content(
 		}
 
 		foreach ( $generator->meta_values( $index, $new_rev ) as $key => $value ) {
-			update_post_meta( $post_id, $key, $value );
+			update_post_meta( $post_id, $key, wp_slash( $value ) );
 		}
 
 		safe_publish_seeder_apply_term_assignments(
