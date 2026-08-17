@@ -13,8 +13,9 @@ Before importing content, Safe Publish performs several validation checks to ens
 - The host is not a literal localhost name or a private/reserved IP address.
 
 URL validation checks only the configured value. The subsequent connection test
-checks whether the site is reachable, runs WordPress, exposes the required REST
-API routes, and accepts Safe Publish authentication.
+probes `wp-json/wp/v2/posts?context=edit&per_page=1` to check whether the site is
+reachable and accepts Safe Publish authentication. It does not probe the
+`safe-publish/v1` routes.
 
 **Common failures:**
 
@@ -100,8 +101,10 @@ Kses sanitization can be opted into via the [`safe_publish_import_kses`](../exte
 
 Media is validated during the import process itself, not as a separate
 pre-import step. A failed inline-media or featured-image import aborts the post
-import. Attachments created earlier in the same attempt are cleaned up; an
-existing destination post is left unchanged.
+import. An inline-media failure cleans up attachments created earlier in the
+same attempt. A featured-image failure leaves any inline-media attachments
+created earlier in the attempt in place. In either case, an existing destination
+post is left unchanged.
 
 A link that looks like media but resolves to a page (for example, an HTML page
 at a `.pdf` URL) is kept as a link. That case is not treated as a failed media

@@ -24,7 +24,12 @@ badge before it moves into the Outdated view on the next listing refresh. A
 failed live comparison shows **Sync check failed**; there is no Unknown local
 state.
 
-The tab is scoped to the connected source site, so import state is resolved against that site alone: a source post ID imported under a previous connection reads as not imported. Changing the connection hides the previous site's rows without deleting them; reconnecting brings them back.
+The tab is scoped to the connected source site, so import state is resolved
+against that site alone: a source post ID imported under a previous connection
+reads as not imported. Changing the connection hides the previous site's rows
+without deleting them. Reconnecting with a URL that has the same scheme, host,
+port, and path brings them back. A trailing slash, query, or fragment does not
+affect the stored source identity.
 
 ### Columns
 
@@ -55,10 +60,11 @@ Import, Trash, and Roll back support bulk selection. Compare is available for
 one outdated post at a time. An Up to date row does not offer Import or Compare
 unless the live source check finds a newer version.
 
-Rollback eligibility comes from the latest active import-history row. A
-successful new import can be rolled back by deleting the destination post; a
-successful update can be rolled back when Safe Publish captured the previous
-content.
+Rollback eligibility comes from the latest active import-history row. Only
+`success` and `updated` rows that have not already been rolled back are
+eligible. Rolling back a successful new import deletes the destination post.
+Rolling back an update restores the previous content when Safe Publish captured
+it, or deletes the post when no previous content was captured.
 
 ### Filtering and search
 
@@ -91,7 +97,9 @@ with Ignore.
 
 The tab is scoped to the connected source site. Changing the connection hides
 the previous site's failures and degradations without deleting them;
-reconnecting brings them back.
+reconnecting with a URL that has the same scheme, host, port, and path brings
+them back. A trailing slash, query, or fragment does not affect the stored
+source identity.
 
 ### Columns
 
@@ -115,16 +123,19 @@ reconnecting brings them back.
 These actions support bulk selection where applicable. Degradations show
 **Resolvable now** when the referenced target has been imported and **Waiting
 on import** while it is still missing. Importing the target does not
-automatically retry existing degradations.
+automatically retry existing degradations. A bulk Retry reports how many issues
+resolved, are still waiting on an import, or failed. Remove remains available
+for failures in the Ignored view.
 
 Removing a failure affects only its history record. To recover, fix the cause
-and import the source post again from the Posts tab. A later successful import
-for the same source removes its previous failure from the list automatically.
+and import the source post again from the Posts tab. Any later import attempt
+for the same source supersedes its previous failure. If the later attempt also
+fails, the new failure appears instead.
 
-Ignore is reversible: a fresh failed attempt or re-detecting the same
-degradation returns the item to Open. Remove permanently deletes a failure
-record. Degradations do not offer Remove; they clear after a successful Retry
-or re-import.
+Ignore is reversible with Un-ignore. A fresh failed attempt creates a new open
+failure, but re-detecting the same degradation keeps the existing issue ignored.
+Remove permanently deletes a failure record. Degradations do not offer Remove;
+they clear after a successful Retry or re-import.
 
 ## Post-import notice
 
