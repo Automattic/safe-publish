@@ -23,6 +23,7 @@ use Safe_Publish\Utils\Sync_State_Comparator;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
 use Safe_Publish\Utils\Topological_Sorter;
+use Safe_Publish\Validators\URL_Validator;
 use WP_Post;
 
 // Prevent direct access.
@@ -1685,6 +1686,7 @@ final class Admin_Ajax_Controller {
 		$this->verify_ajax_capability( 'edit_posts' );
 
 		$this->validate_auth_or_fail();
+		$this->validate_connection_or_fail();
 
 		$source_post_id = absint( $_POST['source_post_id'] ?? 0 );
 		$title          = sanitize_text_field( wp_unslash( $_POST['title'] ?? '' ) );
@@ -1800,6 +1802,7 @@ final class Admin_Ajax_Controller {
 		$this->verify_ajax_capability( 'edit_posts' );
 
 		$this->validate_auth_or_fail();
+		$this->validate_connection_or_fail();
 
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON string not sanitized to preserve structure; validated after decode.
 		$posts_data_json = isset( $_POST['posts_data'] ) ? wp_unslash( $_POST['posts_data'] ) : '';
@@ -2351,5 +2354,28 @@ final class Admin_Ajax_Controller {
 				401
 			);
 		}
+	}
+
+	/**
+	 * Sends a JSON error response when no usable source site is connected.
+	 * Applies the fetch layer's URL validation, so an unparseable, non-HTTP, or
+	 * private-host connection never opens a session.
+	 */
+	private function validate_connection_or_fail(): void {
+		$connected_site_url = (string) Options::get_value(
+			Options::OPTION_CONNECTED_SITE_URL,
+			''
+		);
+
+		if ( URL_Validator::is_valid_external_url( $connected_site_url ) ) {
+			return;
+		}
+
+		wp_send_json_error(
+			__(
+				'No source site is connected. Configure a valid connected site URL in the settings page before importing.',
+				'safe-publish'
+			)
+		);
 	}
 }
