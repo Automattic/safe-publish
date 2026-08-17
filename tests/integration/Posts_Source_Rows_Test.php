@@ -61,6 +61,33 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Inserts a session row carrying no source identity, bypassing
+	 * create_session(), which refuses an empty source.
+	 *
+	 * @return int Session id.
+	 */
+	private function insert_session_without_source(): int {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->insert(
+			Imports_Table::table_name(),
+			array(
+				'user_id'           => 0,
+				'user_display_name' => 'Unknown user',
+				'source_site_url'   => '',
+				'session_type'      => 'bulk',
+				'status'            => 'in_progress',
+				'ended_at_gmt'      => null,
+				'created_at_gmt'    => current_time( 'mysql', true ),
+			),
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s' )
+		);
+
+		return (int) $wpdb->insert_id;
+	}
+
+	/**
 	 * Inserts a single items-table row with arbitrary fields.
 	 *
 	 * @param array $overrides Field overrides.
@@ -587,7 +614,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		$named = self::factory()->post->create();
 		$this->insert_item(
 			array(
-				'session_id'      => $this->create_session( '' ),
+				'session_id'      => $this->insert_session_without_source(),
 				'source_post_id'  => 984,
 				'status'          => 'success',
 				'post_id'         => $anon,
