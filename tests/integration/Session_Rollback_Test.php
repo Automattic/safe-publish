@@ -457,6 +457,59 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that restoring a previous version keeps the backslashes in both
+	 * the post fields and the restored metadata.
+	 */
+	public function test_restore_previous_version_keeps_backslashes(): void {
+		// ARRANGE: An updated post whose pre-update version carried
+		// backslashes, logged so rollback restores it.
+		$title      = 'Windows path A\B';
+		$excerpt    = 'Backslash sample: C:\builds\out.';
+		$content    = '<p>namespace App\Models; $re = "\d+";</p>';
+		$meta_value = 'C:\builds\out';
+
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create(
+			array(
+				'post_title'   => 'Updated',
+				'post_content' => 'New content.',
+			)
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Updated',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_title'   => $title,
+				'previous_excerpt' => $excerpt,
+				'previous_content' => $content,
+				'previous_meta'    => array( 'my_field' => $meta_value ),
+				'action'           => 'updated_existing',
+			)
+		);
+
+		// ACT: Roll the item back, restoring the previous version.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The restore ran and every field came back byte for byte.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'restored', $result['action'] );
+
+		$post = get_post( $post_id );
+		$this->assertNotNull( $post );
+		$this->assertSame( $title, $post->post_title );
+		$this->assertSame( $excerpt, $post->post_excerpt );
+		$this->assertSame( $content, $post->post_content );
+		$this->assertSame(
+			$meta_value,
+			get_post_meta( $post_id, 'my_field', true )
+		);
+	}
+
+	/**
 	 * Verifies that rollback only affects successful/updated imports.
 	 */
 	public function test_rollback_ignores_failed_imports(): void {

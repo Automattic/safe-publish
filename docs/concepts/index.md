@@ -7,7 +7,7 @@ Safe Publish is a WordPress plugin that allows editors to promote content from n
 **Safe Publish** is a plugin that enables controlled content migration from non-production WordPress environments (staging, development) to production environments. It provides a secure, user-friendly interface for:
 
 - Browsing content from source WordPress sites via the WordPress REST API
-- Previewing and comparing content before importing
+- Comparing an imported post against the current source content before updating it
 - Importing posts, pages, and custom post types while preserving supported formatting and media
 - Seeing at a glance whether imported content is still in sync with its source
 - Tracking import history for auditing and compliance purposes
