@@ -847,12 +847,14 @@ final class Diff_Renderer {
 			);
 		}
 
-		$records = $this->drop_empty_unregistered_taxonomies( $records );
+		$term_objects = $current['term_objects'] ?? array();
 
-		$local = array_intersect_key(
-			$current['term_objects'] ?? array(),
-			$records
+		$records = $this->drop_untouched_taxonomies(
+			$records,
+			$term_objects
 		);
+
+		$local = array_intersect_key( $term_objects, $records );
 
 		$plans = ( new Meta_Terms_Manager() )->plan_terms(
 			$records,
@@ -881,19 +883,23 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Drops a payload taxonomy the destination does not register and the
-	 * source sent empty, which the import neither attaches nor reports.
+	 * Drops a payload taxonomy the source sent empty and the post carries no
+	 * terms in, which the import neither attaches nor clears.
 	 *
-	 * @param array $records Source term records by taxonomy.
+	 * @param array $records      Source term records by taxonomy.
+	 * @param array $term_objects Local terms by taxonomy.
 	 *
 	 * @return array Records left to compare.
 	 */
-	private function drop_empty_unregistered_taxonomies( array $records ): array {
+	private function drop_untouched_taxonomies(
+		array $records,
+		array $term_objects
+	): array {
 		return array_filter(
 			$records,
 			static fn( mixed $items, string|int $taxonomy ): bool =>
 				array() !== $items
-				|| taxonomy_exists( sanitize_key( (string) $taxonomy ) ),
+				|| array() !== ( $term_objects[ $taxonomy ] ?? array() ),
 			ARRAY_FILTER_USE_BOTH
 		);
 	}

@@ -669,6 +669,33 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a registered taxonomy the source sends empty and the post
+	 * has no terms in is not reported, since the import writes nothing there.
+	 */
+	public function test_empty_taxonomy_is_not_an_addition(): void {
+		// ARRANGE: An imported category the source matches, on a post carrying
+		// no tags.
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) )
+		);
+		$this->assertFalse( get_the_terms( $this->post_id, 'post_tag' ) );
+
+		// ACT: The source sends the matching category, with the empty tag list
+		// it emits for a taxonomy the post has no terms in.
+		$html = $this->render_term_map(
+			array(
+				'category' => array(
+					$this->record( 101, 'News', 'news', 0, 'Desk' ),
+				),
+				'post_tag' => array(),
+			)
+		);
+
+		// ASSERT: Nothing differs, so the section is omitted.
+		$this->assertSame( '', $html );
+	}
+
+	/**
 	 * Verifies that a parent renamed on the source is not reported as a parent
 	 * the import leaves alone, since the import applies the rename.
 	 */
@@ -814,7 +841,8 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Renders the diff and returns its taxonomies section.
+	 * Renders the diff and returns its taxonomies section, always sending both
+	 * taxonomy keys as the source does.
 	 *
 	 * @param array $categories Source category records.
 	 * @param array $tags       Source tag records.
@@ -824,13 +852,12 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		array $categories,
 		array $tags = array()
 	): string {
-		$terms = array( 'category' => $categories );
-
-		if ( array() !== $tags ) {
-			$terms['post_tag'] = $tags;
-		}
-
-		return $this->render_term_map( $terms );
+		return $this->render_term_map(
+			array(
+				'category' => $categories,
+				'post_tag' => $tags,
+			)
+		);
 	}
 
 	/**
