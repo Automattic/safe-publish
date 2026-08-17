@@ -781,6 +781,171 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the create draft endpoint refuses an import when no source
+	 * site is connected, without opening a session.
+	 */
+	public function test_ajax_create_draft_refuses_import_without_connection(): void {
+		// ARRANGE: Drop the connection configured for the other tests.
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '8010',
+			'title'          => 'Unconnected Import',
+			'source_link'    => 'https://source.example.com/unconnected',
+			'post_type'      => 'post',
+		);
+
+		// ACT: Trigger the create draft AJAX handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: The import is refused by the endpoint. The settings-page
+		// wording distinguishes it from the session layer's fallback error.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertFalse(
+			$response['success'],
+			'Should refuse an import with no connected source site'
+		);
+		$this->assertStringContainsString(
+			'settings page',
+			strtolower( $response['data'] ),
+			'Refusal should point at the settings page'
+		);
+
+		// ASSERT: No session row recorded an empty source identity.
+		$this->assertSame(
+			0,
+			$this->count_all_sessions(),
+			'No session row should exist after a refused import'
+		);
+	}
+
+	/**
+	 * Verifies that the create draft endpoint refuses an import when the
+	 * connected site URL has no parseable source identity.
+	 */
+	public function test_ajax_create_draft_refuses_unparseable_connection(): void {
+		// ARRANGE: A connection saved without a scheme.
+		update_option( Options::OPTION_CONNECTED_SITE_URL, 'example.com/blog' );
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '8011',
+			'title'          => 'Unparseable Connection Import',
+			'source_link'    => 'https://source.example.com/unparseable',
+			'post_type'      => 'post',
+		);
+
+		// ACT: Trigger the create draft AJAX handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: The import is refused and no session row carries the
+		// unparseable value.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertFalse(
+			$response['success'],
+			'Should refuse an import with an unparseable connected site URL'
+		);
+		$this->assertSame(
+			0,
+			$this->count_all_sessions(),
+			'No session row should exist after a refused import'
+		);
+	}
+
+	/**
+	 * Verifies that the create draft endpoint refuses an import when the
+	 * connected site URL parses but carries a scheme the source requests would
+	 * reject, so no session records an unusable identity.
+	 */
+	public function test_ajax_create_draft_refuses_non_http_connection(): void {
+		// ARRANGE: A connection with a parseable host but an unusable scheme.
+		update_option(
+			Options::OPTION_CONNECTED_SITE_URL,
+			'javascript://source.example.com'
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '8014',
+			'title'          => 'Disallowed Scheme Import',
+			'source_link'    => 'https://source.example.com/disallowed-scheme',
+			'post_type'      => 'post',
+		);
+
+		// ACT: Trigger the create draft AJAX handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: The import is refused and no session carries the scheme.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertFalse(
+			$response['success'],
+			'Should refuse an import with a non-HTTP connected site URL'
+		);
+		$this->assertSame(
+			0,
+			$this->count_all_sessions(),
+			'No session row should exist after a refused import'
+		);
+	}
+
+	/**
+	 * Verifies that the create draft endpoint refuses an import when no source
+	 * site is connected even though a post imported from a previous source
+	 * carries the requested source post ID, so the confirmation prompt cannot
+	 * disclose that post's title.
+	 */
+	public function test_ajax_create_draft_refuses_without_connection_before_confirming(): void {
+		// ARRANGE: A post imported from a previously connected source, and no
+		// connection configured.
+		$existing_post_id = wp_insert_post(
+			array(
+				'post_title'  => 'Imported From Old Source',
+				'post_status' => 'draft',
+				'post_type'   => 'post',
+			)
+		);
+		update_post_meta( $existing_post_id, Options::META_SOURCE_POST_ID, '8012' );
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://old.example.com'
+		);
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '8012',
+			'title'          => 'Fresh Attempt',
+			'source_link'    => 'https://source.example.com/fresh-attempt',
+			'post_type'      => 'post',
+		);
+
+		// ACT: Trigger the create draft AJAX handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: The refusal is returned instead of the force-update prompt.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertFalse(
+			$response['success'],
+			'Should refuse rather than prompt to update the existing post'
+		);
+		$this->assertStringNotContainsString(
+			'Imported From Old Source',
+			(string) $response['data'],
+			'Refusal must not disclose the existing post title'
+		);
+	}
+
+	/**
 	 * Verifies that the bulk import endpoint rejects a batch with more than 50
 	 * posts.
 	 */
@@ -810,6 +975,54 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		$this->assertIsArray( $response, 'Response should be a JSON object' );
 		$this->assertFalse( $response['success'], 'Should reject oversized batches' );
 		$this->assertStringContainsString( '50', $response['data'], 'Error should mention the 50-post limit' );
+	}
+
+	/**
+	 * Verifies that the bulk import endpoint refuses a batch when no source
+	 * site is connected, without opening a session.
+	 */
+	public function test_ajax_bulk_import_refuses_import_without_connection(): void {
+		// ARRANGE: Drop the connection and prepare a single-post batch.
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'      => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'posts_data' => wp_json_encode(
+				array(
+					array(
+						'id'        => 8013,
+						'title'     => 'Unconnected Bulk Post',
+						'link'      => 'https://source.example.com/unconnected-bulk',
+						'post_type' => 'posts',
+					),
+				)
+			),
+		);
+
+		// ACT: Trigger the bulk import handler.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_import' );
+
+		// ASSERT: The batch is refused outright, not reported as a partial
+		// failure inside a success envelope.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertFalse(
+			$response['success'],
+			'Should refuse a batch with no connected source site'
+		);
+		$this->assertStringContainsString(
+			'settings page',
+			strtolower( $response['data'] ),
+			'Refusal should point at the settings page'
+		);
+
+		// ASSERT: No session row recorded an empty source identity.
+		$this->assertSame(
+			0,
+			$this->count_all_sessions(),
+			'No session row should exist after a refused batch'
+		);
 	}
 
 	/**
