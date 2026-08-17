@@ -651,6 +651,128 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a term this plugin did not create is annotated when the
+	 * source moves it to the top level, since the import leaves its parent.
+	 */
+	public function test_ineligible_term_the_source_roots_is_annotated(): void {
+		// ARRANGE: A hand-authored term under a hand-authored parent, on the post.
+		self::factory()->term->create(
+			array(
+				'taxonomy' => 'category',
+				'name'     => 'Politics',
+				'slug'     => 'politics',
+			)
+		);
+		self::factory()->term->create(
+			array(
+				'taxonomy'    => 'category',
+				'name'        => 'News',
+				'slug'        => 'news',
+				'parent'      => (int) $this->term_by_slug( 'politics' )->term_id,
+				'description' => '',
+			)
+		);
+		wp_set_post_terms(
+			$this->post_id,
+			array( (int) $this->term_by_slug( 'news' )->term_id ),
+			'category'
+		);
+
+		// ACT: The source sends the term at the top level.
+		$html = $this->render_taxonomies(
+			array( $this->record( 101, 'News', 'news', 0, '' ) )
+		);
+
+		// ASSERT: The dropped parent shows, annotated on the term that keeps it.
+		$this->assertStringContainsString(
+			'news (category) parent: Politics (politics)',
+			implode( "\n", $this->changed_lines( $html ) )
+		);
+		$this->assertSame(
+			array( 'news (category): parent not updated on import' ),
+			$this->notes( $html )
+		);
+	}
+
+	/**
+	 * Verifies that a move the import will not make is annotated on the term
+	 * that stays put, not on the parent it names, whose name is unchanged.
+	 */
+	public function test_ineligible_move_is_annotated_on_the_term(): void {
+		// ARRANGE: A hand-authored term under one hand-authored parent, on the
+		// post, with a second parent for the source to move it under.
+		foreach ( array(
+			'Politics' => 'politics',
+			'World'    => 'world',
+		) as $name => $slug ) {
+			self::factory()->term->create(
+				array(
+					'taxonomy' => 'category',
+					'name'     => $name,
+					'slug'     => $slug,
+				)
+			);
+		}
+
+		self::factory()->term->create(
+			array(
+				'taxonomy'    => 'category',
+				'name'        => 'News',
+				'slug'        => 'news',
+				'parent'      => (int) $this->term_by_slug( 'politics' )->term_id,
+				'description' => '',
+			)
+		);
+		wp_set_post_terms(
+			$this->post_id,
+			array( (int) $this->term_by_slug( 'news' )->term_id ),
+			'category'
+		);
+
+		// ACT: The source sends the term under the second parent.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 300, 'World', 'world', 0, '', false ),
+				$this->record( 101, 'News', 'news', 300, '' ),
+			)
+		);
+
+		// ASSERT: One note, naming the term and its unwritten parent.
+		$this->assertSame(
+			array( 'news (category): parent not updated on import' ),
+			$this->notes( $html )
+		);
+	}
+
+	/**
+	 * Verifies that terms are ordered by slug, so an input order the two sides
+	 * disagree on cannot manufacture a difference.
+	 */
+	public function test_terms_are_ordered_by_slug(): void {
+		// ARRANGE: Two imported terms whose names sort against their slugs.
+		$this->import_terms(
+			array(
+				$this->record( 101, 'Zulu', 'alpha', 0, '' ),
+				$this->record( 102, 'Alpha', 'zulu', 0, '' ),
+			)
+		);
+
+		// ACT: The source renames the second.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 101, 'Zulu', 'alpha', 0, '' ),
+				$this->record( 102, 'Alpha Desk', 'zulu', 0, '' ),
+			)
+		);
+
+		// ASSERT: The summary follows the slugs, not the names.
+		$this->assertStringContainsString(
+			'category: Zulu (alpha), Alpha Desk (zulu)',
+			implode( "\n", $this->changed_lines( $html ) )
+		);
+	}
+
+	/**
 	 * Renders the diff and returns its taxonomies section.
 	 *
 	 * @param array $categories Source category records.
