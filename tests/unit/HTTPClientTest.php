@@ -95,11 +95,13 @@ class HTTPClientTest extends TestCase {
 		// ACT: Issue a catalog request through the shared client.
 		$result = $this->make_catalog_request();
 
-		// ASSERT: The error carries both the HTTP code and the source message.
+		// ASSERT: The HTTP code and the source message read as one sentence
+		// pair, separated by a single space.
 		$this->assertInstanceOf( WP_Error::class, $result );
-		$error_message = $result->get_error_message();
-		$this->assertStringContainsString( '400', $error_message );
-		$this->assertStringContainsString( $detail, $error_message );
+		$this->assertSame(
+			'Source site returned HTTP error 400. ' . $detail,
+			$result->get_error_message()
+		);
 	}
 
 	/**
