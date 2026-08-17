@@ -723,6 +723,32 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a caller who cannot edit posts is denied outright, rather
+	 * than told whether the site has a source connected.
+	 */
+	public function test_diff_preview_endpoint_hides_missing_connection_without_edit_posts(): void {
+		// ARRANGE: No authenticated user, and the connection cleared.
+		wp_set_current_user( 0 );
+		delete_option( 'safe_publish_connected_site_url' );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'content', wp_json_encode( array( 'title' => 'New Title' ) ) );
+		$request->set_param( 'postType', 'post' );
+
+		// ACT: Dispatch through REST server.
+		$response = $this->server->dispatch( $request );
+
+		// ASSERT: A bare authorization denial, not the connection refusal.
+		$this->assertInstanceOf( WP_REST_Response::class, $response );
+		$this->assertSame(
+			rest_authorization_required_code(),
+			$response->get_status()
+		);
+		$this->assertSame( 'rest_forbidden', $response->get_data()['code'] );
+	}
+
+	/**
 	 * Verifies that the diff-preview endpoint returns 403 when no local post
 	 * matches the source post ID, and the user lacks the edit_others_posts capability.
 	 */

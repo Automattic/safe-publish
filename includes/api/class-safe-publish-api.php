@@ -105,6 +105,11 @@ final class Safe_Publish_API extends REST_Base {
 	public function check_diff_preview_permission(
 		WP_REST_Request $request
 	): bool|WP_Error {
+		// Surface the connection refusal only to users who could act on it.
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			return false;
+		}
+
 		$source_site_url = Options::get_connected_site_url_with_path();
 
 		if ( '' === $source_site_url ) {
