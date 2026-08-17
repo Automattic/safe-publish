@@ -124,7 +124,7 @@
     ]
   },
   "dependencies": {
-    "@wordpress/dataviews": "^4.22.0",
+    "@wordpress/dataviews": "4.22.0",
     "diff": "9.0.0"
   },
   "overrides": {

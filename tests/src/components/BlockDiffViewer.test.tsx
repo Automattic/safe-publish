@@ -62,4 +62,32 @@ describe( 'BlockDiffViewer', () => {
 		// strips unchanged entries.
 		expect( screen.getByText( 'modified' ) ).toBeInTheDocument();
 	} );
+
+	it( 'highlights added and removed words in modified blocks', () => {
+		// ARRANGE: One modified block with a word-level change.
+		const blocks: BlockDiff[] = [
+			buildBlock( {
+				status: 'modified',
+				current: {
+					name: 'core/paragraph',
+					rendered: '<p>The old body.</p>',
+				},
+				incoming: {
+					name: 'core/paragraph',
+					rendered: '<p>The new body.</p>',
+				},
+			} ),
+		];
+
+		// ACT: Render the inline diff.
+		const { container } = render( <BlockDiffViewer blocks={ blocks } /> );
+
+		// ASSERT: The changed words retain their added and removed markers.
+		expect(
+			container.querySelector( '.safe-publish-inline-removed' )
+		).toHaveTextContent( 'old' );
+		expect(
+			container.querySelector( '.safe-publish-inline-added' )
+		).toHaveTextContent( 'new' );
+	} );
 } );
