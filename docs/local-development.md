@@ -29,7 +29,8 @@ npm run dev
 ```
 
 This will spin up two WordPress environments, build the block editor scripts,
-load their shared secret from `.wp-env.json`, and watch for changes.
+inject the shared secret configured in `.wp-env.json` into each site's
+`wp-config.php`, and watch for changes.
 
 Both WordPress environments are served on `host.docker.internal` (admin user: `admin`, password: `password`):
 
@@ -50,9 +51,10 @@ be exercised locally:
 | Source      | Tests                | `tests-cli` | 8889         | Export    |
 
 Starting the environment runs the `afterStart` lifecycle script configured in
-`.wp-env.json`. That file supplies the shared authentication secret to both
-sites. The `bin/setup-env` script assigns each site's sync mode, connects the
-sites to each other, and configures their canonical URLs and permalinks.
+`.wp-env.json`. Its `config` entries inject the shared authentication secret
+into both sites as a `wp-config.php` constant. The `bin/setup-env` script
+assigns each site's sync mode, connects the sites to each other, and configures
+their canonical URLs and permalinks.
 
 Commands such as `npm run seed:full` use wrapper scripts that select the
 appropriate CLI target. Source seeding runs against `tests-cli`, while

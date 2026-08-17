@@ -8,7 +8,7 @@
 ## Features
 
 - **Secure Authentication**: Required HMAC shared secret with optional basic authentication
-- **Content Compare**: Compare an imported post with fresh source content before updating it, inline or side by side
+- **Content Compare**: Compare an imported post with fresh source content side by side before updating it
 - **Bulk Import**: Import multiple posts at once with progress tracking
 - **Media Handling**: Automatically imports featured images and inline images
 - **Block Preservation**: Maintains Gutenberg block formatting and structure

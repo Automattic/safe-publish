@@ -67,7 +67,7 @@ The plugin uses a small set of terms consistently throughout its interface and t
 - **Sync mode** — a per-site setting that determines whether a site acts as a source (`export`), a destination (`import`), or both (`bidirectional`).
 - **Catalog** — the list of posts available on the source site, served through a REST API endpoint and browsed from the destination.
 - **Import** — creating a destination draft or updating an existing imported post. A bulk run records several items in one history session.
-- **Compare** — a side-by-side or inline comparison of fresh source content against the current destination post.
+- **Compare** — a side-by-side comparison of fresh source content against the current destination post.
 - **Roll back** — reversing the latest eligible import for a selected post. Rolling back a created post deletes it. Rolling back an updated post restores the previous content when it was captured, or deletes the post when it was not.
 
 ## Requirements
@@ -154,7 +154,7 @@ The **Manage** page has two tabs:
 
 ### Previewing changes with Compare
 
-The Compare action on **Manage → Posts** fetches fresh source content and compares it with the current destination post, covering the title, content, excerpt, featured image, metadata, and taxonomy terms. It can be viewed inline or side by side, and block-editor content is compared block by block. The modal offers an **Update** button to re-import the post.
+The Compare action on **Manage → Posts** fetches fresh source content and compares it with the current destination post, covering the title, content, excerpt, featured image, metadata, and taxonomy terms. It is shown side by side, and block-editor content is compared block by block. The modal offers an **Update** button to re-import the post.
 
 ### Rolling back imports
 
