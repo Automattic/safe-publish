@@ -436,7 +436,6 @@ class Source_Media_REST_Field {
 				'orderby'        => 'menu_order ID',
 				'order'          => 'ASC',
 				// TODO: Paginate while preserving the complete rendered set.
-				// Fetch every attachment to preserve the complete rendered set.
 				// phpcs:ignore WordPressVIPMinimum.Performance.NoPaging
 				'numberposts'    => -1,
 			)

@@ -2217,7 +2217,6 @@ class Post_Import_Service {
 				'post_status'      => 'any',
 				'post_parent'      => 0,
 				// TODO: Paginate without leaving orphaned attachments behind.
-				// Fetch every matching orphan so none remain incorrectly detached.
 				// phpcs:ignore WordPressVIPMinimum.Performance.NoPaging
 				'posts_per_page'   => -1,
 				'fields'           => 'ids',

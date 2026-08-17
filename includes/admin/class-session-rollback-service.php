@@ -220,7 +220,6 @@ final class Session_Rollback_Service {
 				'post_status'      => 'any',
 				'post_parent'      => $post_id,
 				// TODO: Paginate without leaving owned attachments behind.
-				// Fetch every owned attachment so rollback leaves none behind.
 				// phpcs:ignore WordPressVIPMinimum.Performance.NoPaging
 				'posts_per_page'   => -1,
 				'fields'           => 'ids',
