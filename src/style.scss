@@ -560,8 +560,7 @@ html:has(body.toplevel_page_safe-publish) {
 	// Strip default anchor underline and WP admin's a:focus box-shadow
 	// ring on mouse click; :focus-visible preserves keyboard focus.
 	/* stylelint-disable no-descending-specificity */
-	.safe-publish-block-diff a,
-	.incoming-featured-media-preview a {
+	:where(.safe-publish-block-diff, .incoming-featured-media-preview) a {
 		text-decoration: none;
 
 		&:focus:not(:focus-visible) {
@@ -668,7 +667,6 @@ html:has(body.toplevel_page_safe-publish) {
 	color: var(--wp-admin-theme-color);
 }
 
-/* stylelint-disable-next-line no-descending-specificity */
 .safe-publish-dataviews-wrapper .dataviews-title-field a:hover {
 	text-decoration: underline;
 }
