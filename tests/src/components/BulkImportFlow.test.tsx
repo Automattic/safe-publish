@@ -163,3 +163,43 @@ describe( 'BulkImportFlow results summary', () => {
 		).not.toBeInTheDocument();
 	} );
 } );
+
+describe( 'BulkImportFlow outcome announcements', () => {
+	afterEach( () => {
+		vi.unstubAllGlobals();
+	} );
+
+	it( 'Verifies that the outcome heading lands in a live region', async () => {
+		// ARRANGE + ACT: A mixed run resolves.
+		runImport( 1, 1 );
+
+		// ASSERT: The heading is the modal's status message.
+		expect( await screen.findByRole( 'status' ) ).toHaveTextContent(
+			'Import completed with errors'
+		);
+	} );
+
+	it( 'Verifies that a rejected request lands in an alert region', async () => {
+		// ARRANGE: The endpoint refuses the whole request.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: async () => ( {
+					success: false,
+					data: { message: 'Source site unreachable' },
+				} ),
+			} )
+		);
+
+		// ACT: Run the import.
+		render(
+			<BulkImportFlow posts={ POSTS } context={ CONTEXT } onClose={ () => {} } />
+		);
+		fireEvent.click( screen.getByRole( 'button', { name: 'Import 2 posts' } ) );
+
+		// ASSERT: The error is announced assertively.
+		expect( await screen.findByRole( 'alert' ) ).toHaveTextContent(
+			'Source site unreachable'
+		);
+	} );
+} );
