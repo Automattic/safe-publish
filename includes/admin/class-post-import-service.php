@@ -20,6 +20,7 @@ use Safe_Publish\Utils\Reconcile_Logger;
 use Safe_Publish\Utils\Reconcile_Outcome;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
+use Safe_Publish\Utils\Term_Reconcile_Report;
 use Exception;
 use WP_Error;
 use WP_Post;
@@ -1376,7 +1377,7 @@ class Post_Import_Service {
 		);
 
 		$skipped_taxonomies = array();
-		$term_outcome       = array();
+		$term_report        = new Term_Reconcile_Report();
 
 		$post_id = $this->persist_updated_post(
 			$post_args,
@@ -1387,12 +1388,12 @@ class Post_Import_Service {
 			$fields['source_author'],
 			$fields['source_parent_id'],
 			$skipped_taxonomies,
-			$term_outcome
+			$term_report
 		);
 
 		// Ahead of the error return: The term writes it clears up after survive
 		// the rollback.
-		$this->resolve_term_conflict_issues( $term_outcome );
+		$this->resolve_term_conflict_issues( $term_report );
 
 		if ( is_wp_error( $post_id ) ) {
 			$error_data = $post_id->get_error_data();
@@ -1417,7 +1418,7 @@ class Post_Import_Service {
 		}
 
 		$this->add_unregistered_taxonomy_warnings( $fields, $skipped_taxonomies );
-		$this->add_term_conflict_warnings( $fields, $term_outcome );
+		$this->add_term_conflict_warnings( $fields, $term_report );
 		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
 		$this->record_attention_issues( $fields, $post_id );
 
@@ -1558,7 +1559,7 @@ class Post_Import_Service {
 
 		$source_site_url    = Options::get_connected_site_url_with_path();
 		$skipped_taxonomies = array();
-		$term_outcome       = array();
+		$term_report        = new Term_Reconcile_Report();
 
 		$post_id = $this->persist_new_post(
 			array(
@@ -1587,12 +1588,12 @@ class Post_Import_Service {
 			$fields['source_author'],
 			$fields['source_parent_id'],
 			$skipped_taxonomies,
-			$term_outcome
+			$term_report
 		);
 
 		// Ahead of the error return: The term writes it clears up after survive
 		// the rollback.
-		$this->resolve_term_conflict_issues( $term_outcome );
+		$this->resolve_term_conflict_issues( $term_report );
 
 		if ( is_wp_error( $post_id ) ) {
 			$error_data = $post_id->get_error_data();
@@ -1617,7 +1618,7 @@ class Post_Import_Service {
 		}
 
 		$this->add_unregistered_taxonomy_warnings( $fields, $skipped_taxonomies );
-		$this->add_term_conflict_warnings( $fields, $term_outcome );
+		$this->add_term_conflict_warnings( $fields, $term_report );
 		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
 		$this->record_attention_issues( $fields, $post_id );
 
@@ -1750,22 +1751,22 @@ class Post_Import_Service {
 	 * Conflicts on one term share a row identity, so a term blocked on more
 	 * than one field surfaces the last of them.
 	 *
-	 * @param array $fields  Post fields; mutated to append warnings.
-	 * @param array $outcome Reconcile outcome collected by update_terms().
+	 * @param array                 $fields Post fields; mutated to append warnings.
+	 * @param Term_Reconcile_Report $report Reconcile report collected by update_terms().
 	 */
 	private function add_term_conflict_warnings(
 		array &$fields,
-		array $outcome
+		Term_Reconcile_Report $report
 	): void {
-		foreach ( $outcome['conflicts'] ?? array() as $conflict ) {
+		foreach ( $report->conflicts() as $conflict ) {
 			$fields['warnings'][] = array(
 				'type'           => 'term_field_conflict',
-				'taxonomy'       => (string) $conflict['taxonomy'],
-				'term'           => (string) $conflict['term_name'],
-				'term_slug'      => (string) $conflict['term_slug'],
-				'field'          => (string) $conflict['field'],
-				'reason'         => (string) $conflict['reason'],
-				'source_term_id' => (int) $conflict['source_term_id'],
+				'taxonomy'       => $conflict->taxonomy,
+				'term'           => $conflict->term_name,
+				'term_slug'      => $conflict->term_slug,
+				'field'          => $conflict->field,
+				'reason'         => $conflict->reason,
+				'source_term_id' => $conflict->source_term_id,
 			);
 		}
 	}
@@ -1777,19 +1778,21 @@ class Post_Import_Service {
 	 * A term is shared, so once it matches the source again, the rows other
 	 * posts opened for it describe a state that no longer exists.
 	 *
-	 * @param array $outcome Reconcile outcome collected by update_terms().
+	 * @param Term_Reconcile_Report $report Reconcile report collected by update_terms().
 	 */
-	private function resolve_term_conflict_issues( array $outcome ): void {
+	private function resolve_term_conflict_issues(
+		Term_Reconcile_Report $report
+	): void {
 		$source_site_url = Options::get_connected_site_url_with_path();
 
 		if ( '' === $source_site_url ) {
 			return;
 		}
 
-		foreach ( $outcome['resolved'] ?? array() as $source_term_id ) {
+		foreach ( $report->resolved() as $source_term_id ) {
 			$this->attention_issues->reconcile_target_issues(
 				'term_field_conflict',
-				(int) $source_term_id,
+				$source_term_id,
 				'term',
 				'warning',
 				$source_site_url,
@@ -2574,20 +2577,25 @@ class Post_Import_Service {
 	 * during this attempt is deleted. Used by both single and bulk import
 	 * paths.
 	 *
-	 * @param array        $post_args              Arguments for wp_update_post().
-	 * @param int          $featured_attachment_id Sideloaded featured image attachment ID (0 = none).
-	 * @param string       $source_link            Source post URL for meta tracking.
-	 * @param array|object $meta                   Meta data.
-	 * @param array|object $terms                  Terms data.
-	 * @param array        $source_author          Source author payload (email, login,
-	 *                                             display_name) used to refresh diagnostic meta.
-	 * @param int          $source_parent_id       Source post's parent ID used to refresh the
-	 *                                             diagnostic parent meta on hierarchical posts.
-	 * @param array        $skipped_taxonomies     Receives the taxonomies the destination does
-	 *                                             not register, mapped to their unattached term
-	 *                                             names.
-	 * @param array        $term_outcome           Receives the reconcile outcome for the
-	 *                                             post's terms.
+	 * @param array                 $post_args              Arguments for wp_update_post().
+	 * @param int                   $featured_attachment_id Sideloaded featured image
+	 *                                                      attachment ID (0 = none).
+	 * @param string                $source_link            Source post URL for meta tracking.
+	 * @param array|object          $meta                   Meta data.
+	 * @param array|object          $terms                  Terms data.
+	 * @param array                 $source_author          Source author payload (email,
+	 *                                                      login, display_name) used to
+	 *                                                      refresh diagnostic meta.
+	 * @param int                   $source_parent_id       Source post's parent ID used
+	 *                                                      to refresh the diagnostic
+	 *                                                      parent meta on hierarchical
+	 *                                                      posts.
+	 * @param array                 $skipped_taxonomies     Receives the taxonomies the
+	 *                                                      destination does not register,
+	 *                                                      mapped to their unattached
+	 *                                                      term names.
+	 * @param Term_Reconcile_Report $term_report            Collects the reconcile outcome
+	 *                                                      for the post's terms.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
 	 */
 	public function persist_updated_post(
@@ -2599,7 +2607,7 @@ class Post_Import_Service {
 		array $source_author,
 		int $source_parent_id,
 		array &$skipped_taxonomies = array(),
-		array &$term_outcome = array()
+		Term_Reconcile_Report $term_report = new Term_Reconcile_Report()
 	): int|WP_Error {
 		$post_id  = $post_args['ID'];
 		$snapshot = $this->capture_pre_update_state(
@@ -2666,7 +2674,7 @@ class Post_Import_Service {
 			$post_id,
 			$terms,
 			Options::get_connected_site_url_with_path(),
-			$term_outcome
+			$term_report
 		);
 
 		if ( is_wp_error( $terms_result ) ) {
@@ -2834,19 +2842,24 @@ class Post_Import_Service {
 	 * meta_input must carry META_SOURCE_SITE_URL: The concurrent-duplicate
 	 * lookup compares it by value, so an absent row matches no sibling.
 	 *
-	 * @param array        $post_args              Arguments for wp_insert_post() (including meta_input).
-	 * @param int          $featured_attachment_id Sideloaded featured image attachment ID (0 = none).
-	 * @param array|object $meta                   Meta data.
-	 * @param array|object $terms                  Terms data.
-	 * @param array        $source_author          Source author payload (email, login,
-	 *                                             display_name) used to write diagnostic meta.
-	 * @param int          $source_parent_id       Source post's parent ID used to write the
-	 *                                             diagnostic parent meta on hierarchical posts.
-	 * @param array        $skipped_taxonomies     Receives the taxonomies the destination does
-	 *                                             not register, mapped to their unattached term
-	 *                                             names.
-	 * @param array        $term_outcome           Receives the reconcile outcome for the
-	 *                                             post's terms.
+	 * @param array                 $post_args              Arguments for wp_insert_post()
+	 *                                                      (including meta_input).
+	 * @param int                   $featured_attachment_id Sideloaded featured image
+	 *                                                      attachment ID (0 = none).
+	 * @param array|object          $meta                   Meta data.
+	 * @param array|object          $terms                  Terms data.
+	 * @param array                 $source_author          Source author payload (email,
+	 *                                                      login, display_name) used to
+	 *                                                      write diagnostic meta.
+	 * @param int                   $source_parent_id       Source post's parent ID used
+	 *                                                      to write the diagnostic parent
+	 *                                                      meta on hierarchical posts.
+	 * @param array                 $skipped_taxonomies     Receives the taxonomies the
+	 *                                                      destination does not register,
+	 *                                                      mapped to their unattached
+	 *                                                      term names.
+	 * @param Term_Reconcile_Report $term_report            Collects the reconcile outcome
+	 *                                                      for the post's terms.
 	 * @return int|WP_Error Post ID on success, WP_Error on failure.
 	 */
 	public function persist_new_post(
@@ -2857,7 +2870,7 @@ class Post_Import_Service {
 		array $source_author,
 		int $source_parent_id,
 		array &$skipped_taxonomies = array(),
-		array &$term_outcome = array()
+		Term_Reconcile_Report $term_report = new Term_Reconcile_Report()
 	): int|WP_Error {
 		$this->content_processor->disable_content_filters();
 		$post_id = wp_insert_post( wp_slash( $post_args ) );
@@ -2936,7 +2949,7 @@ class Post_Import_Service {
 			$post_id,
 			$terms,
 			$source_site_url,
-			$term_outcome
+			$term_report
 		);
 
 		if ( is_wp_error( $terms_result ) ) {

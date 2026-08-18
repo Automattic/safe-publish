@@ -81,6 +81,9 @@ The controls above the table provide:
 Title and date sorting are server-side, so they apply to the full result set,
 not just the current page.
 
+The selected session does not appear as a filter. Sessions are an internal
+grouping concept, not a UI noun.
+
 ## Needs attention tab
 
 This tab collects two kinds of post-import problem:
@@ -139,11 +142,22 @@ they clear after a successful Retry or re-import.
 
 ## Post-import notice
 
-After a bulk import, Safe Publish records a per-user admin notice for up to one
-hour. The notice summarizes successful and failed items. **View imports** opens
-the Manage page in the Up to date view when at least one item succeeded;
-**View failures** opens Needs attention when every item failed. The destination
-view is not filtered to only the completed session.
+After a bulk import completes, a per-user admin notice summarizes the batch on
+the next Safe Publish page load:
+
+> Last import: 47 of 50 posts imported. 3 failed. **View imports**
+
+Severity tracks the outcome: error when nothing succeeded, warning when
+successes and failures were mixed, and informational when every post imported.
+
+When nothing succeeded, the link reads **View failures** and opens Needs
+attention, since the Posts tab would have nothing to show. Otherwise,
+**View imports** opens the Posts tab filtered to Up to date. That view is not
+filtered to only the completed session.
+
+The notice persists for one hour, or until the operator follows its link or
+dismisses it. Following the link clears the batch, so the notice does not
+reappear on the page it just sent the operator to.
 
 ## Database storage
 

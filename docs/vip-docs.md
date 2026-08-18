@@ -87,7 +87,9 @@ Access to every Safe Publish admin screen — browsing source content, importing
 Two further checks apply during an import:
 
 - Updating an existing post requires the `edit_post` capability for that specific post.
-- Comparing an existing post with its source requires the `edit_post` capability for that post.
+- Comparing an existing post with its source requires the `edit_post`
+  capability for that post. A direct API caller without `manage_options` must
+  also have the post type's `edit_posts` capability.
 
 Requests from the destination to the source site are not authorized by user capabilities. Instead, each cross-site request is authenticated with the shared secret.
 
@@ -154,7 +156,17 @@ The **Manage** page has two tabs:
 
 ### Previewing changes with Compare
 
-The Compare action on **Manage → Posts** fetches fresh source content and compares it with the current destination post, covering the title, content, excerpt, featured image, metadata, and taxonomy terms. It is shown side by side, and block-editor content is compared block by block. The modal offers an **Update** button to re-import the post.
+The Compare action on **Manage → Posts** fetches fresh source content and
+compares it with the current destination post, covering the title, content,
+excerpt, featured image, metadata, and taxonomy terms, including each term's
+parent and description. It is shown side by side, and block-editor content is
+compared block by block so editors can see which blocks were added, removed, or
+changed. A taxonomy this site registers and the source does not send is not
+reported as a removal, since the import does not touch it. Any difference shown
+that the import would not apply is noted under the comparison: a term difference
+names the term and the field it affects, and a taxonomy this site does not
+register names the taxonomy. The modal also offers an **Update** button that
+re-imports the post from the source.
 
 ### Rolling back imports
 
