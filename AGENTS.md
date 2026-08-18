@@ -125,9 +125,7 @@ or PHP version changes, update all of the following together:
    integration matrix.
 4. In `.github/workflows/static-checks.yml`, run PHP checks on the plugin's
    minimum PHP version.
-5. In `.github/workflows/wordpress-trunk-tests.yml`, pair WordPress trunk with
-   the newest PHP version represented in the integration matrix.
-6. Verify each stable `WordPress/WordPress#X.Y-branch` ref exists, parse every
+5. Verify each stable `WordPress/WordPress#X.Y-branch` ref exists, parse every
    workflow as YAML, and run `npm run fix` followed by `npm run check`.
 
 The integration commands use wp-env's `/wordpress-phpunit` mount so the test
