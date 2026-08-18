@@ -67,6 +67,10 @@
 	<rule ref="WordPressVIPMinimum.JS.HTMLExecutingFunctions">
 		<exclude name="WordPressVIPMinimum.JS.HTMLExecutingFunctions"/>
 	</rule>
+	<rule ref="WordPressVIPMinimum.Performance.NoPaging">
+		<exclude-pattern>bin/</exclude-pattern>
+		<exclude-pattern>tests/</exclude-pattern>
+	</rule>
 	<rule ref="Generic.Functions.CallTimePassByReference">
 		<exclude name="Generic.Functions.CallTimePassByReference"/>
 	</rule>

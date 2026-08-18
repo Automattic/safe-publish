@@ -1233,6 +1233,11 @@ final class Diff_Renderer {
 				// term it is about to gain shows no destination values.
 				$on_post = in_array( (int) $entry['term']->term_id, $local_ids, true );
 
+				$source_parent = absint( $record['parent'] ?? 0 );
+				$parent_stands = isset( $paired[ $source_parent ] )
+					&& (int) $paired[ $source_parent ]->term_id
+						=== (int) $entry['term']->parent;
+
 				foreach ( array( 'name', 'parent', 'description' ) as $field ) {
 					if (
 						$current[ $field ] === $incoming[ $field ]
@@ -1252,11 +1257,15 @@ final class Diff_Renderer {
 
 					$blocked = (string) ( $entry['blocked'][ $field ] ?? '' );
 
-					// Nothing blocks the move, so the line differs only because
-					// the parent itself is renamed.
-					if ( 'parent' === $field && '' === $blocked ) {
+					// The term keeps its parent and nothing blocks it, so the
+					// line differs only because that parent is renamed.
+					if (
+						'parent' === $field
+						&& '' === $blocked
+						&& $parent_stands
+					) {
 						$parent_note = $this->renamed_parent_note(
-							absint( $record['parent'] ?? 0 ),
+							$source_parent,
 							$by_source,
 							(string) $taxonomy
 						);
