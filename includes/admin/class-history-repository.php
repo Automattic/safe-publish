@@ -48,13 +48,26 @@ final class History_Repository {
 	 * @param string $source_site_url Source site URL, normalized to the
 	 *                                path-bearing identity before storage.
 	 * @param string $session_type    Type of import (single, bulk).
-	 * @return int|WP_Error Session ID or error.
+	 * @return int|WP_Error Session ID, or error on a blank source or a failed
+	 *                      insert.
 	 */
 	public function create_session(
 		string $source_site_url,
 		string $session_type = 'bulk'
 	): int|WP_Error {
 		global $wpdb;
+
+		$source_site_url = trim( $source_site_url );
+
+		if ( '' === $source_site_url ) {
+			return new WP_Error(
+				'session_no_source_site_url',
+				__(
+					'Cannot open an import session without a connected source site.',
+					'safe-publish'
+				)
+			);
+		}
 
 		$user_id = get_current_user_id();
 		$user    = get_userdata( $user_id );

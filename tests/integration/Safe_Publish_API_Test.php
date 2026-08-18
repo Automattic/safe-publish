@@ -20,6 +20,7 @@ use WP_Post;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
+use WP_User;
 
 /**
  * Safe Publish API Test Class.
@@ -658,6 +659,185 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		// ASSERT: Users with edit_others_posts get semantically correct 404 for non-existent posts.
 		$this->assertInstanceOf( WP_REST_Response::class, $response );
 		$this->assert_404_response( $response, 'Should return 404 for non-existent post' );
+	}
+
+	/**
+	 * Verifies that with no source connected the diff-preview endpoint names the
+	 * missing connection instead of reporting the imported post as unmatched.
+	 */
+	public function test_diff_preview_endpoint_reports_missing_connection(): void {
+		// ARRANGE: An imported post the fixture tagged, then the connection is
+		// cleared.
+		wp_set_current_user( $this->admin_user_id );
+		delete_option( 'safe_publish_connected_site_url' );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'content', wp_json_encode( array( 'title' => 'New Title' ) ) );
+		$request->set_param( 'postType', 'post' );
+
+		// ACT: Dispatch through REST server.
+		$response = $this->server->dispatch( $request );
+
+		// ASSERT: The refusal points at the settings page rather than claiming
+		// the post is not imported.
+		$this->assertInstanceOf( WP_REST_Response::class, $response );
+		$this->assertSame( 500, $response->get_status() );
+		$data = $response->get_data();
+		$this->assertSame( 'no_connected_site_url', $data['code'] );
+		$this->assertStringContainsString(
+			'settings page',
+			strtolower( (string) $data['message'] )
+		);
+	}
+
+	/**
+	 * Verifies that a connected site URL with no parseable identity is refused
+	 * like a missing connection, rather than resolving nothing downstream.
+	 */
+	public function test_diff_preview_endpoint_reports_unparseable_connection(): void {
+		// ARRANGE: A connection saved without a scheme.
+		wp_set_current_user( $this->admin_user_id );
+		update_option( 'safe_publish_connected_site_url', 'example.com/blog' );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'content', wp_json_encode( array( 'title' => 'New Title' ) ) );
+		$request->set_param( 'postType', 'post' );
+
+		// ACT: Dispatch through REST server.
+		$response = $this->server->dispatch( $request );
+
+		// ASSERT: Same refusal as an unset connection.
+		$this->assertInstanceOf( WP_REST_Response::class, $response );
+		$this->assertSame( 500, $response->get_status() );
+		$this->assertSame(
+			'no_connected_site_url',
+			$response->get_data()['code']
+		);
+	}
+
+	/**
+	 * Verifies that a caller who cannot edit posts is denied outright, rather
+	 * than told whether the site has a source connected.
+	 */
+	public function test_diff_preview_endpoint_hides_missing_connection_without_edit_posts(): void {
+		// ARRANGE: No authenticated user, and the connection cleared.
+		wp_set_current_user( 0 );
+		delete_option( 'safe_publish_connected_site_url' );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'content', wp_json_encode( array( 'title' => 'New Title' ) ) );
+		$request->set_param( 'postType', 'post' );
+
+		// ACT: Dispatch through REST server.
+		$response = $this->server->dispatch( $request );
+
+		// ASSERT: A bare authorization denial, not the connection refusal.
+		$this->assertInstanceOf( WP_REST_Response::class, $response );
+		$this->assertSame(
+			rest_authorization_required_code(),
+			$response->get_status()
+		);
+		$this->assertSame( 'rest_forbidden', $response->get_data()['code'] );
+	}
+
+	/**
+	 * Verifies that the refusal reaches an editor of a post type whose
+	 * capabilities are its own, who therefore never holds edit_posts.
+	 */
+	public function test_diff_preview_endpoint_reports_missing_connection_for_custom_capability_type(): void {
+		// ARRANGE: A CPT with its own capability set, a user holding only those
+		// capabilities, and the connection cleared.
+		register_post_type(
+			'sp_movie',
+			array(
+				'public'          => true,
+				'show_in_rest'    => true,
+				'capability_type' => 'sp_movie',
+				'map_meta_cap'    => true,
+			)
+		);
+
+		$movie_capability = get_post_type_object( 'sp_movie' )->cap->edit_posts;
+		$movie_editor_id  = $this->factory()->user->create(
+			array( 'role' => 'subscriber' )
+		);
+		( new WP_User( $movie_editor_id ) )->add_cap( $movie_capability );
+		wp_set_current_user( $movie_editor_id );
+		delete_option( 'safe_publish_connected_site_url' );
+
+		$this->assertTrue(
+			user_can( $movie_editor_id, $movie_capability ),
+			'Fixture must hold the post type capability.'
+		);
+		$this->assertFalse(
+			user_can( $movie_editor_id, 'edit_posts' ),
+			'Fixture must not hold edit_posts, or it proves nothing.'
+		);
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'content', wp_json_encode( array( 'title' => 'New Title' ) ) );
+		$request->set_param( 'postType', 'sp_movie' );
+
+		// ACT: Dispatch through REST server.
+		$response = $this->server->dispatch( $request );
+
+		// ASSERT: The connection refusal, not a bare denial.
+		$this->assertInstanceOf( WP_REST_Response::class, $response );
+		$this->assertSame( 500, $response->get_status() );
+		$this->assertSame(
+			'no_connected_site_url',
+			$response->get_data()['code']
+		);
+
+		unregister_post_type( 'sp_movie' );
+	}
+
+	/**
+	 * Verifies that an administrator still receives the refusal for a post type
+	 * whose capabilities nobody holds, since they own the configuration.
+	 */
+	public function test_diff_preview_endpoint_reports_missing_connection_for_admin_on_ungranted_type(): void {
+		// ARRANGE: A CPT whose capabilities are granted to no role at all.
+		register_post_type(
+			'sp_movie',
+			array(
+				'public'          => true,
+				'show_in_rest'    => true,
+				'capability_type' => 'sp_movie',
+				'map_meta_cap'    => true,
+			)
+		);
+
+		$movie_capability = get_post_type_object( 'sp_movie' )->cap->edit_posts;
+		wp_set_current_user( $this->admin_user_id );
+		delete_option( 'safe_publish_connected_site_url' );
+
+		$this->assertFalse(
+			user_can( $this->admin_user_id, $movie_capability ),
+			'Admins must lack the type capability, or it proves nothing.'
+		);
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'content', wp_json_encode( array( 'title' => 'New Title' ) ) );
+		$request->set_param( 'postType', 'sp_movie' );
+
+		// ACT: Dispatch through REST server.
+		$response = $this->server->dispatch( $request );
+
+		// ASSERT: Still the actionable refusal.
+		$this->assertInstanceOf( WP_REST_Response::class, $response );
+		$this->assertSame( 500, $response->get_status() );
+		$this->assertSame(
+			'no_connected_site_url',
+			$response->get_data()['code']
+		);
+
+		unregister_post_type( 'sp_movie' );
 	}
 
 	/**
