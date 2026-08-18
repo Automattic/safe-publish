@@ -16,16 +16,14 @@
   - "Environments" → docs.wpvip.com environments page
   - "wp-config.php" reference on VIP
 
-  VERIFY IN-PRODUCT (Chrome walk-through was not available this session):
-  - Exact admin menu labels and submenu order
-  - Exact button/notice wording in the import, diff, and rollback modals
+  Product labels and behavior were verified against the current admin
+  implementation during the 2026-08 documentation review.
 -->
 
 <!--
-  Documentation update (2026-06-03): Added the Sync Status column on both
-  the Source Posts and Imports → Posts screens, noted that Update, Delete,
-  and Rollback support bulk selection, recorded that failed imports can now
-  be removed from the Needs attention tab, and added the Test Connection button.
+  Documentation update (2026-06-03): Added import-state information, recorded
+  that bulk actions are available, documented removal from Needs attention,
+  and added the Test Connection button.
   Constant-backed connection settings are intentionally omitted from this
   VIP-facing draft; docs/concepts/authentication.md covers that implementation
   detail for non-VIP and local configuration.
@@ -43,9 +41,11 @@
 
 Safe Publish moves editorial content from a source WordPress site to a destination site over an authenticated connection, preserving the content's structure and format as closely as possible. It is built for teams that draft, stage, or review content on one environment and need to publish that content to another without exporting databases or copying files by hand.
 
-Safe Publish provides a controlled path to move content from the source to the destination via the WordPress Admin dashboard, previews exactly what an update will change with a side-by-side diff, imports one post or many in a single operation, and rolls back any import that was not wanted. Every action is recorded in an audit log, and each import — whether it moved one post or many — can be reversed as a unit. Separate imports are reversed independently of one another.
+Safe Publish provides a controlled path to move content from the source to the destination via the WordPress Admin dashboard, compares changed source and destination content, imports one post or many in a single operation, and rolls back eligible imported posts. Every action is recorded in an audit log. Bulk imports share one history session, but rollback is applied to the selected posts rather than atomically reversing a whole session.
 
-This page covers connecting two sites, browsing and importing content, previewing diffs, rolling back imports, how media and audit logging behave. Full developer documentation and the source code are available on GitHub.
+This page covers connecting two sites, browsing and importing content, using
+Compare, rolling back imports, and how media and audit logging behave. Full
+developer documentation and the source code are available on GitHub.
 
 ## How Safe Publish works
 
@@ -66,9 +66,9 @@ The plugin uses a small set of terms consistently throughout its interface and t
 - **Destination site** — the site content is published to. This is the site where the import is performed.
 - **Sync mode** — a per-site setting that determines whether a site acts as a source (`export`), a destination (`import`), or both (`bidirectional`).
 - **Catalog** — the list of posts available on the source site, served through a REST API endpoint and browsed from the destination.
-- **Import** — a single import operation and the unit of rollback. One import covers every post moved in one action, whether that is a single post or a bulk run.
-- **Compare** — a side-by-side comparison of the incoming content against the current content on the destination, shown for an already-imported post before it is updated.
-- **Rollback** — reversing an import or an individual item. Rolling back a created post deletes it; rolling back an updated post restores the content that existed before the update.
+- **Import** — creating a destination draft or updating an existing imported post. A bulk run records several items in one history session.
+- **Compare** — a side-by-side comparison of fresh source content against the current destination post.
+- **Roll back** — reversing the latest eligible import for a selected post. Rolling back a created post deletes it. Rolling back an updated post restores the previous content when it was captured, or deletes the post when it was not.
 
 ## Requirements
 
@@ -87,7 +87,9 @@ Access to every Safe Publish admin screen — browsing source content, importing
 Two further checks apply during an import:
 
 - Updating an existing post requires the `edit_post` capability for that specific post.
-- Previewing a diff against an existing post requires the `edit_posts` capability, and `edit_post` for that post.
+- Comparing an existing post with its source requires the `edit_post`
+  capability for that post. A direct API caller without `manage_options` must
+  also have the post type's `edit_posts` capability.
 
 Requests from the destination to the source site are not authorized by user capabilities. Instead, each cross-site request is authenticated with the shared secret.
 
@@ -112,16 +114,18 @@ A typical setup pairs a staging site in `export` mode with a production site in 
 
 After saving, use the **Test Connection** button on the settings screen to confirm the destination can reach and authenticate with the source before importing. The button is available in `import` and `bidirectional` modes and reports the result inline.
 
-## Browsing the source catalog
+## Browsing and managing posts
 
-With the connection configured, the **Source Posts** screen — the default page under the Safe Publish menu on the destination — lists the posts, pages, and custom post types available on the source site. The catalog is presented as a sortable, filterable table.
+With the connection configured, **Safe Publish → Manage** opens a unified Posts listing for source content and previous destination imports. Use the **Type**, **Title or URL**, date, status, and **Local State** controls to filter the table.
 
-A **Sync Status** column shows how each source post relates to the destination:
+The Local State control provides four views:
 
+- **All** — every source post, including imported posts.
 - **Available** — the post has not been imported to the destination yet.
 - **Up to date** — the post has been imported and the source has not changed since.
 - **Outdated** — the post has been imported, but the source has changed since the last import. Re-import to bring the destination copy up to date.
-- **Unknown** — the post has been imported, but Safe Publish cannot tell whether the source has changed since. Re-import to refresh.
+
+A failed live source comparison is labeled **Sync check failed** on the row; it is not a separate Local State.
 
 ## Importing content
 
@@ -129,7 +133,7 @@ Safe Publish supports importing a single post or many posts at once. Both paths 
 
 ### Import a single post
 
-1. In the source catalog, select the post to import.
+1. On **Manage → Posts**, use the **Import** row action.
 2. Confirm the import in the dialog that appears.
 
 If a post with the same source post ID already exists on the destination, Safe Publish updates that post rather than creating a duplicate. If no matching post exists, it creates a new one.
@@ -138,34 +142,46 @@ By default, importing a child post fails if its parent is not present on the des
 
 ### Import multiple posts (bulk import)
 
-1. In the source catalog, select the posts to import.
+1. On **Manage → Posts**, select the posts to import.
 2. Start the bulk import.
 
-Safe Publish imports the selected posts as a single unit and records the result of each import. When the selection includes posts with parent–child relationships, the plugin orders the import so that parents are created before their children.
+Safe Publish records the selected posts in one history session and reports each item's result independently. A failure does not roll back successful siblings. When the selection includes posts with parent–child relationships, the plugin orders the import so that parents are created before their children.
 
 ## Reviewing and updating imported content
 
-The **Imports** admin page is the operator surface for everything that came in from the source. It has two tabs:
+The **Manage** page has two tabs:
 
-- **Posts** — local posts that resulted from successful imports. The tab is scoped to the connected source site, so changing the connection hides the previous site's rows without deleting them, and reconnecting brings them back. Each row offers Edit, Update (re-import from source), Compare (compares the local post with the current source content), Delete, and Rollback. Update, Delete, and Rollback can also be applied to several selected rows at once; Compare is available per row only. A **Sync Status** column compares each row against the current source content and reports whether it is up to date, outdated, missing on the source, cannot be checked because the source request failed, or has an invalid timestamp.
-- **Needs attention** — post-import problems in one place: failures (the import errored, so no local post was created, or a re-import of an existing post failed) and degradations (the post imported but something could not be carried over — an unresolved block, term, parent, or navigation reference, or a taxonomy this site does not register). Both are scoped to the connected source site, so changing the connection hides the previous site's rows without deleting them, and reconnecting brings them back. An **Open | Ignored** toggle switches between the active list and items set aside with Ignore; the tab count always reflects the Open set. Each degradation whose target an import can supply carries a **Resolvable now** or **Waiting on import** hint, indicating whether its target is imported yet, so a Retry would reconcile it; a degradation only a site change can fix, such as a taxonomy this site does not register, offers no Retry. The row actions are **Remove**, which permanently deletes a failure's record; **Retry**, which re-runs a degradation's reconciliation and reports whether it cleared; and **Ignore**, a reversible way to set a failure or degradation aside — it drops the row from the Open view and the count without deleting it, and **Un-ignore** restores it. Retry, Remove, and Ignore can each be applied to several selected rows at once, and a bulk Retry reports how many issues resolved, are still waiting on an import, or failed. Recovery for a failure is fixing the underlying issue and re-importing from the source catalog.
+- **Posts** — the unified listing, scoped to the connected source site. Changing the connection hides the previous site's imported rows without deleting them. Reconnecting with a URL that has the same scheme, host, port, and path brings them back. A trailing slash, query, or fragment does not affect the stored source identity. Depending on a row's Local State, it offers Import, Compare, Edit, Trash, and Roll back. Import, Trash, and Roll back support bulk selection; Compare is available for one outdated post at a time.
+- **Needs attention** — post-import problems in one place: failures (the import errored, so no local post was created, or a re-import of an existing post failed) and degradations (the post imported but something could not be carried over — an unresolved block, term, parent, or navigation reference, an unregistered taxonomy, or term fields that could not be reconciled with the source). This tab is also scoped to the connected source site. An **Open | Ignored** toggle switches between the active list and items set aside with Ignore; the tab count always reflects the Open set. Each degradation whose target an import can supply carries a **Resolvable now** or **Waiting on import** hint, indicating whether its target is imported yet. A degradation only a site change can fix, such as an unregistered taxonomy, offers no Retry. Remove permanently deletes a failure record and remains available for failures in the Ignored view. Retry re-runs supported reconciliation; a bulk Retry reports how many issues resolved, are still waiting on an import, or failed. Ignore and Un-ignore provide a reversible way to set items aside. These actions support bulk selection where applicable.
 
 ### Previewing changes with Compare
 
-The Compare action on the Imports → Posts tab compares the current local post with the current source content, covering the title, content, excerpt, featured image, metadata, and taxonomy terms, including each term's parent and description. It is shown side by side, and for block-editor content the diff is computed block by block so editors can see exactly which blocks were added, removed, or changed. A taxonomy this site registers and the source does not send is not reported as a removal, since the import does not touch it. Any difference shown that the import would not apply is noted under the comparison: a term difference names the term and the field it affects, and a taxonomy this site does not register names the taxonomy. The modal also offers an Update button that re-imports the post from the source.
+The Compare action on **Manage → Posts** fetches fresh source content and
+compares it with the current destination post, covering the title, content,
+excerpt, featured image, metadata, and taxonomy terms, including each term's
+parent and description. It is shown side by side, and block-editor content is
+compared block by block so editors can see which blocks were added, removed, or
+changed. A taxonomy this site registers and the source does not send is not
+reported as a removal, since the import does not touch it. Any difference shown
+that the import would not apply is noted under the comparison: a term difference
+names the term and the field it affects, and a taxonomy this site does not
+register names the taxonomy. The modal also offers an **Update** button that
+re-imports the post from the source.
 
 ### Rolling back imports
 
 Rollback reverses a single import:
 
 - If the post was newly created by the import, the post is deleted.
-- If the post was an update of an existing post, the previous content — captured at import time — is restored.
+- If the post was an update of an existing post, the previous content is restored when it was captured; otherwise, the post is deleted.
 
 It's important to note that the roll-back rolls back the specific changes from that single import. If a post has gone through a series of changes, each change can be rolled back sequentially.
 
 Multiple rows can be selected on the Posts tab and rolled back in a single action.
 
-Rollback relies on the content snapshot captured when the post was updated. Because Safe Publish stores the pre-update content as part of the import record, it can restore an updated post to its earlier state without contacting the source site again.
+Safe Publish normally stores a pre-update snapshot in the import record, so it
+can restore an updated post without contacting the source site. If an eligible
+updated row has no captured snapshot, rollback deletes the post instead.
 
 Note: Rolling back a newly created post deletes that post on the destination. Confirm the affected posts before rolling back, since the action is irreversible for newly created posts.
 

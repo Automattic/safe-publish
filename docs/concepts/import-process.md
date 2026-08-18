@@ -222,9 +222,9 @@ Custom taxonomies must be registered with `'show_in_rest' => true` on the source
   - User who performed import
   - Import status (success, updated, or error)
   - Error message (if failed)
-- Import recorded in the imports and import items tables (one session row, one item per processed post). The Imports page surfaces this data; the imported posts list on its Posts tab and post-import problems on its Needs attention tab.
+- Import recorded in the imports and import items tables (one session row, one item per processed post). The Manage page uses this data to decorate the unified Posts listing and populate its Needs attention tab.
 
-See [Imports](imports.md) for more details.
+See [Managing Imports](imports.md) for more details.
 
 ## Bulk Import
 
@@ -233,7 +233,7 @@ Bulk imports process multiple posts sequentially:
 1. Each post goes through all stages individually.
 2. Failures in one post don't stop others.
 3. Results aggregated and reported.
-4. Imports table updated for each post; failed items appear on the Imports page Needs attention tab.
+4. Import history is updated for each post; failed items appear on **Manage → Needs attention**.
 
 ### Performance
 
@@ -254,8 +254,9 @@ Bulk imports process multiple posts sequentially:
 Errors are reported in multiple places:
 
 1. **Results modal**: Per-post outcome as soon as the run finishes
-2. **Post-import notice**: Batch summary, styled by outcome, on the next Safe Publish page load
-3. **Imports → Needs attention tab**: Logged for later review
+2. **Post-import notice**: Batch summary, styled by outcome, on the next Safe
+   Publish page load
+3. **Manage → Needs attention tab**: Logged for later review
 4. **JavaScript console**: Detailed debugging info
 5. **PHP error log**: Server-side errors
 
@@ -270,7 +271,7 @@ Errors are reported in multiple places:
 
 1. **Monitor progress** for errors.
 2. **Don't close the browser** during bulk imports.
-3. **Check the Imports page** periodically.
+3. **Check the Manage page** periodically.
 
 ### After Import
 
@@ -316,6 +317,6 @@ Every imported image that is a real item in the source media library brings its 
 ## Next Steps
 
 - [Content Validation](validation.md) - Understanding validation
-- [Imports](imports.md) - Managing imported content and failed imports
+- [Managing Imports](imports.md) - Browsing source content and reviewing imports
 - [Troubleshooting](../troubleshooting.md) - Common issues
 - [Hooks and Filters](../extending/hooks.md) - Customization options
