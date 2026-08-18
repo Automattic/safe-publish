@@ -57,6 +57,8 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 		remove_all_filters( 'query' );
 		$wpdb->suppress_errors( false );
 
+		$this->restore_items_table();
+
 		parent::tearDown();
 	}
 
@@ -422,6 +424,22 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the migration completes before the items table exists, as
+	 * on the fresh install that creates it after this one.
+	 */
+	public function test_migration_completes_without_the_items_table(): void {
+		// ARRANGE: No recorded version and no items table.
+		delete_option( self::VERSION_OPTION );
+		$this->hide_items_table();
+
+		// ACT: Run the migration.
+		Imports_Table::create_table();
+
+		// ASSERT: The version was recorded, so no pass reported an error.
+		$this->assertNotFalse( get_option( self::VERSION_OPTION ) );
+	}
+
+	/**
 	 * Verifies that the upgrade adds the index that source-scoped queries
 	 * rely on.
 	 */
@@ -500,6 +518,43 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 		);
 
 		return (int) $wpdb->insert_id;
+	}
+
+	/**
+	 * Renames the items table aside, standing in for a fresh install yet to
+	 * create it. Renamed rather than dropped because the suite rewrites DROP
+	 * TABLE to drop a temporary table, leaving the real one in place.
+	 */
+	private function hide_items_table(): void {
+		global $wpdb;
+
+		$table = Import_Items_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
+		$wpdb->query( "RENAME TABLE `{$table}` TO `{$table}_hidden`" );
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
+	}
+
+	/**
+	 * Puts a hidden items table back, leaving an unhidden one alone.
+	 */
+	private function restore_items_table(): void {
+		global $wpdb;
+
+		$table  = Import_Items_Table::table_name();
+		$hidden = $table . '_hidden';
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
+		$found = $wpdb->get_var(
+			$wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $hidden ) )
+		);
+
+		if ( null === $found ) {
+			return;
+		}
+
+		$wpdb->query( "RENAME TABLE `{$hidden}` TO `{$table}`" );
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
 	}
 
 	/**

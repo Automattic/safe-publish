@@ -190,6 +190,15 @@ final class Imports_Table {
 		$items   = Import_Items_Table::table_name();
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// Created after this table, so an absent one means nothing to purge.
+		$found = $wpdb->get_var(
+			$wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $items ) )
+		);
+
+		if ( null === $found ) {
+			return true;
+		}
+
 		$ids = $wpdb->get_col(
 			"SELECT i.id FROM `{$imports}` i WHERE i.source_site_url = ''"
 				. " AND NOT EXISTS ( SELECT 1 FROM `{$items}` t"
