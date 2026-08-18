@@ -825,6 +825,9 @@ final class Diff_Renderer {
 	 * description when the source sends them, and appending a note for every
 	 * shown difference the import would not apply.
 	 *
+	 * Covers the taxonomies the payload carries, since the import writes no
+	 * others.
+	 *
 	 * @param array $current  Current data.
 	 * @param array $incoming Incoming data.
 	 *
@@ -844,7 +847,15 @@ final class Diff_Renderer {
 			);
 		}
 
-		$local = $current['term_objects'] ?? array();
+		$term_objects = $current['term_objects'] ?? array();
+
+		$records = $this->drop_untouched_taxonomies(
+			$records,
+			$term_objects
+		);
+
+		$local = array_intersect_key( $term_objects, $records );
+
 		$plans = ( new Meta_Terms_Manager() )->plan_terms(
 			$records,
 			Options::get_connected_site_url_with_path()
@@ -863,9 +874,34 @@ final class Diff_Renderer {
 			return '';
 		}
 
-		$notes = $this->build_term_notes( $plans, $this->local_term_ids( $local ) );
+		$notes = array_merge(
+			$this->build_term_notes( $plans, $this->local_term_ids( $local ) ),
+			$this->unregistered_taxonomy_notes( $records )
+		);
 
 		return $html . $this->build_term_notes_html( $notes );
+	}
+
+	/**
+	 * Drops a payload taxonomy the source sent empty and the post carries no
+	 * terms in, which the import neither attaches nor clears.
+	 *
+	 * @param array $records      Source term records by taxonomy.
+	 * @param array $term_objects Local terms by taxonomy.
+	 *
+	 * @return array Records left to compare.
+	 */
+	private function drop_untouched_taxonomies(
+		array $records,
+		array $term_objects
+	): array {
+		return array_filter(
+			$records,
+			static fn( mixed $items, string|int $taxonomy ): bool =>
+				array() !== $items
+				|| array() !== ( $term_objects[ $taxonomy ] ?? array() ),
+			ARRAY_FILTER_USE_BOTH
+		);
 	}
 
 	/**
@@ -1368,6 +1404,34 @@ final class Diff_Renderer {
 			__( '%s not updated on import', 'safe-publish' ),
 			$label
 		);
+	}
+
+	/**
+	 * Lists a note for every payload taxonomy the destination does not
+	 * register and the import skips whole.
+	 *
+	 * @param array $records Source term records by taxonomy.
+	 *
+	 * @return string[] Note lines.
+	 */
+	private function unregistered_taxonomy_notes( array $records ): array {
+		$notes = array();
+
+		foreach ( array_keys( $records ) as $taxonomy ) {
+			// Matches the slug the import checks.
+			$tax = sanitize_key( (string) $taxonomy );
+
+			if ( '' === $tax || taxonomy_exists( $tax ) ) {
+				continue;
+			}
+
+			$notes[] = $tax . ': ' . __(
+				'not imported — taxonomy not registered',
+				'safe-publish'
+			);
+		}
+
+		return $notes;
 	}
 
 	/**

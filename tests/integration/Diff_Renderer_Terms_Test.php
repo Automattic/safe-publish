@@ -18,9 +18,10 @@ use WP_REST_Request;
 use WP_Term;
 
 /**
- * Covers the taxonomies section of the diff: The term hierarchy and
- * description differences it surfaces, the notes it attaches to the ones the
- * import would not apply, and its fallback when the source sends neither.
+ * Covers the taxonomies section of the diff: The taxonomies it compares, the
+ * term hierarchy and description differences it surfaces, the notes it
+ * attaches to the ones the import would not apply, and its fallback when the
+ * source sends neither.
  *
  * @psalm-suppress InvalidArgument
  */
@@ -396,23 +397,7 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 
 		// ACT: A source on an older plugin version sends only the embedded
 		// payload, naming a different term.
-		$result = $this->render(
-			array(
-				'_embedded' => array(
-					'wp:term' => array(
-						array(
-							array(
-								'id'       => 101,
-								'taxonomy' => 'category',
-								'name'     => 'Updates',
-								'slug'     => 'news',
-							),
-						),
-					),
-				),
-			)
-		);
-		$html   = (string) $result['nonContentDiffs']['taxonomies'];
+		$html = $this->render_embedded_category( 'Updates' );
 
 		// ASSERT: The names compare as before, with no fields and no notes.
 		$this->assertStringContainsString( 'Updates', $html );
@@ -580,6 +565,137 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a taxonomy the destination registers but the source never
+	 * sends stays out of the comparison, since the import leaves it alone.
+	 */
+	public function test_taxonomy_the_source_omits_is_not_a_removal(): void {
+		// ARRANGE: A post carrying a post format and a category the source
+		// matches.
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) )
+		);
+		$this->assign_post_format();
+
+		// ACT: The source sends the matching category alone.
+		$html = $this->render_taxonomies(
+			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) )
+		);
+
+		// ASSERT: Nothing differs, so the section is omitted.
+		$this->assertSame( '', $html );
+	}
+
+	/**
+	 * Verifies that scoping the comparison to the payload's taxonomies drops
+	 * only those, leaving the differences the import would make.
+	 */
+	public function test_taxonomy_the_source_omits_leaves_real_changes(): void {
+		// ARRANGE: A post carrying a post format and an imported category.
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) )
+		);
+		$this->assign_post_format();
+
+		// ACT: The source renames the category.
+		$html = $this->render_taxonomies(
+			array( $this->record( 101, 'Updates', 'news', 0, 'Desk' ) )
+		);
+
+		// ASSERT: The rename shows and the post format does not.
+		$this->assertStringContainsString( 'Updates', $html );
+		$this->assertStringNotContainsString( 'post_format', $html );
+	}
+
+	/**
+	 * Verifies that a payload naming no taxonomy at all compares none of the
+	 * destination's, rather than falling back to comparing them all.
+	 */
+	public function test_payload_without_taxonomies_compares_none(): void {
+		// ARRANGE: A post carrying an imported term.
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) )
+		);
+
+		// ACT: The source sends the field carrying no taxonomies.
+		$html = $this->render_term_map( array() );
+
+		// ASSERT: Nothing is reported, since nothing would be written.
+		$this->assertSame( '', $html );
+	}
+
+	/**
+	 * Verifies that scoping the current side leaves the note visibility gate
+	 * intact, since the gate reads the terms the post carries from that side.
+	 */
+	public function test_notes_survive_scoping_the_current_side(): void {
+		// ARRANGE: A post carrying a term imported from another source, which the
+		// origin gate keeps the import from reconciling, and a post format.
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) ),
+			self::OTHER_SOURCE
+		);
+		$this->assign_post_format();
+
+		// ACT: The source clears the description, which the import keeps.
+		$html = $this->render_taxonomies(
+			array( $this->record( 101, 'News', 'news', 0, '' ) )
+		);
+
+		// ASSERT: The note still fires, with the post format left out.
+		$this->assertSame(
+			array( 'news (category): description not updated on import' ),
+			$this->notes( $html )
+		);
+		$this->assertStringNotContainsString( 'post_format', $html );
+	}
+
+	/**
+	 * Verifies that a payload key carrying no terms still reports the clear,
+	 * which is the source's signal to empty the taxonomy.
+	 */
+	public function test_emptied_source_taxonomy_still_reports_the_clear(): void {
+		// ARRANGE: An imported term.
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) )
+		);
+
+		// ACT: The source sends the taxonomy with no terms.
+		$html = $this->render_taxonomies( array() );
+
+		// ASSERT: The term still shows as leaving the post, unannotated, since
+		// the import will clear it.
+		$this->assertStringContainsString( 'News', $html );
+		$this->assertSame( array(), $this->notes( $html ) );
+	}
+
+	/**
+	 * Verifies that a registered taxonomy the source sends empty and the post
+	 * has no terms in is not reported, since the import writes nothing there.
+	 */
+	public function test_empty_taxonomy_is_not_an_addition(): void {
+		// ARRANGE: An imported category the source matches, on a post carrying
+		// no tags.
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) )
+		);
+		$this->assertFalse( get_the_terms( $this->post_id, 'post_tag' ) );
+
+		// ACT: The source sends the matching category, with the empty tag list
+		// it emits for a taxonomy the post has no terms in.
+		$html = $this->render_term_map(
+			array(
+				'category' => array(
+					$this->record( 101, 'News', 'news', 0, 'Desk' ),
+				),
+				'post_tag' => array(),
+			)
+		);
+
+		// ASSERT: Nothing differs, so the section is omitted.
+		$this->assertSame( '', $html );
+	}
+
+	/**
 	 * Verifies that a parent renamed on the source is not reported as a parent
 	 * the import leaves alone, since the import applies the rename.
 	 */
@@ -608,6 +724,26 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 			implode( "\n", $this->changed_lines( $html ) )
 		);
 		$this->assertSame( array(), $this->notes( $html ) );
+	}
+
+	/**
+	 * Verifies that the embedded fallback keeps comparing every registered
+	 * taxonomy, since it cannot tell one the source omits from one the source
+	 * emptied.
+	 */
+	public function test_fallback_still_compares_a_taxonomy_the_source_omits(): void {
+		// ARRANGE: A post carrying a post format and a category the source
+		// matches, so the format is all that could differ.
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, '' ) )
+		);
+		$this->assign_post_format();
+
+		// ACT: A source on an older plugin version sends only embedded terms.
+		$html = $this->render_embedded_category( 'News' );
+
+		// ASSERT: The post format still compares.
+		$this->assertStringContainsString( 'post_format', $html );
 	}
 
 	/**
@@ -782,6 +918,36 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that an incoming taxonomy the destination does not register
+	 * still shows, annotated as one the import will not apply.
+	 */
+	public function test_unregistered_incoming_taxonomy_is_annotated(): void {
+		// ARRANGE: An imported category the source matches.
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) )
+		);
+
+		// ACT: The source also sends a taxonomy this site does not register.
+		$html = $this->render_term_map(
+			array(
+				'category'    => array(
+					$this->record( 101, 'News', 'news', 0, 'Desk' ),
+				),
+				'nowhere_tax' => array(
+					$this->record( 900, 'Ghost', 'ghost', 0, '' ),
+				),
+			)
+		);
+
+		// ASSERT: Its term shows, annotated by taxonomy.
+		$this->assertStringContainsString( 'Ghost', $html );
+		$this->assertSame(
+			array( 'nowhere_tax: not imported — taxonomy not registered' ),
+			$this->notes( $html )
+		);
+	}
+
+	/**
 	 * Verifies that a move the import will not make is annotated on the term
 	 * that stays put, not on the parent it names, whose name is unchanged.
 	 */
@@ -864,7 +1030,32 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Renders the diff and returns its taxonomies section.
+	 * Verifies that an unregistered taxonomy the source sent empty is left out
+	 * entirely, since the import neither attaches nor reports it.
+	 */
+	public function test_empty_unregistered_taxonomy_is_left_out(): void {
+		// ARRANGE: An imported category the source matches.
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, 'Desk' ) )
+		);
+
+		// ACT: The source also sends an unregistered taxonomy with no terms.
+		$html = $this->render_term_map(
+			array(
+				'category'    => array(
+					$this->record( 101, 'News', 'news', 0, 'Desk' ),
+				),
+				'nowhere_tax' => array(),
+			)
+		);
+
+		// ASSERT: Nothing differs, so the section is omitted.
+		$this->assertSame( '', $html );
+	}
+
+	/**
+	 * Renders the diff and returns its taxonomies section, always sending both
+	 * taxonomy keys as the source does.
 	 *
 	 * @param array $categories Source category records.
 	 * @param array $tags       Source tag records.
@@ -874,13 +1065,50 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		array $categories,
 		array $tags = array()
 	): string {
-		$terms = array( 'category' => $categories );
+		return $this->render_term_map(
+			array(
+				'category' => $categories,
+				'post_tag' => $tags,
+			)
+		);
+	}
 
-		if ( array() !== $tags ) {
-			$terms['post_tag'] = $tags;
-		}
-
+	/**
+	 * Renders the diff for a payload carrying the given taxonomy map.
+	 *
+	 * @param array $terms Source term records by taxonomy.
+	 * @return string Taxonomies diff HTML.
+	 */
+	private function render_term_map( array $terms ): string {
 		$result = $this->render( array( 'safe_publish_terms' => $terms ) );
+
+		return (string) $result['nonContentDiffs']['taxonomies'];
+	}
+
+	/**
+	 * Renders the diff for a source sending embedded terms alone, as one on an
+	 * older plugin version does.
+	 *
+	 * @param string $name Name the source's category term carries.
+	 * @return string Taxonomies diff HTML.
+	 */
+	private function render_embedded_category( string $name ): string {
+		$result = $this->render(
+			array(
+				'_embedded' => array(
+					'wp:term' => array(
+						array(
+							array(
+								'id'       => 101,
+								'taxonomy' => 'category',
+								'name'     => $name,
+								'slug'     => 'news',
+							),
+						),
+					),
+				),
+			)
+		);
 
 		return (string) $result['nonContentDiffs']['taxonomies'];
 	}
@@ -946,6 +1174,16 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 			static fn( string $item ): string => html_entity_decode( $item, ENT_QUOTES ),
 			$items[1]
 		);
+	}
+
+	/**
+	 * Gives the post a non-standard format, which the terms field never
+	 * collects, failing the test when it does not take.
+	 */
+	private function assign_post_format(): void {
+		set_post_format( $this->post_id, 'aside' );
+
+		$this->assertCount( 1, get_the_terms( $this->post_id, 'post_format' ) );
 	}
 
 	/**
