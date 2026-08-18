@@ -30,6 +30,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Meta_Terms_Manager {
 
 	/**
+	 * Stands in for a parent an import would create. Only plan_terms() passes
+	 * it; the write path resolves parents first, so it always has a real ID.
+	 */
+	private const PARENT_PENDING = -1;
+
+	/**
 	 * Destination term IDs resolved by source identity, keyed by source site
 	 * URL plus taxonomy, then by source term ID. A 0 records a confirmed miss
 	 * so the run does not re-query it.
@@ -183,6 +189,167 @@ final class Meta_Terms_Manager {
 		}
 
 		return $skipped;
+	}
+
+	/**
+	 * Reports what update_terms() would do to each term, writing nothing.
+	 *
+	 * Runs the same pairing ladder as the import — normalize, order
+	 * parent-first, match by source identity, slug, then name under the
+	 * resolved parent — so a caller previewing an import classifies the terms
+	 * the way the import will. A taxonomy the destination does not register is
+	 * omitted, as nothing would be resolved for it.
+	 *
+	 * @param array|object $terms           Terms to plan, keyed by taxonomy.
+	 * @param string       $source_site_url Source site URL scoping identity
+	 *                                      matches and the origin gate.
+	 * @return array<string, list<array{record:array, term:WP_Term|null, eligible:bool, changes:string[], blocked:array<string, string>}>>
+	 *         Per taxonomy, one parent-first entry per record.
+	 */
+	public function plan_terms(
+		array|object $terms,
+		string $source_site_url
+	): array {
+		$plans = array();
+
+		foreach ( (array) $terms as $raw_tax => $term_items ) {
+			$tax = sanitize_key( (string) $raw_tax );
+
+			if ( '' === $tax || ! taxonomy_exists( $tax ) ) {
+				continue;
+			}
+
+			$plans[ $tax ] = $this->plan_taxonomy_terms(
+				is_array( $term_items ) ? $term_items : (array) $term_items,
+				$tax,
+				$source_site_url
+			);
+		}
+
+		return $plans;
+	}
+
+	/**
+	 * Plans one taxonomy's items, mapping each source term ID to the
+	 * destination term it pairs with, or to PARENT_PENDING when the import
+	 * would create it, so a child's parent is known before the child.
+	 *
+	 * @param array  $items           Raw term items for the taxonomy.
+	 * @param string $tax             Taxonomy slug (already validated).
+	 * @param string $source_site_url Source site URL.
+	 * @return list<array{record:array, term:WP_Term|null, eligible:bool, changes:string[], blocked:array<string, string>}>
+	 */
+	private function plan_taxonomy_terms(
+		array $items,
+		string $tax,
+		string $source_site_url
+	): array {
+		$records = array();
+		foreach ( $items as $item ) {
+			$records[] = $this->normalize_term_record( $item );
+		}
+
+		$this->prime_source_term_ids( $records, $tax, $source_site_url );
+
+		$source_to_dest = array();
+		$plans          = array();
+
+		foreach ( $this->order_parent_first( $records ) as $record ) {
+			$source_parent  = $record['parent'] ?? 0;
+			$dest_parent_id = $source_parent > 0
+				? ( $source_to_dest[ $source_parent ] ?? 0 )
+				: 0;
+
+			$plan = $this->plan_term(
+				$record,
+				$tax,
+				$dest_parent_id,
+				$source_site_url
+			);
+
+			$plans[] = $plan;
+
+			if ( $record['source_term_id'] > 0 ) {
+				$source_to_dest[ $record['source_term_id'] ] =
+					$plan['term'] instanceof WP_Term
+						? (int) $plan['term']->term_id
+						: self::PARENT_PENDING;
+			}
+		}
+
+		return $plans;
+	}
+
+	/**
+	 * Plans one record: the destination term it pairs with, whether the origin
+	 * gate lets the import reconcile it, and which fields would be written or
+	 * blocked. A record with no pair would be created with the source's fields;
+	 * one naming a destination term is assigned as is, never reconciled.
+	 *
+	 * @param array{source_term_id:int, parent:?int, name:string, slug:string, description:?string, assigned:bool, dest_id:int} $record Working record.
+	 * @param string                                                                                                            $tax             Taxonomy slug.
+	 * @param int                                                                                                               $dest_parent_id  Resolved destination parent term ID, 0, or PARENT_PENDING.
+	 * @param string                                                                                                            $source_site_url Source site URL.
+	 * @return array{record:array, term:WP_Term|null, eligible:bool, changes:string[], blocked:array<string, string>}
+	 */
+	private function plan_term(
+		array $record,
+		string $tax,
+		int $dest_parent_id,
+		string $source_site_url
+	): array {
+		$plan = array(
+			'record'   => $record,
+			'term'     => null,
+			'eligible' => false,
+			'changes'  => array(),
+			'blocked'  => array(),
+		);
+
+		$supplied = $record['dest_id'] > 0;
+		$term_id  = $supplied
+			? $record['dest_id']
+			: $this->find_existing_term(
+				$record,
+				$tax,
+				$dest_parent_id,
+				$source_site_url
+			);
+
+		if ( 0 === $term_id ) {
+			return $plan;
+		}
+
+		$term = get_term( $term_id, $tax );
+
+		if ( ! ( $term instanceof WP_Term ) ) {
+			return $plan;
+		}
+
+		$plan['term'] = $term;
+
+		if ( $supplied || '' === $source_site_url ) {
+			return $plan;
+		}
+
+		$origin = get_term_meta( $term_id, Options::META_TERM_ORIGIN_URL, true );
+
+		if ( (string) $origin !== $source_site_url ) {
+			return $plan;
+		}
+
+		$plan['eligible'] = true;
+
+		$report          = new Term_Reconcile_Report();
+		$plan['changes'] = array_keys(
+			$this->term_field_changes( $term, $record, $dest_parent_id, $report )
+		);
+
+		foreach ( $report->conflicts() as $conflict ) {
+			$plan['blocked'][ $conflict->field ] = $conflict->reason;
+		}
+
+		return $plan;
 	}
 
 	/**
@@ -538,7 +705,9 @@ final class Meta_Terms_Manager {
 			}
 		}
 
-		if ( '' !== $record['name'] ) {
+		// A term cannot already sit under a parent that does not exist, so a
+		// pending parent skips the lookup rather than querying for one.
+		if ( '' !== $record['name'] && self::PARENT_PENDING !== $dest_parent_id ) {
 			$by_name = get_terms(
 				array(
 					'taxonomy'   => $tax,
@@ -713,10 +882,10 @@ final class Meta_Terms_Manager {
 		if ( null !== $record['description'] ) {
 			$description = wp_kses_post( $record['description'] );
 
+			$narrowed = self::narrow_description( $record['description'] );
+
 			// Core narrows a term description as it saves, so compare that
 			// form too; richer markup would rewrite on every import.
-			$narrowed = wp_kses( $description, 'pre_term_description' );
-
 			if (
 				$description !== $term->description
 				&& $narrowed !== $term->description
@@ -729,6 +898,19 @@ final class Meta_Terms_Manager {
 	}
 
 	/**
+	 * Narrows a source description to the form core stores on a term.
+	 *
+	 * @param string $description Source term description.
+	 * @return string Narrowed description.
+	 */
+	public static function narrow_description( string $description ): string {
+		return wp_kses(
+			wp_kses_post( $description ),
+			'pre_term_description'
+		);
+	}
+
+	/**
 	 * Resolves the parent to re-parent the term to, or null to leave it as is.
 	 *
 	 * A source root flattens the term, while a parent the record omits leaves
@@ -737,9 +919,9 @@ final class Meta_Terms_Manager {
 	 *
 	 * @param WP_Term                                                                                                           $term Term being reconciled.
 	 * @param array{source_term_id:int, parent:?int, name:string, slug:string, description:?string, assigned:bool, dest_id:int} $record         Working record.
-	 * @param int                                                                                                               $dest_parent_id Resolved destination parent term ID, or 0.
+	 * @param int                                                                                                               $dest_parent_id Resolved destination parent term ID, 0, or PARENT_PENDING.
 	 * @param Term_Reconcile_Report                                                                                             $report         Collects an unresolvable or looping parent.
-	 * @return int|null New parent term ID, or null when the parent stands.
+	 * @return int|null New parent term ID, PARENT_PENDING, or null when the parent stands.
 	 */
 	private function reconciled_parent(
 		WP_Term $term,
@@ -756,6 +938,12 @@ final class Meta_Terms_Manager {
 		if ( 0 === $record['parent'] ) {
 			// A term already at the top level needs no write.
 			return 0 !== (int) $term->parent ? 0 : null;
+		}
+
+		// The import creates the parent before it reaches this term, so the
+		// move resolves; only a plan sees it unresolved.
+		if ( self::PARENT_PENDING === $dest_parent_id ) {
+			return self::PARENT_PENDING;
 		}
 
 		if ( 0 === $dest_parent_id ) {
@@ -814,6 +1002,11 @@ final class Meta_Terms_Manager {
 		WP_Term $term,
 		int $parent_id
 	): bool {
+		// Nothing sits under a parent that does not exist yet.
+		if ( self::PARENT_PENDING === $parent_id ) {
+			return false;
+		}
+
 		$tax  = (string) $term->taxonomy;
 		$args = array(
 			'taxonomy'   => $tax,

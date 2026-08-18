@@ -8,7 +8,7 @@ The plugin registers endpoints under the `safe-publish/v1` namespace.
 
 ### Content Endpoints
 
-Require a WordPress user with `edit_post` capability for the target post.
+Require a WordPress user with the `edit_posts` capability, and `edit_post` for the target post.
 
 | Method | Endpoint                                | Description                      |
 | ------ | --------------------------------------- | -------------------------------- |
