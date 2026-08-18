@@ -77,6 +77,30 @@ class HTTPClientTest extends TestCase {
 	}
 
 	/**
+	 * Verifies that make_request prefixes the transport error reported by
+	 * WordPress with the source-site sentence.
+	 */
+	public function test_make_request_prefixes_transport_error(): void {
+		// ARRANGE: Stub a transport failure, so no HTTP response arrives.
+		$detail = 'cURL error 7: Failed to connect to source host.';
+		set_test_http_response(
+			new WP_Error( 'http_request_failed', $detail )
+		);
+
+		// ACT: Issue a catalog request through the shared client.
+		$result = $this->make_catalog_request();
+
+		// ASSERT: The prefix and the transport reason read as one sentence
+		// pair, separated by a single space.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'request_failed', $result->get_error_code() );
+		$this->assertSame(
+			'Failed to fetch data from source site. ' . $detail,
+			$result->get_error_message()
+		);
+	}
+
+	/**
 	 * Verifies that make_request appends the source site's REST error message
 	 * to the WP_Error on a non-200 response.
 	 */
