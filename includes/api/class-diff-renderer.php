@@ -100,8 +100,8 @@ final class Diff_Renderer {
 		$current = $this->extract_current_data( $local_post );
 
 		// Normalize both sides for cleaner diffs.
-		$current  = $this->apply_cleanup( $current );
-		$incoming = $this->apply_cleanup( $incoming );
+		$current  = $this->normalize_diff_data( $current );
+		$incoming = $this->normalize_diff_data( $incoming );
 
 		// Ensure WordPress diff renderer is available.
 		if ( ! class_exists( 'WP_Text_Diff_Renderer_Table' ) ) {
@@ -353,13 +353,13 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Applies cleanup/normalization to data for cleaner diffs.
+	 * Normalizes one side of the comparison for cleaner diffs.
 	 *
 	 * @param array $data Data to normalize.
 	 *
 	 * @return array Normalized data.
 	 */
-	private function apply_cleanup( array $data ): array {
+	private function normalize_diff_data( array $data ): array {
 		// Normalize content for better diffs.
 		if ( isset( $data['content'] ) ) {
 			$data['content'] = $this->normalize_for_diff( $data['content'] );

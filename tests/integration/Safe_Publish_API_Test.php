@@ -896,7 +896,7 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	 * Verifies that both sides are normalized before diffing, so whitespace
 	 * between tags does not render as a content change. Core's wp_text_diff
 	 * collapses blank lines and runs of spaces on its own; tag adjacency comes
-	 * from apply_cleanup, so this fails if that normalization is dropped.
+	 * from normalize_diff_data, so this fails if that normalization is dropped.
 	 */
 	public function test_diff_renderer_normalizes_whitespace_only_difference(): void {
 		// ARRANGE: Both sides carry the same three paragraphs, but each side
