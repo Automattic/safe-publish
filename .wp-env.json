@@ -10,7 +10,7 @@
     ".htaccess": "./bin/conf/htaccess",
     "wp-content/mu-plugins": "./mu-plugins"
   },
-  "core": "WordPress/WordPress#6.8",
+  "core": "WordPress/WordPress#master",
   "plugins": ["."],
   "lifecycleScripts": {
     "afterStart": "bin/setup-env"
