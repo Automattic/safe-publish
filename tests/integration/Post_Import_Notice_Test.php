@@ -30,6 +30,11 @@ class Post_Import_Notice_Test extends WP_UnitTestCase {
 	private const NOTICE_CLASS = 'safe-publish-post-import-notice';
 
 	/**
+	 * Query arg the notice's link carries.
+	 */
+	private const FOLLOWED_ARG = 'import-notice-followed';
+
+	/**
 	 * Signs in an administrator and enters a plugin screen.
 	 */
 	#[\Override]
@@ -120,6 +125,43 @@ class Post_Import_Notice_Test extends WP_UnitTestCase {
 		// ASSERT: Both loads render it; rendering doesn't consume the batch.
 		$this->assertStringContainsString( self::NOTICE_CLASS, $first );
 		$this->assertStringContainsString( self::NOTICE_CLASS, $second );
+	}
+
+	/**
+	 * Verifies that following the notice's link clears the batch, so the
+	 * notice does not outlive the action it prompted.
+	 */
+	public function test_following_the_link_clears_the_batch(): void {
+		// ARRANGE: A recorded batch, reached through the notice's own link.
+		Post_Import_Notice::record( self::SESSION_ID, 2, 2, 0 );
+		$_GET[ self::FOLLOWED_ARG ] = '1';
+
+		// ACT: Load the linked screen, then load one without the arg.
+		$followed = $this->capture_notice();
+		unset( $_GET[ self::FOLLOWED_ARG ] );
+		$next = $this->capture_notice();
+
+		// ASSERT: Neither load renders it — the batch cleared, not skipped.
+		$this->assertSame( '', $followed );
+		$this->assertSame( '', $next );
+	}
+
+	/**
+	 * Verifies that the notice's link carries the arg that clears the batch,
+	 * on both the imports and the failures route.
+	 */
+	public function test_link_carries_the_followed_arg(): void {
+		// ARRANGE: A clean batch, then a batch where nothing succeeded.
+		Post_Import_Notice::record( self::SESSION_ID, 2, 2, 0 );
+		$clean = $this->capture_notice();
+		Post_Import_Notice::record( self::SESSION_ID, 2, 0, 2 );
+
+		// ACT: Render the failures-only variant.
+		$failures = $this->capture_notice();
+
+		// ASSERT: Both links carry the arg.
+		$this->assertStringContainsString( self::FOLLOWED_ARG, $clean );
+		$this->assertStringContainsString( self::FOLLOWED_ARG, $failures );
 	}
 
 	/**

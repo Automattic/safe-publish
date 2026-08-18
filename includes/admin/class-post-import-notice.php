@@ -20,8 +20,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Stores a per-user transient with the just-finished session's id and counts,
  * then renders an outcome-styled notice on subsequent plugin page loads,
  * linking to the Needs attention inbox when nothing succeeded and to the
- * up-to-date imports otherwise. Dismiss is best-effort (the X is native WP
- * behavior plus an AJAX cleanup).
+ * up-to-date imports otherwise. The batch clears when the operator follows
+ * the link or dismisses the notice; a failed dismiss leaves it to expire.
  */
 final class Post_Import_Notice {
 
@@ -88,6 +88,11 @@ final class Post_Import_Notice {
 	);
 
 	/**
+	 * Query arg the notice's link carries; its presence clears the batch.
+	 */
+	private const FOLLOWED_ARG = 'import-notice-followed';
+
+	/**
 	 * Renders the notice when a recorded batch exists for the current user.
 	 */
 	public function render_notice(): void {
@@ -106,7 +111,15 @@ final class Post_Import_Notice {
 			return;
 		}
 
-		$session_id = (int) $data['session_id'];
+		// Following the link clears the batch. No nonce: presence of the arg
+		// is the whole signal, and the worst a forged link does is drop the
+		// requester's own notice a little early.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( isset( $_GET[ self::FOLLOWED_ARG ] ) ) {
+			delete_transient( self::transient_key( $user_id ) );
+			return;
+		}
+
 		$total      = (int) ( $data['total'] ?? 0 );
 		$successful = (int) ( $data['successful'] ?? 0 );
 		$failed     = (int) ( $data['failed'] ?? 0 );
@@ -118,16 +131,17 @@ final class Post_Import_Notice {
 		$link = $failures_only
 			? add_query_arg(
 				array(
-					'page' => 'safe-publish',
-					'tab'  => 'needs-attention',
+					'page'             => 'safe-publish',
+					'tab'              => 'needs-attention',
+					self::FOLLOWED_ARG => '1',
 				),
 				admin_url( 'admin.php' )
 			)
 			: add_query_arg(
 				array(
-					'page'       => 'safe-publish',
-					'state'      => 'up-to-date',
-					'session_id' => $session_id,
+					'page'             => 'safe-publish',
+					'state'            => 'up-to-date',
+					self::FOLLOWED_ARG => '1',
 				),
 				admin_url( 'admin.php' )
 			);

@@ -85,7 +85,7 @@ Severity tracks the outcome: error when nothing succeeded, warning when successe
 
 When nothing succeeded the link reads **View failures** and opens the Needs attention tab, since the Posts tab would have nothing to show. Otherwise it opens the Posts tab filtered to Up to date.
 
-The notice persists for one hour or until the operator dismisses it.
+The notice persists for one hour, or until the operator follows its link or dismisses it. Following the link clears the batch, so the notice does not reappear on the page it just sent the operator to.
 
 ## Database storage
 
