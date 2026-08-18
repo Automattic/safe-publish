@@ -651,6 +651,93 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the rename of a parent this plugin did not create is
+	 * annotated on that parent, as an unwritten rather than a blocked change.
+	 */
+	public function test_rename_of_an_ineligible_parent_is_annotated_on_it(): void {
+		// ARRANGE: A hand-authored parent with a term under it, on the post.
+		self::factory()->term->create(
+			array(
+				'taxonomy' => 'category',
+				'name'     => 'Politics',
+				'slug'     => 'politics',
+			)
+		);
+		self::factory()->term->create(
+			array(
+				'taxonomy'    => 'category',
+				'name'        => 'News',
+				'slug'        => 'news',
+				'parent'      => (int) $this->term_by_slug( 'politics' )->term_id,
+				'description' => '',
+			)
+		);
+		wp_set_post_terms(
+			$this->post_id,
+			array( (int) $this->term_by_slug( 'news' )->term_id ),
+			'category'
+		);
+
+		// ACT: The source renames the parent and keeps the term under it.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 100, 'National Politics', 'politics', 0, '', false ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+
+		// ASSERT: The parent's new name shows on the term's line, annotated on the
+		// parent with the wording for a change nothing blocks.
+		$this->assertStringContainsString(
+			'news (category) parent: National Politics (politics)',
+			implode( "\n", $this->changed_lines( $html ) )
+		);
+		$this->assertSame(
+			array( 'politics (category): name not updated on import' ),
+			$this->notes( $html )
+		);
+	}
+
+	/**
+	 * Verifies that a blocked rename of a parent the source moves the term under
+	 * is shown unannotated, since the move the line reports does apply.
+	 */
+	public function test_blocked_rename_of_a_gained_parent_is_not_annotated(): void {
+		// ARRANGE: An imported top-level term and an imported ancestor, plus
+		// another term already holding the name the source renames it to.
+		$this->import_terms(
+			array(
+				$this->record( 100, 'Politics', 'politics', 0, '', false ),
+				$this->record( 101, 'News', 'news', 0, '' ),
+			)
+		);
+		self::factory()->term->create(
+			array(
+				'taxonomy' => 'category',
+				'name'     => 'National Politics',
+				'slug'     => 'national-politics',
+			)
+		);
+
+		// ACT: The source renames the ancestor onto the taken name and moves the
+		// term under it.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 100, 'National Politics', 'politics', 0, '', false ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+
+		// ASSERT: The gained parent shows under its unwritten name, with no note,
+		// as the parent field of the term below it is written.
+		$this->assertStringContainsString(
+			'news (category) parent: National Politics (politics)',
+			implode( "\n", $this->changed_lines( $html ) )
+		);
+		$this->assertSame( array(), $this->notes( $html ) );
+	}
+
+	/**
 	 * Verifies that a term this plugin did not create is annotated when the
 	 * source moves it to the top level, since the import leaves its parent.
 	 */
@@ -765,10 +852,14 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ASSERT: The summary follows the slugs, not the names.
-		$this->assertStringContainsString(
-			'category: Zulu (alpha), Alpha Desk (zulu)',
-			implode( "\n", $this->changed_lines( $html ) )
+		// ASSERT: Both summaries follow the slugs. The destination side is the
+		// one that pins the sort: the post's terms arrive ordered by name.
+		$this->assertSame(
+			array(
+				'Deleted: category: Zulu (alpha), Alpha (zulu)',
+				'Added: category: Zulu (alpha), Alpha Desk (zulu)',
+			),
+			$this->changed_lines( $html )
 		);
 	}
 
