@@ -38,6 +38,11 @@ final class HTTP_Client {
 	public const ERROR_RESPONSE_TOO_LARGE = 'response_too_large';
 
 	/**
+	 * WP_Error code returned when the request never reached the source site.
+	 */
+	public const ERROR_REQUEST_FAILED = 'request_failed';
+
+	/**
 	 * Caps the source-supplied error detail appended to an HTTP-error message,
 	 * keeping the surfaced message a sane length for display.
 	 */
@@ -111,7 +116,7 @@ final class HTTP_Client {
 
 		if ( is_wp_error( $response ) ) {
 			return new WP_Error(
-				'request_failed',
+				self::ERROR_REQUEST_FAILED,
 				sprintf(
 					/* translators: %s: transport error reported by WordPress */
 					__( 'Failed to fetch data from source site. %s', 'safe-publish' ),

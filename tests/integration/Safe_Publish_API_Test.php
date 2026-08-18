@@ -701,6 +701,68 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the diff-preview endpoint withholds the transport reason
+	 * from a caller who cannot manage options, since it names the currently
+	 * connected host rather than the one recorded on the post.
+	 */
+	public function test_diff_preview_endpoint_withholds_transport_reason_from_non_admin(): void {
+		// ARRANGE: The author of the imported post, and a transport failure
+		// naming a host the post's meta does not.
+		$author_id = $this->factory()->user->create(
+			array( 'role' => 'author' )
+		);
+		wp_update_post(
+			array(
+				'ID'          => $this->post_id,
+				'post_author' => $author_id,
+			)
+		);
+		wp_set_current_user( $author_id );
+
+		$this->assertTrue(
+			current_user_can( 'edit_post', $this->post_id ),
+			'Fixture must reach the route, or it proves nothing.'
+		);
+		$this->assertFalse(
+			current_user_can( 'manage_options' ),
+			'Fixture must not be an administrator, or it proves nothing.'
+		);
+
+		$secret_host     = 'repointed-source.example.net:8443';
+		$failing_request = static fn() => new WP_Error(
+			'http_request_failed',
+			'cURL error 7: Failed to connect to ' . $secret_host
+		);
+		add_filter( 'pre_http_request', $failing_request );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+
+		try {
+			// ACT: Dispatch through REST server.
+			$response = $this->server->dispatch( $request );
+
+			// ASSERT: The failure still surfaces, stripped of the host.
+			$this->assertInstanceOf( WP_REST_Response::class, $response );
+			$this->assertSame( 500, $response->get_status() );
+
+			$data = $response->get_data();
+			$this->assertSame( 'source_fetch_failed', $data['code'] );
+			$this->assertSame(
+				'Failed to fetch data from source site.',
+				$data['message']
+			);
+			$this->assertStringNotContainsString(
+				$secret_host,
+				(string) $data['message']
+			);
+		} finally {
+			remove_filter( 'pre_http_request', $failing_request );
+		}
+	}
+
+	/**
 	 * Verifies that with no source connected the diff-preview endpoint names the
 	 * missing connection instead of reporting the imported post as unmatched.
 	 */
