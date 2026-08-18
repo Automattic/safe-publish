@@ -87,7 +87,7 @@ Access to every Safe Publish admin screen — browsing source content, importing
 Two further checks apply during an import:
 
 - Updating an existing post requires the `edit_post` capability for that specific post.
-- Previewing a diff against an existing post requires the `edit_post` capability for that post.
+- Previewing a diff against an existing post requires the `edit_posts` capability, and `edit_post` for that post.
 
 Requests from the destination to the source site are not authorized by user capabilities. Instead, each cross-site request is authenticated with the shared secret.
 
