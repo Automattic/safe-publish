@@ -122,7 +122,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'post' );
-		$request->set_param( 'mode', 'split' );
 
 		// ACT: Render the diff.
 		$renderer = new Diff_Renderer();
@@ -173,7 +172,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'post' );
-		$request->set_param( 'mode', 'split' );
 
 		// ACT: Render the diff.
 		$renderer = new Diff_Renderer();
@@ -240,7 +238,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'post' );
-		$request->set_param( 'mode', 'split' );
 
 		// ACT: Render the diff.
 		$renderer = new Diff_Renderer();
@@ -372,7 +369,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'post' );
-		$request->set_param( 'mode', 'split' );
 
 		// ACT: Test Diff_Renderer directly with mock callable.
 		$renderer = new Diff_Renderer();
@@ -478,7 +474,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		);
 		$request->set_param( 'postId', self::SOURCE_POST_ID + 1 );
 		$request->set_param( 'postType', 'post' );
-		$request->set_param( 'mode', 'split' );
 
 		// ACT: Render the diff.
 		$renderer = new Diff_Renderer();
@@ -596,7 +591,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		);
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'sp_movie' );
-		$request->set_param( 'mode', 'split' );
 
 		// ACT: Render the diff with the recording callable.
 		$renderer = new Diff_Renderer();
@@ -1055,7 +1049,6 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		);
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'post' );
-		$request->set_param( 'mode', 'split' );
 
 		// ACT: Render the diff.
 		$renderer = new Diff_Renderer();
@@ -1076,6 +1069,73 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$this->assertSame(
 			'core/paragraph',
 			$result['blockDiffs'][0]['current']['name'] ?? null
+		);
+	}
+
+	/**
+	 * Verifies that both sides are normalized before diffing, so whitespace
+	 * between tags does not render as a content change. Core's wp_text_diff
+	 * collapses blank lines and runs of spaces on its own; tag adjacency comes
+	 * from normalize_diff_data, so this fails if that normalization is dropped.
+	 */
+	public function test_diff_renderer_normalizes_whitespace_only_difference(): void {
+		// ARRANGE: Both sides carry the same three paragraphs, but each side
+		// spaces a different pair of tags apart. Normalizing only one side
+		// would leave the other's adjacent tags unbroken.
+		$local_content  = "<p>First.</p><p>Second.</p>\n\n<p>Third.</p>";
+		$source_content = "<p>First.</p>\n\n<p>Second.</p><p>Third.</p>";
+		wp_update_post(
+			array(
+				'ID'           => $this->post_id,
+				'post_content' => $local_content,
+			)
+		);
+
+		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		$mock_http_callable = static function (
+			$_url,
+			$_action,
+			$_credentials
+		) use ( $source_content ) {
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => wp_json_encode(
+					array(
+						'title'   => array( 'raw' => 'Original Title' ),
+						'content' => array( 'raw' => $source_content ),
+						'excerpt' => array( 'raw' => 'Original excerpt.' ),
+					)
+				),
+			);
+		};
+
+		update_option(
+			'safe_publish_connected_site_url',
+			'https://example.com'
+		);
+
+		$request = new WP_REST_Request(
+			'POST',
+			'/safe-publish/v1/diff-preview'
+		);
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+
+		// ACT: Render the diff.
+		$renderer = new Diff_Renderer();
+		$result   = $renderer->render_diff(
+			$request,
+			$mock_http_callable,
+			array()
+		);
+
+		// ASSERT: Normalization collapsed the difference, so the content diff
+		// is empty and the client omits the section.
+		$this->assertIsArray( $result );
+		$this->assertSame(
+			'',
+			$result['contentDiffHtml'],
+			'A whitespace-only difference should not render as a change.'
 		);
 	}
 

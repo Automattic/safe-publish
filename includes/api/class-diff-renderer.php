@@ -64,8 +64,6 @@ final class Diff_Renderer {
 	): array|WP_Error {
 		$source_post_id  = (int) $request->get_param( 'postId' );
 		$post_type       = (string) $request->get_param( 'postType' );
-		$mode            = (string) $request->get_param( 'mode' );
-		$cleanup         = (bool) $request->get_param( 'cleanup' );
 		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
 		$mapped_post_type = Post_Type_Map::to_wp_slug( $post_type );
@@ -102,11 +100,9 @@ final class Diff_Renderer {
 		// Extract current local data.
 		$current = $this->extract_current_data( $local_post );
 
-		// Apply normalization if requested.
-		if ( $cleanup ) {
-			$current  = $this->apply_cleanup( $current );
-			$incoming = $this->apply_cleanup( $incoming );
-		}
+		// Normalize both sides for cleaner diffs.
+		$current  = $this->normalize_diff_data( $current );
+		$incoming = $this->normalize_diff_data( $incoming );
 
 		// Ensure WordPress diff renderer is available.
 		if ( ! class_exists( 'WP_Text_Diff_Renderer_Table' ) ) {
@@ -115,7 +111,12 @@ final class Diff_Renderer {
 		}
 
 		// Generate all diffs.
-		$content_diff_html = $this->generate_content_diff( $current['content'], $incoming['content'], $mode );
+		$content_diff_html = $this->generate_simple_diff(
+			$current['content'],
+			$incoming['content'],
+			__( 'Current Content', 'safe-publish' ),
+			__( 'Incoming Content', 'safe-publish' )
+		);
 		$non_content_diffs = $this->generate_non_content_diffs( $current, $incoming );
 
 		// Generate featured media side-by-side preview.
@@ -361,13 +362,13 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Applies cleanup/normalization to data for cleaner diffs.
+	 * Normalizes one side of the comparison for cleaner diffs.
 	 *
 	 * @param array $data Data to normalize.
 	 *
 	 * @return array Normalized data.
 	 */
-	private function apply_cleanup( array $data ): array {
+	private function normalize_diff_data( array $data ): array {
 		// Normalize content for better diffs.
 		if ( isset( $data['content'] ) ) {
 			$data['content'] = $this->normalize_for_diff( $data['content'] );
@@ -390,30 +391,6 @@ final class Diff_Renderer {
 		}
 
 		return $data;
-	}
-
-	/**
-	 * Generates content diff HTML.
-	 *
-	 * Returns an empty string when the inputs are identical; the client uses
-	 * that signal to omit the Source Diff view.
-	 *
-	 * @param string $current  Current content.
-	 * @param string $incoming Incoming content.
-	 * @param string $mode     Diff mode ('split' or 'inline').
-	 *
-	 * @return string Diff HTML, or '' when no changes.
-	 */
-	private function generate_content_diff( string $current, string $incoming, string $mode ): string {
-		return wp_text_diff(
-			$current,
-			$incoming,
-			array(
-				'title_left'      => __( 'Current Content', 'safe-publish' ),
-				'title_right'     => __( 'Incoming Content', 'safe-publish' ),
-				'show_split_view' => ( 'split' === $mode ),
-			)
-		);
 	}
 
 	/**
@@ -465,7 +442,7 @@ final class Diff_Renderer {
 	 * Generates a simple diff for two text strings.
 	 *
 	 * Returns an empty string when the inputs are identical; the client uses
-	 * that signal to omit the section by default.
+	 * that signal to control whether the section is shown.
 	 *
 	 * @param string $current     Current text.
 	 * @param string $incoming    Incoming text.
