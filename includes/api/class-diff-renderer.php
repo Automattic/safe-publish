@@ -261,6 +261,16 @@ final class Diff_Renderer {
 				return $response;
 			}
 
+			// The transport reason names the connected host, so surface it to
+			// administrators only; the log above records it either way.
+			if ( HTTP_Client::ERROR_REQUEST_FAILED === $error_code
+				&& ! current_user_can( 'manage_options' ) ) {
+				$message = __(
+					'Failed to fetch data from source site.',
+					'safe-publish'
+				);
+			}
+
 			return new WP_Error(
 				'source_fetch_failed',
 				$message,
