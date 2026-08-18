@@ -58,12 +58,13 @@
     "test:php:coverage": "composer test-coverage",
     "test:php:debug": "wp-env run tests-cli --env-cwd=\"wp-content/plugins/$(basename \"$(git rev-parse --show-toplevel)\")\" ./vendor/bin/phpunit",
     "test:integration": "./bin/test-integration",
-    "test:integration:sync-bidirectional": "wp-env run tests-cli --env-cwd=\"wp-content/plugins/$(basename \"$(git rev-parse --show-toplevel)\")\" ./vendor/bin/phpunit -c ./phpunit-integration-sync-bidirectional.xml",
-    "test:integration:sync-import": "wp-env run tests-cli --env-cwd=\"wp-content/plugins/$(basename \"$(git rev-parse --show-toplevel)\")\" ./vendor/bin/phpunit -c ./phpunit-integration-sync-import.xml",
-    "test:integration:sync-export": "wp-env run tests-cli --env-cwd=\"wp-content/plugins/$(basename \"$(git rev-parse --show-toplevel)\")\" ./vendor/bin/phpunit -c ./phpunit-integration-sync-export.xml",
+    "test:integration:sync-bidirectional": "wp-env run tests-cli --env-cwd=\"wp-content/plugins/$(basename \"$(git rev-parse --show-toplevel)\")\" env WP_TESTS_DIR=/wordpress-phpunit ./vendor/bin/phpunit -c ./phpunit-integration-sync-bidirectional.xml",
+    "test:integration:sync-import": "wp-env run tests-cli --env-cwd=\"wp-content/plugins/$(basename \"$(git rev-parse --show-toplevel)\")\" env WP_TESTS_DIR=/wordpress-phpunit ./vendor/bin/phpunit -c ./phpunit-integration-sync-import.xml",
+    "test:integration:sync-export": "wp-env run tests-cli --env-cwd=\"wp-content/plugins/$(basename \"$(git rev-parse --show-toplevel)\")\" env WP_TESTS_DIR=/wordpress-phpunit ./vendor/bin/phpunit -c ./phpunit-integration-sync-export.xml",
     "test:js": "vitest --watch=false",
     "test:js:watch": "vitest --watch=true",
     "test:js:coverage": "vitest --coverage --watch=false",
+    "update:ci-matrix": "bin/update-ci-matrix",
     "wp-cli": "wp-env run cli -- wp"
   },
   "devDependencies": {

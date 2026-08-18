@@ -2,6 +2,7 @@ name: Unit tests
 
 on:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,12 +12,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  unit-tests:
+  php-unit-tests:
+    name: PHP ${{ matrix.php-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        # BEGIN GENERATED COMPATIBILITY MATRIX
         php-version: ['8.2', '8.3', '8.4', '8.5']
+        # END GENERATED COMPATIBILITY MATRIX
     steps:
       - uses: actions/checkout@v7.0.1
 
@@ -28,6 +32,18 @@ jobs:
       - name: Install Composer dependencies
         uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
 
+      - name: Check Composer platform requirements
+        run: composer check-platform-reqs
+
+      - name: PHP tests
+        run: composer test
+
+  js-unit-tests:
+    name: JavaScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
@@ -35,12 +51,20 @@ jobs:
           cache: npm
 
       - name: Install Node dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
-      - name: PHP tests
-        if: ${{ !cancelled() }}
-        run: npm run test:php
-
-      - name: JS tests
-        if: ${{ !cancelled() }}
+      - name: JavaScript tests
         run: npm run test:js
+
+  required:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    needs:
+      - php-unit-tests
+      - js-unit-tests
+    if: ${{ always() && !cancelled() }}
+    steps:
+      - name: Verify test results
+        run: |
+          test '${{ needs.php-unit-tests.result }}' = 'success'
+          test '${{ needs.js-unit-tests.result }}' = 'success'

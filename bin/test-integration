@@ -17,5 +17,6 @@ for config in \
 	phpunit-integration-sync-export.xml; do
 	wp-env run tests-cli \
 		--env-cwd="wp-content/plugins/$PLUGIN_DIR" \
+		env WP_TESTS_DIR=/wordpress-phpunit \
 		./vendor/bin/phpunit -c "./$config" "$@"
 done

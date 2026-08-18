@@ -93,3 +93,7 @@ Currently in closed beta used by customers, soon to become public; anything intr
 ## Dependencies
 
 **`@wordpress/*` and WP stubs are pinned to the wp-6.8 dist-tag line** to match the plugin's `Requires at least: 6.8`. Bumping them past their current major would type-check our code against APIs that don't exist in WP 6.8's bundled `wp.*` globals, causing silent runtime failures. Raising the WP floor requires updating the plugin header, `php-stubs/wordpress-{stubs,tests-stubs}`, and the relevant `@wordpress/*` packages together to the next wp-X.Y dist-tag.
+
+CI integration tests cover only WordPress/PHP combinations supported by WordPress core. Run `npm run update:ci-matrix` instead of editing generated matrix sections. The updater reads the minimum WordPress version from the plugin header, the minimum PHP version from Composer, and supported combinations from the [WordPress PHP compatibility matrix](https://make.wordpress.org/core/handbook/references/php-compatibility-and-wordpress-versions/). It validates and caches a compact snapshot in `.github/compatibility-matrix.json`; CI never reads the live page. The integration commands use wp-env's `/wordpress-phpunit` mount so the test library matches each matrix row; don't replace it with the Composer-pinned minimum-version test library in CI.
+
+Repository rulesets should require the stable aggregate checks named `Integration tests`, `Unit tests`, `Static checks`, and `End-to-end tests`, not individual matrix rows.

@@ -2,6 +2,7 @@ name: Static checks
 
 on:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,25 +12,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  static-checks:
+  php-static-checks:
+    name: PHP
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        php-version: ['8.2', '8.3', '8.4', '8.5']
     steps:
       - uses: actions/checkout@v7.0.1
 
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
-          php-version: ${{ matrix.php-version }}
+          # BEGIN GENERATED COMPATIBILITY MATRIX
+          php-version: '8.2'
+          # END GENERATED COMPATIBILITY MATRIX
 
       - name: Install Composer dependencies
         uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
 
-      - name: Check Composer platform requirements
-        run: composer check-platform-reqs
+      - name: Lint PHP
+        run: vendor/bin/phpcs --cache
+
+      - name: Analyze PHP
+        if: ${{ !cancelled() }}
+        run: vendor/bin/psalm.phar --no-cache
+
+  frontend-static-checks:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -38,19 +48,14 @@ jobs:
           cache: npm
 
       - name: Install Node dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
-      - name: Lint JS
-        if: ${{ !cancelled() }}
+      - name: Lint JavaScript
         run: npm run lint:js
 
       - name: Lint CSS
         if: ${{ !cancelled() }}
         run: npm run lint:css
-
-      - name: Lint PHP
-        if: ${{ !cancelled() }}
-        run: npm run lint:php
 
       - name: Format check
         if: ${{ !cancelled() }}
@@ -59,3 +64,16 @@ jobs:
       - name: Type check
         if: ${{ !cancelled() }}
         run: npm run check-types
+
+  required:
+    name: Static checks
+    runs-on: ubuntu-latest
+    needs:
+      - php-static-checks
+      - frontend-static-checks
+    if: ${{ always() && !cancelled() }}
+    steps:
+      - name: Verify check results
+        run: |
+          test '${{ needs.php-static-checks.result }}' = 'success'
+          test '${{ needs.frontend-static-checks.result }}' = 'success'

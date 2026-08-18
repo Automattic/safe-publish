@@ -1,0 +1,8 @@
+{
+  "source": "https://make.wordpress.org/core/handbook/references/php-compatibility-and-wordpress-versions/",
+  "latestWordPress": "7.0",
+  "latestPhp": "8.5",
+  "phpMaximumOverrides": {
+    "6.8": "8.4"
+  }
+}
