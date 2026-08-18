@@ -385,6 +385,45 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the purge deletes only the sessions it matches when
+	 * survivors sit in the table alongside them.
+	 */
+	public function test_purge_deletes_only_the_sessions_it_matches(): void {
+		// ARRANGE: An empty-identity session of failures, next to one holding a
+		// success, one carrying a source, and one whose source never
+		// normalized.
+		$purged_id      = $this->insert_legacy_row( '' );
+		$worked_id      = $this->insert_legacy_row( '' );
+		$sourced_id     = $this->insert_legacy_row( 'https://example.com/blog' );
+		$unparseable_id = $this->insert_legacy_row( 'example.com/blog' );
+		$this->insert_item( array( 'session_id' => $purged_id ) );
+		$this->insert_item( array( 'session_id' => $worked_id ) );
+		$this->insert_item(
+			array(
+				'session_id' => $worked_id,
+				'status'     => 'success',
+				'post_id'    => 4242,
+			)
+		);
+		$this->insert_item( array( 'session_id' => $sourced_id ) );
+		$this->insert_item( array( 'session_id' => $unparseable_id ) );
+
+		// ACT: Run the table's migration entry point.
+		Imports_Table::create_table();
+
+		// ASSERT: Only the matched session went, and every other session kept
+		// all of its items.
+		$this->assertFalse( $this->session_exists( $purged_id ) );
+		$this->assertSame( 0, $this->item_count( $purged_id ) );
+		$this->assertTrue( $this->session_exists( $worked_id ) );
+		$this->assertSame( 2, $this->item_count( $worked_id ) );
+		$this->assertTrue( $this->session_exists( $sourced_id ) );
+		$this->assertSame( 1, $this->item_count( $sourced_id ) );
+		$this->assertTrue( $this->session_exists( $unparseable_id ) );
+		$this->assertSame( 1, $this->item_count( $unparseable_id ) );
+	}
+
+	/**
 	 * Verifies that a failed purge leaves the schema version unrecorded, so the
 	 * migration is retried rather than marked complete over rows it kept.
 	 */
