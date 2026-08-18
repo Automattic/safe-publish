@@ -694,7 +694,7 @@ class Source_Posts_API {
 	 * @return array<string, list<array{source_term_id:int, name:string, slug:string, parent:int, description:string, assigned:bool}>>|null
 	 *         Taxonomy => term records, or null when the field is absent.
 	 */
-	private static function extract_source_terms( array $data ): ?array {
+	public static function extract_source_terms( array $data ): ?array {
 		if ( ! array_key_exists( 'safe_publish_terms', $data ) ) {
 			return null;
 		}

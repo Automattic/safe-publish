@@ -196,19 +196,11 @@ See `tests/fixtures/images/README.md` for implementation details.
 
 ### Dependencies
 
-All test dependencies are managed via Composer:
+All test dependencies are declared in [`composer.json`](../composer.json).
+Install the exact versions recorded in `composer.lock`:
 
-```json
-{
-  "require-dev": {
-    "phpunit/phpunit": "^9",
-    "mockery/mockery": "^1.6",
-    "wp-phpunit/wp-phpunit": "^6.8",
-    "yoast/phpunit-polyfills": "^4.0",
-    "php-stubs/wordpress-stubs": "^6.8",
-    "php-stubs/wordpress-tests-stubs": "^6.8"
-  }
-}
+```bash
+composer install
 ```
 
 ## Writing New Tests
