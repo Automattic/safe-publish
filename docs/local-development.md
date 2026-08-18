@@ -117,14 +117,6 @@ For e2e tests, ensure the development environment is running, then execute:
 WP_BASE_URL=http://host.docker.internal:8888 npm run test:e2e
 ```
 
-CI matrices are generated from WordPress' published PHP compatibility table.
-The last validated result is committed in `.github/compatibility-matrix.json`,
-so CI never depends on the live page. Refresh the snapshot and matrices with:
-
-```sh
-npm run update:ci-matrix
-```
-
 ### Logs
 
 Watch logs from the WordPress container:

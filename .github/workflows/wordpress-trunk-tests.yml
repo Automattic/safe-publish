@@ -16,8 +16,6 @@ jobs:
   integration-tests:
     uses: ./.github/workflows/reusable-integration-tests.yml
     with:
-      # BEGIN GENERATED COMPATIBILITY MATRIX
       php-version: '8.5'
-      # END GENERATED COMPATIBILITY MATRIX
       wordpress-ref: WordPress/WordPress#master
       wordpress-version: trunk

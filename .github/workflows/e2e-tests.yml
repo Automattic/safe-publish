@@ -19,7 +19,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # BEGIN GENERATED COMPATIBILITY MATRIX
         include:
           - wordpress-version: '6.8'
             wordpress-ref: WordPress/WordPress#6.8-branch
@@ -30,7 +29,6 @@ jobs:
           - wordpress-version: '7.0'
             wordpress-ref: WordPress/WordPress#7.0-branch
             php-version: '8.5'
-        # END GENERATED COMPATIBILITY MATRIX
     steps:
       - uses: actions/checkout@v7.0.1
 

@@ -18,9 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # BEGIN GENERATED COMPATIBILITY MATRIX
         php-version: ['8.2', '8.3', '8.4', '8.5']
-        # END GENERATED COMPATIBILITY MATRIX
     steps:
       - uses: actions/checkout@v7.0.1
 
