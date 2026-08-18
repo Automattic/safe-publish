@@ -616,6 +616,75 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a conflict on a term with no stored name reports it by
+	 * slug, so the degradation still names a term the user can act on.
+	 */
+	public function test_conflict_on_a_nameless_term_reports_the_slug(): void {
+		// ARRANGE: An imported tag, and a second tag already named Updates.
+		$this->import_terms(
+			array( $this->record( 501, 'News', 'news', 0, '' ) ),
+			self::SOURCE,
+			'post_tag'
+		);
+		$blocking = wp_insert_term(
+			'Updates',
+			'post_tag',
+			array( 'slug' => 'updates' )
+		);
+		$this->assertIsArray( $blocking );
+
+		// ARRANGE: The term reads back with no name from here on.
+		$this->blank_term_identity();
+
+		// ACT: The source renames the imported tag onto the taken name.
+		$conflicts = $this->import_terms(
+			array( $this->record( 501, 'Updates', 'news', 0, '' ) ),
+			self::SOURCE,
+			'post_tag'
+		);
+
+		// ASSERT: The blocked rename is reported against the slug.
+		$this->assertSame( 1, count( $conflicts ) );
+		$this->assertSame( 'name_taken', $conflicts[0]->reason );
+		$this->assertSame( 'news', $conflicts[0]->term_name );
+	}
+
+	/**
+	 * Verifies that a conflict on a term carrying neither name nor slug reports
+	 * it by ID, so no degradation identifies its term as nothing at all.
+	 */
+	public function test_conflict_on_an_unidentified_term_reports_the_id(): void {
+		// ARRANGE: An imported tag, and a second tag already named Updates.
+		$this->import_terms(
+			array( $this->record( 501, 'News', 'news', 0, '' ) ),
+			self::SOURCE,
+			'post_tag'
+		);
+		$blocking = wp_insert_term(
+			'Updates',
+			'post_tag',
+			array( 'slug' => 'updates' )
+		);
+		$this->assertIsArray( $blocking );
+		$term_id = (int) $this->term_by_slug( 'news', 'post_tag' )->term_id;
+
+		// ARRANGE: The term reads back with neither field from here on.
+		$this->blank_term_identity( true );
+
+		// ACT: The source renames the imported tag onto the taken name.
+		$conflicts = $this->import_terms(
+			array( $this->record( 501, 'Updates', 'news', 0, '' ) ),
+			self::SOURCE,
+			'post_tag'
+		);
+
+		// ASSERT: The blocked rename is reported against the term ID.
+		$this->assertSame( 1, count( $conflicts ) );
+		$this->assertSame( 'name_taken', $conflicts[0]->reason );
+		$this->assertSame( '#' . $term_id, $conflicts[0]->term_name );
+	}
+
+	/**
 	 * Verifies that a parent the payload cannot resolve keeps the term's
 	 * current parent rather than flattening it to the root.
 	 */
@@ -860,6 +929,31 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 		}
 
 		return $record;
+	}
+
+	/**
+	 * Makes every term read back with an empty name, and optionally an empty
+	 * slug. Both stand in for stored values core's own writes rule out, as it
+	 * refuses an empty name and falls a missing slug back to the term ID. The
+	 * test harness restores hooks, so the filter goes after the calling test.
+	 *
+	 * @param bool $blank_slug Whether to blank the slug as well.
+	 */
+	private function blank_term_identity( bool $blank_slug = false ): void {
+		add_filter(
+			'get_term',
+			static function ( WP_Term $term ) use ( $blank_slug ): WP_Term {
+				// Cloned: get_term() hands out the cached instance.
+				$blanked       = clone $term;
+				$blanked->name = '';
+
+				if ( $blank_slug ) {
+					$blanked->slug = '';
+				}
+
+				return $blanked;
+			}
+		);
 	}
 
 	/**
