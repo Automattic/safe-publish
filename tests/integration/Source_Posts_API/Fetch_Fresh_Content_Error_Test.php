@@ -112,36 +112,32 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 				return $this->mock_supports_error;
 			}
 
-			return array(
-				'headers'  => array(),
-				'body'     => (string) wp_json_encode(
+			return $this->successful_response(
+				(string) wp_json_encode(
 					array( 'supports' => $this->mock_supports )
-				),
-				'response' => array(
-					'code'    => 200,
-					'message' => 'OK',
-				),
-				'cookies'  => array(),
-				'filename' => null,
+				)
 			);
 		}
 
 		if ( str_contains( $url, '/safe-publish/v1/catalog/post-types' ) ) {
-			return array(
-				'headers'  => array(),
-				'body'     => (string) wp_json_encode( $this->mock_post_types ),
-				'response' => array(
-					'code'    => 200,
-					'message' => 'OK',
-				),
-				'cookies'  => array(),
-				'filename' => null,
+			return $this->successful_response(
+				(string) wp_json_encode( $this->mock_post_types )
 			);
 		}
 
+		return $this->successful_response( $this->mock_body );
+	}
+
+	/**
+	 * Builds a successful mocked HTTP response.
+	 *
+	 * @param string $body Response body.
+	 * @return array Mock HTTP response.
+	 */
+	private function successful_response( string $body ): array {
 		return array(
 			'headers'  => array(),
-			'body'     => $this->mock_body,
+			'body'     => $body,
 			'response' => array(
 				'code'    => 200,
 				'message' => 'OK',
@@ -149,6 +145,22 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 			'cookies'  => array(),
 			'filename' => null,
 		);
+	}
+
+	/**
+	 * Fetches the mocked source item.
+	 *
+	 * @param string $post_type Post type slug or REST base.
+	 * @return array|WP_Error Fresh content or an error.
+	 */
+	private function fetch( string $post_type = 'post' ): array|WP_Error {
+		return ( new Source_Posts_API( new HTTP_Client() ) )
+			->fetch_fresh_post_content(
+				123,
+				self::SOURCE_SITE_URL,
+				array(),
+				$post_type
+			);
 	}
 
 	/**
@@ -160,8 +172,7 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		$this->mock_body = 'unexpected non-JSON body';
 
 		// ACT: Fetch fresh content for import.
-		$result = ( new Source_Posts_API( new HTTP_Client() ) )
-			->fetch_fresh_post_content( 123, self::SOURCE_SITE_URL );
+		$result = $this->fetch();
 
 		// ASSERT: The distinct invalid-response code surfaces.
 		$this->assertInstanceOf( WP_Error::class, $result );
@@ -187,8 +198,7 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		);
 
 		// ACT: Fetch fresh content for import.
-		$result = ( new Source_Posts_API( new HTTP_Client() ) )
-			->fetch_fresh_post_content( 123, self::SOURCE_SITE_URL );
+		$result = $this->fetch();
 
 		// ASSERT: The distinct raw-fields-missing code surfaces.
 		$this->assertInstanceOf( WP_Error::class, $result );
@@ -215,13 +225,7 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		);
 
 		// ACT: Fetch fresh content for import.
-		$result = ( new Source_Posts_API( new HTTP_Client() ) )
-			->fetch_fresh_post_content(
-				123,
-				self::SOURCE_SITE_URL,
-				array(),
-				'wp_navigation'
-			);
+		$result = $this->fetch( 'wp_navigation' );
 
 		// ASSERT: The valid no-excerpt response succeeds without inventing data.
 		$this->assertIsArray( $result );
@@ -250,8 +254,7 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		);
 
 		// ACT: Fetch fresh content for import.
-		$result = ( new Source_Posts_API( new HTTP_Client() ) )
-			->fetch_fresh_post_content( 123, self::SOURCE_SITE_URL );
+		$result = $this->fetch();
 
 		// ASSERT: The nonstandard scalar is not assumed to be lossless raw data.
 		$this->assertInstanceOf( WP_Error::class, $result );
@@ -281,8 +284,7 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		);
 
 		// ACT: Fetch the item requested as a post.
-		$result = ( new Source_Posts_API( new HTTP_Client() ) )
-			->fetch_fresh_post_content( 123, self::SOURCE_SITE_URL );
+		$result = $this->fetch();
 
 		// ASSERT: The response is rejected before its supports are consulted.
 		$this->assertInstanceOf( WP_Error::class, $result );
@@ -313,8 +315,7 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		);
 
 		// ACT: Fetch fresh content for import.
-		$result = ( new Source_Posts_API( new HTTP_Client() ) )
-			->fetch_fresh_post_content( 123, self::SOURCE_SITE_URL );
+		$result = $this->fetch();
 
 		// ASSERT: HTTP_Client's transport error is preserved, not remapped to 502.
 		$this->assertInstanceOf( WP_Error::class, $result );
@@ -344,13 +345,7 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		);
 
 		// ACT: Fetch using the custom REST base rather than the type slug.
-		$result = ( new Source_Posts_API( new HTTP_Client() ) )
-			->fetch_fresh_post_content(
-				123,
-				self::SOURCE_SITE_URL,
-				array(),
-				'sp_movies'
-			);
+		$result = $this->fetch( 'sp_movies' );
 
 		// ASSERT: The catalog-backed reverse resolution accepts the response.
 		$this->assertIsArray( $result );

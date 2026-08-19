@@ -204,12 +204,18 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 	/**
 	 * Verifies that malformed supports metadata fails instead of causing the
 	 * importer to guess which source fields should exist.
+	 *
+	 * @dataProvider invalid_supports_provider
+	 *
+	 * @param string $body Malformed source response body.
 	 */
-	public function test_invalid_source_post_type_supports_returns_error(): void {
-		// ARRANGE: Source response omits the required supports object.
+	public function test_invalid_source_post_type_supports_returns_error(
+		string $body
+	): void {
+		// ARRANGE: Source response does not contain a valid supports object.
 		$make_request = static fn(): array => array(
 			'response' => array( 'code' => 200 ),
-			'body'     => '{}',
+			'body'     => $body,
 		);
 
 		// ACT: Resolve supports from the malformed response.
@@ -229,31 +235,16 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a nonempty JSON list cannot masquerade as a supports object
-	 * and make every source field appear unsupported.
+	 * Data provider of malformed supports responses.
+	 *
+	 * @return array<string, array{string}>
 	 */
-	public function test_list_source_post_type_supports_returns_error(): void {
-		// ARRANGE: Source returns feature names as list values, not object keys.
-		$make_request = static fn(): array => array(
-			'response' => array( 'code' => 200 ),
-			'body'     => (string) wp_json_encode(
-				array( 'supports' => array( 'title', 'editor' ) )
+	public static function invalid_supports_provider(): array {
+		return array(
+			'missing supports' => array( '{}' ),
+			'nonempty list'    => array(
+				'{"supports":["title","editor"]}',
 			),
-		);
-
-		// ACT: Resolve supports from the malformed response.
-		$result = Source_Post_Type_Resolver::resolve_supports(
-			'post',
-			self::SOURCE_URL,
-			$make_request,
-			array()
-		);
-
-		// ASSERT: The malformed list is rejected instead of cached.
-		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame(
-			'source_post_type_supports_invalid',
-			$result->get_error_code()
 		);
 	}
 
