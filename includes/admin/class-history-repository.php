@@ -511,17 +511,16 @@ final class History_Repository {
 	}
 
 	/**
-	 * Looks up one source's most recent non-error item row for a given source
-	 * post. An empty $source_site_url matches only sessions recorded without
-	 * one.
+	 * Looks up one source's most recent active item row for a given source post.
+	 * An empty $source_site_url matches only sessions recorded without one.
 	 *
-	 * Only success and updated rows count, so a later error can't mask the
-	 * imported row and an error-only source reads as not imported. Ties on
+	 * Only non-rolled-back success and updated rows count, so an undone update
+	 * or later error can't mask the current import state. Ties on
 	 * import_date_gmt break by highest id.
 	 *
 	 * @param string $source_site_url Path-bearing source identity.
 	 * @param int    $source_post_id  Source post ID.
-	 * @return array|null Item row, or null when the source has no non-error row.
+	 * @return array|null Item row, or null when the source has no active row.
 	 */
 	public function get_active_item_for_source(
 		string $source_site_url,
@@ -539,6 +538,7 @@ final class History_Repository {
 					. " INNER JOIN `{$imports}` s ON s.id = t.session_id"
 					. ' WHERE t.source_post_id = %d'
 					. " AND t.status IN ( 'success', 'updated' )"
+					. ' AND t.rolled_back = 0'
 					. ' AND s.source_site_url = %s'
 					. ' ORDER BY t.import_date_gmt DESC, t.id DESC LIMIT 1',
 				$source_post_id,
@@ -561,7 +561,7 @@ final class History_Repository {
 	 *
 	 * @param string $source_site_url Path-bearing source identity.
 	 * @param int[]  $source_ids      Source post IDs to look up.
-	 * @return array<int, array> Map of source_post_id → latest non-error row.
+	 * @return array<int, array> Map of source_post_id → latest active row.
 	 */
 	public function get_active_items_by_source_ids(
 		string $source_site_url,
@@ -579,8 +579,9 @@ final class History_Repository {
 		$values       = array_values( $source_ids );
 		$values[]     = $source_site_url;
 
-		// NOT EXISTS picks the latest non-error row per source (ties broken by
-		// id); a newer error can't mask it. Served by source_post_id_import_date.
+		// NOT EXISTS picks the latest active row per source (ties broken by id);
+		// a rolled-back row or newer error can't mask it. Served by
+		// source_post_id_import_date.
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
@@ -588,11 +589,13 @@ final class History_Repository {
 					. " INNER JOIN `{$imports}` s1 ON s1.id = t1.session_id"
 					. " WHERE t1.source_post_id IN ({$placeholders})"
 					. " AND t1.status IN ( 'success', 'updated' )"
+					. ' AND t1.rolled_back = 0'
 					. ' AND s1.source_site_url = %s'
 					. " AND NOT EXISTS ( SELECT 1 FROM `{$table}` t2"
 					. " INNER JOIN `{$imports}` s2 ON s2.id = t2.session_id"
 					. ' WHERE t2.source_post_id = t1.source_post_id'
 					. " AND t2.status IN ( 'success', 'updated' )"
+					. ' AND t2.rolled_back = 0'
 					. ' AND s2.source_site_url = s1.source_site_url'
 					. ' AND ( t2.import_date_gmt > t1.import_date_gmt'
 					. ' OR ( t2.import_date_gmt = t1.import_date_gmt'
@@ -631,6 +634,8 @@ final class History_Repository {
 			return 'available';
 		}
 
+		// Defensive: Active-row queries exclude rolled-back rows. If another
+		// caller supplies one, it cannot represent the current imported state.
 		if ( 1 === (int) ( $active_row['rolled_back'] ?? 0 ) ) {
 			return 'available';
 		}
@@ -811,6 +816,7 @@ final class History_Repository {
 					. " INNER JOIN `{$imports_table}` s2 ON s2.id = t2.session_id"
 					. ' WHERE t2.source_post_id = t1.source_post_id'
 					. " AND t2.status IN ( 'success', 'updated' )"
+					. ' AND t2.rolled_back = 0'
 					. ' AND s2.source_site_url = s1.source_site_url'
 					. ' AND ( t2.import_date_gmt > t1.import_date_gmt'
 					. ' OR ( t2.import_date_gmt = t1.import_date_gmt AND t2.id > t1.id ) ) )'

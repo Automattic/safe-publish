@@ -169,6 +169,53 @@ class Posts_Listing_Scoping_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that a rolled-back update preserves the imported catalog payload.
+	 */
+	public function test_rolled_back_update_preserves_imported_catalog_payload(): void {
+		// ARRANGE: An imported draft whose newer update was rolled back.
+		$source_id         = 972;
+		$this->catalog_ids = array( $source_id );
+		$session           = $this->history->create_session( self::SOURCE, 'single' );
+		$post_id           = $this->factory()->post->create(
+			array( 'post_status' => 'draft' )
+		);
+		$this->assertIsInt( $session );
+		$this->assertIsInt( $post_id );
+
+		$initial = $this->history->log_import_action(
+			$session,
+			$source_id,
+			'Imported draft',
+			'success',
+			$post_id
+		);
+		$update  = $this->history->log_import_action(
+			$session,
+			$source_id,
+			'Updated draft',
+			'updated',
+			$post_id
+		);
+		$this->assertIsInt( $initial );
+		$this->assertIsInt( $update );
+		$this->history->mark_item_rolled_back( $update );
+
+		// ACT: Request the catalog-backed All listing used by the Manage screen.
+		$response = $this->list_posts( 'all' );
+
+		// ASSERT: The payload exposes the preceding import and its Edit target.
+		$this->assertTrue( $response['success'] );
+		$this->assertCount( 1, $response['data']['items'] );
+		$row = $response['data']['items'][0];
+		$this->assertTrue( $row['is_imported'] );
+		$this->assertSame( 'up-to-date', $row['local_state'] );
+		$this->assertSame( $initial, $row['item_id'] );
+		$this->assertSame( $post_id, $row['post_id'] );
+		$this->assertSame( 'draft', $row['wp_post_status'] );
+		$this->assertStringContainsString( 'post=' . $post_id, $row['edit_url'] );
+	}
+
+	/**
 	 * Verifies that the up-to-date state lists only the connected source's
 	 * imported posts.
 	 */

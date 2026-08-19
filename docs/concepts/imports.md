@@ -35,14 +35,14 @@ affect the stored source identity.
 
 The visible columns depend on the selected Local State:
 
-| Column         | Description                                                     |
-| -------------- | --------------------------------------------------------------- |
-| Title          | Source post title, linked to its source permalink when present. |
-| Local State    | Available, Up to date, or Outdated, plus live sync information. |
-| Local Status   | Destination `post_status`, or a dash when not yet imported.     |
-| Source Status  | Source `post_status`; shown in All and Available.               |
-| Published Date | Source publication date; shown in All and Available.            |
-| Imported Date  | Most recent import date; shown in Up to date and Outdated.      |
+| Column         | Description                                                       |
+| -------------- | ----------------------------------------------------------------- |
+| Title          | Source post title, linked to its source permalink when present.   |
+| Local State    | Available, Up to date, or Outdated, plus live sync information.   |
+| Local Status   | Destination `post_status`, or a dash when not yet imported.       |
+| Source Status  | Source `post_status`; shown in All and Available.                 |
+| Published Date | Source publication date; shown in All and Available.              |
+| Imported Date  | Most recent active import date; shown in Up to date and Outdated. |
 
 ### Actions
 

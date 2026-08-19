@@ -202,7 +202,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a rolled-back most-recent row routes to available.
+	 * Verifies that a source with only a rolled-back row routes to available.
 	 */
 	public function test_resolves_available_when_most_recent_is_rolled_back(): void {
 		// ARRANGE: A single success row that was later rolled back.
@@ -224,8 +224,61 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 			102
 		);
 
-		// ASSERT: A rolled-back active row folds into Available.
+		// ASSERT: With no active row remaining, the source is Available.
 		$this->assertSame( 'available', $state );
+	}
+
+	/**
+	 * Verifies that a rolled-back update reveals the preceding active row.
+	 */
+	public function test_rolled_back_update_reveals_previous_active_row(): void {
+		// ARRANGE: An initial import followed by an update that was rolled back.
+		$post_id = self::factory()->post->create( array( 'post_status' => 'draft' ) );
+		$session = $this->create_session();
+		$initial = $this->insert_item(
+			array(
+				'session_id'          => $session,
+				'source_post_id'      => 107,
+				'status'              => 'success',
+				'post_id'             => $post_id,
+				'import_date_gmt'     => '2026-01-01 00:00:00',
+				'source_modified_gmt' => '2026-03-01 00:00:00',
+			)
+		);
+		$this->insert_item(
+			array(
+				'session_id'      => $session,
+				'source_post_id'  => 107,
+				'status'          => 'updated',
+				'post_id'         => $post_id,
+				'rolled_back'     => 1,
+				'import_date_gmt' => '2026-02-01 00:00:00',
+			)
+		);
+
+		// ACT: Read the active row through every source-backed repository path.
+		$single = $this->repository->get_active_item_for_source(
+			self::SOURCE,
+			107
+		);
+		$bulk   = $this->repository->get_active_items_by_source_ids(
+			self::SOURCE,
+			array( 107 )
+		);
+		$listed = $this->repository->list_imported_source_rows( self::SOURCE );
+		$state  = $this->repository->resolve_source_post_state(
+			self::SOURCE,
+			107
+		);
+
+		// ASSERT: The undone update cannot mask or replace the initial import.
+		$this->assertIsArray( $single );
+		$this->assertSame( $initial, (int) $single['id'] );
+		$this->assertArrayHasKey( 107, $bulk );
+		$this->assertSame( $initial, (int) $bulk[107]['id'] );
+		$this->assertCount( 1, $listed );
+		$this->assertSame( $initial, (int) $listed[0]['id'] );
+		$this->assertSame( 'outdated', $state );
 	}
 
 	/**
@@ -315,10 +368,10 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a rolled-back active row folds into Available.
+	 * Verifies that state derivation defensively rejects a rolled-back row.
 	 */
 	public function test_derive_active_state_rolled_back_folds_to_available(): void {
-		// ARRANGE: An active row whose rolled_back flag is set.
+		// ARRANGE: A rolled-back row supplied outside the active-row queries.
 		$active_row = array(
 			'rolled_back' => 1,
 			'status'      => 'success',
@@ -327,7 +380,7 @@ final class Posts_Source_Rows_Test extends Integration_Test_Case {
 		// ACT: Derive the routing state from the row.
 		$state = History_Repository::derive_active_state( $active_row, true );
 
-		// ASSERT: Rolled-back rows route to Available regardless of post presence.
+		// ASSERT: An undone operation cannot represent an imported state.
 		$this->assertSame( 'available', $state );
 	}
 
