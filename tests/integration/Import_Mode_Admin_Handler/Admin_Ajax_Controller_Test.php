@@ -111,17 +111,17 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	 * Returns a minimal valid post response for fetch_fresh_post_content().
 	 *
 	 * @param false|array|WP_Error $preempt Preemptive return value.
-	 * @param array                $_args   HTTP request arguments (unused).
+	 * @param array                $args    HTTP request arguments.
 	 * @param string               $url     Request URL.
 	 * @return false|array|WP_Error Mocked response, or the prior return value.
 	 */
 	public function mock_post_api(
 		false|array|WP_Error $preempt,
-		array $_args,
+		array $args,
 		string $url
 	): false|array|WP_Error {
-		if ( false === $preempt && str_contains( $url, '/wp-json/wp/v2/types/post' ) ) {
-			return $this->build_mock_post_type_supports_response( 'post' );
+		if ( false === $preempt && 'OPTIONS' === ( $args['method'] ?? 'GET' ) ) {
+			return $this->build_mock_post_type_schema_response( 'post' );
 		}
 
 		if ( false !== $preempt || ! preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {

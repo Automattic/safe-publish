@@ -83,11 +83,15 @@ final class HTTP_Client {
 
 		// Apply HMAC auth headers; Basic Auth layers on top when configured.
 		$body        = $request_args['body'] ?? '';
+		$method      = isset( $request_args['method'] )
+			&& is_string( $request_args['method'] )
+			? strtoupper( $request_args['method'] )
+			: 'GET';
 		$auth_params = VIP_Safe_Auth::get_auth_params(
 			$url,
 			$action,
 			$auth_credentials,
-			'GET',
+			$method,
 			$body
 		);
 

@@ -113,8 +113,9 @@ abstract class Source_Posts_API_Test_Base extends Integration_Test_Case {
 			return $preempt;
 		}
 
-		if ( preg_match( '#/wp-json/wp/v2/types/([a-z0-9_-]+)#', $url, $matches ) ) {
-			return $this->build_mock_post_type_supports_response( $matches[1] );
+		if ( 'OPTIONS' === ( $args['method'] ?? 'GET' ) ) {
+			$post_type = str_contains( $url, '/pages' ) ? 'page' : 'post';
+			return $this->build_mock_post_type_schema_response( $post_type );
 		}
 
 		// Handle single-post REST endpoint used by fetch_fresh_post() for both

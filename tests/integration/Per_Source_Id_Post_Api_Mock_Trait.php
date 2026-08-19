@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\API\Source_Post_Type_Resolver;
+use Safe_Publish\Utils\Post_Type_Map;
 use WP_Error;
 
 /**
@@ -85,14 +86,33 @@ trait Per_Source_Id_Post_Api_Mock_Trait {
 			return $preempt;
 		}
 
-		if ( preg_match( '#/wp-json/wp/v2/types/([a-z0-9_-]+)#', $url, $matches ) ) {
+		if (
+			'OPTIONS' === ( $_args['method'] ?? 'GET' )
+			&& preg_match( '#/wp-json/wp/v2/([a-z0-9_-]+)(?:\?|$)#', $url, $matches )
+		) {
+			$properties = array();
+			$post_type  = Post_Type_Map::to_wp_slug( $matches[1] );
+			$fields     = array(
+				'title'   => 'title',
+				'editor'  => 'content',
+				'excerpt' => 'excerpt',
+			);
+			foreach ( $fields as $feature => $field ) {
+				if ( post_type_supports( $post_type, $feature ) ) {
+					$properties[ $field ] = array(
+						'properties' => array(
+							'raw' => array( 'type' => 'string' ),
+						),
+					);
+				}
+			}
 			return array(
 				'response' => array(
 					'code'    => 200,
 					'message' => 'OK',
 				),
 				'body'     => (string) wp_json_encode(
-					array( 'supports' => get_all_post_type_supports( $matches[1] ) )
+					array( 'schema' => array( 'properties' => $properties ) )
 				),
 				'headers'  => array(),
 			);

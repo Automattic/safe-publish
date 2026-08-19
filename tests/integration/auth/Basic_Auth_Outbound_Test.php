@@ -287,15 +287,17 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 			);
 		}
 
-		if ( str_contains( $url, '/wp-json/wp/v2/types/post' ) ) {
+		if ( 'OPTIONS' === ( $args['method'] ?? 'GET' ) ) {
 			return array(
 				'headers'  => array(),
 				'body'     => (string) wp_json_encode(
 					array(
-						'supports' => array(
-							'title'   => true,
-							'editor'  => true,
-							'excerpt' => true,
+						'schema' => array(
+							'properties' => array(
+								'title'   => array( 'properties' => array( 'raw' => array( 'type' => 'string' ) ) ),
+								'content' => array( 'properties' => array( 'raw' => array( 'type' => 'string' ) ) ),
+								'excerpt' => array( 'properties' => array( 'raw' => array( 'type' => 'string' ) ) ),
+							),
 						),
 					)
 				),

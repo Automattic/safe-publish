@@ -120,7 +120,7 @@ class Custom_Post_Type_Import_Test extends Source_Posts_API_Test_Base {
 	 * endpoint, letting all other URLs fall through to the base mock.
 	 *
 	 * @param false|array|WP_Error $preempt Short-circuit value passed by WP.
-	 * @param array                $args    Request args (unused).
+	 * @param array                $args    Request arguments.
 	 * @param string               $url     Requested URL.
 	 * @return false|array|WP_Error Mock response, or $preempt to defer.
 	 */
@@ -129,10 +129,11 @@ class Custom_Post_Type_Import_Test extends Source_Posts_API_Test_Base {
 		array $args,
 		string $url
 	): false|array|WP_Error {
-		unset( $args );
-
 		if ( false !== $preempt ) {
 			return $preempt;
+		}
+		if ( 'OPTIONS' === ( $args['method'] ?? 'GET' ) ) {
+			return $this->build_mock_post_type_schema_response( 'sp_movie' );
 		}
 
 		if ( str_contains( $url, '/safe-publish/v1/catalog/post-types' ) ) {

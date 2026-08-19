@@ -33,21 +33,37 @@ trait Mock_Post_API_Trait {
 	protected array $mock_post_overrides = array();
 
 	/**
-	 * Builds a mock response for the source post-type supports endpoint.
+	 * Builds a mock response for a source post type's OPTIONS schema.
 	 *
 	 * @param string $post_type Post type slug.
 	 * @return array Mock HTTP response.
 	 */
-	protected function build_mock_post_type_supports_response(
+	protected function build_mock_post_type_schema_response(
 		string $post_type
 	): array {
+		$properties = array();
+		$fields     = array(
+			'title'   => 'title',
+			'editor'  => 'content',
+			'excerpt' => 'excerpt',
+		);
+		foreach ( $fields as $feature => $field ) {
+			if ( post_type_supports( $post_type, $feature ) ) {
+				$properties[ $field ] = array(
+					'properties' => array(
+						'raw' => array( 'type' => 'string' ),
+					),
+				);
+			}
+		}
+
 		return array(
 			'response' => array(
 				'code'    => 200,
 				'message' => 'OK',
 			),
 			'body'     => (string) wp_json_encode(
-				array( 'supports' => get_all_post_type_supports( $post_type ) )
+				array( 'schema' => array( 'properties' => $properties ) )
 			),
 			'headers'  => array(),
 		);

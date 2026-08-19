@@ -95,7 +95,7 @@ trait Bulk_Import_Ajax_Trait {
 			'excerpt'             => array( 'raw' => '' ),
 			'link'                => "{$connection}/post-{$source_id}",
 			'slug'                => "post-{$source_id}",
-			'type'                => $override['type'] ?? '',
+			'type'                => $override['type'] ?? 'page',
 			'comment_status'      => '',
 			'ping_status'         => '',
 			'menu_order'          => 0,

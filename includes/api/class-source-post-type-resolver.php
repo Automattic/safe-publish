@@ -40,11 +40,11 @@ final class Source_Post_Type_Resolver {
 	private static array $maps = array();
 
 	/**
-	 * Per-request post type supports, keyed by source URL and type slug.
+	 * Per-request raw fields, keyed by source URL and type slug.
 	 *
-	 * @var array<string, array<string, array<string, mixed>>>
+	 * @var array<string, array<string, array<string, mixed>|WP_Error>>
 	 */
-	private static array $supports = array();
+	private static array $raw_fields = array();
 
 	/**
 	 * Resolves a post type slug to the REST base segment for its source.
@@ -56,7 +56,7 @@ final class Source_Post_Type_Resolver {
 	 *
 	 * @param string   $post_type       Source post type slug (or endpoint).
 	 * @param string   $source_site_url Source site URL.
-	 * @param callable $make_request    fn($url, $action, $credentials): array|WP_Error.
+	 * @param callable $make_request    fn($url, $action, $credentials, $args = array()): array|WP_Error.
 	 * @param array    $credentials     Authentication credentials.
 	 * @return string REST base segment for the wp/v2/{rest_base}/{id} URL.
 	 */
@@ -83,7 +83,7 @@ final class Source_Post_Type_Resolver {
 	 *
 	 * @param string   $post_type       Source post type slug or REST base.
 	 * @param string   $source_site_url Source site URL.
-	 * @param callable $make_request    fn($url, $action, $credentials): array|WP_Error.
+	 * @param callable $make_request    fn($url, $action, $credentials, $args = array()): array|WP_Error.
 	 * @param array    $credentials     Authentication credentials.
 	 * @return string Canonical post type slug, or the input when unresolved.
 	 */
@@ -108,18 +108,18 @@ final class Source_Post_Type_Resolver {
 	}
 
 	/**
-	 * Returns the features a source post type declares support for.
+	 * Returns the raw fields exposed by a source post type's REST route.
 	 *
-	 * WordPress exposes supports only in edit context. Successful responses are
-	 * memoized so a bulk import fetches metadata once per source post type.
+	 * WordPress' OPTIONS schema reflects the fields its REST controller exposes.
+	 * Results are memoized so a bulk import fetches it once per source type.
 	 *
 	 * @param string   $post_type       Source post type slug.
 	 * @param string   $source_site_url Source site URL.
-	 * @param callable $make_request    fn($url, $action, $credentials): array|WP_Error.
+	 * @param callable $make_request    fn($url, $action, $credentials, $args = array()): array|WP_Error.
 	 * @param array    $credentials     Authentication credentials.
-	 * @return array<string, mixed>|WP_Error Declared supports, or an error.
+	 * @return array<string, bool>|WP_Error Declared raw fields, or an error.
 	 */
-	public static function resolve_supports(
+	public static function resolve_raw_fields(
 		string $post_type,
 		string $source_site_url,
 		callable $make_request,
@@ -136,59 +136,61 @@ final class Source_Post_Type_Resolver {
 
 		$post_type = $sanitized_post_type;
 
-		if ( isset( self::$supports[ $source_site_url ][ $post_type ] ) ) {
-			return self::$supports[ $source_site_url ][ $post_type ];
+		if ( isset( self::$raw_fields[ $source_site_url ][ $post_type ] ) ) {
+			return self::$raw_fields[ $source_site_url ][ $post_type ];
 		}
 
-		$url = add_query_arg(
-			array(
-				'context' => 'edit',
-				'_fields' => 'supports',
-			),
-			trailingslashit( $source_site_url )
-				. 'wp-json/wp/v2/types/' . $post_type
+		$rest_base = self::resolve_rest_base(
+			$post_type,
+			$source_site_url,
+			$make_request,
+			$credentials
 		);
-
-		$response = $make_request(
+		$url       = trailingslashit( $source_site_url )
+			. 'wp-json/wp/v2/' . $rest_base;
+		$response  = $make_request(
 			$url,
 			Request_Actions::LIST_ITEMS,
-			$credentials
+			$credentials,
+			array( 'method' => 'OPTIONS' )
 		);
 
 		if ( is_wp_error( $response ) ) {
+			self::$raw_fields[ $source_site_url ][ $post_type ] = $response;
 			return $response;
 		}
 
 		$data = json_decode( wp_remote_retrieve_body( $response ) );
-
-		if ( ! ( $data instanceof \stdClass ) || ! isset( $data->supports ) ) {
-			return new WP_Error(
-				'source_post_type_supports_invalid',
+		if (
+			! ( $data instanceof \stdClass )
+			|| ! ( ( $data->schema ?? null ) instanceof \stdClass )
+			|| ! ( ( $data->schema->properties ?? null ) instanceof \stdClass )
+		) {
+			$error = new WP_Error(
+				'source_post_type_schema_invalid',
 				__(
-					'The source site returned invalid post type metadata.',
+					'The source site returned an invalid post route schema.',
 					'safe-publish'
 				)
 			);
+			self::$raw_fields[ $source_site_url ][ $post_type ] = $error;
+			return $error;
 		}
 
-		if ( $data->supports instanceof \stdClass ) {
-			$supports = get_object_vars( $data->supports );
-		} elseif ( is_array( $data->supports ) && array() === $data->supports ) {
-			// Core may encode a post type with no supports as an empty list.
-			$supports = array();
-		} else {
-			return new WP_Error(
-				'source_post_type_supports_invalid',
-				__(
-					'The source site returned invalid post type metadata.',
-					'safe-publish'
-				)
-			);
+		$raw_fields = array();
+		foreach ( array( 'title', 'content', 'excerpt' ) as $field ) {
+			$field_schema = $data->schema->properties->{$field} ?? null;
+			if (
+				$field_schema instanceof \stdClass
+				&& ( $field_schema->properties->raw ?? null ) instanceof \stdClass
+			) {
+				$raw_fields[ $field ] = true;
+			}
 		}
 
-		self::$supports[ $source_site_url ][ $post_type ] = $supports;
+		self::$raw_fields[ $source_site_url ][ $post_type ] = $raw_fields;
 
-		return $supports;
+		return $raw_fields;
 	}
 
 	/**
@@ -198,7 +200,7 @@ final class Source_Post_Type_Resolver {
 	 * memoized, so a later call can retry once the source is reachable.
 	 *
 	 * @param string   $source_site_url Source site URL.
-	 * @param callable $make_request    fn($url, $action, $credentials): array|WP_Error.
+	 * @param callable $make_request    fn($url, $action, $credentials, $args = array()): array|WP_Error.
 	 * @param array    $credentials     Authentication credentials.
 	 * @return array<string, string> Map of post type slug to rest_base.
 	 */
@@ -264,7 +266,7 @@ final class Source_Post_Type_Resolver {
 	 * within a single process.
 	 */
 	public static function reset_cache(): void {
-		self::$maps     = array();
-		self::$supports = array();
+		self::$maps       = array();
+		self::$raw_fields = array();
 	}
 }

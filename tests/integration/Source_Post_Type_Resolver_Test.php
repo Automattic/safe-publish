@@ -142,27 +142,37 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that source post type supports are read from the native types
-	 * endpoint and cached for repeated imports of the same type.
+	 * Verifies that source raw fields are read from the route schema and cached
+	 * for repeated imports of the same type.
 	 */
-	public function test_source_post_type_supports_are_resolved_and_cached(): void {
+	public function test_source_raw_fields_are_resolved_and_cached(): void {
 		// ARRANGE: A source type supporting title and editor, but not excerpt.
 		$calls         = 0;
 		$requested_url = '';
-		$make_request  = function ( string $url ) use (
+		$method        = '';
+		$make_request  = function (
+			string $url,
+			string $_action,
+			array $_credentials,
+			array $args
+		) use (
 			&$calls,
-			&$requested_url
+			&$requested_url,
+			&$method
 		): array {
 			++$calls;
 			$requested_url = $url;
+			$method        = (string) ( $args['method'] ?? '' );
 
 			return array(
 				'response' => array( 'code' => 200 ),
 				'body'     => (string) wp_json_encode(
 					array(
-						'supports' => array(
-							'title'  => true,
-							'editor' => true,
+						'schema' => array(
+							'properties' => array(
+								'title'   => array( 'properties' => array( 'raw' => array( 'type' => 'string' ) ) ),
+								'content' => array( 'properties' => array( 'raw' => array( 'type' => 'string' ) ) ),
+							),
 						),
 					)
 				),
@@ -170,97 +180,114 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 		};
 
 		// ACT: Resolve the same source type twice.
-		$first  = Source_Post_Type_Resolver::resolve_supports(
+		$first  = Source_Post_Type_Resolver::resolve_raw_fields(
 			'wp_navigation',
 			self::SOURCE_URL,
 			$make_request,
 			array()
 		);
-		$second = Source_Post_Type_Resolver::resolve_supports(
+		$second = Source_Post_Type_Resolver::resolve_raw_fields(
 			'wp_navigation',
 			self::SOURCE_URL,
 			$make_request,
 			array()
 		);
 
-		// ASSERT: Metadata came from the type-slug endpoint and was fetched once.
+		// ASSERT: The route schema was requested once with OPTIONS.
 		$this->assertSame(
 			array(
-				'title'  => true,
-				'editor' => true,
+				'title'   => true,
+				'content' => true,
 			),
 			$first
 		);
 		$this->assertSame( $first, $second );
 		$this->assertSame( 1, $calls );
-		$this->assertStringContainsString(
-			'/wp-json/wp/v2/types/wp_navigation',
-			$requested_url
-		);
-		$this->assertStringContainsString( 'context=edit', $requested_url );
-		$this->assertStringContainsString( '_fields=supports', $requested_url );
+		$this->assertStringContainsString( '/wp-json/wp/v2/navigation', $requested_url );
+		$this->assertSame( 'OPTIONS', $method );
 	}
 
 	/**
-	 * Verifies that malformed supports metadata fails instead of causing the
-	 * importer to guess which source fields should exist.
+	 * Verifies that failed schema lookups are cached instead of retried for
+	 * every item in a bulk import.
 	 *
-	 * @dataProvider invalid_supports_provider
+	 * @dataProvider failed_schema_provider
 	 *
-	 * @param string $body Malformed source response body.
+	 * @param string|WP_Error $body          Malformed body or transport error.
+	 * @param string          $expected_code Expected resolver error code.
 	 */
-	public function test_invalid_source_post_type_supports_returns_error(
-		string $body
+	public function test_failed_source_post_type_schema_returns_error(
+		string|WP_Error $body,
+		string $expected_code
 	): void {
-		// ARRANGE: Source response does not contain a valid supports object.
-		$make_request = static fn(): array => array(
-			'response' => array( 'code' => 200 ),
-			'body'     => $body,
-		);
+		// ARRANGE: The metadata request returns a terminal failure.
+		$calls        = 0;
+		$make_request = static function () use ( &$calls, $body ): array|WP_Error {
+			++$calls;
+			if ( $body instanceof WP_Error ) {
+				return $body;
+			}
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => $body,
+			);
+		};
 
-		// ACT: Resolve supports from the malformed response.
-		$result = Source_Post_Type_Resolver::resolve_supports(
+		// ACT: Resolve raw fields from the malformed response.
+		$result = Source_Post_Type_Resolver::resolve_raw_fields(
+			'post',
+			self::SOURCE_URL,
+			$make_request,
+			array()
+		);
+		$cached = Source_Post_Type_Resolver::resolve_raw_fields(
 			'post',
 			self::SOURCE_URL,
 			$make_request,
 			array()
 		);
 
-		// ASSERT: The caller receives a distinct metadata error.
+		// ASSERT: The distinct metadata error is cached for the request.
 		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame(
-			'source_post_type_supports_invalid',
-			$result->get_error_code()
-		);
+		$this->assertSame( $expected_code, $result->get_error_code() );
+		$this->assertSame( $result, $cached );
+		$this->assertSame( 1, $calls );
 	}
 
 	/**
-	 * Data provider of malformed supports responses.
+	 * Data provider of failed schema responses.
 	 *
-	 * @return array<string, array{string}>
+	 * @return array<string, array{string|WP_Error, string}>
 	 */
-	public static function invalid_supports_provider(): array {
+	public static function failed_schema_provider(): array {
 		return array(
-			'missing supports' => array( '{}' ),
-			'nonempty list'    => array(
-				'{"supports":["title","editor"]}',
+			'missing schema'     => array(
+				'{}',
+				'source_post_type_schema_invalid',
+			),
+			'properties as list' => array(
+				'{"schema":{"properties":[]}}',
+				'source_post_type_schema_invalid',
+			),
+			'transport error'    => array(
+				new WP_Error( 'request_failed', 'Source request failed.' ),
+				'request_failed',
 			),
 		);
 	}
 
 	/**
-	 * Verifies that core's empty-list encoding for a type with no supports is
-	 * accepted as an empty support map.
+	 * Verifies that a route schema with no raw fields is accepted.
 	 */
-	public function test_empty_source_post_type_supports_list_is_accepted(): void {
-		// ARRANGE: Source returns an empty list for its empty supports map.
+	public function test_empty_source_post_type_schema_is_accepted(): void {
+		// ARRANGE: Source returns an empty schema properties object.
 		$make_request = static fn(): array => array(
 			'response' => array( 'code' => 200 ),
-			'body'     => '{"supports":[]}',
+			'body'     => '{"schema":{"properties":{}}}',
 		);
 
-		// ACT: Resolve the empty supports map.
-		$result = Source_Post_Type_Resolver::resolve_supports(
+		// ACT: Resolve the empty raw-field map.
+		$result = Source_Post_Type_Resolver::resolve_raw_fields(
 			'sp_minimal',
 			self::SOURCE_URL,
 			$make_request,

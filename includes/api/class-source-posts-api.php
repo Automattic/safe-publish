@@ -551,48 +551,46 @@ class Source_Posts_API {
 				array( 'status' => 502 )
 			);
 		}
-		$supports = Source_Post_Type_Resolver::resolve_supports(
+		$raw_fields = Source_Post_Type_Resolver::resolve_raw_fields(
 			$source_post_type,
 			$source_site_url,
 			array( $this->http_client, 'make_request' ),
 			$auth_credentials
 		);
 
-		if ( is_wp_error( $supports ) ) {
+		if ( is_wp_error( $raw_fields ) ) {
 			$this->logger->content_fetch_failed(
 				$source_post_id,
 				$source_site_url,
-				$supports->get_error_message()
+				$raw_fields->get_error_message()
 			);
 
-			return $supports;
+			return $raw_fields;
 		}
 
-		$field_supports = array(
-			'title'   => 'title',
-			'content' => 'editor',
-			'excerpt' => 'excerpt',
-		);
 		$raw_values     = array();
 		$missing_fields = array();
 
-		foreach ( $field_supports as $field => $feature ) {
-			if ( ! array_key_exists( $feature, $supports ) ) {
-				$raw_values[ $field ] = '';
+		foreach ( array( 'title', 'content', 'excerpt' ) as $field ) {
+			if (
+				isset( $data[ $field ] )
+				&& is_array( $data[ $field ] )
+				&& isset( $data[ $field ]['raw'] )
+				&& is_string( $data[ $field ]['raw'] )
+			) {
+				$raw_values[ $field ] = $data[ $field ]['raw'];
 				continue;
 			}
 
 			if (
-				! isset( $data[ $field ] )
-				|| ! is_array( $data[ $field ] )
-				|| ! isset( $data[ $field ]['raw'] )
-				|| ! is_string( $data[ $field ]['raw'] )
+				array_key_exists( $field, $data )
+				|| array_key_exists( $field, $raw_fields )
 			) {
 				$missing_fields[] = $field;
 				continue;
 			}
 
-			$raw_values[ $field ] = $data[ $field ]['raw'];
+			$raw_values[ $field ] = '';
 		}
 
 		// Require raw values for supported fields to preserve data parity.
@@ -629,9 +627,7 @@ class Source_Posts_API {
 		$post_data['parent']         = absint( $data['parent'] ?? 0 );
 		// Carry the resolved WP slug so the bulk sorter can defer dependent
 		// types (wp_navigation runs after the posts/pages it links to).
-		$post_data['post_type'] = isset( $data['type'] )
-			? sanitize_key( (string) $data['type'] )
-			: '';
+		$post_data['post_type'] = $source_post_type;
 
 		if ( isset( $data['link'] ) ) {
 			$post_data['link'] = esc_url_raw( $data['link'] );

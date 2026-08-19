@@ -53,6 +53,19 @@ register_post_type( 'book', [
 ] );
 ```
 
+### Custom REST Controllers
+
+Safe Publish reads the route's `OPTIONS` schema to determine whether `title`,
+`content`, and `excerpt` expose raw values. `WP_REST_Posts_Controller` provides
+this automatically.
+
+If a post type uses a custom `rest_controller_class`, its author must provide
+a standard WordPress item schema. Each supported field must contain a
+`properties.raw` definition. Safe Publish rejects a missing or malformed route
+schema and any response field that lacks a valid raw value. An individual field
+omitted from both the schema and response is treated as unsupported, so the
+controller author is responsible for declaring every supported raw field.
+
 ### Custom Post Meta
 
 Safe Publish imports the core REST API `meta` object. It does not import arbitrary top-level REST fields added with `register_rest_field()`. For custom post types, the post type must also support `custom-fields`.

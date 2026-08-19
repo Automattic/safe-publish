@@ -38,22 +38,22 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	private string $mock_body = '';
 
 	/**
-	 * Features returned by the mocked source post type.
+	 * Raw fields returned by the mocked source route schema.
 	 *
 	 * @var array<string, bool>
 	 */
-	private array $mock_supports = array(
+	private array $mock_raw_fields = array(
 		'title'   => true,
-		'editor'  => true,
+		'content' => true,
 		'excerpt' => true,
 	);
 
 	/**
-	 * Optional error returned by the mocked supports request.
+	 * Optional error returned by the mocked schema request.
 	 *
-	 * @var WP_Error|null
+	 * @var array|WP_Error|null
 	 */
-	private ?WP_Error $mock_supports_error = null;
+	private array|WP_Error|null $mock_schema_error = null;
 
 	/**
 	 * Post types returned by the mocked Safe Publish catalog.
@@ -96,7 +96,7 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	 * Returns the mocked 200 response carrying the per-test body.
 	 *
 	 * @param false|array|WP_Error $preempt Preemptive return value (unused).
-	 * @param array                $args    HTTP request arguments (unused).
+	 * @param array                $args    HTTP request arguments.
 	 * @param string               $url     Request URL (unused).
 	 * @return array|WP_Error Mock HTTP response or error.
 	 */
@@ -105,23 +105,32 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		array $args,
 		string $url
 	): array|WP_Error {
-		unset( $preempt, $args );
-
-		if ( str_contains( $url, '/wp-json/wp/v2/types/' ) ) {
-			if ( $this->mock_supports_error instanceof WP_Error ) {
-				return $this->mock_supports_error;
-			}
-
-			return $this->successful_response(
-				(string) wp_json_encode(
-					array( 'supports' => $this->mock_supports )
-				)
-			);
-		}
+		unset( $preempt );
 
 		if ( str_contains( $url, '/safe-publish/v1/catalog/post-types' ) ) {
 			return $this->successful_response(
 				(string) wp_json_encode( $this->mock_post_types )
+			);
+		}
+		if ( 'OPTIONS' === ( $args['method'] ?? 'GET' ) ) {
+			if ( null !== $this->mock_schema_error ) {
+				return $this->mock_schema_error;
+			}
+
+			$properties = array();
+			foreach ( array( 'title', 'content', 'excerpt' ) as $field ) {
+				if ( array_key_exists( $field, $this->mock_raw_fields ) ) {
+					$properties[ $field ] = array(
+						'properties' => array(
+							'raw' => array( 'type' => 'string' ),
+						),
+					);
+				}
+			}
+			return $this->successful_response(
+				(string) wp_json_encode(
+					array( 'schema' => array( 'properties' => $properties ) )
+				)
 			);
 		}
 
@@ -214,7 +223,7 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	 */
 	public function test_unsupported_excerpt_is_normalized_to_empty(): void {
 		// ARRANGE: The type omits excerpt support and its response omits the field.
-		unset( $this->mock_supports['excerpt'] );
+		unset( $this->mock_raw_fields['excerpt'] );
 		$this->mock_body = (string) wp_json_encode(
 			array(
 				'id'      => 123,
@@ -238,11 +247,12 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a scalar is not accepted as the raw value of a field the
-	 * source post type declares support for.
+	 * Verifies that a present scalar field is rejected even when its route
+	 * schema does not declare a raw value.
 	 */
 	public function test_supported_scalar_excerpt_is_rejected(): void {
-		// ARRANGE: Raw title/content are valid, but excerpt is a plain string.
+		// ARRANGE: Excerpt is a plain string omitted from the raw-field schema.
+		unset( $this->mock_raw_fields['excerpt'] );
 		$this->mock_body = (string) wp_json_encode(
 			array(
 				'id'      => 123,
@@ -256,7 +266,7 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		// ACT: Fetch fresh content for import.
 		$result = $this->fetch();
 
-		// ASSERT: The nonstandard scalar is not assumed to be lossless raw data.
+		// ASSERT: The nonstandard scalar is not treated as an unsupported field.
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame(
 			'fresh_content_raw_fields_missing',
@@ -269,8 +279,8 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a response cannot select a different post type's supports
-	 * profile to weaken raw-field validation.
+	 * Verifies that a response cannot select a different post type's route
+	 * schema to weaken raw-field validation.
 	 */
 	public function test_mismatched_response_post_type_is_rejected(): void {
 		// ARRANGE: A post request receives a response claiming to be navigation.
@@ -286,7 +296,7 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		// ACT: Fetch the item requested as a post.
 		$result = $this->fetch();
 
-		// ASSERT: The response is rejected before its supports are consulted.
+		// ASSERT: The response is rejected before its schema is consulted.
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame(
 			'fresh_content_post_type_mismatch',
@@ -298,9 +308,9 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	 * Verifies that source metadata request failures retain their transport
 	 * error semantics.
 	 */
-	public function test_supports_request_error_is_propagated(): void {
-		// ARRANGE: The post is valid, but its type metadata request cannot run.
-		$this->mock_body           = (string) wp_json_encode(
+	public function test_schema_request_error_is_propagated(): void {
+		// ARRANGE: The post is valid, but its route schema request cannot run.
+		$this->mock_body         = (string) wp_json_encode(
 			array(
 				'id'      => 123,
 				'type'    => 'post',
@@ -309,7 +319,7 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 				'excerpt' => array( 'raw' => '' ),
 			)
 		);
-		$this->mock_supports_error = new WP_Error(
+		$this->mock_schema_error = new WP_Error(
 			'transport_down',
 			'Metadata transport failed.'
 		);
@@ -323,8 +333,34 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the route schema requires raw values for every
+	 * field it declares.
+	 */
+	public function test_route_schema_requires_declared_raw_fields(): void {
+		// ARRANGE: Schema declares excerpt, but the edit response omits it.
+		$this->mock_body = (string) wp_json_encode(
+			array(
+				'id'      => 123,
+				'type'    => 'sp_book',
+				'title'   => array( 'raw' => 'Book' ),
+				'content' => array( 'raw' => '<p>Book content.</p>' ),
+			)
+		);
+
+		// ACT: Fetch the custom post.
+		$result = $this->fetch( 'sp_book' );
+
+		// ASSERT: Schema authority prevents a silent empty excerpt overwrite.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'fresh_content_raw_fields_missing',
+			$result->get_error_code()
+		);
+	}
+
+	/**
 	 * Verifies that a custom REST base resolves back to the authoritative type
-	 * slug before response-type validation and supports lookup.
+	 * slug before response-type validation and schema lookup.
 	 */
 	public function test_custom_rest_base_resolves_to_response_post_type(): void {
 		// ARRANGE: The catalog maps sp_movie to its distinct sp_movies REST base.
