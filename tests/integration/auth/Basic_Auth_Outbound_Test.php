@@ -287,6 +287,27 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 			);
 		}
 
+		if ( str_contains( $url, '/wp-json/wp/v2/types/post' ) ) {
+			return array(
+				'headers'  => array(),
+				'body'     => (string) wp_json_encode(
+					array(
+						'supports' => array(
+							'title'   => true,
+							'editor'  => true,
+							'excerpt' => true,
+						),
+					)
+				),
+				'response' => array(
+					'code'    => 200,
+					'message' => 'OK',
+				),
+				'cookies'  => array(),
+				'filename' => null,
+			);
+		}
+
 		// Single-post endpoint used by fetch_fresh_post(): Return a post object.
 		if ( preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
 			$current_user = wp_get_current_user();

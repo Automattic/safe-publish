@@ -524,12 +524,79 @@ class Source_Posts_API {
 			);
 		}
 
-		// Require raw field values (edit context) to preserve data parity.
+		$source_post_type = Source_Post_Type_Resolver::resolve_slug(
+			$post_type,
+			$source_site_url,
+			array( $this->http_client, 'make_request' ),
+			$auth_credentials
+		);
 		if (
-			! isset( $data['title']['raw'] ) ||
-			! isset( $data['content']['raw'] ) ||
-			! isset( $data['excerpt']['raw'] )
+			array_key_exists( 'type', $data )
+			&& (
+				! is_string( $data['type'] )
+				|| $source_post_type !== $data['type']
+			)
 		) {
+			$this->logger->content_fetch_invalid_response(
+				$source_post_id,
+				$source_site_url
+			);
+
+			return new WP_Error(
+				'fresh_content_post_type_mismatch',
+				__(
+					'The source response does not match the requested post type.',
+					'safe-publish'
+				),
+				array( 'status' => 502 )
+			);
+		}
+		$supports = Source_Post_Type_Resolver::resolve_supports(
+			$source_post_type,
+			$source_site_url,
+			array( $this->http_client, 'make_request' ),
+			$auth_credentials
+		);
+
+		if ( is_wp_error( $supports ) ) {
+			$this->logger->content_fetch_failed(
+				$source_post_id,
+				$source_site_url,
+				$supports->get_error_message()
+			);
+
+			return $supports;
+		}
+
+		$field_supports = array(
+			'title'   => 'title',
+			'content' => 'editor',
+			'excerpt' => 'excerpt',
+		);
+		$raw_values     = array();
+		$missing_fields = array();
+
+		foreach ( $field_supports as $field => $feature ) {
+			if ( ! array_key_exists( $feature, $supports ) ) {
+				$raw_values[ $field ] = '';
+				continue;
+			}
+
+			if (
+				! isset( $data[ $field ] )
+				|| ! is_array( $data[ $field ] )
+				|| ! isset( $data[ $field ]['raw'] )
+				|| ! is_string( $data[ $field ]['raw'] )
+			) {
+				$missing_fields[] = $field;
+				continue;
+			}
+
+			$raw_values[ $field ] = $data[ $field ]['raw'];
+		}
+
+		// Require raw values for supported fields to preserve data parity.
+		if ( array() !== $missing_fields ) {
 			$this->logger->content_fetch_raw_fields_missing(
 				$source_post_id,
 				$source_site_url
@@ -537,9 +604,13 @@ class Source_Posts_API {
 
 			return new WP_Error(
 				'fresh_content_raw_fields_missing',
-				__(
-					'The source response is missing raw content fields. Verify authentication and edit permissions on the source site.',
-					'safe-publish'
+				sprintf(
+					/* translators: %s: Comma-separated list of field names. */
+					__(
+						'The source response is missing required raw values for supported fields: %s.',
+						'safe-publish'
+					),
+					implode( ', ', $missing_fields )
 				),
 				array( 'status' => 403 )
 			);
@@ -548,7 +619,7 @@ class Source_Posts_API {
 		// Extract post data.
 		$post_data = array();
 
-		$post_data['title']          = sanitize_text_field( $data['title']['raw'] );
+		$post_data['title']          = sanitize_text_field( $raw_values['title'] );
 		$post_data['featured_media'] = absint( $data['featured_media'] ?? 0 );
 		$post_data['slug']           = sanitize_text_field( $data['slug'] ?? '' );
 		$post_data['comment_status'] = sanitize_text_field( $data['comment_status'] ?? '' );
@@ -568,8 +639,8 @@ class Source_Posts_API {
 
 		// HTML fields: Sanitized at the import point with modification
 		// detection to prevent silent data loss during migration.
-		$post_data['content'] = $data['content']['raw'];
-		$post_data['excerpt'] = $data['excerpt']['raw'];
+		$post_data['content'] = $raw_values['content'];
+		$post_data['excerpt'] = $raw_values['excerpt'];
 
 		/**
 		 * Filters the source post meta before it is persisted.

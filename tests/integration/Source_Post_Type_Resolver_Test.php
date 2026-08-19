@@ -114,6 +114,173 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a custom REST base resolves back to its source type slug.
+	 */
+	public function test_custom_rest_base_resolves_to_source_slug(): void {
+		// ARRANGE: Source advertises movie => movies.
+		$calls        = 0;
+		$make_request = $this->recording_types_callable(
+			array(
+				array(
+					'slug'      => 'movie',
+					'rest_base' => 'movies',
+				),
+			),
+			$calls
+		);
+
+		// ACT: Resolve the advertised REST base to its slug.
+		$slug = Source_Post_Type_Resolver::resolve_slug(
+			'movies',
+			self::SOURCE_URL,
+			$make_request,
+			array()
+		);
+
+		// ASSERT: The authoritative source map supplies the canonical slug.
+		$this->assertSame( 'movie', $slug );
+	}
+
+	/**
+	 * Verifies that source post type supports are read from the native types
+	 * endpoint and cached for repeated imports of the same type.
+	 */
+	public function test_source_post_type_supports_are_resolved_and_cached(): void {
+		// ARRANGE: A source type supporting title and editor, but not excerpt.
+		$calls         = 0;
+		$requested_url = '';
+		$make_request  = function ( string $url ) use (
+			&$calls,
+			&$requested_url
+		): array {
+			++$calls;
+			$requested_url = $url;
+
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => (string) wp_json_encode(
+					array(
+						'supports' => array(
+							'title'  => true,
+							'editor' => true,
+						),
+					)
+				),
+			);
+		};
+
+		// ACT: Resolve the same source type twice.
+		$first  = Source_Post_Type_Resolver::resolve_supports(
+			'wp_navigation',
+			self::SOURCE_URL,
+			$make_request,
+			array()
+		);
+		$second = Source_Post_Type_Resolver::resolve_supports(
+			'wp_navigation',
+			self::SOURCE_URL,
+			$make_request,
+			array()
+		);
+
+		// ASSERT: Metadata came from the type-slug endpoint and was fetched once.
+		$this->assertSame(
+			array(
+				'title'  => true,
+				'editor' => true,
+			),
+			$first
+		);
+		$this->assertSame( $first, $second );
+		$this->assertSame( 1, $calls );
+		$this->assertStringContainsString(
+			'/wp-json/wp/v2/types/wp_navigation',
+			$requested_url
+		);
+		$this->assertStringContainsString( 'context=edit', $requested_url );
+		$this->assertStringContainsString( '_fields=supports', $requested_url );
+	}
+
+	/**
+	 * Verifies that malformed supports metadata fails instead of causing the
+	 * importer to guess which source fields should exist.
+	 */
+	public function test_invalid_source_post_type_supports_returns_error(): void {
+		// ARRANGE: Source response omits the required supports object.
+		$make_request = static fn(): array => array(
+			'response' => array( 'code' => 200 ),
+			'body'     => '{}',
+		);
+
+		// ACT: Resolve supports from the malformed response.
+		$result = Source_Post_Type_Resolver::resolve_supports(
+			'post',
+			self::SOURCE_URL,
+			$make_request,
+			array()
+		);
+
+		// ASSERT: The caller receives a distinct metadata error.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'source_post_type_supports_invalid',
+			$result->get_error_code()
+		);
+	}
+
+	/**
+	 * Verifies that a nonempty JSON list cannot masquerade as a supports object
+	 * and make every source field appear unsupported.
+	 */
+	public function test_list_source_post_type_supports_returns_error(): void {
+		// ARRANGE: Source returns feature names as list values, not object keys.
+		$make_request = static fn(): array => array(
+			'response' => array( 'code' => 200 ),
+			'body'     => (string) wp_json_encode(
+				array( 'supports' => array( 'title', 'editor' ) )
+			),
+		);
+
+		// ACT: Resolve supports from the malformed response.
+		$result = Source_Post_Type_Resolver::resolve_supports(
+			'post',
+			self::SOURCE_URL,
+			$make_request,
+			array()
+		);
+
+		// ASSERT: The malformed list is rejected instead of cached.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'source_post_type_supports_invalid',
+			$result->get_error_code()
+		);
+	}
+
+	/**
+	 * Verifies that core's empty-list encoding for a type with no supports is
+	 * accepted as an empty support map.
+	 */
+	public function test_empty_source_post_type_supports_list_is_accepted(): void {
+		// ARRANGE: Source returns an empty list for its empty supports map.
+		$make_request = static fn(): array => array(
+			'response' => array( 'code' => 200 ),
+			'body'     => '{"supports":[]}',
+		);
+
+		// ACT: Resolve the empty supports map.
+		$result = Source_Post_Type_Resolver::resolve_supports(
+			'sp_minimal',
+			self::SOURCE_URL,
+			$make_request,
+			array()
+		);
+
+		// ASSERT: A genuinely empty support map is valid.
+		$this->assertSame( array(), $result );
+	}
+
+	/**
 	 * Verifies that the source post-types map is fetched once per request and
 	 * reused for subsequent resolutions (the bulk-import dedupe path).
 	 */

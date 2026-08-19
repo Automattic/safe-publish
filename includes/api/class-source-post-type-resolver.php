@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\API;
 
 use Safe_Publish\Utils\Post_Type_Map;
+use WP_Error;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -17,8 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Resolves a source post type slug to the REST base used to address it on the
- * source site's wp/v2 API.
+ * Resolves source post type metadata used to fetch and validate source posts.
  *
  * Built-in types resolve from the static Post_Type_Map with no network call.
  * Custom post types whose rest_base differs from their slug (e.g. a `movie`
@@ -38,6 +38,13 @@ final class Source_Post_Type_Resolver {
 	 * @var array<string, array<string, string>>
 	 */
 	private static array $maps = array();
+
+	/**
+	 * Per-request post type supports, keyed by source URL and type slug.
+	 *
+	 * @var array<string, array<string, array<string, mixed>>>
+	 */
+	private static array $supports = array();
 
 	/**
 	 * Resolves a post type slug to the REST base segment for its source.
@@ -69,6 +76,119 @@ final class Source_Post_Type_Resolver {
 
 		return $map[ $post_type ]
 			?? Post_Type_Map::to_rest_endpoint( $post_type );
+	}
+
+	/**
+	 * Resolves a source post type slug or REST base to its canonical slug.
+	 *
+	 * @param string   $post_type       Source post type slug or REST base.
+	 * @param string   $source_site_url Source site URL.
+	 * @param callable $make_request    fn($url, $action, $credentials): array|WP_Error.
+	 * @param array    $credentials     Authentication credentials.
+	 * @return string Canonical post type slug, or the input when unresolved.
+	 */
+	public static function resolve_slug(
+		string $post_type,
+		string $source_site_url,
+		callable $make_request,
+		array $credentials
+	): string {
+		if ( Post_Type_Map::is_builtin( $post_type ) ) {
+			return Post_Type_Map::to_wp_slug( $post_type );
+		}
+
+		$map = self::get_map( $source_site_url, $make_request, $credentials );
+		if ( isset( $map[ $post_type ] ) ) {
+			return $post_type;
+		}
+
+		$slug = array_search( $post_type, $map, true );
+
+		return false !== $slug ? $slug : $post_type;
+	}
+
+	/**
+	 * Returns the features a source post type declares support for.
+	 *
+	 * WordPress exposes supports only in edit context. Successful responses are
+	 * memoized so a bulk import fetches metadata once per source post type.
+	 *
+	 * @param string   $post_type       Source post type slug.
+	 * @param string   $source_site_url Source site URL.
+	 * @param callable $make_request    fn($url, $action, $credentials): array|WP_Error.
+	 * @param array    $credentials     Authentication credentials.
+	 * @return array<string, mixed>|WP_Error Declared supports, or an error.
+	 */
+	public static function resolve_supports(
+		string $post_type,
+		string $source_site_url,
+		callable $make_request,
+		array $credentials
+	): array|WP_Error {
+		$sanitized_post_type = sanitize_key( $post_type );
+
+		if ( '' === $sanitized_post_type || $post_type !== $sanitized_post_type ) {
+			return new WP_Error(
+				'source_post_type_invalid',
+				__( 'The source response did not identify its post type.', 'safe-publish' )
+			);
+		}
+
+		$post_type = $sanitized_post_type;
+
+		if ( isset( self::$supports[ $source_site_url ][ $post_type ] ) ) {
+			return self::$supports[ $source_site_url ][ $post_type ];
+		}
+
+		$url = add_query_arg(
+			array(
+				'context' => 'edit',
+				'_fields' => 'supports',
+			),
+			trailingslashit( $source_site_url )
+				. 'wp-json/wp/v2/types/' . $post_type
+		);
+
+		$response = $make_request(
+			$url,
+			Request_Actions::LIST_ITEMS,
+			$credentials
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$data = json_decode( wp_remote_retrieve_body( $response ) );
+
+		if ( ! ( $data instanceof \stdClass ) || ! isset( $data->supports ) ) {
+			return new WP_Error(
+				'source_post_type_supports_invalid',
+				__(
+					'The source site returned invalid post type metadata.',
+					'safe-publish'
+				)
+			);
+		}
+
+		if ( $data->supports instanceof \stdClass ) {
+			$supports = get_object_vars( $data->supports );
+		} elseif ( is_array( $data->supports ) && array() === $data->supports ) {
+			// Core may encode a post type with no supports as an empty list.
+			$supports = array();
+		} else {
+			return new WP_Error(
+				'source_post_type_supports_invalid',
+				__(
+					'The source site returned invalid post type metadata.',
+					'safe-publish'
+				)
+			);
+		}
+
+		self::$supports[ $source_site_url ][ $post_type ] = $supports;
+
+		return $supports;
 	}
 
 	/**
@@ -144,6 +264,7 @@ final class Source_Post_Type_Resolver {
 	 * within a single process.
 	 */
 	public static function reset_cache(): void {
-		self::$maps = array();
+		self::$maps     = array();
+		self::$supports = array();
 	}
 }

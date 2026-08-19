@@ -44,6 +44,10 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
+		$this->mock_post_overrides = array(
+			'omit_excerpt' => true,
+			'type'         => 'wp_navigation',
+		);
 
 		update_option( Options::OPTION_CONNECTED_SITE_URL, self::SOURCE_A );
 		add_filter(
@@ -85,6 +89,10 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 
 		if ( false !== $preempt ) {
 			return $preempt;
+		}
+
+		if ( str_contains( $url, '/wp-json/wp/v2/types/wp_navigation' ) ) {
+			return $this->build_mock_post_type_supports_response( 'wp_navigation' );
 		}
 
 		if ( 1 === preg_match( '#/wp-json/wp/v2/navigation/\d+#', $url ) ) {

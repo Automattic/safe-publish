@@ -108,6 +108,10 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 		array $_args,
 		string $url
 	): false|array|WP_Error {
+		if ( false === $preempt && str_contains( $url, '/wp-json/wp/v2/types/post' ) ) {
+			return $this->build_mock_post_type_supports_response( 'post' );
+		}
+
 		if ( false !== $preempt || ! preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
 			return $preempt;
 		}

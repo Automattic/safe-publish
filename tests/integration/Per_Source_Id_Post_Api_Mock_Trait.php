@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\API\Source_Post_Type_Resolver;
 use WP_Error;
 
 /**
@@ -43,6 +44,7 @@ trait Per_Source_Id_Post_Api_Mock_Trait {
 	 * Registers the pre_http_request filter that serves the per-source-id mock.
 	 */
 	protected function add_per_source_id_post_api_mock(): void {
+		Source_Post_Type_Resolver::reset_cache();
 		add_filter(
 			'pre_http_request',
 			array( $this, 'mock_per_source_id_post_api' ),
@@ -81,6 +83,19 @@ trait Per_Source_Id_Post_Api_Mock_Trait {
 	): false|array|WP_Error {
 		if ( false !== $preempt ) {
 			return $preempt;
+		}
+
+		if ( preg_match( '#/wp-json/wp/v2/types/([a-z0-9_-]+)#', $url, $matches ) ) {
+			return array(
+				'response' => array(
+					'code'    => 200,
+					'message' => 'OK',
+				),
+				'body'     => (string) wp_json_encode(
+					array( 'supports' => get_all_post_type_supports( $matches[1] ) )
+				),
+				'headers'  => array(),
+			);
 		}
 
 		// Exclude /media/ so Per_Source_Id_Media_Api_Mock_Trait can serve

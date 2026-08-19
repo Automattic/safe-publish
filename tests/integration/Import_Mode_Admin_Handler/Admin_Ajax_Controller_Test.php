@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests\Integration\Import_Mode_Admin_Handler;
 use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Auth\VIP_Safe_Auth;
+use Safe_Publish\API\Source_Post_Type_Resolver;
 use Safe_Publish\Tests\Integration\Ajax_Die_Continue_Trait;
 use Safe_Publish\Tests\Integration\Mock_Media_HTTP_Trait;
 use Safe_Publish\Tests\Integration\Mock_Post_API_Trait;
@@ -50,6 +51,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
+		Source_Post_Type_Resolver::reset_cache();
 
 		// Required by validate_auth_or_fail() in the gated AJAX endpoints.
 		if ( ! defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ) {
@@ -118,6 +120,10 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		array $_args,
 		string $url
 	): false|array|WP_Error {
+		if ( false === $preempt && str_contains( $url, '/wp-json/wp/v2/types/post' ) ) {
+			return $this->build_mock_post_type_supports_response( 'post' );
+		}
+
 		if ( false !== $preempt || ! preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
 			return $preempt;
 		}

@@ -95,7 +95,7 @@ class Bulk_Import_Fetch_Failure_Test extends WP_Ajax_UnitTestCase {
 		$this->assertSame( 1, $data['failed'] );
 		$this->assertFalse( $data['results'][0]['success'] );
 		$this->assertStringContainsString(
-			'missing raw content fields',
+			'missing required raw values',
 			$data['results'][0]['error']
 		);
 	}

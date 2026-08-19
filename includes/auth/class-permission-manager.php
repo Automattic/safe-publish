@@ -79,6 +79,13 @@ class Permission_Manager {
 	private bool $dispatch_logged = false;
 
 	/**
+	 * Primitive capabilities required by the current authenticated route.
+	 *
+	 * @var string[]
+	 */
+	private array $request_caps = array();
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Auth_Logger     $logger          Auth logger instance.
@@ -186,6 +193,7 @@ class Permission_Manager {
 		$this->authenticated    = false;
 		$this->context_override = false;
 		$this->dispatch_logged  = false;
+		$this->request_caps     = array();
 
 		return $result;
 	}
@@ -213,6 +221,18 @@ class Permission_Manager {
 		$route = $request->get_route();
 		if ( ! $route || strpos( $route, '/wp/v2/' ) !== 0 ) {
 			return $response;
+		}
+
+		$this->request_caps = array();
+		if ( preg_match( '#^/wp/v2/types/([a-z0-9_-]+)$#D', $route, $matches ) ) {
+			$post_type = get_post_type_object( $matches[1] );
+			if (
+				$post_type instanceof WP_Post_Type
+				&& isset( $post_type->cap->edit_posts )
+				&& is_string( $post_type->cap->edit_posts )
+			) {
+				$this->request_caps[] = $post_type->cap->edit_posts;
+			}
 		}
 
 		add_filter( 'user_has_cap', array( $this, 'apply_request_caps' ), 5, 4 );
@@ -322,6 +342,9 @@ class Permission_Manager {
 		);
 
 		foreach ( $caps as $cap ) {
+			$allcaps[ $cap ] = true;
+		}
+		foreach ( $this->request_caps as $cap ) {
 			$allcaps[ $cap ] = true;
 		}
 

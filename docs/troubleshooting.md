@@ -195,13 +195,16 @@ add_filter(
 
 #### "Raw content fields missing" error
 
-**Symptoms**: Import reports that the source response is missing raw content fields
+**Symptoms**: Import reports that the source response is missing required raw values
 
 **Solutions**:
 
 1. Verify the HMAC shared secret and connected-site URLs on both sites.
 2. Confirm the request reaches the source with authenticated `context=edit` access.
-3. Check that the source REST response includes `title.raw`, `content.raw`, and `excerpt.raw`.
+3. Check that the source REST response includes a `raw` value for each field
+   its post type supports. For example, a type supporting title, editor, and
+   excerpt must include `title.raw`, `content.raw`, and `excerpt.raw`. Fields
+   the type does not support may be absent.
 
 #### Post creation failed
 

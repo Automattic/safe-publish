@@ -76,6 +76,7 @@ class Custom_Post_Type_Import_Test extends Source_Posts_API_Test_Base {
 				'public'       => true,
 				'show_in_rest' => true,
 				'rest_base'    => 'sp_movies',
+				'supports'     => array( 'title', 'editor' ),
 			)
 		);
 

@@ -99,6 +99,49 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that authenticated type metadata requests receive the custom
+	 * post type's primitive edit capability without granting unrelated caps.
+	 */
+	public function test_type_metadata_request_gets_custom_edit_capability(): void {
+		// ARRANGE: A REST-visible type with custom book capabilities.
+		register_post_type(
+			'sp_book',
+			array(
+				'public'          => true,
+				'show_in_rest'    => true,
+				'capability_type' => array( 'book', 'books' ),
+				'map_meta_cap'    => true,
+			)
+		);
+		$user_id = self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		wp_set_current_user( $user_id );
+		$request = new WP_REST_Request( 'GET', '/wp/v2/types/sp_book' );
+
+		try {
+			// ACT: Install HMAC context and enter the route permission check.
+			$this->permission_manager->setup_authenticated_context( $request );
+			// phpcs:ignore WordPress.WP.Capabilities.Unknown -- Registered test capability.
+			$before = current_user_can( 'edit_books' );
+			$this->permission_manager->handle_permission_check(
+				null,
+				array(),
+				$request
+			);
+			// phpcs:ignore WordPress.WP.Capabilities.Unknown -- Registered test capability.
+			$after = current_user_can( 'edit_books' );
+			// phpcs:ignore WordPress.WP.Capabilities.Unknown -- Registered test capability.
+			$unrelated = current_user_can( 'delete_books' );
+		} finally {
+			unregister_post_type( 'sp_book' );
+		}
+
+		// ASSERT: Only the type endpoint's required primitive cap was added.
+		$this->assertFalse( $before );
+		$this->assertTrue( $after );
+		$this->assertFalse( $unrelated );
+	}
+
+	/**
 	 * Verifies that an unauthenticated request has no special capabilities
 	 * added.
 	 */

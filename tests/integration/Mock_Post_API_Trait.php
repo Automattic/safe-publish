@@ -22,7 +22,7 @@ trait Mock_Post_API_Trait {
 	 *
 	 * Keys: title, featured_media, content, excerpt, meta, terms, slug,
 	 *       comment_status, ping_status, menu_order, password, parent,
-	 *       safe_publish_author, safe_publish_terms, acf.
+	 *       safe_publish_author, safe_publish_terms, acf, type, omit_excerpt.
 	 * Terms: array keyed by taxonomy slug with arrays of term names as values,
 	 *        emitted as the embedded wp:term payload.
 	 * safe_publish_author: array {email, login, display_name}.
@@ -31,6 +31,27 @@ trait Mock_Post_API_Trait {
 	 * @var array<string, mixed>
 	 */
 	protected array $mock_post_overrides = array();
+
+	/**
+	 * Builds a mock response for the source post-type supports endpoint.
+	 *
+	 * @param string $post_type Post type slug.
+	 * @return array Mock HTTP response.
+	 */
+	protected function build_mock_post_type_supports_response(
+		string $post_type
+	): array {
+		return array(
+			'response' => array(
+				'code'    => 200,
+				'message' => 'OK',
+			),
+			'body'     => (string) wp_json_encode(
+				array( 'supports' => get_all_post_type_supports( $post_type ) )
+			),
+			'headers'  => array(),
+		);
+	}
 
 	/**
 	 * Builds a mock HTTP response for the single-post REST endpoint.
@@ -48,7 +69,6 @@ trait Mock_Post_API_Trait {
 			'title'          => array( 'raw' => $this->mock_post_overrides['title'] ?? 'Test Post' ),
 			'featured_media' => $this->mock_post_overrides['featured_media'] ?? 0,
 			'content'        => array( 'raw' => $this->mock_post_overrides['content'] ?? '<p>Test content.</p>' ),
-			'excerpt'        => array( 'raw' => $this->mock_post_overrides['excerpt'] ?? '' ),
 			'link'           => 'https://source.example.com/test-post',
 			'slug'           => $this->mock_post_overrides['slug'] ?? '',
 			'comment_status' => $this->mock_post_overrides['comment_status'] ?? '',
@@ -58,6 +78,16 @@ trait Mock_Post_API_Trait {
 			'parent'         => $this->mock_post_overrides['parent'] ?? 0,
 			'meta'           => $this->mock_post_overrides['meta'] ?? array(),
 		);
+
+		if ( true !== ( $this->mock_post_overrides['omit_excerpt'] ?? false ) ) {
+			$body['excerpt'] = array(
+				'raw' => $this->mock_post_overrides['excerpt'] ?? '',
+			);
+		}
+
+		if ( isset( $this->mock_post_overrides['type'] ) ) {
+			$body['type'] = $this->mock_post_overrides['type'];
+		}
 
 		$body['safe_publish_author'] = $this->mock_post_overrides['safe_publish_author']
 			?? $this->default_safe_publish_author();

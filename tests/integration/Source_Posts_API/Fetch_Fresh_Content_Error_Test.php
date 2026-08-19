@@ -38,6 +38,31 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	private string $mock_body = '';
 
 	/**
+	 * Features returned by the mocked source post type.
+	 *
+	 * @var array<string, bool>
+	 */
+	private array $mock_supports = array(
+		'title'   => true,
+		'editor'  => true,
+		'excerpt' => true,
+	);
+
+	/**
+	 * Optional error returned by the mocked supports request.
+	 *
+	 * @var WP_Error|null
+	 */
+	private ?WP_Error $mock_supports_error = null;
+
+	/**
+	 * Post types returned by the mocked Safe Publish catalog.
+	 *
+	 * @var list<array<string, string>>
+	 */
+	private array $mock_post_types = array();
+
+	/**
 	 * Sets the connected URL and registers the HTTP mock.
 	 */
 	#[\Override]
@@ -73,14 +98,46 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	 * @param false|array|WP_Error $preempt Preemptive return value (unused).
 	 * @param array                $args    HTTP request arguments (unused).
 	 * @param string               $url     Request URL (unused).
-	 * @return array Mock HTTP response.
+	 * @return array|WP_Error Mock HTTP response or error.
 	 */
 	public function intercept_http_request(
 		false|array|WP_Error $preempt,
 		array $args,
 		string $url
-	): array {
-		unset( $preempt, $args, $url );
+	): array|WP_Error {
+		unset( $preempt, $args );
+
+		if ( str_contains( $url, '/wp-json/wp/v2/types/' ) ) {
+			if ( $this->mock_supports_error instanceof WP_Error ) {
+				return $this->mock_supports_error;
+			}
+
+			return array(
+				'headers'  => array(),
+				'body'     => (string) wp_json_encode(
+					array( 'supports' => $this->mock_supports )
+				),
+				'response' => array(
+					'code'    => 200,
+					'message' => 'OK',
+				),
+				'cookies'  => array(),
+				'filename' => null,
+			);
+		}
+
+		if ( str_contains( $url, '/safe-publish/v1/catalog/post-types' ) ) {
+			return array(
+				'headers'  => array(),
+				'body'     => (string) wp_json_encode( $this->mock_post_types ),
+				'response' => array(
+					'code'    => 200,
+					'message' => 'OK',
+				),
+				'cookies'  => array(),
+				'filename' => null,
+			);
+		}
 
 		return array(
 			'headers'  => array(),
@@ -139,5 +196,165 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 			'fresh_content_raw_fields_missing',
 			$result->get_error_code()
 		);
+	}
+
+	/**
+	 * Verifies that an absent excerpt is normalized when the source post type
+	 * does not support excerpts.
+	 */
+	public function test_unsupported_excerpt_is_normalized_to_empty(): void {
+		// ARRANGE: The type omits excerpt support and its response omits the field.
+		unset( $this->mock_supports['excerpt'] );
+		$this->mock_body = (string) wp_json_encode(
+			array(
+				'id'      => 123,
+				'type'    => 'wp_navigation',
+				'title'   => array( 'raw' => 'Main navigation' ),
+				'content' => array( 'raw' => '<!-- wp:navigation-link /-->' ),
+			)
+		);
+
+		// ACT: Fetch fresh content for import.
+		$result = ( new Source_Posts_API( new HTTP_Client() ) )
+			->fetch_fresh_post_content(
+				123,
+				self::SOURCE_SITE_URL,
+				array(),
+				'wp_navigation'
+			);
+
+		// ASSERT: The valid no-excerpt response succeeds without inventing data.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'Main navigation', $result['title'] );
+		$this->assertSame(
+			'<!-- wp:navigation-link /-->',
+			$result['content']
+		);
+		$this->assertSame( '', $result['excerpt'] );
+	}
+
+	/**
+	 * Verifies that a scalar is not accepted as the raw value of a field the
+	 * source post type declares support for.
+	 */
+	public function test_supported_scalar_excerpt_is_rejected(): void {
+		// ARRANGE: Raw title/content are valid, but excerpt is a plain string.
+		$this->mock_body = (string) wp_json_encode(
+			array(
+				'id'      => 123,
+				'type'    => 'post',
+				'title'   => array( 'raw' => 'Title' ),
+				'content' => array( 'raw' => '<p>Content.</p>' ),
+				'excerpt' => 'Possibly rendered excerpt',
+			)
+		);
+
+		// ACT: Fetch fresh content for import.
+		$result = ( new Source_Posts_API( new HTTP_Client() ) )
+			->fetch_fresh_post_content( 123, self::SOURCE_SITE_URL );
+
+		// ASSERT: The nonstandard scalar is not assumed to be lossless raw data.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'fresh_content_raw_fields_missing',
+			$result->get_error_code()
+		);
+		$this->assertStringContainsString(
+			'supported fields: excerpt',
+			$result->get_error_message()
+		);
+	}
+
+	/**
+	 * Verifies that a response cannot select a different post type's supports
+	 * profile to weaken raw-field validation.
+	 */
+	public function test_mismatched_response_post_type_is_rejected(): void {
+		// ARRANGE: A post request receives a response claiming to be navigation.
+		$this->mock_body = (string) wp_json_encode(
+			array(
+				'id'      => 123,
+				'type'    => 'wp_navigation',
+				'title'   => array( 'raw' => 'Title' ),
+				'content' => array( 'raw' => '<p>Content.</p>' ),
+			)
+		);
+
+		// ACT: Fetch the item requested as a post.
+		$result = ( new Source_Posts_API( new HTTP_Client() ) )
+			->fetch_fresh_post_content( 123, self::SOURCE_SITE_URL );
+
+		// ASSERT: The response is rejected before its supports are consulted.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'fresh_content_post_type_mismatch',
+			$result->get_error_code()
+		);
+	}
+
+	/**
+	 * Verifies that source metadata request failures retain their transport
+	 * error semantics.
+	 */
+	public function test_supports_request_error_is_propagated(): void {
+		// ARRANGE: The post is valid, but its type metadata request cannot run.
+		$this->mock_body           = (string) wp_json_encode(
+			array(
+				'id'      => 123,
+				'type'    => 'post',
+				'title'   => array( 'raw' => 'Title' ),
+				'content' => array( 'raw' => '<p>Content.</p>' ),
+				'excerpt' => array( 'raw' => '' ),
+			)
+		);
+		$this->mock_supports_error = new WP_Error(
+			'transport_down',
+			'Metadata transport failed.'
+		);
+
+		// ACT: Fetch fresh content for import.
+		$result = ( new Source_Posts_API( new HTTP_Client() ) )
+			->fetch_fresh_post_content( 123, self::SOURCE_SITE_URL );
+
+		// ASSERT: HTTP_Client's transport error is preserved, not remapped to 502.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( HTTP_Client::ERROR_REQUEST_FAILED, $result->get_error_code() );
+	}
+
+	/**
+	 * Verifies that a custom REST base resolves back to the authoritative type
+	 * slug before response-type validation and supports lookup.
+	 */
+	public function test_custom_rest_base_resolves_to_response_post_type(): void {
+		// ARRANGE: The catalog maps sp_movie to its distinct sp_movies REST base.
+		$this->mock_post_types = array(
+			array(
+				'slug'      => 'sp_movie',
+				'rest_base' => 'sp_movies',
+			),
+		);
+		$this->mock_body       = (string) wp_json_encode(
+			array(
+				'id'      => 123,
+				'type'    => 'sp_movie',
+				'title'   => array( 'raw' => 'Movie' ),
+				'content' => array( 'raw' => '<p>Movie content.</p>' ),
+				'excerpt' => array( 'raw' => '' ),
+			)
+		);
+
+		// ACT: Fetch using the custom REST base rather than the type slug.
+		$result = ( new Source_Posts_API( new HTTP_Client() ) )
+			->fetch_fresh_post_content(
+				123,
+				self::SOURCE_SITE_URL,
+				array(),
+				'sp_movies'
+			);
+
+		// ASSERT: The catalog-backed reverse resolution accepts the response.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'Movie', $result['title'] );
+		$this->assertSame( '<p>Movie content.</p>', $result['content'] );
 	}
 }
