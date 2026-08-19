@@ -1,93 +1,168 @@
-# Imports
+# Managing Imports
 
-The Imports admin page is the operator surface for everything that came in from a source site. It has two tabs sharing the same admin route:
+The **Safe Publish → Manage** screen is the operator surface for browsing source
+content, importing it, and reviewing previous imports. It has two tabs:
 
-- **Posts** — the local posts that resulted from successful imports.
-- **Needs attention** — post-import problems: import failures and degradations.
+- **Posts** — a unified source and destination listing.
+- **Needs attention** — import failures and post-import degradations.
 
 ## Posts tab
 
-Lists imported posts. Each row joins the local post (title, status, edit URL) with the most recent items-table row for the same post (import date, rollback eligibility).
+The Posts tab combines the source catalog with Safe Publish's local import
+history. Use the **Local State** control to choose which records are listed:
 
-The tab is scoped to the connected source site, so import state is resolved against that site alone: a source post ID imported under a previous connection reads as not imported. Changing the connection hides the previous site's rows without deleting them; reconnecting brings them back.
+- **All** — all source posts, including posts already imported.
+- **Available** — source posts without an active destination import.
+- **Up to date** — imported posts whose stored source modification time is not
+  newer than their import time.
+- **Outdated** — imported posts whose stored source modification time is newer
+  than their import time.
+
+Safe Publish also checks imported rows against the source while the listing is
+open. A newly changed source post can therefore show an additional **Outdated**
+badge before it moves into the Outdated view on the next listing refresh. A
+failed live comparison shows **Sync check failed**; there is no Unknown local
+state.
+
+The tab is scoped to the connected source site, so import state is resolved
+against that site alone: a source post ID imported under a previous connection
+reads as not imported. Changing the connection hides the previous site's rows
+without deleting them. Reconnecting with a URL that has the same scheme, host,
+port, and path brings them back. A trailing slash, query, or fragment does not
+affect the stored source identity.
 
 ### Columns
 
-| Column        | Description                                               |
-| ------------- | --------------------------------------------------------- |
-| Title         | Local post title; links to the local editor when present. |
-| Local Status  | Local `post_status` (draft, publish, etc.).               |
-| Type          | Local `post_type`.                                        |
-| Last Imported | Most recent `import_date_gmt` for this post.              |
-| Sync Status   | How this post compares to the current source content.     |
-| Permalink     | Source permalink (opens the source post in a new tab).    |
+The visible columns depend on the selected Local State:
 
-The **Sync Status** column compares each imported post against the current source content and reports one of: _Up to date_, _Outdated_, _Missing on source_, _Cannot check_, or _Invalid timestamp_. _Cannot check_ means the source request failed; _Invalid timestamp_ means a source or import timestamp could not be parsed. The column refills after every listing refresh.
+| Column         | Description                                                     |
+| -------------- | --------------------------------------------------------------- |
+| Title          | Source post title, linked to its source permalink when present. |
+| Local State    | Available, Up to date, or Outdated, plus live sync information. |
+| Local Status   | Destination `post_status`, or a dash when not yet imported.     |
+| Source Status  | Source `post_status`; shown in All and Available.               |
+| Published Date | Source publication date; shown in All and Available.            |
+| Imported Date  | Most recent import date; shown in Up to date and Outdated.      |
 
 ### Actions
 
-| Action   | Description                                                               |
-| -------- | ------------------------------------------------------------------------- |
-| Edit     | Opens the local post in the WordPress editor.                             |
-| Update   | Re-imports the post from the source, overwriting local content.           |
-| Compare  | Compares the local post with the current source content.                  |
-| Delete   | Moves the local post to trash.                                            |
-| Rollback | Reverts the most recent import — restores updates, deletes new creations. |
+Actions are shown only when they apply to the selected row:
 
-Update, Delete, and Rollback support bulk selection; Compare is single-row only. Rollback eligibility tracks the items-table status: only `success` and `updated` rows that have not already been rolled back can be reverted.
+| Action    | Description                                                       |
+| --------- | ----------------------------------------------------------------- |
+| Import    | Creates a destination draft or re-imports changed source content. |
+| Compare   | Compares the current destination post with fresh source content.  |
+| Edit      | Opens the destination post in the WordPress editor.               |
+| Trash     | Moves the destination post to trash.                              |
+| Roll back | Reverses the latest eligible import.                              |
 
-### Filtering
+Import, Trash, and Roll back support bulk selection. Compare is available for
+one outdated post at a time. An Up to date row does not offer Import or Compare
+unless the live source check finds a newer version.
 
-The page exposes the DataViews built-in search and filter chips: title search, Local Status (multi-select), Type (multi-select). Filtering is server-side over the full dataset, so a search applies to every imported post, not just the current page.
+Rollback eligibility comes from the latest active import-history row. Only
+`success` and `updated` rows that have not already been rolled back are
+eligible. Rolling back a successful new import deletes the destination post.
+Rolling back an update restores the previous content when Safe Publish captured
+it, or deletes the post when no previous content was captured.
 
-The selected session does not appear as a filter — sessions are an internal grouping concept, not a UI noun. The post-import notice deep-links into a session-filtered view via `?batch=N`, surfaced as a contextual pill the operator can clear.
+### Filtering and search
+
+The controls above the table provide:
+
+- **Type** selection.
+- Title or URL search. Source URLs apply to All and Available; destination URLs
+  apply to Up to date and Outdated.
+- Published-date filtering for All and Available.
+- Imported-date filtering for Up to date and Outdated.
+- Source-status filtering for All and Available.
+- Local State selection.
+
+Title and date sorting are server-side, so they apply to the full result set,
+not just the current page.
+
+The selected session does not appear as a filter. Sessions are an internal
+grouping concept, not a UI noun.
 
 ## Needs attention tab
 
-Collects every post-import problem in one place: import **failures** (the import errored, so no local post exists — or a re-import of an already-imported post failed) and **degradations** (the post imported but something could not be carried over — an unresolved reference to a block, term, parent, or navigation link, a taxonomy this site does not register, or a term whose fields could not be updated to match the source). Failures are listed first. The tab label shows the current count of open failures plus degradations.
+This tab collects two kinds of post-import problem:
 
-The tab is scoped to the connected source site, so only that site's failures and degradations are listed and counted. Changing the connection hides the previous site's rows without deleting them; reconnecting brings them back.
+- **Failures** — the import errored. A first import has no destination post; a
+  failed re-import can still link to the existing destination post.
+- **Degradations** — the post imported, but a reference, relationship, or
+  taxonomy could not be carried over completely, or an existing term's fields
+  could not be reconciled with the source.
 
-An **Open | Ignored** toggle switches between the active list and items set aside with Ignore. Open (the default) excludes ignored items, and the tab count always reflects the Open set. The Ignored view offers Un-ignore to restore an item; Remove still applies there for failures.
+Failures are listed before degradations. The tab label shows the number of open
+items. Use **Open | Ignored** to switch between active items and items set aside
+with Ignore.
+
+The tab is scoped to the connected source site. Changing the connection hides
+the previous site's failures and degradations without deleting them;
+reconnecting with a URL that has the same scheme, host, port, and path brings
+them back. A trailing slash, query, or fragment does not affect the stored
+source identity.
 
 ### Columns
 
-| Column   | Description                                                                                                                                              |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Content  | Title of the affected post, linked to its editor when a live destination post exists (degradations and failed updates; a first-import failure has none). |
-| Type     | **Failed** or **Degraded**.                                                                                                                              |
-| Detail   | The error message (failures), or the issue description with a **Resolvable now** / **Waiting on import** hint (degradations).                            |
-| Severity | **Error** or **Warning**.                                                                                                                                |
-| When     | When the failure was attempted or the degradation was first detected.                                                                                    |
+| Column   | Description                                                     |
+| -------- | --------------------------------------------------------------- |
+| Content  | Affected title, linked to the destination editor when possible. |
+| Type     | Failed or Degraded.                                             |
+| Detail   | Error or degradation details and any retry readiness hint.      |
+| Severity | Error or Warning.                                               |
+| When     | When the failure occurred or degradation was first detected.    |
 
 ### Actions
 
-| Action    | Description                                                                                                                                    |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Remove    | Clears a failure's record. Supports bulk selection.                                                                                            |
-| Retry     | Re-runs a degradation's reconciliation and reports whether it cleared. Available when the issue type is reconcilable; supports bulk selection. |
-| Ignore    | Sets a failure or degradation aside without deleting it, dropping it from the Open view and the count. Reversible; supports bulk selection.    |
-| Un-ignore | Restores an ignored item to the Open view. Shown in the Ignored view; supports bulk selection.                                                 |
+| Action    | Description                                          |
+| --------- | ---------------------------------------------------- |
+| Remove    | Permanently deletes a failure record.                |
+| Retry     | Re-runs reconciliation for a supported degradation.  |
+| Ignore    | Hides an item from Open without deleting its record. |
+| Un-ignore | Restores an ignored item to Open.                    |
 
-**Resolvable now vs Waiting on import.** Each degradation whose target an import can supply carries a hint: **Resolvable now** means its target (parent, block, term, or menu) is already imported, so a Retry should reconcile it; **Waiting on import** means the target is still missing and a Retry would report it as absent. Importing a target does not auto-resolve the degradations that reference it, so the hint is how you find which ones to Retry — it is advisory, so Retry stays authoritative. Retrying several at once reports an aggregate: how many resolved, are still waiting, or failed.
+These actions support bulk selection where applicable. Degradations show
+**Resolvable now** when the referenced target has been imported and **Waiting
+on import** while it is still missing. Importing the target does not
+automatically retry existing degradations. A bulk Retry reports how many issues
+resolved, are still waiting on an import, or failed. Remove remains available
+for failures in the Ignored view.
 
-Removing a failure only deletes its record; it has no effect on the source. Recovery is fixing the underlying issue (for example, creating a missing author on the destination) and re-importing the post from the Source Posts page. Any later import attempt for the same post on the same source site drops the earlier failure from the list automatically.
+Removing a failure affects only its history record. To recover, fix the cause
+and import the source post again from the Posts tab. Any later import attempt
+for the same source supersedes its previous failure. If the later attempt also
+fails, the new failure appears instead.
 
-**Ignore vs Remove.** Ignore is reversible: it hides a failure or degradation from the Open view and the tab count but keeps its record, so Un-ignore brings it back — and a fresh failed attempt, or re-detecting the same degradation, re-surfaces it in Open. Remove is permanent: it deletes a failure's record outright. Degradations have no Remove; they clear only by a successful Retry or re-import.
+Ignore is reversible with Un-ignore. A fresh failed attempt creates a new open
+failure, but re-detecting the same degradation keeps the existing issue ignored.
+Remove permanently deletes a failure record. Degradations do not offer Remove;
+they clear after a successful Retry or re-import.
 
 ## Post-import notice
 
-After a bulk import completes, an admin notice surfaces a deep-link to the just-finished batch:
+After a bulk import completes, a per-user admin notice summarizes the batch on
+the next Safe Publish page load:
 
 > Last import: 47 of 50 posts imported. 3 failed. **View imports**
 
-The link opens the Imports → Posts tab with `?batch=N` applied as a contextual filter. The pill above the listing identifies the active batch and offers a Clear action that drops the filter and the URL parameter.
+Severity tracks the outcome: error when nothing succeeded, warning when
+successes and failures were mixed, and informational when every post imported.
 
-The notice persists for one hour or until the operator dismisses it.
+When nothing succeeded, the link reads **View failures** and opens Needs
+attention, since the Posts tab would have nothing to show. Otherwise,
+**View imports** opens the Posts tab filtered to Up to date. That view is not
+filtered to only the completed session.
+
+The notice persists for one hour, or until the operator follows its link or
+dismisses it. Following the link clears the batch, so the notice does not
+reappear on the page it just sent the operator to.
 
 ## Database storage
 
-Imports remain backed by two custom tables. They are bookkeeping for the rollback service and the audit fields surfaced on the Imports page; nothing in the UI treats a session as a navigable entity.
+Import history is stored in two custom tables used for listing, failure review,
+and rollback bookkeeping:
 
 | Table                                      | Purpose                                         |
 | ------------------------------------------ | ----------------------------------------------- |
@@ -98,5 +173,5 @@ Imports remain backed by two custom tables. They are bookkeeping for the rollbac
 
 - [Audit Log](audit-log.md) — Reviewing logged events, including exports.
 - [Import Process](import-process.md) — How imports run end-to-end.
-- [Authentication](authentication.md) — Setting up source/destination credentials.
+- [Authentication](authentication.md) — Setting up source and destination credentials.
 - [Troubleshooting](../troubleshooting.md) — Solving common issues.

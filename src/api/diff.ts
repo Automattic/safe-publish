@@ -14,16 +14,12 @@ import type { JsonObject } from '../types';
 /**
  * Payload for requesting a diff preview.
  *
- * @property {number}  postId     Source post ID to compare.
- * @property {string}  [postType] Post type slug.
- * @property {string}  [mode]     Display mode: 'split' or 'inline'.
- * @property {boolean} [cleanup]  Whether to clean up the diff output.
+ * @property {number} postId     Source post ID to compare.
+ * @property {string} [postType] Post type slug.
  */
 export interface DiffPreviewPayload {
 	postId: number;
 	postType?: string;
-	mode?: 'split' | 'inline';
-	cleanup?: boolean;
 }
 
 /**

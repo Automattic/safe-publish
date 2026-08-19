@@ -72,8 +72,6 @@ export function useDiffPreview( {
 			const result = await fetchDiffPreview( {
 				postId,
 				postType,
-				mode: 'split',
-				cleanup: true,
 			} );
 
 			if ( ! active ) {

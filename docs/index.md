@@ -1,6 +1,6 @@
 # Safe Publish Documentation
 
-**Safe Publish** is a WordPress plugin for securely promoting content from non-production WordPress environments (staging, development) to production. It provides a user-friendly interface for browsing, previewing, and importing posts with all formatting, media, and metadata preserved.
+**Safe Publish** is a WordPress plugin for securely promoting content from non-production WordPress environments (staging, development) to production. It provides a user-friendly interface for browsing, comparing, and importing posts while preserving supported formatting, media, and REST-exposed metadata.
 
 ## Table of Contents
 
@@ -9,7 +9,7 @@
   - [Authentication](concepts/authentication.md) - Connecting to source WordPress sites
   - [Content Validation](concepts/validation.md) - How content is validated before import
   - [Import Process](concepts/import-process.md) - Understanding the content import workflow
-  - [Imports](concepts/imports.md) - Managing imported content and failed imports
+  - [Managing Imports](concepts/imports.md) - Browsing source content and managing imports
   - [Audit Log](concepts/audit-log.md) - Reviewing logged events, including exports
 
 - [Extending](extending/index.md)

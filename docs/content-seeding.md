@@ -81,6 +81,11 @@ Every post includes:
 
 All seeded content is tagged with `_seeder_generated=1` meta, which `fresh=1` and `purge=1` use for targeted cleanup.
 
+Seeded titles identify their content shape. A title such as `Post 11 C - 2PR`
+uses `C` for classic-editor content; no editor marker means Gutenberg. The image
+suffix is `1P` for one image, `2P` for two independent images, or `2PR` for an
+original image plus a resized copy.
+
 ## Update Mode
 
 `mode=update` finds every post previously created by the seeder (tagged with `_seeder_generated=1` meta) and applies deterministic mutations so the migration's update path has visible changes to propagate:

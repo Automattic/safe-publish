@@ -23,11 +23,10 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 
 3. **For basic auth**:
    - Verify username and password are correct.
-   - Ensure user has `edit_posts` capability.
    - Check basic auth plugin is installed on source site.
 
-4. **Check HTTPS**:
-   - Production domains must use HTTPS (HTTP is allowed for local development domains like `.test`, `.local`, `.dev`).
+4. **Check the URL and TLS certificate**:
+   - Use HTTPS outside local development. Safe Publish accepts HTTP URLs, but HTTP does not encrypt traffic.
    - Verify SSL certificates are valid.
    - Test site URL in browser.
 
@@ -42,19 +41,20 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
    - Ping the source site domain.
    - Check for firewall rules blocking the connection.
 
-2. **Increase PHP timeout limits**:
+2. **Increase the Safe Publish REST timeout**:
 
    ```php
-   // In wp-config.php
-   set_time_limit( 300 ); // 5 minutes
+   add_filter( 'safe_publish_request_timeout', fn( int $timeout ): int => 30 );
    ```
+
+   This filter affects REST API requests. Media downloads use WordPress core's
+   download timeout instead.
 
 3. **Check server resources**:
    - High CPU/memory usage can cause timeouts.
    - Monitor server during import.
 
 4. **Try fewer posts**:
-   - Reduce "Number of Posts" setting.
    - Import in smaller batches.
 
 #### "Could not be reached" but the site is online
@@ -166,13 +166,9 @@ add_filter(
    - Authenticated user must have read access to posts.
    - Review user roles and capabilities.
 
-4. **Increase "Number of Posts" setting**:
-   - Default is 10, try increasing to 50.
-   - Maybe your posts are pagination past first page.
-
 #### "Media import failed" error
 
-**Symptoms**: Post imports but images are missing
+**Symptoms**: Import fails with a media error; no new post is created, or an existing destination post remains unchanged
 
 **Solutions**:
 
@@ -197,30 +193,15 @@ add_filter(
    - `wp-content/uploads/` must be writable.
    - Check file permissions (755 for directories, 644 for files).
 
-#### "Invalid content structure" error
+#### "Raw content fields missing" error
 
-**Symptoms**: Validation fails, content structure error
+**Symptoms**: Import reports that the source response is missing raw content fields
 
 **Solutions**:
 
-1. **Check for broken HTML**:
-   - Edit source post in WordPress.
-   - Look for validation errors in block editor.
-   - Fix any invalid HTML or blocks.
-
-2. **Verify Gutenberg blocks are valid**:
-   - Switch to code editor view.
-   - Check block comments are closed.
-   - Look for corrupted block syntax.
-
-3. **Test with simple content**:
-   - Create a test post with simple content.
-   - If it imports, issue is with complex content.
-   - Simplify problematic content.
-
-4. **Check for unsupported blocks**:
-   - Some third-party blocks may not transfer.
-   - Try converting to core blocks.
+1. Verify the HMAC shared secret and connected-site URLs on both sites.
+2. Confirm the request reaches the source with authenticated `context=edit` access.
+3. Check that the source REST response includes `title.raw`, `content.raw`, and `excerpt.raw`.
 
 #### Post creation failed
 
@@ -229,7 +210,7 @@ add_filter(
 **Solutions**:
 
 1. **Check user permissions**: The importing user must have permission to create posts of that post type.
-2. **Check for database errors**: Enable `WP_DEBUG_LOG` and review `wp-content/debug.log` for insert failures.
+2. **Check for database errors**: Enable `WP_DEBUG_LOG` and review the destination site's debug log for insert failures. For wp-env, use the container commands in [Local Development](local-development.md#debugging).
 3. **Verify post type is registered** on the destination site — custom post types must exist on both sites.
 
 #### ACF or SCF fields do not appear in the destination editor
@@ -277,11 +258,11 @@ add_filter(
 
 **Solutions**:
 
-Safe Publish tracks imported posts using the `safe_publish_source_post_id` meta key and automatically detects already-imported content. Posts that already exist locally are shown with an **Update** action instead of **Import**.
+Safe Publish tracks imported posts by source site and source post ID. Already-imported posts appear under the **Up to date** or **Outdated** Local State. Changed posts use the **Import** action to update the existing destination post.
 
 If duplicates still occur:
 
-1. **Check the Imports → Posts tab** to see whether the post was imported from different sessions.
+1. **Check Manage → Posts** to see whether both destination posts are tracked.
 2. Delete duplicate drafts manually.
 
 #### Embedded posts display as plain links
@@ -420,7 +401,9 @@ The taxonomy is not registered on the destination site, so its terms could not b
 
 ### Enable WordPress Debug Mode
 
-Add the [WordPress debug constants](local-development.md#debugging) to `wp-config.php`, then check `wp-content/debug.log` for error messages.
+On a regular WordPress installation, enable `WP_DEBUG` and `WP_DEBUG_LOG` in
+`wp-config.php`, then inspect the site's `wp-content/debug.log`. In wp-env,
+follow the container-specific [Local Development instructions](local-development.md#debugging).
 
 ### Browser Developer Tools
 
@@ -442,21 +425,24 @@ Install [Query Monitor](https://wordpress.org/plugins/query-monitor/) for advanc
 
 Use the **Test Connection** button in settings to test authentication independently of imports.
 
-### Imports → Needs attention Tab
+### Manage → Needs attention Tab
 
-Check the **Imports → Needs attention** tab for:
+Check **Safe Publish → Manage → Needs attention** for:
 
 - Error messages recorded at import time
 - Source URL of each failed attempt
 - Timestamp of the attempt
 
-Recovery is fixing the underlying issue and re-importing from Source Posts. Once a failure is no longer needed, use the **Remove** action (per-row or bulk) to clear it from the tab; this only deletes the record and does not affect the source.
+Recovery is fixing the underlying issue and importing the post again from
+**Manage → Posts**. Once a failure is no longer needed, use the **Remove** action
+(per-row or bulk) to clear it from the tab; this only deletes the record and
+does not affect the source.
 
 ## Getting Help
 
 If you still can't resolve the issue:
 
-1. **Check the Imports → Needs attention tab** for detailed error messages.
+1. **Check Manage → Needs attention** for detailed error messages.
 2. **Enable debug mode** and collect error logs.
 3. **Reproduce the issue** in a clean environment if possible.
 4. **Report the issue** via GitHub Issues with:
@@ -478,8 +464,8 @@ If you need to start fresh:
 
 ### Reset Plugin Settings
 
-```php
-// Using WP-CLI
+```sh
+# Using WP-CLI
 wp option delete safe_publish_connected_site_url
 wp option delete safe_publish_sync_mode
 wp option delete safe_publish_basic_auth_username
@@ -488,11 +474,15 @@ wp option delete safe_publish_basic_auth_password
 
 ### Clear Import History
 
-Import history is stored in two custom tables (`safe_publish_imports` and `safe_publish_import_items`). Individual rows can be rolled back from the **Imports → Posts** tab (per-row or bulk). To clear history entirely, use the Complete Reset below.
+Import history is stored in two custom tables (`safe_publish_imports` and
+`safe_publish_import_items`). Eligible rows can be rolled back from **Manage →
+Posts**. Safe Publish does not provide a full-history reset, and deactivating or
+reactivating the plugin does not delete these tables or their rows.
 
-### Complete Reset
-
-Delete the options listed above using WP-CLI, then deactivate and reactivate the plugin. Reactivation restores default option values.
+For a disposable wp-env installation, `npm run dev:destroy` removes the entire
+environment. On a persistent site, back up the database and have a database
+administrator remove history rows deliberately; delete item rows before their
+parent session rows. Removing history does not undo imported posts or media.
 
 ## Next Steps
 

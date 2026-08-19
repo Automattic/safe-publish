@@ -309,7 +309,10 @@ export default function BulkImportFlow( {
 
 					return (
 						<VStack spacing="3">
-							<Text style={ { color: summaryColor, fontWeight: 'bold' } }>
+							<Text
+								role="status"
+								style={ { color: summaryColor, fontWeight: 'bold' } }
+							>
 								{ summaryHeading }
 							</Text>
 							<Text>
@@ -466,7 +469,7 @@ export default function BulkImportFlow( {
 					);
 				} )() }
 
-			{ error && <Text style={ { color: 'var(--safe-publish-status-error)' } }>{ error }</Text> }
+			{ error && <Text role="alert" style={ { color: 'var(--safe-publish-status-error)' } }>{ error }</Text> }
 
 			<HStack justify="right">
 				<Button

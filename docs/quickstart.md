@@ -25,14 +25,14 @@ Activate the plugin through the WordPress admin panel or [code](https://docs.wpv
 
 ### Source Site Configuration
 
-1. Navigate to **Safe Publish** in the WordPress admin sidebar.
+1. Navigate to **Safe Publish → Settings** in the WordPress admin sidebar.
 2. Set the **Sync Mode** to **Source - Content will come from this site.**
 3. In **Connected Site URL**, enter the destination site's URL.
 4. Click **Save Settings**.
 
 ### Destination Site Configuration
 
-1. Navigate to **Safe Publish** in the WordPress admin sidebar.
+1. Navigate to **Safe Publish → Settings** in the WordPress admin sidebar.
 2. Set the **Sync Mode** to **Destination - Content will be published to this site**.
 3. In **Connected Site URL**, enter the source site's URL.
 4. Click **Save Settings**.
@@ -40,7 +40,7 @@ Activate the plugin through the WordPress admin panel or [code](https://docs.wpv
 ### Optional: Basic Authentication
 
 1. On your **source site**, install a basic auth plugin.
-2. In the Safe Publish settings, enter the username and password.
+2. In **Safe Publish → Settings** on the destination, enter the username and password.
 3. Basic authentication is applied on top of Shared Secret authentication when credentials are configured.
 
 ## Step 4: Test the Connection
@@ -53,10 +53,10 @@ Activate the plugin through the WordPress admin panel or [code](https://docs.wpv
 
 ### Browse Posts
 
-- After saving settings, the DataViews interface will display posts from your source site.
-- Use the **Post Type** dropdown to switch between Posts, Pages, and custom post types.
+- Open **Safe Publish → Manage**. The Posts tab displays content from the source site.
+- Use the **Type** dropdown to switch between Posts, Pages, and custom post types.
 - Search, sort, and filter posts using the built-in controls.
-- The **Sync Status** column flags whether each post is new (_Available_), already imported and current (_Up to date_), changed on the source since it was imported (_Outdated_), or imported but not comparable (_Unknown_).
+- Use **Local State** to show _All_, _Available_, _Up to date_, or _Outdated_ posts. A failed live comparison is shown as _Sync check failed_; it is not a separate local state.
 
 ### Import Options
 
@@ -65,7 +65,7 @@ You have three ways to import content:
 **1. Single Post Import**
 
 - Click the **Import** action on any post.
-- The post will be imported as a draft with all content, metadata, and images.
+- A new post is imported as a draft with supported content, media, terms, and REST-exposed metadata.
 
 **2. Bulk Import**
 
@@ -75,8 +75,8 @@ You have three ways to import content:
 
 **3. Manage Already-Imported Posts**
 
-- Click **View in Imports** on any imported post to jump to the Imports → Posts tab with that post focused.
-- From there: update with the latest source content, view a content diff, delete the local post, or roll back the most recent import.
+- Set **Local State** to **Up to date** or **Outdated**.
+- Depending on the row state, use **Compare**, **Import**, **Edit**, **Trash**, or **Roll back**. Compare and re-import are offered when the source is newer.
 
 ## Step 6: Review Imported Content
 
@@ -87,7 +87,7 @@ You have three ways to import content:
 
 ## Imports and exports
 
-The **Imports** page lists everything that came in from the source — see [Imports](concepts/imports.md). The **Audit Log** page lists logged events across every channel, including exports served to destinations — see [Audit Log](concepts/audit-log.md).
+The **Manage** page combines the source catalog, imported content, and the Needs attention inbox — see [Managing Imports](concepts/imports.md). The **Audit Log** page lists logged events across every channel, including exports served to destinations — see [Audit Log](concepts/audit-log.md).
 
 ## Next Steps
 
