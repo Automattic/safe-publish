@@ -51,7 +51,7 @@ export function getErrorMessage(
 		try {
 			return JSON.stringify( response.data );
 		} catch {
-			return String( response.data );
+			return fallback;
 		}
 	}
 

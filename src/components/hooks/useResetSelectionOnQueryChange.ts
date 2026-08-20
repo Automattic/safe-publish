@@ -17,13 +17,13 @@ export function useResetSelectionOnQueryChange(
 	queryKey: string,
 	reset: () => void
 ): void {
-	const previousKey = useRef( queryKey );
+	const previousKeyRef = useRef( queryKey );
 
 	useEffect( () => {
-		if ( previousKey.current === queryKey ) {
+		if ( previousKeyRef.current === queryKey ) {
 			return;
 		}
-		previousKey.current = queryKey;
+		previousKeyRef.current = queryKey;
 		reset();
 	}, [ queryKey, reset ] );
 }

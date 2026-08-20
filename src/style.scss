@@ -1,3 +1,4 @@
+@use "@wordpress/base-styles/variables" as *;
 @import "@wordpress/dataviews/build-style/style.css";
 
 // Bulk import styling enhancements
@@ -613,6 +614,10 @@ html:has(body.toplevel_page_safe-publish) {
 
 		&--details {
 			border-left-color: var(--safe-publish-primary);
+
+			table.diff thead th {
+				font-family: $font-family-body;
+			}
 		}
 
 		&--content {
@@ -663,7 +668,7 @@ html:has(body.toplevel_page_safe-publish) {
 
 // Title links blue by default — every other cell is color-coded, so gray
 // titles read as disabled.
-/* stylelint-disable-next-line no-descending-specificity */
+/* stylelint-disable no-descending-specificity */
 .safe-publish-dataviews-wrapper .dataviews-title-field a {
 	color: var(--wp-admin-theme-color);
 }
@@ -671,6 +676,7 @@ html:has(body.toplevel_page_safe-publish) {
 .safe-publish-dataviews-wrapper .dataviews-title-field a:hover {
 	text-decoration: underline;
 }
+/* stylelint-enable no-descending-specificity */
 
 // Show inline primary action icons at rest. Selector mirrors DataViews'
 // `.dataviews-view-table tr ...` rule so specificity wins.

@@ -25,6 +25,7 @@ import type {
 	UnmappedShortcodeReferenceWarning,
 	UnregisteredTaxonomyWarning,
 	TermFieldConflictWarning,
+	JsonObject,
 } from '@/types';
 
 // Pin WP date settings so format/timezone-sensitive tests are deterministic.
@@ -41,7 +42,7 @@ beforeEach( () => {
 			datetimeAbbreviated: 'M j, Y g:i a',
 		},
 		timezone: {
-			offset:          -4,
+			offset:          '-4',
 			offsetFormatted: '-4',
 			string:          'America/New_York',
 			abbr:            'EDT',
@@ -70,6 +71,22 @@ describe( 'getErrorMessage', () => {
 
 		// ASSERT: The session-expiry copy surfaces, not the generic fallback.
 		expect( message ).toBe( 'Your session has expired. Reload the page.' );
+	} );
+
+	it( 'should use the fallback when error data cannot be serialized', () => {
+		// ARRANGE: A malformed response contains a circular JSON-like object.
+		const data: JsonObject = {};
+		data.self = data;
+		const fallback = 'Unable to read the error response.';
+
+		// ACT: Extract the user-facing message.
+		const message = getErrorMessage(
+			{ success: false, data },
+			fallback
+		);
+
+		// ASSERT: Serialization failure returns the supplied safe fallback.
+		expect( message ).toBe( fallback );
 	} );
 } );
 

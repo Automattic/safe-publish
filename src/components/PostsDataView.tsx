@@ -1,36 +1,9 @@
 /**
- * Unified Posts listing. The chip row picks the data source: All/Available are
- * catalog-primary; Up to date/Outdated are local-primary.
+ * Unified Posts listing. The chip row picks the data source: All/Not imported
+ * are catalog-primary; Up to date/Outdated are local-primary.
  *
  * @file This file defines the PostsDataView component.
  */
-import { help, update } from '@wordpress/icons';
-
-import AuthStatusNotice from './AuthStatusNotice';
-import {
-	calendarRangeToUtcBounds,
-	DateRangeFilter,
-	detectSlugFromInput,
-	slugMatchesChip,
-	type SlugDetection,
-} from './filter-controls';
-import { useAuthStatus } from './hooks/useAuthStatus';
-import { useResetSelectionOnQueryChange } from './hooks/useResetSelectionOnQueryChange';
-import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
-import { createPostsActions, type ActionNotice } from '../actions';
-import {
-	DEFAULT_ITEMS_PER_PAGE,
-	LAYOUT_TABLE,
-	SEARCH_DEBOUNCE_MS,
-} from '../constants';
-import { PostTypeSelector } from '../post-type-selector';
-import {
-	extractUrlPath,
-	formatBadgeTimestamp,
-	getErrorMessage,
-	statusBadgeModifier,
-	statusLabel,
-} from '../utils';
 import {
 	BaseControl,
 	Button,
@@ -49,6 +22,32 @@ import {
 	useState,
 } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
+import { help, update } from '@wordpress/icons';
+
+import AuthStatusNotice from './AuthStatusNotice';
+import {
+	calendarRangeToUtcBounds,
+	DateRangeFilter,
+	detectSlugFromInput,
+	slugMatchesChip,
+	type SlugDetection,
+} from './filter-controls';
+import { createPostsActions, type ActionNotice } from '../actions';
+import {
+	DEFAULT_ITEMS_PER_PAGE,
+	LAYOUT_TABLE,
+	SEARCH_DEBOUNCE_MS,
+} from '../constants';
+import { PostTypeSelector } from '../post-type-selector';
+import {
+	formatBadgeTimestamp,
+	getErrorMessage,
+	statusBadgeModifier,
+	statusLabel,
+} from '../utils';
+import { useAuthStatus } from './hooks/useAuthStatus';
+import { useResetSelectionOnQueryChange } from './hooks/useResetSelectionOnQueryChange';
+import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 
 import type {
 	ApiResponse,
@@ -189,7 +188,7 @@ function StateSelect( {
 					{ value: 'all', label: __( 'All', 'safe-publish' ) },
 					{
 						value: 'available',
-						label: __( 'Available', 'safe-publish' ),
+						label: __( 'Not imported', 'safe-publish' ),
 					},
 					{
 						value: 'up-to-date',
@@ -200,7 +199,7 @@ function StateSelect( {
 						label: __( 'Outdated', 'safe-publish' ),
 					},
 				] }
-				onChange={ ( next ) => onChange( next as ChipState ) }
+				onChange={ ( next ) => onChange( next ) }
 			/>
 		</div>
 	);
@@ -260,7 +259,7 @@ function SearchHelpButton(): JSX.Element {
 						</strong>
 						{ ' — ' }
 						{ __(
-							'finds the exact post by slug. Source links match on All and Available; destination links on Up to date and Outdated.',
+							'finds the exact post by slug. Source links match on All and Not imported; destination links on Up to date and Outdated.',
 							'safe-publish'
 						) }
 					</p>
@@ -800,42 +799,17 @@ export function PostsDataView( {
 				id: 'title',
 				label: __( 'Title', 'safe-publish' ),
 				enableSorting: true,
-				render: ( { item } ) => {
-					const path = extractUrlPath( item.link );
-					const linkable = '' !== item.link && '/' !== path;
-					const titleNode = linkable ? (
-						<a
-							href={ item.link }
-							target="_blank"
-							rel="noopener noreferrer"
-							title={ item.link }
-							aria-label={ sprintf(
-								/* translators: %s: post title */
-								__( '%s (opens in new tab)', 'safe-publish' ),
-								item.title
-							) }
-						>
-							{ item.title }
-						</a>
-					) : (
-						<span>{ item.title }</span>
-					);
-
-					return (
-						<span
-							ref={ ( node ) => {
-								if ( node && null !== item.source_post_id ) {
-									rowRefs.current.set(
-										item.source_post_id,
-										node
-									);
-								}
-							} }
-						>
-							{ titleNode }
-						</span>
-					);
-				},
+				render: ( { item } ) => (
+					<span
+						ref={ ( node ) => {
+							if ( node && null !== item.source_post_id ) {
+								rowRefs.current.set( item.source_post_id, node );
+							}
+						} }
+					>
+						{ item.title }
+					</span>
+				),
 			},
 			{
 				id: 'local_state',
@@ -1109,7 +1083,7 @@ export function PostsDataView( {
 					<p>
 						{ 'source' === detection?.origin
 							? __(
-									'This looks like a source link. Switch to All or Available to find it.',
+									'This looks like a source link. Switch to All or Not imported to find it.',
 									'safe-publish'
 							  )
 							: __(
@@ -1194,11 +1168,11 @@ function LocalStateCell( {
 	syncStatuses: Record< number, { status: ImportSyncStatus } >;
 } ): JSX.Element {
 	const stateLabel: Record< LocalState, string > = {
-		'available': __( 'Available', 'safe-publish' ),
+		'available': __( 'Not imported', 'safe-publish' ),
 		'up-to-date': __( 'Up to date', 'safe-publish' ),
 		'outdated': __( 'Outdated', 'safe-publish' ),
 	};
-	// eslint-disable-next-line security/detect-object-injection
+
 	const label = stateLabel[ item.local_state ];
 
 	// Imported only — the Outdated chip already says it.

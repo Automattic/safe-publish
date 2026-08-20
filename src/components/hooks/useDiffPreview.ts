@@ -4,9 +4,10 @@
  * @file This file defines the useDiffPreview hook.
  */
 
-import { fetchDiffPreview } from '../../api/diff';
 import { useCallback, useEffect, useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
+
+import { fetchDiffPreview } from '../../api/diff';
 
 import type { BlockDiff, DiffPreviewResult } from '../../api/diff';
 

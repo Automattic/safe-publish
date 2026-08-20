@@ -10,11 +10,6 @@
  */
 
 import {
-	isRollbackRestore,
-	rollbackItems,
-	type BulkRollbackResult,
-} from '../api/rollback';
-import {
 	Button,
 	__experimentalText as Text,
 	__experimentalHStack as HStack,
@@ -24,6 +19,12 @@ import {
 } from '@wordpress/components';
 import { useState } from '@wordpress/element';
 import { __, _n, sprintf } from '@wordpress/i18n';
+
+import {
+	isRollbackRestore,
+	rollbackItems,
+	type BulkRollbackResult,
+} from '../api/rollback';
 
 import type { UnifiedPostRow } from '../types';
 
@@ -106,13 +107,13 @@ const BulkRollbackPostModal = ( {
 
 	const failures = result?.entries.filter( entry => ! entry.outcome.success );
 
-	let summaryHeading = __( 'Roll back completed!', 'safe-publish' );
+	let summaryHeading = __( 'Rollback completed!', 'safe-publish' );
 	let summaryColor = 'var(--safe-publish-status-success)';
 	if ( result && 0 === result.successful ) {
-		summaryHeading = __( 'Roll back failed', 'safe-publish' );
+		summaryHeading = __( 'Rollback failed', 'safe-publish' );
 		summaryColor = 'var(--safe-publish-status-error)';
 	} else if ( result && result.failed > 0 ) {
-		summaryHeading = __( 'Roll back completed with errors', 'safe-publish' );
+		summaryHeading = __( 'Rollback completed with errors', 'safe-publish' );
 		summaryColor = 'var(--safe-publish-status-warning)';
 	}
 

@@ -133,15 +133,17 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that update_terms() writes META_SOURCE_TERM_ID/URL on a newly
-	 * created destination term when the input item carries source_term_id and
-	 * the caller passes a non-empty source site URL.
+	 * Verifies that update_terms() writes META_SOURCE_TERM_ID/URL and
+	 * META_TERM_ORIGIN_URL on a newly created destination term when the item
+	 * carries source_term_id and the caller passes a non-empty source URL.
+	 *
+	 * The backslash in the source URL locks the slash round trip.
 	 */
 	public function test_update_terms_writes_source_meta_on_created_term(): void {
 		// ARRANGE: A brand-new term carried by a single-source-payload item.
 		$term_name       = 'Brand New Cat ' . uniqid();
 		$source_term_id  = 12345;
-		$source_site_url = 'https://source.example.com';
+		$source_site_url = 'https://source.example.com/a\b\c';
 		$terms           = array(
 			'category' => array(
 				array(
@@ -175,6 +177,10 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		$this->assertSame(
 			$source_site_url,
 			get_term_meta( $dest_term_id, Options::META_SOURCE_TERM_URL, true )
+		);
+		$this->assertSame(
+			$source_site_url,
+			get_term_meta( $dest_term_id, Options::META_TERM_ORIGIN_URL, true )
 		);
 	}
 
@@ -722,6 +728,72 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		$this->assertFalse(
 			get_term_by( 'slug', 'renamed-on-source', 'category' )
 		);
+	}
+
+	/**
+	 * Verifies that update_terms() resolves a term by source identity when
+	 * the source site URL carries a backslash, covering the meta_query lookup
+	 * that reading the meta back directly does not.
+	 */
+	public function test_update_terms_resolves_backslash_source_identity(): void {
+		// ARRANGE: A first import establishing the identity on a created term.
+		$source_site_url = 'https://source.example.com/a\b\c';
+		$source_term_id  = 31337;
+		$second_post     = self::factory()->post->create();
+
+		$this->manager->update_terms(
+			$this->post_id,
+			array(
+				'category' => array(
+					array(
+						'source_term_id' => $source_term_id,
+						'name'           => 'Backslash Origin ' . uniqid(),
+					),
+				),
+			),
+			$source_site_url
+		);
+
+		$created_ids = wp_get_post_terms(
+			$this->post_id,
+			'category',
+			array( 'fields' => 'ids' )
+		);
+		$this->assertIsArray( $created_ids );
+		$this->assertSame( 1, count( $created_ids ) );
+		$created_id = (int) $created_ids[0];
+
+		// ACT: Re-import onto another post, drifted name and slug so only the
+		// identity can resolve, fresh manager so the memo cannot answer.
+		$drifted_slug  = 'renamed-backslash-' . uniqid();
+		$fresh_manager = new Meta_Terms_Manager();
+		$result        = $fresh_manager->update_terms(
+			$second_post,
+			array(
+				'category' => array(
+					array(
+						'source_term_id' => $source_term_id,
+						'name'           => 'Renamed On Source ' . uniqid(),
+						'slug'           => $drifted_slug,
+						'parent'         => 0,
+						'assigned'       => true,
+					),
+				),
+			),
+			$source_site_url
+		);
+
+		// ASSERT: The first term is reused; the drifted slug creates nothing.
+		$this->assertSame( array(), $result );
+		$this->assertSame(
+			array( $created_id ),
+			wp_get_post_terms(
+				$second_post,
+				'category',
+				array( 'fields' => 'ids' )
+			)
+		);
+		$this->assertFalse( get_term_by( 'slug', $drifted_slug, 'category' ) );
 	}
 
 	/**

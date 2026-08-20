@@ -3,7 +3,6 @@
  *
  * @file This file defines shared filter toolbar primitives.
  */
-import { chevronDown } from '@wordpress/icons';
 
 import {
 	BaseControl,
@@ -14,6 +13,7 @@ import {
 import { dateI18n, getDate, getSettings } from '@wordpress/date';
 import { useMemo } from '@wordpress/element';
 import { __, _x, sprintf } from '@wordpress/i18n';
+import { chevronDown } from '@wordpress/icons';
 
 /**
  * Regex matching pasted URLs or absolute paths. Catches the "I have this
@@ -114,9 +114,9 @@ export function detectSlugFromInput(
 /**
  * Whether a detected slug's origin matches the active chip's slug column.
  *
- * Catalog-primary chips (All, Available) match the source slug; local-primary
- * chips (Up to date, Outdated) match the destination slug. An 'unknown' origin
- * matches any chip so bare paths stay best-effort.
+ * Catalog-primary chips (All, Not imported) match the source slug;
+ * local-primary chips (Up to date, Outdated) match the destination slug. An
+ * 'unknown' origin matches any chip so bare paths stay best-effort.
  *
  * @param {SlugOrigin} origin           Detected origin of the pasted URL.
  * @param {boolean}    isCatalogPrimary Whether the active chip is catalog-primary.
