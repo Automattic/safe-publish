@@ -729,6 +729,77 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that update_terms() still resolves a term by source identity when
+	 * the source site URL carries a backslash, the payoff of slashing the
+	 * identity writes: an unslashed write stores a stripped URL that the lookup
+	 * can no longer match, so the term is re-created instead of reused.
+	 *
+	 * Covers the lookup, which reading the meta back directly does not: a write
+	 * that round-trips is worthless if the meta_query cannot match it.
+	 */
+	public function test_update_terms_resolves_backslash_source_identity(): void {
+		// ARRANGE: A first import establishing the identity on a created term.
+		$source_site_url = 'https://source.example.com/a\b\c';
+		$source_term_id  = 31337;
+		$second_post     = self::factory()->post->create();
+
+		$this->manager->update_terms(
+			$this->post_id,
+			array(
+				'category' => array(
+					array(
+						'source_term_id' => $source_term_id,
+						'name'           => 'Backslash Origin ' . uniqid(),
+					),
+				),
+			),
+			$source_site_url
+		);
+
+		$created_ids = wp_get_post_terms(
+			$this->post_id,
+			'category',
+			array( 'fields' => 'ids' )
+		);
+		$this->assertIsArray( $created_ids );
+		$this->assertSame( 1, count( $created_ids ) );
+		$created_id = (int) $created_ids[0];
+
+		// ACT: Re-import the same source term onto another post, with a drifted
+		// name and slug so only the source identity can resolve it, through a
+		// fresh manager so the per-run memo cannot answer for the lookup.
+		$drifted_slug  = 'renamed-backslash-' . uniqid();
+		$fresh_manager = new Meta_Terms_Manager();
+		$result        = $fresh_manager->update_terms(
+			$second_post,
+			array(
+				'category' => array(
+					array(
+						'source_term_id' => $source_term_id,
+						'name'           => 'Renamed On Source ' . uniqid(),
+						'slug'           => $drifted_slug,
+						'parent'         => 0,
+						'assigned'       => true,
+					),
+				),
+			),
+			$source_site_url
+		);
+
+		// ASSERT: The first term is reused; the drifted slug creates nothing.
+		$this->assertSame( array(), $result );
+		$this->assertSame(
+			array( $created_id ),
+			wp_get_post_terms(
+				$second_post,
+				'category',
+				array( 'fields' => 'ids' )
+			)
+		);
+		$this->assertFalse( get_term_by( 'slug', $drifted_slug, 'category' ) );
+	}
+
+	/**
 	 * Verifies that update_terms() keeps two same-named terms under different
 	 * parents distinct, the regression guard against merging legitimate
 	 * siblings once hierarchy adds parents.
