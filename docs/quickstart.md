@@ -56,7 +56,7 @@ Activate the plugin through the WordPress admin panel or [code](https://docs.wpv
 - Open **Safe Publish → Manage**. The Posts tab displays content from the source site.
 - Use the **Type** dropdown to switch between Posts, Pages, and custom post types.
 - Search, sort, and filter posts using the built-in controls.
-- Use **Local State** to show _All_, _Available_, _Up to date_, or _Outdated_ posts. A failed live comparison is shown as _Sync check failed_; it is not a separate local state.
+- Use **Local State** to show _All_, _Not imported_, _Up to date_, or _Outdated_ posts. A failed live comparison is shown as _Sync check failed_; it is not a separate local state.
 
 ### Import Options
 

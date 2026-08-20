@@ -127,9 +127,8 @@ afterEach( () => {
 	delete window.safePublishAdminData.homeUrl;
 } );
 
-describe( 'PostsDataView title field', () => {
-	it( 'renders source post titles without links', async () => {
-		// ARRANGE: The catalog returns a source post carrying a valid permalink.
+describe( 'PostsDataView fields', () => {
+	beforeEach( () => {
 		fetchMock.mockResolvedValue( {
 			json: () =>
 				Promise.resolve( {
@@ -159,6 +158,10 @@ describe( 'PostsDataView title field', () => {
 					},
 				} ),
 		} );
+	} );
+
+	it( 'renders source post titles without links', async () => {
+		// ARRANGE: The catalog returns a source post carrying a valid permalink.
 
 		// ACT: Render the listing, then render the captured title field.
 		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
@@ -176,6 +179,33 @@ describe( 'PostsDataView title field', () => {
 		// ASSERT: The title remains visible without linking to the source site.
 		expect( container ).toHaveTextContent( 'Source post' );
 		expect( container.querySelector( 'a' ) ).toBeNull();
+	} );
+
+	it( 'labels available source posts as not imported', async () => {
+		// ARRANGE: The catalog returns an available source post.
+
+		// ACT: Render the listing, then render the captured local-state field.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 1 ) );
+		const localStateField = dataViews.props?.fields.find(
+			( field ) => 'local_state' === field.id
+		);
+		expect( localStateField?.render ).toBeDefined();
+		const { container } = render(
+			localStateField?.render?.( {
+				item: dataViews.props?.data[ 0 ] as UnifiedPostRow,
+			} )
+		);
+
+		// ASSERT: Both the filter option and row use the local-state wording.
+		expect(
+			screen.getByRole( 'option', { name: 'Not imported' } )
+		).toBeInTheDocument();
+		expect( container ).toHaveTextContent( 'Not imported' );
+		fireEvent.click( screen.getByRole( 'button', { name: 'Search help' } ) );
+		expect(
+			screen.getByText( /Source links match on All and Not imported/ )
+		).toBeInTheDocument();
 	} );
 } );
 

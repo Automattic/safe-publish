@@ -121,7 +121,7 @@ With the connection configured, **Safe Publish → Manage** opens a unified Post
 The Local State control provides four views:
 
 - **All** — every source post, including imported posts.
-- **Available** — the post has not been imported to the destination yet.
+- **Not imported** — the post does not currently have an active destination import.
 - **Up to date** — the post has been imported and the source has not changed since.
 - **Outdated** — the post has been imported, but the source has changed since the last import. Re-import to bring the destination copy up to date.
 
