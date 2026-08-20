@@ -663,7 +663,7 @@ html:has(body.toplevel_page_safe-publish) {
 
 // Title links blue by default — every other cell is color-coded, so gray
 // titles read as disabled.
-/* stylelint-disable-next-line no-descending-specificity */
+/* stylelint-disable no-descending-specificity */
 .safe-publish-dataviews-wrapper .dataviews-title-field a {
 	color: var(--wp-admin-theme-color);
 }
@@ -671,6 +671,7 @@ html:has(body.toplevel_page_safe-publish) {
 .safe-publish-dataviews-wrapper .dataviews-title-field a:hover {
 	text-decoration: underline;
 }
+/* stylelint-enable no-descending-specificity */
 
 // Show inline primary action icons at rest. Selector mirrors DataViews'
 // `.dataviews-view-table tr ...` rule so specificity wins.

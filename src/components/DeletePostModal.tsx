@@ -8,8 +8,6 @@
  * @file This file defines the DeletePostModal component.
  */
 
-import { ApiResponse, UnifiedPostRow } from '../types';
-import { getErrorMessage } from '../utils';
 import {
 	Button,
 	__experimentalText as Text,
@@ -19,6 +17,9 @@ import {
 } from '@wordpress/components';
 import { useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
+
+import { ApiResponse, UnifiedPostRow } from '../types';
+import { getErrorMessage } from '../utils';
 
 /**
  * Props for the DeletePostModal component.

@@ -6,10 +6,10 @@
  *
  * @file This file defines the BlockDiffViewer component.
  */
-import { Change, diffWords } from 'diff';
 
 import { __experimentalText as Text } from '@wordpress/components';
 import { __ } from '@wordpress/i18n';
+import { Change, diffWords } from 'diff';
 
 import type { BlockDiff } from '../api/diff';
 

@@ -8,7 +8,6 @@
  * @file This file defines the RollbackPostModal component.
  */
 
-import { isRollbackRestore, rollbackItem } from '../api/rollback';
 import {
 	Button,
 	__experimentalText as Text,
@@ -18,6 +17,8 @@ import {
 } from '@wordpress/components';
 import { useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
+
+import { isRollbackRestore, rollbackItem } from '../api/rollback';
 
 import type { ActionNotice } from '../actions';
 import type { UnifiedPostRow } from '../types';

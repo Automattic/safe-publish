@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2018",
-    "lib": ["ES2018", "DOM", "DOM.Iterable"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
     "esModuleInterop": true,
     "strict": true,
@@ -11,6 +11,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "noUnusedLocals": true,
+    "ignoreDeprecations": "6.0",
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
