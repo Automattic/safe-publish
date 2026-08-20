@@ -821,8 +821,8 @@ final class Diff_Renderer {
 	 * @return string Diff HTML, or '' when no changes.
 	 */
 	private function generate_terms_diff( array $current, array $incoming ): string {
-		$title_left  = __( 'Current Taxonomies', 'safe-publish' );
-		$title_right = __( 'Incoming Taxonomies', 'safe-publish' );
+		$title_left  = __( 'Current', 'safe-publish' );
+		$title_right = __( 'Incoming', 'safe-publish' );
 		$records     = $incoming['terms'] ?? array();
 
 		if ( true !== ( $incoming['has_term_fields'] ?? false ) ) {
