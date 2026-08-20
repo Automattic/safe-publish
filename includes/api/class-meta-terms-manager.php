@@ -1333,7 +1333,7 @@ final class Meta_Terms_Manager {
 		update_term_meta(
 			$term_id,
 			Options::META_TERM_ORIGIN_URL,
-			$source_site_url
+			wp_slash( $source_site_url )
 		);
 	}
 
@@ -1392,6 +1392,6 @@ final class Meta_Terms_Manager {
 			return;
 		}
 
-		update_term_meta( $term_id, $meta_key, $value );
+		update_term_meta( $term_id, $meta_key, wp_slash( $value ) );
 	}
 }

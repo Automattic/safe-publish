@@ -141,7 +141,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		// ARRANGE: A brand-new term carried by a single-source-payload item.
 		$term_name       = 'Brand New Cat ' . uniqid();
 		$source_term_id  = 12345;
-		$source_site_url = 'https://source.example.com';
+		$source_site_url = 'https://source.example.com/a\b\c';
 		$terms           = array(
 			'category' => array(
 				array(
@@ -175,6 +175,10 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		$this->assertSame(
 			$source_site_url,
 			get_term_meta( $dest_term_id, Options::META_SOURCE_TERM_URL, true )
+		);
+		$this->assertSame(
+			$source_site_url,
+			get_term_meta( $dest_term_id, Options::META_TERM_ORIGIN_URL, true )
 		);
 	}
 
