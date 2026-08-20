@@ -161,15 +161,15 @@ describe( 'PostsDataView fields', () => {
 	} );
 
 	it( 'renders source post titles without links', async () => {
-		// ARRANGE: The catalog returns a source post carrying a valid permalink.
-
-		// ACT: Render the listing, then render the captured title field.
+		// ARRANGE: Mount the listing and capture the title field DataViews gets.
 		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
 		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 1 ) );
 		const titleField = dataViews.props?.fields.find(
 			( field ) => 'title' === field.id
 		);
 		expect( titleField?.render ).toBeDefined();
+
+		// ACT: Render the title cell for the source post the catalog returned.
 		const { container } = render(
 			titleField?.render?.( {
 				item: dataViews.props?.data[ 0 ] as UnifiedPostRow,
@@ -182,27 +182,27 @@ describe( 'PostsDataView fields', () => {
 	} );
 
 	it( 'labels available source posts as not imported', async () => {
-		// ARRANGE: The catalog returns an available source post.
-
-		// ACT: Render the listing, then render the captured local-state field.
+		// ARRANGE: Mount the listing and capture the local-state field.
 		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
 		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 1 ) );
 		const localStateField = dataViews.props?.fields.find(
 			( field ) => 'local_state' === field.id
 		);
 		expect( localStateField?.render ).toBeDefined();
+
+		// ACT: Render the local-state cell and open the search help popover.
 		const { container } = render(
 			localStateField?.render?.( {
 				item: dataViews.props?.data[ 0 ] as UnifiedPostRow,
 			} )
 		);
+		fireEvent.click( screen.getByRole( 'button', { name: 'Search help' } ) );
 
-		// ASSERT: Both the filter option and row use the local-state wording.
+		// ASSERT: Filter option, row cell, and search help share the wording.
 		expect(
 			screen.getByRole( 'option', { name: 'Not imported' } )
 		).toBeInTheDocument();
 		expect( container ).toHaveTextContent( 'Not imported' );
-		fireEvent.click( screen.getByRole( 'button', { name: 'Search help' } ) );
 		expect(
 			screen.getByText( /Source links match on All and Not imported/ )
 		).toBeInTheDocument();
