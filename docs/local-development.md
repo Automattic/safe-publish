@@ -141,7 +141,7 @@ npm run test:php -- --filter SomeTestClass
 For e2e tests, ensure the development environment is running, then execute:
 
 ```sh
-npm run test:e2e
+WP_BASE_URL=http://host.docker.internal:8888 npm run test:e2e
 ```
 
 ### Logs
