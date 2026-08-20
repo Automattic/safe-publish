@@ -160,7 +160,7 @@ describe( 'PostsDataView fields', () => {
 		} );
 	} );
 
-	it( 'renders source post titles without links', async () => {
+	it( 'Verifies that source post titles render without links', async () => {
 		// ARRANGE: Mount the listing and capture the title field DataViews gets.
 		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
 		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 1 ) );
@@ -181,7 +181,7 @@ describe( 'PostsDataView fields', () => {
 		expect( container.querySelector( 'a' ) ).toBeNull();
 	} );
 
-	it( 'labels available source posts as not imported', async () => {
+	it( 'Verifies that available source posts are labeled Not imported', async () => {
 		// ARRANGE: Mount the listing and capture the local-state field.
 		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
 		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 1 ) );
