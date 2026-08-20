@@ -81,8 +81,8 @@ it, or deletes the post when no previous content was captured.
 The controls above the table provide:
 
 - **Type** selection.
-- Title or URL search. Source URLs: All and Not imported; destination URLs
-  apply to Up to date and Outdated.
+- Title or URL search. Source URLs apply to All and Not imported; destination
+  URLs apply to Up to date and Outdated.
 - Published-date filtering for All and Not imported.
 - Imported-date filtering for Up to date and Outdated.
 - Source-status filtering for All and Not imported.
