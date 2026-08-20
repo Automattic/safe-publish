@@ -35,10 +35,6 @@ abstract class Integration_Test_Case extends WP_UnitTestCase {
 			)
 		);
 
-		Imports_Table::create_table();
-		Import_Items_Table::create_table();
-		Attention_Issues_Table::create_table();
-
 		$this->truncate_history_tables();
 	}
 

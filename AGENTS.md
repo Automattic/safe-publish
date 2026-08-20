@@ -93,3 +93,25 @@ Currently in closed beta used by customers, soon to become public; anything intr
 ## Dependencies
 
 **`@wordpress/*` and WP stubs are pinned to the wp-6.8 dist-tag line** to match the plugin's `Requires at least: 6.8`. Bumping them past their current major would type-check our code against APIs that don't exist in WP 6.8's bundled `wp.*` globals, causing silent runtime failures. Raising the WP floor requires updating the plugin header, `php-stubs/wordpress-{stubs,tests-stubs}`, and the relevant `@wordpress/*` packages together to the next wp-X.Y dist-tag.
+
+## CI compatibility matrix
+
+Update the CI compatibility matrix manually; don't add a live compatibility lookup, scheduled updater, generated cache, or automated pull request.
+
+Use these sources of truth:
+
+- Read the minimum WordPress version from `Requires at least` in `safe-publish.php`.
+- Read the minimum PHP version from the `php` entry under `require` in `composer.json`.
+- Read supported combinations from the [WordPress PHP compatibility matrix](https://make.wordpress.org/core/handbook/references/php-compatibility-and-wordpress-versions/).
+
+When WordPress or PHP compatibility changes, or the plugin's minimum WordPress or PHP version changes, update all of the following together:
+
+1. In `.github/workflows/integration-tests.yml`, list every stable WordPress major/minor release from the plugin's minimum through the current release, and every PHP major/minor release from the plugin's minimum through the newest version supported by at least one of those WordPress releases. Add an `exclude` entry for every combination marked unsupported by WordPress. Keep every supported combination running on every pull request.
+2. In `.github/workflows/e2e-tests.yml`, include every supported WordPress major/minor release once, paired with the highest PHP version that release supports. Use the corresponding `WordPress/WordPress#X.Y-branch` ref.
+3. In `.github/workflows/unit-tests.yml`, test every PHP major/minor version from the plugin's minimum through the newest PHP version represented in the integration matrix.
+4. In `.github/workflows/static-checks.yml`, run PHP checks on the plugin's minimum PHP version.
+5. Verify each stable `WordPress/WordPress#X.Y-branch` ref exists, parse every workflow as YAML, and run `npm run fix` followed by `npm run check`.
+
+The integration commands use wp-env's `/wordpress-phpunit` mount so the test library matches each matrix row; don't replace it with the Composer-pinned minimum-version test library in CI.
+
+Repository rulesets should require the stable aggregate checks named `Integration tests`, `Unit tests`, `Static checks`, and `End-to-end tests`, not individual matrix rows.
