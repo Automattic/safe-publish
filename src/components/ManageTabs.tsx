@@ -6,11 +6,12 @@
  *
  * @file This file defines the ManageTabs component.
  */
-import NeedsAttentionInbox from './NeedsAttentionInbox';
-import { PostsDataView } from './PostsDataView';
 import { TabPanel } from '@wordpress/components';
 import { useCallback, useEffect, useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
+
+import NeedsAttentionInbox from './NeedsAttentionInbox';
+import { PostsDataView } from './PostsDataView';
 
 const POSTS_TAB = 'posts';
 const NEEDS_ATTENTION_TAB = 'needs-attention';
