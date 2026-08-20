@@ -1392,6 +1392,7 @@ final class Meta_Terms_Manager {
 			return;
 		}
 
+		// Slashed for the write only: The compare above reads back unslashed.
 		update_term_meta( $term_id, $meta_key, wp_slash( $value ) );
 	}
 }

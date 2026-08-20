@@ -133,9 +133,11 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that update_terms() writes META_SOURCE_TERM_ID/URL on a newly
-	 * created destination term when the input item carries source_term_id and
-	 * the caller passes a non-empty source site URL.
+	 * Verifies that update_terms() writes META_SOURCE_TERM_ID/URL and
+	 * META_TERM_ORIGIN_URL on a newly created destination term when the item
+	 * carries source_term_id and the caller passes a non-empty source URL.
+	 *
+	 * The backslash in the source URL locks the slash round trip.
 	 */
 	public function test_update_terms_writes_source_meta_on_created_term(): void {
 		// ARRANGE: A brand-new term carried by a single-source-payload item.
@@ -729,13 +731,9 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that update_terms() still resolves a term by source identity when
-	 * the source site URL carries a backslash, the payoff of slashing the
-	 * identity writes: an unslashed write stores a stripped URL that the lookup
-	 * can no longer match, so the term is re-created instead of reused.
-	 *
-	 * Covers the lookup, which reading the meta back directly does not: a write
-	 * that round-trips is worthless if the meta_query cannot match it.
+	 * Verifies that update_terms() resolves a term by source identity when
+	 * the source site URL carries a backslash, covering the meta_query lookup
+	 * that reading the meta back directly does not.
 	 */
 	public function test_update_terms_resolves_backslash_source_identity(): void {
 		// ARRANGE: A first import establishing the identity on a created term.
@@ -765,9 +763,8 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		$this->assertSame( 1, count( $created_ids ) );
 		$created_id = (int) $created_ids[0];
 
-		// ACT: Re-import the same source term onto another post, with a drifted
-		// name and slug so only the source identity can resolve it, through a
-		// fresh manager so the per-run memo cannot answer for the lookup.
+		// ACT: Re-import onto another post, drifted name and slug so only the
+		// identity can resolve, fresh manager so the memo cannot answer.
 		$drifted_slug  = 'renamed-backslash-' . uniqid();
 		$fresh_manager = new Meta_Terms_Manager();
 		$result        = $fresh_manager->update_terms(
