@@ -104,7 +104,7 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		);
 		preg_match_all( '/<th\b[^>]*>(.*?)<\/th>/s', $html, $matches );
 
-		// ASSERT: The section heading carries the taxonomy context.
+		// ASSERT: The columns drop the taxonomy word the heading already carries.
 		$this->assertSame( array( 'Current', 'Incoming' ), $matches[1] );
 	}
 
