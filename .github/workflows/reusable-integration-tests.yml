@@ -1,0 +1,74 @@
+name: Reusable integration tests
+
+on:
+  workflow_call:
+    inputs:
+      php-version:
+        required: true
+        type: string
+      wordpress-ref:
+        required: true
+        type: string
+      wordpress-version:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  integration-tests:
+    name: WordPress ${{ inputs.wordpress-version }} / PHP ${{ inputs.php-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ inputs.php-version }}
+
+      - name: Install Composer dependencies
+        uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Configure WordPress environment
+        run: |
+          printf '{"core":"%s","phpVersion":"%s"}\n' \
+            '${{ inputs.wordpress-ref }}' \
+            '${{ inputs.php-version }}' \
+            > .wp-env.override.json
+
+      - name: Start WordPress environment
+        run: npx wp-env start
+
+      - name: Verify WordPress environment
+        run: |
+          npx wp-env run tests-cli -- php -r '
+          $expected = "${{ inputs.php-version }}";
+          $actual = PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION;
+          printf( "PHP %s\n", $actual );
+          exit( $actual === $expected ? 0 : 1 );
+          '
+          npx wp-env run tests-cli -- wp eval '
+          global $wp_version;
+          $expected = "${{ inputs.wordpress-version }}";
+          WP_CLI::log( "WordPress " . $wp_version );
+          if ( "trunk" !== $expected
+            && $wp_version !== $expected
+            && ! str_starts_with( $wp_version, $expected . "." ) ) {
+            WP_CLI::error( "Expected WordPress " . $expected );
+          }
+          '
+
+      - name: Integration tests
+        run: npm run test:integration
