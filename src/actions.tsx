@@ -4,6 +4,8 @@
  *
  * @file This file defines DataViews actions for the Safe Publish plugin.
  */
+import { Action } from '@wordpress/dataviews/build-types';
+import { __, _n, sprintf } from '@wordpress/i18n';
 import {
 	download,
 	external,
@@ -47,8 +49,6 @@ import {
 	getErrorMessage,
 	renderIssueMessage,
 } from './utils';
-import { Action } from '@wordpress/dataviews/build-types';
-import { __, _n, sprintf } from '@wordpress/i18n';
 
 /**
  * Auth context for the unified Posts action set.

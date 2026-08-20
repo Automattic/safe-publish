@@ -6,8 +6,6 @@
  *
  * @file This file defines the PostTypeSelector component for the Safe Publish plugin.
  */
-import { ApiResponse } from './types';
-import { getErrorMessage } from './utils';
 import { Notice, SelectControl } from '@wordpress/components';
 import {
 	createInterpolateElement,
@@ -16,6 +14,9 @@ import {
 	useState,
 } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
+
+import { ApiResponse } from './types';
+import { getErrorMessage } from './utils';
 
 /**
  * Represents a post type option from the source site.

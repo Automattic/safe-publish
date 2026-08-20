@@ -4,32 +4,6 @@
  *
  * @file This file defines the PostsDataView component.
  */
-import { help, update } from '@wordpress/icons';
-
-import AuthStatusNotice from './AuthStatusNotice';
-import {
-	calendarRangeToUtcBounds,
-	DateRangeFilter,
-	detectSlugFromInput,
-	slugMatchesChip,
-	type SlugDetection,
-} from './filter-controls';
-import { useAuthStatus } from './hooks/useAuthStatus';
-import { useResetSelectionOnQueryChange } from './hooks/useResetSelectionOnQueryChange';
-import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
-import { createPostsActions, type ActionNotice } from '../actions';
-import {
-	DEFAULT_ITEMS_PER_PAGE,
-	LAYOUT_TABLE,
-	SEARCH_DEBOUNCE_MS,
-} from '../constants';
-import { PostTypeSelector } from '../post-type-selector';
-import {
-	formatBadgeTimestamp,
-	getErrorMessage,
-	statusBadgeModifier,
-	statusLabel,
-} from '../utils';
 import {
 	BaseControl,
 	Button,
@@ -48,6 +22,32 @@ import {
 	useState,
 } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
+import { help, update } from '@wordpress/icons';
+
+import AuthStatusNotice from './AuthStatusNotice';
+import {
+	calendarRangeToUtcBounds,
+	DateRangeFilter,
+	detectSlugFromInput,
+	slugMatchesChip,
+	type SlugDetection,
+} from './filter-controls';
+import { createPostsActions, type ActionNotice } from '../actions';
+import {
+	DEFAULT_ITEMS_PER_PAGE,
+	LAYOUT_TABLE,
+	SEARCH_DEBOUNCE_MS,
+} from '../constants';
+import { PostTypeSelector } from '../post-type-selector';
+import {
+	formatBadgeTimestamp,
+	getErrorMessage,
+	statusBadgeModifier,
+	statusLabel,
+} from '../utils';
+import { useAuthStatus } from './hooks/useAuthStatus';
+import { useResetSelectionOnQueryChange } from './hooks/useResetSelectionOnQueryChange';
+import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 
 import type {
 	ApiResponse,
@@ -199,7 +199,7 @@ function StateSelect( {
 						label: __( 'Outdated', 'safe-publish' ),
 					},
 				] }
-				onChange={ ( next ) => onChange( next as ChipState ) }
+				onChange={ ( next ) => onChange( next ) }
 			/>
 		</div>
 	);
@@ -1172,7 +1172,7 @@ function LocalStateCell( {
 		'up-to-date': __( 'Up to date', 'safe-publish' ),
 		'outdated': __( 'Outdated', 'safe-publish' ),
 	};
-	// eslint-disable-next-line security/detect-object-injection
+
 	const label = stateLabel[ item.local_state ];
 
 	// Imported only — the Outdated chip already says it.

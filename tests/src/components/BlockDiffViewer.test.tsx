@@ -62,4 +62,41 @@ describe( 'BlockDiffViewer', () => {
 		// strips unchanged entries.
 		expect( screen.getByText( 'modified' ) ).toBeInTheDocument();
 	} );
+
+	it( 'highlights punctuation without corrupting the block markup', () => {
+		// ARRANGE: One modified block with a punctuation-only change that diff
+		// version 5 incorrectly grouped with the closing tag.
+		const blocks: BlockDiff[] = [
+			buildBlock( {
+				status: 'modified',
+				current: {
+					name: 'core/paragraph',
+					rendered: '<p>Publish now.</p>',
+				},
+				incoming: {
+					name: 'core/paragraph',
+					rendered: '<p>Publish now!</p>',
+				},
+			} ),
+		];
+
+		// ACT: Render the inline diff.
+		const { container } = render( <BlockDiffViewer blocks={ blocks } /> );
+
+		// ASSERT: Only the punctuation is marked, and the paragraph remains
+		// well-formed after the highlighted HTML is parsed.
+		const modifiedColumns = container.querySelectorAll(
+			'.safe-publish-block-diff__col'
+		);
+		const highlightedParagraph = modifiedColumns[ 1 ].querySelector( 'p' );
+		expect( highlightedParagraph ).toHaveTextContent( 'Publish now.!' );
+		expect(
+			highlightedParagraph?.querySelector(
+				'.safe-publish-inline-removed'
+			)
+		).toHaveTextContent( '.' );
+		expect(
+			highlightedParagraph?.querySelector( '.safe-publish-inline-added' )
+		).toHaveTextContent( '!' );
+	} );
 } );

@@ -55,7 +55,7 @@ describe( 'isRollbackRestore', () => {
 
 describe( 'rollbackItem', () => {
 	beforeEach( () => {
-		global.fetch = vi.fn();
+		globalThis.fetch = vi.fn();
 	} );
 
 	afterEach( () => {
@@ -64,7 +64,7 @@ describe( 'rollbackItem', () => {
 
 	it( 'Verifies that the request mirrors the single-item endpoint contract', async () => {
 		// ARRANGE: A successful endpoint response.
-		( global.fetch as any ).mockResolvedValue( {
+		( globalThis.fetch as any ).mockResolvedValue( {
 			json: async () => ( { success: true, data: { action: 'deleted' } } ),
 		} );
 
@@ -73,7 +73,7 @@ describe( 'rollbackItem', () => {
 
 		// ASSERT: The request carries the action, nonce, and item id the
 		// admin-ajax endpoint expects.
-		const [ url, options ] = ( global.fetch as any ).mock.calls[ 0 ];
+		const [ url, options ] = ( globalThis.fetch as any ).mock.calls[ 0 ];
 		expect( url ).toBe( AJAX_URL );
 		const body = options.body as FormData;
 		expect( body.get( 'action' ) ).toBe( 'safe_publish_rollback_item' );
@@ -83,7 +83,7 @@ describe( 'rollbackItem', () => {
 
 	it( 'Verifies that the server-reported action and message are returned on success', async () => {
 		// ARRANGE: The endpoint reports a restore with its confirmation message.
-		( global.fetch as any ).mockResolvedValue( {
+		( globalThis.fetch as any ).mockResolvedValue( {
 			json: async () => ( {
 				success: true,
 				data: {
@@ -106,7 +106,7 @@ describe( 'rollbackItem', () => {
 
 	it( 'Verifies that the server error message surfaces on failure', async () => {
 		// ARRANGE: The endpoint rejects the request with a message payload.
-		( global.fetch as any ).mockResolvedValue( {
+		( globalThis.fetch as any ).mockResolvedValue( {
 			json: async () => ( { success: false, data: 'Invalid item ID' } ),
 		} );
 
@@ -119,7 +119,9 @@ describe( 'rollbackItem', () => {
 
 	it( 'Verifies that a network error becomes a failure outcome', async () => {
 		// ARRANGE: Fetch rejects at the network layer.
-		( global.fetch as any ).mockRejectedValue( new Error( 'Network down' ) );
+		( globalThis.fetch as any ).mockRejectedValue(
+			new Error( 'Network down' )
+		);
 
 		// ACT: Attempt the rollback.
 		const outcome = await rollbackItem( 100, AJAX_URL, NONCE );
@@ -131,7 +133,7 @@ describe( 'rollbackItem', () => {
 
 describe( 'rollbackItems', () => {
 	beforeEach( () => {
-		global.fetch = vi.fn();
+		globalThis.fetch = vi.fn();
 	} );
 
 	afterEach( () => {
@@ -140,7 +142,7 @@ describe( 'rollbackItems', () => {
 
 	it( 'Verifies that each item is processed and progress advances once per item', async () => {
 		// ARRANGE: Every endpoint call succeeds; capture progress notifications.
-		( global.fetch as any ).mockResolvedValue( {
+		( globalThis.fetch as any ).mockResolvedValue( {
 			json: async () => ( { success: true, data: { action: 'deleted' } } ),
 		} );
 		const progress: Array< [ number, number ] > = [];
@@ -172,7 +174,7 @@ describe( 'rollbackItems', () => {
 
 	it( 'Verifies that a mid-list failure does not abort the remainder', async () => {
 		// ARRANGE: The middle call fails; the others succeed.
-		( global.fetch as any )
+		( globalThis.fetch as any )
 			.mockResolvedValueOnce( {
 				json: async () =>
 					( { success: true, data: { action: 'deleted' } } ),
@@ -223,7 +225,7 @@ describe( 'rollbackItems', () => {
 		);
 
 		// ASSERT: No network request runs and the row is reported as failed.
-		expect( global.fetch ).not.toHaveBeenCalled();
+		expect( globalThis.fetch ).not.toHaveBeenCalled();
 		expect( result.failed ).toBe( 1 );
 		expect( result.entries[ 0 ].outcome.success ).toBe( false );
 	} );

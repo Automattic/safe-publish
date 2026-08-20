@@ -7,14 +7,6 @@
  * @file This file defines the PostDiffModal component.
  */
 
-import BlockDiffViewer, { resolveStatus } from './BlockDiffViewer';
-import DiffViewSelector from './DiffViewSelector';
-import NonContentDiffSections from './NonContentDiffSections';
-import { useDiffPreview } from './hooks/useDiffPreview';
-import { useImportPost } from './hooks/useImportPost';
-import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
-import { UnifiedPostRow, ImportSyncStatus, Warning } from '../types';
-import { renderWarningMessage } from '../utils';
 import {
 	Button,
 	ToggleControl,
@@ -25,6 +17,15 @@ import {
 } from '@wordpress/components';
 import { useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
+
+import BlockDiffViewer, { resolveStatus } from './BlockDiffViewer';
+import DiffViewSelector from './DiffViewSelector';
+import NonContentDiffSections from './NonContentDiffSections';
+import { UnifiedPostRow, ImportSyncStatus, Warning } from '../types';
+import { renderWarningMessage } from '../utils';
+import { useDiffPreview } from './hooks/useDiffPreview';
+import { useImportPost } from './hooks/useImportPost';
+import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
 
 import type { BlockDiff, DiffPreviewResult } from '../api/diff';
 
