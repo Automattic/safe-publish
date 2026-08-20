@@ -28,6 +28,9 @@ jobs:
           - wordpress-version: '7.0'
             wordpress-ref: WordPress/WordPress#7.0-branch
             php-version: '8.5'
+          - wordpress-version: '7.1'
+            wordpress-ref: WordPress/WordPress#7.1-branch
+            php-version: '8.5'
     steps:
       - uses: actions/checkout@v7.0.1
 
