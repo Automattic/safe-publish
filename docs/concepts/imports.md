@@ -37,7 +37,7 @@ The visible columns depend on the selected Local State:
 
 | Column         | Description                                                     |
 | -------------- | --------------------------------------------------------------- |
-| Title          | Source post title, linked to its source permalink when present. |
+| Title          | Source post title.                                              |
 | Local State    | Available, Up to date, or Outdated, plus live sync information. |
 | Local Status   | Destination `post_status`, or a dash when not yet imported.     |
 | Source Status  | Source `post_status`; shown in All and Available.               |
@@ -48,17 +48,19 @@ The visible columns depend on the selected Local State:
 
 Actions are shown only when they apply to the selected row:
 
-| Action    | Description                                                       |
-| --------- | ----------------------------------------------------------------- |
-| Import    | Creates a destination draft or re-imports changed source content. |
-| Compare   | Compares the current destination post with fresh source content.  |
-| Edit      | Opens the destination post in the WordPress editor.               |
-| Trash     | Moves the destination post to trash.                              |
-| Roll back | Reverses the latest eligible import.                              |
+| Action      | Description                                                       |
+| ----------- | ----------------------------------------------------------------- |
+| View source | Opens the source post in a new browser tab.                       |
+| Import      | Creates a destination draft or re-imports changed source content. |
+| Compare     | Compares the current destination post with fresh source content.  |
+| Edit        | Opens the destination post in the WordPress editor.               |
+| Trash       | Moves the destination post to trash.                              |
+| Roll back   | Reverses the latest eligible import.                              |
 
-Import, Trash, and Roll back support bulk selection. Compare is available for
-one outdated post at a time. An Up to date row does not offer Import or Compare
-unless the live source check finds a newer version.
+View source is available when the source provides a post permalink other than
+its homepage. Import, Trash, and Roll back support bulk selection. Compare is
+available for one outdated post at a time. An Up to date row does not offer
+Import or Compare unless the live source check finds a newer version.
 
 Rollback eligibility comes from the latest active import-history row. Only
 `success` and `updated` rows that have not already been rolled back are

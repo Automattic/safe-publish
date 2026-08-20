@@ -13,11 +13,23 @@ import {
 
 import { PostsDataView } from '@/components/PostsDataView';
 
+import type { DataViewsField, UnifiedPostRow } from '@/types';
+
+const dataViews = vi.hoisted( () => ( {
+	props: null as {
+		data: UnifiedPostRow[];
+		fields: DataViewsField< UnifiedPostRow >[];
+	} | null,
+} ) );
+
 // DataViews pulls in @wordpress/private-apis, which cannot unlock in the test
 // env; it also only renders once rows exist. Stub it so mounting the container
 // doesn't fault.
 vi.mock( '@wordpress/dataviews', () => ( {
-	DataViews: () => null,
+	DataViews: ( props: NonNullable< typeof dataViews.props > ) => {
+		dataViews.props = props;
+		return null;
+	},
 	View: {},
 } ) );
 
@@ -94,6 +106,7 @@ function searchInput(): HTMLInputElement {
 
 beforeEach( () => {
 	selector.error = null;
+	dataViews.props = null;
 
 	// The destination host is the localized home_url(), distinct from both the
 	// source host and happy-dom's window.location.origin.
@@ -112,6 +125,58 @@ beforeEach( () => {
 afterEach( () => {
 	vi.unstubAllGlobals();
 	delete window.safePublishAdminData.homeUrl;
+} );
+
+describe( 'PostsDataView title field', () => {
+	it( 'renders source post titles without links', async () => {
+		// ARRANGE: The catalog returns a source post carrying a valid permalink.
+		fetchMock.mockResolvedValue( {
+			json: () =>
+				Promise.resolve( {
+					success: true,
+					data: {
+						items: [
+							{
+								id: 10,
+								source_post_id: 10,
+								title: 'Source post',
+								link: `${ SOURCE_URL }/source-post/`,
+								date_gmt: '2026-08-20T00:00:00Z',
+								modified_gmt: '2026-08-20T00:00:00Z',
+								post_type: 'post',
+								status: 'publish',
+								local_state: 'available',
+								is_imported: false,
+								wp_post_status: null,
+								item_id: null,
+								post_id: null,
+								import_date_gmt: null,
+								has_previous_content: false,
+								edit_url: '',
+							},
+						],
+						has_more: false,
+					},
+				} ),
+		} );
+
+		// ACT: Render the listing, then render the captured title field.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 1 ) );
+		const titleField = dataViews.props?.fields.find(
+			( field ) => 'title' === field.id
+		);
+		expect( titleField?.render ).toBeDefined();
+		const { container } = render(
+			titleField?.render?.( {
+				item: dataViews.props?.data[ 0 ] as UnifiedPostRow,
+			} )
+		);
+
+		// ASSERT: The title remains visible without linking to the source site.
+		expect( container ).toHaveTextContent( 'Source post' );
+		expect( container.querySelector( 'a' ) ).toBeNull();
+	} );
 } );
 
 describe( 'PostsDataView URL search routing', () => {

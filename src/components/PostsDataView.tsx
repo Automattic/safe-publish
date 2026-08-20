@@ -25,7 +25,6 @@ import {
 } from '../constants';
 import { PostTypeSelector } from '../post-type-selector';
 import {
-	extractUrlPath,
 	formatBadgeTimestamp,
 	getErrorMessage,
 	statusBadgeModifier,
@@ -800,42 +799,17 @@ export function PostsDataView( {
 				id: 'title',
 				label: __( 'Title', 'safe-publish' ),
 				enableSorting: true,
-				render: ( { item } ) => {
-					const path = extractUrlPath( item.link );
-					const linkable = '' !== item.link && '/' !== path;
-					const titleNode = linkable ? (
-						<a
-							href={ item.link }
-							target="_blank"
-							rel="noopener noreferrer"
-							title={ item.link }
-							aria-label={ sprintf(
-								/* translators: %s: post title */
-								__( '%s (opens in new tab)', 'safe-publish' ),
-								item.title
-							) }
-						>
-							{ item.title }
-						</a>
-					) : (
-						<span>{ item.title }</span>
-					);
-
-					return (
-						<span
-							ref={ ( node ) => {
-								if ( node && null !== item.source_post_id ) {
-									rowRefs.current.set(
-										item.source_post_id,
-										node
-									);
-								}
-							} }
-						>
-							{ titleNode }
-						</span>
-					);
-				},
+				render: ( { item } ) => (
+					<span
+						ref={ ( node ) => {
+							if ( node && null !== item.source_post_id ) {
+								rowRefs.current.set( item.source_post_id, node );
+							}
+						} }
+					>
+						{ item.title }
+					</span>
+				),
 			},
 			{
 				id: 'local_state',
