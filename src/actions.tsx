@@ -8,6 +8,7 @@ import { Action } from '@wordpress/dataviews/build-types';
 import { __, _n, sprintf } from '@wordpress/i18n';
 import {
 	download,
+	external,
 	pages,
 	pencil,
 	rotateLeft,
@@ -44,6 +45,7 @@ import {
 import {
 	attentionIssueId,
 	attentionIssueLabel,
+	extractUrlPath,
 	getErrorMessage,
 	renderIssueMessage,
 } from './utils';
@@ -73,7 +75,8 @@ const isRollbackEligible = ( item: UnifiedPostRow ): boolean =>
  * first-time create, re-import (update), and retry against a single source
  * endpoint; per-state eligibility: 'available' → Import; 'up-to-date'/'outdated'
  * → Compare, Import, Edit, Trash, Rollback (Compare/Import hide on up-to-date).
- * Mixed bulk selections rely on per-item isEligible.
+ * View source is available for every row with a post permalink. Mixed bulk
+ * selections rely on per-item isEligible.
  *
  * @param {Function}            onRefresh       Listing refresh callback.
  * @param {boolean}             isAuthorized    Whether the source authorizes imports.
@@ -218,6 +221,20 @@ export const createPostsActions = (
 					} }
 				/>
 			);
+		},
+	},
+	{
+		id: 'view-source',
+		label: __( 'View source', 'safe-publish' ),
+		icon: external,
+		supportsBulk: false,
+		isEligible: ( item ) =>
+			'' !== item.link && '/' !== extractUrlPath( item.link ),
+		callback: ( items ) => {
+			const url = items[ 0 ]?.link;
+			if ( url ) {
+				window.open( url, '_blank', 'noreferrer' );
+			}
 		},
 	},
 	{

@@ -12,11 +12,19 @@ The Posts tab combines the source catalog with Safe Publish's local import
 history. Use the **Local State** control to choose which records are listed:
 
 - **All** — all source posts, including posts already imported.
-- **Available** — source posts without an active destination import.
+- **Not imported** — source posts without an active destination import.
 - **Up to date** — imported posts whose stored source modification time is not
   newer than their import time.
 - **Outdated** — imported posts whose stored source modification time is newer
   than their import time.
+
+> **Developer note:** The **Not imported** label maps to the internal
+> `available` value used in query parameters, AJAX payloads, and code. It covers
+> posts with no active successful import — never imported, error-only, or every
+> import rolled back — and imported posts whose destination post is missing or
+> trashed. Local State is derived from import history rather than stored in a
+> dedicated database field. Retaining `available` preserves backward
+> compatibility.
 
 Safe Publish also checks imported rows against the source while the listing is
 open. A newly changed source post can therefore show an additional **Outdated**
@@ -35,14 +43,14 @@ affect the stored source identity.
 
 The visible columns depend on the selected Local State:
 
-| Column         | Description                                                     |
-| -------------- | --------------------------------------------------------------- |
-| Title          | Source post title, linked to its source permalink when present. |
-| Local State    | Available, Up to date, or Outdated, plus live sync information. |
-| Local Status   | Destination `post_status`, or a dash when not yet imported.     |
-| Source Status  | Source `post_status`; shown in All and Available.               |
-| Published Date | Source publication date; shown in All and Available.            |
-| Imported Date  | Most recent import date; shown in Up to date and Outdated.      |
+| Column         | Description                                                       |
+| -------------- | ----------------------------------------------------------------- |
+| Title          | Source post title, shown as plain text rather than linked text.   |
+| Local State    | Not imported, Up to date, or Outdated, plus live sync details.    |
+| Local Status   | Destination `post_status`, or a dash when not yet imported.       |
+| Source Status  | Source `post_status`; shown in All and Not imported.              |
+| Published Date | Source publication date; shown in All and Not imported.           |
+| Imported Date  | Most recent active import date; shown in Up to date and Outdated. |
 
 ### Actions
 
@@ -55,6 +63,9 @@ Actions are shown only when they apply to the selected row:
 | Edit      | Opens the destination post in the WordPress editor.               |
 | Trash     | Moves the destination post to trash.                              |
 | Roll back | Reverses the latest eligible import.                              |
+
+View source opens the source post in a new browser tab. It is available when
+the source provides a post permalink other than its homepage.
 
 Import, Trash, and Roll back support bulk selection. Compare is available for
 one outdated post at a time. An Up to date row does not offer Import or Compare
@@ -71,11 +82,11 @@ it, or deletes the post when no previous content was captured.
 The controls above the table provide:
 
 - **Type** selection.
-- Title or URL search. Source URLs apply to All and Available; destination URLs
-  apply to Up to date and Outdated.
-- Published-date filtering for All and Available.
+- Title or URL search. Source URLs apply to All and Not imported; destination
+  URLs apply to Up to date and Outdated.
+- Published-date filtering for All and Not imported.
 - Imported-date filtering for Up to date and Outdated.
-- Source-status filtering for All and Available.
+- Source-status filtering for All and Not imported.
 - Local State selection.
 
 Title and date sorting are server-side, so they apply to the full result set,

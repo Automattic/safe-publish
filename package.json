@@ -76,6 +76,7 @@
     "@types/react-dom": "18.3.7",
     "@vitest/coverage-v8": "4.1.10",
     "@wordpress/api-fetch": "7.25.0",
+    "@wordpress/base-styles": "12.1.0",
     "@wordpress/components": "29.11.0",
     "@wordpress/compose": "7.25.0",
     "@wordpress/data": "10.25.0",

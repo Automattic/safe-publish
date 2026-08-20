@@ -90,6 +90,25 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the taxonomy diff uses concise column headers.
+	 */
+	public function test_taxonomy_diff_uses_concise_column_headers(): void {
+		// ARRANGE: An imported term whose description changes on the source.
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, 'Morning desk' ) )
+		);
+
+		// ACT: Render the resulting taxonomy diff.
+		$html = $this->render_taxonomies(
+			array( $this->record( 101, 'News', 'news', 0, 'Evening desk' ) )
+		);
+		preg_match_all( '/<th\b[^>]*>(.*?)<\/th>/s', $html, $matches );
+
+		// ASSERT: The columns drop the taxonomy word the heading already carries.
+		$this->assertSame( array( 'Current', 'Incoming' ), $matches[1] );
+	}
+
+	/**
 	 * Verifies that a term's changed description reaches the diff, which the
 	 * embedded payload alone cannot carry.
 	 */

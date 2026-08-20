@@ -1,3 +1,4 @@
+@use "@wordpress/base-styles/variables" as *;
 @import "@wordpress/dataviews/build-style/style.css";
 
 // Bulk import styling enhancements
@@ -613,6 +614,10 @@ html:has(body.toplevel_page_safe-publish) {
 
 		&--details {
 			border-left-color: var(--safe-publish-primary);
+
+			table.diff thead th {
+				font-family: $font-family-body;
+			}
 		}
 
 		&--content {

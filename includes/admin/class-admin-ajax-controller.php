@@ -1068,13 +1068,13 @@ final class Admin_Ajax_Controller {
 	}
 
 	/**
-	 * Builds the Available payload by pulling source catalog pages until the
-	 * requested page is filled with non-imported rows.
+	 * Builds the available-state payload by pulling source catalog pages until
+	 * the requested page is filled with non-imported rows.
 	 *
-	 * The Available chip drops already-imported rows, so a single source page
-	 * can render almost empty while the source still reports more raw items.
-	 * Filling across pages lets has_more reflect the non-imported count rather
-	 * than the source's raw pagination.
+	 * The Not imported chip drops already-imported rows, so a single source
+	 * page can render almost empty while the source still reports more raw
+	 * items. Filling across pages lets has_more reflect the non-imported count
+	 * rather than the source's raw pagination.
 	 *
 	 * @param string $source_site_url  Source site URL.
 	 * @param array  $auth_credentials Source auth credentials.
