@@ -27,9 +27,12 @@ const [ , wordpressJsdocOptions ] =
 module.exports = [
 	{
 		ignores: [
+			'.vscode/**',
+			'artifacts/**',
 			'build/**',
 			'coverage/**',
 			'node_modules/**',
+			'package-lock.json',
 			'vendor/**',
 			'**/*.php',
 			'**/*.config.{js,mjs,ts,mts}',

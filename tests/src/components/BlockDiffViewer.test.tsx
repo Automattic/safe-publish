@@ -63,18 +63,19 @@ describe( 'BlockDiffViewer', () => {
 		expect( screen.getByText( 'modified' ) ).toBeInTheDocument();
 	} );
 
-	it( 'highlights added and removed words in modified blocks', () => {
-		// ARRANGE: One modified block with a word-level change.
+	it( 'highlights punctuation without corrupting the block markup', () => {
+		// ARRANGE: One modified block with a punctuation-only change that diff
+		// version 5 incorrectly grouped with the closing tag.
 		const blocks: BlockDiff[] = [
 			buildBlock( {
 				status: 'modified',
 				current: {
 					name: 'core/paragraph',
-					rendered: '<p>The old body.</p>',
+					rendered: '<p>Publish now.</p>',
 				},
 				incoming: {
 					name: 'core/paragraph',
-					rendered: '<p>The new body.</p>',
+					rendered: '<p>Publish now!</p>',
 				},
 			} ),
 		];
@@ -82,12 +83,20 @@ describe( 'BlockDiffViewer', () => {
 		// ACT: Render the inline diff.
 		const { container } = render( <BlockDiffViewer blocks={ blocks } /> );
 
-		// ASSERT: The changed words retain their added and removed markers.
+		// ASSERT: Only the punctuation is marked, and the paragraph remains
+		// well-formed after the highlighted HTML is parsed.
+		const modifiedColumns = container.querySelectorAll(
+			'.safe-publish-block-diff__col'
+		);
+		const highlightedParagraph = modifiedColumns[ 1 ].querySelector( 'p' );
+		expect( highlightedParagraph ).toHaveTextContent( 'Publish now.!' );
 		expect(
-			container.querySelector( '.safe-publish-inline-removed' )
-		).toHaveTextContent( 'old' );
+			highlightedParagraph?.querySelector(
+				'.safe-publish-inline-removed'
+			)
+		).toHaveTextContent( '.' );
 		expect(
-			container.querySelector( '.safe-publish-inline-added' )
-		).toHaveTextContent( 'new' );
+			highlightedParagraph?.querySelector( '.safe-publish-inline-added' )
+		).toHaveTextContent( '!' );
 	} );
 } );

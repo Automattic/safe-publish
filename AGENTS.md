@@ -92,13 +92,4 @@ Currently in closed beta used by customers, soon to become public; anything intr
 
 ## Dependencies
 
-**Runtime `@wordpress/*` packages and WP stubs are pinned to the wp-6.8
-dist-tag line** to match the plugin's `Requires at least: 6.8`. Bumping them
-past their current major would type-check our code against APIs that don't
-exist in WP 6.8's bundled `wp.*` globals, causing silent runtime failures.
-Development-only build, lint, test, and local-environment tools may move beyond
-that line when the upgrade does not expose newer browser APIs or types to
-plugin code; call out that decision in the PR description. Raising the WP floor
-requires updating the plugin header,
-`php-stubs/wordpress-{stubs,tests-stubs}`, and the relevant runtime
-`@wordpress/*` packages together to the next wp-X.Y dist-tag.
+**Runtime `@wordpress/*` packages and WP stubs are pinned to the wp-6.8 dist-tag line** to match the plugin's `Requires at least: 6.8`. Bumping them past their current major would type-check our code against APIs that don't exist in WP 6.8's bundled `wp.*` globals, causing silent runtime failures. Development-only build, lint, test, and local-environment tools may move beyond that line when the upgrade does not expose newer browser APIs or types to plugin code; call out that decision in the PR description. Raising the WP floor requires updating the plugin header, `php-stubs/wordpress-{stubs,tests-stubs}`, and the relevant runtime `@wordpress/*` packages together to the next wp-X.Y dist-tag.
