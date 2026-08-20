@@ -42,32 +42,33 @@ affect the stored source identity.
 
 The visible columns depend on the selected Local State:
 
-| Column         | Description                                                        |
-| -------------- | ------------------------------------------------------------------ |
-| Title          | Source post title.                                                 |
-| Local State    | Not imported, Up to date, or Outdated, plus live sync information. |
-| Local Status   | Destination `post_status`, or a dash when not yet imported.        |
-| Source Status  | Source `post_status`; shown in All and Not imported.               |
-| Published Date | Source publication date; shown in All and Not imported.            |
-| Imported Date  | Most recent import date; shown in Up to date and Outdated.         |
+| Column         | Description                                                     |
+| -------------- | --------------------------------------------------------------- |
+| Title          | Source post title, shown as plain text rather than linked text. |
+| Local State    | Not imported, Up to date, or Outdated, plus live sync details.  |
+| Local Status   | Destination `post_status`, or a dash when not yet imported.     |
+| Source Status  | Source `post_status`; shown in All and Not imported.            |
+| Published Date | Source publication date; shown in All and Not imported.         |
+| Imported Date  | Most recent import date; shown in Up to date and Outdated.      |
 
 ### Actions
 
 Actions are shown only when they apply to the selected row:
 
-| Action      | Description                                                       |
-| ----------- | ----------------------------------------------------------------- |
-| View source | Opens the source post in a new browser tab.                       |
-| Import      | Creates a destination draft or re-imports changed source content. |
-| Compare     | Compares the current destination post with fresh source content.  |
-| Edit        | Opens the destination post in the WordPress editor.               |
-| Trash       | Moves the destination post to trash.                              |
-| Roll back   | Reverses the latest eligible import.                              |
+| Action    | Description                                                       |
+| --------- | ----------------------------------------------------------------- |
+| Import    | Creates a destination draft or re-imports changed source content. |
+| Compare   | Compares the current destination post with fresh source content.  |
+| Edit      | Opens the destination post in the WordPress editor.               |
+| Trash     | Moves the destination post to trash.                              |
+| Roll back | Reverses the latest eligible import.                              |
 
-View source is available when the source provides a post permalink other than
-its homepage. Import, Trash, and Roll back support bulk selection. Compare is
-available for one outdated post at a time. An Up to date row does not offer
-Import or Compare unless the live source check finds a newer version.
+View source opens the source post in a new browser tab. It is available when
+the source provides a post permalink other than its homepage.
+
+Import, Trash, and Roll back support bulk selection. Compare is available for
+one outdated post at a time. An Up to date row does not offer Import or Compare
+unless the live source check finds a newer version.
 
 Rollback eligibility comes from the latest active import-history row. Only
 `success` and `updated` rows that have not already been rolled back are
@@ -80,7 +81,7 @@ it, or deletes the post when no previous content was captured.
 The controls above the table provide:
 
 - **Type** selection.
-- Title or URL search. Source URLs apply to All and Not imported; destination URLs
+- Title or URL search. Source URLs: All and Not imported; destination URLs
   apply to Up to date and Outdated.
 - Published-date filtering for All and Not imported.
 - Imported-date filtering for Up to date and Outdated.
