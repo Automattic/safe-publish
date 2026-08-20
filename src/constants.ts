@@ -10,9 +10,8 @@
 /**
  * WordPress dependencies
  */
-import { arrowDown, arrowUp } from '@wordpress/icons';
-
 import { __ } from '@wordpress/i18n';
+import { arrowDown, arrowUp } from '@wordpress/icons';
 
 // View layouts.
 export const LAYOUT_TABLE = 'table';

@@ -3,7 +3,6 @@
  *
  * @file This file defines shared filter toolbar primitives.
  */
-import { chevronDown } from '@wordpress/icons';
 
 import {
 	BaseControl,
@@ -14,6 +13,7 @@ import {
 import { dateI18n, getDate, getSettings } from '@wordpress/date';
 import { useMemo } from '@wordpress/element';
 import { __, _x, sprintf } from '@wordpress/i18n';
+import { chevronDown } from '@wordpress/icons';
 
 /**
  * Regex matching pasted URLs or absolute paths. Catches the "I have this

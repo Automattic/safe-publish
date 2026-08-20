@@ -8,13 +8,6 @@
  *
  * @file This file defines the AuditLogDataView component.
  */
-import { getChannelLabel, getEventLabel, getUserLabel } from './event-fields';
-import {
-	calendarRangeToUtcBounds,
-	DateRangeFilter,
-} from './filter-controls';
-import { DEFAULT_ITEMS_PER_PAGE, SEARCH_DEBOUNCE_MS } from '../constants';
-import { formatDateTime, getErrorMessage } from '../utils';
 import {
 	BaseControl,
 	Button,
@@ -31,6 +24,14 @@ import {
 	useState,
 } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
+
+import { getChannelLabel, getEventLabel, getUserLabel } from './event-fields';
+import {
+	calendarRangeToUtcBounds,
+	DateRangeFilter,
+} from './filter-controls';
+import { DEFAULT_ITEMS_PER_PAGE, SEARCH_DEBOUNCE_MS } from '../constants';
+import { formatDateTime, getErrorMessage } from '../utils';
 
 import type {
 	ApiResponse,
