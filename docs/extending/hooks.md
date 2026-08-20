@@ -152,7 +152,7 @@ When this filter returns `true`:
 - The post is imported with `post_parent = 0`.
 - A `parent_orphaned` warning is recorded on the import items row and surfaced in the import results UI. The warning carries a `reason` of either `not_imported` (parent never imported and not in the current bulk batch) or `failed_in_batch` (parent was in the batch but did not succeed).
 
-Enabling the fallback relaxes the source-canonical guarantee for parent relationships. Review the import results UI or the Imports → Posts tab for warnings whenever it's enabled.
+Enabling the fallback relaxes the source-canonical guarantee for parent relationships. Review the import results UI or **Manage → Needs attention** for warnings whenever it's enabled.
 
 **Parameters:**
 

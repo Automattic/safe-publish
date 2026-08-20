@@ -13,8 +13,8 @@ use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use WP_Error;
+use WP_Post_Type;
 use WP_REST_Request;
-use WP_REST_Response;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -71,17 +71,6 @@ final class Safe_Publish_API extends REST_Base {
 						'type'     => 'string',
 						'default'  => 'post',
 					),
-					'mode'     => array(
-						'required' => false,
-						'type'     => 'string',
-						'enum'     => array( 'split', 'inline' ),
-						'default'  => 'split',
-					),
-					'cleanup'  => array(
-						'required' => false,
-						'type'     => 'boolean',
-						'default'  => true,
-					),
 				),
 				'callback'            => array( $this, 'render_diff' ),
 			)
@@ -98,12 +87,42 @@ final class Safe_Publish_API extends REST_Base {
 	 * @param WP_REST_Request $request REST request object.
 	 *
 	 * @return bool|WP_Error Whether the user can edit the mapped post; WP_Error
-	 *                       with status 400 for invalid IDs, or 404 when the
-	 *                       post is unmapped and the user has edit_others_posts.
+	 *                       with status 500 when no source is connected, 400 for
+	 *                       invalid IDs, or 404 when the post is unmapped and the
+	 *                       user has edit_others_posts.
 	 */
 	public function check_diff_preview_permission(
 		WP_REST_Request $request
 	): bool|WP_Error {
+		$mapped_post_type = Post_Type_Map::to_wp_slug(
+			(string) $request->get_param( 'postType' )
+		);
+
+		// Surface the connection refusal only to users who could act on it.
+		if ( ! current_user_can( 'manage_options' ) ) {
+			$post_type_object = get_post_type_object( $mapped_post_type );
+			$capability       = $post_type_object instanceof WP_Post_Type
+				? $post_type_object->cap->edit_posts
+				: 'edit_posts';
+
+			if ( ! current_user_can( $capability ) ) {
+				return false;
+			}
+		}
+
+		$source_site_url = Options::get_connected_site_url_with_path();
+
+		if ( '' === $source_site_url ) {
+			return new WP_Error(
+				'no_connected_site_url',
+				__(
+					'No source site is connected. Configure a valid connected site URL in the settings page before comparing.',
+					'safe-publish'
+				),
+				array( 'status' => 500 )
+			);
+		}
+
 		$source_post_id = (int) $request->get_param( 'postId' );
 
 		if ( $source_post_id < 1 ) {
@@ -114,12 +133,10 @@ final class Safe_Publish_API extends REST_Base {
 			);
 		}
 
-		$post_type        = (string) $request->get_param( 'postType' );
-		$mapped_post_type = Post_Type_Map::to_wp_slug( $post_type );
-		$local_post       = $this->diff_renderer->find_local_post(
+		$local_post = $this->diff_renderer->find_local_post(
 			$source_post_id,
 			$mapped_post_type,
-			Options::get_connected_site_url_with_path()
+			$source_site_url
 		);
 
 		if ( is_wp_error( $local_post ) ) {
@@ -143,22 +160,13 @@ final class Safe_Publish_API extends REST_Base {
 	 *
 	 * @param WP_REST_Request $req REST request object.
 	 *
-	 * @return array|WP_REST_Response Array on success, WP_REST_Response with error on failure.
+	 * @return array|WP_Error Diff payload, or the renderer's error.
 	 */
-	public function render_diff( WP_REST_Request $req ): array|WP_REST_Response {
-		$result = $this->diff_renderer->render_diff(
+	public function render_diff( WP_REST_Request $req ): array|WP_Error {
+		return $this->diff_renderer->render_diff(
 			$req,
 			array( $this, 'make_request' ),
 			Auth_Credential_Provider::get_credentials()
 		);
-
-		if ( is_wp_error( $result ) ) {
-			return new WP_REST_Response(
-				array( 'error' => $result->get_error_message() ),
-				$result->get_error_data()['status'] ?? 500
-			);
-		}
-
-		return $result;
 	}
 }

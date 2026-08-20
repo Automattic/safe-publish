@@ -8,7 +8,7 @@ Safe Publish is a WordPress plugin that allows editors to promote content from n
 
 - Browsing content from source WordPress sites via the WordPress REST API
 - Comparing an imported post against the current source content before updating it
-- Importing posts, pages, and custom post types while preserving all formatting and media
+- Importing posts, pages, and custom post types while preserving supported formatting and media
 - Seeing at a glance whether imported content is still in sync with its source
 - Tracking import history for auditing and compliance purposes
 
@@ -44,7 +44,7 @@ The import process consists of several stages:
 2. **Validate**: Check content structure and accessibility.
 3. **Transform**: Process Gutenberg blocks and extract media references.
 4. **Import Media**: Download and import featured images and inline images.
-5. **Create Post**: Create draft post with all content, metadata, and terms.
+5. **Create Post**: Create a draft with processed content, terms, and REST-exposed metadata.
 6. **Track**: Log the import for auditing.
 
 See the [Import Process guide](import-process.md) for a detailed breakdown.
@@ -59,7 +59,7 @@ Every import action is tracked and logged:
 - Import status (success/failure)
 - Error messages (if applicable)
 
-Manage your imported content and review failed imports on the [Imports](imports.md) page. Review logged events on the [Audit Log](audit-log.md) page.
+Browse source content, manage imported content, and review failed imports on the [Manage](imports.md) page. Review logged events on the [Audit Log](audit-log.md) page.
 
 ## Technical concepts
 

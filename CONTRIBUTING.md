@@ -24,9 +24,15 @@ Safe Publish uses [semantic versioning](https://semver.org/).
 
 ## Release process
 
-1. Checkout the `trunk` branch and ensure it is up to date.
-2. Run the release script: `./bin/release <major|minor|patch>`
-3. Push the new release branch to the remote repository and create a pull request.
+Run the **Create release PR** workflow in GitHub Actions and choose `patch`,
+`minor`, or `major`. The workflow runs the release script, pushes the generated
+release branch, and opens a pull request against `trunk`.
+
+For a manual release:
+
+1. Check out `trunk` and ensure it is up to date.
+2. Run `npm run release -- <major|minor|patch>`.
+3. Push the generated release branch and create a pull request against `trunk`.
 4. Merge the pull request into `trunk`.
 
 A new release will be automatically published on GitHub via GitHub Actions.

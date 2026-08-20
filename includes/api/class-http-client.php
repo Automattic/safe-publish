@@ -38,6 +38,11 @@ final class HTTP_Client {
 	public const ERROR_RESPONSE_TOO_LARGE = 'response_too_large';
 
 	/**
+	 * WP_Error code returned when the request never reached the source site.
+	 */
+	public const ERROR_REQUEST_FAILED = 'request_failed';
+
+	/**
 	 * Caps the source-supplied error detail appended to an HTTP-error message,
 	 * keeping the surfaced message a sane length for display.
 	 */
@@ -111,25 +116,34 @@ final class HTTP_Client {
 
 		if ( is_wp_error( $response ) ) {
 			return new WP_Error(
-				'request_failed',
-				__( 'Failed to fetch data from source site.', 'safe-publish' ) . ' ' . $response->get_error_message()
+				self::ERROR_REQUEST_FAILED,
+				sprintf(
+					/* translators: %s: transport error reported by WordPress */
+					__( 'Failed to fetch data from source site. %s', 'safe-publish' ),
+					$response->get_error_message()
+				)
 			);
 		}
 
 		$response_code = wp_remote_retrieve_response_code( $response );
 		if ( 200 !== $response_code ) {
-			$message = sprintf(
-				/* translators: %d: HTTP response code */
-				__( 'Source site returned HTTP error %d.', 'safe-publish' ),
-				$response_code
-			);
-
 			$source_error = $this->parse_source_error(
 				wp_remote_retrieve_body( $response )
 			);
 
 			if ( isset( $source_error['message'] ) ) {
-				$message .= ' ' . $source_error['message'];
+				$message = sprintf(
+					/* translators: 1: HTTP response code, 2: source site reason */
+					__( 'Source site returned HTTP error %1$d. %2$s', 'safe-publish' ),
+					$response_code,
+					$source_error['message']
+				);
+			} else {
+				$message = sprintf(
+					/* translators: %d: HTTP response code */
+					__( 'Source site returned HTTP error %d.', 'safe-publish' ),
+					$response_code
+				);
 			}
 
 			$error_data = array();

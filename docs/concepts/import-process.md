@@ -202,7 +202,11 @@ Re-importing also keeps an already-imported term's name, description, and parent
 
 A field that cannot be updated — because the new name is already taken, or the new parent cannot be resolved on the destination — keeps its current value, and the post still imports. Each field is handled on its own, so a blocked rename does not hold back the description. The gap is recorded as a degradation on the **Needs attention** tab naming the term. Resolving the clash and re-importing any post that uses the term updates it and clears the degradation for every post that reported it.
 
-Re-importing replaces a taxonomy's terms with the source's, so terms removed on the source are removed on the destination — including when the source post is left with none. Terms added on the destination by hand do not survive a re-import.
+The **Compare** action shows all of this before a re-import runs: each term's parent and description are compared alongside its name, and any shown difference the import would not apply is noted under the comparison — a term difference names the term and the field it affects, and a taxonomy this site does not register names the taxonomy. Terms are labeled by slug, which the import never changes, so a rename does not make a term's other fields read as changed. When the source sends neither field, the comparison falls back to names alone with nothing annotated.
+
+Each note predicts what the import will do, computed from the destination's current state before anything is written. Because an import updates one term at a time, an earlier term that frees or takes a name changes what a later one can do: a note can warn about a rename that ends up succeeding, or be absent for one that does not. A term is also reconciled once per import run, so when two source terms pair with one destination term, only the first is written and the second's differences are shown unnoted. The **Needs attention** tab records what the import could not write once it has run. Compare only shows terms assigned to the post. A term that exists only as another term's parent has no row of its own: it is shown as that term's parent. When the import will not write a rename of such a parent, the note names it rather than the term below. The exception is when the source also moves the term below it: the new parent's name then shows with no note, since the move does apply.
+
+Re-importing replaces a taxonomy's terms with the source's, so terms removed on the source are removed on the destination — including when the source post is left with none. Terms added on the destination by hand do not survive a re-import. Only the taxonomies the source sends are touched: one the destination registers and the source omits is left alone, and the comparison does not report it as a removal.
 
 Custom taxonomies must be registered with `'show_in_rest' => true` on the source site. A taxonomy that is not registered on the destination is skipped: the post imports without those term assignments, and the gap is recorded as a degradation on the **Needs attention** tab. Registering the taxonomy and re-importing the post attaches the terms and clears the degradation. When the source post has no terms in that taxonomy, nothing is lost and no degradation is recorded.
 
@@ -218,9 +222,9 @@ Custom taxonomies must be registered with `'show_in_rest' => true` on the source
   - User who performed import
   - Import status (success, updated, or error)
   - Error message (if failed)
-- Import recorded in the imports and import items tables (one session row, one item per processed post). The Imports page surfaces this data; the imported posts list on its Posts tab and post-import problems on its Needs attention tab.
+- Import recorded in the imports and import items tables (one session row, one item per processed post). The Manage page uses this data to decorate the unified Posts listing and populate its Needs attention tab.
 
-See [Imports](imports.md) for more details.
+See [Managing Imports](imports.md) for more details.
 
 ## Bulk Import
 
@@ -229,7 +233,7 @@ Bulk imports process multiple posts sequentially:
 1. Each post goes through all stages individually.
 2. Failures in one post don't stop others.
 3. Results aggregated and reported.
-4. Imports table updated for each post; failed items appear on the Imports page Needs attention tab.
+4. Import history is updated for each post; failed items appear on **Manage → Needs attention**.
 
 ### Performance
 
@@ -249,10 +253,12 @@ Bulk imports process multiple posts sequentially:
 
 Errors are reported in multiple places:
 
-1. **Admin notice**: Immediate feedback in UI
-2. **Imports → Needs attention tab**: Logged for later review
-3. **JavaScript console**: Detailed debugging info
-4. **PHP error log**: Server-side errors
+1. **Results modal**: Per-post outcome as soon as the run finishes
+2. **Post-import notice**: Batch summary, styled by outcome, on the next Safe
+   Publish page load
+3. **Manage → Needs attention tab**: Logged for later review
+4. **JavaScript console**: Detailed debugging info
+5. **PHP error log**: Server-side errors
 
 ## Best Practices
 
@@ -265,7 +271,7 @@ Errors are reported in multiple places:
 
 1. **Monitor progress** for errors.
 2. **Don't close the browser** during bulk imports.
-3. **Check the Imports page** periodically.
+3. **Check the Manage page** periodically.
 
 ### After Import
 
@@ -311,6 +317,6 @@ Every imported image that is a real item in the source media library brings its 
 ## Next Steps
 
 - [Content Validation](validation.md) - Understanding validation
-- [Imports](imports.md) - Managing imported content and failed imports
+- [Managing Imports](imports.md) - Browsing source content and reviewing imports
 - [Troubleshooting](../troubleshooting.md) - Common issues
 - [Hooks and Filters](../extending/hooks.md) - Customization options

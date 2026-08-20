@@ -59,7 +59,7 @@ Use GitHub-flavored blockquote admonitions for notes that need emphasis:
 
 ```markdown
 > [!NOTE]
-> The shared secret must be at least 32 characters.
+> The shared secret must be at least 16 characters; 32 or more is recommended.
 
 > [!WARNING]
 > Never disable SSL verification in production.
@@ -68,7 +68,7 @@ Use GitHub-flavored blockquote admonitions for notes that need emphasis:
 ## Links
 
 - Link to related docs rather than duplicating content.
-- Use relative links within the docs directory: `[Troubleshooting](../troubleshooting.md)`.
+- Use relative links within the docs directory: `[Troubleshooting](troubleshooting.md)`.
 - External links should open as-is (do not force `target="_blank"`).
 - Every page must end with a **Next Steps** or **Related** section linking to at least one other page.
 

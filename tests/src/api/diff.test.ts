@@ -49,8 +49,6 @@ describe( 'fetchDiffPreview', () => {
 		const payload: DiffPreviewPayload = {
 			postId: 123,
 			postType: 'page',
-			mode: 'split',
-			cleanup: true,
 		};
 
 		// ACT: Fetch the diff preview.
