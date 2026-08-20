@@ -162,7 +162,7 @@ final class Session_Rollback_Service {
 
 		return new WP_Error(
 			'unsupported_status',
-			__( 'Cannot rollback this item: unsupported status', 'safe-publish' )
+			__( 'Cannot roll back this item', 'safe-publish' )
 		);
 	}
 

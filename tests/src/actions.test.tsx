@@ -26,7 +26,11 @@ import type {
 	NeedsAttentionRow,
 	UnifiedPostRow,
 } from '@/types';
-import type { Action, ActionModal } from '@wordpress/dataviews/build-types';
+import type {
+	Action,
+	ActionButton,
+	ActionModal,
+} from '@wordpress/dataviews/build-types';
 
 const CONTEXT: PostsActionsContext = {
 	ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
@@ -90,6 +94,20 @@ function getModalAction(
 	return action;
 }
 
+/**
+ * Returns a button action by id, throwing if absent or modal-based.
+ */
+function getButtonAction(
+	actions: Action< UnifiedPostRow >[],
+	id: string
+): ActionButton< UnifiedPostRow > {
+	const action = actions.find( ( candidate ) => candidate.id === id );
+	if ( ! action || ! ( 'callback' in action ) ) {
+		throw new Error( `Expected button action with id "${ id }"` );
+	}
+	return action;
+}
+
 describe( 'createPostsActions per-state eligibility', () => {
 	const actions = createPostsActions( undefined, true, CONTEXT, {} );
 
@@ -149,6 +167,42 @@ describe( 'createPostsActions per-state eligibility', () => {
 			editAction?.isEligible?.( buildImportedRow( { edit_url: '' } ) )
 		).toBe( false );
 		expect( editAction?.isEligible?.( buildRow() ) ).toBe( false );
+	} );
+
+	it( 'Verifies that View source opens a usable source permalink', () => {
+		// ARRANGE: The View source action and a spy for new-tab navigation.
+		const viewSource = getButtonAction( actions, 'view-source' );
+		const open = vi.spyOn( window, 'open' ).mockImplementation( () => null );
+		const row = buildRow();
+
+		// ACT: Run the action for a row carrying a source permalink.
+		viewSource.callback( [ row ], { registry: undefined } );
+
+		// ASSERT: The row is eligible and opens its source URL safely.
+		expect( viewSource.supportsBulk ).toBe( false );
+		expect( viewSource.isEligible?.( row ) ).toBe( true );
+		expect( open ).toHaveBeenCalledWith(
+			row.link,
+			'_blank',
+			'noreferrer'
+		);
+
+		open.mockRestore();
+	} );
+
+	it( 'Verifies that View source hides without a post permalink', () => {
+		// ARRANGE: The View source action and rows without a usable post path.
+		const viewSource = getButtonAction( actions, 'view-source' );
+
+		// ACT + ASSERT: Empty and source-homepage URLs do not expose the action.
+		expect( viewSource.isEligible?.( buildRow( { link: '' } ) ) ).toBe(
+			false
+		);
+		expect(
+			viewSource.isEligible?.(
+				buildRow( { link: 'https://source.example.com/' } )
+			)
+		).toBe( false );
 	} );
 
 	it( 'Verifies that Compare on Imported only shows on a confirmed outdated verdict', () => {
