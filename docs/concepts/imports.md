@@ -20,10 +20,11 @@ history. Use the **Local State** control to choose which records are listed:
 
 > **Developer note:** The **Not imported** label maps to the internal
 > `available` value used in query parameters, AJAX payloads, and code. It covers
-> posts with no active successful import, a rolled-back import, or a missing or
-> trashed destination post. Local State is derived from import history rather
-> than stored in a dedicated database field. Retaining `available` preserves
-> backward compatibility.
+> posts with no active successful import — never imported, error-only, or every
+> import rolled back — and imported posts whose destination post is missing or
+> trashed. Local State is derived from import history rather than stored in a
+> dedicated database field. Retaining `available` preserves backward
+> compatibility.
 
 Safe Publish also checks imported rows against the source while the listing is
 open. A newly changed source post can therefore show an additional **Outdated**
@@ -42,14 +43,14 @@ affect the stored source identity.
 
 The visible columns depend on the selected Local State:
 
-| Column         | Description                                                     |
-| -------------- | --------------------------------------------------------------- |
-| Title          | Source post title, shown as plain text rather than linked text. |
-| Local State    | Not imported, Up to date, or Outdated, plus live sync details.  |
-| Local Status   | Destination `post_status`, or a dash when not yet imported.     |
-| Source Status  | Source `post_status`; shown in All and Not imported.            |
-| Published Date | Source publication date; shown in All and Not imported.         |
-| Imported Date  | Most recent import date; shown in Up to date and Outdated.      |
+| Column         | Description                                                       |
+| -------------- | ----------------------------------------------------------------- |
+| Title          | Source post title, shown as plain text rather than linked text.   |
+| Local State    | Not imported, Up to date, or Outdated, plus live sync details.    |
+| Local Status   | Destination `post_status`, or a dash when not yet imported.       |
+| Source Status  | Source `post_status`; shown in All and Not imported.              |
+| Published Date | Source publication date; shown in All and Not imported.           |
+| Imported Date  | Most recent active import date; shown in Up to date and Outdated. |
 
 ### Actions
 

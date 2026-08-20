@@ -28,8 +28,9 @@ export type JsonValue = JsonPrimitive | JsonArray | JsonObject;
  * Routing label for the unified Posts listing.
  *
  * Derived from the active-row rule per source_post_id. Up to date and Outdated
- * each map to a chip; rolled-back, locally-deleted, and error-only source posts
- * fold into Available. Failures surface in the Needs attention inbox, not here.
+ * each map to a chip; sources with no active row remaining after rollback,
+ * locally-deleted or trashed posts, and error-only sources fold into Available.
+ * Failures surface in the Needs attention inbox, not here.
  */
 export type LocalState = 'available' | 'up-to-date' | 'outdated';
 
