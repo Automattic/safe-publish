@@ -39,17 +39,20 @@ interface UseImportPostParams {
 /**
  * Return value from the useImportPost hook.
  *
- * @property {boolean}       isLoading Whether a submit is in progress.
- * @property {string | null} error     Error message if the submit failed.
- * @property {string | null} editUrl   Edit URL returned on success, or null.
- * @property {Warning[]}     warnings  Non-fatal warnings raised by the backend.
- * @property {() => void}    submit    Triggers the AJAX request.
+ * @property {boolean}       isLoading       Whether a submit is in progress.
+ * @property {string | null} error           Error message if the submit failed.
+ * @property {string | null} editUrl         Edit URL returned on success, or null.
+ * @property {Warning[]}     warnings        Non-fatal warnings raised by the backend.
+ * @property {boolean}       alreadyImported Whether the endpoint returned its
+ *                                           update prompt instead of importing.
+ * @property {() => void}    submit          Triggers the AJAX request.
  */
 interface UseImportPostResult {
 	isLoading: boolean;
 	error: string | null;
 	editUrl: string | null;
 	warnings: Warning[];
+	alreadyImported: boolean;
 	submit: () => void;
 }
 
@@ -74,6 +77,7 @@ export function useImportPost( {
 	const [ error, setError ] = useState< string | null >( null );
 	const [ editUrl, setEditUrl ] = useState< string | null >( null );
 	const [ warnings, setWarnings ] = useState< Warning[] >( [] );
+	const [ alreadyImported, setAlreadyImported ] = useState( false );
 
 	const submit = (): void => {
 		setIsLoading( true );
@@ -120,6 +124,14 @@ export function useImportPost( {
 
 				const data = result.data;
 
+				// An unforced submit for an already-imported post gets the
+				// endpoint's confirmation prompt, whose edit_url would
+				// otherwise read as a completed import.
+				if ( 'update_existing' === data.confirm_action ) {
+					setAlreadyImported( true );
+					return;
+				}
+
 				// Validate edit URL before using it.
 				if ( ! data.edit_url || typeof data.edit_url !== 'string' ) {
 					setError(
@@ -152,6 +164,7 @@ export function useImportPost( {
 		error,
 		editUrl,
 		warnings,
+		alreadyImported,
 		submit,
 	};
 }
