@@ -205,9 +205,11 @@ class Media_Importer {
 			return false;
 		}
 
-		// Store the original URL as meta for tracking.
-		update_post_meta( $attachment_id, Options::META_ORIGINAL_URL, $media_url );
-		update_post_meta( $attachment_id, Options::META_IMPORTED_FROM, $source_site_url );
+		$this->record_attachment_origin(
+			$attachment_id,
+			$media_url,
+			$source_site_url
+		);
 
 		$this->newly_created_attachment_ids[] = $attachment_id;
 
@@ -466,9 +468,11 @@ class Media_Importer {
 			return false;
 		}
 
-		// Store the original URL as meta for tracking.
-		update_post_meta( $attachment_id, Options::META_ORIGINAL_URL, $media_url );
-		update_post_meta( $attachment_id, Options::META_IMPORTED_FROM, $source_site_url );
+		$this->record_attachment_origin(
+			$attachment_id,
+			$media_url,
+			$source_site_url
+		);
 
 		$this->newly_created_attachment_ids[] = $attachment_id;
 
@@ -578,6 +582,31 @@ class Media_Importer {
 			$post_update['ID'] = $attachment_id;
 			wp_update_post( $post_update );
 		}
+	}
+
+	/**
+	 * Records the source URL and origin site on a sideloaded attachment,
+	 * slashed because core unslashes as it saves.
+	 *
+	 * @param int    $attachment_id   Sideloaded attachment.
+	 * @param string $media_url       Query-stripped source media URL.
+	 * @param string $source_site_url Source site URL the media came from.
+	 */
+	private function record_attachment_origin(
+		int $attachment_id,
+		string $media_url,
+		string $source_site_url
+	): void {
+		update_post_meta(
+			$attachment_id,
+			Options::META_ORIGINAL_URL,
+			wp_slash( $media_url )
+		);
+		update_post_meta(
+			$attachment_id,
+			Options::META_IMPORTED_FROM,
+			wp_slash( $source_site_url )
+		);
 	}
 
 	/**
@@ -807,9 +836,21 @@ class Media_Importer {
 
 		// get_attachment_by_featured_media_id() matches on both the source
 		// featured media ID and the origin site, so record the pair here.
-		update_post_meta( $attachment_id, Options::META_IMPORTED_FROM, $source_site_url );
-		update_post_meta( $attachment_id, Options::META_FEATURED_MEDIA_ID, $featured_media_id );
-		update_post_meta( $attachment_id, Options::META_MEDIA_TYPE, 'featured_image' );
+		update_post_meta(
+			$attachment_id,
+			Options::META_IMPORTED_FROM,
+			wp_slash( $source_site_url )
+		);
+		update_post_meta(
+			$attachment_id,
+			Options::META_FEATURED_MEDIA_ID,
+			$featured_media_id
+		);
+		update_post_meta(
+			$attachment_id,
+			Options::META_MEDIA_TYPE,
+			'featured_image'
+		);
 
 		return $attachment_id;
 	}
