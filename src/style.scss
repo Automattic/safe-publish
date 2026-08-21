@@ -102,34 +102,33 @@
 			padding-top: 1px;
 		}
 	}
+}
 
-	.safe-publish-import-warnings-list {
-		background: var(--safe-publish-status-warning-bg);
-		border: 1px solid var(--safe-publish-status-warning-border);
-		border-radius: 4px;
-		padding: 10px 12px;
+.safe-publish-import-warnings-list {
+	background: var(--safe-publish-status-warning-bg);
+	border: 1px solid var(--safe-publish-status-warning-border);
+	border-radius: 4px;
+	padding: 10px 12px;
 
-		ul {
-			margin: 6px 0 0;
-			padding-left: 20px;
-			font-size: 0.85em;
+	ul {
+		margin: 6px 0 0;
+		padding-left: 20px;
+		font-size: 0.85em;
 
-			li + li {
-				margin-top: 2px;
-			}
+		li + li {
+			margin-top: 2px;
+		}
 
-			a {
-				color: var(--safe-publish-status-warning);
-				text-decoration: underline;
-			}
+		a {
+			color: var(--safe-publish-status-warning);
+			text-decoration: underline;
 		}
 	}
+}
 
-	.safe-publish-warning-count,
-	.safe-publish-warning-list-heading {
-		color: var(--safe-publish-status-warning);
-		font-weight: 600;
-	}
+.safe-publish-warning-list-heading {
+	color: var(--safe-publish-status-warning);
+	font-weight: 600;
 }
 
 // Single-import modal warnings. Mirrors the bulk-modal amber treatment for
