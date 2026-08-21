@@ -67,6 +67,10 @@ final class Session_Rollback_Service {
 		$failed_count   = 0;
 
 		foreach ( $items as $item ) {
+			if ( 1 === (int) $item['rolled_back'] ) {
+				continue;
+			}
+
 			$result = $this->rollback_item_row( $item );
 
 			if ( is_wp_error( $result ) ) {
@@ -105,6 +109,17 @@ final class Session_Rollback_Service {
 			return new WP_Error(
 				'item_not_found',
 				__( 'Import item not found', 'safe-publish' )
+			);
+		}
+
+		// Replaying would write this row's snapshot over newer content.
+		if ( 1 === (int) $item['rolled_back'] ) {
+			return new WP_Error(
+				'item_already_rolled_back',
+				__(
+					'This import was already rolled back. Reload the list.',
+					'safe-publish'
+				)
 			);
 		}
 
