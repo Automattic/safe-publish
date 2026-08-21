@@ -1081,8 +1081,8 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that marking an already-rolled-back item emits an
-	 * ITEM_ALREADY_ROLLED_BACK event instead of ITEM_ROLLED_BACK.
+	 * Verifies that marking an already-rolled-back item reports success and
+	 * emits an ITEM_ALREADY_ROLLED_BACK event instead of ITEM_ROLLED_BACK.
 	 */
 	public function test_mark_item_rolled_back_emits_already_rolled_back_when_no_row_changed(): void {
 		// ARRANGE: Item that is already flagged as rolled_back.
@@ -1104,7 +1104,10 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		Audit_Log_Table::clear( 'import' );
 
 		// ACT: Mark the same item as rolled back again.
-		$this->repository->mark_item_rolled_back( $item_id );
+		$flagged = $this->repository->mark_item_rolled_back( $item_id );
+
+		// ASSERT: The row already carries the flag, so the write succeeded.
+		$this->assertTrue( $flagged );
 
 		// ASSERT: An ITEM_ALREADY_ROLLED_BACK event was emitted, not an
 		// ITEM_ROLLED_BACK event.
@@ -1251,8 +1254,9 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a failed item rollback (SQL-layer failure) emits an
-	 * ITEM_ROLLBACK_FAILED audit event with the wpdb error captured.
+	 * Verifies that a failed item rollback (SQL-layer failure) reports the
+	 * failure to its caller and emits an ITEM_ROLLBACK_FAILED audit event
+	 * with the wpdb error captured.
 	 */
 	public function test_mark_item_rolled_back_emits_failed_when_update_errors(): void {
 		global $wpdb;
@@ -1281,7 +1285,10 @@ class Session_Rollback_Test extends Integration_Test_Case {
 
 		try {
 			// ACT: Roll back the item.
-			$this->repository->mark_item_rolled_back( $item_id );
+			$flagged = $this->repository->mark_item_rolled_back( $item_id );
+
+			// ASSERT: The failed write is reported to the caller.
+			$this->assertFalse( $flagged );
 
 			// ASSERT: An ITEM_ROLLBACK_FAILED error event was emitted with the
 			// item ID, the snapshotted session_id and post_id (SELECT runs
@@ -1308,6 +1315,67 @@ class Session_Rollback_Test extends Integration_Test_Case {
 				)
 			);
 			$this->assertCount( 0, $success_events );
+		} finally {
+			remove_filter( 'query', $filter_callback );
+			$wpdb->suppress_errors( false );
+		}
+	}
+
+	/**
+	 * Verifies that a rollback whose flag write fails is reported as an
+	 * error even though the post was reverted.
+	 */
+	public function test_rollback_item_reports_a_rollback_it_could_not_record(): void {
+		global $wpdb;
+
+		// ARRANGE: An updated item, with the next UPDATE on the items table
+		// forced to fail at the SQL layer so only the flag write breaks.
+		// try/finally guarantees filter removal.
+		$session_id      = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id         = $this->factory()->post->create(
+			array(
+				'post_title'   => 'Updated',
+				'post_content' => 'Imported content.',
+			)
+		);
+		$item_id         = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Updated',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => 'Old content.',
+				'action'           => 'updated_existing',
+			)
+		);
+		$items_table     = Import_Items_Table::table_name();
+		$filter_callback = function ( string $query ) use ( $items_table ): string {
+			if ( 0 === strpos( $query, "UPDATE `{$items_table}`" ) ) {
+				return 'UPDATE safe_publish_nonexistent_table_for_test SET x = 1';
+			}
+			return $query;
+		};
+		add_filter( 'query', $filter_callback );
+		$wpdb->suppress_errors( true );
+
+		try {
+			// ACT: Roll the item back.
+			$result = $this->rollback_service->rollback_item( $item_id );
+
+			// ASSERT: The caller is told the rollback went unrecorded.
+			$this->assertInstanceOf( WP_Error::class, $result );
+			$this->assertSame( 'rollback_not_recorded', $result->get_error_code() );
+
+			// ASSERT: The revert itself still happened.
+			$post = get_post( $post_id );
+			$this->assertNotNull( $post );
+			$this->assertSame( 'Old content.', $post->post_content );
+
+			// ASSERT: The row stayed unflagged, matching what was reported.
+			$item = $this->repository->get_item( $item_id );
+			$this->assertSame( 0, (int) $item['rolled_back'] );
 		} finally {
 			remove_filter( 'query', $filter_callback );
 			$wpdb->suppress_errors( false );
