@@ -31,6 +31,9 @@ export const RETRY_PENDING_DELAY_MS = 400;
 // bulk-retry request accepts.
 export const RETRY_ATTENTION_BATCH_MAX = 25;
 
+// Titles a modal lists before collapsing the rest into "…and N more".
+export const MAX_VISIBLE_MODAL_TITLES = 10;
+
 // Sorting constants (kept for potential future use).
 export const SORTING_DIRECTIONS = [ 'asc', 'desc' ] as const;
 export const sortArrows = { asc: '↑', desc: '↓' };

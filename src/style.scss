@@ -131,6 +131,36 @@
 	font-weight: 600;
 }
 
+.safe-publish-confirm-titles {
+
+	.safe-publish-confirm-titles__heading {
+		font-weight: 600;
+	}
+
+	ul {
+		margin: 0;
+		padding-left: 20px;
+		font-size: 0.85em;
+		list-style: disc;
+
+		li + li {
+			margin-top: 2px;
+		}
+	}
+
+	.safe-publish-confirm-titles__more {
+		color: var(--safe-publish-text-muted);
+		list-style: none;
+	}
+
+	&.safe-publish-confirm-titles--destructive {
+
+		.safe-publish-confirm-titles__heading {
+			color: var(--safe-publish-status-error);
+		}
+	}
+}
+
 // Single-import modal warnings. Mirrors the bulk-modal amber treatment for
 // visual continuity.
 .safe-publish-import-warnings {

@@ -10,7 +10,7 @@
 import { dateI18n, getSettings } from '@wordpress/date';
 import { __, _n, sprintf } from '@wordpress/i18n';
 
-import type { AttentionIssue, JsonValue, Warning } from './types';
+import type { AttentionIssue, JsonValue, LocalState, Warning } from './types';
 
 /**
  * Extracts a human-readable error message from an API response.
@@ -551,4 +551,17 @@ export function extractUrlPath( url: string ): string {
 		const match = url.match( /https?:\/\/[^/]+(.*)/ );
 		return match ? match[1] || '/' : url;
 	}
+}
+
+/**
+ * Predicts whether importing a row overwrites an existing destination post
+ * rather than creating a draft. Mirrors the server, which resolves the source
+ * id to a live post before deciding.
+ *
+ * @param {LocalState} localState Row's routing state.
+ *
+ * @return {boolean} True when the import updates an existing post.
+ */
+export function isImportUpdate( localState: LocalState ): boolean {
+	return 'up-to-date' === localState || 'outdated' === localState;
 }
