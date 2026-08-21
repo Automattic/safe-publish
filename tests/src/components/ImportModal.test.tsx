@@ -107,6 +107,27 @@ describe( 'ImportModal', () => {
 		expect( fetch ).not.toHaveBeenCalled();
 	} );
 
+	it( 'Verifies that the overwrite button is described by the live warning', () => {
+		// ARRANGE + ACT: Render the live-overwrite confirmation.
+		render( <ImportModal { ...LIVE_PROPS } /> );
+
+		// ASSERT: Focus lands on Cancel, so the warning is only announced if
+		// the confirm button points at it.
+		const describedBy = screen
+			.getByRole( 'button', { name: 'Overwrite live post' } )
+			.getAttribute( 'aria-describedby' );
+		expect( describedBy ).not.toBeNull();
+
+		const described = ( describedBy as string )
+			.split( ' ' )
+			.map( ( id ) => document.getElementById( id )?.textContent ?? '' )
+			.join( ' ' );
+		expect( described ).toContain( 'is live' );
+		expect( described ).toContain(
+			'Importing overwrites the published content'
+		);
+	} );
+
 	it( 'Verifies that a failed draft import surfaces the reason and offers a retry', async () => {
 		// ARRANGE: The endpoint refuses the import.
 		stubFetch( { success: false, data: 'Source site unreachable' } );

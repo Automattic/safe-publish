@@ -23,6 +23,10 @@ import { renderWarningMessage } from '../utils';
 import { useImportPost } from './hooks/useImportPost';
 import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
 
+// Fixed ids are safe: DataViews keeps one action modal open at a time.
+const LIVE_HEADING_ID = 'safe-publish-import-live-heading';
+const LIVE_BODY_ID = 'safe-publish-import-live-body';
+
 /**
  * Props for the ImportModal component.
  *
@@ -168,15 +172,16 @@ const ImportModal = ( {
 	}
 
 	// The button label carries the warning: It is the last thing read before
-	// the overwrite.
+	// the overwrite. Focus lands on Cancel, above which nothing is announced,
+	// so the button also describes itself with the warning.
 	if ( isLive ) {
 		return (
 			<VStack spacing="5">
-				<Text>{ sprintf( /* translators: %s is the post title */
+				<Text id={ LIVE_HEADING_ID }>{ sprintf( /* translators: %s is the post title */
 					__( '"%s" is live — this update publishes immediately', 'safe-publish' ),
 					title
 				) }</Text>
-				<Text>
+				<Text id={ LIVE_BODY_ID }>
 					{ __(
 						'Importing overwrites the published content with the source version immediately. A rollback restores the previous content.',
 						'safe-publish'
@@ -203,6 +208,7 @@ const ImportModal = ( {
 						isDestructive
 						onClick={ start }
 						disabled={ isLoading }
+						aria-describedby={ `${ LIVE_HEADING_ID } ${ LIVE_BODY_ID }` }
 					>
 						{ isLoading ? (
 							<>
