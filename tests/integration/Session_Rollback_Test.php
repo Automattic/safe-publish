@@ -457,6 +457,35 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that rolling back an unsuccessfully imported item says why.
+	 */
+	public function test_rollback_unsupported_status_reports_the_reason(): void {
+		// ARRANGE: An error-status row with a live post ID, the only shape
+		// that reaches unsupported_status.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create( array( 'post_title' => 'Partial' ) );
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Partial',
+			'error',
+			$post_id,
+			'Media download failed'
+		);
+
+		// ACT: Attempt rollback.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The message states the reason.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'unsupported_status', $result->get_error_code() );
+		$this->assertSame(
+			'Cannot roll back this item because it was not imported successfully',
+			$result->get_error_message()
+		);
+	}
+
+	/**
 	 * Verifies that restoring a previous version keeps the backslashes in both
 	 * the post fields and the restored metadata.
 	 */
