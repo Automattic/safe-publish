@@ -418,8 +418,8 @@ final class Diff_Renderer {
 		$diffs['title'] = $this->generate_simple_diff(
 			$current['title'] ?? '',
 			$incoming['title'] ?? '',
-			__( 'Current Title', 'safe-publish' ),
-			__( 'Incoming Title', 'safe-publish' )
+			__( 'Current', 'safe-publish' ),
+			__( 'Incoming', 'safe-publish' )
 		);
 
 		// Excerpt diff (with normalization).
@@ -428,8 +428,8 @@ final class Diff_Renderer {
 		$diffs['excerpt'] = $this->generate_simple_diff(
 			$current_excerpt,
 			$incoming_excerpt,
-			__( 'Current Excerpt', 'safe-publish' ),
-			__( 'Incoming Excerpt', 'safe-publish' )
+			__( 'Current', 'safe-publish' ),
+			__( 'Incoming', 'safe-publish' )
 		);
 
 		// Taxonomies diff.
@@ -441,8 +441,8 @@ final class Diff_Renderer {
 		$diffs['meta']      = $this->generate_simple_diff(
 			$current_meta_text,
 			$incoming_meta_text,
-			__( 'Current Meta', 'safe-publish' ),
-			__( 'Incoming Meta', 'safe-publish' )
+			__( 'Current', 'safe-publish' ),
+			__( 'Incoming', 'safe-publish' )
 		);
 
 		return $diffs;

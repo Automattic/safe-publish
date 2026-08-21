@@ -247,4 +247,136 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 			$events[0]['properties']['outcome']
 		);
 	}
+
+	/**
+	 * Verifies that replaying a rolled-back item fires rollback_performed
+	 * with failed_count=1 and outcome=failed, rather than reporting a
+	 * restore that never happened.
+	 */
+	public function test_item_rollback_replay_fires_with_failed_outcome(): void {
+		// ARRANGE: An updated item, rolled back outside the handler so the
+		// queue holds only the replay's event.
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+		$post_id    = $this->factory()->post->create(
+			array(
+				'post_title'   => 'Imported Post',
+				'post_content' => 'Imported content.',
+			)
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			2,
+			'Imported Post',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => 'Old content.',
+				'action'           => 'updated_existing',
+			)
+		);
+		$this->repository->complete_session( $session_id );
+
+		$service = new Session_Rollback_Service( $this->repository );
+		$service->rollback_item( $item_id );
+
+		$_POST = array(
+			'nonce'   => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'item_id' => $item_id,
+		);
+
+		// ACT: Dispatch the item rollback against the same item again.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_rollback_item' );
+
+		// ASSERT: Scope=item, failed_count=1, outcome=failed.
+		$events = $this->queue->events();
+		$this->assertCount( 1, $events );
+		$this->assertSame(
+			Telemetry_Events::ROLLBACK_SCOPE_ITEM,
+			$events[0]['properties']['scope']
+		);
+		$this->assertSame( 0, $events[0]['properties']['deleted_count'] );
+		$this->assertSame( 0, $events[0]['properties']['restored_count'] );
+		$this->assertSame( 1, $events[0]['properties']['failed_count'] );
+		$this->assertSame(
+			Telemetry_Events::ROLLBACK_OUTCOME_FAILED,
+			$events[0]['properties']['outcome']
+		);
+	}
+
+	/**
+	 * Verifies that a rollback whose flag write fails reports a failed
+	 * outcome rather than counting as a successful restore.
+	 */
+	public function test_item_rollback_unrecorded_flag_fires_with_failed_outcome(): void {
+		global $wpdb;
+
+		// ARRANGE: An updated item, with the next UPDATE on the items table
+		// forced to fail so only the flag write breaks. try/finally
+		// guarantees filter removal.
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+		$post_id    = $this->factory()->post->create(
+			array(
+				'post_title'   => 'Imported Post',
+				'post_content' => 'Imported content.',
+			)
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			2,
+			'Imported Post',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => 'Old content.',
+				'action'           => 'updated_existing',
+			)
+		);
+		$this->repository->complete_session( $session_id );
+
+		$_POST = array(
+			'nonce'   => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'item_id' => $item_id,
+		);
+
+		$items_table     = Import_Items_Table::table_name();
+		$filter_callback = function ( string $query ) use ( $items_table ): string {
+			if ( 0 === strpos( $query, "UPDATE `{$items_table}`" ) ) {
+				return 'UPDATE safe_publish_nonexistent_table_for_test SET x = 1';
+			}
+			return $query;
+		};
+		add_filter( 'query', $filter_callback );
+		$wpdb->suppress_errors( true );
+
+		try {
+			// ACT: Dispatch the item rollback.
+			$this->dispatch_ajax_expecting_die( 'safe_publish_rollback_item' );
+
+			// ASSERT: Scope=item, failed_count=1, outcome=failed.
+			$events = $this->queue->events();
+			$this->assertCount( 1, $events );
+			$this->assertSame(
+				Telemetry_Events::ROLLBACK_SCOPE_ITEM,
+				$events[0]['properties']['scope']
+			);
+			$this->assertSame( 0, $events[0]['properties']['deleted_count'] );
+			$this->assertSame( 0, $events[0]['properties']['restored_count'] );
+			$this->assertSame( 1, $events[0]['properties']['failed_count'] );
+			$this->assertSame(
+				Telemetry_Events::ROLLBACK_OUTCOME_FAILED,
+				$events[0]['properties']['outcome']
+			);
+		} finally {
+			remove_filter( 'query', $filter_callback );
+			$wpdb->suppress_errors( false );
+		}
+	}
 }

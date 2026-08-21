@@ -429,6 +429,53 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the title, excerpt, and meta diffs use concise headers.
+	 */
+	public function test_non_content_diffs_use_concise_column_headers(): void {
+		// ARRANGE: A source response differing in title, excerpt, and meta.
+		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		$mock_http_callable = function ( $_url, $_action, $_credentials ) {
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => wp_json_encode(
+					array(
+						'title'   => array( 'raw' => 'Updated External Title' ),
+						'content' => array( 'raw' => '<p>Updated source content.</p>' ),
+						'excerpt' => array( 'raw' => 'Updated source excerpt.' ),
+						'meta'    => array( 'custom_meta' => 'meta_value' ),
+					)
+				),
+			);
+		};
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+
+		// ACT: Render the diff.
+		$result = ( new Diff_Renderer() )->render_diff(
+			$request,
+			$mock_http_callable,
+			array()
+		);
+
+		// ASSERT: Each section carries exactly the two concise headers.
+		$this->assertIsArray( $result );
+		foreach ( array( 'title', 'excerpt', 'meta' ) as $section ) {
+			preg_match_all(
+				'/<th\b[^>]*>(.*?)<\/th>/s',
+				$result['nonContentDiffs'][ $section ],
+				$matches
+			);
+			$this->assertSame(
+				array( 'Current', 'Incoming' ),
+				$matches[1],
+				"The {$section} diff should use concise column headers."
+			);
+		}
+	}
+
+	/**
 	 * Verifies that current-side title extraction returns the raw post_title,
 	 * not get_the_title()'s filtered form. Without this, wptexturize turns a
 	 * stored `--` into `&#8211;`, producing a spurious diff against title.raw.
