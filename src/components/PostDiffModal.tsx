@@ -395,12 +395,18 @@ export default function PostDiffModal( {
 	const [ showUnchanged, setShowUnchanged ] = useState( false );
 	const [ showFullSize, setShowFullSize ] = useState( false );
 	const [ showLabels, setShowLabels ] = useState( true );
+	const [ attempted, setAttempted ] = useState( false );
 
 	const updateSucceeded = null !== editUrl;
 	// Mirror the Update menu item's gating in actions.tsx.
 	const isUpToDate = 'up-to-date' === syncStatus;
 
-	useRefreshOnUnmount( updateSucceeded, onRefresh );
+	useRefreshOnUnmount( attempted, onRefresh );
+
+	const handleSubmitUpdate = (): void => {
+		setAttempted( true );
+		submitUpdate();
+	};
 
 	const hasAnyChanges =
 		Boolean( diffHtml ) ||
@@ -448,7 +454,7 @@ export default function PostDiffModal( {
 				onShowUnchanged={ setShowUnchanged }
 				onShowFullSize={ setShowFullSize }
 				onShowLabels={ setShowLabels }
-				onSubmitUpdate={ submitUpdate }
+				onSubmitUpdate={ handleSubmitUpdate }
 			/>
 
 			{ isLoading && ! hasPreviousData && (
