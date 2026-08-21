@@ -2641,7 +2641,7 @@ class Post_Import_Service {
 		update_post_meta(
 			$post_id,
 			Options::META_SOURCE_SITE_URL,
-			Options::get_connected_site_url_with_path()
+			wp_slash( Options::get_connected_site_url_with_path() )
 		);
 
 		if ( $featured_attachment_id > 0 ) {
