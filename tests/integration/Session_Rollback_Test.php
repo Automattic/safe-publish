@@ -510,6 +510,171 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that replaying a rolled-back item is refused and leaves the
+	 * post's current content untouched.
+	 */
+	public function test_rollback_item_refuses_an_already_rolled_back_item(): void {
+		// ARRANGE: An updated item rolled back once, after which newer
+		// content landed on the post.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create(
+			array(
+				'post_title'   => 'Updated',
+				'post_content' => 'Imported content.',
+			)
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Updated',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => 'Old content.',
+				'action'           => 'updated_existing',
+			)
+		);
+		$this->rollback_service->rollback_item( $item_id );
+
+		$newer = 'Content written after the rollback.';
+		$this->factory()->post->update_object(
+			$post_id,
+			array( 'post_content' => $newer )
+		);
+
+		// ACT: Roll the same item back a second time.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The replay was refused with its own error code.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'item_already_rolled_back', $result->get_error_code() );
+
+		// ASSERT: The newer content survived.
+		$post = get_post( $post_id );
+		$this->assertNotNull( $post );
+		$this->assertSame( $newer, $post->post_content );
+	}
+
+	/**
+	 * Verifies that repeating a session rollback skips the items an earlier
+	 * run already undid.
+	 */
+	public function test_rollback_session_skips_already_rolled_back_items(): void {
+		// ARRANGE: A session holding one new import and one update, rolled
+		// back once, after which newer content landed on the surviving post.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$created_id = $this->factory()->post->create( array( 'post_title' => 'Created' ) );
+		$updated_id = $this->factory()->post->create(
+			array(
+				'post_title'   => 'Updated',
+				'post_content' => 'Imported content.',
+			)
+		);
+		$this->repository->log_import_action(
+			$session_id,
+			1,
+			'Created',
+			'success',
+			$created_id
+		);
+		$this->repository->log_import_action(
+			$session_id,
+			2,
+			'Updated',
+			'updated',
+			$updated_id,
+			null,
+			array(
+				'previous_content' => 'Old content.',
+				'action'           => 'updated_existing',
+			)
+		);
+		$this->repository->complete_session( $session_id );
+		$this->rollback_service->rollback_session( $session_id );
+
+		$newer = 'Content written after the rollback.';
+		$this->factory()->post->update_object(
+			$updated_id,
+			array( 'post_content' => $newer )
+		);
+
+		// ACT: Roll the same session back a second time.
+		$result = $this->rollback_service->rollback_session( $session_id );
+
+		// ASSERT: Every item was skipped, so nothing changed and nothing failed.
+		$this->assertIsArray( $result );
+		$this->assertSame( 0, $result['deleted_count'] );
+		$this->assertSame( 0, $result['restored_count'] );
+		$this->assertSame( 0, $result['failed_count'] );
+
+		// ASSERT: The newer content survived.
+		$post = get_post( $updated_id );
+		$this->assertNotNull( $post );
+		$this->assertSame( $newer, $post->post_content );
+	}
+
+	/**
+	 * Verifies that the replay guard leaves sequential rollback intact, so
+	 * each rollback still walks back one import operation.
+	 */
+	public function test_sequential_rollback_walks_back_one_operation_at_a_time(): void {
+		// ARRANGE: A post created by one import, then updated by a later one
+		// that captured the created version.
+		$post_id = $this->factory()->post->create(
+			array(
+				'post_title'   => 'Post',
+				'post_content' => 'Updated content.',
+			)
+		);
+
+		$create_session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$create_item_id    = $this->repository->log_import_action(
+			$create_session_id,
+			1,
+			'Post',
+			'success',
+			$post_id
+		);
+
+		$update_session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$update_item_id    = $this->repository->log_import_action(
+			$update_session_id,
+			1,
+			'Post',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => 'Created content.',
+				'action'           => 'updated_existing',
+			)
+		);
+
+		// ACT: Roll back the update, then the creation.
+		$update_result = $this->rollback_service->rollback_item( $update_item_id );
+		$restored_post = get_post( $post_id );
+		$create_result = $this->rollback_service->rollback_item( $create_item_id );
+
+		// ASSERT: The update rolled back to the created version.
+		$this->assertIsArray( $update_result );
+		$this->assertSame( 'restored', $update_result['action'] );
+		$this->assertNotNull( $restored_post );
+		$this->assertSame( 'Created content.', $restored_post->post_content );
+
+		// ASSERT: Rolling back the creation then removed the post.
+		$this->assertIsArray( $create_result );
+		$this->assertSame( 'deleted', $create_result['action'] );
+		$this->assertNull( get_post( $post_id ) );
+	}
+
+	/**
 	 * Verifies that rollback only affects successful/updated imports.
 	 */
 	public function test_rollback_ignores_failed_imports(): void {
