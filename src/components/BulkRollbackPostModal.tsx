@@ -26,6 +26,7 @@ import {
 	rollbackItems,
 	type BulkRollbackResult,
 } from '../api/rollback';
+import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
 
 import type { UnifiedPostRow } from '../types';
 
@@ -55,6 +56,9 @@ const BulkRollbackPostModal = ( {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ completed, setCompleted ] = useState( 0 );
 	const [ result, setResult ] = useState< BulkRollbackResult | null >( null );
+	const [ attempted, setAttempted ] = useState( false );
+
+	useRefreshOnUnmount( attempted, onRefresh );
 
 	const total = items.length;
 	const restoreTitles = items
@@ -65,6 +69,7 @@ const BulkRollbackPostModal = ( {
 		.map( item => item.title );
 
 	const handleRollback = () => {
+		setAttempted( true );
 		setIsLoading( true );
 		setCompleted( 0 );
 
@@ -77,13 +82,6 @@ const BulkRollbackPostModal = ( {
 			setResult( bulkResult );
 			setIsLoading( false );
 		} );
-	};
-
-	const handleClose = () => {
-		if ( result && result.successful > 0 ) {
-			onRefresh?.();
-		}
-		closeModal?.();
 	};
 
 	const failures = result?.entries.filter( entry => ! entry.outcome.success );
@@ -203,7 +201,7 @@ const BulkRollbackPostModal = ( {
 				<Button
 					__next40pxDefaultSize
 					variant="tertiary"
-					onClick={ handleClose }
+					onClick={ closeModal }
 					disabled={ isLoading }
 				>
 					{ result

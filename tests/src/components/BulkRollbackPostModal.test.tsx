@@ -163,3 +163,134 @@ describe( 'BulkRollbackPostModal confirmation groups', () => {
 		expect( screen.getByText( 'Rolled back 0 of 3' ) ).toBeInTheDocument();
 	} );
 } );
+
+describe( 'BulkRollbackPostModal listing refresh', () => {
+	afterEach( () => {
+		vi.unstubAllGlobals();
+	} );
+
+	/**
+	 * Stubs the rollback endpoint with one canned response for every item.
+	 *
+	 * @param {*} payload Response body the endpoint returns.
+	 */
+	function stubRollback( payload: unknown ): void {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( { json: async () => payload } )
+		);
+	}
+
+	it( 'Verifies that a run in which every item fails still refreshes the listing', async () => {
+		// ARRANGE: Every item is refused because it was already rolled back.
+		stubRollback( {
+			success: false,
+			data: 'This import was already rolled back. Reload the list.',
+		} );
+		const onRefresh = vi.fn();
+
+		// ACT: Run the rollback and wait for the summary.
+		const { unmount } = render(
+			<BulkRollbackPostModal
+				items={ MIXED }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				onRefresh={ onRefresh }
+			/>
+		);
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Roll back 3 posts' } )
+		);
+		expect(
+			await screen.findByText( 'Rollback failed' )
+		).toBeInTheDocument();
+
+		// ASSERT: The summary stays readable, so the refresh is still owed.
+		expect( onRefresh ).not.toHaveBeenCalled();
+
+		// ACT: Dismiss the summary.
+		unmount();
+
+		// ASSERT: The listing refreshes even though nothing succeeded.
+		expect( onRefresh ).toHaveBeenCalledTimes( 1 );
+	} );
+
+	it( 'Verifies that a successful run refreshes on a dismissal that skips Close', async () => {
+		// ARRANGE: Every item rolls back cleanly.
+		stubRollback( {
+			success: true,
+			data: { action: 'deleted', message: 'Post deleted.' },
+		} );
+		const onRefresh = vi.fn();
+
+		// ACT: Run the rollback, then dismiss the way Esc and a backdrop click
+		// do, without touching the Close button.
+		const { unmount } = render(
+			<BulkRollbackPostModal
+				items={ MIXED }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				onRefresh={ onRefresh }
+			/>
+		);
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Roll back 3 posts' } )
+		);
+		expect(
+			await screen.findByText( 'Rollback completed!' )
+		).toBeInTheDocument();
+		unmount();
+
+		// ASSERT: The listing still refreshes.
+		expect( onRefresh ).toHaveBeenCalledTimes( 1 );
+	} );
+
+	it( 'Verifies that dismissing a run still in flight refreshes the listing', () => {
+		// ARRANGE: A request held open so the run cannot finish.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockReturnValue( new Promise( () => {} ) )
+		);
+		const onRefresh = vi.fn();
+
+		// ACT: Start the run, then dismiss before it reports.
+		const { unmount } = render(
+			<BulkRollbackPostModal
+				items={ MIXED }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				onRefresh={ onRefresh }
+			/>
+		);
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Roll back 3 posts' } )
+		);
+		unmount();
+
+		// ASSERT: Items rolled back before the dismissal reach the listing.
+		expect( onRefresh ).toHaveBeenCalledTimes( 1 );
+	} );
+
+	it( 'Verifies that canceling without running a rollback does not refresh', () => {
+		// ARRANGE: A confirmation the operator backs out of.
+		const closeModal = vi.fn();
+		const onRefresh = vi.fn();
+
+		// ACT: Cancel, then dismiss the modal.
+		const { unmount } = render(
+			<BulkRollbackPostModal
+				items={ MIXED }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				closeModal={ closeModal }
+				onRefresh={ onRefresh }
+			/>
+		);
+		fireEvent.click( screen.getByRole( 'button', { name: 'Cancel' } ) );
+		unmount();
+
+		// ASSERT: Nothing reached the server, so the listing is left alone.
+		expect( closeModal ).toHaveBeenCalled();
+		expect( onRefresh ).not.toHaveBeenCalled();
+	} );
+} );
