@@ -159,6 +159,7 @@ export const createPostsActions = (
 						sourceLink={ item.link }
 						postType={ item.post_type }
 						isUpdate={ isUpdate }
+						isLive={ 'publish' === item.wp_post_status }
 						skippedCount={ Math.max( 0, selectedCount - items.length ) }
 						ajaxurl={ context.ajaxurl }
 						nonce={ context.nonce }
