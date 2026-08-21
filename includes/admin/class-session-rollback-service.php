@@ -129,7 +129,16 @@ final class Session_Rollback_Service {
 			return $result;
 		}
 
-		$this->repository->mark_item_rolled_back( $item_id );
+		// A failed flag write leaves the revert unrecorded; don't claim success.
+		if ( ! $this->repository->mark_item_rolled_back( $item_id ) ) {
+			return new WP_Error(
+				'rollback_not_recorded',
+				__(
+					'The rollback was applied, but it could not be recorded. Reload the list before rolling back again.',
+					'safe-publish'
+				)
+			);
+		}
 
 		return $result;
 	}
