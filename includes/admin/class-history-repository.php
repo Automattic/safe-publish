@@ -1269,8 +1269,9 @@ final class History_Repository {
 	 * Marks a single item as rolled back and emits an audit log event.
 	 *
 	 * @param int $item_id Item ID.
+	 * @return bool True when the row is flagged, false when the write failed.
 	 */
-	public function mark_item_rolled_back( int $item_id ): void {
+	public function mark_item_rolled_back( int $item_id ): bool {
 		global $wpdb;
 
 		$table = Import_Items_Table::table_name();
@@ -1304,7 +1305,7 @@ final class History_Repository {
 				$post_id,
 				$wpdb->last_error
 			);
-			return;
+			return false;
 		}
 
 		if ( 0 === $updated ) {
@@ -1312,6 +1313,8 @@ final class History_Repository {
 		} else {
 			$this->logger->item_rolled_back( $item_id, $session_id, $post_id );
 		}
+
+		return true;
 	}
 
 	/**

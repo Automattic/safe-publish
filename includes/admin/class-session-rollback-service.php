@@ -67,6 +67,10 @@ final class Session_Rollback_Service {
 		$failed_count   = 0;
 
 		foreach ( $items as $item ) {
+			if ( 1 === (int) $item['rolled_back'] ) {
+				continue;
+			}
+
 			$result = $this->rollback_item_row( $item );
 
 			if ( is_wp_error( $result ) ) {
@@ -108,13 +112,33 @@ final class Session_Rollback_Service {
 			);
 		}
 
+		// Replaying would write this row's snapshot over newer content.
+		if ( 1 === (int) $item['rolled_back'] ) {
+			return new WP_Error(
+				'item_already_rolled_back',
+				__(
+					'This import was already rolled back. Reload the list.',
+					'safe-publish'
+				)
+			);
+		}
+
 		$result = $this->rollback_item_row( $item );
 
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
 
-		$this->repository->mark_item_rolled_back( $item_id );
+		// A failed flag write leaves the revert unrecorded; don't claim success.
+		if ( ! $this->repository->mark_item_rolled_back( $item_id ) ) {
+			return new WP_Error(
+				'rollback_not_recorded',
+				__(
+					'The rollback was applied, but it could not be recorded. Reload the list before rolling back again.',
+					'safe-publish'
+				)
+			);
+		}
 
 		return $result;
 	}
@@ -162,7 +186,10 @@ final class Session_Rollback_Service {
 
 		return new WP_Error(
 			'unsupported_status',
-			__( 'Cannot roll back this item', 'safe-publish' )
+			__(
+				'Cannot roll back this item because it was not imported successfully',
+				'safe-publish'
+			)
 		);
 	}
 

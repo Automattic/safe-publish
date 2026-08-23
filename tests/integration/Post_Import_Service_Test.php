@@ -1041,6 +1041,53 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that the update path stores a backslash-bearing source identity
+	 * intact, so a later re-import still resolves the same post instead of
+	 * creating a duplicate.
+	 */
+	public function test_reimport_preserves_backslash_in_source_identity(): void {
+		// ARRANGE: A connected source whose path carries a backslash.
+		$source_site = 'https://source.example.com/bl\og';
+		update_option( Options::OPTION_CONNECTED_SITE_URL, $source_site );
+
+		$session_id = $this->repository->create_session( $source_site, 'bulk' );
+
+		$post_data = array(
+			'id'        => 9455,
+			'title'     => 'Post For Backslash Identity Test',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/bl\og/backslash-identity',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Create, re-import to take the update path, then re-import again so
+		// the lookup has to read back what the update path wrote.
+		try {
+			$first  = $this->import_service->import_post( $post_data, $session_id );
+			$second = $this->import_service->import_post( $post_data, $session_id );
+			$third  = $this->import_service->import_post( $post_data, $session_id );
+		} finally {
+			delete_option( Options::OPTION_CONNECTED_SITE_URL );
+		}
+
+		// ASSERT: The update path wrote the identity intact, so the third import
+		// resolved the same post rather than creating a second one.
+		$this->assertTrue( $first['success'] );
+		$this->assertTrue( $second['success'] );
+		$this->assertTrue( $second['existing'] );
+		$this->assertTrue( $third['existing'] );
+		$this->assertSame( $first['post_id'], $third['post_id'] );
+		$this->assertSame(
+			$source_site,
+			get_post_meta(
+				$second['post_id'],
+				Options::META_SOURCE_SITE_URL,
+				true
+			)
+		);
+	}
+
+	/**
 	 * Verifies that import error results use the fresh title from the source
 	 * site, not the stale snapshot title from the listing page.
 	 *

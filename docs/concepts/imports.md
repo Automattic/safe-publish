@@ -73,9 +73,11 @@ unless the live source check finds a newer version.
 
 Rollback eligibility comes from the latest active import-history row. Only
 `success` and `updated` rows that have not already been rolled back are
-eligible. Rolling back a successful new import deletes the destination post.
-Rolling back an update restores the previous content when Safe Publish captured
-it, or deletes the post when no previous content was captured.
+eligible. The server re-checks that rule on each request, so a listing loaded
+before an earlier rollback cannot re-apply it. Rolling back a successful new
+import deletes the destination post. Rolling back an update restores the
+previous content when Safe Publish captured it, or deletes the post when no
+previous content was captured.
 
 ### Filtering and search
 
