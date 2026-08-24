@@ -352,3 +352,66 @@ describe( 'BulkImportFlow outcome announcements', () => {
 		);
 	} );
 } );
+
+describe( 'BulkImportFlow listing refresh', () => {
+	afterEach( () => {
+		vi.unstubAllGlobals();
+	} );
+
+	it( 'Verifies that a run whose request fails still refreshes the listing', async () => {
+		// ARRANGE: The endpoint refuses the whole request, so no results land.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: async () => ( {
+					success: false,
+					data: { message: 'Source site unreachable' },
+				} ),
+			} )
+		);
+		const onRefresh = vi.fn();
+
+		// ACT: Run the import and wait for the error.
+		const { unmount } = render(
+			<BulkImportFlow
+				posts={ POSTS }
+				context={ CONTEXT }
+				onClose={ () => {} }
+				onRefresh={ onRefresh }
+			/>
+		);
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Import 2 posts' } )
+		);
+		expect( await screen.findByRole( 'alert' ) ).toBeInTheDocument();
+
+		// ASSERT: The error stays readable, so the refresh is still owed.
+		expect( onRefresh ).not.toHaveBeenCalled();
+
+		// ACT: Dismiss the modal.
+		unmount();
+
+		// ASSERT: The server may have imported before failing, so the listing
+		// refreshes anyway.
+		expect( onRefresh ).toHaveBeenCalledTimes( 1 );
+	} );
+
+	it( 'Verifies that canceling without running an import does not refresh', () => {
+		// ARRANGE: A confirmation the operator backs out of.
+		const onRefresh = vi.fn();
+
+		// ACT: Render, then dismiss without starting the run.
+		const { unmount } = render(
+			<BulkImportFlow
+				posts={ POSTS }
+				context={ CONTEXT }
+				onClose={ () => {} }
+				onRefresh={ onRefresh }
+			/>
+		);
+		unmount();
+
+		// ASSERT: Nothing reached the server, so the listing is left alone.
+		expect( onRefresh ).not.toHaveBeenCalled();
+	} );
+} );
