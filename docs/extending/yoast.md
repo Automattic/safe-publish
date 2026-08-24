@@ -4,8 +4,7 @@ Yoast SEO stores its per-post settings — meta description, SEO title, focus ke
 
 This is the same root cause as the ACF/SCF gap: Safe Publish imports only what appears in the core REST `meta` object. Unlike ACF, though, Yoast exposes no separate top-level object carrying the raw stored values — `yoast_head_json` is rendered, read-only output, not the underlying meta — so a destination-side filter has nothing to read. The fix must run on the **source**: register the Yoast keys for REST so they enter the `meta` object. From there Safe Publish writes them to destination post meta unchanged.
 
-> [!NOTE]
-> This exposes the raw stored values, not Yoast's rendered output. The destination must have Yoast SEO active for the values to be interpreted as SEO settings; Safe Publish stores the meta but does not install or configure Yoast.
+> [!NOTE] This exposes the raw stored values, not Yoast's rendered output. The destination must have Yoast SEO active for the values to be interpreted as SEO settings; Safe Publish stores the meta but does not install or configure Yoast.
 
 ## Prerequisite: expose the Yoast keys on the source
 

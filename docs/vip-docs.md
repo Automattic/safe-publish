@@ -43,9 +43,7 @@ Safe Publish moves editorial content from a source WordPress site to a destinati
 
 Safe Publish provides a controlled path to move content from the source to the destination via the WordPress Admin dashboard, compares changed source and destination content, imports one post or many in a single operation, and rolls back eligible imported posts. Every action is recorded in an audit log. Bulk imports share one history session, but rollback is applied to the selected posts rather than atomically reversing a whole session.
 
-This page covers connecting two sites, browsing and importing content, using
-Compare, rolling back imports, and how media and audit logging behave. Full
-developer documentation and the source code are available on GitHub.
+This page covers connecting two sites, browsing and importing content, using Compare, rolling back imports, and how media and audit logging behave. Full developer documentation and the source code are available on GitHub.
 
 ## How Safe Publish works
 
@@ -87,9 +85,7 @@ Access to every Safe Publish admin screen — browsing source content, importing
 Two further checks apply during an import:
 
 - Updating an existing post requires the `edit_post` capability for that specific post.
-- Comparing an existing post with its source requires the `edit_post`
-  capability for that post. A direct API caller without `manage_options` must
-  also have the post type's `edit_posts` capability.
+- Comparing an existing post with its source requires the `edit_post` capability for that post. A direct API caller without `manage_options` must also have the post type's `edit_posts` capability.
 
 Requests from the destination to the source site are not authorized by user capabilities. Instead, each cross-site request is authenticated with the shared secret.
 
@@ -102,11 +98,11 @@ Open the Safe Publish settings screen in WP Admin and set:
 - **Connected site URL** — the URL of the other site. On the destination, this is the source's URL.
 - **Sync mode** — the role this site plays:
 
-| Sync mode       | Behavior                                                                                                    |
-| --------------- | ----------------------------------------------------------------------------------------------------------- |
-| `export`        | The site acts as a source only. It exposes its catalog endpoints but provides no import interface.          |
-| `import`        | The site acts as a destination only. It provides the full import interface but does not expose its catalog. |
-| `bidirectional` | The site acts as both source and destination.                                                               |
+| Sync mode | Behavior |
+| --- | --- |
+| `export` | The site acts as a source only. It exposes its catalog endpoints but provides no import interface. |
+| `import` | The site acts as a destination only. It provides the full import interface but does not expose its catalog. |
+| `bidirectional` | The site acts as both source and destination. |
 
 - **Basic authentication username and password** (optional) — credentials for HTTP Basic authentication, if the source site is protected by it. These are sent with requests to the source in addition to the signed shared secret.
 
@@ -156,17 +152,7 @@ The **Manage** page has two tabs:
 
 ### Previewing changes with Compare
 
-The Compare action on **Manage → Posts** fetches fresh source content and
-compares it with the current destination post, covering the title, content,
-excerpt, featured image, metadata, and taxonomy terms, including each term's
-parent and description. It is shown side by side, and block-editor content is
-compared block by block so editors can see which blocks were added, removed, or
-changed. A taxonomy this site registers and the source does not send is not
-reported as a removal, since the import does not touch it. Any difference shown
-that the import would not apply is noted under the comparison: a term difference
-names the term and the field it affects, and a taxonomy this site does not
-register names the taxonomy. The modal also offers an **Update** button that
-re-imports the post from the source.
+The Compare action on **Manage → Posts** fetches fresh source content and compares it with the current destination post, covering the title, content, excerpt, featured image, metadata, and taxonomy terms, including each term's parent and description. It is shown side by side, and block-editor content is compared block by block so editors can see which blocks were added, removed, or changed. A taxonomy this site registers and the source does not send is not reported as a removal, since the import does not touch it. Any difference shown that the import would not apply is noted under the comparison: a term difference names the term and the field it affects, and a taxonomy this site does not register names the taxonomy. The modal also offers an **Update** button that re-imports the post from the source.
 
 ### Rolling back imports
 
@@ -179,9 +165,7 @@ It's important to note that the roll-back rolls back the specific changes from t
 
 Multiple rows can be selected on the Posts tab and rolled back in a single action.
 
-Safe Publish normally stores a pre-update snapshot in the import record, so it
-can restore an updated post without contacting the source site. If an eligible
-updated row has no captured snapshot, rollback deletes the post instead.
+Safe Publish normally stores a pre-update snapshot in the import record, so it can restore an updated post without contacting the source site. If an eligible updated row has no captured snapshot, rollback deletes the post instead.
 
 Note: Rolling back a newly created post deletes that post on the destination. Confirm the affected posts before rolling back, since the action is irreversible for newly created posts.
 
@@ -222,16 +206,16 @@ A custom post type must be registered with the same slug on the destination for 
 
 Safe Publish exposes the following filters for developers. Add them in a theme or a small companion plugin.
 
-| Filter                                      | Default                          | Purpose                                                                                                                                                                         |
-| ------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `safe_publish_import_kses`                  | `false`                          | Enable `wp_kses` sanitization of imported content.                                                                                                                              |
-| `safe_publish_import_kses_allowed_html`     | `wp_kses_allowed_html( 'post' )` | Customize the allowed HTML used when `safe_publish_import_kses` sanitization is enabled. Receives the allowed-tags array and the name of the field being sanitized.             |
-| `safe_publish_import_allow_orphans`         | `false`                          | Allow importing a child post when its parent is not present on the destination.                                                                                                 |
-| `safe_publish_import_allow_author_fallback` | `false`                          | When the source author cannot be matched on the destination, attribute new posts to the importing user and keep the existing author on updates, instead of aborting the import. |
-| `safe_publish_auth_max_time_diff`           | `300`                            | Maximum allowed difference, in seconds, between a signed request's timestamp and the current time.                                                                              |
-| `safe_publish_request_timeout`              | `10`                             | Timeout, in seconds, for HTTP requests to the source site.                                                                                                                      |
-| `safe_publish_request_args`                 | —                                | Customize the arguments passed to the HTTP request made to the source site.                                                                                                     |
-| `safe_publish_dev_ssl_verify`               | `false`                          | Development only: skip SSL verification for requests to non-localhost hosts. Leave disabled in production.                                                                      |
+| Filter | Default | Purpose |
+| --- | --- | --- |
+| `safe_publish_import_kses` | `false` | Enable `wp_kses` sanitization of imported content. |
+| `safe_publish_import_kses_allowed_html` | `wp_kses_allowed_html( 'post' )` | Customize the allowed HTML used when `safe_publish_import_kses` sanitization is enabled. Receives the allowed-tags array and the name of the field being sanitized. |
+| `safe_publish_import_allow_orphans` | `false` | Allow importing a child post when its parent is not present on the destination. |
+| `safe_publish_import_allow_author_fallback` | `false` | When the source author cannot be matched on the destination, attribute new posts to the importing user and keep the existing author on updates, instead of aborting the import. |
+| `safe_publish_auth_max_time_diff` | `300` | Maximum allowed difference, in seconds, between a signed request's timestamp and the current time. |
+| `safe_publish_request_timeout` | `10` | Timeout, in seconds, for HTTP requests to the source site. |
+| `safe_publish_request_args` | — | Customize the arguments passed to the HTTP request made to the source site. |
+| `safe_publish_dev_ssl_verify` | `false` | Development only: skip SSL verification for requests to non-localhost hosts. Leave disabled in production. |
 
 The `safe_publish_event_logged` action fires each time an audit event is recorded, receiving the channel, event type, and event data. Use it to forward audit events to external monitoring.
 
