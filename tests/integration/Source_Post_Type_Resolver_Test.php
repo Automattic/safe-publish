@@ -149,11 +149,12 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that raw fields come from the authenticated catalog and share
-	 * its per-request cache.
+	 * Verifies that routing and raw-field resolution share one authenticated
+	 * catalog request.
 	 */
-	public function test_catalog_raw_fields_are_resolved_and_cached(): void {
-		// ARRANGE: Navigation supports title and content, but not excerpt.
+	public function test_catalog_metadata_is_shared_between_resolvers(): void {
+		// ARRANGE: A custom movie type supports title and content, but not
+		// excerpt.
 		$calls         = 0;
 		$requested_url = '';
 		$make_request  = function ( string $url ) use (
@@ -167,8 +168,8 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 				'body'     => (string) wp_json_encode(
 					array(
 						array(
-							'slug'       => 'wp_navigation',
-							'rest_base'  => 'navigation',
+							'slug'       => 'movie',
+							'rest_base'  => 'movies',
 							'raw_fields' => array( 'title', 'content' ),
 						),
 					)
@@ -177,38 +178,37 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 		};
 
 		$post_data = array(
-			'type'    => 'wp_navigation',
-			'title'   => array( 'raw' => 'Navigation' ),
+			'type'    => 'movie',
+			'title'   => array( 'raw' => 'Movie' ),
 			'content' => array( 'raw' => 'Content' ),
 		);
 
-		// ACT: Resolve the same source type twice.
-		$first  = Source_Post_Type_Resolver::resolve_post_data(
-			'wp_navigation',
-			$post_data,
+		// ACT: Resolve routing, then validate data using the same catalog.
+		$rest_base = Source_Post_Type_Resolver::resolve_rest_base(
+			'movie',
 			self::SOURCE_URL,
 			$make_request,
 			array()
 		);
-		$second = Source_Post_Type_Resolver::resolve_post_data(
-			'wp_navigation',
+		$result    = Source_Post_Type_Resolver::resolve_post_data(
+			'movie',
 			$post_data,
 			self::SOURCE_URL,
 			$make_request,
 			array()
 		);
 
-		// ASSERT: One authenticated catalog request supplied both results.
-		$this->assertIsArray( $first );
+		// ASSERT: One authenticated catalog request supplied both resolutions.
+		$this->assertSame( 'movies', $rest_base );
+		$this->assertIsArray( $result );
 		$this->assertSame(
 			array(
-				'title'   => 'Navigation',
+				'title'   => 'Movie',
 				'content' => 'Content',
 				'excerpt' => '',
 			),
-			$first['raw_values']
+			$result['raw_values']
 		);
-		$this->assertSame( $first, $second );
 		$this->assertSame( 1, $calls );
 		$this->assertStringContainsString(
 			'/safe-publish/v1/catalog/post-types',
@@ -299,45 +299,6 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 			$result->get_error_code()
 		);
 		$this->assertSame( 1, $calls );
-	}
-
-	/**
-	 * Verifies that the source post-types map is fetched once per request and
-	 * reused for subsequent resolutions (the bulk-import dedupe path).
-	 */
-	public function test_source_map_is_fetched_once_per_request(): void {
-		// ARRANGE: Recording callable shared across two resolutions.
-		$calls        = 0;
-		$make_request = $this->recording_types_callable(
-			array(
-				array(
-					'slug'      => 'movie',
-					'rest_base' => 'movies',
-				),
-			),
-			$calls
-		);
-
-		// ACT: Resolve twice within the same request.
-		Source_Post_Type_Resolver::resolve_rest_base(
-			'movie',
-			self::SOURCE_URL,
-			$make_request,
-			array()
-		);
-		Source_Post_Type_Resolver::resolve_rest_base(
-			'movie',
-			self::SOURCE_URL,
-			$make_request,
-			array()
-		);
-
-		// ASSERT: The source was consulted only once.
-		$this->assertSame(
-			1,
-			$calls,
-			'The post-types map must be memoized per request.'
-		);
 	}
 
 	/**

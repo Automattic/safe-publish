@@ -159,6 +159,30 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Builds a valid source post body for tests focused on type resolution.
+	 *
+	 * @param string $post_type Source post type.
+	 * @param string $title     Raw post title.
+	 * @param string $content   Raw post content.
+	 * @return string JSON-encoded source post body.
+	 */
+	private function raw_post_body(
+		string $post_type,
+		string $title,
+		string $content
+	): string {
+		return (string) wp_json_encode(
+			array(
+				'id'      => 123,
+				'type'    => $post_type,
+				'title'   => array( 'raw' => $title ),
+				'content' => array( 'raw' => $content ),
+				'excerpt' => array( 'raw' => '' ),
+			)
+		);
+	}
+
+	/**
 	 * Fetches the mocked source item.
 	 *
 	 * @param string $post_type Post type slug or REST base.
@@ -286,13 +310,10 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	 */
 	public function test_mismatched_response_post_type_is_rejected(): void {
 		// ARRANGE: A post request receives a response claiming to be navigation.
-		$this->mock_body = (string) wp_json_encode(
-			array(
-				'id'      => 123,
-				'type'    => 'wp_navigation',
-				'title'   => array( 'raw' => 'Title' ),
-				'content' => array( 'raw' => '<p>Content.</p>' ),
-			)
+		$this->mock_body = $this->raw_post_body(
+			'wp_navigation',
+			'Title',
+			'<p>Content.</p>'
 		);
 
 		// ACT: Fetch the item requested as a post.
@@ -313,14 +334,10 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	 */
 	public function test_catalog_request_error_uses_response_shape(): void {
 		// ARRANGE: The post is valid, but its catalog request cannot run.
-		$this->mock_body          = (string) wp_json_encode(
-			array(
-				'id'      => 123,
-				'type'    => 'post',
-				'title'   => array( 'raw' => 'Title' ),
-				'content' => array( 'raw' => '<p>Content.</p>' ),
-				'excerpt' => array( 'raw' => '' ),
-			)
+		$this->mock_body          = $this->raw_post_body(
+			'post',
+			'Title',
+			'<p>Content.</p>'
 		);
 		$this->mock_catalog_error = new WP_Error(
 			'transport_down',
@@ -343,14 +360,10 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	public function test_catalog_request_error_preserves_type_validation(): void {
 		// ARRANGE: A post request receives a valid page-shaped response while
 		// the catalog is unavailable.
-		$this->mock_body          = (string) wp_json_encode(
-			array(
-				'id'      => 123,
-				'type'    => 'page',
-				'title'   => array( 'raw' => 'Title' ),
-				'content' => array( 'raw' => '<p>Content.</p>' ),
-				'excerpt' => array( 'raw' => '' ),
-			)
+		$this->mock_body          = $this->raw_post_body(
+			'page',
+			'Title',
+			'<p>Content.</p>'
 		);
 		$this->mock_catalog_error = new WP_Error(
 			'transport_down',
@@ -375,14 +388,10 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	public function test_custom_rest_base_survives_catalog_failure(): void {
 		// ARRANGE: A custom REST endpoint returns its canonical custom type while
 		// both catalog attempts fail.
-		$this->mock_body          = (string) wp_json_encode(
-			array(
-				'id'      => 123,
-				'type'    => 'sp_movie',
-				'title'   => array( 'raw' => 'Movie' ),
-				'content' => array( 'raw' => '<p>Movie content.</p>' ),
-				'excerpt' => array( 'raw' => '' ),
-			)
+		$this->mock_body          = $this->raw_post_body(
+			'sp_movie',
+			'Movie',
+			'<p>Movie content.</p>'
 		);
 		$this->mock_catalog_error = new WP_Error(
 			'transport_down',
@@ -403,14 +412,10 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	 */
 	public function test_custom_rest_base_cannot_fallback_to_builtin_type(): void {
 		// ARRANGE: An unresolved custom endpoint returns a valid page response.
-		$this->mock_body          = (string) wp_json_encode(
-			array(
-				'id'      => 123,
-				'type'    => 'page',
-				'title'   => array( 'raw' => 'Page' ),
-				'content' => array( 'raw' => '<p>Page content.</p>' ),
-				'excerpt' => array( 'raw' => '' ),
-			)
+		$this->mock_body          = $this->raw_post_body(
+			'page',
+			'Page',
+			'<p>Page content.</p>'
 		);
 		$this->mock_catalog_error = new WP_Error(
 			'transport_down',
@@ -435,14 +440,10 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	public function test_custom_fallback_requires_catalog_failure(): void {
 		// ARRANGE: The catalog succeeds without mapping sp_movies, while the
 		// endpoint response claims an otherwise valid custom type.
-		$this->mock_body = (string) wp_json_encode(
-			array(
-				'id'      => 123,
-				'type'    => 'sp_movie',
-				'title'   => array( 'raw' => 'Movie' ),
-				'content' => array( 'raw' => '<p>Movie content.</p>' ),
-				'excerpt' => array( 'raw' => '' ),
-			)
+		$this->mock_body = $this->raw_post_body(
+			'sp_movie',
+			'Movie',
+			'<p>Movie content.</p>'
 		);
 
 		// ACT: Fetch through an endpoint absent from the successful catalog.
@@ -494,14 +495,10 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 				'rest_base' => 'sp_movies',
 			),
 		);
-		$this->mock_body       = (string) wp_json_encode(
-			array(
-				'id'      => 123,
-				'type'    => 'sp_movie',
-				'title'   => array( 'raw' => 'Movie' ),
-				'content' => array( 'raw' => '<p>Movie content.</p>' ),
-				'excerpt' => array( 'raw' => '' ),
-			)
+		$this->mock_body       = $this->raw_post_body(
+			'sp_movie',
+			'Movie',
+			'<p>Movie content.</p>'
 		);
 
 		// ACT: Fetch using the custom REST base rather than the type slug.

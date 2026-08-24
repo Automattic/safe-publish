@@ -69,7 +69,7 @@ final class Source_Post_Type_Resolver {
 			$source_site_url,
 			$make_request,
 			$credentials
-		);
+		) ?? array();
 		$entry    = self::find_entry( $post_type, $metadata );
 
 		return null !== $entry ? $entry['rest_base'] : $post_type;
@@ -100,17 +100,13 @@ final class Source_Post_Type_Resolver {
 		callable $make_request,
 		array $credentials
 	): array|WP_Error {
-		$metadata = self::get_metadata(
+		$metadata          = self::get_metadata(
 			$source_site_url,
 			$make_request,
 			$credentials
 		);
-		// Only valid catalog lists are cached, so cache presence distinguishes
-		// an authoritative empty/unmatched catalog from an unavailable one.
-		$catalog_available = array_key_exists(
-			$source_site_url,
-			self::$metadata
-		);
+		$catalog_available = null !== $metadata;
+		$metadata        ??= array();
 		$entry             = self::find_entry( $post_type, $metadata );
 		$expected_type     = null !== $entry
 			? $entry['slug']
@@ -227,9 +223,11 @@ final class Source_Post_Type_Resolver {
 	/**
 	 * Returns source post type metadata, fetching it once on success.
 	 *
-	 * Failed or malformed responses are not memoized, allowing a later bulk
-	 * item to retry. Individual malformed entries are ignored; an invalid
-	 * raw_fields property conservatively requires every supported field.
+	 * Any valid catalog list, including an empty list, is authoritative and
+	 * memoized. Failed or malformed responses return null and are not memoized,
+	 * allowing a later bulk item to retry. Individual malformed entries are
+	 * ignored; an invalid raw_fields property conservatively requires every
+	 * supported field.
 	 *
 	 * @param string   $source_site_url Source site URL.
 	 * @param callable $make_request    fn($url, $action, $credentials): array|WP_Error.
@@ -237,13 +235,13 @@ final class Source_Post_Type_Resolver {
 	 * @return array<string, array{
 	 *     rest_base: string,
 	 *     raw_fields: array<string, bool>|null
-	 * }> Metadata keyed by post type slug.
+	 * }>|null Metadata keyed by post type slug, or null when unavailable.
 	 */
 	private static function get_metadata(
 		string $source_site_url,
 		callable $make_request,
 		array $credentials
-	): array {
+	): ?array {
 		if ( array_key_exists( $source_site_url, self::$metadata ) ) {
 			return self::$metadata[ $source_site_url ];
 		}
@@ -257,12 +255,12 @@ final class Source_Post_Type_Resolver {
 			$credentials
 		);
 		if ( is_wp_error( $response ) ) {
-			return array();
+			return null;
 		}
 
 		$data = json_decode( wp_remote_retrieve_body( $response ), true );
 		if ( ! is_array( $data ) || ! array_is_list( $data ) ) {
-			return array();
+			return null;
 		}
 
 		$metadata = array();
@@ -335,8 +333,7 @@ final class Source_Post_Type_Resolver {
 	 * @param array  $metadata  Source metadata keyed by slug.
 	 * @return array{
 	 *     slug: string,
-	 *     rest_base: string,
-	 *     raw_fields: array<string, bool>|null
+	 *     rest_base: string
 	 * }|null Matching entry, or null.
 	 */
 	private static function find_entry(
@@ -346,18 +343,16 @@ final class Source_Post_Type_Resolver {
 		$slug = Post_Type_Map::to_wp_slug( $post_type );
 		if ( isset( $metadata[ $slug ] ) ) {
 			return array(
-				'slug'       => $slug,
-				'rest_base'  => $metadata[ $slug ]['rest_base'],
-				'raw_fields' => $metadata[ $slug ]['raw_fields'],
+				'slug'      => $slug,
+				'rest_base' => $metadata[ $slug ]['rest_base'],
 			);
 		}
 
 		foreach ( $metadata as $candidate_slug => $entry ) {
 			if ( $post_type === $entry['rest_base'] ) {
 				return array(
-					'slug'       => $candidate_slug,
-					'rest_base'  => $entry['rest_base'],
-					'raw_fields' => $entry['raw_fields'],
+					'slug'      => $candidate_slug,
+					'rest_base' => $entry['rest_base'],
 				);
 			}
 		}
