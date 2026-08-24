@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests\Integration\Import_Mode_Admin_Handler;
 use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Auth\VIP_Safe_Auth;
+use Safe_Publish\API\Source_Post_Type_Resolver;
 use Safe_Publish\Tests\Integration\Ajax_Die_Continue_Trait;
 use Safe_Publish\Tests\Integration\Mock_Media_HTTP_Trait;
 use Safe_Publish\Tests\Integration\Mock_Post_API_Trait;
@@ -50,6 +51,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
+		Source_Post_Type_Resolver::reset_cache();
 
 		// Required by validate_auth_or_fail() in the gated AJAX endpoints.
 		if ( ! defined( 'SAFE_PUBLISH_SHARED_SECRET' ) ) {
@@ -109,7 +111,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	 * Returns a minimal valid post response for fetch_fresh_post_content().
 	 *
 	 * @param false|array|WP_Error $preempt Preemptive return value.
-	 * @param array                $_args   HTTP request arguments (unused).
+	 * @param array                $_args   HTTP request arguments.
 	 * @param string               $url     Request URL.
 	 * @return false|array|WP_Error Mocked response, or the prior return value.
 	 */

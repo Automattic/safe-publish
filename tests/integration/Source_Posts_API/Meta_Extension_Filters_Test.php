@@ -411,7 +411,9 @@ class Meta_Extension_Filters_Test extends Source_Posts_API_Test_Base {
 		string $url
 	): false|array|WP_Error {
 		unset( $args );
-		$this->captures['request_url'] = $url;
+		if ( 1 === preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
+			$this->captures['request_url'] = $url;
+		}
 		return $preempt;
 	}
 

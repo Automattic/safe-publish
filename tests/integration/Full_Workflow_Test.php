@@ -133,7 +133,7 @@ class Full_Workflow_Test extends Integration_Test_Case {
 	 * Returns a post response built from defaults merged with $this->mock_post_overrides.
 	 *
 	 * @param false|array|WP_Error $preempt Preemptive return value.
-	 * @param array                $_args   HTTP request arguments (unused).
+	 * @param array                $_args   HTTP request arguments.
 	 * @param string               $url     Request URL.
 	 * @return false|array|WP_Error Mocked response, or the prior return value.
 	 */

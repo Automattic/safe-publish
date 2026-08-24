@@ -854,7 +854,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		// ASSERT: Error surfaces the specific raw-fields reason, not a generic
 		// fetch-failed message.
 		$this->assertStringContainsString(
-			'missing raw content fields',
+			'missing required raw values',
 			$result['error'],
 			'Error should surface the specific raw-fields fetch failure.'
 		);

@@ -524,31 +524,39 @@ class Source_Posts_API {
 			);
 		}
 
-		// Require raw field values (edit context) to preserve data parity.
-		if (
-			! isset( $data['title']['raw'] ) ||
-			! isset( $data['content']['raw'] ) ||
-			! isset( $data['excerpt']['raw'] )
-		) {
-			$this->logger->content_fetch_raw_fields_missing(
-				$source_post_id,
-				$source_site_url
-			);
+		$resolved_post_data = Source_Post_Type_Resolver::resolve_post_data(
+			$post_type,
+			$data,
+			$source_site_url,
+			array( $this->http_client, 'make_request' ),
+			$auth_credentials
+		);
+		if ( is_wp_error( $resolved_post_data ) ) {
+			if (
+				'fresh_content_raw_fields_missing'
+				=== $resolved_post_data->get_error_code()
+			) {
+				$this->logger->content_fetch_raw_fields_missing(
+					$source_post_id,
+					$source_site_url
+				);
+			} else {
+				$this->logger->content_fetch_invalid_response(
+					$source_post_id,
+					$source_site_url
+				);
+			}
 
-			return new WP_Error(
-				'fresh_content_raw_fields_missing',
-				__(
-					'The source response is missing raw content fields. Verify authentication and edit permissions on the source site.',
-					'safe-publish'
-				),
-				array( 'status' => 403 )
-			);
+			return $resolved_post_data;
 		}
+
+		$source_post_type = $resolved_post_data['post_type'];
+		$raw_values       = $resolved_post_data['raw_values'];
 
 		// Extract post data.
 		$post_data = array();
 
-		$post_data['title']          = sanitize_text_field( $data['title']['raw'] );
+		$post_data['title']          = sanitize_text_field( $raw_values['title'] );
 		$post_data['featured_media'] = absint( $data['featured_media'] ?? 0 );
 		$post_data['slug']           = sanitize_text_field( $data['slug'] ?? '' );
 		$post_data['comment_status'] = sanitize_text_field( $data['comment_status'] ?? '' );
@@ -558,9 +566,7 @@ class Source_Posts_API {
 		$post_data['parent']         = absint( $data['parent'] ?? 0 );
 		// Carry the resolved WP slug so the bulk sorter can defer dependent
 		// types (wp_navigation runs after the posts/pages it links to).
-		$post_data['post_type'] = isset( $data['type'] )
-			? sanitize_key( (string) $data['type'] )
-			: '';
+		$post_data['post_type'] = $source_post_type;
 
 		if ( isset( $data['link'] ) ) {
 			$post_data['link'] = esc_url_raw( $data['link'] );
@@ -568,8 +574,8 @@ class Source_Posts_API {
 
 		// HTML fields: Sanitized at the import point with modification
 		// detection to prevent silent data loss during migration.
-		$post_data['content'] = $data['content']['raw'];
-		$post_data['excerpt'] = $data['excerpt']['raw'];
+		$post_data['content'] = $raw_values['content'];
+		$post_data['excerpt'] = $raw_values['excerpt'];
 
 		/**
 		 * Filters the source post meta before it is persisted.
