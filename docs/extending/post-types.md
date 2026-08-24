@@ -67,10 +67,11 @@ a valid raw value. An individual field omitted from both the catalog metadata
 and response is treated as unsupported, so the controller author is responsible
 for declaring every supported raw field.
 
-Destinations connected to an older source without catalog field metadata fall
-back to the response shape: Present malformed fields are rejected, while
-absent fields are treated as unsupported. If a newer source includes malformed
-field metadata, Safe Publish conservatively requires all three raw values.
+Destinations fall back to the response shape when an older source omits catalog
+field metadata or a valid catalog cannot be retrieved temporarily. Present
+malformed fields are rejected, while absent fields are treated as unsupported.
+If a newer source includes malformed field metadata in an otherwise valid
+catalog entry, Safe Publish conservatively requires all three raw values.
 
 ### Custom Post Meta
 

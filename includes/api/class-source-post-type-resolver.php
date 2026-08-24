@@ -100,13 +100,19 @@ final class Source_Post_Type_Resolver {
 		callable $make_request,
 		array $credentials
 	): array|WP_Error {
-		$metadata      = self::get_metadata(
+		$metadata = self::get_metadata(
 			$source_site_url,
 			$make_request,
 			$credentials
 		);
-		$entry         = self::find_entry( $post_type, $metadata );
-		$expected_type = null !== $entry
+		// Only valid catalog lists are cached, so cache presence distinguishes
+		// an authoritative empty/unmatched catalog from an unavailable one.
+		$catalog_available = array_key_exists(
+			$source_site_url,
+			self::$metadata
+		);
+		$entry             = self::find_entry( $post_type, $metadata );
+		$expected_type     = null !== $entry
 			? $entry['slug']
 			: Post_Type_Map::to_wp_slug( $post_type );
 
@@ -121,7 +127,19 @@ final class Source_Post_Type_Resolver {
 				return self::invalid_post_type_error();
 			}
 
-			if ( $expected_type !== $response_type ) {
+			if (
+				null !== $entry
+				|| Post_Type_Map::is_builtin( $post_type )
+			) {
+				if ( $expected_type !== $response_type ) {
+					return self::post_type_mismatch_error();
+				}
+			} elseif (
+				$catalog_available
+				|| Post_Type_Map::is_builtin( $response_type )
+			) {
+				// An unresolved custom endpoint may use the response type only
+				// when the catalog is unavailable and the type is also custom.
 				return self::post_type_mismatch_error();
 			}
 

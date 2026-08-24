@@ -369,6 +369,94 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a custom REST base can use the authenticated response type
+	 * when catalog metadata is temporarily unavailable.
+	 */
+	public function test_custom_rest_base_survives_catalog_failure(): void {
+		// ARRANGE: A custom REST endpoint returns its canonical custom type while
+		// both catalog attempts fail.
+		$this->mock_body          = (string) wp_json_encode(
+			array(
+				'id'      => 123,
+				'type'    => 'sp_movie',
+				'title'   => array( 'raw' => 'Movie' ),
+				'content' => array( 'raw' => '<p>Movie content.</p>' ),
+				'excerpt' => array( 'raw' => '' ),
+			)
+		);
+		$this->mock_catalog_error = new WP_Error(
+			'transport_down',
+			'Metadata transport failed.'
+		);
+
+		// ACT: Fetch using the REST base rather than the custom type slug.
+		$result = $this->fetch( 'sp_movies' );
+
+		// ASSERT: The valid custom response supplies the canonical type.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'sp_movie', $result['post_type'] );
+		$this->assertSame( 'Movie', $result['title'] );
+	}
+
+	/**
+	 * Verifies that custom fallback cannot select a built-in response type.
+	 */
+	public function test_custom_rest_base_cannot_fallback_to_builtin_type(): void {
+		// ARRANGE: An unresolved custom endpoint returns a valid page response.
+		$this->mock_body          = (string) wp_json_encode(
+			array(
+				'id'      => 123,
+				'type'    => 'page',
+				'title'   => array( 'raw' => 'Page' ),
+				'content' => array( 'raw' => '<p>Page content.</p>' ),
+				'excerpt' => array( 'raw' => '' ),
+			)
+		);
+		$this->mock_catalog_error = new WP_Error(
+			'transport_down',
+			'Metadata transport failed.'
+		);
+
+		// ACT: Fetch the response through a custom REST base.
+		$result = $this->fetch( 'sp_movies' );
+
+		// ASSERT: Built-in types remain protected by strict matching.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'fresh_content_post_type_mismatch',
+			$result->get_error_code()
+		);
+	}
+
+	/**
+	 * Verifies that a successful catalog remains authoritative when it does
+	 * not map a requested custom REST base.
+	 */
+	public function test_custom_fallback_requires_catalog_failure(): void {
+		// ARRANGE: The catalog succeeds without mapping sp_movies, while the
+		// endpoint response claims an otherwise valid custom type.
+		$this->mock_body = (string) wp_json_encode(
+			array(
+				'id'      => 123,
+				'type'    => 'sp_movie',
+				'title'   => array( 'raw' => 'Movie' ),
+				'content' => array( 'raw' => '<p>Movie content.</p>' ),
+				'excerpt' => array( 'raw' => '' ),
+			)
+		);
+
+		// ACT: Fetch through an endpoint absent from the successful catalog.
+		$result = $this->fetch( 'sp_movies' );
+
+		// ASSERT: Successful catalog metadata remains authoritative.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'fresh_content_post_type_mismatch',
+			$result->get_error_code()
+		);
+	}
+
+	/**
 	 * Verifies that catalog metadata requires raw values for every field it
 	 * declares.
 	 */
