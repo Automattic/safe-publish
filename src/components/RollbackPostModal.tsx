@@ -19,6 +19,7 @@ import { useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
 import { isRollbackRestore, rollbackItem } from '../api/rollback';
+import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
 
 import type { ActionNotice } from '../actions';
 import type { UnifiedPostRow } from '../types';
@@ -50,6 +51,9 @@ const RollbackPostModal = ( {
 }: RollbackPostModalProps ) => {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
+	const [ attempted, setAttempted ] = useState( false );
+
+	useRefreshOnUnmount( attempted, onRefresh );
 
 	const post = items[ 0 ];
 
@@ -65,6 +69,7 @@ const RollbackPostModal = ( {
 			return;
 		}
 
+		setAttempted( true );
 		setIsLoading( true );
 		setError( null );
 
@@ -76,7 +81,6 @@ const RollbackPostModal = ( {
 			}
 
 			onNotice?.( { status: 'success', message: outcome.message } );
-			onRefresh?.();
 			setIsLoading( false );
 			closeModal?.();
 		} );

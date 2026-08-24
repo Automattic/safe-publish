@@ -21,6 +21,7 @@ import { __, sprintf } from '@wordpress/i18n';
 import { ApiResponse, UnifiedPostRow } from '../types';
 import { getErrorMessage } from '../utils';
 import ConfirmTitleList from './ConfirmTitleList';
+import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
 
 /**
  * Props for the DeletePostModal component.
@@ -55,10 +56,14 @@ const DeletePostModal = ( {
 }: DeletePostModalProps ) => {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
+	const [ attempted, setAttempted ] = useState( false );
+
+	useRefreshOnUnmount( attempted, onRefresh );
 
 	const isBulk = items.length > 1;
 
 	const handleDelete = (): void => {
+		setAttempted( true );
 		setIsLoading( true );
 		setError( null );
 
@@ -98,9 +103,6 @@ const DeletePostModal = ( {
 					return;
 				}
 
-				if ( ! isBulk || result.data.deleted > 0 ) {
-					onRefresh?.();
-				}
 				setIsLoading( false );
 				closeModal?.();
 			} )

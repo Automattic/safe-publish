@@ -143,8 +143,10 @@ export default function BulkImportFlow( {
 	const [ error, setError ] = useState< string | null >( null );
 	const [ progress, setProgress ] = useState( 0 );
 	const [ results, setResults ] = useState< BulkImportResponse | null >( null );
+	const [ attempted, setAttempted ] = useState( false );
 
 	const handleRun = async (): Promise< void > => {
+		setAttempted( true );
 		setIsLoading( true );
 		setError( null );
 		setProgress( 0 );
@@ -172,10 +174,7 @@ export default function BulkImportFlow( {
 		}
 	};
 
-	useRefreshOnUnmount(
-		null !== results && results.successful > 0,
-		onRefresh
-	);
+	useRefreshOnUnmount( attempted, onRefresh );
 
 	const allFailed =
 		null !== results && 0 === results.successful && results.failed > 0;

@@ -22,6 +22,7 @@ import { __, sprintf } from '@wordpress/i18n';
 import { ApiResponse } from '../types';
 import { getErrorMessage } from '../utils';
 import ConfirmTitleList from './ConfirmTitleList';
+import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
 
 /**
  * A failure row to remove. Orphans carry only an itemId; source-linked
@@ -58,10 +59,14 @@ const DeleteFailedImportsModal = ( {
 }: DeleteFailedImportsModalProps ): JSX.Element => {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
+	const [ attempted, setAttempted ] = useState( false );
+
+	useRefreshOnUnmount( attempted, onRefresh );
 
 	const isBulk = items.length > 1;
 
 	const handleDelete = (): void => {
+		setAttempted( true );
 		setIsLoading( true );
 		setError( null );
 
@@ -97,7 +102,6 @@ const DeleteFailedImportsModal = ( {
 					return;
 				}
 
-				onRefresh?.();
 				setIsLoading( false );
 				closeModal?.();
 			} )

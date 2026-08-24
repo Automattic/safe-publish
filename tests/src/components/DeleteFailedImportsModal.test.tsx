@@ -2,8 +2,8 @@
  * Tests for the DeleteFailedImportsModal confirmation, which names the
  * selected failure rows on the bulk path.
  */
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import DeleteFailedImportsModal, {
 	type DeleteFailedImportsItem,
@@ -50,5 +50,72 @@ describe( 'DeleteFailedImportsModal confirmation', () => {
 			screen.getByText( 'Remove "Failed one"?' )
 		).toBeInTheDocument();
 		expect( screen.queryByRole( 'list' ) ).not.toBeInTheDocument();
+	} );
+} );
+
+describe( 'DeleteFailedImportsModal inbox refresh', () => {
+	afterEach( () => {
+		vi.unstubAllGlobals();
+	} );
+
+	it( 'Verifies that a failed removal refreshes once the error has been read', async () => {
+		// ARRANGE: The endpoint refuses the removal.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: async () => ( {
+					success: false,
+					data: 'That failure row is already gone',
+				} ),
+			} )
+		);
+		const onRefresh = vi.fn();
+
+		// ACT: Attempt the removal and wait for the error.
+		const { unmount } = render(
+			<DeleteFailedImportsModal
+				items={ ITEMS }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				onRefresh={ onRefresh }
+			/>
+		);
+		fireEvent.click( screen.getByRole( 'button', { name: 'Remove' } ) );
+		expect(
+			await screen.findByText( 'That failure row is already gone' )
+		).toBeInTheDocument();
+
+		// ASSERT: The error stays readable, so the refresh is still owed.
+		expect( onRefresh ).not.toHaveBeenCalled();
+
+		// ACT: Dismiss the modal.
+		unmount();
+
+		// ASSERT: A refused removal can mean the inbox was stale, so it
+		// refreshes anyway.
+		expect( onRefresh ).toHaveBeenCalledTimes( 1 );
+	} );
+
+	it( 'Verifies that canceling without attempting a removal does not refresh', () => {
+		// ARRANGE: A confirmation the operator backs out of.
+		const closeModal = vi.fn();
+		const onRefresh = vi.fn();
+
+		// ACT: Cancel, then dismiss the modal.
+		const { unmount } = render(
+			<DeleteFailedImportsModal
+				items={ ITEMS }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				closeModal={ closeModal }
+				onRefresh={ onRefresh }
+			/>
+		);
+		fireEvent.click( screen.getByRole( 'button', { name: 'Cancel' } ) );
+		unmount();
+
+		// ASSERT: Nothing reached the server, so the inbox is left alone.
+		expect( closeModal ).toHaveBeenCalled();
+		expect( onRefresh ).not.toHaveBeenCalled();
 	} );
 } );

@@ -2,8 +2,8 @@
  * Tests for the DeletePostModal confirmation, which names the selected titles
  * on the bulk path and reads as a single question on the single path.
  */
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import DeletePostModal from '@/components/DeletePostModal';
 import type { UnifiedPostRow } from '@/types';
@@ -101,5 +101,107 @@ describe( 'DeletePostModal confirmation', () => {
 		expect( screen.getByText( 'Post 10' ) ).toBeInTheDocument();
 		expect( screen.queryByText( 'Post 11' ) ).not.toBeInTheDocument();
 		expect( screen.getByText( '…and 1 more' ) ).toBeInTheDocument();
+	} );
+} );
+
+describe( 'DeletePostModal listing refresh', () => {
+	const BULK = [ buildRow( 1, 'First post' ), buildRow( 2, 'Second post' ) ];
+
+	afterEach( () => {
+		vi.unstubAllGlobals();
+	} );
+
+	/**
+	 * Stubs the trash endpoint with a canned response.
+	 *
+	 * @param {*} payload Response body the endpoint returns.
+	 */
+	function stubTrash( payload: unknown ): void {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( { json: async () => payload } )
+		);
+	}
+
+	it( 'Verifies that a bulk trash which skipped every post still refreshes', async () => {
+		// ARRANGE: Every selected post was already gone, so none was trashed.
+		stubTrash( { success: true, data: { deleted: 0, skipped: 2 } } );
+		const closeModal = vi.fn();
+		const onRefresh = vi.fn();
+
+		// ACT: Run the trash and wait for it to settle.
+		const { unmount } = render(
+			<DeletePostModal
+				items={ BULK }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				closeModal={ closeModal }
+				onRefresh={ onRefresh }
+			/>
+		);
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Move to Trash' } )
+		);
+		await waitFor( () => expect( closeModal ).toHaveBeenCalled() );
+
+		// ACT: Dismiss the modal.
+		unmount();
+
+		// ASSERT: A zero count means the listing was stale, so it refreshes.
+		expect( onRefresh ).toHaveBeenCalledTimes( 1 );
+	} );
+
+	it( 'Verifies that a failed trash refreshes once the error has been read', async () => {
+		// ARRANGE: The endpoint refuses the request.
+		stubTrash( { success: false, data: 'The post no longer exists' } );
+		const onRefresh = vi.fn();
+
+		// ACT: Attempt the trash and wait for the error.
+		const { unmount } = render(
+			<DeletePostModal
+				items={ BULK }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				onRefresh={ onRefresh }
+			/>
+		);
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Move to Trash' } )
+		);
+		expect(
+			await screen.findByText( 'The post no longer exists' )
+		).toBeInTheDocument();
+
+		// ASSERT: The error stays readable, so the refresh is still owed.
+		expect( onRefresh ).not.toHaveBeenCalled();
+
+		// ACT: Dismiss the modal.
+		unmount();
+
+		// ASSERT: The listing refreshes anyway.
+		expect( onRefresh ).toHaveBeenCalledTimes( 1 );
+	} );
+
+	it( 'Verifies that canceling without attempting a trash does not refresh', () => {
+		// ARRANGE: A confirmation the operator backs out of.
+		const closeModal = vi.fn();
+		const onRefresh = vi.fn();
+
+		// ACT: Cancel, then dismiss the modal.
+		const { unmount } = render(
+			<DeletePostModal
+				items={ BULK }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				closeModal={ closeModal }
+				onRefresh={ onRefresh }
+			/>
+		);
+		fireEvent.click( screen.getByRole( 'button', { name: 'Cancel' } ) );
+		unmount();
+
+		// ASSERT: Nothing reached the server, so the listing is left alone.
+		expect( closeModal ).toHaveBeenCalled();
+		expect( onRefresh ).not.toHaveBeenCalled();
 	} );
 } );
