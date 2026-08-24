@@ -56,6 +56,13 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	private array|WP_Error|null $mock_catalog_error = null;
 
 	/**
+	 * Catalog requests the mock has served.
+	 *
+	 * @var int
+	 */
+	private int $catalog_requests = 0;
+
+	/**
 	 * Post types returned by the mocked Safe Publish catalog.
 	 *
 	 * @var list<array<string, string>>
@@ -121,6 +128,8 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		unset( $preempt );
 
 		if ( str_contains( $url, '/safe-publish/v1/catalog/post-types' ) ) {
+			++$this->catalog_requests;
+
 			if ( null !== $this->mock_catalog_error ) {
 				return $this->mock_catalog_error;
 			}
@@ -161,25 +170,32 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	/**
 	 * Builds a valid source post body for tests focused on type resolution.
 	 *
-	 * @param string $post_type Source post type.
-	 * @param string $title     Raw post title.
-	 * @param string $content   Raw post content.
+	 * @param string $post_type     Source post type.
+	 * @param string $title         Raw post title.
+	 * @param string $content       Raw post content.
+	 * @param bool   $with_excerpt  Optional. Whether to emit excerpt.raw, which
+	 *                              decides whether the catalog is consulted.
+	 *                              Default true.
 	 * @return string JSON-encoded source post body.
 	 */
 	private function raw_post_body(
 		string $post_type,
 		string $title,
-		string $content
+		string $content,
+		bool $with_excerpt = true
 	): string {
-		return (string) wp_json_encode(
-			array(
-				'id'      => 123,
-				'type'    => $post_type,
-				'title'   => array( 'raw' => $title ),
-				'content' => array( 'raw' => $content ),
-				'excerpt' => array( 'raw' => '' ),
-			)
+		$body = array(
+			'id'      => 123,
+			'type'    => $post_type,
+			'title'   => array( 'raw' => $title ),
+			'content' => array( 'raw' => $content ),
 		);
+
+		if ( $with_excerpt ) {
+			$body['excerpt'] = array( 'raw' => '' );
+		}
+
+		return (string) wp_json_encode( $body );
 	}
 
 	/**
@@ -333,11 +349,12 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	 * sources.
 	 */
 	public function test_catalog_request_error_uses_response_shape(): void {
-		// ARRANGE: The post is valid, but its catalog request cannot run.
+		// ARRANGE: An absent excerpt forces the catalog lookup, which then fails.
 		$this->mock_body          = $this->raw_post_body(
 			'post',
 			'Title',
-			'<p>Content.</p>'
+			'<p>Content.</p>',
+			false
 		);
 		$this->mock_catalog_error = new WP_Error(
 			'transport_down',
@@ -347,10 +364,12 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		// ACT: Fetch fresh content for import.
 		$result = $this->fetch();
 
-		// ASSERT: The valid post still imports using its response shape.
+		// ASSERT: The post imports, treating the absent excerpt as unsupported.
 		$this->assertIsArray( $result );
 		$this->assertSame( 'Title', $result['title'] );
 		$this->assertSame( '<p>Content.</p>', $result['content'] );
+		$this->assertSame( '', $result['excerpt'] );
+		$this->assertGreaterThan( 0, $this->catalog_requests );
 	}
 
 	/**
@@ -358,12 +377,13 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	 * post type.
 	 */
 	public function test_catalog_request_error_preserves_type_validation(): void {
-		// ARRANGE: A post request receives a valid page-shaped response while
-		// the catalog is unavailable.
+		// ARRANGE: A post request receives a page-shaped response with an absent
+		// excerpt, so the catalog is consulted and unavailable.
 		$this->mock_body          = $this->raw_post_body(
 			'page',
 			'Title',
-			'<p>Content.</p>'
+			'<p>Content.</p>',
+			false
 		);
 		$this->mock_catalog_error = new WP_Error(
 			'transport_down',
@@ -449,12 +469,60 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		// ACT: Fetch through an endpoint absent from the successful catalog.
 		$result = $this->fetch( 'sp_movies' );
 
-		// ASSERT: Successful catalog metadata remains authoritative.
+		// ASSERT: The type is reported as unlisted, not as a response mismatch.
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame(
-			'fresh_content_post_type_mismatch',
+			'fresh_content_post_type_unresolved',
 			$result->get_error_code()
 		);
+	}
+
+	/**
+	 * Verifies that a built-in type carrying every raw value resolves without
+	 * a catalog request, which cannot change the outcome.
+	 */
+	public function test_complete_builtin_response_skips_catalog_request(): void {
+		// ARRANGE: A post response carrying title, content, and excerpt raw.
+		$this->mock_body = $this->raw_post_body(
+			'post',
+			'Title',
+			'<p>Content.</p>'
+		);
+
+		// ACT: Fetch fresh content for import.
+		$result = $this->fetch();
+
+		// ASSERT: The import succeeds without consulting the catalog.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'Title', $result['title'] );
+		$this->assertSame( 0, $this->catalog_requests );
+	}
+
+	/**
+	 * Verifies that repeated catalog failures stop after the attempt cap so one
+	 * unreachable source cannot cost a request per item in a bulk run.
+	 */
+	public function test_catalog_failures_stop_at_the_attempt_cap(): void {
+		// ARRANGE: Every item omits its excerpt, and the catalog always fails.
+		$this->mock_body          = $this->raw_post_body(
+			'post',
+			'Title',
+			'<p>Content.</p>',
+			false
+		);
+		$this->mock_catalog_error = new WP_Error(
+			'transport_down',
+			'Metadata transport failed.'
+		);
+
+		// ACT: Fetch five items from the same source in one request.
+		for ( $i = 0; $i < 5; $i++ ) {
+			$result = $this->fetch();
+			$this->assertIsArray( $result );
+		}
+
+		// ASSERT: The catalog was attempted twice, not once per item.
+		$this->assertSame( 2, $this->catalog_requests );
 	}
 
 	/**
