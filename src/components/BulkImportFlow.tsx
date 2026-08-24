@@ -18,60 +18,41 @@ import {
 import { useState } from '@wordpress/element';
 import { __, _n, sprintf } from '@wordpress/i18n';
 
-import { getErrorMessage, renderWarningShortLabel } from '../utils';
+import ConfirmTitleList from './ConfirmTitleList';
+import { MAX_VISIBLE_MODAL_TITLES } from '../constants';
+import {
+	getErrorMessage,
+	isImportUpdate,
+	renderWarningShortLabel,
+} from '../utils';
 import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
 
 import type {
 	ApiResponse,
 	BulkImportResponse,
 	BulkImportResult,
+	LocalState,
 } from '../types';
 
 /**
- * Maximum number of warning entries shown in the bulk results titles list
- * before collapsing the remainder into a "…and N more" line.
- */
-const MAX_VISIBLE_WARNING_TITLES = 10;
-
-/**
- * Shape the bulk endpoint reads. The unified Posts listing maps each
- * UnifiedPostRow down to this minimum before dispatching the import.
+ * A selected row, carrying the routing state the confirmation groups by. The
+ * unified Posts listing maps each UnifiedPostRow down to this.
  */
 export interface BulkImportFlowPost {
 	id: number;
 	post_type: string;
 	title: string;
-}
-
-/**
- * Labels driving the modal's copy across its confirm, progress, and
- * results phases. Defaults use drafts-oriented wording; callers override
- * per string.
- */
-export interface BulkImportFlowLabels {
-	confirmQuestion: string;
-	confirmQuestionPartial: string;
-	confirmDescription: string;
-	processingHeading: string;
-	processingFootnote: string;
-	completedHeading: string;
-	failedHeading: string;
-	partialHeading: string;
-	totalSummary: string;
-	primaryButton: string;
-	loadingButton: string;
-	primaryActionId: string;
+	local_state: LocalState;
 }
 
 /**
  * Props for the BulkImportFlow modal body.
  *
- * @property {BulkImportFlowPost[]}  posts        Pre-mapped row payload.
- * @property {number?}               skippedCount Ineligible selected rows dropped before import.
- * @property {Object}                context      Admin-ajax URL + nonce.
- * @property {Function}              onClose      Modal close callback.
- * @property {Function?}             onRefresh    Called after a successful run.
- * @property {BulkImportFlowLabels?} labels       Optional copy overrides.
+ * @property {BulkImportFlowPost[]} posts        Pre-mapped row payload.
+ * @property {number?}              skippedCount Ineligible selected rows dropped before import.
+ * @property {Object}               context      Admin-ajax URL + nonce.
+ * @property {Function}             onClose      Modal close callback.
+ * @property {Function?}            onRefresh    Called after a successful run.
  */
 export interface BulkImportFlowProps {
 	posts: BulkImportFlowPost[];
@@ -79,37 +60,7 @@ export interface BulkImportFlowProps {
 	context: { ajaxurl: string; nonce: string };
 	onClose: () => void;
 	onRefresh?: () => void;
-	labels?: Partial< BulkImportFlowLabels >;
 }
-
-const DEFAULT_LABELS: BulkImportFlowLabels = {
-	/* translators: %d is the number of selected posts */
-	confirmQuestion: __( 'Import %d selected posts as drafts?', 'safe-publish' ),
-	/* translators: 1: importable count, 2: total selected count */
-	confirmQuestionPartial: __(
-		'Import %1$d of %2$d selected posts as drafts?',
-		'safe-publish'
-	),
-	confirmDescription: __(
-		'This will import all selected posts including their content, images, links, and formatting.',
-		'safe-publish'
-	),
-	processingHeading: __( 'Importing posts as a batch…', 'safe-publish' ),
-	/* translators: %d is the number of selected posts */
-	processingFootnote: __(
-		'All %d posts will be imported in a single session',
-		'safe-publish'
-	),
-	completedHeading: __( 'Import completed!', 'safe-publish' ),
-	failedHeading: __( 'Import failed', 'safe-publish' ),
-	partialHeading: __( 'Import completed with errors', 'safe-publish' ),
-	/* translators: 1: successful count, 2: total count */
-	totalSummary: __( 'Imported: %1$d of %2$d posts', 'safe-publish' ),
-	/* translators: %d is the number of selected posts */
-	primaryButton: __( 'Import %d posts', 'safe-publish' ),
-	loadingButton: __( 'Importing…', 'safe-publish' ),
-	primaryActionId: 'import',
-};
 
 /**
  * Returns true when the result is a successful import that carries warnings.
@@ -139,7 +90,17 @@ async function postBulk(
 	const formData = new FormData();
 	formData.append( 'action', 'safe_publish_bulk_import' );
 	formData.append( 'nonce', context.nonce );
-	formData.append( 'posts_data', JSON.stringify( posts ) );
+	// local_state drives the confirmation only; send what the endpoint reads.
+	formData.append(
+		'posts_data',
+		JSON.stringify(
+			posts.map( ( post ) => ( {
+				id: post.id,
+				post_type: post.post_type,
+				title: post.title,
+			} ) )
+		)
+	);
 
 	const response = await fetch( context.ajaxurl, {
 		method: 'POST',
@@ -177,10 +138,7 @@ export default function BulkImportFlow( {
 	context,
 	onClose,
 	onRefresh,
-	labels: labelOverrides,
 }: BulkImportFlowProps ): JSX.Element {
-	const labels = { ...DEFAULT_LABELS, ...labelOverrides };
-
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ error, setError ] = useState< string | null >( null );
 	const [ progress, setProgress ] = useState( 0 );
@@ -224,28 +182,44 @@ export default function BulkImportFlow( {
 	const partialFailure =
 		null !== results && results.successful > 0 && results.failed > 0;
 
-	let summaryHeading = labels.completedHeading;
+	let summaryHeading = __( 'Import completed!', 'safe-publish' );
 	let summaryColor = 'var(--safe-publish-status-success)';
 	if ( allFailed ) {
-		summaryHeading = labels.failedHeading;
+		summaryHeading = __( 'Import failed', 'safe-publish' );
 		summaryColor = 'var(--safe-publish-status-error)';
 	} else if ( partialFailure ) {
-		summaryHeading = labels.partialHeading;
+		summaryHeading = __( 'Import completed with errors', 'safe-publish' );
 		summaryColor = 'var(--safe-publish-status-warning)';
 	}
 
-	let confirmHeading: string;
-	if ( skippedCount > 0 ) {
-		// eslint-disable-next-line @wordpress/valid-sprintf
-		confirmHeading = sprintf(
-			labels.confirmQuestionPartial,
-			posts.length,
-			posts.length + skippedCount
-		);
-	} else {
-		// eslint-disable-next-line @wordpress/valid-sprintf
-		confirmHeading = sprintf( labels.confirmQuestion, posts.length );
-	}
+	const updateTitles = posts
+		.filter( ( post ) => isImportUpdate( post.local_state ) )
+		.map( ( post ) => post.title );
+	const createTitles = posts
+		.filter( ( post ) => ! isImportUpdate( post.local_state ) )
+		.map( ( post ) => post.title );
+
+	// A single-row selection routes to ImportModal, so posts.length is always
+	// plural here; the group counts below can be 1 and use _n().
+	const confirmHeading =
+		skippedCount > 0
+			? sprintf(
+					/* translators: 1: importable count, 2: total selected count */
+					__(
+						'Import %1$d of %2$d selected posts from the source?',
+						'safe-publish'
+					),
+					posts.length,
+					posts.length + skippedCount
+			  )
+			: sprintf(
+					/* translators: %d is the number of selected posts */
+					__(
+						'Import %d selected posts from the source?',
+						'safe-publish'
+					),
+					posts.length
+			  );
 
 	return (
 		<VStack
@@ -253,7 +227,7 @@ export default function BulkImportFlow( {
 			style={ { minWidth: '400px' } }
 			className="safe-publish-bulk-import-modal"
 		>
-			{ ! results && (
+			{ ! results && ! isLoading && (
 				<>
 					<Text>{ confirmHeading }</Text>
 					{ skippedCount > 0 && (
@@ -270,15 +244,44 @@ export default function BulkImportFlow( {
 							) }
 						</Text>
 					) }
+					<ConfirmTitleList
+						heading={ sprintf(
+							/* translators: %d is the number of posts that will be updated */
+							_n(
+								'%d post will be updated with the latest source content:',
+								'%d posts will be updated with the latest source content:',
+								updateTitles.length,
+								'safe-publish'
+							),
+							updateTitles.length
+						) }
+						titles={ updateTitles }
+					/>
+					<ConfirmTitleList
+						heading={ sprintf(
+							/* translators: %d is the number of posts that will be created */
+							_n(
+								'%d post will be imported as a new draft:',
+								'%d posts will be imported as new drafts:',
+								createTitles.length,
+								'safe-publish'
+							),
+							createTitles.length
+						) }
+						titles={ createTitles }
+					/>
 					<Text style={ { fontSize: '0.9em', color: 'var(--safe-publish-text-muted)' } }>
-						{ labels.confirmDescription }
+						{ __(
+							'This pulls each post from the source — content, images, links, and formatting.',
+							'safe-publish'
+						) }
 					</Text>
 				</>
 			) }
 
 			{ isLoading && (
 				<VStack spacing="3" className="safe-publish-bulk-import-progress">
-					<Text>{ labels.processingHeading }</Text>
+					<Text>{ __( 'Importing posts as a batch…', 'safe-publish' ) }</Text>
 					<ProgressBar value={ progress } />
 					<Text style={ { fontSize: '0.8em', color: 'var(--safe-publish-text-muted)' } }>
 						{ 100 === progress
@@ -290,10 +293,14 @@ export default function BulkImportFlow( {
 							  ) }
 					</Text>
 					<Text style={ { fontSize: '0.75em', color: 'var(--safe-publish-text-muted)' } }>
-						{
-							// eslint-disable-next-line @wordpress/valid-sprintf
-							sprintf( labels.processingFootnote, posts.length )
-						}
+						{ sprintf(
+							/* translators: %d is the number of selected posts */
+							__(
+								'All %d posts will be imported in a single session',
+								'safe-publish'
+							),
+							posts.length
+						) }
 					</Text>
 				</VStack>
 			) }
@@ -303,7 +310,7 @@ export default function BulkImportFlow( {
 					const withWarnings = results.results.filter( hasWarnings );
 					const visibleWarnings = withWarnings.slice(
 						0,
-						MAX_VISIBLE_WARNING_TITLES
+						MAX_VISIBLE_MODAL_TITLES
 					);
 					const hiddenWarnings = withWarnings.length - visibleWarnings.length;
 
@@ -316,14 +323,12 @@ export default function BulkImportFlow( {
 								{ summaryHeading }
 							</Text>
 							<Text>
-								{
-									// eslint-disable-next-line @wordpress/valid-sprintf
-									sprintf(
-										labels.totalSummary,
-										results.successful,
-										results.total
-									)
-								}
+								{ sprintf(
+									/* translators: 1: successful count, 2: total count */
+									__( 'Imported: %1$d of %2$d posts', 'safe-publish' ),
+									results.successful,
+									results.total
+								) }
 							</Text>
 							{ results.successful > 0 && (
 								<Text style={ { fontSize: '0.9em', color: 'var(--safe-publish-text-muted)' } }>
@@ -488,16 +493,19 @@ export default function BulkImportFlow( {
 						variant="primary"
 						onClick={ () => void handleRun() }
 						disabled={ isLoading }
-						data-action-id={ labels.primaryActionId }
+						data-action-id="import"
 					>
 						{ isLoading ? (
 							<>
 								<Spinner />
-								{ labels.loadingButton }
+								{ __( 'Importing…', 'safe-publish' ) }
 							</>
 						) : (
-							// eslint-disable-next-line @wordpress/valid-sprintf
-							sprintf( labels.primaryButton, posts.length )
+							sprintf(
+								/* translators: %d is the number of selected posts */
+								__( 'Import %d posts', 'safe-publish' ),
+								posts.length
+							)
 						) }
 					</Button>
 				) }

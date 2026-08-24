@@ -3,8 +3,8 @@
  *
  * Confirms and runs a rollback across multiple Manage listing rows. A mixed
  * selection may both permanently delete newly created posts and restore
- * updated ones, so the confirmation summarizes the counts. Each row is rolled
- * back with its own request and the result reports which titles failed.
+ * updated ones, so the confirmation names the titles in each group. Each row
+ * is rolled back with its own request and the result reports which failed.
  *
  * @file This file defines the BulkRollbackPostModal component.
  */
@@ -20,6 +20,7 @@ import {
 import { useState } from '@wordpress/element';
 import { __, _n, sprintf } from '@wordpress/i18n';
 
+import ConfirmTitleList from './ConfirmTitleList';
 import {
 	isRollbackRestore,
 	rollbackItems,
@@ -56,8 +57,12 @@ const BulkRollbackPostModal = ( {
 	const [ result, setResult ] = useState< BulkRollbackResult | null >( null );
 
 	const total = items.length;
-	const restoreCount = items.filter( isRollbackRestore ).length;
-	const deleteCount = total - restoreCount;
+	const restoreTitles = items
+		.filter( isRollbackRestore )
+		.map( item => item.title );
+	const deleteTitles = items
+		.filter( item => ! isRollbackRestore( item ) )
+		.map( item => item.title );
 
 	const handleRollback = () => {
 		setIsLoading( true );
@@ -80,30 +85,6 @@ const BulkRollbackPostModal = ( {
 		}
 		closeModal?.();
 	};
-
-	const deletedLabel = ( count: number ): string =>
-		sprintf(
-			/* translators: %d: number of posts that will be permanently deleted */
-			_n(
-				'%d post will be permanently deleted',
-				'%d posts will be permanently deleted',
-				count,
-				'safe-publish'
-			),
-			count
-		);
-
-	const restoredLabel = ( count: number ): string =>
-		sprintf(
-			/* translators: %d: number of posts that will be restored */
-			_n(
-				'%d post will be restored to its previous version',
-				'%d posts will be restored to their previous version',
-				count,
-				'safe-publish'
-			),
-			count
-		);
 
 	const failures = result?.entries.filter( entry => ! entry.outcome.success );
 
@@ -133,18 +114,33 @@ const BulkRollbackPostModal = ( {
 							total
 						) }
 					</Text>
-					<VStack spacing="2">
-						{ deleteCount > 0 && (
-							<Text style={ { fontSize: '0.9em', color: 'var(--safe-publish-text-muted)' } }>
-								{ deletedLabel( deleteCount ) }
-							</Text>
+					<ConfirmTitleList
+						isDestructive
+						heading={ sprintf(
+							/* translators: %d: number of posts that will be permanently deleted */
+							_n(
+								'%d post will be permanently deleted:',
+								'%d posts will be permanently deleted:',
+								deleteTitles.length,
+								'safe-publish'
+							),
+							deleteTitles.length
 						) }
-						{ restoreCount > 0 && (
-							<Text style={ { fontSize: '0.9em', color: 'var(--safe-publish-text-muted)' } }>
-								{ restoredLabel( restoreCount ) }
-							</Text>
+						titles={ deleteTitles }
+					/>
+					<ConfirmTitleList
+						heading={ sprintf(
+							/* translators: %d: number of posts that will be restored */
+							_n(
+								'%d post will be restored to its previous version:',
+								'%d posts will be restored to their previous version:',
+								restoreTitles.length,
+								'safe-publish'
+							),
+							restoreTitles.length
 						) }
-					</VStack>
+						titles={ restoreTitles }
+					/>
 				</>
 			) }
 
@@ -218,7 +214,7 @@ const BulkRollbackPostModal = ( {
 					<Button
 						__next40pxDefaultSize
 						variant="primary"
-						isDestructive={ deleteCount > 0 }
+						isDestructive={ deleteTitles.length > 0 }
 						onClick={ handleRollback }
 						disabled={ isLoading }
 					>
