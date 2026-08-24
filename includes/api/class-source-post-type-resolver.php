@@ -34,8 +34,9 @@ final class Source_Post_Type_Resolver {
 	/**
 	 * Catalog fetches attempted per source within one request.
 	 *
-	 * Failures are not memoized, so a recovered source is retried; the cap
-	 * bounds that retry to two requests rather than one per bulk item.
+	 * Stops an unreachable source costing one request per bulk item. Keep
+	 * below the threshold HTTP_Client passes to vip_safe_wp_remote_get, which
+	 * throttles a host's GETs once that many time out.
 	 */
 	private const MAX_CATALOG_ATTEMPTS = 2;
 
