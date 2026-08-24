@@ -59,7 +59,7 @@ describe( 'RollbackPostModal', () => {
 		const closeModal = vi.fn();
 
 		// ACT: Render the modal and confirm the rollback.
-		render(
+		const { unmount } = render(
 			<RollbackPostModal
 				items={ [ buildRow() ] }
 				ajaxurl={ AJAX_URL }
@@ -71,16 +71,22 @@ describe( 'RollbackPostModal', () => {
 		);
 		fireEvent.click( screen.getByRole( 'button', { name: 'Roll back' } ) );
 
-		// ASSERT: The server message surfaces as a success notice, then the
-		// listing refreshes and the modal closes.
+		// ASSERT: The server message surfaces as a success notice and the modal
+		// closes, with the refresh still owed.
 		await waitFor( () =>
 			expect( onNotice ).toHaveBeenCalledWith( {
 				status: 'success',
 				message: 'Post restored to its previous version.',
 			} )
 		);
-		expect( onRefresh ).toHaveBeenCalled();
 		expect( closeModal ).toHaveBeenCalled();
+		expect( onRefresh ).not.toHaveBeenCalled();
+
+		// ACT: Dismiss the modal.
+		unmount();
+
+		// ASSERT: The listing refreshes once.
+		expect( onRefresh ).toHaveBeenCalledTimes( 1 );
 	} );
 
 	it( 'Verifies that a failed rollback shows the error in-modal without a notice', async () => {
@@ -99,7 +105,7 @@ describe( 'RollbackPostModal', () => {
 		const closeModal = vi.fn();
 
 		// ACT: Render the modal and attempt the rollback.
-		render(
+		const { unmount } = render(
 			<RollbackPostModal
 				items={ [ buildRow() ] }
 				ajaxurl={ AJAX_URL }
@@ -111,13 +117,43 @@ describe( 'RollbackPostModal', () => {
 		);
 		fireEvent.click( screen.getByRole( 'button', { name: 'Roll back' } ) );
 
-		// ASSERT: The failure stays in the modal — no notice, no refresh, no
-		// close, so the operator can read the error and retry or cancel.
+		// ASSERT: The failure stays in the modal — no notice, no close, and no
+		// refresh yet, so the operator can read the error and retry or cancel.
 		expect(
 			await screen.findByText( 'The post no longer exists' )
 		).toBeInTheDocument();
 		expect( onNotice ).not.toHaveBeenCalled();
 		expect( onRefresh ).not.toHaveBeenCalled();
 		expect( closeModal ).not.toHaveBeenCalled();
+
+		// ACT: Dismiss the modal after reading the error.
+		unmount();
+
+		// ASSERT: A refused rollback can mean the listing was already stale, so
+		// it refreshes anyway.
+		expect( onRefresh ).toHaveBeenCalledTimes( 1 );
+	} );
+
+	it( 'Verifies that canceling without attempting a rollback does not refresh', () => {
+		// ARRANGE: A modal the operator opens and backs out of.
+		const onRefresh = vi.fn();
+		const closeModal = vi.fn();
+
+		// ACT: Render, cancel, then dismiss the modal.
+		const { unmount } = render(
+			<RollbackPostModal
+				items={ [ buildRow() ] }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				closeModal={ closeModal }
+				onRefresh={ onRefresh }
+			/>
+		);
+		fireEvent.click( screen.getByRole( 'button', { name: 'Cancel' } ) );
+		unmount();
+
+		// ASSERT: Nothing reached the server, so the listing is left alone.
+		expect( closeModal ).toHaveBeenCalled();
+		expect( onRefresh ).not.toHaveBeenCalled();
 	} );
 } );

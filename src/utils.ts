@@ -10,7 +10,7 @@
 import { dateI18n, getSettings } from '@wordpress/date';
 import { __, _n, sprintf } from '@wordpress/i18n';
 
-import type { AttentionIssue, JsonValue, Warning } from './types';
+import type { AttentionIssue, JsonValue, LocalState, Warning } from './types';
 
 /**
  * Extracts a human-readable error message from an API response.
@@ -179,6 +179,22 @@ const STATUS_BADGE_MODIFIERS: Record< string, string > = {
  */
 export function statusBadgeModifier( status: string ): string {
 	return ownLookup( STATUS_BADGE_MODIFIERS, status ) ?? '';
+}
+
+// Scheduled posts are excluded: nothing is visible yet, so the overwrite
+// warning's copy would not hold.
+const LIVE_STATUSES: readonly string[] = [ 'publish', 'private' ];
+
+/**
+ * Whether overwriting a destination post in this status changes what readers
+ * already see.
+ *
+ * @param {string|null} status Destination post status, null when absent.
+ *
+ * @return {boolean} True when the content is already visible.
+ */
+export function isLiveStatus( status: string | null ): boolean {
+	return null !== status && LIVE_STATUSES.includes( status );
 }
 
 /**
@@ -551,4 +567,17 @@ export function extractUrlPath( url: string ): string {
 		const match = url.match( /https?:\/\/[^/]+(.*)/ );
 		return match ? match[1] || '/' : url;
 	}
+}
+
+/**
+ * Predicts whether importing a row overwrites an existing destination post
+ * rather than creating a draft. Mirrors the server, which resolves the source
+ * id to a live post before deciding.
+ *
+ * @param {LocalState} localState Row's routing state.
+ *
+ * @return {boolean} True when the import updates an existing post.
+ */
+export function isImportUpdate( localState: LocalState ): boolean {
+	return 'up-to-date' === localState || 'outdated' === localState;
 }
