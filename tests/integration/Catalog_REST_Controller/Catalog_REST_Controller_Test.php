@@ -1100,7 +1100,40 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 		$this->assertArrayHasKey( 'label', $post_entry );
 		$this->assertArrayHasKey( 'rest_base', $post_entry );
 		$this->assertArrayHasKey( 'description', $post_entry );
+		$this->assertArrayHasKey( 'raw_fields', $post_entry );
 		$this->assertSame( 'posts', $post_entry['rest_base'] );
+		$this->assertSame(
+			array( 'title', 'content', 'excerpt' ),
+			$post_entry['raw_fields']
+		);
+	}
+
+	/**
+	 * Verifies that catalog raw fields follow the source REST controller's
+	 * post-type support schema.
+	 */
+	public function test_post_types_endpoint_reports_controller_raw_fields(): void {
+		// ARRANGE: Authenticate and rely on core's navigation controller.
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Find navigation in the authenticated catalog.
+		$items      = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/safe-publish/v1/catalog/post-types' )
+		)->get_data();
+		$navigation = null;
+		foreach ( $items as $item ) {
+			if ( 'wp_navigation' === $item['slug'] ) {
+				$navigation = $item;
+				break;
+			}
+		}
+
+		// ASSERT: Navigation declares title/content but no unsupported excerpt.
+		$this->assertNotNull( $navigation );
+		$this->assertSame(
+			array( 'title', 'content' ),
+			$navigation['raw_fields']
+		);
 	}
 
 	/**

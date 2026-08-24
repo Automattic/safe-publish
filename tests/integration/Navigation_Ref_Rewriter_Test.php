@@ -76,21 +76,17 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 	 * Serves the navigation single-post endpoint; other URLs fall through.
 	 *
 	 * @param false|array|WP_Error $preempt Short-circuit value passed by WP.
-	 * @param array                $args    Request arguments.
+	 * @param array                $_args   Request arguments.
 	 * @param string               $url     Requested URL.
 	 * @return false|array|WP_Error Mock response, or $preempt to defer.
 	 */
 	public function mock_navigation_source(
 		false|array|WP_Error $preempt,
-		array $args,
+		array $_args,
 		string $url
 	): false|array|WP_Error {
 		if ( false !== $preempt ) {
 			return $preempt;
-		}
-
-		if ( 'OPTIONS' === ( $args['method'] ?? 'GET' ) ) {
-			return $this->build_mock_post_type_schema_response( 'wp_navigation' );
 		}
 
 		if ( 1 === preg_match( '#/wp-json/wp/v2/navigation/\d+#', $url ) ) {

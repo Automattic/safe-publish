@@ -206,10 +206,10 @@ add_filter(
    excerpt must include `title.raw`, `content.raw`, and `excerpt.raw`. Fields
    the type does not support may be absent.
 4. If the post type uses a custom REST controller, ask its author to provide a
-   standard WordPress `OPTIONS` schema. Each supported title, content, or
-   excerpt field must declare a `raw` property. Safe Publish treats a field
-   omitted from both the schema and response as unsupported, so an inaccurate
-   custom schema must be corrected by the controller author.
+   standard WordPress item schema. Each supported title, content, or excerpt
+   field must declare a `raw` property. Safe Publish publishes those fields in
+   its authenticated post-type catalog and treats a field omitted from both
+   the catalog metadata and response as unsupported.
 
 #### Post creation failed
 

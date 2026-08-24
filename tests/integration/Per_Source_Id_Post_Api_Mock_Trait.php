@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\API\Source_Post_Type_Resolver;
-use Safe_Publish\Utils\Post_Type_Map;
 use WP_Error;
 
 /**
@@ -84,38 +83,6 @@ trait Per_Source_Id_Post_Api_Mock_Trait {
 	): false|array|WP_Error {
 		if ( false !== $preempt ) {
 			return $preempt;
-		}
-
-		if (
-			'OPTIONS' === ( $_args['method'] ?? 'GET' )
-			&& preg_match( '#/wp-json/wp/v2/([a-z0-9_-]+)(?:\?|$)#', $url, $matches )
-		) {
-			$properties = array();
-			$post_type  = Post_Type_Map::to_wp_slug( $matches[1] );
-			$fields     = array(
-				'title'   => 'title',
-				'editor'  => 'content',
-				'excerpt' => 'excerpt',
-			);
-			foreach ( $fields as $feature => $field ) {
-				if ( post_type_supports( $post_type, $feature ) ) {
-					$properties[ $field ] = array(
-						'properties' => array(
-							'raw' => array( 'type' => 'string' ),
-						),
-					);
-				}
-			}
-			return array(
-				'response' => array(
-					'code'    => 200,
-					'message' => 'OK',
-				),
-				'body'     => (string) wp_json_encode(
-					array( 'schema' => array( 'properties' => $properties ) )
-				),
-				'headers'  => array(),
-			);
 		}
 
 		// Exclude /media/ so Per_Source_Id_Media_Api_Mock_Trait can serve

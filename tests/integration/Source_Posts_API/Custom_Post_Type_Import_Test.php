@@ -120,22 +120,18 @@ class Custom_Post_Type_Import_Test extends Source_Posts_API_Test_Base {
 	 * endpoint, letting all other URLs fall through to the base mock.
 	 *
 	 * @param false|array|WP_Error $preempt Short-circuit value passed by WP.
-	 * @param array                $args    Request arguments.
+	 * @param array                $_args   Request arguments (unused).
 	 * @param string               $url     Requested URL.
 	 * @return false|array|WP_Error Mock response, or $preempt to defer.
 	 */
 	public function mock_custom_cpt_source(
 		false|array|WP_Error $preempt,
-		array $args,
+		array $_args,
 		string $url
 	): false|array|WP_Error {
 		if ( false !== $preempt ) {
 			return $preempt;
 		}
-		if ( 'OPTIONS' === ( $args['method'] ?? 'GET' ) ) {
-			return $this->build_mock_post_type_schema_response( 'sp_movie' );
-		}
-
 		if ( str_contains( $url, '/safe-publish/v1/catalog/post-types' ) ) {
 			return array(
 				'response' => array(
@@ -145,10 +141,11 @@ class Custom_Post_Type_Import_Test extends Source_Posts_API_Test_Base {
 				'body'     => (string) wp_json_encode(
 					array(
 						array(
-							'slug'      => 'sp_movie',
-							'name'      => 'Movies',
-							'label'     => 'Movies',
-							'rest_base' => 'sp_movies',
+							'slug'       => 'sp_movie',
+							'name'       => 'Movies',
+							'label'      => 'Movies',
+							'rest_base'  => 'sp_movies',
+							'raw_fields' => array( 'title', 'content' ),
 						),
 					)
 				),

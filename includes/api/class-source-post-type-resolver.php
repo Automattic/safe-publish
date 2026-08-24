@@ -20,43 +20,38 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Resolves source post type metadata used to fetch and validate source posts.
  *
- * Built-in types resolve from the static Post_Type_Map with no network call.
- * Custom post types whose rest_base differs from their slug (e.g. a `movie`
- * type exposed at wp/v2/movies) are resolved from the source's authoritative
- * /catalog/post-types response, which pairs every catalog-eligible slug with
- * its rest_base.
- *
- * The fetched slug => rest_base map is memoized per source URL for the
- * duration of the request, so a bulk import resolves it once rather than once
- * per post.
+ * The source's authenticated /catalog/post-types response pairs each eligible
+ * slug with its REST base and, on newer sources, the raw fields declared by
+ * its REST controller. Older sources omit raw_fields and remain compatible
+ * through response-shape validation.
  */
 final class Source_Post_Type_Resolver {
+	/**
+	 * Raw post fields Safe Publish imports.
+	 */
+	private const RAW_FIELDS = array( 'title', 'content', 'excerpt' );
 
 	/**
-	 * Per-request slug => rest_base maps, keyed by source site URL.
+	 * Per-request source metadata, keyed by source URL and type slug.
 	 *
-	 * @var array<string, array<string, string>>
-	 */
-	private static array $maps = array();
-
-	/**
-	 * Per-request raw fields, keyed by source URL and type slug.
+	 * A null raw_fields value means the source predates that catalog property.
 	 *
-	 * @var array<string, array<string, array<string, mixed>|WP_Error>>
+	 * @var array<string, array<string, array{
+	 *     rest_base: string,
+	 *     raw_fields: array<string, bool>|null
+	 * }>>
 	 */
-	private static array $raw_fields = array();
+	private static array $metadata = array();
 
 	/**
 	 * Resolves a post type slug to the REST base segment for its source.
 	 *
-	 * Falls back to passing the slug through unchanged when the source can't
-	 * be consulted or doesn't know the type — this keeps built-ins and custom
-	 * types whose rest_base equals their slug working without a reachable
-	 * source.
+	 * Built-ins use their fixed WordPress mapping. Custom types fall back to
+	 * the input when the source catalog is unavailable or does not know them.
 	 *
-	 * @param string   $post_type       Source post type slug (or endpoint).
+	 * @param string   $post_type       Source post type slug or REST endpoint.
 	 * @param string   $source_site_url Source site URL.
-	 * @param callable $make_request    fn($url, $action, $credentials, $args = array()): array|WP_Error.
+	 * @param callable $make_request    fn($url, $action, $credentials): array|WP_Error.
 	 * @param array    $credentials     Authentication credentials.
 	 * @return string REST base segment for the wp/v2/{rest_base}/{id} URL.
 	 */
@@ -66,151 +61,173 @@ final class Source_Post_Type_Resolver {
 		callable $make_request,
 		array $credentials
 	): string {
-		// Built-in types have a core-fixed rest_base; resolve them without a
-		// network call.
 		if ( Post_Type_Map::is_builtin( $post_type ) ) {
 			return Post_Type_Map::to_rest_endpoint( $post_type );
 		}
 
-		$map = self::get_map( $source_site_url, $make_request, $credentials );
-
-		return $map[ $post_type ]
-			?? Post_Type_Map::to_rest_endpoint( $post_type );
-	}
-
-	/**
-	 * Resolves a source post type slug or REST base to its canonical slug.
-	 *
-	 * @param string   $post_type       Source post type slug or REST base.
-	 * @param string   $source_site_url Source site URL.
-	 * @param callable $make_request    fn($url, $action, $credentials, $args = array()): array|WP_Error.
-	 * @param array    $credentials     Authentication credentials.
-	 * @return string Canonical post type slug, or the input when unresolved.
-	 */
-	public static function resolve_slug(
-		string $post_type,
-		string $source_site_url,
-		callable $make_request,
-		array $credentials
-	): string {
-		if ( Post_Type_Map::is_builtin( $post_type ) ) {
-			return Post_Type_Map::to_wp_slug( $post_type );
-		}
-
-		$map = self::get_map( $source_site_url, $make_request, $credentials );
-		if ( isset( $map[ $post_type ] ) ) {
-			return $post_type;
-		}
-
-		$slug = array_search( $post_type, $map, true );
-
-		return false !== $slug ? $slug : $post_type;
-	}
-
-	/**
-	 * Returns the raw fields exposed by a source post type's REST route.
-	 *
-	 * WordPress' OPTIONS schema reflects the fields its REST controller exposes.
-	 * Results are memoized so a bulk import fetches it once per source type.
-	 *
-	 * @param string   $post_type       Source post type slug.
-	 * @param string   $source_site_url Source site URL.
-	 * @param callable $make_request    fn($url, $action, $credentials, $args = array()): array|WP_Error.
-	 * @param array    $credentials     Authentication credentials.
-	 * @return array<string, bool>|WP_Error Declared raw fields, or an error.
-	 */
-	public static function resolve_raw_fields(
-		string $post_type,
-		string $source_site_url,
-		callable $make_request,
-		array $credentials
-	): array|WP_Error {
-		$sanitized_post_type = sanitize_key( $post_type );
-
-		if ( '' === $sanitized_post_type || $post_type !== $sanitized_post_type ) {
-			return new WP_Error(
-				'source_post_type_invalid',
-				__( 'The source response did not identify its post type.', 'safe-publish' )
-			);
-		}
-
-		$post_type = $sanitized_post_type;
-
-		if ( isset( self::$raw_fields[ $source_site_url ][ $post_type ] ) ) {
-			return self::$raw_fields[ $source_site_url ][ $post_type ];
-		}
-
-		$rest_base = self::resolve_rest_base(
-			$post_type,
+		$metadata = self::get_metadata(
 			$source_site_url,
 			$make_request,
 			$credentials
 		);
-		$url       = trailingslashit( $source_site_url )
-			. 'wp-json/wp/v2/' . $rest_base;
-		$response  = $make_request(
-			$url,
-			Request_Actions::LIST_ITEMS,
-			$credentials,
-			array( 'method' => 'OPTIONS' )
-		);
+		$entry    = self::find_entry( $post_type, $metadata );
 
-		if ( is_wp_error( $response ) ) {
-			self::$raw_fields[ $source_site_url ][ $post_type ] = $response;
-			return $response;
-		}
-
-		$data = json_decode( wp_remote_retrieve_body( $response ) );
-		if (
-			! ( $data instanceof \stdClass )
-			|| ! ( ( $data->schema ?? null ) instanceof \stdClass )
-			|| ! ( ( $data->schema->properties ?? null ) instanceof \stdClass )
-		) {
-			$error = new WP_Error(
-				'source_post_type_schema_invalid',
-				__(
-					'The source site returned an invalid post route schema.',
-					'safe-publish'
-				)
-			);
-			self::$raw_fields[ $source_site_url ][ $post_type ] = $error;
-			return $error;
-		}
-
-		$raw_fields = array();
-		foreach ( array( 'title', 'content', 'excerpt' ) as $field ) {
-			$field_schema = $data->schema->properties->{$field} ?? null;
-			if (
-				$field_schema instanceof \stdClass
-				&& ( $field_schema->properties->raw ?? null ) instanceof \stdClass
-			) {
-				$raw_fields[ $field ] = true;
-			}
-		}
-
-		self::$raw_fields[ $source_site_url ][ $post_type ] = $raw_fields;
-
-		return $raw_fields;
+		return null !== $entry ? $entry['rest_base'] : $post_type;
 	}
 
 	/**
-	 * Returns the source's slug => rest_base map, fetching it once per request.
+	 * Resolves and validates a source post response's type and raw fields.
 	 *
-	 * A failed or unparseable response yields an empty map that is not
-	 * memoized, so a later call can retry once the source is reachable.
+	 * Catalog metadata makes response-type and declared-field checks
+	 * authoritative when available. An older or temporarily unavailable
+	 * catalog falls back to the response type and shape without weakening the
+	 * validation of fields that are present.
+	 *
+	 * @param string   $post_type       Requested source slug or REST base.
+	 * @param array    $data            Decoded source post response.
+	 * @param string   $source_site_url Source site URL.
+	 * @param callable $make_request    fn($url, $action, $credentials): array|WP_Error.
+	 * @param array    $credentials     Authentication credentials.
+	 * @return array{
+	 *     post_type: string,
+	 *     raw_values: array{title:string,content:string,excerpt:string}
+	 * }|WP_Error Resolved type and raw values, or a validation error.
+	 */
+	public static function resolve_post_data(
+		string $post_type,
+		array $data,
+		string $source_site_url,
+		callable $make_request,
+		array $credentials
+	): array|WP_Error {
+		$metadata      = self::get_metadata(
+			$source_site_url,
+			$make_request,
+			$credentials
+		);
+		$entry         = self::find_entry( $post_type, $metadata );
+		$expected_type = null !== $entry
+			? $entry['slug']
+			: Post_Type_Map::to_wp_slug( $post_type );
+
+		if ( array_key_exists( 'type', $data ) ) {
+			$response_type = $data['type'];
+			if ( ! is_string( $response_type ) ) {
+				return self::invalid_post_type_error();
+			}
+
+			$sanitized_type = sanitize_key( $response_type );
+			if ( '' === $sanitized_type || $response_type !== $sanitized_type ) {
+				return self::invalid_post_type_error();
+			}
+
+			if ( $expected_type !== $response_type ) {
+				return self::post_type_mismatch_error();
+			}
+
+			$source_post_type = $response_type;
+		} else {
+			$source_post_type = $expected_type;
+			$sanitized_type   = sanitize_key( $source_post_type );
+			if (
+				'' === $sanitized_type
+				|| $source_post_type !== $sanitized_type
+			) {
+				return self::invalid_post_type_error();
+			}
+		}
+
+		$raw_fields = $metadata[ $source_post_type ]['raw_fields'] ?? null;
+		$raw_values = self::extract_raw_values( $data, $raw_fields );
+		if ( is_wp_error( $raw_values ) ) {
+			return $raw_values;
+		}
+
+		return array(
+			'post_type'  => $source_post_type,
+			'raw_values' => $raw_values,
+		);
+	}
+
+	/**
+	 * Extracts raw title, content, and excerpt values from a source response.
+	 *
+	 * @param array                    $data       Decoded source response.
+	 * @param array<string, bool>|null $raw_fields Declared raw fields, or null
+	 *                                             for an older source.
+	 * @return array{title:string,content:string,excerpt:string}|WP_Error
+	 */
+	private static function extract_raw_values(
+		array $data,
+		?array $raw_fields
+	): array|WP_Error {
+		$raw_values     = array(
+			'title'   => '',
+			'content' => '',
+			'excerpt' => '',
+		);
+		$missing_fields = array();
+
+		foreach ( self::RAW_FIELDS as $field ) {
+			$field_value = $data[ $field ] ?? null;
+			if (
+				is_array( $field_value )
+				&& array_key_exists( 'raw', $field_value )
+				&& is_string( $field_value['raw'] )
+			) {
+				$raw_values[ $field ] = $field_value['raw'];
+				continue;
+			}
+
+			if (
+				array_key_exists( $field, $data )
+				|| ( null !== $raw_fields && isset( $raw_fields[ $field ] ) )
+			) {
+				$missing_fields[] = $field;
+				continue;
+			}
+		}
+
+		if ( array() !== $missing_fields ) {
+			return new WP_Error(
+				'fresh_content_raw_fields_missing',
+				sprintf(
+					/* translators: %s: Comma-separated list of field names. */
+					__(
+						'The source response is missing required raw values for supported fields: %s.',
+						'safe-publish'
+					),
+					implode( ', ', $missing_fields )
+				),
+				array( 'status' => 403 )
+			);
+		}
+
+		return $raw_values;
+	}
+
+	/**
+	 * Returns source post type metadata, fetching it once on success.
+	 *
+	 * Failed or malformed responses are not memoized, allowing a later bulk
+	 * item to retry. Individual malformed entries are ignored; an invalid
+	 * raw_fields property conservatively requires every supported field.
 	 *
 	 * @param string   $source_site_url Source site URL.
-	 * @param callable $make_request    fn($url, $action, $credentials, $args = array()): array|WP_Error.
+	 * @param callable $make_request    fn($url, $action, $credentials): array|WP_Error.
 	 * @param array    $credentials     Authentication credentials.
-	 * @return array<string, string> Map of post type slug to rest_base.
+	 * @return array<string, array{
+	 *     rest_base: string,
+	 *     raw_fields: array<string, bool>|null
+	 * }> Metadata keyed by post type slug.
 	 */
-	private static function get_map(
+	private static function get_metadata(
 		string $source_site_url,
 		callable $make_request,
 		array $credentials
 	): array {
-		if ( isset( self::$maps[ $source_site_url ] ) ) {
-			return self::$maps[ $source_site_url ];
+		if ( array_key_exists( $source_site_url, self::$metadata ) ) {
+			return self::$metadata[ $source_site_url ];
 		}
 
 		$url = trailingslashit( $source_site_url )
@@ -221,52 +238,154 @@ final class Source_Post_Type_Resolver {
 			Request_Actions::LIST_ITEMS,
 			$credentials
 		);
-
 		if ( is_wp_error( $response ) ) {
 			return array();
 		}
 
 		$data = json_decode( wp_remote_retrieve_body( $response ), true );
-
-		// The catalog endpoint returns a JSON list. A non-list body — a REST
-		// error envelope ({code, ...}) or anything else — is treated as a
-		// transient failure: Return empty without memoizing so a later call
-		// can retry.
 		if ( ! is_array( $data ) || ! array_is_list( $data ) ) {
 			return array();
 		}
 
-		$map = array();
+		$metadata = array();
 		foreach ( $data as $type ) {
-			// rest_base is interpolated into the wp/v2 request path, and HMAC
-			// vouches for the source's identity but not its honesty — reject
-			// anything outside the REST-path charset so a compromised source
-			// can't shape the request URL. The /D anchor keeps a trailing
-			// newline (which $ would otherwise allow) out of the value.
-			if (
-				is_array( $type )
-				&& isset( $type['slug'], $type['rest_base'] )
-				&& is_string( $type['slug'] )
-				&& is_string( $type['rest_base'] )
-				&& 1 === preg_match( '/^[A-Za-z0-9_-]+$/D', $type['rest_base'] )
-			) {
-				$map[ $type['slug'] ] = $type['rest_base'];
+			if ( ! is_array( $type ) ) {
+				continue;
 			}
+
+			$slug      = $type['slug'] ?? null;
+			$rest_base = $type['rest_base'] ?? null;
+			if (
+				! is_string( $slug )
+				|| '' === $slug
+				|| sanitize_key( $slug ) !== $slug
+				|| ! is_string( $rest_base )
+				|| 1 !== preg_match( '/^[A-Za-z0-9_-]+$/D', $rest_base )
+			) {
+				continue;
+			}
+
+			$metadata[ $slug ] = array(
+				'rest_base'  => $rest_base,
+				'raw_fields' => self::parse_raw_fields( $type ),
+			);
 		}
 
-		self::$maps[ $source_site_url ] = $map;
+		self::$metadata[ $source_site_url ] = $metadata;
 
-		return $map;
+		return $metadata;
 	}
 
 	/**
-	 * Clears the per-request memoized maps.
+	 * Parses an optional catalog raw_fields property.
+	 *
+	 * @param array $type Catalog post type entry.
+	 * @return array<string, bool>|null Parsed fields, or null when unavailable.
+	 */
+	private static function parse_raw_fields( array $type ): ?array {
+		if ( ! array_key_exists( 'raw_fields', $type ) ) {
+			return null;
+		}
+
+		$fields = $type['raw_fields'];
+		if ( ! is_array( $fields ) || ! array_is_list( $fields ) ) {
+			return array_fill_keys( self::RAW_FIELDS, true );
+		}
+
+		$raw_fields = array();
+		foreach ( $fields as $field ) {
+			if (
+				! is_string( $field )
+				|| ! in_array(
+					$field,
+					self::RAW_FIELDS,
+					true
+				)
+			) {
+				return array_fill_keys( self::RAW_FIELDS, true );
+			}
+			$raw_fields[ $field ] = true;
+		}
+
+		return $raw_fields;
+	}
+
+	/**
+	 * Finds metadata by either a post type slug or REST base.
+	 *
+	 * @param string $post_type Source slug or REST base.
+	 * @param array  $metadata  Source metadata keyed by slug.
+	 * @return array{
+	 *     slug: string,
+	 *     rest_base: string,
+	 *     raw_fields: array<string, bool>|null
+	 * }|null Matching entry, or null.
+	 */
+	private static function find_entry(
+		string $post_type,
+		array $metadata
+	): ?array {
+		$slug = Post_Type_Map::to_wp_slug( $post_type );
+		if ( isset( $metadata[ $slug ] ) ) {
+			return array(
+				'slug'       => $slug,
+				'rest_base'  => $metadata[ $slug ]['rest_base'],
+				'raw_fields' => $metadata[ $slug ]['raw_fields'],
+			);
+		}
+
+		foreach ( $metadata as $candidate_slug => $entry ) {
+			if ( $post_type === $entry['rest_base'] ) {
+				return array(
+					'slug'       => $candidate_slug,
+					'rest_base'  => $entry['rest_base'],
+					'raw_fields' => $entry['raw_fields'],
+				);
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Returns the invalid source post type error.
+	 *
+	 * @return WP_Error Invalid-type error.
+	 */
+	private static function invalid_post_type_error(): WP_Error {
+		return new WP_Error(
+			'source_post_type_invalid',
+			__(
+				'The source response did not identify a valid post type.',
+				'safe-publish'
+			),
+			array( 'status' => 502 )
+		);
+	}
+
+	/**
+	 * Returns the source post type mismatch error.
+	 *
+	 * @return WP_Error Type-mismatch error.
+	 */
+	private static function post_type_mismatch_error(): WP_Error {
+		return new WP_Error(
+			'fresh_content_post_type_mismatch',
+			__(
+				'The source response does not match the requested post type.',
+				'safe-publish'
+			),
+			array( 'status' => 502 )
+		);
+	}
+
+	/**
+	 * Clears the per-request memoized metadata.
 	 *
 	 * For tests that exercise multiple source responses for the same URL
 	 * within a single process.
 	 */
 	public static function reset_cache(): void {
-		self::$maps       = array();
-		self::$raw_fields = array();
+		self::$metadata = array();
 	}
 }

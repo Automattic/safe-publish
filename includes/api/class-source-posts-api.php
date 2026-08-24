@@ -524,95 +524,34 @@ class Source_Posts_API {
 			);
 		}
 
-		$source_post_type = Source_Post_Type_Resolver::resolve_slug(
+		$resolved_post_data = Source_Post_Type_Resolver::resolve_post_data(
 			$post_type,
+			$data,
 			$source_site_url,
 			array( $this->http_client, 'make_request' ),
 			$auth_credentials
 		);
-		if (
-			array_key_exists( 'type', $data )
-			&& (
-				! is_string( $data['type'] )
-				|| $source_post_type !== $data['type']
-			)
-		) {
-			$this->logger->content_fetch_invalid_response(
-				$source_post_id,
-				$source_site_url
-			);
-
-			return new WP_Error(
-				'fresh_content_post_type_mismatch',
-				__(
-					'The source response does not match the requested post type.',
-					'safe-publish'
-				),
-				array( 'status' => 502 )
-			);
-		}
-		$raw_fields = Source_Post_Type_Resolver::resolve_raw_fields(
-			$source_post_type,
-			$source_site_url,
-			array( $this->http_client, 'make_request' ),
-			$auth_credentials
-		);
-
-		if ( is_wp_error( $raw_fields ) ) {
-			$this->logger->content_fetch_failed(
-				$source_post_id,
-				$source_site_url,
-				$raw_fields->get_error_message()
-			);
-
-			return $raw_fields;
-		}
-
-		$raw_values     = array();
-		$missing_fields = array();
-
-		foreach ( array( 'title', 'content', 'excerpt' ) as $field ) {
+		if ( is_wp_error( $resolved_post_data ) ) {
 			if (
-				isset( $data[ $field ] )
-				&& is_array( $data[ $field ] )
-				&& isset( $data[ $field ]['raw'] )
-				&& is_string( $data[ $field ]['raw'] )
+				'fresh_content_raw_fields_missing'
+				=== $resolved_post_data->get_error_code()
 			) {
-				$raw_values[ $field ] = $data[ $field ]['raw'];
-				continue;
+				$this->logger->content_fetch_raw_fields_missing(
+					$source_post_id,
+					$source_site_url
+				);
+			} else {
+				$this->logger->content_fetch_invalid_response(
+					$source_post_id,
+					$source_site_url
+				);
 			}
 
-			if (
-				array_key_exists( $field, $data )
-				|| array_key_exists( $field, $raw_fields )
-			) {
-				$missing_fields[] = $field;
-				continue;
-			}
-
-			$raw_values[ $field ] = '';
+			return $resolved_post_data;
 		}
 
-		// Require raw values for supported fields to preserve data parity.
-		if ( array() !== $missing_fields ) {
-			$this->logger->content_fetch_raw_fields_missing(
-				$source_post_id,
-				$source_site_url
-			);
-
-			return new WP_Error(
-				'fresh_content_raw_fields_missing',
-				sprintf(
-					/* translators: %s: Comma-separated list of field names. */
-					__(
-						'The source response is missing required raw values for supported fields: %s.',
-						'safe-publish'
-					),
-					implode( ', ', $missing_fields )
-				),
-				array( 'status' => 403 )
-			);
-		}
+		$source_post_type = $resolved_post_data['post_type'];
+		$raw_values       = $resolved_post_data['raw_values'];
 
 		// Extract post data.
 		$post_data = array();

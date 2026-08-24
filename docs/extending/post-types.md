@@ -55,16 +55,22 @@ register_post_type( 'book', [
 
 ### Custom REST Controllers
 
-Safe Publish reads the route's `OPTIONS` schema to determine whether `title`,
-`content`, and `excerpt` expose raw values. `WP_REST_Posts_Controller` provides
-this automatically.
+Safe Publish includes supported `title`, `content`, and `excerpt` raw fields in
+its authenticated post-type catalog. The source derives them from each REST
+controller's item schema. `WP_REST_Posts_Controller` provides this
+automatically.
 
 If a post type uses a custom `rest_controller_class`, its author must provide
 a standard WordPress item schema. Each supported field must contain a
-`properties.raw` definition. Safe Publish rejects a missing or malformed route
-schema and any response field that lacks a valid raw value. An individual field
-omitted from both the schema and response is treated as unsupported, so the
-controller author is responsible for declaring every supported raw field.
+`properties.raw` definition. Safe Publish rejects a response field that lacks
+a valid raw value. An individual field omitted from both the catalog metadata
+and response is treated as unsupported, so the controller author is responsible
+for declaring every supported raw field.
+
+Destinations connected to an older source without catalog field metadata fall
+back to the response shape: Present malformed fields are rejected, while
+absent fields are treated as unsupported. If a newer source includes malformed
+field metadata, Safe Publish conservatively requires all three raw values.
 
 ### Custom Post Meta
 

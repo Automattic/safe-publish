@@ -90,12 +90,22 @@ final class Diff_Renderer {
 			return $source_data;
 		}
 
-		// Extract incoming data from source response.
-		$incoming = $this->extract_incoming_data( $source_data );
-
-		if ( is_wp_error( $incoming ) ) {
-			return $incoming;
+		$resolved_post_data = Source_Post_Type_Resolver::resolve_post_data(
+			$post_type,
+			$source_data,
+			$source_site_url,
+			$make_request,
+			$credentials
+		);
+		if ( is_wp_error( $resolved_post_data ) ) {
+			return $resolved_post_data;
 		}
+
+		// Extract incoming data from the shared validated raw values.
+		$incoming = $this->extract_incoming_data(
+			$source_data,
+			$resolved_post_data['raw_values']
+		);
 
 		// Extract current local data.
 		$current = $this->extract_current_data( $local_post );
@@ -295,31 +305,19 @@ final class Diff_Renderer {
 	/**
 	 * Extracts incoming data from source API response.
 	 *
-	 * @param array $data Source post data.
+	 * @param array $data       Source post data.
+	 * @param array $raw_values Validated raw title, content, and excerpt.
 	 *
-	 * @return array|WP_Error Structured incoming data, or error when
-	 *                        raw fields are unavailable.
+	 * @return array Structured incoming data.
 	 */
-	private function extract_incoming_data( array $data ): array|WP_Error {
-		if (
-			! isset( $data['title']['raw'] ) ||
-			! isset( $data['content']['raw'] ) ||
-			! isset( $data['excerpt']['raw'] )
-		) {
-			return new WP_Error(
-				'raw_data_unavailable',
-				__(
-					'Could not fetch raw post data. Verify that authentication is configured correctly.',
-					'safe-publish'
-				),
-				array( 'status' => 403 )
-			);
-		}
-
+	private function extract_incoming_data(
+		array $data,
+		array $raw_values
+	): array {
 		$incoming = array(
-			'title'   => $data['title']['raw'],
-			'content' => $data['content']['raw'],
-			'excerpt' => $data['excerpt']['raw'],
+			'title'   => $raw_values['title'],
+			'content' => $raw_values['content'],
+			'excerpt' => $raw_values['excerpt'],
 			'meta'    => isset( $data['meta'] ) && is_array( $data['meta'] ) ? $data['meta'] : array(),
 			'terms'   => array(),
 		);
