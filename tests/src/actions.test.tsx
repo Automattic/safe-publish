@@ -373,6 +373,95 @@ describe( 'createPostsActions per-state eligibility', () => {
 			( modal.props as { skippedCount?: number } ).skippedCount
 		).toBe( 3 );
 	} );
+
+	it( 'Verifies that a published destination post marks the import as live', () => {
+		// ARRANGE: An outdated row whose destination post is published.
+		const importAction = getModalAction(
+			createPostsActions( undefined, true, CONTEXT, {} ),
+			'import'
+		);
+
+		// ACT: Render the modal for that row.
+		const modal = importAction.RenderModal( {
+			items: [
+				buildImportedRow( {
+					local_state: 'outdated' as LocalState,
+					wp_post_status: 'publish',
+				} ),
+			],
+		} );
+
+		// ASSERT: The overwrite confirmation is gated on, not suppressed.
+		expect( ( modal.props as { isLive?: boolean } ).isLive ).toBe( true );
+	} );
+
+	it( 'Verifies that a private destination post marks the import as live', () => {
+		// ARRANGE: An outdated row whose destination post is published with
+		// restricted visibility — not a draft, and visible to those who can see it.
+		const importAction = getModalAction(
+			createPostsActions( undefined, true, CONTEXT, {} ),
+			'import'
+		);
+
+		// ACT: Render the modal for that row.
+		const modal = importAction.RenderModal( {
+			items: [
+				buildImportedRow( {
+					local_state: 'outdated' as LocalState,
+					wp_post_status: 'private',
+				} ),
+			],
+		} );
+
+		// ASSERT: The overwrite is confirmed rather than started on mount.
+		expect( ( modal.props as { isLive?: boolean } ).isLive ).toBe( true );
+	} );
+
+	it( 'Verifies that a scheduled destination post does not mark the import as live', () => {
+		// ARRANGE: An outdated row whose destination post is scheduled. Nothing
+		// is visible yet, so the live-overwrite copy would not hold.
+		const importAction = getModalAction(
+			createPostsActions( undefined, true, CONTEXT, {} ),
+			'import'
+		);
+
+		// ACT: Render the modal for that row.
+		const modal = importAction.RenderModal( {
+			items: [
+				buildImportedRow( {
+					local_state: 'outdated' as LocalState,
+					wp_post_status: 'future',
+				} ),
+			],
+		} );
+
+		// ASSERT: Deliberate exclusion; scheduled posts need their own warning.
+		expect( ( modal.props as { isLive?: boolean } ).isLive ).toBe( false );
+	} );
+
+	it( 'Verifies that an unpublished destination post does not mark the import as live', () => {
+		// ARRANGE: An outdated row imported as a draft and never published —
+		// an update, but nothing publicly visible changes.
+		const importAction = getModalAction(
+			createPostsActions( undefined, true, CONTEXT, {} ),
+			'import'
+		);
+
+		// ACT: Render the modal for that row.
+		const modal = importAction.RenderModal( {
+			items: [
+				buildImportedRow( {
+					local_state: 'outdated' as LocalState,
+					wp_post_status: 'draft',
+				} ),
+			],
+		} );
+
+		// ASSERT: isUpdate alone must not trigger the live-overwrite warning.
+		const props = modal.props as { isUpdate?: boolean; isLive?: boolean };
+		expect( props.isUpdate ).toBe( true );
+		expect( props.isLive ).toBe( false );
+	} );
 } );
 
 /**

@@ -114,11 +114,10 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that the source post-types map is fetched once per request and
-	 * reused for subsequent resolutions (the bulk-import dedupe path).
+	 * Verifies that a custom REST base resolves back to its source type slug.
 	 */
-	public function test_source_map_is_fetched_once_per_request(): void {
-		// ARRANGE: Recording callable shared across two resolutions.
+	public function test_custom_rest_base_resolves_to_source_slug(): void {
+		// ARRANGE: Source advertises movie => movies.
 		$calls        = 0;
 		$make_request = $this->recording_types_callable(
 			array(
@@ -130,26 +129,176 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 			$calls
 		);
 
-		// ACT: Resolve twice within the same request.
-		Source_Post_Type_Resolver::resolve_rest_base(
-			'movie',
-			self::SOURCE_URL,
-			$make_request,
-			array()
-		);
-		Source_Post_Type_Resolver::resolve_rest_base(
-			'movie',
+		// ACT: Resolve post data requested through the advertised REST base.
+		$result = Source_Post_Type_Resolver::resolve_post_data(
+			'movies',
+			array(
+				'type'    => 'movie',
+				'title'   => array( 'raw' => 'Movie' ),
+				'content' => array( 'raw' => 'Content' ),
+				'excerpt' => array( 'raw' => '' ),
+			),
 			self::SOURCE_URL,
 			$make_request,
 			array()
 		);
 
-		// ASSERT: The source was consulted only once.
-		$this->assertSame(
-			1,
-			$calls,
-			'The post-types map must be memoized per request.'
+		// ASSERT: The authoritative catalog supplies the canonical slug.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'movie', $result['post_type'] );
+	}
+
+	/**
+	 * Verifies that routing and raw-field resolution share one authenticated
+	 * catalog request.
+	 */
+	public function test_catalog_metadata_is_shared_between_resolvers(): void {
+		// ARRANGE: A custom movie type supports title and content, but not
+		// excerpt.
+		$calls         = 0;
+		$requested_url = '';
+		$make_request  = function ( string $url ) use (
+			&$calls,
+			&$requested_url
+		): array {
+			++$calls;
+			$requested_url = $url;
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => (string) wp_json_encode(
+					array(
+						array(
+							'slug'       => 'movie',
+							'rest_base'  => 'movies',
+							'raw_fields' => array( 'title', 'content' ),
+						),
+					)
+				),
+			);
+		};
+
+		$post_data = array(
+			'type'    => 'movie',
+			'title'   => array( 'raw' => 'Movie' ),
+			'content' => array( 'raw' => 'Content' ),
 		);
+
+		// ACT: Resolve routing, then validate data using the same catalog.
+		$rest_base = Source_Post_Type_Resolver::resolve_rest_base(
+			'movie',
+			self::SOURCE_URL,
+			$make_request,
+			array()
+		);
+		$result    = Source_Post_Type_Resolver::resolve_post_data(
+			'movie',
+			$post_data,
+			self::SOURCE_URL,
+			$make_request,
+			array()
+		);
+
+		// ASSERT: One authenticated catalog request supplied both resolutions.
+		$this->assertSame( 'movies', $rest_base );
+		$this->assertIsArray( $result );
+		$this->assertSame(
+			array(
+				'title'   => 'Movie',
+				'content' => 'Content',
+				'excerpt' => '',
+			),
+			$result['raw_values']
+		);
+		$this->assertSame( 1, $calls );
+		$this->assertStringContainsString(
+			'/safe-publish/v1/catalog/post-types',
+			$requested_url
+		);
+	}
+
+	/**
+	 * Verifies that a catalog from an older source has no field metadata.
+	 */
+	public function test_legacy_catalog_omits_raw_fields(): void {
+		// ARRANGE: The catalog entry predates raw_fields.
+		$calls        = 0;
+		$make_request = $this->recording_types_callable(
+			array(
+				array(
+					'slug'      => 'post',
+					'rest_base' => 'posts',
+				),
+			),
+			$calls
+		);
+
+		// ACT: Resolve post data with every raw field absent.
+		$result = Source_Post_Type_Resolver::resolve_post_data(
+			'post',
+			array( 'type' => 'post' ),
+			self::SOURCE_URL,
+			$make_request,
+			array()
+		);
+
+		// ASSERT: Absence selects response-shape compatibility behavior.
+		$this->assertIsArray( $result );
+		$this->assertSame(
+			array(
+				'title'   => '',
+				'content' => '',
+				'excerpt' => '',
+			),
+			$result['raw_values']
+		);
+	}
+
+	/**
+	 * Verifies that invalid current raw_fields metadata fails conservatively
+	 * without losing the REST-base mapping.
+	 */
+	public function test_invalid_raw_fields_property_fails_conservatively(): void {
+		// ARRANGE: Valid type metadata carries an invalid field name.
+		$calls        = 0;
+		$make_request = $this->recording_types_callable(
+			array(
+				array(
+					'slug'       => 'movie',
+					'rest_base'  => 'movies',
+					'raw_fields' => array( 'title', 'unknown' ),
+				),
+			),
+			$calls
+		);
+
+		// ACT: Resolve routing and post data missing one core raw field.
+		$rest_base = Source_Post_Type_Resolver::resolve_rest_base(
+			'movie',
+			self::SOURCE_URL,
+			$make_request,
+			array()
+		);
+		$result    = Source_Post_Type_Resolver::resolve_post_data(
+			'movie',
+			array(
+				'type'    => 'movie',
+				'title'   => array( 'raw' => 'Movie' ),
+				'content' => array( 'raw' => 'Content' ),
+			),
+			self::SOURCE_URL,
+			$make_request,
+			array()
+		);
+
+		// ASSERT: Routing remains valid, but invalid metadata cannot weaken
+		// field validation.
+		$this->assertSame( 'movies', $rest_base );
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'fresh_content_raw_fields_missing',
+			$result->get_error_code()
+		);
+		$this->assertSame( 1, $calls );
 	}
 
 	/**

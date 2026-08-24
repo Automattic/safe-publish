@@ -1,11 +1,13 @@
 /**
- * Fires a refresh callback on cleanup once a success flag has flipped.
+ * Fires a refresh callback on cleanup once a gate flag has flipped.
  *
- * Lets modals trigger a parent refresh on any dismiss path (X, Esc, backdrop,
- * Close button) rather than wiring `onRefresh` into a single onClick handler.
+ * Lets modals refresh the parent on any dismiss path (X, Esc, backdrop, Close)
+ * rather than wiring `onRefresh` into a single onClick handler.
  *
- * Requires a stable `onRefresh` reference and a monotonic `succeeded` flag
- * so the cleanup runs once, on unmount.
+ * Gate on the attempt, not the outcome, wherever a failure can also leave the
+ * listing stale.
+ *
+ * Requires a stable `onRefresh` and a monotonic flag so the cleanup runs once.
  *
  * @file This file defines the useRefreshOnUnmount hook.
  */
@@ -13,21 +15,21 @@
 import { useEffect } from '@wordpress/element';
 
 /**
- * Calls the refresh callback on cleanup when the success flag is true.
+ * Calls the refresh callback on cleanup when the gate flag is true.
  *
- * @param {boolean}  succeeded Whether the success condition was reached.
- * @param {Function} onRefresh Refresh callback; no-op when undefined.
+ * @param {boolean}  shouldRefresh Whether a refresh is owed on dismissal.
+ * @param {Function} onRefresh     Refresh callback; no-op when undefined.
  */
 export function useRefreshOnUnmount(
-	succeeded: boolean,
+	shouldRefresh: boolean,
 	onRefresh: ( () => void ) | undefined
 ): void {
 	useEffect( () => {
-		if ( ! succeeded ) {
+		if ( ! shouldRefresh ) {
 			return;
 		}
 		return () => {
 			onRefresh?.();
 		};
-	}, [ succeeded, onRefresh ] );
+	}, [ shouldRefresh, onRefresh ] );
 }

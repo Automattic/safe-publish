@@ -13,6 +13,7 @@ use Safe_Publish\Auth\HMAC_Authenticator;
 use Safe_Publish\Utils\Datetime_Sanitizer;
 use WP_Error;
 use WP_Post;
+use WP_Post_Type;
 use WP_Query;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -426,10 +427,47 @@ final class Catalog_REST_Controller {
 				'description' => is_string( $object->description )
 					? $object->description
 					: '',
+				'raw_fields'  => self::get_raw_fields( $object ),
 			);
 		}
 
 		return new WP_REST_Response( $items, 200 );
+	}
+
+	/**
+	 * Returns the raw fields declared by a post type's REST controller.
+	 *
+	 * The controller schema is authoritative for custom controllers and tracks
+	 * WordPress' post-type support checks for the standard controller.
+	 *
+	 * @param WP_Post_Type $post_type Post type object.
+	 * @return list<string> Supported raw fields.
+	 */
+	private static function get_raw_fields( WP_Post_Type $post_type ): array {
+		$controller = $post_type->get_rest_controller();
+		if ( null === $controller ) {
+			return array();
+		}
+
+		$schema     = $controller->get_item_schema();
+		$properties = $schema['properties'] ?? null;
+		if ( ! is_array( $properties ) ) {
+			return array();
+		}
+
+		$raw_fields = array();
+		foreach ( array( 'title', 'content', 'excerpt' ) as $field ) {
+			$field_properties = $properties[ $field ]['properties'] ?? null;
+			if (
+				is_array( $field_properties )
+				&& isset( $field_properties['raw'] )
+				&& is_array( $field_properties['raw'] )
+			) {
+				$raw_fields[] = $field;
+			}
+		}
+
+		return $raw_fields;
 	}
 
 	/**

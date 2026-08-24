@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\API\Source_Post_Type_Resolver;
 use WP_Error;
 
 /**
@@ -43,6 +44,7 @@ trait Per_Source_Id_Post_Api_Mock_Trait {
 	 * Registers the pre_http_request filter that serves the per-source-id mock.
 	 */
 	protected function add_per_source_id_post_api_mock(): void {
+		Source_Post_Type_Resolver::reset_cache();
 		add_filter(
 			'pre_http_request',
 			array( $this, 'mock_per_source_id_post_api' ),

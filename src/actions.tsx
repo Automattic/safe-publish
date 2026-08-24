@@ -47,6 +47,8 @@ import {
 	attentionIssueLabel,
 	extractUrlPath,
 	getErrorMessage,
+	isImportUpdate,
+	isLiveStatus,
 	renderIssueMessage,
 } from './utils';
 
@@ -149,16 +151,14 @@ export const createPostsActions = (
 		RenderModal: ( { items, closeModal } ) => {
 			if ( 1 === items.length ) {
 				const item = items[ 0 ];
-				const isUpdate =
-					'up-to-date' === item.local_state
-						|| 'outdated' === item.local_state;
 				return (
 					<ImportModal
 						sourcePostId={ item.source_post_id ?? item.id }
 						title={ item.title }
 						sourceLink={ item.link }
 						postType={ item.post_type }
-						isUpdate={ isUpdate }
+						isUpdate={ isImportUpdate( item.local_state ) }
+						isLive={ isLiveStatus( item.wp_post_status ) }
 						skippedCount={ Math.max( 0, selectedCount - items.length ) }
 						ajaxurl={ context.ajaxurl }
 						nonce={ context.nonce }
@@ -174,51 +174,12 @@ export const createPostsActions = (
 						id: item.source_post_id ?? item.id,
 						post_type: item.post_type,
 						title: item.title,
+						local_state: item.local_state,
 					} ) ) }
 					skippedCount={ Math.max( 0, selectedCount - items.length ) }
 					context={ { ajaxurl: context.ajaxurl, nonce: context.nonce } }
 					onClose={ () => closeModal?.() }
 					onRefresh={ onRefresh }
-					labels={ {
-						/* translators: %d is the number of selected posts */
-						confirmQuestion: __(
-							'Import %d selected posts from the source?',
-							'safe-publish'
-						),
-						/* translators: 1: importable count, 2: total selected count */
-						confirmQuestionPartial: __(
-							'Import %1$d of %2$d selected posts from the source?',
-							'safe-publish'
-						),
-						confirmDescription: __(
-							'This pulls each post from the source — content, images, links, and formatting.',
-							'safe-publish'
-						),
-						processingHeading: __(
-							'Importing posts as a batch…',
-							'safe-publish'
-						),
-						/* translators: %d is the number of selected posts */
-						processingFootnote: __(
-							'All %d posts will be imported in a single session',
-							'safe-publish'
-						),
-						completedHeading: __( 'Import completed!', 'safe-publish' ),
-						failedHeading: __( 'Import failed', 'safe-publish' ),
-						partialHeading: __(
-							'Import completed with errors',
-							'safe-publish'
-						),
-						/* translators: 1: successful count, 2: total count */
-						totalSummary: __(
-							'Imported: %1$d of %2$d posts',
-							'safe-publish'
-						),
-						/* translators: %d is the number of selected posts */
-						primaryButton: __( 'Import %d posts', 'safe-publish' ),
-						loadingButton: __( 'Importing…', 'safe-publish' ),
-						primaryActionId: 'import',
-					} }
 				/>
 			);
 		},

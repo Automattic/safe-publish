@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\API\Source_Post_Type_Resolver;
 use Safe_Publish\Utils\Attention_Issues_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
@@ -28,6 +29,7 @@ abstract class Integration_Test_Case extends WP_UnitTestCase {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
+		Source_Post_Type_Resolver::reset_cache();
 
 		wp_set_current_user(
 			self::factory()->user->create(

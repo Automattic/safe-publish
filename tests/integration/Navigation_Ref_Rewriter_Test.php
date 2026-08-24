@@ -44,6 +44,10 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
+		$this->mock_post_overrides = array(
+			'omit_excerpt' => true,
+			'type'         => 'wp_navigation',
+		);
 
 		update_option( Options::OPTION_CONNECTED_SITE_URL, self::SOURCE_A );
 		add_filter(
@@ -72,17 +76,15 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 	 * Serves the navigation single-post endpoint; other URLs fall through.
 	 *
 	 * @param false|array|WP_Error $preempt Short-circuit value passed by WP.
-	 * @param array                $args    Request args (unused).
+	 * @param array                $_args   Request arguments.
 	 * @param string               $url     Requested URL.
 	 * @return false|array|WP_Error Mock response, or $preempt to defer.
 	 */
 	public function mock_navigation_source(
 		false|array|WP_Error $preempt,
-		array $args,
+		array $_args,
 		string $url
 	): false|array|WP_Error {
-		unset( $args );
-
 		if ( false !== $preempt ) {
 			return $preempt;
 		}

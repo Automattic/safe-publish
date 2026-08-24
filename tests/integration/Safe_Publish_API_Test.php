@@ -597,10 +597,15 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 					'body'     => (string) wp_json_encode(
 						array(
 							array(
-								'slug'      => 'sp_movie',
-								'name'      => 'Movies',
-								'label'     => 'Movies',
-								'rest_base' => 'sp_movies',
+								'slug'       => 'sp_movie',
+								'name'       => 'Movies',
+								'label'      => 'Movies',
+								'rest_base'  => 'sp_movies',
+								'raw_fields' => array(
+									'title',
+									'content',
+									'excerpt',
+								),
 							),
 						)
 					),
@@ -684,6 +689,88 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		);
 
 		unregister_post_type( 'sp_movie' );
+	}
+
+	/**
+	 * Verifies that Compare accepts a navigation response without an excerpt
+	 * when the authenticated catalog declares that field unsupported.
+	 */
+	public function test_diff_renderer_accepts_navigation_without_excerpt(): void {
+		// ARRANGE: A local navigation post linked to its source counterpart.
+		$local_id = $this->factory()->post->create(
+			array(
+				'post_type'    => 'wp_navigation',
+				'post_status'  => 'publish',
+				'post_title'   => 'Local navigation',
+				'post_content' => '<!-- wp:navigation-link /-->',
+				'post_excerpt' => 'Local navigation excerpt',
+			)
+		);
+		update_post_meta(
+			$local_id,
+			'safe_publish_source_post_id',
+			self::SOURCE_POST_ID
+		);
+		update_post_meta(
+			$local_id,
+			'safe_publish_source_site_url',
+			'https://example.com'
+		);
+
+		$make_request = static function ( string $url ): array {
+			if ( str_contains( $url, '/catalog/post-types' ) ) {
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => (string) wp_json_encode(
+						array(
+							array(
+								'slug'       => 'wp_navigation',
+								'rest_base'  => 'navigation',
+								'raw_fields' => array( 'title', 'content' ),
+							),
+						)
+					),
+				);
+			}
+
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => (string) wp_json_encode(
+					array(
+						'type'    => 'wp_navigation',
+						'title'   => array( 'raw' => 'Source navigation' ),
+						'content' => array(
+							'raw' => '<!-- wp:navigation-link /-->',
+						),
+					)
+				),
+			);
+		};
+
+		$request = new WP_REST_Request(
+			'POST',
+			'/safe-publish/v1/diff-preview'
+		);
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'wp_navigation' );
+
+		// ACT: Render the diff without excerpt.raw in the source response.
+		$result = ( new Diff_Renderer() )->render_diff(
+			$request,
+			$make_request,
+			array()
+		);
+
+		// ASSERT: Compare succeeds and treats the unsupported excerpt as empty.
+		$this->assertIsArray( $result );
+		$this->assertSame(
+			'Local navigation excerpt',
+			$result['current']['excerpt']
+		);
+		$this->assertStringContainsString(
+			'Local navigation excerpt',
+			$result['nonContentDiffs']['excerpt']
+		);
 	}
 
 	/**
