@@ -68,7 +68,7 @@ jobs:
     needs:
       - php-static-checks
       - frontend-static-checks
-    if: ${{ always() && !cancelled() }}
+    if: ${{ !cancelled() }}
     steps:
       - name: Verify check results
         run: |
