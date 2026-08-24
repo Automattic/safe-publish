@@ -134,7 +134,7 @@ Safe Publish supports importing a single post or many posts at once. Both paths 
 ### Import a single post
 
 1. On **Manage → Posts**, use the **Import** row action.
-2. Confirm the import in the dialog that appears.
+2. The import starts right away. If the destination post is already published, confirm the overwrite first, because it changes the live site immediately.
 
 If a post with the same source post ID already exists on the destination, Safe Publish updates that post rather than creating a duplicate. If no matching post exists, it creates a new one.
 

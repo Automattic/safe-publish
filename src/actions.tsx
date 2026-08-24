@@ -48,6 +48,7 @@ import {
 	extractUrlPath,
 	getErrorMessage,
 	isImportUpdate,
+	isLiveStatus,
 	renderIssueMessage,
 } from './utils';
 
@@ -157,6 +158,7 @@ export const createPostsActions = (
 						sourceLink={ item.link }
 						postType={ item.post_type }
 						isUpdate={ isImportUpdate( item.local_state ) }
+						isLive={ isLiveStatus( item.wp_post_status ) }
 						skippedCount={ Math.max( 0, selectedCount - items.length ) }
 						ajaxurl={ context.ajaxurl }
 						nonce={ context.nonce }

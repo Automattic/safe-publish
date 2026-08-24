@@ -256,6 +256,73 @@ describe( 'useImportPost', () => {
 		expect( result.current.isLoading ).toBe( false );
 	} );
 
+	it( 'flags the update-confirmation prompt instead of reporting an import', async () => {
+		// ARRANGE: The endpoint's short-circuit for an already-imported post —
+		// a success envelope carrying an edit_url for a post it did not touch.
+		vi.mocked( fetch ).mockResolvedValue(
+			new Response(
+				JSON.stringify( {
+					success: true,
+					data: {
+						existing: true,
+						post_id: 42,
+						post_title: 'Hello world',
+						edit_url: 'https://example.com/edit',
+						confirm_action: 'update_existing',
+					},
+				} ),
+				{ status: 200 }
+			)
+		);
+
+		// ACT: Submit without force_update, as a first-time import does.
+		const { result } = renderHook( () => useImportPost( PARAMS ) );
+		act( () => {
+			result.current.submit();
+		} );
+
+		// ASSERT: The prompt surfaces as its own state; editUrl stays null so
+		// success-only UI cannot claim the post was imported.
+		await waitFor( () =>
+			expect( result.current.alreadyImported ).toBe( true )
+		);
+		expect( result.current.editUrl ).toBeNull();
+		expect( result.current.error ).toBeNull();
+	} );
+
+	it( 'treats an existing flag on a completed update as a success', async () => {
+		// ARRANGE: A real update also reports existing: true, but without the
+		// confirm_action key that marks the short-circuit.
+		vi.mocked( fetch ).mockResolvedValue(
+			new Response(
+				JSON.stringify( {
+					success: true,
+					data: {
+						existing: true,
+						post_id: 42,
+						edit_url: 'https://example.com/edit',
+					},
+				} ),
+				{ status: 200 }
+			)
+		);
+
+		// ACT: Submit as an update.
+		const { result } = renderHook( () =>
+			useImportPost( { ...PARAMS, isUpdate: true } )
+		);
+		act( () => {
+			result.current.submit();
+		} );
+
+		// ASSERT: Only confirm_action gates the prompt state, so the update
+		// still lands as a success.
+		await waitFor( () =>
+			expect( result.current.editUrl ).toBe( 'https://example.com/edit' )
+		);
+		expect( result.current.alreadyImported ).toBe( false );
+	} );
+
 	it( 'treats a non-array warnings field as empty', async () => {
 		// ARRANGE: Successful response with a non-array warnings field,
 		// exercising the hook's defensive Array.isArray guard.

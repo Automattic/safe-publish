@@ -181,6 +181,22 @@ export function statusBadgeModifier( status: string ): string {
 	return ownLookup( STATUS_BADGE_MODIFIERS, status ) ?? '';
 }
 
+// Scheduled posts are excluded: nothing is visible yet, so the overwrite
+// warning's copy would not hold.
+const LIVE_STATUSES: readonly string[] = [ 'publish', 'private' ];
+
+/**
+ * Whether overwriting a destination post in this status changes what readers
+ * already see.
+ *
+ * @param {string|null} status Destination post status, null when absent.
+ *
+ * @return {boolean} True when the content is already visible.
+ */
+export function isLiveStatus( status: string | null ): boolean {
+	return null !== status && LIVE_STATUSES.includes( status );
+}
+
 /**
  * Renders a term the import could not reconcile, pointing at the destination
  * change that unblocks it.

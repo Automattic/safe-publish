@@ -9,6 +9,7 @@ import {
 	formatDateTime,
 	extractUrlPath,
 	getErrorMessage,
+	isLiveStatus,
 	renderIssueMessage,
 	renderWarningMessage,
 	renderWarningShortLabel,
@@ -791,6 +792,30 @@ describe( 'statusLabel', () => {
 		expect( statusLabel( '__proto__' ) ).toBe( 'Proto' );
 		expect( statusLabel( 'constructor' ) ).toBe( 'Constructor' );
 		expect( statusLabel( 'toString' ) ).toBe( 'ToString' );
+	} );
+} );
+
+describe( 'isLiveStatus', () => {
+	it( 'Verifies that published and private statuses count as live', () => {
+		// ARRANGE + ACT + ASSERT: Both are published states whose content
+		// readers can already see, so an overwrite needs confirming.
+		expect( isLiveStatus( 'publish' ) ).toBe( true );
+		expect( isLiveStatus( 'private' ) ).toBe( true );
+	} );
+
+	it( 'Verifies that statuses with nothing visible yet are not live', () => {
+		// ARRANGE + ACT + ASSERT: Scheduled posts are excluded deliberately —
+		// they publish later, so the live-overwrite copy would not hold.
+		expect( isLiveStatus( 'draft' ) ).toBe( false );
+		expect( isLiveStatus( 'pending' ) ).toBe( false );
+		expect( isLiveStatus( 'future' ) ).toBe( false );
+	} );
+
+	it( 'Verifies that an absent or custom status is not treated as live', () => {
+		// ARRANGE + ACT + ASSERT: A row with no destination post carries null,
+		// and an unrecognized status must not be assumed visible.
+		expect( isLiveStatus( null ) ).toBe( false );
+		expect( isLiveStatus( 'in-progress' ) ).toBe( false );
 	} );
 } );
 
