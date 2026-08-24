@@ -20,6 +20,7 @@ import { __, sprintf } from '@wordpress/i18n';
 
 import { ApiResponse, UnifiedPostRow } from '../types';
 import { getErrorMessage } from '../utils';
+import ConfirmTitleList from './ConfirmTitleList';
 
 /**
  * Props for the DeletePostModal component.
@@ -127,7 +128,14 @@ const DeletePostModal = ( {
 
 	return (
 		<VStack spacing="5">
-			<Text>{ confirmationText }</Text>
+			{ isBulk ? (
+				<ConfirmTitleList
+					heading={ confirmationText }
+					titles={ items.map( ( item ) => item.title ) }
+				/>
+			) : (
+				<Text>{ confirmationText }</Text>
+			) }
 			{ error && (
 				<Text role="alert" style={ { color: 'var(--safe-publish-status-error)' } }>
 					{ error }

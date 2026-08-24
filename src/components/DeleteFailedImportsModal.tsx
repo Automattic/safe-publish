@@ -21,6 +21,7 @@ import { __, sprintf } from '@wordpress/i18n';
 
 import { ApiResponse } from '../types';
 import { getErrorMessage } from '../utils';
+import ConfirmTitleList from './ConfirmTitleList';
 
 /**
  * A failure row to remove. Orphans carry only an itemId; source-linked
@@ -124,7 +125,14 @@ const DeleteFailedImportsModal = ( {
 
 	return (
 		<VStack spacing="5">
-			<Text>{ confirmationText }</Text>
+			{ isBulk ? (
+				<ConfirmTitleList
+					heading={ confirmationText }
+					titles={ items.map( ( item ) => item.title ) }
+				/>
+			) : (
+				<Text>{ confirmationText }</Text>
+			) }
 			{ error && (
 				<Text
 					role="alert"
