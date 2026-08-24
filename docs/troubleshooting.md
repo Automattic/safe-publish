@@ -201,30 +201,18 @@ add_filter(
 
 1. Verify the HMAC shared secret and connected-site URLs on both sites.
 2. Confirm the request reaches the source with authenticated `context=edit` access.
-3. Check that the source REST response includes a `raw` value for each field
-   its post type supports. For example, a type supporting title, editor, and
-   excerpt must include `title.raw`, `content.raw`, and `excerpt.raw`. Fields
-   the type does not support may be absent.
-4. If the post type uses a custom REST controller, ask its author to provide a
-   standard WordPress item schema. Each supported title, content, or excerpt
-   field must declare a `raw` property. Safe Publish publishes those fields in
-   its authenticated post-type catalog and treats a field omitted from both
-   the catalog metadata and response as unsupported.
+3. Check that the source REST response includes a `raw` value for each field its post type supports. For example, a type supporting title, editor, and excerpt must include `title.raw`, `content.raw`, and `excerpt.raw`. Fields the type does not support may be absent.
+4. If the post type uses a custom REST controller, ask its author to provide a standard WordPress item schema. Each supported title, content, or excerpt field must declare a `raw` property. Safe Publish publishes those fields in its authenticated post-type catalog and treats a field omitted from both the catalog metadata and response as unsupported.
 
 #### "Post type not listed in catalog" error
 
-**Symptoms**: Import or Compare reports that the source site does not list the
-post type in its catalog, for a post that imported successfully before
+**Symptoms**: Import or Compare reports that the source site does not list the post type in its catalog, for a post that imported successfully before
 
 **Solutions**:
 
-1. Confirm the post type is still registered on the source with
-   `show_in_rest` set to `true` and `public` set to `true`. Safe Publish also
-   allows `wp_navigation` and `wp_block` despite `public` being false.
-2. A truthy but non-boolean `show_in_rest` value, such as `1`, registers the
-   REST route but excludes the type from the catalog. Use `true`.
-3. Where the source registers the type conditionally, confirm the registration
-   also runs for REST requests.
+1. Confirm the post type is still registered on the source with `show_in_rest` set to `true` and `public` set to `true`. Safe Publish also allows `wp_navigation` and `wp_block` despite `public` being false.
+2. A truthy but non-boolean `show_in_rest` value, such as `1`, registers the REST route but excludes the type from the catalog. Use `true`.
+3. Where the source registers the type conditionally, confirm the registration also runs for REST requests.
 
 #### Post creation failed
 
