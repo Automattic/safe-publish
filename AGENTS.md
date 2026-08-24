@@ -107,7 +107,7 @@ Use these sources of truth:
 When WordPress or PHP compatibility changes, or the plugin's minimum WordPress or PHP version changes, update all of the following together:
 
 1. In `.github/workflows/integration-tests.yml`, list every stable WordPress major/minor release from the plugin's minimum through the current release, and every PHP major/minor release from the plugin's minimum through the newest version supported by at least one of those WordPress releases. Add an `exclude` entry for every combination marked unsupported by WordPress. Keep every supported combination running on every pull request.
-2. In `.github/workflows/e2e-tests.yml`, include every supported WordPress major/minor release once, paired with the highest PHP version that release supports. Use the corresponding `WordPress/WordPress#X.Y-branch` ref.
+2. In `.github/workflows/e2e-tests.yml`, include every supported WordPress major/minor release once, paired with the highest PHP version that release supports.
 3. In `.github/workflows/unit-tests.yml`, test every PHP major/minor version from the plugin's minimum through the newest PHP version represented in the integration matrix.
 4. In `.github/workflows/static-checks.yml`, run PHP checks on the plugin's minimum PHP version.
 5. Verify each stable `WordPress/WordPress#X.Y-branch` ref exists, parse every workflow as YAML, and run `npm run fix` followed by `npm run check`.
