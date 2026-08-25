@@ -125,6 +125,23 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 		$this->assertStringContainsString( '"ref":50001', $post->post_content );
 		$this->assertStringNotContainsString( '"ref":99001', $post->post_content );
 		$this->assertSame( $modified_before, $post->post_modified );
+		$rewritten_block = parse_blocks( $post->post_content )[0];
+		$this->assertSame(
+			array(
+				array(
+					'post_id' => $post_id,
+					'blocks'  => array(
+						array(
+							'after_block_hash' => $this->compact_hash(
+								serialize_block( $rewritten_block )
+							),
+							'paths'            => array( array( 0 ) ),
+						),
+					),
+				),
+			),
+			$result['changes']
+		);
 		$this->assertNotSame(
 			'',
 			get_post_meta(
@@ -378,15 +395,22 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			'wp_navigation'
 		);
 
+		$repository = new History_Repository();
+		$session_id = $repository->create_session( self::SOURCE_A, 'single' );
+
 		// ACT: Import menu B (source 8200) through the full import path.
-		$result = $this->build_import_service( new Navigation_Ref_Rewriter() )
+		$result = $this->build_import_service(
+			new Navigation_Ref_Rewriter(),
+			$repository
+		)
 			->import_post(
 				array(
 					'id'        => 8200,
 					'title'     => 'Menu B',
 					'link'      => self::SOURCE_A . '/menu-b',
 					'post_type' => 'wp_navigation',
-				)
+				),
+				$session_id
 			);
 
 		// ASSERT: Import succeeded and menu A now points at menu B's dest ID.
@@ -399,6 +423,20 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			'"ref":8200',
 			get_post( $menu_a )->post_content
 		);
+		$items   = $repository->get_session_items_by_status(
+			$session_id,
+			array( 'success' )
+		);
+		$changes = History_Repository::decode_item_changes(
+			$items[0]['content_changes']
+		);
+		$this->assertIsArray( $changes );
+		$this->assertArrayNotHasKey( 'previous_content', $changes );
+		$nav = $changes['rollback_snapshot']['navigation_rewrites'];
+		$this->assertSame( 8200, $nav['source_ref'] );
+		$this->assertSame( (int) $result['post_id'], $nav['destination_ref'] );
+		$this->assertSame( $menu_a, $nav['posts'][0]['post_id'] );
+		$this->assertSame( array( array( 0 ) ), $nav['posts'][0]['blocks'][0]['paths'] );
 	}
 
 	/**
@@ -437,14 +475,155 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that an unrecordable new-menu import restores cross-post refs.
+	 */
+	public function test_history_failure_restores_navigation_rewrites(): void {
+		// ARRANGE: An imported post references a menu that is about to arrive.
+		$referencing_post = $this->seed_referencing_post(
+			$this->nav_ref_block( 8400 ),
+			self::SOURCE_A,
+			8102
+		);
+		$repository       = new History_Repository();
+		$session_id       = $repository->create_session( self::SOURCE_A, 'single' );
+		$attention        = new Attention_Issues_Repository();
+		$attention->upsert_issue(
+			$referencing_post,
+			'nav_ref_rewrite_failed',
+			8400,
+			'post',
+			'error',
+			self::SOURCE_A,
+			array( 'source_nav_id' => 8400 )
+		);
+
+		global $wpdb;
+		$history_table = $wpdb->prefix . 'safe_publish_import_items';
+		$fail_insert   = static function ( string $query ) use ( $history_table ): string {
+			if ( str_starts_with( $query, "INSERT INTO `$history_table`" ) ) {
+				return str_replace( $history_table, $history_table . '_missing', $query );
+			}
+
+			return $query;
+		};
+		add_filter( 'query', $fail_insert );
+		$wpdb->suppress_errors();
+
+		// ACT: Import the menu while its success row cannot be written.
+		$result = $this->build_import_service(
+			new Navigation_Ref_Rewriter(),
+			$repository,
+			$attention
+		)->import_post(
+			array(
+				'id'        => 8400,
+				'title'     => 'Unrecorded Menu',
+				'link'      => self::SOURCE_A . '/unrecorded-menu',
+				'post_type' => 'wp_navigation',
+			),
+			$session_id
+		);
+
+		$wpdb->suppress_errors( false );
+		remove_filter( 'query', $fail_insert );
+
+		// ASSERT: The import fails and the referencing post returns to its
+		// source ref rather than pointing at the discarded destination menu.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString(
+			'"ref":8400',
+			get_post( $referencing_post )->post_content
+		);
+		$this->assertSame(
+			array(),
+			$repository->get_session_items_by_status(
+				$session_id,
+				array( 'success' )
+			)
+		);
+		$this->assertIsArray(
+			$attention->get_issue(
+				$referencing_post,
+				'nav_ref_rewrite_failed',
+				8400
+			)
+		);
+	}
+
+	/**
+	 * Verifies that compensation does not overwrite a concurrent nav edit.
+	 */
+	public function test_history_failure_preserves_concurrent_navigation_edit(): void {
+		// ARRANGE: A referencing post that changes again before compensation.
+		$referencing_post = $this->seed_referencing_post(
+			$this->nav_ref_block( 8401 ),
+			self::SOURCE_A,
+			8103
+		);
+		$repository       = new History_Repository();
+		$session_id       = $repository->create_session( self::SOURCE_A, 'single' );
+		$concurrent       = '<!-- wp:paragraph --><p>Concurrent edit.</p><!-- /wp:paragraph -->';
+
+		global $wpdb;
+		$history_table = $wpdb->prefix . 'safe_publish_import_items';
+		$fail_insert   = static function ( string $query ) use (
+			$history_table,
+			$referencing_post,
+			$concurrent,
+			$wpdb
+		): string {
+			if ( str_starts_with( $query, "INSERT INTO `$history_table`" ) ) {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Simulates a concurrent writer during the history insert.
+				$wpdb->update(
+					$wpdb->posts,
+					array( 'post_content' => $concurrent ),
+					array( 'ID' => $referencing_post )
+				);
+				clean_post_cache( $referencing_post );
+
+				return str_replace( $history_table, $history_table . '_missing', $query );
+			}
+
+			return $query;
+		};
+		add_filter( 'query', $fail_insert );
+		$wpdb->suppress_errors();
+
+		// ACT: Fail history after the concurrent writer replaces the rewrite.
+		$result = $this->build_import_service(
+			new Navigation_Ref_Rewriter(),
+			$repository
+		)->import_post(
+			array(
+				'id'        => 8401,
+				'title'     => 'Concurrent Menu',
+				'link'      => self::SOURCE_A . '/concurrent-menu',
+				'post_type' => 'wp_navigation',
+			),
+			$session_id
+		);
+
+		$wpdb->suppress_errors( false );
+		remove_filter( 'query', $fail_insert );
+
+		// ASSERT: Compensation reports failure and preserves the newer edit.
+		$this->assertFalse( $result['success'] );
+		$this->assertSame( $concurrent, get_post( $referencing_post )->post_content );
+	}
+
+	/**
 	 * Builds a Post_Import_Service wired against real dependencies and the
 	 * given rewriter.
 	 *
-	 * @param Navigation_Ref_Rewriter $rewriter Rewriter to inject.
+	 * @param Navigation_Ref_Rewriter          $rewriter   Rewriter to inject.
+	 * @param History_Repository|null          $repository History repository, or null.
+	 * @param Attention_Issues_Repository|null $attention Attention repository, or null.
 	 * @return Post_Import_Service Service under test.
 	 */
 	private function build_import_service(
-		Navigation_Ref_Rewriter $rewriter
+		Navigation_Ref_Rewriter $rewriter,
+		?History_Repository $repository = null,
+		?Attention_Issues_Repository $attention = null
 	): Post_Import_Service {
 		$media_importer = new Media_Importer( new HTTP_Client() );
 
@@ -456,11 +635,11 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 				new Content_Media_Processor( $media_importer ),
 				new Shortcode_ID_Rewriter()
 			),
-			new History_Repository(),
+			$repository ?? new History_Repository(),
 			new Meta_Terms_Manager(),
 			new Telemetry_Service(),
 			$rewriter,
-			new Attention_Issues_Repository()
+			$attention ?? new Attention_Issues_Repository()
 		);
 	}
 
@@ -539,6 +718,19 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 	 */
 	private function nav_ref_block( int $ref ): string {
 		return '<!-- wp:navigation {"ref":' . $ref . '} /-->';
+	}
+
+	/**
+	 * Returns the version-1 compact digest for a rewritten block.
+	 *
+	 * @param string $value Value to hash.
+	 * @return string Unpadded Base64URL SHA-256 digest.
+	 */
+	private function compact_hash( string $value ): string {
+		return rtrim(
+			strtr( base64_encode( hash( 'sha256', $value, true ) ), '+/', '-_' ),
+			'='
+		);
 	}
 
 	/**

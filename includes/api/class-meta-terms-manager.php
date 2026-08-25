@@ -58,6 +58,13 @@ final class Meta_Terms_Manager {
 	private array $reconciled_terms = array();
 
 	/**
+	 * Updated-term snapshots awaiting ownership by a persisted history row.
+	 *
+	 * @var array<string, array<int, array{taxonomy:string, fields:array}>>
+	 */
+	private array $pending_term_updates = array();
+
+	/**
 	 * Updates post meta based on provided input.
 	 *
 	 * Accepts array or object; keys are meta keys, values are meta values.
@@ -649,7 +656,8 @@ final class Meta_Terms_Manager {
 				$record,
 				$tax,
 				$dest_parent_id,
-				$source_site_url
+				$source_site_url,
+				$report
 			);
 			if ( is_wp_error( $created ) ) {
 				return $created;
@@ -771,6 +779,16 @@ final class Meta_Terms_Manager {
 		// Reconcile once per run: Later posts only replay the conflicts.
 		if ( isset( $this->reconciled_terms[ $key ][ $term_id ] ) ) {
 			$report->add_conflicts( $this->reconciled_terms[ $key ][ $term_id ] );
+
+			if ( isset( $this->pending_term_updates[ $key ][ $term_id ] ) ) {
+				$pending = $this->pending_term_updates[ $key ][ $term_id ];
+				$report->record_updated(
+					$pending['taxonomy'],
+					$term_id,
+					$pending['fields']
+				);
+			}
+
 			return;
 		}
 
@@ -798,6 +816,8 @@ final class Meta_Terms_Manager {
 			$term_report
 		);
 
+		$updated = false;
+
 		if ( array() !== $changes ) {
 			// Core unslashes as it saves, so an unslashed backslash would be
 			// dropped and the compare would never converge.
@@ -811,6 +831,21 @@ final class Meta_Terms_Manager {
 						implode( ', ', array_keys( $changes ) )
 					)
 				);
+			} else {
+				$updated = true;
+			}
+		}
+
+		if ( true === $updated ) {
+			$current = get_term( $term_id, $tax );
+
+			if ( $current instanceof WP_Term ) {
+				$fields = $this->recorded_term_changes( $term, $current, $changes );
+				$this->pending_term_updates[ $key ][ $term_id ] = array(
+					'taxonomy' => $tax,
+					'fields'   => $fields,
+				);
+				$report->record_updated( $tax, $term_id, $fields );
 			}
 		}
 
@@ -828,6 +863,29 @@ final class Meta_Terms_Manager {
 		}
 
 		$report->add_conflicts( $conflicts );
+	}
+
+	/**
+	 * Marks updated-term snapshots as owned by a persisted import item.
+	 *
+	 * @param string                $source_site_url Source site URL.
+	 * @param Term_Reconcile_Report $report          Persisted term effects.
+	 */
+	public function acknowledge_updated_terms(
+		string $source_site_url,
+		Term_Reconcile_Report $report
+	): void {
+		foreach ( $report->updated() as $update ) {
+			$key = $this->source_term_key(
+				$update['taxonomy'],
+				$source_site_url
+			);
+			unset( $this->pending_term_updates[ $key ][ $update['term_id'] ] );
+
+			if ( array() === ( $this->pending_term_updates[ $key ] ?? array() ) ) {
+				unset( $this->pending_term_updates[ $key ] );
+			}
+		}
 	}
 
 	/**
@@ -1248,13 +1306,15 @@ final class Meta_Terms_Manager {
 	 * @param string                                                                                                            $tax             Taxonomy slug.
 	 * @param int                                                                                                               $dest_parent_id  Resolved destination parent term ID, or 0.
 	 * @param string                                                                                                            $source_site_url Source site URL recorded as the term's origin.
+	 * @param Term_Reconcile_Report                                                                                             $report          Collects created term IDs.
 	 * @return int|WP_Error Destination term ID, or WP_Error on insert failure.
 	 */
 	private function create_term(
 		array $record,
 		string $tax,
 		int $dest_parent_id,
-		string $source_site_url
+		string $source_site_url,
+		Term_Reconcile_Report $report
 	): int|WP_Error {
 		$args        = array();
 		$description = $record['description'] ?? '';
@@ -1300,9 +1360,58 @@ final class Meta_Terms_Manager {
 
 		if ( in_array( $term_id, $created_ids, true ) ) {
 			$this->mark_term_origin( $term_id, $source_site_url );
+			$report->record_created( $tax, $term_id );
 		}
 
 		return $term_id;
+	}
+
+	/**
+	 * Builds compact before/after records for visible term fields.
+	 *
+	 * String after-values are hashed to keep large descriptions out of history.
+	 *
+	 * @param WP_Term                   $before  Term before the update.
+	 * @param WP_Term                   $after   Persisted term after the update.
+	 * @param array<string, int|string> $changes Fields passed to wp_update_term().
+	 * @return array<string, array{before:mixed, after?:mixed, after_hash?:string}>
+	 */
+	private function recorded_term_changes(
+		WP_Term $before,
+		WP_Term $after,
+		array $changes
+	): array {
+		$recorded = array();
+
+		foreach ( array_keys( $changes ) as $field ) {
+			if ( 'parent' === $field ) {
+				$recorded[ $field ] = array(
+					'before' => (int) $before->parent,
+					'after'  => (int) $after->parent,
+				);
+				continue;
+			}
+
+			$recorded[ $field ] = array(
+				'before'     => (string) $before->{$field},
+				'after_hash' => self::compact_hash( (string) $after->{$field} ),
+			);
+		}
+
+		return $recorded;
+	}
+
+	/**
+	 * Returns an unpadded Base64URL SHA-256 digest.
+	 *
+	 * @param string $value Value to hash.
+	 * @return string Compact digest.
+	 */
+	private static function compact_hash( string $value ): string {
+		return rtrim(
+			strtr( base64_encode( hash( 'sha256', $value, true ) ), '+/', '-_' ),
+			'='
+		);
 	}
 
 	/**

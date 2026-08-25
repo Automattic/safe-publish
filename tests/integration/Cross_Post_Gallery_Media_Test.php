@@ -70,6 +70,13 @@ class Cross_Post_Gallery_Media_Test extends Integration_Test_Case {
 	private Post_Import_Service $service;
 
 	/**
+	 * Content processor used by the import service.
+	 *
+	 * @var Content_Processor
+	 */
+	private Content_Processor $content_processor;
+
+	/**
 	 * Sets up the connection, HTTP mocks, and import service.
 	 */
 	#[\Override]
@@ -472,29 +479,68 @@ class Cross_Post_Gallery_Media_Test extends Integration_Test_Case {
 			),
 		);
 
+		$repository = new History_Repository();
+		$session_id = $repository->create_session( self::SOURCE, 'single' );
+
 		// ACT: Import A.
-		$this->import( self::A_SOURCE );
+		$this->import( self::A_SOURCE, $session_id );
 
 		// ASSERT: The same attachment is reused, its order corrected to 5.
 		$x = $this->dest_attachment_for( $x_url );
 		$this->assertSame( $existing, $x->ID );
 		$this->assertSame( 5, (int) $x->menu_order );
+		$this->assertSame(
+			array(
+				$existing => array(
+					'menu_order' => array(
+						'before' => 0,
+						'after'  => 5,
+					),
+				),
+			),
+			$this->content_processor->get_updated_attachments()
+		);
+		$items = $repository->get_session_items_by_status(
+			$session_id,
+			array( 'success' )
+		);
+		$this->assertCount( 1, $items );
+		$changes = History_Repository::decode_item_changes(
+			$items[0]['content_changes']
+		);
+		$this->assertIsArray( $changes );
+		$this->assertSame(
+			array(
+				array(
+					'attachment_id' => $existing,
+					'fields'        => array(
+						'menu_order' => array(
+							'before' => 0,
+							'after'  => 5,
+						),
+					),
+				),
+			),
+			$changes['rollback_snapshot']['updated_attachments']
+		);
 	}
 
 	/**
 	 * Imports a registered source post and returns its destination post ID.
 	 *
-	 * @param int $source_id Source post ID to import.
+	 * @param int      $source_id Source post ID to import.
+	 * @param int|null $session_id Optional history session ID.
 	 * @return int Destination post ID.
 	 */
-	private function import( int $source_id ): int {
+	private function import( int $source_id, ?int $session_id = null ): int {
 		$result = $this->service->import_post(
 			array(
 				'id'        => $source_id,
 				'title'     => 'Post ' . $source_id,
 				'link'      => self::SOURCE . '/post-' . $source_id,
 				'post_type' => 'posts',
-			)
+			),
+			$session_id
 		);
 
 		$this->assertTrue(
@@ -557,8 +603,8 @@ class Cross_Post_Gallery_Media_Test extends Integration_Test_Case {
 	 * @return Post_Import_Service
 	 */
 	private function build_service(): Post_Import_Service {
-		$media_importer    = new Media_Importer( new HTTP_Client() );
-		$content_processor = new Content_Processor(
+		$media_importer          = new Media_Importer( new HTTP_Client() );
+		$this->content_processor = new Content_Processor(
 			$media_importer,
 			new Content_Media_Processor( $media_importer ),
 			new Shortcode_ID_Rewriter()
@@ -567,7 +613,7 @@ class Cross_Post_Gallery_Media_Test extends Integration_Test_Case {
 		return new Post_Import_Service(
 			new Source_Posts_API( new HTTP_Client() ),
 			$media_importer,
-			$content_processor,
+			$this->content_processor,
 			new History_Repository(),
 			new Meta_Terms_Manager(),
 			new Telemetry_Service(),

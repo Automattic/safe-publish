@@ -152,9 +152,14 @@ final class History_Repository {
 		if ( count( $changes ) > 0 ) {
 			$json = wp_json_encode( $changes );
 
-			if ( false !== $json ) {
-				$encoded_changes = $json;
+			if ( false === $json ) {
+				return new WP_Error(
+					'changes_encoding_failed',
+					__( 'Failed to encode import item changes.', 'safe-publish' )
+				);
 			}
+
+			$encoded_changes = $json;
 
 			if ( '' !== ( $changes['previous_content'] ?? '' ) ) {
 				$has_previous_content = 1;
@@ -166,9 +171,14 @@ final class History_Repository {
 		if ( count( $warnings ) > 0 ) {
 			$json = wp_json_encode( $warnings );
 
-			if ( false !== $json ) {
-				$encoded_warnings = $json;
+			if ( false === $json ) {
+				return new WP_Error(
+					'warnings_encoding_failed',
+					__( 'Failed to encode import item warnings.', 'safe-publish' )
+				);
 			}
+
+			$encoded_warnings = $json;
 		}
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching

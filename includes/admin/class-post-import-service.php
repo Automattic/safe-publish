@@ -119,6 +119,13 @@ class Post_Import_Service {
 	private Attention_Issues_Repository $attention_issues;
 
 	/**
+	 * Existing attachment fields changed while persisting the current import.
+	 *
+	 * @var array<int, array<string, array{before:int, after:int}>>
+	 */
+	private array $updated_attachments = array();
+
+	/**
 	 * Issue types keyed to the imported post itself, reconciled from its
 	 * finalized import warnings.
 	 *
@@ -131,6 +138,13 @@ class Post_Import_Service {
 		'unregistered_taxonomy',
 		'term_field_conflict',
 	);
+
+	/**
+	 * Version of the additive rollback snapshot stored in import history.
+	 *
+	 * @var int
+	 */
+	private const ROLLBACK_SNAPSHOT_VERSION = 1;
 
 	/**
 	 * Post meta recording the unix timestamp at which an orphaned post was
@@ -224,7 +238,8 @@ class Post_Import_Service {
 		?int $session_id,
 		array $options
 	): array {
-		$fields = $this->extract_post_fields( $post_data );
+		$this->updated_attachments = array();
+		$fields                    = $this->extract_post_fields( $post_data );
 
 		$validation_error = $this->validate_required_fields( $fields );
 		if ( null !== $validation_error ) {
@@ -1359,7 +1374,47 @@ class Post_Import_Service {
 			return $this->build_error_result( $fields, $error_message );
 		}
 
-		$previous_content = $this->capture_previous_content( $imported_post );
+		$current_post = get_post( $imported_post->ID );
+
+		if ( ! ( $current_post instanceof WP_Post ) ) {
+			$error_message = __( 'The destination post no longer exists.', 'safe-publish' );
+			$this->content_processor->delete_newly_created_media();
+			$this->log_import_if_session(
+				$session_id,
+				$fields['source_post_id'],
+				$fields['title'],
+				'error',
+				$imported_post->ID,
+				$error_message,
+				array( 'action' => 'destination_post_missing' )
+			);
+
+			return $this->build_error_result( $fields, $error_message );
+		}
+
+		$previous_content = $this->capture_previous_content(
+			$current_post,
+			$fields['meta'],
+			$fields['terms']
+		);
+
+		if ( is_wp_error( $previous_content ) ) {
+			$this->content_processor->delete_newly_created_media();
+			$this->log_import_if_session(
+				$session_id,
+				$fields['source_post_id'],
+				$fields['title'],
+				'error',
+				$imported_post->ID,
+				$previous_content->get_error_message(),
+				array( 'action' => $previous_content->get_error_code() )
+			);
+
+			return $this->build_error_result(
+				$fields,
+				$previous_content->get_error_message()
+			);
+		}
 
 		$post_args = array(
 			'ID'             => $imported_post->ID,
@@ -1396,6 +1451,22 @@ class Post_Import_Service {
 		$this->resolve_term_conflict_issues( $term_report );
 
 		if ( is_wp_error( $post_id ) ) {
+			$effects_restored = $this->restore_import_effects(
+				$this->add_import_effects(
+					array( 'version' => self::ROLLBACK_SNAPSHOT_VERSION ),
+					$term_report,
+					null
+				),
+				array()
+			);
+
+			if ( ! $effects_restored ) {
+				return $this->build_error_result(
+					$fields,
+					__( 'The import failed and its external effects could not be fully restored.', 'safe-publish' )
+				);
+			}
+
 			$error_data = $post_id->get_error_data();
 			$action     = is_array( $error_data ) && isset( $error_data['action'] )
 				? $error_data['action']
@@ -1419,10 +1490,17 @@ class Post_Import_Service {
 
 		$this->add_unregistered_taxonomy_warnings( $fields, $skipped_taxonomies );
 		$this->add_term_conflict_warnings( $fields, $term_report );
-		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
-		$this->record_attention_issues( $fields, $post_id );
-
-		$this->log_import_if_session(
+		$nav_effects                           = $this->rewrite_nav_cross_refs(
+			$fields,
+			$post_id,
+			$post_type
+		);
+		$previous_content['rollback_snapshot'] = $this->add_import_effects(
+			$previous_content['rollback_snapshot'],
+			$term_report,
+			$nav_effects['snapshot']
+		);
+		$history_result                        = $this->log_import_if_session(
 			$session_id,
 			$fields['source_post_id'],
 			$fields['title'],
@@ -1434,6 +1512,38 @@ class Post_Import_Service {
 			$source_modified_gmt
 		);
 
+		if ( is_wp_error( $history_result ) ) {
+			$restore_result   = $this->restore_recorded_update(
+				$post_id,
+				$previous_content
+			);
+			$effects_restored = $this->restore_import_effects(
+				$previous_content['rollback_snapshot'],
+				$nav_effects['undo']
+			);
+
+			if ( ! $effects_restored || is_wp_error( $restore_result ) ) {
+				return $this->build_error_result(
+					$fields,
+					is_wp_error( $restore_result )
+						? $restore_result->get_error_message()
+						: __( 'Failed to restore unrecorded import effects.', 'safe-publish' )
+				);
+			}
+
+			return $this->build_error_result(
+				$fields,
+				$history_result->get_error_message()
+			);
+		}
+
+		$this->reconcile_nav_cross_ref_issues( $nav_effects );
+		$this->meta_terms_manager->acknowledge_updated_terms(
+			Options::get_connected_site_url_with_path(),
+			$term_report
+		);
+		$this->record_attention_issues( $fields, $post_id );
+
 		return $this->build_success_result( $fields, $post_id, true );
 	}
 
@@ -1441,15 +1551,30 @@ class Post_Import_Service {
 	 * Captures the previous content of an existing post for the session
 	 * rollback history log.
 	 *
-	 * Stores the current post fields, featured image, and tracking meta so
-	 * the update can be reverted via session rollback. The returned array is
-	 * used as the `changes` payload of the history log entry for an
-	 * 'updated_existing' action.
+	 * Stores the current post fields, featured image, and tracking meta used by
+	 * the existing rollback behavior. It also records a versioned, lossless
+	 * snapshot of the meta keys and taxonomy assignments the update can change.
+	 * The versioned snapshot is additive and is not consumed by rollback yet.
 	 *
-	 * @param WP_Post $existing_post Existing WordPress post.
-	 * @return array Previous content keyed by field name.
+	 * @param WP_Post      $existing_post Existing WordPress post.
+	 * @param array|object $meta          Meta about to be written.
+	 * @param array|object $terms         Terms about to be written.
+	 * @return array|WP_Error Previous content, or an error when capture fails.
 	 */
-	private function capture_previous_content( WP_Post $existing_post ): array {
+	private function capture_previous_content(
+		WP_Post $existing_post,
+		array|object $meta,
+		array|object $terms
+	): array|WP_Error {
+		$terms_snapshot = $this->capture_rollback_terms(
+			$existing_post->ID,
+			$terms
+		);
+
+		if ( is_wp_error( $terms_snapshot ) ) {
+			return $terms_snapshot;
+		}
+
 		$previous_content = array(
 			'previous_content'        => $existing_post->post_content,
 			'previous_title'          => $existing_post->post_title,
@@ -1461,8 +1586,29 @@ class Post_Import_Service {
 			'previous_password'       => $existing_post->post_password,
 			'previous_featured_image' => get_post_thumbnail_id( $existing_post->ID ),
 			'previous_meta'           => array(),
+			'rollback_snapshot'       => array(
+				'version' => self::ROLLBACK_SNAPSHOT_VERSION,
+				'meta'    => array(),
+				'terms'   => $terms_snapshot,
+				'post'    => array(
+					'post_author' => (int) $existing_post->post_author,
+					'post_parent' => (int) $existing_post->post_parent,
+					'post_type'   => $existing_post->post_type,
+				),
+			),
 			'action'                  => 'updated_existing',
 		);
+
+		$meta_snapshot = $this->capture_rollback_meta(
+			$existing_post->ID,
+			$meta
+		);
+
+		if ( is_wp_error( $meta_snapshot ) ) {
+			return $meta_snapshot;
+		}
+
+		$previous_content['rollback_snapshot']['meta'] = $meta_snapshot;
 
 		$meta_keys_to_preserve = array(
 			'_edit_last',
@@ -1478,6 +1624,422 @@ class Post_Import_Service {
 		}
 
 		return $previous_content;
+	}
+
+	/**
+	 * Captures every value for meta keys an update can change.
+	 *
+	 * An empty value list records that the key did not exist. A list containing
+	 * an empty string records an existing key with an empty value.
+	 *
+	 * @param int          $post_id Post ID.
+	 * @param array|object $meta    Source meta about to be written.
+	 * Values are read directly from the database and base64 encoded so the
+	 * history JSON preserves serialized objects and every other stored type.
+	 *
+	 * @return array<string, string[]>|WP_Error Encoded values, or a read error.
+	 */
+	private function capture_rollback_meta(
+		int $post_id,
+		array|object $meta
+	): array|WP_Error {
+		global $wpdb;
+
+		$meta_keys = array(
+			'_edit_last',
+			'_edit_lock',
+			Options::META_SOURCE_LINK,
+			Options::META_SOURCE_SITE_URL,
+			Options::META_SOURCE_AUTHOR_EMAIL,
+			Options::META_SOURCE_AUTHOR_LOGIN,
+			Options::META_SOURCE_POST_PARENT_ID,
+		);
+
+		foreach ( (array) $meta as $meta_key => $_ ) {
+			$meta_keys[] = sanitize_text_field( (string) $meta_key );
+		}
+
+		$meta_keys    = array_values( array_unique( $meta_keys ) );
+		$snapshot     = array_fill_keys( $meta_keys, array() );
+		$key_selects  = array();
+		$query_params = array();
+
+		foreach ( $meta_keys as $order => $meta_key ) {
+			$key_selects[]  = 'SELECT %s AS requested_key, %d AS requested_order';
+			$query_params[] = $meta_key;
+			$query_params[] = $order;
+		}
+		$query_params[] = $post_id;
+		$requested_keys = implode( ' UNION ALL ', $key_selects );
+
+		// Snapshot requires the exact stored representation.
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT requested.requested_key, meta.meta_value FROM ({$requested_keys}) AS requested INNER JOIN {$wpdb->postmeta} AS meta ON meta.meta_key = requested.requested_key WHERE meta.post_id = %d ORDER BY requested.requested_order ASC, meta.meta_id ASC",
+				...$query_params
+			),
+			ARRAY_A
+		);
+		// phpcs:enable
+
+		if ( '' !== $wpdb->last_error ) {
+			return new WP_Error(
+				'meta_snapshot_failed',
+				__( 'Failed to capture existing metadata.', 'safe-publish' )
+			);
+		}
+
+		foreach ( $rows as $row ) {
+			$snapshot[ (string) $row['requested_key'] ][] = base64_encode(
+				(string) $row['meta_value']
+			);
+		}
+
+		return $snapshot;
+	}
+
+	/**
+	 * Captures assignments for every registered taxonomy an update can change.
+	 *
+	 * @param int          $post_id Post ID.
+	 * @param array|object $terms   Source terms about to be written.
+	 * @return array<string, int[]>|WP_Error Term IDs, or a capture error.
+	 */
+	private function capture_rollback_terms(
+		int $post_id,
+		array|object $terms
+	): array|WP_Error {
+		$snapshot = array();
+
+		foreach ( (array) $terms as $taxonomy => $_ ) {
+			$taxonomy = sanitize_key( (string) $taxonomy );
+			if ( '' === $taxonomy || ! taxonomy_exists( $taxonomy ) ) {
+				continue;
+			}
+
+			$term_ids = wp_get_object_terms(
+				$post_id,
+				$taxonomy,
+				array( 'fields' => 'ids' )
+			);
+
+			if ( is_wp_error( $term_ids ) ) {
+				return new WP_Error(
+					'term_snapshot_failed',
+					__( 'Failed to capture existing term assignments.', 'safe-publish' )
+				);
+			}
+
+			$snapshot[ $taxonomy ] = array_map( 'intval', $term_ids );
+		}
+
+		return $snapshot;
+	}
+
+	/**
+	 * Adds compact import-owned effects to a versioned rollback snapshot.
+	 *
+	 * Empty optional sections are omitted to keep common history rows small.
+	 *
+	 * @param array                 $snapshot    Existing versioned snapshot.
+	 * @param Term_Reconcile_Report $term_report Term effects from persistence.
+	 * @param array|null            $nav_changes Compact navigation rewrite data.
+	 * @return array Completed snapshot.
+	 */
+	private function add_import_effects(
+		array $snapshot,
+		Term_Reconcile_Report $term_report,
+		?array $nav_changes
+	): array {
+		$created_terms = $term_report->created();
+
+		foreach ( $created_terms as &$term_ids ) {
+			$term_ids = array_values( array_unique( array_map( 'intval', $term_ids ) ) );
+			sort( $term_ids );
+		}
+		unset( $term_ids );
+
+		if ( array() !== $created_terms ) {
+			ksort( $created_terms );
+			$snapshot['created_terms'] = $created_terms;
+		}
+
+		$updated_terms = $term_report->updated();
+		if ( array() !== $updated_terms ) {
+			$snapshot['updated_terms'] = $updated_terms;
+		}
+
+		$created_attachments = array_values(
+			array_unique(
+				array_map(
+					'intval',
+					$this->media_importer->get_newly_created_attachment_ids()
+				)
+			)
+		);
+		sort( $created_attachments );
+
+		if ( array() !== $created_attachments ) {
+			$snapshot['created_attachments'] = $created_attachments;
+		}
+
+		$updates = $this->content_processor->get_updated_attachments();
+		foreach ( $this->updated_attachments as $attachment_id => $fields ) {
+			$updates[ $attachment_id ] = array_merge(
+				$updates[ $attachment_id ] ?? array(),
+				$fields
+			);
+		}
+
+		$created_lookup = array_fill_keys( $created_attachments, true );
+		$updated        = array();
+
+		foreach ( $updates as $attachment_id => $fields ) {
+			$attachment_id = (int) $attachment_id;
+			if ( isset( $created_lookup[ $attachment_id ] ) ) {
+				continue;
+			}
+
+			ksort( $fields );
+			$updated[] = array(
+				'attachment_id' => $attachment_id,
+				'fields'        => $fields,
+			);
+		}
+
+		if ( array() !== $updated ) {
+			usort(
+				$updated,
+				static fn ( array $a, array $b ): int =>
+					$a['attachment_id'] <=> $b['attachment_id']
+			);
+			$snapshot['updated_attachments'] = $updated;
+		}
+
+		if ( null !== $nav_changes && array() !== $nav_changes['posts'] ) {
+			$snapshot['navigation_rewrites'] = $nav_changes;
+		}
+
+		return $snapshot;
+	}
+
+	/**
+	 * Restores compact effects when their history row cannot be persisted.
+	 *
+	 * This is same-request compensation, not the user-facing rollback path.
+	 * Existing-term reconciliation deliberately survives, since other posts
+	 * share that source-owned term state.
+	 *
+	 * @param array                                                                   $snapshot Versioned snapshot.
+	 * @param list<array{post_id:int, previous_content:string, after_content:string}> $nav_undo In-memory navigation contents.
+	 * @return bool True when every effect was restored or removed.
+	 */
+	private function restore_import_effects(
+		array $snapshot,
+		array $nav_undo
+	): bool {
+		global $wpdb;
+
+		$restored = $this->nav_ref_rewriter->restore_rewrites( $nav_undo );
+
+		foreach ( $snapshot['updated_attachments'] ?? array() as $attachment ) {
+			$fields = array();
+			$where  = array( 'ID' => $attachment['attachment_id'] );
+			foreach ( $attachment['fields'] as $field => $change ) {
+				$fields[ $field ] = $change['before'];
+				$where[ $field ]  = $change['after'];
+			}
+
+			if ( array() === $fields ) {
+				continue;
+			}
+
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			$result = $wpdb->update(
+				$wpdb->posts,
+				$fields,
+				$where
+			);
+
+			if ( false === $result ) {
+				$restored = false;
+				continue;
+			}
+
+			if ( 0 === $result ) {
+				clean_post_cache( $attachment['attachment_id'] );
+				$current = get_post( $attachment['attachment_id'] );
+
+				foreach ( $fields as $field => $before ) {
+					$restored = $current instanceof WP_Post
+						&& (int) $current->{$field} === $before
+						&& $restored;
+				}
+				continue;
+			}
+
+			clean_post_cache( $attachment['attachment_id'] );
+		}
+
+		$created_attachments = $snapshot['created_attachments'] ?? array();
+		$this->content_processor->delete_newly_created_media();
+
+		foreach ( $created_attachments as $attachment_id ) {
+			$restored = null === get_post( $attachment_id ) && $restored;
+		}
+
+		foreach ( $snapshot['created_terms'] ?? array() as $taxonomy => $term_ids ) {
+			foreach ( array_reverse( $term_ids ) as $term_id ) {
+				$objects  = get_objects_in_term( $term_id, $taxonomy );
+				$children = get_terms(
+					array(
+						'taxonomy'   => $taxonomy,
+						'parent'     => $term_id,
+						'fields'     => 'ids',
+						'hide_empty' => false,
+					)
+				);
+
+				if (
+					is_wp_error( $objects )
+					|| array() !== $objects
+					|| is_wp_error( $children )
+					|| array() !== $children
+				) {
+					$restored = false;
+					continue;
+				}
+
+				$deleted  = wp_delete_term( $term_id, $taxonomy );
+				$restored = ! is_wp_error( $deleted ) && false !== $deleted
+					&& $restored;
+			}
+		}
+
+		return $restored;
+	}
+
+	/**
+	 * Restores an update when its history snapshot could not be recorded.
+	 *
+	 * @param int   $post_id  Destination post ID.
+	 * @param array $changes  Recorded pre-update content.
+	 */
+	private function restore_recorded_update(
+		int $post_id,
+		array $changes
+	): true|WP_Error {
+		$snapshot = $changes['rollback_snapshot'];
+
+		$post_result = wp_update_post(
+			wp_slash(
+				array(
+					'ID'             => $post_id,
+					'post_title'     => $changes['previous_title'],
+					'post_content'   => $changes['previous_content'],
+					'post_excerpt'   => $changes['previous_excerpt'],
+					'post_name'      => $changes['previous_slug'],
+					'comment_status' => $changes['previous_comment_status'],
+					'ping_status'    => $changes['previous_ping_status'],
+					'menu_order'     => $changes['previous_menu_order'],
+					'post_password'  => $changes['previous_password'],
+					'post_author'    => $snapshot['post']['post_author'],
+					'post_parent'    => $snapshot['post']['post_parent'],
+					'post_type'      => $snapshot['post']['post_type'],
+				)
+			)
+		);
+		$failed      = is_wp_error( $post_result ) || 0 === $post_result;
+
+		if ( $changes['previous_featured_image'] > 0 ) {
+			set_post_thumbnail( $post_id, $changes['previous_featured_image'] );
+		} else {
+			delete_post_thumbnail( $post_id );
+		}
+
+		foreach ( $snapshot['meta'] as $key => $values ) {
+			delete_post_meta( $post_id, $key );
+
+			foreach ( $values as $encoded_value ) {
+				$raw_value = base64_decode( $encoded_value, true );
+
+				if ( false !== $raw_value ) {
+					$added  = add_post_meta(
+						$post_id,
+						$key,
+						wp_slash( maybe_unserialize( $raw_value ) )
+					);
+					$failed = false === $added || $failed;
+				} else {
+					$failed = true;
+				}
+			}
+		}
+
+		foreach ( $snapshot['terms'] as $taxonomy => $term_ids ) {
+			$term_result = wp_set_object_terms( $post_id, $term_ids, $taxonomy );
+			$failed      = is_wp_error( $term_result ) || $failed;
+		}
+
+		$this->content_processor->delete_newly_created_media();
+
+		$restored_post = get_post( $post_id );
+		$failed        = ! ( $restored_post instanceof WP_Post ) || $failed;
+
+		if ( $restored_post instanceof WP_Post ) {
+			$expected_fields = array(
+				'post_title'     => $changes['previous_title'],
+				'post_content'   => $changes['previous_content'],
+				'post_excerpt'   => $changes['previous_excerpt'],
+				'post_name'      => $changes['previous_slug'],
+				'comment_status' => $changes['previous_comment_status'],
+				'ping_status'    => $changes['previous_ping_status'],
+				'menu_order'     => (int) $changes['previous_menu_order'],
+				'post_password'  => $changes['previous_password'],
+				'post_author'    => $snapshot['post']['post_author'],
+				'post_parent'    => $snapshot['post']['post_parent'],
+				'post_type'      => $snapshot['post']['post_type'],
+			);
+
+			foreach ( $expected_fields as $field => $expected ) {
+				$actual = in_array(
+					$field,
+					array( 'menu_order', 'post_author', 'post_parent' ),
+					true
+				) ? (int) $restored_post->{$field} : $restored_post->{$field};
+				$failed = $actual !== $expected || $failed;
+			}
+		}
+
+		$failed = get_post_thumbnail_id( $post_id ) !==
+			(int) $changes['previous_featured_image'] || $failed;
+
+		$current_meta = $this->capture_rollback_meta(
+			$post_id,
+			array_fill_keys( array_keys( $snapshot['meta'] ), null )
+		);
+		$failed       = is_wp_error( $current_meta ) ||
+			$current_meta !== $snapshot['meta'] || $failed;
+
+		$current_terms = $this->capture_rollback_terms(
+			$post_id,
+			array_fill_keys( array_keys( $snapshot['terms'] ), null )
+		);
+		$failed        = is_wp_error( $current_terms ) ||
+			$current_terms !== $snapshot['terms'] || $failed;
+
+		if ( $failed ) {
+			return new WP_Error(
+				'history_restore_failed',
+				__(
+					'Failed to record import history and fully restore the destination post.',
+					'safe-publish'
+				)
+			);
+		}
+
+		return true;
 	}
 
 	/**
@@ -1596,6 +2158,22 @@ class Post_Import_Service {
 		$this->resolve_term_conflict_issues( $term_report );
 
 		if ( is_wp_error( $post_id ) ) {
+			$effects_restored = $this->restore_import_effects(
+				$this->add_import_effects(
+					array( 'version' => self::ROLLBACK_SNAPSHOT_VERSION ),
+					$term_report,
+					null
+				),
+				array()
+			);
+
+			if ( ! $effects_restored ) {
+				return $this->build_error_result(
+					$fields,
+					__( 'The import failed and its external effects could not be fully restored.', 'safe-publish' )
+				);
+			}
+
 			$error_data = $post_id->get_error_data();
 			$action     = is_array( $error_data ) && isset( $error_data['action'] )
 				? $error_data['action']
@@ -1619,20 +2197,58 @@ class Post_Import_Service {
 
 		$this->add_unregistered_taxonomy_warnings( $fields, $skipped_taxonomies );
 		$this->add_term_conflict_warnings( $fields, $term_report );
-		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
-		$this->record_attention_issues( $fields, $post_id );
-
-		$this->log_import_if_session(
+		$nav_effects    = $this->rewrite_nav_cross_refs(
+			$fields,
+			$post_id,
+			$post_type
+		);
+		$snapshot       = $this->add_import_effects(
+			array( 'version' => self::ROLLBACK_SNAPSHOT_VERSION ),
+			$term_report,
+			$nav_effects['snapshot']
+		);
+		$changes        = array(
+			'action'            => 'created_new_post',
+			'rollback_snapshot' => $snapshot,
+		);
+		$history_result = $this->log_import_if_session(
 			$session_id,
 			$fields['source_post_id'],
 			$fields['title'],
 			'success',
 			$post_id,
 			null,
-			array( 'action' => 'created_new_post' ),
+			$changes,
 			$fields['warnings'],
 			$source_modified_gmt
 		);
+
+		if ( is_wp_error( $history_result ) ) {
+			$deleted          = false !== wp_delete_post( $post_id, true );
+			$effects_restored = $this->restore_import_effects(
+				$snapshot,
+				$nav_effects['undo']
+			);
+
+			if ( ! $deleted || ! $effects_restored ) {
+				return $this->build_error_result(
+					$fields,
+					__( 'Failed to restore an import whose history could not be recorded.', 'safe-publish' )
+				);
+			}
+
+			return $this->build_error_result(
+				$fields,
+				$history_result->get_error_message()
+			);
+		}
+
+		$this->reconcile_nav_cross_ref_issues( $nav_effects );
+		$this->meta_terms_manager->acknowledge_updated_terms(
+			Options::get_connected_site_url_with_path(),
+			$term_report
+		);
+		$this->record_attention_issues( $fields, $post_id );
 
 		return $this->build_success_result( $fields, $post_id, false );
 	}
@@ -1650,14 +2266,20 @@ class Post_Import_Service {
 	 *                          append a warning on failure.
 	 * @param int    $post_id   Destination menu post ID.
 	 * @param string $post_type Resolved destination post type slug.
+	 * @return array{snapshot:?array, undo:list<array{post_id:int, previous_content:string, after_content:string}>, source_ref:int, failed:list<int>} Compact persisted changes and in-request compensation data.
 	 */
 	private function rewrite_nav_cross_refs(
 		array &$fields,
 		int $post_id,
 		string $post_type
-	): void {
+	): array {
 		if ( 'wp_navigation' !== $post_type ) {
-			return;
+			return array(
+				'snapshot'   => null,
+				'undo'       => array(),
+				'source_ref' => 0,
+				'failed'     => array(),
+			);
 		}
 
 		$source_nav_id   = (int) $fields['source_post_id'];
@@ -1676,16 +2298,36 @@ class Post_Import_Service {
 			);
 		}
 
-		// Posts whose write failed stay open; every other referencing post for
-		// this menu now points correctly, so its issue is resolved.
+		return array(
+			'snapshot'   => array(
+				'source_ref'      => $source_nav_id,
+				'destination_ref' => $post_id,
+				'posts'           => $result['changes'],
+			),
+			'undo'       => $result['undo'],
+			'source_ref' => $source_nav_id,
+			'failed'     => $result['failed'],
+		);
+	}
+
+	/**
+	 * Reconciles navigation rewrite issues after history is safely persisted.
+	 *
+	 * @param array{snapshot:?array, undo:list<array{post_id:int, previous_content:string, after_content:string}>, source_ref:int, failed:list<int>} $nav_effects Rewrite outcome.
+	 */
+	private function reconcile_nav_cross_ref_issues( array $nav_effects ): void {
+		if ( 0 === $nav_effects['source_ref'] ) {
+			return;
+		}
+
 		$this->attention_issues->reconcile_target_issues(
 			'nav_ref_rewrite_failed',
-			$source_nav_id,
+			$nav_effects['source_ref'],
 			'post',
 			'error',
-			$source_site_url,
-			$result['failed'],
-			array( 'source_nav_id' => $source_nav_id )
+			Options::get_connected_site_url_with_path(),
+			$nav_effects['failed'],
+			array( 'source_nav_id' => $nav_effects['source_ref'] )
 		);
 	}
 
@@ -2254,6 +2896,12 @@ class Post_Import_Service {
 
 			if ( $this->persist_post_parent( $orphan_id, $dest_post_id ) ) {
 				clean_post_cache( $orphan_id );
+				$this->record_attachment_update(
+					$orphan_id,
+					'post_parent',
+					0,
+					$dest_post_id
+				);
 				$adopted = true;
 			} else {
 				$write_failed = true;
@@ -2274,6 +2922,28 @@ class Post_Import_Service {
 			$dest_post_id,
 			$source_post_id,
 			'post'
+		);
+	}
+
+	/**
+	 * Records one scalar field changed on an existing attachment.
+	 *
+	 * @param int    $attachment_id Attachment ID.
+	 * @param string $field         Post field name.
+	 * @param int    $before        Value before the import.
+	 * @param int    $after         Value written by the import.
+	 */
+	private function record_attachment_update(
+		int $attachment_id,
+		string $field,
+		int $before,
+		int $after
+	): void {
+		$before = $this->updated_attachments[ $attachment_id ][ $field ]['before']
+			?? $before;
+		$this->updated_attachments[ $attachment_id ][ $field ] = array(
+			'before' => $before,
+			'after'  => $after,
 		);
 	}
 
@@ -3088,6 +3758,7 @@ class Post_Import_Service {
 	 * @param array       $warnings            Non-fatal warnings raised during import.
 	 * @param string|null $source_modified_gmt Source post's modified_gmt at import time;
 	 *                                         null when the fetch failed before reading it.
+	 * @return int|WP_Error|null Item ID, an error, or null without a session.
 	 */
 	private function log_import_if_session(
 		?int $session_id,
@@ -3099,12 +3770,12 @@ class Post_Import_Service {
 		array $changes,
 		array $warnings = array(),
 		?string $source_modified_gmt = null
-	): void {
+	): int|WP_Error|null {
 		if ( null === $session_id ) {
-			return;
+			return null;
 		}
 
-		$this->repository->log_import_action(
+		$result = $this->repository->log_import_action(
 			$session_id,
 			$source_post_id,
 			$title,
@@ -3119,6 +3790,8 @@ class Post_Import_Service {
 		if ( 'error' === $status ) {
 			$this->emit_item_failed_telemetry( $session_id, $changes );
 		}
+
+		return $result;
 	}
 
 	/**

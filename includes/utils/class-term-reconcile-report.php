@@ -39,6 +39,20 @@ final class Term_Reconcile_Report {
 	private array $resolved = array();
 
 	/**
+	 * Destination term IDs created during this reconcile, by taxonomy.
+	 *
+	 * @var array<string, list<int>>
+	 */
+	private array $created = array();
+
+	/**
+	 * Visible field changes applied to existing terms.
+	 *
+	 * @var list<array{taxonomy:string, term_id:int, fields:array<string, array{before:mixed, after?:mixed, after_hash?:string}>}>
+	 */
+	private array $updated = array();
+
+	/**
 	 * Records one conflict.
 	 *
 	 * @param Term_Conflict $conflict Field the reconcile could not write.
@@ -68,6 +82,39 @@ final class Term_Reconcile_Report {
 	}
 
 	/**
+	 * Records a destination term created by this reconcile pass.
+	 *
+	 * @param string $taxonomy Taxonomy slug.
+	 * @param int    $term_id  Destination term ID.
+	 */
+	public function record_created( string $taxonomy, int $term_id ): void {
+		$this->created[ $taxonomy ][] = $term_id;
+	}
+
+	/**
+	 * Records visible fields changed on an existing destination term.
+	 *
+	 * @param string                                                               $taxonomy Taxonomy slug.
+	 * @param int                                                                  $term_id  Destination term ID.
+	 * @param array<string, array{before:mixed, after?:mixed, after_hash?:string}> $fields   Changed fields.
+	 */
+	public function record_updated(
+		string $taxonomy,
+		int $term_id,
+		array $fields
+	): void {
+		if ( array() === $fields ) {
+			return;
+		}
+
+		$this->updated[] = array(
+			'taxonomy' => $taxonomy,
+			'term_id'  => $term_id,
+			'fields'   => $fields,
+		);
+	}
+
+	/**
 	 * Lists the fields the reconcile could not write.
 	 *
 	 * @return list<Term_Conflict>
@@ -83,5 +130,23 @@ final class Term_Reconcile_Report {
 	 */
 	public function resolved(): array {
 		return $this->resolved;
+	}
+
+	/**
+	 * Lists destination terms created during this reconcile pass.
+	 *
+	 * @return array<string, list<int>> Taxonomy => destination term IDs.
+	 */
+	public function created(): array {
+		return $this->created;
+	}
+
+	/**
+	 * Lists visible field changes applied to existing terms.
+	 *
+	 * @return list<array{taxonomy:string, term_id:int, fields:array<string, array{before:mixed, after?:mixed, after_hash?:string}>}>
+	 */
+	public function updated(): array {
+		return $this->updated;
 	}
 }

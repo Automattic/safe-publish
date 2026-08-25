@@ -551,6 +551,20 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
 		$first = $this->import_service->import_post( $post_data, $session_id );
 		$this->assertTrue( $first['success'] );
+		$success_items = $this->repository->get_session_items_by_status(
+			$session_id,
+			array( 'success' )
+		);
+		$this->assertCount( 1, $success_items );
+		$created_changes = History_Repository::decode_item_changes(
+			$success_items[0]['content_changes']
+		);
+		$this->assertIsArray( $created_changes );
+		$this->assertSame( 'created_new_post', $created_changes['action'] );
+		$this->assertSame(
+			array( (int) get_post_thumbnail_id( $first['post_id'] ) ),
+			$created_changes['rollback_snapshot']['created_attachments']
+		);
 
 		// Remove the thumbnail so that only the re-import can restore it.
 		delete_post_thumbnail( $first['post_id'] );
@@ -1038,6 +1052,843 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$post->menu_order,
 			'Menu order must be updated on re-import.'
 		);
+	}
+
+	/**
+	 * Verifies that an update records a versioned, lossless rollback snapshot.
+	 */
+	public function test_reimport_records_versioned_rollback_snapshot(): void {
+		// ARRANGE: Import a post, then give its destination copy the meta, terms,
+		// author, and parent state that the re-import will replace.
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		$this->mock_post_overrides = array(
+			'content' => '<p>Original content.</p>',
+		);
+		$post_data                 = array(
+			'id'        => 9402,
+			'title'     => 'Rollback Snapshot Test',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/rollback-snapshot',
+			'post_type' => 'posts',
+		);
+		$first                     = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		$post_id         = $first['post_id'];
+		$previous_author = self::factory()->user->create( array( 'role' => 'author' ) );
+		$previous_parent = self::factory()->post->create();
+		$previous_term   = self::factory()->term->create(
+			array(
+				'taxonomy' => 'category',
+				'name'     => 'Previous Category',
+			)
+		);
+		$this->assertIsInt( $previous_author );
+		$this->assertIsInt( $previous_parent );
+		$this->assertIsInt( $previous_term );
+
+		wp_update_post(
+			array(
+				'ID'          => $post_id,
+				'post_author' => $previous_author,
+				'post_parent' => $previous_parent,
+			)
+		);
+		wp_set_object_terms( $post_id, array( $previous_term ), 'category' );
+		update_post_meta( $post_id, 'empty_before', '' );
+		add_post_meta( $post_id, 'multiple_before', 'first' );
+		add_post_meta( $post_id, 'multiple_before', 'second' );
+		update_post_meta(
+			$post_id,
+			'structured_before',
+			wp_slash( array( 'path' => 'C:\\builds\\out' ) )
+		);
+		$object_before       = new \stdClass();
+		$object_before->name = 'preserve-object';
+		update_post_meta( $post_id, 'object_before', $object_before );
+		update_post_meta( $post_id, 'untouched_meta', 'keep' );
+		update_post_meta( $post_id, 'café', 'accent-equivalent' );
+		$existing_tag = self::factory()->term->create(
+			array(
+				'taxonomy'    => 'post_tag',
+				'name'        => 'Original Snapshot Tag',
+				'slug'        => 'updated-tag',
+				'description' => '',
+			)
+		);
+		$this->assertIsInt( $existing_tag );
+		update_term_meta( $existing_tag, Options::META_SOURCE_TERM_ID, 94021 );
+		update_term_meta(
+			$existing_tag,
+			Options::META_SOURCE_TERM_URL,
+			'https://source.example.com'
+		);
+		update_term_meta(
+			$existing_tag,
+			Options::META_TERM_ORIGIN_URL,
+			'https://source.example.com'
+		);
+
+		$previous_source_link = get_post_meta(
+			$post_id,
+			Options::META_SOURCE_LINK,
+			false
+		);
+
+		$this->mock_post_overrides = array(
+			'content'            => '<p>Updated content.</p>',
+			'meta'               => array(
+				'absent_before'     => 'created',
+				'empty_before'      => 'updated',
+				'multiple_before'   => 'updated',
+				'structured_before' => array( 'path' => '/updated' ),
+				'object_before'     => 'updated',
+				'cafe'              => 'updated',
+			),
+			'safe_publish_terms' => array(
+				'category' => array(
+					array(
+						'id'       => 94019,
+						'name'     => 'Updated Parent',
+						'slug'     => 'updated-parent',
+						'assigned' => false,
+					),
+					array(
+						'id'       => 94020,
+						'name'     => 'Updated Category',
+						'slug'     => 'updated-category',
+						'parent'   => 94019,
+						'assigned' => true,
+					),
+				),
+				'post_tag' => array(
+					array(
+						'id'       => 94021,
+						'name'     => 'Updated Tag',
+						'slug'     => 'updated-tag',
+						'assigned' => true,
+					),
+				),
+			),
+		);
+
+		$meta_snapshot_queries = 0;
+		$count_meta_snapshot   = static function ( string $query ) use (
+			&$meta_snapshot_queries
+		): string {
+			if ( str_contains( $query, 'SELECT requested.requested_key' ) ) {
+				++$meta_snapshot_queries;
+			}
+
+			return $query;
+		};
+		add_filter( 'query', $count_meta_snapshot );
+
+		// ACT: Re-import and decode the updated item's history payload.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+		remove_filter( 'query', $count_meta_snapshot );
+		$this->assertTrue( $second['success'], $second['error'] ?? '' );
+		$items = $this->repository->get_session_items_by_status(
+			$session_id,
+			array( 'updated' )
+		);
+		$this->assertCount( 1, $items );
+		$changes = History_Repository::decode_item_changes(
+			$items[0]['content_changes']
+		);
+
+		// ASSERT: The additive snapshot preserves exact pre-update state while
+		// the legacy history fields remain available to today's rollback.
+		$this->assertIsArray( $changes );
+		$this->assertSame( 1, $meta_snapshot_queries );
+		$this->assertSame( '<p>Original content.</p>', $changes['previous_content'] );
+		$this->assertSame(
+			$previous_source_link[0],
+			$changes['previous_meta'][ Options::META_SOURCE_LINK ]
+		);
+
+		$snapshot = $changes['rollback_snapshot'];
+		$this->assertSame( 1, $snapshot['version'] );
+		$this->assertArrayNotHasKey( 'meta_encoding', $snapshot );
+		$this->assertSame( array(), $snapshot['meta']['absent_before'] );
+		$this->assertSame( array( '' ), $snapshot['meta']['empty_before'] );
+		$this->assertSame(
+			array( base64_encode( 'first' ), base64_encode( 'second' ) ),
+			$snapshot['meta']['multiple_before']
+		);
+		$this->assertSame(
+			array(
+				base64_encode(
+					maybe_serialize( array( 'path' => 'C:\\builds\\out' ) )
+				),
+			),
+			$snapshot['meta']['structured_before']
+		);
+		$this->assertSame(
+			array_map( 'base64_encode', $previous_source_link ),
+			$snapshot['meta'][ Options::META_SOURCE_LINK ]
+		);
+		$this->assertSame(
+			array( base64_encode( maybe_serialize( $object_before ) ) ),
+			$snapshot['meta']['object_before']
+		);
+		$this->assertSame(
+			array( base64_encode( 'accent-equivalent' ) ),
+			$snapshot['meta']['cafe']
+		);
+		$this->assertArrayNotHasKey( 'untouched_meta', $snapshot['meta'] );
+		$this->assertSame(
+			array( $previous_term ),
+			$snapshot['terms']['category']
+		);
+		$this->assertSame( array(), $snapshot['terms']['post_tag'] );
+		$this->assertSame(
+			array(
+				'post_author' => $previous_author,
+				'post_parent' => $previous_parent,
+				'post_type'   => 'post',
+			),
+			$snapshot['post']
+		);
+		$updated_parent   = get_term_by( 'slug', 'updated-parent', 'category' );
+		$updated_category = get_term_by( 'slug', 'updated-category', 'category' );
+		$updated_tag      = get_term_by( 'slug', 'updated-tag', 'post_tag' );
+		$this->assertInstanceOf( \WP_Term::class, $updated_parent );
+		$this->assertInstanceOf( \WP_Term::class, $updated_category );
+		$this->assertInstanceOf( \WP_Term::class, $updated_tag );
+		$this->assertSame(
+			array(
+				'category' => array(
+					(int) $updated_parent->term_id,
+					(int) $updated_category->term_id,
+				),
+			),
+			$snapshot['created_terms']
+		);
+		$this->assertSame( $existing_tag, (int) $updated_tag->term_id );
+		$this->assertSame(
+			array(
+				array(
+					'taxonomy' => 'post_tag',
+					'term_id'  => $existing_tag,
+					'fields'   => array(
+						'name' => array(
+							'before'     => 'Original Snapshot Tag',
+							'after_hash' => rtrim(
+								strtr(
+									base64_encode(
+										hash( 'sha256', 'Updated Tag', true )
+									),
+									'+/',
+									'-_'
+								),
+								'='
+							),
+						),
+					),
+				),
+			),
+			$snapshot['updated_terms']
+		);
+	}
+
+	/**
+	 * Verifies that a failed term snapshot aborts before changing the post.
+	 */
+	public function test_term_snapshot_failure_aborts_update(): void {
+		// ARRANGE: Import a post and make its next update touch a taxonomy.
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		$post_data                 = array(
+			'id'        => 9404,
+			'title'     => 'Term Snapshot Failure',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/term-capture-failure',
+			'post_type' => 'posts',
+		);
+		$this->mock_post_overrides = array(
+			'content' => '<p>Original content.</p>',
+		);
+		$first                     = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		$this->mock_post_overrides = array(
+			'content'            => '<p>Updated content.</p>',
+			'featured_media'     => 100,
+			'safe_publish_terms' => array( 'category' => array() ),
+		);
+		$attachments_before        = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'posts_per_page' => -1,
+				'fields'         => 'ids',
+			)
+		);
+
+		$fail_term_capture = static function (
+			mixed $terms,
+			array $object_ids,
+			array $taxonomies,
+			array $args
+		): mixed {
+			unset( $object_ids );
+
+			if ( array( 'category' ) === $taxonomies && 'ids' === $args['fields'] ) {
+				return new WP_Error( 'forced_term_read_failure' );
+			}
+
+			return $terms;
+		};
+		add_filter( 'get_object_terms', $fail_term_capture, 10, 4 );
+
+		// ACT: Attempt the update while the prior term read fails.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+		remove_filter( 'get_object_terms', $fail_term_capture, 10 );
+
+		// ASSERT: Capture failure must prevent any destination mutation.
+		$this->assertFalse( $second['success'] );
+		$this->assertSame(
+			'<p>Original content.</p>',
+			get_post( $first['post_id'] )->post_content
+		);
+		$this->assertSame(
+			$attachments_before,
+			get_posts(
+				array(
+					'post_type'      => 'attachment',
+					'posts_per_page' => -1,
+					'fields'         => 'ids',
+				)
+			)
+		);
+		$error_items = $this->repository->get_session_items_by_status(
+			$session_id,
+			array( 'error' )
+		);
+		$this->assertCount( 1, $error_items );
+		$this->assertSame(
+			array( 'action' => 'term_snapshot_failed' ),
+			History_Repository::decode_item_changes(
+				$error_items[0]['content_changes']
+			)
+		);
+		$this->assertSame(
+			array(),
+			$this->repository->get_session_items_by_status(
+				$session_id,
+				array( 'updated' )
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a failed raw meta read aborts and records the item error.
+	 */
+	public function test_meta_snapshot_failure_aborts_update(): void {
+		// ARRANGE: Import a post, then force its raw metadata query to fail.
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		$post_data                 = array(
+			'id'        => 9407,
+			'title'     => 'Meta Snapshot Failure',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/meta-capture-failure',
+			'post_type' => 'posts',
+		);
+		$this->mock_post_overrides = array(
+			'content' => '<p>Original content.</p>',
+		);
+		$first                     = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		$this->mock_post_overrides = array(
+			'content' => '<p>Updated content.</p>',
+			'meta'    => array( 'capture_key' => 'updated' ),
+		);
+
+		global $wpdb;
+		$fail_meta_read = static function ( string $query ) use ( $wpdb ): string {
+			if (
+				str_contains( $query, 'SELECT requested.requested_key' ) &&
+				str_contains( $query, "'capture_key'" )
+			) {
+				return str_replace(
+					$wpdb->postmeta,
+					$wpdb->postmeta . '_missing',
+					$query
+				);
+			}
+
+			return $query;
+		};
+		add_filter( 'query', $fail_meta_read );
+		$wpdb->suppress_errors();
+
+		// ACT: Attempt the update while the raw metadata read fails.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+		$wpdb->suppress_errors( false );
+		remove_filter( 'query', $fail_meta_read );
+
+		// ASSERT: The update is untouched and the capture failure is observable.
+		$this->assertFalse( $second['success'] );
+		$this->assertSame(
+			'<p>Original content.</p>',
+			get_post( $first['post_id'] )->post_content
+		);
+		$error_items = $this->repository->get_session_items_by_status(
+			$session_id,
+			array( 'error' )
+		);
+		$this->assertCount( 1, $error_items );
+		$this->assertSame(
+			array( 'action' => 'meta_snapshot_failed' ),
+			History_Repository::decode_item_changes(
+				$error_items[0]['content_changes']
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a failed history write restores the destination update.
+	 */
+	public function test_history_write_failure_restores_update(): void {
+		// ARRANGE: Import a post, then make its history insert fail on re-import.
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		$post_data                 = array(
+			'id'        => 9405,
+			'title'     => 'History Failure',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/history-failure',
+			'post_type' => 'posts',
+		);
+		$this->mock_post_overrides = array(
+			'content' => '<p>Original content.</p>',
+		);
+		$first                     = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		$post_id = $first['post_id'];
+		add_post_meta( $post_id, 'repeated', 'first' );
+		add_post_meta( $post_id, 'repeated', 'second' );
+		$this->mock_post_overrides = array(
+			'content'            => '<p>Updated content.</p>',
+			'featured_media'     => 100,
+			'meta'               => array( 'repeated' => 'updated' ),
+			'safe_publish_terms' => array(
+				'category' => array(
+					array(
+						'id'       => 94050,
+						'name'     => 'Unrecorded Parent',
+						'slug'     => 'unrecorded-parent',
+						'assigned' => false,
+					),
+					array(
+						'id'       => 94051,
+						'name'     => 'Unrecorded Child',
+						'slug'     => 'unrecorded-child',
+						'parent'   => 94050,
+						'assigned' => true,
+					),
+				),
+			),
+		);
+		$attachments_before        = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'post_status'    => 'any',
+				'posts_per_page' => -1,
+				'fields'         => 'ids',
+			)
+		);
+
+		global $wpdb;
+		$history_table = $wpdb->prefix . 'safe_publish_import_items';
+		$fail_insert   = static function ( string $query ) use ( $history_table ): string {
+			if ( str_starts_with( $query, "INSERT INTO `$history_table`" ) ) {
+				return str_replace( $history_table, $history_table . '_missing', $query );
+			}
+
+			return $query;
+		};
+		add_filter( 'query', $fail_insert );
+		$wpdb->suppress_errors();
+
+		// ACT: Re-import while the updated history row cannot be inserted.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+		$wpdb->suppress_errors( false );
+		remove_filter( 'query', $fail_insert );
+
+		// ASSERT: The update must fail and restore exact content and meta rows.
+		$this->assertFalse( $second['success'] );
+		$this->assertSame(
+			'<p>Original content.</p>',
+			get_post( $post_id )->post_content
+		);
+		$this->assertSame(
+			array( 'first', 'second' ),
+			get_post_meta( $post_id, 'repeated', false )
+		);
+		$this->assertSame(
+			array(),
+			$this->repository->get_session_items_by_status(
+				$session_id,
+				array( 'updated' )
+			)
+		);
+		$this->assertFalse(
+			get_term_by( 'slug', 'unrecorded-parent', 'category' )
+		);
+		$this->assertFalse(
+			get_term_by( 'slug', 'unrecorded-child', 'category' )
+		);
+		$this->assertSame(
+			$attachments_before,
+			get_posts(
+				array(
+					'post_type'      => 'attachment',
+					'post_status'    => 'any',
+					'posts_per_page' => -1,
+					'fields'         => 'ids',
+				)
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a surviving shared-term update is owned by the next row.
+	 */
+	public function test_unrecorded_shared_term_update_moves_to_next_item(): void {
+		// ARRANGE: Import the first of two posts sharing one source term.
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		$this->mock_post_overrides = array(
+			'safe_publish_terms' => array(
+				'category' => array(
+					array(
+						'id'          => 94060,
+						'name'        => 'Original Shared Name',
+						'slug'        => 'shared-snapshot-term',
+						'description' => '',
+						'parent'      => 0,
+						'assigned'    => true,
+					),
+				),
+			),
+		);
+		$first_data                = array(
+			'id'        => 9406,
+			'title'     => 'First Shared Term Post',
+			'content'   => '<p>First.</p>',
+			'link'      => 'https://source.example.com/first-shared-term',
+			'post_type' => 'posts',
+		);
+		$first                     = $this->import_service->import_post(
+			$first_data,
+			$session_id
+		);
+		$this->assertTrue( $first['success'] );
+
+		$this->mock_post_overrides['safe_publish_terms']['category'][0]['name'] =
+			'Updated Shared Name';
+		global $wpdb;
+		$history_table = $wpdb->prefix . 'safe_publish_import_items';
+		$fail_insert   = static function ( string $query ) use ( $history_table ): string {
+			if ( str_starts_with( $query, "INSERT INTO `$history_table`" ) ) {
+				return str_replace( $history_table, $history_table . '_missing', $query );
+			}
+
+			return $query;
+		};
+		add_filter( 'query', $fail_insert );
+		$wpdb->suppress_errors();
+
+		// ACT: Let the term update survive a failed row, then import its sibling.
+		$failed = $this->import_service->import_post( $first_data, $session_id );
+		$wpdb->suppress_errors( false );
+		remove_filter( 'query', $fail_insert );
+		$second = $this->import_service->import_post(
+			array(
+				'id'        => 9407,
+				'title'     => 'Second Shared Term Post',
+				'content'   => '<p>Second.</p>',
+				'link'      => 'https://source.example.com/second-shared-term',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		// ASSERT: The next persisted item owns the original before state.
+		$this->assertFalse( $failed['success'] );
+		$this->assertTrue( $second['success'] );
+		$items       = $this->repository->get_session_items_by_status(
+			$session_id,
+			array( 'success' )
+		);
+		$second_item = null;
+		foreach ( $items as $item ) {
+			if ( 9407 === (int) $item['source_post_id'] ) {
+				$second_item = $item;
+				break;
+			}
+		}
+		$this->assertIsArray( $second_item );
+		$changes = History_Repository::decode_item_changes(
+			$second_item['content_changes']
+		);
+		$this->assertIsArray( $changes );
+		$this->assertSame(
+			'Original Shared Name',
+			$changes['rollback_snapshot']['updated_terms'][0]['fields']['name']['before']
+		);
+	}
+
+	/**
+	 * Verifies that an incomplete emergency restoration is reported explicitly.
+	 */
+	public function test_history_restore_failure_is_reported(): void {
+		// ARRANGE: Import a post and fail its history insert and following restore.
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		$post_data                 = array(
+			'id'        => 9408,
+			'title'     => 'History Restore Failure',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/history-restore-failure',
+			'post_type' => 'posts',
+		);
+		$this->mock_post_overrides = array(
+			'content' => '<p>Original content.</p>',
+		);
+		$first                     = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		$this->mock_post_overrides = array(
+			'content' => '<p>Updated content.</p>',
+		);
+
+		global $wpdb;
+		$history_table  = $wpdb->prefix . 'safe_publish_import_items';
+		$history_failed = false;
+		$fail_restore   = static function ( string $query ) use (
+			$history_table,
+			$wpdb,
+			&$history_failed
+		): string {
+			if ( str_starts_with( $query, "INSERT INTO `$history_table`" ) ) {
+				$history_failed = true;
+
+				return str_replace(
+					$history_table,
+					$history_table . '_missing',
+					$query
+				);
+			}
+
+			if (
+				$history_failed &&
+				str_starts_with( $query, "UPDATE `{$wpdb->posts}`" )
+			) {
+				return str_replace(
+					$wpdb->posts,
+					$wpdb->posts . '_missing',
+					$query
+				);
+			}
+
+			return $query;
+		};
+		add_filter( 'query', $fail_restore );
+		$wpdb->suppress_errors();
+
+		// ACT: Re-import while history and the post-field restore both fail.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+		$wpdb->suppress_errors( false );
+		remove_filter( 'query', $fail_restore );
+
+		// ASSERT: The caller is told restoration was incomplete.
+		$this->assertFalse( $second['success'] );
+		$this->assertStringContainsString(
+			'fully restore the destination post',
+			$second['error']
+		);
+		$this->assertSame(
+			'<p>Updated content.</p>',
+			get_post( $first['post_id'] )->post_content
+		);
+	}
+
+	/**
+	 * Verifies that the snapshot uses post fields read immediately before update.
+	 */
+	public function test_snapshot_refreshes_post_fields_before_update(): void {
+		// ARRANGE: Import a post and prepare an edit during the fresh-source read.
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		$post_data  = array(
+			'id'        => 9406,
+			'title'     => 'Live Snapshot Fields',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/live-snapshot-fields',
+			'post_type' => 'posts',
+		);
+		$first      = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		$post_id     = $first['post_id'];
+		$live_author = self::factory()->user->create( array( 'role' => 'author' ) );
+		$live_parent = self::factory()->post->create();
+		$this->assertIsInt( $live_author );
+		$this->assertIsInt( $live_parent );
+
+		$edit_during_fetch = static function ( mixed $preempt ) use (
+			$post_id,
+			$live_author,
+			$live_parent
+		): mixed {
+			wp_update_post(
+				array(
+					'ID'          => $post_id,
+					'post_author' => $live_author,
+					'post_parent' => $live_parent,
+				)
+			);
+
+			return $preempt;
+		};
+		add_filter( 'pre_http_request', $edit_during_fetch, 4, 1 );
+
+		// ACT: Re-import after the destination changes during source preparation.
+		$second = $this->import_service->import_post( $post_data, $session_id );
+		remove_filter( 'pre_http_request', $edit_during_fetch, 4 );
+
+		// ASSERT: History captures the live edit, not the initially loaded object.
+		$this->assertTrue( $second['success'] );
+		$items   = $this->repository->get_session_items_by_status(
+			$session_id,
+			array( 'updated' )
+		);
+		$changes = History_Repository::decode_item_changes(
+			$items[0]['content_changes']
+		);
+		$this->assertIsArray( $changes );
+		$this->assertSame(
+			array(
+				'post_author' => $live_author,
+				'post_parent' => $live_parent,
+				'post_type'   => 'post',
+			),
+			$changes['rollback_snapshot']['post']
+		);
+	}
+
+	/**
+	 * Verifies that recording the new snapshot leaves rollback behavior and
+	 * replay protection unchanged.
+	 */
+	public function test_recorded_snapshot_does_not_change_current_rollback(): void {
+		// ARRANGE: Import a post, then re-import with different meta and terms.
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+		$this->mock_post_overrides = array(
+			'content' => '<p>Original content.</p>',
+		);
+		$post_data                 = array(
+			'id'        => 9403,
+			'title'     => 'Additive Snapshot Rollback Test',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/additive-snapshot',
+			'post_type' => 'posts',
+		);
+		$first                     = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		$previous_term = self::factory()->term->create(
+			array(
+				'taxonomy' => 'category',
+				'name'     => 'Original Rollback Category',
+			)
+		);
+		wp_set_object_terms( $first['post_id'], array( $previous_term ), 'category' );
+		update_post_meta( $first['post_id'], 'rollback_custom_meta', 'original' );
+
+		$this->mock_post_overrides = array(
+			'content'            => '<p>Updated content.</p>',
+			'meta'               => array( 'rollback_custom_meta' => 'updated' ),
+			'safe_publish_terms' => array(
+				'category' => array(
+					array(
+						'id'       => 94030,
+						'name'     => 'Updated Rollback Category',
+						'slug'     => 'updated-rollback-category',
+						'assigned' => true,
+					),
+				),
+			),
+		);
+		$second                    = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+		$updated_terms             = wp_get_object_terms(
+			$first['post_id'],
+			'category',
+			array( 'fields' => 'ids' )
+		);
+		$items                     = $this->repository->get_session_items_by_status(
+			$session_id,
+			array( 'updated' )
+		);
+		$changes                   = History_Repository::decode_item_changes(
+			$items[0]['content_changes']
+		);
+		$rollback_service          = new Session_Rollback_Service( $this->repository );
+
+		// ACT: Roll back once with today's implementation, then try to replay it.
+		$rollback = $rollback_service->rollback_item( (int) $items[0]['id'] );
+		$replay   = $rollback_service->rollback_item( (int) $items[0]['id'] );
+
+		// ASSERT: Legacy fields restore as before, the additive snapshot is not
+		// consumed, and the existing rolled_back guard prevents a second attempt.
+		$this->assertTrue( $second['success'] );
+		$this->assertIsArray( $changes );
+		$this->assertSame( 1, $changes['rollback_snapshot']['version'] );
+		$this->assertIsArray( $rollback );
+		$this->assertSame(
+			'<p>Original content.</p>',
+			get_post_field( 'post_content', $first['post_id'] )
+		);
+		$this->assertSame(
+			'updated',
+			get_post_meta( $first['post_id'], 'rollback_custom_meta', true )
+		);
+		$this->assertSame(
+			$updated_terms,
+			wp_get_object_terms(
+				$first['post_id'],
+				'category',
+				array( 'fields' => 'ids' )
+			)
+		);
+		$this->assertInstanceOf( WP_Error::class, $replay );
+		$this->assertSame( 'item_already_rolled_back', $replay->get_error_code() );
 	}
 
 	/**

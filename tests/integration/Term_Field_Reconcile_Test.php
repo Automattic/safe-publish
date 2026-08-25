@@ -49,6 +49,13 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 	private int $term_updates = 0;
 
 	/**
+	 * Report returned by the most recent term import.
+	 *
+	 * @var Term_Reconcile_Report
+	 */
+	private Term_Reconcile_Report $last_report;
+
+	/**
 	 * Sets up test dependencies.
 	 */
 	#[\Override]
@@ -112,6 +119,29 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 		);
 		$this->assertSame( 'news', $term->slug );
 		$this->assertSame( array(), $conflicts );
+		$this->assertSame(
+			array(
+				array(
+					'taxonomy' => 'category',
+					'term_id'  => (int) $term->term_id,
+					'fields'   => array(
+						'parent'      => array(
+							'before' => 0,
+							'after'  => (int) $term->parent,
+						),
+						'name'        => array(
+							'before'     => 'News',
+							'after_hash' => $this->compact_hash( 'Updates' ),
+						),
+						'description' => array(
+							'before'     => 'Old description',
+							'after_hash' => $this->compact_hash( 'New description' ),
+						),
+					),
+				),
+			),
+			$this->last_report->updated()
+		);
 	}
 
 	/**
@@ -875,7 +905,8 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 		string $taxonomy = 'category',
 		?int $post_id = null
 	): array {
-		$report = new Term_Reconcile_Report();
+		$report            = new Term_Reconcile_Report();
+		$this->last_report = $report;
 
 		$result = $this->manager->update_terms(
 			$post_id ?? $this->post_id,
@@ -890,6 +921,19 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 		);
 
 		return $report->conflicts();
+	}
+
+	/**
+	 * Returns the version-1 compact digest for a term string.
+	 *
+	 * @param string $value Value to hash.
+	 * @return string Unpadded Base64URL SHA-256 digest.
+	 */
+	private function compact_hash( string $value ): string {
+		return rtrim(
+			strtr( base64_encode( hash( 'sha256', $value, true ) ), '+/', '-_' ),
+			'='
+		);
 	}
 
 	/**

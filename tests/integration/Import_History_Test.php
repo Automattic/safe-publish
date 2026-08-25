@@ -90,6 +90,38 @@ class Import_History_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that unencodable changes do not create an empty history row.
+	 */
+	public function test_logging_rejects_unencodable_changes(): void {
+		// ARRANGE: Create a session and a recursive JSON value.
+		$session_id           = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$changes              = array();
+		$changes['recursive'] = &$changes;
+
+		// ACT: Attempt to log changes that cannot be JSON encoded.
+		$result = $this->repository->log_import_action(
+			$session_id,
+			123,
+			'Unencodable Changes',
+			'updated',
+			456,
+			null,
+			$changes
+		);
+
+		// ASSERT: The failure is explicit and no misleading item is stored.
+		$this->assertWPError( $result );
+		$this->assertSame( 'changes_encoding_failed', $result->get_error_code() );
+		$this->assertSame(
+			array(),
+			$this->repository->get_session_items( $session_id )
+		);
+	}
+
+	/**
 	 * Verifies that a null source_post_id is preserved end to end.
 	 *
 	 * Source data sometimes lacks a usable id (malformed payload or unexpected

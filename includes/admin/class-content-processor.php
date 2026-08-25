@@ -164,6 +164,13 @@ class Content_Processor {
 	private array $warnings = array();
 
 	/**
+	 * Existing attachment fields changed during the current processing run.
+	 *
+	 * @var array<int, array<string, array{before:int, after:int}>>
+	 */
+	private array $updated_attachments = array();
+
+	/**
 	 * Constructs the Content_Processor instance.
 	 *
 	 * @param Media_Importer                $media_importer           Media importer.
@@ -225,6 +232,7 @@ class Content_Processor {
 		$this->failed_media        = array();
 		$this->unprocessable_media = array();
 		$this->warnings            = array();
+		$this->updated_attachments = array();
 		$this->media_importer->reset_newly_created_attachment_ids();
 
 		$session_id_map = isset( $context['session_id_map'] )
@@ -628,12 +636,23 @@ class Content_Processor {
 		global $wpdb;
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$wpdb->update(
+		$result = $wpdb->update(
 			$wpdb->posts,
 			array( 'menu_order' => $menu_order ),
 			array( 'ID' => $attachment_id )
 		);
+
+		if ( false === $result ) {
+			return;
+		}
+
 		clean_post_cache( $attachment_id );
+		$this->record_attachment_update(
+			$attachment_id,
+			'menu_order',
+			(int) $attachment->menu_order,
+			$menu_order
+		);
 	}
 
 	/**
@@ -657,12 +676,45 @@ class Content_Processor {
 		global $wpdb;
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$wpdb->update(
+		$result = $wpdb->update(
 			$wpdb->posts,
 			array( 'post_parent' => $parent_id ),
 			array( 'ID' => $attachment_id )
 		);
+
+		if ( false === $result ) {
+			return;
+		}
+
 		clean_post_cache( $attachment_id );
+		$this->record_attachment_update(
+			$attachment_id,
+			'post_parent',
+			(int) $attachment->post_parent,
+			$parent_id
+		);
+	}
+
+	/**
+	 * Records one changed scalar field on an existing attachment.
+	 *
+	 * @param int    $attachment_id Attachment ID.
+	 * @param string $field         Post field name.
+	 * @param int    $before        Value before the import.
+	 * @param int    $after         Value written by the import.
+	 */
+	private function record_attachment_update(
+		int $attachment_id,
+		string $field,
+		int $before,
+		int $after
+	): void {
+		$before = $this->updated_attachments[ $attachment_id ][ $field ]['before']
+			?? $before;
+		$this->updated_attachments[ $attachment_id ][ $field ] = array(
+			'before' => $before,
+			'after'  => $after,
+		);
 	}
 
 	/**
@@ -730,6 +782,15 @@ class Content_Processor {
 	 */
 	public function get_warnings(): array {
 		return $this->warnings;
+	}
+
+	/**
+	 * Lists existing attachment fields changed during content processing.
+	 *
+	 * @return array<int, array<string, array{before:int, after:int}>>
+	 */
+	public function get_updated_attachments(): array {
+		return $this->updated_attachments;
 	}
 
 	/**
