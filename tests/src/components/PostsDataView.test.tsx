@@ -19,6 +19,8 @@ const dataViews = vi.hoisted( () => ( {
 	props: null as {
 		data: UnifiedPostRow[];
 		fields: DataViewsField< UnifiedPostRow >[];
+		selection?: string[];
+		onChangeSelection?: ( items: string[] ) => void;
 	} | null,
 } ) );
 
@@ -102,6 +104,33 @@ function searchInput(): HTMLInputElement {
 		throw new Error( 'search input not found' );
 	}
 	return input;
+}
+
+/**
+ * Builds a source row returned by the catalog listing.
+ *
+ * @param {number} id Source post ID.
+ * @return {UnifiedPostRow} Catalog row fixture.
+ */
+function buildSourceRow( id: number ): UnifiedPostRow {
+	return {
+		id,
+		source_post_id: id,
+		title: `Source post ${ id }`,
+		link: `${ SOURCE_URL }/source-post-${ id }/`,
+		date_gmt: '2026-08-20T00:00:00Z',
+		modified_gmt: '2026-08-20T00:00:00Z',
+		post_type: 'post',
+		status: 'publish',
+		local_state: 'available',
+		is_imported: false,
+		wp_post_status: null,
+		item_id: null,
+		post_id: null,
+		import_date_gmt: null,
+		has_previous_content: false,
+		edit_url: '',
+	};
 }
 
 beforeEach( () => {
@@ -206,6 +235,64 @@ describe( 'PostsDataView fields', () => {
 		expect(
 			screen.getByText( /Source links match on All and Not imported/ )
 		).toBeInTheDocument();
+	} );
+} );
+
+describe( 'PostsDataView bulk selection', () => {
+	beforeEach( () => {
+		fetchMock.mockResolvedValue( {
+			json: () =>
+				Promise.resolve( {
+					success: true,
+					data: {
+						items: Array.from( { length: 100 }, ( _, index ) =>
+							buildSourceRow( index + 1 )
+						),
+						has_more: false,
+					},
+				} ),
+		} );
+	} );
+
+	it( 'Verifies that selecting a full 100-row page keeps only 50 posts', async () => {
+		// ARRANGE: A full page whose header checkbox requests every row.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 100 ) );
+		const ids = Array.from( { length: 100 }, ( _, index ) =>
+			String( index + 1 )
+		);
+
+		// ACT: DataViews asks the controlled listing to select the whole page.
+		act( () => dataViews.props?.onChangeSelection?.( ids ) );
+
+		// ASSERT: Only an accepted batch is selected and the limit is explained.
+		expect( dataViews.props?.selection ).toEqual( ids.slice( 0, 50 ) );
+		expect(
+			document.querySelector( '.components-notice.is-warning' )
+		).toHaveTextContent(
+			'Bulk actions are limited to 50 posts at a time. Only the first 50 posts were selected.'
+		);
+	} );
+
+	it( 'Verifies that reducing the selection clears the limit warning', async () => {
+		// ARRANGE: Trigger the limit warning with 51 selected rows.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 100 ) );
+		const ids = Array.from( { length: 51 }, ( _, index ) =>
+			String( index + 1 )
+		);
+		act( () => dataViews.props?.onChangeSelection?.( ids ) );
+
+		// ACT: DataViews removes a row that the controlled selection accepted.
+		act( () =>
+			dataViews.props?.onChangeSelection?.( ids.slice( 1, 50 ) )
+		);
+
+		// ASSERT: The accepted rows minus the deselected row remain selected.
+		expect( dataViews.props?.selection ).toEqual( ids.slice( 1, 50 ) );
+		expect(
+			document.querySelector( '.components-notice.is-warning' )
+		).toBeNull();
 	} );
 } );
 
