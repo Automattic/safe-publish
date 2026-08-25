@@ -74,7 +74,7 @@ The plugin uses a small set of terms consistently throughout its interface and t
 
 To use Safe Publish, the following must be in place:
 
-- WordPress 6.8 or higher on both the source and destination sites.
+- WordPress 6.9 or higher on both the source and destination sites.
 - PHP 8.2 or higher on both sites.
 - The Safe Publish integration enabled on both sites.
 

@@ -11,7 +11,7 @@
  * Text Domain: safe-publish
  * Domain Path: /languages
  * Version: 0.9.0
- * Requires at least: 6.8
+ * Requires at least: 6.9
  * Requires PHP: 8.2
  */
 

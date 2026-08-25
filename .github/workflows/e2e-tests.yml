@@ -19,8 +19,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - wordpress-version: '6.8'
-            php-version: '8.4'
           - wordpress-version: '6.9'
             php-version: '8.5'
           - wordpress-version: '7.0'
