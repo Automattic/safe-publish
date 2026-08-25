@@ -181,7 +181,7 @@ export default function BulkImportFlow( {
 	const partialFailure =
 		null !== results && results.successful > 0 && results.failed > 0;
 
-	let summaryHeading = __( 'Import completed!', 'safe-publish' );
+	let summaryHeading: string = __( 'Import completed!', 'safe-publish' );
 	let summaryColor = 'var(--safe-publish-status-success)';
 	if ( allFailed ) {
 		summaryHeading = __( 'Import failed', 'safe-publish' );
