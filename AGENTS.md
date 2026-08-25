@@ -34,18 +34,20 @@
   - Any related documentation files need updating.
 - Wrap code, comments and docblocks at 80 characters; never wrap them unnecessarily early. `@param`/`@return` descriptions starting beyond column 40 can extend to 100 characters. Line length is measured in display characters, with tabs counting as 4.
 
-### PHP
-
-- Verify PHP files use strict typing, and use type hinting everywhere possible.
-- Prefer using `_` instead of `@psalm-suppress PossiblyUnusedParam`.
-- Use explicit checks — don't use `empty()`, and don't coerce values with `!`. Reserve `!` for booleans and predicates; write an explicit comparison instead (`0 === $id`, `null === $post`), and for a multi-falsy union a type test (`! ( $result instanceof WP_Post )`, not `! $result`).
-
 ### Comments and docblocks
+
+These apply to comments in every language, not just PHP.
 
 - Write short and to the point comments; lengthy comments allowed only when they provide value.
 - Adhere to WordPress inline documentation standards.
 - Docblock summaries are plain prose; no backticks or Markdown.
 - In comments, capitalize the first word after a colon only when it begins prose — not a code reference such as an identifier or function name (`()` optional, camelCase included), a tag, attribute, slug, or enum value, a quoted string, URL, type shape, or literal. Apply this at every colon followed by a space (not `10:30` or `https://`); for a list, judge by the items — `image, audio, or video` stays lowercase, `Scheme and host only` capitalizes.
+
+### PHP
+
+- Verify PHP files use strict typing, and use type hinting everywhere possible.
+- Prefer using `_` instead of `@psalm-suppress PossiblyUnusedParam`.
+- Use explicit checks — don't use `empty()`, and don't coerce values with `!`. Reserve `!` for booleans and predicates; write an explicit comparison instead (`0 === $id`, `null === $post`), and for a multi-falsy union a type test (`! ( $result instanceof WP_Post )`, not `! $result`).
 
 ## Tests
 
