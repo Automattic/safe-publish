@@ -332,7 +332,10 @@ class Options {
 				$constant_name,
 				sprintf(
 					/* translators: %s: constant name */
-					__( '%s must be a valid external URL.', 'safe-publish' ),
+					__(
+						'%s must be an http or https URL, not a loopback or private address.',
+						'safe-publish'
+					),
 					$constant_name
 				)
 			);

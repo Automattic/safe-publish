@@ -86,10 +86,10 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 	 * of storing an identity that readers cannot reproduce.
 	 */
 	public function test_create_session_rejects_an_unparseable_value(): void {
-		// ARRANGE: A connection URL saved without a scheme.
+		// ARRANGE: The row count to compare against.
 		$before = $this->count_sessions();
 
-		// ACT: Open a session for it.
+		// ACT: Open a session for a source saved without a scheme.
 		$result = $this->repository->create_session( 'example.com/blog', 'single' );
 
 		// ASSERT: The call failed and inserted nothing.
