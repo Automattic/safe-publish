@@ -281,7 +281,7 @@ final class Meta_Terms_Manager {
 	}
 
 	/**
-	 * Plans one record: the destination term it pairs with, whether the origin
+	 * Plans one record: The destination term it pairs with, whether the origin
 	 * gate lets the import reconcile it, and which fields would be written or
 	 * blocked. A record with no pair would be created with the source's fields;
 	 * one naming a destination term is assigned as is, never reconciled.
@@ -1288,7 +1288,7 @@ final class Meta_Terms_Manager {
 			if ( 'term_exists' === $inserted->get_error_code() ) {
 				$existing_id = absint( $inserted->get_error_data( 'term_exists' ) );
 				if ( $existing_id > 0 ) {
-					// Recovered, not created: leave it unmarked so reconcile
+					// Recovered, not created: Leave it unmarked so reconcile
 					// never overwrites a term this plugin does not own.
 					return $existing_id;
 				}
