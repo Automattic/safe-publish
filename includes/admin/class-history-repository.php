@@ -839,7 +839,7 @@ final class History_Repository {
 	 * The ignored_gmt column is NULL for an open failure and set once ignored;
 	 * $ignored=true selects the ignored set instead of the open one.
 	 *
-	 * Carries one %s placeholder: callers join the imports table as alias s and
+	 * Carries one %s placeholder: Callers join the imports table as alias s and
 	 * pass $source_site_url first to prepare().
 	 *
 	 * @param bool $ignored Select ignored rows instead of open ones.

@@ -22,7 +22,7 @@ use WP_Error;
  * repointed at the destination attachment, that third-party URLs are left as-is,
  * and that download failures are recorded.
  *
- * The 3-argument constructor is used deliberately: content_Processor defaults the
+ * The 3-argument constructor is used deliberately: Content_Processor defaults the
  * shortcode media rewriter to wrap its injected Media_Importer, so this exercises
  * the real production wiring.
  */

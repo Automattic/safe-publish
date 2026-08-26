@@ -181,7 +181,7 @@ export function statusBadgeModifier( status: string ): string {
 	return ownLookup( STATUS_BADGE_MODIFIERS, status ) ?? '';
 }
 
-// Scheduled posts are excluded: nothing is visible yet, so the overwrite
+// Scheduled posts are excluded: Nothing is visible yet, so the overwrite
 // warning's copy would not hold.
 const LIVE_STATUSES: readonly string[] = [ 'publish', 'private' ];
 
