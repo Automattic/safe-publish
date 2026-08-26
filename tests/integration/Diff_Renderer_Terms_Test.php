@@ -418,10 +418,33 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		// payload, naming a different term.
 		$html = $this->render_embedded_category( 'Updates' );
 
-		// ASSERT: The names compare as before, with no fields and no notes.
-		$this->assertStringContainsString( 'Updates', $html );
+		// ASSERT: Both sides compare on names alone, with no fields and no
+		// notes.
+		$changed = implode( "\n", $this->changed_lines( $html ) );
+		$this->assertStringContainsString( 'category: News', $changed );
+		$this->assertStringContainsString( 'category: Updates', $changed );
 		$this->assertStringNotContainsString( 'description', $html );
 		$this->assertSame( array(), $this->notes( $html ) );
+	}
+
+	/**
+	 * Verifies that a source naming a taxonomy loosely still compares against
+	 * the post's terms, which the import reaches by narrowing the name.
+	 */
+	public function test_fallback_pairs_a_loosely_named_taxonomy(): void {
+		// ARRANGE: An imported term the source's payload replaces.
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, '' ) )
+		);
+
+		// ACT: The source names the taxonomy in a form the import narrows.
+		$html = $this->render_embedded_category( 'Updates', 'Category' );
+
+		// ASSERT: The current side still carries the term the import removes.
+		$this->assertStringContainsString(
+			'category: News',
+			implode( "\n", $this->changed_lines( $html ) )
+		);
 	}
 
 	/**
@@ -1107,10 +1130,14 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	 * Renders the diff for a source sending embedded terms alone, as one on an
 	 * older plugin version does.
 	 *
-	 * @param string $name Name the source's category term carries.
+	 * @param string $name     Name the source's category term carries.
+	 * @param string $taxonomy Taxonomy the source names it under.
 	 * @return string Taxonomies diff HTML.
 	 */
-	private function render_embedded_category( string $name ): string {
+	private function render_embedded_category(
+		string $name,
+		string $taxonomy = 'category'
+	): string {
 		$result = $this->render(
 			array(
 				'_embedded' => array(
@@ -1118,7 +1145,7 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 						array(
 							array(
 								'id'       => 101,
-								'taxonomy' => 'category',
+								'taxonomy' => $taxonomy,
 								'name'     => $name,
 								'slug'     => 'news',
 							),
