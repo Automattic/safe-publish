@@ -15,11 +15,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        wordpress-version: ['6.8', '6.9', '7.0', '7.1']
+        wordpress-version: ['6.9', '7.0', '7.1']
         php-version: ['8.2', '8.3', '8.4', '8.5']
-        exclude:
-          - wordpress-version: '6.8'
-            php-version: '8.5'
     uses: ./.github/workflows/reusable-integration-tests.yml
     with:
       php-version: ${{ matrix.php-version }}

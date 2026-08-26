@@ -707,12 +707,6 @@ html:has(body.toplevel_page_safe-publish) {
 }
 /* stylelint-enable no-descending-specificity */
 
-// Show inline primary action icons at rest. Selector mirrors DataViews'
-// `.dataviews-view-table tr ...` rule so specificity wins.
-.safe-publish-dataviews-wrapper .dataviews-view-table tr .dataviews-item-actions .components-button:not(.dataviews-all-actions-button) {
-	opacity: 1;
-}
-
 // Each admin page drives search/filter from its own toolbar; hide DataViews'
 // built-ins so they don't duplicate the UI.
 .safe-publish-dataviews-wrapper .dataviews-search,

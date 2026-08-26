@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "968a2678fe474d8466dccadddc575aed",
+    "content-hash": "23b28553f2e7a609474e8586667826ea",
     "packages": [],
     "packages-dev": [
         {
@@ -505,16 +505,16 @@
         },
         {
             "name": "php-stubs/wordpress-stubs",
-            "version": "v6.8.3",
+            "version": "v6.9.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/php-stubs/wordpress-stubs.git",
-                "reference": "abeb5a8b58fda7ac21f15ee596f302f2959a7114"
+                "reference": "90a9412826b9944f93b10bf41d795b5fe68abcd5"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/php-stubs/wordpress-stubs/zipball/abeb5a8b58fda7ac21f15ee596f302f2959a7114",
-                "reference": "abeb5a8b58fda7ac21f15ee596f302f2959a7114",
+                "url": "https://api.github.com/repos/php-stubs/wordpress-stubs/zipball/90a9412826b9944f93b10bf41d795b5fe68abcd5",
+                "reference": "90a9412826b9944f93b10bf41d795b5fe68abcd5",
                 "shasum": ""
             },
             "conflict": {
@@ -524,10 +524,11 @@
                 "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
                 "nikic/php-parser": "^5.5",
                 "php": "^7.4 || ^8.0",
-                "php-stubs/generator": "^0.8.3",
-                "phpdocumentor/reflection-docblock": "^5.4.1",
+                "php-stubs/generator": "^0.8.6",
+                "phpdocumentor/reflection-docblock": "^6.0",
                 "phpstan/phpstan": "^2.1",
                 "phpunit/phpunit": "^9.5",
+                "symfony/polyfill-php80": "*",
                 "szepeviktor/phpcs-psr-12-neutron-hybrid-ruleset": "^1.1.1",
                 "wp-coding-standards/wpcs": "3.1.0 as 2.3.0"
             },
@@ -550,22 +551,22 @@
             ],
             "support": {
                 "issues": "https://github.com/php-stubs/wordpress-stubs/issues",
-                "source": "https://github.com/php-stubs/wordpress-stubs/tree/v6.8.3"
+                "source": "https://github.com/php-stubs/wordpress-stubs/tree/v6.9.4"
             },
-            "time": "2025-09-30T20:58:47+00:00"
+            "time": "2026-05-01T20:36:01+00:00"
         },
         {
             "name": "php-stubs/wordpress-tests-stubs",
-            "version": "v6.8.6",
+            "version": "v6.9.7",
             "source": {
                 "type": "git",
                 "url": "https://github.com/php-stubs/wordpress-tests-stubs.git",
-                "reference": "bac17c487f2fe665eecd5e02626fd2da760996b2"
+                "reference": "c6878d4aee7b6cdd7bdc53c30653c4a8bb0c417f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/php-stubs/wordpress-tests-stubs/zipball/bac17c487f2fe665eecd5e02626fd2da760996b2",
-                "reference": "bac17c487f2fe665eecd5e02626fd2da760996b2",
+                "url": "https://api.github.com/repos/php-stubs/wordpress-tests-stubs/zipball/c6878d4aee7b6cdd7bdc53c30653c4a8bb0c417f",
+                "reference": "c6878d4aee7b6cdd7bdc53c30653c4a8bb0c417f",
                 "shasum": ""
             },
             "require-dev": {
@@ -590,9 +591,9 @@
             ],
             "support": {
                 "issues": "https://github.com/php-stubs/wordpress-tests-stubs/issues",
-                "source": "https://github.com/php-stubs/wordpress-tests-stubs/tree/v6.8.6"
+                "source": "https://github.com/php-stubs/wordpress-tests-stubs/tree/v6.9.7"
             },
-            "time": "2026-07-23T13:01:49+00:00"
+            "time": "2026-08-13T08:31:51+00:00"
         },
         {
             "name": "phpcompatibility/php-compatibility",
@@ -2695,16 +2696,16 @@
         },
         {
             "name": "wp-phpunit/wp-phpunit",
-            "version": "6.8.6",
+            "version": "6.9.7",
             "source": {
                 "type": "git",
                 "url": "https://github.com/wp-phpunit/wp-phpunit.git",
-                "reference": "a33d328dab5a4a9ddf0c560bcadbabb58b5ee67f"
+                "reference": "15fd216bf6516670d8d07b938675925bfa5c15b0"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/wp-phpunit/wp-phpunit/zipball/a33d328dab5a4a9ddf0c560bcadbabb58b5ee67f",
-                "reference": "a33d328dab5a4a9ddf0c560bcadbabb58b5ee67f",
+                "url": "https://api.github.com/repos/wp-phpunit/wp-phpunit/zipball/15fd216bf6516670d8d07b938675925bfa5c15b0",
+                "reference": "15fd216bf6516670d8d07b938675925bfa5c15b0",
                 "shasum": ""
             },
             "type": "library",
@@ -2739,7 +2740,7 @@
                 "issues": "https://github.com/wp-phpunit/issues",
                 "source": "https://github.com/wp-phpunit/wp-phpunit"
             },
-            "time": "2025-04-16T01:40:54+00:00"
+            "time": "2026-02-04T01:48:23+00:00"
         },
         {
             "name": "yoast/phpunit-polyfills",
