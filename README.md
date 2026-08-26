@@ -29,7 +29,7 @@ Safe Publish is ideal for:
 ## Requirements
 
 - **PHP**: 8.2 or higher
-- **WordPress**: 6.8 or higher
+- **WordPress**: 6.9 or higher
 - **cURL**: PHP cURL extension with SSL support
 - **Site URLs**: HTTP or HTTPS; use HTTPS outside local development
 - Administrator privileges on both source and destination sites
