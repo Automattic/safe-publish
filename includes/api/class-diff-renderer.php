@@ -824,8 +824,13 @@ final class Diff_Renderer {
 		$records     = $incoming['terms'] ?? array();
 
 		if ( true !== ( $incoming['has_term_fields'] ?? false ) ) {
+			$local = array_intersect_key(
+				$current['terms'] ?? array(),
+				$records
+			);
+
 			return $this->generate_simple_diff(
-				$this->build_terms_text( $current['terms'] ?? array() ),
+				$this->build_terms_text( $local ),
 				$this->build_terms_text( $records ),
 				$title_left,
 				$title_right
@@ -909,7 +914,7 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Renders term fields for diff comparison: one summary line per taxonomy,
+	 * Renders term fields for diff comparison: One summary line per taxonomy,
 	 * then a line per term carrying a parent or a description. Terms are keyed
 	 * and ordered by slug.
 	 *
@@ -1110,7 +1115,7 @@ final class Diff_Renderer {
 		$source      = (string) ( $record['description'] ?? '' );
 		$description = wp_kses_post( $source );
 
-		// Mirrors the reconcile: core narrows a description as it saves, and
+		// Mirrors the reconcile: Core narrows a description as it saves, and
 		// how far depends on who imports, so either form already stored means
 		// nothing would change.
 		if (
@@ -1135,7 +1140,7 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Reads the slug a record is identified by: the paired destination term's,
+	 * Reads the slug a record is identified by: The paired destination term's,
 	 * falling back to the source's own for a term the import would create.
 	 *
 	 * @param array                                       $record Source term record.
@@ -1270,7 +1275,7 @@ final class Diff_Renderer {
 			}
 		}
 
-		// Two records can produce one note: several children naming the same
+		// Two records can produce one note: Several children naming the same
 		// parent, or two source terms pairing with one destination term.
 		return array_values( array_unique( $notes ) );
 	}
@@ -1331,7 +1336,7 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Builds the identifier joining a term's lines to its notes: the slug, which
+	 * Builds the identifier joining a term's lines to its notes: The slug, which
 	 * the import never rewrites, plus the taxonomy, so a renamed term keys alike
 	 * on both sides and terms sharing a slug across taxonomies stay distinct.
 	 *

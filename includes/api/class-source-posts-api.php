@@ -81,7 +81,14 @@ class Source_Posts_API {
 					continue;
 				}
 
-				$tax = isset( $term['taxonomy'] ) ? (string) $term['taxonomy'] : 'term';
+				$tax = isset( $term['taxonomy'] )
+					? sanitize_key( (string) $term['taxonomy'] )
+					: 'term';
+
+				if ( '' === $tax ) {
+					continue;
+				}
+
 				if ( ! isset( $terms[ $tax ] ) ) {
 					$terms[ $tax ] = array();
 				}

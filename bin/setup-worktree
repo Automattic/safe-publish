@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Bootstrap a worktree: install dependencies and assign a free wp-env port
+# Bootstrap a worktree: Install dependencies and assign a free wp-env port
 # pair, recorded in .devports so `npm run dev` loads it automatically.
 #
 # Usage: bin/setup-worktree
@@ -23,7 +23,7 @@ is_free() {
 }
 
 # Ports recorded by sibling worktrees, so a pair stays reserved even while its
-# worktree is stopped. Best-effort: an unreadable file is skipped, not fatal.
+# worktree is stopped. Best-effort: An unreadable file is skipped, not fatal.
 claimed_ports() {
 	oldifs="$IFS"
 	IFS='
@@ -57,7 +57,7 @@ find_pair() {
 	exit 1
 }
 
-# Serialize allocation: concurrent setups would otherwise read the same claimed
+# Serialize allocation: Concurrent setups would otherwise read the same claimed
 # set before any writes .devports and pick the same pair. mkdir is an atomic,
 # dependency-free lock (flock is absent on macOS), kept in the shared git dir so
 # all worktrees contend on one.
@@ -90,7 +90,7 @@ release_lock() {
 	trap - EXIT INT TERM
 }
 
-# Precedence: an explicit WP_ENV_PORT (e.g. from an orchestrator) wins; else
+# Precedence: An explicit WP_ENV_PORT (e.g. from an orchestrator) wins; else
 # reuse an existing .devports (idempotent); else allocate a free pair. Runs
 # under the lock so simultaneous setups get distinct pairs.
 acquire_lock

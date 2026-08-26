@@ -418,10 +418,33 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		// payload, naming a different term.
 		$html = $this->render_embedded_category( 'Updates' );
 
-		// ASSERT: The names compare as before, with no fields and no notes.
-		$this->assertStringContainsString( 'Updates', $html );
+		// ASSERT: Both sides compare on names alone, with no fields and no
+		// notes.
+		$changed = implode( "\n", $this->changed_lines( $html ) );
+		$this->assertStringContainsString( 'category: News', $changed );
+		$this->assertStringContainsString( 'category: Updates', $changed );
 		$this->assertStringNotContainsString( 'description', $html );
 		$this->assertSame( array(), $this->notes( $html ) );
+	}
+
+	/**
+	 * Verifies that a source naming a taxonomy loosely still compares against
+	 * the post's terms, which the import reaches by narrowing the name.
+	 */
+	public function test_fallback_pairs_a_loosely_named_taxonomy(): void {
+		// ARRANGE: An imported term the source's payload replaces.
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, '' ) )
+		);
+
+		// ACT: The source names the taxonomy in a form the import narrows.
+		$html = $this->render_embedded_category( 'Updates', 'Category' );
+
+		// ASSERT: The current side still carries the term the import removes.
+		$this->assertStringContainsString(
+			'category: News',
+			implode( "\n", $this->changed_lines( $html ) )
+		);
 	}
 
 	/**
@@ -746,11 +769,10 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that the embedded fallback keeps comparing every registered
-	 * taxonomy, since it cannot tell one the source omits from one the source
-	 * emptied.
+	 * Verifies that the embedded fallback leaves out a taxonomy the source
+	 * omits, since the import leaves it alone too.
 	 */
-	public function test_fallback_still_compares_a_taxonomy_the_source_omits(): void {
+	public function test_fallback_omitted_taxonomy_is_not_a_removal(): void {
 		// ARRANGE: A post carrying a post format and a category the source
 		// matches, so the format is all that could differ.
 		$this->import_terms(
@@ -761,8 +783,8 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		// ACT: A source on an older plugin version sends only embedded terms.
 		$html = $this->render_embedded_category( 'News' );
 
-		// ASSERT: The post format still compares.
-		$this->assertStringContainsString( 'post_format', $html );
+		// ASSERT: Nothing differs, so the section is omitted.
+		$this->assertSame( '', $html );
 	}
 
 	/**
@@ -1038,7 +1060,7 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: Both summaries follow the slugs. The destination side is the
-		// one that pins the sort: the post's terms arrive ordered by name.
+		// one that pins the sort: The post's terms arrive ordered by name.
 		$this->assertSame(
 			array(
 				'Deleted: category: Zulu (alpha), Alpha (zulu)',
@@ -1108,10 +1130,14 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	 * Renders the diff for a source sending embedded terms alone, as one on an
 	 * older plugin version does.
 	 *
-	 * @param string $name Name the source's category term carries.
+	 * @param string $name     Name the source's category term carries.
+	 * @param string $taxonomy Taxonomy the source names it under.
 	 * @return string Taxonomies diff HTML.
 	 */
-	private function render_embedded_category( string $name ): string {
+	private function render_embedded_category(
+		string $name,
+		string $taxonomy = 'category'
+	): string {
 		$result = $this->render(
 			array(
 				'_embedded' => array(
@@ -1119,7 +1145,7 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 						array(
 							array(
 								'id'       => 101,
-								'taxonomy' => 'category',
+								'taxonomy' => $taxonomy,
 								'name'     => $name,
 								'slug'     => 'news',
 							),
