@@ -386,7 +386,7 @@ html:has(body.toplevel_page_safe-publish) {
 	white-space: nowrap;
 }
 
-// Needs attention inbox: the Type column tag and the Severity label.
+// Needs attention inbox: The Type column tag and the Severity label.
 .safe-publish-inbox-type {
 	font-weight: 600;
 
@@ -431,7 +431,7 @@ html:has(body.toplevel_page_safe-publish) {
 	}
 }
 
-// Needs attention inbox: the Open | Ignored view toggle.
+// Needs attention inbox: The Open | Ignored view toggle.
 .safe-publish-inbox-view-toggle {
 	margin-bottom: 16px;
 	max-width: 240px;
@@ -707,12 +707,6 @@ html:has(body.toplevel_page_safe-publish) {
 }
 /* stylelint-enable no-descending-specificity */
 
-// Show inline primary action icons at rest. Selector mirrors DataViews'
-// `.dataviews-view-table tr ...` rule so specificity wins.
-.safe-publish-dataviews-wrapper .dataviews-view-table tr .dataviews-item-actions .components-button:not(.dataviews-all-actions-button) {
-	opacity: 1;
-}
-
 // Each admin page drives search/filter from its own toolbar; hide DataViews'
 // built-ins so they don't duplicate the UI.
 .safe-publish-dataviews-wrapper .dataviews-search,
@@ -727,7 +721,7 @@ html:has(body.toplevel_page_safe-publish) {
 	padding-bottom: 0;
 }
 
-// Replace DataViews' "Page X of Y" widget where pagination is approximate: the
+// Replace DataViews' "Page X of Y" widget where pagination is approximate: The
 // catalog endpoint sets no_found_rows and signals more via has_more, so the
 // true total is unknown. Hide the native page-select and render "Page N" from
 // the wrapper's --safe-publish-page-text variable; Prev/Next stay.

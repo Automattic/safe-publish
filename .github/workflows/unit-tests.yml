@@ -59,7 +59,7 @@ jobs:
     needs:
       - php-unit-tests
       - js-unit-tests
-    if: ${{ always() && !cancelled() }}
+    if: ${{ !cancelled() }}
     steps:
       - name: Verify test results
         run: |

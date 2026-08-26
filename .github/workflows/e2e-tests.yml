@@ -19,17 +19,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - wordpress-version: '6.8'
-            wordpress-ref: WordPress/WordPress#6.8-branch
-            php-version: '8.4'
           - wordpress-version: '6.9'
-            wordpress-ref: WordPress/WordPress#6.9-branch
             php-version: '8.5'
           - wordpress-version: '7.0'
-            wordpress-ref: WordPress/WordPress#7.0-branch
             php-version: '8.5'
           - wordpress-version: '7.1'
-            wordpress-ref: WordPress/WordPress#7.1-branch
             php-version: '8.5'
     steps:
       - uses: actions/checkout@v7.0.1
@@ -57,7 +51,7 @@ jobs:
       - name: Configure WordPress environment
         run: |
           printf '{"core":"%s","phpVersion":"%s"}\n' \
-            '${{ matrix.wordpress-ref }}' \
+            '${{ format('WordPress/WordPress#{0}-branch', matrix.wordpress-version) }}' \
             '${{ matrix.php-version }}' \
             > .wp-env.override.json
 
@@ -109,7 +103,7 @@ jobs:
     name: End-to-end tests
     runs-on: ubuntu-latest
     needs: e2e-tests
-    if: ${{ always() && !cancelled() }}
+    if: ${{ !cancelled() }}
     steps:
       - name: Verify matrix result
         run: test '${{ needs.e2e-tests.result }}' = 'success'

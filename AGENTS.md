@@ -34,18 +34,20 @@
   - Any related documentation files need updating.
 - Wrap code, comments and docblocks at 80 characters; never wrap them unnecessarily early. `@param`/`@return` descriptions starting beyond column 40 can extend to 100 characters. Line length is measured in display characters, with tabs counting as 4. Markdown prose is exempt; don't hand-wrap it, `npm run format` joins it. GitHub alerts are the one place a line break matters: put a quoted blank line between the marker and its content.
 
-### PHP
-
-- Verify PHP files use strict typing, and use type hinting everywhere possible.
-- Prefer using `_` instead of `@psalm-suppress PossiblyUnusedParam`.
-- Use explicit checks — don't use `empty()`, and don't coerce values with `!`. Reserve `!` for booleans and predicates; write an explicit comparison instead (`0 === $id`, `null === $post`), and for a multi-falsy union a type test (`! ( $result instanceof WP_Post )`, not `! $result`).
-
 ### Comments and docblocks
+
+These apply to comments in every language, not just PHP.
 
 - Write short and to the point comments; lengthy comments allowed only when they provide value.
 - Adhere to WordPress inline documentation standards.
 - Docblock summaries are plain prose; no backticks or Markdown.
 - In comments, capitalize the first word after a colon only when it begins prose — not a code reference such as an identifier or function name (`()` optional, camelCase included), a tag, attribute, slug, or enum value, a quoted string, URL, type shape, or literal. Apply this at every colon followed by a space (not `10:30` or `https://`); for a list, judge by the items — `image, audio, or video` stays lowercase, `Scheme and host only` capitalizes.
+
+### PHP
+
+- Verify PHP files use strict typing, and use type hinting everywhere possible.
+- Prefer using `_` instead of `@psalm-suppress PossiblyUnusedParam`.
+- Use explicit checks — don't use `empty()`, and don't coerce values with `!`. Reserve `!` for booleans and predicates; write an explicit comparison instead (`0 === $id`, `null === $post`), and for a multi-falsy union a type test (`! ( $result instanceof WP_Post )`, not `! $result`).
 
 ## Tests
 
@@ -92,7 +94,7 @@ Currently in closed beta used by customers, soon to become public; anything intr
 
 ## Dependencies
 
-**Runtime `@wordpress/*` packages and WP stubs are pinned to the wp-6.8 dist-tag line** to match the plugin's `Requires at least: 6.8`. Bumping them past their current major would type-check our code against APIs that don't exist in WP 6.8's bundled `wp.*` globals, causing silent runtime failures. Development-only build, lint, test, and local-environment tools may move beyond that line when the upgrade does not expose newer browser APIs or types to plugin code; call out that decision in the PR description. Raising the WP floor requires updating the plugin header, `php-stubs/wordpress-{stubs,tests-stubs}`, and the relevant runtime `@wordpress/*` packages together to the next wp-X.Y dist-tag.
+**Runtime `@wordpress/*` packages and WP stubs are pinned to the wp-6.9 dist-tag line** to match the plugin's `Requires at least: 6.9`. Externalized packages resolve to `wp.*` globals, so an off-line version type-checks against APIs the floor lacks. `@wordpress/dataviews` and `@wordpress/icons` are bundled instead, but dataviews unlocks private APIs from the externalized `@wordpress/components`: an off-line copy destructures names core doesn't expose, yielding `undefined` silently until render. Development-only build, lint, test, and local-environment tools may move beyond the line when the upgrade exposes no newer browser APIs or types to plugin code — `@wordpress/base-styles` counts, since it compiles into our own stylesheet and never resolves against core; call out any such decision in the PR description. Raising the WP floor requires updating the plugin header, `minimum_supported_wp_version` in `phpcs.xml.dist`, `php-stubs/wordpress-{stubs,tests-stubs}`, `wp-phpunit/wp-phpunit`, the relevant runtime `@wordpress/*` packages to the next wp-X.Y dist-tag, and the minimum stated in the docs.
 
 ## CI compatibility matrix
 
@@ -107,7 +109,7 @@ Use these sources of truth:
 When WordPress or PHP compatibility changes, or the plugin's minimum WordPress or PHP version changes, update all of the following together:
 
 1. In `.github/workflows/integration-tests.yml`, list every stable WordPress major/minor release from the plugin's minimum through the current release, and every PHP major/minor release from the plugin's minimum through the newest version supported by at least one of those WordPress releases. Add an `exclude` entry for every combination marked unsupported by WordPress. Keep every supported combination running on every pull request.
-2. In `.github/workflows/e2e-tests.yml`, include every supported WordPress major/minor release once, paired with the highest PHP version that release supports. Use the corresponding `WordPress/WordPress#X.Y-branch` ref.
+2. In `.github/workflows/e2e-tests.yml`, include every supported WordPress major/minor release once, paired with the highest PHP version that release supports.
 3. In `.github/workflows/unit-tests.yml`, test every PHP major/minor version from the plugin's minimum through the newest PHP version represented in the integration matrix.
 4. In `.github/workflows/static-checks.yml`, run PHP checks on the plugin's minimum PHP version.
 5. Verify each stable `WordPress/WordPress#X.Y-branch` ref exists, parse every workflow as YAML, and run `npm run fix` followed by `npm run check`.

@@ -637,7 +637,7 @@ final class Catalog_REST_Controller {
 	/**
 	 * Resolves and validates the requested status list.
 	 *
-	 * No usable status param means "no filter": list every non-internal
+	 * No usable status param means "no filter": List every non-internal
 	 * content status, so custom editorial-workflow statuses are discoverable
 	 * alongside the built-ins. internal => false excludes trash, auto-draft,
 	 * and inherit while keeping custom statuses that show_in_admin_all_list

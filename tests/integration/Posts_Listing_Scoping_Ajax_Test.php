@@ -18,7 +18,7 @@ use WP_Error;
 
 /**
  * Verifies that safe_publish_list_posts scopes every state to the connected
- * source: the catalog annotation, the local listing, and the focused-state
+ * source: The catalog annotation, the local listing, and the focused-state
  * chip each resolve a numeric source post id against that source's imports
  * only, so an id also imported from a previously connected site neither
  * disappears from Available nor routes its row to the other site's post.
