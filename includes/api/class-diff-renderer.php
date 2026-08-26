@@ -824,8 +824,13 @@ final class Diff_Renderer {
 		$records     = $incoming['terms'] ?? array();
 
 		if ( true !== ( $incoming['has_term_fields'] ?? false ) ) {
+			$local = array_intersect_key(
+				$current['terms'] ?? array(),
+				$records
+			);
+
 			return $this->generate_simple_diff(
-				$this->build_terms_text( $current['terms'] ?? array() ),
+				$this->build_terms_text( $local ),
 				$this->build_terms_text( $records ),
 				$title_left,
 				$title_right

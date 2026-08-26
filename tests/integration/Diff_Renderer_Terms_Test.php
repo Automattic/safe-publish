@@ -746,11 +746,10 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that the embedded fallback keeps comparing every registered
-	 * taxonomy, since it cannot tell one the source omits from one the source
-	 * emptied.
+	 * Verifies that the embedded fallback leaves out a taxonomy the source
+	 * omits, since the import leaves it alone too.
 	 */
-	public function test_fallback_still_compares_a_taxonomy_the_source_omits(): void {
+	public function test_fallback_omitted_taxonomy_is_not_a_removal(): void {
 		// ARRANGE: A post carrying a post format and a category the source
 		// matches, so the format is all that could differ.
 		$this->import_terms(
@@ -761,8 +760,8 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		// ACT: A source on an older plugin version sends only embedded terms.
 		$html = $this->render_embedded_category( 'News' );
 
-		// ASSERT: The post format still compares.
-		$this->assertStringContainsString( 'post_format', $html );
+		// ASSERT: Nothing differs, so the section is omitted.
+		$this->assertSame( '', $html );
 	}
 
 	/**
