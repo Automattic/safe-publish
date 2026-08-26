@@ -82,19 +82,23 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that create_session keeps a value it cannot parse instead of
-	 * storing an empty identity.
+	 * Verifies that create_session rejects a value it cannot normalize instead
+	 * of storing an identity that readers cannot reproduce.
 	 */
-	public function test_create_session_preserves_an_unparseable_value(): void {
+	public function test_create_session_rejects_an_unparseable_value(): void {
 		// ARRANGE: A connection URL saved without a scheme.
-		$raw = 'example.com/blog';
+		$before = $this->count_sessions();
 
 		// ACT: Open a session for it.
-		$session_id = $this->repository->create_session( $raw, 'single' );
+		$result = $this->repository->create_session( 'example.com/blog', 'single' );
 
-		// ASSERT: The original value survived the insert.
-		$this->assertIsInt( $session_id );
-		$this->assertSame( $raw, $this->stored_url( $session_id ) );
+		// ASSERT: The call failed and inserted nothing.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'session_invalid_source_site_url',
+			$result->get_error_code()
+		);
+		$this->assertSame( $before, $this->count_sessions() );
 	}
 
 	/**

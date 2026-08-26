@@ -48,7 +48,7 @@ final class History_Repository {
 	 * @param string $source_site_url Source site URL, normalized to the
 	 *                                path-bearing identity before storage.
 	 * @param string $session_type    Type of import (single, bulk).
-	 * @return int|WP_Error Session ID, or error on a blank source or a failed
+	 * @return int|WP_Error Session ID, or error on an invalid source or a failed
 	 *                      insert.
 	 */
 	public function create_session(
@@ -69,15 +69,22 @@ final class History_Repository {
 			);
 		}
 
-		$user_id = get_current_user_id();
-		$user    = get_userdata( $user_id );
-
-		// Store the path-bearing identity so sessions compare equal with post
-		// meta and degradations; an unparseable value is kept as given.
 		$normalized = URL_Validator::normalize_site_url_with_path(
 			$source_site_url
 		);
-		$stored_url = '' === $normalized ? $source_site_url : $normalized;
+
+		if ( '' === $normalized ) {
+			return new WP_Error(
+				'session_invalid_source_site_url',
+				__(
+					'Cannot open an import session without a valid connected source site.',
+					'safe-publish'
+				)
+			);
+		}
+
+		$user_id = get_current_user_id();
+		$user    = get_userdata( $user_id );
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$inserted = $wpdb->insert(
@@ -87,7 +94,7 @@ final class History_Repository {
 				'user_display_name' => $user
 					? $user->display_name
 					: __( 'Unknown user', 'safe-publish' ),
-				'source_site_url'   => $stored_url,
+				'source_site_url'   => $normalized,
 				'session_type'      => $session_type,
 				'status'            => 'in_progress',
 				'ended_at_gmt'      => null,

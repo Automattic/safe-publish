@@ -325,6 +325,20 @@ class Options {
 			return null;
 		}
 
+		if ( self::OPTION_CONNECTED_SITE_URL === $option
+			&& ! URL_Validator::is_valid_external_url( $constant_value )
+		) {
+			self::report_invalid_constant(
+				$constant_name,
+				sprintf(
+					/* translators: %s: constant name */
+					__( '%s must be a valid external URL.', 'safe-publish' ),
+					$constant_name
+				)
+			);
+			return null;
+		}
+
 		if ( self::OPTION_SYNC_MODE === $option
 			&& ! self::is_valid_sync_mode( $constant_value )
 		) {
