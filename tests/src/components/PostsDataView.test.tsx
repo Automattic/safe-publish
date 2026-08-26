@@ -19,6 +19,7 @@ const dataViews = vi.hoisted( () => ( {
 	props: null as {
 		data: UnifiedPostRow[];
 		fields: DataViewsField< UnifiedPostRow >[];
+		config?: { perPageSizes: number[] };
 	} | null,
 } ) );
 
@@ -206,6 +207,17 @@ describe( 'PostsDataView fields', () => {
 		expect(
 			screen.getByText( /Source links match on All and Not imported/ )
 		).toBeInTheDocument();
+	} );
+
+	it( 'Verifies that the largest page size matches the bulk request cap', async () => {
+		// ARRANGE: Mount a listing with the DataViews view controls.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+
+		// ACT: Wait for DataViews to receive the listing configuration.
+		await waitFor( () => expect( dataViews.props ).not.toBeNull() );
+
+		// ASSERT: A user cannot show and select more than 50 rows at once.
+		expect( dataViews.props?.config?.perPageSizes ).toEqual( [ 10, 20, 50 ] );
 	} );
 } );
 

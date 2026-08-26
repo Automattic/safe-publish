@@ -164,7 +164,7 @@ class Attention_Issues_Schema_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Replaces the table with its v2 shape: no target_slug, narrow target_kind,
+	 * Replaces the table with its v2 shape: No target_slug, narrow target_kind,
 	 * and the four-column identity key.
 	 */
 	private function create_v2_table(): void {

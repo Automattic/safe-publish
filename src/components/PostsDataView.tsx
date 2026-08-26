@@ -1126,6 +1126,7 @@ export function PostsDataView( {
 					onChangeSelection={ setSelection }
 					paginationInfo={ paginationInfo }
 					defaultLayouts={ { [ LAYOUT_TABLE ]: {} } }
+					config={ { perPageSizes: [ 10, 20, 50 ] } }
 					actions={ createPostsActions(
 						refresh,
 						isAuthorized,

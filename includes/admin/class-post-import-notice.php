@@ -111,7 +111,7 @@ final class Post_Import_Notice {
 			return;
 		}
 
-		// Following the link clears the batch. No nonce: presence of the arg
+		// Following the link clears the batch. No nonce: Presence of the arg
 		// is the whole signal, and the worst a forged link does is drop the
 		// requester's own notice a little early.
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended

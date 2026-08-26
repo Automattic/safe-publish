@@ -1037,7 +1037,7 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: Both summaries follow the slugs. The destination side is the
-		// one that pins the sort: the post's terms arrive ordered by name.
+		// one that pins the sort: The post's terms arrive ordered by name.
 		$this->assertSame(
 			array(
 				'Deleted: category: Zulu (alpha), Alpha (zulu)',
