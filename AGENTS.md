@@ -32,7 +32,7 @@
 - When applying changes, carefully analyze whether:
   - The change could be breaking desired functionality.
   - Any related documentation files need updating.
-- Wrap code, comments and docblocks at 80 characters; never wrap them unnecessarily early. `@param`/`@return` descriptions starting beyond column 40 can extend to 100 characters. Line length is measured in display characters, with tabs counting as 4. Markdown prose is exempt; don't hand-wrap it, `npm run format` joins it.
+- Wrap code, comments and docblocks at 80 characters; never wrap them unnecessarily early. `@param`/`@return` descriptions starting beyond column 40 can extend to 100 characters. Line length is measured in display characters, with tabs counting as 4. Markdown prose is exempt; don't hand-wrap it, `npm run format` joins it. GitHub alerts are the one place a line break matters: put a quoted blank line between the marker and its content.
 
 ### PHP
 

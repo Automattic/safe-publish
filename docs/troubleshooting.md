@@ -120,7 +120,9 @@ add_filter(
 );
 ```
 
-> [!NOTE] This does not expose private content: Safe Publish still validates the HMAC signature before serving edit-context or import data, so a forged or absent signature retrieves nothing beyond WordPress' default anonymous REST access. For unsigned requests, the allowlisted `wp/v2` namespace exposes only what WordPress already serves anonymously, including the author data at `wp/v2/users`.
+> [!NOTE]
+>
+> This does not expose private content: Safe Publish still validates the HMAC signature before serving edit-context or import data, so a forged or absent signature retrieves nothing beyond WordPress' default anonymous REST access. For unsigned requests, the allowlisted `wp/v2` namespace exposes only what WordPress already serves anonymously, including the author data at `wp/v2/users`.
 
 #### "REST API not found" error
 
