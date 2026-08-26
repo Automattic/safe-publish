@@ -36,7 +36,6 @@ import { createPostsActions, type ActionNotice } from '../actions';
 import {
 	DEFAULT_ITEMS_PER_PAGE,
 	LAYOUT_TABLE,
-	POSTS_BULK_SELECTION_MAX,
 	SEARCH_DEBOUNCE_MS,
 } from '../constants';
 import { PostTypeSelector } from '../post-type-selector';
@@ -319,8 +318,6 @@ export function PostsDataView( {
 
 	const [ rows, setRows ] = useState< UnifiedPostRow[] >( [] );
 	const [ selection, setSelection ] = useState< string[] >( [] );
-	const [ selectionLimitReached, setSelectionLimitReached ] =
-		useState( false );
 	const [ hasMore, setHasMore ] = useState( false );
 
 	const [ selectedPostType, setSelectedPostType ] = useState( 'post' );
@@ -365,33 +362,6 @@ export function PostsDataView( {
 		const ids = new Set( selection );
 		return rows.filter( ( row ) => ids.has( getRowId( row ) ) ).length;
 	}, [ rows, selection ] );
-
-	const handleSelectionChange = useCallback(
-		( next: string[] ): void => {
-			const rowIds = new Set( rows.map( getRowId ) );
-			const currentSelection = next.filter( ( id ) => rowIds.has( id ) );
-
-			if ( currentSelection.length <= POSTS_BULK_SELECTION_MAX ) {
-				setSelection( next );
-				setSelectionLimitReached( false );
-				return;
-			}
-
-			const allowed = new Set(
-				currentSelection.slice( 0, POSTS_BULK_SELECTION_MAX )
-			);
-			setSelection(
-				next.filter( ( id ) => ! rowIds.has( id ) || allowed.has( id ) )
-			);
-			setSelectionLimitReached( true );
-		},
-		[ rows ]
-	);
-
-	const resetSelection = useCallback( (): void => {
-		setSelection( [] );
-		setSelectionLimitReached( false );
-	}, [] );
 
 	// Consume the ?state= deep-link once; chip changes stay ephemeral.
 	useEffect( () => stripUrlParam( 'state' ), [] );
@@ -619,7 +589,7 @@ export function PostsDataView( {
 			focusSourceId,
 			refreshNonce,
 		] ),
-		resetSelection
+		() => setSelection( [] )
 	);
 
 	const sourceIds = useMemo(
@@ -1104,22 +1074,6 @@ export function PostsDataView( {
 					{ rollbackNotice.message }
 				</Notice>
 			) }
-			{ selectionLimitReached && (
-				<Notice
-					status="warning"
-					onRemove={ () => setSelectionLimitReached( false ) }
-				>
-					{ sprintf(
-						/* translators: 1: maximum number of posts in a bulk action, 2: number selected */
-						__(
-							'Bulk actions are limited to %1$d posts at a time. Only the first %2$d posts were selected.',
-							'safe-publish'
-						),
-						POSTS_BULK_SELECTION_MAX,
-						POSTS_BULK_SELECTION_MAX
-					) }
-				</Notice>
-			) }
 			{ slugChipMismatch && (
 				<div
 					className="safe-publish-no-data"
@@ -1169,9 +1123,10 @@ export function PostsDataView( {
 					view={ effectiveView }
 					onChangeView={ handleViewChange }
 					selection={ selection }
-					onChangeSelection={ handleSelectionChange }
+					onChangeSelection={ setSelection }
 					paginationInfo={ paginationInfo }
 					defaultLayouts={ { [ LAYOUT_TABLE ]: {} } }
+					config={ { perPageSizes: [ 10, 20, 50 ] } }
 					actions={ createPostsActions(
 						refresh,
 						isAuthorized,

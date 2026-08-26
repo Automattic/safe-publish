@@ -19,9 +19,6 @@ export const LAYOUT_TABLE = 'table';
 // Catalog page size; matches the source controller's default.
 export const DEFAULT_ITEMS_PER_PAGE = 20;
 
-// Mirrors the server caps for bulk import and trash requests.
-export const POSTS_BULK_SELECTION_MAX = 50;
-
 // Debounce window for the search box. Long enough to avoid firing on
 // every keystroke; short enough to feel responsive on URL paste.
 export const SEARCH_DEBOUNCE_MS = 400;
