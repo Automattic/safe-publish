@@ -29,7 +29,7 @@ class Permission_Manager_Test extends WP_UnitTestCase {
 	 * User-Agent string the destination sends; HTTP_Client::parse_destination_site_url
 	 * extracts the destination URL from it into log payloads.
 	 */
-	private const TEST_USER_AGENT = 'Safe Publish/0.9.0; https://dest.example.com';
+	private const TEST_USER_AGENT = 'Safe Publish/0.10.0; https://dest.example.com';
 
 	/**
 	 * Destination URL portion of TEST_USER_AGENT, as it appears in log rows.

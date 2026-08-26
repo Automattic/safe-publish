@@ -86,7 +86,7 @@ const BulkRollbackPostModal = ( {
 
 	const failures = result?.entries.filter( entry => ! entry.outcome.success );
 
-	let summaryHeading = __( 'Rollback completed!', 'safe-publish' );
+	let summaryHeading: string = __( 'Rollback completed!', 'safe-publish' );
 	let summaryColor = 'var(--safe-publish-status-success)';
 	if ( result && 0 === result.successful ) {
 		summaryHeading = __( 'Rollback failed', 'safe-publish' );
