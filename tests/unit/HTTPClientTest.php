@@ -98,6 +98,16 @@ class HTTPClientTest extends TestCase {
 			'Failed to fetch data from source site. ' . $detail,
 			$result->get_error_message()
 		);
+		$this->assertSame(
+			array(
+				HTTP_Client::ERROR_DATA_SOURCE_ERROR => array(
+					'message'  => $detail,
+					'template' =>
+						'Failed to fetch data from source site. <reason />',
+				),
+			),
+			$result->get_error_data()
+		);
 	}
 
 	/**
@@ -151,8 +161,14 @@ class HTTPClientTest extends TestCase {
 		$this->assertSame( 'http_error', $result->get_error_code() );
 		$this->assertSame(
 			array(
-				'source_code'   => 'safe_publish_catalog_invalid_date',
-				'source_status' => 400,
+				HTTP_Client::ERROR_DATA_SOURCE_ERROR => array(
+					'message'  => 'Invalid date parameters.',
+					'template' =>
+						'Source site returned HTTP error 400. <reason />',
+				),
+				'source_code'                        =>
+					'safe_publish_catalog_invalid_date',
+				'source_status'                      => 400,
 			),
 			$result->get_error_data()
 		);

@@ -15,7 +15,7 @@ import {
 	__experimentalVStack as VStack,
 	Spinner,
 } from '@wordpress/components';
-import { useState } from '@wordpress/element';
+import { createInterpolateElement, useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
 import BlockDiffViewer, { resolveStatus } from './BlockDiffViewer';
@@ -368,6 +368,7 @@ export default function PostDiffModal( {
 		nonContentDiffs,
 		isLoading,
 		error,
+		sourceError,
 		refetch,
 	} = useDiffPreview( {
 		postId: sourcePostId,
@@ -428,6 +429,12 @@ export default function PostDiffModal( {
 	const ready = ! error && ( ! isLoading || hasPreviousData );
 	const showEmptyState = ready && ! hasAnyChanges;
 	const showDiffBody = ready && hasAnyChanges;
+	const renderedError =
+		error && sourceError
+			? createInterpolateElement( sourceError.template, {
+					reason: <bdi dir="auto">{ sourceError.message }</bdi>,
+				} )
+			: error;
 
 	const modalClassName = showFullSize
 		? 'safe-publish-compare-modal'
@@ -464,7 +471,11 @@ export default function PostDiffModal( {
 				</HStack>
 			) }
 
-			{ error && <Text style={ { color: 'var(--safe-publish-status-error)' } }>{ error }</Text> }
+			{ renderedError && (
+				<Text style={ { color: 'var(--safe-publish-status-error)' } }>
+					{ renderedError }
+				</Text>
+			) }
 
 			{ showDiffBody && (
 				<DiffBody

@@ -829,6 +829,14 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 				$upstream_message,
 				(string) $data['message']
 			);
+			$this->assertSame(
+				array(
+					'message'  => $upstream_message,
+					'template' =>
+						'Failed to fetch data from source site. <reason />',
+				),
+				$data['data']['source_error']
+			);
 		} finally {
 			remove_filter( 'pre_http_request', $failing_request );
 		}
@@ -891,6 +899,7 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 				$secret_host,
 				(string) $data['message']
 			);
+			$this->assertArrayNotHasKey( 'source_error', $data['data'] );
 		} finally {
 			remove_filter( 'pre_http_request', $failing_request );
 		}

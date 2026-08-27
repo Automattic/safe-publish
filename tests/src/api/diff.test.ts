@@ -71,6 +71,52 @@ describe( 'fetchDiffPreview', () => {
 		expect( result.error ).toBe( 'Server says no' );
 	} );
 
+	it( 'preserves valid structured source error data', async () => {
+		// ARRANGE: WordPress rejects with a display message and source detail.
+		mockApiFetch.mockRejectedValue( {
+			message: 'Source site returned HTTP error 401. Refused.',
+			data: {
+				source_error: {
+					message: 'Refused.',
+					template:
+						'Source site returned HTTP error 401. <reason />',
+				},
+			},
+		} );
+
+		// ACT: Fetch the diff preview.
+		const result = await fetchDiffPreview( { postId: 123 } );
+
+		// ASSERT: The source detail remains separate from the fallback message.
+		expect( result ).toEqual( {
+			error: 'Source site returned HTTP error 401. Refused.',
+			sourceError: {
+				message: 'Refused.',
+				template:
+					'Source site returned HTTP error 401. <reason />',
+			},
+		} );
+	} );
+
+	it( 'ignores malformed structured source error data', async () => {
+		// ARRANGE: The optional source template lacks the reason marker.
+		mockApiFetch.mockRejectedValue( {
+			message: 'Server says no',
+			data: {
+				source_error: {
+					message: 'Refused.',
+					template: 'Source site returned HTTP error 401.',
+				},
+			},
+		} );
+
+		// ACT: Fetch the diff preview.
+		const result = await fetchDiffPreview( { postId: 123 } );
+
+		// ASSERT: The compatible fallback message still surfaces alone.
+		expect( result ).toEqual( { error: 'Server says no' } );
+	} );
+
 	it( 'falls back to a generic message when the rejection has no message', async () => {
 		// ARRANGE: apiFetch rejects with no usable message.
 		mockApiFetch.mockRejectedValue( {} );

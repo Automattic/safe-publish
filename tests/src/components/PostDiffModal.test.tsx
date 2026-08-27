@@ -158,4 +158,42 @@ describe( 'PostDiffModal listing refresh', () => {
 		// ASSERT: Nothing was submitted, so the listing is left alone.
 		expect( onRefresh ).not.toHaveBeenCalled();
 	} );
+
+	it( 'Verifies that an HTTP failure isolates the source-provided reason', async () => {
+		// ARRANGE: The source reason contains its own directional controls.
+		const reason = '\u202eSource refused the request.\u202c';
+		mockApiFetch.mockRejectedValue( {
+			message: `Source site returned HTTP error 401. ${ reason }`,
+			data: {
+				source_error: {
+					message: reason,
+					template:
+						'<reason /> Source site returned HTTP error 401.',
+				},
+			},
+		} );
+
+		// ACT: Render Compare's failed request.
+		render(
+			<PostDiffModal
+				items={ [ ROW ] }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				syncStatus="outdated"
+			/>
+		);
+		const isolatedReason = await screen.findByText( reason );
+
+		// ASSERT: The untrusted run has a markup isolation boundary, while the
+		// translated sentence remains outside it.
+		expect( isolatedReason.tagName ).toBe( 'BDI' );
+		expect( isolatedReason ).toHaveAttribute( 'dir', 'auto' );
+		expect( isolatedReason ).toHaveTextContent( reason );
+		expect( isolatedReason.parentElement?.firstChild ).toBe(
+			isolatedReason
+		);
+		expect( isolatedReason.parentElement ).toHaveTextContent(
+			'Source site returned HTTP error 401.'
+		);
+	} );
 } );

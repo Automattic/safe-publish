@@ -9,7 +9,11 @@ import { __ } from '@wordpress/i18n';
 
 import { fetchDiffPreview } from '../../api/diff';
 
-import type { BlockDiff, DiffPreviewResult } from '../../api/diff';
+import type {
+	BlockDiff,
+	DiffPreviewResult,
+	DiffPreviewSourceError,
+} from '../../api/diff';
 
 /**
  * Parameters for the useDiffPreview hook.
@@ -33,6 +37,7 @@ interface UseDiffPreviewParams {
  * @property {DiffPreviewResult['nonContentDiffs']} nonContentDiffs Non-content field diffs.
  * @property {boolean}                              isLoading       Whether diff is loading.
  * @property {string | null}                        error           Error message if fetch failed.
+ * @property {DiffPreviewSourceError | undefined}   sourceError     Isolated source failure detail.
  * @property {() => void}                           refetch         Re-runs the diff fetch.
  */
 interface UseDiffPreviewResult {
@@ -41,6 +46,7 @@ interface UseDiffPreviewResult {
 	nonContentDiffs: DiffPreviewResult['nonContentDiffs'];
 	isLoading: boolean;
 	error: string | null;
+	sourceError: DiffPreviewSourceError | undefined;
 	refetch: () => void;
 }
 
@@ -60,6 +66,9 @@ export function useDiffPreview( {
 	const [ nonContentDiffs, setNonContentDiffs ] = useState< DiffPreviewResult['nonContentDiffs'] >( undefined );
 	const [ isLoading, setIsLoading ] = useState( true );
 	const [ error, setError ] = useState< string | null >( null );
+	const [ sourceError, setSourceError ] = useState<
+		DiffPreviewSourceError | undefined
+	>( undefined );
 	const [ refetchCount, setRefetchCount ] = useState( 0 );
 
 	useEffect( () => {
@@ -68,6 +77,7 @@ export function useDiffPreview( {
 		void ( async () => {
 			setIsLoading( true );
 			setError( null );
+			setSourceError( undefined );
 
 			const result = await fetchDiffPreview( {
 				postId,
@@ -80,6 +90,7 @@ export function useDiffPreview( {
 
 			if ( result.error ) {
 				setError( result.error );
+				setSourceError( result.sourceError );
 			} else if (
 				result.contentDiffHtml !== undefined ||
 				result.html !== undefined ||
@@ -111,6 +122,7 @@ export function useDiffPreview( {
 		nonContentDiffs,
 		isLoading,
 		error,
+		sourceError,
 		refetch,
 	};
 }

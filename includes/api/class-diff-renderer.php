@@ -258,6 +258,7 @@ final class Diff_Renderer {
 		if ( is_wp_error( $response ) ) {
 			$message    = $response->get_error_message();
 			$error_code = $response->get_error_code();
+			$error_data = $response->get_error_data();
 
 			$this->logger->content_fetch_failed(
 				$post_id,
@@ -273,18 +274,35 @@ final class Diff_Renderer {
 
 			// The transport reason names the connected host, so surface it to
 			// administrators only; the log above records it either way.
-			if ( HTTP_Client::ERROR_REQUEST_FAILED === $error_code
-				&& ! current_user_can( 'manage_options' ) ) {
+			$withhold_source_message =
+				HTTP_Client::ERROR_REQUEST_FAILED === $error_code
+				&& ! current_user_can( 'manage_options' );
+			if ( $withhold_source_message ) {
 				$message = __(
 					'Failed to fetch data from source site.',
 					'safe-publish'
 				);
 			}
 
+			$rest_error_data = array( 'status' => 500 );
+			$source_error    = is_array( $error_data )
+				? ( $error_data[ HTTP_Client::ERROR_DATA_SOURCE_ERROR ] ?? null )
+				: null;
+			if (
+				is_array( $source_error )
+				&& isset( $source_error['message'], $source_error['template'] )
+				&& is_string( $source_error['message'] )
+				&& is_string( $source_error['template'] )
+				&& str_contains( $source_error['template'], '<reason />' )
+				&& ! $withhold_source_message
+			) {
+				$rest_error_data['source_error'] = $source_error;
+			}
+
 			return new WP_Error(
 				'source_fetch_failed',
 				$message,
-				array( 'status' => 500 )
+				$rest_error_data
 			);
 		}
 
