@@ -73,6 +73,26 @@ describe( 'ImportModal', () => {
 		expect( fetch ).toHaveBeenCalledTimes( 1 );
 	} );
 
+	it( 'Verifies that a successful draft import refreshes only on dismiss', async () => {
+		// ARRANGE: A successful auto-submitted draft import.
+		const onRefresh = vi.fn();
+		const { unmount } = render(
+			<ImportModal { ...BASE_PROPS } onRefresh={ onRefresh } />
+		);
+
+		// ACT: Let the successful attempt settle.
+		await screen.findByText( '"A Post" has been imported as a draft.' );
+
+		// ASSERT: Completion does not refresh while the result remains open.
+		expect( onRefresh ).not.toHaveBeenCalled();
+
+		// ACT: Dismiss the result.
+		unmount();
+
+		// ASSERT: Dismissal refreshes the listing once.
+		expect( onRefresh ).toHaveBeenCalledTimes( 1 );
+	} );
+
 	it( 'Verifies that a double-invoked mount effect starts only one import', async () => {
 		// ARRANGE + ACT: StrictMode runs mount effects twice. The app does not
 		// enable it today, so this pins the ref guard rather than the dep list:
@@ -153,8 +173,13 @@ describe( 'ImportModal', () => {
 			<ImportModal { ...BASE_PROPS } onRefresh={ onRefresh } />
 		);
 
-		// ACT: Let the failed attempt settle, then dismiss the modal.
+		// ACT: Let the failed attempt settle.
 		await screen.findByRole( 'alert' );
+
+		// ASSERT: Failure does not refresh while the error remains open.
+		expect( onRefresh ).not.toHaveBeenCalled();
+
+		// ACT: Dismiss the error.
 		unmount();
 
 		// ASSERT: The attempt can have written before being refused, so the
@@ -215,11 +240,16 @@ describe( 'ImportModal', () => {
 			<ImportModal { ...LIVE_PROPS } onRefresh={ onRefresh } />
 		);
 
-		// ACT: Confirm the overwrite, let it fail, then dismiss.
+		// ACT: Confirm the overwrite and let it fail.
 		fireEvent.click(
 			screen.getByRole( 'button', { name: 'Overwrite live post' } )
 		);
 		await screen.findByRole( 'alert' );
+
+		// ASSERT: Failure does not refresh while the error remains open.
+		expect( onRefresh ).not.toHaveBeenCalled();
+
+		// ACT: Dismiss the error.
 		unmount();
 
 		// ASSERT: Starting the import is what obliges the refetch, not
