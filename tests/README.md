@@ -196,8 +196,7 @@ See `tests/fixtures/images/README.md` for implementation details.
 
 ### Dependencies
 
-All test dependencies are declared in [`composer.json`](../composer.json).
-Install the exact versions recorded in `composer.lock`:
+All test dependencies are declared in [`composer.json`](../composer.json). Install the exact versions recorded in `composer.lock`:
 
 ```bash
 composer install

@@ -10,6 +10,7 @@ It has two parts:
 - A small integration on the **destination** site that folds those values into the imported meta.
 
 > [!NOTE]
+>
 > The Step 1 scalar recipe works as shown. The complex-field pattern is a functional starting point — ACF configurations vary, so test any integration in a staging environment and expect to adapt the complex-field and reference-field handling (field keys, ID remapping) to your own field definitions.
 
 ## Prerequisite: expose the acf object on the source

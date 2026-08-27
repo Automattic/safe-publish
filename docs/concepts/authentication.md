@@ -52,12 +52,12 @@ Each connection setting can be defined as a PHP constant in `wp-config.php` inst
 
 The settings screen shows the resolved values for the URL, sync mode, and Basic Auth username, but those fields remain editable. The Basic Auth password is handled differently: when `SAFE_PUBLISH_BASIC_AUTH_PASSWORD` is defined, the password field shows "Configured externally" and becomes read-only so the secret is not rendered into the page.
 
-| Constant                           | Setting                                     |
-| ---------------------------------- | ------------------------------------------- |
-| `SAFE_PUBLISH_CONNECTED_SITE_URL`  | URL of the connected source or destination. |
-| `SAFE_PUBLISH_SYNC_MODE`           | `export`, `import`, or `bidirectional`.     |
-| `SAFE_PUBLISH_BASIC_AUTH_USERNAME` | Basic Auth username for the source site.    |
-| `SAFE_PUBLISH_BASIC_AUTH_PASSWORD` | Basic Auth password for the source site.    |
+| Constant | Setting |
+| --- | --- |
+| `SAFE_PUBLISH_CONNECTED_SITE_URL` | URL of the connected source or destination. |
+| `SAFE_PUBLISH_SYNC_MODE` | `export`, `import`, or `bidirectional`. |
+| `SAFE_PUBLISH_BASIC_AUTH_USERNAME` | Basic Auth username for the source site. |
+| `SAFE_PUBLISH_BASIC_AUTH_PASSWORD` | Basic Auth password for the source site. |
 
 All connection-setting constants must be strings. `SAFE_PUBLISH_SYNC_MODE` must also be one of the three valid modes. `SAFE_PUBLISH_CONNECTED_SITE_URL` must be an http or https URL that is not a loopback or private address, so `http://localhost:8888` and `http://192.168.1.10` are refused. Unlike the settings screen, the constant is taken literally, so `example.com` is rejected rather than repaired to `http://example.com`.
 

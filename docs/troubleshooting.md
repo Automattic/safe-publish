@@ -47,8 +47,7 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
    add_filter( 'safe_publish_request_timeout', fn( int $timeout ): int => 30 );
    ```
 
-   This filter affects REST API requests. Media downloads use WordPress core's
-   download timeout instead.
+   This filter affects REST API requests. Media downloads use WordPress core's download timeout instead.
 
 3. **Check server resources**:
    - High CPU/memory usage can cause timeouts.
@@ -122,6 +121,7 @@ add_filter(
 ```
 
 > [!NOTE]
+>
 > This does not expose private content: Safe Publish still validates the HMAC signature before serving edit-context or import data, so a forged or absent signature retrieves nothing beyond WordPress' default anonymous REST access. For unsigned requests, the allowlisted `wp/v2` namespace exposes only what WordPress already serves anonymously, including the author data at `wp/v2/users`.
 
 #### "REST API not found" error
@@ -298,13 +298,13 @@ The taxonomy is not registered on the destination site, so its terms could not b
 
 ### Validation Errors
 
-| Error code                 | Cause                                                 | Solution                                                 |
-| -------------------------- | ----------------------------------------------------- | -------------------------------------------------------- |
-| `invalid_url`              | URL not valid or accessible                           | Check URL format and ensure the site is reachable        |
-| `request_failed`           | HTTP request to the source site failed                | Check network connectivity and site availability         |
-| `meta_update_failed`       | One or more post meta keys failed to save             | Check destination site database permissions              |
-| `source_author_unresolved` | Source post has no author or its author was deleted   | Restore the source author or attribute the post manually |
-| `source_author_not_found`  | Source author's email has no match on the destination | Create a user with the same email on the destination     |
+| Error code | Cause | Solution |
+| --- | --- | --- |
+| `invalid_url` | URL not valid or accessible | Check URL format and ensure the site is reachable |
+| `request_failed` | HTTP request to the source site failed | Check network connectivity and site availability |
+| `meta_update_failed` | One or more post meta keys failed to save | Check destination site database permissions |
+| `source_author_unresolved` | Source post has no author or its author was deleted | Restore the source author or attribute the post manually |
+| `source_author_not_found` | Source author's email has no match on the destination | Create a user with the same email on the destination |
 
 ### Performance Issues
 
@@ -412,9 +412,7 @@ The taxonomy is not registered on the destination site, so its terms could not b
 
 ### Enable WordPress Debug Mode
 
-On a regular WordPress installation, enable `WP_DEBUG` and `WP_DEBUG_LOG` in
-`wp-config.php`, then inspect the site's `wp-content/debug.log`. In wp-env,
-follow the container-specific [Local Development instructions](local-development.md#debugging).
+On a regular WordPress installation, enable `WP_DEBUG` and `WP_DEBUG_LOG` in `wp-config.php`, then inspect the site's `wp-content/debug.log`. In wp-env, follow the container-specific [Local Development instructions](local-development.md#debugging).
 
 ### Browser Developer Tools
 
@@ -444,10 +442,7 @@ Check **Safe Publish → Manage → Needs attention** for:
 - Source URL of each failed attempt
 - Timestamp of the attempt
 
-Recovery is fixing the underlying issue and importing the post again from
-**Manage → Posts**. Once a failure is no longer needed, use the **Remove** action
-(per-row or bulk) to clear it from the tab; this only deletes the record and
-does not affect the source.
+Recovery is fixing the underlying issue and importing the post again from **Manage → Posts**. Once a failure is no longer needed, use the **Remove** action (per-row or bulk) to clear it from the tab; this only deletes the record and does not affect the source.
 
 ## Getting Help
 
@@ -485,15 +480,9 @@ wp option delete safe_publish_basic_auth_password
 
 ### Clear Import History
 
-Import history is stored in two custom tables (`safe_publish_imports` and
-`safe_publish_import_items`). Eligible rows can be rolled back from **Manage →
-Posts**. Safe Publish does not provide a full-history reset, and deactivating or
-reactivating the plugin does not delete these tables or their rows.
+Import history is stored in two custom tables (`safe_publish_imports` and `safe_publish_import_items`). Eligible rows can be rolled back from **Manage → Posts**. Safe Publish does not provide a full-history reset, and deactivating or reactivating the plugin does not delete these tables or their rows.
 
-For a disposable wp-env installation, `npm run dev:destroy` removes the entire
-environment. On a persistent site, back up the database and have a database
-administrator remove history rows deliberately; delete item rows before their
-parent session rows. Removing history does not undo imported posts or media.
+For a disposable wp-env installation, `npm run dev:destroy` removes the entire environment. On a persistent site, back up the database and have a database administrator remove history rows deliberately; delete item rows before their parent session rows. Removing history does not undo imported posts or media.
 
 ## Next Steps
 

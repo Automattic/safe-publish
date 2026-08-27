@@ -28,9 +28,7 @@ To start a development environment with Xdebug enabled:
 npm run dev
 ```
 
-This will spin up two WordPress environments, build the block editor scripts,
-inject the shared secret configured in `.wp-env.json` into each site's
-`wp-config.php`, and watch for changes.
+This will spin up two WordPress environments, build the block editor scripts, inject the shared secret configured in `.wp-env.json` into each site's `wp-config.php`, and watch for changes.
 
 Both WordPress environments are served on `host.docker.internal` (admin user: `admin`, password: `password`):
 
@@ -41,25 +39,16 @@ The same hostname is used from your browser and from inside either container, so
 
 ### How the two-site environment works
 
-`wp-env` normally creates a development environment and a test environment.
-Safe Publish uses both as regular WordPress sites so the complete transfer can
-be exercised locally:
+`wp-env` normally creates a development environment and a test environment. Safe Publish uses both as regular WordPress sites so the complete transfer can be exercised locally:
 
 | Role        | `wp-env` environment | CLI target  | Default port | Sync mode |
 | ----------- | -------------------- | ----------- | ------------ | --------- |
 | Destination | Development          | `cli`       | 8888         | Import    |
 | Source      | Tests                | `tests-cli` | 8889         | Export    |
 
-Starting the environment runs the `afterStart` lifecycle script configured in
-`.wp-env.json`. Its `config` entries inject the shared authentication secret
-into both sites as a `wp-config.php` constant. The `bin/setup-env` script
-assigns each site's sync mode, connects the sites to each other, and configures
-their canonical URLs and permalinks.
+Starting the environment runs the `afterStart` lifecycle script configured in `.wp-env.json`. Its `config` entries inject the shared authentication secret into both sites as a `wp-config.php` constant. The `bin/setup-env` script assigns each site's sync mode, connects the sites to each other, and configures their canonical URLs and permalinks.
 
-Commands such as `npm run seed:full` use wrapper scripts that select the
-appropriate CLI target. Source seeding runs against `tests-cli`, while
-destination seeding runs against `cli`. You do not need to start or configure a
-second `wp-env` process manually.
+Commands such as `npm run seed:full` use wrapper scripts that select the appropriate CLI target. Source seeding runs against `tests-cli`, while destination seeding runs against `cli`. You do not need to start or configure a second `wp-env` process manually.
 
 Stop the development environment with `Ctrl+C` and resume it by running the same command. You can also manually stop the environment with `npm run dev:stop`. Stopping the environment optionally stops the WordPress containers but preserves their state.
 
@@ -71,10 +60,7 @@ To run additional checkouts (e.g. `git worktree` siblings) alongside the main on
 bin/setup-worktree
 ```
 
-The script installs dependencies, assigns the next free `WP_ENV_PORT` and
-`WP_ENV_TESTS_PORT` pair (8890/8891 for the first worktree, 8892/8893 for the
-next, and so on), and records the pair in `.devports`. Start the environment
-normally; the development scripts load those ports automatically:
+The script installs dependencies, assigns the next free `WP_ENV_PORT` and `WP_ENV_TESTS_PORT` pair (8890/8891 for the first worktree, 8892/8893 for the next, and so on), and records the pair in `.devports`. Start the environment normally; the development scripts load those ports automatically:
 
 ```sh
 npm run dev
@@ -176,8 +162,7 @@ The development environment includes:
 
 **Enable WordPress debug mode:**
 
-Create the git-ignored `.wp-env.override.json` file in the repository root so
-the settings apply inside the wp-env containers:
+Create the git-ignored `.wp-env.override.json` file in the repository root so the settings apply inside the wp-env containers:
 
 ```json
 {

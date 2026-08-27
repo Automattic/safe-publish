@@ -1,6 +1,7 @@
 # Extending Safe Publish
 
 > [!TIP]
+>
 > Make sure you've read the [core concepts](../concepts/index.md) before extending the plugin.
 
 Safe Publish provides hooks, filters, and extensibility points to customize its behavior. Whether you need to modify the import process, add custom validation, or integrate with other systems, the plugin offers flexible options for developers.

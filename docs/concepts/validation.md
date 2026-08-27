@@ -12,10 +12,7 @@ Before importing content, Safe Publish performs several validation checks to ens
 - URL uses the `http` or `https` scheme.
 - The host is not a literal localhost name or a private/reserved IP address.
 
-URL validation checks only the configured value. The subsequent connection test
-probes `wp-json/wp/v2/posts?context=edit&per_page=1` to check whether the site is
-reachable and accepts Safe Publish authentication. It does not probe the
-`safe-publish/v1` routes.
+URL validation checks only the configured value. The subsequent connection test probes `wp-json/wp/v2/posts?context=edit&per_page=1` to check whether the site is reachable and accepts Safe Publish authentication. It does not probe the `safe-publish/v1` routes.
 
 **Common failures:**
 
@@ -27,8 +24,7 @@ reachable and accepts Safe Publish authentication. It does not probe the
 
 **How to fix:**
 
-- Include `https://` outside local development. The validator also accepts
-  `http://`, but it does not provide transport encryption.
+- Include `https://` outside local development. The validator also accepts `http://`, but it does not provide transport encryption.
 - Verify the site is accessible in a browser.
 - Check REST API: visit `https://your-site.com/wp-json`.
 
@@ -69,8 +65,7 @@ Empty post content is valid and does not by itself block an import.
 - Malformed JSON response
 - Missing required fields
 - Unsupported post type
-- Missing raw edit-context fields, usually because authentication or edit
-  permissions failed
+- Missing raw edit-context fields, usually because authentication or edit permissions failed
 
 **How to fix:**
 
@@ -99,16 +94,9 @@ Kses sanitization can be opted into via the [`safe_publish_import_kses`](../exte
 
 ### 5. Media Validation
 
-Media is validated during the import process itself, not as a separate
-pre-import step. A failed inline-media or featured-image import aborts the post
-import. An inline-media failure cleans up attachments created earlier in the
-same attempt. A featured-image failure leaves any inline-media attachments
-created earlier in the attempt in place. In either case, an existing destination
-post is left unchanged.
+Media is validated during the import process itself, not as a separate pre-import step. A failed inline-media or featured-image import aborts the post import. An inline-media failure cleans up attachments created earlier in the same attempt. A featured-image failure leaves any inline-media attachments created earlier in the attempt in place. In either case, an existing destination post is left unchanged.
 
-A link that looks like media but resolves to a page (for example, an HTML page
-at a `.pdf` URL) is kept as a link. That case is not treated as a failed media
-download.
+A link that looks like media but resolves to a page (for example, an HTML page at a `.pdf` URL) is kept as a link. That case is not treated as a failed media download.
 
 **What it checks (at import time):**
 
