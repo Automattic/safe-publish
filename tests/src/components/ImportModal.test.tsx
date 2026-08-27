@@ -145,6 +145,23 @@ describe( 'ImportModal', () => {
 		).toBeInTheDocument();
 	} );
 
+	it( 'Verifies that a failed draft import refreshes the listing on dismiss', async () => {
+		// ARRANGE: The endpoint refuses an auto-submitted draft import.
+		stubFetch( { success: false, data: 'Source site unreachable' } );
+		const onRefresh = vi.fn();
+		const { unmount } = render(
+			<ImportModal { ...BASE_PROPS } onRefresh={ onRefresh } />
+		);
+
+		// ACT: Let the failed attempt settle, then dismiss the modal.
+		await screen.findByRole( 'alert' );
+		unmount();
+
+		// ASSERT: The attempt can have written before being refused, so the
+		// listing is refreshed even though the import returned no edit URL.
+		expect( onRefresh ).toHaveBeenCalledTimes( 1 );
+	} );
+
 	it( "Verifies that the endpoint's update prompt is not reported as an import", async () => {
 		// ARRANGE: A stale row offered Import for a post already imported, so
 		// the endpoint answers with its confirmation prompt.
