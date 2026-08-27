@@ -10,18 +10,18 @@ The plugin registers endpoints under the `safe-publish/v1` namespace.
 
 Require a WordPress user with the `edit_posts` capability, and `edit_post` for the target post.
 
-| Method | Endpoint                                | Description                      |
-| ------ | --------------------------------------- | -------------------------------- |
+| Method | Endpoint | Description |
+| --- | --- | --- |
 | `POST` | `/wp-json/safe-publish/v1/diff-preview` | Render a diff preview for a post |
 
 ### Source Endpoints
 
 Registered only on source-mode installs. HMAC-authenticated; called by the destination's import UI.
 
-| Method | Endpoint                                      | Auth | Description                                |
-| ------ | --------------------------------------------- | ---- | ------------------------------------------ |
-| `GET`  | `/wp-json/safe-publish/v1/catalog/posts`      | HMAC | Browsable, server-paginated source catalog |
-| `GET`  | `/wp-json/safe-publish/v1/catalog/post-types` | HMAC | Post types the catalog can serve           |
+| Method | Endpoint | Auth | Description |
+| --- | --- | --- | --- |
+| `GET` | `/wp-json/safe-publish/v1/catalog/posts` | HMAC | Browsable, server-paginated source catalog |
+| `GET` | `/wp-json/safe-publish/v1/catalog/post-types` | HMAC | Post types the catalog can serve |
 
 ## Authentication
 
