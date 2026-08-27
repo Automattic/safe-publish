@@ -1,6 +1,5 @@
 /**
- * Tests for the PostDiffModal listing refresh, which is owed once an update
- * has been submitted from the compare view.
+ * Tests for PostDiffModal refresh and error rendering.
  */
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -65,7 +64,7 @@ afterEach( () => {
 	vi.unstubAllGlobals();
 } );
 
-describe( 'PostDiffModal listing refresh', () => {
+describe( 'PostDiffModal', () => {
 	/**
 	 * Stubs the update endpoint so a submit resolves successfully.
 	 */
@@ -195,5 +194,37 @@ describe( 'PostDiffModal listing refresh', () => {
 		expect( isolatedReason.parentElement ).toHaveTextContent(
 			'Source site returned HTTP error 401.'
 		);
+	} );
+
+	it( 'Verifies that an Update failure isolates the source reason', async () => {
+		// ARRANGE: Compare succeeds, then Update receives an HTTP failure.
+		const reason = '\u202eSource refused the request.\u202c';
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: async () => ( {
+					success: false,
+					data: {
+						message: `Source site returned HTTP error 401. ${ reason }`,
+						source_error: {
+							message: reason,
+							template:
+								'Source site returned HTTP error 401. <reason />',
+						},
+					},
+				} ),
+			} )
+		);
+
+		// ACT: Submit Update and find its source-provided reason.
+		renderWithDiff( vi.fn() );
+		fireEvent.click(
+			await screen.findByRole( 'button', { name: 'Update' } )
+		);
+		const isolatedReason = await screen.findByText( reason );
+
+		// ASSERT: Update applies the same bidirectional isolation as Compare.
+		expect( isolatedReason.tagName ).toBe( 'BDI' );
+		expect( isolatedReason ).toHaveAttribute( 'dir', 'auto' );
 	} );
 } );

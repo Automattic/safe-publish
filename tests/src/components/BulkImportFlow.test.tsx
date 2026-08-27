@@ -311,6 +311,54 @@ describe( 'BulkImportFlow results summary', () => {
 			screen.queryByText( 'Import completed with errors' )
 		).not.toBeInTheDocument();
 	} );
+
+	it( 'Verifies that a failed item isolates its source reason', async () => {
+		// ARRANGE: One item fails with structured source detail.
+		const reason = '\u202eSource refused the request.\u202c';
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: async () => ( {
+					success: true,
+					data: {
+						total: 1,
+						successful: 0,
+						failed: 1,
+						results: [
+							{
+								source_post_id: 1,
+								title: 'Broken post',
+								success: false,
+								error: 'Source site returned HTTP error 401.',
+								source_error: {
+									message: reason,
+									template:
+										'Source site returned HTTP error 401. <reason />',
+								},
+							},
+						],
+					},
+				} ),
+			} )
+		);
+
+		// ACT: Import the single post and find the source-provided reason.
+		render(
+			<BulkImportFlow
+				posts={ [ POSTS[ 0 ] ] }
+				context={ CONTEXT }
+				onClose={ () => {} }
+			/>
+		);
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Import 1 posts' } )
+		);
+		const isolatedReason = await screen.findByText( reason );
+
+		// ASSERT: The item result prevents its reason from reordering the UI.
+		expect( isolatedReason.tagName ).toBe( 'BDI' );
+		expect( isolatedReason ).toHaveAttribute( 'dir', 'auto' );
+	} );
 } );
 
 describe( 'BulkImportFlow outcome announcements', () => {

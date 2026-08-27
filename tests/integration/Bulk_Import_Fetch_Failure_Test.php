@@ -29,6 +29,11 @@ class Bulk_Import_Fetch_Failure_Test extends WP_Ajax_UnitTestCase {
 	private const RAW_MISSING_SOURCE_ID = 4242;
 
 	/**
+	 * Source ID whose endpoint returns an HTTP error.
+	 */
+	private const HTTP_ERROR_SOURCE_ID = 4343;
+
+	/**
 	 * Sets up the bulk-import harness.
 	 */
 	#[\Override]
@@ -98,5 +103,67 @@ class Bulk_Import_Fetch_Failure_Test extends WP_Ajax_UnitTestCase {
 			'missing required raw values',
 			$data['results'][0]['error']
 		);
+	}
+
+	/**
+	 * Verifies that a bulk item preserves structured source HTTP error data.
+	 */
+	public function test_bulk_item_preserves_source_http_error_data(): void {
+		// ARRANGE: Intercept this post before the standard source mock.
+		$upstream_message = 'The source post is private.';
+		$failing_request  = static function (
+			$preempt,
+			$_args,
+			string $url,
+		) use (
+			$upstream_message
+		) {
+			if ( ! str_contains( $url, '/' . self::HTTP_ERROR_SOURCE_ID ) ) {
+				return $preempt;
+			}
+
+			return array(
+				'response' => array(
+					'code'    => 401,
+					'message' => 'Unauthorized',
+				),
+				'body'     => (string) wp_json_encode(
+					array( 'message' => $upstream_message )
+				),
+				'headers'  => array(),
+			);
+		};
+		add_filter( 'pre_http_request', $failing_request, 0, 3 );
+
+		$posts_data = array(
+			array(
+				'id'        => self::HTTP_ERROR_SOURCE_ID,
+				'title'     => 'Private post',
+				'link'      => 'https://source.example.com/private-post',
+				'post_type' => 'posts',
+			),
+		);
+
+		try {
+			// ACT: Dispatch the bulk import.
+			$data = $this->dispatch_bulk_import( $posts_data );
+
+			// ASSERT: The item carries the structured detail needed by the UI.
+			$this->assertFalse( $data['results'][0]['success'] );
+			$this->assertSame(
+				'Source site returned HTTP error 401. ' . $upstream_message,
+				$data['results'][0]['error']
+			);
+			$this->assertSame(
+				array(
+					'message'  => $upstream_message,
+					'template' =>
+						'Source site returned HTTP error 401. <reason />',
+				),
+				$data['results'][0]['source_error']
+			);
+		} finally {
+			remove_filter( 'pre_http_request', $failing_request, 0 );
+		}
 	}
 }

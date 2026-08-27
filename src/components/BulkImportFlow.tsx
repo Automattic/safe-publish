@@ -19,9 +19,11 @@ import { useState } from '@wordpress/element';
 import { __, _n, sprintf } from '@wordpress/i18n';
 
 import ConfirmTitleList from './ConfirmTitleList';
+import IsolatedErrorMessage from './IsolatedErrorMessage';
 import { MAX_VISIBLE_MODAL_TITLES } from '../constants';
 import {
 	getErrorMessage,
+	getSourceError,
 	isImportUpdate,
 	renderWarningShortLabel,
 } from '../utils';
@@ -457,7 +459,11 @@ export default function BulkImportFlow( {
 													</span>
 													{ ! result.success && result.error && (
 														<span className="safe-publish-result-error">
-															{ result.error }
+															<IsolatedErrorMessage
+																error={
+																	getSourceError( result ) ?? result.error
+																}
+															/>
 														</span>
 													) }
 												</div>

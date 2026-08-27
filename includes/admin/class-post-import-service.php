@@ -254,10 +254,7 @@ class Post_Import_Service {
 				array( 'action' => $post_type->get_error_code() )
 			);
 
-			return $this->build_error_result(
-				$fields,
-				$post_type->get_error_message()
-			);
+			return $this->build_error_result( $fields, $post_type );
 		}
 
 		$lock_acquired = $this->acquire_import_lock( $fields['source_post_id'] );
@@ -683,17 +680,36 @@ class Post_Import_Service {
 	/**
 	 * Builds a standardized error result array for an import operation.
 	 *
-	 * @param array  $fields        Sanitized post fields.
-	 * @param string $error_message Error description.
+	 * @param array           $fields Sanitized post fields.
+	 * @param string|WP_Error $error  Error description or object.
 	 * @return array Error result with source_post_id, title, success, and error keys.
 	 */
-	private function build_error_result( array $fields, string $error_message ): array {
-		return array(
+	private function build_error_result(
+		array $fields,
+		string|WP_Error $error
+	): array {
+		$error_data = null;
+		if ( $error instanceof WP_Error ) {
+			$error_data = $error->get_error_data();
+			$error      = $error->get_error_message();
+		}
+
+		$result = array(
 			'source_post_id' => $fields['source_post_id'],
 			'title'          => $fields['title'],
 			'success'        => false,
-			'error'          => $error_message,
+			'error'          => $error,
 		);
+		if (
+			is_array( $error_data )
+			&& isset( $error_data[ HTTP_Client::ERROR_DATA_SOURCE_ERROR ] )
+			&& is_array( $error_data[ HTTP_Client::ERROR_DATA_SOURCE_ERROR ] )
+		) {
+			$result[ HTTP_Client::ERROR_DATA_SOURCE_ERROR ] =
+				$error_data[ HTTP_Client::ERROR_DATA_SOURCE_ERROR ];
+		}
+
+		return $result;
 	}
 
 	/**
@@ -1327,10 +1343,7 @@ class Post_Import_Service {
 				)
 			);
 
-			return $this->build_error_result(
-				$error_fields,
-				$prepared->get_error_message()
-			);
+			return $this->build_error_result( $error_fields, $prepared );
 		}
 
 		$fields              = $prepared['fields'];
@@ -1411,10 +1424,7 @@ class Post_Import_Service {
 				array( 'action' => $action )
 			);
 
-			return $this->build_error_result(
-				$fields,
-				$post_id->get_error_message()
-			);
+			return $this->build_error_result( $fields, $post_id );
 		}
 
 		$this->add_unregistered_taxonomy_warnings( $fields, $skipped_taxonomies );
@@ -1525,10 +1535,7 @@ class Post_Import_Service {
 				)
 			);
 
-			return $this->build_error_result(
-				$error_fields,
-				$prepared->get_error_message()
-			);
+			return $this->build_error_result( $error_fields, $prepared );
 		}
 
 		$fields              = $prepared['fields'];
@@ -1611,10 +1618,7 @@ class Post_Import_Service {
 				array( 'action' => $action )
 			);
 
-			return $this->build_error_result(
-				$fields,
-				$post_id->get_error_message()
-			);
+			return $this->build_error_result( $fields, $post_id );
 		}
 
 		$this->add_unregistered_taxonomy_warnings( $fields, $skipped_taxonomies );
@@ -2427,7 +2431,8 @@ class Post_Import_Service {
 
 				return new WP_Error(
 					'fetch_failed',
-					$fresh_result->get_error_message()
+					$fresh_result->get_error_message(),
+					$fresh_result->get_error_data()
 				);
 			}
 		}

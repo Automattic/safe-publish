@@ -122,7 +122,10 @@ final class HTTP_Client {
 		if ( is_wp_error( $response ) ) {
 			$source_message = $response->get_error_message();
 			/* translators: %s: transport error reported by WordPress. */
-			$message_template = __( 'Failed to fetch data from source site. %s', 'safe-publish' );
+			$message_template = __(
+				'Failed to fetch data from source site. %s',
+				'safe-publish'
+			);
 
 			return new WP_Error(
 				self::ERROR_REQUEST_FAILED,
@@ -135,7 +138,7 @@ final class HTTP_Client {
 							'<reason />'
 						),
 					),
-				),
+				)
 			);
 		}
 
@@ -145,13 +148,25 @@ final class HTTP_Client {
 				wp_remote_retrieve_body( $response )
 			);
 
+			$error_data = array();
 			if ( isset( $source_error['message'] ) ) {
 				/* translators: 1: HTTP response code, 2: source site reason. */
-				$message_template = __( 'Source site returned HTTP error %1$d. %2$s', 'safe-publish' );
-				$message          = sprintf(
+				$message_template                            = __(
+					'Source site returned HTTP error %1$d. %2$s',
+					'safe-publish'
+				);
+				$message                                     = sprintf(
 					$message_template,
 					$response_code,
 					$source_error['message']
+				);
+				$error_data[ self::ERROR_DATA_SOURCE_ERROR ] = array(
+					'message'  => $source_error['message'],
+					'template' => sprintf(
+						$message_template,
+						$response_code,
+						'<reason />'
+					),
 				);
 			} else {
 				$message = sprintf(
@@ -161,17 +176,6 @@ final class HTTP_Client {
 				);
 			}
 
-			$error_data = array();
-			if ( isset( $source_error['message'] ) ) {
-				$error_data[ self::ERROR_DATA_SOURCE_ERROR ] = array(
-					'message'  => $source_error['message'],
-					'template' => sprintf(
-						$message_template,
-						$response_code,
-						'<reason />'
-					),
-				);
-			}
 			if ( isset( $source_error['code'] ) ) {
 				$error_data['source_code'] = $source_error['code'];
 			}

@@ -296,7 +296,8 @@ final class Diff_Renderer {
 				&& str_contains( $source_error['template'], '<reason />' )
 				&& ! $withhold_source_message
 			) {
-				$rest_error_data['source_error'] = $source_error;
+				$rest_error_data[ HTTP_Client::ERROR_DATA_SOURCE_ERROR ] =
+					$source_error;
 			}
 
 			return new WP_Error(

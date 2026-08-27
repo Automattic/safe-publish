@@ -9,7 +9,9 @@
 import apiFetch from '@wordpress/api-fetch';
 import { __ } from '@wordpress/i18n';
 
-import type { JsonObject } from '../types';
+import { getSourceError, isRecord } from '../utils';
+
+import type { JsonObject, SourceError } from '../types';
 
 /**
  * Payload for requesting a diff preview.
@@ -20,14 +22,6 @@ import type { JsonObject } from '../types';
 export interface DiffPreviewPayload {
 	postId: number;
 	postType?: string;
-}
-
-/**
- * Structured source-site detail attached to a failed diff request.
- */
-export interface DiffPreviewSourceError {
-	message: string;
-	template: string;
 }
 
 /**
@@ -60,7 +54,7 @@ export interface BlockDiff {
  * @property {Object}      [nonContentDiffs]      Non-content field diffs.
  * @property {BlockDiff[]} [blockDiffs]           Block-level diffs.
  * @property {string}      [error]                Error message if failed.
- * @property {Object}      [sourceError]          Isolated source failure detail.
+ * @property {Object}      [sourceError]          Source failure detail.
  * @property {Object}      [current]              Current post data.
  * @property {string}      [html]                 Legacy HTML diff output.
  * @property {string}      [incomingRenderedHtml] Incoming rendered HTML.
@@ -77,7 +71,7 @@ export interface DiffPreviewResult {
 	};
 	blockDiffs?: BlockDiff[];
 	error?: string;
-	sourceError?: DiffPreviewSourceError;
+	sourceError?: SourceError;
 	current?: {
 		title?: string;
 		excerpt?: string;
@@ -109,50 +103,15 @@ export async function fetchDiffPreview(
 			data: payload,
 		} );
 	} catch ( err ) {
-		const error = isRecord( err ) ? err : undefined;
+		const error = isRecord( err ) ? err : {};
 		const message =
-			typeof error?.message === 'string'
+			typeof error.message === 'string'
 				? error.message
 				: __( 'Failed to fetch diff', 'safe-publish' );
-		const sourceError = getSourceError( error?.data );
+		const sourceError = getSourceError( error.data );
 
 		return sourceError
 			? { error: message, sourceError }
 			: { error: message };
 	}
-}
-
-/**
- * Checks whether a value can be safely inspected by property name.
- *
- * @param {unknown} value Value to inspect.
- *
- * @return {boolean} Whether the value is a record.
- */
-function isRecord( value: unknown ): value is Record< string, unknown > {
-	return typeof value === 'object' && value !== null;
-}
-
-/**
- * Extracts structured source detail from WordPress' REST error data.
- *
- * @param {unknown} data WordPress REST error data.
- *
- * @return {DiffPreviewSourceError | undefined} Valid source detail.
- */
-function getSourceError( data: unknown ): DiffPreviewSourceError | undefined {
-	if ( ! isRecord( data ) || ! isRecord( data.source_error ) ) {
-		return undefined;
-	}
-
-	const { message, template } = data.source_error;
-	if (
-		typeof message !== 'string' ||
-		typeof template !== 'string' ||
-		! template.includes( '<reason />' )
-	) {
-		return undefined;
-	}
-
-	return { message, template };
 }
