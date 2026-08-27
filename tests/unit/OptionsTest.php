@@ -72,6 +72,61 @@ class OptionsTest extends TestCase {
 	}
 
 	/**
+	 * Verifies that invalid connected-site URL constants fall back to the
+	 * stored option value.
+	 *
+	 * @runInSeparateProcess
+	 * @preserveGlobalState disabled
+	 */
+	public function test_get_value_ignores_invalid_connected_site_url_constant(): void {
+		// ARRANGE: Define an invalid URL constant and a stored option fallback.
+		define( 'SAFE_PUBLISH_CONNECTED_SITE_URL', 'example.com' );
+		set_test_option( Options::OPTION_CONNECTED_SITE_URL, 'https://option.example.com' );
+
+		// ACT: Read the connected-site URL through the option helper.
+		$value = Options::get_value( Options::OPTION_CONNECTED_SITE_URL, '' );
+
+		// ASSERT: The stored option is used and the invalid constant is reported.
+		$this->assertSame( 'https://option.example.com', $value );
+		$this->assertSame(
+			'SAFE_PUBLISH_CONNECTED_SITE_URL',
+			get_test_doing_it_wrong_calls()[0]['function_name']
+		);
+		$this->assertStringContainsString(
+			'must be an http or https URL',
+			get_test_doing_it_wrong_calls()[0]['message']
+		);
+	}
+
+	/**
+	 * Verifies that a loopback connected-site URL constant is ignored, so the
+	 * constant path cannot configure an internal address the settings screen
+	 * rejects.
+	 *
+	 * @runInSeparateProcess
+	 * @preserveGlobalState disabled
+	 */
+	public function test_get_value_ignores_loopback_connected_site_url_constant(): void {
+		// ARRANGE: Define a loopback URL constant and a stored option fallback.
+		define( 'SAFE_PUBLISH_CONNECTED_SITE_URL', 'http://localhost:8889' );
+		set_test_option( Options::OPTION_CONNECTED_SITE_URL, 'https://option.example.com' );
+
+		// ACT: Read the connected-site URL through the option helper.
+		$value = Options::get_value( Options::OPTION_CONNECTED_SITE_URL, '' );
+
+		// ASSERT: The stored option is used and the loopback constant is reported.
+		$this->assertSame( 'https://option.example.com', $value );
+		$this->assertSame(
+			'SAFE_PUBLISH_CONNECTED_SITE_URL',
+			get_test_doing_it_wrong_calls()[0]['function_name']
+		);
+		$this->assertStringContainsString(
+			'not a loopback or private address',
+			get_test_doing_it_wrong_calls()[0]['message']
+		);
+	}
+
+	/**
 	 * Verifies that non-string constants fall back to stored option values.
 	 *
 	 * @runInSeparateProcess

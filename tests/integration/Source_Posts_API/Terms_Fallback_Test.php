@@ -112,6 +112,56 @@ class Terms_Fallback_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that the embedded fallback keys a taxonomy the way the import
+	 * writes it, so a loosely named one still reaches the same terms.
+	 */
+	public function test_embedded_fallback_sanitizes_the_taxonomy_key(): void {
+		// ARRANGE: A source naming the taxonomy in a form register_taxonomy
+		// permits and the import narrows at write time.
+		$this->mock_post_overrides = array(
+			'terms' => array( 'Category' => array( 'Narrowed' ) ),
+		);
+
+		// ACT: Fetch the post.
+		$result = $this->api->fetch_fresh_post_content(
+			4242,
+			self::SOURCE_SITE_URL,
+			array(),
+			'post'
+		);
+
+		// ASSERT: The key arrives narrowed, as update_terms() writes it.
+		$this->assertIsArray( $result );
+		$this->assertSame(
+			array( 'category' ),
+			array_keys( $result['terms'] )
+		);
+	}
+
+	/**
+	 * Verifies that a taxonomy whose name survives no sanitizing is dropped
+	 * rather than collected under an empty key.
+	 */
+	public function test_embedded_fallback_drops_an_unusable_key(): void {
+		// ARRANGE: A taxonomy name with nothing sanitize_key keeps.
+		$this->mock_post_overrides = array(
+			'terms' => array( '@@@' => array( 'Orphan' ) ),
+		);
+
+		// ACT: Fetch the post.
+		$result = $this->api->fetch_fresh_post_content(
+			4242,
+			self::SOURCE_SITE_URL,
+			array(),
+			'post'
+		);
+
+		// ASSERT: Nothing is collected.
+		$this->assertIsArray( $result );
+		$this->assertSame( array(), $result['terms'] );
+	}
+
+	/**
 	 * Verifies that a taxonomy the source sent empty survives the JSON round
 	 * trip as an empty list, reaching the importer as the signal to clear.
 	 */

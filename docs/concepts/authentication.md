@@ -59,7 +59,9 @@ The settings screen shows the resolved values for the URL, sync mode, and Basic 
 | `SAFE_PUBLISH_BASIC_AUTH_USERNAME` | Basic Auth username for the source site. |
 | `SAFE_PUBLISH_BASIC_AUTH_PASSWORD` | Basic Auth password for the source site. |
 
-All connection-setting constants must be strings. `SAFE_PUBLISH_SYNC_MODE` must also be one of the three valid modes. Invalid constants are ignored and reported via `_doing_it_wrong()`.
+All connection-setting constants must be strings. `SAFE_PUBLISH_SYNC_MODE` must also be one of the three valid modes. `SAFE_PUBLISH_CONNECTED_SITE_URL` must be an http or https URL that is not a loopback or private address, so `http://localhost:8888` and `http://192.168.1.10` are refused. Unlike the settings screen, the constant is taken literally, so `example.com` is rejected rather than repaired to `http://example.com`.
+
+Invalid constants are ignored and reported via `_doing_it_wrong()`, leaving the stored option value to apply.
 
 The shared secret is configured separately with `SAFE_PUBLISH_SHARED_SECRET`, which can be defined as a constant or provided as an environment variable.
 
