@@ -6,6 +6,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { Modal } from '@wordpress/components';
 import { StrictMode } from '@wordpress/element';
 
 import ImportModal from '@/components/ImportModal';
@@ -34,6 +35,28 @@ function stubFetch( body: Record< string, unknown > ): void {
 		vi.fn().mockResolvedValue(
 			new Response( JSON.stringify( body ), { status: 200 } )
 		)
+	);
+}
+
+/**
+ * Renders the import body in the WordPress modal used by DataViews.
+ *
+ * @param {typeof LIVE_PROPS} props      Import modal properties.
+ * @param {Function}          closeModal Modal close callback.
+ */
+function renderInModal(
+	props: typeof LIVE_PROPS,
+	closeModal: () => void
+): void {
+	render(
+		<Modal
+			__experimentalHideHeader
+			contentLabel="Import"
+			focusOnMount="firstContentElement"
+			onRequestClose={ closeModal }
+		>
+			<ImportModal { ...props } closeModal={ closeModal } />
+		</Modal>
 	);
 }
 
@@ -126,6 +149,108 @@ describe( 'ImportModal', () => {
 		expect( described ).toContain(
 			'Importing overwrites the published content'
 		);
+	} );
+
+	it( 'Verifies that Escape closes the live confirmation', async () => {
+		// ARRANGE: The confirmation is inside the same modal DataViews uses.
+		const closeModal = vi.fn();
+		renderInModal( LIVE_PROPS, closeModal );
+		const cancel = screen.getByRole( 'button', { name: 'Cancel' } );
+		await waitFor( () => expect( cancel ).toHaveFocus() );
+
+		// ACT: Dismiss from the initially focused control.
+		fireEvent.keyDown( cancel, { key: 'Escape', code: 'Escape' } );
+
+		// ASSERT: The modal receives the bubbled keyboard event.
+		await waitFor( () => expect( closeModal ).toHaveBeenCalledTimes( 1 ) );
+	} );
+
+	it( 'Verifies that focus and Escape stay in the modal during an overwrite', async () => {
+		// ARRANGE: Hold the request open at the in-flight stage.
+		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
+		const closeModal = vi.fn();
+		renderInModal( LIVE_PROPS, closeModal );
+		const overwrite = screen.getByRole( 'button', {
+			name: 'Overwrite live post',
+		} );
+		await waitFor( () =>
+			expect( screen.getByRole( 'button', { name: 'Cancel' } ) ).toHaveFocus()
+		);
+		overwrite.focus();
+
+		// ACT: Start the overwrite from the focused primary button.
+		fireEvent.click( overwrite );
+		const importing = await screen.findByRole( 'button', {
+			name: 'Updating…',
+		} );
+
+		// ASSERT: Disabled actions remain focusable, and Escape still reaches the
+		// modal rather than starting from document.body.
+		expect( importing ).toHaveFocus();
+		expect( importing ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( importing ).not.toHaveAttribute( 'disabled' );
+		expect(
+			screen.getByRole( 'button', { name: 'Cancel' } )
+		).toHaveAttribute( 'aria-disabled', 'true' );
+		fireEvent.keyDown( importing, { key: 'Escape', code: 'Escape' } );
+		await waitFor( () => expect( closeModal ).toHaveBeenCalledTimes( 1 ) );
+	} );
+
+	it( 'Verifies that a completed overwrite focuses Close and keeps Escape working', async () => {
+		// ARRANGE: Render a live overwrite that will complete successfully.
+		const closeModal = vi.fn();
+		renderInModal( LIVE_PROPS, closeModal );
+		const overwrite = screen.getByRole( 'button', {
+			name: 'Overwrite live post',
+		} );
+		await waitFor( () =>
+			expect( screen.getByRole( 'button', { name: 'Cancel' } ) ).toHaveFocus()
+		);
+		overwrite.focus();
+
+		// ACT: Complete the overwrite, which replaces the focused primary button.
+		fireEvent.click( overwrite );
+		const close = await screen.findByRole( 'button', { name: 'Close' } );
+
+		// ASSERT: Focus moves to the dismiss action, not the announced result.
+		await waitFor( () => expect( close ).toHaveFocus() );
+		expect( screen.getByRole( 'status' ) ).not.toHaveFocus();
+		fireEvent.keyDown( close, { key: 'Escape', code: 'Escape' } );
+		await waitFor( () => expect( closeModal ).toHaveBeenCalledTimes( 1 ) );
+	} );
+
+	it( 'Verifies that retrying a draft focuses Close and keeps Escape working', async () => {
+		// ARRANGE: Fail the automatic attempt, then hold its retry in flight.
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValueOnce(
+					new Response(
+						JSON.stringify( {
+							success: false,
+							data: 'Source site unreachable',
+						} ),
+						{ status: 200 }
+					)
+				)
+				.mockReturnValueOnce( new Promise( () => {} ) )
+		);
+		const closeModal = vi.fn();
+		renderInModal( BASE_PROPS, closeModal );
+		const retry = await screen.findByRole( 'button', { name: 'Retry' } );
+		retry.focus();
+
+		// ACT: Retry from the focused primary action.
+		fireEvent.click( retry );
+		const close = await screen.findByRole( 'button', { name: 'Close' } );
+
+		// ASSERT: The replacement loading view receives focus and keeps the
+		// modal's Escape handler on the event path.
+		await waitFor( () => expect( close ).toHaveFocus() );
+		expect( await screen.findByText( 'Importing…' ) ).toBeInTheDocument();
+		fireEvent.keyDown( close, { key: 'Escape', code: 'Escape' } );
+		await waitFor( () => expect( closeModal ).toHaveBeenCalledTimes( 1 ) );
 	} );
 
 	it( 'Verifies that a failed draft import surfaces the reason and offers a retry', async () => {

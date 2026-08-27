@@ -3,8 +3,9 @@
  * titles the run permanently deletes and the ones it restores.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { Modal } from '@wordpress/components';
 import BulkRollbackPostModal from '@/components/BulkRollbackPostModal';
 import type { UnifiedPostRow } from '@/types';
 
@@ -180,6 +181,97 @@ describe( 'BulkRollbackPostModal listing refresh', () => {
 			vi.fn().mockResolvedValue( { json: async () => payload } )
 		);
 	}
+
+	it( 'Verifies that rollback failures form a keyboard-scrollable region', async () => {
+		// ARRANGE: Every rollback returns a failure shown in the results list.
+		stubRollback( {
+			success: false,
+			data: 'This import was already rolled back. Reload the list.',
+		} );
+		const closeModal = vi.fn();
+		render(
+			<Modal
+				__experimentalHideHeader
+				contentLabel="Rollback"
+				focusOnMount="firstContentElement"
+				onRequestClose={ closeModal }
+			>
+				<BulkRollbackPostModal
+					items={ MIXED }
+					ajaxurl={ AJAX_URL }
+					nonce={ NONCE }
+					closeModal={ closeModal }
+				/>
+			</Modal>
+		);
+		const rollback = screen.getByRole( 'button', {
+			name: 'Roll back 3 posts',
+		} );
+		await waitFor( () =>
+			expect( screen.getByRole( 'button', { name: 'Cancel' } ) ).toHaveFocus()
+		);
+		rollback.focus();
+
+		// ACT: Complete the run from the focused primary action.
+		fireEvent.click( rollback );
+		const failures = await screen.findByRole( 'region', {
+			name: 'Rollback failures',
+		} );
+		const close = await screen.findByRole( 'button', { name: 'Close' } );
+
+		// ASSERT: Completion recovers focus inside the modal, from which the
+		// named overflow region is keyboard-reachable and Escape still works.
+		await waitFor( () => expect( close ).toHaveFocus() );
+		expect( failures ).toHaveAttribute( 'tabindex', '0' );
+		failures.focus();
+		expect( failures ).toHaveFocus();
+		fireEvent.keyDown( failures, { key: 'Escape', code: 'Escape' } );
+		await waitFor( () => expect( closeModal ).toHaveBeenCalledTimes( 1 ) );
+	} );
+
+	it( 'Verifies that focus and Escape stay in the modal during bulk rollback', async () => {
+		// ARRANGE: Hold the first rollback request open at the in-flight stage.
+		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
+		const closeModal = vi.fn();
+		render(
+			<Modal
+				__experimentalHideHeader
+				contentLabel="Rollback"
+				focusOnMount="firstContentElement"
+				onRequestClose={ closeModal }
+			>
+				<BulkRollbackPostModal
+					items={ MIXED }
+					ajaxurl={ AJAX_URL }
+					nonce={ NONCE }
+					closeModal={ closeModal }
+				/>
+			</Modal>
+		);
+		const rollback = screen.getByRole( 'button', {
+			name: 'Roll back 3 posts',
+		} );
+		await waitFor( () =>
+			expect( screen.getByRole( 'button', { name: 'Cancel' } ) ).toHaveFocus()
+		);
+		rollback.focus();
+
+		// ACT: Start rollback from the focused primary action.
+		fireEvent.click( rollback );
+		const rollingBack = await screen.findByRole( 'button', {
+			name: 'Rolling back…',
+		} );
+
+		// ASSERT: Both actions remain focusable and Escape reaches the modal.
+		expect( rollingBack ).toHaveFocus();
+		expect( rollingBack ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( rollingBack ).not.toHaveAttribute( 'disabled' );
+		expect(
+			screen.getByRole( 'button', { name: 'Cancel' } )
+		).toHaveAttribute( 'aria-disabled', 'true' );
+		fireEvent.keyDown( rollingBack, { key: 'Escape', code: 'Escape' } );
+		await waitFor( () => expect( closeModal ).toHaveBeenCalledTimes( 1 ) );
+	} );
 
 	it( 'Verifies that a run in which every item fails still refreshes the listing', async () => {
 		// ARRANGE: Every item is refused because it was already rolled back.

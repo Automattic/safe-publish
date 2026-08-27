@@ -15,10 +15,11 @@ import {
 	__experimentalHStack as HStack,
 	__experimentalVStack as VStack,
 } from '@wordpress/components';
-import { useState } from '@wordpress/element';
+import { useEffect, useRef, useState } from '@wordpress/element';
 import { __, _n, sprintf } from '@wordpress/i18n';
 
 import ConfirmTitleList from './ConfirmTitleList';
+import ScrollableRegion from './ScrollableRegion';
 import { MAX_VISIBLE_MODAL_TITLES } from '../constants';
 import {
 	getErrorMessage,
@@ -144,6 +145,7 @@ export default function BulkImportFlow( {
 	const [ progress, setProgress ] = useState( 0 );
 	const [ results, setResults ] = useState< BulkImportResponse | null >( null );
 	const [ attempted, setAttempted ] = useState( false );
+	const closeButtonRef = useRef< HTMLButtonElement >( null );
 
 	const handleRun = async (): Promise< void > => {
 		setAttempted( true );
@@ -175,6 +177,12 @@ export default function BulkImportFlow( {
 	};
 
 	useRefreshOnUnmount( attempted, onRefresh );
+
+	useEffect( () => {
+		if ( null !== results && ! isLoading ) {
+			closeButtonRef.current?.focus();
+		}
+	}, [ isLoading, results ] );
 
 	const allFailed =
 		null !== results && 0 === results.successful && results.failed > 0;
@@ -419,7 +427,10 @@ export default function BulkImportFlow( {
 							) }
 
 							{ results.results.length > 0 && (
-								<div className="safe-publish-import-results">
+								<ScrollableRegion
+									className="safe-publish-import-results"
+									ariaLabel={ __( 'Import results', 'safe-publish' ) }
+								>
 									{ results.results.map( ( result, index ) => {
 										const warned = hasWarnings( result );
 										let titleClass: 'success' | 'warning' | 'error';
@@ -467,7 +478,7 @@ export default function BulkImportFlow( {
 											</div>
 										);
 									} ) }
-								</div>
+								</ScrollableRegion>
 							) }
 						</VStack>
 					);
@@ -481,6 +492,8 @@ export default function BulkImportFlow( {
 					variant="tertiary"
 					onClick={ onClose }
 					disabled={ isLoading }
+					accessibleWhenDisabled
+					ref={ closeButtonRef }
 				>
 					{ results
 						? __( 'Close', 'safe-publish' )
@@ -492,6 +505,7 @@ export default function BulkImportFlow( {
 						variant="primary"
 						onClick={ () => void handleRun() }
 						disabled={ isLoading }
+						accessibleWhenDisabled
 						data-action-id="import"
 					>
 						{ isLoading ? (

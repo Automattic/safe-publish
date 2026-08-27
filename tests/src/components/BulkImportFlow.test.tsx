@@ -3,8 +3,9 @@
  * messaging, and the results-summary heading per run outcome.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { Modal } from '@wordpress/components';
 import BulkImportFlow, {
 	type BulkImportFlowPost,
 } from '@/components/BulkImportFlow';
@@ -25,6 +26,28 @@ const MIXED: BulkImportFlowPost[] = [
 	{ id: 2, post_type: 'post', title: 'Stale copy', local_state: 'outdated' },
 	{ id: 3, post_type: 'post', title: 'Current copy', local_state: 'up-to-date' },
 ];
+
+/**
+ * Renders the bulk import body in the WordPress modal used by DataViews.
+ *
+ * @param {Function} onClose Modal close callback.
+ */
+function renderInModal( onClose: () => void ): void {
+	render(
+		<Modal
+			__experimentalHideHeader
+			contentLabel="Import"
+			focusOnMount="firstContentElement"
+			onRequestClose={ onClose }
+		>
+			<BulkImportFlow
+				posts={ POSTS }
+				context={ CONTEXT }
+				onClose={ onClose }
+			/>
+		</Modal>
+	);
+}
 
 /**
  * Stubs the bulk endpoint with the given outcome counts, then renders the
@@ -269,6 +292,94 @@ describe( 'BulkImportFlow confirmation groups', () => {
 	} );
 } );
 
+describe( 'BulkImportFlow keyboard focus', () => {
+	afterEach( () => {
+		vi.unstubAllGlobals();
+	} );
+
+	it( 'Verifies that Escape closes the bulk confirmation', async () => {
+		// ARRANGE: The confirmation is inside the same modal DataViews uses.
+		const onClose = vi.fn();
+		renderInModal( onClose );
+		const cancel = screen.getByRole( 'button', { name: 'Cancel' } );
+		await waitFor( () => expect( cancel ).toHaveFocus() );
+
+		// ACT: Dismiss from the initially focused control.
+		fireEvent.keyDown( cancel, { key: 'Escape', code: 'Escape' } );
+
+		// ASSERT: The modal receives the bubbled keyboard event.
+		await waitFor( () => expect( onClose ).toHaveBeenCalledTimes( 1 ) );
+	} );
+
+	it( 'Verifies that focus and Escape stay in the modal during a bulk run', async () => {
+		// ARRANGE: Hold the request open at the in-flight stage.
+		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
+		const onClose = vi.fn();
+		renderInModal( onClose );
+		const importButton = screen.getByRole( 'button', {
+			name: 'Import 2 posts',
+		} );
+		await waitFor( () =>
+			expect( screen.getByRole( 'button', { name: 'Cancel' } ) ).toHaveFocus()
+		);
+		importButton.focus();
+
+		// ACT: Start the run from the focused primary button.
+		fireEvent.click( importButton );
+		const importing = await screen.findByRole( 'button', {
+			name: 'Importing…',
+		} );
+
+		// ASSERT: Disabled actions remain focusable, and Escape still reaches the
+		// modal rather than starting from document.body.
+		expect( importing ).toHaveFocus();
+		expect( importing ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( importing ).not.toHaveAttribute( 'disabled' );
+		expect(
+			screen.getByRole( 'button', { name: 'Cancel' } )
+		).toHaveAttribute( 'aria-disabled', 'true' );
+		fireEvent.keyDown( importing, { key: 'Escape', code: 'Escape' } );
+		await waitFor( () => expect( onClose ).toHaveBeenCalledTimes( 1 ) );
+	} );
+
+	it( 'Verifies that bulk results focus Close and keep Escape working', async () => {
+		// ARRANGE: Resolve the bulk endpoint with a successful result.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: async () => ( {
+					success: true,
+					data: {
+						total: 2,
+						successful: 2,
+						failed: 0,
+						results: [],
+					},
+				} ),
+			} )
+		);
+		const onClose = vi.fn();
+		renderInModal( onClose );
+		const importButton = screen.getByRole( 'button', {
+			name: 'Import 2 posts',
+		} );
+		await waitFor( () =>
+			expect( screen.getByRole( 'button', { name: 'Cancel' } ) ).toHaveFocus()
+		);
+		importButton.focus();
+
+		// ACT: Complete the run, which unmounts the focused primary button.
+		fireEvent.click( importButton );
+		const close = await screen.findByRole( 'button', { name: 'Close' } );
+
+		// ASSERT: Focus moves to the dismiss action, not the announced result.
+		await waitFor( () => expect( close ).toHaveFocus() );
+		expect( screen.getByRole( 'status' ) ).not.toHaveFocus();
+		fireEvent.keyDown( close, { key: 'Escape', code: 'Escape' } );
+		await waitFor( () => expect( onClose ).toHaveBeenCalledTimes( 1 ) );
+	} );
+} );
+
 describe( 'BulkImportFlow results summary', () => {
 	afterEach( () => {
 		vi.unstubAllGlobals();
@@ -310,6 +421,19 @@ describe( 'BulkImportFlow results summary', () => {
 		expect(
 			screen.queryByText( 'Import completed with errors' )
 		).not.toBeInTheDocument();
+	} );
+
+	it( 'Verifies that import results form a keyboard-scrollable region', async () => {
+		// ARRANGE + ACT: Complete a run that renders per-post results.
+		runImport( 2, 0 );
+		const results = await screen.findByRole( 'region', {
+			name: 'Import results',
+		} );
+
+		// ASSERT: Keyboard users can focus and scroll the overflow container.
+		expect( results ).toHaveAttribute( 'tabindex', '0' );
+		results.focus();
+		expect( results ).toHaveFocus();
 	} );
 } );
 
