@@ -254,8 +254,7 @@ Bulk imports process multiple posts sequentially:
 Errors are reported in multiple places:
 
 1. **Results modal**: Per-post outcome as soon as the run finishes
-2. **Post-import notice**: Batch summary, styled by outcome, on the next Safe
-   Publish page load
+2. **Post-import notice**: Batch summary, styled by outcome, on the next Safe Publish page load
 3. **Manage → Needs attention tab**: Logged for later review
 4. **JavaScript console**: Detailed debugging info
 5. **PHP error log**: Server-side errors
