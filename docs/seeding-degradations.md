@@ -8,10 +8,10 @@ It requires a running development environment (`npm run dev`) with both sites co
 
 ## npm Script
 
-| Command                                | Description                                       |
-| -------------------------------------- | ------------------------------------------------- |
-| `npm run seed:degradations`            | Seed the Needs attention tab on the destination   |
-| `npm run seed:degradations -- count=N` | Also add N filler entries for paging              |
+| Command | Description |
+| --- | --- |
+| `npm run seed:degradations` | Seed the Needs attention tab on the destination |
+| `npm run seed:degradations -- count=N` | Also add N filler entries for paging |
 | `npm run seed:degradations -- purge=1` | Remove every seeded demo artifact from both sites |
 
 Re-running is idempotent: the counts hold steady, and dropping `count` back to its default removes the filler without a purge.
@@ -20,15 +20,15 @@ Re-running is idempotent: the counts hold steady, and dropping `count` back to i
 
 Eight **degradations** — covering every issue type and both severities — plus one **orphan failure**:
 
-| Affected page               | Issue type                            | Severity | Resolves via                                  |
-| --------------------------- | ------------------------------------- | -------- | --------------------------------------------- |
-| Orphan Demo Child           | `parent_orphaned`                     | warning  | import **Orphan Demo Parent**, then Retry     |
-| Unmapped References Demo    | `unmapped_block_reference` (post, ×2) | warning  | import **Unmapped Target A** / **B**, Retry   |
-| Cross-Post Gallery Demo     | `unmapped_gallery_reference` (post)   | warning  | import **Unmapped Target A**, then Retry      |
-| Unresolvable Reference Demo | `unmapped_block_reference` (term)     | warning  | never — points at a non-existent term         |
-| Unresolvable Reference Demo | `unregistered_taxonomy`               | warning  | never — register the taxonomy, then re-import |
-| Nav Referrer Demo           | `nav_ref_rewrite_failed`              | error    | Retry alone                                   |
-| Reusable Block Demo         | `unmapped_block_reference` (reusable) | warning  | never — target block isn't seeded on source   |
+| Affected page | Issue type | Severity | Resolves via |
+| --- | --- | --- | --- |
+| Orphan Demo Child | `parent_orphaned` | warning | import **Orphan Demo Parent**, then Retry |
+| Unmapped References Demo | `unmapped_block_reference` (post, ×2) | warning | import **Unmapped Target A** / **B**, Retry |
+| Cross-Post Gallery Demo | `unmapped_gallery_reference` (post) | warning | import **Unmapped Target A**, then Retry |
+| Unresolvable Reference Demo | `unmapped_block_reference` (term) | warning | never — points at a non-existent term |
+| Unresolvable Reference Demo | `unregistered_taxonomy` | warning | never — register the taxonomy, then re-import |
+| Nav Referrer Demo | `nav_ref_rewrite_failed` | error | Retry alone |
+| Reusable Block Demo | `unmapped_block_reference` (reusable) | warning | never — target block isn't seeded on source |
 
 The orphan failure — titled "Import with no source ID" — comes from an import request with no source post id.
 
