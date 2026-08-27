@@ -891,9 +891,7 @@ final class Diff_Renderer {
 			false
 		);
 		$related_notes  = array_values( array_unique( $related_notes ) );
-		$assigned_notes = array_values(
-			array_diff( array_unique( $assigned_notes ), $related_notes )
-		);
+		$assigned_notes = array_values( array_unique( $assigned_notes ) );
 
 		$html = $assigned_html . $this->build_term_notes_html( $assigned_notes );
 
@@ -1069,12 +1067,12 @@ final class Diff_Renderer {
 					false === $entry['record']['assigned']
 					&& $entry['term'] instanceof WP_Term
 				) {
-					$terms[] = $entry['term'];
+					$terms[ (int) $entry['term']->term_id ] = $entry['term'];
 				}
 			}
 
 			if ( array() !== $terms ) {
-				$by_tax[ (string) $taxonomy ] = $terms;
+				$by_tax[ (string) $taxonomy ] = array_values( $terms );
 			}
 		}
 
@@ -1363,14 +1361,20 @@ final class Diff_Renderer {
 						&& '' === $blocked
 						&& $parent_stands
 					) {
-						$parent_note = $this->renamed_parent_note(
-							$source_parent,
-							$by_source,
-							(string) $taxonomy
-						);
+						if (
+							isset( $by_source[ $source_parent ] )
+							&& $assigned ===
+								$by_source[ $source_parent ]['record']['assigned']
+						) {
+							$parent_note = $this->renamed_parent_note(
+								$source_parent,
+								$by_source,
+								(string) $taxonomy
+							);
 
-						if ( '' !== $parent_note ) {
-							$notes[] = $parent_note;
+							if ( '' !== $parent_note ) {
+								$notes[] = $parent_note;
+							}
 						}
 
 						continue;

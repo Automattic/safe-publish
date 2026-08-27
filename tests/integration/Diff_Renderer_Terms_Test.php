@@ -566,6 +566,82 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that identical assigned and related notes stay with both tables.
+	 */
+	public function test_identical_notes_stay_with_both_tables(): void {
+		// ARRANGE: An assigned and an unassigned record that both resolve to one
+		// hand-authored destination term, by slug and then by name.
+		$term_id = self::factory()->term->create(
+			array(
+				'taxonomy'    => 'category',
+				'name'        => 'News',
+				'slug'        => 'news',
+				'description' => 'Local desk',
+			)
+		);
+		$this->assertIsInt( $term_id );
+		wp_set_post_terms( $this->post_id, array( $term_id ), 'category' );
+
+		// ACT: Both source records carry the same unwritten description.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 101, 'News', 'news', 0, 'Source desk' ),
+				$this->record( 102, 'News', '', 0, 'Source desk', false ),
+			)
+		);
+
+		// ASSERT: Each table keeps the note for the row it renders.
+		$related = strpos( $html, '<div class="safe-publish-related-terms">' );
+		$note    = 'news (category): description not updated on import';
+
+		$this->assertIsInt( $related );
+		$this->assertSame( array( $note, $note ), $this->notes( $html ) );
+		$this->assertStringContainsString(
+			'<li>' . $note . '</li>',
+			substr( $html, 0, $related )
+		);
+		$this->assertStringContainsString(
+			'<li>' . $note . '</li>',
+			substr( $html, $related )
+		);
+	}
+
+	/**
+	 * Verifies that one destination term appears once on the related current
+	 * side.
+	 */
+	public function test_related_current_terms_are_deduplicated(): void {
+		// ARRANGE: A hand-authored term that two unassigned records resolve to, by
+		// slug and then by name.
+		$term_id = self::factory()->term->create(
+			array(
+				'taxonomy'    => 'category',
+				'name'        => 'News',
+				'slug'        => 'news',
+				'description' => 'Local desk',
+			)
+		);
+		$this->assertIsInt( $term_id );
+
+		// ACT: Both source records change the destination description.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 101, 'News', 'news', 0, 'Source desk', false ),
+				$this->record( 102, 'News', '', 0, 'Source desk', false ),
+			)
+		);
+
+		// ASSERT: The destination description is rendered only once.
+		$this->assertSame(
+			1,
+			substr_count(
+				implode( "\n", $this->changed_lines( $html ) ),
+				'news (category) description: Local desk'
+			)
+		);
+	}
+
+	/**
 	 * Verifies that a source sending no safe_publish_terms falls back to the
 	 * embedded names, with no annotations, since eligibility cannot be judged
 	 * without the field.
@@ -1079,6 +1155,53 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		$this->assertSame(
 			array( 'politics (category): may not apply — name taken' ),
 			$this->notes( $html )
+		);
+	}
+
+	/**
+	 * Verifies that an assigned grandparent's note stays with the main table.
+	 */
+	public function test_assigned_grandparent_rename_note_stays_assigned(): void {
+		// ARRANGE: The post carries a grandparent and grandchild, while the term
+		// between them is present only to preserve hierarchy.
+		$this->import_terms(
+			array(
+				$this->record( 90, 'World', 'world', 0, '' ),
+				$this->record( 100, 'Politics', 'politics', 90, '', false ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+		self::factory()->term->create(
+			array(
+				'taxonomy' => 'category',
+				'name'     => 'Global',
+				'slug'     => 'global',
+			)
+		);
+
+		// ACT: The source renames the assigned grandparent onto the taken name.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 90, 'Global', 'world', 0, '' ),
+				$this->record( 100, 'Politics', 'politics', 90, '', false ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+
+		// ASSERT: Its one note is below the main table, not inside the related
+		// block whose middle term merely names it as a parent.
+		$related = strpos( $html, '<div class="safe-publish-related-terms">' );
+		$note    = 'world (category): may not apply — name taken';
+
+		$this->assertIsInt( $related );
+		$this->assertSame( array( $note ), $this->notes( $html ) );
+		$this->assertStringContainsString(
+			'<li>' . $note . '</li>',
+			substr( $html, 0, $related )
+		);
+		$this->assertStringNotContainsString(
+			'<li>' . $note . '</li>',
+			substr( $html, $related )
 		);
 	}
 
