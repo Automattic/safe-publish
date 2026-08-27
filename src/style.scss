@@ -44,17 +44,10 @@
 }
 
 .safe-publish-import-results {
-	max-height: 200px;
-	overflow-y: auto;
 	background: var(--safe-publish-bg-muted);
 	border: 1px solid var(--safe-publish-border);
 	border-radius: 4px;
 	padding: 10px;
-
-	&:focus-visible {
-		outline: 2px solid var(--wp-admin-theme-color);
-		outline-offset: 2px;
-	}
 
 	.safe-publish-import-result-item {
 		display: flex;

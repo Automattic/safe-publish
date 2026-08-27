@@ -19,7 +19,6 @@ import { useEffect, useRef, useState } from '@wordpress/element';
 import { __, _n, sprintf } from '@wordpress/i18n';
 
 import ConfirmTitleList from './ConfirmTitleList';
-import ScrollableRegion from './ScrollableRegion';
 import { MAX_VISIBLE_MODAL_TITLES } from '../constants';
 import {
 	getErrorMessage,
@@ -427,10 +426,7 @@ export default function BulkImportFlow( {
 							) }
 
 							{ results.results.length > 0 && (
-								<ScrollableRegion
-									className="safe-publish-import-results"
-									ariaLabel={ __( 'Import results', 'safe-publish' ) }
-								>
+								<div className="safe-publish-import-results">
 									{ results.results.map( ( result, index ) => {
 										const warned = hasWarnings( result );
 										let titleClass: 'success' | 'warning' | 'error';
@@ -478,7 +474,7 @@ export default function BulkImportFlow( {
 											</div>
 										);
 									} ) }
-								</ScrollableRegion>
+								</div>
 							) }
 						</VStack>
 					);

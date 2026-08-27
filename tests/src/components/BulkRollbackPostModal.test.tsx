@@ -182,7 +182,7 @@ describe( 'BulkRollbackPostModal listing refresh', () => {
 		);
 	}
 
-	it( 'Verifies that rollback failures form a keyboard-scrollable region', async () => {
+	it( 'Verifies that rollback results focus Close and keep Escape working', async () => {
 		// ARRANGE: Every rollback returns a failure shown in the results list.
 		stubRollback( {
 			success: false,
@@ -214,18 +214,12 @@ describe( 'BulkRollbackPostModal listing refresh', () => {
 
 		// ACT: Complete the run from the focused primary action.
 		fireEvent.click( rollback );
-		const failures = await screen.findByRole( 'region', {
-			name: 'Rollback failures',
-		} );
 		const close = await screen.findByRole( 'button', { name: 'Close' } );
 
-		// ASSERT: Completion recovers focus inside the modal, from which the
-		// named overflow region is keyboard-reachable and Escape still works.
+		// ASSERT: Completion recovers focus inside the modal and Escape still
+		// works from the replacement action.
 		await waitFor( () => expect( close ).toHaveFocus() );
-		expect( failures ).toHaveAttribute( 'tabindex', '0' );
-		failures.focus();
-		expect( failures ).toHaveFocus();
-		fireEvent.keyDown( failures, { key: 'Escape', code: 'Escape' } );
+		fireEvent.keyDown( close, { key: 'Escape', code: 'Escape' } );
 		await waitFor( () => expect( closeModal ).toHaveBeenCalledTimes( 1 ) );
 	} );
 

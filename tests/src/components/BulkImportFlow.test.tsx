@@ -423,18 +423,6 @@ describe( 'BulkImportFlow results summary', () => {
 		).not.toBeInTheDocument();
 	} );
 
-	it( 'Verifies that import results form a keyboard-scrollable region', async () => {
-		// ARRANGE + ACT: Complete a run that renders per-post results.
-		runImport( 2, 0 );
-		const results = await screen.findByRole( 'region', {
-			name: 'Import results',
-		} );
-
-		// ASSERT: Keyboard users can focus and scroll the overflow container.
-		expect( results ).toHaveAttribute( 'tabindex', '0' );
-		results.focus();
-		expect( results ).toHaveFocus();
-	} );
 } );
 
 describe( 'BulkImportFlow outcome announcements', () => {

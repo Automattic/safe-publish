@@ -21,7 +21,6 @@ import { useEffect, useRef, useState } from '@wordpress/element';
 import { __, _n, sprintf } from '@wordpress/i18n';
 
 import ConfirmTitleList from './ConfirmTitleList';
-import ScrollableRegion from './ScrollableRegion';
 import {
 	isRollbackRestore,
 	rollbackItems,
@@ -179,10 +178,7 @@ const BulkRollbackPostModal = ( {
 						) }
 					</Text>
 					{ failures && failures.length > 0 && (
-						<ScrollableRegion
-							className="safe-publish-import-results"
-							ariaLabel={ __( 'Rollback failures', 'safe-publish' ) }
-						>
+						<div className="safe-publish-import-results">
 							{ failures.map( ( entry, index ) => (
 								<div
 									key={ index }
@@ -203,7 +199,7 @@ const BulkRollbackPostModal = ( {
 									</span>
 								</div>
 							) ) }
-						</ScrollableRegion>
+						</div>
 					) }
 				</VStack>
 			) }
