@@ -40,6 +40,31 @@ afterEach( () => {
 } );
 
 describe( 'RollbackPostModal', () => {
+	it( 'Verifies that loading actions use accessible disabled semantics', async () => {
+		// ARRANGE: Hold the rollback request open at the in-flight stage.
+		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
+		render(
+			<RollbackPostModal
+				items={ [ buildRow() ] }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+			/>
+		);
+
+		// ACT: Start the rollback.
+		fireEvent.click( screen.getByRole( 'button', { name: 'Roll back' } ) );
+		const rollingBack = await screen.findByRole( 'button', {
+			name: 'Rolling back…',
+		} );
+
+		// ASSERT: Loading actions use aria-disabled instead of native disabled.
+		expect( rollingBack ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( rollingBack ).not.toHaveAttribute( 'disabled' );
+		const cancel = screen.getByRole( 'button', { name: 'Cancel' } );
+		expect( cancel ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( cancel ).not.toHaveAttribute( 'disabled' );
+	} );
+
 	it( 'Verifies that a successful rollback surfaces the server message as a success notice', async () => {
 		// ARRANGE: The endpoint restores the post and returns its confirmation.
 		vi.stubGlobal(

@@ -149,6 +149,7 @@ const DeletePostModal = ( {
 					variant="tertiary"
 					onClick={ closeModal }
 					disabled={ isLoading }
+					accessibleWhenDisabled
 				>
 					{ __( 'Cancel', 'safe-publish' ) }
 				</Button>
@@ -158,6 +159,7 @@ const DeletePostModal = ( {
 					isDestructive
 					onClick={ handleDelete }
 					disabled={ isLoading }
+					accessibleWhenDisabled
 				>
 					{ isLoading ? (
 						<>

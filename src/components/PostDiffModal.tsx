@@ -180,6 +180,7 @@ function HeaderBar( {
 					variant="primary"
 					onClick={ onSubmitUpdate }
 					disabled={ isUpdating || isLoading }
+					accessibleWhenDisabled
 				>
 					{ isUpdating ? (
 						<Spinner style={ { margin: 0 } } />

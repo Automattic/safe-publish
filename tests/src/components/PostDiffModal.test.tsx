@@ -81,6 +81,20 @@ describe( 'PostDiffModal listing refresh', () => {
 		);
 	}
 
+	it( 'Verifies that a loading update uses accessible disabled semantics', async () => {
+		// ARRANGE: Hold the update request open at the in-flight stage.
+		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
+		renderWithDiff( vi.fn() );
+		const update = await screen.findByRole( 'button', { name: 'Update' } );
+
+		// ACT: Start the update.
+		fireEvent.click( update );
+
+		// ASSERT: The action uses aria-disabled instead of native disabled.
+		expect( update ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( update ).not.toHaveAttribute( 'disabled' );
+	} );
+
 	it( 'Verifies that a completed update refreshes the listing once its result has been read', async () => {
 		// ARRANGE: The update endpoint accepts the submit.
 		stubSuccessfulUpdate();

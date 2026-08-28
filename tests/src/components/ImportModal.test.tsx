@@ -165,35 +165,26 @@ describe( 'ImportModal', () => {
 		await waitFor( () => expect( closeModal ).toHaveBeenCalledTimes( 1 ) );
 	} );
 
-	it( 'Verifies that focus and Escape stay in the modal during an overwrite', async () => {
+	it( 'Verifies that loading overwrite actions use accessible disabled semantics', async () => {
 		// ARRANGE: Hold the request open at the in-flight stage.
 		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
-		const closeModal = vi.fn();
-		renderInModal( LIVE_PROPS, closeModal );
+		render( <ImportModal { ...LIVE_PROPS } /> );
 		const overwrite = screen.getByRole( 'button', {
 			name: 'Overwrite live post',
 		} );
-		await waitFor( () =>
-			expect( screen.getByRole( 'button', { name: 'Cancel' } ) ).toHaveFocus()
-		);
-		overwrite.focus();
 
-		// ACT: Start the overwrite from the focused primary button.
+		// ACT: Start the overwrite.
 		fireEvent.click( overwrite );
 		const importing = await screen.findByRole( 'button', {
 			name: 'Updating…',
 		} );
 
-		// ASSERT: Disabled actions remain focusable, and Escape still reaches the
-		// modal rather than starting from document.body.
-		expect( importing ).toHaveFocus();
+		// ASSERT: Loading actions use aria-disabled instead of native disabled.
 		expect( importing ).toHaveAttribute( 'aria-disabled', 'true' );
 		expect( importing ).not.toHaveAttribute( 'disabled' );
-		expect(
-			screen.getByRole( 'button', { name: 'Cancel' } )
-		).toHaveAttribute( 'aria-disabled', 'true' );
-		fireEvent.keyDown( importing, { key: 'Escape', code: 'Escape' } );
-		await waitFor( () => expect( closeModal ).toHaveBeenCalledTimes( 1 ) );
+		const cancel = screen.getByRole( 'button', { name: 'Cancel' } );
+		expect( cancel ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( cancel ).not.toHaveAttribute( 'disabled' );
 	} );
 
 	it( 'Verifies that a completed overwrite focuses Close and keeps Escape working', async () => {

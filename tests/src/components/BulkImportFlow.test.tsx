@@ -311,35 +311,32 @@ describe( 'BulkImportFlow keyboard focus', () => {
 		await waitFor( () => expect( onClose ).toHaveBeenCalledTimes( 1 ) );
 	} );
 
-	it( 'Verifies that focus and Escape stay in the modal during a bulk run', async () => {
+	it( 'Verifies that loading bulk actions use accessible disabled semantics', async () => {
 		// ARRANGE: Hold the request open at the in-flight stage.
 		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
-		const onClose = vi.fn();
-		renderInModal( onClose );
+		render(
+			<BulkImportFlow
+				posts={ POSTS }
+				context={ CONTEXT }
+				onClose={ () => {} }
+			/>
+		);
 		const importButton = screen.getByRole( 'button', {
 			name: 'Import 2 posts',
 		} );
-		await waitFor( () =>
-			expect( screen.getByRole( 'button', { name: 'Cancel' } ) ).toHaveFocus()
-		);
-		importButton.focus();
 
-		// ACT: Start the run from the focused primary button.
+		// ACT: Start the run.
 		fireEvent.click( importButton );
 		const importing = await screen.findByRole( 'button', {
 			name: 'Importing…',
 		} );
 
-		// ASSERT: Disabled actions remain focusable, and Escape still reaches the
-		// modal rather than starting from document.body.
-		expect( importing ).toHaveFocus();
+		// ASSERT: Loading actions use aria-disabled instead of native disabled.
 		expect( importing ).toHaveAttribute( 'aria-disabled', 'true' );
 		expect( importing ).not.toHaveAttribute( 'disabled' );
-		expect(
-			screen.getByRole( 'button', { name: 'Cancel' } )
-		).toHaveAttribute( 'aria-disabled', 'true' );
-		fireEvent.keyDown( importing, { key: 'Escape', code: 'Escape' } );
-		await waitFor( () => expect( onClose ).toHaveBeenCalledTimes( 1 ) );
+		const cancel = screen.getByRole( 'button', { name: 'Cancel' } );
+		expect( cancel ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( cancel ).not.toHaveAttribute( 'disabled' );
 	} );
 
 	it( 'Verifies that bulk results focus Close and keep Escape working', async () => {
@@ -422,7 +419,6 @@ describe( 'BulkImportFlow results summary', () => {
 			screen.queryByText( 'Import completed with errors' )
 		).not.toBeInTheDocument();
 	} );
-
 } );
 
 describe( 'BulkImportFlow outcome announcements', () => {

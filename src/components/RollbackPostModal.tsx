@@ -100,6 +100,7 @@ const RollbackPostModal = ( {
 					variant="tertiary"
 					onClick={ closeModal }
 					disabled={ isLoading }
+					accessibleWhenDisabled
 				>
 					{ __( 'Cancel', 'safe-publish' ) }
 				</Button>
@@ -109,6 +110,7 @@ const RollbackPostModal = ( {
 					isDestructive={ ! isRestore }
 					onClick={ handleRollback }
 					disabled={ isLoading }
+					accessibleWhenDisabled
 				>
 					{ isLoading ? (
 						<>
