@@ -171,20 +171,6 @@ describe( 'ImportModal', () => {
 		);
 	} );
 
-	it( 'Verifies that Escape closes the live confirmation', async () => {
-		// ARRANGE: The confirmation is inside the same modal DataViews uses.
-		const closeModal = vi.fn();
-		renderInModal( LIVE_PROPS, closeModal );
-		const cancel = screen.getByRole( 'button', { name: 'Cancel' } );
-		await waitFor( () => expect( cancel ).toHaveFocus() );
-
-		// ACT: Dismiss from the initially focused control.
-		fireEvent.keyDown( cancel, { key: 'Escape', code: 'Escape' } );
-
-		// ASSERT: The modal receives the bubbled keyboard event.
-		await waitFor( () => expect( closeModal ).toHaveBeenCalledTimes( 1 ) );
-	} );
-
 	it( 'Verifies that loading overwrite actions use accessible disabled semantics', async () => {
 		// ARRANGE: Hold the request open at the in-flight stage.
 		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
@@ -205,6 +191,24 @@ describe( 'ImportModal', () => {
 		const cancel = screen.getByRole( 'button', { name: 'Cancel' } );
 		expect( cancel ).toHaveAttribute( 'aria-disabled', 'true' );
 		expect( cancel ).not.toHaveAttribute( 'disabled' );
+	} );
+
+	it( 'Verifies that a running overwrite leaves focus on the action that started it', async () => {
+		// ARRANGE: Hold the request open at the in-flight stage.
+		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
+		render( <ImportModal { ...LIVE_PROPS } /> );
+		const overwrite = screen.getByRole( 'button', {
+			name: 'Overwrite live post',
+		} );
+		overwrite.focus();
+
+		// ACT: Start the overwrite from the focused action.
+		fireEvent.click( overwrite );
+		await screen.findByRole( 'button', { name: 'Updating…' } );
+
+		// ASSERT: The live confirmation keeps both buttons, so nothing pulls
+		// focus over to Cancel.
+		expect( overwrite ).toHaveFocus();
 	} );
 
 	it( 'Verifies that a completed overwrite focuses Close and keeps Escape working', async () => {

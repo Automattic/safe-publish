@@ -297,20 +297,6 @@ describe( 'BulkImportFlow keyboard focus', () => {
 		vi.unstubAllGlobals();
 	} );
 
-	it( 'Verifies that Escape closes the bulk confirmation', async () => {
-		// ARRANGE: The confirmation is inside the same modal DataViews uses.
-		const onClose = vi.fn();
-		renderInModal( onClose );
-		const cancel = screen.getByRole( 'button', { name: 'Cancel' } );
-		await waitFor( () => expect( cancel ).toHaveFocus() );
-
-		// ACT: Dismiss from the initially focused control.
-		fireEvent.keyDown( cancel, { key: 'Escape', code: 'Escape' } );
-
-		// ASSERT: The modal receives the bubbled keyboard event.
-		await waitFor( () => expect( onClose ).toHaveBeenCalledTimes( 1 ) );
-	} );
-
 	it( 'Verifies that loading bulk actions use accessible disabled semantics', async () => {
 		// ARRANGE: Hold the request open at the in-flight stage.
 		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );

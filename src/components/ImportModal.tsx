@@ -109,6 +109,7 @@ const ImportModal = ( {
 	// needs a refresh.
 	useRefreshOnUnmount( hasStarted, onRefresh );
 
+	// A live run keeps its action row mounted; every other stage swaps it out.
 	useEffect( () => {
 		if (
 			null !== editUrl ||
