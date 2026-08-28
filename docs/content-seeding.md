@@ -6,13 +6,13 @@ Use the npm scripts below to seed; `bin/seed-content.php` is the underlying WP-C
 
 ## npm Scripts
 
-| Script                            | Description                                    |
-| --------------------------------- | ---------------------------------------------- |
-| `npm run seed`                    | Seed the source site with defaults             |
-| `npm run seed:source`             | Alias for `seed`                               |
-| `npm run seed:destination`        | Seed the destination site                      |
-| `npm run seed:full`               | Run the full preset on the source site         |
-| `npm run seed:update`             | Bump every seeded post on the source site      |
+| Script | Description |
+| --- | --- |
+| `npm run seed` | Seed the source site with defaults |
+| `npm run seed:source` | Alias for `seed` |
+| `npm run seed:destination` | Seed the destination site |
+| `npm run seed:full` | Run the full preset on the source site |
+| `npm run seed:update` | Bump every seeded post on the source site |
 | `npm run seed:update:destination` | Bump every seeded post on the destination site |
 
 Any script accepts additional arguments after `--`:
@@ -41,30 +41,30 @@ npm run seed:update -- revision=3
 
 The seeder accepts these arguments:
 
-| Argument       | Default     | Description                                                                                                             |
-| -------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `site=`        | `source`    | Which site to seed: `source`, `destination`, or `both`                                                                  |
-| `mode=`        | `create`    | `create` inserts new posts; `update` bumps existing seeded posts to a new revision (see below)                          |
-| `preset=`      | _(none)_    | `full` — runs all meaningful combinations; ignores other args except `site=` and `fresh=`                               |
-| `count=`       | `20`        | Number of posts to create (create mode only)                                                                            |
-| `start=`       | `1`         | Starting post number; use to avoid duplicate numbers across batches (create mode only)                                  |
-| `type=`        | `post`      | Post type slug (`post`, `page`, or any registered CPT). In `mode=update`, omit to touch every seeded post type          |
-| `editor=`      | `gutenberg` | Content format: `gutenberg`, `classic`, or `mixed` (2/3 block, 1/3 classic)                                             |
-| `images=`      | `auto`      | Image mode (see below)                                                                                                  |
-| `date-offset=` | `0`         | Shift all post dates this many extra days into the past; use in multi-batch presets to keep date ranges non-overlapping |
-| `fresh=`       | _(off)_     | Set to `1` to delete all previously seeded content, then seed normally. Not allowed with `mode=update`                  |
-| `purge=`       | _(off)_     | Set to `1` to delete all previously seeded content and exit without inserting anything. Not allowed with `mode=update`  |
-| `prefix=`      | _(none)_    | String prepended to every post title — useful to distinguish multiple runs                                              |
-| `revision=`    | _(auto)_    | Target revision number for `mode=update`. Omit to auto-bump each post's current revision by one                         |
+| Argument | Default | Description |
+| --- | --- | --- |
+| `site=` | `source` | Which site to seed: `source`, `destination`, or `both` |
+| `mode=` | `create` | `create` inserts new posts; `update` bumps existing seeded posts to a new revision (see below) |
+| `preset=` | _(none)_ | `full` — runs all meaningful combinations; ignores other args except `site=` and `fresh=` |
+| `count=` | `20` | Number of posts to create (create mode only) |
+| `start=` | `1` | Starting post number; use to avoid duplicate numbers across batches (create mode only) |
+| `type=` | `post` | Post type slug (`post`, `page`, or any registered CPT). In `mode=update`, omit to touch every seeded post type |
+| `editor=` | `gutenberg` | Content format: `gutenberg`, `classic`, or `mixed` (2/3 block, 1/3 classic) |
+| `images=` | `auto` | Image mode (see below) |
+| `date-offset=` | `0` | Shift all post dates this many extra days into the past; use in multi-batch presets to keep date ranges non-overlapping |
+| `fresh=` | _(off)_ | Set to `1` to delete all previously seeded content, then seed normally. Not allowed with `mode=update` |
+| `purge=` | _(off)_ | Set to `1` to delete all previously seeded content and exit without inserting anything. Not allowed with `mode=update` |
+| `prefix=` | _(none)_ | String prepended to every post title — useful to distinguish multiple runs |
+| `revision=` | _(auto)_ | Target revision number for `mode=update`. Omit to auto-bump each post's current revision by one |
 
 ### Image Modes
 
-| Mode        | What is created                                                             |
-| ----------- | --------------------------------------------------------------------------- |
-| `1`         | One image per post                                                          |
-| `2`         | Two independent images                                                      |
+| Mode | What is created |
+| --- | --- |
+| `1` | One image per post |
+| `2` | Two independent images |
 | `2-resized` | Original image + a half-size copy (tests URL rewriting of resized variants) |
-| `auto`      | Rotates through all three modes across posts                                |
+| `auto` | Rotates through all three modes across posts |
 
 ## What Gets Seeded
 
@@ -81,10 +81,7 @@ Every post includes:
 
 All seeded content is tagged with `_seeder_generated=1` meta, which `fresh=1` and `purge=1` use for targeted cleanup.
 
-Seeded titles identify their content shape. A title such as `Post 11 C - 2PR`
-uses `C` for classic-editor content; no editor marker means Gutenberg. The image
-suffix is `1P` for one image, `2P` for two independent images, or `2PR` for an
-original image plus a resized copy.
+Seeded titles identify their content shape. A title such as `Post 11 C - 2PR` uses `C` for classic-editor content; no editor marker means Gutenberg. The image suffix is `1P` for one image, `2P` for two independent images, or `2PR` for an original image plus a resized copy.
 
 ## Update Mode
 

@@ -6,10 +6,10 @@ This is the authoritative style guide for all Safe Publish documentation — int
 
 Every doc targets one of two audiences. Know which one before you start writing.
 
-| Audience      | Who they are                                               | Assumed knowledge                              |
-| ------------- | ---------------------------------------------------------- | ---------------------------------------------- |
-| **End-user**  | Content editors, content managers                          | Moderate WordPress knowledge; no coding skills |
-| **Developer** | Engineers installing, extending, or maintaining the plugin | PHP, WordPress plugin development, REST API    |
+| Audience | Who they are | Assumed knowledge |
+| --- | --- | --- |
+| **End-user** | Content editors, content managers | Moderate WordPress knowledge; no coding skills |
+| **Developer** | Engineers installing, extending, or maintaining the plugin | PHP, WordPress plugin development, REST API |
 
 ## Voice and Tone
 
@@ -55,13 +55,15 @@ Bold UI labels exactly as they appear in the plugin: click **Import**, not click
 
 ### Notes and warnings
 
-Use GitHub-flavored blockquote admonitions for notes that need emphasis:
+Use GitHub-flavored blockquote admonitions for notes that need emphasis. Separate the marker from its content with a quoted blank line — without it, `npm run format` joins the two lines and GitHub renders an ordinary blockquote instead of a callout:
 
 ```markdown
 > [!NOTE]
+>
 > The shared secret must be at least 16 characters; 32 or more is recommended.
 
 > [!WARNING]
+>
 > Never disable SSL verification in production.
 ```
 

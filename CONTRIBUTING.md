@@ -24,9 +24,7 @@ Safe Publish uses [semantic versioning](https://semver.org/).
 
 ## Release process
 
-Run the **Create release PR** workflow in GitHub Actions and choose `patch`,
-`minor`, or `major`. The workflow runs the release script, pushes the generated
-release branch, and opens a pull request against `trunk`.
+Run the **Create release PR** workflow in GitHub Actions and choose `patch`, `minor`, or `major`. The workflow runs the release script, pushes the generated release branch, and opens a pull request against `trunk`.
 
 For a manual release:
 
