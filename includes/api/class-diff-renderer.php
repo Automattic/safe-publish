@@ -895,8 +895,6 @@ final class Diff_Renderer {
 			$this->local_term_ids( $related_current ),
 			false
 		);
-		$related_notes  = array_values( array_unique( $related_notes ) );
-		$assigned_notes = array_values( array_unique( $assigned_notes ) );
 
 		$html = $assigned_html . $this->build_term_notes_html( $assigned_notes );
 
@@ -1580,7 +1578,7 @@ final class Diff_Renderer {
 	private function build_related_terms_html( string $diff_html ): string {
 		$heading = __( 'Related hierarchy terms', 'safe-publish' );
 		$help    = __(
-			'These terms preserve the hierarchy but are not assigned to this post.',
+			'The source sends these terms to carry the hierarchy, not to assign them to the post.',
 			'safe-publish'
 		);
 
