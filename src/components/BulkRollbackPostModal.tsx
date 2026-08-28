@@ -204,7 +204,7 @@ const BulkRollbackPostModal = ( {
 				</VStack>
 			) }
 
-			<HStack justify="right">
+			<HStack justify="right" className="safe-publish-modal-actions">
 				<Button
 					__next40pxDefaultSize
 					variant="tertiary"

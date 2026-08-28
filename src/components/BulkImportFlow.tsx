@@ -482,7 +482,7 @@ export default function BulkImportFlow( {
 
 			{ error && <Text role="alert" style={ { color: 'var(--safe-publish-status-error)' } }>{ error }</Text> }
 
-			<HStack justify="right">
+			<HStack justify="right" className="safe-publish-modal-actions">
 				<Button
 					__next40pxDefaultSize
 					variant="tertiary"

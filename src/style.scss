@@ -102,6 +102,28 @@
 	}
 }
 
+// Results outgrow the modal, and focusing Close would scroll the outcome
+// summary away. ::after extends the bg into the modal padding so scrolled
+// content doesn't peek through below.
+.safe-publish-modal-actions {
+	position: sticky;
+	bottom: 0;
+	z-index: 2;
+	background: var(--safe-publish-surface-bg);
+	padding: 8px 0;
+
+	&::after {
+		content: "";
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 100%;
+		height: 32px;
+		background: var(--safe-publish-surface-bg);
+		pointer-events: none;
+	}
+}
+
 .safe-publish-import-warnings-list {
 	background: var(--safe-publish-status-warning-bg);
 	border: 1px solid var(--safe-publish-status-warning-border);
