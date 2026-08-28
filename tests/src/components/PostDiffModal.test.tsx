@@ -173,3 +173,131 @@ describe( 'PostDiffModal listing refresh', () => {
 		expect( onRefresh ).not.toHaveBeenCalled();
 	} );
 } );
+
+describe( 'PostDiffModal keyboard focus', () => {
+	it( 'Verifies that a completed update keeps its action focused after the diff clears', async () => {
+		// ARRANGE: The first preview reports changes and the post-update
+		// refetch reports none, which is what retires the Update button.
+		mockApiFetch
+			.mockResolvedValueOnce( {
+				contentDiffHtml: '<ins>Incoming paragraph</ins>',
+				blockDiffs: [],
+			} )
+			.mockResolvedValue( { contentDiffHtml: '', blockDiffs: [] } );
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: async () => ( {
+					success: true,
+					data: { edit_url: 'https://example.com/edit' },
+				} ),
+			} )
+		);
+		render(
+			<PostDiffModal
+				items={ [ ROW ] }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				syncStatus="outdated"
+				onRefresh={ vi.fn() }
+			/>
+		);
+		const update = await screen.findByRole( 'button', { name: 'Update' } );
+		update.focus();
+
+		// ACT: Submit from the focused action, then wait out the refetch that
+		// empties the diff.
+		fireEvent.click( update );
+		expect( await screen.findByText( /Update applied/ ) ).toBeInTheDocument();
+		expect(
+			await screen.findByText( 'No differences detected.' )
+		).toBeInTheDocument();
+
+		// ASSERT: The action outlives the cleared diff, holds focus so Escape
+		// still reaches the dialog, and refuses a second submit.
+		expect( update ).toBeInTheDocument();
+		expect( update ).toHaveFocus();
+		expect( update ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( update ).not.toHaveAttribute( 'disabled' );
+	} );
+
+	it( 'Verifies that an update leaving differences behind stays submittable', async () => {
+		// ARRANGE: Every preview reports differences, so the refetch that
+		// follows the update still has something to show.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: async () => ( {
+					success: true,
+					data: { edit_url: 'https://example.com/edit' },
+				} ),
+			} )
+		);
+		const { getByRole } = renderWithDiff( vi.fn() );
+
+		// ACT: Complete an update that cannot clear the whole diff.
+		fireEvent.click(
+			await screen.findByRole( 'button', { name: 'Update' } )
+		);
+		expect(
+			await screen.findByText( /Some differences remain/ )
+		).toBeInTheDocument();
+
+		// ASSERT: The action stays live, so the operator can resubmit.
+		expect( getByRole( 'button', { name: 'Update' } ) ).not.toHaveAttribute(
+			'aria-disabled'
+		);
+	} );
+} );
+
+describe( 'PostDiffModal outcome announcements', () => {
+	it( 'Verifies that a completed update lands in a live region', async () => {
+		// ARRANGE: The update endpoint accepts the submit.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: async () => ( {
+					success: true,
+					data: { edit_url: 'https://example.com/edit' },
+				} ),
+			} )
+		);
+		renderWithDiff( vi.fn() );
+
+		// ACT: Submit the update.
+		fireEvent.click(
+			await screen.findByRole( 'button', { name: 'Update' } )
+		);
+
+		// ASSERT: Focus stays on the action, so the outcome only reaches a
+		// screen reader as a status message.
+		expect( await screen.findByRole( 'status' ) ).toHaveTextContent(
+			'Update applied'
+		);
+	} );
+
+	it( 'Verifies that a refused update lands in a live region', async () => {
+		// ARRANGE: The update endpoint refuses the submit.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: async () => ( {
+					success: false,
+					data: 'The source post is no longer available',
+				} ),
+			} )
+		);
+		renderWithDiff( vi.fn() );
+
+		// ACT: Submit the update.
+		fireEvent.click(
+			await screen.findByRole( 'button', { name: 'Update' } )
+		);
+
+		// ASSERT: The reason is announced rather than left for the operator
+		// to discover.
+		expect( await screen.findByRole( 'alert' ) ).toHaveTextContent(
+			'The source post is no longer available'
+		);
+	} );
+} );
