@@ -846,6 +846,11 @@ final class Diff_Renderer {
 
 		$local = array_intersect_key( $term_objects, $records );
 
+		// A blank side diffs as one empty line, so it reads as a deletion.
+		if ( array() === $local ) {
+			$local = array_fill_keys( array_keys( $records ), array() );
+		}
+
 		$plans = ( new Meta_Terms_Manager() )->plan_terms(
 			$records,
 			Options::get_connected_site_url_with_path()
@@ -1050,7 +1055,9 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Collects the local fields of unassigned terms used to carry hierarchy.
+	 * Collects the destination terms the unassigned records pair with. A
+	 * taxonomy carrying such records is listed even when none of them pairs,
+	 * so the current side never comes out blank.
 	 *
 	 * @param array $plans Per-taxonomy term plans from Meta_Terms_Manager.
 	 *
@@ -1060,18 +1067,22 @@ final class Diff_Renderer {
 		$by_tax = array();
 
 		foreach ( $plans as $taxonomy => $entries ) {
-			$terms = array();
+			$terms   = array();
+			$related = false;
 
 			foreach ( $entries as $entry ) {
-				if (
-					false === $entry['record']['assigned']
-					&& $entry['term'] instanceof WP_Term
-				) {
+				if ( true === $entry['record']['assigned'] ) {
+					continue;
+				}
+
+				$related = true;
+
+				if ( $entry['term'] instanceof WP_Term ) {
 					$terms[ (int) $entry['term']->term_id ] = $entry['term'];
 				}
 			}
 
-			if ( array() !== $terms ) {
+			if ( true === $related ) {
 				$by_tax[ (string) $taxonomy ] = array_values( $terms );
 			}
 		}

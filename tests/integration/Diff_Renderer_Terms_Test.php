@@ -642,6 +642,55 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that an ancestor the import would create is not paired with an
+	 * empty removal, which the related side alone can produce.
+	 */
+	public function test_created_ancestor_is_not_shown_as_a_removal(): void {
+		// ARRANGE: An imported term under an imported parent.
+		$this->import_terms(
+			array(
+				$this->record( 100, 'Politics', 'politics', 0, '' ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+
+		// ACT: The source moves it under an ancestor this site does not have,
+		// so no unassigned record pairs with a destination term.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 102, 'World', 'world', 0, '', false ),
+				$this->record( 101, 'News', 'news', 102, '' ),
+			)
+		);
+
+		// ASSERT: The related block shows the ancestor as an addition alone.
+		$this->assertStringContainsString( 'Related hierarchy terms', $html );
+		$this->assertSame( 0, $this->empty_removals( $html ) );
+	}
+
+	/**
+	 * Verifies that terms the post gains in every payload taxonomy are not
+	 * paired with an empty removal.
+	 */
+	public function test_gained_terms_are_not_shown_as_a_removal(): void {
+		// ARRANGE: A post carrying no terms in the taxonomy the source sends.
+		$this->assertFalse( get_the_terms( $this->post_id, 'post_tag' ) );
+
+		// ACT: The source sends a tag the destination does not have.
+		$html = $this->render_term_map(
+			array(
+				'post_tag' => array(
+					$this->record( 200, 'Alpha', 'alpha', 0, 'Tag desk' ),
+				),
+			)
+		);
+
+		// ASSERT: The comparison shows the tag as an addition alone.
+		$this->assertStringContainsString( 'Alpha (alpha)', $html );
+		$this->assertSame( 0, $this->empty_removals( $html ) );
+	}
+
+	/**
 	 * Verifies that a source sending no safe_publish_terms falls back to the
 	 * embedded names, with no annotations, since eligibility cannot be judged
 	 * without the field.
@@ -1542,6 +1591,19 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 				ENT_QUOTES
 			),
 			$cells[1]
+		);
+	}
+
+	/**
+	 * Counts the cells marked removed that carry no text of their own.
+	 *
+	 * @param string $html Taxonomies diff HTML.
+	 * @return int Empty removal cells.
+	 */
+	private function empty_removals( string $html ): int {
+		return substr_count(
+			$html,
+			"<span class='screen-reader-text'>Deleted: </span></td>"
 		);
 	}
 
