@@ -3,8 +3,9 @@
  * messaging, and the results-summary heading per run outcome.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { Modal } from '@wordpress/components';
 import BulkImportFlow, {
 	type BulkImportFlowPost,
 } from '@/components/BulkImportFlow';
@@ -25,6 +26,28 @@ const MIXED: BulkImportFlowPost[] = [
 	{ id: 2, post_type: 'post', title: 'Stale copy', local_state: 'outdated' },
 	{ id: 3, post_type: 'post', title: 'Current copy', local_state: 'up-to-date' },
 ];
+
+/**
+ * Renders the bulk import body in the WordPress modal used by DataViews.
+ *
+ * @param {Function} onClose Modal close callback.
+ */
+function renderInModal( onClose: () => void ): void {
+	render(
+		<Modal
+			__experimentalHideHeader
+			contentLabel="Import"
+			focusOnMount="firstContentElement"
+			onRequestClose={ onClose }
+		>
+			<BulkImportFlow
+				posts={ POSTS }
+				context={ CONTEXT }
+				onClose={ onClose }
+			/>
+		</Modal>
+	);
+}
 
 /**
  * Stubs the bulk endpoint with the given outcome counts, then renders the
@@ -269,6 +292,77 @@ describe( 'BulkImportFlow confirmation groups', () => {
 	} );
 } );
 
+describe( 'BulkImportFlow keyboard focus', () => {
+	afterEach( () => {
+		vi.unstubAllGlobals();
+	} );
+
+	it( 'Verifies that loading bulk actions use accessible disabled semantics', async () => {
+		// ARRANGE: Hold the request open at the in-flight stage.
+		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
+		render(
+			<BulkImportFlow
+				posts={ POSTS }
+				context={ CONTEXT }
+				onClose={ () => {} }
+			/>
+		);
+		const importButton = screen.getByRole( 'button', {
+			name: 'Import 2 posts',
+		} );
+
+		// ACT: Start the run.
+		fireEvent.click( importButton );
+		const importing = await screen.findByRole( 'button', {
+			name: 'Importing…',
+		} );
+
+		// ASSERT: Loading actions use aria-disabled instead of native disabled.
+		expect( importing ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( importing ).not.toHaveAttribute( 'disabled' );
+		const cancel = screen.getByRole( 'button', { name: 'Cancel' } );
+		expect( cancel ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( cancel ).not.toHaveAttribute( 'disabled' );
+	} );
+
+	it( 'Verifies that bulk results focus Close and keep Escape working', async () => {
+		// ARRANGE: Resolve the bulk endpoint with a successful result.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: async () => ( {
+					success: true,
+					data: {
+						total: 2,
+						successful: 2,
+						failed: 0,
+						results: [],
+					},
+				} ),
+			} )
+		);
+		const onClose = vi.fn();
+		renderInModal( onClose );
+		const importButton = screen.getByRole( 'button', {
+			name: 'Import 2 posts',
+		} );
+		await waitFor( () =>
+			expect( screen.getByRole( 'button', { name: 'Cancel' } ) ).toHaveFocus()
+		);
+		importButton.focus();
+
+		// ACT: Complete the run, which unmounts the focused primary button.
+		fireEvent.click( importButton );
+		const close = await screen.findByRole( 'button', { name: 'Close' } );
+
+		// ASSERT: Focus moves to the dismiss action, not the announced result.
+		await waitFor( () => expect( close ).toHaveFocus() );
+		expect( screen.getByRole( 'status' ) ).not.toHaveFocus();
+		fireEvent.keyDown( close, { key: 'Escape', code: 'Escape' } );
+		await waitFor( () => expect( onClose ).toHaveBeenCalledTimes( 1 ) );
+	} );
+} );
+
 describe( 'BulkImportFlow results summary', () => {
 	afterEach( () => {
 		vi.unstubAllGlobals();
@@ -310,6 +404,54 @@ describe( 'BulkImportFlow results summary', () => {
 		expect(
 			screen.queryByText( 'Import completed with errors' )
 		).not.toBeInTheDocument();
+	} );
+
+	it( 'Verifies that a failed item isolates its source reason', async () => {
+		// ARRANGE: One item fails with structured source detail.
+		const reason = '\u202eSource refused the request.\u202c';
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: async () => ( {
+					success: true,
+					data: {
+						total: 1,
+						successful: 0,
+						failed: 1,
+						results: [
+							{
+								source_post_id: 1,
+								title: 'Broken post',
+								success: false,
+								error: 'Source site returned HTTP error 401.',
+								source_error: {
+									message: reason,
+									template:
+										'Source site returned HTTP error 401. <reason />',
+								},
+							},
+						],
+					},
+				} ),
+			} )
+		);
+
+		// ACT: Import the single post and find the source-provided reason.
+		render(
+			<BulkImportFlow
+				posts={ [ POSTS[ 0 ] ] }
+				context={ CONTEXT }
+				onClose={ () => {} }
+			/>
+		);
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Import 1 posts' } )
+		);
+		const isolatedReason = await screen.findByText( reason );
+
+		// ASSERT: The item result prevents its reason from reordering the UI.
+		expect( isolatedReason.tagName ).toBe( 'BDI' );
+		expect( isolatedReason ).toHaveAttribute( 'dir', 'auto' );
 	} );
 } );
 

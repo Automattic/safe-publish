@@ -9,7 +9,9 @@
 import apiFetch from '@wordpress/api-fetch';
 import { __ } from '@wordpress/i18n';
 
-import type { JsonObject } from '../types';
+import { getSourceError, isRecord } from '../utils';
+
+import type { JsonObject, SourceError } from '../types';
 
 /**
  * Payload for requesting a diff preview.
@@ -52,6 +54,7 @@ export interface BlockDiff {
  * @property {Object}      [nonContentDiffs]      Non-content field diffs.
  * @property {BlockDiff[]} [blockDiffs]           Block-level diffs.
  * @property {string}      [error]                Error message if failed.
+ * @property {Object}      [sourceError]          Source failure detail.
  * @property {Object}      [current]              Current post data.
  * @property {string}      [html]                 Legacy HTML diff output.
  * @property {string}      [incomingRenderedHtml] Incoming rendered HTML.
@@ -68,6 +71,7 @@ export interface DiffPreviewResult {
 	};
 	blockDiffs?: BlockDiff[];
 	error?: string;
+	sourceError?: SourceError;
 	current?: {
 		title?: string;
 		excerpt?: string;
@@ -99,13 +103,15 @@ export async function fetchDiffPreview(
 			data: payload,
 		} );
 	} catch ( err ) {
+		const error = isRecord( err ) ? err : {};
 		const message =
-			typeof err === 'object' &&
-			err !== null &&
-			'message' in err &&
-			typeof err.message === 'string'
-				? err.message
+			typeof error.message === 'string'
+				? error.message
 				: __( 'Failed to fetch diff', 'safe-publish' );
-		return { error: message };
+		const sourceError = getSourceError( error.data );
+
+		return sourceError
+			? { error: message, sourceError }
+			: { error: message };
 	}
 }

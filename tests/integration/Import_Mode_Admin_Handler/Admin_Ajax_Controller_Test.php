@@ -177,6 +177,84 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that an Update failure carries structured source HTTP data.
+	 */
+	public function test_update_failure_preserves_source_http_error_data(): void {
+		// ARRANGE: An imported post whose source endpoint returns an HTTP error.
+		$source_post_id = 6011;
+		$post_id        = $this->factory()->post->create();
+		update_post_meta(
+			$post_id,
+			Options::META_SOURCE_POST_ID,
+			(string) $source_post_id
+		);
+		update_post_meta(
+			$post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
+		wp_set_current_user( $this->admin_user_id );
+
+		$upstream_message = 'The source post is private.';
+		$failing_request  = static function (
+			$preempt,
+			$_args,
+			string $url,
+		) use (
+			$source_post_id,
+			$upstream_message
+		) {
+			if ( ! str_contains( $url, '/posts/' . $source_post_id ) ) {
+				return $preempt;
+			}
+
+			return array(
+				'response' => array(
+					'code'    => 401,
+					'message' => 'Unauthorized',
+				),
+				'body'     => (string) wp_json_encode(
+					array( 'message' => $upstream_message )
+				),
+				'headers'  => array(),
+			);
+		};
+		add_filter( 'pre_http_request', $failing_request, 0, 3 );
+		$_POST = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => (string) $source_post_id,
+			'title'          => 'Private post',
+			'source_link'    => 'https://source.example.com/private-post',
+			'post_type'      => 'post',
+			'force_update'   => 'true',
+		);
+
+		try {
+			// ACT: Trigger Update through its AJAX handler.
+			$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+			// ASSERT: The client receives the data needed for safe interpolation.
+			$response = json_decode( $this->_last_response, true );
+			$this->assertIsArray( $response );
+			$this->assertFalse( $response['success'] );
+			$this->assertSame(
+				'Source site returned HTTP error 401. ' . $upstream_message,
+				$response['data']['message']
+			);
+			$this->assertSame(
+				array(
+					'message'  => $upstream_message,
+					'template' =>
+						'Source site returned HTTP error 401. <reason />',
+				),
+				$response['data']['source_error']
+			);
+		} finally {
+			remove_filter( 'pre_http_request', $failing_request, 0 );
+		}
+	}
+
+	/**
 	 * Verifies that the bulk import endpoint rejects requests with an invalid
 	 * nonce.
 	 */

@@ -53,6 +53,37 @@ describe( 'DeleteFailedImportsModal confirmation', () => {
 	} );
 } );
 
+describe( 'DeleteFailedImportsModal loading actions', () => {
+	afterEach( () => {
+		vi.unstubAllGlobals();
+	} );
+
+	it( 'Verifies that loading actions use accessible disabled semantics', async () => {
+		// ARRANGE: Hold the removal request open at the in-flight stage.
+		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
+		render(
+			<DeleteFailedImportsModal
+				items={ ITEMS }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+			/>
+		);
+
+		// ACT: Start removing the failed imports.
+		fireEvent.click( screen.getByRole( 'button', { name: 'Remove' } ) );
+		const deleting = await screen.findByRole( 'button', {
+			name: 'Removing…',
+		} );
+
+		// ASSERT: Loading actions use aria-disabled instead of native disabled.
+		expect( deleting ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( deleting ).not.toHaveAttribute( 'disabled' );
+		const cancel = screen.getByRole( 'button', { name: 'Cancel' } );
+		expect( cancel ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( cancel ).not.toHaveAttribute( 'disabled' );
+	} );
+} );
+
 describe( 'DeleteFailedImportsModal inbox refresh', () => {
 	afterEach( () => {
 		vi.unstubAllGlobals();

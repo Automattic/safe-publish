@@ -17,7 +17,7 @@ import {
 	Spinner,
 	ProgressBar,
 } from '@wordpress/components';
-import { useState } from '@wordpress/element';
+import { useEffect, useRef, useState } from '@wordpress/element';
 import { __, _n, sprintf } from '@wordpress/i18n';
 
 import ConfirmTitleList from './ConfirmTitleList';
@@ -57,8 +57,15 @@ const BulkRollbackPostModal = ( {
 	const [ completed, setCompleted ] = useState( 0 );
 	const [ result, setResult ] = useState< BulkRollbackResult | null >( null );
 	const [ attempted, setAttempted ] = useState( false );
+	const closeButtonRef = useRef< HTMLButtonElement >( null );
 
 	useRefreshOnUnmount( attempted, onRefresh );
+
+	useEffect( () => {
+		if ( null !== result && ! isLoading ) {
+			closeButtonRef.current?.focus();
+		}
+	}, [ isLoading, result ] );
 
 	const total = items.length;
 	const restoreTitles = items
@@ -197,12 +204,14 @@ const BulkRollbackPostModal = ( {
 				</VStack>
 			) }
 
-			<HStack justify="right">
+			<HStack justify="right" className="safe-publish-modal-actions">
 				<Button
 					__next40pxDefaultSize
 					variant="tertiary"
 					onClick={ closeModal }
 					disabled={ isLoading }
+					accessibleWhenDisabled
+					ref={ closeButtonRef }
 				>
 					{ result
 						? __( 'Close', 'safe-publish' )
@@ -215,6 +224,7 @@ const BulkRollbackPostModal = ( {
 						isDestructive={ deleteTitles.length > 0 }
 						onClick={ handleRollback }
 						disabled={ isLoading }
+						accessibleWhenDisabled
 					>
 						{ isLoading ? (
 							<>

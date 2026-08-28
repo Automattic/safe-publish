@@ -8,8 +8,14 @@
 import { useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
-import { ApiResponse, CreateDraftResponse, Warning } from '../../types';
-import { getErrorMessage } from '../../utils';
+import { getErrorMessage, getSourceError } from '../../utils';
+
+import type {
+	ApiResponse,
+	CreateDraftResponse,
+	DisplayError,
+	Warning,
+} from '../../types';
 
 /**
  * Parameters for the useImportPost hook.
@@ -40,7 +46,7 @@ interface UseImportPostParams {
  * Return value from the useImportPost hook.
  *
  * @property {boolean}       isLoading       Whether a submit is in progress.
- * @property {string | null} error           Error message if the submit failed.
+ * @property {?DisplayError} error           Display-ready error.
  * @property {string | null} editUrl         Edit URL returned on success, or null.
  * @property {Warning[]}     warnings        Non-fatal warnings raised by the backend.
  * @property {boolean}       alreadyImported Whether the endpoint returned its
@@ -49,7 +55,7 @@ interface UseImportPostParams {
  */
 interface UseImportPostResult {
 	isLoading: boolean;
-	error: string | null;
+	error: DisplayError | null;
 	editUrl: string | null;
 	warnings: Warning[];
 	alreadyImported: boolean;
@@ -74,7 +80,7 @@ export function useImportPost( {
 	onSuccess,
 }: UseImportPostParams ): UseImportPostResult {
 	const [ isLoading, setIsLoading ] = useState( false );
-	const [ error, setError ] = useState< string | null >( null );
+	const [ error, setError ] = useState< DisplayError | null >( null );
 	const [ editUrl, setEditUrl ] = useState< string | null >( null );
 	const [ warnings, setWarnings ] = useState< Warning[] >( [] );
 	const [ alreadyImported, setAlreadyImported ] = useState( false );
@@ -114,10 +120,11 @@ export function useImportPost( {
 
 				if ( ! result.success ) {
 					setError(
-						getErrorMessage(
-							result,
-							__( 'Failed to import the post.', 'safe-publish' )
-						)
+						getSourceError( result.data ) ??
+							getErrorMessage(
+								result,
+								__( 'Failed to import the post.', 'safe-publish' )
+							)
 					);
 					return;
 				}

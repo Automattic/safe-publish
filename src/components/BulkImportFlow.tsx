@@ -15,13 +15,15 @@ import {
 	__experimentalHStack as HStack,
 	__experimentalVStack as VStack,
 } from '@wordpress/components';
-import { useState } from '@wordpress/element';
+import { useEffect, useRef, useState } from '@wordpress/element';
 import { __, _n, sprintf } from '@wordpress/i18n';
 
 import ConfirmTitleList from './ConfirmTitleList';
+import IsolatedErrorMessage from './IsolatedErrorMessage';
 import { MAX_VISIBLE_MODAL_TITLES } from '../constants';
 import {
 	getErrorMessage,
+	getSourceError,
 	isImportUpdate,
 	renderWarningShortLabel,
 } from '../utils';
@@ -144,6 +146,7 @@ export default function BulkImportFlow( {
 	const [ progress, setProgress ] = useState( 0 );
 	const [ results, setResults ] = useState< BulkImportResponse | null >( null );
 	const [ attempted, setAttempted ] = useState( false );
+	const closeButtonRef = useRef< HTMLButtonElement >( null );
 
 	const handleRun = async (): Promise< void > => {
 		setAttempted( true );
@@ -175,6 +178,12 @@ export default function BulkImportFlow( {
 	};
 
 	useRefreshOnUnmount( attempted, onRefresh );
+
+	useEffect( () => {
+		if ( null !== results && ! isLoading ) {
+			closeButtonRef.current?.focus();
+		}
+	}, [ isLoading, results ] );
 
 	const allFailed =
 		null !== results && 0 === results.successful && results.failed > 0;
@@ -457,7 +466,11 @@ export default function BulkImportFlow( {
 													</span>
 													{ ! result.success && result.error && (
 														<span className="safe-publish-result-error">
-															{ result.error }
+															<IsolatedErrorMessage
+																error={
+																	getSourceError( result ) ?? result.error
+																}
+															/>
 														</span>
 													) }
 												</div>
@@ -475,12 +488,14 @@ export default function BulkImportFlow( {
 
 			{ error && <Text role="alert" style={ { color: 'var(--safe-publish-status-error)' } }>{ error }</Text> }
 
-			<HStack justify="right">
+			<HStack justify="right" className="safe-publish-modal-actions">
 				<Button
 					__next40pxDefaultSize
 					variant="tertiary"
 					onClick={ onClose }
 					disabled={ isLoading }
+					accessibleWhenDisabled
+					ref={ closeButtonRef }
 				>
 					{ results
 						? __( 'Close', 'safe-publish' )
@@ -492,6 +507,7 @@ export default function BulkImportFlow( {
 						variant="primary"
 						onClick={ () => void handleRun() }
 						disabled={ isLoading }
+						accessibleWhenDisabled
 						data-action-id="import"
 					>
 						{ isLoading ? (

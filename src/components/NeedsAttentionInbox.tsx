@@ -414,6 +414,7 @@ const NeedsAttentionInbox = ( {
 							icon={ update }
 							aria-busy={ isLoading }
 							disabled={ isLoading }
+							accessibleWhenDisabled
 							label={ __( 'Refresh', 'safe-publish' ) }
 							onClick={ refresh }
 						/>
