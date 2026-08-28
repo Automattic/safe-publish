@@ -826,3 +826,16 @@ html:has(body.toplevel_page_safe-publish) {
 	font-size: 12px;
 	color: var(--safe-publish-text-muted);
 }
+
+.safe-publish-related-terms {
+	margin-top: 16px;
+}
+
+.safe-publish-related-terms__heading,
+.safe-publish-related-terms__help {
+	margin: 0 0 8px;
+}
+
+.safe-publish-related-terms__help {
+	color: var(--safe-publish-text-muted);
+}

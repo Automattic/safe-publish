@@ -869,12 +869,17 @@ final class Diff_Renderer {
 
 		$local = array_intersect_key( $term_objects, $records );
 
+		// A blank side diffs as one empty line, so it reads as a deletion.
+		if ( array() === $local ) {
+			$local = array_fill_keys( array_keys( $records ), array() );
+		}
+
 		$plans = ( new Meta_Terms_Manager() )->plan_terms(
 			$records,
 			Options::get_connected_site_url_with_path()
 		);
 
-		$html = $this->generate_simple_diff(
+		$assigned_html = $this->generate_simple_diff(
 			$this->build_term_fields_text( $this->current_term_fields( $local ) ),
 			$this->build_term_fields_text(
 				$this->incoming_term_fields( $records, $plans )
@@ -883,16 +888,46 @@ final class Diff_Renderer {
 			$title_right
 		);
 
-		if ( '' === $html ) {
+		$related_current  = $this->current_related_terms( $plans );
+		$related_incoming = $this->incoming_related_term_fields( $plans );
+		$related_html     = array() === $related_incoming
+			? ''
+			: $this->generate_simple_diff(
+				$this->build_term_fields_text(
+					$this->current_term_fields( $related_current )
+				),
+				$this->build_term_fields_text( $related_incoming ),
+				$title_left,
+				$title_right
+			);
+
+		if ( '' === $assigned_html && '' === $related_html ) {
 			return '';
 		}
 
-		$notes = array_merge(
-			$this->build_term_notes( $plans, $this->local_term_ids( $local ) ),
+		$assigned_notes = array_merge(
+			$this->build_term_notes(
+				$plans,
+				$this->local_term_ids( $local ),
+				true
+			),
 			$this->unregistered_taxonomy_notes( $records )
 		);
+		$related_notes  = $this->build_term_notes(
+			$plans,
+			$this->local_term_ids( $related_current ),
+			false
+		);
 
-		return $html . $this->build_term_notes_html( $notes );
+		$html = $assigned_html . $this->build_term_notes_html( $assigned_notes );
+
+		if ( '' !== $related_html ) {
+			$html .= $this->build_related_terms_html(
+				$related_html . $this->build_term_notes_html( $related_notes )
+			);
+		}
+
+		return $html;
 	}
 
 	/**
@@ -1035,6 +1070,80 @@ final class Diff_Renderer {
 			}
 
 			$by_tax[ (string) $taxonomy ] = $fields;
+		}
+
+		return $by_tax;
+	}
+
+	/**
+	 * Collects the destination terms the unassigned records pair with. A
+	 * taxonomy carrying such records is listed even when none of them pairs,
+	 * so the current side never comes out blank.
+	 *
+	 * @param array $plans Per-taxonomy term plans from Meta_Terms_Manager.
+	 *
+	 * @return array<string, WP_Term[]>
+	 */
+	private function current_related_terms( array $plans ): array {
+		$by_tax = array();
+
+		foreach ( $plans as $taxonomy => $entries ) {
+			$terms   = array();
+			$related = false;
+
+			foreach ( $entries as $entry ) {
+				if ( true === $entry['record']['assigned'] ) {
+					continue;
+				}
+
+				$related = true;
+
+				if ( $entry['term'] instanceof WP_Term ) {
+					$terms[ (int) $entry['term']->term_id ] = $entry['term'];
+				}
+			}
+
+			if ( true === $related ) {
+				$by_tax[ (string) $taxonomy ] = array_values( $terms );
+			}
+		}
+
+		return $by_tax;
+	}
+
+	/**
+	 * Collects the source fields of unassigned terms used to carry hierarchy.
+	 *
+	 * @param array $plans Per-taxonomy term plans from Meta_Terms_Manager.
+	 *
+	 * @return array<string, list<array{name:string, slug:string, parent:string, description:string}>>
+	 */
+	private function incoming_related_term_fields( array $plans ): array {
+		$by_tax = array();
+
+		foreach ( $plans as $taxonomy => $entries ) {
+			$records = wp_list_pluck( $entries, 'record' );
+			$paired  = $this->paired_terms( $entries );
+			$index   = $this->source_term_index( $records, $paired );
+			$fields  = array();
+
+			foreach ( $entries as $entry ) {
+				$record = $entry['record'];
+
+				if ( true === $record['assigned'] ) {
+					continue;
+				}
+
+				$fields[] = $this->record_display_fields(
+					$record,
+					$index,
+					$entry['term'] instanceof WP_Term ? $entry['term'] : null
+				);
+			}
+
+			if ( array() !== $fields ) {
+				$by_tax[ (string) $taxonomy ] = $fields;
+			}
 		}
 
 		return $by_tax;
@@ -1207,12 +1316,17 @@ final class Diff_Renderer {
 	 * Lists a note for every shown field difference the import would leave
 	 * unwritten, keyed by the destination term the note describes.
 	 *
-	 * @param array $plans     Per-taxonomy term plans from Meta_Terms_Manager.
-	 * @param int[] $local_ids IDs of the terms the post carries.
+	 * @param array $plans       Per-taxonomy term plans from Meta_Terms_Manager.
+	 * @param int[] $current_ids IDs of the terms shown on the current side.
+	 * @param bool  $assigned    Whether to build notes for assigned records.
 	 *
 	 * @return string[] Note lines.
 	 */
-	private function build_term_notes( array $plans, array $local_ids ): array {
+	private function build_term_notes(
+		array $plans,
+		array $current_ids,
+		bool $assigned
+	): array {
 		$notes = array();
 
 		foreach ( $plans as $taxonomy => $entries ) {
@@ -1228,9 +1342,7 @@ final class Diff_Renderer {
 
 				$record = $entry['record'];
 
-				// An unassigned ancestor has no line of its own; a rename of it
-				// is annotated through the child whose parent line shows it.
-				if ( false === $record['assigned'] ) {
+				if ( $assigned !== $record['assigned'] ) {
 					continue;
 				}
 
@@ -1242,9 +1354,13 @@ final class Diff_Renderer {
 				);
 				$key      = $this->term_key( $current['slug'], (string) $taxonomy );
 
-				// The current side only renders terms the post carries, so a
-				// term it is about to gain shows no destination values.
-				$on_post = in_array( (int) $entry['term']->term_id, $local_ids, true );
+				// A term missing from this comparison's current side shows no
+				// destination values.
+				$shown_current = in_array(
+					(int) $entry['term']->term_id,
+					$current_ids,
+					true
+				);
 
 				$source_parent = absint( $record['parent'] ?? 0 );
 				$parent_stands = isset( $paired[ $source_parent ] )
@@ -1263,7 +1379,7 @@ final class Diff_Renderer {
 					// shows on one side or the other.
 					if (
 						'' === $incoming[ $field ]
-						&& ( ! $on_post || '' === $current[ $field ] )
+						&& ( ! $shown_current || '' === $current[ $field ] )
 					) {
 						continue;
 					}
@@ -1277,14 +1393,20 @@ final class Diff_Renderer {
 						&& '' === $blocked
 						&& $parent_stands
 					) {
-						$parent_note = $this->renamed_parent_note(
-							$source_parent,
-							$by_source,
-							(string) $taxonomy
-						);
+						if (
+							isset( $by_source[ $source_parent ] )
+							&& $assigned ===
+								$by_source[ $source_parent ]['record']['assigned']
+						) {
+							$parent_note = $this->renamed_parent_note(
+								$source_parent,
+								$by_source,
+								(string) $taxonomy
+							);
 
-						if ( '' !== $parent_note ) {
-							$notes[] = $parent_note;
+							if ( '' !== $parent_note ) {
+								$notes[] = $parent_note;
+							}
 						}
 
 						continue;
@@ -1467,6 +1589,29 @@ final class Diff_Renderer {
 		}
 
 		return '<ul class="safe-publish-term-notes">' . $items . '</ul>';
+	}
+
+	/**
+	 * Wraps the comparison for terms used only to preserve hierarchy.
+	 *
+	 * @param string $diff_html Related term diff table.
+	 *
+	 * @return string Related terms HTML.
+	 */
+	private function build_related_terms_html( string $diff_html ): string {
+		$heading = __( 'Related hierarchy terms', 'safe-publish' );
+		$help    = __(
+			'The source sends these terms to carry the hierarchy, not to assign them to the post.',
+			'safe-publish'
+		);
+
+		return '<div class="safe-publish-related-terms">'
+			. '<h4 class="safe-publish-related-terms__heading">'
+			. esc_html( $heading ) . '</h4>'
+			. '<p class="safe-publish-related-terms__help">'
+			. esc_html( $help ) . '</p>'
+			. $diff_html
+			. '</div>';
 	}
 
 	/**
