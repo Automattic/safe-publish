@@ -262,6 +262,19 @@ export type ApiResponse< T = unknown > =
 	| { success: false; data?: JsonValue; error?: string };
 
 /**
+ * Source-provided error detail and its localized display template.
+ */
+export interface SourceError {
+	message: string;
+	template: string;
+}
+
+/**
+ * Display-ready error text or structured source detail.
+ */
+export type DisplayError = string | SourceError;
+
+/**
  * Surfaced when the opt-in author fallback was applied during import.
  *
  * `fallback_user_id` is non-null for inserts (the importing user) and null
@@ -400,6 +413,7 @@ export interface BulkImportResult {
 	post_id?: number;
 	edit_url?: string;
 	error?: string;
+	source_error?: SourceError;
 	existing?: boolean;
 	warnings?: Warning[];
 }

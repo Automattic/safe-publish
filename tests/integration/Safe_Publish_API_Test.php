@@ -829,6 +829,14 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 				$upstream_message,
 				(string) $data['message']
 			);
+			$this->assertSame(
+				array(
+					'message'  => $upstream_message,
+					'template' =>
+						'Failed to fetch data from source site. <reason />',
+				),
+				$data['data']['source_error']
+			);
 		} finally {
 			remove_filter( 'pre_http_request', $failing_request );
 		}
@@ -891,8 +899,126 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 				$secret_host,
 				(string) $data['message']
 			);
+			$this->assertArrayNotHasKey( 'source_error', $data['data'] );
 		} finally {
 			remove_filter( 'pre_http_request', $failing_request );
+		}
+	}
+
+	/**
+	 * Verifies that a non-admin receives a source HTTP reason because it comes
+	 * from the post endpoint itself rather than exposing connection details.
+	 */
+	public function test_diff_preview_endpoint_surfaces_http_reason_to_non_admin(): void {
+		// ARRANGE: The imported post's author and an HTTP error from its source.
+		$author_id = $this->factory()->user->create(
+			array( 'role' => 'author' )
+		);
+		wp_update_post(
+			array(
+				'ID'          => $this->post_id,
+				'post_author' => $author_id,
+			)
+		);
+		wp_set_current_user( $author_id );
+
+		$this->assertTrue(
+			current_user_can( 'edit_post', $this->post_id ),
+			'Fixture must reach the route, or it proves nothing.'
+		);
+		$this->assertFalse(
+			current_user_can( 'manage_options' ),
+			'Fixture must not be an administrator, or it proves nothing.'
+		);
+
+		$upstream_message = 'The source post is private.';
+		$failing_request  = static fn() => array(
+			'response' => array(
+				'code'    => 401,
+				'message' => 'Unauthorized',
+			),
+			'body'     => (string) wp_json_encode(
+				array( 'message' => $upstream_message )
+			),
+			'headers'  => array(),
+		);
+		add_filter( 'pre_http_request', $failing_request );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+
+		try {
+			// ACT: Dispatch through the REST server.
+			$response = $this->server->dispatch( $request );
+
+			// ASSERT: The HTTP reason and localized template reach the author.
+			$this->assertInstanceOf( WP_REST_Response::class, $response );
+			$this->assertSame( 500, $response->get_status() );
+
+			$data = $response->get_data();
+			$this->assertSame( 'source_fetch_failed', $data['code'] );
+			$this->assertSame(
+				array(
+					'message'  => $upstream_message,
+					'template' =>
+						'Source site returned HTTP error 401. <reason />',
+				),
+				$data['data']['source_error']
+			);
+		} finally {
+			remove_filter( 'pre_http_request', $failing_request );
+		}
+	}
+
+	/**
+	 * Verifies that a template carrying markup beyond the reason marker is
+	 * withheld, since the client would drop the reason rather than isolate it.
+	 */
+	public function test_diff_preview_endpoint_withholds_template_with_extra_markup(): void {
+		// ARRANGE: A translation that wraps the response code in markup, and a
+		// source that answers with an HTTP error.
+		wp_set_current_user( $this->admin_user_id );
+
+		$upstream_message = 'The source post is private.';
+		$translate        = static function ( $translation, string $text ) {
+			return 'Source site returned HTTP error %1$d. %2$s' === $text
+				? 'Fehler <b>%1$d</b>: %2$s'
+				: $translation;
+		};
+		add_filter( 'gettext', $translate, 10, 2 );
+
+		$failing_request = static fn() => array(
+			'response' => array(
+				'code'    => 401,
+				'message' => 'Unauthorized',
+			),
+			'body'     => (string) wp_json_encode(
+				array( 'message' => $upstream_message )
+			),
+			'headers'  => array(),
+		);
+		add_filter( 'pre_http_request', $failing_request );
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+
+		try {
+			// ACT: Dispatch through the REST server.
+			$response = $this->server->dispatch( $request );
+
+			// ASSERT: The reason survives in the flat message, and the
+			// unusable structured copy is dropped.
+			$data = $response->get_data();
+			$this->assertStringContainsString(
+				$upstream_message,
+				(string) $data['message']
+			);
+			$this->assertArrayNotHasKey( 'source_error', $data['data'] );
+		} finally {
+			remove_filter( 'pre_http_request', $failing_request );
+			remove_filter( 'gettext', $translate, 10 );
 		}
 	}
 

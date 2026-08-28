@@ -174,10 +174,12 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ASSERT: Both parents show, and the move is not annotated.
+		// ASSERT: Both parents show, the new related term is identified as not
+		// assigned to the post, and the move is not annotated.
 		$this->assertStringContainsString( 'news (category) parent', $html );
 		$this->assertStringContainsString( 'Politics', $html );
 		$this->assertStringContainsString( 'World', $html );
+		$this->assertStringContainsString( 'Related hierarchy terms', $html );
 		$this->assertSame( array(), $this->notes( $html ) );
 	}
 
@@ -376,10 +378,10 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that ancestors the source sends unassigned stay out of the
-	 * comparison, since the import creates but does not attach them.
+	 * Verifies that unchanged ancestors stay out of the assigned comparison,
+	 * since the import creates but does not attach them.
 	 */
-	public function test_unassigned_ancestors_are_not_compared(): void {
+	public function test_unchanged_ancestors_stay_out_of_assigned_terms(): void {
 		// ARRANGE: An imported term under an imported parent.
 		$records = array(
 			$this->record( 100, 'Politics', 'politics', 0, '', false ),
@@ -401,6 +403,291 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		$this->assertSame( '', $unchanged );
 		$this->assertStringContainsString( 'category: News (news)', $changed );
 		$this->assertStringNotContainsString( 'News (news), Politics (politics)', $changed );
+	}
+
+	/**
+	 * Verifies that a changed ancestor description is shown even though the
+	 * ancestor is not assigned to the post.
+	 */
+	public function test_unassigned_ancestor_description_is_compared(): void {
+		// ARRANGE: An imported child below an unassigned ancestor.
+		$records = array(
+			$this->record( 100, 'Politics', 'politics', 0, 'Old desk', false ),
+			$this->record( 101, 'News', 'news', 100, '' ),
+		);
+		$this->import_terms( $records );
+
+		// ACT: The source changes only the ancestor's description.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 100, 'Politics', 'politics', 0, 'New desk', false ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+
+		// ASSERT: The related-only change keeps the taxonomy section visible and
+		// does not read as a term assigned to the post.
+		$changed = implode( "\n", $this->changed_lines( $html ) );
+		$this->assertNotSame( '', $html );
+		$this->assertStringContainsString( 'Related hierarchy terms', $html );
+		$this->assertStringContainsString(
+			'politics (category) description: Old desk',
+			$changed
+		);
+		$this->assertStringContainsString(
+			'politics (category) description: New desk',
+			$changed
+		);
+		$this->assertStringNotContainsString(
+			'News (news), Politics (politics)',
+			$html
+		);
+		$this->assertSame( array(), $this->notes( $html ) );
+	}
+
+	/**
+	 * Verifies that an unassigned ancestor's own parent change is shown.
+	 */
+	public function test_unassigned_ancestor_parent_is_compared(): void {
+		// ARRANGE: An imported child below two levels of unassigned ancestors.
+		$this->import_terms(
+			array(
+				$this->record( 90, 'World', 'world', 0, '', false ),
+				$this->record( 100, 'Politics', 'politics', 90, '', false ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+
+		// ACT: The source moves the immediate ancestor below a new ancestor.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 80, 'Public affairs', 'affairs', 0, '', false ),
+				$this->record( 100, 'Politics', 'politics', 80, '', false ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+
+		// ASSERT: The ancestor's current and incoming parents show in the related
+		// block, with no note because the import applies the move.
+		$this->assertStringContainsString( 'Related hierarchy terms', $html );
+		$this->assertStringContainsString( 'politics (category) parent', $html );
+		$this->assertStringContainsString( 'World', $html );
+		$this->assertStringContainsString( 'Public affairs', $html );
+		$this->assertSame( array(), $this->notes( $html ) );
+	}
+
+	/**
+	 * Verifies that a blocked unassigned ancestor change keeps its own visible
+	 * note anchor.
+	 */
+	public function test_blocked_unassigned_ancestor_rename_is_annotated(): void {
+		// ARRANGE: An imported child below an unassigned ancestor, with another
+		// term already holding the ancestor's incoming name.
+		$this->import_terms(
+			array(
+				$this->record( 100, 'Politics', 'politics', 0, '', false ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+		self::factory()->term->create(
+			array(
+				'taxonomy' => 'category',
+				'name'     => 'Updates',
+				'slug'     => 'updates',
+			)
+		);
+
+		// ACT: The source renames the unassigned ancestor onto the taken name.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 100, 'Updates', 'politics', 0, '', false ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+
+		// ASSERT: The related block anchors the ancestor's one deduplicated note.
+		$this->assertStringContainsString( 'Related hierarchy terms', $html );
+		$this->assertStringContainsString(
+			'Updates (politics)',
+			implode( "\n", $this->changed_lines( $html ) )
+		);
+		$this->assertSame(
+			array( 'politics (category): may not apply — name taken' ),
+			$this->notes( $html )
+		);
+	}
+
+	/**
+	 * Verifies that assigned and related notes stay with their own tables.
+	 */
+	public function test_assigned_and_related_notes_keep_their_anchors(): void {
+		// ARRANGE: A child and its unassigned ancestor imported from another
+		// source, so the connected source cannot reconcile either term.
+		$this->import_terms(
+			array(
+				$this->record( 100, 'Politics', 'politics', 0, 'Old desk', false ),
+				$this->record( 101, 'News', 'news', 100, 'Old news' ),
+			),
+			self::OTHER_SOURCE
+		);
+
+		// ACT: The connected source changes both descriptions.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 100, 'Politics', 'politics', 0, 'New desk', false ),
+				$this->record( 101, 'News', 'news', 100, 'New news' ),
+			)
+		);
+
+		// ASSERT: The assigned note precedes the related block, whose own note
+		// remains inside that block.
+		$related       = strpos( $html, '<div class="safe-publish-related-terms">' );
+		$assigned_note = strpos(
+			$html,
+			'news (category): description not updated on import'
+		);
+		$related_note  = strpos(
+			$html,
+			'politics (category): description not updated on import'
+		);
+
+		$this->assertIsInt( $related );
+		$this->assertIsInt( $assigned_note );
+		$this->assertIsInt( $related_note );
+		$this->assertLessThan( $related, $assigned_note );
+		$this->assertGreaterThan( $related, $related_note );
+		$this->assertSame(
+			array(
+				'news (category): description not updated on import',
+				'politics (category): description not updated on import',
+			),
+			$this->notes( $html )
+		);
+	}
+
+	/**
+	 * Verifies that identical assigned and related notes stay with both tables.
+	 */
+	public function test_identical_notes_stay_with_both_tables(): void {
+		// ARRANGE: An assigned and an unassigned record that both resolve to one
+		// hand-authored destination term, by slug and then by name.
+		$term_id = self::factory()->term->create(
+			array(
+				'taxonomy'    => 'category',
+				'name'        => 'News',
+				'slug'        => 'news',
+				'description' => 'Local desk',
+			)
+		);
+		$this->assertIsInt( $term_id );
+		wp_set_post_terms( $this->post_id, array( $term_id ), 'category' );
+
+		// ACT: Both source records carry the same unwritten description.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 101, 'News', 'news', 0, 'Source desk' ),
+				$this->record( 102, 'News', '', 0, 'Source desk', false ),
+			)
+		);
+
+		// ASSERT: Each table keeps the note for the row it renders.
+		$related = strpos( $html, '<div class="safe-publish-related-terms">' );
+		$note    = 'news (category): description not updated on import';
+
+		$this->assertIsInt( $related );
+		$this->assertSame( array( $note, $note ), $this->notes( $html ) );
+		$this->assertStringContainsString(
+			'<li>' . $note . '</li>',
+			substr( $html, 0, $related )
+		);
+		$this->assertStringContainsString(
+			'<li>' . $note . '</li>',
+			substr( $html, $related )
+		);
+	}
+
+	/**
+	 * Verifies that one destination term appears once on the related current
+	 * side.
+	 */
+	public function test_related_current_terms_are_deduplicated(): void {
+		// ARRANGE: A hand-authored term that two unassigned records resolve to, by
+		// slug and then by name.
+		$term_id = self::factory()->term->create(
+			array(
+				'taxonomy'    => 'category',
+				'name'        => 'News',
+				'slug'        => 'news',
+				'description' => 'Local desk',
+			)
+		);
+		$this->assertIsInt( $term_id );
+
+		// ACT: Both source records change the destination description.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 101, 'News', 'news', 0, 'Source desk', false ),
+				$this->record( 102, 'News', '', 0, 'Source desk', false ),
+			)
+		);
+
+		// ASSERT: The destination description is rendered only once.
+		$this->assertSame(
+			1,
+			substr_count(
+				implode( "\n", $this->changed_lines( $html ) ),
+				'news (category) description: Local desk'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that an ancestor the import would create is not paired with an
+	 * empty removal, which the related side alone can produce.
+	 */
+	public function test_created_ancestor_is_not_shown_as_a_removal(): void {
+		// ARRANGE: An imported term under an imported parent.
+		$this->import_terms(
+			array(
+				$this->record( 100, 'Politics', 'politics', 0, '' ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+
+		// ACT: The source moves it under an ancestor this site does not have,
+		// so no unassigned record pairs with a destination term.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 102, 'World', 'world', 0, '', false ),
+				$this->record( 101, 'News', 'news', 102, '' ),
+			)
+		);
+
+		// ASSERT: The related block shows the ancestor as an addition alone.
+		$this->assertStringContainsString( 'Related hierarchy terms', $html );
+		$this->assertSame( 0, $this->empty_removals( $html ) );
+	}
+
+	/**
+	 * Verifies that terms the post gains in every payload taxonomy are not
+	 * paired with an empty removal.
+	 */
+	public function test_gained_terms_are_not_shown_as_a_removal(): void {
+		// ARRANGE: A post carrying no terms in the taxonomy the source sends.
+		$this->assertFalse( get_the_terms( $this->post_id, 'post_tag' ) );
+
+		// ACT: The source sends a tag the destination does not have.
+		$html = $this->render_term_map(
+			array(
+				'post_tag' => array(
+					$this->record( 200, 'Alpha', 'alpha', 0, 'Tag desk' ),
+				),
+			)
+		);
+
+		// ASSERT: The comparison shows the tag as an addition alone.
+		$this->assertStringContainsString( 'Alpha (alpha)', $html );
+		$this->assertSame( 0, $this->empty_removals( $html ) );
 	}
 
 	/**
@@ -526,9 +813,10 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		) as $name => $slug ) {
 			$parents[ $slug ] = self::factory()->term->create(
 				array(
-					'taxonomy' => 'category',
-					'name'     => $name,
-					'slug'     => $slug,
+					'taxonomy'    => 'category',
+					'name'        => $name,
+					'slug'        => $slug,
+					'description' => '',
 				)
 			);
 		}
@@ -835,9 +1123,10 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		// ARRANGE: A hand-authored parent with a term under it, on the post.
 		self::factory()->term->create(
 			array(
-				'taxonomy' => 'category',
-				'name'     => 'Politics',
-				'slug'     => 'politics',
+				'taxonomy'    => 'category',
+				'name'        => 'Politics',
+				'slug'        => 'politics',
+				'description' => '',
 			)
 		);
 		self::factory()->term->create(
@@ -877,9 +1166,9 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that a blocked rename of a parent the source moves the term under
-	 * is shown unannotated, since the move the line reports does apply.
+	 * is annotated on the parent's related-term comparison.
 	 */
-	public function test_blocked_rename_of_a_gained_parent_is_not_annotated(): void {
+	public function test_blocked_rename_of_a_gained_parent_is_annotated(): void {
 		// ARRANGE: An imported top-level term and an imported ancestor, plus
 		// another term already holding the name the source renames it to.
 		$this->import_terms(
@@ -905,13 +1194,64 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ASSERT: The gained parent shows under its unwritten name, with no note,
-		// as the parent field of the term below it is written.
+		// ASSERT: The gained parent shows on the child and in the related block;
+		// its blocked rename is now anchored to its own comparison.
 		$this->assertStringContainsString(
 			'news (category) parent: National Politics (politics)',
 			implode( "\n", $this->changed_lines( $html ) )
 		);
-		$this->assertSame( array(), $this->notes( $html ) );
+		$this->assertStringContainsString( 'Related hierarchy terms', $html );
+		$this->assertSame(
+			array( 'politics (category): may not apply — name taken' ),
+			$this->notes( $html )
+		);
+	}
+
+	/**
+	 * Verifies that an assigned grandparent's note stays with the main table.
+	 */
+	public function test_assigned_grandparent_rename_note_stays_assigned(): void {
+		// ARRANGE: The post carries a grandparent and grandchild, while the term
+		// between them is present only to preserve hierarchy.
+		$this->import_terms(
+			array(
+				$this->record( 90, 'World', 'world', 0, '' ),
+				$this->record( 100, 'Politics', 'politics', 90, '', false ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+		self::factory()->term->create(
+			array(
+				'taxonomy' => 'category',
+				'name'     => 'Global',
+				'slug'     => 'global',
+			)
+		);
+
+		// ACT: The source renames the assigned grandparent onto the taken name.
+		$html = $this->render_taxonomies(
+			array(
+				$this->record( 90, 'Global', 'world', 0, '' ),
+				$this->record( 100, 'Politics', 'politics', 90, '', false ),
+				$this->record( 101, 'News', 'news', 100, '' ),
+			)
+		);
+
+		// ASSERT: Its one note is below the main table, not inside the related
+		// block whose middle term merely names it as a parent.
+		$related = strpos( $html, '<div class="safe-publish-related-terms">' );
+		$note    = 'world (category): may not apply — name taken';
+
+		$this->assertIsInt( $related );
+		$this->assertSame( array( $note ), $this->notes( $html ) );
+		$this->assertStringContainsString(
+			'<li>' . $note . '</li>',
+			substr( $html, 0, $related )
+		);
+		$this->assertStringNotContainsString(
+			'<li>' . $note . '</li>',
+			substr( $html, $related )
+		);
 	}
 
 	/**
@@ -1001,9 +1341,10 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		) as $name => $slug ) {
 			self::factory()->term->create(
 				array(
-					'taxonomy' => 'category',
-					'name'     => $name,
-					'slug'     => $slug,
+					'taxonomy'    => 'category',
+					'name'        => $name,
+					'slug'        => $slug,
+					'description' => '',
 				)
 			);
 		}
@@ -1250,6 +1591,19 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 				ENT_QUOTES
 			),
 			$cells[1]
+		);
+	}
+
+	/**
+	 * Counts the cells marked removed that carry no text of their own.
+	 *
+	 * @param string $html Taxonomies diff HTML.
+	 * @return int Empty removal cells.
+	 */
+	private function empty_removals( string $html ): int {
+		return substr_count(
+			$html,
+			"<span class='screen-reader-text'>Deleted: </span></td>"
 		);
 	}
 

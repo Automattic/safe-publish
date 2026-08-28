@@ -20,16 +20,17 @@ const dataViews = vi.hoisted( () => ( {
 		data: UnifiedPostRow[];
 		fields: DataViewsField< UnifiedPostRow >[];
 		config?: { perPageSizes: number[] };
+		header?: JSX.Element;
 	} | null,
 } ) );
 
 // DataViews pulls in @wordpress/private-apis, which cannot unlock in the test
 // env; it also only renders once rows exist. Stub it so mounting the container
-// doesn't fault.
+// doesn't fault, rendering only the header it is handed.
 vi.mock( '@wordpress/dataviews', () => ( {
 	DataViews: ( props: NonNullable< typeof dataViews.props > ) => {
 		dataViews.props = props;
-		return null;
+		return props.header ?? null;
 	},
 	View: {},
 } ) );
@@ -207,6 +208,24 @@ describe( 'PostsDataView fields', () => {
 		expect(
 			screen.getByText( /Source links match on All and Not imported/ )
 		).toBeInTheDocument();
+	} );
+
+	it( 'Verifies that a loading refresh uses accessible disabled semantics', async () => {
+		// ARRANGE: A loaded listing whose next request stays in flight.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		const refresh = await screen.findByRole( 'button', {
+			name: 'Refresh',
+		} );
+		fetchMock.mockReturnValue( new Promise( () => {} ) );
+
+		// ACT: Start a refresh.
+		fireEvent.click( refresh );
+
+		// ASSERT: The action uses aria-disabled instead of native disabled.
+		await waitFor( () =>
+			expect( refresh ).toHaveAttribute( 'aria-disabled', 'true' )
+		);
+		expect( refresh ).not.toHaveAttribute( 'disabled' );
 	} );
 
 	it( 'Verifies that the largest page size matches the bulk request cap', async () => {

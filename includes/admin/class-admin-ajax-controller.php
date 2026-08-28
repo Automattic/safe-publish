@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\API\Catalog_REST_Controller;
+use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\Auth\Auth_Logger;
@@ -1767,7 +1768,18 @@ final class Admin_Ajax_Controller {
 		$this->repository->complete_session( $session_id );
 
 		if ( ! $result['success'] ) {
-			wp_send_json_error( $result['error'] );
+			$response_error = $result['error'];
+			if (
+				isset( $result[ HTTP_Client::ERROR_DATA_SOURCE_ERROR ] )
+				&& is_array( $result[ HTTP_Client::ERROR_DATA_SOURCE_ERROR ] )
+			) {
+				$response_error = array(
+					'message'                            => $result['error'],
+					HTTP_Client::ERROR_DATA_SOURCE_ERROR =>
+						$result[ HTTP_Client::ERROR_DATA_SOURCE_ERROR ],
+				);
+			}
+			wp_send_json_error( $response_error );
 		}
 
 		$this->telemetry->record_event(

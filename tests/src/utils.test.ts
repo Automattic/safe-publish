@@ -9,7 +9,9 @@ import {
 	formatDateTime,
 	extractUrlPath,
 	getErrorMessage,
+	getSourceError,
 	isLiveStatus,
+	isRecord,
 	renderIssueMessage,
 	renderWarningMessage,
 	renderWarningShortLabel,
@@ -88,6 +90,87 @@ describe( 'getErrorMessage', () => {
 
 		// ASSERT: Serialization failure returns the supplied safe fallback.
 		expect( message ).toBe( fallback );
+	} );
+} );
+
+describe( 'getSourceError', () => {
+	const TEMPLATE = 'Source site returned HTTP error 401. <reason />';
+
+	it( 'should return the detail when the payload is well formed', () => {
+		// ARRANGE: The error data an endpoint sends alongside a flat message.
+		const data = {
+			source_error: { message: 'Refused.', template: TEMPLATE },
+		};
+
+		// ACT: Extract the structured detail.
+		const sourceError = getSourceError( data );
+
+		// ASSERT: Both halves survive for isolated rendering.
+		expect( sourceError ).toEqual( {
+			message: 'Refused.',
+			template: TEMPLATE,
+		} );
+	} );
+
+	it( 'should reject a template that carries a tag beyond the marker', () => {
+		// ARRANGE: A translation introduced markup around the reason.
+		const data = {
+			source_error: {
+				message: 'Refused.',
+				template: 'Fehler <b>401</b>: <reason />',
+			},
+		};
+
+		// ACT: Extract the structured detail.
+		const sourceError = getSourceError( data );
+
+		// ASSERT: Rejected, since interpolation would drop the reason.
+		expect( sourceError ).toBeUndefined();
+	} );
+
+	it( 'should reject a template missing the reason marker', () => {
+		// ARRANGE: The reason has nowhere to go.
+		const data = {
+			source_error: {
+				message: 'Refused.',
+				template: 'Source site returned HTTP error 401.',
+			},
+		};
+
+		// ACT: Extract the structured detail.
+		const sourceError = getSourceError( data );
+
+		// ASSERT: Rejected, leaving the caller its flat message.
+		expect( sourceError ).toBeUndefined();
+	} );
+
+	it( 'should reject a non-string reason', () => {
+		// ARRANGE: The source detail arrives with the wrong shape.
+		const data = {
+			source_error: { message: { text: 'Refused.' }, template: TEMPLATE },
+		};
+
+		// ACT: Extract the structured detail.
+		const sourceError = getSourceError( data );
+
+		// ASSERT: Rejected before it can reach the renderer.
+		expect( sourceError ).toBeUndefined();
+	} );
+
+	it( 'should return undefined when no source detail is present', () => {
+		// ACT + ASSERT: A plain error body and a non-record both yield nothing.
+		expect( getSourceError( { status: 500 } ) ).toBeUndefined();
+		expect( getSourceError( 'Source site unreachable' ) ).toBeUndefined();
+	} );
+} );
+
+describe( 'isRecord', () => {
+	it( 'should accept an object and reject null and primitives', () => {
+		// ACT + ASSERT: Only values safe to inspect by property name pass.
+		expect( isRecord( { a: 1 } ) ).toBe( true );
+		expect( isRecord( null ) ).toBe( false );
+		expect( isRecord( 'source_error' ) ).toBe( false );
+		expect( isRecord( undefined ) ).toBe( false );
 	} );
 } );
 

@@ -6,6 +6,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { Modal } from '@wordpress/components';
 import { StrictMode } from '@wordpress/element';
 
 import ImportModal from '@/components/ImportModal';
@@ -34,6 +35,28 @@ function stubFetch( body: Record< string, unknown > ): void {
 		vi.fn().mockResolvedValue(
 			new Response( JSON.stringify( body ), { status: 200 } )
 		)
+	);
+}
+
+/**
+ * Renders the import body in the WordPress modal used by DataViews.
+ *
+ * @param {typeof LIVE_PROPS} props      Import modal properties.
+ * @param {Function}          closeModal Modal close callback.
+ */
+function renderInModal(
+	props: typeof LIVE_PROPS,
+	closeModal: () => void
+): void {
+	render(
+		<Modal
+			__experimentalHideHeader
+			contentLabel="Import"
+			focusOnMount="firstContentElement"
+			onRequestClose={ closeModal }
+		>
+			<ImportModal { ...props } closeModal={ closeModal } />
+		</Modal>
 	);
 }
 
@@ -148,6 +171,103 @@ describe( 'ImportModal', () => {
 		);
 	} );
 
+	it( 'Verifies that loading overwrite actions use accessible disabled semantics', async () => {
+		// ARRANGE: Hold the request open at the in-flight stage.
+		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
+		render( <ImportModal { ...LIVE_PROPS } /> );
+		const overwrite = screen.getByRole( 'button', {
+			name: 'Overwrite live post',
+		} );
+
+		// ACT: Start the overwrite.
+		fireEvent.click( overwrite );
+		const importing = await screen.findByRole( 'button', {
+			name: 'Updating…',
+		} );
+
+		// ASSERT: Loading actions use aria-disabled instead of native disabled.
+		expect( importing ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( importing ).not.toHaveAttribute( 'disabled' );
+		const cancel = screen.getByRole( 'button', { name: 'Cancel' } );
+		expect( cancel ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( cancel ).not.toHaveAttribute( 'disabled' );
+	} );
+
+	it( 'Verifies that a running overwrite leaves focus on the action that started it', async () => {
+		// ARRANGE: Hold the request open at the in-flight stage.
+		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
+		render( <ImportModal { ...LIVE_PROPS } /> );
+		const overwrite = screen.getByRole( 'button', {
+			name: 'Overwrite live post',
+		} );
+		overwrite.focus();
+
+		// ACT: Start the overwrite from the focused action.
+		fireEvent.click( overwrite );
+		await screen.findByRole( 'button', { name: 'Updating…' } );
+
+		// ASSERT: The live confirmation keeps both buttons, so nothing pulls
+		// focus over to Cancel.
+		expect( overwrite ).toHaveFocus();
+	} );
+
+	it( 'Verifies that a completed overwrite focuses Close and keeps Escape working', async () => {
+		// ARRANGE: Render a live overwrite that will complete successfully.
+		const closeModal = vi.fn();
+		renderInModal( LIVE_PROPS, closeModal );
+		const overwrite = screen.getByRole( 'button', {
+			name: 'Overwrite live post',
+		} );
+		await waitFor( () =>
+			expect( screen.getByRole( 'button', { name: 'Cancel' } ) ).toHaveFocus()
+		);
+		overwrite.focus();
+
+		// ACT: Complete the overwrite, which replaces the focused primary button.
+		fireEvent.click( overwrite );
+		const close = await screen.findByRole( 'button', { name: 'Close' } );
+
+		// ASSERT: Focus moves to the dismiss action, not the announced result.
+		await waitFor( () => expect( close ).toHaveFocus() );
+		expect( screen.getByRole( 'status' ) ).not.toHaveFocus();
+		fireEvent.keyDown( close, { key: 'Escape', code: 'Escape' } );
+		await waitFor( () => expect( closeModal ).toHaveBeenCalledTimes( 1 ) );
+	} );
+
+	it( 'Verifies that retrying a draft focuses Close and keeps Escape working', async () => {
+		// ARRANGE: Fail the automatic attempt, then hold its retry in flight.
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValueOnce(
+					new Response(
+						JSON.stringify( {
+							success: false,
+							data: 'Source site unreachable',
+						} ),
+						{ status: 200 }
+					)
+				)
+				.mockReturnValueOnce( new Promise( () => {} ) )
+		);
+		const closeModal = vi.fn();
+		renderInModal( BASE_PROPS, closeModal );
+		const retry = await screen.findByRole( 'button', { name: 'Retry' } );
+		retry.focus();
+
+		// ACT: Retry from the focused primary action.
+		fireEvent.click( retry );
+		const close = await screen.findByRole( 'button', { name: 'Close' } );
+
+		// ASSERT: The replacement loading view receives focus and keeps the
+		// modal's Escape handler on the event path.
+		await waitFor( () => expect( close ).toHaveFocus() );
+		expect( await screen.findByText( 'Importing…' ) ).toBeInTheDocument();
+		fireEvent.keyDown( close, { key: 'Escape', code: 'Escape' } );
+		await waitFor( () => expect( closeModal ).toHaveBeenCalledTimes( 1 ) );
+	} );
+
 	it( 'Verifies that a failed draft import surfaces the reason and offers a retry', async () => {
 		// ARRANGE: The endpoint refuses the import.
 		stubFetch( { success: false, data: 'Source site unreachable' } );
@@ -163,6 +283,42 @@ describe( 'ImportModal', () => {
 		expect(
 			screen.getByRole( 'button', { name: 'Retry' } )
 		).toBeInTheDocument();
+	} );
+
+	it.each( [
+		[ 'draft import', BASE_PROPS, false ],
+		[ 'live overwrite', LIVE_PROPS, true ],
+	] )( 'Verifies that a source reason is isolated during %s', async (
+		_label,
+		props,
+		requiresConfirmation
+	) => {
+		// ARRANGE: The source reason contains directional controls.
+		const reason = '\u202eSource refused the request.\u202c';
+		stubFetch( {
+			success: false,
+			data: {
+				message: `Source site returned HTTP error 401. ${ reason }`,
+				source_error: {
+					message: reason,
+					template:
+						'Source site returned HTTP error 401. <reason />',
+				},
+			},
+		} );
+
+		// ACT: Start the import if this path requires confirmation.
+		render( <ImportModal { ...props } /> );
+		if ( requiresConfirmation ) {
+			fireEvent.click(
+				screen.getByRole( 'button', { name: 'Overwrite live post' } )
+			);
+		}
+		const isolatedReason = await screen.findByText( reason );
+
+		// ASSERT: The source text cannot reorder the surrounding modal copy.
+		expect( isolatedReason.tagName ).toBe( 'BDI' );
+		expect( isolatedReason ).toHaveAttribute( 'dir', 'auto' );
 	} );
 
 	it( 'Verifies that a failed draft import refreshes the listing on dismiss', async () => {

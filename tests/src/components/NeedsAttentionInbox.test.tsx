@@ -14,8 +14,8 @@ const dv = vi.hoisted( () => ( {
 
 // DataViews pulls in @wordpress/private-apis, which cannot unlock in the test
 // env. Stub it with a minimal renderer that exercises each field's render and
-// each row's eligible actions, and captures view/onChangeView so a test can
-// drive a view change.
+// each row's eligible actions and the header, and captures view/onChangeView
+// so a test can drive a view change.
 vi.mock( '@wordpress/dataviews', () => ( {
 	DataViews: ( {
 		data,
@@ -23,6 +23,7 @@ vi.mock( '@wordpress/dataviews', () => ( {
 		actions = [],
 		view,
 		onChangeView,
+		header,
 	}: {
 		data: NeedsAttentionRow[];
 		fields: Array< {
@@ -36,11 +37,13 @@ vi.mock( '@wordpress/dataviews', () => ( {
 		} >;
 		view: unknown;
 		onChangeView: ( next: unknown ) => void;
+		header?: JSX.Element;
 	} ): JSX.Element => {
 		dv.view = view;
 		dv.onChangeView = onChangeView;
 		return (
 			<div>
+				{ header }
 				{ data.map( ( item ) => (
 					<div key={ item.row_id }>
 						{ fields.map( ( field ) => (
@@ -339,5 +342,29 @@ describe( 'NeedsAttentionInbox', () => {
 
 		// ASSERT: The per-page change resets the offset to page 1.
 		await waitFor( () => expect( fetchedPage() ).toBe( '1' ) );
+	} );
+
+	it( 'Verifies that a loading refresh uses accessible disabled semantics', async () => {
+		// ARRANGE: A loaded inbox whose next request stays in flight.
+		mockListResponse( [ FAILURE ] );
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+			/>
+		);
+		const refresh = await screen.findByRole( 'button', {
+			name: 'Refresh',
+		} );
+		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
+
+		// ACT: Start a refresh.
+		fireEvent.click( refresh );
+
+		// ASSERT: The action uses aria-disabled instead of native disabled.
+		await waitFor( () =>
+			expect( refresh ).toHaveAttribute( 'aria-disabled', 'true' )
+		);
+		expect( refresh ).not.toHaveAttribute( 'disabled' );
 	} );
 } );

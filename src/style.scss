@@ -44,8 +44,6 @@
 }
 
 .safe-publish-import-results {
-	max-height: 200px;
-	overflow-y: auto;
 	background: var(--safe-publish-bg-muted);
 	border: 1px solid var(--safe-publish-border);
 	border-radius: 4px;
@@ -101,6 +99,28 @@
 			flex-shrink: 0;
 			padding-top: 1px;
 		}
+	}
+}
+
+// Results outgrow the modal, and focusing Close would scroll the outcome
+// summary away. ::after extends the bg into the modal padding so scrolled
+// content doesn't peek through below.
+.safe-publish-modal-actions {
+	position: sticky;
+	bottom: 0;
+	z-index: 2;
+	background: var(--safe-publish-surface-bg);
+	padding: 8px 0;
+
+	&::after {
+		content: "";
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 100%;
+		height: 32px;
+		background: var(--safe-publish-surface-bg);
+		pointer-events: none;
 	}
 }
 
@@ -804,5 +824,18 @@ html:has(body.toplevel_page_safe-publish) {
 	margin: 8px 0 0;
 	padding-left: 20px;
 	font-size: 12px;
+	color: var(--safe-publish-text-muted);
+}
+
+.safe-publish-related-terms {
+	margin-top: 16px;
+}
+
+.safe-publish-related-terms__heading,
+.safe-publish-related-terms__help {
+	margin: 0 0 8px;
+}
+
+.safe-publish-related-terms__help {
 	color: var(--safe-publish-text-muted);
 }

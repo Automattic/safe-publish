@@ -10,7 +10,13 @@
 import { dateI18n, getSettings } from '@wordpress/date';
 import { __, _n, sprintf } from '@wordpress/i18n';
 
-import type { AttentionIssue, JsonValue, LocalState, Warning } from './types';
+import type {
+	AttentionIssue,
+	JsonValue,
+	LocalState,
+	SourceError,
+	Warning,
+} from './types';
 
 /**
  * Extracts a human-readable error message from an API response.
@@ -56,6 +62,47 @@ export function getErrorMessage(
 	}
 
 	return fallback;
+}
+
+// createInterpolateElement stops at the first unrecognized tag, so the marker
+// must be the only one.
+const ISOLATED_REASON_TEMPLATE = /^[^<]*<reason \/>[^<]*$/;
+
+/**
+ * Extracts structured source detail from an API error data object.
+ *
+ * @param {unknown} data API error data.
+ *
+ * @return {SourceError | undefined} Valid source detail.
+ */
+export function getSourceError( data: unknown ): SourceError | undefined {
+	if ( ! isRecord( data ) || ! isRecord( data.source_error ) ) {
+		return undefined;
+	}
+
+	const { message, template } = data.source_error;
+	if (
+		typeof message !== 'string' ||
+		typeof template !== 'string' ||
+		! ISOLATED_REASON_TEMPLATE.test( template )
+	) {
+		return undefined;
+	}
+
+	return { message, template };
+}
+
+/**
+ * Checks whether a value can be safely inspected by property name.
+ *
+ * @param {unknown} value Value to inspect.
+ *
+ * @return {boolean} Whether the value is a record.
+ */
+export function isRecord(
+	value: unknown
+): value is Record< string, unknown > {
+	return typeof value === 'object' && value !== null;
 }
 
 /**
