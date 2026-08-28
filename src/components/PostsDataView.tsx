@@ -1144,6 +1144,7 @@ export function PostsDataView( {
 							icon={ update }
 							aria-busy={ isLoading }
 							disabled={ isLoading || refreshBlocked }
+							accessibleWhenDisabled
 							label={ __( 'Refresh', 'safe-publish' ) }
 							onClick={ refresh }
 						/>
