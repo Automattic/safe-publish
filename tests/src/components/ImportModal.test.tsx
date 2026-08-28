@@ -165,6 +165,42 @@ describe( 'ImportModal', () => {
 		).toBeInTheDocument();
 	} );
 
+	it.each( [
+		[ 'draft import', BASE_PROPS, false ],
+		[ 'live overwrite', LIVE_PROPS, true ],
+	] )( 'Verifies that a source reason is isolated during %s', async (
+		_label,
+		props,
+		requiresConfirmation
+	) => {
+		// ARRANGE: The source reason contains directional controls.
+		const reason = '\u202eSource refused the request.\u202c';
+		stubFetch( {
+			success: false,
+			data: {
+				message: `Source site returned HTTP error 401. ${ reason }`,
+				source_error: {
+					message: reason,
+					template:
+						'Source site returned HTTP error 401. <reason />',
+				},
+			},
+		} );
+
+		// ACT: Start the import if this path requires confirmation.
+		render( <ImportModal { ...props } /> );
+		if ( requiresConfirmation ) {
+			fireEvent.click(
+				screen.getByRole( 'button', { name: 'Overwrite live post' } )
+			);
+		}
+		const isolatedReason = await screen.findByText( reason );
+
+		// ASSERT: The source text cannot reorder the surrounding modal copy.
+		expect( isolatedReason.tagName ).toBe( 'BDI' );
+		expect( isolatedReason ).toHaveAttribute( 'dir', 'auto' );
+	} );
+
 	it( 'Verifies that a failed draft import refreshes the listing on dismiss', async () => {
 		// ARRANGE: The endpoint refuses an auto-submitted draft import.
 		stubFetch( { success: false, data: 'Source site unreachable' } );

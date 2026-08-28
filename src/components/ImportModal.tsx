@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from '@wordpress/element';
 import { __, _n, sprintf } from '@wordpress/i18n';
 
 import { renderWarningMessage } from '../utils';
+import IsolatedErrorMessage from './IsolatedErrorMessage';
 import { useImportPost } from './hooks/useImportPost';
 import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
 
@@ -190,7 +191,7 @@ const ImportModal = ( {
 				{ skippedNotice }
 				{ error && (
 					<Text role="alert" style={ { color: 'var(--safe-publish-status-error)' } }>
-						{ error }
+						<IsolatedErrorMessage error={ error } />
 					</Text>
 				) }
 				<HStack justify="right">
@@ -236,7 +237,7 @@ const ImportModal = ( {
 			<VStack spacing="5">
 				{ skippedNotice }
 				<Text role="alert" style={ { color: 'var(--safe-publish-status-error)' } }>
-					{ failureMessage }
+					<IsolatedErrorMessage error={ failureMessage } />
 				</Text>
 				<HStack justify="right">
 					<Button

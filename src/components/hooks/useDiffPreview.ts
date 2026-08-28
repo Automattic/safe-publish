@@ -10,6 +10,7 @@ import { __ } from '@wordpress/i18n';
 import { fetchDiffPreview } from '../../api/diff';
 
 import type { BlockDiff, DiffPreviewResult } from '../../api/diff';
+import type { DisplayError } from '../../types';
 
 /**
  * Parameters for the useDiffPreview hook.
@@ -32,7 +33,7 @@ interface UseDiffPreviewParams {
  * @property {BlockDiff[]}                          blockDiffs      Block-level diffs.
  * @property {DiffPreviewResult['nonContentDiffs']} nonContentDiffs Non-content field diffs.
  * @property {boolean}                              isLoading       Whether diff is loading.
- * @property {string | null}                        error           Error message if fetch failed.
+ * @property {?DisplayError}                        error           Error.
  * @property {() => void}                           refetch         Re-runs the diff fetch.
  */
 interface UseDiffPreviewResult {
@@ -40,7 +41,7 @@ interface UseDiffPreviewResult {
 	blockDiffs: BlockDiff[];
 	nonContentDiffs: DiffPreviewResult['nonContentDiffs'];
 	isLoading: boolean;
-	error: string | null;
+	error: DisplayError | null;
 	refetch: () => void;
 }
 
@@ -59,7 +60,7 @@ export function useDiffPreview( {
 	const [ blockDiffs, setBlockDiffs ] = useState< BlockDiff[] >( [] );
 	const [ nonContentDiffs, setNonContentDiffs ] = useState< DiffPreviewResult['nonContentDiffs'] >( undefined );
 	const [ isLoading, setIsLoading ] = useState( true );
-	const [ error, setError ] = useState< string | null >( null );
+	const [ error, setError ] = useState< DisplayError | null >( null );
 	const [ refetchCount, setRefetchCount ] = useState( 0 );
 
 	useEffect( () => {
@@ -79,7 +80,7 @@ export function useDiffPreview( {
 			}
 
 			if ( result.error ) {
-				setError( result.error );
+				setError( result.sourceError ?? result.error );
 			} else if (
 				result.contentDiffHtml !== undefined ||
 				result.html !== undefined ||
