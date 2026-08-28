@@ -104,6 +104,39 @@ describe( 'DeletePostModal confirmation', () => {
 	} );
 } );
 
+describe( 'DeletePostModal loading actions', () => {
+	afterEach( () => {
+		vi.unstubAllGlobals();
+	} );
+
+	it( 'Verifies that loading actions use accessible disabled semantics', async () => {
+		// ARRANGE: Hold the trash request open at the in-flight stage.
+		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
+		render(
+			<DeletePostModal
+				items={ [ buildRow( 1, 'Lone post' ) ] }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+			/>
+		);
+
+		// ACT: Start moving the post to trash.
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Move to Trash' } )
+		);
+		const deleting = await screen.findByRole( 'button', {
+			name: 'Moving to trash…',
+		} );
+
+		// ASSERT: Loading actions use aria-disabled instead of native disabled.
+		expect( deleting ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( deleting ).not.toHaveAttribute( 'disabled' );
+		const cancel = screen.getByRole( 'button', { name: 'Cancel' } );
+		expect( cancel ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( cancel ).not.toHaveAttribute( 'disabled' );
+	} );
+} );
+
 describe( 'DeletePostModal listing refresh', () => {
 	const BULK = [ buildRow( 1, 'First post' ), buildRow( 2, 'Second post' ) ];
 

@@ -89,6 +89,7 @@ const ImportModal = ( {
 	// The ref keeps a re-render from starting a second import; the state drives
 	// the refresh, which a ref cannot because it does not re-render.
 	const hasStartedRef = useRef( false );
+	const closeButtonRef = useRef< HTMLButtonElement >( null );
 	const [ hasStarted, setHasStarted ] = useState( false );
 
 	const start = (): void => {
@@ -108,6 +109,16 @@ const ImportModal = ( {
 	// A started import can have written even if it failed, so any dismiss
 	// needs a refresh.
 	useRefreshOnUnmount( hasStarted, onRefresh );
+
+	// A live run keeps its action row mounted; every other stage swaps it out.
+	useEffect( () => {
+		if (
+			null !== editUrl ||
+			( ! isLive && ( isLoading || null !== error || alreadyImported ) )
+		) {
+			closeButtonRef.current?.focus();
+		}
+	}, [ alreadyImported, editUrl, error, isLive, isLoading ] );
 
 	const loadingLabel = isUpdate ? __( 'Updating…', 'safe-publish' ) : __( 'Importing…', 'safe-publish' );
 
@@ -154,6 +165,7 @@ const ImportModal = ( {
 						__next40pxDefaultSize
 						variant="tertiary"
 						onClick={ closeModal }
+						ref={ closeButtonRef }
 					>
 						{ __( 'Close', 'safe-publish' ) }
 					</Button>
@@ -200,6 +212,8 @@ const ImportModal = ( {
 						variant="tertiary"
 						onClick={ closeModal }
 						disabled={ isLoading }
+						accessibleWhenDisabled
+						ref={ closeButtonRef }
 					>
 						{ __( 'Cancel', 'safe-publish' ) }
 					</Button>
@@ -209,6 +223,7 @@ const ImportModal = ( {
 						isDestructive
 						onClick={ start }
 						disabled={ isLoading }
+						accessibleWhenDisabled
 						aria-describedby={ `${ LIVE_HEADING_ID } ${ LIVE_BODY_ID }` }
 					>
 						{ isLoading ? (
@@ -244,6 +259,7 @@ const ImportModal = ( {
 						__next40pxDefaultSize
 						variant="tertiary"
 						onClick={ closeModal }
+						ref={ closeButtonRef }
 					>
 						{ __( 'Close', 'safe-publish' ) }
 					</Button>
@@ -276,6 +292,7 @@ const ImportModal = ( {
 					__next40pxDefaultSize
 					variant="tertiary"
 					onClick={ closeModal }
+					ref={ closeButtonRef }
 				>
 					{ __( 'Close', 'safe-publish' ) }
 				</Button>

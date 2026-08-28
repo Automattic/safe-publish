@@ -3,8 +3,9 @@
  * titles the run permanently deletes and the ones it restores.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { Modal } from '@wordpress/components';
 import BulkRollbackPostModal from '@/components/BulkRollbackPostModal';
 import type { UnifiedPostRow } from '@/types';
 
@@ -51,6 +52,41 @@ const MIXED: UnifiedPostRow[] = [
 	buildRow( 2, 'Second creation', false ),
 	buildRow( 3, 'Updated post', true ),
 ];
+
+/**
+ * Stubs the rollback endpoint with one canned response for every item.
+ *
+ * @param {*} payload Response body the endpoint returns.
+ */
+function stubRollback( payload: unknown ): void {
+	vi.stubGlobal(
+		'fetch',
+		vi.fn().mockResolvedValue( { json: async () => payload } )
+	);
+}
+
+/**
+ * Renders the bulk rollback body in the WordPress modal used by DataViews.
+ *
+ * @param {Function} closeModal Modal close callback.
+ */
+function renderInModal( closeModal: () => void ): void {
+	render(
+		<Modal
+			__experimentalHideHeader
+			contentLabel="Rollback"
+			focusOnMount="firstContentElement"
+			onRequestClose={ closeModal }
+		>
+			<BulkRollbackPostModal
+				items={ MIXED }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				closeModal={ closeModal }
+			/>
+		</Modal>
+	);
+}
 
 describe( 'BulkRollbackPostModal confirmation groups', () => {
 	afterEach( () => {
@@ -164,22 +200,65 @@ describe( 'BulkRollbackPostModal confirmation groups', () => {
 	} );
 } );
 
-describe( 'BulkRollbackPostModal listing refresh', () => {
+describe( 'BulkRollbackPostModal keyboard behavior', () => {
 	afterEach( () => {
 		vi.unstubAllGlobals();
 	} );
 
-	/**
-	 * Stubs the rollback endpoint with one canned response for every item.
-	 *
-	 * @param {*} payload Response body the endpoint returns.
-	 */
-	function stubRollback( payload: unknown ): void {
-		vi.stubGlobal(
-			'fetch',
-			vi.fn().mockResolvedValue( { json: async () => payload } )
+	it( 'Verifies that rollback results focus Close and keep Escape working', async () => {
+		// ARRANGE: Every rollback returns a failure shown in the results list.
+		stubRollback( {
+			success: false,
+			data: 'This import was already rolled back. Reload the list.',
+		} );
+		const closeModal = vi.fn();
+		renderInModal( closeModal );
+		const rollback = screen.getByRole( 'button', {
+			name: 'Roll back 3 posts',
+		} );
+		await waitFor( () =>
+			expect( screen.getByRole( 'button', { name: 'Cancel' } ) ).toHaveFocus()
 		);
-	}
+		rollback.focus();
+
+		// ACT: Complete the run from the focused primary action.
+		fireEvent.click( rollback );
+		const close = await screen.findByRole( 'button', { name: 'Close' } );
+
+		// ASSERT: Completion recovers focus inside the modal and Escape still
+		// works from the replacement action.
+		await waitFor( () => expect( close ).toHaveFocus() );
+		fireEvent.keyDown( close, { key: 'Escape', code: 'Escape' } );
+		await waitFor( () => expect( closeModal ).toHaveBeenCalledTimes( 1 ) );
+	} );
+
+	it( 'Verifies that loading rollback actions use accessible disabled semantics', async () => {
+		// ARRANGE: Hold the first rollback request open at the in-flight stage.
+		vi.stubGlobal( 'fetch', vi.fn().mockReturnValue( new Promise( () => {} ) ) );
+		renderInModal( vi.fn() );
+		const rollback = screen.getByRole( 'button', {
+			name: 'Roll back 3 posts',
+		} );
+
+		// ACT: Start rollback.
+		fireEvent.click( rollback );
+		const rollingBack = await screen.findByRole( 'button', {
+			name: 'Rolling back…',
+		} );
+
+		// ASSERT: Loading actions use aria-disabled instead of native disabled.
+		expect( rollingBack ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( rollingBack ).not.toHaveAttribute( 'disabled' );
+		const cancel = screen.getByRole( 'button', { name: 'Cancel' } );
+		expect( cancel ).toHaveAttribute( 'aria-disabled', 'true' );
+		expect( cancel ).not.toHaveAttribute( 'disabled' );
+	} );
+} );
+
+describe( 'BulkRollbackPostModal listing refresh', () => {
+	afterEach( () => {
+		vi.unstubAllGlobals();
+	} );
 
 	it( 'Verifies that a run in which every item fails still refreshes the listing', async () => {
 		// ARRANGE: Every item is refused because it was already rolled back.

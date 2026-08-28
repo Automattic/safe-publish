@@ -151,6 +151,7 @@ const DeleteFailedImportsModal = ( {
 					variant="tertiary"
 					onClick={ closeModal }
 					disabled={ isLoading }
+					accessibleWhenDisabled
 				>
 					{ __( 'Cancel', 'safe-publish' ) }
 				</Button>
@@ -160,6 +161,7 @@ const DeleteFailedImportsModal = ( {
 					isDestructive
 					onClick={ handleDelete }
 					disabled={ isLoading }
+					accessibleWhenDisabled
 				>
 					{ isLoading ? (
 						<>

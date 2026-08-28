@@ -66,6 +66,7 @@ interface PostDiffModalProps {
  * @property {boolean}       isUpdating       Update submit in progress.
  * @property {boolean}       isLoading        Diff fetch in progress.
  * @property {boolean}       updateSucceeded  Update has completed successfully.
+ * @property {boolean}       updateSpent      Update succeeded and left no differences to submit.
  * @property {?DisplayError} updateError      Update error, if any.
  * @property {Function}      onViewChange     Selector change callback.
  * @property {Function}      onShowUnchanged  Toggle change callback.
@@ -85,6 +86,7 @@ interface HeaderBarProps {
 	isUpdating: boolean;
 	isLoading: boolean;
 	updateSucceeded: boolean;
+	updateSpent: boolean;
 	updateError: DisplayError | null;
 	onViewChange: ( showBlockView: boolean ) => void;
 	onShowUnchanged: ( value: boolean ) => void;
@@ -113,6 +115,7 @@ function HeaderBar( {
 	isUpdating,
 	isLoading,
 	updateSucceeded,
+	updateSpent,
 	updateError,
 	onViewChange,
 	onShowUnchanged,
@@ -176,7 +179,7 @@ function HeaderBar( {
 				</>
 			) }
 			{ updateError && (
-				<Text style={ { color: 'var(--safe-publish-status-error)', whiteSpace: 'nowrap' } }>
+				<Text role="alert" style={ { color: 'var(--safe-publish-status-error)', whiteSpace: 'nowrap' } }>
 					<IsolatedErrorMessage error={ updateError } />
 				</Text>
 			) }
@@ -185,7 +188,8 @@ function HeaderBar( {
 					__next40pxDefaultSize
 					variant="primary"
 					onClick={ onSubmitUpdate }
-					disabled={ isUpdating || isLoading }
+					disabled={ isUpdating || isLoading || updateSpent }
+					accessibleWhenDisabled
 				>
 					{ isUpdating ? (
 						<Spinner style={ { margin: 0 } } />
@@ -195,7 +199,7 @@ function HeaderBar( {
 				</Button>
 			) }
 			{ updateSucceeded && ! isUpdating && (
-				<Text style={ { color: 'var(--safe-publish-status-success)', whiteSpace: 'nowrap' } }>
+				<Text role="status" style={ { color: 'var(--safe-publish-status-success)', whiteSpace: 'nowrap' } }>
 					{ successMessage }
 				</Text>
 			) }
@@ -449,12 +453,15 @@ export default function PostDiffModal( {
 				showLabels={ showLabels }
 				hasImages={ hasImages }
 				showViewOptions={ showDiffBody }
+				// Outlives the diff the post-update refetch clears; unmounting
+				// the activated action would drop focus to the body.
 				showUpdateButton={
-					! error && ! isUpToDate && hasAnyChanges
+					! error && ! isUpToDate && ( hasAnyChanges || updateSucceeded )
 				}
 				isUpdating={ isUpdating }
 				isLoading={ isLoading }
 				updateSucceeded={ updateSucceeded }
+				updateSpent={ updateSucceeded && ! hasAnyChanges }
 				updateError={ updateError }
 				onViewChange={ setShowBlockView }
 				onShowUnchanged={ setShowUnchanged }
