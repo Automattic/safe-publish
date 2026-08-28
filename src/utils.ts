@@ -64,6 +64,10 @@ export function getErrorMessage(
 	return fallback;
 }
 
+// createInterpolateElement stops at the first unrecognized tag, so the marker
+// must be the only one.
+const ISOLATED_REASON_TEMPLATE = /^[^<]*<reason \/>[^<]*$/;
+
 /**
  * Extracts structured source detail from an API error data object.
  *
@@ -80,7 +84,7 @@ export function getSourceError( data: unknown ): SourceError | undefined {
 	if (
 		typeof message !== 'string' ||
 		typeof template !== 'string' ||
-		! template.includes( '<reason />' )
+		! ISOLATED_REASON_TEMPLATE.test( template )
 	) {
 		return undefined;
 	}

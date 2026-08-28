@@ -682,7 +682,8 @@ class Post_Import_Service {
 	 *
 	 * @param array           $fields Sanitized post fields.
 	 * @param string|WP_Error $error  Error description or object.
-	 * @return array Error result with source_post_id, title, success, and error keys.
+	 * @return array Error result; source_error is present only when the failure
+	 *               supplied structured detail.
 	 */
 	private function build_error_result(
 		array $fields,

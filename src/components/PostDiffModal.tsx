@@ -434,6 +434,7 @@ export default function PostDiffModal( {
 	const ready = ! error && ( ! isLoading || hasPreviousData );
 	const showEmptyState = ready && ! hasAnyChanges;
 	const showDiffBody = ready && hasAnyChanges;
+
 	const modalClassName = showFullSize
 		? 'safe-publish-compare-modal'
 		: 'safe-publish-compare-modal safe-publish-compare-modal--capped';

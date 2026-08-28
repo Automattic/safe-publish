@@ -293,7 +293,11 @@ final class Diff_Renderer {
 				&& isset( $source_error['message'], $source_error['template'] )
 				&& is_string( $source_error['message'] )
 				&& is_string( $source_error['template'] )
-				&& str_contains( $source_error['template'], '<reason />' )
+				// The client rejects a template with any other tag.
+				&& 1 === preg_match(
+					'#^[^<]*<reason />[^<]*$#',
+					$source_error['template']
+				)
 				&& ! $withhold_source_message
 			) {
 				$rest_error_data[ HTTP_Client::ERROR_DATA_SOURCE_ERROR ] =
