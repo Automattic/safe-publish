@@ -20,14 +20,20 @@ import { __ } from '@wordpress/i18n';
 
 import BlockDiffViewer, { resolveStatus } from './BlockDiffViewer';
 import DiffViewSelector from './DiffViewSelector';
+import IsolatedErrorMessage from './IsolatedErrorMessage';
 import NonContentDiffSections from './NonContentDiffSections';
-import { UnifiedPostRow, ImportSyncStatus, Warning } from '../types';
 import { renderWarningMessage } from '../utils';
 import { useDiffPreview } from './hooks/useDiffPreview';
 import { useImportPost } from './hooks/useImportPost';
 import { useRefreshOnUnmount } from './hooks/useRefreshOnUnmount';
 
 import type { BlockDiff, DiffPreviewResult } from '../api/diff';
+import type {
+	DisplayError,
+	ImportSyncStatus,
+	UnifiedPostRow,
+	Warning,
+} from '../types';
 
 /**
  * Props for the PostDiffModal component.
@@ -61,7 +67,7 @@ interface PostDiffModalProps {
  * @property {boolean}       isLoading        Diff fetch in progress.
  * @property {boolean}       updateSucceeded  Update has completed successfully.
  * @property {boolean}       updateSpent      Update succeeded and left no differences to submit.
- * @property {string | null} updateError      Error from the Update submit, if any.
+ * @property {?DisplayError} updateError      Update error, if any.
  * @property {Function}      onViewChange     Selector change callback.
  * @property {Function}      onShowUnchanged  Toggle change callback.
  * @property {Function}      onShowFullSize   Toggle change callback.
@@ -81,7 +87,7 @@ interface HeaderBarProps {
 	isLoading: boolean;
 	updateSucceeded: boolean;
 	updateSpent: boolean;
-	updateError: string | null;
+	updateError: DisplayError | null;
 	onViewChange: ( showBlockView: boolean ) => void;
 	onShowUnchanged: ( value: boolean ) => void;
 	onShowFullSize: ( value: boolean ) => void;
@@ -174,7 +180,7 @@ function HeaderBar( {
 			) }
 			{ updateError && (
 				<Text role="alert" style={ { color: 'var(--safe-publish-status-error)', whiteSpace: 'nowrap' } }>
-					{ updateError }
+					<IsolatedErrorMessage error={ updateError } />
 				</Text>
 			) }
 			{ showUpdateButton && (
@@ -471,7 +477,11 @@ export default function PostDiffModal( {
 				</HStack>
 			) }
 
-			{ error && <Text style={ { color: 'var(--safe-publish-status-error)' } }>{ error }</Text> }
+			{ error && (
+				<Text style={ { color: 'var(--safe-publish-status-error)' } }>
+					<IsolatedErrorMessage error={ error } />
+				</Text>
+			) }
 
 			{ showDiffBody && (
 				<DiffBody
