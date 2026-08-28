@@ -49,7 +49,7 @@ View source opens the source post in a new browser tab. It is available when the
 
 Import, Trash, and Roll back support bulk selection. Compare is available for one outdated post at a time. An Up to date row does not offer Import or Compare unless the live source check finds a newer version.
 
-Rollback eligibility comes from the latest active import-history row. Only `success` and `updated` rows that have not already been rolled back are eligible. The server re-checks that rule on each request, so a listing loaded before an earlier rollback cannot re-apply it. Rolling back a successful new import deletes the destination post. Rolling back an update restores the previous content when Safe Publish captured it, or deletes the post when no previous content was captured.
+Rollback eligibility comes from the latest active import-history row. Only `success` and `updated` rows that have not already been rolled back are eligible. The server re-checks that rule on each request, so a listing loaded before an earlier rollback cannot re-apply it. Rolling back a successful new import deletes the destination post. Rolling back an update restores the captured post fields, author, parent, post type, featured image, and previous assignments for the taxonomies the update affected. It does not delete created term objects or restore changes to shared term fields. An older update with no captured previous content is deleted instead.
 
 ### Filtering and search
 

@@ -400,38 +400,30 @@ final class Session_Rollback_Service {
 		string $post_title,
 		array $changes
 	): array|WP_Error {
+		$valid = $this->validate_previous_version( $changes );
+		if ( is_wp_error( $valid ) ) {
+			return $valid;
+		}
+
 		$restore_data = array( 'ID' => $post_id );
+		$post_fields  = array(
+			'previous_content'        => 'post_content',
+			'previous_title'          => 'post_title',
+			'previous_excerpt'        => 'post_excerpt',
+			'previous_slug'           => 'post_name',
+			'previous_comment_status' => 'comment_status',
+			'previous_ping_status'    => 'ping_status',
+			'previous_menu_order'     => 'menu_order',
+			'previous_password'       => 'post_password',
+			'previous_author'         => 'post_author',
+			'previous_parent'         => 'post_parent',
+			'previous_post_type'      => 'post_type',
+		);
 
-		if ( isset( $changes['previous_content'] ) ) {
-			$restore_data['post_content'] = $changes['previous_content'];
-		}
-
-		if ( isset( $changes['previous_title'] ) ) {
-			$restore_data['post_title'] = $changes['previous_title'];
-		}
-
-		if ( isset( $changes['previous_excerpt'] ) ) {
-			$restore_data['post_excerpt'] = $changes['previous_excerpt'];
-		}
-
-		if ( isset( $changes['previous_slug'] ) ) {
-			$restore_data['post_name'] = $changes['previous_slug'];
-		}
-
-		if ( isset( $changes['previous_comment_status'] ) ) {
-			$restore_data['comment_status'] = $changes['previous_comment_status'];
-		}
-
-		if ( isset( $changes['previous_ping_status'] ) ) {
-			$restore_data['ping_status'] = $changes['previous_ping_status'];
-		}
-
-		if ( isset( $changes['previous_menu_order'] ) ) {
-			$restore_data['menu_order'] = $changes['previous_menu_order'];
-		}
-
-		if ( isset( $changes['previous_password'] ) ) {
-			$restore_data['post_password'] = $changes['previous_password'];
+		foreach ( $post_fields as $previous_field => $post_field ) {
+			if ( isset( $changes[ $previous_field ] ) ) {
+				$restore_data[ $post_field ] = $changes[ $previous_field ];
+			}
 		}
 
 		// The history record holds raw database reads, so it needs re-slashing
@@ -449,6 +441,24 @@ final class Session_Rollback_Service {
 			);
 		}
 
+		if ( isset( $changes['previous_terms'] ) && is_array( $changes['previous_terms'] ) ) {
+			$terms_restored = Term_Assignment_State::restore(
+				$post_id,
+				$changes['previous_terms']
+			);
+
+			if ( is_wp_error( $terms_restored ) ) {
+				return new WP_Error(
+					'terms_restore_failed',
+					sprintf(
+						/* translators: %s: error message */
+						__( 'Failed to restore terms: %s', 'safe-publish' ),
+						$terms_restored->get_error_message()
+					)
+				);
+			}
+		}
+
 		$this->restore_post_metadata( $post_id, $changes );
 		$this->restore_featured_image( $post_id, $changes );
 
@@ -457,6 +467,76 @@ final class Session_Rollback_Service {
 			'post_id'    => $post_id,
 			'post_title' => $post_title,
 		);
+	}
+
+	/**
+	 * Validates delayed-rollback references before changing the post.
+	 *
+	 * @param array $changes Previous post state.
+	 * @return true|WP_Error True when the recorded references are available.
+	 */
+	private function validate_previous_version( array $changes ): true|WP_Error {
+		if ( array_key_exists( 'previous_terms', $changes ) ) {
+			if ( ! is_array( $changes['previous_terms'] ) ) {
+				return new WP_Error(
+					'invalid_rollback_snapshot',
+					__( 'The saved rollback data is invalid.', 'safe-publish' )
+				);
+			}
+
+			$valid_terms = Term_Assignment_State::validate(
+				$changes['previous_terms']
+			);
+			if ( is_wp_error( $valid_terms ) ) {
+				return $valid_terms;
+			}
+		}
+
+		if ( array_key_exists( 'previous_author', $changes ) ) {
+			$author_id = $changes['previous_author'];
+			if ( ! is_int( $author_id ) || $author_id < 0 ) {
+				return new WP_Error(
+					'invalid_rollback_snapshot',
+					__( 'The saved rollback data is invalid.', 'safe-publish' )
+				);
+			}
+
+			if ( $author_id > 0 && false === get_user_by( 'id', $author_id ) ) {
+				return new WP_Error(
+					'rollback_author_unavailable',
+					__( 'The previous author is unavailable.', 'safe-publish' )
+				);
+			}
+		}
+
+		if ( array_key_exists( 'previous_parent', $changes ) ) {
+			$parent_id = $changes['previous_parent'];
+			if ( ! is_int( $parent_id ) || $parent_id < 0 ) {
+				return new WP_Error(
+					'invalid_rollback_snapshot',
+					__( 'The saved rollback data is invalid.', 'safe-publish' )
+				);
+			}
+
+			if ( $parent_id > 0 && null === get_post( $parent_id ) ) {
+				return new WP_Error(
+					'rollback_parent_unavailable',
+					__( 'The previous parent is unavailable.', 'safe-publish' )
+				);
+			}
+		}
+
+		if ( array_key_exists( 'previous_post_type', $changes ) ) {
+			$post_type = $changes['previous_post_type'];
+			if ( ! is_string( $post_type ) || ! post_type_exists( $post_type ) ) {
+				return new WP_Error(
+					'rollback_post_type_unavailable',
+					__( 'The previous post type is unavailable.', 'safe-publish' )
+				);
+			}
+		}
+
+		return true;
 	}
 
 	/**
