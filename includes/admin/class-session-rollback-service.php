@@ -441,6 +441,8 @@ final class Session_Rollback_Service {
 			);
 		}
 
+		$terms_error = null;
+
 		if ( isset( $changes['previous_terms'] ) && is_array( $changes['previous_terms'] ) ) {
 			$terms_restored = Term_Assignment_State::restore(
 				$post_id,
@@ -448,7 +450,7 @@ final class Session_Rollback_Service {
 			);
 
 			if ( is_wp_error( $terms_restored ) ) {
-				return new WP_Error(
+				$terms_error = new WP_Error(
 					'terms_restore_failed',
 					sprintf(
 						/* translators: %s: error message */
@@ -461,6 +463,10 @@ final class Session_Rollback_Service {
 
 		$this->restore_post_metadata( $post_id, $changes );
 		$this->restore_featured_image( $post_id, $changes );
+
+		if ( null !== $terms_error ) {
+			return $terms_error;
+		}
 
 		return array(
 			'action'     => 'restored',
@@ -532,6 +538,26 @@ final class Session_Rollback_Service {
 				return new WP_Error(
 					'rollback_post_type_unavailable',
 					__( 'The previous post type is unavailable.', 'safe-publish' )
+				);
+			}
+		}
+
+		if ( array_key_exists( 'previous_featured_image', $changes ) ) {
+			$thumbnail_id = $changes['previous_featured_image'];
+			if ( ! is_int( $thumbnail_id ) && false !== $thumbnail_id ) {
+				return new WP_Error(
+					'invalid_rollback_snapshot',
+					__( 'The saved rollback data is invalid.', 'safe-publish' )
+				);
+			}
+
+			if (
+				$thumbnail_id > 0
+				&& '' === wp_get_attachment_image( $thumbnail_id, 'thumbnail' )
+			) {
+				return new WP_Error(
+					'rollback_featured_image_unavailable',
+					__( 'The previous featured image is unavailable.', 'safe-publish' )
 				);
 			}
 		}

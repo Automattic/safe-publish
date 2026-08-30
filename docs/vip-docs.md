@@ -159,7 +159,7 @@ The Compare action on **Manage → Posts** fetches fresh source content and comp
 Rollback reverses a single import:
 
 - If the post was newly created by the import, the post is deleted.
-- If the post was an update of an existing post, the captured post fields, author, parent, post type, featured image, and previous taxonomy assignments are restored. Created terms and changes to shared term fields are retained. If no previous content was captured, the post is deleted.
+- If the post was an update of an existing post, the captured post fields, author, parent, post type, featured image, editor and tracking metadata, and previous assignments for taxonomies carried in the import payload are restored. Imported custom metadata is not restored or removed, and created terms and changes to shared term fields are retained. When an update changes the post type, WordPress may add a default category or another taxonomy's default term outside the import payload; those assignments are not currently removed by rollback. If no previous content was captured, the post is deleted.
 
 It's important to note that the roll-back rolls back the specific changes from that single import. If a post has gone through a series of changes, each change can be rolled back sequentially.
 

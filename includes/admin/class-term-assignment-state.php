@@ -60,12 +60,14 @@ final class Term_Assignment_State {
 	 */
 	public static function validate( array $assignments ): true|WP_Error {
 		foreach ( $assignments as $taxonomy => $term_ids ) {
-			if ( ! is_string( $taxonomy ) || ! is_array( $term_ids ) ) {
+			if ( ! is_array( $term_ids ) ) {
 				return new WP_Error(
 					'invalid_term_assignment_snapshot',
 					__( 'The saved term assignments are invalid.', 'safe-publish' )
 				);
 			}
+
+			$taxonomy = (string) $taxonomy;
 
 			if ( ! taxonomy_exists( $taxonomy ) ) {
 				return new WP_Error(
@@ -102,6 +104,8 @@ final class Term_Assignment_State {
 		int $post_id,
 		array $assignments
 	): true|WP_Error {
+		$first_error = null;
+
 		foreach ( $assignments as $taxonomy => $term_ids ) {
 			$result = wp_set_object_terms(
 				$post_id,
@@ -110,11 +114,11 @@ final class Term_Assignment_State {
 				false
 			);
 
-			if ( is_wp_error( $result ) ) {
-				return $result;
+			if ( is_wp_error( $result ) && null === $first_error ) {
+				$first_error = $result;
 			}
 		}
 
-		return true;
+		return null === $first_error ? true : $first_error;
 	}
 }

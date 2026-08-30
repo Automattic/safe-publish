@@ -11,6 +11,7 @@ namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Session_Rollback_Service;
+use Safe_Publish\Admin\Term_Assignment_State;
 use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
@@ -396,10 +397,14 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	public function test_restore_previous_version_refuses_invalid_references(): void {
 		// ARRANGE: Build each unavailable delayed-snapshot reference.
 		register_taxonomy( 'sp_rollback_topic', 'post' );
-		$author_id = $this->factory()->user->create();
-		$parent_id = $this->factory()->post->create();
-		$current   = wp_insert_term( 'Current Topic', 'sp_rollback_topic' );
-		$deleted   = wp_insert_term( 'Deleted Topic', 'sp_rollback_topic' );
+		$author_id                  = $this->factory()->user->create();
+		$parent_id                  = $this->factory()->post->create();
+		$current                    = wp_insert_term( 'Current Topic', 'sp_rollback_topic' );
+		$deleted                    = wp_insert_term( 'Deleted Topic', 'sp_rollback_topic' );
+		$deleted_attachment_id      = $this->factory()->attachment->create();
+		$unrenderable_attachment_id = $this->factory()->attachment->create(
+			array( 'post_mime_type' => 'application/pdf' )
+		);
 
 		$this->assertIsInt( $author_id );
 		$this->assertIsInt( $parent_id );
@@ -408,6 +413,7 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		wp_delete_user( $author_id );
 		wp_delete_post( $parent_id, true );
 		wp_delete_term( (int) $deleted['term_id'], 'sp_rollback_topic' );
+		wp_delete_attachment( $deleted_attachment_id, true );
 
 		$cases = array(
 			array(
@@ -447,6 +453,21 @@ class Session_Rollback_Test extends Integration_Test_Case {
 				'unavailable post type',
 				array( 'previous_post_type' => 'sp_missing_type' ),
 				'rollback_post_type_unavailable',
+			),
+			array(
+				'deleted featured image',
+				array( 'previous_featured_image' => $deleted_attachment_id ),
+				'rollback_featured_image_unavailable',
+			),
+			array(
+				'unrenderable featured image',
+				array( 'previous_featured_image' => $unrenderable_attachment_id ),
+				'rollback_featured_image_unavailable',
+			),
+			array(
+				'malformed featured image',
+				array( 'previous_featured_image' => array() ),
+				'invalid_rollback_snapshot',
 			),
 		);
 
@@ -488,6 +509,78 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that numeric taxonomy keys remain valid after a JSON round trip.
+	 */
+	public function test_term_assignment_validation_accepts_numeric_taxonomy_keys(): void {
+		// ARRANGE: Capture a taxonomy whose numeric slug becomes an integer key.
+		register_taxonomy( '123', 'post' );
+
+		try {
+			$post_id = $this->factory()->post->create();
+			$term    = wp_insert_term( 'Numeric Taxonomy Term', '123' );
+			$this->assertIsArray( $term );
+			wp_set_object_terms( $post_id, array( (int) $term['term_id'] ), '123' );
+			$captured = Term_Assignment_State::capture(
+				$post_id,
+				array( '123' => array() )
+			);
+			$decoded  = json_decode( (string) wp_json_encode( $captured ), true );
+			$this->assertIsArray( $decoded );
+
+			// ACT: Validate the decoded snapshot.
+			$result = Term_Assignment_State::validate( $decoded );
+
+			// ASSERT: The integer array key resolves to the registered taxonomy.
+			$this->assertTrue( $result );
+		} finally {
+			unregister_taxonomy( '123' );
+		}
+	}
+
+	/**
+	 * Verifies that a taxonomy failure does not prevent later restores.
+	 */
+	public function test_term_assignment_restore_continues_after_failure(): void {
+		// ARRANGE: Put a restorable taxonomy after an unavailable one.
+		register_taxonomy( 'sp_later_taxonomy', 'post' );
+
+		try {
+			$post_id  = $this->factory()->post->create();
+			$previous = wp_insert_term( 'Previous Term', 'sp_later_taxonomy' );
+			$current  = wp_insert_term( 'Current Term', 'sp_later_taxonomy' );
+			$this->assertIsArray( $previous );
+			$this->assertIsArray( $current );
+			wp_set_object_terms(
+				$post_id,
+				array( (int) $current['term_id'] ),
+				'sp_later_taxonomy'
+			);
+
+			// ACT: Restore both taxonomies.
+			$result = Term_Assignment_State::restore(
+				$post_id,
+				array(
+					'sp_missing_taxonomy' => array(),
+					'sp_later_taxonomy'   => array( (int) $previous['term_id'] ),
+				)
+			);
+
+			// ASSERT: The first error is returned after the later restore succeeds.
+			$this->assertInstanceOf( WP_Error::class, $result );
+			$this->assertSame(
+				array( (int) $previous['term_id'] ),
+				wp_get_object_terms(
+					$post_id,
+					'sp_later_taxonomy',
+					array( 'fields' => 'ids' )
+				)
+			);
+		} finally {
+			unregister_taxonomy( 'sp_later_taxonomy' );
+		}
+	}
+
+	/**
 	 * Verifies that a legacy update without a previous-content snapshot keeps
 	 * its deletion fallback.
 	 */
@@ -524,13 +617,17 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		$term = wp_insert_term( 'Previous Topic', 'sp_rollback_topic' );
 
 		$this->assertIsArray( $term );
-		$history             = $this->create_updated_item(
+		$history = $this->create_updated_item(
 			array(
-				'previous_terms' => array(
+				'previous_terms'          => array(
 					'sp_rollback_topic' => array( (int) $term['term_id'] ),
 				),
+				'previous_meta'           => array( 'rollback_meta' => 'Previous metadata.' ),
+				'previous_featured_image' => 0,
 			)
 		);
+		update_post_meta( $history['post_id'], 'rollback_meta', 'Imported metadata.' );
+		update_post_meta( $history['post_id'], '_thumbnail_id', 12345 );
 		$unregister_taxonomy = static function (): void {
 			unregister_taxonomy( 'sp_rollback_topic' );
 		};
@@ -546,6 +643,14 @@ class Session_Rollback_Test extends Integration_Test_Case {
 			$this->assertSame(
 				'Previous content.',
 				get_post_field( 'post_content', $history['post_id'] )
+			);
+			$this->assertSame(
+				'Previous metadata.',
+				get_post_meta( $history['post_id'], 'rollback_meta', true )
+			);
+			$this->assertSame(
+				'',
+				get_post_meta( $history['post_id'], '_thumbnail_id', true )
 			);
 			$item = $this->repository->get_item( $history['item_id'] );
 			$this->assertSame( 0, (int) $item['rolled_back'] );
