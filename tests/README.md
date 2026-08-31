@@ -130,6 +130,7 @@ The test suite provides comprehensive coverage for:
   - Rollback functionality
   - Post deletion and cleanup
   - Item state management
+  - Session deletion
 
 **Media Import Testing**: Integration tests use a two-part mocking strategy to enable complete workflow testing without network calls:
 
