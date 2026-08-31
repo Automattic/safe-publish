@@ -459,7 +459,6 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		// ARRANGE: A snapshot containing unavailable references alongside one
 		// fully restorable taxonomy.
 		register_taxonomy( 'sp_atomic_taxonomy', 'post' );
-		register_taxonomy( '123', 'post' );
 
 		try {
 			$deleted_author = $this->factory()->user->create();
@@ -469,15 +468,16 @@ class Session_Rollback_Test extends Integration_Test_Case {
 			);
 			$deleted_term   = wp_insert_term( 'Deleted Term', 'sp_atomic_taxonomy' );
 			$current_term   = wp_insert_term( 'Current Term', 'sp_atomic_taxonomy' );
-			$previous_term  = wp_insert_term( 'Previous Term', '123' );
-			$current_other  = wp_insert_term( 'Current Other', '123' );
 			$this->assertIsArray( $deleted_term );
 			$this->assertIsArray( $current_term );
-			$this->assertIsArray( $previous_term );
-			$this->assertIsArray( $current_other );
 			wp_delete_user( $deleted_author );
 			wp_delete_post( $deleted_parent, true );
 			wp_delete_term( (int) $deleted_term['term_id'], 'sp_atomic_taxonomy' );
+			register_taxonomy( '123', 'post' );
+			$previous_term = wp_insert_term( 'Previous Term', '123' );
+			$current_other = wp_insert_term( 'Current Other', '123' );
+			$this->assertIsArray( $previous_term );
+			$this->assertIsArray( $current_other );
 
 			$history        = $this->create_updated_item(
 				array(
