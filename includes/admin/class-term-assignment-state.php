@@ -53,13 +53,13 @@ final class Term_Assignment_State {
 	}
 
 	/**
-	 * Validates captured assignments before a delayed rollback changes a post.
+	 * Validates captured assignment structure before a rollback changes a post.
 	 *
 	 * @param array $assignments Term IDs keyed by taxonomy.
-	 * @return true|WP_Error True when every recorded assignment is available.
+	 * @return true|WP_Error True when every recorded assignment is well formed.
 	 */
 	public static function validate( array $assignments ): true|WP_Error {
-		foreach ( $assignments as $taxonomy => $term_ids ) {
+		foreach ( $assignments as $_ => $term_ids ) {
 			if ( ! is_array( $term_ids ) ) {
 				return new WP_Error(
 					'invalid_term_assignment_snapshot',
@@ -67,30 +67,41 @@ final class Term_Assignment_State {
 				);
 			}
 
-			$taxonomy = (string) $taxonomy;
-
-			if ( ! taxonomy_exists( $taxonomy ) ) {
-				return new WP_Error(
-					'rollback_taxonomy_unavailable',
-					__( 'A taxonomy needed for this rollback is unavailable.', 'safe-publish' )
-				);
-			}
-
 			foreach ( $term_ids as $term_id ) {
-				if (
-					! is_int( $term_id )
-					|| $term_id <= 0
-					|| null === term_exists( $term_id, $taxonomy )
-				) {
+				if ( ! is_int( $term_id ) || $term_id <= 0 ) {
 					return new WP_Error(
-						'rollback_term_unavailable',
-						__( 'A term needed for this rollback is unavailable.', 'safe-publish' )
+						'invalid_term_assignment_snapshot',
+						__( 'The saved term assignments are invalid.', 'safe-publish' )
 					);
 				}
 			}
 		}
 
 		return true;
+	}
+
+	/**
+	 * Returns why a taxonomy assignment cannot currently be restored.
+	 *
+	 * @param string $taxonomy Taxonomy slug.
+	 * @param int[]  $term_ids Term IDs.
+	 * @return string|null Unavailable reason, or null when restorable.
+	 */
+	public static function unavailable_reason(
+		string $taxonomy,
+		array $term_ids
+	): ?string {
+		if ( ! taxonomy_exists( $taxonomy ) ) {
+			return 'taxonomy_unavailable';
+		}
+
+		foreach ( $term_ids as $term_id ) {
+			if ( null === term_exists( $term_id, $taxonomy ) ) {
+				return 'term_unavailable';
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -107,12 +118,21 @@ final class Term_Assignment_State {
 		$first_error = null;
 
 		foreach ( $assignments as $taxonomy => $term_ids ) {
-			$result = wp_set_object_terms(
-				$post_id,
-				array_map( 'intval', $term_ids ),
-				(string) $taxonomy,
-				false
+			$taxonomy = (string) $taxonomy;
+			$reason   = self::unavailable_reason( $taxonomy, $term_ids );
+			$result   = null === $reason ? null : new WP_Error(
+				'rollback_' . $reason,
+				__( 'A taxonomy term needed for this rollback is unavailable.', 'safe-publish' )
 			);
+
+			if ( null === $result ) {
+				$result = wp_set_object_terms(
+					$post_id,
+					array_map( 'intval', $term_ids ),
+					$taxonomy,
+					false
+				);
+			}
 
 			if ( is_wp_error( $result ) && null === $first_error ) {
 				$first_error = $result;

@@ -1183,9 +1183,13 @@ final class History_Repository {
 	 * prior rollback already flagged it), so the audit log can reconstruct
 	 * which items a session rollback touched without joining the items table.
 	 *
-	 * @param int $session_id Session ID.
+	 * @param int   $session_id Session ID.
+	 * @param array $omissions  Optional. Omissions keyed by item ID.
 	 */
-	public function mark_session_rolled_back( int $session_id ): void {
+	public function mark_session_rolled_back(
+		int $session_id,
+		array $omissions = array()
+	): void {
 		global $wpdb;
 
 		$items_table = Import_Items_Table::table_name();
@@ -1221,6 +1225,7 @@ final class History_Repository {
 			$this->logger->session_rollback_failed( $session_id, $wpdb->last_error );
 			return;
 		}
+		$snapshot = is_array( $items ) ? $items : array();
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$updated = $wpdb->update(
@@ -1232,15 +1237,33 @@ final class History_Repository {
 		);
 
 		if ( false === $updated ) {
-			$this->logger->session_rollback_failed( $session_id, $wpdb->last_error );
+			$wpdb_error = $wpdb->last_error;
+			// The item flags are already durable. Preserve omission details even
+			// though the session row could not be updated.
+			foreach ( $snapshot as $item ) {
+				$item_id = (int) $item['id'];
+				if ( 1 === (int) $item['rolled_back'] || ! isset( $omissions[ $item_id ] ) ) {
+					continue;
+				}
+
+				$this->log_item_rollback_event(
+					$session_id,
+					$item,
+					$omissions[ $item_id ]
+				);
+			}
+			$this->logger->session_rollback_failed( $session_id, $wpdb_error );
 			return;
 		}
 
-		// Record the per-item events only once the rollback is durably
-		// complete, so a mid-operation failure logs just the session event.
-		$snapshot = is_array( $items ) ? $items : array();
+		// Record the remaining per-item events after both updates succeed.
 		foreach ( $snapshot as $item ) {
-			$this->log_item_rollback_event( $session_id, $item );
+			$item_id = (int) $item['id'];
+			$this->log_item_rollback_event(
+				$session_id,
+				$item,
+				$omissions[ $item_id ] ?? array()
+			);
 		}
 
 		if ( 0 === $updated ) {
@@ -1257,16 +1280,23 @@ final class History_Repository {
 	 * @param int   $session_id Parent session of the item.
 	 * @param array $item       Snapshot row with id, post_id, and the
 	 *                          pre-UPDATE rolled_back value.
+	 * @param array $omissions  References omitted from this item's rollback.
 	 */
 	private function log_item_rollback_event(
 		int $session_id,
-		array $item
+		array $item,
+		array $omissions
 	): void {
 		$item_id = (int) $item['id'];
 		$post_id = isset( $item['post_id'] ) ? (int) $item['post_id'] : 0;
 
 		if ( 0 === (int) $item['rolled_back'] ) {
-			$this->logger->item_rolled_back( $item_id, $session_id, $post_id );
+			$this->logger->item_rolled_back(
+				$item_id,
+				$session_id,
+				$post_id,
+				$omissions
+			);
 		} else {
 			$this->logger->item_already_rolled_back( $item_id, $session_id, $post_id );
 		}
@@ -1275,10 +1305,14 @@ final class History_Repository {
 	/**
 	 * Marks a single item as rolled back and emits an audit log event.
 	 *
-	 * @param int $item_id Item ID.
+	 * @param int   $item_id   Item ID.
+	 * @param array $omissions References omitted from the rollback.
 	 * @return bool True when the row is flagged, false when the write failed.
 	 */
-	public function mark_item_rolled_back( int $item_id ): bool {
+	public function mark_item_rolled_back(
+		int $item_id,
+		array $omissions = array()
+	): bool {
 		global $wpdb;
 
 		$table = Import_Items_Table::table_name();
@@ -1318,7 +1352,12 @@ final class History_Repository {
 		if ( 0 === $updated ) {
 			$this->logger->item_already_rolled_back( $item_id, $session_id, $post_id );
 		} else {
-			$this->logger->item_rolled_back( $item_id, $session_id, $post_id );
+			$this->logger->item_rolled_back(
+				$item_id,
+				$session_id,
+				$post_id,
+				$omissions
+			);
 		}
 
 		return true;

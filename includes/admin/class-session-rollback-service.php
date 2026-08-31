@@ -45,7 +45,7 @@ final class Session_Rollback_Service {
 	 * Rolls back an entire import session.
 	 *
 	 * @param int $session_id Session ID to roll back.
-	 * @return array{deleted_count: int, restored_count: int, failed_count: int}|WP_Error Rollback results or error.
+	 * @return array{deleted_count: int, restored_count: int, failed_count: int, omission_count: int}|WP_Error Rollback results or error.
 	 */
 	public function rollback_session( int $session_id ): array|WP_Error {
 		$session = $this->repository->get_session( $session_id );
@@ -65,6 +65,8 @@ final class Session_Rollback_Service {
 		$deleted_count  = 0;
 		$restored_count = 0;
 		$failed_count   = 0;
+		$omission_count = 0;
+		$omissions      = array();
 
 		foreach ( $items as $item ) {
 			if ( 1 === (int) $item['rolled_back'] ) {
@@ -83,16 +85,23 @@ final class Session_Rollback_Service {
 			} elseif ( 'restored' === $result['action'] ) {
 				++$restored_count;
 			}
+
+			$item_omissions = $result['omissions'] ?? array();
+			if ( array() !== $item_omissions ) {
+				$omissions[ (int) $item['id'] ] = $item_omissions;
+				$omission_count                += count( $item_omissions );
+			}
 		}
 
 		if ( 0 === $failed_count ) {
-			$this->repository->mark_session_rolled_back( $session_id );
+			$this->repository->mark_session_rolled_back( $session_id, $omissions );
 		}
 
 		return array(
 			'deleted_count'  => $deleted_count,
 			'restored_count' => $restored_count,
 			'failed_count'   => $failed_count,
+			'omission_count' => $omission_count,
 		);
 	}
 
@@ -100,7 +109,7 @@ final class Session_Rollback_Service {
 	 * Rolls back a single import item.
 	 *
 	 * @param int $item_id Item ID to roll back.
-	 * @return array{action: string, post_id: int, post_title: string}|WP_Error Rollback result or error.
+	 * @return array{action: string, post_id: int, post_title: string, omissions?: array}|WP_Error Rollback result or error.
 	 */
 	public function rollback_item( int $item_id ): array|WP_Error {
 		$item = $this->repository->get_item( $item_id );
@@ -130,7 +139,8 @@ final class Session_Rollback_Service {
 		}
 
 		// A failed flag write leaves the revert unrecorded; don't claim success.
-		if ( ! $this->repository->mark_item_rolled_back( $item_id ) ) {
+		$omissions = $result['omissions'] ?? array();
+		if ( ! $this->repository->mark_item_rolled_back( $item_id, $omissions ) ) {
 			return new WP_Error(
 				'rollback_not_recorded',
 				__(
@@ -147,7 +157,7 @@ final class Session_Rollback_Service {
 	 * Rolls back a single item row (internal helper).
 	 *
 	 * @param array $item Item row.
-	 * @return array{action: string, post_id: int, post_title: string}|WP_Error Rollback result or error.
+	 * @return array{action: string, post_id: int, post_title: string, omissions?: array}|WP_Error Rollback result or error.
 	 */
 	private function rollback_item_row( array $item ): array|WP_Error {
 		$post_id = isset( $item['post_id'] ) ? (int) $item['post_id'] : 0;
@@ -393,17 +403,19 @@ final class Session_Rollback_Service {
 	 * @param int    $post_id    Post ID to restore.
 	 * @param string $post_title Post title for response.
 	 * @param array  $changes    Previous content/metadata.
-	 * @return array{action: string, post_id: int, post_title: string}|WP_Error Result or error.
+	 * @return array{action: string, post_id: int, post_title: string, omissions: array}|WP_Error Result or error.
 	 */
 	private function restore_previous_version(
 		int $post_id,
 		string $post_title,
 		array $changes
 	): array|WP_Error {
-		$valid = $this->validate_previous_version( $changes );
-		if ( is_wp_error( $valid ) ) {
-			return $valid;
+		$prepared = $this->prepare_previous_version( $changes );
+		if ( is_wp_error( $prepared ) ) {
+			return $prepared;
 		}
+		$changes   = $prepared['changes'];
+		$omissions = $prepared['omissions'];
 
 		$restore_data = array( 'ID' => $post_id );
 		$post_fields  = array(
@@ -472,97 +484,122 @@ final class Session_Rollback_Service {
 			'action'     => 'restored',
 			'post_id'    => $post_id,
 			'post_title' => $post_title,
+			'omissions'  => $omissions,
 		);
 	}
 
 	/**
-	 * Validates delayed-rollback references before changing the post.
+	 * Validates a snapshot and omits references that are no longer available.
 	 *
 	 * @param array $changes Previous post state.
-	 * @return true|WP_Error True when the recorded references are available.
+	 * @return array{changes: array, omissions: array}|WP_Error Prepared state or error.
 	 */
-	private function validate_previous_version( array $changes ): true|WP_Error {
+	private function prepare_previous_version( array $changes ): array|WP_Error {
 		if ( array_key_exists( 'previous_terms', $changes ) ) {
 			if ( ! is_array( $changes['previous_terms'] ) ) {
-				return new WP_Error(
-					'invalid_rollback_snapshot',
-					__( 'The saved rollback data is invalid.', 'safe-publish' )
-				);
+				return $this->invalid_snapshot_error();
 			}
 
-			$valid_terms = Term_Assignment_State::validate(
-				$changes['previous_terms']
-			);
+			$valid_terms = Term_Assignment_State::validate( $changes['previous_terms'] );
 			if ( is_wp_error( $valid_terms ) ) {
 				return $valid_terms;
 			}
 		}
 
-		if ( array_key_exists( 'previous_author', $changes ) ) {
-			$author_id = $changes['previous_author'];
-			if ( ! is_int( $author_id ) || $author_id < 0 ) {
-				return new WP_Error(
-					'invalid_rollback_snapshot',
-					__( 'The saved rollback data is invalid.', 'safe-publish' )
-				);
-			}
-
-			if ( $author_id > 0 && false === get_user_by( 'id', $author_id ) ) {
-				return new WP_Error(
-					'rollback_author_unavailable',
-					__( 'The previous author is unavailable.', 'safe-publish' )
-				);
+		foreach ( array( 'previous_author', 'previous_parent' ) as $key ) {
+			if (
+				array_key_exists( $key, $changes )
+				&& ( ! is_int( $changes[ $key ] ) || $changes[ $key ] < 0 )
+			) {
+				return $this->invalid_snapshot_error();
 			}
 		}
 
-		if ( array_key_exists( 'previous_parent', $changes ) ) {
-			$parent_id = $changes['previous_parent'];
-			if ( ! is_int( $parent_id ) || $parent_id < 0 ) {
-				return new WP_Error(
-					'invalid_rollback_snapshot',
-					__( 'The saved rollback data is invalid.', 'safe-publish' )
-				);
-			}
-
-			if ( $parent_id > 0 && null === get_post( $parent_id ) ) {
-				return new WP_Error(
-					'rollback_parent_unavailable',
-					__( 'The previous parent is unavailable.', 'safe-publish' )
-				);
-			}
-		}
-
-		if ( array_key_exists( 'previous_post_type', $changes ) ) {
-			$post_type = $changes['previous_post_type'];
-			if ( ! is_string( $post_type ) || ! post_type_exists( $post_type ) ) {
-				return new WP_Error(
-					'rollback_post_type_unavailable',
-					__( 'The previous post type is unavailable.', 'safe-publish' )
-				);
-			}
+		if (
+			array_key_exists( 'previous_post_type', $changes )
+			&& ! is_string( $changes['previous_post_type'] )
+		) {
+			return $this->invalid_snapshot_error();
 		}
 
 		if ( array_key_exists( 'previous_featured_image', $changes ) ) {
 			$thumbnail_id = $changes['previous_featured_image'];
-			if ( ! is_int( $thumbnail_id ) && false !== $thumbnail_id ) {
-				return new WP_Error(
-					'invalid_rollback_snapshot',
-					__( 'The saved rollback data is invalid.', 'safe-publish' )
-				);
-			}
-
 			if (
-				$thumbnail_id > 0
-				&& '' === wp_get_attachment_image( $thumbnail_id, 'thumbnail' )
+				false !== $thumbnail_id
+				&& ( ! is_int( $thumbnail_id ) || $thumbnail_id < 0 )
 			) {
-				return new WP_Error(
-					'rollback_featured_image_unavailable',
-					__( 'The previous featured image is unavailable.', 'safe-publish' )
-				);
+				return $this->invalid_snapshot_error();
 			}
 		}
 
-		return true;
+		$omissions = array();
+
+		if ( isset( $changes['previous_terms'] ) ) {
+			foreach ( $changes['previous_terms'] as $taxonomy_key => $term_ids ) {
+				$taxonomy = (string) $taxonomy_key;
+				$reason   = Term_Assignment_State::unavailable_reason(
+					$taxonomy,
+					$term_ids
+				);
+
+				if ( null !== $reason ) {
+					$omissions[] = array(
+						'field'    => 'term_assignments',
+						'reason'   => $reason,
+						'taxonomy' => $taxonomy,
+						'term_ids' => $term_ids,
+					);
+					unset( $changes['previous_terms'][ $taxonomy_key ] );
+				}
+			}
+		}
+
+		$references = array(
+			'previous_author'         => array( 'author', 'id' ),
+			'previous_parent'         => array( 'parent', 'id' ),
+			'previous_post_type'      => array( 'post_type', 'slug' ),
+			'previous_featured_image' => array( 'featured_image', 'id' ),
+		);
+
+		foreach ( $references as $snapshot_key => [ $field, $value_key ] ) {
+			if ( ! isset( $changes[ $snapshot_key ] ) ) {
+				continue;
+			}
+
+			$value     = $changes[ $snapshot_key ];
+			$available = match ( $snapshot_key ) {
+				'previous_author' => 0 === $value || false !== get_user_by( 'id', $value ),
+				'previous_parent' => 0 === $value || null !== get_post( $value ),
+				'previous_post_type' => post_type_exists( $value ),
+				'previous_featured_image' => false === $value || 0 === $value
+					|| '' !== wp_get_attachment_image( $value, 'thumbnail' ),
+			};
+
+			if ( $available ) {
+				continue;
+			}
+
+			$omissions[] = array(
+				'field'    => $field,
+				'reason'   => 'reference_unavailable',
+				$value_key => $value,
+			);
+			unset( $changes[ $snapshot_key ] );
+		}
+
+		return compact( 'changes', 'omissions' );
+	}
+
+	/**
+	 * Returns the shared malformed-snapshot error.
+	 *
+	 * @return WP_Error Invalid snapshot error.
+	 */
+	private function invalid_snapshot_error(): WP_Error {
+		return new WP_Error(
+			'invalid_rollback_snapshot',
+			__( 'The saved rollback data is invalid.', 'safe-publish' )
+		);
 	}
 
 	/**

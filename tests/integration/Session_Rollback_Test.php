@@ -11,7 +11,6 @@ namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Session_Rollback_Service;
-use Safe_Publish\Admin\Term_Assignment_State;
 use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
@@ -391,93 +390,46 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that rollback rejects each unavailable or malformed reference
-	 * before changing the post.
+	 * Verifies that rollback rejects malformed references before changing the
+	 * post.
 	 */
-	public function test_restore_previous_version_refuses_invalid_references(): void {
-		// ARRANGE: Build each unavailable delayed-snapshot reference.
-		register_taxonomy( 'sp_rollback_topic', 'post' );
-		$author_id                  = $this->factory()->user->create();
-		$parent_id                  = $this->factory()->post->create();
-		$current                    = wp_insert_term( 'Current Topic', 'sp_rollback_topic' );
-		$deleted                    = wp_insert_term( 'Deleted Topic', 'sp_rollback_topic' );
-		$deleted_attachment_id      = $this->factory()->attachment->create();
-		$unrenderable_attachment_id = $this->factory()->attachment->create(
-			array( 'post_mime_type' => 'application/pdf' )
-		);
-
-		$this->assertIsInt( $author_id );
-		$this->assertIsInt( $parent_id );
-		$this->assertIsArray( $current );
-		$this->assertIsArray( $deleted );
-		wp_delete_user( $author_id );
-		wp_delete_post( $parent_id, true );
-		wp_delete_term( (int) $deleted['term_id'], 'sp_rollback_topic' );
-		wp_delete_attachment( $deleted_attachment_id, true );
-
+	public function test_restore_previous_version_refuses_malformed_references(): void {
+		// ARRANGE: Build representative malformed snapshot values.
 		$cases = array(
-			array(
-				'deleted term',
-				array(
-					'previous_terms' => array(
-						'sp_rollback_topic' => array( (int) $deleted['term_id'] ),
-					),
-				),
-				'rollback_term_unavailable',
-			),
-			array(
-				'malformed terms',
+			'malformed terms'          => array(
 				array(
 					'previous_terms' => array( 'category' => 'invalid' ),
 				),
 				'invalid_term_assignment_snapshot',
 			),
-			array(
-				'unavailable taxonomy',
-				array(
-					'previous_terms' => array( 'sp_missing_taxonomy' => array() ),
-				),
-				'rollback_taxonomy_unavailable',
+			'malformed term ID'        => array(
+				array( 'previous_terms' => array( 'category' => array( '12' ) ) ),
+				'invalid_term_assignment_snapshot',
 			),
-			array(
-				'deleted author',
-				array( 'previous_author' => $author_id ),
-				'rollback_author_unavailable',
+			'malformed author'         => array(
+				array( 'previous_author' => '12' ),
+				'invalid_rollback_snapshot',
 			),
-			array(
-				'deleted parent',
-				array( 'previous_parent' => $parent_id ),
-				'rollback_parent_unavailable',
+			'malformed parent'         => array(
+				array( 'previous_parent' => -1 ),
+				'invalid_rollback_snapshot',
 			),
-			array(
-				'unavailable post type',
-				array( 'previous_post_type' => 'sp_missing_type' ),
-				'rollback_post_type_unavailable',
+			'malformed post type'      => array(
+				array( 'previous_post_type' => array() ),
+				'invalid_rollback_snapshot',
 			),
-			array(
-				'deleted featured image',
-				array( 'previous_featured_image' => $deleted_attachment_id ),
-				'rollback_featured_image_unavailable',
-			),
-			array(
-				'unrenderable featured image',
-				array( 'previous_featured_image' => $unrenderable_attachment_id ),
-				'rollback_featured_image_unavailable',
-			),
-			array(
-				'malformed featured image',
+			'malformed featured image' => array(
 				array( 'previous_featured_image' => array() ),
+				'invalid_rollback_snapshot',
+			),
+			'negative featured image'  => array(
+				array( 'previous_featured_image' => -1 ),
 				'invalid_rollback_snapshot',
 			),
 		);
 
-		foreach ( $cases as [ $case_name, $changes, $error_code ] ) {
+		foreach ( $cases as $case_name => [ $changes, $error_code ] ) {
 			$history = $this->create_updated_item( $changes );
-			wp_set_object_terms(
-				$history['post_id'],
-				array( (int) $current['term_id'] ),
-				'sp_rollback_topic'
-			);
 
 			// ACT: Attempt to restore the invalid snapshot.
 			$result = $this->rollback_service->rollback_item( $history['item_id'] );
@@ -496,87 +448,159 @@ class Session_Rollback_Test extends Integration_Test_Case {
 			);
 			$item = $this->repository->get_item( $history['item_id'] );
 			$this->assertSame( 0, (int) $item['rolled_back'], $case_name );
-			$this->assertSame(
-				array( (int) $current['term_id'] ),
-				wp_get_object_terms(
-					$history['post_id'],
-					'sp_rollback_topic',
-					array( 'fields' => 'ids' )
-				),
-				$case_name
-			);
 		}
 	}
 
 	/**
-	 * Verifies that numeric taxonomy keys remain valid after a JSON round trip.
+	 * Verifies that unavailable references are retained and recorded as
+	 * omissions while available state is restored.
 	 */
-	public function test_term_assignment_validation_accepts_numeric_taxonomy_keys(): void {
-		// ARRANGE: Capture a taxonomy whose numeric slug becomes an integer key.
+	public function test_restore_previous_version_records_unavailable_references_as_omissions(): void {
+		// ARRANGE: A snapshot containing unavailable references alongside one
+		// fully restorable taxonomy.
+		register_taxonomy( 'sp_atomic_taxonomy', 'post' );
 		register_taxonomy( '123', 'post' );
 
 		try {
-			$post_id = $this->factory()->post->create();
-			$term    = wp_insert_term( 'Numeric Taxonomy Term', '123' );
-			$this->assertIsArray( $term );
-			wp_set_object_terms( $post_id, array( (int) $term['term_id'] ), '123' );
-			$captured = Term_Assignment_State::capture(
-				$post_id,
-				array( '123' => array() )
+			$deleted_author = $this->factory()->user->create();
+			$deleted_parent = $this->factory()->post->create();
+			$previous_image = $this->factory()->attachment->create(
+				array( 'post_mime_type' => 'application/pdf' )
 			);
-			$decoded  = json_decode( (string) wp_json_encode( $captured ), true );
-			$this->assertIsArray( $decoded );
+			$deleted_term   = wp_insert_term( 'Deleted Term', 'sp_atomic_taxonomy' );
+			$current_term   = wp_insert_term( 'Current Term', 'sp_atomic_taxonomy' );
+			$previous_term  = wp_insert_term( 'Previous Term', '123' );
+			$current_other  = wp_insert_term( 'Current Other', '123' );
+			$this->assertIsArray( $deleted_term );
+			$this->assertIsArray( $current_term );
+			$this->assertIsArray( $previous_term );
+			$this->assertIsArray( $current_other );
+			wp_delete_user( $deleted_author );
+			wp_delete_post( $deleted_parent, true );
+			wp_delete_term( (int) $deleted_term['term_id'], 'sp_atomic_taxonomy' );
 
-			// ACT: Validate the decoded snapshot.
-			$result = Term_Assignment_State::validate( $decoded );
-
-			// ASSERT: The integer array key resolves to the registered taxonomy.
-			$this->assertTrue( $result );
-		} finally {
-			unregister_taxonomy( '123' );
-		}
-	}
-
-	/**
-	 * Verifies that a taxonomy failure does not prevent later restores.
-	 */
-	public function test_term_assignment_restore_continues_after_failure(): void {
-		// ARRANGE: Put a restorable taxonomy after an unavailable one.
-		register_taxonomy( 'sp_later_taxonomy', 'post' );
-
-		try {
-			$post_id  = $this->factory()->post->create();
-			$previous = wp_insert_term( 'Previous Term', 'sp_later_taxonomy' );
-			$current  = wp_insert_term( 'Current Term', 'sp_later_taxonomy' );
-			$this->assertIsArray( $previous );
-			$this->assertIsArray( $current );
-			wp_set_object_terms(
-				$post_id,
-				array( (int) $current['term_id'] ),
-				'sp_later_taxonomy'
-			);
-
-			// ACT: Restore both taxonomies.
-			$result = Term_Assignment_State::restore(
-				$post_id,
+			$history        = $this->create_updated_item(
 				array(
-					'sp_missing_taxonomy' => array(),
-					'sp_later_taxonomy'   => array( (int) $previous['term_id'] ),
+					'previous_terms'          => array(
+						'sp_missing_taxonomy' => array(),
+						'sp_atomic_taxonomy'  => array( (int) $deleted_term['term_id'] ),
+						'123'                 => array( (int) $previous_term['term_id'] ),
+					),
+					'previous_author'         => $deleted_author,
+					'previous_parent'         => $deleted_parent,
+					'previous_post_type'      => 'sp_missing_type',
+					'previous_featured_image' => $previous_image,
 				)
 			);
+			$current_author = $this->factory()->user->create();
+			$current_parent = $this->factory()->post->create();
+			$current_image  = $this->factory()->attachment->create();
+			$this->assertIsInt( $current_author );
+			$this->assertIsInt( $current_parent );
+			wp_update_post(
+				array(
+					'ID'          => $history['post_id'],
+					'post_author' => $current_author,
+					'post_parent' => $current_parent,
+				)
+			);
+			update_post_meta( $history['post_id'], '_thumbnail_id', $current_image );
+			wp_set_object_terms(
+				$history['post_id'],
+				array( (int) $current_term['term_id'] ),
+				'sp_atomic_taxonomy'
+			);
+			wp_set_object_terms(
+				$history['post_id'],
+				array( (int) $current_other['term_id'] ),
+				'123'
+			);
 
-			// ASSERT: The first error is returned after the later restore succeeds.
-			$this->assertInstanceOf( WP_Error::class, $result );
+			// ACT: Restore every available part of the session item.
+			$result = $this->rollback_service->rollback_session( $history['session_id'] );
+
+			// ASSERT: The rollback succeeds, retaining each unavailable value and
+			// restoring the complete available taxonomy.
+			$this->assertIsArray( $result );
+			$this->assertSame( 1, $result['restored_count'] );
+			$this->assertSame( 0, $result['failed_count'] );
+			$this->assertSame( 6, $result['omission_count'] );
+			$events = Audit_Log_Table::get_events(
+				array(
+					'channel'    => 'import',
+					'event_type' => 'ITEM_ROLLED_BACK_WITH_OMISSIONS',
+				)
+			);
+			$this->assertCount( 1, $events );
+			$omissions = $events[0]['data']['omissions'];
 			$this->assertSame(
-				array( (int) $previous['term_id'] ),
+				array(
+					'term_assignments',
+					'term_assignments',
+					'author',
+					'parent',
+					'post_type',
+					'featured_image',
+				),
+				array_column( $omissions, 'field' )
+			);
+			$this->assertSame( 'sp_missing_taxonomy', $omissions[0]['taxonomy'] );
+			$this->assertSame(
+				array( (int) $deleted_term['term_id'] ),
+				$omissions[1]['term_ids']
+			);
+			$this->assertSame( $deleted_author, $omissions[2]['id'] );
+			$this->assertSame( $deleted_parent, $omissions[3]['id'] );
+			$this->assertSame( 'sp_missing_type', $omissions[4]['slug'] );
+			$this->assertSame( $previous_image, $omissions[5]['id'] );
+			$this->assertSame(
+				array(
+					'taxonomy_unavailable',
+					'term_unavailable',
+					'reference_unavailable',
+					'reference_unavailable',
+					'reference_unavailable',
+					'reference_unavailable',
+				),
+				array_column( $omissions, 'reason' )
+			);
+			$post = get_post( $history['post_id'] );
+			$this->assertSame( 'Previous content.', $post->post_content );
+			$this->assertSame( $current_author, (int) $post->post_author );
+			$this->assertSame( $current_parent, (int) $post->post_parent );
+			$this->assertSame( 'post', $post->post_type );
+			$this->assertSame(
+				$current_image,
+				(int) get_post_meta( $history['post_id'], '_thumbnail_id', true )
+			);
+			$this->assertSame(
+				array( (int) $current_term['term_id'] ),
 				wp_get_object_terms(
-					$post_id,
-					'sp_later_taxonomy',
+					$history['post_id'],
+					'sp_atomic_taxonomy',
 					array( 'fields' => 'ids' )
 				)
 			);
+			$this->assertSame(
+				array( (int) $previous_term['term_id'] ),
+				wp_get_object_terms(
+					$history['post_id'],
+					'123',
+					array( 'fields' => 'ids' )
+				)
+			);
+			$item = $this->repository->get_item( $history['item_id'] );
+			$this->assertSame( 1, (int) $item['rolled_back'] );
+
+			// ASSERT: The durable audit event identifies the affected item.
+			$this->assertSame( 'warning', $events[0]['level'] );
+			$this->assertSame( $history['item_id'], $events[0]['data']['item_id'] );
+			$this->assertSame( $history['session_id'], $events[0]['data']['session_id'] );
+			$this->assertSame( $history['post_id'], $events[0]['data']['post_id'] );
+			$this->assertSame( 1, $events[0]['data']['omissions_version'] );
 		} finally {
-			unregister_taxonomy( 'sp_later_taxonomy' );
+			unregister_taxonomy( 'sp_atomic_taxonomy' );
+			unregister_taxonomy( '123' );
 		}
 	}
 
@@ -612,15 +636,24 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	 * Verifies that a term restore failure is reported and remains retryable.
 	 */
 	public function test_restore_previous_version_reports_term_restore_failure(): void {
-		// ARRANGE: A valid taxonomy becomes unavailable after preflight.
+		// ARRANGE: A valid term is deleted after preflight, while the post still
+		// has its imported term assignment and a later taxonomy can restore.
 		register_taxonomy( 'sp_rollback_topic', 'post' );
-		$term = wp_insert_term( 'Previous Topic', 'sp_rollback_topic' );
+		register_taxonomy( 'sp_later_taxonomy', 'post' );
+		$term           = wp_insert_term( 'Previous Topic', 'sp_rollback_topic' );
+		$current_term   = wp_insert_term( 'Current Topic', 'sp_rollback_topic' );
+		$previous_later = wp_insert_term( 'Previous Later', 'sp_later_taxonomy' );
+		$current_later  = wp_insert_term( 'Current Later', 'sp_later_taxonomy' );
 
 		$this->assertIsArray( $term );
+		$this->assertIsArray( $current_term );
+		$this->assertIsArray( $previous_later );
+		$this->assertIsArray( $current_later );
 		$history = $this->create_updated_item(
 			array(
 				'previous_terms'          => array(
 					'sp_rollback_topic' => array( (int) $term['term_id'] ),
+					'sp_later_taxonomy' => array( (int) $previous_later['term_id'] ),
 				),
 				'previous_meta'           => array( 'rollback_meta' => 'Previous metadata.' ),
 				'previous_featured_image' => 0,
@@ -628,10 +661,20 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		);
 		update_post_meta( $history['post_id'], 'rollback_meta', 'Imported metadata.' );
 		update_post_meta( $history['post_id'], '_thumbnail_id', 12345 );
-		$unregister_taxonomy = static function (): void {
-			unregister_taxonomy( 'sp_rollback_topic' );
+		wp_set_object_terms(
+			$history['post_id'],
+			array( (int) $current_term['term_id'] ),
+			'sp_rollback_topic'
+		);
+		wp_set_object_terms(
+			$history['post_id'],
+			array( (int) $current_later['term_id'] ),
+			'sp_later_taxonomy'
+		);
+		$delete_term = static function () use ( $term ): void {
+			wp_delete_term( (int) $term['term_id'], 'sp_rollback_topic' );
 		};
-		add_action( 'save_post', $unregister_taxonomy );
+		add_action( 'save_post', $delete_term );
 
 		try {
 			// ACT: Attempt to restore the previous version.
@@ -654,8 +697,24 @@ class Session_Rollback_Test extends Integration_Test_Case {
 			);
 			$item = $this->repository->get_item( $history['item_id'] );
 			$this->assertSame( 0, (int) $item['rolled_back'] );
+			$this->assertSame(
+				array( (int) $current_term['term_id'] ),
+				wp_get_object_terms(
+					$history['post_id'],
+					'sp_rollback_topic',
+					array( 'fields' => 'ids' )
+				)
+			);
+			$this->assertSame(
+				array( (int) $previous_later['term_id'] ),
+				wp_get_object_terms(
+					$history['post_id'],
+					'sp_later_taxonomy',
+					array( 'fields' => 'ids' )
+				)
+			);
 		} finally {
-			remove_action( 'save_post', $unregister_taxonomy );
+			remove_action( 'save_post', $delete_term );
 		}
 	}
 
@@ -663,7 +722,7 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	 * Creates an updated post and its rollback history item.
 	 *
 	 * @param array $changes Additional previous state.
-	 * @return array{post_id: int, item_id: int} Created IDs.
+	 * @return array{session_id: int, post_id: int, item_id: int} Created IDs.
 	 */
 	private function create_updated_item( array $changes ): array {
 		$session_id = $this->repository->create_session(
@@ -683,7 +742,7 @@ class Session_Rollback_Test extends Integration_Test_Case {
 			array( 'previous_content' => 'Previous content.' ) + $changes
 		);
 
-		return compact( 'post_id', 'item_id' );
+		return compact( 'session_id', 'post_id', 'item_id' );
 	}
 
 	/**
@@ -1439,7 +1498,17 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		// ARRANGE: Create a session, then force the next UPDATE on the
 		// imports table to fail at the SQL layer by rewriting it to invalid
 		// SQL via the 'query' filter. try/finally guarantees filter removal.
-		$session_id      = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create();
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Updated',
+			'updated',
+			$post_id
+		);
+		$this->assertIsInt( $item_id );
+		$omissions       = array( $item_id => array( array( 'field' => 'author' ) ) );
 		$imports_table   = Imports_Table::table_name();
 		$filter_callback = function ( string $query ) use ( $imports_table ): string {
 			if ( 0 === strpos( $query, "UPDATE `{$imports_table}`" ) ) {
@@ -1452,7 +1521,7 @@ class Session_Rollback_Test extends Integration_Test_Case {
 
 		try {
 			// ACT: Roll back the session.
-			$this->repository->mark_session_rolled_back( $session_id );
+			$this->repository->mark_session_rolled_back( $session_id, $omissions );
 
 			// ASSERT: A SESSION_ROLLBACK_FAILED error event was emitted with
 			// the session ID and a non-empty wpdb_error string.
@@ -1475,6 +1544,16 @@ class Session_Rollback_Test extends Integration_Test_Case {
 				)
 			);
 			$this->assertCount( 0, $success_events );
+
+			// ASSERT: The already-durable item flag keeps its omission warning.
+			$omission_events = Audit_Log_Table::get_events(
+				array(
+					'channel'    => 'import',
+					'event_type' => 'ITEM_ROLLED_BACK_WITH_OMISSIONS',
+				)
+			);
+			$this->assertCount( 1, $omission_events );
+			$this->assertSame( $item_id, $omission_events[0]['data']['item_id'] );
 		} finally {
 			remove_filter( 'query', $filter_callback );
 			$wpdb->suppress_errors( false );

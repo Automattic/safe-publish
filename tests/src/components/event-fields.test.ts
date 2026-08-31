@@ -67,15 +67,15 @@ describe( 'getUserLabel', () => {
 } );
 
 describe( 'getEventLabel', () => {
-	it( 'should return the mapped label for a known event code', () => {
+	it( 'Verifies that a known event code has a mapped label', () => {
 		// ARRANGE: A known Log_Events code.
-		const event = 'ITEM_ROLLBACK_FAILED';
+		const event = 'ITEM_ROLLED_BACK_WITH_OMISSIONS';
 
 		// ACT: Derive the event column label.
 		const result = getEventLabel( event );
 
 		// ASSERT: The code maps to its human-readable label.
-		expect( result ).toBe( 'Item rollback failed' );
+		expect( result ).toBe( 'Item rolled back with omissions' );
 	} );
 
 	it( 'should fall back to the raw code for an unknown event', () => {
