@@ -859,10 +859,6 @@ final class Diff_Renderer {
 				$title_right
 			);
 
-			if ( '' === $html ) {
-				return '';
-			}
-
 			return $html . $this->build_term_notes_html(
 				$this->unregistered_taxonomy_notes( $records )
 			);
