@@ -50,7 +50,7 @@ class Audit_Log_Table_Query_Test extends Integration_Test_Case {
 		Audit_Log_Table::insert( 'auth', 'info', 'REQUEST_AUTHENTICATED', '2026-01-10 10:00:00', array() );
 		Audit_Log_Table::insert( 'auth', 'error', 'SIGNATURE_INVALID', '2026-01-11 11:00:00', array() );
 		Audit_Log_Table::insert( 'export', 'info', 'CONTENT_EXPORTED', '2026-01-12 12:00:00', array() );
-		Audit_Log_Table::insert( 'import', 'error', 'SESSION_ROLLBACK_FAILED', '2026-01-13 13:00:00', array() );
+		Audit_Log_Table::insert( 'import', 'error', 'ITEM_ROLLBACK_FAILED', '2026-01-13 13:00:00', array() );
 		Audit_Log_Table::insert( 'settings', 'info', 'SYNC_MODE_CHANGED', '2026-01-14 14:00:00', array() );
 	}
 
@@ -114,7 +114,7 @@ class Audit_Log_Table_Query_Test extends Integration_Test_Case {
 		$events = array_column( $rows, 'event' );
 		sort( $events );
 		$this->assertSame(
-			array( 'SESSION_ROLLBACK_FAILED', 'SYNC_MODE_CHANGED' ),
+			array( 'ITEM_ROLLBACK_FAILED', 'SYNC_MODE_CHANGED' ),
 			$events
 		);
 	}
@@ -138,7 +138,7 @@ class Audit_Log_Table_Query_Test extends Integration_Test_Case {
 		$events = array_column( $rows, 'event' );
 		$this->assertContains( 'EDGE', $events );
 		$this->assertContains( 'REQUEST_AUTHENTICATED', $events );
-		$this->assertNotContains( 'SESSION_ROLLBACK_FAILED', $events );
+		$this->assertNotContains( 'ITEM_ROLLBACK_FAILED', $events );
 	}
 
 	/**

@@ -1452,13 +1452,12 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Captures the previous content of an existing post for the session
-	 * rollback history log.
+	 * Captures the previous content of an existing post for item rollback.
 	 *
 	 * Stores the current post fields, featured image, tracking meta, and term
-	 * assignments so the update can be reverted via session rollback. The
-	 * returned array is used as the `changes` payload of the history log entry
-	 * for an 'updated_existing' action.
+	 * assignments so the update can be reverted via item rollback. The returned
+	 * array is used as the `changes` payload of the history log entry for an
+	 * 'updated_existing' action.
 	 *
 	 * @param WP_Post      $existing_post Existing WordPress post.
 	 * @param array|object $terms         Terms about to be written.
