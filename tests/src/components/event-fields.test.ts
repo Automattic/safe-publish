@@ -78,6 +78,20 @@ describe( 'getEventLabel', () => {
 		expect( result ).toBe( 'Item rollback failed' );
 	} );
 
+	it.each( [
+		[ 'SESSION_ROLLED_BACK', 'Session rolled back' ],
+		[ 'SESSION_ALREADY_ROLLED_BACK', 'Session already rolled back' ],
+		[ 'SESSION_ROLLBACK_FAILED', 'Session rollback failed' ],
+	] )( 'should retain the historical label for %s', ( event, label ) => {
+		// ARRANGE: A historical session rollback event stored in the audit log.
+
+		// ACT: Derive the event column label.
+		const result = getEventLabel( event );
+
+		// ASSERT: Historical rows keep their human-readable label.
+		expect( result ).toBe( label );
+	} );
+
 	it( 'should fall back to the raw code for an unknown event', () => {
 		// ARRANGE: A code with no mapping.
 		const event = 'NOT_A_REAL_EVENT';
