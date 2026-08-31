@@ -38,7 +38,8 @@ export function getUserLabel( item: AuditEvent ): string {
 }
 
 /**
- * Human-readable labels for current and historical audit event codes.
+ * Human-readable labels for audit event codes, keyed by the Log_Events
+ * constant string.
  */
 const EVENT_LABELS: Record< string, string > = {
 	SOURCE_MEDIA_FETCH_FAILED: __( 'Source media fetch failed', 'safe-publish' ),
@@ -74,11 +75,6 @@ const EVENT_LABELS: Record< string, string > = {
 	EXPORT_RESPONSE_BAD_STATUS: __( 'Export response: bad status', 'safe-publish' ),
 	DISPATCH_REQUEST_ERROR: __( 'Dispatch request error', 'safe-publish' ),
 	DISPATCH_RESPONSE_BAD_STATUS: __( 'Dispatch response: bad status', 'safe-publish' ),
-	// Keep removed session events mapped so stored audit rows remain readable.
-	SESSION_ROLLED_BACK: __( 'Session rolled back', 'safe-publish' ),
-	SESSION_ALREADY_ROLLED_BACK: __( 'Session already rolled back', 'safe-publish' ),
-	SESSION_ROLLBACK_FAILED: __( 'Session rollback failed', 'safe-publish' ),
-
 	ITEM_ROLLED_BACK: __( 'Item rolled back', 'safe-publish' ),
 	ITEM_ALREADY_ROLLED_BACK: __( 'Item already rolled back', 'safe-publish' ),
 	ITEM_ROLLBACK_FAILED: __( 'Item rollback failed', 'safe-publish' ),
@@ -98,7 +94,7 @@ const EVENT_LABELS: Record< string, string > = {
 /**
  * Returns the display label for an audit event code.
  *
- * @param {string} event Current or historical event code.
+ * @param {string} event Event code (a Log_Events constant).
  *
  * @return {string} Human-readable label, or the raw code when unmapped.
  */
