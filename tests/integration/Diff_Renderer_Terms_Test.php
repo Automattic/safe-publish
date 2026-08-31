@@ -692,8 +692,8 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that a source sending no safe_publish_terms falls back to the
-	 * embedded names, with no annotations, since eligibility cannot be judged
-	 * without the field.
+	 * embedded names, with no term-level annotations, since eligibility cannot
+	 * be judged without the field.
 	 */
 	public function test_absent_source_terms_field_falls_back_to_names(): void {
 		// ARRANGE: An imported term carrying a description.
@@ -731,6 +731,25 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		$this->assertStringContainsString(
 			'category: News',
 			implode( "\n", $this->changed_lines( $html ) )
+		);
+	}
+
+	/**
+	 * Verifies that the embedded fallback annotates a taxonomy the destination
+	 * does not register, since the import skips it whole.
+	 */
+	public function test_fallback_unregistered_taxonomy_is_annotated(): void {
+		// ARRANGE: No destination taxonomy matches the source's taxonomy.
+		$this->assertFalse( taxonomy_exists( 'nowheretax' ) );
+
+		// ACT: An older source sends a term under that taxonomy.
+		$html = $this->render_embedded_category( 'Ghost', 'Nowhere Tax' );
+
+		// ASSERT: The addition is shown with the warning the import can predict.
+		$this->assertStringContainsString( 'Ghost', $html );
+		$this->assertSame(
+			array( 'nowheretax: not imported — taxonomy not registered' ),
+			$this->notes( $html )
 		);
 	}
 
