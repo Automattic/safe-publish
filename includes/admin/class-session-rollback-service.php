@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Session Rollback Service Class.
  *
- * Handles rollback operations for import sessions and individual items.
+ * Handles rollback operations for individual import items.
  */
 final class Session_Rollback_Service {
 
@@ -39,61 +39,6 @@ final class Session_Rollback_Service {
 	 */
 	public function __construct( History_Repository $repository ) {
 		$this->repository = $repository;
-	}
-
-	/**
-	 * Rolls back an entire import session.
-	 *
-	 * @param int $session_id Session ID to roll back.
-	 * @return array{deleted_count: int, restored_count: int, failed_count: int}|WP_Error Rollback results or error.
-	 */
-	public function rollback_session( int $session_id ): array|WP_Error {
-		$session = $this->repository->get_session( $session_id );
-
-		if ( ! $session ) {
-			return new WP_Error(
-				'session_not_found',
-				__( 'Session not found', 'safe-publish' )
-			);
-		}
-
-		$items = $this->repository->get_session_items_by_status(
-			$session_id,
-			array( 'success', 'updated' )
-		);
-
-		$deleted_count  = 0;
-		$restored_count = 0;
-		$failed_count   = 0;
-
-		foreach ( $items as $item ) {
-			if ( 1 === (int) $item['rolled_back'] ) {
-				continue;
-			}
-
-			$result = $this->rollback_item_row( $item );
-
-			if ( is_wp_error( $result ) ) {
-				++$failed_count;
-				continue;
-			}
-
-			if ( 'deleted' === $result['action'] ) {
-				++$deleted_count;
-			} elseif ( 'restored' === $result['action'] ) {
-				++$restored_count;
-			}
-		}
-
-		if ( 0 === $failed_count ) {
-			$this->repository->mark_session_rolled_back( $session_id );
-		}
-
-		return array(
-			'deleted_count'  => $deleted_count,
-			'restored_count' => $restored_count,
-			'failed_count'   => $failed_count,
-		);
 	}
 
 	/**

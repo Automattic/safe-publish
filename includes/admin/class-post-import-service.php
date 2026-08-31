@@ -1449,11 +1449,10 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Captures the previous content of an existing post for the session
-	 * rollback history log.
+	 * Captures the previous content of an existing post for item rollback.
 	 *
 	 * Stores the current post fields, featured image, and tracking meta so
-	 * the update can be reverted via session rollback. The returned array is
+	 * the update can be reverted via item rollback. The returned array is
 	 * used as the `changes` payload of the history log entry for an
 	 * 'updated_existing' action.
 	 *

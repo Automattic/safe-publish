@@ -34,49 +34,6 @@ class Import_Logger extends Logger {
 	}
 
 	/**
-	 * Logs a successful session rollback.
-	 *
-	 * @param int $session_id Session that was marked rolled back.
-	 */
-	public function session_rolled_back( int $session_id ): void {
-		$this->log_event(
-			Log_Events::SESSION_ROLLED_BACK,
-			array( 'session_id' => $session_id )
-		);
-	}
-
-	/**
-	 * Logs a session rollback that affected no rows (already rolled back).
-	 *
-	 * @param int $session_id Session that was already in the rolled-back state.
-	 */
-	public function session_already_rolled_back( int $session_id ): void {
-		$this->log_event(
-			Log_Events::SESSION_ALREADY_ROLLED_BACK,
-			array( 'session_id' => $session_id )
-		);
-	}
-
-	/**
-	 * Logs a session rollback that failed at the SQL layer.
-	 *
-	 * @param int    $session_id Session whose rollback UPDATE failed.
-	 * @param string $wpdb_error Last MySQL error from $wpdb->last_error.
-	 */
-	public function session_rollback_failed(
-		int $session_id,
-		string $wpdb_error
-	): void {
-		$this->log_error(
-			Log_Events::SESSION_ROLLBACK_FAILED,
-			array(
-				'session_id' => $session_id,
-				'wpdb_error' => $wpdb_error,
-			)
-		);
-	}
-
-	/**
 	 * Logs a successful single-item rollback.
 	 *
 	 * @param int $item_id    Item that was marked rolled back.

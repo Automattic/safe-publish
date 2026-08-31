@@ -126,10 +126,10 @@ The test suite provides comprehensive coverage for:
   - Import logging and retrieval
   - History filtering
 
-- **Session Rollback** (`Session_Rollback_Test.php`)
+- **Rollback** (`Session_Rollback_Test.php`)
   - Rollback functionality
   - Post deletion and cleanup
-  - Session state management
+  - Item state management
 
 **Media Import Testing**: Integration tests use a two-part mocking strategy to enable complete workflow testing without network calls:
 

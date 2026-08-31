@@ -22,6 +22,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Source_Posts_API\Source_Posts_API_Test_Base;
+use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Telemetry_Service;
 use WP_Error;
@@ -1671,7 +1672,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		);
 
 		// ASSERT: Two item rows were written, both with status 'error'.
-		$items = $this->repository->get_session_items( $session_id );
+		$items = $this->get_session_items_for_test( $session_id );
 
 		$this->assertCount(
 			2,
@@ -2311,11 +2312,9 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
 		// ASSERT: Import fails and the item row carries no warnings.
 		$this->assertFalse( $result['success'] );
-		$items = $this->repository->get_session_items_by_status(
-			$session_id,
-			array( 'error' )
-		);
+		$items = $this->get_session_items_for_test( $session_id );
 		$this->assertCount( 1, $items );
+		$this->assertSame( 'error', $items[0]['status'] );
 		$this->assertNull( $items[0]['warnings'] );
 	}
 
@@ -2372,11 +2371,9 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			(int) get_post( $result['post_id'] )->post_author
 		);
 
-		$items = $this->repository->get_session_items_by_status(
-			$session_id,
-			array( 'success' )
-		);
+		$items = $this->get_session_items_for_test( $session_id );
 		$this->assertCount( 1, $items );
+		$this->assertSame( 'success', $items[0]['status'] );
 		$this->assertNull( $items[0]['warnings'] );
 	}
 
@@ -2446,11 +2443,9 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		);
 
 		// ASSERT: Warning is persisted on the item row, encoded as JSON.
-		$items = $this->repository->get_session_items_by_status(
-			$session_id,
-			array( 'success' )
-		);
+		$items = $this->get_session_items_for_test( $session_id );
 		$this->assertCount( 1, $items );
+		$this->assertSame( 'success', $items[0]['status'] );
 		$persisted = json_decode( (string) $items[0]['warnings'], true );
 		$this->assertSame( $result['warnings'], $persisted );
 	}
@@ -3946,6 +3941,31 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$meta['custom_field'],
 			get_post_meta( $post_id, 'custom_field', true )
 		);
+	}
+
+	/**
+	 * Retrieves fields asserted from every item in a test session.
+	 *
+	 * @param int $session_id Session ID.
+	 * @return list<array{source_post_id: ?string, status: string, warnings: ?string}> Item rows.
+	 */
+	private function get_session_items_for_test( int $session_id ): array {
+		global $wpdb;
+
+		$table = Import_Items_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$items = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT source_post_id, status, warnings FROM `{$table}`"
+					. ' WHERE session_id = %d ORDER BY id ASC',
+				$session_id
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return is_array( $items ) ? $items : array();
 	}
 
 	/**
